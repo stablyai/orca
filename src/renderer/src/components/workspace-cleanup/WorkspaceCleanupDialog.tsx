@@ -406,62 +406,46 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                 <Loader2 className="size-3.5 animate-spin" />
                 Checking old workspaces
               </div>
-            ) : (
+            ) : oldCandidateCount > 0 || hiddenByKeepCount > 0 ? (
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/25 px-5 py-2.5">
-                <div className="min-w-0">
-                  {oldCandidateCount > 0 || hiddenByKeepCount > 0 ? (
-                    <div className="text-sm font-medium text-foreground">
-                      {selectedCount} selected
-                    </div>
-                  ) : null}
-                  <div className="text-xs leading-5 text-muted-foreground">
-                    {oldCandidateCount > 0 ? (
-                      <>
-                        <span className="font-medium text-foreground">{oldCandidateCount}</span> old
-                        workspace{oldCandidateCount === 1 ? '' : 's'} found.
-                      </>
-                    ) : (
-                      'No old workspaces found.'
-                    )}
-                  </div>
+                <div className="min-w-0 text-sm font-medium text-foreground">
+                  {selectedCount} selected
                 </div>
-                {oldCandidateCount > 0 || hiddenByKeepCount > 0 ? (
-                  <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    {hiddenByKeepCount > 0 ? (
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        onClick={() => setShowKept((value) => !value)}
-                      >
-                        {showKept ? 'Hide hidden workspaces' : 'Show hidden workspaces'}
-                      </Button>
-                    ) : null}
-                    {readyCount > 0 && selectedCount < readyCount ? (
-                      <Button variant="ghost" size="xs" onClick={selectReady}>
-                        Select all removable
-                      </Button>
-                    ) : null}
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  {hiddenByKeepCount > 0 ? (
                     <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={keepSelected}
-                      disabled={selectedCount === 0}
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => setShowKept((value) => !value)}
                     >
-                      Hide selected
+                      {showKept ? 'Hide hidden workspaces' : 'Show hidden workspaces'}
                     </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => setConfirming(true)}
-                      disabled={selectedCount === 0}
-                    >
-                      <Trash2 className="size-3.5" />
-                      Remove selected
+                  ) : null}
+                  {readyCount > 0 && selectedCount < readyCount ? (
+                    <Button variant="ghost" size="xs" onClick={selectReady}>
+                      Select all removable
                     </Button>
-                  </div>
-                ) : null}
+                  ) : null}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={keepSelected}
+                    disabled={selectedCount === 0}
+                  >
+                    Hide selected
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setConfirming(true)}
+                    disabled={selectedCount === 0}
+                  >
+                    <Trash2 className="size-3.5" />
+                    Remove selected
+                  </Button>
+                </div>
               </div>
-            )}
+            ) : null}
 
             {error ? (
               <div className="border-b border-destructive/30 bg-destructive/10 px-5 py-2 text-xs text-destructive">
