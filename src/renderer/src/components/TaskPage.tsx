@@ -1461,7 +1461,6 @@ export default function TaskPage(): React.JSX.Element {
       taskSource !== 'github' ||
       githubMode !== 'items' ||
       dialogWorkItem ||
-      drawerLinearIssue ||
       newIssueOpen ||
       newLinearIssueOpen ||
       activeModal !== 'none'
@@ -1499,15 +1498,7 @@ export default function TaskPage(): React.JSX.Element {
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [
-    activeModal,
-    dialogWorkItem,
-    drawerLinearIssue,
-    githubMode,
-    newIssueOpen,
-    newLinearIssueOpen,
-    taskSource
-  ])
+  }, [activeModal, dialogWorkItem, githubMode, newIssueOpen, newLinearIssueOpen, taskSource])
 
   const openComposerForItem = useCallback(
     (item: GitHubWorkItem): void => {
