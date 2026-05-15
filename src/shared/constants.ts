@@ -120,6 +120,8 @@ export const REPO_COLORS = [
   '#ec4899' // pink
 ] as const
 
+export const DEFAULT_REPO_BADGE_COLOR = REPO_COLORS[0]
+
 export function getDefaultNotificationSettings(): NotificationSettings {
   return {
     enabled: true,

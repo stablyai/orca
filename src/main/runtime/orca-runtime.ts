@@ -219,7 +219,7 @@ import {
   shouldRunSetupForCreate,
   writeIssueCommand
 } from '../hooks'
-import { REPO_COLORS, getDefaultVoiceSettings } from '../../shared/constants'
+import { DEFAULT_REPO_BADGE_COLOR, getDefaultVoiceSettings } from '../../shared/constants'
 import { listRepoWorktrees } from '../repo-worktrees'
 import { createWorktreeSymlinks } from '../ipc/worktree-symlinks'
 import {
@@ -4046,7 +4046,7 @@ export class OrcaRuntimeService {
       id: randomUUID(),
       path,
       displayName: getRepoName(path),
-      badgeColor: REPO_COLORS[this.store.getRepos().length % REPO_COLORS.length],
+      badgeColor: DEFAULT_REPO_BADGE_COLOR,
       addedAt: Date.now(),
       kind
     }
@@ -4154,7 +4154,7 @@ export class OrcaRuntimeService {
       id: randomUUID(),
       path: targetPath,
       displayName: trimmedName,
-      badgeColor: REPO_COLORS[this.store.getRepos().length % REPO_COLORS.length],
+      badgeColor: DEFAULT_REPO_BADGE_COLOR,
       addedAt: Date.now(),
       kind: repoKind
     }
@@ -4221,7 +4221,7 @@ export class OrcaRuntimeService {
       id: randomUUID(),
       path: clonePath,
       displayName: getRepoName(clonePath),
-      badgeColor: REPO_COLORS[this.store.getRepos().length % REPO_COLORS.length],
+      badgeColor: DEFAULT_REPO_BADGE_COLOR,
       addedAt: Date.now(),
       kind: 'git'
     }

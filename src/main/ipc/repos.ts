@@ -7,7 +7,7 @@ import { randomUUID } from 'crypto'
 import type { Store } from '../persistence'
 import type { Repo, BaseRefDefaultResult, SparsePreset } from '../../shared/types'
 import { isFolderRepo } from '../../shared/repo-kind'
-import { REPO_COLORS } from '../../shared/constants'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { invalidateAuthorizedRootsCache } from './filesystem-auth'
 import type { ChildProcess } from 'child_process'
 import { access, mkdir, readdir, rm } from 'fs/promises'
@@ -107,7 +107,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         id: randomUUID(),
         path: args.path,
         displayName: getRepoName(args.path),
-        badgeColor: REPO_COLORS[store.getRepos().length % REPO_COLORS.length],
+        badgeColor: DEFAULT_REPO_BADGE_COLOR,
         addedAt: Date.now(),
         kind: repoKind
       }
@@ -206,7 +206,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         id: randomUUID(),
         path: resolvedPath,
         displayName,
-        badgeColor: REPO_COLORS[store.getRepos().length % REPO_COLORS.length],
+        badgeColor: DEFAULT_REPO_BADGE_COLOR,
         addedAt: Date.now(),
         kind: repoKind,
         connectionId: args.connectionId
@@ -405,7 +405,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         id: randomUUID(),
         path: targetPath,
         displayName: name,
-        badgeColor: REPO_COLORS[store.getRepos().length % REPO_COLORS.length],
+        badgeColor: DEFAULT_REPO_BADGE_COLOR,
         addedAt: Date.now(),
         kind: repoKind
       }
@@ -686,7 +686,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         id: randomUUID(),
         path: clonePath,
         displayName: getRepoName(clonePath),
-        badgeColor: REPO_COLORS[store.getRepos().length % REPO_COLORS.length],
+        badgeColor: DEFAULT_REPO_BADGE_COLOR,
         addedAt: Date.now(),
         kind: 'git'
       }

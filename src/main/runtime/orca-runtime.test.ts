@@ -1,7 +1,10 @@
 /* eslint-disable max-lines -- Why: runtime behavior is stateful and cross-cutting, so these tests stay in one file to preserve the end-to-end invariants around handles, waits, and graph sync. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { EventEmitter } from 'events'
+import { mkdtemp, rm } from 'fs/promises'
 import type { WorktreeLineage, WorktreeMeta } from '../../shared/types'
 import { addWorktree, listWorktrees, removeWorktree } from '../git/worktree'
+import * as gitRunner from '../git/runner'
 import {
   createSetupRunnerScript,
   getEffectiveHooks,
@@ -18,6 +21,7 @@ import {
   unregisterSshFilesystemProvider
 } from '../providers/ssh-filesystem-dispatch'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 
 const {
   MOCK_GIT_WORKTREES,
@@ -95,7 +99,9 @@ vi.mock('../ipc/worktree-logic', async (importOriginal) => {
 })
 
 vi.mock('../ipc/filesystem-auth', () => ({
-  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
+  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock,
+  isENOENT: (error: unknown) =>
+    Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
 }))
 
 // Why: the CLI create-worktree path calls getDefaultBaseRef to resolve a
@@ -864,6 +870,136 @@ describe('OrcaRuntimeService', () => {
 
     expect(repo).toMatchObject({ id: 'repo-unc', path: '//Server/Share/Repo' })
     expect(added).toHaveLength(0)
+  })
+
+  it('defaults runtime addRepo badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
+    const added: Record<string, unknown>[] = []
+    const colorStore = {
+      ...store,
+      getRepos: () => [...added] as never,
+      addRepo: (repo: Record<string, unknown>) => {
+        added.push(repo)
+      },
+      getRepo: (id: string) => added.find((repo) => repo.id === id) as never
+    }
+    const runtime = new OrcaRuntimeService(colorStore as never)
+
+    const repo = await runtime.addRepo('/tmp/runtime-add-default', 'folder')
+
+    expect(repo.badgeColor).toBe(DEFAULT_REPO_BADGE_COLOR)
+    expect(added).toEqual([expect.objectContaining({ badgeColor: DEFAULT_REPO_BADGE_COLOR })])
+  })
+
+  it('defaults runtime createRepo badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
+    const added: Record<string, unknown>[] = []
+    const colorStore = {
+      ...store,
+      getRepos: () => [...added] as never,
+      addRepo: (repo: Record<string, unknown>) => {
+        added.push(repo)
+      },
+      getRepo: (id: string) => added.find((repo) => repo.id === id) as never
+    }
+    const runtime = new OrcaRuntimeService(colorStore as never)
+    const parentDir = await mkdtemp('/tmp/orca-runtime-create-')
+    try {
+      const result = await runtime.createRepo(parentDir, 'runtime-create-default', 'folder')
+      if ('error' in result) {
+        throw new Error(result.error)
+      }
+
+      expect(result).toHaveProperty('repo.badgeColor', DEFAULT_REPO_BADGE_COLOR)
+      expect(added).toEqual([expect.objectContaining({ badgeColor: DEFAULT_REPO_BADGE_COLOR })])
+    } finally {
+      await rm(parentDir, { recursive: true, force: true })
+    }
+  })
+
+  it('preserves existing badgeColor on runtime createRepo dedupe', async () => {
+    const existing = {
+      id: 'runtime-existing-create',
+      path: '/tmp/runtime-existing-create',
+      displayName: 'runtime-existing-create',
+      badgeColor: '#14b8a6',
+      addedAt: 1,
+      kind: 'folder' as const
+    }
+    const colorStore = {
+      ...store,
+      getRepos: () => [existing]
+    }
+    const runtime = new OrcaRuntimeService(colorStore as never)
+
+    const result = await runtime.createRepo('/tmp', 'runtime-existing-create', 'folder')
+
+    expect(result).toEqual({ repo: existing })
+    expect(result).toHaveProperty('repo.badgeColor', '#14b8a6')
+  })
+
+  it('defaults runtime cloneRepo badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
+    const spawnSpy = vi.spyOn(gitRunner, 'wslAwareSpawn')
+    const added: Record<string, unknown>[] = []
+    const colorStore = {
+      ...store,
+      getRepos: () => [...added] as never,
+      addRepo: (repo: Record<string, unknown>) => {
+        added.push(repo)
+      },
+      getRepo: (id: string) => added.find((repo) => repo.id === id) as never
+    }
+    spawnSpy.mockImplementation(() => {
+      const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
+      proc.stderr = new EventEmitter()
+      queueMicrotask(() => proc.emit('close', 0, null))
+      return proc as never
+    })
+    const runtime = new OrcaRuntimeService(colorStore as never)
+
+    try {
+      const repo = await runtime.cloneRepo('https://example.com/repo-badge-color.git', '/tmp')
+      expect(repo.badgeColor).toBe(DEFAULT_REPO_BADGE_COLOR)
+      expect(added).toEqual([expect.objectContaining({ badgeColor: DEFAULT_REPO_BADGE_COLOR })])
+    } finally {
+      spawnSpy.mockRestore()
+    }
+  })
+
+  it('preserves existing badgeColor on runtime cloneRepo folder->git dedupe upgrade', async () => {
+    const spawnSpy = vi.spyOn(gitRunner, 'wslAwareSpawn')
+    spawnSpy.mockImplementation(() => {
+      const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
+      proc.stderr = new EventEmitter()
+      queueMicrotask(() => proc.emit('close', 0, null))
+      return proc as never
+    })
+    const existing = {
+      id: 'runtime-folder-upgrade',
+      path: '/tmp/repo-badge-color',
+      displayName: 'repo-badge-color',
+      badgeColor: '#ec4899',
+      addedAt: 1,
+      kind: 'folder' as const
+    }
+    const updates: { id: string; updates: Record<string, unknown> }[] = []
+    const upgraded = { ...existing, kind: 'git' as const }
+    const colorStore = {
+      ...store,
+      getRepos: () => [existing],
+      updateRepo: (id: string, repoUpdates: Record<string, unknown>) => {
+        updates.push({ id, updates: repoUpdates })
+        return upgraded as never
+      }
+    }
+    const runtime = new OrcaRuntimeService(colorStore as never)
+
+    try {
+      const repo = await runtime.cloneRepo('https://example.com/repo-badge-color.git', '/tmp')
+      expect(updates).toEqual([{ id: existing.id, updates: { kind: 'git' } }])
+      expect(repo).toEqual(upgraded)
+      expect(repo.badgeColor).toBe('#ec4899')
+    } finally {
+      spawnSpy.mockRestore()
+    }
   })
 
   it('associates controller PTYs with mixed-case Windows and UNC cwd paths', async () => {
