@@ -1,6 +1,5 @@
 /* eslint-disable max-lines -- Why: the worktree card centralizes sidebar card state (selection, drag, agent status, git info, context menu) in one cohesive component so sidebar rendering doesn't fan out across files. */
-import React, { useEffect, useMemo, useCallback, useState } from 'react'
-import { useShallow } from 'zustand/react/shallow'
+import React, { useEffect, useCallback, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import { Badge } from '@/components/ui/badge'
@@ -22,13 +21,7 @@ import { SshDisconnectedDialog } from './SshDisconnectedDialog'
 import WorktreeCardAgents from './WorktreeCardAgents'
 import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import {
-  getWorktreeStatusLabel,
-  resolveWorktreeStatus,
-  type WorktreeStatus
-} from '@/lib/worktree-status'
-import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
+import { getWorktreeStatusLabel } from '@/lib/worktree-status'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { Worktree, Repo, IssueInfo } from '../../../../shared/types'
@@ -36,16 +29,11 @@ import {
   branchDisplayName,
   checksLabel,
   CONFLICT_OPERATION_LABELS,
-  EMPTY_TABS,
-  EMPTY_BROWSER_TABS,
   FilledBellIcon
 } from './WorktreeCardHelpers'
 import { IssueSection, ReviewSection, CommentSection } from './WorktreeCardMeta'
-import {
-  selectLivePtyIdsForWorktree,
-  selectRuntimePaneTitlesForWorktree
-} from './worktree-card-status-inputs'
 import { writeWorkspaceDragData } from './workspace-status'
+import { useWorktreeActivityStatus } from './use-worktree-activity-status'
 
 type WorktreeCardProps = {
   worktree: Worktree
@@ -155,29 +143,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
     repo?.connectionId ? (s.sshTargetLabels.get(repo.connectionId) ?? '') : ''
   )
 
-  // ── GRANULAR selectors: only subscribe to THIS worktree's data ──
-  const tabs = useAppStore((s) => s.tabsByWorktree[worktree.id] ?? EMPTY_TABS)
-  const browserTabs = useAppStore((s) => s.browserTabsByWorktree[worktree.id] ?? EMPTY_BROWSER_TABS)
-  const hasNotesSurface = useAppStore((s) =>
-    (s.unifiedTabsByWorktree[worktree.id] ?? []).some((tab) => tab.contentType === 'notes')
-  )
-  // Why: keep these as separate shallow selectors. Combining them into one
-  // returned object nests freshly-created maps under fresh keys, so Zustand's
-  // shallow memoization sees every unrelated store write as a change and
-  // re-renders every mounted card.
-  // tab.ptyId is the wake-hint sessionId preserved across sleep, not a
-  // liveness signal; sleep-then-card-render would lie the dot green if we
-  // read tab.ptyId; ptyIdsByTabId is the source of truth.
-  // tab.title is the focused-pane title (onActivePaneChange overwrites it),
-  // so the per-pane title map is needed to keep the sidebar spinner
-  // reflecting *any* working pane, not just the focused one.
-  const runtimePaneTitlesForWorktree = useAppStore(
-    useShallow((s) => selectRuntimePaneTitlesForWorktree(s, worktree.id))
-  )
-  const ptyIdsForWorktree = useAppStore(
-    useShallow((s) => selectLivePtyIdsForWorktree(s, worktree.id))
-  )
-
   const branch = branchDisplayName(worktree.branch)
   const isFolder = repo ? isFolderRepo(repo) : false
   const hostedReviewCacheKey =
@@ -210,109 +175,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       : null)
   const isDeleting = deleteState?.isDeleting ?? false
 
-  // Why: the sidebar dot overlays the *stable* hook-reported states (blocked,
-  // waiting, done) onto the title-heuristic base. `working` remains on the
-  // heuristic because hook pings flip on/off mid-turn and users complained
-  // that the spinner flickered; the blocked/waiting/done states don't have
-  // that problem — they're terminal (done) or attention-needed (blocked/
-  // waiting) and persist until the user acts. Retained "done" snapshots are
-  // consulted too so the done dot keeps glowing after the agent process exits,
-  // matching the dashboard's retention behavior.
-  //
-  // Priority (highest first): permission (blocked/waiting) > heuristic
-  // 'working' > done > other heuristic ('active'/'inactive').
-  // permission wins over everything because a newer blocked agent in the same
-  // worktree means the user needs to act now, not admire a previous
-  // completion.
-  // heuristic 'working' wins over done because a spinner means the user has
-  // already re-prompted the agent after it reported done — the newer "work
-  // in progress" signal is more informative than a retained completion dot.
-  // Only the 'working' heuristic earns this precedence; 'active'/'inactive'
-  // mean "quiet terminal", which shouldn't drown out a recent done.
-  // Why: collapse live hook entries to booleans inside the selector so the
-  // snapshot is a stable scalar (useShallow compares element identity — an
-  // array of freshly-constructed {state,updatedAt} objects would never hit
-  // the cache and trip React's "getSnapshot should be cached" infinite-loop
-  // guard). Staleness is applied here too so the selector already reflects
-  // the 30-min TTL; agentStatusEpoch pulls in the tick that fires when a
-  // fresh entry crosses the stale boundary. The same useShallow wrapper
-  // covers hasPermission, hasLiveDone, *and* hasRetainedDone — merging the
-  // retained scan into the same selector avoids a second full-map iteration
-  // per card on every retention write (with N sidebar cards on screen a
-  // standalone retained selector scans Object.values(...) N times per tick).
-  const { hasPermission, hasLiveDone, hasRetainedDone } = useAppStore(
-    useShallow((s) => {
-      // Touch the epoch so this selector re-runs when the freshness scheduler
-      // ticks — otherwise a stale transition wouldn't flip the booleans until
-      // some unrelated store write happened to rerun us.
-      void s.agentStatusEpoch
-      const wtTabs = s.tabsByWorktree[worktree.id] ?? EMPTY_TABS
-      let perm = false
-      let live = false
-      if (wtTabs.length > 0) {
-        const tabIds = new Set(wtTabs.map((t) => t.id))
-        const now = Date.now()
-        for (const [paneKey, entry] of Object.entries(s.agentStatusByPaneKey)) {
-          const sepIdx = paneKey.indexOf(':')
-          if (sepIdx <= 0) {
-            continue
-          }
-          const tabId = paneKey.slice(0, sepIdx)
-          if (!tabIds.has(tabId)) {
-            continue
-          }
-          if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
-            continue
-          }
-          if (entry.state === 'blocked' || entry.state === 'waiting') {
-            perm = true
-          } else if (entry.state === 'done') {
-            live = true
-          }
-        }
-      }
-      // Retained scan — one pass in the same selector avoids a second
-      // Object.values(...) per store tick (one per sidebar card).
-      let retained = false
-      for (const ra of Object.values(s.retainedAgentsByPaneKey)) {
-        if (ra.worktreeId === worktree.id) {
-          retained = true
-          break
-        }
-      }
-      return { hasPermission: perm, hasLiveDone: live, hasRetainedDone: retained }
-    })
-  )
-
-  // Why: resolveWorktreeStatus enforces the runtime-liveness precondition —
-  // when no tab in this worktree has a live PTY (and no browser tab exists)
-  // it short-circuits to 'inactive' before consulting hook-reported state or
-  // retained-done snapshots. That keeps the dot honest across sleep, crash,
-  // and slept-with-retained-done while preserving the row data used by the
-  // inline agents list (retained 'done' rows still render inside the card).
-  const status: WorktreeStatus = useMemo(
-    () =>
-      resolveWorktreeStatus({
-        tabs,
-        browserTabs,
-        ptyIdsByTabId: ptyIdsForWorktree,
-        runtimePaneTitlesByTabId: runtimePaneTitlesForWorktree,
-        hasNotesSurface,
-        hasPermission,
-        hasLiveDone,
-        hasRetainedDone
-      }),
-    [
-      tabs,
-      browserTabs,
-      ptyIdsForWorktree,
-      runtimePaneTitlesForWorktree,
-      hasNotesSurface,
-      hasPermission,
-      hasLiveDone,
-      hasRetainedDone
-    ]
-  )
+  const status = useWorktreeActivityStatus(worktree.id)
 
   const showPR = cardProps.includes('pr')
   const showCI = cardProps.includes('ci')
