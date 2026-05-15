@@ -1068,6 +1068,13 @@ const api = {
       gh: { installed: boolean; authenticated: boolean }
       glab?: { installed: boolean; authenticated: boolean }
       bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
+      gitea?: {
+        configured: boolean
+        authenticated: boolean
+        account: string | null
+        baseUrl: string | null
+        tokenConfigured: boolean
+      }
       linear: { connected: boolean }
     }> => ipcRenderer.invoke('preflight:check', args),
     detectAgents: (): Promise<string[]> => ipcRenderer.invoke('preflight:detectAgents'),

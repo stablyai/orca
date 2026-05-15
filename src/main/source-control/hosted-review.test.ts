@@ -6,14 +6,18 @@ const {
   getRepoSlugMock,
   getPRForBranchMock,
   getBitbucketRepoSlugMock,
-  getBitbucketPullRequestForBranchMock
+  getBitbucketPullRequestForBranchMock,
+  getGiteaRepoSlugMock,
+  getGiteaPullRequestForBranchMock
 } = vi.hoisted(() => ({
   getProjectSlugMock: vi.fn(),
   getMergeRequestForBranchMock: vi.fn(),
   getRepoSlugMock: vi.fn(),
   getPRForBranchMock: vi.fn(),
   getBitbucketRepoSlugMock: vi.fn(),
-  getBitbucketPullRequestForBranchMock: vi.fn()
+  getBitbucketPullRequestForBranchMock: vi.fn(),
+  getGiteaRepoSlugMock: vi.fn(),
+  getGiteaPullRequestForBranchMock: vi.fn()
 }))
 
 vi.mock('../gitlab/client', () => ({
@@ -33,6 +37,12 @@ vi.mock('../bitbucket/client', () => ({
   getBitbucketPullRequest: vi.fn()
 }))
 
+vi.mock('../gitea/client', () => ({
+  getGiteaRepoSlug: getGiteaRepoSlugMock,
+  getGiteaPullRequestForBranch: getGiteaPullRequestForBranchMock,
+  getGiteaPullRequest: vi.fn()
+}))
+
 import { getHostedReviewForBranch } from './hosted-review'
 
 describe('getHostedReviewForBranch', () => {
@@ -43,6 +53,8 @@ describe('getHostedReviewForBranch', () => {
     getPRForBranchMock.mockReset()
     getBitbucketRepoSlugMock.mockReset()
     getBitbucketPullRequestForBranchMock.mockReset()
+    getGiteaRepoSlugMock.mockReset()
+    getGiteaPullRequestForBranchMock.mockReset()
   })
 
   it('maps GitLab merge requests into the hosted review surface', async () => {
@@ -136,5 +148,45 @@ describe('getHostedReviewForBranch', () => {
       'feature/bitbucket',
       11
     )
+  })
+
+  it('falls through to Gitea when origin is not another hosted provider', async () => {
+    getProjectSlugMock.mockResolvedValue(null)
+    getRepoSlugMock.mockResolvedValue(null)
+    getBitbucketRepoSlugMock.mockResolvedValue(null)
+    getGiteaRepoSlugMock.mockResolvedValue({
+      host: 'git.example.com',
+      owner: 'team',
+      repo: 'orca'
+    })
+    getGiteaPullRequestForBranchMock.mockResolvedValue({
+      number: 14,
+      title: 'Gitea branch',
+      state: 'open',
+      url: 'https://git.example.com/team/orca/pulls/14',
+      status: 'pending',
+      updatedAt: '2026-05-15T00:00:00.000Z',
+      mergeable: 'MERGEABLE',
+      headSha: 'def456'
+    })
+
+    await expect(
+      getHostedReviewForBranch({
+        repoPath: '/repo',
+        branch: 'feature/gitea',
+        linkedGiteaPR: 14
+      })
+    ).resolves.toEqual({
+      provider: 'gitea',
+      number: 14,
+      title: 'Gitea branch',
+      state: 'open',
+      url: 'https://git.example.com/team/orca/pulls/14',
+      status: 'pending',
+      updatedAt: '2026-05-15T00:00:00.000Z',
+      mergeable: 'MERGEABLE',
+      headSha: 'def456'
+    })
+    expect(getGiteaPullRequestForBranchMock).toHaveBeenCalledWith('/repo', 'feature/gitea', 14)
   })
 })

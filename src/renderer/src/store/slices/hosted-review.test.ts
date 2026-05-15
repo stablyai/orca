@@ -71,7 +71,8 @@ describe('hosted review slice', () => {
       branch: 'feature/gitlab',
       linkedGitHubPR: null,
       linkedGitLabMR: 5,
-      linkedBitbucketPR: null
+      linkedBitbucketPR: null,
+      linkedGiteaPR: null
     })
   })
 
@@ -96,7 +97,8 @@ describe('hosted review slice', () => {
         branch: 'feature/windows',
         linkedGitHubPR: 12,
         linkedGitLabMR: null,
-        linkedBitbucketPR: null
+        linkedBitbucketPR: null,
+        linkedGiteaPR: null
       },
       { timeoutMs: 30_000 }
     )

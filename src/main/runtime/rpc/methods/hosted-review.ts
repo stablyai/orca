@@ -7,7 +7,8 @@ const HostedReviewForBranch = z.object({
   branch: requiredString('Missing branch'),
   linkedGitHubPR: z.number().int().positive().nullable().optional(),
   linkedGitLabMR: z.number().int().positive().nullable().optional(),
-  linkedBitbucketPR: z.number().int().positive().nullable().optional()
+  linkedBitbucketPR: z.number().int().positive().nullable().optional(),
+  linkedGiteaPR: z.number().int().positive().nullable().optional()
 })
 
 export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
@@ -20,7 +21,8 @@ export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
         branch: params.branch,
         linkedGitHubPR: params.linkedGitHubPR ?? null,
         linkedGitLabMR: params.linkedGitLabMR ?? null,
-        linkedBitbucketPR: params.linkedBitbucketPR ?? null
+        linkedBitbucketPR: params.linkedBitbucketPR ?? null,
+        linkedGiteaPR: params.linkedGiteaPR ?? null
       })
   })
 ]

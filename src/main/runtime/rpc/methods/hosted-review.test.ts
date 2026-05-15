@@ -38,7 +38,8 @@ describe('hosted review RPC methods', () => {
       branch: 'feature/windows',
       linkedGitHubPR: 12,
       linkedGitLabMR: null,
-      linkedBitbucketPR: null
+      linkedBitbucketPR: null,
+      linkedGiteaPR: null
     })
     expect(response).toMatchObject({
       ok: true,
