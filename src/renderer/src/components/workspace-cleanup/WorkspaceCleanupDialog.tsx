@@ -372,7 +372,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
             {initialLoading ? (
               <div className="flex items-center gap-2 border-b border-border bg-muted/25 px-5 py-3 text-xs text-muted-foreground">
                 <Loader2 className="size-3.5 animate-spin" />
-                Scanning workspaces
+                Checking old workspaces
               </div>
             ) : (
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/25 px-5 py-2.5">
