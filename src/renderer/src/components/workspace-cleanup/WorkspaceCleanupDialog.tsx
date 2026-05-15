@@ -118,6 +118,35 @@ function isOldWorkspaceCandidate(candidate: WorkspaceCleanupCandidate, scannedAt
   )
 }
 
+function compareCleanupCandidates(
+  a: WorkspaceCleanupCandidate,
+  b: WorkspaceCleanupCandidate,
+  scannedAt: number
+): number {
+  const priorityA = getCleanupCandidatePriority(a, scannedAt)
+  const priorityB = getCleanupCandidatePriority(b, scannedAt)
+  if (priorityA !== priorityB) {
+    return priorityA - priorityB
+  }
+  return a.lastActivityAt - b.lastActivityAt
+}
+
+function getCleanupCandidatePriority(
+  candidate: WorkspaceCleanupCandidate,
+  scannedAt: number
+): number {
+  if (candidate.tier === 'ready') {
+    return 0
+  }
+  if (candidate.reasons.length > 0) {
+    return 1
+  }
+  if (isOldWorkspaceCandidate(candidate, scannedAt)) {
+    return 2
+  }
+  return 3
+}
+
 export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const activeModal = useAppStore((s) => s.activeModal)
   const closeModal = useAppStore((s) => s.closeModal)
@@ -170,13 +199,13 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     setConfirming(false)
   }, [open, scan, scan?.scannedAt, candidates])
 
-  const visibleCandidates = useMemo(
-    () =>
-      showKept
-        ? candidates
-        : candidates.filter((candidate) => !candidate.blockers.includes('dismissed')),
-    [candidates, showKept]
-  )
+  const visibleCandidates = useMemo(() => {
+    const scannedAt = scan?.scannedAt ?? Date.now()
+    const rows = showKept
+      ? candidates
+      : candidates.filter((candidate) => !candidate.blockers.includes('dismissed'))
+    return [...rows].sort((a, b) => compareCleanupCandidates(a, b, scannedAt))
+  }, [candidates, scan?.scannedAt, showKept])
   const groups = useMemo(
     () => ({
       ready: visibleCandidates.filter((candidate) => candidate.tier === 'ready'),
@@ -211,6 +240,16 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     ? `${oldCandidateCount}+`
     : String(oldCandidateCount)
   const initialLoading = loading && !scan
+
+  useEffect(() => {
+    if (!open || loading || !scan) {
+      return
+    }
+    if (readyCount === 0 && groups.review.length > 0) {
+      setShowSuggested(false)
+      setShowReview(true)
+    }
+  }, [groups.review.length, loading, open, readyCount, scan?.scannedAt, scan])
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -384,8 +423,8 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                   ) : oldCandidateCount > 0 ? (
                     <>
                       <span className="font-medium text-foreground">{oldCandidateCountLabel}</span>{' '}
-                      old workspace{oldCandidateCount === 1 ? '' : 's'} found. None selected for
-                      removal.
+                      old workspace{oldCandidateCount === 1 ? '' : 's'} need review. None are safe
+                      to remove automatically.
                     </>
                   ) : (
                     'No workspaces selected.'
