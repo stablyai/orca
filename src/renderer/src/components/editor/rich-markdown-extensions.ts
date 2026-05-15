@@ -10,9 +10,11 @@ import { Table } from '@tiptap/extension-table'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { TableRow } from '@tiptap/extension-table-row'
+import { BlockMath, InlineMath } from '@tiptap/extension-mathematics'
 import { Markdown } from '@tiptap/markdown'
 import { createLowlight, common } from 'lowlight'
 import { loadLocalImageSrc, onImageCacheInvalidated } from './useLocalImageSrc'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import { RawMarkdownHtmlBlock, RawMarkdownHtmlInline } from './raw-markdown-html'
 import { MarkdownDocLink } from './rich-markdown-doc-link'
 import { RichMarkdownCodeBlock } from './RichMarkdownCodeBlock'
@@ -55,7 +57,7 @@ export function createRichMarkdownExtensions({
     // and works identically in dev and production modes.
     Image.extend({
       addStorage() {
-        return { filePath: '' }
+        return { filePath: '', runtimeContext: undefined as RuntimeFileOperationArgs | undefined }
       },
       addNodeView() {
         return ({ node, HTMLAttributes }) => {
@@ -79,11 +81,14 @@ export function createRichMarkdownExtensions({
 
           const loadImage = (src: string | undefined): void => {
             const fp = this.storage.filePath as string
+            const runtimeContext = this.storage.runtimeContext as
+              | RuntimeFileOperationArgs
+              | undefined
             if (src && fp) {
               // Why: when IPC resolution fails (e.g. unsupported format),
               // the ternary falls back to the raw src so the browser can
               // attempt its own loading rather than leaving a broken image.
-              void loadLocalImageSrc(src, fp).then((resolved) => {
+              void loadLocalImageSrc(src, fp, undefined, runtimeContext).then((resolved) => {
                 img.src = resolved ? resolved : src
               })
             } else if (src) {
@@ -132,6 +137,17 @@ export function createRichMarkdownExtensions({
     TableRow,
     TableHeader,
     TableCell,
+    InlineMath.configure({
+      katexOptions: {
+        throwOnError: false
+      }
+    }),
+    BlockMath.configure({
+      katexOptions: {
+        displayMode: true,
+        throwOnError: false
+      }
+    }),
     RawMarkdownHtmlInline,
     RawMarkdownHtmlBlock,
     MarkdownDocLink,

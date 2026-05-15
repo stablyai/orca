@@ -11,7 +11,7 @@ export function getRequiredReleaseAssetNames(tag) {
     'latest-mac.yml',
     'latest.yml',
     'orca-linux.AppImage',
-    `orca_${version}_amd64.deb`,
+    `orca-ide_${version}_amd64.deb`,
     'orca-windows-setup.exe',
     'orca-windows-setup.exe.blockmap',
     `Orca-${version}-mac.zip`,

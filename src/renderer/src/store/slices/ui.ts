@@ -12,6 +12,7 @@ import type {
   TaskViewPresetId,
   TuiAgent,
   UpdateStatus,
+  WorkspaceStatusDefinition,
   WorktreeCardProperty
 } from '../../../../shared/types'
 import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/types'
@@ -20,6 +21,12 @@ import {
   DEFAULT_STATUS_BAR_ITEMS,
   DEFAULT_WORKTREE_CARD_PROPERTIES
 } from '../../../../shared/constants'
+import {
+  clampWorkspaceBoardOpacity,
+  cloneDefaultWorkspaceStatuses,
+  normalizeWorkspaceBoardCompact,
+  normalizeWorkspaceStatuses
+} from '../../../../shared/workspace-statuses'
 import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
 import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
 import { DEFAULT_PET_ID, isBundledPetId } from '../../components/pet/pet-models'
@@ -194,16 +201,17 @@ export type UISlice = {
   acknowledgedAgentsByPaneKey: Record<string, number>
   acknowledgeAgents: (paneKeys: string[]) => void
   unacknowledgeAgents: (paneKeys: string[]) => void
-  activeView: 'terminal' | 'settings' | 'tasks' | 'activity' | 'automations'
-  previousViewBeforeTasks: 'terminal' | 'settings' | 'activity' | 'automations'
-  previousViewBeforeSettings: 'terminal' | 'tasks' | 'activity' | 'automations'
-  previousViewBeforeActivity: 'terminal' | 'settings' | 'tasks' | 'automations'
-  previousViewBeforeAutomations: 'terminal' | 'settings' | 'tasks' | 'activity'
+  activeView: 'terminal' | 'settings' | 'tasks' | 'activity' | 'automations' | 'space'
+  previousViewBeforeTasks: 'terminal' | 'settings' | 'activity' | 'automations' | 'space'
+  previousViewBeforeSettings: 'terminal' | 'tasks' | 'activity' | 'automations' | 'space'
+  previousViewBeforeActivity: 'terminal' | 'settings' | 'tasks' | 'automations' | 'space'
+  previousViewBeforeAutomations: 'terminal' | 'settings' | 'tasks' | 'activity' | 'space'
+  previousViewBeforeSpace: 'terminal' | 'settings' | 'tasks' | 'activity' | 'automations'
   setActiveView: (view: UISlice['activeView']) => void
   taskPageData: {
     preselectedRepoId?: string
     prefilledName?: string
-    taskSource?: 'github' | 'linear'
+    taskSource?: 'github' | 'linear' | 'gitlab'
   }
   taskResumeState: TaskResumeState | undefined
   setTaskResumeState: (updates: Partial<TaskResumeState>) => void
@@ -214,7 +222,7 @@ export type UISlice = {
     note: string
     attachments: string[]
     linkedWorkItem: {
-      type: 'issue' | 'pr'
+      type: 'issue' | 'pr' | 'mr'
       number: number
       title: string
       url: string
@@ -222,6 +230,10 @@ export type UISlice = {
     agent: TuiAgent
     linkedIssue: string
     linkedPR: number | null
+    /** GitLab parallels — number for an issue, iid for an MR. Optional so
+     *  drafts saved before GitLab support keep loading without migration. */
+    linkedGitLabIssue?: number | null
+    linkedGitLabMR?: number | null
     // Why: repo-scoped start ref selected via the "Start from" picker.
     // Absent means "use the repo's effective base ref".
     baseBranch?: string
@@ -234,6 +246,8 @@ export type UISlice = {
   setSelectedAutomationId: (id: string | null) => void
   openAutomationsPage: () => void
   closeAutomationsPage: () => void
+  openSpacePage: () => void
+  closeSpacePage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
   openSettingsPage: () => void
@@ -250,7 +264,9 @@ export type UISlice = {
       | 'repo'
       | 'agents'
       | 'accounts'
+      | 'voice'
       | 'experimental'
+      | 'servers'
       | 'mobile'
       | 'ssh'
     repoId: string | null
@@ -268,11 +284,15 @@ export type UISlice = {
     | 'add-repo'
     | 'quick-open'
     | 'worktree-palette'
+    | 'feature-wall'
     | 'new-workspace-composer'
     | 'confirm-orca-yaml-hooks'
   modalData: Record<string, unknown>
   openModal: (modal: UISlice['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void
+  featureTourNudgeVisible: boolean
+  showFeatureTourNudge: () => void
+  dismissFeatureTourNudge: () => void
   trustedOrcaHooks: PersistedTrustedOrcaHooks
   markOrcaHookScriptConfirmed: (
     repoId: string,
@@ -295,6 +315,12 @@ export type UISlice = {
   toggleCollapsedGroup: (key: string) => void
   worktreeCardProperties: WorktreeCardProperty[]
   toggleWorktreeCardProperty: (prop: WorktreeCardProperty) => void
+  workspaceStatuses: WorkspaceStatusDefinition[]
+  setWorkspaceStatuses: (statuses: WorkspaceStatusDefinition[]) => void
+  workspaceBoardOpacity: number
+  setWorkspaceBoardOpacity: (opacity: number) => void
+  workspaceBoardCompact: boolean
+  setWorkspaceBoardCompact: (compact: boolean) => void
   statusBarItems: StatusBarItem[]
   toggleStatusBarItem: (item: StatusBarItem) => void
   statusBarVisible: boolean
@@ -414,6 +440,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   previousViewBeforeSettings: 'terminal',
   previousViewBeforeActivity: 'terminal',
   previousViewBeforeAutomations: 'terminal',
+  previousViewBeforeSpace: 'terminal',
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
   taskResumeState: undefined,
@@ -527,6 +554,16 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set((state) => ({
       activeView: state.previousViewBeforeAutomations
     })),
+  openSpacePage: () =>
+    set((state) => ({
+      activeView: 'space',
+      previousViewBeforeSpace:
+        state.activeView === 'space' ? state.previousViewBeforeSpace : state.activeView
+    })),
+  closeSpacePage: () =>
+    set((state) => ({
+      activeView: state.previousViewBeforeSpace
+    })),
   setNewWorkspaceDraft: (draft) => set({ newWorkspaceDraft: draft }),
   clearNewWorkspaceDraft: () => set({ newWorkspaceDraft: null }),
   openSettingsPage: () =>
@@ -549,8 +586,20 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
 
   activeModal: 'none',
   modalData: {},
-  openModal: (modal, data = {}) => set({ activeModal: modal, modalData: data }),
+  openModal: (modal, data = {}) =>
+    set((state) => ({
+      activeModal: modal,
+      modalData: data,
+      featureTourNudgeVisible: modal === 'feature-wall' ? false : state.featureTourNudgeVisible
+    })),
   closeModal: () => set({ activeModal: 'none', modalData: {} }),
+  featureTourNudgeVisible: false,
+  showFeatureTourNudge: () => {
+    if (get().activeModal !== 'feature-wall') {
+      set({ featureTourNudgeVisible: true })
+    }
+  },
+  dismissFeatureTourNudge: () => set({ featureTourNudgeVisible: false }),
 
   trustedOrcaHooks: {},
   markOrcaHookScriptConfirmed: (repoId, kind, contentHash) =>
@@ -639,6 +688,27 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       window.api.ui.set({ worktreeCardProperties: updated }).catch(console.error)
       return { worktreeCardProperties: updated }
     }),
+
+  workspaceStatuses: cloneDefaultWorkspaceStatuses(),
+  setWorkspaceStatuses: (statuses) => {
+    const normalized = normalizeWorkspaceStatuses(statuses)
+    window.api.ui.set({ workspaceStatuses: normalized }).catch(console.error)
+    set({ workspaceStatuses: normalized })
+  },
+
+  workspaceBoardOpacity: 1,
+  setWorkspaceBoardOpacity: (opacity) => {
+    const clamped = clampWorkspaceBoardOpacity(opacity)
+    window.api.ui.set({ workspaceBoardOpacity: clamped }).catch(console.error)
+    set({ workspaceBoardOpacity: clamped })
+  },
+
+  workspaceBoardCompact: false,
+  setWorkspaceBoardCompact: (compact) => {
+    const normalized = normalizeWorkspaceBoardCompact(compact)
+    window.api.ui.set({ workspaceBoardCompact: normalized }).catch(console.error)
+    set({ workspaceBoardCompact: normalized })
+  },
 
   statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
   toggleStatusBarItem: (item) =>
@@ -779,6 +849,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         uiZoomLevel: ui.uiZoomLevel ?? 0,
         editorFontZoomLevel: ui.editorFontZoomLevel ?? 0,
         worktreeCardProperties: ui.worktreeCardProperties ?? [...DEFAULT_WORKTREE_CARD_PROPERTIES],
+        workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
+        workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
+        workspaceBoardCompact: normalizeWorkspaceBoardCompact(ui.workspaceBoardCompact),
         statusBarItems: migrateStatusBarItems(ui.statusBarItems),
         statusBarVisible: ui.statusBarVisible ?? true,
         // Why: absent → true so existing users see the pet the first time

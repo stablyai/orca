@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { DiffComment, Worktree } from '../../../../shared/types'
 import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 
 export type DiffCommentsSlice = {
   getDiffComments: (worktreeId: string | null | undefined) => DiffComment[]
@@ -22,11 +23,25 @@ function generateId(): string {
 // the sentinel from being corrupted globally.
 const EMPTY_COMMENTS: readonly DiffComment[] = Object.freeze([])
 
-async function persist(worktreeId: string, diffComments: DiffComment[]): Promise<void> {
-  await window.api.worktrees.updateMeta({
-    worktreeId,
-    updates: { diffComments }
-  })
+async function persist(
+  settings: AppState['settings'],
+  worktreeId: string,
+  diffComments: DiffComment[]
+): Promise<void> {
+  const target = getActiveRuntimeTarget(settings)
+  if (target.kind === 'local') {
+    await window.api.worktrees.updateMeta({
+      worktreeId,
+      updates: { diffComments }
+    })
+    return
+  }
+  await callRuntimeRpc(
+    target,
+    'worktree.set',
+    { worktree: worktreeId, diffComments },
+    { timeoutMs: 15_000 }
+  )
 }
 
 // Why: IPC writes from `persist` are not ordered with respect to each other.
@@ -55,7 +70,7 @@ function enqueuePersist(worktreeId: string, get: () => AppState): Promise<void> 
     const repoList = get().worktreesByRepo[repoId]
     const target = repoList?.find((w) => w.id === worktreeId)
     const latest = target?.diffComments ?? []
-    await persist(worktreeId, latest)
+    await persist(get().settings, worktreeId, latest)
   }
   const next = prior.then(run, run)
   persistQueueByWorktree.set(worktreeId, next)

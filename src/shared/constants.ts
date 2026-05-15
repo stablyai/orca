@@ -11,6 +11,9 @@ import type {
   WorktreeCardProperty
 } from './types'
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
+import { getDefaultTerminalQuickCommands } from './terminal-quick-commands'
+import type { VoiceSettings } from './speech-types'
+import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
 
 export const SCHEMA_VERSION = 1
 export const DEFAULT_APP_FONT_FAMILY = 'Geist'
@@ -192,6 +195,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // is installed, with a safe fallback to the inbox Windows PowerShell.
     terminalWindowsPowerShellImplementation: 'auto',
     terminalMouseHideWhileTyping: false,
+    terminalQuickCommands: getDefaultTerminalQuickCommands(),
     // Default false: opt-in only (matches Ghostty's default). Existing users
     // on upgrade inherit this default via persistence.ts's
     // { ...defaults.settings, ...parsed.settings } merge, so enabling
@@ -248,6 +252,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     experimentalPet: false,
     experimentalActivity: true,
     experimentalWorktreeSymlinks: false,
+    // Why: local desktop remains the default server until the user explicitly
+    // selects a saved runtime environment.
+    activeRuntimeEnvironmentId: null,
     // Why: hydrate an empty default so the renderer's optional-chained reads
     // (`settings?.githubProjects?.activeProject`) land on a stable shape
     // instead of `undefined`. Upgraded profiles inherit this via the
@@ -269,7 +276,20 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
       selectedThinkingByModel: {},
       customPrompt: '',
       customAgentCommand: ''
-    }
+    },
+    voice: getDefaultVoiceSettings()
+  }
+}
+
+export function getDefaultVoiceSettings(): VoiceSettings {
+  return {
+    enabled: false,
+    sttModel: '',
+    modelsDir: '',
+    language: 'en',
+    dictationMode: 'toggle' as const,
+    terminalConfirmBeforeInsert: false,
+    userModels: []
   }
 }
 
@@ -317,6 +337,9 @@ export function getDefaultUIState(): PersistedUIState {
     uiZoomLevel: 0,
     editorFontZoomLevel: 0,
     worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
+    workspaceStatuses: cloneDefaultWorkspaceStatuses(),
+    workspaceBoardOpacity: 1,
+    workspaceBoardCompact: false,
     statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
     statusBarVisible: true,
     dismissedUpdateVersion: null,

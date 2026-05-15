@@ -31,28 +31,34 @@ describe('applyTerminalAttributionEnv', () => {
     return tmpRoot
   }
 
+  function stripInheritedAttributionPath(pathValue: string): string {
+    const pathDelimiter = process.platform === 'win32' ? ';' : ':'
+    return pathValue
+      .split(pathDelimiter)
+      .filter((entry) => !entry.includes('orca-terminal-attribution'))
+      .join(pathDelimiter)
+  }
+
+  function cleanAttributionEnv(env?: Record<string, string>): Record<string, string> {
+    const base = { ...process.env }
+    delete base.ORCA_ENABLE_GIT_ATTRIBUTION
+    delete base.ORCA_GIT_COMMIT_TRAILER
+    delete base.ORCA_GH_PR_FOOTER
+    delete base.ORCA_GH_ISSUE_FOOTER
+    delete base.ORCA_ATTRIBUTION_SHIM_DIR
+    delete base.ORCA_REAL_GIT
+    delete base.ORCA_REAL_GH
+    base.PATH = stripInheritedAttributionPath(base.PATH ?? '')
+    const next = { ...base, ...env }
+    return next as Record<string, string>
+  }
+
   function runGit(repo: string, args: string[], env?: Record<string, string>): string {
     return execFileSync('git', args, {
       cwd: repo,
       encoding: 'utf8',
-      env: { ...getCleanProcessEnv(), ...env }
+      env: cleanAttributionEnv(env)
     })
-  }
-
-  function getCleanProcessEnv(): NodeJS.ProcessEnv {
-    const env = { ...process.env }
-    delete env.ORCA_ENABLE_GIT_ATTRIBUTION
-    delete env.ORCA_GIT_COMMIT_TRAILER
-    delete env.ORCA_GH_PR_FOOTER
-    delete env.ORCA_GH_ISSUE_FOOTER
-    delete env.ORCA_ATTRIBUTION_SHIM_DIR
-    delete env.ORCA_REAL_GIT
-    delete env.ORCA_REAL_GH
-    env.PATH = (env.PATH ?? '')
-      .split(process.platform === 'win32' ? ';' : ':')
-      .filter((entry) => !entry.replace(/\\/g, '/').includes('/orca-terminal-attribution/'))
-      .join(process.platform === 'win32' ? ';' : ':')
-    return env
   }
 
   it('does not amend HEAD when git commit --dry-run exits successfully', () => {
@@ -66,7 +72,7 @@ describe('applyTerminalAttributionEnv', () => {
     runGit(repo, ['add', 'README.md'])
     runGit(repo, ['commit', '-m', 'initial'])
 
-    const attributionEnv = { PATH: process.env.PATH ?? '' }
+    const attributionEnv = { PATH: stripInheritedAttributionPath(process.env.PATH ?? '') }
     applyTerminalAttributionEnv(attributionEnv, {
       enabled: true,
       userDataPath: join(root, 'user-data')
@@ -99,7 +105,7 @@ describe('applyTerminalAttributionEnv', () => {
     writeFileSync(join(repo, 'README.md'), 'initial\n')
     runGit(repo, ['add', 'README.md'])
 
-    const attributionEnv = { PATH: process.env.PATH ?? '' }
+    const attributionEnv = { PATH: stripInheritedAttributionPath(process.env.PATH ?? '') }
     applyTerminalAttributionEnv(attributionEnv, {
       enabled: true,
       userDataPath: join(root, 'user-data')
@@ -124,7 +130,7 @@ describe('applyTerminalAttributionEnv', () => {
     runGit(repo, ['commit', '-m', 'initial'])
     writeFileSync(join(repo, 'README.md'), 'changed\n')
 
-    const attributionEnv = { PATH: process.env.PATH ?? '' }
+    const attributionEnv = { PATH: stripInheritedAttributionPath(process.env.PATH ?? '') }
     applyTerminalAttributionEnv(attributionEnv, {
       enabled: true,
       userDataPath: join(root, 'user-data')
@@ -147,7 +153,7 @@ describe('applyTerminalAttributionEnv', () => {
     writeFileSync(join(repo, 'README.md'), 'initial\n')
     runGit(repo, ['add', 'README.md'])
 
-    const attributionEnv = { PATH: process.env.PATH ?? '' }
+    const attributionEnv = { PATH: stripInheritedAttributionPath(process.env.PATH ?? '') }
     applyTerminalAttributionEnv(attributionEnv, {
       enabled: true,
       userDataPath: join(root, 'user-data')
@@ -172,7 +178,7 @@ describe('applyTerminalAttributionEnv', () => {
     writeFileSync(messagePath, 'initial from file\n')
     runGit(repo, ['add', 'README.md'])
 
-    const attributionEnv = { PATH: process.env.PATH ?? '' }
+    const attributionEnv = { PATH: stripInheritedAttributionPath(process.env.PATH ?? '') }
     applyTerminalAttributionEnv(attributionEnv, {
       enabled: true,
       userDataPath: join(root, 'user-data')
@@ -205,7 +211,9 @@ exit 1
     )
     chmodSync(join(binDir, 'git'), 0o755)
 
-    const attributionEnv = { PATH: `${binDir}:${process.env.PATH ?? ''}` }
+    const attributionEnv = {
+      PATH: `${binDir}:${stripInheritedAttributionPath(process.env.PATH ?? '')}`
+    }
     applyTerminalAttributionEnv(attributionEnv, {
       enabled: true,
       userDataPath: join(root, 'user-data')
@@ -214,7 +222,7 @@ exit 1
     expect(() =>
       execFileSync('git', ['commit', '-F', join(root, 'missing-message.txt')], {
         encoding: 'utf8',
-        env: { ...process.env, ...attributionEnv }
+        env: cleanAttributionEnv(attributionEnv)
       })
     ).toThrow()
 
@@ -242,7 +250,9 @@ exit 1
     )
     chmodSync(join(binDir, 'git'), 0o755)
 
-    const attributionEnv = { PATH: `${binDir}:${process.env.PATH ?? ''}` }
+    const attributionEnv = {
+      PATH: `${binDir}:${stripInheritedAttributionPath(process.env.PATH ?? '')}`
+    }
     applyTerminalAttributionEnv(attributionEnv, {
       enabled: true,
       userDataPath: join(root, 'user-data')
@@ -250,15 +260,15 @@ exit 1
 
     execFileSync('git', ['commit', '-C', 'HEAD'], {
       encoding: 'utf8',
-      env: { ...process.env, ...attributionEnv }
+      env: cleanAttributionEnv(attributionEnv)
     })
     execFileSync('git', ['commit', '--fixup', 'HEAD'], {
       encoding: 'utf8',
-      env: { ...process.env, ...attributionEnv }
+      env: cleanAttributionEnv(attributionEnv)
     })
     execFileSync('git', ['commit', '-F', messagePath, '--fixup', 'HEAD'], {
       encoding: 'utf8',
-      env: { ...process.env, ...attributionEnv }
+      env: cleanAttributionEnv(attributionEnv)
     })
 
     expect(readFileSync(argsPath, 'utf8')).not.toContain('Co-authored-by: Orca')
@@ -290,7 +300,7 @@ grep -Fq 'Co-authored-by: Orca <help@stably.ai>' "$1"
     writeFileSync(join(repo, 'README.md'), 'initial\n')
     runGit(repo, ['add', 'README.md'])
 
-    const attributionEnv = { PATH: process.env.PATH ?? '' }
+    const attributionEnv = { PATH: stripInheritedAttributionPath(process.env.PATH ?? '') }
     applyTerminalAttributionEnv(attributionEnv, {
       enabled: true,
       userDataPath: join(root, 'user-data')
@@ -334,7 +344,9 @@ exit 1
     )
     chmodSync(join(binDir, 'git'), 0o755)
 
-    const attributionEnv = { PATH: `${binDir}:${process.env.PATH ?? ''}` }
+    const attributionEnv = {
+      PATH: `${binDir}:${stripInheritedAttributionPath(process.env.PATH ?? '')}`
+    }
     applyTerminalAttributionEnv(attributionEnv, {
       enabled: true,
       userDataPath: join(root, 'user-data')
@@ -342,7 +354,7 @@ exit 1
 
     execFileSync('git', ['commit', '-m', 'signed commit'], {
       encoding: 'utf8',
-      env: { ...process.env, ...attributionEnv }
+      env: cleanAttributionEnv(attributionEnv)
     })
 
     expect(existsSync(commitPath)).toBe(true)
@@ -369,7 +381,9 @@ exit 1
     )
     chmodSync(join(binDir, 'git'), 0o755)
 
-    const attributionEnv = { PATH: `${binDir}:${process.env.PATH ?? ''}` }
+    const attributionEnv = {
+      PATH: `${binDir}:${stripInheritedAttributionPath(process.env.PATH ?? '')}`
+    }
     applyTerminalAttributionEnv(attributionEnv, {
       enabled: true,
       userDataPath: join(root, 'user-data')
@@ -377,7 +391,7 @@ exit 1
 
     execFileSync('git', ['commit'], {
       encoding: 'utf8',
-      env: { ...process.env, ...attributionEnv }
+      env: cleanAttributionEnv(attributionEnv)
     })
 
     expect(readFileSync(argsPath, 'utf8')).toBe('commit\n')
@@ -413,7 +427,9 @@ exit 1
       'utf8'
     )
     chmodSync(join(binDir, 'gh'), 0o755)
-    const attributionEnv = { PATH: `${binDir}:${process.env.PATH ?? ''}` }
+    const attributionEnv = {
+      PATH: `${binDir}:${stripInheritedAttributionPath(process.env.PATH ?? '')}`
+    }
     applyTerminalAttributionEnv(attributionEnv, {
       enabled: true,
       userDataPath: join(root, 'user-data')
@@ -421,7 +437,7 @@ exit 1
 
     const output = execFileSync('gh', ['pr', 'create'], {
       encoding: 'utf8',
-      env: { ...process.env, ...attributionEnv }
+      env: cleanAttributionEnv(attributionEnv)
     })
 
     expect(output).toBe('interactive create complete\n')
@@ -469,7 +485,9 @@ exit 1
       'utf8'
     )
     chmodSync(join(binDir, 'gh'), 0o755)
-    const attributionEnv = { PATH: `${binDir}:${process.env.PATH ?? ''}` }
+    const attributionEnv = {
+      PATH: `${binDir}:${stripInheritedAttributionPath(process.env.PATH ?? '')}`
+    }
     applyTerminalAttributionEnv(attributionEnv, {
       enabled: true,
       userDataPath: join(root, 'user-data')
@@ -478,13 +496,13 @@ exit 1
     expect(
       execFileSync('gh', ['pr', 'create', '--fill'], {
         encoding: 'utf8',
-        env: { ...process.env, ...attributionEnv }
+        env: cleanAttributionEnv(attributionEnv)
       })
     ).toBe('https://github.com/stablyai/orca/pull/123\n')
     expect(
       execFileSync('gh', ['issue', 'create', '--title', 'Issue', '--body', 'Body'], {
         encoding: 'utf8',
-        env: { ...process.env, ...attributionEnv }
+        env: cleanAttributionEnv(attributionEnv)
       })
     ).toBe('https://github.com/stablyai/orca/issues/456\n')
 
@@ -532,7 +550,9 @@ exit 1
       'utf8'
     )
     chmodSync(join(binDir, 'gh'), 0o755)
-    const attributionEnv = { PATH: `${binDir}:${process.env.PATH ?? ''}` }
+    const attributionEnv = {
+      PATH: `${binDir}:${stripInheritedAttributionPath(process.env.PATH ?? '')}`
+    }
     applyTerminalAttributionEnv(attributionEnv, {
       enabled: true,
       userDataPath: join(root, 'user-data')
@@ -540,13 +560,13 @@ exit 1
 
     const output = execFileSync('gh', ['pr', 'create', '--help'], {
       encoding: 'utf8',
-      env: { ...process.env, ...attributionEnv }
+      env: cleanAttributionEnv(attributionEnv)
     })
 
     expect(output).toBe('pr help\n')
     const issueOutput = execFileSync('gh', ['issue', 'create', '--help'], {
       encoding: 'utf8',
-      env: { ...process.env, ...attributionEnv }
+      env: cleanAttributionEnv(attributionEnv)
     })
 
     expect(issueOutput).toBe('issue help\n')
@@ -579,7 +599,9 @@ exit 1
       'utf8'
     )
     chmodSync(join(binDir, 'gh'), 0o755)
-    const attributionEnv = { PATH: `${binDir}:${process.env.PATH ?? ''}` }
+    const attributionEnv = {
+      PATH: `${binDir}:${stripInheritedAttributionPath(process.env.PATH ?? '')}`
+    }
     applyTerminalAttributionEnv(attributionEnv, {
       enabled: true,
       userDataPath: join(root, 'user-data')
@@ -587,7 +609,7 @@ exit 1
 
     const output = execFileSync('gh', ['issue', 'create'], {
       encoding: 'utf8',
-      env: { ...process.env, ...attributionEnv }
+      env: cleanAttributionEnv(attributionEnv)
     })
 
     expect(output).toBe('interactive issue create complete\n')
@@ -619,7 +641,9 @@ exit 1
       'utf8'
     )
     chmodSync(join(binDir, 'gh'), 0o755)
-    const attributionEnv = { PATH: `${binDir}:${process.env.PATH ?? ''}` }
+    const attributionEnv = {
+      PATH: `${binDir}:${stripInheritedAttributionPath(process.env.PATH ?? '')}`
+    }
     applyTerminalAttributionEnv(attributionEnv, {
       enabled: true,
       userDataPath: join(root, 'user-data')
@@ -627,7 +651,7 @@ exit 1
 
     const output = execFileSync('gh', ['pr', 'create', '--fill'], {
       encoding: 'utf8',
-      env: { ...process.env, ...attributionEnv }
+      env: cleanAttributionEnv(attributionEnv)
     })
 
     expect(output).toBe('https://github.com/stablyai/orca/pull/123\n')
@@ -658,7 +682,9 @@ exit 1
       'utf8'
     )
     chmodSync(join(binDir, 'gh'), 0o755)
-    const attributionEnv = { PATH: `${binDir}:${process.env.PATH ?? ''}` }
+    const attributionEnv = {
+      PATH: `${binDir}:${stripInheritedAttributionPath(process.env.PATH ?? '')}`
+    }
     applyTerminalAttributionEnv(attributionEnv, {
       enabled: true,
       userDataPath: join(root, 'user-data')
@@ -666,7 +692,7 @@ exit 1
 
     const output = execFileSync('gh', ['pr', 'create', '--fill'], {
       encoding: 'utf8',
-      env: { ...process.env, ...attributionEnv }
+      env: cleanAttributionEnv(attributionEnv)
     })
 
     expect(output).toBe('https://github.com/stablyai/orca/pull/123\n')
@@ -689,7 +715,9 @@ exit 1
 
   it('does not duplicate shim directories when applied to an already-injected env', () => {
     const root = makeTmpRoot()
-    const baseEnv: Record<string, string> = { PATH: process.env.PATH ?? '' }
+    const baseEnv: Record<string, string> = {
+      PATH: stripInheritedAttributionPath(process.env.PATH ?? '')
+    }
     const options = { enabled: true, userDataPath: join(root, 'user-data') }
     const pathDelimiter = process.platform === 'win32' ? ';' : ':'
 
@@ -705,7 +733,7 @@ exit 1
   it('writes PowerShell wrappers without raw-template backslash escapes', () => {
     const root = makeTmpRoot()
     applyTerminalAttributionEnv(
-      { PATH: process.env.PATH ?? '' },
+      { PATH: stripInheritedAttributionPath(process.env.PATH ?? '') },
       { enabled: true, userDataPath: join(root, 'user-data') }
     )
 

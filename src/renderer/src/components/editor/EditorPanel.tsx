@@ -5,7 +5,16 @@ across multiple components. Autosave now lives in a smaller headless controller
 so hidden editor UI no longer participates in shutdown. */
 import React, { useCallback, useEffect, useRef, useState, Suspense } from 'react'
 import * as monaco from 'monaco-editor'
-import { Columns2, Copy, Eye, ExternalLink, FileText, MoreHorizontal, Rows2 } from 'lucide-react'
+import {
+  Columns2,
+  Copy,
+  Eye,
+  ExternalLink,
+  FileText,
+  ListTree,
+  MoreHorizontal,
+  Rows2
+} from 'lucide-react'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { getConnectionId } from '@/lib/connection-context'
@@ -29,6 +38,7 @@ import EditorViewToggle, {
 } from './EditorViewToggle'
 import { EditorContent } from './EditorContent'
 import { scrollTopCache, cursorPositionCache, diffViewStateCache } from '@/lib/scroll-cache'
+import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import type { GitDiffResult } from '../../../../shared/types'
 import {
   getOpenFilesForExternalFileChange,
@@ -51,6 +61,19 @@ import {
   isMarkdownPreviewShortcut
 } from './markdown-preview-controls'
 import type { EditorToggleValue } from './EditorViewToggle'
+import {
+  createRuntimePath,
+  getRuntimeFileReadScope,
+  readRuntimeFileContent,
+  renameRuntimePath,
+  runtimePathExists
+} from '@/runtime/runtime-file-client'
+import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import {
+  getRuntimeGitBranchDiff,
+  getRuntimeGitDiff,
+  getRuntimeGitScope
+} from '@/runtime/runtime-git-client'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -190,6 +213,7 @@ function EditorPanelInner({
   const activeFileWorktreeId = activeFile?.worktreeId ?? null
   const activeFileMode = activeFile?.mode ?? null
   const activeFileDiffSource = activeFile?.diffSource
+  const activeFileRuntimeEnvironmentId = activeFile?.runtimeEnvironmentId
   const activeViewStateId = activeViewStateIdProp ?? activeFileId
   const [fileContents, setFileContents] = useState<Record<string, FileContent>>({})
   const [diffContents, setDiffContents] = useState<Record<string, DiffContent>>({})
@@ -211,6 +235,7 @@ function EditorPanelInner({
   const [copiedPathToast, setCopiedPathToast] = useState<{ fileId: string; token: number } | null>(
     null
   )
+  const [showMarkdownTableOfContents, setShowMarkdownTableOfContents] = useState(false)
   const [renameDialogFileId, setRenameDialogFileId] = useState<string | null>(null)
   const renameDialogFile = renameDialogFileId
     ? openFiles.find((f) => f.id === renameDialogFileId)
@@ -379,18 +404,26 @@ function EditorPanelInner({
       try {
         const connectionId = getConnectionId(worktreeId ?? null) ?? undefined
         const restoredOpenFile = openFilesRef.current.find((file) => file.id === id)
-        if (
-          !connectionId &&
-          restoredOpenFile?.filePath === filePath &&
-          restoredOpenFile.relativePath === filePath
-        ) {
+        const activeSettings = useAppStore.getState().settings
+        const readSettings = settingsForRuntimeOwner(
+          activeSettings,
+          restoredOpenFile?.runtimeEnvironmentId
+        )
+        if (restoredOpenFile?.filePath === filePath && restoredOpenFile.relativePath === filePath) {
+          if (readSettings?.activeRuntimeEnvironmentId?.trim() || connectionId) {
+            // Why: restored external-file tabs contain client-local absolute
+            // paths. Remote runtime and SSH workspaces cannot read those paths
+            // without an explicit upload/import flow.
+            throw new Error('External local files are not available for remote workspaces.')
+          }
           // Why: external files selected through OS/browser/drop flows are
           // authorized in the main process, but that grant is in-memory. On
           // session restore, re-authorize only tabs that were stored with an
           // absolute relativePath because they came from outside a worktree.
           await window.api.fs.authorizeExternalPath({ targetPath: filePath })
         }
-        const key = inFlightReadKey(connectionId, filePath)
+        const readScope = getRuntimeFileReadScope(readSettings, connectionId)
+        const key = inFlightReadKey(readScope, filePath)
         // Why: share the IPC round-trip across split-pane EditorPanels viewing
         // the same file. The first caller starts the read and registers the
         // promise; concurrent callers (triggered by the same external-change
@@ -398,7 +431,13 @@ function EditorPanelInner({
         // downstream setContent transactions.
         let pending = inFlightFileReads.get(key)
         if (!pending) {
-          pending = window.api.fs.readFile({ filePath, connectionId }) as Promise<FileContent>
+          pending = readRuntimeFileContent({
+            settings: readSettings,
+            filePath,
+            relativePath: restoredOpenFile?.relativePath,
+            worktreeId,
+            connectionId
+          }) as Promise<FileContent>
           inFlightFileReads.set(key, pending)
           // Why: limit deduplication to synchronous callers (like N split panes
           // responding to the exact same event loop dispatch). Caching the promise
@@ -458,6 +497,9 @@ function EditorPanelInner({
           ? file.branchCompare
           : null
       const connectionId = getConnectionId(file.worktreeId) ?? undefined
+      const activeSettings = useAppStore.getState().settings
+      const fileSettings = settingsForRuntimeOwner(activeSettings, file.runtimeEnvironmentId)
+      const gitScope = getRuntimeGitScope(fileSettings, connectionId)
       // Why: Changes view mode runs on top of an edit-mode tab and asks git
       // for an unstaged diff against HEAD for that file. Use the 'unstaged'
       // diff-source key so multiple Changes tabs across split panes share one
@@ -469,7 +511,7 @@ function EditorPanelInner({
       const compareAgainstHead = file.mode === 'edit'
       const key = inFlightDiffKey(
         { ...file, diffSource: effectiveDiffSource },
-        connectionId,
+        gitScope,
         compareAgainstHead
       )
       // Why: same rationale as inFlightFileReads above — a single external
@@ -480,25 +522,37 @@ function EditorPanelInner({
       if (!pending) {
         pending = (
           effectiveDiffSource === 'branch' && branchCompare
-            ? window.api.git.branchDiff({
-                worktreePath,
-                compare: {
-                  baseRef: branchCompare.baseRef,
-                  baseOid: branchCompare.baseOid!,
-                  headOid: branchCompare.headOid!,
-                  mergeBase: branchCompare.mergeBase!
+            ? getRuntimeGitBranchDiff(
+                {
+                  settings: fileSettings,
+                  worktreeId: file.worktreeId,
+                  worktreePath,
+                  connectionId
                 },
-                filePath: file.relativePath,
-                oldPath: file.branchOldPath,
-                connectionId
-              })
-            : window.api.git.diff({
-                worktreePath,
-                filePath: file.relativePath,
-                staged: effectiveDiffSource === 'staged',
-                compareAgainstHead,
-                connectionId
-              })
+                {
+                  compare: {
+                    baseRef: branchCompare.baseRef,
+                    baseOid: branchCompare.baseOid!,
+                    headOid: branchCompare.headOid!,
+                    mergeBase: branchCompare.mergeBase!
+                  },
+                  filePath: file.relativePath,
+                  oldPath: file.branchOldPath
+                }
+              )
+            : getRuntimeGitDiff(
+                {
+                  settings: fileSettings,
+                  worktreeId: file.worktreeId,
+                  worktreePath,
+                  connectionId
+                },
+                {
+                  filePath: file.relativePath,
+                  staged: effectiveDiffSource === 'staged',
+                  compareAgainstHead
+                }
+              )
         ) as Promise<DiffContent>
         inFlightDiffReads.set(key, pending)
         queueMicrotask(() => {
@@ -875,10 +929,20 @@ function EditorPanelInner({
         oldPath.length - renameDialogFile.relativePath.length - 1
       )
       const newPath = `${worktreeRoot}/${newRelPath}`
+      const connectionId = getConnectionId(renameDialogFile.worktreeId) ?? undefined
+      const fileContext = {
+        settings: settingsForRuntimeOwner(
+          useAppStore.getState().settings,
+          renameDialogFile.runtimeEnvironmentId
+        ),
+        worktreeId: renameDialogFile.worktreeId,
+        worktreePath: worktreeRoot,
+        connectionId
+      }
 
       // Prevent silently overwriting an existing file (but allow keeping
       // the current name — the file's own path is not a conflict).
-      if (newPath !== oldPath && (await window.api.shell.pathExists(newPath))) {
+      if (newPath !== oldPath && (await runtimePathExists(fileContext, newPath))) {
         setRenameError('A file with that name already exists')
         return
       }
@@ -915,12 +979,12 @@ function EditorPanelInner({
       // if the directory already exists (assertNotExists guard), so only call
       // it when the directory is not yet on disk.
       const newDir = newPath.slice(0, newPath.lastIndexOf('/'))
-      if (newDir !== worktreeRoot && !(await window.api.shell.pathExists(newDir))) {
-        await window.api.fs.createDir({ dirPath: newDir })
+      if (newDir !== worktreeRoot && !(await runtimePathExists(fileContext, newDir))) {
+        await createRuntimePath(fileContext, newDir, 'directory')
       }
 
       try {
-        await window.api.fs.rename({ oldPath, newPath })
+        await renameRuntimePath(fileContext, oldPath, newPath)
       } catch (err) {
         setRenameError(err instanceof Error ? err.message : 'Failed to rename file')
         return
@@ -931,6 +995,7 @@ function EditorPanelInner({
         filePath: newPath,
         relativePath: newRelPath,
         worktreeId: renameDialogFile.worktreeId,
+        runtimeEnvironmentId: renameDialogFile.runtimeEnvironmentId,
         language: detectLanguage(newRelPath),
         mode: 'edit'
       })
@@ -998,6 +1063,7 @@ function EditorPanelInner({
         filePath: activeFilePath,
         relativePath: activeFileRelativePath,
         worktreeId: activeFileWorktreeId,
+        runtimeEnvironmentId: activeFileRuntimeEnvironmentId,
         language: shortcutLanguage
       })
     }
@@ -1009,6 +1075,7 @@ function EditorPanelInner({
     activeFileMode,
     activeFilePath,
     activeFileRelativePath,
+    activeFileRuntimeEnvironmentId,
     activeFileWorktreeId,
     openMarkdownPreview
   ])
@@ -1129,6 +1196,9 @@ function EditorPanelInner({
     : hasViewModeToggle
       ? mdViewMode
       : 'edit'
+  const isMarkdownTableOfContentsDisabled = hasViewModeToggle && mdViewMode === 'source'
+  const canShowMarkdownTableOfContents =
+    isMarkdown && (hasViewModeToggle || activeFile.mode === 'markdown-preview')
   const canShowMarkdownPreview = canOpenMarkdownPreview({
     language: resolvedLanguage,
     mode: activeFile.mode,
@@ -1217,6 +1287,7 @@ function EditorPanelInner({
                         filePath: activeFile.filePath,
                         relativePath: activeFile.relativePath,
                         worktreeId: activeFile.worktreeId,
+                        runtimeEnvironmentId: activeFile.runtimeEnvironmentId,
                         language: resolvedLanguage
                       })
                     }
@@ -1229,6 +1300,17 @@ function EditorPanelInner({
                 {canShowMarkdownPreview && <DropdownMenuSeparator />}
                 <DropdownMenuItem
                   onSelect={() => {
+                    if (
+                      isLocalPathOpenBlocked(
+                        settingsForRuntimeOwner(settings, activeFile.runtimeEnvironmentId),
+                        {
+                          connectionId: getConnectionId(activeFile.worktreeId)
+                        }
+                      )
+                    ) {
+                      showLocalPathOpenBlockedToast()
+                      return
+                    }
                     window.api.shell.openPath(activeFile.filePath)
                   }}
                 >
@@ -1312,6 +1394,33 @@ function EditorPanelInner({
               }
             />
           )}
+          {canShowMarkdownTableOfContents && (
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className={`p-1 rounded hover:bg-accent hover:text-foreground transition-colors flex-shrink-0 disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted-foreground ${
+                      showMarkdownTableOfContents && !isMarkdownTableOfContentsDisabled
+                        ? 'bg-accent text-foreground'
+                        : 'text-muted-foreground'
+                    }`}
+                    onClick={() => setShowMarkdownTableOfContents((shown) => !shown)}
+                    disabled={isMarkdownTableOfContentsDisabled}
+                    aria-label="Table of Contents"
+                    aria-pressed={showMarkdownTableOfContents}
+                  >
+                    <ListTree size={14} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={4}>
+                  {isMarkdownTableOfContentsDisabled
+                    ? 'Table of Contents is available in rich or preview mode'
+                    : 'Table of Contents'}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
           {hasViewModeToggle && isMarkdown && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -1366,6 +1475,8 @@ function EditorPanelInner({
           handleDirtyStateHint={handleDirtyStateHint}
           handleSave={handleSave}
           reloadFileContent={reloadFileContent}
+          showMarkdownTableOfContents={showMarkdownTableOfContents}
+          onCloseMarkdownTableOfContents={() => setShowMarkdownTableOfContents(false)}
         />
       </Suspense>
       <UntitledFileRenameDialog
@@ -1377,6 +1488,13 @@ function EditorPanelInner({
                 ?.path ?? '')
             : ''
         }
+        disableBrowse={Boolean(
+          settingsForRuntimeOwner(
+            settings,
+            renameDialogFile?.runtimeEnvironmentId
+          )?.activeRuntimeEnvironmentId?.trim() ||
+          (renameDialogFile ? getConnectionId(renameDialogFile.worktreeId) : null)
+        )}
         externalError={renameError}
         onClose={() => {
           setRenameDialogFileId(null)

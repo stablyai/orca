@@ -2,13 +2,47 @@
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const callMock = vi.fn()
+const {
+  callMock,
+  serveOrcaAppMock,
+  getDefaultUserDataPathMock,
+  addEnvironmentFromPairingCodeMock,
+  listEnvironmentsMock
+} = vi.hoisted(() => ({
+  callMock: vi.fn(),
+  serveOrcaAppMock: vi.fn(),
+  getDefaultUserDataPathMock: vi.fn(() => '/tmp/orca-user-data'),
+  addEnvironmentFromPairingCodeMock: vi.fn(),
+  listEnvironmentsMock: vi.fn()
+}))
 
 vi.mock('./runtime-client', () => {
   class RuntimeClient {
+    readonly isRemote: boolean
     call = callMock
     getCliStatus = vi.fn()
     openOrca = vi.fn()
+
+    constructor(
+      _userDataPath?: string,
+      _requestTimeoutMs?: number,
+      remotePairingCode?: string | null,
+      environmentSelector?: string | null
+    ) {
+      const effectivePairingCode =
+        remotePairingCode === undefined
+          ? (process.env.ORCA_PAIRING_CODE ?? process.env.ORCA_REMOTE_PAIRING)
+          : remotePairingCode
+      const effectiveEnvironment =
+        environmentSelector === undefined ? process.env.ORCA_ENVIRONMENT : environmentSelector
+      if (effectivePairingCode && effectiveEnvironment) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          'Use either --pairing-code or --environment, not both.'
+        )
+      }
+      this.isRemote = Boolean(effectivePairingCode || effectiveEnvironment)
+    }
   }
 
   class RuntimeClientError extends Error {
@@ -32,9 +66,18 @@ vi.mock('./runtime-client', () => {
   return {
     RuntimeClient,
     RuntimeClientError,
-    RuntimeRpcFailureError
+    RuntimeRpcFailureError,
+    serveOrcaApp: serveOrcaAppMock,
+    getDefaultUserDataPath: getDefaultUserDataPathMock
   }
 })
+
+vi.mock('./runtime/environments', () => ({
+  addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
+  listEnvironments: listEnvironmentsMock,
+  removeEnvironment: vi.fn(),
+  resolveEnvironment: vi.fn()
+}))
 
 import {
   buildCurrentWorktreeSelector,
@@ -58,9 +101,36 @@ describe('COMMAND_SPECS collision check', () => {
 describe('orca cli worktree awareness', () => {
   const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
   const originalUserDataPath = process.env.ORCA_USER_DATA_PATH
+  const originalPairingCode = process.env.ORCA_PAIRING_CODE
+  const originalRemotePairing = process.env.ORCA_REMOTE_PAIRING
+  const originalEnvironment = process.env.ORCA_ENVIRONMENT
 
   beforeEach(() => {
     callMock.mockReset()
+    serveOrcaAppMock.mockReset()
+    getDefaultUserDataPathMock.mockClear()
+    addEnvironmentFromPairingCodeMock.mockReset()
+    listEnvironmentsMock.mockReset()
+    addEnvironmentFromPairingCodeMock.mockReturnValue({
+      id: 'env-1',
+      name: 'desk',
+      createdAt: 100,
+      updatedAt: 100,
+      lastUsedAt: null,
+      runtimeId: null,
+      endpoints: [
+        {
+          id: 'ws-env-1',
+          kind: 'websocket',
+          label: 'WebSocket',
+          endpoint: 'ws://127.0.0.1:6768',
+          deviceToken: 'token',
+          publicKeyB64: 'pk'
+        }
+      ],
+      preferredEndpointId: 'ws-env-1'
+    })
+    listEnvironmentsMock.mockReturnValue([])
   })
 
   afterEach(() => {
@@ -74,6 +144,21 @@ describe('orca cli worktree awareness', () => {
       delete process.env.ORCA_USER_DATA_PATH
     } else {
       process.env.ORCA_USER_DATA_PATH = originalUserDataPath
+    }
+    if (originalPairingCode === undefined) {
+      delete process.env.ORCA_PAIRING_CODE
+    } else {
+      process.env.ORCA_PAIRING_CODE = originalPairingCode
+    }
+    if (originalRemotePairing === undefined) {
+      delete process.env.ORCA_REMOTE_PAIRING
+    } else {
+      process.env.ORCA_REMOTE_PAIRING = originalRemotePairing
+    }
+    if (originalEnvironment === undefined) {
+      delete process.env.ORCA_ENVIRONMENT
+    } else {
+      process.env.ORCA_ENVIRONMENT = originalEnvironment
     }
   })
 
@@ -113,6 +198,25 @@ describe('orca cli worktree awareness', () => {
       worktree: `path:${path.resolve('/tmp/repo/feature')}`
     })
     expect(logSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects remote `worktree current` without listing worktrees from client cwd', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['worktree', 'current', '--pairing-code', 'remote-runtime', '--json'],
+      '/tmp/repo/src'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'current is a local cwd shortcut and cannot be resolved against a remote runtime.'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
   })
 
   it('uses cwd when active is passed to worktree.set', async () => {
@@ -170,6 +274,192 @@ describe('orca cli worktree awareness', () => {
       activate: true
     })
   })
+
+  it('starts a foreground headless server through `serve`', async () => {
+    serveOrcaAppMock.mockResolvedValue(0)
+    process.env.ORCA_ENVIRONMENT = 'stale-env'
+
+    await main(
+      ['serve', '--json', '--port', '6768', '--pairing-address', '100.64.1.20', '--no-pairing'],
+      '/tmp/repo'
+    )
+
+    expect(serveOrcaAppMock).toHaveBeenCalledWith({
+      json: true,
+      port: '6768',
+      pairingAddress: '100.64.1.20',
+      noPairing: true,
+      mobilePairing: false
+    })
+  })
+
+  it('starts a foreground headless server with mobile pairing enabled', async () => {
+    serveOrcaAppMock.mockResolvedValue(0)
+
+    await main(
+      ['serve', '--pairing-address', '100.64.1.20', '--mobile-pairing', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(serveOrcaAppMock).toHaveBeenCalledWith({
+      json: true,
+      port: null,
+      pairingAddress: '100.64.1.20',
+      noPairing: false,
+      mobilePairing: true
+    })
+  })
+
+  it('rejects contradictory serve pairing flags', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['serve', '--mobile-pairing', '--no-pairing', '--json'], '/tmp/repo')
+
+    expect(serveOrcaAppMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Use either --mobile-pairing or --no-pairing, not both.'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects invalid serve ports before launching the app', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['serve', '--port', 'not-a-port', '--json'], '/tmp/repo')
+
+    expect(serveOrcaAppMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Invalid --port value: not-a-port'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('lists saved environments even when ORCA_ENVIRONMENT is set', async () => {
+    process.env.ORCA_ENVIRONMENT = 'stale-env'
+    listEnvironmentsMock.mockReturnValue([addEnvironmentFromPairingCodeMock()])
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['environment', 'list', '--json'], '/tmp/repo')
+
+    expect(listEnvironmentsMock).toHaveBeenCalledWith('/tmp/orca-user-data')
+    expect(callMock).not.toHaveBeenCalled()
+    expect(logSpy.mock.calls[0]?.[0]).not.toContain('token')
+    expect(logSpy.mock.calls[0]?.[0]).not.toContain('publicKeyB64')
+  })
+
+  it('adds saved environments even when ORCA_ENVIRONMENT is set', async () => {
+    process.env.ORCA_ENVIRONMENT = 'stale-env'
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['environment', 'add', '--name', 'desk', '--pairing-code', 'orca://pair#abc', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(addEnvironmentFromPairingCodeMock).toHaveBeenCalledWith('/tmp/orca-user-data', {
+      name: 'desk',
+      pairingCode: 'orca://pair#abc'
+    })
+    expect(callMock).not.toHaveBeenCalled()
+    expect(logSpy.mock.calls[0]?.[0]).not.toContain('token')
+    expect(logSpy.mock.calls[0]?.[0]).not.toContain('publicKeyB64')
+  })
+
+  it('resolves repo.add paths against the invoking cli cwd', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_repo_add', {
+        repo: {
+          id: 'repo-1',
+          path: path.resolve('/tmp/repo/apps/web'),
+          displayName: 'web'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['repo', 'add', '--path', './apps/web', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('repo.add', {
+      path: path.resolve('/tmp/repo/apps/web')
+    })
+  })
+
+  it('rejects remote repo.add relative paths instead of resolving against client cwd', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['repo', 'add', '--path', './apps/web', '--pairing-code', 'remote-runtime', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Remote repo add requires --path to be an absolute path on the remote server.'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('sends remote repo.add absolute paths unchanged', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_repo_add', {
+        repo: {
+          id: 'repo-1',
+          path: '/srv/orca/web',
+          displayName: 'web'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['repo', 'add', '--path', '/srv/orca/web', '--pairing-code', 'remote-runtime', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('repo.add', {
+      path: '/srv/orca/web'
+    })
+  })
+
+  it.each(['C:\\repo', 'C:/repo', '\\\\server\\share\\repo', '//server/share/repo'])(
+    'sends remote repo.add server absolute path %s unchanged',
+    async (serverPath) => {
+      queueFixtures(
+        callMock,
+        okFixture('req_repo_add', {
+          repo: {
+            id: 'repo-1',
+            path: serverPath,
+            displayName: 'web'
+          }
+        })
+      )
+      vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      await main(
+        ['repo', 'add', '--path', serverPath, '--pairing-code', 'remote-runtime', '--json'],
+        '/tmp/repo'
+      )
+
+      expect(callMock).toHaveBeenCalledWith('repo.add', {
+        path: serverPath
+      })
+    }
+  )
 
   it('opts into setup and activation when worktree.create runs hooks', async () => {
     queueFixtures(
@@ -351,5 +641,80 @@ describe('orca cli worktree awareness', () => {
       worktree: `path:${path.resolve('/tmp/repo/feature')}`,
       limit: undefined
     })
+  })
+
+  it('rejects implicit remote terminal create instead of resolving from client cwd', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['terminal', 'create', '--pairing-code', 'remote-runtime', '--json'],
+      '/tmp/client/repo/src'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Remote terminal create requires --worktree'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('sends explicit remote terminal create worktree selectors unchanged', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_create', {
+        terminal: {
+          handle: 'term_1',
+          worktreeId: 'repo-1::/srv/orca/feature',
+          title: 'Server terminal'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'terminal',
+        'create',
+        '--worktree',
+        'id:repo-1::/srv/orca/feature',
+        '--pairing-code',
+        'remote-runtime',
+        '--json'
+      ],
+      '/tmp/client/repo/src'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('terminal.create', {
+      worktree: 'id:repo-1::/srv/orca/feature',
+      command: undefined,
+      title: undefined,
+      focus: false
+    })
+  })
+
+  it('does not resolve implicit remote browser targets from client cwd', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_tab_current', {
+        tab: {
+          browserPageId: 'page-1',
+          index: 0,
+          url: 'https://example.com',
+          title: 'Example',
+          active: true,
+          worktreeId: 'repo-1::/srv/orca/feature'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['tab', 'current', '--pairing-code', 'remote-runtime', '--json'], '/tmp/client/src')
+
+    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledWith('browser.tabCurrent', { worktree: undefined })
   })
 })

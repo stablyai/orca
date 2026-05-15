@@ -11,6 +11,7 @@ import type {
   IssueInfo,
   PRCheckDetail,
   PRComment,
+  Repo,
   Worktree,
   GitHubWorkItem
 } from '../../../../shared/types'
@@ -25,6 +26,7 @@ import type {
 } from '../../../../shared/github-project-types'
 import { sortWorkItemsByUpdatedAt, PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items'
 import { syncPRChecksStatus } from './github-checks'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 
 // ─── ProjectV2 cache types ────────────────────────────────────────────
 // Why: declared separately from CacheEntry<T> (not a generified E parameter)
@@ -75,6 +77,18 @@ function queryOverrideKeyPart(queryOverride: string | undefined): string {
     return ''
   }
   return `:q=${queryOverride}`
+}
+
+function getRuntimeRepoTarget(
+  state: AppState,
+  repoPath: string
+): { target: { kind: 'environment'; environmentId: string }; repo: Repo } | null {
+  const target = getActiveRuntimeTarget(state.settings)
+  if (target.kind !== 'environment') {
+    return null
+  }
+  const repo = state.repos.find((candidate) => candidate.path === repoPath)
+  return repo ? { target, repo } : null
 }
 
 export function projectViewCacheKey(
@@ -616,7 +630,16 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const request = (async (): Promise<GetProjectViewTableResult> => {
       await acquireWorkItemSlot()
       try {
-        const envelope = await window.api.gh.getProjectViewTable(args)
+        const target = getActiveRuntimeTarget(get().settings)
+        const envelope =
+          target.kind === 'environment'
+            ? await callRuntimeRpc<GetProjectViewTableResult>(
+                target,
+                'github.project.viewTable',
+                args,
+                { timeoutMs: 60_000 }
+              )
+            : await window.api.gh.getProjectViewTable(args)
         if (envelope.ok) {
           const table = envelope.data
           const key = projectViewCacheKey(
@@ -703,12 +726,26 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     }
     applyRowPatch(set, cacheKey, rowId, optimisticRow)
 
-    const result = await window.api.gh.updateProjectItemField({
-      projectId: table.project.id,
-      itemId: rowId,
-      fieldId,
-      value
-    })
+    const target = getActiveRuntimeTarget(get().settings)
+    const result =
+      target.kind === 'environment'
+        ? await callRuntimeRpc<GitHubProjectMutationResult>(
+            target,
+            'github.project.updateItemField',
+            {
+              projectId: table.project.id,
+              itemId: rowId,
+              fieldId,
+              value
+            },
+            { timeoutMs: 30_000 }
+          )
+        : await window.api.gh.updateProjectItemField({
+            projectId: table.project.id,
+            itemId: rowId,
+            fieldId,
+            value
+          })
     if (!result.ok) {
       rollbackRowIfPresent(set, get, cacheKey, rowId, previousRow)
     }
@@ -741,11 +778,24 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     }
     applyRowPatch(set, cacheKey, rowId, optimisticRow)
 
-    const result = await window.api.gh.clearProjectItemField({
-      projectId: table.project.id,
-      itemId: rowId,
-      fieldId
-    })
+    const target = getActiveRuntimeTarget(get().settings)
+    const result =
+      target.kind === 'environment'
+        ? await callRuntimeRpc<GitHubProjectMutationResult>(
+            target,
+            'github.project.clearItemField',
+            {
+              projectId: table.project.id,
+              itemId: rowId,
+              fieldId
+            },
+            { timeoutMs: 30_000 }
+          )
+        : await window.api.gh.clearProjectItemField({
+            projectId: table.project.id,
+            itemId: rowId,
+            fieldId
+          })
     if (!result.ok) {
       rollbackRowIfPresent(set, get, cacheKey, rowId, previousRow)
     }
@@ -820,11 +870,12 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     // PRs goes through updatePullRequestBySlug; for issues through
     // updateIssueBySlug. We dispatch both as needed.
     let envelope: GitHubProjectMutationResult = { ok: true }
+    const target = getActiveRuntimeTarget(get().settings)
     if (
       previousRow.itemType === 'PULL_REQUEST' &&
       (updates.title !== undefined || updates.body !== undefined)
     ) {
-      const prRes = await window.api.gh.updatePullRequestBySlug({
+      const args = {
         owner,
         repo,
         number,
@@ -832,7 +883,16 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           ...(updates.title !== undefined ? { title: updates.title } : {}),
           ...(updates.body !== undefined ? { body: updates.body } : {})
         }
-      })
+      }
+      const prRes =
+        target.kind === 'environment'
+          ? await callRuntimeRpc<GitHubProjectMutationResult>(
+              target,
+              'github.project.updatePullRequestBySlug',
+              args,
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.updatePullRequestBySlug(args)
       if (!prRes.ok) {
         envelope = prRes
       }
@@ -846,7 +906,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         (previousRow.itemType === 'ISSUE' &&
           (updates.title !== undefined || updates.body !== undefined)))
     ) {
-      const issueRes = await window.api.gh.updateIssueBySlug({
+      const args = {
         owner,
         repo,
         number,
@@ -858,7 +918,16 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           ...(updates.addAssignees ? { addAssignees: updates.addAssignees } : {}),
           ...(updates.removeAssignees ? { removeAssignees: updates.removeAssignees } : {})
         }
-      })
+      }
+      const issueRes =
+        target.kind === 'environment'
+          ? await callRuntimeRpc<GitHubProjectMutationResult>(
+              target,
+              'github.project.updateIssueBySlug',
+              args,
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.updateIssueBySlug(args)
       if (!issueRes.ok) {
         envelope = issueRes
       }
@@ -899,12 +968,22 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       content: { ...previousRow.content, issueType }
     }
     applyRowPatch(set, cacheKey, rowId, optimistic)
-    const res = await window.api.gh.updateIssueTypeBySlug({
+    const target = getActiveRuntimeTarget(get().settings)
+    const args = {
       owner,
       repo,
       number,
       issueTypeId: issueType?.id ?? null
-    })
+    }
+    const res =
+      target.kind === 'environment'
+        ? await callRuntimeRpc<GitHubProjectMutationResult>(
+            target,
+            'github.project.updateIssueTypeBySlug',
+            args,
+            { timeoutMs: 30_000 }
+          )
+        : await window.api.gh.updateIssueTypeBySlug(args)
     if (!res.ok) {
       rollbackRowIfPresent(set, get, cacheKey, rowId, previousRow)
     }
@@ -1008,11 +1087,19 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const request = (async () => {
       await acquireWorkItemSlot()
       try {
-        const envelope = await window.api.gh.listWorkItems({
-          repoPath,
-          limit,
-          query: query || undefined
-        })
+        const runtimeRepo = getRuntimeRepoTarget(get(), repoPath)
+        const envelope = runtimeRepo
+          ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.listWorkItems>>>(
+              runtimeRepo.target,
+              'github.listWorkItems',
+              { repo: runtimeRepo.repo.id, limit, query: query || undefined },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.listWorkItems({
+              repoPath,
+              limit,
+              query: query || undefined
+            })
         // Why: stamp repoId at the renderer fetch boundary so every downstream
         // consumer (cross-repo merge, row rendering, drawer) can rely on the
         // field being present. Main doesn't know Orca's Repo.id.
@@ -1103,12 +1190,25 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       repos.map(async (r) => {
         await acquireWorkItemSlot()
         try {
-          const envelope = await window.api.gh.listWorkItems({
-            repoPath: r.path,
-            limit: perRepoLimit,
-            query: query || undefined,
-            before
-          })
+          const runtimeRepo = getRuntimeRepoTarget(get(), r.path)
+          const envelope = runtimeRepo
+            ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.listWorkItems>>>(
+                runtimeRepo.target,
+                'github.listWorkItems',
+                {
+                  repo: runtimeRepo.repo.id,
+                  limit: perRepoLimit,
+                  query: query || undefined,
+                  before
+                },
+                { timeoutMs: 30_000 }
+              )
+            : await window.api.gh.listWorkItems({
+                repoPath: r.path,
+                limit: perRepoLimit,
+                query: query || undefined,
+                before
+              })
           // Why: page-N partial failures don't participate in the cache's per-repo
           // error banner (which is keyed on the initial-fetch cache entry). Log the
           // classified issues-side error so pagination failures are at least
@@ -1140,10 +1240,18 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const counts = await Promise.all(
       repos.map(async (r) => {
         try {
-          return await window.api.gh.countWorkItems({
-            repoPath: r.path,
-            query: query || undefined
-          })
+          const runtimeRepo = getRuntimeRepoTarget(get(), r.path)
+          return runtimeRepo
+            ? await callRuntimeRpc<number>(
+                runtimeRepo.target,
+                'github.countWorkItems',
+                { repo: runtimeRepo.repo.id, query: query || undefined },
+                { timeoutMs: 30_000 }
+              )
+            : await window.api.gh.countWorkItems({
+                repoPath: r.path,
+                query: query || undefined
+              })
         } catch {
           return 0
         }
@@ -1201,7 +1309,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const linkedPRNumber = options?.linkedPRNumber ?? null
     const request = (async () => {
       try {
-        const pr = await window.api.gh.prForBranch({ repoPath, branch, linkedPRNumber })
+        const runtimeRepo = getRuntimeRepoTarget(get(), repoPath)
+        const pr = runtimeRepo
+          ? await callRuntimeRpc<PRInfo | null>(
+              runtimeRepo.target,
+              'github.prForBranch',
+              { repo: runtimeRepo.repo.id, branch, linkedPRNumber },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.prForBranch({ repoPath, branch, linkedPRNumber })
         if (prRequestGenerations.get(cacheKey) === generation) {
           set((s) => ({
             prCache: { ...s.prCache, [cacheKey]: { data: pr, fetchedAt: Date.now() } }
@@ -1248,7 +1364,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
     const request = (async () => {
       try {
-        const issue = await window.api.gh.issue({ repoPath, number })
+        const runtimeRepo = getRuntimeRepoTarget(get(), repoPath)
+        const issue = runtimeRepo
+          ? await callRuntimeRpc<IssueInfo | null>(
+              runtimeRepo.target,
+              'github.issue',
+              { repo: runtimeRepo.repo.id, number },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.issue({ repoPath, number })
         set((s) => ({
           issueCache: { ...s.issueCache, [cacheKey]: { data: issue, fetchedAt: Date.now() } }
         }))
@@ -1290,12 +1414,20 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
     const request = (async () => {
       try {
-        const checks = (await window.api.gh.prChecks({
-          repoPath,
-          prNumber,
-          headSha,
-          noCache: options?.force
-        })) as PRCheckDetail[]
+        const runtimeRepo = getRuntimeRepoTarget(get(), repoPath)
+        const checks = runtimeRepo
+          ? await callRuntimeRpc<PRCheckDetail[]>(
+              runtimeRepo.target,
+              'github.prChecks',
+              { repo: runtimeRepo.repo.id, prNumber, headSha, noCache: options?.force },
+              { timeoutMs: 30_000 }
+            )
+          : ((await window.api.gh.prChecks({
+              repoPath,
+              prNumber,
+              headSha,
+              noCache: options?.force
+            })) as PRCheckDetail[])
         set((s) => {
           const nextState: Partial<AppState> = {
             checksCache: { ...s.checksCache, [cacheKey]: { data: checks, fetchedAt: Date.now() } }
@@ -1336,11 +1468,19 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
     const request = (async () => {
       try {
-        const comments = (await window.api.gh.prComments({
-          repoPath,
-          prNumber,
-          noCache: options?.force
-        })) as PRComment[]
+        const runtimeRepo = getRuntimeRepoTarget(get(), repoPath)
+        const comments = runtimeRepo
+          ? await callRuntimeRpc<PRComment[]>(
+              runtimeRepo.target,
+              'github.prComments',
+              { repo: runtimeRepo.repo.id, prNumber, noCache: options?.force },
+              { timeoutMs: 30_000 }
+            )
+          : ((await window.api.gh.prComments({
+              repoPath,
+              prNumber,
+              noCache: options?.force
+            })) as PRComment[])
         set((s) => ({
           commentsCache: {
             ...s.commentsCache,
@@ -1378,7 +1518,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       }))
     }
 
-    const ok = await window.api.gh.resolveReviewThread({ repoPath, threadId, resolve })
+    const runtimeRepo = getRuntimeRepoTarget(get(), repoPath)
+    const ok = runtimeRepo
+      ? await callRuntimeRpc<boolean>(
+          runtimeRepo.target,
+          'github.resolveReviewThread',
+          { repo: runtimeRepo.repo.id, threadId, resolve },
+          { timeoutMs: 30_000 }
+        )
+      : await window.api.gh.resolveReviewThread({ repoPath, threadId, resolve })
     if (!ok && prev) {
       // Revert optimistic update on failure
       set((s) => ({
@@ -1529,10 +1677,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       // `repos:changed` broadcast → other windows re-fetch. The store layer
       // normalizes `'auto'` to `undefined` so the persisted record drops
       // the key entirely (see main/persistence.ts#updateRepo).
-      await window.api.repos.update({
-        repoId,
-        updates: { issueSourcePreference: preference === 'auto' ? undefined : preference }
-      })
+      const updates = { issueSourcePreference: preference === 'auto' ? undefined : preference }
+      const target = getActiveRuntimeTarget(get().settings)
+      await (target.kind === 'local'
+        ? window.api.repos.update({ repoId, updates })
+        : callRuntimeRpc(target, 'repo.update', { repo: repoId, updates }, { timeoutMs: 15_000 }))
     } catch (err) {
       console.error('Failed to persist issue-source preference:', err)
       // Why: surface the persist failure so the user understands why the

@@ -51,11 +51,12 @@ export function findLineByContent(terminal: Terminal, content: string, hintRatio
 
 export function captureScrollState(terminal: Terminal): ScrollState {
   const buf = terminal.buffer.active
+  const bufferType = buf.type
   const viewportY = buf.viewportY
   const wasAtBottom = viewportY >= buf.baseY
   const firstVisibleLineContent = buf.getLine(viewportY)?.translateToString(true)?.trimEnd() ?? ''
   const totalLines = buf.baseY + terminal.rows
-  return { wasAtBottom, firstVisibleLineContent, viewportY, totalLines }
+  return { bufferType, wasAtBottom, firstVisibleLineContent, viewportY, totalLines }
 }
 
 export function restoreScrollState(terminal: Terminal, state: ScrollState): void {

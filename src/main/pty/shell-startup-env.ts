@@ -4,30 +4,77 @@ import { basename, join } from 'path'
 // Why: only files the user's actual shell would source. Mixing zsh and bash
 // files breaks the "last assignment wins matches the live shell" guarantee —
 // a stale .bash_profile on a zsh user would clobber the real .zshrc value.
-const ZSH_FILES = ['.zshenv', '.zprofile', '.zshrc', '.zlogin']
+const ZSH_ENV_FILE = '.zshenv'
+const ZSH_AFTER_ENV_FILES = ['.zprofile', '.zshrc', '.zlogin']
 // Why: Orca launches bash as a login shell (see local-pty-shell-ready.ts
 // getBashShellReadyRcfileContent and daemon/shell-ready.ts) which sources
 // .bash_profile / .bash_login / .profile but intentionally does NOT force
 // .bashrc. Scanning .bashrc would mirror values the live Orca bash never sees.
 const BASH_LOGIN_FILES = ['.bash_profile', '.bash_login', '.profile']
 
-function shellStartupFiles(shell: string | undefined): readonly string[] {
+function parseExportedValue(content: string, name: string, home: string): string | undefined {
+  const assignment = new RegExp(`^export\\s+${name}=(.+)$`)
+  let lastMatch: string | undefined
+
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim()
+    const match = assignment.exec(line)
+    if (!match?.[1]) {
+      continue
+    }
+    // Why: strip trailing unquoted `# comment` first so quoted values like
+    // `"$HOME/.opencode" # note` survive intact for unquoteShellValue.
+    const decommented = stripTrailingComment(match[1])
+    const { text, quoted } = unquoteShellValue(decommented)
+    // Why: $HOME / ${HOME} / ~ expansion mimics what the live shell would
+    // do for double-quoted and unquoted values; single-quoted is literal.
+    const expanded = quoted === "'" ? text : expandHome(text, home)
+    if (expanded.length > 0) {
+      lastMatch = expanded
+    }
+  }
+
+  return lastMatch
+}
+
+function readStartupFile(path: string): string | null {
+  if (!existsSync(path)) {
+    return null
+  }
+  try {
+    return readFileSync(path, 'utf8')
+  } catch {
+    return null
+  }
+}
+
+function shellStartupFilePaths(home: string, shell: string | undefined): readonly string[] {
   if (!shell) {
     // Why: Orca's POSIX default shell is /bin/zsh when $SHELL is unset.
-    return ZSH_FILES
+    return zshStartupFilePaths(home)
   }
 
   const name = basename(shell).toLowerCase()
   if (name === 'zsh') {
-    return ZSH_FILES
+    return zshStartupFilePaths(home)
   }
   if (name === 'bash') {
-    return BASH_LOGIN_FILES
+    return BASH_LOGIN_FILES.map((file) => join(home, file))
   }
   // Why: unsupported explicit shells (fish, nushell, custom wrappers) do not
   // use Orca's zsh/bash shell-ready startup files, so scanning those files
   // would mirror values the live PTY shell never sees.
   return []
+}
+
+function zshStartupFilePaths(home: string): readonly string[] {
+  const zshEnvPath = join(home, ZSH_ENV_FILE)
+  const zshEnv = readStartupFile(zshEnvPath)
+  // Why: zsh sources ~/.zshenv first, then uses any ZDOTDIR exported there
+  // for .zprofile/.zshrc/.zlogin. Mirror that enough for static env discovery
+  // so users who keep zsh config in ~/.config/zsh do not lose overlay sources.
+  const zshDir = zshEnv ? (parseExportedValue(zshEnv, 'ZDOTDIR', home) ?? home) : home
+  return [zshEnvPath, ...ZSH_AFTER_ENV_FILES.map((file) => join(zshDir, file))]
 }
 
 function unquoteShellValue(value: string): { text: string; quoted: '"' | "'" | null } {
@@ -118,38 +165,17 @@ export function readShellStartupEnvVar(
     return cache.get(cacheKey)
   }
 
-  const assignment = new RegExp(`^export\\s+${name}=(.+)$`)
   let lastMatch: string | undefined
 
-  for (const file of shellStartupFiles(shell)) {
-    const path = join(home, file)
-    if (!existsSync(path)) {
+  for (const path of shellStartupFilePaths(home, shell)) {
+    const content = readStartupFile(path)
+    if (content === null) {
       continue
     }
 
-    let content
-    try {
-      content = readFileSync(path, 'utf8')
-    } catch {
-      continue
-    }
-
-    for (const rawLine of content.split(/\r?\n/)) {
-      const line = rawLine.trim()
-      const match = assignment.exec(line)
-      if (!match?.[1]) {
-        continue
-      }
-      // Why: strip trailing unquoted `# comment` first so quoted values like
-      // `"$HOME/.opencode" # note` survive intact for unquoteShellValue.
-      const decommented = stripTrailingComment(match[1])
-      const { text, quoted } = unquoteShellValue(decommented)
-      // Why: $HOME / ${HOME} / ~ expansion mimics what the live shell would
-      // do for double-quoted and unquoted values; single-quoted is literal.
-      const expanded = quoted === "'" ? text : expandHome(text, home)
-      if (expanded.length > 0) {
-        lastMatch = expanded
-      }
+    const match = parseExportedValue(content, name, home)
+    if (match !== undefined) {
+      lastMatch = match
     }
   }
 

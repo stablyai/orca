@@ -188,4 +188,28 @@ describe('resolveWorktreeStatus', () => {
 
     expect(status).toBe('active')
   })
+
+  it('treats a notes-only worktree as active without promoting unrelated worktrees', () => {
+    const notesWorktreeStatus = resolveWorktreeStatus({
+      tabs: [],
+      browserTabs: [],
+      ptyIdsByTabId: {},
+      hasNotesSurface: true,
+      hasPermission: false,
+      hasLiveDone: false,
+      hasRetainedDone: false
+    })
+    const unrelatedWorktreeStatus = resolveWorktreeStatus({
+      tabs: [],
+      browserTabs: [],
+      ptyIdsByTabId: {},
+      hasNotesSurface: false,
+      hasPermission: false,
+      hasLiveDone: false,
+      hasRetainedDone: false
+    })
+
+    expect(notesWorktreeStatus).toBe('active')
+    expect(unrelatedWorktreeStatus).toBe('inactive')
+  })
 })

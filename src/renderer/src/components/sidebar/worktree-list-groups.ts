@@ -1,17 +1,18 @@
-import {
-  CircleCheckBig,
-  CircleDot,
-  CircleX,
-  Folder,
-  GitPullRequest,
-  LayoutList,
-  Pin
-} from 'lucide-react'
+import { CircleCheckBig, CircleDot, CircleX, Folder, GitPullRequest, Pin } from 'lucide-react'
 import type React from 'react'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo, Worktree, WorkspaceStatusDefinition } from '../../../../shared/types'
 import { branchName } from '@/lib/git-utils'
+import {
+  getWorkspaceStatus,
+  getWorkspaceStatusFromGroupKey,
+  getWorkspaceStatusGroupKey,
+  getWorkspaceStatusVisualMeta
+} from './workspace-status'
+import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
 
 export { branchName }
+
+export type WorktreeGroupBy = 'none' | 'repo' | 'pr-status'
 
 export type GroupHeaderRow = {
   type: 'header'
@@ -73,14 +74,6 @@ export const PINNED_GROUP_META = {
   icon: Pin
 } as const
 
-export const ALL_GROUP_KEY = 'all'
-
-export const ALL_GROUP_META = {
-  label: 'All',
-  tone: 'text-foreground',
-  icon: LayoutList
-} as const
-
 export function getPRGroupKey(
   worktree: Worktree,
   repoMap: Map<string, Repo>,
@@ -118,10 +111,11 @@ function emitPinnedGroup(
   worktrees: Worktree[],
   repoMap: Map<string, Repo>,
   collapsedGroups: Set<string>,
-  result: Row[]
+  result: Row[],
+  force = false
 ): Set<string> {
   const pinned = worktrees.filter((w) => w.isPinned)
-  if (pinned.length === 0) {
+  if (pinned.length === 0 && !force) {
     return new Set()
   }
 
@@ -146,40 +140,18 @@ function emitPinnedGroup(
  * Extracted here to keep WorktreeList.tsx under the line-count lint limit.
  */
 export function buildRows(
-  groupBy: 'none' | 'repo' | 'pr-status',
+  groupBy: WorktreeGroupBy,
   worktrees: Worktree[],
   repoMap: Map<string, Repo>,
   prCache: Record<string, unknown> | null,
   collapsedGroups: Set<string>,
-  repoOrder?: Map<string, number>
+  repoOrder?: Map<string, number>,
+  workspaceStatuses: readonly WorkspaceStatusDefinition[] = cloneDefaultWorkspaceStatuses()
 ): Row[] {
   const result: Row[] = []
 
-  const pinnedIds = emitPinnedGroup(worktrees, repoMap, collapsedGroups, result)
+  const pinnedIds = emitPinnedGroup(worktrees, repoMap, collapsedGroups, result, groupBy === 'none')
   const unpinned = pinnedIds.size > 0 ? worktrees.filter((w) => !pinnedIds.has(w.id)) : worktrees
-
-  if (groupBy === 'none') {
-    // Without an "All" header, the unpinned block is visually indistinguishable
-    // from a continuation of the Pinned section — so when pinned items exist,
-    // mark the boundary with a sibling header that mirrors the Pinned one.
-    if (pinnedIds.size > 0 && unpinned.length > 0) {
-      result.push({
-        type: 'header',
-        key: ALL_GROUP_KEY,
-        label: ALL_GROUP_META.label,
-        count: unpinned.length,
-        tone: ALL_GROUP_META.tone,
-        icon: ALL_GROUP_META.icon
-      })
-      if (collapsedGroups.has(ALL_GROUP_KEY)) {
-        return result
-      }
-    }
-    for (const w of unpinned) {
-      result.push({ type: 'item', worktree: w, repo: repoMap.get(w.repoId) })
-    }
-    return result
-  }
 
   const grouped = new Map<string, { label: string; items: Worktree[]; repo?: Repo }>()
   for (const w of unpinned) {
@@ -190,6 +162,11 @@ export function buildRows(
       repo = repoMap.get(w.repoId)
       key = `repo:${w.repoId}`
       label = repo?.displayName ?? 'Unknown'
+    } else if (groupBy === 'none') {
+      const workspaceStatus = getWorkspaceStatus(w, workspaceStatuses)
+      key = getWorkspaceStatusGroupKey(workspaceStatus)
+      label =
+        workspaceStatuses.find((status) => status.id === workspaceStatus)?.label ?? workspaceStatus
     } else {
       const prGroup = getPRGroupKey(w, repoMap, prCache)
       key = `pr:${prGroup}`
@@ -205,6 +182,17 @@ export function buildRows(
   if (groupBy === 'pr-status') {
     for (const prGroup of PR_GROUP_ORDER) {
       const key = `pr:${prGroup}`
+      const group = grouped.get(key)
+      if (group) {
+        orderedGroups.push([key, group])
+      }
+    }
+  } else if (groupBy === 'none') {
+    // Why: the old "All" grouping now organizes workspaces by user status.
+    // Keep the sidebar compact by rendering only sections that contain cards;
+    // the board drawer is the wider all-lanes drag target.
+    for (const status of workspaceStatuses) {
+      const key = getWorkspaceStatusGroupKey(status.id)
       const group = grouped.get(key)
       if (group) {
         orderedGroups.push([key, group])
@@ -249,18 +237,35 @@ export function buildRows(
             icon: REPO_GROUP_META.icon,
             repo
           }
-        : (() => {
-            const prGroup = key.replace(/^pr:/, '') as PRGroupKey
-            const meta = PR_GROUP_META[prGroup]
-            return {
-              type: 'header' as const,
-              key,
-              label: meta.label,
-              count: group.items.length,
-              tone: meta.tone,
-              icon: meta.icon
-            }
-          })()
+        : groupBy === 'none'
+          ? (() => {
+              const workspaceStatus =
+                getWorkspaceStatusFromGroupKey(key, workspaceStatuses) ??
+                workspaceStatuses[0]?.id ??
+                'in-progress'
+              const definition = workspaceStatuses.find((status) => status.id === workspaceStatus)
+              const meta = getWorkspaceStatusVisualMeta(definition ?? workspaceStatus)
+              return {
+                type: 'header' as const,
+                key,
+                label: definition?.label ?? workspaceStatus,
+                count: group.items.length,
+                tone: meta.tone,
+                icon: meta.icon
+              }
+            })()
+          : (() => {
+              const prGroup = key.replace(/^pr:/, '') as PRGroupKey
+              const meta = PR_GROUP_META[prGroup]
+              return {
+                type: 'header' as const,
+                key,
+                label: meta.label,
+                count: group.items.length,
+                tone: meta.tone,
+                icon: meta.icon
+              }
+            })()
 
     result.push(header)
     if (!isCollapsed) {
@@ -274,13 +279,14 @@ export function buildRows(
 }
 
 export function getGroupKeyForWorktree(
-  groupBy: 'none' | 'repo' | 'pr-status',
+  groupBy: WorktreeGroupBy,
   worktree: Worktree,
   repoMap: Map<string, Repo>,
-  prCache: Record<string, unknown> | null
+  prCache: Record<string, unknown> | null,
+  workspaceStatuses: readonly WorkspaceStatusDefinition[] = cloneDefaultWorkspaceStatuses()
 ): string | null {
   if (groupBy === 'none') {
-    return null
+    return getWorkspaceStatusGroupKey(getWorkspaceStatus(worktree, workspaceStatuses))
   }
   if (groupBy === 'repo') {
     return `repo:${worktree.repoId}`

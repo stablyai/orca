@@ -223,6 +223,47 @@ export function useTerminalPaneGlobalEffects({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVisible])
 
+  // Why: dictation events are dispatched globally; gate on isActiveRef so only
+  // the foreground terminal pane consumes the inserted text — otherwise text
+  // would be duplicated across all mounted but inactive tabs.
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return
+    }
+    const onDictationInsert = (event: Event): void => {
+      if (!isActiveRef.current) {
+        return
+      }
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      const detail = (
+        event as CustomEvent<string | { text?: string; tabId?: string; paneId?: number }>
+      ).detail
+      const text = typeof detail === 'string' ? detail : detail?.text
+      if (typeof detail === 'object' && detail.tabId !== tabId) {
+        return
+      }
+      const requestedPaneId = typeof detail === 'object' ? detail.paneId : undefined
+      const pane = requestedPaneId
+        ? manager.getPanes().find((candidate) => candidate.id === requestedPaneId)
+        : (manager.getActivePane() ?? manager.getPanes()[0])
+      if (!pane) {
+        return
+      }
+      const transport = paneTransportsRef.current.get(pane.id)
+      if (!transport) {
+        return
+      }
+      if (text) {
+        transport.sendInput(text)
+      }
+    }
+    document.addEventListener('dictation:insertText', onDictationInsert)
+    return () => document.removeEventListener('dictation:insertText', onDictationInsert)
+  }, [isActiveRef, managerRef, paneTransportsRef, tabId])
+
   // Why: visible but unfocused split-group terminals can still receive native
   // OS drops. Route tab-id-aware payloads to the dropped pane, while legacy
   // payloads without a tab id keep the old active-terminal-only behavior.

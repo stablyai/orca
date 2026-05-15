@@ -634,6 +634,12 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
+      # Why: `plutil -lint` accepts duplicate plist keys, but `codesign`
+      # rejects duplicate entitlements after the expensive app build.
+      - name: Verify macOS entitlements
+        if: matrix.platform == 'mac'
+        run: pnpm verify:macos-entitlements
+
       # Why: telemetry's transport gate (`src/main/telemetry/client.ts:IS_OFFICIAL_BUILD`)
       # requires the build identity to be the literal string `stable` or `rc`,
       # substituted by electron-vite's `define` block at build time. Derive

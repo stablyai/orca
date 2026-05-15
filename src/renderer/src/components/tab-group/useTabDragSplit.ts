@@ -34,7 +34,7 @@ export type TabDragItemData = {
   groupId: string
   unifiedTabId: string
   visibleTabId: string
-  tabType: 'terminal' | 'editor' | 'browser'
+  tabType: 'terminal' | 'editor' | 'browser' | 'notes'
   /** Rendered by the DragOverlay ghost that follows the cursor across
    *  groups. Source tab strips use overflow-hidden, so without the overlay
    *  the dragged tab would be invisible once the cursor leaves its own

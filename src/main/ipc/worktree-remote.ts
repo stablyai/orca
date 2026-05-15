@@ -108,7 +108,7 @@ async function ensureUniqueRemoteName(repoPath: string, preferred: string): Prom
   throw new Error(`Could not find an available remote name for ${preferred}.`)
 }
 
-async function prepareWorktreePushTarget(
+export async function prepareWorktreePushTarget(
   repoPath: string,
   target: GitPushTarget
 ): Promise<GitPushTarget> {
@@ -138,7 +138,7 @@ async function prepareWorktreePushTarget(
   }
 }
 
-async function configureCreatedWorktreePushTarget(
+export async function configureCreatedWorktreePushTarget(
   worktreePath: string,
   branchName: string,
   target: GitPushTarget

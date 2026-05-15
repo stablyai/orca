@@ -11,7 +11,11 @@ import {
 } from '@/components/ui/dialog'
 import { PASTE_TERMINAL_TEXT_EVENT } from '@/constants/terminal'
 import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
-import { notifyOrchestrationSetupStateChanged } from '@/lib/orchestration-setup-state'
+import {
+  ORCHESTRATION_ENABLED_STORAGE_KEY,
+  ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
+  notifyOrchestrationSetupStateChanged
+} from '@/lib/orchestration-setup-state'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 
 type FloatingTerminalOrchestrationDialogProps = {
@@ -75,8 +79,8 @@ export function FloatingTerminalOrchestrationDialog({
   const handlePasteSkillCommand = async (): Promise<void> => {
     setSkillBusy(true)
     try {
-      localStorage.setItem('orca.orchestration.enabled', '1')
-      localStorage.removeItem('orca.orchestration.setupDismissed')
+      localStorage.setItem(ORCHESTRATION_ENABLED_STORAGE_KEY, '1')
+      localStorage.removeItem(ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY)
       notifyOrchestrationSetupStateChanged()
       await window.api.ui.writeClipboardText(ORCHESTRATION_SKILL_INSTALL_COMMAND)
       if (activeTabId) {

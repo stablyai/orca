@@ -20,6 +20,10 @@ import {
   getWatchedTargetKey
 } from './useEditorExternalWatch'
 import { useAppStore } from '@/store'
+import {
+  getOpenFilesForExternalFileChange,
+  notifyEditorExternalFileChange
+} from '@/components/editor/editor-autosave'
 
 describe('getWatchedTargetKey', () => {
   it('changes when a worktree gains an SSH connection id', () => {
@@ -27,13 +31,33 @@ describe('getWatchedTargetKey', () => {
       getWatchedTargetKey({
         worktreeId: 'wt-1',
         worktreePath: '/repo',
-        connectionId: undefined
+        connectionId: undefined,
+        runtimeEnvironmentId: undefined
       })
     ).not.toBe(
       getWatchedTargetKey({
         worktreeId: 'wt-1',
         worktreePath: '/repo',
-        connectionId: 'conn-1'
+        connectionId: 'conn-1',
+        runtimeEnvironmentId: undefined
+      })
+    )
+  })
+
+  it('changes when the active runtime environment changes', () => {
+    expect(
+      getWatchedTargetKey({
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        connectionId: undefined,
+        runtimeEnvironmentId: undefined
+      })
+    ).not.toBe(
+      getWatchedTargetKey({
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        connectionId: undefined,
+        runtimeEnvironmentId: 'env-1'
       })
     )
   })
@@ -104,10 +128,16 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
         worktreeId: string
         worktreePath: string
         connectionId: string | undefined
+        runtimeEnvironmentId: string | undefined
       }
     | undefined =>
     worktreePath === '/repo'
-      ? { worktreeId: 'wt-1', worktreePath: '/repo', connectionId: undefined }
+      ? {
+          worktreeId: 'wt-1',
+          worktreePath: '/repo',
+          connectionId: undefined,
+          runtimeEnvironmentId: undefined
+        }
       : undefined
 
   const fileNotes = {
@@ -180,6 +210,78 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     // is already correct because both events are visible at once.
     expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'renamed')
 
+    dispose()
+  })
+
+  it('reloads Windows editor tabs when watcher event casing differs', () => {
+    const file = {
+      id: 'file-win',
+      worktreeId: 'wt-win',
+      worktreePath: 'C:\\Repo',
+      filePath: 'C:\\Repo\\notes.md',
+      relativePath: 'notes.md',
+      mode: 'edit' as const,
+      isDirty: false
+    }
+    vi.mocked(useAppStore.getState).mockReturnValue({
+      openFiles: [file],
+      setExternalMutation
+    } as never)
+    vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([file] as never)
+    const { handleFsChanged, dispose } = createExternalWatchEventHandler(() => ({
+      worktreeId: 'wt-win',
+      worktreePath: 'C:\\Repo',
+      connectionId: undefined,
+      runtimeEnvironmentId: 'env-1'
+    }))
+
+    handleFsChanged({
+      worktreePath: 'c:\\repo',
+      events: [{ kind: 'update', absolutePath: 'c:\\repo\\notes.md', isDirectory: false }]
+    })
+    vi.advanceTimersByTime(100)
+
+    expect(notifyEditorExternalFileChange).toHaveBeenCalledWith({
+      worktreeId: 'wt-win',
+      worktreePath: 'C:\\Repo',
+      relativePath: 'notes.md'
+    })
+    dispose()
+  })
+
+  it('reloads UNC editor tabs without collapsing the share root', () => {
+    const file = {
+      id: 'file-unc',
+      worktreeId: 'wt-unc',
+      worktreePath: '//Server/Share/Repo',
+      filePath: '//Server/Share/Repo/notes.md',
+      relativePath: 'notes.md',
+      mode: 'edit' as const,
+      isDirty: false
+    }
+    vi.mocked(useAppStore.getState).mockReturnValue({
+      openFiles: [file],
+      setExternalMutation
+    } as never)
+    vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([file] as never)
+    const { handleFsChanged, dispose } = createExternalWatchEventHandler(() => ({
+      worktreeId: 'wt-unc',
+      worktreePath: '//Server/Share/Repo',
+      connectionId: undefined,
+      runtimeEnvironmentId: 'env-1'
+    }))
+
+    handleFsChanged({
+      worktreePath: '//server/share/repo',
+      events: [{ kind: 'update', absolutePath: '//server/share/repo/notes.md', isDirectory: false }]
+    })
+    vi.advanceTimersByTime(100)
+
+    expect(notifyEditorExternalFileChange).toHaveBeenCalledWith({
+      worktreeId: 'wt-unc',
+      worktreePath: '//Server/Share/Repo',
+      relativePath: 'notes.md'
+    })
     dispose()
   })
 })

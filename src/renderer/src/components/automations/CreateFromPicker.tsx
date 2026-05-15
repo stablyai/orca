@@ -11,6 +11,11 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import type { Repo, Worktree } from '../../../../shared/types'
+import { useAppStore } from '@/store'
+import {
+  getRuntimeRepoBaseRefDefault,
+  searchRuntimeRepoBaseRefs
+} from '@/runtime/runtime-repo-client'
 
 const DEFAULT_VALUE = '__project_default__'
 
@@ -31,6 +36,9 @@ export function CreateFromPicker({
   value: string
   onValueChange: (baseBranch: string) => void
 }): React.JSX.Element {
+  const activeRuntimeEnvironmentId = useAppStore(
+    (state) => state.settings?.activeRuntimeEnvironmentId ?? null
+  )
   const repo = repoMap.get(repoId)
   const [open, setOpen] = React.useState(false)
   const inputRef = React.useRef<HTMLInputElement | null>(null)
@@ -73,8 +81,7 @@ export function CreateFromPicker({
     }
     let stale = false
     setDefaultBaseRef(null)
-    void window.api.repos
-      .getBaseRefDefault({ repoId })
+    void getRuntimeRepoBaseRefDefault({ activeRuntimeEnvironmentId }, repoId)
       .then((result) => {
         if (!stale) {
           setDefaultBaseRef(result.defaultBaseRef)
@@ -88,7 +95,7 @@ export function CreateFromPicker({
     return () => {
       stale = true
     }
-  }, [repoId])
+  }, [activeRuntimeEnvironmentId, repoId])
 
   React.useEffect(() => {
     setQuery('')
@@ -107,8 +114,7 @@ export function CreateFromPicker({
     let stale = false
     setIsSearching(true)
     const timer = window.setTimeout(() => {
-      void window.api.repos
-        .searchBaseRefs({ repoId, query: trimmedQuery, limit: 30 })
+      void searchRuntimeRepoBaseRefs({ activeRuntimeEnvironmentId }, repoId, trimmedQuery, 30)
         .then((results) => {
           if (!stale) {
             setSearchResults(results)
@@ -130,7 +136,7 @@ export function CreateFromPicker({
       stale = true
       window.clearTimeout(timer)
     }
-  }, [open, query, repoId])
+  }, [activeRuntimeEnvironmentId, open, query, repoId])
 
   return (
     <div className="space-y-2">

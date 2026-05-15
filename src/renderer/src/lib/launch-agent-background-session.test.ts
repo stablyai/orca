@@ -1,6 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from '@/runtime/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
 const mockSpawn = vi.fn()
+const mockRuntimeEnvironmentCall = vi.fn()
+const mockRuntimeEnvironmentTransportCall = vi.fn()
+const mockRuntimeEnvironmentSubscribe = vi.fn()
 const mockCreateTab = vi.fn()
 const mockSetTabCustomTitle = vi.fn()
 const mockUpdateTabPtyId = vi.fn()
@@ -11,7 +19,7 @@ const mockSubscribeToPtyExit = vi.fn()
 const mockPasteDraftWhenAgentReady = vi.fn()
 
 const state = {
-  settings: { agentCmdOverrides: {} },
+  settings: { agentCmdOverrides: {}, activeRuntimeEnvironmentId: null as string | null },
   repos: [{ id: 'repo-1', connectionId: null }],
   allWorktrees: vi.fn(() => [
     { id: 'wt-1', repoId: 'repo-1', path: '/repo/worktree', displayName: 'main' }
@@ -47,15 +55,39 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 
 describe('launchAgentBackgroundSession', () => {
   beforeEach(() => {
+    clearRuntimeCompatibilityCacheForTests()
     vi.clearAllMocks()
+    mockRuntimeEnvironmentTransportCall.mockImplementation(
+      (args: RuntimeEnvironmentCallRequest) => {
+        return (
+          createCompatibleRuntimeStatusResponseIfNeeded(args) ?? mockRuntimeEnvironmentCall(args)
+        )
+      }
+    )
+    state.settings = { agentCmdOverrides: {}, activeRuntimeEnvironmentId: null }
     mockCreateTab.mockReturnValue({ id: 'tab-1', title: 'Terminal 1' })
     mockSpawn.mockResolvedValue({ id: 'pty-1' })
+    mockRuntimeEnvironmentCall.mockResolvedValue({
+      ok: true,
+      result: { terminal: { handle: 'terminal-1', worktreeId: 'wt-1', title: null } }
+    })
+    mockRuntimeEnvironmentSubscribe.mockImplementation(async (_args, callbacks) => {
+      queueMicrotask(() => callbacks.onResponse({ ok: true, result: { type: 'ready' } }))
+      return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+    })
     mockSubscribeToPtyData.mockReturnValue(vi.fn())
     mockSubscribeToPtyExit.mockReturnValue(vi.fn())
     vi.stubGlobal('window', {
       api: {
         pty: {
           spawn: mockSpawn
+        },
+        runtime: {
+          call: vi.fn()
+        },
+        runtimeEnvironments: {
+          call: mockRuntimeEnvironmentTransportCall,
+          subscribe: mockRuntimeEnvironmentSubscribe
         }
       }
     })
@@ -174,5 +206,44 @@ describe('launchAgentBackgroundSession', () => {
         submit: true
       })
     )
+  })
+
+  it('creates background sessions on the active runtime environment', async () => {
+    state.settings = { agentCmdOverrides: {}, activeRuntimeEnvironmentId: 'env-1' }
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    const result = await launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation'
+    })
+
+    expect(mockSpawn).not.toHaveBeenCalled()
+    expect(mockRuntimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'terminal.create',
+      params: expect.objectContaining({
+        worktree: 'wt-1',
+        command: "claude 'run the automation'",
+        env: expect.objectContaining({
+          ORCA_PANE_KEY: 'tab-1:1',
+          ORCA_TAB_ID: 'tab-1',
+          ORCA_WORKTREE_ID: 'wt-1'
+        }),
+        focus: false
+      }),
+      timeoutMs: 15_000
+    })
+    expect(mockUpdateTabPtyId).toHaveBeenCalledWith('tab-1', 'remote:env-1@@terminal-1')
+    expect(mockRegisterEagerPtyBuffer).not.toHaveBeenCalled()
+    expect(mockRuntimeEnvironmentSubscribe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'terminal.multiplex',
+        params: {}
+      }),
+      expect.any(Object)
+    )
+    expect(result).toMatchObject({ tabId: 'tab-1', ptyId: 'remote:env-1@@terminal-1' })
   })
 })

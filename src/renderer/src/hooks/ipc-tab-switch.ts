@@ -67,6 +67,9 @@ function applyNextTab(store: AppStoreState, next: TypeCyclableTab): void {
       store.activateTab?.(next.tabId)
     }
     store.setActiveTabType('browser')
+  } else if (next.type === 'notes') {
+    store.activateTab?.(next.tabId ?? next.id)
+    store.setActiveTabType('notes')
   } else {
     // Why: `setActiveFile` targets the file entity (its implicit activateTab
     // picks the first matching tab in the active group); `activateTab(tabId)`

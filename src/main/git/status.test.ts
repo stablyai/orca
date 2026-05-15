@@ -27,6 +27,7 @@ vi.mock('fs', () => ({
 
 import {
   bulkStageFiles,
+  bulkDiscardChanges,
   bulkUnstageFiles,
   detectConflictOperation,
   discardChanges,
@@ -99,6 +100,7 @@ describe('discardChanges', () => {
 describe('bulk git helpers', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
+    rmMock.mockReset()
   })
 
   it('chunks bulk stage requests to avoid oversized argv payloads', async () => {
@@ -139,6 +141,48 @@ describe('bulk git helpers', () => {
       }
     )
   })
+
+  it('discards tracked and untracked paths in bulk', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'src/file.ts\0docs/readme.md\0' })
+      .mockResolvedValueOnce({ stdout: '' })
+
+    await bulkDiscardChanges('/repo', ['src/file.ts', 'src/new-file.ts', 'docs', 'scratch'])
+
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      ['ls-files', '-z', '--', 'src/file.ts', 'src/new-file.ts', 'docs', 'scratch'],
+      {
+        cwd: '/repo'
+      }
+    )
+    // Why: a pathspec is tracked if git reports either the exact path or a
+    // tracked descendant, which keeps directory pathspecs on the restore path.
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      ['restore', '--worktree', '--source=HEAD', '--', 'src/file.ts', 'docs'],
+      {
+        cwd: '/repo'
+      }
+    )
+    expect(rmMock).toHaveBeenCalledWith(path.resolve('/repo', 'src', 'new-file.ts'), {
+      force: true,
+      recursive: true
+    })
+    expect(rmMock).toHaveBeenCalledWith(path.resolve('/repo', 'scratch'), {
+      force: true,
+      recursive: true
+    })
+  })
+
+  it('rejects bulk discard paths that traverse outside the worktree', async () => {
+    await expect(bulkDiscardChanges('/repo', ['src/file.ts', '../outside.txt'])).rejects.toThrow(
+      'resolves outside the worktree'
+    )
+
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(rmMock).not.toHaveBeenCalled()
+  })
 })
 
 describe('getDiff', () => {
@@ -177,10 +221,14 @@ describe('getDiff', () => {
 
     const result = await getDiff('/repo', 'src/file.ts', false)
 
-    expect(gitExecFileAsyncBufferMock).toHaveBeenNthCalledWith(2, ['show', 'HEAD:src/file.ts'], {
-      cwd: '/repo',
-      maxBuffer: 10 * 1024 * 1024
-    })
+    expect(gitExecFileAsyncBufferMock).toHaveBeenNthCalledWith(
+      2,
+      ['show', '--end-of-options', 'HEAD:src/file.ts'],
+      {
+        cwd: '/repo',
+        maxBuffer: 10 * 1024 * 1024
+      }
+    )
     expect(result.originalContent).toBe('head-content\n')
     expect(result.modifiedContent).toBe('working-tree-content')
   })

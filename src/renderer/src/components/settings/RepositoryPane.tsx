@@ -10,6 +10,7 @@ import { Trash2 } from 'lucide-react'
 import { DEFAULT_REPO_HOOK_SETTINGS } from './SettingsConstants'
 import { BaseRefPicker } from './BaseRefPicker'
 import { RepositoryHooksSection } from './RepositoryHooksSection'
+import { McpConfigSection } from './McpConfigSection'
 import { WorktreeSymlinksSection } from './WorktreeSymlinksSection'
 import { SparsePresetSettingsSection } from './SparsePresetSettingsSection'
 import { SearchableSetting } from './SearchableSetting'
@@ -81,6 +82,19 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
               'shared',
               'env',
               'node_modules'
+            ]
+          },
+          {
+            title: 'MCP Configs',
+            description: 'Inspect repo-level MCP server config files.',
+            keywords: [
+              repo.displayName,
+              'mcp',
+              'model context protocol',
+              '.mcp.json',
+              '.cursor/mcp.json',
+              '.claude.json',
+              '.claude/mcp.json'
             ]
           },
           {
@@ -206,6 +220,7 @@ export function RepositoryPane({
       'Custom GitHub Issue Command'
     ].includes(entry.title)
   )
+  const mcpEntries = allEntries.filter((entry) => entry.title === 'MCP Configs')
   const symlinkEntries = allEntries.filter((entry) => entry.title === 'Worktree Symlinks')
 
   const visibleSections = [
@@ -312,6 +327,9 @@ export function RepositoryPane({
     ) : null,
     !isFolder && matchesSettingsSearch(searchQuery, sparsePresetEntries) ? (
       <SparsePresetSettingsSection key="sparse-presets" repoId={repo.id} />
+    ) : null,
+    !isFolder && matchesSettingsSearch(searchQuery, mcpEntries) ? (
+      <McpConfigSection key="mcp-configs" repo={repo} />
     ) : null,
     !isFolder && matchesSettingsSearch(searchQuery, hooksEntries) ? (
       <RepositoryHooksSection

@@ -10,6 +10,7 @@ import {
 } from '../../shared/window-shortcut-policy'
 
 type ResolveRenderer = (browserTabId: string) => Electron.WebContents | null
+type ShouldForwardDictationShortcut = () => boolean
 
 function isTerminalTabSwitchChord(input: Electron.Input): boolean {
   return (
@@ -217,8 +218,9 @@ export function setupGuestShortcutForwarding(args: {
   browserTabId: string
   guest: Electron.WebContents
   resolveRenderer: ResolveRenderer
+  shouldForwardDictationShortcut?: ShouldForwardDictationShortcut
 }): () => void {
-  const { browserTabId, guest, resolveRenderer } = args
+  const { browserTabId, guest, resolveRenderer, shouldForwardDictationShortcut } = args
   const handler = (event: Electron.Event, input: Electron.Input): void => {
     if (input.type !== 'keyDown') {
       return
@@ -229,6 +231,12 @@ export function setupGuestShortcutForwarding(args: {
     // which rejects Alt. Every other chord handled further down can reuse
     // the same `action` rather than re-running the full predicate chain.
     const action = resolveWindowShortcutAction(input, process.platform)
+    if (input.isAutoRepeat) {
+      if (action?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) {
+        event.preventDefault()
+      }
+      return
+    }
     if (action?.type === 'worktreeHistoryNavigate') {
       // Why: preventDefault unconditionally — if we cannot resolve the
       // renderer (torn-down tab or teardown race), dropping the keystroke
@@ -330,6 +338,11 @@ export function setupGuestShortcutForwarding(args: {
       renderer.send('ui:openNewWorkspace')
     } else if (action?.type === 'jumpToWorktreeIndex') {
       renderer.send('ui:jumpToWorktreeIndex', action.index)
+    } else if (action?.type === 'dictationKeyDown') {
+      if (!shouldForwardDictationShortcut?.()) {
+        return
+      }
+      renderer.send('ui:dictationKeyDown')
     } else {
       return
     }

@@ -22,6 +22,7 @@ import {
 } from '@stablyai/playwright-test'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { execSync } from 'child_process'
+import { randomUUID } from 'crypto'
 import os from 'os'
 import path from 'path'
 import { TEST_REPO_PATH_FILE } from '../global-setup'
@@ -88,8 +89,7 @@ function isValidGitRepo(repoPath: string): boolean {
 }
 
 function createSeededTestRepo(): string {
-  const testRepoDir = path.join(os.tmpdir(), `orca-e2e-repo-${Date.now()}`)
-  mkdirSync(testRepoDir, { recursive: true })
+  const testRepoDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-repo-'))
 
   execSync('git init', { cwd: testRepoDir, stdio: 'pipe' })
   execSync('git config user.email "e2e@test.local"', { cwd: testRepoDir, stdio: 'pipe' })
@@ -111,7 +111,9 @@ function createSeededTestRepo(): string {
   execSync('git add -A', { cwd: testRepoDir, stdio: 'pipe' })
   execSync('git commit -m "Initial commit for E2E tests"', { cwd: testRepoDir, stdio: 'pipe' })
 
-  const worktreeDir = path.join(testRepoDir, '..', `orca-e2e-worktree-${Date.now()}`)
+  // Why: worker-scoped fixture fallbacks can run in parallel; UUIDs avoid
+  // colliding on the same temp repo/worktree when workers start together.
+  const worktreeDir = path.join(testRepoDir, '..', `orca-e2e-worktree-${randomUUID()}`)
   execSync(`git worktree add "${worktreeDir}" -b e2e-secondary`, {
     cwd: testRepoDir,
     stdio: 'pipe'

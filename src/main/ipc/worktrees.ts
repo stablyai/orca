@@ -13,10 +13,12 @@ import type {
   Repo,
   WorktreeMeta
 } from '../../shared/types'
-import { removeWorktree } from '../git/worktree'
+import { listWorktrees as listGitWorktrees, removeWorktree } from '../git/worktree'
 import { gitExecFileAsync } from '../git/runner'
 import { getDefaultRemote } from '../git/repo'
 import { getPullRequestPushTarget, getWorkItem } from '../github/client'
+import { getProjectRef as getGlabProjectRef, getGlabKnownHosts } from '../gitlab/gl-utils'
+import { getWorkItemByProjectRef as getGitLabWorkItemByProjectRef } from '../gitlab/client'
 import { listRepoWorktrees, createFolderWorktree } from '../repo-worktrees'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import {
@@ -49,6 +51,10 @@ import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { workspaceSourceSchema, type WorkspaceSource } from '../../shared/telemetry-events'
 import { classifyWorkspaceCreateError } from './workspace-create-error-classifier'
+import {
+  canSafelyRemoveOrphanedWorktreeDirectory,
+  getRegisteredDeletableWorktree
+} from '../worktree-removal-safety'
 
 // Why: worktrees discovered on disk (not created via Orca's UI) have no
 // persisted WorktreeMeta, so mergeWorktree falls back to `lastActivityAt: 0`.
@@ -398,6 +404,111 @@ export function registerWorktreeHandlers(
     }
   )
 
+  // Why: GitLab parallel of worktrees:resolvePrBase. Same shape, same
+  // semantics — caller passes mrIid (with optional source_branch +
+  // isCrossRepository hints from the picker) and we return either a
+  // `<remote>/<source_branch>` ref (same-project MRs) or a SHA fetched
+  // from refs/merge-requests/<iid>/head (fork MRs). The returned value
+  // is the workspace's base ref; the new worktree branch derives from
+  // the workspace name, not from the source ref.
+  ipcMain.handle(
+    'worktrees:resolveMrBase',
+    async (
+      _event,
+      args: {
+        repoId: string
+        mrIid: number
+        sourceBranch?: string
+        isCrossRepository?: boolean
+      }
+    ): Promise<{ baseBranch: string } | { error: string }> => {
+      const repo = store.getRepo(args.repoId)
+      if (!repo) {
+        return { error: 'Repo not found' }
+      }
+      // Why: parity with the gh-side guard above. Remote SSH repos are
+      // out of v1 scope; the picker disables the GitLab tab for them too.
+      if (repo.connectionId) {
+        return { error: 'MR start points are not supported for remote repos yet.' }
+      }
+      if (isFolderRepo(repo)) {
+        return { error: 'Folder mode does not support creating worktrees.' }
+      }
+
+      let sourceBranch = args.sourceBranch?.trim() ?? ''
+      let isCrossRepository = args.isCrossRepository === true
+
+      if (!sourceBranch) {
+        const knownHosts = await getGlabKnownHosts()
+        const projectRef = await getGlabProjectRef(repo.path, knownHosts)
+        if (!projectRef) {
+          return { error: 'No GitLab project found for this repository.' }
+        }
+        const item = await getGitLabWorkItemByProjectRef(repo.path, projectRef, args.mrIid, 'mr')
+        if (!item || item.type !== 'mr') {
+          return { error: `MR !${args.mrIid} not found.` }
+        }
+        sourceBranch = (item.branchName ?? '').trim()
+        if (!sourceBranch) {
+          return { error: `MR !${args.mrIid} has no source branch.` }
+        }
+        if (item.isCrossRepository === true) {
+          isCrossRepository = true
+        }
+      }
+
+      let remote: string
+      try {
+        remote = await getDefaultRemote(repo.path)
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : 'Could not resolve git remote.' }
+      }
+
+      // Why: GitLab exposes every MR head (fork or same-project) as
+      // refs/merge-requests/<iid>/head on the target project. Using that
+      // ref lets us snapshot fork MRs without configuring the fork as a
+      // remote — same SHA-as-baseBranch shape as the gh-side branch above.
+      if (isCrossRepository) {
+        const mrRef = `refs/merge-requests/${args.mrIid}/head`
+        try {
+          await gitExecFileAsync(['fetch', remote, mrRef], { cwd: repo.path })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          return { error: `Failed to fetch ${mrRef}: ${message.split('\n')[0]}` }
+        }
+        let sha: string
+        try {
+          const { stdout } = await gitExecFileAsync(['rev-parse', '--verify', 'FETCH_HEAD'], {
+            cwd: repo.path
+          })
+          sha = stdout.trim()
+        } catch {
+          return { error: `Could not resolve fork MR !${args.mrIid} head after fetch.` }
+        }
+        if (!sha) {
+          return { error: `Empty SHA resolving fork MR !${args.mrIid} head.` }
+        }
+        return { baseBranch: sha }
+      }
+
+      try {
+        await gitExecFileAsync(['fetch', remote, sourceBranch], { cwd: repo.path })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        return { error: `Failed to fetch ${remote}/${sourceBranch}: ${message.split('\n')[0]}` }
+      }
+
+      const remoteRef = `${remote}/${sourceBranch}`
+      try {
+        await gitExecFileAsync(['rev-parse', '--verify', remoteRef], { cwd: repo.path })
+      } catch {
+        return { error: `Remote ref ${remoteRef} does not exist after fetch.` }
+      }
+
+      return { baseBranch: remoteRef }
+    }
+  )
+
   ipcMain.handle(
     'worktrees:remove',
     async (_event, args: { worktreeId: string; force?: boolean; skipArchive?: boolean }) => {
@@ -409,6 +520,21 @@ export function registerWorktreeHandlers(
       if (isFolderRepo(repo)) {
         throw new Error('Folder mode does not support deleting worktrees.')
       }
+
+      // Why: the renderer-supplied worktreeId contains a filesystem path.
+      // Re-derive the canonical path from git before any destructive action.
+      const provider = repo.connectionId ? getSshGitProvider(repo.connectionId) : null
+      if (repo.connectionId && !provider) {
+        throw new Error(`No git provider for connection "${repo.connectionId}"`)
+      }
+      const registeredWorktrees = repo.connectionId
+        ? await provider!.listWorktrees(repo.path)
+        : await listGitWorktrees(repo.path)
+      const canonicalWorktreePath = getRegisteredDeletableWorktree(
+        repo.path,
+        worktreePath,
+        registeredWorktrees
+      ).path
 
       // Why: kill every PTY belonging to this worktree BEFORE git-level
       // removal. The renderer pre-kills via shutdownWorktreeTerminals, but
@@ -436,12 +562,9 @@ export function registerWorktreeHandlers(
       }
 
       if (repo.connectionId) {
-        const provider = getSshGitProvider(repo.connectionId)
-        if (!provider) {
-          throw new Error(`No git provider for connection "${repo.connectionId}"`)
-        }
-        await provider.removeWorktree(worktreePath, args.force)
+        await provider!.removeWorktree(canonicalWorktreePath, args.force)
         runtime.clearOptimisticReconcileToken(args.worktreeId)
+        await runtime.unlinkNotesWorktree(repoId, args.worktreeId)
         store.removeWorktreeMeta(args.worktreeId)
         deleteWorktreeHistoryDir(args.worktreeId)
         notifyWorktreesChanged(mainWindow, repoId)
@@ -451,9 +574,9 @@ export function registerWorktreeHandlers(
       // Run archive hook before removal
       const hooks = getEffectiveHooks(repo)
       if (hooks?.scripts.archive && !args.skipArchive) {
-        const result = await runHook('archive', worktreePath, repo)
+        const result = await runHook('archive', canonicalWorktreePath, repo)
         if (!result.success) {
-          console.error(`[hooks] archive hook failed for ${worktreePath}:`, result.output)
+          console.error(`[hooks] archive hook failed for ${canonicalWorktreePath}:`, result.output)
         }
       }
 
@@ -463,31 +586,43 @@ export function registerWorktreeHandlers(
       // first so the normal delete path keeps working — otherwise every
       // deletion would require the Force Delete toast once the feature is on.
       if (repo.symlinkPaths && repo.symlinkPaths.length > 0) {
-        await removeWorktreeSymlinks(worktreePath, repo.symlinkPaths)
+        await removeWorktreeSymlinks(canonicalWorktreePath, repo.symlinkPaths)
       }
 
       try {
-        await removeWorktree(repo.path, worktreePath, args.force ?? false)
+        await removeWorktree(repo.path, canonicalWorktreePath, args.force ?? false)
       } catch (error) {
         // If git no longer tracks this worktree, clean up the directory and metadata
         if (isOrphanedWorktreeError(error)) {
-          console.warn(`[worktrees] Orphaned worktree detected at ${worktreePath}, cleaning up`)
-          await rm(worktreePath, { recursive: true, force: true }).catch(() => {})
+          console.warn(
+            `[worktrees] Orphaned worktree detected at ${canonicalWorktreePath}, cleaning up`
+          )
+          if (await canSafelyRemoveOrphanedWorktreeDirectory(canonicalWorktreePath, repo.path)) {
+            await rm(canonicalWorktreePath, { recursive: true, force: true }).catch(() => {})
+          } else {
+            console.warn(
+              `[worktrees] Refusing recursive cleanup for unproven worktree directory: ${canonicalWorktreePath}`
+            )
+          }
           // Why: `git worktree remove` failed, so git's internal worktree tracking
           // (`.git/worktrees/<name>`) is still intact. Without pruning, `git worktree
           // list` continues to show the stale entry and the branch it had checked out
           // remains locked — other worktrees cannot check it out.
           await gitExecFileAsync(['worktree', 'prune'], { cwd: repo.path }).catch(() => {})
           runtime.clearOptimisticReconcileToken(args.worktreeId)
+          await runtime.unlinkNotesWorktree(repoId, args.worktreeId)
           store.removeWorktreeMeta(args.worktreeId)
           deleteWorktreeHistoryDir(args.worktreeId)
           invalidateAuthorizedRootsCache()
           notifyWorktreesChanged(mainWindow, repoId)
           return
         }
-        throw new Error(formatWorktreeRemovalError(error, worktreePath, args.force ?? false))
+        throw new Error(
+          formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false)
+        )
       }
       runtime.clearOptimisticReconcileToken(args.worktreeId)
+      await runtime.unlinkNotesWorktree(repoId, args.worktreeId)
       store.removeWorktreeMeta(args.worktreeId)
       deleteWorktreeHistoryDir(args.worktreeId)
       invalidateAuthorizedRootsCache()

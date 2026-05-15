@@ -128,6 +128,12 @@ export function createMainWindow(
   })()
 
   const settings = store?.getSettings()
+  browserManager.setDictationShortcutForwardingPredicate(() => {
+    // Why: focused webview guests do not expose a safe transcript insertion
+    // target yet. Let Cmd/Ctrl+E continue to the page instead of starting a
+    // dictation session whose final text would be dropped.
+    return false
+  })
   const blur = settings?.windowBackgroundBlur ?? false
   // Why: native blur requires platform-specific Electron APIs. macOS uses
   // vibrancy (needs transparent: true), Windows uses backgroundMaterial.
@@ -463,11 +469,7 @@ export function createMainWindow(
   })
 
   mainWindow.webContents.on('before-input-event', (event, input) => {
-    if (input.type !== 'keyDown') {
-      return
-    }
-
-    if (is.dev && input.code === 'F12') {
+    if (input.type === 'keyDown' && is.dev && input.code === 'F12') {
       event.preventDefault()
       if (mainWindow.webContents.isDevToolsOpened()) {
         mainWindow.webContents.closeDevTools()
@@ -503,6 +505,34 @@ export function createMainWindow(
       return
     }
 
+    if (input.type !== 'keyDown') {
+      return
+    }
+
+    // Why: in hold mode, Cmd+E must NOT be intercepted here. Calling
+    // preventDefault() in before-input-event suppresses ALL subsequent DOM
+    // events for the key combo — including the keyUp the renderer needs to
+    // detect release. By letting the event through, the renderer's
+    // capture-phase DOM listeners handle both keydown and keyup normally.
+    // Toggle mode still uses the IPC path since it doesn't need keyUp.
+    if (action.type === 'dictationKeyDown') {
+      const voiceSettings = store?.getSettings().voice
+      if (!voiceSettings?.enabled || !voiceSettings.sttModel) {
+        return
+      }
+      const dictationMode = voiceSettings.dictationMode ?? 'toggle'
+      if (dictationMode === 'hold') {
+        return
+      }
+      if (input.isAutoRepeat) {
+        event.preventDefault()
+        return
+      }
+      event.preventDefault()
+      mainWindow.webContents.send('ui:dictationKeyDown')
+      return
+    }
+
     event.preventDefault()
 
     if (action.type === 'zoom') {
@@ -535,7 +565,6 @@ export function createMainWindow(
     }
 
     if (action.type === 'openQuickOpen') {
-      // Forward Cmd/Ctrl+P to trigger Quick Open
       mainWindow.webContents.send('ui:openQuickOpen')
       return
     }
@@ -549,7 +578,6 @@ export function createMainWindow(
     }
 
     if (action.type === 'jumpToWorktreeIndex') {
-      // Forward Cmd/Ctrl+1-9 for quick worktree switching
       mainWindow.webContents.send('ui:jumpToWorktreeIndex', action.index)
       return
     }
@@ -684,6 +712,7 @@ export function createMainWindow(
     ipcMain.removeListener(trafficLightChannel, onSyncTrafficLights)
     ipcMain.removeListener(minimizeChannel, onMinimize)
     ipcMain.removeListener(maximizeChannel, onMaximize)
+    browserManager.setDictationShortcutForwardingPredicate(null)
     ipcMain.removeListener(requestCloseChannel, onRequestClose)
     ipcMain.removeListener(popupMenuChannel, onPopupMenu)
     ipcMain.removeHandler(isMaximizedChannel)

@@ -239,16 +239,16 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         // tool/prompt pings still update agentStatusByPaneKey for the owning
         // row, but they must not fan out through dashboard/sidebar aggregate
         // work across every card. Sort-relevant inputs are:
-        //   1. `state` transitions — sort score is a function of state.
-        //   2. Freshness transitions (stale → fresh) — `computeSmartScoreFromSignals`
-        //      in smart-sort.ts filters entries through
-        //      `isExplicitAgentStatusFresh(entry, updatedAt, AGENT_STATUS_STALE_AFTER_MS)`
+        //   1. `state` transitions — smart-sort class is a function of state.
+        //   2. Freshness transitions (stale → fresh) — `resolveAttention` in
+        //      smart-attention.ts filters entries through
+        //      `isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)`
         //      (30-min TTL). A stale entry that refreshes with the SAME state
-        //      goes from "not contributing" to contributing +60 (working) or
-        //      +35 (blocked/waiting) to the score — order must update. Snapshot
-        //      hydration can pass an older updatedAt; in that case the entry is
-        //      still stored with its true age, and selectors will immediately
-        //      decay it if it is already stale.
+        //      goes from "not contributing" (Class 4) to driving a higher
+        //      class — order must update. Snapshot hydration can pass an older
+        //      updatedAt; in that case the entry is still stored with its true
+        //      age, and selectors will immediately decay it if it is already
+        //      stale.
         const wasFresh =
           !!existing && isExplicitAgentStatusFresh(existing, updatedAt, AGENT_STATUS_STALE_AFTER_MS)
         const sortRelevantChange = !existing || existing.state !== payload.state || !wasFresh
@@ -664,8 +664,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     dismissRetainedAgent: (paneKey) => {
       // Why: no agentStatusEpoch / sortEpoch bump here (mirrors retainAgents).
       // Retained rows are a pure read-overlay on top of agentStatusByPaneKey —
-      // they do not contribute to smart-sort scoring (see computeSmartScore*
-      // in smart-sort.ts, which reads agentStatusByPaneKey only) and dashboard
+      // they do not contribute to smart-sort class resolution (see
+      // resolveAttention in smart-attention.ts, which reads
+      // agentStatusByPaneKey only) and dashboard
       // selectors re-render on retainedAgentsByPaneKey identity changes
       // directly. Bumping epochs would force sidebar re-sorts and selector
       // recomputations for a change that cannot affect either result.

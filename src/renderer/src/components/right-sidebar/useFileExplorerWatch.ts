@@ -3,14 +3,19 @@ import type { Dispatch, SetStateAction } from 'react'
 import type { FsChangedPayload } from '../../../../shared/types'
 import type { DirCache } from './file-explorer-types'
 import type { InlineInput } from './FileExplorerRow'
-import { normalizeRelativePath } from '@/lib/path'
-import { normalizeAbsolutePath } from './file-explorer-paths'
-import { dirname } from '@/lib/path'
+import { joinPath, normalizeRelativePath, dirname } from '@/lib/path'
+import {
+  isPathInsideOrEqual,
+  normalizeRuntimePathForComparison,
+  relativePathInsideRoot
+} from '../../../../shared/cross-platform-path'
 import {
   purgeDirCacheSubtree,
   purgeExpandedDirsSubtree,
   clearStalePendingReveal
 } from './file-explorer-watcher-reconcile'
+import { useAppStore } from '@/store'
+import { subscribeRuntimeFileChanges } from '@/runtime/runtime-file-client'
 
 type UseFileExplorerWatchParams = {
   worktreePath: string | null
@@ -35,17 +40,8 @@ export function getExternalFileChangeRelativePath(
     return null
   }
 
-  const normalizedWorktreePath = normalizeAbsolutePath(worktreePath)
-  const normalizedAbsolutePath = normalizeAbsolutePath(absolutePath)
-  // Why: `normalizeAbsolutePath` preserves the trailing slash for filesystem
-  // roots (`/` on POSIX, `C:/` on Windows drive roots) but strips it from all
-  // other paths. Blindly appending `/` would produce `//` or `C://`, so
-  // external edits under a root worktree would fail the prefix check and be
-  // silently dropped. Treat those roots as already-terminated prefixes.
-  const isFsRoot = normalizedWorktreePath === '/' || /^[A-Za-z]:\/$/.test(normalizedWorktreePath)
-  const worktreePrefix = isFsRoot ? normalizedWorktreePath : `${normalizedWorktreePath}/`
-
-  if (!normalizedAbsolutePath.startsWith(worktreePrefix)) {
+  const relativePath = relativePathInsideRoot(worktreePath, absolutePath)
+  if (relativePath === null || relativePath === '') {
     return null
   }
 
@@ -54,14 +50,37 @@ export function getExternalFileChangeRelativePath(
   // filesystem watcher reports absolute paths, so normalize them here before
   // the explorer refresh path returns; otherwise terminal edits refresh the
   // tree but leave the editor's cached file contents stale.
-  return normalizeRelativePath(normalizedAbsolutePath.slice(worktreePrefix.length))
+  return normalizeRelativePath(relativePath)
+}
+
+export function canonicalizeFileExplorerWatchPath(
+  worktreePath: string,
+  absolutePath: string
+): string | null {
+  const relativePath = relativePathInsideRoot(worktreePath, absolutePath)
+  if (relativePath === null) {
+    return null
+  }
+
+  const rootPath = normalizeExplorerAbsolutePath(worktreePath)
+  return relativePath === '' ? rootPath : joinPath(rootPath, relativePath)
+}
+
+function normalizeExplorerAbsolutePath(path: string): string {
+  if (path === '/' || /^[A-Za-z]:[\\/]$/.test(path)) {
+    return path
+  }
+  return path.replace(/[\\/]+$/, '')
 }
 
 export function payloadRequiresDeferredTreeRefresh(
   payload: FsChangedPayload,
   currentWorktreePath: string
 ): boolean {
-  if (normalizeAbsolutePath(payload.worktreePath) !== normalizeAbsolutePath(currentWorktreePath)) {
+  if (
+    normalizeRuntimePathForComparison(payload.worktreePath) !==
+    normalizeRuntimePathForComparison(currentWorktreePath)
+  ) {
     return false
   }
 
@@ -91,6 +110,8 @@ export function useFileExplorerWatch({
   dragSourcePath,
   isNativeDragOver
 }: UseFileExplorerWatchParams): void {
+  const activeRuntimeEnvironmentId = useAppStore((s) => s.settings?.activeRuntimeEnvironmentId)
+
   // Keep refs for values accessed inside the event handler to avoid
   // re-subscribing the IPC listener on every render.
   const dirCacheRef = useRef(dirCache)
@@ -151,7 +172,8 @@ export function useFileExplorerWatch({
       // the old worktree can arrive after the switch. Processing them against
       // the new worktree's tree state would corrupt dirCache (design §3).
       if (
-        normalizeAbsolutePath(payload.worktreePath) !== normalizeAbsolutePath(currentWorktreePath)
+        normalizeRuntimePathForComparison(payload.worktreePath) !==
+        normalizeRuntimePathForComparison(currentWorktreePath)
       ) {
         return
       }
@@ -169,11 +191,17 @@ export function useFileExplorerWatch({
       let needsFullRefresh = false
 
       for (const evt of payload.events) {
-        const normalizedPath = normalizeAbsolutePath(evt.absolutePath)
-
         if (evt.kind === 'overflow') {
           needsFullRefresh = true
           break
+        }
+
+        const normalizedPath = canonicalizeFileExplorerWatchPath(
+          currentWorktreePath,
+          evt.absolutePath
+        )
+        if (!normalizedPath) {
+          continue
         }
 
         if (evt.kind === 'delete') {
@@ -193,27 +221,27 @@ export function useFileExplorerWatch({
 
           // Clear selectedPath if it points into the deleted subtree
           setSelectedPath((prev) => {
-            if (prev && normalizeAbsolutePath(prev) === normalizedPath) {
-              return null
-            }
             if (
               prev &&
-              wasDirectory &&
-              normalizeAbsolutePath(prev).startsWith(`${normalizedPath}/`)
+              normalizeRuntimePathForComparison(prev) ===
+                normalizeRuntimePathForComparison(normalizedPath)
             ) {
+              return null
+            }
+            if (prev && wasDirectory && isPathInsideOrEqual(normalizedPath, prev)) {
               return null
             }
             return prev
           })
 
           // Invalidate the parent directory
-          const parent = normalizeAbsolutePath(dirname(normalizedPath))
+          const parent = normalizeExplorerAbsolutePath(dirname(normalizedPath))
           if (parent in cache) {
             dirsToRefresh.add(parent)
           }
         } else if (evt.kind === 'create') {
           // Invalidate the parent directory
-          const parent = normalizeAbsolutePath(dirname(normalizedPath))
+          const parent = normalizeExplorerAbsolutePath(dirname(normalizedPath))
           if (parent in cache) {
             dirsToRefresh.add(parent)
           }
@@ -239,7 +267,7 @@ export function useFileExplorerWatch({
       for (const dirPath of dirsToRefresh) {
         // Check the dir is the root or an expanded directory or already in cache
         if (
-          dirPath === normalizeAbsolutePath(currentWorktreePath) ||
+          dirPath === normalizeExplorerAbsolutePath(currentWorktreePath) ||
           exp.has(dirPath) ||
           dirPath in dirCacheRef.current
         ) {
@@ -271,14 +299,52 @@ export function useFileExplorerWatch({
       processPayload(payload)
     }
 
-    const unsubscribeListener = window.api.fs.onFsChanged(handleFsChanged)
+    let disposed = false
+    let unsubscribeListener: (() => void) | null = null
+    if (activeRuntimeEnvironmentId?.trim() && activeWorktreeId) {
+      // Why: remote runtime watch events do not enter the local Electron
+      // fs:changed bus, so the Explorer subscribes directly while it is mounted.
+      void subscribeRuntimeFileChanges(
+        {
+          settings: { activeRuntimeEnvironmentId },
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId: undefined
+        },
+        handleFsChanged,
+        (err) => {
+          console.warn('[filesystem-watch] failed to subscribe to runtime file changes', {
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            error: err.message
+          })
+        }
+      )
+        .then((unsubscribe) => {
+          if (disposed) {
+            unsubscribe()
+            return
+          }
+          unsubscribeListener = unsubscribe
+        })
+        .catch((err) => {
+          console.warn('[filesystem-watch] failed to subscribe to runtime file changes', {
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            error: err instanceof Error ? err.message : String(err)
+          })
+        })
+    } else {
+      unsubscribeListener = window.api.fs.onFsChanged(handleFsChanged)
+    }
 
     return () => {
-      unsubscribeListener()
+      disposed = true
+      unsubscribeListener?.()
       deferredRef.current = []
       processPayloadRef.current = null
     }
-  }, [worktreePath, activeWorktreeId, setDirCache, setSelectedPath])
+  }, [worktreePath, activeWorktreeId, activeRuntimeEnvironmentId, setDirCache, setSelectedPath])
 
   // ── Flush deferred events when interaction ends ────────────────────
   useEffect(() => {

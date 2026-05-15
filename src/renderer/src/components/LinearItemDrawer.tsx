@@ -18,6 +18,12 @@ import {
   useImmediateMutation
 } from '@/hooks/useIssueMetadata'
 import type { LinearIssue, LinearComment } from '../../../shared/types'
+import {
+  linearAddIssueComment,
+  linearGetIssue,
+  linearIssueComments,
+  linearUpdateIssue
+} from '@/runtime/runtime-linear-client'
 
 function LinearIcon({ className }: { className?: string }): React.JSX.Element {
   return (
@@ -87,6 +93,7 @@ type EditSectionProps = {
 function EditSection({ issue, editState, onEditStateChange }: EditSectionProps): React.JSX.Element {
   const [labelPopoverOpen, setLabelPopoverOpen] = useState(false)
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
+  const settings = useAppStore((s) => s.settings)
   const { isPending, run } = useImmediateMutation()
 
   const {
@@ -98,9 +105,9 @@ function EditSection({ issue, editState, onEditStateChange }: EditSectionProps):
   } = editState
 
   const teamId = issue.team?.id || null
-  const states = useTeamStates(teamId)
-  const labels = useTeamLabels(teamId)
-  const members = useTeamMembers(teamId)
+  const states = useTeamStates(teamId, settings)
+  const labels = useTeamLabels(teamId, settings)
+  const members = useTeamMembers(teamId, settings)
 
   const handleStateChange = useCallback(
     (stateId: string) => {
@@ -113,7 +120,7 @@ function EditSection({ issue, editState, onEditStateChange }: EditSectionProps):
       const stateValue = { name: newState.name, type: newState.type, color: newState.color }
 
       run('state', {
-        mutate: () => window.api.linear.updateIssue({ id: issue.id, updates: { stateId } }),
+        mutate: () => linearUpdateIssue(settings, issue.id, { stateId }),
         onOptimistic: () => {
           onEditStateChange({ state: stateValue })
           patchLinearIssue(issue.id, { state: stateValue })
@@ -125,7 +132,7 @@ function EditSection({ issue, editState, onEditStateChange }: EditSectionProps):
         onError: (err) => toast.error(err)
       })
     },
-    [issue.id, localState, states.data, patchLinearIssue, run, onEditStateChange]
+    [issue.id, localState, settings, states.data, patchLinearIssue, run, onEditStateChange]
   )
 
   const handlePriorityChange = useCallback(
@@ -133,7 +140,7 @@ function EditSection({ issue, editState, onEditStateChange }: EditSectionProps):
       const priority = parseInt(value, 10)
       const prevPriority = localPriority
       run('priority', {
-        mutate: () => window.api.linear.updateIssue({ id: issue.id, updates: { priority } }),
+        mutate: () => linearUpdateIssue(settings, issue.id, { priority }),
         onOptimistic: () => {
           onEditStateChange({ priority })
           patchLinearIssue(issue.id, { priority })
@@ -145,7 +152,7 @@ function EditSection({ issue, editState, onEditStateChange }: EditSectionProps):
         onError: (err) => toast.error(err)
       })
     },
-    [issue.id, localPriority, patchLinearIssue, run, onEditStateChange]
+    [issue.id, localPriority, settings, patchLinearIssue, run, onEditStateChange]
   )
 
   const handleAssigneeChange = useCallback(
@@ -157,7 +164,7 @@ function EditSection({ issue, editState, onEditStateChange }: EditSectionProps):
         ? { id: member.id, displayName: member.displayName, avatarUrl: member.avatarUrl }
         : undefined
       run('assignee', {
-        mutate: () => window.api.linear.updateIssue({ id: issue.id, updates: { assigneeId } }),
+        mutate: () => linearUpdateIssue(settings, issue.id, { assigneeId }),
         onOptimistic: () => {
           onEditStateChange({ assignee: newAssignee })
           patchLinearIssue(issue.id, { assignee: newAssignee })
@@ -169,7 +176,7 @@ function EditSection({ issue, editState, onEditStateChange }: EditSectionProps):
         onError: (err) => toast.error(err)
       })
     },
-    [issue.id, localAssignee, members.data, patchLinearIssue, run, onEditStateChange]
+    [issue.id, localAssignee, settings, members.data, patchLinearIssue, run, onEditStateChange]
   )
 
   const handleLabelToggle = useCallback(
@@ -185,8 +192,7 @@ function EditSection({ issue, editState, onEditStateChange }: EditSectionProps):
         .filter((n): n is string => !!n)
 
       run('labels', {
-        mutate: () =>
-          window.api.linear.updateIssue({ id: issue.id, updates: { labelIds: newLabelIds } }),
+        mutate: () => linearUpdateIssue(settings, issue.id, { labelIds: newLabelIds }),
         onOptimistic: () => {
           onEditStateChange({ labelIds: newLabelIds, labels: newLabels })
           patchLinearIssue(issue.id, { labelIds: newLabelIds, labels: newLabels })
@@ -198,7 +204,16 @@ function EditSection({ issue, editState, onEditStateChange }: EditSectionProps):
         onError: (err) => toast.error(err)
       })
     },
-    [issue.id, localLabelIds, localLabels, labels.data, patchLinearIssue, run, onEditStateChange]
+    [
+      issue.id,
+      localLabelIds,
+      localLabels,
+      settings,
+      labels.data,
+      patchLinearIssue,
+      run,
+      onEditStateChange
+    ]
   )
 
   const currentStateId = states.data.find(
@@ -406,6 +421,7 @@ function CommentFooter({
   issueId: string
   onCommentAdded: (comment: LocalComment) => void
 }): React.JSX.Element {
+  const settings = useAppStore((s) => s.settings)
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -426,7 +442,7 @@ function CommentFooter({
     }
     setSubmitting(true)
     try {
-      const result = await window.api.linear.addIssueComment({ issueId, body: trimmed })
+      const result = await linearAddIssueComment(settings, issueId, trimmed)
       const typed = result as { ok: boolean; id?: string; error?: string }
       if (typed.ok) {
         setBody('')
@@ -443,7 +459,7 @@ function CommentFooter({
     } finally {
       setSubmitting(false)
     }
-  }, [body, issueId, onCommentAdded])
+  }, [body, issueId, onCommentAdded, settings])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -508,6 +524,7 @@ export default function LinearItemDrawer({
   const requestIdRef = useRef(0)
   const hasEditedRef = useRef(false)
   const optimisticCommentsRef = useRef<LinearComment[]>([])
+  const settings = useAppStore((s) => s.settings)
 
   const handleEditStateChange = useCallback((patch: Partial<LinearEditState>) => {
     hasEditedRef.current = true
@@ -535,8 +552,7 @@ export default function LinearItemDrawer({
 
     // Why: fetch issue and comments independently so a transient comments
     // failure doesn't discard the successfully-fetched issue data.
-    window.api.linear
-      .getIssue({ id: issue.id })
+    linearGetIssue(settings, issue.id)
       .then((issueResult) => {
         if (requestId !== requestIdRef.current) {
           return
@@ -553,8 +569,7 @@ export default function LinearItemDrawer({
       })
       .catch(() => {})
 
-    window.api.linear
-      .issueComments({ issueId: issue.id })
+    linearIssueComments(settings, issue.id)
       .then((commentsResult) => {
         if (requestId !== requestIdRef.current) {
           return
@@ -579,7 +594,7 @@ export default function LinearItemDrawer({
         }
       })
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [issue?.id])
+  }, [issue?.id, settings])
 
   // Why: same pointer-events fix as GitHubItemDialog — Radix may leave
   // pointer-events: none on body when overlays transition.

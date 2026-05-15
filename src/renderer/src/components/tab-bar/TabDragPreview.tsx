@@ -1,4 +1,4 @@
-import { FileCode, Globe, Terminal as TerminalIcon } from 'lucide-react'
+import { FileCode, Globe, Terminal as TerminalIcon, FileText } from 'lucide-react'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 
 // Why: rendered inside dnd-kit's DragOverlay (a document-level portal), so
@@ -9,7 +9,13 @@ import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 // the wrapper's top-left.
 export default function TabDragPreview({ drag }: { drag: TabDragItemData }): React.JSX.Element {
   const Icon =
-    drag.tabType === 'browser' ? Globe : drag.tabType === 'editor' ? FileCode : TerminalIcon
+    drag.tabType === 'browser'
+      ? Globe
+      : drag.tabType === 'editor'
+        ? FileCode
+        : drag.tabType === 'notes'
+          ? FileText
+          : TerminalIcon
   return (
     <div className="pointer-events-none flex h-full w-full items-center gap-1.5 rounded-sm border border-border bg-accent px-2 text-xs text-foreground shadow-md">
       <Icon className="h-3.5 w-3.5 shrink-0" />

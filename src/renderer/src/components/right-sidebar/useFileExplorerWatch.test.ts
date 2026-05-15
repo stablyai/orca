@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { FsChangedPayload } from '../../../../shared/types'
 import {
+  canonicalizeFileExplorerWatchPath,
   getExternalFileChangeRelativePath,
   payloadRequiresDeferredTreeRefresh
 } from './useFileExplorerWatch'
@@ -32,6 +33,22 @@ describe('getExternalFileChangeRelativePath', () => {
     ).toBe('config/settings.json')
   })
 
+  it('matches Windows paths case-insensitively before deriving the relative path', () => {
+    expect(
+      getExternalFileChangeRelativePath('C:\\Repo', 'c:\\repo\\config\\settings.json', false)
+    ).toBe('config/settings.json')
+  })
+
+  it('preserves UNC roots when deriving the relative path', () => {
+    expect(
+      getExternalFileChangeRelativePath(
+        '//Server/Share/Repo',
+        '//server/share/repo/config/settings.json',
+        false
+      )
+    ).toBe('config/settings.json')
+  })
+
   it('ignores paths outside the active worktree', () => {
     expect(
       getExternalFileChangeRelativePath('/repo', '/other/config/settings.json', false)
@@ -59,6 +76,29 @@ describe('getExternalFileChangeRelativePath', () => {
     expect(getExternalFileChangeRelativePath('/repo', '/repo/a/b/c/deep.ts', false)).toBe(
       'a/b/c/deep.ts'
     )
+  })
+})
+
+describe('canonicalizeFileExplorerWatchPath', () => {
+  it('returns event paths with the watched worktree casing for UNC cache lookups', () => {
+    expect(
+      canonicalizeFileExplorerWatchPath('//Server/Share/Repo', '//server/share/repo/src/index.ts')
+    ).toBe('//Server/Share/Repo/src/index.ts')
+  })
+
+  it('preserves the watched worktree separator style for Windows cache lookups', () => {
+    expect(canonicalizeFileExplorerWatchPath('C:\\Repo', 'c:\\repo\\src\\index.ts')).toBe(
+      'C:\\Repo\\src\\index.ts'
+    )
+  })
+
+  it('rejects sibling UNC shares whose path merely shares a prefix', () => {
+    expect(
+      canonicalizeFileExplorerWatchPath(
+        '//Server/Share/Repo',
+        '//server/share/repository/src/index.ts'
+      )
+    ).toBeNull()
   })
 })
 

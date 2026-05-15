@@ -1,6 +1,10 @@
 import type { AppState } from '../store'
 import type { WorkspaceSessionState } from '../../../shared/types'
-import { buildWorkspaceSessionPayload, SESSION_RELEVANT_FIELDS } from './workspace-session'
+import {
+  buildWorkspaceSessionPayload,
+  SESSION_RELEVANT_FIELDS,
+  shouldPersistWorkspaceSession
+} from './workspace-session'
 
 export type SessionWriteSubscriberDeps = {
   store: {
@@ -33,7 +37,7 @@ export function createSessionWriteSubscriber({
   let prev: Record<string, unknown> | null = null
 
   const unsub = store.subscribe((state) => {
-    if (!state.workspaceSessionReady) {
+    if (!shouldPersistWorkspaceSession(state)) {
       return
     }
     let changed = false
@@ -68,7 +72,11 @@ export function createSessionWriteSubscriber({
       // future refactor that adds a non-relevant field read to the payload
       // builder — without this, such a change would silently start emitting
       // stale values for that field.
-      persist(buildWorkspaceSessionPayload(store.getState()))
+      const fresh = store.getState()
+      if (!shouldPersistWorkspaceSession(fresh)) {
+        return
+      }
+      persist(buildWorkspaceSessionPayload(fresh))
     }, debounceMs)
   })
 

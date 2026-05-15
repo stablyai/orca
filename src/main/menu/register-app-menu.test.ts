@@ -27,6 +27,7 @@ function buildMenuOptions() {
   return {
     onCheckForUpdates: vi.fn(),
     onOpenSettings: vi.fn(),
+    onOpenFeatureTour: vi.fn(),
     onZoomIn: vi.fn(),
     onZoomOut: vi.fn(),
     onZoomReset: vi.fn(),
@@ -171,7 +172,7 @@ describe('registerAppMenu', () => {
     expect(fileLabels).toEqual(expect.arrayContaining(['Export as PDF...', 'Settings', 'Exit']))
 
     const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
-    expect(helpLabels).toEqual(expect.arrayContaining(['Check for Updates...']))
+    expect(helpLabels).toEqual(expect.arrayContaining(['Feature tour', 'Check for Updates...']))
   })
 
   it.runIf(isMac)('keeps the macOS app-named menu with Settings and quit roles', () => {
@@ -186,8 +187,24 @@ describe('registerAppMenu', () => {
     const fileLabels = getSubmenu(template, 'File').map((item) => item.label)
     expect(fileLabels).not.toContain('Settings')
     expect(fileLabels).not.toContain('Exit')
-    // No Help menu on macOS — About/Check for Updates live in the app menu.
-    expect(template.find((item) => item.label === 'Help')).toBeUndefined()
+    const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
+    expect(helpLabels).toEqual(['Feature tour'])
+  })
+
+  it('routes Feature tour through its callback', () => {
+    const options = buildMenuOptions()
+    registerAppMenu(options)
+
+    const featureTourItem = getSubmenu(getTemplate(), 'Help').find(
+      (entry) => entry.label === 'Feature tour'
+    )
+    expect(featureTourItem?.accelerator).toBeUndefined()
+
+    const targetWindow = {} as Electron.BaseWindow
+    featureTourItem?.click?.({} as never, targetWindow, {} as Electron.KeyboardEvent)
+
+    expect(options.onOpenFeatureTour).toHaveBeenCalledTimes(1)
+    expect(options.onOpenFeatureTour).toHaveBeenCalledWith(targetWindow)
   })
 
   it('exposes an Appearance submenu under View with checkbox items reflecting state', () => {

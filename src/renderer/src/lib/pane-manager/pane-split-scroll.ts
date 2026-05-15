@@ -1,3 +1,4 @@
+import type { IBuffer, IDisposable } from '@xterm/xterm'
 import type { ManagedPaneInternal, ScrollState } from './pane-manager-types'
 import { restoreScrollState } from './pane-scroll'
 
@@ -7,6 +8,43 @@ function refreshAfterReparent(pane: ManagedPaneInternal): void {
   } catch {
     /* ignore — pane may have been disposed */
   }
+}
+
+function runAfterNormalBuffer(
+  pane: ManagedPaneInternal,
+  getPaneById: (id: number) => ManagedPaneInternal | undefined,
+  paneId: number,
+  isDestroyed: () => boolean,
+  callback: (pane: ManagedPaneInternal) => void
+): void {
+  let disposable: IDisposable | null = null
+  disposable = pane.terminal.buffer.onBufferChange((buffer: IBuffer) => {
+    if (buffer.type === 'alternate') {
+      return
+    }
+    disposable?.dispose()
+    disposable = null
+    if (isDestroyed()) {
+      return
+    }
+    const live = getPaneById(paneId)
+    if (live) {
+      callback(live)
+    }
+  })
+}
+
+function restoreCapturedScrollState(
+  pane: ManagedPaneInternal,
+  scrollState: ScrollState,
+  reattachWebgl?: (pane: ManagedPaneInternal) => void
+): void {
+  pane.pendingSplitScrollState = null
+  if (reattachWebgl) {
+    reattachWebgl(pane)
+  }
+  restoreScrollState(pane.terminal, scrollState)
+  refreshAfterReparent(pane)
 }
 
 function logPaneHealth(pane: ManagedPaneInternal, phase: string): void {
@@ -89,10 +127,19 @@ export function scheduleSplitScrollRestore(
         return
       }
       const live = getPaneById(paneId)
-      if (live?.pendingSplitScrollState) {
-        restoreScrollState(live.terminal, scrollState)
-        refreshAfterReparent(live)
+      if (!live?.pendingSplitScrollState) {
+        return
       }
+      // Why: see the 200ms timer below — the alt-screen buffer belongs to a
+      // TUI and restore-during-draw knocks its cursor one row off (#1298).
+      if (
+        scrollState.bufferType === 'alternate' ||
+        live.terminal.buffer.active.type === 'alternate'
+      ) {
+        return
+      }
+      restoreScrollState(live.terminal, scrollState)
+      refreshAfterReparent(live)
     })
   })
 
@@ -104,12 +151,32 @@ export function scheduleSplitScrollRestore(
     if (!live) {
       return
     }
-    live.pendingSplitScrollState = null
-    if (reattachWebgl) {
-      reattachWebgl(live)
+    // Why: the alt-screen buffer belongs to a full-screen TUI (Claude Code,
+    // vim, less) that owns its cursor position. Re-running scroll restore
+    // and a full refresh here clobbers an in-progress draw — refresh(0,
+    // rows-1) repaints rows from xterm's buffer, racing the TUI's next
+    // write and leaving its cursor one row off (#1298 regression).
+    // WebGL reattach also refreshes, so defer it until the TUI exits the
+    // alternate buffer. Alt-screen has no scrollback, so scroll restore has
+    // nothing legitimate to do.
+    if (scrollState.bufferType === 'alternate') {
+      live.pendingSplitScrollState = null
+      if (live.terminal.buffer.active.type === 'alternate' && reattachWebgl) {
+        runAfterNormalBuffer(live, getPaneById, paneId, isDestroyed, reattachWebgl)
+        return
+      }
+      if (reattachWebgl) {
+        reattachWebgl(live)
+      }
+      return
     }
-    restoreScrollState(live.terminal, scrollState)
-    refreshAfterReparent(live)
+    if (live.terminal.buffer.active.type === 'alternate') {
+      runAfterNormalBuffer(live, getPaneById, paneId, isDestroyed, (normalPane) => {
+        restoreCapturedScrollState(normalPane, scrollState, reattachWebgl)
+      })
+      return
+    }
+    restoreCapturedScrollState(live, scrollState, reattachWebgl)
   }, 200)
 
   setTimeout(() => {

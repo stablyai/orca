@@ -17,15 +17,18 @@ import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agen
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { isGitRepoKind } from '../../../shared/repo-kind'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type {
   GitHubWorkItem,
   GitPushTarget,
+  GitLabWorkItem,
   LinearIssue,
   OrcaHooks,
   SetupDecision,
   SetupRunPolicy,
   SparsePreset,
   TuiAgent,
+  WorktreeMeta,
   WorkspaceCreateTelemetrySource
 } from '../../../shared/types'
 import {
@@ -47,6 +50,9 @@ import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-sug
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { normalizeSparseDirectoryLines, sparseDirectoriesMatch } from '@/lib/sparse-paths'
+import { joinPath } from '@/lib/path'
+import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
+import { checkRuntimeHooks, readRuntimeIssueCommand } from '@/runtime/runtime-hooks-client'
 
 export type UseComposerStateOptions = {
   initialRepoId?: string
@@ -83,8 +89,11 @@ export type ComposerCardProps = {
   name: string
   onNameValueChange: (value: string) => void
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
+  onSmartGitLabItemSelect: (item: GitLabWorkItem) => void
   onSmartBranchSelect: (refName: string) => void
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
+  /** GitLab parallel of onBaseBranchPrSelect. */
+  onBaseBranchMrSelect?: (baseBranch: string, item: GitLabWorkItem) => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
   agentPrompt: string
@@ -288,6 +297,22 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
     return initialLinkedWorkItem?.type === 'pr' ? initialLinkedWorkItem.number : null
   })
+  // Why: GitLab parallels of linkedIssue/linkedPR. Kept as separate state
+  // (rather than reusing the GitHub slots with a provider discriminator) so
+  // the existing GitHub auto-name / linked-badge / persistence code paths
+  // stay untouched.
+  const [linkedGitLabIssue, setLinkedGitLabIssue] = useState<number | null>(() => {
+    if (persistDraft && newWorkspaceDraft?.linkedGitLabIssue !== undefined) {
+      return newWorkspaceDraft.linkedGitLabIssue
+    }
+    return null
+  })
+  const [linkedGitLabMR, setLinkedGitLabMR] = useState<number | null>(() => {
+    if (persistDraft && newWorkspaceDraft?.linkedGitLabMR !== undefined) {
+      return newWorkspaceDraft.linkedGitLabMR
+    }
+    return initialLinkedWorkItem?.type === 'mr' ? initialLinkedWorkItem.number : null
+  })
   const [baseBranch, setBaseBranch] = useState<string | undefined>(
     persistDraft ? newWorkspaceDraft?.baseBranch : initialBaseBranch
   )
@@ -371,6 +396,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // multi-instance routing).
   const agentPromptRef = useRef(agentPrompt)
   agentPromptRef.current = agentPrompt
+  const connectionIdRef = useRef(connectionId)
+  connectionIdRef.current = connectionId
 
   const selectedRepo = eligibleRepos.find((repo) => repo.id === repoId)
 
@@ -383,18 +410,30 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     null
   )
   const selectedRepoPath = selectedRepo?.path
+  const selectedRepoPathRef = useRef<string | undefined>(selectedRepoPath)
+  selectedRepoPathRef.current = selectedRepoPath
+  const settingsRef = useRef(settings)
+  settingsRef.current = settings
   useEffect(() => {
-    if (!selectedRepoPath) {
+    if (!selectedRepo || !selectedRepoPath) {
       setSelectedRepoSlug(null)
       return
     }
     let cancelled = false
-    void (
-      window.api.gh.repoSlug({ repoPath: selectedRepoPath }) as Promise<{
-        owner: string
-        repo: string
-      } | null>
-    )
+    const target = getActiveRuntimeTarget(settings)
+    const request =
+      target.kind === 'environment'
+        ? callRuntimeRpc<{ owner: string; repo: string } | null>(
+            target,
+            'github.repoSlug',
+            { repo: selectedRepo.id },
+            { timeoutMs: 30_000 }
+          )
+        : (window.api.gh.repoSlug({ repoPath: selectedRepoPath }) as Promise<{
+            owner: string
+            repo: string
+          } | null>)
+    void request
       .then((result) => {
         if (cancelled) {
           return
@@ -409,7 +448,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return () => {
       cancelled = true
     }
-  }, [selectedRepoPath])
+  }, [selectedRepo, selectedRepoPath, settings])
   const sparsePresetsForRepo = sparsePresetsByRepo[repoId]
   const sparsePresets = sparsePresetsForRepo ?? EMPTY_SPARSE_PRESETS
   const normalizedSparseDirectories = useMemo(
@@ -603,6 +642,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       agent: tuiAgent,
       linkedIssue,
       linkedPR,
+      linkedGitLabIssue,
+      linkedGitLabMR,
       ...(baseBranch !== undefined ? { baseBranch } : {})
     })
   }, [
@@ -612,6 +653,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     baseBranch,
     linkedIssue,
     linkedPR,
+    linkedGitLabIssue,
+    linkedGitLabMR,
     linkedWorkItem,
     note,
     name,
@@ -677,8 +720,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setYamlHooks(null)
     setCheckedHooksRepoId(null)
 
-    void window.api.hooks
-      .check({ repoId })
+    void checkRuntimeHooks(settings, repoId)
       .then((result) => {
         if (!cancelled) {
           setYamlHooks(result.hooks)
@@ -692,8 +734,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         }
       })
 
-    void window.api.hooks
-      .readIssueCommand({ repoId })
+    void readRuntimeIssueCommand(settings, repoId)
       .then((result) => {
         if (!cancelled) {
           setIssueCommandTemplate(result.effectiveContent ?? '')
@@ -710,7 +751,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return () => {
       cancelled = true
     }
-  }, [repoId])
+  }, [repoId, settings])
 
   // Why: warm the Start-from picker's PR cache on composer mount and whenever
   // the selected repo changes so opening the picker paints instantly from
@@ -754,8 +795,17 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setLinkItemsLoading(true)
 
     const lookupRepoId = selectedRepo.id
-    void window.api.gh
-      .listWorkItems({ repoPath: selectedRepo.path, limit: 100 })
+    const target = getActiveRuntimeTarget(settings)
+    const request =
+      target.kind === 'environment'
+        ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.listWorkItems>>>(
+            target,
+            'github.listWorkItems',
+            { repo: selectedRepo.id, limit: 100 },
+            { timeoutMs: 30_000 }
+          )
+        : window.api.gh.listWorkItems({ repoPath: selectedRepo.path, limit: 100 })
+    void request
       .then((envelope) => {
         if (!cancelled) {
           // Why: IPC payload omits repoId — stamp it here from the repo we
@@ -802,7 +852,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return () => {
       cancelled = true
     }
-  }, [linkPopoverOpen, selectedRepo])
+  }, [linkPopoverOpen, selectedRepo, settings])
 
   useEffect(() => {
     if (!linkPopoverOpen || !selectedRepo || normalizedLinkQuery.directNumber === null) {
@@ -818,8 +868,20 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     // resolving direct lookups against the selected repo instead of requiring a
     // text match in the recent-items list.
     const lookupRepoId = selectedRepo.id
-    void window.api.gh
-      .workItem({ repoPath: selectedRepo.path, number: normalizedLinkQuery.directNumber })
+    const target = getActiveRuntimeTarget(settings)
+    const request =
+      target.kind === 'environment'
+        ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.workItem>>>(
+            target,
+            'github.workItem',
+            { repo: selectedRepo.id, number: normalizedLinkQuery.directNumber },
+            { timeoutMs: 30_000 }
+          )
+        : window.api.gh.workItem({
+            repoPath: selectedRepo.path,
+            number: normalizedLinkQuery.directNumber
+          })
+    void request
       .then((item) => {
         if (!cancelled) {
           setLinkDirectItem(
@@ -841,7 +903,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return () => {
       cancelled = true
     }
-  }, [linkPopoverOpen, normalizedLinkQuery.directNumber, selectedRepo])
+  }, [linkPopoverOpen, normalizedLinkQuery.directNumber, selectedRepo, settings])
 
   const applyLinkedWorkItem = useCallback(
     (item: GitHubWorkItem): void => {
@@ -859,6 +921,44 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         url: item.url
       })
       const suggestedName = getLinkedWorkItemSuggestedName(item)
+      if (suggestedName && (!name.trim() || name === lastAutoNameRef.current)) {
+        setName(suggestedName)
+        lastAutoNameRef.current = suggestedName
+      }
+    },
+    [name]
+  )
+
+  // Why: parallel of applyLinkedWorkItem for GitLab. Touches the GitLab
+  // state slots only — the GitHub linkedIssue/linkedPR remain unchanged
+  // so a workspace can in principle reference items from both providers.
+  // The auto-name logic mirrors the GitHub side (issue: number-and-title,
+  // MR: branch name) via getLinkedWorkItemSuggestedName, which already
+  // accepts both shapes structurally.
+  const applyLinkedGitLabWorkItem = useCallback(
+    (item: GitLabWorkItem): void => {
+      if (item.type === 'issue') {
+        setLinkedGitLabIssue(item.number)
+        setLinkedGitLabMR(null)
+      } else {
+        setLinkedGitLabIssue(null)
+        setLinkedGitLabMR(item.number)
+      }
+      setLinkedWorkItem({
+        type: item.type,
+        number: item.number,
+        title: item.title,
+        url: item.url
+      })
+      // Why: GitLabWorkItem.branchName lines up with GitHubWorkItem.branchName
+      // structurally; cast to the suggested-name helper's input shape so we
+      // reuse the existing naming heuristic without forking it.
+      const suggestedName = getLinkedWorkItemSuggestedName({
+        type: item.type === 'mr' ? 'pr' : 'issue',
+        number: item.number,
+        title: item.title,
+        branchName: item.branchName
+      } as unknown as GitHubWorkItem)
       if (suggestedName && (!name.trim() || name === lastAutoNameRef.current)) {
         setName(suggestedName)
         lastAutoNameRef.current = suggestedName
@@ -912,23 +1012,165 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     },
     [name]
   )
+
+  const addComposerAttachments = useCallback((paths: string[]): void => {
+    if (paths.length === 0) {
+      return
+    }
+    setAttachmentPaths((current) => {
+      const next = [...current]
+      for (const pathValue of paths) {
+        if (!next.includes(pathValue)) {
+          next.push(pathValue)
+        }
+      }
+      return next
+    })
+  }, [])
+
+  const insertComposerFolderPaths = useCallback((folderPaths: string[]): void => {
+    if (folderPaths.length === 0) {
+      return
+    }
+    // Why: de-dup within a single drop — the OS occasionally delivers the
+    // same folder twice when a user drags from a selection that includes both
+    // the item and its parent, and we don't want to insert it multiple times.
+    const uniqueFolderPaths = Array.from(new Set(folderPaths))
+    // Why: wrap paths containing shell metacharacters in double quotes (and
+    // escape embedded quotes) so inserted folder refs stay a single token if
+    // pasted into a terminal. Simple paths stay unadorned to match OS drops.
+    const formatPath = (p: string): string => {
+      if (/[\s"'$`\\()[\]{}*?!;&|<>#~]/.test(p)) {
+        return `"${p.replace(/(["\\$`])/g, '\\$1')}"`
+      }
+      return p
+    }
+    const insertion = uniqueFolderPaths.map(formatPath).join(' ')
+    const textarea = promptTextareaRef.current
+    // Why: compute selection, insertion, and caret target OUTSIDE the
+    // setAgentPrompt updater so the updater stays pure. React Strict Mode
+    // double-invokes updaters in dev, and batching can delay execution.
+    const current = agentPromptRef.current
+    const selStart = textarea?.selectionStart ?? current.length
+    const selEnd = textarea?.selectionEnd ?? current.length
+    const before = current.slice(0, selStart)
+    const after = current.slice(selEnd)
+    // Why: pad with single spaces when the caret sits directly against other
+    // text so the folder path doesn't merge into an adjacent word.
+    const needsLeadingSpace = before.length > 0 && !/\s$/.test(before)
+    const needsTrailingSpace = after.length > 0 && !/^\s/.test(after)
+    const padded = `${needsLeadingSpace ? ' ' : ''}${insertion}${needsTrailingSpace ? ' ' : ''}`
+    const caret = before.length + padded.length
+    if (textarea) {
+      requestAnimationFrame(() => {
+        textarea.focus()
+        textarea.setSelectionRange(caret, caret)
+      })
+    }
+    // Why: pass a plain value (not an updater) since `before`/`after` were
+    // already resolved from `agentPromptRef.current`; this keeps the state
+    // write side-effect-free under Strict-Mode double-render.
+    setAgentPrompt(before + padded + after)
+  }, [])
+
+  const uploadComposerPaths = useCallback(
+    async (
+      sourcePaths: string[],
+      targetSettings = settings,
+      targetConnectionId = connectionId,
+      targetRepoPath = selectedRepoPath
+    ): Promise<{ filePaths: string[]; folderPaths: string[] } | null> => {
+      if (!targetSettings?.activeRuntimeEnvironmentId?.trim() && !targetConnectionId) {
+        return null
+      }
+      if (!targetRepoPath) {
+        toast.error('No remote repository path is available for attachments.')
+        return { filePaths: [], folderPaths: [] }
+      }
+      const destinationDir = joinPath(targetRepoPath, '.orca/drops')
+      const { results } = await importExternalPathsToRuntime(
+        {
+          settings: targetSettings,
+          worktreeId: targetRepoPath,
+          worktreePath: targetRepoPath,
+          connectionId: targetConnectionId ?? undefined
+        },
+        sourcePaths,
+        destinationDir,
+        { ensureDestinationDir: true }
+      )
+      const filePaths: string[] = []
+      const folderPaths: string[] = []
+      let skippedOrFailed = 0
+      for (const result of results) {
+        if (result.status !== 'imported') {
+          skippedOrFailed += 1
+          continue
+        }
+        if (result.kind === 'directory') {
+          folderPaths.push(result.destPath)
+        } else {
+          filePaths.push(result.destPath)
+        }
+      }
+      if (skippedOrFailed > 0) {
+        toast.error('Some attachments could not be uploaded.')
+      }
+      return { filePaths, folderPaths }
+    },
+    [connectionId, selectedRepoPath, settings]
+  )
+
   const handleAddAttachment = useCallback(async (): Promise<void> => {
     try {
       const selectedPath = await window.api.shell.pickAttachment()
       if (!selectedPath) {
         return
       }
-      setAttachmentPaths((current) => {
-        if (current.includes(selectedPath)) {
-          return current
-        }
-        return [...current, selectedPath]
-      })
+      const uploaded = await uploadComposerPaths([selectedPath])
+      if (uploaded) {
+        addComposerAttachments(uploaded.filePaths)
+        insertComposerFolderPaths(uploaded.folderPaths)
+        return
+      }
+      addComposerAttachments([selectedPath])
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to add attachment.'
       toast.error(message)
     }
-  }, [])
+  }, [addComposerAttachments, insertComposerFolderPaths, uploadComposerPaths])
+
+  const applyLocalComposerDrop = useCallback(
+    async (paths: string[]): Promise<void> => {
+      const fileAttachments: string[] = []
+      const folderPaths: string[] = []
+      for (const filePath of paths) {
+        try {
+          await window.api.fs.authorizeExternalPath({ targetPath: filePath })
+          const stat = await window.api.fs.stat({ filePath })
+          if (stat.isDirectory) {
+            folderPaths.push(filePath)
+          } else {
+            fileAttachments.push(filePath)
+          }
+        } catch {
+          // Skip paths we cannot authorize or stat.
+        }
+      }
+
+      addComposerAttachments(fileAttachments)
+      insertComposerFolderPaths(folderPaths)
+    },
+    [addComposerAttachments, insertComposerFolderPaths]
+  )
+  const addComposerAttachmentsRef = useRef(addComposerAttachments)
+  addComposerAttachmentsRef.current = addComposerAttachments
+  const insertComposerFolderPathsRef = useRef(insertComposerFolderPaths)
+  insertComposerFolderPathsRef.current = insertComposerFolderPaths
+  const uploadComposerPathsRef = useRef(uploadComposerPaths)
+  uploadComposerPathsRef.current = uploadComposerPaths
+  const applyLocalComposerDropRef = useRef(applyLocalComposerDrop)
+  applyLocalComposerDropRef.current = applyLocalComposerDrop
 
   // Why: native OS file drops onto the composer are captured by the preload
   // bridge (see `data-native-file-drop-target="composer"` markers) and relayed
@@ -952,82 +1194,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         return
       }
       void (async () => {
-        const fileAttachments: string[] = []
-        const folderPaths: string[] = []
-        for (const filePath of data.paths) {
-          try {
-            await window.api.fs.authorizeExternalPath({ targetPath: filePath })
-            const stat = await window.api.fs.stat({ filePath })
-            if (stat.isDirectory) {
-              folderPaths.push(filePath)
-            } else {
-              fileAttachments.push(filePath)
-            }
-          } catch {
-            // Skip paths we cannot authorize or stat.
-          }
+        const uploaded = await uploadComposerPathsRef.current(
+          data.paths,
+          settingsRef.current,
+          connectionIdRef.current,
+          selectedRepoPathRef.current
+        )
+        if (uploaded) {
+          addComposerAttachmentsRef.current(uploaded.filePaths)
+          insertComposerFolderPathsRef.current(uploaded.folderPaths)
+          return
         }
-
-        if (fileAttachments.length > 0) {
-          setAttachmentPaths((current) => {
-            const next = [...current]
-            for (const p of fileAttachments) {
-              if (!next.includes(p)) {
-                next.push(p)
-              }
-            }
-            return next
-          })
-        }
-
-        if (folderPaths.length > 0) {
-          // Why: de-dup within a single drop — the OS occasionally delivers
-          // the same folder twice when a user drags from a selection that
-          // includes both the item and its parent, and we don't want to
-          // insert it multiple times.
-          const uniqueFolderPaths = Array.from(new Set(folderPaths))
-          // Why: wrap paths containing shell metacharacters in double quotes
-          // (and escape embedded quotes) so the inserted text reads as a
-          // single token if the user pastes it into a terminal. Simple paths
-          // stay unadorned to match how Finder/Explorer drops appear.
-          const formatPath = (p: string): string => {
-            if (/[\s"'$`\\()[\]{}*?!;&|<>#~]/.test(p)) {
-              return `"${p.replace(/(["\\$`])/g, '\\$1')}"`
-            }
-            return p
-          }
-          const insertion = uniqueFolderPaths.map(formatPath).join(' ')
-          const textarea = promptTextareaRef.current
-          // Why: compute selection, insertion, and caret target OUTSIDE the
-          // setAgentPrompt updater so the updater stays pure. React Strict
-          // Mode double-invokes updaters in dev, and batching can delay
-          // execution — reading `textarea.selectionStart` inside the updater
-          // risks seeing a shifted caret. Read `agentPromptRef.current` for
-          // the latest prompt because this effect subscribes once and the
-          // outer closure's `agentPrompt` would be stale.
-          const current = agentPromptRef.current
-          const selStart = textarea?.selectionStart ?? current.length
-          const selEnd = textarea?.selectionEnd ?? current.length
-          const before = current.slice(0, selStart)
-          const after = current.slice(selEnd)
-          // Why: pad with single spaces when the caret sits directly against
-          // other text so the folder path doesn't merge into an adjacent word.
-          const needsLeadingSpace = before.length > 0 && !/\s$/.test(before)
-          const needsTrailingSpace = after.length > 0 && !/^\s/.test(after)
-          const padded = `${needsLeadingSpace ? ' ' : ''}${insertion}${needsTrailingSpace ? ' ' : ''}`
-          const caret = before.length + padded.length
-          if (textarea) {
-            // Restore the caret to the end of the inserted text after React flushes.
-            requestAnimationFrame(() => {
-              textarea.focus()
-              textarea.setSelectionRange(caret, caret)
-            })
-          }
-          // Why: pass a plain value (not an updater) since `before`/`after`
-          // were already resolved from `agentPromptRef.current`; this keeps
-          // the state write side-effect-free under Strict-Mode double-render.
-          setAgentPrompt(before + padded + after)
-        }
+        await applyLocalComposerDropRef.current(data.paths)
       })()
     })
     return () => {
@@ -1067,12 +1245,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       let hint: string | null = null
       if (linkedWorkItem?.type === 'pr' && baseBranch) {
         hint = `was PR #${linkedWorkItem.number}`
+      } else if (linkedWorkItem?.type === 'mr' && baseBranch) {
+        // Why: GitLab MR convention is `!N`, not `#N` — match the
+        // upstream UI so the reset hint is recognizable.
+        hint = `was MR !${linkedWorkItem.number}`
       } else if (baseBranch) {
         hint = `was ${baseBranch}`
       }
       setRepoId(value)
       setLinkedIssue('')
       setLinkedPR(null)
+      setLinkedGitLabIssue(null)
+      setLinkedGitLabMR(null)
       setLinkedWorkItem(null)
       setSparseEnabled(false)
       setSparseDirectories('')
@@ -1132,6 +1316,26 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [applyLinkedWorkItem]
   )
 
+  // Why: GitLab parallel of handleBaseBranchPrSelect. Same shape, same
+  // semantics — except the note prefill uses GitLab's `!N` MR convention
+  // so a glance at the worktree sidebar makes the provider obvious.
+  const handleBaseBranchMrSelect = useCallback(
+    (nextBaseBranch: string, item: GitLabWorkItem): void => {
+      setBaseBranch(nextBaseBranch)
+      setStartFromResetHint(null)
+      applyLinkedGitLabWorkItem(item)
+      if (item.type === 'mr') {
+        const suggestedNote = `MR !${item.number} — ${item.title}`
+        const currentNote = noteRef.current
+        if (!currentNote.trim() || currentNote === lastAutoNoteRef.current) {
+          setNote(suggestedNote)
+          lastAutoNoteRef.current = suggestedNote
+        }
+      }
+    },
+    [applyLinkedGitLabWorkItem]
+  )
+
   const handleSmartGitHubItemSelect = useCallback(
     (item: GitHubWorkItem): void => {
       setStartFromResetHint(null)
@@ -1142,15 +1346,31 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         return
       }
       setPushTarget(undefined)
-      void window.api.worktrees
-        .resolvePrBase({
-          repoId: repoForItem.id,
-          prNumber: item.number,
-          ...(item.branchName ? { headRefName: item.branchName } : {}),
-          ...(item.isCrossRepository !== undefined
-            ? { isCrossRepository: item.isCrossRepository }
-            : {})
-        })
+      const target = getActiveRuntimeTarget(settings)
+      const resolvePrBase =
+        target.kind === 'local'
+          ? window.api.worktrees.resolvePrBase({
+              repoId: repoForItem.id,
+              prNumber: item.number,
+              ...(item.branchName ? { headRefName: item.branchName } : {}),
+              ...(item.isCrossRepository !== undefined
+                ? { isCrossRepository: item.isCrossRepository }
+                : {})
+            })
+          : callRuntimeRpc<{ baseBranch: string; pushTarget?: GitPushTarget } | { error: string }>(
+              target,
+              'worktree.resolvePrBase',
+              {
+                repo: repoForItem.id,
+                prNumber: item.number,
+                ...(item.branchName ? { headRefName: item.branchName } : {}),
+                ...(item.isCrossRepository !== undefined
+                  ? { isCrossRepository: item.isCrossRepository }
+                  : {})
+              },
+              { timeoutMs: 30_000 }
+            )
+      void resolvePrBase
         .then((result) => {
           if ('error' in result) {
             setBaseBranch(undefined)
@@ -1166,7 +1386,39 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           toast.error(error instanceof Error ? error.message : 'Failed to resolve PR base.')
         })
     },
-    [applyLinkedWorkItem, eligibleRepos, handleBaseBranchPrSelect, selectedRepo]
+    [applyLinkedWorkItem, eligibleRepos, handleBaseBranchPrSelect, selectedRepo, settings]
+  )
+
+  // Why: GitLab parallel of handleSmartGitHubItemSelect. For a picked
+  // MR, resolves the base branch via worktrees:resolveMrBase (which uses
+  // refs/merge-requests/<iid>/head for fork MRs the same way the gh side
+  // uses refs/pull/<N>/head). Issue selections short-circuit since
+  // there's no branch-resolution step to run.
+  const handleSmartGitLabItemSelect = useCallback(
+    (item: GitLabWorkItem): void => {
+      applyLinkedGitLabWorkItem(item)
+      setStartFromResetHint(null)
+      const repoForItem = eligibleRepos.find((repo) => repo.id === item.repoId) ?? selectedRepo
+      if (item.type !== 'mr' || !repoForItem) {
+        return
+      }
+      void window.api.worktrees
+        .resolveMrBase({
+          repoId: repoForItem.id,
+          mrIid: item.number,
+          ...(item.branchName ? { sourceBranch: item.branchName } : {}),
+          ...(item.isCrossRepository !== undefined
+            ? { isCrossRepository: item.isCrossRepository }
+            : {})
+        })
+        .then((result) => {
+          if ('error' in result) {
+            return
+          }
+          handleBaseBranchMrSelect(result.baseBranch, item)
+        })
+    },
+    [applyLinkedGitLabWorkItem, eligibleRepos, handleBaseBranchMrSelect, selectedRepo]
   )
 
   const handleSmartBranchSelect = useCallback(
@@ -1255,12 +1507,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   }, [closeModal, openSettingsPage, openSettingsTarget])
 
   const applyWorktreeMeta = useCallback(
-    async (
-      worktreeId: string,
-      meta: {
-        comment?: string
-      }
-    ): Promise<void> => {
+    async (worktreeId: string, meta: Partial<WorktreeMeta>): Promise<void> => {
       if (Object.keys(meta).length === 0) {
         return
       }
@@ -1325,7 +1572,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       const worktree = result.worktree
 
       const trimmedNote = note.trim()
-      await applyWorktreeMeta(worktree.id, trimmedNote ? { comment: trimmedNote } : {})
+      await applyWorktreeMeta(worktree.id, {
+        ...(parsedLinkedIssueNumber !== null ? { linkedIssue: parsedLinkedIssueNumber } : {}),
+        ...(effectiveLinkedPR !== null ? { linkedPR: effectiveLinkedPR } : {}),
+        ...(linkedGitLabIssue !== null ? { linkedGitLabIssue } : {}),
+        ...(linkedGitLabMR !== null ? { linkedGitLabMR } : {}),
+        ...(trimmedNote ? { comment: trimmedNote } : {})
+      })
 
       const issueCommand =
         shouldRunIssueAutomation && issueCommandTrustDecision === 'run'
@@ -1397,6 +1650,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     applyWorktreeMeta,
     issueCommandTemplate,
     effectiveLinkedPR,
+    linkedGitLabIssue,
+    linkedGitLabMR,
     linkedWorkItem?.title,
     linkedWorkItem?.url,
     normalizedSparseDirectories,
@@ -1643,6 +1898,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     name,
     onNameValueChange: handleNameValueChange,
     onSmartGitHubItemSelect: handleSmartGitHubItemSelect,
+    onSmartGitLabItemSelect: handleSmartGitLabItemSelect,
     onSmartBranchSelect: handleSmartBranchSelect,
     onSmartLinearIssueSelect: handleSmartLinearIssueSelect,
     smartNameSelection,
@@ -1680,6 +1936,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     baseBranch,
     onBaseBranchChange: handleBaseBranchChange,
     onBaseBranchPrSelect: handleBaseBranchPrSelect,
+    onBaseBranchMrSelect: handleBaseBranchMrSelect,
     baseBranchLinkedPrNumber:
       linkedWorkItem?.type === 'pr' && baseBranch ? linkedWorkItem.number : null,
     selectedRepoPath: selectedRepo?.path ?? null,

@@ -7,14 +7,12 @@ import type { HelloMessage, HelloResponse, RpcResponse, DaemonEvent } from './ty
 import { addNodePtyRecoveryHint } from './node-pty-error-hints'
 
 const CONNECT_TIMEOUT_MS = 5000
-const HELLO_TIMEOUT_MS = 5000
 const REQUEST_TIMEOUT_MS = 30000
 
 export type DaemonClientOptions = {
   socketPath: string
   tokenPath: string
   protocolVersion?: number
-  handshakeTimeoutMs?: number
 }
 
 type PendingRequest = {
@@ -27,7 +25,6 @@ export class DaemonClient {
   private socketPath: string
   private tokenPath: string
   private protocolVersion: number
-  private handshakeTimeoutMs: number
   private clientId = randomUUID()
 
   private controlSocket: Socket | null = null
@@ -53,7 +50,6 @@ export class DaemonClient {
     this.socketPath = opts.socketPath
     this.tokenPath = opts.tokenPath
     this.protocolVersion = opts.protocolVersion ?? PROTOCOL_VERSION
-    this.handshakeTimeoutMs = opts.handshakeTimeoutMs ?? HELLO_TIMEOUT_MS
   }
 
   isConnected(): boolean {
@@ -219,7 +215,6 @@ export class DaemonClient {
         }
 
         socket.removeListener('data', onData)
-        clearTimeout(timer)
         const line = buffer.slice(0, newlineIdx)
         try {
           const response = JSON.parse(line) as HelloResponse
@@ -234,13 +229,6 @@ export class DaemonClient {
           reject(new DaemonProtocolError('Invalid hello response'))
         }
       }
-
-      // Why: a wedged daemon can accept the socket but never answer hello,
-      // leaving terminal spawn permanently pending with a blank renderer pane.
-      const timer = setTimeout(() => {
-        socket.removeListener('data', onData)
-        reject(new DaemonProtocolError('Hello timed out'))
-      }, this.handshakeTimeoutMs)
 
       socket.on('data', onData)
       socket.write(encodeNdjson(hello))

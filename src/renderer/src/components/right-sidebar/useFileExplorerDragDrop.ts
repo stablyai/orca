@@ -10,6 +10,7 @@ import { detectLanguage } from '@/lib/language-detect'
 import { getConnectionId } from '@/lib/connection-context'
 import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
+import { renameRuntimePath } from '@/runtime/runtime-file-client'
 
 function extractIpcErrorMessage(err: unknown, fallback: string): string {
   if (!(err instanceof Error)) {
@@ -281,16 +282,22 @@ export function useFileExplorerDragDrop({
 
         try {
           const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-          await window.api.fs.rename({ oldPath: sourcePath, newPath, connectionId })
+          const fileContext = {
+            settings: useAppStore.getState().settings,
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId
+          }
+          await renameRuntimePath(fileContext, sourcePath, newPath)
 
           commitFileExplorerOp({
             undo: async () => {
-              await window.api.fs.rename({ oldPath: newPath, newPath: sourcePath, connectionId })
+              await renameRuntimePath(fileContext, newPath, sourcePath)
               await Promise.all([refreshDir(destDir), refreshDir(sourceDir)])
               remapOpenTabsForMovedPath(newPath, sourcePath)
             },
             redo: async () => {
-              await window.api.fs.rename({ oldPath: sourcePath, newPath, connectionId })
+              await renameRuntimePath(fileContext, sourcePath, newPath)
               await Promise.all([refreshDir(sourceDir), refreshDir(destDir)])
               remapOpenTabsForMovedPath(sourcePath, newPath)
             }

@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+/* oxlint-disable max-lines -- Why: the relay entry point centralizes process
+   lifecycle (stdio, --connect bridge, grace timer, signal handlers, socket
+   server) and handler registration in one file so the boot sequence stays in
+   topological order. Splitting by line count would scatter ordered side-
+   effects across modules and obscure the lifecycle. */
 
 /* eslint-disable max-lines -- Why: the relay entrypoint owns process startup,
    daemon reconnect, and handler registration. Splitting the orchestration
@@ -29,11 +34,14 @@ import { PreflightHandler } from './preflight-handler'
 import { PortScanHandler } from './port-scan-handler'
 import { AgentExecHandler } from './agent-exec-handler'
 import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
+import { PluginOverlayManager } from './plugin-overlay'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD
 } from '../shared/agent-hook-relay'
+import { assertPluginSourceUnderByteCap } from './plugin-source-limit'
+import { resolveOpenCodeSourceConfigDir, resolvePiSourceAgentDir } from './plugin-overlay-env'
 
 const DEFAULT_GRACE_MS = 5 * 60 * 1000
 const SOCK_NAME = 'relay.sock'
@@ -255,26 +263,77 @@ async function main(): Promise<void> {
       )
     }
   })
-  // Why: wait for hook-server startup before the readiness sentinel. A PTY
-  // spawned before the augmenter exists can never receive ORCA_AGENT_HOOK_*
-  // later, so success registers the augmenter first; failure is the deliberate
-  // fail-open path where agent status is disabled for this relay process.
+  // Why: await the hook-server bind before announcing readiness so the very
+  // first PTY spawn (which can land within milliseconds of the sentinel)
+  // already sees populated ORCA_AGENT_HOOK_* env. The bind is a local-loopback
+  // listen — measured in ms — so the latency cost is trivial and removes a
+  // class of "first agent invocation has no status" races. Bind failure is
+  // treated as soft: log and continue, the augmenter returns {} and agent
+  // status simply does not flow.
   try {
     await hookServer.start()
-    ptyHandler.addEnvAugmenter(() => hookServer.buildPtyEnv())
   } catch (err) {
     process.stderr.write(
       `[relay] agent-hook server failed to start: ${err instanceof Error ? err.message : String(err)}\n`
     )
   }
 
-  // Why: evict the per-pane last-status cache when the backing PTY exits so
-  // a terminated pane's last working/done payload cannot resurface as a
-  // ghost event after a later reconnect — see §5 Path 3.
-  ptyHandler.setExitListener(({ paneKey }) => {
+  // Why: every relay-spawned PTY needs the live ORCA_AGENT_HOOK_* coords. The
+  // augmenter is read on every spawn so a hook-server bind that succeeded
+  // late (or after a stop/start) lands in the next PTY's env without a
+  // restart.
+  ptyHandler.addEnvAugmenter(() => hookServer.buildPtyEnv())
+
+  // Why: per-PTY plugin overlays for OpenCode and Pi. `OPENCODE_CONFIG_DIR`
+  // and `PI_CODING_AGENT_DIR` only make sense on the relay's own filesystem
+  // — paths the renderer would synthesize for the Orca host's userData are
+  // meaningless on the remote. The overlay manager materializes a per-PTY
+  // dir on the remote (rooted at $HOME/.orca-relay/) so the agent CLI inside
+  // the relay-spawned PTY loads the bundled status plugin and posts to the
+  // relay's hook server. Source bodies arrive over JSON-RPC (see
+  // `agent_hook.installPlugins` below) — not bundled with the relay binary.
+  const pluginOverlay = new PluginOverlayManager()
+  ptyHandler.addEnvAugmenter((ctx) => {
+    const env: Record<string, string> = {}
+    // Why: prefer paneKey for overlay identity so a renderer-side remount
+    // that reuses the paneKey lands in the same overlay dir. Falls back to
+    // the relay-internal pty-id when paneKey is absent (e.g. CLI-launched
+    // PTYs that don't go through the renderer).
+    const overlayId = ctx.paneKey ?? ctx.id
+    if (pluginOverlay.hasOpenCodeSource()) {
+      const sourceDir = resolveOpenCodeSourceConfigDir(ctx.env, ctx.shell)
+      const dir = pluginOverlay.materializeOpenCode(overlayId, sourceDir)
+      if (dir) {
+        env.OPENCODE_CONFIG_DIR = dir
+        env.ORCA_OPENCODE_CONFIG_DIR = dir
+        if (sourceDir) {
+          env.ORCA_OPENCODE_SOURCE_CONFIG_DIR = sourceDir
+        }
+      }
+    }
+    if (pluginOverlay.hasPiSource()) {
+      const sourceDir = resolvePiSourceAgentDir(ctx.env, ctx.shell)
+      const dir = pluginOverlay.materializePi(overlayId, sourceDir)
+      if (dir) {
+        env.PI_CODING_AGENT_DIR = dir
+        env.ORCA_PI_CODING_AGENT_DIR = dir
+        if (sourceDir) {
+          env.ORCA_PI_SOURCE_AGENT_DIR = sourceDir
+        }
+      }
+    }
+    return env
+  })
+
+  // Why: evict the per-pane last-status cache AND any plugin overlay dirs
+  // when the backing PTY exits so terminated panes do not (a) resurface as
+  // ghost events after a later reconnect (§5 Path 3) or (b) leak overlay
+  // dirs on a long-lived relay.
+  ptyHandler.setExitListener(({ paneKey, id }) => {
     if (paneKey) {
       hookServer.clearPaneState(paneKey)
     }
+    pluginOverlay.clearOverlay(paneKey ?? id)
   })
 
   // Why: request-driven replay. Orca issues this *after* it re-wires the
@@ -288,12 +347,31 @@ async function main(): Promise<void> {
     return { replayed }
   })
 
-  // Why: stub for the plugin-source sync handler used by OpenCode/Pi. The
-  // real implementation is wired in commit #7 (deferred to keep this commit
-  // tight). Stubbed out here as a method-found handler so a probing client
-  // can detect support without -32601 noise on first connect.
-  dispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async () => {
-    return { installed: false }
+  // Why: Orca ships the OpenCode plugin / Pi extension source bodies over
+  // the wire at session-ready (the renderer's bundled hook-service strings
+  // change as new agent events are added — pinning them to the relay binary
+  // would force a relay redeploy on every Orca update). Cache them so each
+  // subsequent PTY spawn can materialize a per-PTY overlay rooted under
+  // $HOME/.orca-relay/. See docs/design/agent-status-over-ssh.md §4.
+  // Why: bound the per-source size so a buggy/hostile Orca can't OOM the
+  // relay by pushing a giant string. The HTTP path has HOOK_REQUEST_MAX_BYTES
+  // = 1 MB; the JSON-RPC path needs an equivalent ceiling. Real plugin sources
+  // are <50 KB today; 256 KB leaves generous headroom.
+  dispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async (params) => {
+    const opencode = params.opencodePluginSource
+    const pi = params.piExtensionSource
+    assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
+    assertPluginSourceUnderByteCap('piExtensionSource', pi)
+    pluginOverlay.setSources({
+      opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
+      piExtensionSource: typeof pi === 'string' ? pi : undefined
+    })
+    return {
+      installed: {
+        opencode: pluginOverlay.hasOpenCodeSource(),
+        pi: pluginOverlay.hasPiSource()
+      }
+    }
   })
 
   // ── Socket server for reconnection ──────────────────────────────────
@@ -496,7 +574,7 @@ function cleanupSocket(sockPath: string): void {
 
 void main().catch((err) => {
   process.stderr.write(
-    `[relay] Fatal startup error: ${err instanceof Error ? err.message : String(err)}\n`
+    `[relay] Fatal startup error: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`
   )
   process.exit(1)
 })

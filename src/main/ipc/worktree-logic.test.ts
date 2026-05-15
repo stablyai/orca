@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: these worktree path/name tests share a
+single setup-free pure-logic module, and splitting them would make the related
+edge cases harder to audit together. */
 import { join, resolve } from 'path'
 import { describe, expect, it } from 'vitest'
 import {
@@ -212,11 +215,15 @@ describe('mergeWorktree', () => {
       linkedIssue: 42,
       linkedPR: 10,
       linkedLinearIssue: null,
+      linkedGitLabMR: null,
+      linkedGitLabIssue: null,
       isArchived: true,
       isUnread: true,
       isPinned: true,
       sortOrder: 5,
-      lastActivityAt: 1000
+      lastActivityAt: 1000,
+      workspaceStatus: 'in-review',
+      diffComments: []
     }
     const result = mergeWorktree('repo1', baseGit, meta)
     expect(result).toEqual({
@@ -232,11 +239,15 @@ describe('mergeWorktree', () => {
       linkedIssue: 42,
       linkedPR: 10,
       linkedLinearIssue: null,
+      linkedGitLabMR: null,
+      linkedGitLabIssue: null,
       isArchived: true,
       isUnread: true,
       isPinned: true,
       sortOrder: 5,
-      lastActivityAt: 1000
+      lastActivityAt: 1000,
+      workspaceStatus: 'in-review',
+      diffComments: []
     })
   })
 
@@ -251,6 +262,7 @@ describe('mergeWorktree', () => {
     expect(result.isPinned).toBe(false)
     expect(result.sortOrder).toBe(0)
     expect(result.lastActivityAt).toBe(0)
+    expect(result.workspaceStatus).toBe('in-progress')
   })
 
   it('strips refs/heads/ prefix from branch for display name', () => {

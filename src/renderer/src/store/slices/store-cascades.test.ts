@@ -403,7 +403,7 @@ describe('setActiveWorktree', () => {
 
     const worktrees = [...store.getState().worktreesByRepo.repo1]
     const repoMap = new Map(store.getState().repos.map((repo) => [repo.id, repo]))
-    worktrees.sort(buildWorktreeComparator('smart', {}, repoMap, null, now))
+    worktrees.sort(buildWorktreeComparator('smart', repoMap, now, new Map()))
 
     expect(worktrees.map((worktree) => worktree.id)).toEqual([backgroundId, focusedId])
   })

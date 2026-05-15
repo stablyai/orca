@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Copy, FolderOpen, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
+import { ORCA_CLI_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
 import { Button } from '../ui/button'
 import {
   Dialog,
@@ -17,9 +18,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/
 type CliSectionProps = {
   currentPlatform: string
 }
-
-const ORCA_CLI_SKILL_INSTALL_COMMAND =
-  'npx skills add https://github.com/stablyai/orca --skill orca-cli'
 
 function getRevealLabel(platform: string): string {
   if (platform === 'darwin') {

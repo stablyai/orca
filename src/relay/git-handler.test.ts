@@ -44,6 +44,7 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.bulkStage')
     expect(methods).toContain('git.bulkUnstage')
     expect(methods).toContain('git.discard')
+    expect(methods).toContain('git.bulkDiscard')
     expect(methods).toContain('git.conflictOperation')
     expect(methods).toContain('git.branchCompare')
     expect(methods).toContain('git.upstreamStatus')
@@ -257,12 +258,41 @@ describe('GitHandler', () => {
       await expect(fs.access(path.join(tmpDir, 'new.txt'))).rejects.toThrow()
     })
 
+    it('bulk discards tracked and untracked files', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'a.txt'), 'a')
+      writeFileSync(path.join(tmpDir, 'b.txt'), 'b')
+      gitCommit(tmpDir, 'initial')
+      writeFileSync(path.join(tmpDir, 'a.txt'), 'a-modified')
+      writeFileSync(path.join(tmpDir, 'b.txt'), 'b-modified')
+      writeFileSync(path.join(tmpDir, 'new.txt'), 'untracked')
+
+      await dispatcher.callRequest('git.bulkDiscard', {
+        worktreePath: tmpDir,
+        filePaths: ['a.txt', 'b.txt', 'new.txt']
+      })
+
+      await expect(fs.readFile(path.join(tmpDir, 'a.txt'), 'utf-8')).resolves.toBe('a')
+      await expect(fs.readFile(path.join(tmpDir, 'b.txt'), 'utf-8')).resolves.toBe('b')
+      await expect(fs.access(path.join(tmpDir, 'new.txt'))).rejects.toThrow()
+    })
+
     it('rejects path traversal', async () => {
       gitInit(tmpDir)
       await expect(
         dispatcher.callRequest('git.discard', {
           worktreePath: tmpDir,
           filePath: '../../../etc/passwd'
+        })
+      ).rejects.toThrow('outside the worktree')
+    })
+
+    it('rejects bulk discard path traversal', async () => {
+      gitInit(tmpDir)
+      await expect(
+        dispatcher.callRequest('git.bulkDiscard', {
+          worktreePath: tmpDir,
+          filePaths: ['file.txt', '../../../etc/passwd']
         })
       ).rejects.toThrow('outside the worktree')
     })

@@ -6,6 +6,7 @@ import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '.
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { cn } from '@/lib/utils'
 import { SearchableSetting } from './SearchableSetting'
+import { useAppStore } from '@/store'
 
 type WorktreeSymlinksSectionProps = {
   repo: Repo
@@ -23,11 +24,16 @@ export function WorktreeSymlinksSection({
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [entries, setEntries] = useState<DirEntry[]>([])
+  const activeRuntimeEnvironmentId = useAppStore((s) => s.settings?.activeRuntimeEnvironmentId)
 
   const paths = repo.symlinkPaths ?? []
   const queryTrimmed = query.trim().replace(/^\/+/, '')
 
   useEffect(() => {
+    if (activeRuntimeEnvironmentId?.trim()) {
+      setEntries([])
+      return
+    }
     let cancelled = false
     void window.api.fs
       .readDir({ dirPath: repo.path, connectionId: repo.connectionId ?? undefined })
@@ -44,7 +50,7 @@ export function WorktreeSymlinksSection({
     return () => {
       cancelled = true
     }
-  }, [repo.path, repo.connectionId])
+  }, [activeRuntimeEnvironmentId, repo.path, repo.connectionId])
 
   const filtered = useMemo(() => {
     const q = queryTrimmed.toLowerCase()

@@ -1211,13 +1211,10 @@ export async function getPRComments(
       // Each source is parsed independently; failed sources contribute zero
       // comments instead of aborting the entire fetch.
       const [issueResult, threadsResult, reviewsResult] = await Promise.allSettled([
-        execFileAsync(
-          'gh',
-          ['api', ...cacheArgs, `${base}/issues/${prNumber}/comments?per_page=100`],
-          { cwd: repoPath, encoding: 'utf-8' }
-        ),
-        execFileAsync(
-          'gh',
+        ghExecFileAsync(['api', ...cacheArgs, `${base}/issues/${prNumber}/comments?per_page=100`], {
+          cwd: repoPath
+        }),
+        ghExecFileAsync(
           [
             'api',
             'graphql',
@@ -1230,17 +1227,15 @@ export async function getPRComments(
             '-F',
             `pr=${prNumber}`
           ],
-          { cwd: repoPath, encoding: 'utf-8' }
+          { cwd: repoPath }
         ),
         // Why: review summaries (approve, request changes, general comments) live
         // under pulls/{n}/reviews, not under issue comments or review threads.
         // Without this, a reviewer who submits "LGTM" without inline threads
         // would have their comment silently dropped from the panel.
-        execFileAsync(
-          'gh',
-          ['api', ...cacheArgs, `${base}/pulls/${prNumber}/reviews?per_page=100`],
-          { cwd: repoPath, encoding: 'utf-8' }
-        )
+        ghExecFileAsync(['api', ...cacheArgs, `${base}/pulls/${prNumber}/reviews?per_page=100`], {
+          cwd: repoPath
+        })
       ])
 
       // Parse issue comments (REST)
@@ -1387,10 +1382,11 @@ export async function getPRComments(
     }
 
     // Fallback: non-GitHub remote — use gh pr view (only returns issue-level comments)
-    const { stdout } = await execFileAsync(
-      'gh',
+    const { stdout } = await ghExecFileAsync(
       ['pr', 'view', String(prNumber), '--json', 'comments'],
-      { cwd: repoPath, encoding: 'utf-8' }
+      {
+        cwd: repoPath
+      }
     )
     const data = JSON.parse(stdout) as {
       comments: {

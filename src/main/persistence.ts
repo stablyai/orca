@@ -2,8 +2,17 @@
 load/save, and flush logic in one file so the full storage contract is reviewable
 as a unit instead of being scattered across modules. */
 import { app, safeStorage } from 'electron'
-import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, unlinkSync } from 'fs'
-import { writeFile, rename, mkdir, rm } from 'fs/promises'
+import {
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  existsSync,
+  renameSync,
+  unlinkSync,
+  copyFileSync,
+  statSync
+} from 'fs'
+import { writeFile, rename, mkdir, rm, copyFile } from 'fs/promises'
 import { join, dirname } from 'path'
 import { homedir } from 'os'
 import { randomUUID } from 'node:crypto'
@@ -37,6 +46,7 @@ import {
   getDefaultPersistedState,
   getDefaultNotificationSettings,
   getDefaultOnboardingState,
+  getDefaultVoiceSettings,
   getDefaultUIState,
   getDefaultRepoHookSettings,
   getDefaultWorkspaceSession,
@@ -46,6 +56,13 @@ import { parseWorkspaceSession } from '../shared/workspace-session-schema'
 import { pruneLocalTerminalScrollbackBuffers } from '../shared/workspace-session-terminal-buffers'
 import { pruneWorkspaceSessionBrowserHistory } from '../shared/workspace-session-browser-history'
 import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
+import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
+import {
+  DEFAULT_WORKSPACE_STATUS_ID,
+  clampWorkspaceBoardOpacity,
+  normalizeWorkspaceBoardCompact,
+  normalizeWorkspaceStatuses
+} from '../shared/workspace-statuses'
 
 function encrypt(plaintext: string): string {
   if (!plaintext || !safeStorage.isEncryptionAvailable()) {
@@ -109,6 +126,26 @@ function getDataFile(): string {
     _dataFile = join(app.getPath('userData'), 'orca-data.json')
   }
   return _dataFile
+}
+
+// Why (issue #1158): keep 5 rolling backups of orca-data.json so a corrupt or
+// empty write leaves at least one earlier copy recoverable. Five snapshots at
+// >=1-hour spacing cover recent work without churning disk on every debounce.
+const BACKUP_COUNT = 5
+const BACKUP_MIN_INTERVAL_MS = 60 * 60 * 1000
+
+function backupPath(dataFile: string, index: number): string {
+  return `${dataFile}.bak.${index}`
+}
+
+function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupBy'] {
+  if (groupBy === 'none' || groupBy === 'repo' || groupBy === 'pr-status') {
+    return groupBy
+  }
+  if (groupBy === 'workspace-status') {
+    return 'none'
+  }
+  return getDefaultUIState().groupBy
 }
 
 function normalizeSortBy(sortBy: unknown): 'name' | 'smart' | 'recent' | 'repo' {
@@ -244,7 +281,94 @@ export class Store {
     this.state = this.load()
   }
 
-  private load(): PersistedState {
+  // Why (issue #1158): debounced writes fire as often as every 300ms during
+  // active use. The backup ring should capture meaningfully different moments,
+  // not five near-identical snapshots from one burst of store updates.
+  private shouldRotateBackups(now: number, dataFile: string): boolean {
+    try {
+      const mtime = statSync(backupPath(dataFile, 0)).mtimeMs
+      return now - mtime >= BACKUP_MIN_INTERVAL_MS
+    } catch {
+      return true
+    }
+  }
+
+  // Why: rotate oldest to discarded and shift .bak.i to .bak.i+1 by rename;
+  // then copy the current data file to .bak.0 so load() has a JSON recovery
+  // source even if a later primary write is truncated or corrupted.
+  private async rotateBackupsAsync(dataFile: string): Promise<void> {
+    if (!existsSync(dataFile)) {
+      return
+    }
+    await rm(backupPath(dataFile, BACKUP_COUNT - 1)).catch((err: unknown) => {
+      if (err && (err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        console.error('[persistence] Failed to remove oldest backup:', err)
+      }
+    })
+    for (let i = BACKUP_COUNT - 2; i >= 0; i--) {
+      const src = backupPath(dataFile, i)
+      const dst = backupPath(dataFile, i + 1)
+      if (existsSync(src)) {
+        await rename(src, dst).catch((err) => {
+          console.error('[persistence] Failed to rotate backup', src, '->', dst, err)
+        })
+      }
+    }
+    await copyFile(dataFile, backupPath(dataFile, 0)).catch((err) => {
+      console.error('[persistence] Failed to snapshot current file to .bak.0:', err)
+    })
+  }
+
+  private rotateBackupsSync(dataFile: string): void {
+    if (!existsSync(dataFile)) {
+      return
+    }
+    try {
+      unlinkSync(backupPath(dataFile, BACKUP_COUNT - 1))
+    } catch (err) {
+      if (err && (err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        console.error('[persistence] Failed to remove oldest backup:', err)
+      }
+    }
+    for (let i = BACKUP_COUNT - 2; i >= 0; i--) {
+      const src = backupPath(dataFile, i)
+      const dst = backupPath(dataFile, i + 1)
+      if (existsSync(src)) {
+        try {
+          renameSync(src, dst)
+        } catch (err) {
+          console.error('[persistence] Failed to rotate backup', src, '->', dst, err)
+        }
+      }
+    }
+    try {
+      copyFileSync(dataFile, backupPath(dataFile, 0))
+    } catch (err) {
+      console.error('[persistence] Failed to snapshot current file to .bak.0:', err)
+    }
+  }
+
+  private restoreFromBackup(dataFile: string): boolean {
+    for (let i = 0; i < BACKUP_COUNT; i++) {
+      const path = backupPath(dataFile, i)
+      if (!existsSync(path)) {
+        continue
+      }
+      try {
+        const raw = readFileSync(path, 'utf-8')
+        JSON.parse(raw)
+        mkdirSync(dirname(dataFile), { recursive: true })
+        writeFileSync(dataFile, raw, 'utf-8')
+        console.warn(`[persistence] Recovered state from backup slot ${i}: ${path}`)
+        return true
+      } catch (err) {
+        console.error(`[persistence] Backup slot ${i} unusable, trying next:`, err)
+      }
+    }
+    return false
+  }
+
+  private load(allowBackupRecovery = true): PersistedState {
     // Capture once, at the top: this is the unambiguous "has the user run
     // Orca before?" signal used by the telemetry cohort migration below.
     // Field-based inference (e.g., `settings.telemetry` presence) does not
@@ -318,9 +442,16 @@ export class Store {
             terminalMacOptionAsAltMigrated: true,
             floatingTerminalEnabled: migratedFloatingTerminalEnabled,
             floatingTerminalDefaultedForAllUsers: true,
+            terminalQuickCommands: normalizeTerminalQuickCommands(
+              parsed.settings?.terminalQuickCommands
+            ),
             notifications: {
               ...getDefaultNotificationSettings(),
               ...parsed.settings?.notifications
+            },
+            voice: {
+              ...getDefaultVoiceSettings(),
+              ...parsed.settings?.voice
             }
           },
           // Why: 'recent' used to mean the weighted smart sort. One-shot
@@ -451,7 +582,7 @@ export class Store {
         }
       }
     } catch (err) {
-      console.error('[persistence] Failed to load state, using defaults:', err)
+      console.error('[persistence] Failed to load primary state, trying backups:', err)
     }
 
     // Corrupt-file catch path and "no file on disk" path converge here. The
@@ -459,6 +590,22 @@ export class Store {
     // because a user whose `orca-data.json` got corrupted is not a fresh
     // install of the telemetry release — they still count as existing and
     // must see the opt-in banner, not the default-on toast.
+    if (result === null && allowBackupRecovery) {
+      let hasBackup = false
+      for (let i = 0; i < BACKUP_COUNT; i++) {
+        if (existsSync(backupPath(dataFile, i))) {
+          hasBackup = true
+          break
+        }
+      }
+      if (fileExistedOnLoad || hasBackup) {
+        if (this.restoreFromBackup(dataFile)) {
+          return this.load(false)
+        }
+        console.error('[persistence] No usable state file or backup found, using defaults')
+      }
+    }
+
     if (result === null) {
       result = getDefaultPersistedState(homedir())
     }
@@ -538,13 +685,20 @@ export class Store {
     }
     this.writeTimer = setTimeout(() => {
       this.writeTimer = null
-      this.pendingWrite = this.writeToDiskAsync()
+      // Why (issue #1158): serialize async writes so backup rotation never has
+      // two callers racing over the same dataFile/tmp/.bak paths.
+      const prev = this.pendingWrite ?? Promise.resolve()
+      const next = prev
+        .then(() => this.writeToDiskAsync())
         .catch((err) => {
           console.error('[persistence] Failed to write state:', err)
         })
         .finally(() => {
-          this.pendingWrite = null
+          if (this.pendingWrite === next) {
+            this.pendingWrite = null
+          }
         })
+      this.pendingWrite = next
     }, 300)
   }
 
@@ -597,6 +751,15 @@ export class Store {
         await rm(tmpFile).catch(() => {})
       }
     }
+    // Why (issue #1158): rotate only after the atomic rename succeeded; then
+    // re-check the generation so a concurrent flush owns any backup rotation.
+    if (this.writeGeneration !== gen) {
+      return
+    }
+    const now = Date.now()
+    if (this.shouldRotateBackups(now, dataFile)) {
+      await this.rotateBackupsAsync(dataFile)
+    }
   }
 
   // Why: synchronous variant kept only for flush() at shutdown, where the
@@ -639,6 +802,10 @@ export class Store {
           // Best-effort cleanup; the write already failed, swallow secondary error.
         }
       }
+    }
+    const now = Date.now()
+    if (this.shouldRotateBackups(now, dataFile)) {
+      this.rotateBackupsSync(dataFile)
     }
   }
 
@@ -1009,6 +1176,12 @@ export class Store {
   }
 
   updateSettings(updates: Partial<GlobalSettings>): GlobalSettings {
+    const sanitizedUpdates = { ...updates }
+    if ('terminalQuickCommands' in updates) {
+      sanitizedUpdates.terminalQuickCommands = normalizeTerminalQuickCommands(
+        updates.terminalQuickCommands
+      )
+    }
     // Why: `telemetry` is deep-merged for the same reason `notifications` is —
     // partial updates from the Privacy pane / consent flow (e.g., flipping
     // only `optedIn`) must not clobber sibling fields like `installId` or
@@ -1016,15 +1189,15 @@ export class Store {
     // synthesize a `telemetry` key on the result when at least one side has
     // one.
     const mergedTelemetry =
-      updates.telemetry !== undefined
-        ? { ...this.state.settings.telemetry, ...updates.telemetry }
+      sanitizedUpdates.telemetry !== undefined
+        ? { ...this.state.settings.telemetry, ...sanitizedUpdates.telemetry }
         : this.state.settings.telemetry
     this.state.settings = {
       ...this.state.settings,
-      ...updates,
+      ...sanitizedUpdates,
       notifications: {
         ...this.state.settings.notifications,
-        ...updates.notifications
+        ...sanitizedUpdates.notifications
       },
       ...(mergedTelemetry !== undefined ? { telemetry: mergedTelemetry } : {})
     }
@@ -1038,7 +1211,11 @@ export class Store {
     return {
       ...getDefaultUIState(),
       ...this.state.ui,
-      sortBy: normalizeSortBy(this.state.ui?.sortBy)
+      groupBy: normalizeGroupBy(this.state.ui?.groupBy),
+      sortBy: normalizeSortBy(this.state.ui?.sortBy),
+      workspaceStatuses: normalizeWorkspaceStatuses(this.state.ui?.workspaceStatuses),
+      workspaceBoardOpacity: clampWorkspaceBoardOpacity(this.state.ui?.workspaceBoardOpacity),
+      workspaceBoardCompact: normalizeWorkspaceBoardCompact(this.state.ui?.workspaceBoardCompact)
     }
   }
 
@@ -1046,9 +1223,21 @@ export class Store {
     this.state.ui = {
       ...this.state.ui,
       ...updates,
+      groupBy: updates.groupBy
+        ? normalizeGroupBy(updates.groupBy)
+        : normalizeGroupBy(this.state.ui?.groupBy),
       sortBy: updates.sortBy
         ? normalizeSortBy(updates.sortBy)
-        : normalizeSortBy(this.state.ui?.sortBy)
+        : normalizeSortBy(this.state.ui?.sortBy),
+      workspaceStatuses: normalizeWorkspaceStatuses(
+        updates.workspaceStatuses ?? this.state.ui?.workspaceStatuses
+      ),
+      workspaceBoardOpacity: clampWorkspaceBoardOpacity(
+        updates.workspaceBoardOpacity ?? this.state.ui?.workspaceBoardOpacity
+      ),
+      workspaceBoardCompact: normalizeWorkspaceBoardCompact(
+        updates.workspaceBoardCompact ?? this.state.ui?.workspaceBoardCompact
+      )
     }
     this.scheduleSave()
   }
@@ -1543,10 +1732,13 @@ function getDefaultWorktreeMeta(): WorktreeMeta {
     linkedIssue: null,
     linkedPR: null,
     linkedLinearIssue: null,
+    linkedGitLabMR: null,
+    linkedGitLabIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,
     sortOrder: Date.now(),
-    lastActivityAt: 0
+    lastActivityAt: 0,
+    workspaceStatus: DEFAULT_WORKSPACE_STATUS_ID
   }
 }

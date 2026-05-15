@@ -1,10 +1,10 @@
 // ─── Protocol Version ────────────────────────────────────────────────
 // Why: daemons can survive app updates. Bump for IPC wire-shape changes, or
 // when daemon-baked behavior cannot be delivered by on-disk wrapper refresh.
-// Why: bumped from 4 → 5 for OpenCode/Pi overlay restoration: a surviving v4
-// daemon keeps emitting stale shell-ready wrappers and stale PowerShell args.
-export const PROTOCOL_VERSION = 5
-export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [1, 2, 3, 4] as const
+// Why: bumped from 5 -> 6 for OSC 133 shell wrapper changes layered on top of
+// OpenCode/Pi overlay restoration, both of which are baked into daemon spawns.
+export const PROTOCOL_VERSION = 6
+export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [1, 2, 3, 4, 5] as const
 
 // ─── Session State Machine ──────────────────────────────────────────
 export type SessionState = 'created' | 'spawning' | 'running' | 'exiting' | 'exited'

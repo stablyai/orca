@@ -34,6 +34,9 @@ export function openComputerUsePermissions(
     throw new RuntimeClientError('accessibility_error', 'Orca Computer Use.app was not found')
   }
   const status = getComputerUsePermissionStatus()
+  if (status.helperUnavailableReason) {
+    throw new RuntimeClientError('accessibility_error', status.helperUnavailableReason)
+  }
   const nextStep = nextPermissionStep(status.permissions)
 
   if (!permissionId && !nextStep) {
@@ -80,6 +83,8 @@ export function getComputerUsePermissionStatus(): ComputerUsePermissionStatusRes
   if (process.platform !== 'darwin') {
     return {
       platform: process.platform,
+      helperAppPath: null,
+      helperUnavailableReason: null,
       permissions: [
         { id: 'accessibility', status: 'unsupported' },
         { id: 'screenshots', status: 'unsupported' }
@@ -89,13 +94,23 @@ export function getComputerUsePermissionStatus(): ComputerUsePermissionStatusRes
 
   const helperAppPath = resolveMacOSComputerUseAppPath()
   if (!helperAppPath) {
-    throw new RuntimeClientError('accessibility_error', 'Orca Computer Use.app was not found')
+    return createUnavailablePermissionStatus('Orca Computer Use.app was not found', null)
   }
 
-  const raw = readPermissionStatusFromHelperApp(helperAppPath)
+  const executablePath = resolveMacOSComputerUseExecutablePath()
+  if (!executablePath) {
+    return createUnavailablePermissionStatus(
+      `${helperAppPath}/Contents/MacOS/orca-computer-use-macos was not found`,
+      helperAppPath
+    )
+  }
+
+  const raw = readPermissionStatusFromHelperExecutable(executablePath)
 
   return {
     platform: process.platform,
+    helperAppPath,
+    helperUnavailableReason: null,
     permissions: [
       { id: 'accessibility', status: raw.accessibility ?? 'not-granted' },
       { id: 'screenshots', status: raw.screenshots ?? 'not-granted' }
@@ -103,16 +118,24 @@ export function getComputerUsePermissionStatus(): ComputerUsePermissionStatusRes
   }
 }
 
-function readPermissionStatusFromHelperApp(
-  helperAppPath: string
-): Partial<Record<ComputerUsePermissionId, ComputerUsePermissionStatus>> {
-  const executablePath = resolveMacOSComputerUseExecutablePath()
-  if (!executablePath) {
-    throw new RuntimeClientError(
-      'accessibility_error',
-      `${helperAppPath}/Contents/MacOS/orca-computer-use-macos was not found`
-    )
+function createUnavailablePermissionStatus(
+  reason: string,
+  helperAppPath: string | null
+): ComputerUsePermissionStatusResult {
+  return {
+    platform: process.platform,
+    helperAppPath,
+    helperUnavailableReason: reason,
+    permissions: [
+      { id: 'accessibility', status: 'not-granted' },
+      { id: 'screenshots', status: 'not-granted' }
+    ]
   }
+}
+
+function readPermissionStatusFromHelperExecutable(
+  executablePath: string
+): Partial<Record<ComputerUsePermissionId, ComputerUsePermissionStatus>> {
   // Why: launching the nested helper via LaunchServices can make TCC evaluate
   // Orca.app as responsible; the signed helper executable owns this grant.
   const output = execFileSync(executablePath, ['--permission-status'], {

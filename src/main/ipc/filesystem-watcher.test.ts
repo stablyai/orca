@@ -28,16 +28,25 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 }))
 
 import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'
+import { stat } from 'fs/promises'
+import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>
 
 describe('registerFilesystemWatcherHandlers', () => {
   const handlers: HandlerMap = {}
+  const originalPlatform = process.platform
 
   beforeEach(() => {
     vi.useRealTimers()
     handleMock.mockReset()
     getSshFilesystemProviderMock.mockReset()
+    vi.mocked(stat).mockReset()
+    vi.mocked(subscribeParcelWatcher).mockReset()
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: originalPlatform
+    })
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
     }
@@ -45,6 +54,28 @@ describe('registerFilesystemWatcherHandlers', () => {
       handlers[channel] = handler
     })
     registerFilesystemWatcherHandlers()
+  })
+
+  it('pins Parcel to the Windows backend for local Windows watches', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
+    vi.mocked(subscribeParcelWatcher).mockResolvedValue({ unsubscribe: vi.fn() } as never)
+
+    await handlers['fs:watchWorktree'](
+      { sender: { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 } },
+      { worktreePath: 'C:\\repo' }
+    )
+
+    expect(subscribeParcelWatcher).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Function),
+      expect.objectContaining({ backend: 'windows' })
+    )
+
+    await closeAllWatchers()
   })
 
   it('quietly skips SSH worktree watches while the filesystem provider is unavailable', async () => {

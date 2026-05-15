@@ -13,6 +13,7 @@ import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/di
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { Repo } from '../../../../shared/types'
 
@@ -46,6 +47,12 @@ export function useCreateRepo(
   }, [])
 
   const handlePickParent = useCallback(async () => {
+    if (useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim()) {
+      // Why: the native folder picker returns a client-local path. Runtime
+      // project creation needs an explicit server parent path.
+      toast.error('Enter a server parent path.')
+      return
+    }
     const dir = await window.api.repos.pickDirectory()
     if (dir) {
       setCreateParent(dir)
@@ -63,11 +70,25 @@ export function useCreateRepo(
     setIsCreating(true)
     setCreateError(null)
     try {
-      const result = await window.api.repos.create({
-        parentPath,
-        name,
-        kind: createKind
-      })
+      const settings = useAppStore.getState().settings
+      const target = getActiveRuntimeTarget(settings)
+      const result =
+        target.kind === 'environment'
+          ? await callRuntimeRpc<{ repo: Repo } | { error: string }>(
+              target,
+              'repo.create',
+              {
+                parentPath,
+                name,
+                kind: createKind
+              },
+              { timeoutMs: 60_000 }
+            )
+          : await window.api.repos.create({
+              parentPath,
+              name,
+              kind: createKind
+            })
       // Why: if the user closed the dialog or clicked Back mid-create,
       // createGenRef was bumped by resetCreateState. Ignore stale results.
       if (gen !== createGenRef.current) {
@@ -147,6 +168,7 @@ export function useCreateRepo(
     createError,
     isCreating,
     setCreateName,
+    setCreateParent,
     setCreateKind,
     setCreateError,
     resetCreateState,
@@ -235,7 +257,9 @@ type CreateStepProps = {
   createKind: RepoKind
   createError: string | null
   isCreating: boolean
+  manualParentEntry?: boolean
   onNameChange: (value: string) => void
+  onParentChange: (value: string) => void
   onKindChange: (kind: RepoKind) => void
   onPickParent: () => void
   onCreate: () => void
@@ -247,7 +271,9 @@ export function CreateStep({
   createKind,
   createError,
   isCreating,
+  manualParentEntry = false,
   onNameChange,
+  onParentChange,
   onKindChange,
   onPickParent,
   onCreate
@@ -333,11 +359,21 @@ export function CreateStep({
           />
         </div>
 
-        {/* Location. The "Choose…" button morphs into a summary + Change once picked. */}
+        {/* Location. The local flow uses a folder picker; runtime servers need
+          manual server-path entry because the client cannot browse that filesystem yet. */}
         <div className="space-y-1">
           <span className="text-[11px] font-medium text-muted-foreground block">Location</span>
 
-          {createParent ? (
+          {manualParentEntry ? (
+            <Input
+              value={createParent}
+              onChange={(e) => onParentChange(e.target.value)}
+              placeholder="/home/user/projects"
+              className="h-11 text-sm font-mono"
+              disabled={isCreating}
+              spellCheck={false}
+            />
+          ) : createParent ? (
             <div className="group flex items-center gap-2.5 rounded-md border border-border bg-background/40 h-11 min-w-0 px-3 text-sm">
               <span className="shrink-0 inline-flex items-center justify-center size-7 rounded-md border border-border/70 bg-background/50 text-muted-foreground">
                 <Home className="size-3.5" />

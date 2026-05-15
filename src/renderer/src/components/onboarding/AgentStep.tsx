@@ -28,7 +28,7 @@ export function AgentStep({ selectedAgent, onSelect, detectedSet, isDetecting }:
   // the active card is visible without forcing the user to expand the disclosure.
   const selectedEntryIsCollapsed =
     selectedAgent != null && fallbackRest.some((a) => a.id === selectedAgent)
-  // Why: one-way latch — auto-open when selection lands in the fallback bucket,
+  // Why: one-way latch: auto-open when selection lands in the fallback bucket,
   // but never force-close. The user can freely toggle via the native <details>
   // disclosure once it's open; controlling `open` directly off the prop would
   // slam it shut as soon as `selectedEntryIsCollapsed` flips back to false.
@@ -49,7 +49,7 @@ export function AgentStep({ selectedAgent, onSelect, detectedSet, isDetecting }:
       {selectedEntry && (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-2.5 text-xs text-amber-700 dark:text-amber-200/90">
           <span>
-            <span className="font-medium">{selectedEntry.label}</span> isn&apos;t on your PATH yet —
+            <span className="font-medium">{selectedEntry.label}</span> isn&apos;t on your PATH yet.
             Orca will set it as your default and you can install it any time.
           </span>
           <button

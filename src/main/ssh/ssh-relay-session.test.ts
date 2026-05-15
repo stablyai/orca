@@ -6,6 +6,11 @@ import { SshRelaySession } from './ssh-relay-session'
 import type { SshConnection } from './ssh-connection'
 import type { Store } from '../persistence'
 import type { SshPortForwardManager } from './ssh-port-forward'
+import { AGENT_HOOK_INSTALL_PLUGINS_METHOD } from '../../shared/agent-hook-relay'
+
+const { muxRequestMock } = vi.hoisted(() => ({
+  muxRequestMock: vi.fn()
+}))
 
 vi.mock('./ssh-relay-deploy', () => ({
   deployAndLaunchRelay: vi.fn()
@@ -15,7 +20,7 @@ vi.mock('./ssh-channel-multiplexer', () => {
   return {
     SshChannelMultiplexer: class MockSshChannelMultiplexer {
       notify = vi.fn()
-      request = vi.fn().mockResolvedValue([])
+      request = muxRequestMock
       onNotification = vi.fn().mockReturnValue(() => {})
       onDispose = vi.fn().mockReturnValue(() => {})
       dispose = vi.fn()
@@ -119,6 +124,9 @@ function mockDeploySuccess() {
 describe('SshRelaySession', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+    muxRequestMock.mockReset()
+    muxRequestMock.mockResolvedValue([])
     mockDeploySuccess()
     vi.mocked(getPtyIdsForConnection).mockReturnValue([])
   })
@@ -141,6 +149,63 @@ describe('SshRelaySession', () => {
     expect(registerSshPtyProvider).toHaveBeenCalledWith('target-1', expect.anything())
     expect(registerSshFilesystemProvider).toHaveBeenCalledWith('target-1', expect.anything())
     expect(registerSshGitProvider).toHaveBeenCalledWith('target-1', expect.anything())
+  })
+
+  it('syncs relay-owned plugin assets before registering the SSH PTY provider', async () => {
+    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
+    muxRequestMock.mockResolvedValue({ ok: true })
+    const sftp = { end: vi.fn() }
+    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const mockConn = {
+      sftp: vi.fn().mockResolvedValue(sftp)
+    } as unknown as SshConnection
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+
+    await session.establish(mockConn)
+
+    const installPluginsCallIndex = muxRequestMock.mock.calls.findIndex(
+      ([method]) => method === AGENT_HOOK_INSTALL_PLUGINS_METHOD
+    )
+    expect(installPluginsCallIndex).toBeGreaterThanOrEqual(0)
+    expect(muxRequestMock.mock.invocationCallOrder[installPluginsCallIndex]).toBeLessThan(
+      vi.mocked(registerSshPtyProvider).mock.invocationCallOrder[0]
+    )
+    // Why: connecting to SSH may upload relay-owned plugin source, but must
+    // not mutate user-owned agent config files. Remote managed-hook install
+    // belongs behind an explicit per-host user action.
+    expect(mockConn.sftp).not.toHaveBeenCalled()
+    expect(sftp.end).not.toHaveBeenCalled()
+  })
+
+  it('does not register providers if dispose wins during initial plugin sync', async () => {
+    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
+    let resolvePluginInstall!: () => void
+    muxRequestMock.mockImplementation(async (method: string) => {
+      if (method === AGENT_HOOK_INSTALL_PLUGINS_METHOD) {
+        return new Promise((resolve) => {
+          resolvePluginInstall = () => resolve({ ok: true })
+        })
+      }
+      return { ok: true }
+    })
+    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const mockConn = {} as SshConnection
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+
+    const establish = session.establish(mockConn)
+    await vi.waitFor(() =>
+      expect(muxRequestMock).toHaveBeenCalledWith(
+        AGENT_HOOK_INSTALL_PLUGINS_METHOD,
+        expect.anything()
+      )
+    )
+    session.dispose()
+    resolvePluginInstall()
+
+    await expect(establish).rejects.toThrow('Session disposed during establish')
+    expect(registerSshPtyProvider).not.toHaveBeenCalled()
+    expect(registerSshFilesystemProvider).not.toHaveBeenCalled()
+    expect(registerSshGitProvider).not.toHaveBeenCalled()
   })
 
   it('rejects establish when not idle', async () => {

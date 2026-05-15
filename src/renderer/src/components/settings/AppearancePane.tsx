@@ -61,23 +61,11 @@ const STATUS_BAR_TOGGLES: readonly {
   },
   {
     id: 'resource-usage',
-    title: 'Resource Usage',
-    description: 'Show CPU, memory, and terminal session indicators in the status bar.',
-    keywords: [
-      'status bar',
-      'resource',
-      'usage',
-      'memory',
-      'ram',
-      'cpu',
-      'terminal',
-      'sessions',
-      'pty',
-      'monitoring',
-      'performance'
-    ],
+    title: 'Resource Manager',
+    description: 'Show CPU, memory, terminal sessions, and workspace disk usage in the status bar.',
+    keywords: ['status bar', 'resource', 'manager', 'memory', 'cpu', 'terminal', 'disk', 'space'],
     toggleDescription:
-      'Show CPU, memory, and terminal session counts. Click it for a per-workspace breakdown and daemon controls.'
+      'Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.'
   }
 ]
 

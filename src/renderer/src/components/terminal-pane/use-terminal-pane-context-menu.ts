@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
+import type { TerminalQuickCommand } from '../../../../shared/types'
+import { sendTerminalQuickCommandToPane } from './terminal-quick-command-dispatch'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -30,6 +32,7 @@ type TerminalMenuState = {
   onSplitDown: () => void
   onClosePane: () => void
   onClearScreen: () => void
+  onQuickCommand: (command: TerminalQuickCommand) => void
   onToggleExpand: () => void
   onSetTitle: () => void
 }
@@ -159,6 +162,18 @@ export function useTerminalPaneContextMenu({
     }
   }
 
+  const onQuickCommand = (command: TerminalQuickCommand): void => {
+    const pane = resolveMenuPane()
+    if (!pane) {
+      return
+    }
+    sendTerminalQuickCommandToPane({
+      command,
+      pane,
+      transport: paneTransportsRef.current.get(pane.id)
+    })
+  }
+
   const onToggleExpand = (): void => {
     const pane = resolveMenuPane()
     if (pane) {
@@ -228,6 +243,7 @@ export function useTerminalPaneContextMenu({
     onSplitDown,
     onClosePane,
     onClearScreen,
+    onQuickCommand,
     onToggleExpand,
     onSetTitle: handleSetTitle
   }

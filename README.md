@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English</a> · <a href="docs/README.zh-CN.md">中文</a> · <a href="docs/README.ja.md">日本語</a> · <a href="docs/README.es.md">Español</a>
+  <a href="README.md">English</a> · <a href="docs/README.zh-CN.md">中文</a> · <a href="docs/README.ja.md">日本語</a> · <a href="docs/README.ko.md">한국어</a> · <a href="docs/README.es.md">Español</a>
 </p>
 
 <p align="center">
@@ -106,7 +106,7 @@ Control your agents from your phone.
 </p>
 
 - **iOS:** [Download from App Store](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [Download from GH release (find latest mobile)](https://github.com/stablyai/orca/releases)
+- **Android:** [Download from GH release](https://github.com/stablyai/orca/releases/tag/mobile-v0.0.7)
 
 ---
 

@@ -25,8 +25,8 @@ export function BrowserUseSkillStep({
         <div className="space-y-1">
           <p className="text-sm font-medium">Install Browser Use Skill</p>
           <p className="text-xs text-muted-foreground">
-            Run this in your agent project — once per project — so Claude Code, Codex, and other
-            agents learn to drive Orca&apos;s browser.
+            Run this once on your computer so Claude Code, Codex, and other agents learn to drive
+            Orca&apos;s browser.
           </p>
         </div>
         <div className="flex max-w-full items-center gap-2 rounded-lg border border-border/60 bg-background/60 px-3 py-2">
@@ -55,7 +55,7 @@ export function BrowserUseSkillStep({
           <span>
             {skillInstalled
               ? 'Marked as installed on this machine.'
-              : "Check off once you've run it in your project."}
+              : "Check off once you've run it on this computer."}
           </span>
           <button
             type="button"

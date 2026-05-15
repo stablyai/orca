@@ -38,6 +38,7 @@ import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-optio
 import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { connectPanePty } from './pty-connection'
 import type { PtyTransport } from './pty-transport'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { isPaneReplaying, type ReplayingPanesRef } from './replay-guard'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import { registerRuntimeTerminalTab, scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
@@ -296,7 +297,11 @@ export function useTerminalPaneLifecycle({
       startupCwd,
       managerRef,
       linkProviderDisposablesRef,
-      pathExistsCache
+      pathExistsCache,
+      getRuntimeEnvironmentIdForPane: (paneId) => {
+        const ptyId = paneTransportsRef.current.get(paneId)?.getPtyId()
+        return ptyId ? getRemoteRuntimePtyEnvironmentId(ptyId) : null
+      }
     }
     let resizeRaf: number | null = null
     const queueResizeAll = (focusActive: boolean): void => {
@@ -488,7 +493,10 @@ export function useTerminalPaneLifecycle({
         pane.terminal.options.linkHandler = {
           allowNonHttpProtocols: true,
           activate: (event, text) => {
-            handleOscLink(text, event as MouseEvent | undefined, linkDeps)
+            handleOscLink(text, event as MouseEvent | undefined, {
+              ...linkDeps,
+              runtimeEnvironmentId: linkDeps.getRuntimeEnvironmentIdForPane?.(pane.id) ?? null
+            })
             // Why: Cmd/Ctrl+clicking a link activates Orca handling (open file,
             // new browser tab, system browser) which can steal focus from the
             // terminal before the click's mouseup reaches ownerDocument. Without
@@ -685,7 +693,13 @@ export function useTerminalPaneLifecycle({
         if (!event) {
           return
         }
-        void handleOscLink(url, event, linkDeps)
+        const activePane = managerRef.current?.getActivePane()
+        void handleOscLink(url, event, {
+          ...linkDeps,
+          runtimeEnvironmentId: activePane
+            ? (linkDeps.getRuntimeEnvironmentIdForPane?.(activePane.id) ?? null)
+            : null
+        })
         // Why: Cmd/Ctrl+click on a plain-text URL (WebLinksAddon) takes focus
         // away from the terminal before the click's mouseup reaches
         // ownerDocument. That leaves xterm's SelectionService drag-select

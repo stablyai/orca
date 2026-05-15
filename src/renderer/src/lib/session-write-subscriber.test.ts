@@ -19,7 +19,7 @@ describe('createSessionWriteSubscriber', () => {
     useAppStore.setState(initialState, true)
   })
 
-  it('does not write while workspaceSessionReady is false', () => {
+  it('does not write until both workspaceSessionReady and hydrationSucceeded are true', () => {
     const persist = vi.fn<(payload: WorkspaceSessionState) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
 
@@ -27,17 +27,34 @@ describe('createSessionWriteSubscriber', () => {
     vi.advanceTimersByTime(200)
 
     expect(persist).not.toHaveBeenCalled()
-    cleanup()
-  })
-
-  it('writes exactly once after workspaceSessionReady flips to true', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionState) => void>()
-    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
-
     useAppStore.setState({ workspaceSessionReady: true })
     vi.advanceTimersByTime(200)
 
+    expect(persist).not.toHaveBeenCalled()
+    cleanup()
+  })
+
+  it('writes exactly once after the hydration persistence gate opens', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionState) => void>()
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+    vi.advanceTimersByTime(200)
+
     expect(persist).toHaveBeenCalledTimes(1)
+    cleanup()
+  })
+
+  it('re-checks the hydration gate when a pending debounce fires', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionState) => void>()
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+    vi.advanceTimersByTime(50)
+    useAppStore.setState({ hydrationSucceeded: false })
+    vi.advanceTimersByTime(200)
+
+    expect(persist).not.toHaveBeenCalled()
     cleanup()
   })
 
@@ -45,7 +62,7 @@ describe('createSessionWriteSubscriber', () => {
     const persist = vi.fn<(payload: WorkspaceSessionState) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
 
-    useAppStore.setState({ workspaceSessionReady: true })
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
     vi.advanceTimersByTime(200)
     expect(persist).toHaveBeenCalledTimes(1)
     persist.mockClear()
@@ -68,7 +85,7 @@ describe('createSessionWriteSubscriber', () => {
     const persist = vi.fn<(payload: WorkspaceSessionState) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
 
-    useAppStore.setState({ workspaceSessionReady: true })
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
     vi.advanceTimersByTime(200)
     expect(persist).toHaveBeenCalledTimes(1)
     persist.mockClear()
@@ -99,7 +116,7 @@ describe('createSessionWriteSubscriber', () => {
     const persist = vi.fn<(payload: WorkspaceSessionState) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
 
-    useAppStore.setState({ workspaceSessionReady: true })
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
     vi.advanceTimersByTime(200)
     persist.mockClear()
 
@@ -118,7 +135,7 @@ describe('createSessionWriteSubscriber', () => {
     const persist = vi.fn<(payload: WorkspaceSessionState) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
 
-    useAppStore.setState({ workspaceSessionReady: true })
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
     vi.advanceTimersByTime(200)
     persist.mockClear()
 

@@ -9,6 +9,10 @@ import { useAppStore } from '@/store'
 import { joinPath } from '@/lib/path'
 import { setWithLRU } from '@/lib/scroll-cache'
 import { getConnectionId } from '@/lib/connection-context'
+import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { writeRuntimeFile } from '@/runtime/runtime-file-client'
+import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { getRuntimeGitBranchDiff, getRuntimeGitDiff } from '@/runtime/runtime-git-client'
 import '@/lib/monaco-setup'
 import { Button } from '@/components/ui/button'
 import type { OpenFile } from '@/store/slices/editor'
@@ -207,26 +211,40 @@ export default function CombinedDiffViewer({
       let result: GitDiffResult
       try {
         const connectionId = getConnectionId(file.worktreeId) ?? undefined
+        const state = useAppStore.getState()
+        const fileSettings = settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId)
         result =
           isBranchMode && branchCompare
-            ? ((await window.api.git.branchDiff({
-                worktreePath: file.filePath,
-                compare: {
-                  baseRef: branchCompare.baseRef,
-                  baseOid: branchCompare.baseOid!,
-                  headOid: branchCompare.headOid!,
-                  mergeBase: branchCompare.mergeBase!
+            ? ((await getRuntimeGitBranchDiff(
+                {
+                  settings: fileSettings,
+                  worktreeId: file.worktreeId,
+                  worktreePath: file.filePath,
+                  connectionId
                 },
-                filePath: entry.path,
-                oldPath: entry.oldPath,
-                connectionId
-              })) as GitDiffResult)
-            : ((await window.api.git.diff({
-                worktreePath: file.filePath,
-                filePath: entry.path,
-                staged: 'area' in entry && entry.area === 'staged',
-                connectionId
-              })) as GitDiffResult)
+                {
+                  compare: {
+                    baseRef: branchCompare.baseRef,
+                    baseOid: branchCompare.baseOid!,
+                    headOid: branchCompare.headOid!,
+                    mergeBase: branchCompare.mergeBase!
+                  },
+                  filePath: entry.path,
+                  oldPath: entry.oldPath
+                }
+              )) as GitDiffResult)
+            : ((await getRuntimeGitDiff(
+                {
+                  settings: fileSettings,
+                  worktreeId: file.worktreeId,
+                  worktreePath: file.filePath,
+                  connectionId
+                },
+                {
+                  filePath: entry.path,
+                  staged: 'area' in entry && entry.area === 'staged'
+                }
+              )) as GitDiffResult)
       } catch {
         result = {
           kind: 'text',
@@ -261,6 +279,7 @@ export default function CombinedDiffViewer({
       branchCompare?.mergeBase,
       branchEntries,
       file.filePath,
+      file.runtimeEnvironmentId,
       isBranchMode,
       uncommittedEntries
     ]
@@ -287,7 +306,20 @@ export default function CombinedDiffViewer({
       const absolutePath = joinPath(file.filePath, section.path)
       try {
         const connectionId = getConnectionId(file.worktreeId) ?? undefined
-        await window.api.fs.writeFile({ filePath: absolutePath, content, connectionId })
+        const state = useAppStore.getState()
+        const worktree = file.worktreeId
+          ? findWorktreeById(state.worktreesByRepo, file.worktreeId)
+          : null
+        await writeRuntimeFile(
+          {
+            settings: settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId),
+            worktreeId: file.worktreeId,
+            worktreePath: worktree?.path ?? null,
+            connectionId
+          },
+          absolutePath,
+          content
+        )
         setSections((prev) =>
           prev.map((s, i) => (i === index ? { ...s, modifiedContent: content, dirty: false } : s))
         )
@@ -295,7 +327,7 @@ export default function CombinedDiffViewer({
         console.error('Save failed:', err)
       }
     },
-    [file.filePath, file.worktreeId, sections]
+    [file.filePath, file.runtimeEnvironmentId, file.worktreeId, sections]
   )
 
   const handleSectionSaveRef = useRef(handleSectionSave)

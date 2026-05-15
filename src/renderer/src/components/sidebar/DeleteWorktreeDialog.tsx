@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { AlertTriangle, Check, LoaderCircle, Trash2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
-import { runWorktreeDeleteWithToast } from './delete-worktree-flow'
+import { runWorktreeDeletesSequentially } from './delete-worktree-flow'
 
 const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -35,6 +35,10 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
           : [],
     [modalData.worktreeIds, worktreeId]
   )
+  const onDeleted =
+    typeof modalData.onDeleted === 'function'
+      ? (modalData.onDeleted as (worktreeIds: string[]) => void)
+      : null
   const worktree = useMemo(
     () => (worktreeId ? (allWorktrees().find((item) => item.id === worktreeId) ?? null) : null),
     [allWorktrees, worktreeId]
@@ -54,6 +58,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const canForceDelete = deleteState?.canForceDelete ?? false
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
   const isBatchDelete = worktreeIds.length > 1
+  const allowSkipConfirm = !isBatchDelete && modalData.allowSkipConfirm !== false
   // Why: the main worktree is the repo's original clone directory — `git worktree remove`
   // always rejects it. We block the delete button upfront so the user doesn't have to
   // discover this limitation via a confusing force-delete dead-end.
@@ -132,7 +137,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
       // Saving "don't ask again" from that state would conflate the recovery
       // action with a broader preference. Only persist the preference on the
       // primary (non-force) confirmation so users intentionally opt in.
-      if (dontAskAgain && !force) {
+      if (dontAskAgain && allowSkipConfirm && !force) {
         persistDontAskAgainPreference()
       }
       if (force) {
@@ -146,7 +151,9 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
               toast.error('Force delete failed', {
                 description: result.error
               })
+              return
             }
+            onDeleted?.([worktreeId])
           })
           .catch((err: unknown) => {
             toast.error('Failed to delete worktree', {
@@ -154,15 +161,19 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
             })
           })
       } else {
-        for (const target of worktrees) {
-          runWorktreeDeleteWithToast(target.id, target.displayName)
-        }
+        void runWorktreeDeletesSequentially(worktrees).then((deletedIds) => {
+          if (deletedIds.length > 0) {
+            onDeleted?.(deletedIds)
+          }
+        })
       }
       closeModal()
     },
     [
       closeModal,
       dontAskAgain,
+      allowSkipConfirm,
+      onDeleted,
       persistDontAskAgainPreference,
       removeWorktree,
       worktreeIds.length,
@@ -248,7 +259,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
           </div>
         )}
 
-        {!isMainWorktree && !canForceDelete && (
+        {!isMainWorktree && allowSkipConfirm && !canForceDelete && (
           // Why: only show "Don't ask again" for the primary confirmation. The
           // force-delete variant is a recovery path that shouldn't double as a
           // preference checkpoint; see handleDelete for the matching guard.
