@@ -113,6 +113,15 @@ const CHROMIUM_BROWSERS: ChromiumBrowserDef[] = [
     macRoot: 'BraveSoftware/Brave-Browser',
     winRoot: 'BraveSoftware/Brave-Browser/User Data',
     linuxRoot: 'BraveSoftware/Brave-Browser'
+  },
+  {
+    family: 'comet',
+    label: 'Comet',
+    keychainService: 'Comet Safe Storage',
+    keychainAccount: 'Comet',
+    macRoot: 'Comet',
+    winRoot: 'Comet/User Data'
+    // linuxRoot intentionally omitted — Comet does not ship a Linux build as of 2026-05-15
   }
 ]
 
@@ -658,7 +667,7 @@ export async function importCookiesFromFile(
 // Why: Google and other services bind auth cookies to the User-Agent that
 // created them. We read the source browser's real version from its plist
 // and construct a matching UA string so imported sessions aren't invalidated.
-function getUserAgentForBrowser(
+export function getUserAgentForBrowser(
   family: BrowserSessionProfileSource['browserFamily']
 ): string | null {
   // Why: UA spoofing uses macOS-specific plist reading. On other platforms,
@@ -701,6 +710,12 @@ function getUserAgentForBrowser(
     }
     case 'chromium': {
       const v = readBrowserVersion('/Applications/Brave Browser.app')
+      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
+    }
+    case 'comet': {
+      // Why: Comet is Chromium-based and ships a Chrome-shaped version in its plist.
+      // Use the same UA shape as Chrome itself so Google-bound auth cookies survive import.
+      const v = readBrowserVersion('/Applications/Comet.app')
       return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
     }
     default:
