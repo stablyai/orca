@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Plus, SlidersHorizontal } from 'lucide-react'
+import { Kanban, Plus, SlidersHorizontal } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -55,12 +55,18 @@ const WORKSPACE_BOARD_HOVER_OPEN_DELAY_MS = 50
 // Why: gives the pointer room to travel from the header into the board before
 // the temporary hover preview collapses.
 const WORKSPACE_BOARD_HOVER_CLOSE_DELAY_MS = 220
+type WorkspaceBoardOpenMode = 'closed' | 'hover' | 'persistent'
 
 const SidebarHeader = React.memo(function SidebarHeader() {
-  const [workspaceBoardOpen, setWorkspaceBoardOpen] = useState(false)
-  // Why: entering the board turns the hover preview into a persistent drawer
-  // until the user explicitly closes it or clicks outside.
-  const workspaceBoardPinnedOpenRef = useRef(false)
+  const [workspaceBoardOpenMode, setWorkspaceBoardOpenMode] =
+    useState<WorkspaceBoardOpenMode>('closed')
+  const workspaceBoardOpen = workspaceBoardOpenMode !== 'closed'
+  const workspaceBoardPersistentOpen = workspaceBoardOpenMode === 'persistent'
+  // Why: hover-open and manual-open have different close semantics; keeping
+  // the mode explicit prevents a button click from closing a hover preview.
+  const workspaceBoardOpenModeRef = useRef<WorkspaceBoardOpenMode>('closed')
+  const workspaceBoardHoverSuppressedRef = useRef(false)
+  const workspaceHeaderHoveredRef = useRef(false)
   const workspaceBoardHoverOpenTimerRef = useRef<number | null>(null)
   const workspaceBoardHoverCloseTimerRef = useRef<number | null>(null)
   const openModal = useAppStore((s) => s.openModal)
@@ -100,20 +106,24 @@ const SidebarHeader = React.memo(function SidebarHeader() {
     [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen]
   )
 
-  const setWorkspaceBoardPinned = useCallback((pinned: boolean) => {
-    workspaceBoardPinnedOpenRef.current = pinned
+  const setWorkspaceBoardMode = useCallback((mode: WorkspaceBoardOpenMode) => {
+    workspaceBoardOpenModeRef.current = mode
+    setWorkspaceBoardOpenMode(mode)
   }, [])
 
   const handleWorkspaceBoardOpenChange = useCallback(
     (open: boolean) => {
       clearWorkspaceBoardHoverOpen()
       clearWorkspaceBoardHoverClose()
-      setWorkspaceBoardOpen(open)
-      if (!open) {
-        setWorkspaceBoardPinned(false)
+      if (open) {
+        workspaceBoardHoverSuppressedRef.current = false
+        setWorkspaceBoardMode('persistent')
+        return
       }
+      setWorkspaceBoardMode('closed')
+      workspaceBoardHoverSuppressedRef.current = workspaceHeaderHoveredRef.current
     },
-    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen, setWorkspaceBoardPinned]
+    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen, setWorkspaceBoardMode]
   )
 
   const handleWorkspaceHeaderPointerEnter = useCallback(
@@ -121,35 +131,58 @@ const SidebarHeader = React.memo(function SidebarHeader() {
       if (event.pointerType !== 'mouse') {
         return
       }
+      workspaceHeaderHoveredRef.current = true
       clearWorkspaceBoardHoverClose()
-      if (workspaceBoardOpen) {
+      if (
+        workspaceBoardOpenModeRef.current !== 'closed' ||
+        workspaceBoardHoverSuppressedRef.current
+      ) {
         return
       }
       clearWorkspaceBoardHoverOpen()
       workspaceBoardHoverOpenTimerRef.current = window.setTimeout(() => {
         workspaceBoardHoverOpenTimerRef.current = null
-        setWorkspaceBoardOpen(true)
+        if (
+          workspaceBoardHoverSuppressedRef.current ||
+          workspaceBoardOpenModeRef.current !== 'closed'
+        ) {
+          return
+        }
+        setWorkspaceBoardMode('hover')
       }, WORKSPACE_BOARD_HOVER_OPEN_DELAY_MS)
     },
-    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen, workspaceBoardOpen]
+    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen, setWorkspaceBoardMode]
   )
 
   const handleWorkspaceHeaderPointerLeave = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      if (event.pointerType === 'mouse') {
+        const rect = event.currentTarget.getBoundingClientRect()
+        if (
+          event.clientX >= rect.left &&
+          event.clientX <= rect.right &&
+          event.clientY >= rect.top &&
+          event.clientY <= rect.bottom
+        ) {
+          return
+        }
+      }
+      workspaceHeaderHoveredRef.current = false
+      workspaceBoardHoverSuppressedRef.current = false
       clearWorkspaceBoardHoverOpen()
-      if (event.pointerType !== 'mouse' || workspaceBoardPinnedOpenRef.current) {
+      if (event.pointerType !== 'mouse' || workspaceBoardOpenModeRef.current === 'persistent') {
         return
       }
       clearWorkspaceBoardHoverClose()
       workspaceBoardHoverCloseTimerRef.current = window.setTimeout(() => {
         workspaceBoardHoverCloseTimerRef.current = null
-        if (workspaceBoardPinnedOpenRef.current) {
+        if (workspaceBoardOpenModeRef.current === 'persistent') {
           return
         }
-        setWorkspaceBoardOpen(false)
+        setWorkspaceBoardMode('closed')
       }, WORKSPACE_BOARD_HOVER_CLOSE_DELAY_MS)
     },
-    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen]
+    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen, setWorkspaceBoardMode]
   )
 
   const handleWorkspaceBoardPointerEnter = useCallback(
@@ -159,11 +192,36 @@ const SidebarHeader = React.memo(function SidebarHeader() {
       }
       clearWorkspaceBoardHoverOpen()
       clearWorkspaceBoardHoverClose()
-      setWorkspaceBoardPinned(true)
-      setWorkspaceBoardOpen(true)
+      workspaceBoardHoverSuppressedRef.current = false
+      setWorkspaceBoardMode('persistent')
     },
-    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen, setWorkspaceBoardPinned]
+    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen, setWorkspaceBoardMode]
   )
+
+  const handleWorkspaceBoardButtonPointerDown = useCallback(
+    (event: React.PointerEvent<HTMLButtonElement>) => {
+      if (event.button !== 0) {
+        return
+      }
+      clearWorkspaceBoardHoverOpen()
+      clearWorkspaceBoardHoverClose()
+    },
+    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen]
+  )
+
+  const handleWorkspaceBoardToggle = useCallback(() => {
+    clearWorkspaceBoardHoverOpen()
+    clearWorkspaceBoardHoverClose()
+
+    if (workspaceBoardOpenModeRef.current === 'persistent') {
+      workspaceBoardHoverSuppressedRef.current = workspaceHeaderHoveredRef.current
+      setWorkspaceBoardMode('closed')
+      return
+    }
+
+    workspaceBoardHoverSuppressedRef.current = false
+    setWorkspaceBoardMode('persistent')
+  }, [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen, setWorkspaceBoardMode])
 
   return (
     <>
@@ -176,6 +234,29 @@ const SidebarHeader = React.memo(function SidebarHeader() {
           <span className="px-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80 select-none">
             Workspaces
           </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={workspaceBoardOpen ? 'secondary' : 'ghost'}
+                size="icon-xs"
+                className="text-muted-foreground"
+                aria-label="Workspace board"
+                aria-pressed={workspaceBoardPersistentOpen}
+                data-workspace-board-trigger=""
+                onPointerDown={handleWorkspaceBoardButtonPointerDown}
+                onClick={handleWorkspaceBoardToggle}
+              >
+                <Kanban className="size-3.5" strokeWidth={2.25} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {workspaceBoardPersistentOpen
+                ? 'Close workspace board'
+                : workspaceBoardOpen
+                  ? 'Keep workspace board open'
+                  : 'Workspace board'}
+            </TooltipContent>
+          </Tooltip>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <SidebarFilter />

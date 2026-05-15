@@ -45,6 +45,7 @@ type WorktreeCardProps = {
   isMultiSelected?: boolean
   selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
+  hideCiCheck?: boolean
   parentLabel?: string
   lineageState?: 'valid' | 'missing'
   lineageChildCount?: number
@@ -71,6 +72,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   onSelectionGesture,
   onContextMenuSelect,
   hideRepoBadge,
+  hideCiCheck = false,
   parentLabel,
   lineageState,
   lineageChildCount = 0,
@@ -193,7 +195,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const status = useWorktreeActivityStatus(worktree.id)
 
   const showPR = cardProps.includes('pr')
-  const showCI = cardProps.includes('ci')
+  const showCI = !hideCiCheck && cardProps.includes('ci')
   const showIssue = cardProps.includes('issue')
 
   // Skip hosted-review fetches when the corresponding card sections are hidden.
