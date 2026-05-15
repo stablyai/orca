@@ -161,6 +161,7 @@ const TaskPage = lazy(() => import('./components/TaskPage'))
 const AutomationsPage = lazy(() => import('./components/automations/AutomationsPage'))
 const ActivityPrototypePage = lazy(() => import('./components/activity/ActivityPrototypePage'))
 const Settings = lazy(() => import('./components/settings/Settings'))
+const SkillsPage = lazy(() => import('./components/skills/SkillsPage'))
 const WorkspaceSpacePage = lazy(() => import('./components/workspace-space/WorkspaceSpacePage'))
 const QuickOpen = lazy(() => import('./components/QuickOpen'))
 const WorktreeJumpPalette = lazy(() => import('./components/WorktreeJumpPalette'))
@@ -865,7 +866,10 @@ function App(): React.JSX.Element {
   // Why: Activity and Space are full-page navigation surfaces — same
   // treatment as Settings — so the worktree sidebar is removed for those views.
   const showSidebar =
-    activeView !== 'settings' && activeView !== 'activity' && activeView !== 'space'
+    activeView !== 'settings' &&
+    activeView !== 'activity' &&
+    activeView !== 'space' &&
+    activeView !== 'skills'
   // Why: only the terminal workspace replaces the full-width titlebar with
   // split-column chrome. Full-page navigation views keep the draggable app
   // titlebar so their page-level controls can live in that window strip.
@@ -877,7 +881,8 @@ function App(): React.JSX.Element {
     activeView !== 'tasks' &&
     activeView !== 'activity' &&
     activeView !== 'automations' &&
-    activeView !== 'space'
+    activeView !== 'space' &&
+    activeView !== 'skills'
 
   const handleToggleExpand = (): void => {
     if (!effectiveActiveTabId) {
@@ -968,7 +973,8 @@ function App(): React.JSX.Element {
         activeView === 'tasks' ||
         activeView === 'activity' ||
         activeView === 'automations' ||
-        activeView === 'space'
+        activeView === 'space' ||
+        activeView === 'skills'
       ) {
         return
       }
@@ -1207,7 +1213,8 @@ function App(): React.JSX.Element {
       (activeView === 'tasks' ||
         activeView === 'activity' ||
         activeView === 'automations' ||
-        activeView === 'space') &&
+        activeView === 'space' ||
+        activeView === 'skills') &&
       rightSidebarOpen
     ) {
       // Why: hide the right sidebar immediately when entering full-page
@@ -1374,6 +1381,7 @@ function App(): React.JSX.Element {
                   </div>
                   <Suspense fallback={null}>
                     {activeView === 'settings' ? <Settings /> : null}
+                    {activeView === 'skills' ? <SkillsPage /> : null}
                     {activeView === 'tasks' ? <TaskPage /> : null}
                     {activeView === 'automations' ? <AutomationsPage /> : null}
                     {activeView === 'activity' ? <ActivityPrototypePage /> : null}

@@ -43,6 +43,7 @@ const {
   registerExportHandlersMock,
   registerOnboardingHandlersMock,
   registerSpeechHandlersMock,
+  registerSkillsHandlersMock,
   registerWorkspaceSpaceHandlersMock
 } = vi.hoisted(() => ({
   registerCliHandlersMock: vi.fn(),
@@ -85,6 +86,7 @@ const {
   registerExportHandlersMock: vi.fn(),
   registerOnboardingHandlersMock: vi.fn(),
   registerSpeechHandlersMock: vi.fn(),
+  registerSkillsHandlersMock: vi.fn(),
   registerWorkspaceSpaceHandlersMock: vi.fn()
 }))
 
@@ -154,6 +156,10 @@ vi.mock('./computer-use-permissions', () => ({
 
 vi.mock('./settings', () => ({
   registerSettingsHandlers: registerSettingsHandlersMock
+}))
+
+vi.mock('./skills', () => ({
+  registerSkillsHandlers: registerSkillsHandlersMock
 }))
 
 vi.mock('./workspace-space', () => ({
@@ -286,6 +292,7 @@ describe('registerCoreHandlers', () => {
     registerHostedReviewHandlersMock.mockReset()
     registerExportHandlersMock.mockReset()
     registerSpeechHandlersMock.mockReset()
+    registerSkillsHandlersMock.mockReset()
     registerWorkspaceSpaceHandlersMock.mockReset()
   })
 
@@ -332,6 +339,7 @@ describe('registerCoreHandlers', () => {
     expect(registerDeveloperPermissionHandlersMock).toHaveBeenCalled()
     expect(registerComputerUsePermissionHandlersMock).toHaveBeenCalled()
     expect(registerSettingsHandlersMock).toHaveBeenCalledWith(store, undefined)
+    expect(registerSkillsHandlersMock).toHaveBeenCalledWith(store)
     expect(registerWorkspaceSpaceHandlersMock).toHaveBeenCalledWith(store)
     expect(registerTelemetryHandlersMock).toHaveBeenCalledWith(store)
     expect(registerSessionHandlersMock).toHaveBeenCalledWith(store)

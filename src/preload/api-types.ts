@@ -157,6 +157,7 @@ import type {
   RuntimeTerminalDriverState
 } from '../shared/runtime-types'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
+import type { SkillDiscoveryResult } from '../shared/skills'
 
 export type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
 
@@ -1118,6 +1119,9 @@ export type PreloadApi = {
     pickAudio: () => Promise<string | null>
     pickDirectory: (args: { defaultPath?: string }) => Promise<string | null>
     copyFile: (args: { srcPath: string; destPath: string }) => Promise<void>
+  }
+  skills: {
+    discover: () => Promise<SkillDiscoveryResult>
   }
   pet: {
     import: () => Promise<CustomPet | null>

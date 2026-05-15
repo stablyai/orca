@@ -33,6 +33,7 @@ import type {
   WorktreeRemoteBranchConflictEvent
 } from '../shared/types'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
+import type { SkillDiscoveryResult } from '../shared/skills'
 import type {
   RuntimeStatus,
   RuntimeSyncWindowGraph,
@@ -1259,6 +1260,10 @@ const api = {
 
     copyFile: (args: { srcPath: string; destPath: string }): Promise<void> =>
       ipcRenderer.invoke('shell:copyFile', args)
+  },
+
+  skills: {
+    discover: (): Promise<SkillDiscoveryResult> => ipcRenderer.invoke('skills:discover')
   },
 
   pet: {
