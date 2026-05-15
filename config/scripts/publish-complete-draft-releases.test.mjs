@@ -122,12 +122,12 @@ describe('writeGithubOutputs', () => {
       )
 
       expect(readFileSync(outputPath, 'utf8')).toBe(
-        [
+        `${[
           'published_count=1',
           'skipped_count=1',
           'published_tags=v1.4.2-rc.7',
           'skipped_tags=v1.4.2-rc.8'
-        ].join('\n') + '\n'
+        ].join('\n')}\n`
       )
     } finally {
       rmSync(dir, { recursive: true, force: true })

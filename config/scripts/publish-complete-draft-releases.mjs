@@ -28,7 +28,7 @@ async function githubJson(fetchImpl, url, token, options = {}) {
       Accept: 'application/vnd.github+json',
       Authorization: `Bearer ${token}`,
       'X-GitHub-Api-Version': API_VERSION,
-      ...(options.headers ?? {})
+      ...options.headers
     }
   })
   if (!res.ok) {
@@ -109,12 +109,12 @@ export function writeGithubOutputs({ published, skipped }, outputPath = process.
   }
   appendFileSync(
     outputPath,
-    [
+    `${[
       `published_count=${published.length}`,
       `skipped_count=${skipped.length}`,
       `published_tags=${published.join(',')}`,
       `skipped_tags=${skipped.map((item) => item.tag).join(',')}`
-    ].join('\n') + '\n'
+    ].join('\n')}\n`
   )
 }
 
