@@ -55,6 +55,9 @@ importers:
       '@tiptap/extension-link':
         specifier: ^3.22.5
         version: 3.22.5(@tiptap/core@3.22.5(@tiptap/pm@3.22.5))(@tiptap/pm@3.22.5)
+      '@tiptap/extension-mathematics':
+        specifier: 3.22.5
+        version: 3.22.5(@tiptap/core@3.22.5(@tiptap/pm@3.22.5))(@tiptap/pm@3.22.5)(katex@0.16.45)
       '@tiptap/extension-placeholder':
         specifier: ^3.22.5
         version: 3.22.5(@tiptap/extensions@3.22.5(@tiptap/core@3.22.5(@tiptap/pm@3.22.5))(@tiptap/pm@3.22.5))
@@ -139,6 +142,9 @@ importers:
       entities:
         specifier: ^6.0.1
         version: 6.0.1
+      emoji-picker-react:
+        specifier: ^4.19.1
+        version: 4.19.1(react@19.2.5)
       github-slugger:
         specifier: ^2.0.0
         version: 2.0.0
@@ -2627,6 +2633,13 @@ packages:
       '@tiptap/core': 3.22.5
       '@tiptap/pm': 3.22.5
 
+  '@tiptap/extension-mathematics@3.22.5':
+    resolution: {integrity: sha512-ld2xoFHKyl4Qs+rgu3wn1UZBTsgDApEz2PD17E/XWlVXHO4KoiBOcLhrc5L9SL+aKOBXXmC/Ex1d+0hCptsBbg==}
+    peerDependencies:
+      '@tiptap/core': 3.22.5
+      '@tiptap/pm': 3.22.5
+      katex: ^0.16.4
+
   '@tiptap/extension-ordered-list@3.22.5':
     resolution: {integrity: sha512-OXdh4k4CNrukwiSdWdEQ49uvgnqvR0Z9aNSP4HI5/kZQ/Te1NtRtYCpUrzWyO/7CtjcCisXHti0o9C/TV8YMbQ==}
     peerDependencies:
@@ -3847,6 +3860,12 @@ packages:
     engines: {node: '>= 12.20.55'}
     hasBin: true
 
+  emoji-picker-react@4.19.1:
+    resolution: {integrity: sha512-BmDdqInKFVYJpv7qS9WI6L9656cDAC+FkDvUjJds56nKHbaVTBNeDmLwKBytRnzu37zWHs9Isg7gt5PT43y6xA==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      react: '>=16'
+
   emoji-regex@10.6.0:
     resolution: {integrity: sha512-toUI84YS5YmxW219erniWD0CIVOo46xGKColeNQRgOzDorgBi1v4D71/OFzgD9GO2UGKIv1C3Sp8DAn0+j5w7A==}
 
@@ -4068,6 +4087,9 @@ packages:
   find-up@4.1.0:
     resolution: {integrity: sha512-PpOwAdQ/YlXQ2vj8a3h8IipDuYRi3wceVQQGYWxNINccq40Anw7BlsEXCMbt1Zt+OLA6Fq9suIpIWD0OsnISlw==}
     engines: {node: '>=8'}
+
+  flairup@1.0.0:
+    resolution: {integrity: sha512-IKlE+pNvL2R+kVL1kEhUYqRxVqeFnjiIvHWDMLFXNaqyUdFXQM2wte44EfMYJNHkW16X991t2Zg8apKkhv7OBA==}
 
   form-data@4.0.5:
     resolution: {integrity: sha512-8RipRLol37bNs2bhoV67fiTEvdTrbMUYcFTiy3+wuuOnUog2QBHCZWXDRijWQfAkhBj2Uf5UnVaiWwA5vdd82w==}
@@ -8436,6 +8458,12 @@ snapshots:
       '@tiptap/core': 3.22.5(@tiptap/pm@3.22.5)
       '@tiptap/pm': 3.22.5
 
+  '@tiptap/extension-mathematics@3.22.5(@tiptap/core@3.22.5(@tiptap/pm@3.22.5))(@tiptap/pm@3.22.5)(katex@0.16.45)':
+    dependencies:
+      '@tiptap/core': 3.22.5(@tiptap/pm@3.22.5)
+      '@tiptap/pm': 3.22.5
+      katex: 0.16.45
+
   '@tiptap/extension-ordered-list@3.22.5(@tiptap/extension-list@3.22.5(@tiptap/core@3.22.5(@tiptap/pm@3.22.5))(@tiptap/pm@3.22.5))':
     dependencies:
       '@tiptap/extension-list': 3.22.5(@tiptap/core@3.22.5(@tiptap/pm@3.22.5))(@tiptap/pm@3.22.5)
@@ -9814,6 +9842,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  emoji-picker-react@4.19.1(react@19.2.5):
+    dependencies:
+      flairup: 1.0.0
+      react: 19.2.5
+
   emoji-regex@10.6.0: {}
 
   emoji-regex@8.0.0: {}
@@ -10110,6 +10143,8 @@ snapshots:
     dependencies:
       locate-path: 5.0.0
       path-exists: 4.0.0
+
+  flairup@1.0.0: {}
 
   form-data@4.0.5:
     dependencies:

@@ -5,6 +5,7 @@ import type { Editor } from '@tiptap/react'
 import type { MarkdownDocument } from '../../../../shared/types'
 import { RichMarkdownSlashMenu } from './RichMarkdownSlashMenu'
 import { RichMarkdownDocLinkMenu } from './RichMarkdownDocLinkMenu'
+import { RichMarkdownEmojiMenu } from './RichMarkdownEmojiMenu'
 import { useAppStore } from '@/store'
 import { RichMarkdownToolbar } from './RichMarkdownToolbar'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
@@ -193,6 +194,7 @@ export default function RichMarkdownEditor({
   const [slashMenu, setSlashMenu] = useState<SlashMenuState | null>(null)
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0)
   const [docLinkMenu, setDocLinkMenu] = useState<DocLinkMenuState | null>(null)
+  const [emojiMenu, setEmojiMenu] = useState<{ left: number; top: number } | null>(null)
   const [selectedDocLinkIndex, setSelectedDocLinkIndex] = useState(0)
   const isMac = navigator.userAgent.includes('Mac')
   const lastCommittedMarkdownRef = useRef(content)
@@ -207,6 +209,7 @@ export default function RichMarkdownEditor({
   const onSaveRef = useRef(onSave)
   const onOpenDocLinkRef = useRef(onOpenDocLink)
   const handleLocalImagePickRef = useRef<() => void>(() => {})
+  const handleEmojiPickRef = useRef<(menu: SlashMenuState) => void>(() => {})
   const openSearchRef = useRef<() => void>(() => {})
   // Why: ProseMirror keeps the initial handleKeyDown closure, so `editor` stays
   // stuck at the first-render null value unless we read the live instance here.
@@ -305,6 +308,7 @@ export default function RichMarkdownEditor({
         filteredDocLinkRowsRef,
         selectedDocLinkIndexRef,
         handleLocalImagePickRef,
+        handleEmojiPickRef,
         typedEmptyOrderedListMarkerRef,
         flushPendingSerialization,
         openSearchRef,
@@ -600,6 +604,15 @@ export default function RichMarkdownEditor({
     [flatTableOfContentsItems]
   )
 
+  const openEmojiMenu = useCallback((menu: SlashMenuState): void => {
+    setSlashMenu(null)
+    setEmojiMenu({ left: menu.left, top: menu.top })
+  }, [])
+
+  useEffect(() => {
+    handleEmojiPickRef.current = openEmojiMenu
+  }, [openEmojiMenu])
+
   const filteredSlashCommands = useMemo(() => {
     const query = slashMenu?.query.trim().toLowerCase() ?? ''
     if (!query) {
@@ -807,6 +820,15 @@ export default function RichMarkdownEditor({
             filteredCommands={filteredSlashCommands}
             selectedIndex={selectedCommandIndex}
             onImagePick={handleLocalImagePick}
+            onEmojiPick={() => openEmojiMenu(slashMenu)}
+          />
+        ) : null}
+        {emojiMenu ? (
+          <RichMarkdownEmojiMenu
+            editor={editor}
+            left={emojiMenu.left}
+            top={emojiMenu.top}
+            onClose={() => setEmojiMenu(null)}
           />
         ) : null}
         {docLinkMenu ? (
