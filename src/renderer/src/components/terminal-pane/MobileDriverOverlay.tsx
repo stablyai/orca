@@ -108,7 +108,7 @@ function LoudOverlay({
       style={OVERLAY_STYLE}
       className={rootClassName}
     >
-      <div style={CARD_STYLE}>
+      <div className="shadow-2xl" style={CARD_STYLE}>
         <div style={eyebrowStyle}>
           <span aria-hidden="true">●</span>
           <span>{eyebrow}</span>
@@ -123,7 +123,8 @@ function LoudOverlay({
               Collapse
             </Button>
           )}
-          <Button type="button" variant="default" size="sm" onClick={onAction}>
+          {/* autoFocus required by role="alertdialog" so screen-reader + keyboard users land on the action. */}
+          <Button type="button" variant="default" size="sm" onClick={onAction} autoFocus>
             {actionLabel}
           </Button>
         </div>
@@ -140,11 +141,18 @@ type ChipProps = {
 
 function LockChip({ onAction, onExpand, rootClassName }: ChipProps): ReactElement {
   return (
-    <div style={CHIP_WRAP_STYLE} className={rootClassName}>
+    <div className={`shadow-lg ${rootClassName ?? ''}`.trim()} style={CHIP_WRAP_STYLE}>
       <span aria-hidden="true" style={CHIP_DOT_STYLE} />
-      <button type="button" style={CHIP_LABEL_STYLE} onClick={onExpand} title="Show details">
+      <Button
+        type="button"
+        variant="ghost"
+        size="xs"
+        className="px-1 font-medium"
+        onClick={onExpand}
+        title="Show details"
+      >
         Mobile driving
-      </button>
+      </Button>
       <Button type="button" variant="default" size="xs" onClick={onAction}>
         Take back
       </Button>
@@ -174,7 +182,6 @@ const CARD_STYLE: CSSProperties = {
   border: '1px solid var(--color-border)',
   borderRadius: 'var(--radius-lg)',
   padding: '24px 24px 20px',
-  boxShadow: '0 24px 60px rgba(0,0,0,0.45), 0 6px 18px rgba(0,0,0,0.3)',
   display: 'flex',
   flexDirection: 'column',
   gap: '12px'
@@ -218,7 +225,6 @@ const CHIP_WRAP_STYLE: CSSProperties = {
   color: 'var(--color-card-foreground)',
   border: '1px solid var(--color-border)',
   borderRadius: '999px',
-  boxShadow: '0 4px 14px rgba(0,0,0,0.25)',
   fontSize: '12px',
   fontWeight: 500
 }
@@ -227,15 +233,5 @@ const CHIP_DOT_STYLE: CSSProperties = {
   width: '8px',
   height: '8px',
   borderRadius: '50%',
-  background: 'var(--color-primary)',
-  boxShadow: '0 0 0 3px rgba(23, 23, 23, 0.15)'
-}
-
-const CHIP_LABEL_STYLE: CSSProperties = {
-  background: 'transparent',
-  border: 'none',
-  color: 'inherit',
-  cursor: 'pointer',
-  padding: 0,
-  font: 'inherit'
+  background: 'var(--color-primary)'
 }
