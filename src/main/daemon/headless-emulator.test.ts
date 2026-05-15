@@ -348,6 +348,16 @@ describe('HeadlessEmulator', () => {
       )
     })
 
+    it('preserves mouse modes after mobile normalizes an alternate-screen replay', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+      await emulator.write('normal buffer\r\n\x1b[?1049h\x1b[?2004h\x1b[?1002;1006halternate')
+      const snapshot = emulator.getSnapshot()
+      const payload = snapshot.rehydrateSequences + snapshot.snapshotAnsi
+      expect(payload.split('\x1b[?1049h')).toHaveLength(2)
+      expect(payload.slice(payload.lastIndexOf('\x1b[?1049h'))).toContain('\x1b[?1002h')
+      expect(payload.slice(payload.lastIndexOf('\x1b[?1049h'))).toContain('\x1b[?1006h')
+    })
+
     it('rehydrates mouse encoding independently from reporting mode', async () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
       await emulator.write('\x1b[?1002;1006h')

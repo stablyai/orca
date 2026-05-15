@@ -106,8 +106,12 @@ export class HeadlessEmulator {
 
   getSnapshot(opts: HeadlessSnapshotOptions = {}): TerminalSnapshot {
     const modes = this.getModes()
+    const snapshotAnsi = this.normalizeSnapshotAnsiForModes(
+      this.serializer.serialize({ scrollback: opts.scrollbackRows }),
+      modes
+    )
     return {
-      snapshotAnsi: this.serializer.serialize({ scrollback: opts.scrollbackRows }),
+      snapshotAnsi,
       scrollbackAnsi: '',
       rehydrateSequences: this.buildRehydrateSequences(modes),
       cwd: this.cwd,
@@ -216,6 +220,21 @@ export class HeadlessEmulator {
 
   private isIncompletePrivateModeParams(params: string): boolean {
     return /^[0-9;]*$/.test(params)
+  }
+
+  private normalizeSnapshotAnsiForModes(snapshotAnsi: string, modes: TerminalModes): string {
+    if (!modes.alternateScreen) {
+      return snapshotAnsi
+    }
+    const alternateScreenMarker = '\x1b[?1049h'
+    const start = snapshotAnsi.lastIndexOf(alternateScreenMarker)
+    if (start === -1) {
+      return snapshotAnsi
+    }
+    // Why: rehydrateSequences already enters the alternate screen and restores
+    // mouse modes. Dropping SerializeAddon's duplicate ?1049h keeps mobile's
+    // "slice from last alt-screen marker" replay from discarding those modes.
+    return snapshotAnsi.slice(start + alternateScreenMarker.length)
   }
 
   private parseOsc7Uri(uri: string): void {
