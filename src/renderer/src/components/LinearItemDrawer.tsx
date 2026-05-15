@@ -26,6 +26,8 @@ import {
   linearUpdateIssue
 } from '@/runtime/runtime-linear-client'
 
+const IS_MAC = navigator.userAgent.includes('Mac')
+
 function LinearIcon({ className }: { className?: string }): React.JSX.Element {
   return (
     <svg viewBox="0 0 24 24" aria-hidden className={className} fill="currentColor">
@@ -77,7 +79,7 @@ type LinearItemDrawerProps = {
   onClose: () => void
 }
 
-type LinearEditState = {
+export type LinearEditState = {
   state: LinearIssue['state']
   priority: number
   assignee: LinearIssue['assignee']
@@ -91,7 +93,11 @@ type EditSectionProps = {
   onEditStateChange: (patch: Partial<LinearEditState>) => void
 }
 
-function EditSection({ issue, editState, onEditStateChange }: EditSectionProps): React.JSX.Element {
+export function LinearIssueEditSection({
+  issue,
+  editState,
+  onEditStateChange
+}: EditSectionProps): React.JSX.Element {
   const [labelPopoverOpen, setLabelPopoverOpen] = useState(false)
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const settings = useAppStore((s) => s.settings)
@@ -433,16 +439,16 @@ function EditSection({ issue, editState, onEditStateChange }: EditSectionProps):
   )
 }
 
-type LocalComment = { id: string; body: string; createdAt: string }
+export type LinearLocalComment = { id: string; body: string; createdAt: string }
 
-function CommentFooter({
+export function LinearIssueCommentFooter({
   issueId,
   workspaceId,
   onCommentAdded
 }: {
   issueId: string
   workspaceId?: string | null
-  onCommentAdded: (comment: LocalComment) => void
+  onCommentAdded: (comment: LinearLocalComment) => void
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const [body, setBody] = useState('')
@@ -486,7 +492,8 @@ function CommentFooter({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      const mod = IS_MAC ? e.metaKey : e.ctrlKey
+      if (e.key === 'Enter' && mod) {
         e.preventDefault()
         handleSubmit()
       }
@@ -525,7 +532,7 @@ function CommentFooter({
   )
 }
 
-function initEditState(issue: LinearIssue): LinearEditState {
+export function initLinearIssueEditState(issue: LinearIssue): LinearEditState {
   return {
     state: issue.state,
     priority: issue.priority,
@@ -568,7 +575,7 @@ export default function LinearItemDrawer({
     optimisticCommentsRef.current = []
     setComments([])
     setCommentsLoading(true)
-    setEditState(initEditState(issue))
+    setEditState(initLinearIssueEditState(issue))
     requestIdRef.current += 1
     const requestId = requestIdRef.current
     setFullIssue(issue)
@@ -586,7 +593,7 @@ export default function LinearItemDrawer({
           // Why: skip if the user already made optimistic edits — the fetch
           // carries pre-edit data that would clobber in-flight changes.
           if (!hasEditedRef.current) {
-            setEditState(initEditState(fetched))
+            setEditState(initLinearIssueEditState(fetched))
           }
         }
       })
@@ -645,7 +652,7 @@ export default function LinearItemDrawer({
     }
   }, [issue?.id])
 
-  const handleCommentAdded = useCallback((comment: LocalComment) => {
+  const handleCommentAdded = useCallback((comment: LinearLocalComment) => {
     const newComment: LinearComment = {
       id: comment.id,
       body: comment.body,
@@ -733,7 +740,7 @@ export default function LinearItemDrawer({
 
             {/* Edit section */}
             {editState && (
-              <EditSection
+              <LinearIssueEditSection
                 issue={displayed}
                 editState={editState}
                 onEditStateChange={handleEditStateChange}
@@ -802,7 +809,7 @@ export default function LinearItemDrawer({
             </div>
 
             {/* Comment footer + Start workspace */}
-            <CommentFooter
+            <LinearIssueCommentFooter
               issueId={displayed.id}
               workspaceId={displayed.workspaceId}
               onCommentAdded={handleCommentAdded}
