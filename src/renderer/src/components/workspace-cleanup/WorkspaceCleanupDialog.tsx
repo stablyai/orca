@@ -80,25 +80,56 @@ function formatRelativeTime(timestamp: number): string {
   return `${Math.floor(hours / 24)}d ago`
 }
 
-function formatScanNoticeMessage(errors: WorkspaceCleanupScanError[]): string | null {
-  if (errors.length === 0) {
-    return null
-  }
-  if (errors.length === 1) {
-    const error = errors[0]
-    return `Could not check ${error.repoName}: ${formatScanErrorReason(error.message)}. Some old workspaces may be missing. Refresh to try again.`
-  }
-  const repoLabel = errors.length === 1 ? 'repository' : 'repositories'
-  const repoNames = errors
-    .slice(0, 3)
-    .map((error) => error.repoName)
-    .join(', ')
-  const moreCount = errors.length - 3
-  const suffix = moreCount > 0 ? `, +${moreCount} more` : ''
-  return `Could not check ${errors.length} ${repoLabel} (${repoNames}${suffix}). Some old workspaces may be missing. Refresh to try again.`
+function isDisconnectedRemoteScanError(message: string): boolean {
+  return (
+    message === 'SSH provider is unavailable.' ||
+    message === 'Remote workspaces are not connected. Reconnect and refresh to check them.'
+  )
 }
 
-function formatScanErrorReason(message: string): string {
+function formatScanNoticeMessage(
+  errors: WorkspaceCleanupScanError[],
+  repoNameById: Map<string, string>
+): string | null {
+  const visibleErrors = errors.filter(
+    (error) => !isDisconnectedRemoteScanError(error.message ?? '')
+  )
+  if (visibleErrors.length === 0) {
+    return null
+  }
+  if (visibleErrors.length === 1) {
+    const error = visibleErrors[0]
+    const repoName = formatScanErrorRepoName(error, repoNameById)
+    return `Could not check ${repoName}: ${formatScanErrorReason(error.message)}. Some old workspaces may be missing. Refresh to try again.`
+  }
+  const repoNames = visibleErrors
+    .slice(0, 3)
+    .map((error) => formatScanErrorRepoName(error, repoNameById))
+    .join(', ')
+  const moreCount = visibleErrors.length - 3
+  const suffix = moreCount > 0 ? `, +${moreCount} more` : ''
+  return `Could not check ${visibleErrors.length} repositories (${repoNames}${suffix}). Some old workspaces may be missing. Refresh to try again.`
+}
+
+function formatScanErrorRepoName(
+  error: Partial<WorkspaceCleanupScanError>,
+  repoNameById: Map<string, string>
+): string {
+  const repoName = error.repoName?.trim()
+  if (repoName) {
+    return repoName
+  }
+  const fallback = error.repoId ? repoNameById.get(error.repoId)?.trim() : ''
+  return fallback || 'a repository'
+}
+
+function formatScanErrorReason(message: string | undefined): string {
+  if (!message) {
+    return 'Git could not list worktrees'
+  }
+  if (message === 'Could not scan workspace cleanup for this repository.') {
+    return 'Git could not list worktrees'
+  }
   return message.replace(/\.$/, '')
 }
 
@@ -140,6 +171,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const scan = useAppStore((s) => s.workspaceCleanupScan)
   const loading = useAppStore((s) => s.workspaceCleanupLoading)
   const error = useAppStore((s) => s.workspaceCleanupError)
+  const repos = useAppStore((s) => s.repos)
   const scanWorkspaceCleanup = useAppStore((s) => s.scanWorkspaceCleanup)
   const markCandidateViewed = useAppStore((s) => s.markWorkspaceCleanupCandidateViewed)
   const dismissCandidates = useAppStore((s) => s.dismissWorkspaceCleanupCandidates)
@@ -213,9 +245,13 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const hiddenByKeepCount = candidates.filter((candidate) =>
     candidate.blockers.includes('dismissed')
   ).length
+  const repoNameById = useMemo(
+    () => new Map(repos.map((repo) => [repo.id, repo.displayName || repo.path])),
+    [repos]
+  )
   const scanNoticeMessage = useMemo(
-    () => formatScanNoticeMessage(scan?.errors ?? []),
-    [scan?.errors]
+    () => formatScanNoticeMessage(scan?.errors ?? [], repoNameById),
+    [repoNameById, scan?.errors]
   )
   const readyCount = groups.ready.length
   const oldCandidateCount = useMemo(
