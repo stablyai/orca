@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: these CommitArea regression tests share
+   element-tree helpers that keep the assertions independent from a DOM test
+   harness; splitting the remaining cases would mostly duplicate setup. */
 import { describe, expect, it, vi } from 'vitest'
 import { Check, RefreshCw } from 'lucide-react'
 import { CommitArea } from './SourceControl'

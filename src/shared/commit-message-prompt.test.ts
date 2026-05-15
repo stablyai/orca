@@ -97,7 +97,7 @@ describe('extractAgentErrorMessage', () => {
     )
   })
 
-  it('falls back to the raw payload when the JSON cannot be parsed', () => {
+  it('returns the payload for non-JSON error lines', () => {
     const out = 'preamble line\nERROR: {bad json oops'
     expect(extractAgentErrorMessage(out, '')).toBe('{bad json oops')
   })

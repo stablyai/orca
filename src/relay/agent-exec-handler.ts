@@ -1,16 +1,74 @@
 import { exec, spawn, type ChildProcess } from 'child_process'
+import { existsSync } from 'fs'
+import { delimiter, join } from 'path'
 import type { RelayDispatcher } from './dispatcher'
 
 const DEFAULT_TIMEOUT_MS = 60_000
 const MAX_TIMEOUT_MS = 5 * 60 * 1000
 const MAX_OUTPUT_BYTES = 4 * 1024 * 1024
+const WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR = 'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
 
-// Why: mirrors src/main/git/commit-message-generator.ts. On Windows the
-// spawned `claude`/`codex` is a `.cmd` shim wrapped by an implicit cmd.exe,
-// so killing only the immediate child leaves the real node.exe running.
-// `taskkill /T /F` walks the process tree by PID and force-kills every
-// descendant. Kept duplicated rather than imported because the relay is a
-// separate runtime that ships independently to remote hosts.
+function getCmdExePath(): string {
+  return process.env.ComSpec || `${process.env.SystemRoot ?? 'C:\\Windows'}\\System32\\cmd.exe`
+}
+
+function isWindowsBatchScript(commandPath: string): boolean {
+  return process.platform === 'win32' && /\.(cmd|bat)$/i.test(commandPath)
+}
+
+function hasUnsafeWindowsBatchSyntax(value: string): boolean {
+  return /[&|<>^"%!\r\n]/.test(value)
+}
+
+function quoteWindowsBatchToken(value: string): string {
+  if (hasUnsafeWindowsBatchSyntax(value)) {
+    throw new Error(WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR)
+  }
+  return `"${value}"`
+}
+
+function resolveWindowsCommand(binary: string, env: NodeJS.ProcessEnv): string {
+  if (process.platform !== 'win32') {
+    return binary
+  }
+  if (/[\\/]/.test(binary) || /\.[a-z0-9]+$/i.test(binary)) {
+    return binary
+  }
+
+  const pathEnv = env.PATH ?? env.Path
+  if (!pathEnv) {
+    return binary
+  }
+  const names = [`${binary}.cmd`, `${binary}.exe`, `${binary}.bat`, binary]
+  for (const directory of pathEnv.split(delimiter).filter(Boolean)) {
+    for (const name of names) {
+      const candidate = join(directory, name)
+      if (existsSync(candidate)) {
+        return candidate
+      }
+    }
+  }
+  return binary
+}
+
+function getWindowsSafeSpawn(
+  binary: string,
+  args: string[],
+  env: NodeJS.ProcessEnv
+): { spawnCmd: string; spawnArgs: string[] } {
+  const resolvedBinary = resolveWindowsCommand(binary, env)
+  if (!isWindowsBatchScript(resolvedBinary)) {
+    return { spawnCmd: resolvedBinary, spawnArgs: args }
+  }
+  const commandLine = [resolvedBinary, ...args].map(quoteWindowsBatchToken).join(' ')
+  return { spawnCmd: getCmdExePath(), spawnArgs: ['/d', '/s', '/c', commandLine] }
+}
+
+// Why: mirrors src/main/text-generation/commit-message-text-generation.ts. On
+// Windows, npm-installed CLIs like `claude`/`codex` are usually `.cmd` shims.
+// We route those through cmd.exe so Node can launch them, and taskkill is
+// needed to terminate the whole wrapper + node.exe process tree. Kept
+// duplicated rather than imported because the relay ships to remote hosts.
 function killProcessTree(child: ChildProcess): void {
   const pid = child.pid
   if (!pid) {
@@ -97,13 +155,15 @@ export class AgentExecHandler {
       params.env && typeof params.env === 'object' && !Array.isArray(params.env)
         ? (params.env as Record<string, string>)
         : null
+    const spawnEnv = extraEnv ? { ...process.env, ...extraEnv } : process.env
 
     return new Promise<ExecResult>((resolve) => {
       let child
       try {
-        child = spawn(binary, args, {
+        const { spawnCmd, spawnArgs } = getWindowsSafeSpawn(binary, args, spawnEnv)
+        child = spawn(spawnCmd, spawnArgs, {
           cwd,
-          env: extraEnv ? { ...process.env, ...extraEnv } : process.env,
+          env: spawnEnv,
           stdio: ['pipe', 'pipe', 'pipe'],
           windowsHide: true
         })

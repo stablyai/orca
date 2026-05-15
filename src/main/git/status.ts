@@ -14,9 +14,11 @@ import type {
   GitStatusEntry,
   GitStatusResult
 } from '../../shared/types'
+import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import { gitExecFileAsync, gitExecFileAsyncBuffer } from './runner'
 
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
+const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
 
 /**
  * Parse `git status --porcelain=v2` output into structured entries.
@@ -724,16 +726,39 @@ export async function unstageFile(worktreePath: string, filePath: string): Promi
   await gitExecFileAsync(['restore', '--staged', '--', filePath], { cwd: worktreePath })
 }
 
-/**
- * Returns the full staged diff for the worktree (`git diff --cached --no-color`).
- * Used by AI commit-message generation to feed the agent the changes about to be
- * committed. `--no-color` strips ANSI so the prompt stays clean.
- */
-export async function getStagedDiff(worktreePath: string): Promise<string> {
-  const { stdout } = await gitExecFileAsync(['diff', '--cached', '--no-color'], {
+export async function getStagedCommitContext(
+  worktreePath: string
+): Promise<CommitMessageDraftContext | null> {
+  const branchPromise = gitExecFileAsync(['branch', '--show-current'], {
     cwd: worktreePath
+  }).catch(() => ({ stdout: '' }))
+  const summaryPromise = gitExecFileAsync(['diff', '--cached', '--name-status'], {
+    cwd: worktreePath,
+    maxBuffer: MAX_STAGED_COMMIT_CONTEXT_BYTES
   })
-  return stdout
+
+  const [branchResult, summaryResult] = await Promise.all([branchPromise, summaryPromise])
+  const stagedSummary = summaryResult.stdout.trim()
+  if (!stagedSummary) {
+    return null
+  }
+
+  const { stdout: stagedPatch } = await gitExecFileAsync(
+    ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
+    {
+      cwd: worktreePath,
+      // Why: the prompt builder truncates large staged patches later. Give git
+      // enough buffer room to reach that truncation step instead of failing at
+      // Node's default execFile limit first.
+      maxBuffer: MAX_STAGED_COMMIT_CONTEXT_BYTES
+    }
+  )
+
+  return {
+    branch: branchResult.stdout.trim() || null,
+    stagedSummary,
+    stagedPatch
+  }
 }
 
 export async function commitChanges(

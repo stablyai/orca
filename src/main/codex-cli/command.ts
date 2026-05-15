@@ -121,7 +121,10 @@ function getVersionManagerDirectories(
   return directories
 }
 
-function resolveCommand(commandName: string, options: ResolveCommandOptions = {}): string {
+export function resolveCliCommand(
+  commandName: string,
+  options: ResolveCommandOptions = {}
+): string {
   const platform = options.platform ?? process.platform
   const executableNames = getExecutableNames(platform, commandName)
   const pathEnv = options.pathEnv ?? process.env.PATH ?? process.env.Path ?? null
@@ -139,11 +142,11 @@ function resolveCommand(commandName: string, options: ResolveCommandOptions = {}
 }
 
 export function resolveCodexCommand(options: ResolveCommandOptions = {}): string {
-  return resolveCommand('codex', options)
+  return resolveCliCommand('codex', options)
 }
 
 export function resolveClaudeCommand(options: ResolveCommandOptions = {}): string {
-  return resolveCommand('claude', options)
+  return resolveCliCommand('claude', options)
 }
 
 // Why: GUI-launched Electron apps inherit a minimal PATH that excludes Node

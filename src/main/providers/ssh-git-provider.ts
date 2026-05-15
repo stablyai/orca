@@ -3,11 +3,7 @@
    indirection — every method is a 1:1 forwarder to a relay RPC plus a
    small amount of param plumbing. */
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
-import type {
-  GenerateCommitMessageRequest,
-  GenerateCommitMessageResponse,
-  IGitProvider
-} from './types'
+import type { IGitProvider } from './types'
 import hostedGitInfo from 'hosted-git-info'
 import type {
   GitStatusResult,
@@ -18,25 +14,9 @@ import type {
   GitUpstreamStatus,
   GitWorktreeInfo
 } from '../../shared/types'
-import {
-  buildCommitPrompt,
-  cleanGeneratedCommitMessage,
-  extractAgentErrorMessage,
-  truncateDiffForPrompt
-} from '../../shared/commit-message-prompt'
-import { planCommitMessageGeneration } from '../../shared/commit-message-plan'
-import { applyOrcaAttribution } from '../git/commit-message-generator'
-
-const SSH_GENERATION_TIMEOUT_MS = 60_000
-
-type RemoteExecResult = {
-  stdout: string
-  stderr: string
-  exitCode: number | null
-  timedOut: boolean
-  canceled?: boolean
-  spawnError?: string
-}
+import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
+import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import type { RemoteCommitMessageExecResult } from '../text-generation/commit-message-text-generation'
 
 export class SshGitProvider implements IGitProvider {
   private connectionId: string
@@ -65,72 +45,41 @@ export class SshGitProvider implements IGitProvider {
     })) as { success: boolean; error?: string }
   }
 
-  async generateCommitMessage(
-    request: GenerateCommitMessageRequest
-  ): Promise<GenerateCommitMessageResponse> {
-    let diff: string
-    try {
-      const diffResult = await this.exec(['diff', '--cached', '--no-color'], request.worktreePath)
-      diff = diffResult.stdout
-    } catch (error) {
-      return {
-        success: false,
-        error: `Failed to read staged diff: ${error instanceof Error ? error.message : String(error)}`
-      }
+  async getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null> {
+    const branchPromise = this.exec(['branch', '--show-current'], worktreePath).catch(() => ({
+      stdout: ''
+    }))
+    const [branchResult, summaryResult] = await Promise.all([
+      branchPromise,
+      this.exec(['diff', '--cached', '--name-status'], worktreePath)
+    ])
+    const stagedSummary = summaryResult.stdout.trim()
+    if (!stagedSummary) {
+      return null
     }
-    if (!diff.trim()) {
-      return { success: false, error: 'No staged changes to summarize.' }
-    }
-
-    const prompt = buildCommitPrompt(truncateDiffForPrompt(diff), request.customPrompt ?? '')
-    const planned = planCommitMessageGeneration(request, prompt)
-    if (!planned.ok) {
-      return { success: false, error: planned.error }
-    }
-    const { binary, args, stdinPayload, label } = planned.plan
-
-    const result = (await this.mux.request('agent.execNonInteractive', {
-      binary,
-      args,
-      cwd: request.worktreePath,
-      stdin: stdinPayload,
-      timeoutMs: SSH_GENERATION_TIMEOUT_MS
-    })) as RemoteExecResult
-
-    if (result.spawnError) {
-      // Why: ENOENT on the remote PATH is the most common failure here, so
-      // surface a concrete install hint rather than the bare "ENOENT" line.
-      if (/ENOENT/i.test(result.spawnError)) {
-        return {
-          success: false,
-          error: `${binary} not found on the remote PATH. Install ${label} on the SSH host.`
-        }
-      }
-      return { success: false, error: result.spawnError }
-    }
-    if (result.canceled) {
-      return { success: false, error: 'Generation canceled.', canceled: true }
-    }
-    if (result.timedOut) {
-      return {
-        success: false,
-        error: `Generation timed out after ${SSH_GENERATION_TIMEOUT_MS / 1000}s.`
-      }
-    }
-    if (result.exitCode !== 0) {
-      const extracted = extractAgentErrorMessage(result.stdout, result.stderr)
-      const detail =
-        extracted ?? result.stderr.trim() ?? result.stdout.trim() ?? `exit code ${result.exitCode}`
-      return { success: false, error: `${label} failed: ${detail}` }
-    }
-    const cleaned = cleanGeneratedCommitMessage(result.stdout)
-    if (!cleaned) {
-      return { success: false, error: `${label} returned an empty message.` }
-    }
+    const { stdout: stagedPatch } = await this.exec(
+      ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
+      worktreePath
+    )
     return {
-      success: true,
-      message: applyOrcaAttribution(cleaned, request.attributionEnabled === true)
+      branch: branchResult.stdout.trim() || null,
+      stagedSummary,
+      stagedPatch
     }
+  }
+
+  async executeCommitMessagePlan(
+    plan: CommitMessagePlan,
+    cwd: string,
+    timeoutMs: number
+  ): Promise<RemoteCommitMessageExecResult> {
+    return (await this.mux.request('agent.execNonInteractive', {
+      binary: plan.binary,
+      args: plan.args,
+      cwd,
+      stdin: plan.stdinPayload,
+      timeoutMs
+    })) as RemoteCommitMessageExecResult
   }
 
   async cancelGenerateCommitMessage(worktreePath: string): Promise<void> {

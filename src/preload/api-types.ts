@@ -63,7 +63,6 @@ import type {
   SearchResult,
   StatsSummary,
   MemorySnapshot,
-  TuiAgent,
   UpdateStatus,
   Worktree,
   WorktreeBaseStatusEvent,
@@ -1033,14 +1032,10 @@ export type PreloadApi = {
     }) => Promise<{ success: boolean; error?: string }>
     generateCommitMessage: (args: {
       worktreePath: string
-      agentId: TuiAgent | 'custom'
-      model: string
-      thinkingLevel?: string
-      customPrompt?: string
-      customAgentCommand?: string
       connectionId?: string
     }) => Promise<
-      { success: true; message: string } | { success: false; error: string; canceled?: boolean }
+      | { success: true; message: string; agentLabel?: string }
+      | { success: false; error: string; canceled?: boolean }
     >
     cancelGenerateCommitMessage: (args: {
       worktreePath: string

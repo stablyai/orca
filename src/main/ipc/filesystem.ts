@@ -36,17 +36,16 @@ import {
   bulkStageFiles,
   bulkUnstageFiles,
   discardChanges,
+  getStagedCommitContext,
   getBranchCompare,
   getBranchDiff
 } from '../git/status'
 import {
   cancelGenerateCommitMessageLocal,
-  generateCommitMessageLocal,
-  type GenerateCommitMessageParams,
+  generateCommitMessageFromContext,
+  resolveCommitMessageSettings,
   type GenerateCommitMessageResult
-} from '../git/commit-message-generator'
-import { COMMIT_MESSAGE_AGENT_SPECS } from '../../shared/commit-message-agent-spec'
-import type { TuiAgent } from '../../shared/types'
+} from '../text-generation/commit-message-text-generation'
 import { getUpstreamStatus } from '../git/upstream'
 import { gitFetch, gitPull, gitPush } from '../git/remote'
 import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
@@ -66,6 +65,8 @@ import { listMarkdownDocuments, markdownDocumentsFromRelativePaths } from './mar
 import { checkRgAvailable } from './rg-availability'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
+import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 
 // Why: Monaco has large-file optimizations like VS Code; blocking at 5MB makes
 // ordinary JSON/log files inaccessible before the editor can degrade features.
@@ -89,6 +90,56 @@ const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
   '.pdf': 'application/pdf'
+}
+
+export type CommitMessageAgentEnvironmentResolvers = {
+  prepareForCodexLaunch?: () => string | null
+  prepareForClaudeLaunch?: () => Promise<ClaudeRuntimeAuthPreparation>
+}
+
+function cloneProcessEnv(): Record<string, string> {
+  const env: Record<string, string> = {}
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined) {
+      env[key] = value
+    }
+  }
+  return env
+}
+
+async function prepareLocalCommitMessageAgentEnv(
+  agentId: string,
+  resolvers: CommitMessageAgentEnvironmentResolvers | undefined
+): Promise<{ ok: true; env?: NodeJS.ProcessEnv } | { ok: false; error: string }> {
+  if (!resolvers) {
+    return { ok: true }
+  }
+
+  try {
+    if (agentId === 'codex' && resolvers.prepareForCodexLaunch) {
+      const codexHomePath = resolvers.prepareForCodexLaunch()
+      return {
+        ok: true,
+        env: codexHomePath ? { ...cloneProcessEnv(), CODEX_HOME: codexHomePath } : undefined
+      }
+    }
+
+    if (agentId === 'claude' && resolvers.prepareForClaudeLaunch) {
+      const preparation = await resolvers.prepareForClaudeLaunch()
+      const env = applyClaudeEnvPatch(cloneProcessEnv(), preparation.envPatch, {
+        stripAuthEnv: preparation.stripAuthEnv
+      })
+      return { ok: true, env }
+    }
+  } catch (error) {
+    console.error('[filesystem] Failed to prepare commit message agent environment:', error)
+    return {
+      ok: false,
+      error: 'Failed to prepare the selected agent account for commit message generation.'
+    }
+  }
+
+  return { ok: true }
 }
 
 /**
@@ -136,7 +187,10 @@ async function isDirectoryEntry(
   }
 }
 
-export function registerFilesystemHandlers(store: Store): void {
+export function registerFilesystemHandlers(
+  store: Store,
+  commitMessageAgentEnv?: CommitMessageAgentEnvironmentResolvers
+): void {
   const activeTextSearches = new Map<string, ChildProcess>()
 
   // ─── Filesystem ─────────────────────────────────────────
@@ -570,43 +624,12 @@ export function registerFilesystemHandlers(store: Store): void {
       _event,
       args: {
         worktreePath: string
-        agentId: string
-        model: string
-        thinkingLevel?: string
-        customPrompt?: string
-        customAgentCommand?: string
         connectionId?: string
       }
     ): Promise<GenerateCommitMessageResult> => {
-      // Why: validate at the IPC boundary so unknown agents fail fast with a
-      // legible error instead of trying to spawn a missing binary. The
-      // sentinel `'custom'` skips the spec lookup — its template is
-      // validated downstream in planCustomCommand.
-      const isCustom = args.agentId === 'custom'
-      if (!args.agentId || (!isCustom && !(args.agentId in COMMIT_MESSAGE_AGENT_SPECS))) {
-        return {
-          success: false,
-          error: `Agent "${args.agentId}" does not support AI commit messages.`
-        }
-      }
-      if (isCustom && !args.customAgentCommand?.trim()) {
-        return {
-          success: false,
-          error: 'Custom command is empty. Add one in Settings → Git → AI Commit Messages.'
-        }
-      }
-      // Why: read the toggle from the persisted store so a single source of
-      // truth (the same one the terminal git/gh shim reads) decides whether
-      // the trailer is appended. The renderer does not need to send it.
-      const attributionEnabled = store.getSettings().enableGitHubAttribution === true
-      const baseRequest: GenerateCommitMessageParams = {
-        worktreePath: args.worktreePath,
-        agentId: args.agentId as TuiAgent | 'custom',
-        model: args.model,
-        thinkingLevel: args.thinkingLevel,
-        customPrompt: args.customPrompt,
-        customAgentCommand: args.customAgentCommand,
-        attributionEnabled
+      const resolvedSettings = resolveCommitMessageSettings(store.getSettings())
+      if (!resolvedSettings.ok) {
+        return { success: false, error: resolvedSettings.error }
       }
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
@@ -616,10 +639,53 @@ export function registerFilesystemHandlers(store: Store): void {
             error: `No git provider for connection "${args.connectionId}"`
           }
         }
-        return provider.generateCommitMessage(baseRequest)
+        let context
+        try {
+          context = await provider.getStagedCommitContext(args.worktreePath)
+        } catch (error) {
+          console.error('[filesystem] Failed to read remote staged commit context:', error)
+          return {
+            success: false,
+            error: 'Failed to read staged changes.'
+          }
+        }
+        if (!context) {
+          return { success: false, error: 'No staged changes to summarize.' }
+        }
+        return generateCommitMessageFromContext(context, resolvedSettings.params, {
+          kind: 'remote',
+          cwd: args.worktreePath,
+          execute: (plan, cwd, timeoutMs) =>
+            provider.executeCommitMessagePlan(plan, cwd, timeoutMs),
+          missingBinaryLocation: 'remote PATH'
+        })
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      return generateCommitMessageLocal({ ...baseRequest, worktreePath })
+      let context
+      try {
+        context = await getStagedCommitContext(worktreePath)
+      } catch (error) {
+        console.error('[filesystem] Failed to read staged commit context:', error)
+        return {
+          success: false,
+          error: 'Failed to read staged changes.'
+        }
+      }
+      if (!context) {
+        return { success: false, error: 'No staged changes to summarize.' }
+      }
+      const localEnv = await prepareLocalCommitMessageAgentEnv(
+        resolvedSettings.params.agentId,
+        commitMessageAgentEnv
+      )
+      if (!localEnv.ok) {
+        return { success: false, error: localEnv.error }
+      }
+      return generateCommitMessageFromContext(context, resolvedSettings.params, {
+        kind: 'local',
+        cwd: worktreePath,
+        ...(localEnv.env ? { env: localEnv.env } : {})
+      })
     }
   )
 

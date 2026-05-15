@@ -1710,11 +1710,6 @@ const api = {
     }): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('git:commit', args),
     generateCommitMessage: (args: {
       worktreePath: string
-      agentId: string
-      model: string
-      thinkingLevel?: string
-      customPrompt?: string
-      customAgentCommand?: string
       connectionId?: string
     }): Promise<unknown> => ipcRenderer.invoke('git:generateCommitMessage', args),
     cancelGenerateCommitMessage: (args: {

@@ -4,7 +4,10 @@ import { registerPreflightHandlers } from './preflight'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { StatsCollector } from '../stats/collector'
-import { registerFilesystemHandlers } from './filesystem'
+import {
+  registerFilesystemHandlers,
+  type CommitMessageAgentEnvironmentResolvers
+} from './filesystem'
 import { registerFilesystemWatcherHandlers } from './filesystem-watcher'
 import { registerClaudeUsageHandlers } from './claude-usage'
 import { registerCodexUsageHandlers } from './codex-usage'
@@ -59,7 +62,8 @@ export function registerCoreHandlers(
   claudeAccounts: ClaudeAccountService,
   rateLimits: RateLimitService,
   mainWindowWebContentsId: number | null = null,
-  automations?: AutomationService
+  automations?: AutomationService,
+  commitMessageAgentEnv?: CommitMessageAgentEnvironmentResolvers
 ): void {
   // Why: on macOS the app can stay alive after all windows close, then
   // openMainWindow() is called again on 'activate'. ipcMain.handle() throws
@@ -109,7 +113,11 @@ export function registerCoreHandlers(
   registerPetHandlers()
   registerSessionHandlers(store)
   registerUIHandlers(store)
-  registerFilesystemHandlers(store)
+  if (commitMessageAgentEnv) {
+    registerFilesystemHandlers(store, commitMessageAgentEnv)
+  } else {
+    registerFilesystemHandlers(store)
+  }
   registerFilesystemWatcherHandlers()
   registerRuntimeHandlers(runtime)
   registerClipboardHandlers()

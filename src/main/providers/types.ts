@@ -9,9 +9,9 @@ import type {
   GitUpstreamStatus,
   GitWorktreeInfo,
   SearchOptions,
-  SearchResult,
-  TuiAgent
+  SearchResult
 } from '../../shared/types'
+import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 
 // ─── PTY Provider ───────────────────────────────────────────────────
 
@@ -133,29 +133,10 @@ export type IFilesystemProvider = {
 
 // ─── Git Provider ───────────────────────────────────────────────────
 
-export type GenerateCommitMessageRequest = {
-  worktreePath: string
-  agentId: TuiAgent | 'custom'
-  model: string
-  thinkingLevel?: string
-  customPrompt?: string
-  /** Required when `agentId === 'custom'`: the user's command template. */
-  customAgentCommand?: string
-  /** When true, the generator appends the Orca attribution trailer (`enableGitHubAttribution`). */
-  attributionEnabled?: boolean
-}
-
-export type GenerateCommitMessageResponse =
-  | { success: true; message: string }
-  | { success: false; error: string; canceled?: boolean }
-
 export type IGitProvider = {
   getStatus(worktreePath: string): Promise<GitStatusResult>
   commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>
-  generateCommitMessage(
-    request: GenerateCommitMessageRequest
-  ): Promise<GenerateCommitMessageResponse>
-  cancelGenerateCommitMessage(worktreePath: string): Promise<void>
+  getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null>
   getDiff(
     worktreePath: string,
     filePath: string,

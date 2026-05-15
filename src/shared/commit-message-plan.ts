@@ -3,7 +3,7 @@ import {
   getCommitMessageModel,
   isCustomAgentId
 } from './commit-message-agent-spec'
-import { planCustomCommand } from './commit-message-prompt'
+import { planCustomCommand, tokenizeCustomCommandTemplate } from './commit-message-prompt'
 import type { TuiAgent } from './types'
 
 // Why: planning is a pure transformation from "user request + prompt text"
@@ -17,6 +17,7 @@ export type CommitMessagePlanInput = {
   model: string
   thinkingLevel?: string
   customAgentCommand?: string
+  agentCommandOverride?: string
 }
 
 export type CommitMessagePlan = {
@@ -31,6 +32,26 @@ export type CommitMessagePlan = {
 export type CommitMessagePlanResult =
   | { ok: true; plan: CommitMessagePlan }
   | { ok: false; error: string }
+
+function planAgentBinary(
+  defaultBinary: string,
+  commandOverride: string | undefined
+): { ok: true; binary: string; prefixArgs: string[] } | { ok: false; error: string } {
+  const command = commandOverride?.trim()
+  if (!command) {
+    return { ok: true, binary: defaultBinary, prefixArgs: [] }
+  }
+
+  const tokenized = tokenizeCustomCommandTemplate(command)
+  if (!tokenized.ok) {
+    return { ok: false, error: `Agent command override is invalid: ${tokenized.error}` }
+  }
+  const [binary, ...prefixArgs] = tokenized.tokens
+  if (!binary) {
+    return { ok: false, error: 'Agent command override must start with a binary name.' }
+  }
+  return { ok: true, binary, prefixArgs }
+}
 
 export function planCommitMessageGeneration(
   input: CommitMessagePlanInput,
@@ -90,11 +111,15 @@ export function planCommitMessageGeneration(
     model: input.model,
     thinkingLevel: input.thinkingLevel
   })
+  const command = planAgentBinary(spec.binary, input.agentCommandOverride)
+  if (!command.ok) {
+    return { ok: false, error: command.error }
+  }
   return {
     ok: true,
     plan: {
-      binary: spec.binary,
-      args,
+      binary: command.binary,
+      args: [...command.prefixArgs, ...args],
       stdinPayload: spec.promptDelivery === 'stdin' ? prompt : null,
       label: spec.label
     }

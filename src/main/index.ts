@@ -255,7 +255,14 @@ function openMainWindow(): BrowserWindow {
     claudeAccounts,
     rateLimits,
     window.webContents.id,
-    automations
+    automations,
+    {
+      prepareForCodexLaunch: () =>
+        store!.getSettings().activeCodexManagedAccountId
+          ? codexRuntimeHome!.prepareForCodexLaunch()
+          : null,
+      prepareForClaudeLaunch: () => claudeRuntimeAuth!.prepareForClaudeLaunch()
+    }
   )
   automations.setWebContents(window.webContents)
   automations.start()
@@ -263,7 +270,10 @@ function openMainWindow(): BrowserWindow {
     window,
     store,
     runtime,
-    () => codexRuntimeHome!.prepareForCodexLaunch(),
+    () =>
+      store!.getSettings().activeCodexManagedAccountId
+        ? codexRuntimeHome!.prepareForCodexLaunch()
+        : null,
     () => claudeRuntimeAuth!.prepareForClaudeLaunch()
   )
   rateLimits.attach(window)

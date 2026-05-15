@@ -6,27 +6,22 @@ import { useMemo } from 'react'
 import { Terminal } from 'lucide-react'
 import type { CommitMessageAiSettings, GlobalSettings, TuiAgent } from '../../../../shared/types'
 import {
-  COMMIT_MESSAGE_AGENT_SPECS,
   CUSTOM_AGENT_ID,
   DEFAULT_COMMIT_MESSAGE_AGENT_ID,
-  getCommitMessageAgentSpec,
-  getCommitMessageModel,
+  getCommitMessageAgentCapability,
   isCustomAgentId,
-  listCommitMessageAgentIds,
+  listCommitMessageAgentCapabilities,
   type CommitMessageAgentChoice,
-  type CommitMessageAgentSpec,
-  type CommitMessageModel
+  type CommitMessageAgentCapability,
+  type CommitMessageModelCapability
 } from '../../../../shared/commit-message-agent-spec'
 import { CUSTOM_PROMPT_PLACEHOLDER } from '../../../../shared/commit-message-prompt'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { useAppStore } from '../../store'
-import { COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES } from './commit-message-ai-search'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
-
-export { COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES }
 
 type CommitMessageAiPaneProps = {
   settings: GlobalSettings
@@ -46,28 +41,28 @@ function readSettings(settings: GlobalSettings): CommitMessageAiSettings {
   return settings.commitMessageAi ?? EMPTY_SETTINGS
 }
 
-function agentLabel(agentId: TuiAgent, spec: CommitMessageAgentSpec): string {
-  return AGENT_CATALOG.find((a) => a.id === agentId)?.label ?? spec.label
+function agentLabel(agentId: TuiAgent, capability: CommitMessageAgentCapability): string {
+  return AGENT_CATALOG.find((a) => a.id === agentId)?.label ?? capability.label
 }
 
 function resolveSelectedModel(
   config: CommitMessageAiSettings,
-  spec: CommitMessageAgentSpec
-): CommitMessageModel {
-  const persisted = config.selectedModelByAgent[spec.id]
+  capability: CommitMessageAgentCapability
+): CommitMessageModelCapability {
+  const persisted = config.selectedModelByAgent[capability.id]
   if (persisted) {
-    const found = spec.models.find((m) => m.id === persisted)
+    const found = capability.models.find((m) => m.id === persisted)
     if (found) {
       return found
     }
   }
-  // Why: defaultModelId is guaranteed to exist in spec.models by construction.
-  return spec.models.find((m) => m.id === spec.defaultModelId) ?? spec.models[0]
+  // Why: defaultModelId is guaranteed to exist in provider capabilities by construction.
+  return capability.models.find((m) => m.id === capability.defaultModelId) ?? capability.models[0]
 }
 
 function resolveSelectedThinking(
   config: CommitMessageAiSettings,
-  model: CommitMessageModel
+  model: CommitMessageModelCapability
 ): string | undefined {
   if (!model.thinkingLevels) {
     return undefined
@@ -86,11 +81,11 @@ export function CommitMessageAiPane({
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const config = readSettings(settings)
 
-  const agentIds = useMemo(listCommitMessageAgentIds, [])
+  const agentCapabilities = useMemo(listCommitMessageAgentCapabilities, [])
   const activeAgentId: CommitMessageAgentChoice = config.agentId ?? DEFAULT_COMMIT_MESSAGE_AGENT_ID
   const isCustom = isCustomAgentId(activeAgentId)
-  const activeSpec = isCustom ? undefined : getCommitMessageAgentSpec(activeAgentId)
-  const activeModel = activeSpec ? resolveSelectedModel(config, activeSpec) : null
+  const activeCapability = isCustom ? undefined : getCommitMessageAgentCapability(activeAgentId)
+  const activeModel = activeCapability ? resolveSelectedModel(config, activeCapability) : null
   const activeThinking = activeModel ? resolveSelectedThinking(config, activeModel) : undefined
 
   const writeConfig = (patch: Partial<CommitMessageAiSettings>): void => {
@@ -104,20 +99,20 @@ export function CommitMessageAiPane({
       return
     }
     // Why: when the user enables the feature for the first time, hydrate the
-    // agent / model / thinking choices from the spec defaults so the Generate
-    // button works immediately without forcing them to pick first. If the
-    // user previously persisted 'custom', we keep that and let them re-edit
-    // the command — no implicit reset to a preset.
+    // agent / model / thinking choices from provider capabilities so the
+    // Generate button works immediately without forcing them to pick first.
+    // If the user previously persisted 'custom', we keep that and let them
+    // re-edit the command — no implicit reset to a preset.
     const seedAgentId: TuiAgent | 'custom' = config.agentId ?? DEFAULT_COMMIT_MESSAGE_AGENT_ID
-    const seedSpec = isCustomAgentId(seedAgentId)
+    const seedCapability = isCustomAgentId(seedAgentId)
       ? undefined
-      : getCommitMessageAgentSpec(seedAgentId)
-    const seedModel = seedSpec ? resolveSelectedModel(config, seedSpec) : null
+      : getCommitMessageAgentCapability(seedAgentId)
+    const seedModel = seedCapability ? resolveSelectedModel(config, seedCapability) : null
     const seedThinking = seedModel ? resolveSelectedThinking(config, seedModel) : undefined
 
     const nextSelectedModelByAgent = { ...config.selectedModelByAgent }
-    if (seedSpec && !nextSelectedModelByAgent[seedSpec.id]) {
-      nextSelectedModelByAgent[seedSpec.id] = seedSpec.defaultModelId
+    if (seedCapability && !nextSelectedModelByAgent[seedCapability.id]) {
+      nextSelectedModelByAgent[seedCapability.id] = seedCapability.defaultModelId
     }
     const nextSelectedThinkingByModel = { ...config.selectedThinkingByModel }
     if (seedModel && seedThinking && !nextSelectedThinkingByModel[seedModel.id]) {
@@ -136,15 +131,15 @@ export function CommitMessageAiPane({
       writeConfig({ agentId: CUSTOM_AGENT_ID })
       return
     }
-    const spec = getCommitMessageAgentSpec(newAgentId as TuiAgent)
-    if (!spec) {
+    const capability = getCommitMessageAgentCapability(newAgentId as TuiAgent)
+    if (!capability) {
       return
     }
     const nextSelectedModelByAgent = { ...config.selectedModelByAgent }
-    if (!nextSelectedModelByAgent[spec.id]) {
-      nextSelectedModelByAgent[spec.id] = spec.defaultModelId
+    if (!nextSelectedModelByAgent[capability.id]) {
+      nextSelectedModelByAgent[capability.id] = capability.defaultModelId
     }
-    const newModel = resolveSelectedModel({ ...config, agentId: spec.id }, spec)
+    const newModel = resolveSelectedModel({ ...config, agentId: capability.id }, capability)
     const nextSelectedThinkingByModel = { ...config.selectedThinkingByModel }
     if (
       newModel.thinkingLevels &&
@@ -154,7 +149,7 @@ export function CommitMessageAiPane({
       nextSelectedThinkingByModel[newModel.id] = newModel.defaultThinkingLevel
     }
     writeConfig({
-      agentId: spec.id,
+      agentId: capability.id,
       selectedModelByAgent: nextSelectedModelByAgent,
       selectedThinkingByModel: nextSelectedThinkingByModel
     })
@@ -165,16 +160,16 @@ export function CommitMessageAiPane({
   }
 
   const onModelChange = (newModelId: string): void => {
-    if (!activeSpec) {
+    if (!activeCapability) {
       return
     }
-    const model = getCommitMessageModel(activeSpec.id, newModelId)
+    const model = activeCapability.models.find((m) => m.id === newModelId)
     if (!model) {
       return
     }
     const nextSelectedModelByAgent = {
       ...config.selectedModelByAgent,
-      [activeSpec.id]: model.id
+      [activeCapability.id]: model.id
     }
     const nextSelectedThinkingByModel = { ...config.selectedThinkingByModel }
     if (
@@ -278,16 +273,13 @@ export function CommitMessageAiPane({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {agentIds.map((id) => {
-              const spec = COMMIT_MESSAGE_AGENT_SPECS[id]
-              if (!spec) {
-                return null
-              }
+            {agentCapabilities.map((capability) => {
+              const id = capability.id
               return (
                 <SelectItem key={id} value={id} className="cursor-pointer">
                   <span className="flex items-center gap-2">
                     <AgentIcon agent={id} size={14} />
-                    <span>{agentLabel(id, spec)}</span>
+                    <span>{agentLabel(id, capability)}</span>
                   </span>
                 </SelectItem>
               )
@@ -353,7 +345,7 @@ export function CommitMessageAiPane({
 
   if (
     config.enabled &&
-    activeSpec &&
+    activeCapability &&
     activeModel &&
     matchesSettingsSearch(searchQuery, {
       title: 'Model',
@@ -381,7 +373,7 @@ export function CommitMessageAiPane({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {activeSpec.models.map((m) => (
+            {activeCapability.models.map((m) => (
               <SelectItem key={m.id} value={m.id} className="cursor-pointer">
                 {m.label}
               </SelectItem>

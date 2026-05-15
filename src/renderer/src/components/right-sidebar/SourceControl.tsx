@@ -96,13 +96,8 @@ import type {
   GitConflictOperation,
   GitStatusEntry,
   GitUpstreamStatus,
-  PRInfo,
-  TuiAgent
+  PRInfo
 } from '../../../../shared/types'
-import {
-  getCommitMessageAgentSpec,
-  getCommitMessageModel
-} from '../../../../shared/commit-message-agent-spec'
 import { STATUS_COLORS, STATUS_LABELS } from './status-display'
 
 type SourceControlScope = 'all' | 'uncommitted'
@@ -622,10 +617,6 @@ function SourceControlInner(): React.JSX.Element {
       return
     }
 
-    let agentId: TuiAgent | 'custom'
-    let modelId = ''
-    let thinkingLevel: string | undefined
-    let customAgentCommand: string | undefined
     if (commitMessageAi.agentId === 'custom') {
       const command = commitMessageAi.customAgentCommand?.trim() ?? ''
       if (!command) {
@@ -636,32 +627,6 @@ function SourceControlInner(): React.JSX.Element {
         }))
         return
       }
-      agentId = 'custom'
-      customAgentCommand = command
-    } else {
-      const spec = getCommitMessageAgentSpec(commitMessageAi.agentId)
-      if (!spec) {
-        setGenerateErrors((prev) => ({
-          ...prev,
-          [activeWorktreeId]: `Agent "${commitMessageAi.agentId}" is no longer supported.`
-        }))
-        return
-      }
-      const persistedModelId =
-        commitMessageAi.selectedModelByAgent[commitMessageAi.agentId] ?? spec.defaultModelId
-      const model = getCommitMessageModel(commitMessageAi.agentId, persistedModelId)
-      if (!model) {
-        setGenerateErrors((prev) => ({
-          ...prev,
-          [activeWorktreeId]: `Model "${persistedModelId}" is no longer available for ${spec.label}.`
-        }))
-        return
-      }
-      thinkingLevel = model.thinkingLevels
-        ? (commitMessageAi.selectedThinkingByModel[model.id] ?? model.defaultThinkingLevel)
-        : undefined
-      agentId = commitMessageAi.agentId as TuiAgent
-      modelId = model.id
     }
 
     generateInFlightRef.current[activeWorktreeId] = true
@@ -671,14 +636,9 @@ function SourceControlInner(): React.JSX.Element {
     try {
       const result = (await window.api.git.generateCommitMessage({
         worktreePath,
-        agentId,
-        model: modelId,
-        thinkingLevel,
-        customPrompt: commitMessageAi.customPrompt,
-        customAgentCommand,
         connectionId
       })) as
-        | { success: true; message: string }
+        | { success: true; message: string; agentLabel?: string }
         | { success: false; error: string; canceled?: boolean }
 
       if (!result.success) {

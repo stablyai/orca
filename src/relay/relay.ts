@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 
+/* eslint-disable max-lines -- Why: the relay entrypoint owns process startup,
+   daemon reconnect, and handler registration. Splitting the orchestration
+   would hide the startup order, which is the important invariant here. */
+
 // Orca Relay — lightweight daemon deployed to remote hosts.
 // Communicates over stdin/stdout using the framed JSON-RPC protocol.
 // The Electron app (client) deploys this script via SCP and launches

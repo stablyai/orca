@@ -31,6 +31,20 @@ export type CommitMessageAgentSpec = {
   defaultModelId: string
 }
 
+export type CommitMessageModelCapability = {
+  id: string
+  label: string
+  thinkingLevels?: ThinkingLevel[]
+  defaultThinkingLevel?: string
+}
+
+export type CommitMessageAgentCapability = {
+  id: TuiAgent
+  label: string
+  models: CommitMessageModelCapability[]
+  defaultModelId: string
+}
+
 export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageAgentSpec>> = {
   claude: {
     id: 'claude',
@@ -86,13 +100,21 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     id: 'codex',
     label: 'Codex',
     binary: 'codex',
-    promptDelivery: 'argv',
-    buildArgs: ({ prompt, model, thinkingLevel }) => [
+    // Why: `codex exec` reads stdin when no prompt arg is supplied. Commit
+    // prompts include large staged diffs, so argv would exceed Windows and
+    // some SSH/POSIX command-line limits.
+    promptDelivery: 'stdin',
+    buildArgs: ({ model, thinkingLevel }) => [
       'exec',
+      // Why: commit-message generation needs text only, not a persisted agent
+      // session or workspace writes. Match T3 Code's safe git-text mode.
+      '--ephemeral',
+      '--skip-git-repo-check',
+      '-s',
+      'read-only',
       '--model',
       model,
-      ...(thinkingLevel ? ['-c', `model_reasoning_effort=${thinkingLevel}`] : []),
-      prompt
+      ...(thinkingLevel ? ['-c', `model_reasoning_effort=${thinkingLevel}`] : [])
     ],
     // Why: ordered to match the official `codex` model picker — descending
     // by version so the frontier model lands on top and legacy models trail.
@@ -199,7 +221,46 @@ export function getCommitMessageModel(
   return getCommitMessageAgentSpec(agentId)?.models.find((m) => m.id === modelId)
 }
 
+function toCommitMessageAgentCapability(
+  spec: CommitMessageAgentSpec
+): CommitMessageAgentCapability {
+  return {
+    id: spec.id,
+    label: spec.label,
+    defaultModelId: spec.defaultModelId,
+    // Why: renderer/settings should consume provider capabilities, not the
+    // spawn contract. Copy the model metadata so future dynamic probes can
+    // swap this source without leaking binary/argv details into UI code.
+    models: spec.models.map((model) => ({
+      id: model.id,
+      label: model.label,
+      ...(model.thinkingLevels ? { thinkingLevels: [...model.thinkingLevels] } : {}),
+      ...(model.defaultThinkingLevel ? { defaultThinkingLevel: model.defaultThinkingLevel } : {})
+    }))
+  }
+}
+
+export function getCommitMessageAgentCapability(
+  agentId: TuiAgent
+): CommitMessageAgentCapability | undefined {
+  const spec = getCommitMessageAgentSpec(agentId)
+  return spec ? toCommitMessageAgentCapability(spec) : undefined
+}
+
+export function getCommitMessageModelCapability(
+  agentId: TuiAgent,
+  modelId: string
+): CommitMessageModelCapability | undefined {
+  return getCommitMessageAgentCapability(agentId)?.models.find((m) => m.id === modelId)
+}
+
 /** Ordered list of agents that have a non-interactive mode wired up. */
 export function listCommitMessageAgentIds(): TuiAgent[] {
   return Object.keys(COMMIT_MESSAGE_AGENT_SPECS) as TuiAgent[]
+}
+
+export function listCommitMessageAgentCapabilities(): CommitMessageAgentCapability[] {
+  return listCommitMessageAgentIds()
+    .map((id) => getCommitMessageAgentCapability(id))
+    .filter((capability): capability is CommitMessageAgentCapability => Boolean(capability))
 }
