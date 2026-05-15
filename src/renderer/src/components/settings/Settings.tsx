@@ -558,7 +558,7 @@ function Settings(): React.JSX.Element {
       {
         id: 'stats',
         title: 'Stats & Usage',
-        description: 'Orca stats and Claude usage analytics.',
+        description: 'Orca stats plus Claude and Codex usage analytics.',
         icon: BarChart3,
         searchEntries: STATS_PANE_SEARCH_ENTRIES
       },

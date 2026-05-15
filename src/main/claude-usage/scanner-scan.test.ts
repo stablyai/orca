@@ -10,6 +10,7 @@ async function makeClaudeProjectsRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-claude-usage-'))
   tempRoots.push(root)
   await mkdir(join(root, '.claude', 'projects', 'project-a'), { recursive: true })
+  await mkdir(join(root, '.claude', 'transcripts'), { recursive: true })
   return root
 }
 
@@ -23,8 +24,10 @@ describe('scanClaudeUsageFiles', () => {
   it('scans transcript files from the configured Claude projects directory', async () => {
     const root = await makeClaudeProjectsRoot()
     const projectDir = join(root, '.claude', 'projects', 'project-a')
+    const transcriptsDir = join(root, '.claude', 'transcripts')
     const firstFile = join(projectDir, 'a.jsonl')
     const secondFile = join(projectDir, 'b.jsonl')
+    const transcriptFile = join(transcriptsDir, 'ses_123.jsonl')
 
     await writeFile(
       firstFile,
@@ -63,6 +66,22 @@ describe('scanClaudeUsageFiles', () => {
         }
       })
     )
+    await writeFile(
+      transcriptFile,
+      JSON.stringify({
+        type: 'assistant',
+        timestamp: '2026-04-11T10:00:00.000Z',
+        cwd: '/workspace/repo-a/packages/app',
+        message: {
+          model: 'claude-sonnet-4-6',
+          usage: {
+            input_tokens: 70,
+            output_tokens: 15,
+            cache_read_input_tokens: 20
+          }
+        }
+      })
+    )
 
     vi.resetModules()
     vi.doMock('os', async () => ({
@@ -82,10 +101,65 @@ describe('scanClaudeUsageFiles', () => {
 
     expect(result.processedFiles.map((file) => [file.path, file.lineCount])).toEqual([
       [firstFile, 2],
-      [secondFile, 1]
+      [secondFile, 1],
+      [transcriptFile, 1]
     ])
-    expect(result.sessions.map((session) => session.sessionId)).toEqual(['session-2', 'session-1'])
-    expect(result.dailyAggregates).toHaveLength(2)
+    expect(result.sessions.map((session) => session.sessionId)).toEqual([
+      'ses_123',
+      'session-2',
+      'session-1'
+    ])
+    expect(result.dailyAggregates).toHaveLength(3)
     expect(result.dailyAggregates[0]?.projectLabel).toBe('Repo A')
+    expect(result.dailyAggregates[2]?.projectLabel).toBe('Repo A')
+  })
+
+  it('reuses unchanged transcript projections from the previous scan', async () => {
+    const root = await makeClaudeProjectsRoot()
+    const projectDir = join(root, '.claude', 'projects', 'project-a')
+    const transcriptFile = join(projectDir, 'session-1.jsonl')
+
+    await writeFile(
+      transcriptFile,
+      JSON.stringify({
+        type: 'assistant',
+        sessionId: 'session-1',
+        timestamp: '2026-04-09T10:00:00.000Z',
+        cwd: '/workspace/repo-a',
+        message: {
+          model: 'claude-sonnet-4-6',
+          usage: {
+            input_tokens: 100,
+            output_tokens: 20
+          }
+        }
+      })
+    )
+
+    vi.resetModules()
+    vi.doMock('os', async () => ({
+      ...(await vi.importActual<typeof Os>('os')),
+      homedir: () => root
+    }))
+    const { scanClaudeUsageFiles } = await import('./scanner')
+    const worktrees = [
+      {
+        repoId: 'repo-1',
+        worktreeId: 'worktree-1',
+        path: '/workspace/repo-a',
+        displayName: 'Repo A'
+      }
+    ]
+
+    const first = await scanClaudeUsageFiles(worktrees)
+    const cachedFile = structuredClone(first.processedFiles[0]!)
+    cachedFile.sessions[0]!.totalInputTokens = 999
+    cachedFile.sessions[0]!.locationBreakdown[0]!.inputTokens = 999
+    cachedFile.dailyAggregates[0]!.inputTokens = 999
+
+    const second = await scanClaudeUsageFiles(worktrees, [cachedFile])
+
+    expect(second.processedFiles[0]?.sessions[0]?.totalInputTokens).toBe(999)
+    expect(second.dailyAggregates[0]?.inputTokens).toBe(999)
   })
 })
