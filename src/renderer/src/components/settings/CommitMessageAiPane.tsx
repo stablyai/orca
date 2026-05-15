@@ -2,8 +2,8 @@
    model dropdown, thinking effort dropdown, custom command, custom prompt) is
    a SearchableSetting block, and splitting the pane across files would scatter
    the ~6 conditional render branches without making any of them clearer. */
-import { useMemo } from 'react'
-import { Terminal } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { RefreshCw, Terminal } from 'lucide-react'
 import type { CommitMessageAiSettings, GlobalSettings, TuiAgent } from '../../../../shared/types'
 import {
   CUSTOM_AGENT_ID,
@@ -16,10 +16,16 @@ import {
   type CommitMessageModelCapability
 } from '../../../../shared/commit-message-agent-spec'
 import { CUSTOM_PROMPT_PLACEHOLDER } from '../../../../shared/commit-message-prompt'
+import {
+  getCommitMessageModelDiscoveryHostKey,
+  LOCAL_COMMIT_MESSAGE_HOST_KEY
+} from '../../../../shared/commit-message-host-key'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
+import { getConnectionId } from '@/lib/connection-context'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { useAppStore } from '../../store'
+import { useActiveWorktree } from '../../store/selectors'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 
@@ -32,9 +38,18 @@ const EMPTY_SETTINGS: CommitMessageAiSettings = {
   enabled: false,
   agentId: null,
   selectedModelByAgent: {},
+  discoveredModelsByAgent: {},
   selectedThinkingByModel: {},
   customPrompt: '',
   customAgentCommand: ''
+}
+
+type ModelDiscoveryState = {
+  status: 'idle' | 'loading' | 'ready' | 'error'
+  hostKey: string
+  models: CommitMessageModelCapability[]
+  defaultModelId?: string
+  error?: string
 }
 
 function readSettings(settings: GlobalSettings): CommitMessageAiSettings {
@@ -45,11 +60,23 @@ function agentLabel(agentId: TuiAgent, capability: CommitMessageAgentCapability)
   return AGENT_CATALOG.find((a) => a.id === agentId)?.label ?? capability.label
 }
 
+function readSelectedModelId(
+  config: CommitMessageAiSettings,
+  hostKey: string,
+  agentId: TuiAgent
+): string | undefined {
+  return (
+    config.selectedModelByAgentByHost?.[hostKey]?.[agentId] ??
+    (hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY ? config.selectedModelByAgent[agentId] : undefined)
+  )
+}
+
 function resolveSelectedModel(
   config: CommitMessageAiSettings,
-  capability: CommitMessageAgentCapability
+  capability: CommitMessageAgentCapability,
+  hostKey: string
 ): CommitMessageModelCapability {
-  const persisted = config.selectedModelByAgent[capability.id]
+  const persisted = readSelectedModelId(config, hostKey, capability.id)
   if (persisted) {
     const found = capability.models.find((m) => m.id === persisted)
     if (found) {
@@ -74,23 +101,235 @@ function resolveSelectedThinking(
   return model.defaultThinkingLevel
 }
 
+export function mergeDiscoveredModelsIntoCommitMessageConfig(
+  config: CommitMessageAiSettings,
+  agentId: TuiAgent,
+  models: CommitMessageModelCapability[],
+  defaultModelId: string,
+  hostKey = LOCAL_COMMIT_MESSAGE_HOST_KEY
+): CommitMessageAiSettings {
+  const hostSelectedModels = config.selectedModelByAgentByHost?.[hostKey] ?? {}
+  const persisted = readSelectedModelId(config, hostKey, agentId)
+  const nextModelId = models.some((model) => model.id === persisted) ? persisted : defaultModelId
+  const nextHostSelectedModels =
+    nextModelId && nextModelId !== persisted
+      ? {
+          ...hostSelectedModels,
+          [agentId]: nextModelId
+        }
+      : hostSelectedModels
+  const nextHostDiscoveredModels = {
+    ...config.discoveredModelsByAgentByHost?.[hostKey],
+    [agentId]: models
+  }
+  return {
+    ...config,
+    ...(hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY
+      ? {
+          discoveredModelsByAgent: {
+            ...config.discoveredModelsByAgent,
+            [agentId]: models
+          },
+          selectedModelByAgent:
+            nextModelId && nextModelId !== persisted
+              ? {
+                  ...config.selectedModelByAgent,
+                  [agentId]: nextModelId
+                }
+              : config.selectedModelByAgent
+        }
+      : {}),
+    discoveredModelsByAgentByHost: {
+      ...config.discoveredModelsByAgentByHost,
+      [hostKey]: nextHostDiscoveredModels
+    },
+    selectedModelByAgentByHost: {
+      ...config.selectedModelByAgentByHost,
+      [hostKey]: nextHostSelectedModels
+    }
+  }
+}
+
+function selectModelForHost(
+  config: CommitMessageAiSettings,
+  hostKey: string,
+  agentId: TuiAgent,
+  modelId: string
+): Pick<CommitMessageAiSettings, 'selectedModelByAgent' | 'selectedModelByAgentByHost'> {
+  const hostSelectedModels = config.selectedModelByAgentByHost?.[hostKey] ?? {}
+  return {
+    selectedModelByAgent:
+      hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY
+        ? {
+            ...config.selectedModelByAgent,
+            [agentId]: modelId
+          }
+        : config.selectedModelByAgent,
+    selectedModelByAgentByHost: {
+      ...config.selectedModelByAgentByHost,
+      [hostKey]: {
+        ...hostSelectedModels,
+        [agentId]: modelId
+      }
+    }
+  }
+}
+
 export function CommitMessageAiPane({
   settings,
   updateSettings
 }: CommitMessageAiPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const activeWorktree = useActiveWorktree()
+  const activeConnectionId = getConnectionId(activeWorktree?.id ?? null)
+  const discoveryHostKey = getCommitMessageModelDiscoveryHostKey(activeConnectionId)
   const config = readSettings(settings)
+  const latestConfigRef = useRef(config)
+  latestConfigRef.current = config
+  const [modelDiscoveryByAgent, setModelDiscoveryByAgent] = useState<
+    Partial<Record<TuiAgent, ModelDiscoveryState>>
+  >({})
 
-  const agentCapabilities = useMemo(listCommitMessageAgentCapabilities, [])
+  const baseAgentCapabilities = useMemo(listCommitMessageAgentCapabilities, [])
+  const agentCapabilities = useMemo(
+    () =>
+      baseAgentCapabilities.map((capability) => {
+        const discovery = modelDiscoveryByAgent[capability.id]
+        if (
+          capability.modelSource !== 'dynamic' ||
+          discovery?.status !== 'ready' ||
+          discovery.hostKey !== discoveryHostKey
+        ) {
+          return capability
+        }
+        return {
+          ...capability,
+          models: discovery.models,
+          defaultModelId: discovery.defaultModelId ?? capability.defaultModelId
+        }
+      }),
+    [baseAgentCapabilities, discoveryHostKey, modelDiscoveryByAgent]
+  )
   const activeAgentId: CommitMessageAgentChoice = config.agentId ?? DEFAULT_COMMIT_MESSAGE_AGENT_ID
   const isCustom = isCustomAgentId(activeAgentId)
-  const activeCapability = isCustom ? undefined : getCommitMessageAgentCapability(activeAgentId)
-  const activeModel = activeCapability ? resolveSelectedModel(config, activeCapability) : null
+  const activeCapability = isCustom
+    ? undefined
+    : (agentCapabilities.find((capability) => capability.id === activeAgentId) ??
+      getCommitMessageAgentCapability(activeAgentId))
+  const activeModel = activeCapability
+    ? resolveSelectedModel(config, activeCapability, discoveryHostKey)
+    : null
   const activeThinking = activeModel ? resolveSelectedThinking(config, activeModel) : undefined
+  const rawActiveDiscovery = !isCustom ? modelDiscoveryByAgent[activeAgentId] : undefined
+  const activeDiscovery =
+    rawActiveDiscovery?.hostKey === discoveryHostKey ? rawActiveDiscovery : undefined
 
   const writeConfig = (patch: Partial<CommitMessageAiSettings>): void => {
     updateSettings({ commitMessageAi: { ...config, ...patch } })
   }
+
+  const refreshModels = async (agentId: TuiAgent): Promise<void> => {
+    const capability =
+      agentCapabilities.find((candidate) => candidate.id === agentId) ??
+      getCommitMessageAgentCapability(agentId)
+    if (!capability || capability.modelSource !== 'dynamic') {
+      return
+    }
+    setModelDiscoveryByAgent((prev) => ({
+      ...prev,
+      [agentId]: {
+        status: 'loading',
+        hostKey: discoveryHostKey,
+        models:
+          prev[agentId]?.hostKey === discoveryHostKey
+            ? (prev[agentId]?.models ?? capability.models)
+            : capability.models
+      }
+    }))
+    try {
+      const result = await window.api.git.discoverCommitMessageModels({
+        agentId,
+        ...(activeWorktree?.path ? { worktreePath: activeWorktree.path } : {}),
+        ...(activeConnectionId ? { connectionId: activeConnectionId } : {})
+      })
+      if (!result.success) {
+        setModelDiscoveryByAgent((prev) => ({
+          ...prev,
+          [agentId]: {
+            status: 'error',
+            hostKey: discoveryHostKey,
+            models:
+              prev[agentId]?.hostKey === discoveryHostKey
+                ? (prev[agentId]?.models ?? capability.models)
+                : capability.models,
+            error: result.error
+          }
+        }))
+        return
+      }
+      setModelDiscoveryByAgent((prev) => ({
+        ...prev,
+        [agentId]: {
+          status: 'ready',
+          hostKey: discoveryHostKey,
+          models: result.models,
+          defaultModelId: result.defaultModelId
+        }
+      }))
+      const latestConfig = latestConfigRef.current
+      updateSettings({
+        commitMessageAi: mergeDiscoveredModelsIntoCommitMessageConfig(
+          latestConfig,
+          agentId,
+          result.models,
+          result.defaultModelId,
+          discoveryHostKey
+        )
+      })
+    } catch (error) {
+      setModelDiscoveryByAgent((prev) => ({
+        ...prev,
+        [agentId]: {
+          status: 'error',
+          hostKey: discoveryHostKey,
+          models:
+            prev[agentId]?.hostKey === discoveryHostKey
+              ? (prev[agentId]?.models ?? capability.models)
+              : capability.models,
+          error: error instanceof Error ? error.message : 'Failed to discover models'
+        }
+      }))
+    }
+  }
+
+  useEffect(() => {
+    if (
+      !config.enabled ||
+      isCustom ||
+      !activeCapability ||
+      activeCapability.modelSource !== 'dynamic'
+    ) {
+      return
+    }
+    const discovery = modelDiscoveryByAgent[activeCapability.id]
+    if (
+      discovery?.hostKey === discoveryHostKey &&
+      (discovery.status === 'loading' || discovery.status === 'ready')
+    ) {
+      return
+    }
+    void refreshModels(activeCapability.id)
+    // Why: auto-refresh should run once when a dynamic agent becomes active.
+    // Including the discovery map would retry immediately after an error and
+    // turn a visible CLI failure into a request loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    activeCapability?.id,
+    activeCapability?.modelSource,
+    config.enabled,
+    discoveryHostKey,
+    isCustom
+  ])
 
   const onToggleEnabled = (): void => {
     const next = !config.enabled
@@ -107,13 +346,23 @@ export function CommitMessageAiPane({
     const seedCapability = isCustomAgentId(seedAgentId)
       ? undefined
       : getCommitMessageAgentCapability(seedAgentId)
-    const seedModel = seedCapability ? resolveSelectedModel(config, seedCapability) : null
+    const seedModel = seedCapability
+      ? resolveSelectedModel(config, seedCapability, discoveryHostKey)
+      : null
     const seedThinking = seedModel ? resolveSelectedThinking(config, seedModel) : undefined
 
-    const nextSelectedModelByAgent = { ...config.selectedModelByAgent }
-    if (seedCapability && !nextSelectedModelByAgent[seedCapability.id]) {
-      nextSelectedModelByAgent[seedCapability.id] = seedCapability.defaultModelId
-    }
+    const selectedModelPatch = seedCapability
+      ? selectModelForHost(
+          config,
+          discoveryHostKey,
+          seedCapability.id,
+          readSelectedModelId(config, discoveryHostKey, seedCapability.id) ??
+            seedCapability.defaultModelId
+        )
+      : {
+          selectedModelByAgent: config.selectedModelByAgent,
+          selectedModelByAgentByHost: config.selectedModelByAgentByHost
+        }
     const nextSelectedThinkingByModel = { ...config.selectedThinkingByModel }
     if (seedModel && seedThinking && !nextSelectedThinkingByModel[seedModel.id]) {
       nextSelectedThinkingByModel[seedModel.id] = seedThinking
@@ -121,7 +370,7 @@ export function CommitMessageAiPane({
     writeConfig({
       enabled: true,
       agentId: seedAgentId,
-      selectedModelByAgent: nextSelectedModelByAgent,
+      ...selectedModelPatch,
       selectedThinkingByModel: nextSelectedThinkingByModel
     })
   }
@@ -135,11 +384,17 @@ export function CommitMessageAiPane({
     if (!capability) {
       return
     }
-    const nextSelectedModelByAgent = { ...config.selectedModelByAgent }
-    if (!nextSelectedModelByAgent[capability.id]) {
-      nextSelectedModelByAgent[capability.id] = capability.defaultModelId
-    }
-    const newModel = resolveSelectedModel({ ...config, agentId: capability.id }, capability)
+    const selectedModelPatch = selectModelForHost(
+      config,
+      discoveryHostKey,
+      capability.id,
+      readSelectedModelId(config, discoveryHostKey, capability.id) ?? capability.defaultModelId
+    )
+    const newModel = resolveSelectedModel(
+      { ...config, ...selectedModelPatch, agentId: capability.id },
+      capability,
+      discoveryHostKey
+    )
     const nextSelectedThinkingByModel = { ...config.selectedThinkingByModel }
     if (
       newModel.thinkingLevels &&
@@ -150,7 +405,7 @@ export function CommitMessageAiPane({
     }
     writeConfig({
       agentId: capability.id,
-      selectedModelByAgent: nextSelectedModelByAgent,
+      ...selectedModelPatch,
       selectedThinkingByModel: nextSelectedThinkingByModel
     })
   }
@@ -167,10 +422,12 @@ export function CommitMessageAiPane({
     if (!model) {
       return
     }
-    const nextSelectedModelByAgent = {
-      ...config.selectedModelByAgent,
-      [activeCapability.id]: model.id
-    }
+    const selectedModelPatch = selectModelForHost(
+      config,
+      discoveryHostKey,
+      activeCapability.id,
+      model.id
+    )
     const nextSelectedThinkingByModel = { ...config.selectedThinkingByModel }
     if (
       model.thinkingLevels &&
@@ -180,7 +437,7 @@ export function CommitMessageAiPane({
       nextSelectedThinkingByModel[model.id] = model.defaultThinkingLevel
     }
     writeConfig({
-      selectedModelByAgent: nextSelectedModelByAgent,
+      ...selectedModelPatch,
       selectedThinkingByModel: nextSelectedThinkingByModel
     })
   }
@@ -249,7 +506,7 @@ export function CommitMessageAiPane({
     matchesSettingsSearch(searchQuery, {
       title: 'Agent',
       description: 'Which agent to invoke when generating a commit message.',
-      keywords: ['agent', 'claude', 'codex']
+      keywords: ['agent', 'claude', 'codex', 'opencode', 'gemini', 'cursor', 'droid']
     })
   ) {
     sections.push(
@@ -257,7 +514,7 @@ export function CommitMessageAiPane({
         key="agent"
         title="Agent"
         description="Which agent to invoke when generating a commit message."
-        keywords={['agent', 'claude', 'codex']}
+        keywords={['agent', 'claude', 'codex', 'opencode', 'gemini', 'cursor', 'droid']}
         className="flex items-center justify-between gap-4 px-1 py-2"
       >
         <div className="space-y-0.5">
@@ -364,22 +621,42 @@ export function CommitMessageAiPane({
         <div className="space-y-0.5">
           <Label>Model</Label>
           <p className="text-xs text-muted-foreground">
-            Smaller models default to lower latency and cost. Pick a larger one if the diffs you
-            review tend to need more reasoning.
+            {activeCapability.modelSource === 'dynamic'
+              ? 'Refreshes from the selected CLI when the CLI exposes model discovery.'
+              : 'This agent does not expose model discovery, so Orca uses a manual catalog.'}
           </p>
+          {activeDiscovery?.status === 'error' && (
+            <p className="text-xs text-destructive">{activeDiscovery.error}</p>
+          )}
         </div>
-        <Select value={activeModel.id} onValueChange={onModelChange}>
-          <SelectTrigger size="sm" className="h-8 text-xs w-[200px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {activeCapability.models.map((m) => (
-              <SelectItem key={m.id} value={m.id} className="cursor-pointer">
-                {m.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          {activeCapability.modelSource === 'dynamic' && (
+            <button
+              type="button"
+              onClick={() => void refreshModels(activeCapability.id)}
+              disabled={activeDiscovery?.status === 'loading'}
+              title="Refresh models"
+              aria-label="Refresh models"
+              className="inline-flex size-8 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RefreshCw
+                className={`size-3.5 ${activeDiscovery?.status === 'loading' ? 'animate-spin' : ''}`}
+              />
+            </button>
+          )}
+          <Select value={activeModel.id} onValueChange={onModelChange}>
+            <SelectTrigger size="sm" className="h-8 text-xs w-[240px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {activeCapability.models.map((m) => (
+                <SelectItem key={m.id} value={m.id} className="cursor-pointer">
+                  {m.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </SearchableSetting>
     )
   }

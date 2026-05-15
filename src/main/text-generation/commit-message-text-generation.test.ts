@@ -7,6 +7,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import {
   applyOrcaAttribution,
+  discoverCommitMessageModelsLocal,
+  discoverCommitMessageModelsRemote,
   generateCommitMessageFromContext,
   resolveCommitMessageSettings
 } from './commit-message-text-generation'
@@ -36,7 +38,7 @@ beforeEach(() => {
 })
 
 describe('resolveCommitMessageSettings', () => {
-  it('falls back to the agent default model when a persisted model is stale', () => {
+  it('falls back when a dynamic persisted model was not discovered', () => {
     const settings = getDefaultSettings('/tmp')
     settings.enableGitHubAttribution = true
     settings.commitMessageAi = {
@@ -58,6 +60,66 @@ describe('resolveCommitMessageSettings', () => {
         thinkingLevel: 'low',
         customPrompt: 'Use Conventional Commits.',
         attributionEnabled: true
+      }
+    })
+  })
+
+  it('preserves dynamic persisted models that were discovered by the CLI', () => {
+    const settings = getDefaultSettings('/tmp')
+    settings.commitMessageAi = {
+      enabled: true,
+      agentId: 'droid',
+      selectedModelByAgent: { droid: 'gpt-5.2' },
+      discoveredModelsByAgent: {
+        droid: [
+          {
+            id: 'gpt-5.2',
+            label: 'GPT 5.2',
+            thinkingLevels: [{ id: 'xhigh', label: 'Extra High' }],
+            defaultThinkingLevel: 'xhigh'
+          }
+        ]
+      },
+      selectedThinkingByModel: { 'gpt-5.2': 'xhigh' },
+      customPrompt: '',
+      customAgentCommand: ''
+    }
+
+    const result = resolveCommitMessageSettings(settings)
+
+    expect(result).toMatchObject({
+      ok: true,
+      params: {
+        agentId: 'droid',
+        model: 'gpt-5.2',
+        thinkingLevel: 'xhigh'
+      }
+    })
+  })
+
+  it('uses host-scoped discovered models for SSH worktrees', () => {
+    const settings = getDefaultSettings('/tmp')
+    settings.commitMessageAi = {
+      enabled: true,
+      agentId: 'cursor',
+      selectedModelByAgent: { cursor: 'auto' },
+      selectedModelByAgentByHost: { 'ssh:conn-1': { cursor: 'remote-only' } },
+      discoveredModelsByAgent: { cursor: [{ id: 'auto', label: 'Auto' }] },
+      discoveredModelsByAgentByHost: {
+        'ssh:conn-1': { cursor: [{ id: 'remote-only', label: 'Remote Only' }] }
+      },
+      selectedThinkingByModel: {},
+      customPrompt: '',
+      customAgentCommand: ''
+    }
+
+    const result = resolveCommitMessageSettings(settings, 'ssh:conn-1')
+
+    expect(result).toMatchObject({
+      ok: true,
+      params: {
+        agentId: 'cursor',
+        model: 'remote-only'
       }
     })
   })
@@ -108,6 +170,29 @@ describe('resolveCommitMessageSettings', () => {
     })
   })
 
+  it('falls back when persisted thinking belongs to an undiscovered dynamic model', () => {
+    const settings = getDefaultSettings('/tmp')
+    settings.commitMessageAi = {
+      enabled: true,
+      agentId: 'droid',
+      selectedModelByAgent: { droid: 'gpt-5.2' },
+      selectedThinkingByModel: { 'gpt-5.2': 'xhigh' },
+      customPrompt: '',
+      customAgentCommand: ''
+    }
+
+    const result = resolveCommitMessageSettings(settings)
+
+    expect(result).toMatchObject({
+      ok: true,
+      params: {
+        agentId: 'droid',
+        model: 'claude-opus-4-5-20251101',
+        thinkingLevel: 'off'
+      }
+    })
+  })
+
   it('requires a non-empty custom command for custom agents', () => {
     const settings = getDefaultSettings('/tmp')
     settings.commitMessageAi = {
@@ -126,7 +211,129 @@ describe('resolveCommitMessageSettings', () => {
   })
 })
 
+describe('discoverCommitMessageModelsLocal', () => {
+  it('returns static catalog models without spawning for static agents', async () => {
+    const result = await discoverCommitMessageModelsLocal('gemini', undefined)
+
+    expect(result).toMatchObject({
+      success: true,
+      defaultModelId: 'gemini-3-pro-preview'
+    })
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
+  it('discovers dynamic models through the agent CLI', async () => {
+    const listeners = new Map<string, (value: unknown) => void>()
+    const child = {
+      pid: 123,
+      kill: vi.fn(),
+      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
+      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+      stdin: { end: vi.fn() },
+      on: vi.fn((event, callback) => listeners.set(event, callback))
+    }
+    spawnMock.mockReturnValue(child as never)
+
+    const pending = discoverCommitMessageModelsLocal('cursor', undefined)
+
+    listeners.get('stdout:data')?.(Buffer.from('auto - Auto\ngpt-5.2 - GPT-5.2\n'))
+    listeners.get('close')?.(0)
+
+    await expect(pending).resolves.toMatchObject({
+      success: true,
+      defaultModelId: 'auto',
+      models: [
+        { id: 'auto', label: 'Auto' },
+        { id: 'gpt-5.2', label: 'GPT-5.2' }
+      ]
+    })
+    expect(spawnMock).toHaveBeenCalledWith(
+      'cursor-agent',
+      ['--list-models'],
+      expect.objectContaining({ windowsHide: true })
+    )
+  })
+
+  it('discovers dynamic models through the configured agent command override', async () => {
+    const listeners = new Map<string, (value: unknown) => void>()
+    const child = {
+      pid: 123,
+      kill: vi.fn(),
+      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
+      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+      stdin: { end: vi.fn() },
+      on: vi.fn((event, callback) => listeners.set(event, callback))
+    }
+    spawnMock.mockReturnValue(child as never)
+
+    const pending = discoverCommitMessageModelsLocal('cursor', undefined, 'npx cursor-agent')
+
+    listeners.get('stdout:data')?.(Buffer.from('auto - Auto\n'))
+    listeners.get('close')?.(0)
+
+    await expect(pending).resolves.toMatchObject({
+      success: true,
+      defaultModelId: 'auto'
+    })
+    expect(spawnMock).toHaveBeenCalledWith(
+      'npx',
+      ['cursor-agent', '--list-models'],
+      expect.objectContaining({ windowsHide: true })
+    )
+  })
+})
+
 describe('generateCommitMessageFromContext', () => {
+  it('discovers dynamic models through a remote execution plan', async () => {
+    const execute = vi.fn(async (plan, cwd, timeoutMs) => {
+      expect(plan).toEqual({
+        binary: 'npx',
+        args: ['cursor-agent', '--list-models'],
+        stdinPayload: null,
+        label: 'Cursor'
+      })
+      expect(cwd).toBe('/remote/repo')
+      expect(timeoutMs).toBe(60_000)
+      return {
+        stdout: 'auto - Auto\ngpt-5.2 - GPT-5.2\n',
+        stderr: '',
+        exitCode: 0,
+        timedOut: false
+      }
+    })
+
+    const result = await discoverCommitMessageModelsRemote(
+      'cursor',
+      '/remote/repo',
+      execute,
+      'npx cursor-agent'
+    )
+
+    expect(result).toMatchObject({
+      success: true,
+      defaultModelId: 'auto',
+      models: [
+        { id: 'auto', label: 'Auto' },
+        { id: 'gpt-5.2', label: 'GPT-5.2' }
+      ]
+    })
+  })
+
+  it('reports remote model discovery spawn failures with remote install guidance', async () => {
+    const result = await discoverCommitMessageModelsRemote('cursor', '/remote/repo', async () => ({
+      stdout: '',
+      stderr: '',
+      exitCode: null,
+      timedOut: false,
+      spawnError: 'ENOENT'
+    }))
+
+    expect(result).toEqual({
+      success: false,
+      error: 'cursor-agent not found on the remote PATH. Install Cursor there.'
+    })
+  })
+
   it('uses a prepared remote execution plan instead of running git on the remote side', async () => {
     const result = await generateCommitMessageFromContext(
       {
@@ -218,6 +425,37 @@ describe('generateCommitMessageFromContext', () => {
           stdout: 'ERROR: fatal: /secret/repo/config failed',
           stderr: '',
           exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error: 'agent failed. Check the agent CLI configuration and try again.'
+    })
+  })
+
+  it('treats empty stdout plus an error on stderr as an agent failure', async () => {
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr: '\u001b[91m\u001b[1mError: \u001b[0mNo payment method',
+          exitCode: 0,
           timedOut: false
         })
       }

@@ -16,9 +16,72 @@ describe('planCommitMessageGeneration', () => {
       ok: true,
       plan: {
         binary: 'claude',
-        args: ['-p', '--output-format', 'text', '--model', 'claude-sonnet-4-6', '--effort', 'high'],
+        args: [
+          '-p',
+          '--output-format',
+          'text',
+          '--model',
+          'claude-sonnet-4-6',
+          '--permission-mode',
+          'plan',
+          '--effort',
+          'high'
+        ],
         stdinPayload: 'PROMPT',
         label: 'Claude'
+      }
+    })
+  })
+
+  it('plans OpenCode run with prompt in argv and model variant', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'opencode',
+        model: 'opencode/gpt-5.4-mini',
+        thinkingLevel: 'high'
+      },
+      'PROMPT'
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'opencode',
+        args: [
+          'run',
+          '--model',
+          'opencode/gpt-5.4-mini',
+          '--agent',
+          'build',
+          '--format',
+          'default',
+          '--variant',
+          'high',
+          'PROMPT'
+        ],
+        stdinPayload: null,
+        label: 'OpenCode'
+      }
+    })
+  })
+
+  it('allows discovered dynamic models that are not in the seed catalog', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'droid',
+        model: 'gpt-5.2',
+        thinkingLevel: 'xhigh'
+      },
+      'PROMPT'
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'droid',
+        args: ['exec', '--model', 'gpt-5.2', '--reasoning-effort', 'xhigh'],
+        stdinPayload: 'PROMPT',
+        label: 'Droid'
       }
     })
   })

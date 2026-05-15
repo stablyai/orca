@@ -9,33 +9,50 @@ import {
   getCommitMessageModel,
   isCustomAgentId,
   listCommitMessageAgentCapabilities,
-  listCommitMessageAgentIds
+  listCommitMessageAgentIds,
+  parseCodexModels,
+  parseCursorModels,
+  parseDroidModels,
+  parseLineModels,
+  parsePiModels
 } from './commit-message-agent-spec'
 
 describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
-  it('exposes Claude and Codex as the v1 agents', () => {
+  it('exposes the installed local agents as commit-message agents', () => {
     const ids = listCommitMessageAgentIds().sort()
-    expect(ids).toEqual(['claude', 'codex'])
+    expect(ids).toEqual([
+      'amp',
+      'claude',
+      'codex',
+      'copilot',
+      'cursor',
+      'droid',
+      'gemini',
+      'kimi',
+      'opencode',
+      'pi'
+    ])
   })
 
   it('uses the smallest model as the default for each agent', () => {
     expect(COMMIT_MESSAGE_AGENT_SPECS.claude?.defaultModelId).toBe('claude-haiku-4-5')
     expect(COMMIT_MESSAGE_AGENT_SPECS.codex?.defaultModelId).toBe('gpt-5.4-mini')
+    expect(COMMIT_MESSAGE_AGENT_SPECS.pi?.defaultModelId).toBe('github-copilot/gpt-5.4-mini')
   })
 
   it('defaults the agent picker to Claude', () => {
     expect(DEFAULT_COMMIT_MESSAGE_AGENT_ID).toBe('claude')
   })
 
-  it('defaults every model with thinking levels to "low"', () => {
+  it('gives every model with thinking levels a valid default', () => {
     for (const spec of Object.values(COMMIT_MESSAGE_AGENT_SPECS)) {
       if (!spec) {
         continue
       }
       for (const model of spec.models) {
         if (model.thinkingLevels) {
-          expect(model.defaultThinkingLevel).toBe('low')
-          expect(model.thinkingLevels.some((l) => l.id === 'low')).toBe(true)
+          expect(model.defaultThinkingLevel).toBeDefined()
+          expect(model.thinkingLevels.some((l) => l.id === model.defaultThinkingLevel)).toBe(true)
         }
       }
     }
@@ -81,11 +98,12 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
 
   it('exposes UI capabilities without spawn details', () => {
     const capabilities = listCommitMessageAgentCapabilities()
-    expect(capabilities.map((capability) => capability.id).sort()).toEqual(['claude', 'codex'])
+    expect(capabilities.map((capability) => capability.id)).toContain('opencode')
     const codex = getCommitMessageAgentCapability('codex')
     expect(codex).toMatchObject({
       id: 'codex',
       label: 'Codex',
+      modelSource: 'dynamic',
       defaultModelId: 'gpt-5.4-mini'
     })
     expect(codex).not.toHaveProperty('binary')
@@ -99,7 +117,15 @@ describe('buildArgs (Claude)', () => {
 
   it('passes -p, output format, and model on every call', () => {
     const args = spec.buildArgs({ prompt: '', model: 'claude-haiku-4-5' })
-    expect(args).toEqual(['-p', '--output-format', 'text', '--model', 'claude-haiku-4-5'])
+    expect(args).toEqual([
+      '-p',
+      '--output-format',
+      'text',
+      '--model',
+      'claude-haiku-4-5',
+      '--permission-mode',
+      'plan'
+    ])
   })
 
   it('appends --effort when a thinking level is supplied', () => {
@@ -114,6 +140,8 @@ describe('buildArgs (Claude)', () => {
       'text',
       '--model',
       'claude-sonnet-4-6',
+      '--permission-mode',
+      'plan',
       '--effort',
       'high'
     ])
@@ -122,6 +150,124 @@ describe('buildArgs (Claude)', () => {
   it('omits --effort when thinkingLevel is not provided', () => {
     const args = spec.buildArgs({ prompt: '', model: 'claude-opus-4-7' })
     expect(args).not.toContain('--effort')
+  })
+})
+
+describe('model discovery parsers', () => {
+  it('parses Codex model JSON', () => {
+    expect(
+      parseCodexModels(
+        JSON.stringify({
+          models: [
+            {
+              slug: 'gpt-5.5',
+              display_name: 'GPT-5.5',
+              default_reasoning_level: 'low',
+              supported_reasoning_levels: [{ effort: 'low' }, { effort: 'high' }]
+            }
+          ]
+        })
+      )
+    ).toEqual([
+      {
+        id: 'gpt-5.5',
+        label: 'GPT-5.5',
+        thinkingLevels: [
+          { id: 'low', label: 'Low' },
+          { id: 'high', label: 'High' }
+        ],
+        defaultThinkingLevel: 'low'
+      }
+    ])
+  })
+
+  it('parses one-model-per-line output', () => {
+    expect(parseLineModels('opencode/gpt-5.4-mini\n\nopenai/gpt-5.5\n').map((m) => m.id)).toEqual([
+      'opencode/gpt-5.4-mini',
+      'openai/gpt-5.5'
+    ])
+  })
+
+  it('parses Pi model table output with provider-qualified ids', () => {
+    const output = [
+      'provider        model                   context  max-out  thinking  images',
+      'github-copilot  gpt-5.4-mini            400K     128K     yes       yes',
+      'github-copilot  gpt-4o                  128K     4.1K     no        yes'
+    ].join('\n')
+
+    expect(parsePiModels(output)).toEqual([
+      {
+        id: 'github-copilot/gpt-5.4-mini',
+        label: 'Github Copilot GPT 5.4 Mini',
+        thinkingLevels: [
+          { id: 'off', label: 'Off' },
+          { id: 'low', label: 'Low' },
+          { id: 'medium', label: 'Medium' },
+          { id: 'high', label: 'High' },
+          { id: 'xhigh', label: 'Extra High' }
+        ],
+        defaultThinkingLevel: 'low'
+      },
+      {
+        id: 'github-copilot/gpt-4o',
+        label: 'Github Copilot GPT 4O'
+      }
+    ])
+  })
+
+  it('parses Cursor model output', () => {
+    expect(parseCursorModels('auto - Auto\ngpt-5.2 - GPT-5.2\n')).toEqual([
+      { id: 'auto', label: 'Auto' },
+      {
+        id: 'gpt-5.2',
+        label: 'GPT-5.2',
+        thinkingLevels: [
+          { id: 'low', label: 'Low' },
+          { id: 'medium', label: 'Medium' },
+          { id: 'high', label: 'High' },
+          { id: 'xhigh', label: 'Extra High' }
+        ],
+        defaultThinkingLevel: 'low'
+      }
+    ])
+  })
+
+  it('parses Droid help models and reasoning levels', () => {
+    const output = `
+Available Models:
+  gpt-5.2                      GPT-5.2
+  claude-opus-4-5-20251101     Claude Opus 4.5 (default)
+
+Model details:
+  - GPT-5.2: supports reasoning: Yes; supported: [off, low, medium, high, xhigh]; default: low
+  - Claude Opus 4.5: supports reasoning: Yes; supported: [off, low, medium, high]; default: off
+`
+
+    expect(parseDroidModels(output)).toEqual([
+      {
+        id: 'gpt-5.2',
+        label: 'GPT-5.2',
+        thinkingLevels: [
+          { id: 'off', label: 'Off' },
+          { id: 'low', label: 'Low' },
+          { id: 'medium', label: 'Medium' },
+          { id: 'high', label: 'High' },
+          { id: 'xhigh', label: 'Extra High' }
+        ],
+        defaultThinkingLevel: 'low'
+      },
+      {
+        id: 'claude-opus-4-5-20251101',
+        label: 'Claude Opus 4.5',
+        thinkingLevels: [
+          { id: 'off', label: 'Off' },
+          { id: 'low', label: 'Low' },
+          { id: 'medium', label: 'Medium' },
+          { id: 'high', label: 'High' }
+        ],
+        defaultThinkingLevel: 'off'
+      }
+    ])
   })
 })
 

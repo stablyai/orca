@@ -273,6 +273,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
       enabled: false,
       agentId: null,
       selectedModelByAgent: {},
+      discoveredModelsByAgent: {},
+      selectedModelByAgentByHost: {},
+      discoveredModelsByAgentByHost: {},
       selectedThinkingByModel: {},
       customPrompt: '',
       customAgentCommand: ''
