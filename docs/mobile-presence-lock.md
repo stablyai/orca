@@ -558,21 +558,32 @@ if (
 }
 ```
 
-### Banner copy
+### Overlay copy
 
-```
-🔒 Mobile is driving this terminal — your input is paused. [ Take back ]
-```
+The lock UI is a full-pane overlay (not a thin banner) so users cannot
+miss it. The driving state can be collapsed to a corner chip while the
+session is being watched; the held-fit state stays loud because there is
+no live output to monitor (see `MobileDriverOverlay.tsx`).
 
-When PTY is at phone dims, append the dim suffix:
-```
-🔒 Mobile is driving this terminal (80×24) — your input is paused. [ Take back ]
-```
+Driving state, expanded:
+- Eyebrow: `Mobile is driving this terminal`
+- Title: `Your keyboard is paused`
+- Body: `Output below is being typed from your phone. Take back to resume typing on the desktop, or collapse to keep watching.`
+- Buttons: `Collapse`, `Take back`
 
-The phrasing makes Take back the discoverable resolution. There is no
-auto-unlock-on-WS-silence and no liveness probing; the banner stays up
-until the desktop user takes back, until mobile actor sends input (which
-keeps mobile as driver), or until the last mobile subscriber disconnects.
+Driving state, collapsed (corner chip): `● Mobile driving [ Take back ]`.
+Clicking the label re-expands.
+
+Held-at-phone-fit (no active mobile subscriber, PTY still at phone dims):
+- Eyebrow: `Held at phone size`
+- Title: `This terminal is sized for your mobile app`
+- Body: `The session is still being held at the dimensions your phone last reported. Restore to use it on your desktop.`
+- Button: `Restore desktop size`
+
+There is no auto-unlock-on-WS-silence and no liveness probing; the overlay
+stays up until the desktop user takes back / restores, until mobile actor
+sends input (which keeps mobile as driver), or until the last mobile
+subscriber disconnects.
 
 ## Edge cases
 
