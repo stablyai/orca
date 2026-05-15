@@ -10,6 +10,7 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { MarkdownViewMode } from '@/store/slices/editor'
 
 // Why: 'changes' is not a MarkdownViewMode in the store — it lives on the
@@ -82,39 +83,48 @@ export default function EditorViewToggle({
   metadataOverride
 }: EditorViewToggleProps): React.JSX.Element {
   return (
-    <ToggleGroup
-      type="single"
-      size="sm"
-      className="h-6 [&_[data-slot=toggle-group-item]]:h-7 [&_[data-slot=toggle-group-item]]:min-w-5 [&_[data-slot=toggle-group-item]]:px-2.5"
-      variant="outline"
-      value={value}
-      onValueChange={(v) => {
-        if (v) {
-          onChange(v as EditorToggleValue)
-        }
-      }}
-    >
-      {modes.map((viewMode) => {
-        // Why: metadataOverride is keyed by MarkdownViewMode (source/rich/preview)
-        // because only those slots have language-specific presentation variants
-        // (e.g. CSV's "Table" label on the 'rich' slot). 'edit'/'changes' are
-        // orthogonal toggle values and always use the default metadata.
-        const override = (
-          metadataOverride as Partial<Record<EditorToggleValue, ViewModeMetadata>> | undefined
-        )?.[viewMode]
-        const metadata = override ?? DEFAULT_VIEW_MODE_METADATA[viewMode]
-        const Icon = metadata.icon
-        return (
-          <ToggleGroupItem
-            key={viewMode}
-            value={viewMode}
-            aria-label={metadata.label}
-            title={metadata.title ?? metadata.label}
-          >
-            <Icon className="h-3 w-3" />
-          </ToggleGroupItem>
-        )
-      })}
-    </ToggleGroup>
+    <TooltipProvider delayDuration={300}>
+      <ToggleGroup
+        type="single"
+        size="sm"
+        className="h-6 [&_[data-slot=toggle-group-item]]:h-7 [&_[data-slot=toggle-group-item]]:min-w-5 [&_[data-slot=toggle-group-item]]:px-2.5"
+        variant="outline"
+        value={value}
+        onValueChange={(v) => {
+          if (v) {
+            onChange(v as EditorToggleValue)
+          }
+        }}
+      >
+        {modes.map((viewMode) => {
+          // Why: metadataOverride is keyed by MarkdownViewMode (source/rich/preview)
+          // because only those slots have language-specific presentation variants
+          // (e.g. CSV's "Table" label on the 'rich' slot). 'edit'/'changes' are
+          // orthogonal toggle values and always use the default metadata.
+          const override = (
+            metadataOverride as Partial<Record<EditorToggleValue, ViewModeMetadata>> | undefined
+          )?.[viewMode]
+          const metadata = override ?? DEFAULT_VIEW_MODE_METADATA[viewMode]
+          const Icon = metadata.icon
+          const tooltipLabel = metadata.title ?? metadata.label
+          return (
+            <Tooltip key={viewMode}>
+              <TooltipTrigger asChild>
+                <ToggleGroupItem
+                  value={viewMode}
+                  aria-label={metadata.label}
+                  className="data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:shadow-xs data-[state=on]:hover:bg-primary/90 data-[state=on]:hover:text-primary-foreground"
+                >
+                  <Icon className="h-3 w-3" />
+                </ToggleGroupItem>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {tooltipLabel}
+              </TooltipContent>
+            </Tooltip>
+          )
+        })}
+      </ToggleGroup>
+    </TooltipProvider>
   )
 }

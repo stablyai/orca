@@ -5,6 +5,17 @@
   padding: 24px 32px;
   font-size: inherit;
   line-height: 1.7;
+  min-width: 0;
+  flex: 1;
+}
+
+.markdown-preview-shell {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  height: 100%;
+  min-width: 0;
+  container-type: inline-size;
 }
 
 .markdown-preview:focus-visible {
@@ -79,6 +90,113 @@
 .markdown-preview-search-button:hover:not(:disabled) {
   background: var(--accent);
   color: var(--foreground);
+}
+
+.markdown-toc-panel {
+  display: flex;
+  width: 240px;
+  min-width: 200px;
+  max-width: 30%;
+  flex-shrink: 0;
+  flex-direction: column;
+  border-left: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--background) 88%, var(--editor-surface));
+}
+
+.markdown-toc-header {
+  display: flex;
+  min-height: 40px;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  padding: 0 10px 0 12px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.markdown-toc-header > svg,
+.markdown-toc-header > button {
+  flex-shrink: 0;
+}
+
+.markdown-toc-header > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.markdown-toc-list {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.markdown-toc-row {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding-top: 6px;
+  padding-right: 8px;
+  padding-bottom: 6px;
+  color: var(--foreground);
+  font-size: 12px;
+  line-height: 1.25;
+  text-align: left;
+}
+
+.markdown-toc-row:hover {
+  background: var(--accent);
+}
+
+.markdown-toc-level {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.markdown-toc-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.markdown-toc-empty {
+  padding: 8px 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .markdown-toc-panel {
+    width: 200px;
+    max-width: 42%;
+  }
+}
+
+@container (max-width: 560px) {
+  .markdown-toc-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    width: min(240px, 72cqw);
+    min-width: 0;
+    max-width: calc(100cqw - 44px);
+    box-shadow: -10px 0 24px rgb(0 0 0 / 0.14);
+  }
 }
 
 .markdown-preview-search-match {
