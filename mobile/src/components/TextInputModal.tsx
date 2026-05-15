@@ -1,5 +1,13 @@
 import { useState, useEffect } from 'react'
-import { View, Text, TextInput, Pressable, StyleSheet, Platform } from 'react-native'
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  StyleSheet,
+  Platform,
+  type KeyboardTypeOptions
+} from 'react-native'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
 
@@ -9,6 +17,9 @@ type Props = {
   message?: string
   defaultValue?: string
   placeholder?: string
+  submitLabel?: string
+  selectTextOnFocus?: boolean
+  keyboardType?: KeyboardTypeOptions
   onSubmit: (value: string) => void
   onCancel: () => void
 }
@@ -19,6 +30,9 @@ export function TextInputModal({
   message,
   defaultValue = '',
   placeholder,
+  submitLabel = 'Save',
+  selectTextOnFocus = false,
+  keyboardType,
   onSubmit,
   onCancel
 }: Props) {
@@ -50,6 +64,8 @@ export function TextInputModal({
         autoFocus
         autoCapitalize="none"
         autoCorrect={false}
+        selectTextOnFocus={selectTextOnFocus}
+        keyboardType={keyboardType}
         returnKeyType="done"
         onSubmitEditing={handleSubmit}
         selectionColor={colors.accentBlue}
@@ -71,7 +87,7 @@ export function TextInputModal({
           disabled={!value.trim()}
           onPress={handleSubmit}
         >
-          <Text style={styles.submitText}>Save</Text>
+          <Text style={styles.submitText}>{submitLabel}</Text>
         </Pressable>
       </View>
     </BottomDrawer>

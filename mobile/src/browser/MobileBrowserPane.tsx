@@ -73,6 +73,9 @@ type FrameGeometry = {
 type StreamViewport = {
   width: number
   height: number
+  viewportWidth: number
+  viewportHeight: number
+  deviceScaleFactor: number
 }
 
 type ZoomState = {
@@ -123,7 +126,7 @@ export function MobileBrowserPane({
   bottomInset,
   onToast
 }: MobileBrowserPaneProps) {
-  const [addressValue, setAddressValue] = useState(tab.url || 'about:blank')
+  const [addressValue, setAddressValue] = useState(displayMobileBrowserUrl(tab.url))
   const [addressFocused, setAddressFocused] = useState(false)
   const [keyboardValue, setKeyboardValue] = useState('')
   const [frameUri, setFrameUri] = useState<string | null>(null)
@@ -133,7 +136,6 @@ export function MobileBrowserPane({
   const [error, setError] = useState<string | null>(null)
   const [rotated, setRotated] = useState(false)
   const [zoom, setZoom] = useState<ZoomState>(DEFAULT_ZOOM)
-  const [visibleFrameLayer, setVisibleFrameLayer] = useState<FrameLayer>(0)
   const [layout, setLayout] = useState<ViewportLayout | null>(null)
   const [appActive, setAppActive] = useState(AppState.currentState === 'active')
   const streamGenerationRef = useRef(0)
@@ -142,6 +144,7 @@ export function MobileBrowserPane({
   const frameUriRef = useRef<string | null>(null)
   const frameMountedRef = useRef(false)
   const browserImageRefs = useRef<[Image | null, Image | null]>([null, null])
+  const browserLayerRefs = useRef<[View | null, View | null]>([null, null])
   const pendingFrameLayerRef = useRef<FrameLayer | null>(null)
   const visibleFrameLayerRef = useRef<FrameLayer>(0)
   const readyRef = useRef(false)
@@ -186,7 +189,7 @@ export function MobileBrowserPane({
 
   useEffect(() => {
     if (!addressFocused) {
-      setAddressValue(tab.url || 'about:blank')
+      setAddressValue(displayMobileBrowserUrl(tab.url))
     }
   }, [addressFocused, tab.url])
 
@@ -264,8 +267,8 @@ export function MobileBrowserPane({
     frameMountedRef.current = false
     pendingFrameLayerRef.current = null
     visibleFrameLayerRef.current = 0
+    updateBrowserLayerVisibility(browserLayerRefs.current, 0)
     setFrameUri(null)
-    setVisibleFrameLayer(0)
     setFrameMetadata(null)
     frameMetadataRef.current = null
     lastAppliedFrameAtRef.current = 0
@@ -314,6 +317,9 @@ export function MobileBrowserPane({
         quality: BROWSER_FRAME_QUALITY,
         maxWidth: streamViewport.width,
         maxHeight: streamViewport.height,
+        viewportWidth: streamViewport.viewportWidth,
+        viewportHeight: streamViewport.viewportHeight,
+        deviceScaleFactor: streamViewport.deviceScaleFactor,
         everyNthFrame: BROWSER_FRAME_EVERY_NTH_FRAME,
         minFrameIntervalMs: BROWSER_FRAME_MIN_INTERVAL_MS
       },
@@ -336,7 +342,7 @@ export function MobileBrowserPane({
             setBusy(false)
           }
           if (typeof event.tab?.url === 'string') {
-            setAddressValue(event.tab.url)
+            setAddressValue(displayMobileBrowserUrl(event.tab.url))
             if (event.tab.url !== lastZoomResetUrlRef.current) {
               lastZoomResetUrlRef.current = event.tab.url
               resetZoomState()
@@ -454,7 +460,7 @@ export function MobileBrowserPane({
       { showBusy: true, timeoutMs: 30_000 }
     )) as { url?: string } | null
     if (typeof result?.url === 'string') {
-      setAddressValue(result.url)
+      setAddressValue(displayMobileBrowserUrl(result.url))
       lastZoomResetUrlRef.current = result.url
       resetZoomState()
     }
@@ -468,7 +474,21 @@ export function MobileBrowserPane({
       }
       const clickResult = await sendBrowserRequest(
         'browser.mouseClick',
-        { x: point.x, y: point.y, button },
+        {
+          x: point.x,
+          y: point.y,
+          button,
+          ...(button === 'left'
+            ? {
+                radius: computeTouchClickRadiusCss(
+                  layoutRef.current,
+                  frameMetadataRef.current,
+                  rotatedRef.current,
+                  zoomRef.current
+                )
+              }
+            : {})
+        },
         { suppressError: true, timeoutMs: 5_000 }
       )
       if (clickResult !== null) {
@@ -775,6 +795,18 @@ export function MobileBrowserPane({
       updateBrowserImageSource(image, currentFrameUri)
     }
   }, [])
+  const setBrowserLayerRef = useCallback((layer: FrameLayer, view: View | null) => {
+    browserLayerRefs.current[layer] = view
+    updateBrowserLayerVisibility(browserLayerRefs.current, visibleFrameLayerRef.current)
+  }, [])
+  const setBrowserLayer0Ref = useCallback(
+    (view: View | null) => setBrowserLayerRef(0, view),
+    [setBrowserLayerRef]
+  )
+  const setBrowserLayer1Ref = useCallback(
+    (view: View | null) => setBrowserLayerRef(1, view),
+    [setBrowserLayerRef]
+  )
   const setBrowserImageLayer0Ref = useCallback(
     (image: Image | null) => setBrowserImageRef(0, image),
     [setBrowserImageRef]
@@ -790,7 +822,7 @@ export function MobileBrowserPane({
     }
     pendingFrameLayerRef.current = null
     visibleFrameLayerRef.current = layer
-    setVisibleFrameLayer(layer)
+    updateBrowserLayerVisibility(browserLayerRefs.current, layer)
   }, [])
   const handleBrowserImageLayer0Load = useCallback(
     () => handleBrowserImageLoad(0),
@@ -816,12 +848,15 @@ export function MobileBrowserPane({
 
   const controlsDisabled = !client || !tab.browserPageId || screencastSupported !== true
   const initialFrameSource = useMemo(() => (frameUri ? { uri: frameUri } : null), [frameUri])
-  const frameLayerStyle = useCallback(
-    (layer: FrameLayer) => [
+  const frameLayerStyle = useCallback((layer: FrameLayer) => {
+    return [
       styles.browserImageLayer,
-      visibleFrameLayer !== layer && styles.browserImageLayerHidden
-    ],
-    [visibleFrameLayer]
+      visibleFrameLayerRef.current !== layer && styles.browserImageLayerHidden
+    ]
+  }, [])
+  const browserLayerRef = useCallback(
+    (layer: FrameLayer) => (layer === 0 ? setBrowserLayer0Ref : setBrowserLayer1Ref),
+    [setBrowserLayer0Ref, setBrowserLayer1Ref]
   )
   const frameLayerRef = useCallback(
     (layer: FrameLayer) => (layer === 0 ? setBrowserImageLayer0Ref : setBrowserImageLayer1Ref),
@@ -908,7 +943,12 @@ export function MobileBrowserPane({
                   ]}
                 >
                   {([0, 1] as const).map((layer) => (
-                    <View key={layer} pointerEvents="none" style={frameLayerStyle(layer)}>
+                    <View
+                      key={layer}
+                      ref={browserLayerRef(layer)}
+                      pointerEvents="none"
+                      style={frameLayerStyle(layer)}
+                    >
                       <Image
                         ref={frameLayerRef(layer)}
                         source={initialFrameSource}
@@ -941,7 +981,12 @@ export function MobileBrowserPane({
               </View>
             ) : (
               ([0, 1] as const).map((layer) => (
-                <View key={layer} pointerEvents="none" style={frameLayerStyle(layer)}>
+                <View
+                  key={layer}
+                  ref={browserLayerRef(layer)}
+                  pointerEvents="none"
+                  style={frameLayerStyle(layer)}
+                >
                   <Image
                     ref={frameLayerRef(layer)}
                     source={initialFrameSource}
@@ -1054,6 +1099,15 @@ function createBrowserFrameDataUri(frame: BrowserScreencastFrame): string {
   return `data:image/${frame.format};base64,${Buffer.from(frame.image).toString('base64')}`
 }
 
+function updateBrowserLayerVisibility(
+  layers: [View | null, View | null],
+  visible: FrameLayer
+): void {
+  for (const [index, layer] of layers.entries()) {
+    layer?.setNativeProps({ style: { opacity: index === visible ? 1 : 0 } })
+  }
+}
+
 function updateBrowserImageSource(image: Image | null, uri: string): void {
   // Why: browser frames are large strings; mutating only the native Image
   // source avoids re-rendering the whole tab view for every streamed frame.
@@ -1072,7 +1126,7 @@ function assertRpcOk(
 
 function normalizeMobileBrowserUrl(value: string): string | null {
   const trimmed = value.trim()
-  if (!trimmed || trimmed === 'about:blank') {
+  if (!trimmed || isBlankMobileBrowserUrl(trimmed)) {
     return 'about:blank'
   }
   try {
@@ -1089,6 +1143,15 @@ function normalizeMobileBrowserUrl(value: string): string | null {
       return null
     }
   }
+}
+
+function displayMobileBrowserUrl(value: string | null | undefined): string {
+  const trimmed = value?.trim() ?? ''
+  return isBlankMobileBrowserUrl(trimmed) ? 'about:blank' : trimmed
+}
+
+function isBlankMobileBrowserUrl(value: string): boolean {
+  return !value || value === 'about:blank' || value.startsWith('data:text/html')
 }
 
 function getPositiveFiniteNumber(value: unknown): number | null {
@@ -1116,11 +1179,24 @@ function computeStreamViewport(
   // Why: React Native layout is in density-independent points; requesting
   // point-sized frames makes desktop pages unreadably soft on high-DPI phones.
   const streamScale = clamp(PixelRatio.get(), 1, BROWSER_MAX_STREAM_SCALE)
-  const width = (rotated ? layout.height : layout.width) * streamScale
-  const height = (rotated ? layout.width : layout.height) * streamScale
+  const viewportWidth = rotated ? layout.height : layout.width
+  const viewportHeight = rotated ? layout.width : layout.height
+  const width = viewportWidth * streamScale
+  const height = viewportHeight * streamScale
   return {
     width: clamp(Math.round(width), BROWSER_MIN_VIEWPORT_WIDTH, BROWSER_MAX_VIEWPORT_WIDTH),
-    height: clamp(Math.round(height), BROWSER_MIN_VIEWPORT_HEIGHT, BROWSER_MAX_VIEWPORT_HEIGHT)
+    height: clamp(Math.round(height), BROWSER_MIN_VIEWPORT_HEIGHT, BROWSER_MAX_VIEWPORT_HEIGHT),
+    viewportWidth: clamp(
+      Math.round(viewportWidth),
+      BROWSER_MIN_VIEWPORT_WIDTH,
+      BROWSER_MAX_VIEWPORT_WIDTH
+    ),
+    viewportHeight: clamp(
+      Math.round(viewportHeight),
+      BROWSER_MIN_VIEWPORT_HEIGHT,
+      BROWSER_MAX_VIEWPORT_HEIGHT
+    ),
+    deviceScaleFactor: streamScale
   }
 }
 
@@ -1165,6 +1241,22 @@ function shouldSurfaceBrowserError(message: string): boolean {
   // Why: selector_not_found can be emitted by in-flight page automation while
   // the browser is still usable; replacing the frame with it feels like a crash.
   return !normalized.includes('selector_not_found') && !normalized.includes('selector not found')
+}
+
+function computeTouchClickRadiusCss(
+  layout: ViewportLayout | null,
+  metadata: BrowserScreencastFrameMetadata | null,
+  rotated: boolean,
+  zoom: ZoomState
+): number {
+  const geometry = computeFrameGeometry(layout, metadata, rotated)
+  const scale = geometry ? geometry.scale * zoom.scale : 1
+  if (!Number.isFinite(scale) || scale <= 0) {
+    return 10
+  }
+  // Why: phone taps are finger-sized while CDP clicks are pixel exact. Convert a
+  // small screen radius back into page CSS pixels so tiny links remain hittable.
+  return clamp(Math.round(10 / scale), 4, 24)
 }
 
 function screenToFrameLocal(
@@ -1339,15 +1431,15 @@ const styles = StyleSheet.create({
   addressInput: {
     flex: 1,
     minWidth: 0,
-    height: 36,
+    height: 38,
     borderRadius: radii.input,
     backgroundColor: colors.bgRaised,
     color: colors.textPrimary,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 0,
+    paddingVertical: Platform.OS === 'ios' ? 0 : 2,
     fontSize: 14,
-    lineHeight: 19,
-    includeFontPadding: false,
+    lineHeight: 20,
+    includeFontPadding: true,
     textAlignVertical: 'center',
     fontFamily: typography.monoFamily
   },

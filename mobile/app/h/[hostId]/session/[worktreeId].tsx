@@ -29,9 +29,11 @@ import {
   Globe2,
   Mic,
   Monitor,
+  PanelTop,
   Plus,
   RefreshCw,
-  Smartphone
+  Smartphone,
+  SquareTerminal
 } from 'lucide-react-native'
 import type { RpcClient } from '../../../../src/transport/rpc-client'
 import { loadHosts } from '../../../../src/transport/host-store'
@@ -180,6 +182,52 @@ function getActiveTabIdForHandle(
         tab.type === 'terminal' && tab.terminal === terminalHandle
     )?.id ?? terminalHandle
   )
+}
+
+function isBlankBrowserUrl(value: string | null | undefined): boolean {
+  const trimmed = value?.trim() ?? ''
+  return !trimmed || trimmed === 'about:blank' || trimmed.startsWith('data:text/html')
+}
+
+function getMobileSessionTabTitle(tab: MobileSessionTab): string {
+  if (tab.type === 'browser') {
+    const title = tab.title.trim()
+    if (title && !isBlankBrowserUrl(title)) {
+      return title
+    }
+    if (isBlankBrowserUrl(tab.url)) {
+      return 'New Browser'
+    }
+    return 'Browser'
+  }
+  if (tab.type === 'markdown') {
+    return tab.title || 'Markdown'
+  }
+  if (tab.type === 'file') {
+    return tab.title || 'File'
+  }
+  return tab.title || 'Terminal'
+}
+
+function normalizeCreateBrowserUrl(value: string): string | null {
+  const trimmed = value.trim()
+  if (isBlankBrowserUrl(trimmed)) {
+    return 'about:blank'
+  }
+  try {
+    const parsed = new URL(trimmed)
+    return parsed.protocol === 'http:' ||
+      parsed.protocol === 'https:' ||
+      parsed.protocol === 'file:'
+      ? parsed.toString()
+      : null
+  } catch {
+    try {
+      return new URL(`https://${trimmed}`).toString()
+    } catch {
+      return null
+    }
+  }
 }
 
 type TerminalCreateResult = {
@@ -512,6 +560,8 @@ export default function SessionScreen() {
   const [creating, setCreating] = useState(false)
   const [creatingBrowser, setCreatingBrowser] = useState(false)
   const [createError, setCreateError] = useState('')
+  const [showCreateTabDrawer, setShowCreateTabDrawer] = useState(false)
+  const [showCreateBrowserModal, setShowCreateBrowserModal] = useState(false)
   const [actionTarget, setActionTarget] = useState<Terminal | null>(null)
   const [markdownActionTarget, setMarkdownActionTarget] = useState<Extract<
     MobileSessionTab,
@@ -2336,11 +2386,18 @@ export default function SessionScreen() {
     }
   }
 
-  async function handleCreateBrowser() {
-    if (!client || creatingBrowser) return
+  async function handleCreateBrowser(rawUrl = 'about:blank'): Promise<boolean> {
+    if (!client || creatingBrowser) return false
     if (browserScreencastSupported !== true) {
       showToast('Desktop update required for mobile browser streaming', 1600)
-      return
+      return false
+    }
+    const url = normalizeCreateBrowserUrl(rawUrl)
+    if (!url) {
+      const message = 'Enter a valid URL'
+      setCreateError(message)
+      showToast(message, 1400)
+      return false
     }
 
     setCreatingBrowser(true)
@@ -2350,7 +2407,7 @@ export default function SessionScreen() {
         'browser.tabCreate',
         {
           worktree: `id:${worktreeId}`,
-          url: 'about:blank'
+          url
         },
         { timeoutMs: 30_000 }
       )
@@ -2358,10 +2415,12 @@ export default function SessionScreen() {
         throw new Error((response as RpcFailure).error.message)
       }
       setTimeout(() => void fetchSessionTabs(), 300)
+      return true
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create browser'
       setCreateError(message)
       showToast(message, 1800)
+      return false
     } finally {
       setCreatingBrowser(false)
     }
@@ -2625,7 +2684,7 @@ export default function SessionScreen() {
                   >
                     <View style={styles.tabLabelRow}>
                       {t.type === 'browser' && (
-                        <Globe2 size={13} color={colors.textSecondary} strokeWidth={2.1} />
+                        <PanelTop size={13} color={colors.textSecondary} strokeWidth={2.1} />
                       )}
                       {t.type === 'markdown' && (
                         <FileText size={13} color={colors.textSecondary} strokeWidth={2.1} />
@@ -2640,7 +2699,7 @@ export default function SessionScreen() {
                         ]}
                         numberOfLines={1}
                       >
-                        {t.title || (t.type === 'browser' ? 'Browser' : 'Terminal')}
+                        {getMobileSessionTabTitle(t)}
                       </Text>
                     </View>
                   </Pressable>
@@ -2649,32 +2708,17 @@ export default function SessionScreen() {
                   style={({ pressed }) => [
                     styles.newTerminalButton,
                     pressed && styles.newTerminalButtonPressed,
-                    (creating || connState !== 'connected') && styles.newTerminalButtonDisabled
-                  ]}
-                  disabled={creating || connState !== 'connected'}
-                  onPress={() => void handleCreateTerminal()}
-                  accessibilityLabel="New terminal"
-                >
-                  <Plus size={16} color={colors.textSecondary} strokeWidth={2.2} />
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.newTerminalButton,
-                    pressed && styles.newTerminalButtonPressed,
-                    (creatingBrowser ||
-                      connState !== 'connected' ||
-                      browserScreencastSupported !== true) &&
+                    (creating || creatingBrowser || connState !== 'connected') &&
                       styles.newTerminalButtonDisabled
                   ]}
-                  disabled={
-                    creatingBrowser ||
-                    connState !== 'connected' ||
-                    browserScreencastSupported !== true
-                  }
-                  onPress={() => void handleCreateBrowser()}
-                  accessibilityLabel="New browser"
+                  disabled={creating || creatingBrowser || connState !== 'connected'}
+                  onPress={() => {
+                    setCreateError('')
+                    setShowCreateTabDrawer(true)
+                  }}
+                  accessibilityLabel="New tab"
                 >
-                  <Globe2 size={15} color={colors.textSecondary} strokeWidth={2.2} />
+                  <Plus size={16} color={colors.textSecondary} strokeWidth={2.2} />
                 </Pressable>
               </ScrollView>
             </View>
@@ -2691,25 +2735,19 @@ export default function SessionScreen() {
             {createError ? <Text style={styles.createError}>{createError}</Text> : null}
             <View style={styles.emptyActions}>
               <Pressable
-                style={[styles.createButton, creating && styles.createButtonDisabled]}
-                disabled={creating}
-                onPress={() => void handleCreateTerminal()}
-              >
-                <Text style={styles.createButtonText}>
-                  {creating ? 'Creating…' : 'Create Terminal'}
-                </Text>
-              </Pressable>
-              <Pressable
                 style={[
                   styles.createButton,
-                  (creatingBrowser || browserScreencastSupported !== true) &&
+                  (creating || creatingBrowser || connState !== 'connected') &&
                     styles.createButtonDisabled
                 ]}
-                disabled={creatingBrowser || browserScreencastSupported !== true}
-                onPress={() => void handleCreateBrowser()}
+                disabled={creating || creatingBrowser || connState !== 'connected'}
+                onPress={() => {
+                  setCreateError('')
+                  setShowCreateTabDrawer(true)
+                }}
               >
                 <Text style={styles.createButtonText}>
-                  {creatingBrowser ? 'Creating…' : 'Create Browser'}
+                  {creating || creatingBrowser ? 'Creating…' : 'Create Tab'}
                 </Text>
               </Pressable>
             </View>
@@ -3000,6 +3038,34 @@ export default function SessionScreen() {
       </View>
 
       <ActionSheetModal
+        visible={showCreateTabDrawer}
+        title="New Tab"
+        actions={[
+          {
+            label: 'Terminal',
+            icon: SquareTerminal,
+            onPress: () => {
+              setShowCreateTabDrawer(false)
+              void handleCreateTerminal()
+            }
+          },
+          {
+            label: 'Browser',
+            icon: PanelTop,
+            onPress: () => {
+              setShowCreateTabDrawer(false)
+              if (browserScreencastSupported !== true) {
+                showToast('Desktop update required for mobile browser streaming', 1600)
+                return
+              }
+              setShowCreateBrowserModal(true)
+            }
+          }
+        ]}
+        onClose={() => setShowCreateTabDrawer(false)}
+      />
+
+      <ActionSheetModal
         visible={actionTarget != null}
         title={actionTarget?.title || 'Terminal'}
         actions={[
@@ -3125,7 +3191,7 @@ export default function SessionScreen() {
       />
       <ActionSheetModal
         visible={browserActionTarget != null}
-        title={browserActionTarget?.title || 'Browser'}
+        title={browserActionTarget ? getMobileSessionTabTitle(browserActionTarget) : 'Browser'}
         actions={[
           ...(browserActionTarget?.canGoBack
             ? [
@@ -3233,6 +3299,24 @@ export default function SessionScreen() {
         placeholder="Terminal name"
         onSubmit={(value) => void handleRenameTerminal(value)}
         onCancel={() => setRenameTarget(null)}
+      />
+      <TextInputModal
+        visible={showCreateBrowserModal}
+        title="New Browser"
+        message="Enter a URL or leave about:blank."
+        defaultValue="about:blank"
+        placeholder="https://example.com"
+        submitLabel="Open"
+        selectTextOnFocus
+        keyboardType={Platform.OS === 'ios' ? 'url' : 'default'}
+        onSubmit={(value) => {
+          void handleCreateBrowser(value).then((created) => {
+            if (created) {
+              setShowCreateBrowserModal(false)
+            }
+          })
+        }}
+        onCancel={() => setShowCreateBrowserModal(false)}
       />
       <CustomKeyModal
         visible={showCustomKeyModal}

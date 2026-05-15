@@ -19,6 +19,7 @@ export type BrowserScreencastOptions = {
   maxHeight: number
   viewportWidth?: number
   viewportHeight?: number
+  deviceScaleFactor?: number
   everyNthFrame: number
   minFrameIntervalMs: number
   onFrame: (bytes: Uint8Array<ArrayBufferLike>) => void
@@ -46,6 +47,10 @@ function readFrameMetadata(raw: unknown): BrowserScreencastFrameMetadata {
 
 function positiveInteger(value: number | undefined): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.round(value) : null
+}
+
+function positiveNumber(value: number | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
 }
 
 async function sendDebuggerCommand(
@@ -184,6 +189,14 @@ export async function startBrowserScreencast(
       }
       const image = new Uint8Array(Buffer.from(data, 'base64'))
       const imageSize = readBrowserScreencastImageSize(image, options.format)
+      const viewportWidth = positiveInteger(options.viewportWidth)
+      const viewportHeight = positiveInteger(options.viewportHeight)
+      const metadata =
+        viewportWidth && viewportHeight
+          ? { deviceWidth: viewportWidth, deviceHeight: viewportHeight }
+          : imageSize
+            ? { deviceWidth: imageSize.width, deviceHeight: imageSize.height }
+            : {}
       lastFrameSentAt = Date.now()
       options.onFrame(
         encodeBrowserScreencastFrame({
@@ -192,9 +205,7 @@ export async function startBrowserScreencast(
           format: options.format,
           // Why: static pages may only produce this fallback capture. Without
           // dimensions, mobile clients stretch it to the phone aspect ratio.
-          metadata: imageSize
-            ? { deviceWidth: imageSize.width, deviceHeight: imageSize.height }
-            : {},
+          metadata,
           image
         })
       )
@@ -210,13 +221,14 @@ export async function startBrowserScreencast(
     await sendDebuggerCommand(dbg, 'Page.enable')
     const viewportWidth = positiveInteger(options.viewportWidth)
     const viewportHeight = positiveInteger(options.viewportHeight)
+    const deviceScaleFactor = positiveNumber(options.deviceScaleFactor) ?? 1
     if (viewportWidth && viewportHeight) {
       // Why: the first frame must use the same CSS viewport as the client pane,
       // otherwise the image is scaled and input coordinates land off target.
       await sendDebuggerCommand(dbg, 'Emulation.setDeviceMetricsOverride', {
         width: viewportWidth,
         height: viewportHeight,
-        deviceScaleFactor: 1,
+        deviceScaleFactor,
         mobile: false
       })
       deviceMetricsOverridden = true

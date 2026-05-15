@@ -87,6 +87,7 @@ type BrowserScreencastParams = {
   maxHeight?: number
   viewportWidth?: number
   viewportHeight?: number
+  deviceScaleFactor?: number
   everyNthFrame?: number
   minFrameIntervalMs?: number
 } & BrowserCommandTargetParams
@@ -118,6 +119,17 @@ function clampOptionalInteger(
     return undefined
   }
   return Math.min(max, Math.max(min, Math.round(value)))
+}
+
+function clampOptionalNumber(
+  value: number | undefined,
+  min: number,
+  max: number
+): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined
+  }
+  return Math.min(max, Math.max(min, value))
 }
 
 export type RuntimeBrowserCommandHost = {
@@ -440,6 +452,7 @@ export class RuntimeBrowserCommands {
         maxHeight: clampInteger(params.maxHeight, 240, 2160, 1200),
         viewportWidth: clampOptionalInteger(params.viewportWidth, 320, 3840),
         viewportHeight: clampOptionalInteger(params.viewportHeight, 240, 2160),
+        deviceScaleFactor: clampOptionalNumber(params.deviceScaleFactor, 1, 4),
         everyNthFrame: clampInteger(params.everyNthFrame, 1, 10, 2),
         minFrameIntervalMs: clampInteger(params.minFrameIntervalMs, 0, 1000, 0),
         onFrame: stream.sendBinary
@@ -930,7 +943,7 @@ export class RuntimeBrowserCommands {
   }
 
   async browserMouseClick(
-    params: { x: number; y: number; button?: string } & BrowserCommandTargetParams
+    params: { x: number; y: number; button?: string; radius?: number } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
     return this.requireAgentBrowserBridge().mouseClick(
@@ -938,7 +951,8 @@ export class RuntimeBrowserCommands {
       params.y,
       params.button,
       target.worktreeId,
-      target.browserPageId
+      target.browserPageId,
+      clampOptionalNumber(params.radius, 0, 64)
     )
   }
 
