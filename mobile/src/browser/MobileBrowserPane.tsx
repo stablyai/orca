@@ -101,6 +101,8 @@ const LONG_PRESS_MS = 550
 const WHEEL_INTERVAL_MS = 70
 const BROWSER_FRAME_FORMAT = 'jpeg'
 const BROWSER_FRAME_QUALITY = 72
+const BROWSER_FRAME_EVERY_NTH_FRAME = 3
+const BROWSER_FRAME_MIN_INTERVAL_MS = 100
 const BROWSER_MIN_VIEWPORT_WIDTH = 320
 const BROWSER_MIN_VIEWPORT_HEIGHT = 240
 const BROWSER_MAX_VIEWPORT_WIDTH = 2400
@@ -134,6 +136,7 @@ export function MobileBrowserPane({
   const streamGenerationRef = useRef(0)
   const layoutRef = useRef<ViewportLayout | null>(null)
   const frameMetadataRef = useRef<BrowserScreencastFrameMetadata | null>(null)
+  const lastAppliedFrameAtRef = useRef(0)
   const rotatedRef = useRef(false)
   const startPointRef = useRef<{ x: number; y: number; t: number } | null>(null)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -209,7 +212,10 @@ export function MobileBrowserPane({
   }, [tab.browserPageId, worktreeId])
 
   const applyFrame = useCallback((frame: BrowserScreencastFrame): void => {
-    setFrameMetadata(frame.metadata)
+    if (!browserFrameMetadataEqual(frameMetadataRef.current, frame.metadata)) {
+      frameMetadataRef.current = frame.metadata
+      setFrameMetadata(frame.metadata)
+    }
     setFrameUri(`data:image/${frame.format};base64,${Buffer.from(frame.image).toString('base64')}`)
     setBusy(false)
     setReady(true)
@@ -227,6 +233,8 @@ export function MobileBrowserPane({
     const generation = streamGenerationRef.current
     setFrameUri(null)
     setFrameMetadata(null)
+    frameMetadataRef.current = null
+    lastAppliedFrameAtRef.current = 0
     setReady(false)
     setError(null)
     if (
@@ -267,7 +275,7 @@ export function MobileBrowserPane({
         quality: BROWSER_FRAME_QUALITY,
         maxWidth: streamViewport.width,
         maxHeight: streamViewport.height,
-        everyNthFrame: 1
+        everyNthFrame: BROWSER_FRAME_EVERY_NTH_FRAME
       },
       (payload) => {
         if (streamGenerationRef.current !== generation) return
@@ -306,6 +314,16 @@ export function MobileBrowserPane({
         onBinaryFrame: (frame) => {
           if (streamGenerationRef.current !== generation) return
           clearStartupTimer()
+          const now = Date.now()
+          // Why: each frame is a large base64 state update; applying every
+          // desktop screencast frame can starve tab switching on the phone.
+          if (
+            lastAppliedFrameAtRef.current > 0 &&
+            now - lastAppliedFrameAtRef.current < BROWSER_FRAME_MIN_INTERVAL_MS
+          ) {
+            return
+          }
+          lastAppliedFrameAtRef.current = now
           applyFrame(frame)
         }
       }
@@ -922,6 +940,17 @@ function normalizeMobileBrowserUrl(value: string): string | null {
 
 function getPositiveFiniteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
+}
+
+function browserFrameMetadataEqual(
+  a: BrowserScreencastFrameMetadata | null,
+  b: BrowserScreencastFrameMetadata
+): boolean {
+  return (
+    a?.deviceWidth === b.deviceWidth &&
+    a?.deviceHeight === b.deviceHeight &&
+    a?.pageScaleFactor === b.pageScaleFactor
+  )
 }
 
 function computeStreamViewport(

@@ -1284,26 +1284,33 @@ export default function SessionScreen() {
     return drafts
   }, [markdownDocs, sessionTabs])
 
+  const leaveSession = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back()
+      return
+    }
+    // Why: Android back can arrive when this session is the root route; using
+    // replace avoids React Navigation's dev-only unhandled GO_BACK warning.
+    router.replace(`/h/${hostId}`)
+  }, [hostId, router])
+
   const requestLeaveSession = useCallback(() => {
     const dirtyDrafts = getDirtyMarkdownDrafts()
     if (dirtyDrafts.length === 0) {
-      router.back()
+      leaveSession()
       return
     }
     Keyboard.dismiss()
     setLeaveDrafts(dirtyDrafts)
-  }, [getDirtyMarkdownDrafts, router])
+  }, [getDirtyMarkdownDrafts, leaveSession])
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (getDirtyMarkdownDrafts().length === 0) {
-        return false
-      }
       requestLeaveSession()
       return true
     })
     return () => subscription.remove()
-  }, [getDirtyMarkdownDrafts, requestLeaveSession])
+  }, [requestLeaveSession])
 
   const discardMarkdownLocalContent = useCallback(
     (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
@@ -3188,7 +3195,7 @@ export default function SessionScreen() {
               void Clipboard.setStringAsync(combined)
                 .then(() => {
                   setLeaveDrafts(null)
-                  router.back()
+                  leaveSession()
                 })
                 .catch(() => {
                   triggerError()
@@ -3201,7 +3208,7 @@ export default function SessionScreen() {
             destructive: true,
             onPress: () => {
               setLeaveDrafts(null)
-              router.back()
+              leaveSession()
             }
           }
         ]}
