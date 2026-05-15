@@ -179,6 +179,24 @@ describe('workspace cleanup scan', () => {
     })
   })
 
+  it('skips connected remote workspaces that fail during broad scans', async () => {
+    const provider = {
+      listWorktrees: vi.fn().mockRejectedValue(new Error('ssh timeout')),
+      getStatus: vi.fn()
+    }
+    getSshGitProviderMock.mockReturnValue(provider)
+
+    const result = await scanWorkspaceCleanup(
+      makeStore({
+        repos: [{ ...REPO, connectionId: 'ssh-1' }]
+      })
+    )
+
+    expect(provider.listWorktrees).toHaveBeenCalledWith('/repo')
+    expect(result.errors).toEqual([])
+    expect(result.candidates).toEqual([])
+  })
+
   it('filters out recent workspaces before running git status', async () => {
     const result = await scanWorkspaceCleanup(
       makeStore({

@@ -136,6 +136,11 @@ async function scanRepoWorkspaces(args: {
     }
   } catch (error) {
     console.error('Workspace cleanup repo scan failed', error)
+    if (repo.connectionId && !targetWorktreeId) {
+      // Why: broad cleanup only shows remote workspaces Orca can inspect now.
+      // A connected SSH repo that fails mid-scan is omitted, not bannered.
+      return { scannedAt, candidates: [], errors: [] }
+    }
     errors.push(createScanError(repo, toSafeRepoScanError(error)))
     return { scannedAt, candidates: [], errors }
   }
