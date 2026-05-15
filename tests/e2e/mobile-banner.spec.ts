@@ -7,8 +7,8 @@ import { waitForActivePanePtyId, waitForActiveTerminalManager } from './helpers/
 // docs/mobile-presence-lock.md). The original bug was that the prior banner
 // mounted but was visually unobtrusive enough that users missed it. Strong DOM
 // assertions guard the "doesn't mount / doesn't dismiss" regression class;
-// screenshots attached via testInfo.attach surface in the Playwright artifacts
-// upload so reviewers can eyeball the rendering on a failed run.
+// screenshots ride in the playwright-traces artifact upload so reviewers can
+// eyeball the rendering on a failed run.
 //
 // Drives the renderer by sending the same IPC events main fires in production
 // (runtime:terminalFitOverrideChanged, runtime:terminalDriverChanged — wired in
@@ -17,7 +17,7 @@ import { waitForActivePanePtyId, waitForActiveTerminalManager } from './helpers/
 
 test.describe.configure({ mode: 'serial' })
 
-test('mobile subscribe mounts overlay; Take back dismisses it', async ({
+test('mobile subscribe mounts overlay; collapse → chip; Take back dismisses', async ({
   orcaPage,
   electronApp
 }, testInfo) => {
@@ -27,70 +27,86 @@ test('mobile subscribe mounts overlay; Take back dismisses it', async ({
   await waitForActiveTerminalManager(orcaPage)
   const ptyId = await waitForActivePanePtyId(orcaPage)
 
-  // Baseline: clean terminal, no overlay.
   const overlay = orcaPage.locator('.mobile-driver-banner')
   await expect(overlay).toHaveCount(0)
-  await captureAttachment(orcaPage, testInfo, '01-desktop-clean.png')
 
   // Fire the IPC events main emits when a mobile client subscribes in 'auto'
   // mode (handleMobileSubscribe in src/main/runtime/orca-runtime.ts). The
   // renderer's listener calls setFitOverride + setDriverForPty, the banner
-  // observes the change, and MobileDriverOverlay mounts.
-  await electronApp.evaluate(
-    ({ BrowserWindow }, args) => {
-      const wins = BrowserWindow.getAllWindows()
-      for (const win of wins) {
-        win.webContents.send('runtime:terminalFitOverrideChanged', {
-          ptyId: args.ptyId,
-          mode: 'mobile-fit',
-          cols: args.cols,
-          rows: args.rows
-        })
-        win.webContents.send('runtime:terminalDriverChanged', {
-          ptyId: args.ptyId,
-          driver: { kind: 'mobile', clientId: 'fake-phone-1' }
-        })
-      }
-    },
-    { ptyId, cols: 45, rows: 20 }
-  )
+  // observes the change, and MobileDriverOverlay mounts in loud mode.
+  await sendMobileSubscribeIpc(electronApp, { ptyId, cols: 45, rows: 20 })
 
   await expect(overlay).toBeVisible({ timeout: 15_000 })
   await expect(overlay).toContainText(/mobile is driving this terminal/i)
   await expect(overlay).toContainText(/your keyboard is paused/i)
 
   const takeBack = overlay.getByRole('button', { name: /take back/i })
+  const collapse = overlay.getByRole('button', { name: /^collapse$/i })
   await expect(takeBack).toBeVisible()
+  await expect(collapse).toBeVisible()
 
-  await captureAttachment(orcaPage, testInfo, '02-mobile-driving.png')
+  await captureAttachment(orcaPage, testInfo, 'overlay-loud.png')
 
-  // Take back dismisses the overlay. The button calls runtime.restoreTerminalFit
-  // via IPC; main responds with desktop-fit + idle driver events that we mirror
-  // here so the renderer state lands on the take-back terminal state.
-  await takeBack.click()
-  await electronApp.evaluate(
-    ({ BrowserWindow }, args) => {
-      const wins = BrowserWindow.getAllWindows()
-      for (const win of wins) {
-        win.webContents.send('runtime:terminalFitOverrideChanged', {
-          ptyId: args.ptyId,
-          mode: 'desktop-fit',
-          cols: 0,
-          rows: 0
-        })
-        win.webContents.send('runtime:terminalDriverChanged', {
-          ptyId: args.ptyId,
-          driver: { kind: 'idle' }
-        })
-      }
-    },
-    { ptyId }
-  )
+  // Click Collapse → loud overlay swaps to the corner chip while the lock stays
+  // engaged. The user can keep watching live mobile output while the chip
+  // remains a one-click escape hatch back to desktop control.
+  await collapse.click()
+  await expect(overlay).toContainText(/mobile driving/i)
+  await expect(overlay.getByRole('button', { name: /take back/i })).toBeVisible()
+  await expect(overlay).not.toContainText(/your keyboard is paused/i)
 
+  await captureAttachment(orcaPage, testInfo, 'overlay-collapsed.png')
+
+  // Take back from the chip dismisses the overlay. The button calls
+  // runtime.restoreTerminalFit via IPC; main responds with desktop-fit + idle
+  // driver events that we mirror here so the renderer state lands on the
+  // post-take-back terminal state.
+  await overlay.getByRole('button', { name: /take back/i }).click()
+  await sendTakeBackIpc(electronApp, { ptyId })
   await expect(overlay).toBeHidden({ timeout: 15_000 })
-
-  await captureAttachment(orcaPage, testInfo, '03-after-take-back.png')
 })
+
+async function sendMobileSubscribeIpc(
+  electronApp: Parameters<Parameters<typeof test>[1]>[0]['electronApp'],
+  args: { ptyId: string; cols: number; rows: number }
+): Promise<void> {
+  await electronApp.evaluate(({ BrowserWindow }, payload) => {
+    const wins = BrowserWindow.getAllWindows()
+    for (const win of wins) {
+      win.webContents.send('runtime:terminalFitOverrideChanged', {
+        ptyId: payload.ptyId,
+        mode: 'mobile-fit',
+        cols: payload.cols,
+        rows: payload.rows
+      })
+      win.webContents.send('runtime:terminalDriverChanged', {
+        ptyId: payload.ptyId,
+        driver: { kind: 'mobile', clientId: 'fake-phone-1' }
+      })
+    }
+  }, args)
+}
+
+async function sendTakeBackIpc(
+  electronApp: Parameters<Parameters<typeof test>[1]>[0]['electronApp'],
+  args: { ptyId: string }
+): Promise<void> {
+  await electronApp.evaluate(({ BrowserWindow }, payload) => {
+    const wins = BrowserWindow.getAllWindows()
+    for (const win of wins) {
+      win.webContents.send('runtime:terminalFitOverrideChanged', {
+        ptyId: payload.ptyId,
+        mode: 'desktop-fit',
+        cols: 0,
+        rows: 0
+      })
+      win.webContents.send('runtime:terminalDriverChanged', {
+        ptyId: payload.ptyId,
+        driver: { kind: 'idle' }
+      })
+    }
+  }, args)
+}
 
 // Why: writing the screenshot to testInfo.outputPath() lands the file in the
 // per-test output dir that ships in the playwright-traces artifact uploaded by
