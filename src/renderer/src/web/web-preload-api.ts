@@ -154,6 +154,9 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     computerUsePermissions: createComputerUsePermissionsApi(),
     updater: createUpdaterApi(),
     shell: createShellApi(),
+    skills: {
+      discover: () => Promise.resolve({ skills: [], sources: [], scannedAt: Date.now() })
+    },
     pty: createPtyApi(),
     ssh: createSshApi(),
     wsl: { isAvailable: () => Promise.resolve(false) },

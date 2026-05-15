@@ -4,6 +4,7 @@ states stay consistent across Claude and Codex. */
 import {
   AlertTriangle,
   Activity,
+  BookOpen,
   ChevronDown,
   ChevronRight,
   RefreshCw,
@@ -729,6 +730,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   // statusBarItems checkbox would double-toggle the surface). It is driven
   // purely by the experimentalPet settings flag.
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
+  const openSkillsPage = useAppStore((s) => s.openSkillsPage)
   const toggleStatusBarItem = useAppStore((s) => s.toggleStatusBarItem)
   const containerRef = useRef<HTMLDivElement>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -901,6 +903,21 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
 
       <div className="flex items-center gap-3">
         <UpdateStatusSegment compact={compact} iconOnly={iconOnly} />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex size-5 cursor-pointer items-center justify-center rounded border border-border bg-secondary text-secondary-foreground shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground"
+              aria-label="Open Skills"
+              onClick={openSkillsPage}
+            >
+              <BookOpen className="size-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={6}>
+            Skills
+          </TooltipContent>
+        </Tooltip>
         {petEnabled && <PetStatusSegment />}
         {showResourceUsage && <ResourceUsageStatusSegment compact={compact} iconOnly={iconOnly} />}
         {showSsh && <SshStatusSegment compact={compact} iconOnly={iconOnly} />}
