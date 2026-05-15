@@ -486,20 +486,27 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
     if (selectedDeletableIds.length === 0) {
       return
     }
-    const started = runWorktreeBatchDelete(selectedDeletableIds, {
+    runWorktreeBatchDelete(selectedDeletableIds, {
       onDeleted: (deletedIds) => {
         removeWorkspaceSpaceWorktrees(deletedIds)
         setInspectedWorktreeId((current) =>
           current && deletedIds.includes(current) ? null : current
         )
+        setSelectedIds((current) => {
+          if (deletedIds.length === 0) {
+            return current
+          }
+          const next = new Set(current)
+          for (const id of deletedIds) {
+            next.delete(id)
+          }
+          return next
+        })
         toast.success(deletedIds.length === 1 ? 'Workspace deleted' : 'Workspaces deleted', {
           description: `${deletedIds.length} ${deletedIds.length === 1 ? 'workspace' : 'workspaces'} removed from Space.`
         })
       }
     })
-    if (started) {
-      setSelectedIds(new Set<string>())
-    }
   }
 
   return (
