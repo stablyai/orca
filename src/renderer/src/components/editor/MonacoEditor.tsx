@@ -1,4 +1,7 @@
-import React, { useRef, useCallback, useEffect, useLayoutEffect, useState } from 'react'
+/* eslint-disable max-lines -- Why: MonacoEditor centralizes Monaco setup,
+source-mode markdown annotations, persistence-safe content sync, reveal
+handling, and editor-local UI overlays so split-pane state remains coherent. */
+import React, { useRef, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import type { MarkdownDocument } from '../../../../shared/types'
@@ -25,6 +28,11 @@ import {
   createMarkdownDocLinkDecorationController,
   type MarkdownDocLinkDecorationController
 } from './monaco-markdown-doc-link-decorations'
+import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import type { DiffComment } from '../../../../shared/types'
+import { isMarkdownComment } from '@/lib/diff-comment-compat'
+import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
+import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
 
 type MonacoEditorProps = {
   filePath: string
@@ -38,6 +46,8 @@ type MonacoEditorProps = {
   revealColumn?: number
   revealMatchLength?: number
   markdownDocuments?: MarkdownDocument[]
+  worktreeId?: string
+  markdownAnnotationsEnabled?: boolean
 }
 
 export default function MonacoEditor({
@@ -51,9 +61,12 @@ export default function MonacoEditor({
   revealLine,
   revealColumn,
   revealMatchLength,
-  markdownDocuments
+  markdownDocuments,
+  worktreeId,
+  markdownAnnotationsEnabled = false
 }: MonacoEditorProps): React.JSX.Element {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
+  const [mountedEditor, setMountedEditor] = useState<editor.IStandaloneCodeEditor | null>(null)
   const modelKeyRef = useRef<string | null>(null)
   const languageRef = useRef(language)
   languageRef.current = language
@@ -79,15 +92,33 @@ export default function MonacoEditor({
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
   const setEditorCursorLine = useAppStore((s) => s.setEditorCursorLine)
+  const addDiffComment = useAppStore((s) => s.addDiffComment)
+  const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
+  const updateDiffComment = useAppStore((s) => s.updateDiffComment)
+  const scrollToDiffCommentId = useAppStore((s) => s.scrollToDiffCommentId)
+  const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
+  const allDiffComments = useAppStore((s): DiffComment[] | undefined =>
+    worktreeId ? findWorktreeById(s.worktreesByRepo, worktreeId)?.diffComments : undefined
+  )
   const editorFontSize = computeEditorFontSize(
     settings?.terminalFontSize ?? 13,
     editorFontZoomLevel
+  )
+  const markdownComments = useMemo(
+    () =>
+      (allDiffComments ?? []).filter((c) => c.filePath === relativePath && isMarkdownComment(c)),
+    [allDiffComments, relativePath]
   )
 
   // Gutter context menu state
   const [gutterMenuOpen, setGutterMenuOpen] = useState(false)
   const [gutterMenuPoint, setGutterMenuPoint] = useState({ x: 0, y: 0 })
   const [gutterMenuLine, setGutterMenuLine] = useState(1)
+  const [commentPopover, setCommentPopover] = useState<{
+    lineNumber: number
+    startLine?: number
+    top: number
+  } | null>(null)
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -107,6 +138,35 @@ export default function MonacoEditor({
       clearMarkdownDocCompletionDocuments(modelKey)
     }
   }, [language, markdownDocuments])
+
+  const shouldShowMarkdownAnnotations =
+    markdownAnnotationsEnabled && language === 'markdown' && Boolean(worktreeId)
+
+  const pendingScrollForThisEditor = useMemo(() => {
+    if (!shouldShowMarkdownAnnotations || !scrollToDiffCommentId) {
+      return null
+    }
+    return markdownComments.some((c) => c.id === scrollToDiffCommentId)
+      ? scrollToDiffCommentId
+      : null
+  }, [markdownComments, scrollToDiffCommentId, shouldShowMarkdownAnnotations])
+
+  useDiffCommentDecorator({
+    editor: shouldShowMarkdownAnnotations ? mountedEditor : null,
+    filePath: relativePath,
+    worktreeId: worktreeId ?? '',
+    comments: shouldShowMarkdownAnnotations ? markdownComments : [],
+    onAddCommentClick: ({ lineNumber, startLine, top }) =>
+      setCommentPopover({ lineNumber, startLine, top }),
+    onDeleteComment: (id) => {
+      if (worktreeId) {
+        void deleteDiffComment(worktreeId, id)
+      }
+    },
+    onUpdateComment: worktreeId ? (id, body) => updateDiffComment(worktreeId, id, body) : undefined,
+    pendingScrollCommentId: pendingScrollForThisEditor,
+    onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
+  })
 
   const clearTransientRevealHighlight = useCallback(() => {
     if (revealHighlightTimerRef.current !== null) {
@@ -186,6 +246,7 @@ export default function MonacoEditor({
   const handleMount: OnMount = useCallback(
     (editorInstance, monaco) => {
       editorRef.current = editorInstance
+      setMountedEditor(editorInstance)
       markdownDocLinkDecorationsRef.current = createMarkdownDocLinkDecorationController(
         editorInstance,
         () => languageRef.current
@@ -227,6 +288,12 @@ export default function MonacoEditor({
           lineNumber: e.position.lineNumber,
           column: e.position.column
         })
+      })
+
+      editorInstance.onDidDispose(() => {
+        editorRef.current = null
+        setMountedEditor(null)
+        setCommentPopover(null)
       })
 
       // Why: Writing to the Map at 60fps (every scroll frame) is unnecessary since
@@ -301,6 +368,44 @@ export default function MonacoEditor({
       viewStateKey
     ]
   )
+
+  useEffect(() => {
+    if (!mountedEditor || !commentPopover) {
+      return
+    }
+    const update = (): void => {
+      const top =
+        mountedEditor.getTopForLineNumber(commentPopover.lineNumber) - mountedEditor.getScrollTop()
+      setCommentPopover((prev) => (prev ? { ...prev, top } : prev))
+    }
+    const scrollSub = mountedEditor.onDidScrollChange(update)
+    const contentSub = mountedEditor.onDidContentSizeChange(update)
+    return () => {
+      scrollSub.dispose()
+      contentSub.dispose()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- match DiffViewer: don't resubscribe on top updates.
+  }, [mountedEditor, commentPopover?.lineNumber])
+
+  const handleSubmitMarkdownComment = async (body: string): Promise<void> => {
+    if (!commentPopover || !worktreeId) {
+      return
+    }
+    const result = await addDiffComment({
+      worktreeId,
+      filePath: relativePath,
+      source: 'markdown',
+      startLine: commentPopover.startLine,
+      lineNumber: commentPopover.lineNumber,
+      body,
+      side: 'modified'
+    })
+    if (result) {
+      setCommentPopover(null)
+    } else {
+      console.error('Failed to add markdown comment — draft preserved')
+    }
+  }
 
   const handleChange = useCallback(
     (value: string | undefined) => {
@@ -442,6 +547,16 @@ export default function MonacoEditor({
 
   return (
     <div className="relative h-full">
+      {commentPopover && shouldShowMarkdownAnnotations && (
+        <DiffCommentPopover
+          key={commentPopover.lineNumber}
+          lineNumber={commentPopover.lineNumber}
+          startLine={commentPopover.startLine}
+          top={commentPopover.top}
+          onCancel={() => setCommentPopover(null)}
+          onSubmit={handleSubmitMarkdownComment}
+        />
+      )}
       <Editor
         height="100%"
         language={language}

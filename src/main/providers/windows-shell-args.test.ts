@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import {
+  encodePowerShellCommand,
+  getPowerShellOsc133Bootstrap
+} from '../powershell-osc133-bootstrap'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 
 describe('resolveWindowsShellLaunchArgs', () => {
@@ -9,38 +13,49 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(result.validationCwd).toBe('C:\\Users\\alice')
   })
 
-  it('returns PowerShell args that dot-source $PROFILE and force UTF-8 I/O', () => {
+  it('returns PowerShell args that install OSC 133 bootstrap after normal profile loading', () => {
     const result = resolveWindowsShellLaunchArgs(
       'powershell.exe',
       'C:\\Users\\alice',
       'C:\\Users\\alice'
     )
-    expect(result.shellArgs[0]).toBe('-NoExit')
-    expect(result.shellArgs[1]).toBe('-Command')
-    // The actual command must dot-source $PROFILE before setting encodings,
-    // otherwise oh-my-posh / starship / PSReadLine never load.
-    const command = result.shellArgs[2] ?? ''
-    const profileIndex = command.indexOf('. $PROFILE')
+    expect(result.shellArgs).toEqual([
+      '-NoLogo',
+      '-NoExit',
+      '-EncodedCommand',
+      encodePowerShellCommand(getPowerShellOsc133Bootstrap())
+    ])
+
+    const command = Buffer.from(result.shellArgs[3] ?? '', 'base64').toString('utf16le')
+    const outputEncodingIndex = command.indexOf('[Console]::OutputEncoding')
     const opencodeRestoreIndex = command.indexOf(
       '$env:OPENCODE_CONFIG_DIR = $env:ORCA_OPENCODE_CONFIG_DIR'
     )
     const piRestoreIndex = command.indexOf(
       '$env:PI_CODING_AGENT_DIR = $env:ORCA_PI_CODING_AGENT_DIR'
     )
-    const outputEncodingIndex = command.indexOf('[Console]::OutputEncoding')
-    const inputEncodingIndex = command.indexOf('[Console]::InputEncoding')
+    const promptIndex = command.indexOf('function Global:prompt')
 
-    expect(profileIndex).toBeGreaterThanOrEqual(0)
-    expect(opencodeRestoreIndex).toBeGreaterThan(profileIndex)
-    expect(piRestoreIndex).toBeGreaterThan(profileIndex)
-    expect(outputEncodingIndex).toBeGreaterThan(opencodeRestoreIndex)
-    expect(outputEncodingIndex).toBeGreaterThan(piRestoreIndex)
-    expect(inputEncodingIndex).toBeGreaterThan(outputEncodingIndex)
+    expect(command).not.toContain('$PROFILE')
+    expect(outputEncodingIndex).toBeGreaterThanOrEqual(0)
+    expect(opencodeRestoreIndex).toBeGreaterThan(outputEncodingIndex)
+    expect(piRestoreIndex).toBeGreaterThan(outputEncodingIndex)
+    expect(promptIndex).toBeGreaterThan(piRestoreIndex)
+    expect(command).toContain('Esc = [char]27')
+    expect(command).toContain('Bel = [char]7')
+    expect(command).toContain(')]133;D;$fakeExitCode$(')
+    expect(command).toContain(')]133;C$(')
+    expect(command).not.toContain('`e]133')
   })
 
   it('handles pwsh.exe (PowerShell Core) the same as Windows PowerShell', () => {
     const result = resolveWindowsShellLaunchArgs('pwsh.exe', 'C:\\', 'C:\\Users\\alice')
-    expect(result.shellArgs[0]).toBe('-NoExit')
+    expect(result.shellArgs).toEqual([
+      '-NoLogo',
+      '-NoExit',
+      '-EncodedCommand',
+      encodePowerShellCommand(getPowerShellOsc133Bootstrap())
+    ])
   })
 
   it('translates Windows cwd to /mnt/<drive>/... for wsl.exe', () => {
@@ -117,6 +132,11 @@ describe('resolveWindowsShellLaunchArgs', () => {
 
   it('is case-insensitive on the shell basename', () => {
     const result = resolveWindowsShellLaunchArgs('PowerShell.EXE', 'C:\\', 'C:\\')
-    expect(result.shellArgs[0]).toBe('-NoExit')
+    expect(result.shellArgs).toEqual([
+      '-NoLogo',
+      '-NoExit',
+      '-EncodedCommand',
+      encodePowerShellCommand(getPowerShellOsc133Bootstrap())
+    ])
   })
 })

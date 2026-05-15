@@ -41,6 +41,7 @@ import type { AppMemory, UsageValues, Worktree } from '../../../../shared/types'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { isWorkspaceOldForCleanup } from '../../../../shared/workspace-cleanup'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import {
   mergeSnapshotAndSessions,
   UNATTRIBUTED_REPO_ID,
@@ -50,6 +51,7 @@ import {
   type UnifiedSessionRow,
   type UnifiedWorktreeRow
 } from './mergeSnapshotAndSessions'
+import { WorkspaceSpaceCompactPanel } from './WorkspaceSpaceCompactPanel'
 
 const POLL_MS = 2_000
 const SESSIONS_POLL_MS = 10_000
@@ -658,8 +660,13 @@ export function ResourceUsageStatusSegment({
   const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
   const setActiveView = useAppStore((s) => s.setActiveView)
   const openModal = useAppStore((s) => s.openModal)
+  const openSpacePage = useAppStore((s) => s.openSpacePage)
   const repos = useAppStore((s) => s.repos)
   const allWorktrees = useAllWorktrees()
+  const activeRuntimeEnvironmentId = useAppStore(
+    (s) => s.settings?.activeRuntimeEnvironmentId ?? null
+  )
+  const runtimeEnvironmentActive = Boolean(activeRuntimeEnvironmentId?.trim())
 
   const [open, setOpen] = useState(false)
   const [sortOption, setSortOption] = useState<SortOption>('memory')
@@ -670,6 +677,10 @@ export function ResourceUsageStatusSegment({
   const [sessionsError, setSessionsError] = useState(false)
   const [killConfirm, setKillConfirm] = useState<UnifiedSessionRow | null>(null)
   const [killing, setKilling] = useState(false)
+  // Why: this segment only understands the local Electron PTY/resource daemon.
+  // While a runtime server is active, hiding local samples avoids showing or
+  // killing sessions from the wrong machine.
+  const resourceSnapshot = runtimeEnvironmentActive ? null : snapshot
 
   // Why: after a kill confirms and the session unmounts, focus would otherwise
   // fall to <body>. We park a ref on the popover body so we can restore focus
@@ -677,6 +688,11 @@ export function ResourceUsageStatusSegment({
   const popoverBodyRef = useRef<HTMLDivElement | null>(null)
 
   const refreshSessions = useCallback(async () => {
+    if (runtimeEnvironmentActive) {
+      setSessions([])
+      setSessionsError(false)
+      return
+    }
     try {
       const result = await window.api.pty.listSessions()
       setSessions(result)
@@ -684,7 +700,7 @@ export function ResourceUsageStatusSegment({
     } catch {
       setSessionsError(true)
     }
-  }, [])
+  }, [runtimeEnvironmentActive])
 
   const daemonActions = useDaemonActions({
     onRestartSettled: () => {
@@ -701,7 +717,7 @@ export function ResourceUsageStatusSegment({
   // background at a slower rate so the badge count stays reasonably fresh
   // without keeping the Memory IPC hot.
   useEffect(() => {
-    if (!open) {
+    if (!open || runtimeEnvironmentActive) {
       return
     }
     void fetchSnapshot()
@@ -716,9 +732,14 @@ export function ResourceUsageStatusSegment({
     return () => {
       window.clearInterval(memTimer)
     }
-  }, [open, fetchSnapshot, refreshSessions])
+  }, [open, runtimeEnvironmentActive, fetchSnapshot, refreshSessions])
 
   useEffect(() => {
+    if (runtimeEnvironmentActive) {
+      setSessions([])
+      setSessionsError(false)
+      return
+    }
     const refreshIfVisible = (): void => {
       if (document.visibilityState === 'visible' && document.hasFocus()) {
         void refreshSessions()
@@ -736,7 +757,7 @@ export function ResourceUsageStatusSegment({
       window.removeEventListener('focus', refreshIfVisible)
       document.removeEventListener('visibilitychange', refreshIfVisible)
     }
-  }, [refreshSessions])
+  }, [runtimeEnvironmentActive, refreshSessions])
 
   const repoDisplayNameById = useMemo(() => {
     const map = new Map<string, string>()
@@ -786,8 +807,8 @@ export function ResourceUsageStatusSegment({
   // feel laggy because the segment is always mounted in the status bar.
   const unifiedRepos = useMemo(
     () =>
-      open
-        ? mergeSnapshotAndSessions(snapshot, sessions, {
+      open && !runtimeEnvironmentActive
+        ? mergeSnapshotAndSessions(resourceSnapshot, sessions, {
             tabsByWorktree,
             ptyIdsByTabId,
             runtimePaneTitlesByTabId,
@@ -798,7 +819,8 @@ export function ResourceUsageStatusSegment({
         : [],
     [
       open,
-      snapshot,
+      runtimeEnvironmentActive,
+      resourceSnapshot,
       sessions,
       tabsByWorktree,
       ptyIdsByTabId,
@@ -814,7 +836,7 @@ export function ResourceUsageStatusSegment({
   // Build the bound set with a single flat walk instead of nested Object
   // iterations to keep this light on every store update.
   const orphanCount = useMemo(() => {
-    if (!workspaceSessionReady) {
+    if (!workspaceSessionReady || runtimeEnvironmentActive) {
       return 0
     }
     const bound = new Set<string>()
@@ -832,32 +854,36 @@ export function ResourceUsageStatusSegment({
       }
     }
     return n
-  }, [sessions, ptyIdsByTabId, workspaceSessionReady])
+  }, [sessions, ptyIdsByTabId, workspaceSessionReady, runtimeEnvironmentActive])
 
   const { totalMemory, totalCpu, hostShare, memBadgeLabel } = useMemo(() => {
-    const memory = snapshot?.totalMemory ?? 0
-    const cpu = snapshot?.totalCpu ?? 0
-    const hostTotal = snapshot?.host.totalMemory ?? 0
+    const memory = resourceSnapshot?.totalMemory ?? 0
+    const cpu = resourceSnapshot?.totalCpu ?? 0
+    const hostTotal = resourceSnapshot?.host.totalMemory ?? 0
     return {
       totalMemory: memory,
       totalCpu: cpu,
       hostShare: hostTotal > 0 ? (memory / hostTotal) * 100 : 0,
-      memBadgeLabel: snapshot ? formatMemory(memory) : '—'
+      memBadgeLabel: resourceSnapshot ? formatMemory(memory) : '—'
     }
-  }, [snapshot])
+  }, [resourceSnapshot])
 
   // Why: memorySnapshotError is null both for "last fetch succeeded" and
   // "never fetched". When the segment is mounted but the popover hasn't
   // been opened, fetchMemorySnapshot has never run, so a sessions IPC
   // failure on the always-on poll would otherwise be silent. Treat the
   // absence of any snapshot plus a sessions error as unreachable too.
-  const daemonUnreachable = sessionsError && (memorySnapshotError !== null || snapshot === null)
+  const daemonUnreachable =
+    !runtimeEnvironmentActive &&
+    sessionsError &&
+    (memorySnapshotError !== null || snapshot === null)
   // Why: a partial failure where the sessions IPC fails but the snapshot
   // IPC still works was silently invisible after the merge — the old
   // SessionsTabPanel surfaced it as "Terminal sessions unavailable". Show
   // a slim inline notice so the user understands why the session list is
   // empty/stale even though the resource numbers look fine.
-  const sessionsOnlyError = sessionsError && memorySnapshotError === null
+  const sessionsOnlyError =
+    !runtimeEnvironmentActive && sessionsError && memorySnapshotError === null
 
   const toggleRepo = useCallback((repoId: string): void => {
     setCollapsedRepos((prev) => {
@@ -905,17 +931,10 @@ export function ResourceUsageStatusSegment({
         }
       }
       setActiveView('terminal')
-      // Why: snapshot-derived rows carry a `${tabId}:${paneId}` paneKey from
-      // the main-process pty registry — parse the paneId tail so split-tab
-      // clicks land focus on the *clicked* pane rather than whichever pane
-      // was last active. Daemon-only rows have paneKey=null and degrade to
-      // tab-only activation.
-      const colon = paneKey ? paneKey.indexOf(':') : -1
-      const tail = colon > 0 && paneKey ? paneKey.slice(colon + 1) : ''
-      const parsed = /^\d+$/.test(tail) ? Number.parseInt(tail, 10) : NaN
-      const paneId =
-        Number.isFinite(parsed) && parsed > 0 && paneKey?.slice(0, colon) === tabId ? parsed : null
-      activateTabAndFocusPane(tabId, paneId)
+      // Why: paneKey suffixes are stable UUID leaf ids after replay/reload.
+      // Legacy numeric keys degrade to tab-only activation instead of guessing.
+      const parsed = paneKey ? parsePaneKey(paneKey) : null
+      activateTabAndFocusPane(tabId, parsed?.tabId === tabId ? parsed.leafId : null)
     },
     [tabsByWorktree, setActiveView]
   )
@@ -1012,6 +1031,11 @@ export function ResourceUsageStatusSegment({
     }
   }, [killConfirm, refreshSessions])
 
+  const openSpaceResults = useCallback((): void => {
+    setOpen(false)
+    openSpacePage()
+  }, [openSpacePage])
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <Tooltip delayDuration={150}>
@@ -1020,7 +1044,7 @@ export function ResourceUsageStatusSegment({
             <button
               type="button"
               className="inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
-              aria-label="Resource usage"
+              aria-label="Resource manager"
             >
               <MemoryStick className="size-3 text-muted-foreground" />
               {!iconOnly && (
@@ -1050,7 +1074,7 @@ export function ResourceUsageStatusSegment({
           </PopoverTrigger>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6}>
-          Resource usage — {memBadgeLabel} · {sessions.length} session
+          Resource Manager — {memBadgeLabel} · {sessions.length} session
           {sessions.length === 1 ? '' : 's'}
         </TooltipContent>
       </Tooltip>
@@ -1059,7 +1083,7 @@ export function ResourceUsageStatusSegment({
         side="top"
         align="end"
         sideOffset={8}
-        className="w-[26rem] p-0"
+        className="w-[26rem] max-w-[calc(100vw-2rem)] p-0"
         onOpenAutoFocus={(event) => event.preventDefault()}
         // Why: clicking a terminal row activates a tab, which causes xterm
         // to programmatically focus the terminal DOM node. Radix would
@@ -1068,13 +1092,10 @@ export function ResourceUsageStatusSegment({
         // outside-click (onPointerDownOutside default) and Escape.
         onFocusOutside={(event) => event.preventDefault()}
       >
-        {/* Why: header strip — title on the left, daemon-control icons on
-            the right. The tab switcher was removed because a single unified
-            list now covers what the two tabs used to show. */}
         <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-foreground">
-            <MemoryStick className="size-3 text-muted-foreground" />
-            <span>Resource Usage</span>
+          <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-foreground">
+            <MemoryStick className="size-3 shrink-0 text-muted-foreground" />
+            <span className="truncate">Resource Manager</span>
           </div>
 
           <div className="flex items-center gap-0.5">
@@ -1083,7 +1104,7 @@ export function ResourceUsageStatusSegment({
                 <button
                   type="button"
                   onClick={() => daemonActions.setPending('restart')}
-                  disabled={daemonActions.isBusy}
+                  disabled={daemonActions.isBusy || runtimeEnvironmentActive}
                   aria-label="Restart daemon"
                   className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
                 >
@@ -1091,7 +1112,7 @@ export function ResourceUsageStatusSegment({
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={6}>
-                Restart daemon
+                {runtimeEnvironmentActive ? 'Unavailable for runtime servers' : 'Restart daemon'}
               </TooltipContent>
             </Tooltip>
             <Tooltip delayDuration={200}>
@@ -1099,7 +1120,7 @@ export function ResourceUsageStatusSegment({
                 <button
                   type="button"
                   onClick={() => daemonActions.setPending('killAll')}
-                  disabled={daemonActions.isBusy}
+                  disabled={daemonActions.isBusy || runtimeEnvironmentActive}
                   aria-label="Kill all sessions"
                   className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
                 >
@@ -1107,7 +1128,7 @@ export function ResourceUsageStatusSegment({
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={6}>
-                Kill all sessions
+                {runtimeEnvironmentActive ? 'Unavailable for runtime servers' : 'Kill all sessions'}
               </TooltipContent>
             </Tooltip>
           </div>
@@ -1145,7 +1166,7 @@ export function ResourceUsageStatusSegment({
           </div>
         )}
 
-        {snapshot && (
+        {resourceSnapshot && (
           <div className="px-3 py-2 border-b border-border flex items-baseline justify-between gap-3 text-xs tabular-nums">
             <div className="flex items-baseline gap-3 min-w-0">
               <Tooltip delayDuration={200}>
@@ -1205,7 +1226,7 @@ export function ResourceUsageStatusSegment({
             inner tree owns its own scroll. The footer renders below this
             shell when orphan-bulk-kill is available. */}
         <div ref={popoverBodyRef} tabIndex={-1} className="flex h-[420px] flex-col outline-none">
-          {(unifiedRepos.length > 0 || snapshot) && (
+          {(unifiedRepos.length > 0 || resourceSnapshot) && (
             <div className="flex items-center justify-between px-3 py-1 bg-muted/30 border-b border-border/50 text-[10px] uppercase tracking-wide shrink-0">
               <button
                 type="button"
@@ -1276,22 +1297,26 @@ export function ResourceUsageStatusSegment({
               />
             )}
 
-            {unifiedRepos.length === 0 && snapshot && (
+            {unifiedRepos.length === 0 && resourceSnapshot && (
               <div className="px-3 py-4 text-center text-xs text-muted-foreground">
                 Nothing running right now
               </div>
             )}
 
-            {snapshot && (
+            {resourceSnapshot && (
               <AppSection
-                app={snapshot.app}
+                app={resourceSnapshot.app}
                 isCollapsed={appCollapsed}
                 onToggle={() => setAppCollapsed((v) => !v)}
               />
             )}
 
-            {!snapshot && !daemonUnreachable && (
-              <div className="px-3 py-4 text-center text-xs text-muted-foreground">Loading…</div>
+            {!resourceSnapshot && !daemonUnreachable && (
+              <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                {runtimeEnvironmentActive
+                  ? 'Local resource usage hidden for runtime servers.'
+                  : 'Loading…'}
+              </div>
             )}
           </div>
         </div>
@@ -1318,6 +1343,8 @@ export function ResourceUsageStatusSegment({
             </button>
           ) : null}
         </div>
+
+        <WorkspaceSpaceCompactPanel onOpenFullPage={openSpaceResults} />
       </PopoverContent>
       {/* Why: Radix Dialog must not be a descendant of PopoverContent — when
           the popover unmounts (e.g. clicking outside, focus moving to the
@@ -1378,7 +1405,7 @@ export function ResourceUsageStatusSegment({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <DaemonActionDialog api={daemonActions} />
+      {!runtimeEnvironmentActive && <DaemonActionDialog api={daemonActions} />}
     </Popover>
   )
 }

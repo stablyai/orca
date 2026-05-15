@@ -13,38 +13,87 @@ import type {
   ClaudeUsageSummary
 } from '../../shared/claude-usage-types'
 import type { Store } from '../persistence'
-import { loadKnownUsageWorktreesByRepo } from '../usage-worktree-metadata'
+import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-worktree-metadata'
 import type { ClaudeUsagePersistedState } from './types'
 import { createWorktreeRefs, getSessionProjectLabel, scanClaudeUsageFiles } from './scanner'
 
-const SCHEMA_VERSION = 1
+const SCHEMA_VERSION = 3
 const STALE_MS = 5 * 60_000
 
 // Why: capture the path after configureDevUserDataPath() but before app.setName()
 // mutates Electron's derived userData location, matching the persistence/store pattern.
 let _claudeUsageFile: string | null = null
 
-const MODEL_PRICING: Record<
-  string,
-  { input: number; output: number; cacheRead: number; cacheWrite: number }
-> = {
+type ClaudeModelPricing = {
+  input: number
+  output: number
+  cacheRead: number
+  cacheWrite: number
+  thresholdTokens?: number
+  inputAboveThreshold?: number
+  outputAboveThreshold?: number
+  cacheReadAboveThreshold?: number
+  cacheWriteAboveThreshold?: number
+}
+
+const LONG_CONTEXT_THRESHOLD_TOKENS = 200_000
+const SONNET_LONG_CONTEXT_PRICING = {
+  thresholdTokens: LONG_CONTEXT_THRESHOLD_TOKENS,
+  inputAboveThreshold: 6,
+  outputAboveThreshold: 22.5,
+  cacheReadAboveThreshold: 0.6,
+  cacheWriteAboveThreshold: 7.5
+} satisfies Partial<ClaudeModelPricing>
+
+const MODEL_PRICING: Record<string, ClaudeModelPricing> = {
   'claude-opus-4-7': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   'claude-opus-4-6': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   'claude-opus-4-5': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   'claude-opus-4-1': { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
   'claude-opus-4': { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
-  'claude-sonnet-4-6': { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
-  'claude-sonnet-4-5': { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
-  'claude-sonnet-4': { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+  'claude-sonnet-4-6': {
+    input: 3,
+    output: 15,
+    cacheRead: 0.3,
+    cacheWrite: 3.75,
+    ...SONNET_LONG_CONTEXT_PRICING
+  },
+  'claude-sonnet-4-5': {
+    input: 3,
+    output: 15,
+    cacheRead: 0.3,
+    cacheWrite: 3.75,
+    ...SONNET_LONG_CONTEXT_PRICING
+  },
+  'claude-sonnet-4': {
+    input: 3,
+    output: 15,
+    cacheRead: 0.3,
+    cacheWrite: 3.75,
+    ...SONNET_LONG_CONTEXT_PRICING
+  },
   'claude-sonnet-3-7': { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+  'claude-sonnet-3-5': { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
   'claude-haiku-4-5': { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 },
   'claude-haiku-3-5': { input: 0.8, output: 4, cacheRead: 0.08, cacheWrite: 1 },
   'claude-haiku-3': { input: 0.25, output: 1.25, cacheRead: 0.03, cacheWrite: 0.3 }
 }
 
+const MODEL_ALIASES: Record<string, string> = {
+  model_placeholder_m26: 'claude-opus-4-6',
+  model_placeholder_m35: 'claude-sonnet-4-6',
+  'claude-opus-4.6': 'claude-opus-4-6',
+  'claude-sonnet-4.6': 'claude-sonnet-4-6',
+  'claude-opus-4.6-thinking': 'claude-opus-4-6',
+  'claude-sonnet-4.6-thinking': 'claude-sonnet-4-6',
+  'claude-opus-4-6-thinking': 'claude-opus-4-6',
+  'claude-sonnet-4-6-thinking': 'claude-sonnet-4-6'
+}
+
 function getDefaultState(): ClaudeUsagePersistedState {
   return {
     schemaVersion: SCHEMA_VERSION,
+    worktreeFingerprint: null,
     processedFiles: [],
     sessions: [],
     dailyAggregates: [],
@@ -72,7 +121,14 @@ function normalizeModelForPricing(model: string | null): string | null {
   if (!model) {
     return null
   }
-  const lower = model.toLowerCase()
+  const lower = model
+    .toLowerCase()
+    .trim()
+    .replace(/^anthropic[/:]/, '')
+  const alias = MODEL_ALIASES[lower]
+  if (alias) {
+    return alias
+  }
   if (lower.includes('opus-4-7')) {
     return 'claude-opus-4-7'
   }
@@ -103,8 +159,13 @@ function normalizeModelForPricing(model: string | null): string | null {
   // Why: legacy version-first IDs like `claude-3-5-sonnet-20241022` are still
   // present in historical Claude Code/SDK logs read off disk. Match them so
   // their cost is not silently dropped from the breakdown.
-  if (lower.includes('3-5-sonnet') || lower.includes('3.5-sonnet')) {
-    return 'claude-sonnet-3-7'
+  if (
+    lower.includes('sonnet-3-5') ||
+    lower.includes('sonnet-3.5') ||
+    lower.includes('3-5-sonnet') ||
+    lower.includes('3.5-sonnet')
+  ) {
+    return 'claude-sonnet-3-5'
   }
   if (lower.includes('haiku-4-5')) {
     return 'claude-haiku-4-5'
@@ -121,6 +182,20 @@ function normalizeModelForPricing(model: string | null): string | null {
   return null
 }
 
+function calculateTieredCost(
+  tokens: number,
+  basePrice: number,
+  abovePrice?: number,
+  threshold?: number
+): number {
+  if (threshold === undefined || abovePrice === undefined) {
+    return tokens * basePrice
+  }
+  const belowTokens = Math.min(tokens, threshold)
+  const aboveTokens = Math.max(tokens - threshold, 0)
+  return belowTokens * basePrice + aboveTokens * abovePrice
+}
+
 function estimateCostUsd(
   model: string | null,
   inputTokens: number,
@@ -134,10 +209,30 @@ function estimateCostUsd(
   }
   const pricing = MODEL_PRICING[normalized]
   return (
-    (inputTokens * pricing.input +
-      outputTokens * pricing.output +
-      cacheReadTokens * pricing.cacheRead +
-      cacheWriteTokens * pricing.cacheWrite) /
+    (calculateTieredCost(
+      inputTokens,
+      pricing.input,
+      pricing.inputAboveThreshold,
+      pricing.thresholdTokens
+    ) +
+      calculateTieredCost(
+        outputTokens,
+        pricing.output,
+        pricing.outputAboveThreshold,
+        pricing.thresholdTokens
+      ) +
+      calculateTieredCost(
+        cacheReadTokens,
+        pricing.cacheRead,
+        pricing.cacheReadAboveThreshold,
+        pricing.thresholdTokens
+      ) +
+      calculateTieredCost(
+        cacheWriteTokens,
+        pricing.cacheWrite,
+        pricing.cacheWriteAboveThreshold,
+        pricing.thresholdTokens
+      )) /
     1_000_000
   )
 }
@@ -167,6 +262,22 @@ function getLocalDay(timestamp: string): string | null {
   return `${year}-${month}-${day}`
 }
 
+function getWorktreeFingerprint(worktreesByRepo: Map<string, UsageWorktreeRef[]>): string {
+  const rows = [...worktreesByRepo.entries()]
+    .flatMap(([repoId, worktrees]) =>
+      worktrees.map((worktree) =>
+        JSON.stringify({
+          repoId,
+          worktreeId: worktree.worktreeId,
+          path: worktree.path,
+          displayName: worktree.displayName
+        })
+      )
+    )
+    .sort()
+  return JSON.stringify(rows)
+}
+
 export class ClaudeUsageStore {
   private state: ClaudeUsagePersistedState
   private readonly store: Store
@@ -184,6 +295,11 @@ export class ClaudeUsageStore {
         return getDefaultState()
       }
       const parsed = JSON.parse(readFileSync(usageFile, 'utf-8')) as ClaudeUsagePersistedState
+      if (parsed.schemaVersion !== SCHEMA_VERSION) {
+        // Why: scanner semantics affect persisted totals, so old Claude caches
+        // must be rebuilt after parser/source changes instead of reused briefly.
+        return getDefaultState()
+      }
       return {
         ...getDefaultState(),
         ...parsed,
@@ -233,9 +349,10 @@ export class ClaudeUsageStore {
     if (!this.state.scanState.enabled) {
       return this.getScanState()
     }
+    const currentWorktreeFingerprint = await this.getCurrentWorktreeFingerprint()
     if (!force && this.state.scanState.lastScanCompletedAt) {
       const ageMs = Date.now() - this.state.scanState.lastScanCompletedAt
-      if (ageMs < STALE_MS) {
+      if (ageMs < STALE_MS && this.state.worktreeFingerprint === currentWorktreeFingerprint) {
         return this.getScanState()
       }
     }
@@ -257,10 +374,15 @@ export class ClaudeUsageStore {
       try {
         const repos = this.store.getRepos()
         const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
-        const result = await scanClaudeUsageFiles(createWorktreeRefs(repos, worktreesByRepo))
+        const worktreeFingerprint = getWorktreeFingerprint(worktreesByRepo)
+        const result = await scanClaudeUsageFiles(
+          createWorktreeRefs(repos, worktreesByRepo),
+          this.state.worktreeFingerprint === worktreeFingerprint ? this.state.processedFiles : []
+        )
         this.state.processedFiles = result.processedFiles
         this.state.sessions = result.sessions
         this.state.dailyAggregates = result.dailyAggregates
+        this.state.worktreeFingerprint = worktreeFingerprint
         this.state.scanState.lastScanCompletedAt = Date.now()
         this.state.scanState.lastScanError = null
         this.writeToDisk()
@@ -531,5 +653,11 @@ export class ClaudeUsageStore {
       }
       return true
     })
+  }
+
+  private async getCurrentWorktreeFingerprint(): Promise<string> {
+    const repos = this.store.getRepos()
+    const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
+    return getWorktreeFingerprint(worktreesByRepo)
   }
 }

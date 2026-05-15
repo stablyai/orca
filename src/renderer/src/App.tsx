@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/context-menu'
 import { useAppStore } from './store'
 import { useShallow } from 'zustand/react/shallow'
-import { useIpcEvents } from './hooks/useIpcEvents'
+import { isRemoteWorkspaceSnapshotApplyInProgress, useIpcEvents } from './hooks/useIpcEvents'
 import { useAutomationDispatchEvents } from './hooks/useAutomationDispatchEvents'
 import RetainedAgentsSyncGate from './components/dashboard/RetainedAgentsSyncGate'
 import { ActivityTitlebarControls } from './components/activity/ActivityTitlebarControls'
@@ -44,10 +44,12 @@ import RightSidebar from './components/right-sidebar'
 import { StatusBar } from './components/status-bar/StatusBar'
 import { UpdateCard } from './components/UpdateCard'
 import { StarNagCard } from './components/StarNagCard'
+import { FeatureTourNudge } from './components/feature-wall/FeatureTourNudge'
 import { TelemetryFirstLaunchSurface } from './components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from './components/ZoomOverlay'
 import { shouldShowOnboarding } from './components/onboarding/should-show-onboarding'
 import { SshPassphraseDialog } from './components/settings/SshPassphraseDialog'
+import DeleteWorktreeDialog from './components/sidebar/DeleteWorktreeDialog'
 import {
   FloatingTerminalPanel,
   FloatingTerminalToggleButton
@@ -82,6 +84,7 @@ import {
   canGoBackWorktreeHistory,
   canGoForwardWorktreeHistory
 } from '@/store/slices/worktree-nav-history'
+import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
 import type { OnboardingState } from '../../shared/types'
 
 const isMac = navigator.userAgent.includes('Mac')
@@ -158,12 +161,14 @@ const TaskPage = lazy(() => import('./components/TaskPage'))
 const AutomationsPage = lazy(() => import('./components/automations/AutomationsPage'))
 const ActivityPrototypePage = lazy(() => import('./components/activity/ActivityPrototypePage'))
 const Settings = lazy(() => import('./components/settings/Settings'))
+const WorkspaceSpacePage = lazy(() => import('./components/workspace-space/WorkspaceSpacePage'))
 const QuickOpen = lazy(() => import('./components/QuickOpen'))
 const WorktreeJumpPalette = lazy(() => import('./components/WorktreeJumpPalette'))
 const NewWorkspaceComposerModal = lazy(() => import('./components/NewWorkspaceComposerModal'))
 const WorkspaceCleanupDialog = lazy(
   () => import('./components/workspace-cleanup/WorkspaceCleanupDialog')
 )
+const FeatureWallModal = lazy(() => import('./components/feature-wall/FeatureWallModal'))
 // Why: lazy-loaded so the WebP asset + overlay module aren't fetched unless
 // the user opts into the experimental flag.
 const PetOverlay = lazy(() => import('./components/pet/PetOverlay'))
@@ -171,6 +176,36 @@ const PetOverlay = lazy(() => import('./components/pet/PetOverlay'))
 // past first-launch. The gate `shouldShowOnboarding` lives in its own tiny
 // module so no eager import path pulls OnboardingFlow into the main chunk.
 const OnboardingFlow = lazy(() => import('./components/onboarding/OnboardingFlow'))
+
+function applyRemoteWorkspacePatchStatus(
+  targetId: string,
+  result: RemoteWorkspacePatchResult
+): void {
+  const store = useAppStore.getState()
+  if (result.ok) {
+    store.setRemoteWorkspaceSyncStatus(targetId, {
+      phase: 'synced',
+      direction: 'push',
+      revision: result.snapshot.revision,
+      updatedAt: result.snapshot.updatedAt,
+      lastSyncedAt: Date.now(),
+      message: 'Workspace uploaded'
+    })
+    return
+  }
+  store.setRemoteWorkspaceSyncStatus(targetId, {
+    phase: result.reason === 'stale-revision' ? 'conflict' : 'offline',
+    direction: 'push',
+    revision: result.snapshot?.revision,
+    updatedAt: result.snapshot?.updatedAt,
+    lastSyncedAt: Date.now(),
+    message:
+      result.message ??
+      (result.reason === 'stale-revision'
+        ? 'Workspace changed on another device'
+        : 'Remote workspace sync unavailable')
+  })
+}
 
 function App(): React.JSX.Element {
   useUnreadDockBadge()
@@ -367,6 +402,10 @@ function App(): React.JSX.Element {
     let reconnectStarted = false
     void (async () => {
       try {
+        // Why: repo/worktree hydration routes through settings.activeRuntimeEnvironmentId.
+        // Load settings first so a persisted remote runtime does not boot against
+        // the local filesystem and then hydrate stale local workspace state.
+        await actions.fetchSettings()
         await actions.fetchRepos()
         await actions.fetchAllWorktrees()
         const persistedUI = await window.api.ui.get()
@@ -376,10 +415,6 @@ function App(): React.JSX.Element {
           hydratePersistedUI: actions.hydratePersistedUI
         })
         const session = await window.api.session.get()
-        // Why: settings must be loaded before hydrateWorkspaceSession so that
-        // hydration has access to user preferences. Without this, settings
-        // would still be null at hydration time.
-        await actions.fetchSettings()
         if (!cancelled) {
           actions.hydrateWorkspaceSession(session)
           actions.hydrateTabsSession(session)
@@ -616,11 +651,10 @@ function App(): React.JSX.Element {
   useEffect(() => {
     let previousKey = getRuntimeMobileSessionSyncKey(useAppStore.getState())
     return useAppStore.subscribe((state, previousState) => {
-      // Why: skip the key build entirely when no input field has changed by
-      // reference. Mirrors every field used by getRuntimeMobileSessionSyncKey
-      // so this gate covers every "could the key have changed?" case.
-      // — if any field's reference is unchanged, neither the projection
-      // serialized from it nor the reference-compared map can have changed.
+      // Why: skip the key build entirely when every input field is unchanged
+      // by reference. Mirrors every field used by
+      // getRuntimeMobileSessionSyncKey so this gate covers every "could the
+      // key have changed?" case.
       if (
         state.tabsByWorktree === previousState.tabsByWorktree &&
         state.groupsByWorktree === previousState.groupsByWorktree &&
@@ -637,7 +671,7 @@ function App(): React.JSX.Element {
       ) {
         return
       }
-      const nextKey = getRuntimeMobileSessionSyncKey(state)
+      const nextKey = getRuntimeMobileSessionSyncKey(state, previousState, previousKey)
       if (runtimeMobileSessionSyncKeysEqual(nextKey, previousKey)) {
         return
       }
@@ -661,7 +695,32 @@ function App(): React.JSX.Element {
   useEffect(() => {
     return createSessionWriteSubscriber({
       store: useAppStore,
-      persist: (payload) => void window.api.session.set(payload)
+      shouldSchedulePersist: () => !isRemoteWorkspaceSnapshotApplyInProgress(),
+      persist: (payload) => {
+        void window.api.session.set(payload)
+        const state = useAppStore.getState()
+        const hydratedTargetIds = Array.from(state.remoteWorkspaceHydratedTargetIds).filter(
+          (targetId) => state.remoteWorkspaceSyncStatusByTargetId[targetId]?.phase !== 'conflict'
+        )
+        if (hydratedTargetIds.length > 0) {
+          void window.api.remoteWorkspace
+            ?.setForConnectedTargets({ session: payload, hydratedTargetIds })
+            .then((results) => {
+              for (const { targetId, result } of results) {
+                applyRemoteWorkspacePatchStatus(targetId, result)
+              }
+            })
+            .catch((err) => {
+              for (const targetId of hydratedTargetIds) {
+                useAppStore.getState().setRemoteWorkspaceSyncStatus(targetId, {
+                  phase: 'error',
+                  direction: 'push',
+                  message: err instanceof Error ? err.message : 'Workspace upload failed'
+                })
+              }
+            })
+        }
+      }
     })
   }, [])
 
@@ -803,10 +862,10 @@ function App(): React.JSX.Element {
     activeWorktreeId !== null &&
     !hasTabBar &&
     effectiveActiveTabExpanded
-  // Why: Activity is a full-page navigation surface — same treatment as
-  // Settings — so the worktree sidebar is removed for that view, letting the
-  // thread list + agent terminal span edge-to-edge.
-  const showSidebar = activeView !== 'settings' && activeView !== 'activity'
+  // Why: Activity and Space are full-page navigation surfaces — same
+  // treatment as Settings — so the worktree sidebar is removed for those views.
+  const showSidebar =
+    activeView !== 'settings' && activeView !== 'activity' && activeView !== 'space'
   // Why: only the terminal workspace replaces the full-width titlebar with
   // split-column chrome. Full-page navigation views keep the draggable app
   // titlebar so their page-level controls can live in that window strip.
@@ -817,7 +876,8 @@ function App(): React.JSX.Element {
     activeView !== 'settings' &&
     activeView !== 'tasks' &&
     activeView !== 'activity' &&
-    activeView !== 'automations'
+    activeView !== 'automations' &&
+    activeView !== 'space'
 
   const handleToggleExpand = (): void => {
     if (!effectiveActiveTabId) {
@@ -904,7 +964,12 @@ function App(): React.JSX.Element {
 
       // Why: full-page navigation surfaces should not reveal the right sidebar;
       // they are designed as distraction-free content areas.
-      if (activeView === 'tasks' || activeView === 'activity' || activeView === 'automations') {
+      if (
+        activeView === 'tasks' ||
+        activeView === 'activity' ||
+        activeView === 'automations' ||
+        activeView === 'space'
+      ) {
         return
       }
 
@@ -983,7 +1048,8 @@ function App(): React.JSX.Element {
       activeModal !== 'quick-open' &&
       activeModal !== 'worktree-palette' &&
       activeModal !== 'new-workspace-composer' &&
-      activeModal !== 'workspace-cleanup'
+      activeModal !== 'workspace-cleanup' &&
+      activeModal !== 'feature-wall'
     ) {
       return
     }
@@ -1138,7 +1204,10 @@ function App(): React.JSX.Element {
 
   useEffect(() => {
     if (
-      (activeView === 'tasks' || activeView === 'activity' || activeView === 'automations') &&
+      (activeView === 'tasks' ||
+        activeView === 'activity' ||
+        activeView === 'automations' ||
+        activeView === 'space') &&
       rightSidebarOpen
     ) {
       // Why: hide the right sidebar immediately when entering full-page
@@ -1308,6 +1377,7 @@ function App(): React.JSX.Element {
                     {activeView === 'tasks' ? <TaskPage /> : null}
                     {activeView === 'automations' ? <AutomationsPage /> : null}
                     {activeView === 'activity' ? <ActivityPrototypePage /> : null}
+                    {activeView === 'space' ? <WorkspaceSpacePage /> : null}
                     {activeView === 'terminal' && !activeWorktreeId ? <Landing /> : null}
                   </Suspense>
                 </div>
@@ -1348,6 +1418,7 @@ function App(): React.JSX.Element {
       <Suspense fallback={null}>
         {mountedLazyModalIds.has('quick-open') ? <QuickOpen /> : null}
         {mountedLazyModalIds.has('worktree-palette') ? <WorktreeJumpPalette /> : null}
+        {mountedLazyModalIds.has('feature-wall') ? <FeatureWallModal /> : null}
       </Suspense>
       {/* Why: mount PetOverlay only when the experimental flag is on AND
           the user hasn't hit "Hide pet" in the status-bar menu. Both
@@ -1359,6 +1430,7 @@ function App(): React.JSX.Element {
         </Suspense>
       ) : null}
       <UpdateCard />
+      <FeatureTourNudge />
       <StarNagCard />
       {/* Why: the existing-user opt-in banner mounts at App root so it
           renders once per renderer session, not per view. It gates
@@ -1370,6 +1442,7 @@ function App(): React.JSX.Element {
       <TelemetryFirstLaunchSurface />
       <ZoomOverlay />
       <SshPassphraseDialog />
+      <DeleteWorktreeDialog />
       {onboarding && shouldShowOnboarding(onboarding) ? (
         <Suspense fallback={null}>
           <OnboardingFlow onboarding={onboarding} onOnboardingChange={setOnboarding} />

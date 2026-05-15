@@ -80,6 +80,19 @@ import {
   type BrowserFocusRequestDetail
 } from './browser-focus'
 import {
+  isRemoteRuntimeFileOperation,
+  statRuntimePath,
+  type RuntimeFileOperationArgs
+} from '@/runtime/runtime-file-client'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import type {
+  BrowserBackResult,
+  BrowserGotoResult,
+  BrowserReloadResult,
+  BrowserScreenshotResult,
+  BrowserTabInfo
+} from '../../../../shared/runtime-types'
+import {
   formatByteCount,
   formatDownloadFinishedNotice,
   formatLoadFailureDescription,
@@ -156,6 +169,31 @@ function fileUrlToAbsolutePath(url: string): string | null {
 function getNotebookPathFromBrowserUrl(url: string): string | null {
   const filePath = fileUrlToAbsolutePath(url)
   return filePath?.toLowerCase().endsWith('.ipynb') ? filePath : null
+}
+
+function getRemoteBrowserKeypressKey(event: React.KeyboardEvent): string | null {
+  if (event.key.length === 1) {
+    return null
+  }
+  if (event.metaKey || event.ctrlKey || event.altKey) {
+    return null
+  }
+  const supported = new Set([
+    'Enter',
+    'Backspace',
+    'Delete',
+    'Tab',
+    'Escape',
+    'ArrowUp',
+    'ArrowDown',
+    'ArrowLeft',
+    'ArrowRight',
+    'Home',
+    'End',
+    'PageUp',
+    'PageDown'
+  ])
+  return supported.has(event.key) ? event.key : null
 }
 
 function getLoadErrorMetadata(loadError: BrowserLoadError | null): {
@@ -278,12 +316,39 @@ export default function BrowserPane({
   browserTab: BrowserWorkspaceState
   isActive: boolean
 }): React.JSX.Element {
+  const activeRuntimeEnvironmentId = useAppStore(
+    (s) => s.settings?.activeRuntimeEnvironmentId ?? null
+  )
   const browserPagesByWorkspace = useAppStore((s) => s.browserPagesByWorkspace)
   const browserPages = browserPagesByWorkspace[browserTab.id] ?? EMPTY_BROWSER_PAGES
   const activeBrowserPage =
     browserPages.find((page) => page.id === browserTab.activePageId) ?? browserPages[0] ?? null
   const updateBrowserPageState = useAppStore((s) => s.updateBrowserPageState)
   const setBrowserPageUrl = useAppStore((s) => s.setBrowserPageUrl)
+  const runtimeEnvironmentActive = Boolean(activeRuntimeEnvironmentId?.trim())
+
+  useEffect(() => {
+    if (!runtimeEnvironmentActive) {
+      return
+    }
+    for (const page of browserPages) {
+      destroyPersistentWebview(page.id)
+    }
+  }, [browserPages, runtimeEnvironmentActive])
+
+  if (runtimeEnvironmentActive) {
+    return activeBrowserPage ? (
+      <RemoteBrowserPagePane
+        browserTab={activeBrowserPage}
+        worktreeId={browserTab.worktreeId}
+        isActive={isActive}
+        onUpdatePageState={updateBrowserPageState}
+        onSetUrl={setBrowserPageUrl}
+      />
+    ) : (
+      <div className="flex h-full min-h-0 flex-1 bg-background" />
+    )
+  }
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col">
@@ -300,6 +365,451 @@ export default function BrowserPane({
           />
         </div>
       ) : null}
+    </div>
+  )
+}
+
+function RemoteBrowserPagePane({
+  browserTab,
+  worktreeId,
+  isActive,
+  onUpdatePageState,
+  onSetUrl
+}: {
+  browserTab: BrowserPageState
+  worktreeId: string
+  isActive: boolean
+  onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
+  onSetUrl: (tabId: string, url: string) => void
+}): React.JSX.Element {
+  const settings = useAppStore((s) => s.settings)
+  const addressBarInputRef = useRef<HTMLInputElement | null>(null)
+  const imageRef = useRef<HTMLImageElement | null>(null)
+  const [addressBarValue, setAddressBarValue] = useState(toDisplayUrl(browserTab.url))
+  const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null)
+  const [remoteError, setRemoteError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const remotePageIdRef = useRef<string | null>(null)
+  const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() ?? null
+  const setRemoteBrowserPageHandle = useAppStore((s) => s.setRemoteBrowserPageHandle)
+
+  useEffect(() => {
+    if (document.activeElement === addressBarInputRef.current) {
+      return
+    }
+    setAddressBarValue(toDisplayUrl(browserTab.url))
+  }, [browserTab.url])
+
+  const runtimeTarget = useCallback(() => {
+    const target = getActiveRuntimeTarget(settings)
+    return target.kind === 'environment' ? target : null
+  }, [settings])
+
+  useEffect(() => {
+    if (!activeRuntimeEnvironmentId) {
+      return
+    }
+    return () => {
+      const remotePageId = remotePageIdRef.current
+      if (!remotePageId) {
+        return
+      }
+      const state = useAppStore.getState()
+      const currentEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim() ?? null
+      const pageStillExists = Object.values(state.browserPagesByWorkspace).some((pages) =>
+        pages.some((page) => page.id === browserTab.id)
+      )
+      if (currentEnvironmentId === activeRuntimeEnvironmentId && pageStillExists) {
+        return
+      }
+      const removedHandle = state.removeRemoteBrowserPageHandle(browserTab.id, remotePageId)
+      remotePageIdRef.current = null
+      if (!removedHandle) {
+        return
+      }
+      // Why: remote browser tabs outlive React components on the daemon. Close
+      // only when the local page is gone or its owning runtime environment is.
+      void callRuntimeRpc(
+        { kind: 'environment', environmentId: removedHandle.environmentId },
+        'browser.tabClose',
+        { worktree: `id:${worktreeId}`, page: removedHandle.remotePageId },
+        { timeoutMs: 15_000 }
+      ).catch(() => {})
+    }
+  }, [activeRuntimeEnvironmentId, browserTab.id, worktreeId])
+
+  const applyRemoteTabInfo = useCallback(
+    (tab: Pick<BrowserTabInfo, 'url' | 'title'>): void => {
+      const safeUrl = redactKagiSessionToken(tab.url || 'about:blank')
+      onSetUrl(browserTab.id, safeUrl)
+      onUpdatePageState(browserTab.id, {
+        title: getBrowserDisplayTitle(tab.title, safeUrl),
+        loading: false,
+        loadError: null
+      })
+      setAddressBarValue(toDisplayUrl(safeUrl))
+    },
+    [browserTab.id, onSetUrl, onUpdatePageState]
+  )
+
+  const captureRemoteScreenshot = useCallback(
+    async (pageId: string): Promise<void> => {
+      const target = runtimeTarget()
+      if (!target) {
+        return
+      }
+      const screenshot = await callRuntimeRpc<BrowserScreenshotResult>(
+        target,
+        'browser.screenshot',
+        { worktree: `id:${worktreeId}`, page: pageId, format: 'png' },
+        { timeoutMs: 30_000 }
+      )
+      setScreenshotUrl(`data:image/${screenshot.format};base64,${screenshot.data}`)
+    },
+    [runtimeTarget, worktreeId]
+  )
+
+  const ensureRemotePage = useCallback(async (): Promise<string | null> => {
+    const target = runtimeTarget()
+    if (!target) {
+      return null
+    }
+    const existingHandle = useAppStore.getState().remoteBrowserPageHandlesByPageId[browserTab.id]
+    if (existingHandle?.environmentId === target.environmentId) {
+      remotePageIdRef.current = existingHandle.remotePageId
+      return existingHandle.remotePageId
+    }
+    const initialUrl =
+      browserTab.url === ORCA_BROWSER_BLANK_URL ? 'about:blank' : browserTab.url || 'about:blank'
+    const created = await callRuntimeRpc<{ browserPageId: string }>(
+      target,
+      'browser.tabCreate',
+      { worktree: `id:${worktreeId}`, url: initialUrl },
+      { timeoutMs: 30_000 }
+    )
+    remotePageIdRef.current = created.browserPageId
+    setRemoteBrowserPageHandle(browserTab.id, {
+      environmentId: target.environmentId,
+      remotePageId: created.browserPageId
+    })
+    return created.browserPageId
+  }, [browserTab.id, browserTab.url, runtimeTarget, setRemoteBrowserPageHandle, worktreeId])
+
+  const refreshRemoteView = useCallback(
+    async (pageId?: string): Promise<void> => {
+      const target = runtimeTarget()
+      const targetPageId = pageId ?? remotePageIdRef.current
+      if (!target || !targetPageId) {
+        return
+      }
+      const shown = await callRuntimeRpc<{ tab: BrowserTabInfo }>(
+        target,
+        'browser.tabShow',
+        { worktree: `id:${worktreeId}`, page: targetPageId },
+        { timeoutMs: 15_000 }
+      )
+      applyRemoteTabInfo(shown.tab)
+      await captureRemoteScreenshot(targetPageId)
+    },
+    [applyRemoteTabInfo, captureRemoteScreenshot, runtimeTarget, worktreeId]
+  )
+
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    let cancelled = false
+    setBusy(true)
+    setRemoteError(null)
+    void ensureRemotePage()
+      .then(async (pageId) => {
+        if (!pageId || cancelled) {
+          return
+        }
+        await refreshRemoteView(pageId)
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setRemoteError(error instanceof Error ? error.message : 'Failed to open remote browser.')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setBusy(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [ensureRemotePage, isActive, refreshRemoteView])
+
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    return window.api.ui.onFocusBrowserAddressBar(() => {
+      addressBarInputRef.current?.focus()
+      addressBarInputRef.current?.select()
+    })
+  }, [isActive])
+
+  const runRemoteNavigation = useCallback(
+    async (
+      method: 'browser.goto' | 'browser.back' | 'browser.forward' | 'browser.reload',
+      url?: string
+    ) => {
+      const target = runtimeTarget()
+      if (!target) {
+        return
+      }
+      const pageId = await ensureRemotePage()
+      if (!pageId) {
+        return
+      }
+      setBusy(true)
+      setRemoteError(null)
+      onUpdatePageState(browserTab.id, { loading: true, loadError: null })
+      try {
+        const params =
+          method === 'browser.goto'
+            ? { worktree: `id:${worktreeId}`, page: pageId, url: url ?? 'about:blank' }
+            : { worktree: `id:${worktreeId}`, page: pageId }
+        const result = await callRuntimeRpc<
+          BrowserGotoResult | BrowserBackResult | BrowserReloadResult
+        >(target, method, params, { timeoutMs: 30_000 })
+        applyRemoteTabInfo(result)
+        await captureRemoteScreenshot(pageId)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Remote browser command failed.'
+        setRemoteError(message)
+        onUpdatePageState(browserTab.id, {
+          loading: false,
+          loadError: { code: 0, description: message, validatedUrl: url ?? browserTab.url }
+        })
+      } finally {
+        setBusy(false)
+      }
+    },
+    [
+      applyRemoteTabInfo,
+      browserTab.id,
+      browserTab.url,
+      captureRemoteScreenshot,
+      ensureRemotePage,
+      onUpdatePageState,
+      runtimeTarget,
+      worktreeId
+    ]
+  )
+
+  const navigateToUrl = useCallback(
+    (url: string): void => {
+      void runRemoteNavigation('browser.goto', url)
+    },
+    [runRemoteNavigation]
+  )
+
+  const submitAddressBar = (): void => {
+    const searchEngine = useAppStore.getState().browserDefaultSearchEngine
+    const kagiSessionLink = useAppStore.getState().browserKagiSessionLink
+    const nextUrl = normalizeBrowserNavigationUrl(addressBarValue, searchEngine, {
+      kagiSessionLink
+    })
+    if (!nextUrl) {
+      const message = 'Enter a valid http(s) or localhost URL.'
+      setRemoteError(message)
+      onUpdatePageState(browserTab.id, {
+        loadError: {
+          code: 0,
+          description: message,
+          validatedUrl: redactKagiSessionToken(addressBarValue.trim()) || 'about:blank'
+        }
+      })
+      return
+    }
+    navigateToUrl(nextUrl)
+  }
+
+  const clickRemoteScreenshot = (event: React.MouseEvent<HTMLImageElement>): void => {
+    const target = runtimeTarget()
+    const pageId = remotePageIdRef.current
+    const image = imageRef.current
+    if (!target || !pageId || !image) {
+      return
+    }
+    const rect = image.getBoundingClientRect()
+    image.focus()
+    const scaleX = image.naturalWidth / rect.width
+    const scaleY = image.naturalHeight / rect.height
+    const x = Math.round((event.clientX - rect.left) * scaleX)
+    const y = Math.round((event.clientY - rect.top) * scaleY)
+    setBusy(true)
+    setRemoteError(null)
+    void (async () => {
+      try {
+        const params = { worktree: `id:${worktreeId}`, page: pageId }
+        await callRuntimeRpc(
+          target,
+          'browser.mouseMove',
+          { ...params, x, y },
+          { timeoutMs: 15_000 }
+        )
+        await callRuntimeRpc(target, 'browser.mouseDown', params, { timeoutMs: 15_000 })
+        await callRuntimeRpc(target, 'browser.mouseUp', params, { timeoutMs: 15_000 })
+        await new Promise((resolve) => window.setTimeout(resolve, 300))
+        await refreshRemoteView(pageId)
+      } catch (error) {
+        setRemoteError(error instanceof Error ? error.message : 'Remote click failed.')
+      } finally {
+        setBusy(false)
+      }
+    })()
+  }
+
+  const handleRemoteScreenshotKeyDown = (event: React.KeyboardEvent<HTMLImageElement>): void => {
+    if (isEditableKeyboardTarget(event.target)) {
+      return
+    }
+    const target = runtimeTarget()
+    const pageId = remotePageIdRef.current
+    if (!target || !pageId) {
+      return
+    }
+    const params = { worktree: `id:${worktreeId}`, page: pageId }
+    const text =
+      event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey ? event.key : null
+    const key = text ? null : getRemoteBrowserKeypressKey(event)
+    if (!text && !key) {
+      return
+    }
+    event.preventDefault()
+    setRemoteError(null)
+    void (async () => {
+      try {
+        if (text) {
+          await callRuntimeRpc(
+            target,
+            'browser.keyboardInsertText',
+            { ...params, text },
+            { timeoutMs: 15_000 }
+          )
+        } else if (key) {
+          await callRuntimeRpc(
+            target,
+            'browser.keypress',
+            { ...params, key },
+            { timeoutMs: 15_000 }
+          )
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 100))
+        await refreshRemoteView(pageId)
+      } catch (error) {
+        setRemoteError(error instanceof Error ? error.message : 'Remote keyboard input failed.')
+      }
+    })()
+  }
+
+  const handleRemoteScreenshotWheel = (event: React.WheelEvent<HTMLImageElement>): void => {
+    const target = runtimeTarget()
+    const pageId = remotePageIdRef.current
+    if (!target || !pageId) {
+      return
+    }
+    event.preventDefault()
+    setRemoteError(null)
+    void callRuntimeRpc(
+      target,
+      'browser.mouseWheel',
+      {
+        worktree: `id:${worktreeId}`,
+        page: pageId,
+        dx: Math.round(event.deltaX),
+        dy: Math.round(event.deltaY)
+      },
+      { timeoutMs: 15_000 }
+    )
+      .then(async () => {
+        await new Promise((resolve) => window.setTimeout(resolve, 100))
+        await refreshRemoteView(pageId)
+      })
+      .catch((error: unknown) => {
+        setRemoteError(error instanceof Error ? error.message : 'Remote scroll failed.')
+      })
+  }
+
+  return (
+    <div className="relative flex h-full min-h-0 flex-1 flex-col bg-background">
+      <div className="relative z-10 flex items-center gap-2 border-b border-border/70 bg-background/95 px-3 py-1.5">
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          onClick={() => void runRemoteNavigation('browser.back')}
+        >
+          <ArrowLeft className="size-4" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          onClick={() => void runRemoteNavigation('browser.forward')}
+        >
+          <ArrowRight className="size-4" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          onClick={() => void runRemoteNavigation('browser.reload')}
+        >
+          {busy || browserTab.loading ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <RefreshCw className="size-4" />
+          )}
+        </Button>
+        <BrowserAddressBar
+          value={addressBarValue}
+          onChange={setAddressBarValue}
+          onSubmit={submitAddressBar}
+          onNavigate={navigateToUrl}
+          inputRef={addressBarInputRef}
+        />
+      </div>
+      <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-muted/20">
+        {screenshotUrl ? (
+          <img
+            ref={imageRef}
+            src={screenshotUrl}
+            alt=""
+            tabIndex={0}
+            className="max-h-full max-w-full cursor-crosshair bg-white object-contain"
+            onClick={clickRemoteScreenshot}
+            onKeyDown={handleRemoteScreenshotKeyDown}
+            onWheel={handleRemoteScreenshotWheel}
+            draggable={false}
+          />
+        ) : (
+          <div className="flex max-w-sm flex-col items-center gap-2 px-6 text-center">
+            {busy ? (
+              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+            ) : (
+              <Globe className="size-5 text-muted-foreground" />
+            )}
+            <div className="text-sm font-medium text-foreground">
+              {busy ? 'Opening remote browser' : 'Remote browser'}
+            </div>
+            <div className="text-xs leading-5 text-muted-foreground">
+              This pane is rendered from the active runtime server.
+            </div>
+          </div>
+        )}
+        {remoteError ? (
+          <div className="absolute bottom-4 left-1/2 max-w-md -translate-x-1/2 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md">
+            {remoteError}
+          </div>
+        ) : null}
+      </div>
     </div>
   )
 }
@@ -1563,14 +2073,22 @@ function BrowserPagePane({
           }
 
           try {
-            await window.api.fs.authorizeExternalPath({ targetPath: notebookPath })
-            const stat = await window.api.fs.stat({ filePath: notebookPath })
+            const activeWorktree = store.allWorktrees().find((w) => w.id === worktreeId)
+            const fileContext: RuntimeFileOperationArgs = {
+              settings: store.settings,
+              worktreeId,
+              worktreePath: activeWorktree?.path,
+              connectionId: undefined
+            }
+            if (!isRemoteRuntimeFileOperation(fileContext, notebookPath)) {
+              await window.api.fs.authorizeExternalPath({ targetPath: notebookPath })
+            }
+            const stat = await statRuntimePath(fileContext, notebookPath)
             if (stat.isDirectory) {
               navigateBrowserUrl(url)
               return
             }
 
-            const activeWorktree = store.allWorktrees().find((w) => w.id === worktreeId)
             let relativePath = notebookPath
             if (activeWorktree?.path && isPathInsideWorktree(notebookPath, activeWorktree.path)) {
               relativePath =

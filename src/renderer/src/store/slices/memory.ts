@@ -17,7 +17,7 @@ export const createMemorySlice: StateCreator<AppState, [], [], MemorySlice> = (s
       const snapshot = await window.api.memory.getSnapshot()
       set({ memorySnapshot: snapshot, memorySnapshotError: null })
     } catch (err) {
-      // Why: the always-on Resource Usage status-bar segment needs to know when
+      // Why: the always-on Resource Manager status-bar segment needs to know when
       // the snapshot IPC is failing so it can surface a "daemon not responding"
       // banner with a Restart CTA. Prior code only console.error'd.
       console.error('Failed to fetch memory snapshot:', err)

@@ -13,6 +13,7 @@ import {
   type RpcRequest,
   type RpcResponse
 } from './core'
+import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
 import { errorResponse, mapBrowserError, mapRuntimeError, successResponse } from './errors'
 import { ALL_RPC_METHODS } from './methods'
 import type { OrcaRuntimeService } from '../orca-runtime'
@@ -79,8 +80,13 @@ export class RpcDispatcher {
     reply: (response: string) => void,
     options?: {
       connectionId?: string
+      signal?: AbortSignal
       clientId?: string
       sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
+      registerBinaryStreamHandler?: (
+        streamId: number,
+        handler: (frame: TerminalStreamFrame) => void
+      ) => () => void
     }
   ): Promise<void> {
     const meta = this.meta()
@@ -104,9 +110,11 @@ export class RpcDispatcher {
       try {
         const result = await method.handler(parsedParams.value, {
           runtime: this.runtime,
+          signal: options?.signal,
           connectionId: options?.connectionId,
           clientId: options?.clientId,
-          sendBinary: options?.sendBinary
+          sendBinary: options?.sendBinary,
+          registerBinaryStreamHandler: options?.registerBinaryStreamHandler
         })
         reply(JSON.stringify(successResponse(request.id, meta, result)))
       } catch (error) {
@@ -126,9 +134,11 @@ export class RpcDispatcher {
         parsedParams.value,
         {
           runtime: this.runtime,
+          signal: options?.signal,
           connectionId: options?.connectionId,
           clientId: options?.clientId,
-          sendBinary: options?.sendBinary
+          sendBinary: options?.sendBinary,
+          registerBinaryStreamHandler: options?.registerBinaryStreamHandler
         },
         emit
       )

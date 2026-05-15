@@ -3,6 +3,17 @@ const { execFileSync } = require('node:child_process')
 const { join, resolve } = require('node:path')
 
 const isMacRelease = process.env.ORCA_MAC_RELEASE === '1'
+const featureWallResources = {
+  from: 'resources/onboarding/feature-wall',
+  to: 'onboarding/feature-wall'
+}
+// Why: SSH relay deploy resolves bundles from process.resourcesPath in packaged
+// apps. Keeping relay assets as extraResources makes them real directories
+// instead of paths hidden inside app.asar.
+const relayExtraResource = {
+  from: 'out/relay',
+  to: 'relay'
+}
 
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
@@ -18,7 +29,10 @@ module.exports = {
     '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,CHANGELOG.md,README.md}',
     '!{.env,.env.*,.npmrc,pnpm-lock.yaml}',
     '!tsconfig.json',
-    '!config/*'
+    '!config/*',
+    // Why: feature-wall media is copied via extraResources so runtime can read
+    // it from process.resourcesPath; exclude the source copy from app.asar.
+    '!resources/onboarding/feature-wall/**'
   ],
   // Why: the CLI entry-point lives in out/cli/ but imports shared modules
   // from out/shared/ (e.g. runtime-bootstrap). Both directories must be
@@ -32,6 +46,8 @@ module.exports = {
   // integration — dependencies inside the asar archive are invisible to
   // require(). Unpack CLI runtime deps so they resolve from
   // app.asar.unpacked/node_modules/.
+  // Why: remote runtime connections use WebSocket + E2EE from the packaged CLI
+  // before the GUI process starts, so those deps need the same treatment.
   // Why: sherpa-onnx native bindings (platform-specific subpackages) must be
   // unpacked because they ship .node addons + .dylib/.so files that cannot be
   // dlopen()'d from inside the asar archive.
@@ -42,6 +58,8 @@ module.exports = {
     'out/main/computer-sidecar.js',
     'out/main/chunks/**',
     'resources/**',
+    'node_modules/ws/**',
+    'node_modules/tweetnacl/**',
     'node_modules/zod/**',
     'node_modules/sherpa-onnx*/**'
   ],
@@ -74,6 +92,7 @@ module.exports = {
   win: {
     executableName: 'Orca',
     extraResources: [
+      relayExtraResource,
       {
         from: 'resources/win32/bin/orca.cmd',
         to: 'bin/orca.cmd'
@@ -85,7 +104,8 @@ module.exports = {
       {
         from: 'native/computer-use-windows/runtime.ps1',
         to: 'computer-use-windows/runtime.ps1'
-      }
+      },
+      featureWallResources
     ]
   },
   nsis: {
@@ -126,6 +146,7 @@ module.exports = {
     hardenedRuntime: isMacRelease,
     notarize: isMacRelease,
     extraResources: [
+      relayExtraResource,
       {
         from: 'resources/darwin/bin/orca',
         to: 'bin/orca'
@@ -137,7 +158,8 @@ module.exports = {
       {
         from: 'native/computer-use-macos/.build/release/Orca Computer Use.app',
         to: 'Orca Computer Use.app'
-      }
+      },
+      featureWallResources
     ],
     target: [
       {
@@ -161,6 +183,7 @@ module.exports = {
     // The Linux installer should not claim those system package/file names.
     executableName: 'orca-ide',
     extraResources: [
+      relayExtraResource,
       {
         from: 'resources/linux/bin/orca',
         to: 'bin/orca'
@@ -172,7 +195,8 @@ module.exports = {
       {
         from: 'native/computer-use-linux/runtime.py',
         to: 'computer-use-linux/runtime.py'
-      }
+      },
+      featureWallResources
     ],
     target: ['AppImage', 'deb'],
     maintainer: 'stablyai',

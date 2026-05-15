@@ -1,6 +1,8 @@
 /* eslint-disable max-lines -- Why: keeping notebook parse and mutation helpers
 in one module makes nbformat preservation easier to audit while the notebook
 editor model is still small. */
+import { createBrowserUuid } from '@/lib/browser-uuid'
+
 export type IpynbCellKind = 'code' | 'markdown' | 'raw'
 
 export type IpynbOutput =
@@ -288,7 +290,7 @@ export function insertIpynbCell(
   const cells = root.cells as unknown[]
   const nextCell: Record<string, unknown> = {
     cell_type: kind,
-    id: crypto.randomUUID?.() ?? `cell-${Date.now()}`,
+    id: createBrowserUuid(),
     metadata: {},
     source: []
   }
@@ -307,7 +309,7 @@ export function deleteIpynbCell(content: string, index: number): string {
   if (cells.length <= 1) {
     cells.splice(0, cells.length, {
       cell_type: 'code',
-      id: crypto.randomUUID?.() ?? `cell-${Date.now()}`,
+      id: createBrowserUuid(),
       metadata: {},
       execution_count: null,
       outputs: [],

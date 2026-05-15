@@ -38,6 +38,7 @@ import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { PetStatusSegment } from './PetStatusSegment'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/FloatingTerminalIconContextMenu'
+import { GitHubRateLimitCompact } from '@/components/github/github-rate-limit-display'
 
 type StatusBarProps = {
   floatingTerminalOpen: boolean
@@ -855,6 +856,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
       }}
     >
       <div className="flex items-center gap-3">
+        <GitHubRateLimitCompact label="GitHub API budget" />
         {showClaude && <ClaudeSwitcherMenu claude={claude} compact={compact} iconOnly={iconOnly} />}
         {showCodex && <CodexSwitcherMenu codex={codex} compact={compact} iconOnly={iconOnly} />}
         {showGemini && (
@@ -908,7 +910,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  className="inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  className="inline-flex size-5 cursor-pointer items-center justify-center rounded border border-border bg-secondary text-secondary-foreground shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground"
                   aria-label={floatingTerminalActionLabel}
                   onClick={() => {
                     window.dispatchEvent(new CustomEvent(TOGGLE_FLOATING_TERMINAL_EVENT))
@@ -985,7 +987,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             onCheckedChange={() => toggleStatusBarItem('resource-usage')}
           >
             <Activity className="size-3.5" />
-            Resource Usage
+            Resource Manager
           </DropdownMenuCheckboxItem>
         </DropdownMenuContent>
       </DropdownMenu>

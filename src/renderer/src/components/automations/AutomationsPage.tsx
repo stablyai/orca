@@ -28,6 +28,9 @@ import { useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import type {
   Automation,
+  ExternalAutomationAction,
+  ExternalAutomationJob,
+  ExternalAutomationManager,
   AutomationRun,
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
@@ -36,6 +39,7 @@ import { buildAutomationRrule, parseAutomationRrule } from '../../../../shared/a
 import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
 import { AutomationDetail } from './AutomationDetail'
 import { AutomationEditorDialog, type AutomationDraft } from './AutomationEditorDialog'
+import { ExternalAutomationManagers } from './ExternalAutomationManagers'
 
 const AGENTS = AGENT_CATALOG.map((agent) => agent.id)
 const DEFAULT_TIME = '09:00'
@@ -72,6 +76,8 @@ export default function AutomationsPage(): React.JSX.Element {
 
   const [automations, setAutomations] = useState<Automation[]>([])
   const [runs, setRuns] = useState<AutomationRun[]>([])
+  const [externalManagers, setExternalManagers] = useState<ExternalAutomationManager[]>([])
+  const [externalActionKey, setExternalActionKey] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
@@ -79,6 +85,10 @@ export default function AutomationsPage(): React.JSX.Element {
   const [relativeNow, setRelativeNow] = useState(Date.now())
   const [draftAtOpen, setDraftAtOpen] = useState<AutomationDraft | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Automation | null>(null)
+  const [externalDeleteTarget, setExternalDeleteTarget] = useState<{
+    manager: ExternalAutomationManager
+    job: ExternalAutomationJob
+  } | null>(null)
   const [dontAskDeleteAgain, setDontAskDeleteAgain] = useState(false)
   const editRequestRef = useRef(0)
   const deleteConfirmButtonRef = useRef<HTMLButtonElement>(null)
@@ -129,12 +139,14 @@ export default function AutomationsPage(): React.JSX.Element {
   const refresh = useCallback(async () => {
     setIsLoading(true)
     try {
-      const [nextAutomations, nextRuns] = await Promise.all([
+      const [nextAutomations, nextRuns, nextExternalManagers] = await Promise.all([
         window.api.automations.list(),
-        window.api.automations.listRuns()
+        window.api.automations.listRuns(),
+        window.api.automations.listExternalManagers()
       ])
       setAutomations(nextAutomations)
       setRuns(nextRuns)
+      setExternalManagers(nextExternalManagers)
       const currentSelectedId = useAppStore.getState().selectedAutomationId
       const hasCurrentSelection = nextAutomations.some(
         (automation) => automation.id === currentSelectedId
@@ -464,6 +476,59 @@ export default function AutomationsPage(): React.JSX.Element {
     toast.message('Automation run queued.')
   }
 
+  const runExternalAction = async (
+    manager: ExternalAutomationManager,
+    job: ExternalAutomationJob,
+    action: ExternalAutomationAction
+  ): Promise<void> => {
+    const key = `${manager.id}:${job.id}:${action}`
+    setExternalActionKey(key)
+    try {
+      await window.api.automations.runExternalAction({
+        managerId: manager.id,
+        provider: manager.provider,
+        target: manager.target,
+        jobId: job.id,
+        action
+      })
+      await refresh()
+      toast.success(
+        action === 'delete'
+          ? 'External automation deleted.'
+          : action === 'run'
+            ? 'External automation queued.'
+            : action === 'pause'
+              ? 'External automation paused.'
+              : 'External automation resumed.'
+      )
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'External automation action failed.')
+    } finally {
+      setExternalActionKey(null)
+    }
+  }
+
+  const requestExternalAction = (
+    manager: ExternalAutomationManager,
+    job: ExternalAutomationJob,
+    action: ExternalAutomationAction
+  ): void => {
+    if (action === 'delete') {
+      setExternalDeleteTarget({ manager, job })
+      return
+    }
+    void runExternalAction(manager, job, action)
+  }
+
+  const confirmDeleteExternalAutomation = async (): Promise<void> => {
+    if (!externalDeleteTarget) {
+      return
+    }
+    const target = externalDeleteTarget
+    setExternalDeleteTarget(null)
+    await runExternalAction(target.manager, target.job, 'delete')
+  }
+
   const openRunWorkspace = (run: AutomationRun): void => {
     if (!run.workspaceId || !activateAndRevealWorktree(run.workspaceId)) {
       toast.error('Workspace is not available.')
@@ -613,6 +678,55 @@ export default function AutomationsPage(): React.JSX.Element {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={externalDeleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setExternalDeleteTarget(null)
+          }
+        }}
+      >
+        <DialogContent
+          className="max-w-md"
+          onOpenAutoFocus={(event) => {
+            event.preventDefault()
+            deleteConfirmButtonRef.current?.focus()
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle className="text-sm">Delete External Automation</DialogTitle>
+            <DialogDescription className="text-xs">
+              Delete{' '}
+              <span className="break-all font-medium text-foreground">
+                {externalDeleteTarget?.job.name}
+              </span>{' '}
+              from {externalDeleteTarget?.manager.label}.
+            </DialogDescription>
+          </DialogHeader>
+          {externalDeleteTarget ? (
+            <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs">
+              <div className="break-all font-medium text-foreground">
+                {externalDeleteTarget.job.name}
+              </div>
+              <div className="mt-1 text-muted-foreground">{externalDeleteTarget.job.schedule}</div>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExternalDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              ref={deleteConfirmButtonRef}
+              variant="destructive"
+              onClick={() => void confirmDeleteExternalAutomation()}
+            >
+              <Trash2 className="size-4" />
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(280px,360px)_1fr] overflow-hidden border-t border-border/50">
         <section className="flex min-h-0 flex-col border-r border-border/50 bg-muted/20">
           <div className="min-h-0 flex-1 overflow-auto p-2">
@@ -715,6 +829,12 @@ export default function AutomationsPage(): React.JSX.Element {
             onEdit={(automation) => void openEditDialog(automation)}
             onToggle={(automation) => void toggleAutomation(automation)}
             onDelete={requestDeleteAutomation}
+          />
+          <ExternalAutomationManagers
+            managers={externalManagers}
+            now={relativeNow}
+            runningActionKey={externalActionKey}
+            onAction={requestExternalAction}
           />
         </section>
       </div>

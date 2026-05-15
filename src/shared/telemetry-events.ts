@@ -14,6 +14,7 @@
 // re-check string length.
 
 import { z } from 'zod'
+import { FEATURE_WALL_MAX_DWELL_MS } from './feature-wall-telemetry'
 
 import { AGENT_HOOK_TARGETS } from './agent-hook-types'
 import { ONBOARDING_FINAL_STEP } from './constants'
@@ -57,6 +58,7 @@ export const AGENT_KIND_VALUES = [
   'qwen-code',
   'rovo',
   'hermes',
+  'openclaw',
   'copilot',
   'other'
 ] as const
@@ -132,12 +134,32 @@ export const launchSourceSchema = z.enum([
   'shortcut',
   'onboarding',
   'diff_notes_send',
+  'notes_send',
   'unknown'
 ])
 export type LaunchSource = z.infer<typeof launchSourceSchema>
 
 export const requestKindSchema = z.enum(['new', 'resume', 'followup'])
 export type RequestKind = z.infer<typeof requestKindSchema>
+
+export const featureWallTileIdSchema = z.enum([
+  'tile-01',
+  'tile-02',
+  'tile-03',
+  'tile-04',
+  'tile-05',
+  'tile-06',
+  'tile-07',
+  'tile-08',
+  'tile-09',
+  'tile-10',
+  'tile-11',
+  'tile-12'
+])
+export type FeatureWallTileIdTelemetry = z.infer<typeof featureWallTileIdSchema>
+
+export const featureWallOpenSourceSchema = z.enum(['help_menu', 'popup', 'unknown'])
+export type FeatureWallOpenSourceTelemetry = z.infer<typeof featureWallOpenSourceSchema>
 
 // `env_var` is deliberately absent — env-var and CI paths override consent at
 // runtime only (see consent.ts); they never mutate `optedIn` and therefore
@@ -241,6 +263,27 @@ const settingsChangedSchema = z
 const telemetryOptedInSchema = z.object({ via: optInViaSchema }).strict()
 const telemetryOptedOutSchema = z.object({ via: optInViaSchema }).strict()
 
+const featureWallOpenedSchema = z
+  .object({
+    source: featureWallOpenSourceSchema
+  })
+  .strict()
+const featureWallClosedSchema = z
+  .object({
+    dwell_ms: z.number().int().min(0).max(FEATURE_WALL_MAX_DWELL_MS)
+  })
+  .strict()
+const featureWallTileFocusedSchema = z
+  .object({
+    tile_id: featureWallTileIdSchema
+  })
+  .strict()
+const featureWallTileClickedSchema = z
+  .object({
+    tile_id: featureWallTileIdSchema
+  })
+  .strict()
+
 const addRepoSetupStepActionEventSchema = z
   .object({ action: addRepoSetupStepActionSchema, nth_repo_added: nthRepoAddedSchema })
   .strict()
@@ -326,6 +369,31 @@ const onboardingChecklistItemSchema = z.enum([
   'openedFile',
   'ranAgentOnFile'
 ])
+const onboardingFeatureSetupFeatureSchema = z.enum(['browser_use', 'computer_use', 'orchestration'])
+const onboardingFeatureSetupSelectionSchema = {
+  browser_use: z.boolean(),
+  computer_use: z.boolean(),
+  orchestration: z.boolean(),
+  selected_count: z.number().int().min(0).max(3)
+} as const
+type OnboardingFeatureSetupSelectionTelemetry = {
+  browser_use: boolean
+  computer_use: boolean
+  orchestration: boolean
+  selected_count: number
+}
+const onboardingFeatureSetupSelectedCountRefinement = {
+  path: ['selected_count'],
+  message: 'selected_count must match selected feature flags'
+}
+
+function hasMatchingOnboardingFeatureSetupSelectedCount(
+  props: OnboardingFeatureSetupSelectionTelemetry
+): boolean {
+  const selectedCount =
+    (props.browser_use ? 1 : 0) + (props.computer_use ? 1 : 0) + (props.orchestration ? 1 : 0)
+  return props.selected_count === selectedCount
+}
 
 // Why: compile-time guard that the enum above stays in lockstep with the
 // activation keys of OnboardingChecklistState (everything except the UI-only
@@ -546,6 +614,51 @@ const onboardingGhosttyImportFailedSchema = z
     cohort: cohortSchema
   })
   .strict()
+const onboardingFeatureSetupToggledSchema = z
+  .object({
+    feature: onboardingFeatureSetupFeatureSchema,
+    selected: z.boolean(),
+    cohort: cohortSchema
+  })
+  .strict()
+const onboardingFeatureSetupRunSchema = z
+  .object({
+    ...onboardingFeatureSetupSelectionSchema,
+    cli_touched: z.boolean(),
+    skill_commands_copied: z.boolean(),
+    skill_install_command_prepared: z.boolean(),
+    computer_use_permissions_opened: z.boolean(),
+    warning_count: z.number().int().nonnegative(),
+    cohort: cohortSchema
+  })
+  // Why: selected_count is derived analytics data; validate the relationship
+  // at the untrusted IPC boundary instead of trusting renderer callers.
+  .refine(
+    hasMatchingOnboardingFeatureSetupSelectedCount,
+    onboardingFeatureSetupSelectedCountRefinement
+  )
+  .strict()
+const onboardingFeatureSetupTerminalOpenedSchema = z
+  .object({
+    ...onboardingFeatureSetupSelectionSchema,
+    cohort: cohortSchema
+  })
+  .refine(
+    hasMatchingOnboardingFeatureSetupSelectedCount,
+    onboardingFeatureSetupSelectedCountRefinement
+  )
+  .strict()
+const onboardingFeatureSetupTerminalInteractedSchema = z
+  .object({
+    ...onboardingFeatureSetupSelectionSchema,
+    method: z.enum(['keyboard', 'pointer']),
+    cohort: cohortSchema
+  })
+  .refine(
+    hasMatchingOnboardingFeatureSetupSelectedCount,
+    onboardingFeatureSetupSelectedCountRefinement
+  )
+  .strict()
 
 // ── Event registry: the one record the validator consumes ───────────────
 //
@@ -578,6 +691,11 @@ export const eventSchemas = {
   telemetry_opted_in: telemetryOptedInSchema,
   telemetry_opted_out: telemetryOptedOutSchema,
 
+  feature_wall_opened: featureWallOpenedSchema,
+  feature_wall_closed: featureWallClosedSchema,
+  feature_wall_tile_focused: featureWallTileFocusedSchema,
+  feature_wall_tile_clicked: featureWallTileClickedSchema,
+
   onboarding_started: onboardingStartedSchema,
   onboarding_step_viewed: onboardingStepViewedSchema,
   onboarding_step_completed: onboardingStepCompletedSchema,
@@ -590,6 +708,10 @@ export const eventSchemas = {
   onboarding_ghostty_discovered: onboardingGhosttyDiscoveredSchema,
   onboarding_ghostty_import_clicked: onboardingGhosttyImportClickedSchema,
   onboarding_ghostty_import_failed: onboardingGhosttyImportFailedSchema,
+  onboarding_feature_setup_toggled: onboardingFeatureSetupToggledSchema,
+  onboarding_feature_setup_run: onboardingFeatureSetupRunSchema,
+  onboarding_feature_setup_terminal_opened: onboardingFeatureSetupTerminalOpenedSchema,
+  onboarding_feature_setup_terminal_interacted: onboardingFeatureSetupTerminalInteractedSchema,
   activation_checklist_item_completed: activationChecklistItemCompletedSchema,
 
   smart_sort_class_distribution: smartSortClassDistributionSchema,
@@ -640,8 +762,12 @@ type _CohortExtendedRoster =
   | 'workspace_create_failed'
   | 'agent_started'
   | 'agent_error'
+// Why: `z.object({}).strict()` infers a string index signature, which would
+// make every key appear present. Ignore index-signature-only keys here so
+// strict empty event payloads do not get pulled into keyed telemetry rosters.
+type _KnownPayloadKeys<T> = string extends keyof T ? never : keyof T
 type _DerivedCohortExtendedEvents = {
-  [N in EventName]: 'nth_repo_added' extends keyof EventMap[N] ? N : never
+  [N in EventName]: 'nth_repo_added' extends _KnownPayloadKeys<EventMap[N]> ? N : never
 }[EventName]
 type _CohortExtendedRosterSync = _CohortExtendedRoster extends _DerivedCohortExtendedEvents
   ? _DerivedCohortExtendedEvents extends _CohortExtendedRoster
@@ -688,8 +814,12 @@ type _OnboardingCohortRoster =
   | 'onboarding_ghostty_discovered'
   | 'onboarding_ghostty_import_clicked'
   | 'onboarding_ghostty_import_failed'
+  | 'onboarding_feature_setup_toggled'
+  | 'onboarding_feature_setup_run'
+  | 'onboarding_feature_setup_terminal_opened'
+  | 'onboarding_feature_setup_terminal_interacted'
 type _DerivedOnboardingCohortEvents = {
-  [N in EventName]: 'cohort' extends keyof EventMap[N] ? N : never
+  [N in EventName]: 'cohort' extends _KnownPayloadKeys<EventMap[N]> ? N : never
 }[EventName]
 type _OnboardingCohortRosterSync = _OnboardingCohortRoster extends _DerivedOnboardingCohortEvents
   ? _DerivedOnboardingCohortEvents extends _OnboardingCohortRoster

@@ -6,10 +6,12 @@ import type { TabsSlice } from './slices/tabs'
 import type { UISlice } from './slices/ui'
 import type { SettingsSlice } from './slices/settings'
 import type { GitHubSlice } from './slices/github'
+import type { HostedReviewSlice } from './slices/hosted-review'
 import type { LinearSlice } from './slices/linear'
 import type { EditorSlice } from './slices/editor'
 import type { StatsSlice } from './slices/stats'
 import type { MemorySlice } from './slices/memory'
+import type { WorkspaceSpaceSlice } from './slices/workspace-space'
 import type { ClaudeUsageSlice } from './slices/claude-usage'
 import type { CodexUsageSlice } from './slices/codex-usage'
 import type { BrowserSlice } from './slices/browser'
@@ -30,10 +32,12 @@ export type AppState = RepoSlice &
   UISlice &
   SettingsSlice &
   GitHubSlice &
+  HostedReviewSlice &
   LinearSlice &
   EditorSlice &
   StatsSlice &
   MemorySlice &
+  WorkspaceSpaceSlice &
   ClaudeUsageSlice &
   CodexUsageSlice &
   BrowserSlice &

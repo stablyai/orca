@@ -5,6 +5,8 @@ import { getConnectionId } from '@/lib/connection-context'
 import type { DirCache, TreeNode } from './file-explorer-types'
 import { splitPathSegments } from './path-tree'
 import { shouldIncludeFileExplorerEntry } from './file-explorer-entries'
+import { readRuntimeDirectory } from '@/runtime/runtime-file-client'
+import { useAppStore } from '@/store'
 
 type UseFileExplorerTreeResult = {
   dirCache: Record<string, DirCache>
@@ -48,7 +50,15 @@ export function useFileExplorerTree(
       }))
       try {
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-        const entries = await window.api.fs.readDir({ dirPath, connectionId })
+        const entries = await readRuntimeDirectory(
+          {
+            settings: useAppStore.getState().settings,
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId
+          },
+          dirPath
+        )
         if (depth === -1) {
           setRootError(null)
         }

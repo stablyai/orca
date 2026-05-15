@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { isEditableTarget } from '@/lib/editable-target'
 import type { OnboardingState } from '../../../../shared/types'
@@ -18,15 +18,16 @@ const stepCopy = {
   agent: {
     title: 'Pick your default agent',
     subtitle:
-      "Orca works with every CLI agent. Choose the one you'll reach for most — switch any time."
+      "Orca works with every CLI agent. Choose the one you'll reach for most. Switch any time."
   },
   theme: {
     title: 'Make it feel like home',
     subtitle: 'Pick the look you want to stare at for hours.'
   },
   notifications: {
-    title: 'Know when an agent needs you',
-    subtitle: 'Get a desktop notification when your agent finishes or asks a question.'
+    title: 'Set up Orca for agents',
+    subtitle:
+      'Get notifications when agents need you, and choose the capabilities Orca should enable on this computer.'
   },
   repo: {
     title: 'Point Orca at some code',
@@ -46,6 +47,11 @@ export default function OnboardingFlow({
   const flow = useOnboardingFlow(onboarding, onOnboardingChange)
   const { currentStep, stepIndex, busyLabel } = flow
   const copy = stepCopy[currentStep.id]
+  const shouldShowSetupAction =
+    currentStep.id === 'notifications' &&
+    flow.hasSelectedFeatureSetup &&
+    !flow.featureSetupTerminalCommand
+  const primaryActionLabel = busyLabel ?? (shouldShowSetupAction ? 'Set up' : 'Continue')
   // Why: depend on stable callbacks + step id only so the listener doesn't
   // re-bind on every render of the parent (flow object identity changes).
   const { next: flowNext, openFolder: flowOpenFolder } = flow
@@ -153,15 +159,28 @@ export default function OnboardingFlow({
             />
           )}
           {currentStep.id === 'notifications' && (
-            <NotificationStep value={flow.notifications} onChange={flow.setNotifications} />
+            <NotificationStep
+              value={flow.notifications}
+              onChange={flow.setNotifications}
+              featureSetup={flow.featureSetupSelection}
+              onFeatureSetupChange={flow.setFeatureSetupSelection}
+              featureSetupCommand={flow.featureSetupTerminalCommand}
+              featureSetupCommandSelection={flow.featureSetupTerminalSelection}
+            />
           )}
           {currentStep.id === 'repo' && (
             <RepoStep
               cloneUrl={flow.cloneUrl}
               onCloneUrlChange={flow.setCloneUrl}
               onOpenFolder={() => void flow.openFolder()}
+              onOpenServerFolder={(kind) => void flow.openFolder(kind)}
               onClone={() => void flow.clone()}
+              serverPath={flow.serverPath}
+              onServerPathChange={flow.setServerPath}
+              cloneDestination={flow.cloneDestination}
+              onCloneDestinationChange={flow.setCloneDestination}
               workspaceDir={flow.settings?.workspaceDir ?? ''}
+              runtimeActive={Boolean(flow.settings?.activeRuntimeEnvironmentId?.trim())}
               busyLabel={flow.busyLabel}
               error={flow.error}
             />
@@ -173,15 +192,25 @@ export default function OnboardingFlow({
             <kbd className="rounded-md border border-border bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] text-foreground">
               {enterLabel}
             </kbd>
-            <span>{currentStep.id === 'repo' ? 'open folder' : 'continue'}</span>
+            <span>
+              {currentStep.id === 'repo'
+                ? 'open folder'
+                : currentStep.id === 'notifications' &&
+                    flow.hasSelectedFeatureSetup &&
+                    !flow.featureSetupTerminalCommand
+                  ? 'set up'
+                  : 'continue'}
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <button
-              className={
+              className={cn(
                 currentStep.id === 'repo'
                   ? 'rounded-md border border-foreground/20 bg-muted px-3 py-2 text-sm font-medium text-foreground hover:bg-muted-foreground/10'
-                  : 'rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground'
-              }
+                  : 'rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground',
+                'disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-muted-foreground'
+              )}
+              disabled={Boolean(busyLabel)}
               onClick={() => void flow.skip()}
             >
               {currentStep.id === 'repo' ? "I'll add one later" : 'Skip'}
@@ -198,11 +227,13 @@ export default function OnboardingFlow({
             )}
             {currentStep.id !== 'repo' && (
               <button
-                className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                aria-busy={Boolean(busyLabel)}
                 disabled={Boolean(busyLabel)}
                 onClick={() => void flow.next()}
               >
-                Continue
+                {busyLabel ? <Loader2 className="size-4 animate-spin" /> : null}
+                {primaryActionLabel}
               </button>
             )}
           </div>

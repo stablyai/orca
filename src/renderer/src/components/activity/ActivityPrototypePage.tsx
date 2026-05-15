@@ -58,8 +58,11 @@ import {
   type AgentStateHistoryEntry,
   type AgentStatusEntry,
   type AgentStatusState,
-  type AgentType
+  type AgentType,
+  type MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 
 type ThreadReadFilter = 'all' | 'unread'
 type ActivityGroupBy = 'status' | 'project' | 'worktree' | 'agent'
@@ -77,6 +80,7 @@ type ActivityEvent = {
   tab: TerminalTab
   agentType: AgentType
   agentAlive: boolean
+  migrationUnsupportedPtyId?: string
   unread: boolean
 }
 
@@ -91,8 +95,8 @@ type ActivityLiveAgentSnapshot = {
 }
 
 // Why (per-pane thread): the activity feed is keyed on the agent pane (a
-// terminal tab + pane id) rather than on the workspace, so the left list
-// shows one entry per agent. paneKey is the stable identity (`${tabId}:${paneId}`).
+// terminal tab + stable leaf id) rather than on the workspace, so the left list
+// shows one entry per agent. paneKey is the durable identity (`${tabId}:${leafId}`).
 type AgentPaneThread = {
   paneKey: string
   paneTitle: string
@@ -106,6 +110,7 @@ type AgentPaneThread = {
   latestTimestamp: number
   latestEvent: ActivityEvent | null
   events: ActivityEvent[]
+  migrationUnsupportedPtyId?: string
   unread: boolean
 }
 
@@ -119,13 +124,14 @@ type ActivityThreadGroup = {
 
 type ActivityTerminalPortalReadiness = {
   target: HTMLElement | null
-  tabId: string | null
-  ready: boolean
+  paneKey: string | null
+  status: 'loading' | 'ready' | 'unavailable'
 }
 
 type ActivityTerminalPortalDomStatus = {
   hasSelectedRoot: boolean
   ready: boolean
+  unavailable: boolean
 }
 
 type ActivityTerminalPortalSlotId = 'primary' | 'secondary'
@@ -168,6 +174,43 @@ function formatRelativeTime(timestamp: number): string {
   return relativeTimeFormatter.format(diffDays, 'day')
 }
 
+function findActivityTerminalPane(
+  root: HTMLElement,
+  leafId: string
+): { foundAnyPane: boolean; pane: HTMLElement | null } {
+  let foundAnyPane = false
+  for (const candidate of root.querySelectorAll<HTMLElement>('[data-leaf-id]')) {
+    foundAnyPane = true
+    if (candidate.dataset.leafId === leafId) {
+      return { foundAnyPane, pane: candidate }
+    }
+  }
+  return { foundAnyPane, pane: null }
+}
+
+function hasInlineDisplayNoneBetween(element: HTMLElement, root: HTMLElement): boolean {
+  let current: HTMLElement | null = element
+  while (current) {
+    if (current.style.display === 'none') {
+      return true
+    }
+    if (current === root) {
+      return false
+    }
+    current = current.parentElement
+  }
+  return false
+}
+
+function hasUnhiddenSiblingPane(root: HTMLElement, selectedPane: HTMLElement): boolean {
+  for (const candidate of root.querySelectorAll<HTMLElement>('[data-leaf-id]')) {
+    if (candidate !== selectedPane && !hasInlineDisplayNoneBetween(candidate, root)) {
+      return true
+    }
+  }
+  return false
+}
+
 function truncatePreservingSurrogates(value: string, maxLength: number): string {
   if (value.length <= maxLength) {
     return value
@@ -195,50 +238,70 @@ export function activityThreadResponseRenderPreview({
   ).trimEnd()}...`
 }
 
-function paneIdFromPaneKey(paneKey: string): number | null {
-  const colon = paneKey.indexOf(':')
-  const tail = colon > 0 ? paneKey.slice(colon + 1) : ''
-  const parsed = /^\d+$/.test(tail) ? Number.parseInt(tail, 10) : NaN
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
-}
-
 function getSelectedActivityTerminalPortalStatus(
   target: HTMLElement,
-  tabId: string
+  paneKey: string
 ): ActivityTerminalPortalDomStatus {
+  const parsed = parsePaneKey(paneKey)
+  if (!parsed) {
+    return { hasSelectedRoot: false, ready: false, unavailable: true }
+  }
   let selectedRoot: HTMLElement | null = null
   for (const candidate of target.querySelectorAll<HTMLElement>('[data-terminal-tab-id]')) {
-    if (candidate.dataset.terminalTabId === tabId) {
+    if (candidate.dataset.terminalTabId === parsed.tabId) {
       selectedRoot = candidate
       break
     }
   }
   if (!selectedRoot) {
-    return { hasSelectedRoot: false, ready: false }
+    return { hasSelectedRoot: false, ready: false, unavailable: false }
   }
+
+  const { foundAnyPane, pane: selectedPane } = findActivityTerminalPane(selectedRoot, parsed.leafId)
+  if (!selectedPane) {
+    return { hasSelectedRoot: true, ready: false, unavailable: foundAnyPane }
+  }
+
+  const unavailable = hasInlineDisplayNoneBetween(selectedPane, selectedRoot)
+  const hasUnisolatedSibling = hasUnhiddenSiblingPane(selectedRoot, selectedPane)
+  const isVisibleRoot =
+    !unavailable && (selectedPane.offsetParent !== null || selectedPane.getClientRects().length > 0)
   const hasPtyBinding =
-    selectedRoot.hasAttribute('data-pty-id') ||
-    selectedRoot.querySelector<HTMLElement>('[data-pty-id]') !== null
-  const hasXtermScreen = selectedRoot.querySelector<HTMLElement>('.xterm-screen') !== null
-  return { hasSelectedRoot: true, ready: hasPtyBinding && hasXtermScreen }
+    selectedPane.hasAttribute('data-pty-id') ||
+    selectedPane.querySelector<HTMLElement>('[data-pty-id]') !== null
+  const hasXtermScreen = selectedPane.querySelector<HTMLElement>('.xterm-screen') !== null
+  return {
+    hasSelectedRoot: true,
+    ready: isVisibleRoot && !hasUnisolatedSibling && hasPtyBinding && hasXtermScreen,
+    unavailable
+  }
 }
 
-function useActivityTerminalPortalReadiness(
+function useActivityTerminalPortalStatus(
   target: HTMLElement | null,
-  tabId: string | null
-): boolean {
+  paneKey: string | null,
+  forceUnavailable = false
+): ActivityTerminalPortalReadiness['status'] {
   const [readiness, setReadiness] = useState<ActivityTerminalPortalReadiness>({
     target: null,
-    tabId: null,
-    ready: false
+    paneKey: null,
+    status: 'loading'
   })
 
   useLayoutEffect(() => {
-    if (!target || !tabId) {
+    if (!target || !paneKey) {
       setReadiness((prev) =>
-        prev.target === null && prev.tabId === null && !prev.ready
+        prev.target === null && prev.paneKey === null && prev.status === 'loading'
           ? prev
-          : { target: null, tabId: null, ready: false }
+          : { target: null, paneKey: null, status: 'loading' }
+      )
+      return
+    }
+    if (forceUnavailable) {
+      setReadiness((prev) =>
+        prev.target === target && prev.paneKey === paneKey && prev.status === 'unavailable'
+          ? prev
+          : { target, paneKey, status: 'unavailable' }
       )
       return
     }
@@ -247,11 +310,11 @@ function useActivityTerminalPortalReadiness(
     let readyFrame: number | null = null
     let sawUnreadySelectedRoot = false
 
-    const updateReadiness = (ready: boolean): void => {
+    const updateReadiness = (status: ActivityTerminalPortalReadiness['status']): void => {
       setReadiness((prev) =>
-        prev.target === target && prev.tabId === tabId && prev.ready === ready
+        prev.target === target && prev.paneKey === paneKey && prev.status === status
           ? prev
-          : { target, tabId, ready }
+          : { target, paneKey, status }
       )
     }
 
@@ -263,11 +326,16 @@ function useActivityTerminalPortalReadiness(
     }
 
     const checkReadiness = (): void => {
-      const status = getSelectedActivityTerminalPortalStatus(target, tabId)
+      const status = getSelectedActivityTerminalPortalStatus(target, paneKey)
+      if (status.unavailable) {
+        cancelReadyFrame()
+        updateReadiness('unavailable')
+        return
+      }
       if (status.ready) {
         if (!sawUnreadySelectedRoot) {
           cancelReadyFrame()
-          updateReadiness(true)
+          updateReadiness('ready')
           return
         }
         if (readyFrame !== null) {
@@ -278,8 +346,8 @@ function useActivityTerminalPortalReadiness(
         // frame without moving terminal lifecycle work into global layout effects.
         readyFrame = requestAnimationFrame(() => {
           readyFrame = null
-          if (!disposed && getSelectedActivityTerminalPortalStatus(target, tabId).ready) {
-            updateReadiness(true)
+          if (!disposed && getSelectedActivityTerminalPortalStatus(target, paneKey).ready) {
+            updateReadiness('ready')
           }
         })
         return
@@ -288,10 +356,10 @@ function useActivityTerminalPortalReadiness(
         sawUnreadySelectedRoot = true
       }
       cancelReadyFrame()
-      updateReadiness(false)
+      updateReadiness('loading')
     }
 
-    updateReadiness(false)
+    updateReadiness('loading')
     checkReadiness()
 
     const observer = new MutationObserver(checkReadiness)
@@ -299,7 +367,7 @@ function useActivityTerminalPortalReadiness(
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['data-terminal-tab-id', 'data-pty-id']
+      attributeFilter: ['data-terminal-tab-id', 'data-leaf-id', 'data-pty-id', 'style']
     })
 
     return () => {
@@ -307,9 +375,9 @@ function useActivityTerminalPortalReadiness(
       cancelReadyFrame()
       observer.disconnect()
     }
-  }, [target, tabId])
+  }, [target, paneKey, forceUnavailable])
 
-  return readiness.target === target && readiness.tabId === tabId && readiness.ready
+  return readiness.target === target && readiness.paneKey === paneKey ? readiness.status : 'loading'
 }
 
 function otherActivityTerminalSlot(
@@ -440,6 +508,7 @@ function appendActivityEvent(args: {
   agentType: AgentType
   agentAlive: boolean
   acknowledgedAt: number
+  migrationUnsupportedPtyId?: string
 }): void {
   const id = `agent:${args.entry.paneKey}:${args.state}:${args.timestamp}`
   if (args.seenEventIds.has(id)) {
@@ -456,6 +525,7 @@ function appendActivityEvent(args: {
     tab: args.tab,
     agentType: args.agentType,
     agentAlive: args.agentAlive,
+    migrationUnsupportedPtyId: args.migrationUnsupportedPtyId,
     unread: args.acknowledgedAt < args.timestamp
   })
 }
@@ -470,6 +540,7 @@ function appendActivityEventsForEntry(args: {
   agentType: AgentType
   agentAlive: boolean
   acknowledgedAt: number
+  migrationUnsupportedPtyId?: string
 }): void {
   // Why: Activity is an append-only history surface. When a user continues in
   // the same terminal pane, the live entry moves done→working; stateHistory is
@@ -498,6 +569,7 @@ function appendActivityEventsForEntry(args: {
 
 export function buildActivityEvents(args: {
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>
   retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
   tabsByWorktree: Record<string, TerminalTab[]>
   worktreeMap: Map<string, Worktree>
@@ -521,12 +593,11 @@ export function buildActivityEvents(args: {
   }
 
   for (const [paneKey, entry] of Object.entries(args.agentStatusByPaneKey)) {
-    const separatorIndex = paneKey.indexOf(':')
-    if (separatorIndex <= 0) {
+    const parsed = parsePaneKey(paneKey)
+    if (!parsed) {
       continue
     }
-    const tabId = paneKey.slice(0, separatorIndex)
-    const context = tabContext.get(tabId)
+    const context = tabContext.get(parsed.tabId)
     if (!context) {
       continue
     }
@@ -559,7 +630,47 @@ export function buildActivityEvents(args: {
     })
   }
 
+  for (const unsupported of Object.values(args.migrationUnsupportedByPtyId ?? {})) {
+    const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
+    if (!entry) {
+      continue
+    }
+    const parsed = parsePaneKey(entry.paneKey)
+    if (!parsed) {
+      continue
+    }
+    const context = tabContext.get(parsed.tabId)
+    if (!context) {
+      continue
+    }
+    const ackAt = args.acknowledgedAgentsByPaneKey[entry.paneKey] ?? 0
+    liveAgentByPaneKey[entry.paneKey] = {
+      state: 'blocked',
+      timestamp: entry.stateStartedAt,
+      worktree: context.worktree,
+      repo: args.repoMap.get(context.worktree.repoId) ?? null,
+      entry,
+      tab: context.tab,
+      agentType: entry.agentType ?? 'unknown'
+    }
+    appendActivityEventsForEntry({
+      events,
+      seenEventIds,
+      worktree: context.worktree,
+      repo: args.repoMap.get(context.worktree.repoId) ?? null,
+      entry,
+      tab: context.tab,
+      agentType: entry.agentType ?? 'unknown',
+      agentAlive: false,
+      acknowledgedAt: ackAt,
+      migrationUnsupportedPtyId: unsupported.ptyId
+    })
+  }
+
   for (const [paneKey, retained] of Object.entries(args.retainedAgentsByPaneKey)) {
+    if (!parsePaneKey(paneKey)) {
+      continue
+    }
     const worktree = args.worktreeMap.get(retained.worktreeId)
     if (!worktree) {
       continue
@@ -618,12 +729,15 @@ export function buildAgentPaneThreads(args: {
         latestTimestamp: event.timestamp,
         latestEvent: event,
         events: [event],
+        migrationUnsupportedPtyId: event.migrationUnsupportedPtyId,
         unread: event.unread
       })
       continue
     }
     existing.events.push(event)
     existing.unread = existing.unread || event.unread
+    existing.migrationUnsupportedPtyId =
+      existing.migrationUnsupportedPtyId ?? event.migrationUnsupportedPtyId
     if (!existing.latestEvent || event.timestamp > existing.latestEvent.timestamp) {
       existing.latestEvent = event
       existing.paneTitle = paneTitleForEvent(event)
@@ -1090,6 +1204,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   const storeData = useAppStore(
     useShallow((s) => ({
       agentStatusByPaneKey: s.agentStatusByPaneKey,
+      migrationUnsupportedByPtyId: s.migrationUnsupportedByPtyId,
       retainedAgentsByPaneKey: s.retainedAgentsByPaneKey,
       tabsByWorktree: s.tabsByWorktree,
       worktreeMap: getWorktreeMapFromState(s),
@@ -1108,6 +1223,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     () =>
       buildActivityEvents({
         agentStatusByPaneKey: storeData.agentStatusByPaneKey,
+        migrationUnsupportedByPtyId: storeData.migrationUnsupportedByPtyId,
         retainedAgentsByPaneKey: storeData.retainedAgentsByPaneKey,
         tabsByWorktree: storeData.tabsByWorktree,
         worktreeMap: storeData.worktreeMap,
@@ -1199,10 +1315,20 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   } satisfies Record<ActivityTerminalPortalSlotId, HTMLElement | null>
   const activePortalTargetEl = portalTargetBySlot[activePortalSlotId]
   const inactivePortalTargetEl = portalTargetBySlot[inactivePortalSlotId]
-  const visibleTabId = visibleThread?.tab.id ?? null
-  const stagedTabId = stagedThread?.tab.id ?? null
-  const visiblePortalReady = useActivityTerminalPortalReadiness(activePortalTargetEl, visibleTabId)
-  const stagedPortalReady = useActivityTerminalPortalReadiness(inactivePortalTargetEl, stagedTabId)
+  const visiblePortalStatus = useActivityTerminalPortalStatus(
+    activePortalTargetEl,
+    visibleThread?.paneKey ?? null,
+    visibleThread?.migrationUnsupportedPtyId !== undefined
+  )
+  const stagedPortalStatus = useActivityTerminalPortalStatus(
+    inactivePortalTargetEl,
+    stagedThread?.paneKey ?? null,
+    stagedThread?.migrationUnsupportedPtyId !== undefined
+  )
+  const visiblePortalReady = visiblePortalStatus === 'ready'
+  const visiblePortalUnavailable = visiblePortalStatus === 'unavailable'
+  const stagedPortalReady = stagedPortalStatus === 'ready'
+  const stagedPortalUnavailable = stagedPortalStatus === 'unavailable'
   const showTerminalLoadingLabel = useActivityTerminalLoadingLabel(
     Boolean(visibleThread && !stagedThread && !visiblePortalReady)
   )
@@ -1232,20 +1358,24 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     if (visibleThread && activePortalTargetEl) {
       descriptors.push({
         slotId: activePortalSlotId,
+        requestToken: `${activePortalSlotId}:${visibleThread.paneKey}`,
         target: activePortalTargetEl,
         worktreeId: visibleThread.worktree.id,
         tabId: visibleThread.tab.id,
-        paneId: paneIdFromPaneKey(visibleThread.paneKey),
+        paneKey: visibleThread.paneKey,
+        forceUnavailable: visibleThread.migrationUnsupportedPtyId !== undefined,
         active: true
       })
     }
     if (stagedThread && inactivePortalTargetEl) {
       descriptors.push({
         slotId: inactivePortalSlotId,
+        requestToken: `${inactivePortalSlotId}:${stagedThread.paneKey}`,
         target: inactivePortalTargetEl,
         worktreeId: stagedThread.worktree.id,
         tabId: stagedThread.tab.id,
-        paneId: paneIdFromPaneKey(stagedThread.paneKey),
+        paneKey: stagedThread.paneKey,
+        forceUnavailable: stagedThread.migrationUnsupportedPtyId !== undefined,
         active: false
       })
     }
@@ -1264,7 +1394,9 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       setDisplayedPaneKey(null)
       return
     }
-    if (stagedThread && stagedPortalReady) {
+    if (stagedThread && (stagedPortalReady || stagedPortalUnavailable)) {
+      // Why: a stale selected pane should replace the old terminal with the
+      // unavailable state, not leave the previous pane visible under the new row.
       setActivePortalSlotId(inactivePortalSlotId)
       setDisplayedPaneKey(stagedThread.paneKey)
       return
@@ -1276,6 +1408,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     inactivePortalSlotId,
     selectedHasLiveTab,
     selectedThread,
+    stagedPortalUnavailable,
     stagedPortalReady,
     stagedThread,
     visiblePortalReady,
@@ -1325,14 +1458,43 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       state.setActiveWorktree(thread.worktree.id)
     }
     state.setActiveTabType('terminal')
-    activateTabAndFocusPane(thread.tab.id, paneIdFromPaneKey(thread.paneKey))
+    const parsed = parsePaneKey(thread.paneKey)
+    activateTabAndFocusPane(
+      thread.tab.id,
+      parsed && parsed.tabId === thread.tab.id ? parsed.leafId : null
+    )
   }
 
   const selectThread = (thread: AgentPaneThread): void => {
     setSelectedPaneKey(thread.paneKey)
-    markThreadRead(thread)
     activateThreadTerminal(thread)
   }
+
+  useEffect(() => {
+    if (
+      !selectedThread ||
+      !selectedThread.unread ||
+      stagedThread ||
+      selectedThread.paneKey !== selectedPaneKey
+    ) {
+      return
+    }
+    const selectedThreadHasDetailOnlyView =
+      !selectedHasLiveTab || selectedThread.migrationUnsupportedPtyId !== undefined
+    const selectedThreadIsVisibleTerminal =
+      visibleThread?.paneKey === selectedPaneKey && visiblePortalReady
+    if (selectedThreadHasDetailOnlyView || selectedThreadIsVisibleTerminal) {
+      storeData.acknowledgeAgents([selectedThread.paneKey])
+    }
+  }, [
+    selectedHasLiveTab,
+    selectedPaneKey,
+    selectedThread,
+    stagedThread,
+    storeData,
+    visiblePortalReady,
+    visibleThread
+  ])
 
   const jumpToWorkspace = (thread: AgentPaneThread): void => {
     markThreadRead(thread)
@@ -1566,7 +1728,12 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                         className="pointer-events-none absolute inset-0 z-20 bg-editor-surface"
                         aria-hidden="true"
                       >
-                        {showTerminalLoadingLabel ? (
+                        {visiblePortalUnavailable ? (
+                          <div className="ml-3 mt-3 inline-flex items-center gap-2 rounded-md border border-border bg-background/85 px-2 py-1 text-xs text-muted-foreground shadow-xs">
+                            <span className="h-3 w-1.5 rounded-sm bg-muted-foreground/70" />
+                            <span>Terminal unavailable</span>
+                          </div>
+                        ) : showTerminalLoadingLabel ? (
                           <div className="ml-3 mt-3 inline-flex items-center gap-2 rounded-md border border-border bg-background/85 px-2 py-1 text-xs text-muted-foreground shadow-xs">
                             <span className="h-3 w-1.5 animate-pulse rounded-sm bg-muted-foreground/70" />
                             <span>Connecting terminal...</span>

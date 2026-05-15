@@ -6,12 +6,10 @@ import type {
   ComputerUsePermissionState,
   ComputerUsePermissionStatus
 } from '../../../../shared/computer-use-permissions-types'
+import { COMPUTER_USE_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import type { SettingsSearchEntry } from './settings-search'
-
-const COMPUTER_USE_SKILL_INSTALL_COMMAND =
-  'npx skills add https://github.com/stablyai/orca --skill computer-use'
 
 export const COMPUTER_USE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
@@ -69,20 +67,12 @@ function statusClass(status: ComputerUsePermissionStatus | undefined): string {
   return 'border-border bg-muted text-muted-foreground'
 }
 
-function isExpectedDevMissingHelperError(error: unknown): boolean {
-  return (
-    import.meta.env.DEV &&
-    error instanceof Error &&
-    error.message.includes('Orca Computer Use.app was not found')
-  )
-}
-
 export function ComputerUsePane(): React.JSX.Element {
   const [platform, setPlatform] = useState<NodeJS.Platform | null>(null)
   const [states, setStates] = useState<ComputerUsePermissionState[]>([])
   const [loading, setLoading] = useState(true)
   const [pendingId, setPendingId] = useState<ComputerUsePermissionId | null>(null)
-  const [helperUnavailableInDev, setHelperUnavailableInDev] = useState(false)
+  const [helperUnavailableReason, setHelperUnavailableReason] = useState<string | null>(null)
 
   const stateById = useMemo(
     () => new Map(states.map((state) => [state.id, state.status] as const)),
@@ -95,14 +85,8 @@ export function ComputerUsePane(): React.JSX.Element {
       const result = await window.api.computerUsePermissions.getStatus()
       setPlatform(result.platform)
       setStates(result.permissions)
-      setHelperUnavailableInDev(false)
+      setHelperUnavailableReason(result.helperUnavailableReason)
     } catch (error) {
-      if (isExpectedDevMissingHelperError(error)) {
-        setPlatform('darwin')
-        setStates(PERMISSIONS.map((permission) => ({ id: permission.id, status: 'not-granted' })))
-        setHelperUnavailableInDev(true)
-        return
-      }
       toast.error(
         error instanceof Error ? error.message : 'Could not load Computer Use permissions'
       )
@@ -168,10 +152,9 @@ export function ComputerUsePane(): React.JSX.Element {
                 Computer Use needs macOS privacy permissions before agents can inspect and operate
                 app windows.
               </p>
-              {helperUnavailableInDev ? (
+              {helperUnavailableReason ? (
                 <p className="text-xs text-muted-foreground">
-                  Computer Use permissions are unavailable in this dev build because the helper app
-                  has not been built.
+                  Computer Use permissions are unavailable because {helperUnavailableReason}.
                 </p>
               ) : null}
             </div>
@@ -210,7 +193,9 @@ export function ComputerUsePane(): React.JSX.Element {
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={pending || status === 'unsupported' || helperUnavailableInDev}
+                    disabled={
+                      pending || status === 'unsupported' || helperUnavailableReason !== null
+                    }
                     onClick={() => void openPermission(permission.id)}
                     className="shrink-0 gap-1.5"
                   >
@@ -228,8 +213,7 @@ export function ComputerUsePane(): React.JSX.Element {
         <div className="space-y-1">
           <p className="text-sm font-medium">Install Computer Use Skill</p>
           <p className="text-xs text-muted-foreground">
-            Run this once in an agent project so agents know how to use Orca&apos;s computer
-            controls.
+            Run this once on your computer so agents know how to use Orca&apos;s computer controls.
           </p>
         </div>
         <div className="flex max-w-full items-center gap-2 rounded-lg border border-border/60 bg-background/60 px-3 py-2">

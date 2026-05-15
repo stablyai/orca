@@ -106,6 +106,11 @@ export class RelayAgentHookServer {
     await new Promise<void>((resolve, reject) => {
       const onStartupError = (err: Error): void => {
         this.server?.off('listening', onListening)
+        // Why: null the server reference on bind failure so a subsequent
+        // start() can retry. Without this, a failed bind (e.g. EMFILE) leaves
+        // this.server populated and the early-return at the top of start()
+        // wedges the relay into a permanently broken state until stop() runs.
+        this.server = null
         reject(err)
       }
       const onListening = (): void => {
@@ -234,9 +239,14 @@ export class RelayAgentHookServer {
       }
       res.writeHead(204)
       res.end()
-    } catch {
+    } catch (err) {
       // Why: agent hooks must fail open — return success on parse / size /
       // timeout errors so a buggy agent script never blocks the agent run.
+      // Log the swallowed error to stderr so future programmer bugs are not
+      // invisible (the 204 response would otherwise mask them entirely).
+      process.stderr.write(
+        `[relay-hook-server] hook request failed: ${err instanceof Error ? err.message : String(err)}\n`
+      )
       res.writeHead(204)
       res.end()
     }

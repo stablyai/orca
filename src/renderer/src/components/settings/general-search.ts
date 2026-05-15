@@ -43,6 +43,11 @@ export const GENERAL_EDITOR_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Minimap',
     description: 'Show the minimap overview when editing a file.',
     keywords: ['minimap', 'overview', 'code', 'scroll']
+  },
+  {
+    title: 'Markdown Review Notes',
+    description: 'Show local markdown review note controls and the review panel.',
+    keywords: ['markdown', 'review', 'notes', 'annotations', 'agents']
   }
 ]
 

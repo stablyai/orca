@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: terminal link routing has intertwined local,
+SSH, and runtime cases; keeping them in one suite prevents fixture drift. */
 import type { IDisposable, ILink } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
@@ -9,18 +11,29 @@ import {
   openDetectedFilePath
 } from './terminal-link-handlers'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
+import { getConnectionId } from '@/lib/connection-context'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from '@/runtime/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
 const openUrlMock = vi.fn()
 const openFileUriMock = vi.fn()
+const openFilePathMock = vi.fn()
 const openFileMock = vi.fn()
 const authorizeExternalPathMock = vi.fn()
 const statMock = vi.fn().mockResolvedValue({ isDirectory: false })
+const runtimeEnvironmentCallMock = vi.fn()
+const runtimeEnvironmentTransportCallMock = vi.fn()
 const setActiveWorktreeMock = vi.fn()
 const createBrowserTabMock = vi.fn()
 
 const deps = { worktreeId: 'wt-1', worktreePath: '/tmp' }
 const storeState = {
-  settings: undefined as { openLinksInApp?: boolean } | undefined,
+  settings: undefined as
+    | { openLinksInApp?: boolean; activeRuntimeEnvironmentId?: string | null }
+    | undefined,
   setActiveWorktree: setActiveWorktreeMock,
   createBrowserTab: createBrowserTabMock,
   openFile: openFileMock
@@ -44,12 +57,22 @@ vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 
+vi.mock('@/lib/connection-context', () => ({
+  getConnectionId: vi.fn(() => null)
+}))
+
 function setPlatform(userAgent: string): void {
   vi.stubGlobal('navigator', { userAgent })
 }
 
 beforeEach(() => {
+  clearRuntimeCompatibilityCacheForTests()
   vi.clearAllMocks()
+  runtimeEnvironmentTransportCallMock.mockReset()
+  runtimeEnvironmentTransportCallMock.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+    return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCallMock(args)
+  })
+  vi.mocked(getConnectionId).mockReturnValue(null)
   storeState.settings = undefined
   registerHttpLinkStoreAccessor(() => storeState)
   vi.stubGlobal('window', {
@@ -57,12 +80,14 @@ beforeEach(() => {
       shell: {
         openUrl: openUrlMock,
         openFileUri: openFileUriMock,
+        openFilePath: openFilePathMock,
         pathExists: vi.fn().mockResolvedValue(true)
       },
       fs: {
         authorizeExternalPath: authorizeExternalPathMock,
         stat: statMock
-      }
+      },
+      runtimeEnvironments: { call: runtimeEnvironmentTransportCallMock }
     }
   })
 })
@@ -239,6 +264,127 @@ describe('handleOscLink', () => {
         relativePath: 'project/docs/README.md'
       })
     )
+  })
+
+  it('stats remote-runtime file links through the active runtime environment', async () => {
+    setPlatform('Macintosh')
+    storeState.settings = { activeRuntimeEnvironmentId: 'env-1' }
+    runtimeEnvironmentCallMock.mockResolvedValueOnce({
+      id: 'rpc-1',
+      ok: true,
+      result: { size: 1, isDirectory: false, mtime: 1 },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    openDetectedFilePath('/tmp/src/main.ts', null, null, deps)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(statMock).not.toHaveBeenCalled()
+    await vi.waitFor(() => {
+      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'files.stat',
+        params: { worktree: 'wt-1', relativePath: 'src/main.ts' },
+        timeoutMs: 15_000
+      })
+    })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/tmp/src/main.ts',
+        relativePath: 'src/main.ts'
+      })
+    )
+  })
+
+  it('stats remote-runtime file links through the owning PTY runtime environment', async () => {
+    setPlatform('Macintosh')
+    storeState.settings = { activeRuntimeEnvironmentId: 'env-2' }
+    runtimeEnvironmentCallMock.mockResolvedValueOnce({
+      id: 'rpc-1',
+      ok: true,
+      result: { size: 1, isDirectory: false, mtime: 1 },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    openDetectedFilePath('/tmp/src/main.ts', null, null, {
+      ...deps,
+      runtimeEnvironmentId: 'env-1'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    await vi.waitFor(() => {
+      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'files.stat',
+        params: { worktree: 'wt-1', relativePath: 'src/main.ts' },
+        timeoutMs: 15_000
+      })
+    })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/tmp/src/main.ts',
+        relativePath: 'src/main.ts',
+        runtimeEnvironmentId: 'env-1'
+      })
+    )
+  })
+
+  it('opens SSH file links through Orca without local authorization', async () => {
+    setPlatform('Macintosh')
+    vi.mocked(getConnectionId).mockReturnValue('ssh-1')
+
+    openDetectedFilePath('/home/me/repo/src/main.ts', null, null, {
+      worktreeId: 'wt-1',
+      worktreePath: '/home/me/repo'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(statMock).toHaveBeenCalledWith({
+      filePath: '/home/me/repo/src/main.ts',
+      connectionId: 'ssh-1'
+    })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/home/me/repo/src/main.ts',
+        relativePath: 'src/main.ts'
+      })
+    )
+  })
+
+  it('does not open SSH html file links as client-local file browser tabs', async () => {
+    setPlatform('Macintosh')
+    vi.mocked(getConnectionId).mockReturnValue('ssh-1')
+
+    openDetectedFilePath('/home/me/repo/report.html', null, null, {
+      worktreeId: 'wt-1',
+      worktreePath: '/home/me/repo'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/home/me/repo/report.html',
+        relativePath: 'report.html'
+      })
+    )
+  })
+
+  it('does not ask the client OS to open SSH directories', async () => {
+    setPlatform('Macintosh')
+    vi.mocked(getConnectionId).mockReturnValue('ssh-1')
+    statMock.mockResolvedValueOnce({ isDirectory: true })
+
+    openDetectedFilePath('/home/me/repo/src', null, null, {
+      worktreeId: 'wt-1',
+      worktreePath: '/home/me/repo'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(openFilePathMock).not.toHaveBeenCalled()
+    expect(openFileMock).not.toHaveBeenCalled()
   })
 })
 

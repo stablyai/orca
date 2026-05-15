@@ -13,6 +13,8 @@ export type EditingTarget = {
   proxyCommand: string
   jumpHost: string
   relayGracePeriodSeconds: string
+  remoteWorkspaceSyncEnabled: boolean
+  remoteWorkspaceSyncGracePeriodSeconds: string
 }
 
 export const EMPTY_FORM: EditingTarget = {
@@ -24,7 +26,9 @@ export const EMPTY_FORM: EditingTarget = {
   identityFile: '',
   proxyCommand: '',
   jumpHost: '',
-  relayGracePeriodSeconds: '300'
+  relayGracePeriodSeconds: '300',
+  remoteWorkspaceSyncEnabled: false,
+  remoteWorkspaceSyncGracePeriodSeconds: '300'
 }
 
 type SshTargetFormProps = {
@@ -139,6 +143,47 @@ export function SshTargetForm({
           <p className="text-[11px] text-muted-foreground">
             How long the relay keeps terminals alive after disconnect. Default: 300 (5 minutes).
           </p>
+        </div>
+        <div className="col-span-2 space-y-3 border-t border-border/50 pt-3">
+          <label className="flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-4 accent-foreground"
+              checked={form.remoteWorkspaceSyncEnabled}
+              onChange={(e) =>
+                onFormChange((f) => ({ ...f, remoteWorkspaceSyncEnabled: e.target.checked }))
+              }
+            />
+            <span className="space-y-1">
+              <span className="block font-medium">Sync remote workspace</span>
+              <span className="block text-[11px] text-muted-foreground">
+                Store terminal tabs and split layouts on the SSH host so another Orca client can
+                restore the same remote workspace.
+              </span>
+            </span>
+          </label>
+          {form.remoteWorkspaceSyncEnabled && (
+            <div className="space-y-1.5 pl-7">
+              <Label>Synced Relay Grace Period (seconds)</Label>
+              <Input
+                type="number"
+                value={form.remoteWorkspaceSyncGracePeriodSeconds}
+                onChange={(e) =>
+                  onFormChange((f) => ({
+                    ...f,
+                    remoteWorkspaceSyncGracePeriodSeconds: e.target.value
+                  }))
+                }
+                placeholder="0"
+                min={0}
+                max={3600}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                How long synced remote workspace terminals stay alive after all clients disconnect.
+                0 keeps them alive until explicitly terminated.
+              </p>
+            </div>
+          )}
         </div>
       </div>
 

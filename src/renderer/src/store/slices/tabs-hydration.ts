@@ -4,6 +4,7 @@ import type {
   TabGroupLayoutNode,
   WorkspaceSessionState
 } from '../../../../shared/types'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   dedupeTabOrder,
   getPersistedEditFileIdsByWorktree,
@@ -61,8 +62,7 @@ function hydrateUnifiedFormat(
     tabsByWorktree[worktreeId] = [...tabs]
       .map((tab) => ({
         ...tab,
-        entityId: tab.entityId ?? tab.id,
-        isDirty: false
+        entityId: tab.entityId ?? tab.id
       }))
       .filter((tab) => {
         if (!isTransientEditorContentType(tab.contentType)) {
@@ -164,7 +164,7 @@ function hydrateLegacyFormat(
       continue
     }
 
-    const groupId = globalThis.crypto.randomUUID()
+    const groupId = createBrowserUuid()
     const tabs: Tab[] = []
     const tabOrder: string[] = []
 

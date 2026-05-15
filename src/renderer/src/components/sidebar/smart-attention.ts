@@ -1,12 +1,21 @@
 import { detectAgentStatusFromTitle, isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import type { AgentStatus } from '../../../../shared/agent-detection'
-import type { TerminalTab, Worktree } from '../../../../shared/types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode,
+  TerminalTab,
+  Worktree
+} from '../../../../shared/types'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStateHistoryEntry,
-  type AgentStatusEntry
+  type AgentStatusEntry,
+  type MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
+import { isTerminalLeafId, parsePaneKey } from '../../../../shared/stable-pane-id'
+import { FIRST_PANE_ID } from '../../../../shared/pane-key'
 
 /**
  * Ordinal class for the "Smart" sort. Lower number = more attention-demanding.
@@ -191,43 +200,90 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
  * resolution pay O(T) lookups instead of scanning the full map.
  */
 export function buildExplicitEntriesByTabId(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined
+  agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined,
+  migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>
 ): Map<string, AgentStatusEntry[]> {
   const byTab = new Map<string, AgentStatusEntry[]>()
-  if (!agentStatusByPaneKey) {
+  const entries = [
+    ...Object.values(agentStatusByPaneKey ?? {}),
+    ...Object.values(migrationUnsupportedByPtyId ?? {}).flatMap((entry) => {
+      const agentEntry = migrationUnsupportedToAgentStatusEntry(entry)
+      return agentEntry ? [agentEntry] : []
+    })
+  ]
+  if (entries.length === 0) {
     return byTab
   }
-  for (const entry of Object.values(agentStatusByPaneKey)) {
-    const colon = entry.paneKey.indexOf(':')
-    // Why: paneKey must be `${tabId}:${paneId}`. Skip malformed entries (no
-    // colon or leading colon) rather than bucketing them under an empty tabId.
-    if (colon <= 0) {
+  for (const entry of entries) {
+    const parsed = parsePaneKey(entry.paneKey)
+    // Why: paneKey must be `${tabId}:${leafUuid}`. Skip malformed or legacy
+    // numeric entries rather than bucketing unroutable rows under a tab.
+    if (!parsed) {
       continue
     }
-    const tabId = entry.paneKey.slice(0, colon)
-    const bucket = byTab.get(tabId)
+    const bucket = byTab.get(parsed.tabId)
     if (bucket) {
       bucket.push(entry)
     } else {
-      byTab.set(tabId, [entry])
+      byTab.set(parsed.tabId, [entry])
     }
   }
   return byTab
 }
 
 /**
- * Extract the paneId from a `${tabId}:${paneId}` paneKey, returning null for
- * malformed keys (no colon or non-numeric tail). Used for per-pane authority:
- * we need to know which paneIds already have a fresh hook entry so we don't
- * double-count them via the title fallback.
+ * Extract the stable leaf id from a `${tabId}:${leafId}` paneKey. Used for
+ * per-pane authority: we need to know which leaves already have a fresh hook
+ * entry so we don't double-count them via the title fallback.
  */
-function paneIdFromPaneKey(paneKey: string): number | null {
-  const colon = paneKey.indexOf(':')
-  if (colon <= 0) {
+function leafIdFromPaneKey(paneKey: string): string | null {
+  return parsePaneKey(paneKey)?.leafId ?? null
+}
+
+function getLeftmostLeafId(node: TerminalPaneLayoutNode): string {
+  return node.type === 'leaf' ? node.leafId : getLeftmostLeafId(node.first)
+}
+
+function collectReplayCreatedPaneLeafIds(
+  node: Extract<TerminalPaneLayoutNode, { type: 'split' }>,
+  leafIdsInReplayCreationOrder: string[]
+): void {
+  leafIdsInReplayCreationOrder.push(getLeftmostLeafId(node.second))
+
+  if (node.first.type === 'split') {
+    collectReplayCreatedPaneLeafIds(node.first, leafIdsInReplayCreationOrder)
+  }
+  if (node.second.type === 'split') {
+    collectReplayCreatedPaneLeafIds(node.second, leafIdsInReplayCreationOrder)
+  }
+}
+
+function collectLeafIdsInReplayCreationOrder(
+  node: TerminalPaneLayoutNode | null | undefined
+): string[] {
+  if (!node) {
+    return []
+  }
+  const leafIdsInReplayCreationOrder = [getLeftmostLeafId(node)]
+  if (node.type === 'split') {
+    collectReplayCreatedPaneLeafIds(node, leafIdsInReplayCreationOrder)
+  }
+  return leafIdsInReplayCreationOrder
+}
+
+function resolveRuntimePaneTitleLeafId(
+  tabLayout: TerminalLayoutSnapshot | undefined,
+  runtimePaneId: string
+): string | null {
+  if (isTerminalLeafId(runtimePaneId)) {
+    return runtimePaneId
+  }
+  const numericPaneId = Number(runtimePaneId)
+  if (!Number.isInteger(numericPaneId) || numericPaneId < FIRST_PANE_ID) {
     return null
   }
-  const id = Number(paneKey.slice(colon + 1))
-  return Number.isFinite(id) ? id : null
+  const leafIds = collectLeafIdsInReplayCreationOrder(tabLayout?.root)
+  return leafIds[numericPaneId - FIRST_PANE_ID] ?? null
 }
 
 /**
@@ -248,9 +304,11 @@ export function buildAttentionByWorktree(
   agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined,
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>,
   ptyIdsByTabId: Record<string, string[]>,
-  now: number
+  now: number,
+  migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>,
+  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
 ): Map<string, WorktreeAttention> {
-  const byTab = buildExplicitEntriesByTabId(agentStatusByPaneKey)
+  const byTab = buildExplicitEntriesByTabId(agentStatusByPaneKey, migrationUnsupportedByPtyId)
   const result = new Map<string, WorktreeAttention>()
 
   for (const worktree of worktrees) {
@@ -262,9 +320,9 @@ export function buildAttentionByWorktree(
     const panes: PaneInput[] = []
     for (const tab of tabs) {
       const hookEntries = byTab.get(tab.id)
-      // Why: paneIds covered by a hook entry skip the title fallback so we
+      // Why: leaf ids covered by a hook entry skip the title fallback so we
       // don't double-count them. Hook authority is per-pane.
-      const hookPaneIds = new Set<number>()
+      const hookLeafIds = new Set<string>()
       if (hookEntries) {
         for (const entry of hookEntries) {
           panes.push({ kind: 'hook', entry })
@@ -275,9 +333,9 @@ export function buildAttentionByWorktree(
           if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
             continue
           }
-          const paneId = paneIdFromPaneKey(entry.paneKey)
-          if (paneId !== null) {
-            hookPaneIds.add(paneId)
+          const leafId = leafIdFromPaneKey(entry.paneKey)
+          if (leafId !== null) {
+            hookLeafIds.add(leafId)
           }
         }
       }
@@ -293,9 +351,10 @@ export function buildAttentionByWorktree(
       if (paneTitles && Object.keys(paneTitles).length > 0) {
         // Why: split-pane tabs can host multiple agents; each pane reports
         // its own title. Mirrors the precedence used by getWorkingAgentsPerWorktree.
-        for (const [paneIdStr, title] of Object.entries(paneTitles)) {
-          const paneId = Number(paneIdStr)
-          if (hookPaneIds.has(paneId)) {
+        const tabLayout = terminalLayoutsByTabId?.[tab.id]
+        for (const [runtimePaneId, title] of Object.entries(paneTitles)) {
+          const leafId = resolveRuntimePaneTitleLeafId(tabLayout, runtimePaneId)
+          if (leafId !== null && hookLeafIds.has(leafId)) {
             continue
           }
           panes.push({
@@ -304,7 +363,7 @@ export function buildAttentionByWorktree(
             worktreeLastActivityAt: worktree.lastActivityAt
           })
         }
-      } else if (hookPaneIds.size === 0) {
+      } else if (hookLeafIds.size === 0) {
         // Why: tabs we have not mounted yet (restored-but-unvisited) only
         // expose the legacy tab title. Fall back to it only when no pane-level
         // titles or hook entries exist for this tab.

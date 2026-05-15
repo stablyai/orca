@@ -24,9 +24,7 @@ const ORCA_SHELL_WRAPPER_ENV = [
   'ORCA_OPENCODE_CONFIG_DIR',
   'ORCA_PI_CODING_AGENT_DIR'
 ] as const
-const POWERSHELL_PROFILE_COMMAND = expect.stringMatching(
-  /ORCA_OPENCODE_CONFIG_DIR[\s\S]*ORCA_PI_CODING_AGENT_DIR[\s\S]*UTF8/
-)
+const POWERSHELL_OSC133_COMMAND_ARGS = ['-NoLogo', '-NoExit', '-EncodedCommand', expect.any(String)]
 const ZSH_SHELL_READY_DIR = /shell-ready[\\/]zsh/
 
 function mockPtyProcess(pid = 12345) {
@@ -413,7 +411,7 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'powershell.exe',
-      ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
+      POWERSHELL_OSC133_COMMAND_ARGS,
       expect.any(Object)
     )
   })
@@ -442,7 +440,7 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'pwsh.exe',
-      ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
+      POWERSHELL_OSC133_COMMAND_ARGS,
       expect.any(Object)
     )
   })
@@ -471,7 +469,7 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'powershell.exe',
-      ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
+      POWERSHELL_OSC133_COMMAND_ARGS,
       expect.any(Object)
     )
   })
@@ -500,7 +498,7 @@ describe('createPtySubprocess', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'powershell.exe',
-      ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
+      POWERSHELL_OSC133_COMMAND_ARGS,
       expect.any(Object)
     )
   })

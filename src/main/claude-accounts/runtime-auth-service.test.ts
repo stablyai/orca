@@ -995,6 +995,80 @@ describe('ClaudeRuntimeAuthService', () => {
     expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(originalCredentials)
   })
 
+  it('preserves rejected runtime refreshes while a Claude terminal is live on Windows', async () => {
+    setPlatform('win32')
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const originalCredentials = createClaudeCredentialsJson('user@example.com', 'original', 'org-a')
+    const refreshedCredentials = createClaudeCredentialsWithoutEmail('refreshed', 'org-a')
+    const managedAuthPath = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-1',
+      originalCredentials
+    )
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('account-1', managedAuthPath, { organizationUuid: 'org-a' })
+      ],
+      activeClaudeManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const { markClaudePtyExited, markClaudePtySpawned } = await import('./live-pty-gate')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    await service.syncForCurrentSelection()
+
+    markClaudePtySpawned('live-claude-pty')
+    try {
+      writeFileSync(runtimeCredentialsPath, refreshedCredentials, 'utf-8')
+      await service.syncForCurrentSelection()
+
+      expect(readManagedCredentialsForTest('account-1', managedAuthPath)).toBe(refreshedCredentials)
+      expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(refreshedCredentials)
+    } finally {
+      markClaudePtyExited('live-claude-pty')
+    }
+
+    await service.syncForCurrentSelection()
+
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(refreshedCredentials)
+  })
+
+  it('does not persist live runtime refreshes with conflicting organization identity', async () => {
+    setPlatform('win32')
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const originalCredentials = createClaudeCredentialsJson('user@example.com', 'original', 'org-a')
+    const conflictingCredentials = createClaudeCredentialsWithoutEmail('refreshed', 'org-b')
+    const managedAuthPath = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-1',
+      originalCredentials
+    )
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('account-1', managedAuthPath, { organizationUuid: 'org-a' })
+      ],
+      activeClaudeManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const { markClaudePtyExited, markClaudePtySpawned } = await import('./live-pty-gate')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    await service.syncForCurrentSelection()
+
+    markClaudePtySpawned('live-claude-pty')
+    try {
+      writeFileSync(runtimeCredentialsPath, conflictingCredentials, 'utf-8')
+      await service.syncForCurrentSelection()
+
+      expect(readManagedCredentialsForTest('account-1', managedAuthPath)).toBe(originalCredentials)
+      expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(conflictingCredentials)
+    } finally {
+      markClaudePtyExited('live-claude-pty')
+    }
+  })
+
   it('rejects unverifiable refreshed runtime credentials', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const originalCredentials = createClaudeCredentialsWithoutEmail('original')

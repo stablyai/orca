@@ -1,4 +1,7 @@
 import { cn } from '@/lib/utils'
+import { FeatureSetupInlineTerminal } from './FeatureSetupInlineTerminal'
+import { FeatureSetupChecklist } from './FeatureSetupChecklist'
+import type { OnboardingFeatureSetupSelection } from './onboarding-feature-setup'
 
 // Why: wizard uses positive framing ("notify when focused"); persisted
 // setting stays `suppressWhenFocused` and is inverted at the boundary.
@@ -11,9 +14,20 @@ export type NotificationDraft = {
 type NotificationStepProps = {
   value: NotificationDraft
   onChange: (value: NotificationDraft) => void
+  featureSetup: OnboardingFeatureSetupSelection
+  onFeatureSetupChange: (value: OnboardingFeatureSetupSelection) => void
+  featureSetupCommand: string | null
+  featureSetupCommandSelection: OnboardingFeatureSetupSelection | null
 }
 
-export function NotificationStep({ value, onChange }: NotificationStepProps) {
+export function NotificationStep({
+  value,
+  onChange,
+  featureSetup,
+  onFeatureSetupChange,
+  featureSetupCommand,
+  featureSetupCommandSelection
+}: NotificationStepProps) {
   const rows: { key: keyof NotificationDraft; title: string; description: string }[] = [
     {
       key: 'agentTaskComplete',
@@ -23,7 +37,7 @@ export function NotificationStep({ value, onChange }: NotificationStepProps) {
     {
       key: 'terminalBell',
       title: 'Terminal bell',
-      description: 'Play a sound when a terminal rings — usually a question waiting on you.'
+      description: 'Play a sound when a terminal rings, usually a question waiting on you.'
     },
     {
       key: 'notifyWhenFocused',
@@ -68,9 +82,16 @@ export function NotificationStep({ value, onChange }: NotificationStepProps) {
         ))}
       </div>
       <p className="mt-3 text-[13px] text-muted-foreground">
-        Configure other agent status personalization — like custom sounds or pet sidekicks — under{' '}
+        Configure other agent status personalization, like custom sounds, under{' '}
         <span className="font-medium text-foreground">Settings → Notifications</span>.
       </p>
+      <FeatureSetupChecklist value={featureSetup} onChange={onFeatureSetupChange} />
+      {featureSetupCommand ? (
+        <FeatureSetupInlineTerminal
+          command={featureSetupCommand}
+          selection={featureSetupCommandSelection ?? featureSetup}
+        />
+      ) : null}
     </>
   )
 }

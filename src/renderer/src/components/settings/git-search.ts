@@ -12,6 +12,11 @@ export const GIT_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     keywords: ['main', 'master', 'origin/main', 'git diff', 'base ref', 'worktree']
   },
   {
+    title: 'GitHub API Budget',
+    description: 'Current GitHub CLI REST, Search, and GraphQL rate limits.',
+    keywords: ['github', 'gh', 'graphql', 'rate limit', 'api budget']
+  },
+  {
     title: 'Orca Attribution',
     description: 'Add Orca attribution to commits, PRs, and issues.',
     keywords: ['github', 'gh', 'pr', 'issue', 'co-author', 'coauthored', 'attribution', 'orca']

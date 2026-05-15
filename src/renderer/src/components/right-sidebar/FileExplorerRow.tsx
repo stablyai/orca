@@ -29,6 +29,7 @@ import type { GitFileStatus } from '../../../../shared/types'
 import { STATUS_LABELS } from './status-display'
 import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerRowDrag } from './useFileExplorerRowDrag'
+import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 
 const ORCA_PATH_MIME = 'text/x-orca-file-path'
 
@@ -372,7 +373,26 @@ export function FileExplorerRow({
             Open Markdown Preview
           </ContextMenuItem>
         )}
-        <ContextMenuItem onSelect={() => window.api.shell.openPath(node.path)}>
+        <ContextMenuItem
+          onSelect={() => {
+            const state = useAppStore.getState()
+            const activeWorktree = Object.values(state.worktreesByRepo)
+              .flat()
+              .find((worktree) => worktree.id === activeWorktreeId)
+            const activeRepo = activeWorktree
+              ? state.repos.find((repo) => repo.id === activeWorktree.repoId)
+              : null
+            if (
+              isLocalPathOpenBlocked(state.settings, {
+                connectionId: activeRepo?.connectionId ?? null
+              })
+            ) {
+              showLocalPathOpenBlockedToast()
+              return
+            }
+            window.api.shell.openPath(node.path)
+          }}
+        >
           <ExternalLink />
           {revealLabel}
         </ContextMenuItem>

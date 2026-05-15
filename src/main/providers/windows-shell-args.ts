@@ -1,5 +1,9 @@
 import { win32 as pathWin32 } from 'path'
 import { parseWslPath, toLinuxPath } from '../wsl'
+import {
+  encodePowerShellCommand,
+  getPowerShellOsc133Bootstrap
+} from '../powershell-osc133-bootstrap'
 
 /** Result of resolving a Windows shell to its launch args + effective cwd.
  *
@@ -46,17 +50,15 @@ export function resolveWindowsShellLaunchArgs(
   }
 
   if (shellBasename === 'powershell.exe' || shellBasename === 'pwsh.exe') {
-    // Why: PowerShell profiles run after the spawn env is set and may re-export
-    // user defaults; restore Orca's PTY-scoped overlays after the profile.
-    const command = [
-      'try { . $PROFILE } catch {}',
-      'if ($env:ORCA_OPENCODE_CONFIG_DIR) { $env:OPENCODE_CONFIG_DIR = $env:ORCA_OPENCODE_CONFIG_DIR }',
-      'if ($env:ORCA_PI_CODING_AGENT_DIR) { $env:PI_CODING_AGENT_DIR = $env:ORCA_PI_CODING_AGENT_DIR }',
-      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
-      '[Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-    ].join('; ')
+    // Why: foreground-process status on Windows depends on OSC 133 C/D, and
+    // PowerShell needs a prompt/readline bootstrap after profiles finish.
     return {
-      shellArgs: ['-NoExit', '-Command', command],
+      shellArgs: [
+        '-NoLogo',
+        '-NoExit',
+        '-EncodedCommand',
+        encodePowerShellCommand(getPowerShellOsc133Bootstrap())
+      ],
       effectiveCwd: cwd,
       validationCwd: cwd
     }

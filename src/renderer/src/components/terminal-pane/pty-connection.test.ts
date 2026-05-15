@@ -3,6 +3,7 @@ import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST_REPLAY_FOCUS_REPORTING_RESET, POST_REPLAY_MODE_RESET } from './layout-serialization'
 import type * as UseNotificationDispatchModule from './use-notification-dispatch'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 // Why: the fresh-spawn and reattach paths now chain pre-signal → spawn →
 // register/settle through multiple microtasks. Tests that previously flushed
@@ -15,6 +16,12 @@ async function flushAsyncTicks(count = 6): Promise<void> {
 }
 
 const toastInfo = vi.fn()
+const LEAF_1 = '11111111-1111-4111-8111-111111111111' as const
+const LEAF_2 = '22222222-2222-4222-8222-222222222222' as const
+
+function leafIdForPane(paneId: number): string {
+  return paneId === 2 ? LEAF_2 : LEAF_1
+}
 
 type StoreState = {
   tabsByWorktree: Record<string, { id: string; ptyId: string | null; title?: string }[]>
@@ -24,7 +31,7 @@ type StoreState = {
   repos: { id: string; connectionId?: string | null }[]
   sshConnectionStates: Map<string, { status: string }>
   cacheTimerByKey: Record<string, number | null>
-  settings: { promptCacheTimerEnabled?: boolean } | null
+  settings: { promptCacheTimerEnabled?: boolean; activeRuntimeEnvironmentId?: string | null } | null
   codexRestartNoticeByPtyId: Record<
     string,
     { previousAccountLabel: string; nextAccountLabel: string }
@@ -35,6 +42,9 @@ type StoreState = {
   removeDeferredSshSessionId: ReturnType<typeof vi.fn>
   consumePendingColdRestore: ReturnType<typeof vi.fn>
   consumePendingSnapshot: ReturnType<typeof vi.fn>
+  agentStatusByPaneKey: Record<string, unknown>
+  removeAgentStatus: ReturnType<typeof vi.fn>
+  dropAgentStatus: ReturnType<typeof vi.fn>
 }
 
 type ConnectCallbacks = {
@@ -135,6 +145,19 @@ vi.mock('./pty-transport', () => ({
   })
 }))
 
+vi.mock('./remote-runtime-pty-transport', () => ({
+  createRemoteRuntimePtyTransport: vi.fn(
+    (_environmentId: string, options: Record<string, unknown>) => {
+      createdTransportOptions.push(options)
+      const nextTransport = transportFactoryQueue.shift()
+      if (!nextTransport) {
+        throw new Error('No mock transport queued')
+      }
+      return nextTransport
+    }
+  )
+}))
+
 function createMockTransport(initialPtyId: string | null = null): MockTransport {
   let ptyId = initialPtyId
   return {
@@ -155,15 +178,21 @@ function createMockTransport(initialPtyId: string | null = null): MockTransport 
 }
 
 function createPane(paneId: number) {
+  const leafId = leafIdForPane(paneId)
   return {
     id: paneId,
+    leafId,
+    stablePaneId: leafId,
     terminal: {
       cols: 120,
       rows: 40,
       write: vi.fn(),
       onData: vi.fn(() => ({ dispose: vi.fn() })),
       onResize: vi.fn(() => ({ dispose: vi.fn() })),
-      onTitleChange: vi.fn(() => ({ dispose: vi.fn() }))
+      onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+      parser: {
+        registerOscHandler: vi.fn(() => ({ dispose: vi.fn() }))
+      }
     },
     container: { dataset: {} },
     fitAddon: {
@@ -176,7 +205,12 @@ function createManager(paneCount = 1) {
   return {
     setPaneGpuRendering: vi.fn(),
     markPaneHasComplexScriptOutput: vi.fn(),
-    getPanes: vi.fn(() => Array.from({ length: paneCount }, (_, index) => ({ id: index + 1 }))),
+    getPanes: vi.fn(() =>
+      Array.from({ length: paneCount }, (_, index) => ({
+        id: index + 1,
+        leafId: leafIdForPane(index + 1)
+      }))
+    ),
     closePane: vi.fn(),
     getActivePane: vi.fn<() => { id: number } | null>(() => null)
   }
@@ -253,7 +287,9 @@ describe('connectPanePty', () => {
       removeDeferredSshSessionId: vi.fn(),
       consumePendingColdRestore: vi.fn(() => null),
       consumePendingSnapshot: vi.fn(() => null),
-      removeAgentStatus: vi.fn()
+      agentStatusByPaneKey: {},
+      removeAgentStatus: vi.fn(),
+      dropAgentStatus: vi.fn()
     } as StoreState
     ;(globalThis as unknown as { window: unknown }).window = {
       api: {
@@ -555,6 +591,44 @@ describe('connectPanePty', () => {
     }
   })
 
+  it('drops agent status without retaining when OSC 133 reports the command finished', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-local-1'
+    })
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState = {
+      ...mockStoreState,
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          state: 'done',
+          prompt: 'hi',
+          updatedAt: 1000,
+          stateStartedAt: 1000,
+          agentType: 'codex',
+          stateHistory: []
+        }
+      }
+    }
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({ isVisibleRef: { current: false } })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    capturedDataCallback.current?.('\x1b]133;D;130\x07thebr ~/repo $ ')
+
+    expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
+    expect(mockStoreState.removeAgentStatus).not.toHaveBeenCalled()
+  })
+
   it('reattaches a remounted split pane to its restored leaf PTY instead of the tab-level PTY', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
@@ -568,8 +642,8 @@ describe('connectPanePty', () => {
     const pane = createPane(2)
     const manager = createManager(2)
     const deps = createDeps({
-      restoredLeafId: 'pane:2',
-      restoredPtyIdByLeafId: { 'pane:2': 'leaf-pty-2' }
+      restoredLeafId: LEAF_2,
+      restoredPtyIdByLeafId: { [LEAF_2]: 'leaf-pty-2' }
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
@@ -608,8 +682,8 @@ describe('connectPanePty', () => {
     const pane = createPane(2)
     const manager = createManager(2)
     const deps = createDeps({
-      restoredLeafId: 'pane:2',
-      restoredPtyIdByLeafId: { 'pane:2': 'stale-pty' }
+      restoredLeafId: LEAF_2,
+      restoredPtyIdByLeafId: { [LEAF_2]: 'stale-pty' }
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
@@ -647,8 +721,8 @@ describe('connectPanePty', () => {
     const pane = createPane(2)
     const manager = createManager(2)
     const deps = createDeps({
-      restoredLeafId: 'pane:2',
-      restoredPtyIdByLeafId: { 'pane:2': 'restored-session' }
+      restoredLeafId: LEAF_2,
+      restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
@@ -686,8 +760,8 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     const manager = createManager(1)
     const deps = createDeps({
-      restoredLeafId: 'pane:1',
-      restoredPtyIdByLeafId: { 'pane:1': 'tab-pty' }
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
@@ -737,8 +811,8 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     const manager = createManager(1)
     const deps = createDeps({
-      restoredLeafId: 'pane:1',
-      restoredPtyIdByLeafId: { 'pane:1': 'tab-pty' }
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
@@ -772,8 +846,8 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     const manager = createManager(1)
     const deps = createDeps({
-      restoredLeafId: 'pane:1',
-      restoredPtyIdByLeafId: { 'pane:1': 'tab-pty' }
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
@@ -912,6 +986,65 @@ describe('connectPanePty', () => {
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'pty-local-detached')
   })
 
+  it('attaches remote runtime PTY handles instead of creating a replacement terminal', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'remote:terminal-1' }]
+      },
+      settings: {
+        ...mockStoreState.settings,
+        activeRuntimeEnvironmentId: 'env-1'
+      }
+    } as StoreState
+
+    const pane = createPane(2)
+    const manager = createManager(2)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    expect(transport.connect).not.toHaveBeenCalled()
+    expect(transport.attach).toHaveBeenCalledWith(
+      expect.objectContaining({ existingPtyId: 'remote:terminal-1' })
+    )
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'remote:terminal-1')
+  })
+
+  it('constructs restored encoded remote PTYs with their owning runtime environment', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'remote:env-1@@terminal-1' }]
+      },
+      settings: {
+        ...mockStoreState.settings,
+        activeRuntimeEnvironmentId: 'env-2'
+      }
+    } as StoreState
+
+    const pane = createPane(2)
+    const manager = createManager(2)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    expect(createRemoteRuntimePtyTransport).toHaveBeenCalledWith('env-1', expect.any(Object))
+    expect(transport.attach).toHaveBeenCalledWith(
+      expect.objectContaining({ existingPtyId: 'remote:env-1@@terminal-1' })
+    )
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'remote:env-1@@terminal-1')
+  })
+
   it('persists a restarted pane PTY id and uses it on the next remount', async () => {
     const { connectPanePty } = await import('./pty-connection')
 
@@ -952,8 +1085,8 @@ describe('connectPanePty', () => {
     const remountPane = createPane(1)
     const remountManager = createManager(1)
     const remountDeps = createDeps({
-      restoredLeafId: 'pane:1',
-      restoredPtyIdByLeafId: { 'pane:1': 'pty-restarted' }
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'pty-restarted' }
     })
 
     connectPanePty(remountPane as never, remountManager as never, remountDeps as never)
@@ -1122,8 +1255,8 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     const manager = createManager(1)
     const deps = createDeps({
-      restoredLeafId: 'leaf-1',
-      restoredPtyIdByLeafId: { 'leaf-1': 'leaf-session' }
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'leaf-session' }
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
@@ -1226,8 +1359,8 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     const manager = createManager(1)
     const deps = createDeps({
-      restoredLeafId: 'leaf-1',
-      restoredPtyIdByLeafId: { 'leaf-1': 'leaf-session' }
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'leaf-session' }
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
@@ -1317,6 +1450,6 @@ describe('connectPanePty', () => {
 
     agentExitedHandler()
 
-    expect(deps.setCacheTimerStartedAt).toHaveBeenCalledWith('tab-1:1', null)
+    expect(deps.setCacheTimerStartedAt).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1), null)
   })
 })

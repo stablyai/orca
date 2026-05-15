@@ -470,6 +470,15 @@
   width: var(--window-controls-width, 0px);
 }
 
+.right-sidebar-header-drag {
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.right-sidebar-header-no-drag {
+  -webkit-app-region: no-drag;
+}
+
 /* Why: the right sidebar header extends to the window's right edge. On Windows
    the fixed-position window-controls overlay sits on top of that edge, so we
    add matching padding-right so the header's close button (pr-1) isn't hidden
@@ -726,6 +735,41 @@
   width: 0;
   border-right: none;
   overflow: hidden;
+}
+
+/* Why: the workspace board is offset to the sidebar edge. The generic left
+   sheet translates by its full width, which makes an offset board fly in from
+   far offscreen; this reveals it from the sidebar boundary instead. */
+.workspace-kanban-sheet-content[data-state='open'] {
+  animation-name: workspace-kanban-sheet-in;
+  animation-duration: 300ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.workspace-kanban-sheet-content[data-state='closed'] {
+  animation-name: workspace-kanban-sheet-out;
+  animation-duration: 200ms;
+  animation-timing-function: cubic-bezier(0.7, 0, 0.84, 0);
+}
+
+@keyframes workspace-kanban-sheet-in {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes workspace-kanban-sheet-out {
+  from {
+    clip-path: inset(0 0 0 0);
+  }
+
+  to {
+    clip-path: inset(0 100% 0 0);
+  }
 }
 
 .sidebar-header {

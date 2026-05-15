@@ -13,6 +13,7 @@ import {
   resolveOwnedClaudeManagedAuthPath,
   writeClaudeManagedAuthFile
 } from './managed-auth-path'
+import { hasLiveClaudePtys } from './live-pty-gate'
 import { ClaudeRuntimePathResolver } from './runtime-paths'
 import {
   deleteActiveClaudeKeychainCredentialsStrict,
@@ -47,7 +48,9 @@ type ClaudeAuthIdentity = {
   organizationUuid: string | null
 }
 
-type ClaudeReadBackResult = { status: 'unchanged' | 'persisted' | 'rejected' }
+type ClaudeReadBackResult =
+  | { status: 'unchanged' | 'persisted' }
+  | { status: 'rejected'; runtimeCredentialsChanged: boolean; runtimeCredentialsJson?: string }
 type ClaudeReadBackMatch =
   | { kind: 'matched'; account: ClaudeManagedAccount; managedCredentialsJson: string }
   | { kind: 'none' | 'ambiguous' }
@@ -250,6 +253,34 @@ export class ClaudeRuntimeAuthService {
           if (updatedCredentialsJson && this.isValidCredentialsJsonObject(updatedCredentialsJson)) {
             credentialsJson = updatedCredentialsJson
           }
+        } else if (
+          readBackResult.status === 'rejected' &&
+          readBackResult.runtimeCredentialsChanged &&
+          hasLiveClaudePtys()
+        ) {
+          if (
+            readBackResult.runtimeCredentialsJson &&
+            this.liveRuntimeCredentialsCanUpdateActiveAccount(
+              readBackResult.runtimeCredentialsJson,
+              activeAccount,
+              credentialsJson,
+              this.readManagedOauthAccount(activeAccount)
+            )
+          ) {
+            // Why: this Claude process was launched under the active managed
+            // account, but persistence still needs positive account proof.
+            await this.writeManagedCredentials(activeAccount, readBackResult.runtimeCredentialsJson)
+            credentialsJson = readBackResult.runtimeCredentialsJson
+          } else {
+            // Why: while Claude is running, an unknown refresh can still belong
+            // to a live session. Rewriting stale managed auth logs that session out.
+            console.warn(
+              '[claude-runtime-auth] Preserving changed Claude runtime credentials while live Claude terminals are running'
+            )
+            this.lastSyncedAccountId = activeAccount.id
+            this.hasMaterializedRuntimeAuth = true
+            return
+          }
         }
       }
     }
@@ -319,6 +350,7 @@ export class ClaudeRuntimeAuthService {
         credentialsJson: string
         match: Extract<ClaudeReadBackMatch, { kind: 'matched' }>
       }[] = []
+      const ambiguousCandidates: string[] = []
       let sawAmbiguousCandidate = false
       for (const runtimeContents of changedCandidates) {
         if (!this.isValidCredentialsJsonObject(runtimeContents)) {
@@ -327,6 +359,7 @@ export class ClaudeRuntimeAuthService {
         const match = await this.findManagedAccountForRuntimeCredentials(runtimeContents)
         if (match.kind === 'ambiguous') {
           sawAmbiguousCandidate = true
+          ambiguousCandidates.push(runtimeContents)
           continue
         }
         if (match.kind !== 'matched') {
@@ -348,7 +381,12 @@ export class ClaudeRuntimeAuthService {
         if (sawAmbiguousCandidate) {
           console.warn('[claude-runtime-auth] Refusing ambiguous Claude auth read-back')
         }
-        return { status: 'rejected' }
+        return {
+          status: 'rejected',
+          runtimeCredentialsChanged: true,
+          runtimeCredentialsJson:
+            ambiguousCandidates.length === 1 ? ambiguousCandidates[0] : undefined
+        }
       }
       const { credentialsJson: runtimeContents, match } =
         this.chooseFreshestReadBackCandidate(acceptedCandidates)
@@ -368,7 +406,11 @@ export class ClaudeRuntimeAuthService {
       // forward sync path — the worst case is one more stale-token cycle, which
       // is strictly better than failing the entire sync.
       console.warn('[claude-runtime-auth] Failed to read back refreshed tokens:', error)
-      return { status: 'rejected' }
+      return {
+        status: 'rejected',
+        runtimeCredentialsChanged:
+          this.runtimeCredentialsChangedSinceLastWrite(baselineCredentialsJson)
+      }
     }
   }
 
@@ -496,6 +538,36 @@ export class ClaudeRuntimeAuthService {
     }
 
     return 'match'
+  }
+
+  private liveRuntimeCredentialsCanUpdateActiveAccount(
+    runtimeCredentialsJson: string,
+    account: ClaudeManagedAccount,
+    managedCredentialsJson: string,
+    managedOauthAccount: unknown
+  ): boolean {
+    const match = this.runtimeCredentialsMatchAccount(
+      runtimeCredentialsJson,
+      account,
+      managedCredentialsJson,
+      managedOauthAccount
+    )
+    if (match === 'match') {
+      return true
+    }
+    const identity = this.readIdentityFromCredentials(runtimeCredentialsJson)
+    const managedIdentity = this.readIdentityFromCredentials(managedCredentialsJson)
+    const managedOauthIdentity = this.readIdentityFromOauthAccount(managedOauthAccount)
+    const selectedOrganizationUuid = this.normalizeField(
+      account.organizationUuid ??
+        managedIdentity?.organizationUuid ??
+        managedOauthIdentity.organizationUuid
+    )
+    return (
+      match === 'unverifiable' &&
+      Boolean(selectedOrganizationUuid) &&
+      identity?.organizationUuid === selectedOrganizationUuid
+    )
   }
 
   private readIdentityFromCredentials(credentialsJson: string): ClaudeAuthIdentity | null {
@@ -1012,6 +1084,21 @@ export class ClaudeRuntimeAuthService {
       ? readFileSync(paths.credentialsPath, 'utf-8')
       : null
     return currentCredentialsJson === previouslyWrittenCredentialsJson
+  }
+
+  private runtimeCredentialsChangedSinceLastWrite(baselineCredentialsJson: string): boolean {
+    const paths = this.pathResolver.getRuntimePaths()
+    try {
+      const currentCredentialsJson = existsSync(paths.credentialsPath)
+        ? readFileSync(paths.credentialsPath, 'utf-8')
+        : null
+      return (
+        currentCredentialsJson !== null &&
+        currentCredentialsJson !== (this.lastWrittenCredentialsJson ?? baselineCredentialsJson)
+      )
+    } catch {
+      return false
+    }
   }
 
   private restoreRuntimeCredentials(credentialsJson: string | null): void {

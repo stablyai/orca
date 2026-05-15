@@ -4,11 +4,16 @@ import { registerPreflightHandlers } from './preflight'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { StatsCollector } from '../stats/collector'
-import { registerFilesystemHandlers } from './filesystem'
+import {
+  registerFilesystemHandlers,
+  type CommitMessageAgentEnvironmentResolvers
+} from './filesystem'
 import { registerFilesystemWatcherHandlers } from './filesystem-watcher'
 import { registerClaudeUsageHandlers } from './claude-usage'
 import { registerCodexUsageHandlers } from './codex-usage'
 import { registerGitHubHandlers } from './github'
+import { registerGitLabHandlers } from './gitlab'
+import { registerHostedReviewHandlers } from './hosted-review'
 import { registerLinearHandlers } from './linear'
 import { registerFeedbackHandlers } from './feedback'
 import { registerExportHandlers } from './export'
@@ -16,7 +21,7 @@ import { registerStatsHandlers } from './stats'
 import { registerMemoryHandlers } from './memory'
 import { registerRateLimitHandlers } from './rate-limits'
 import { registerRuntimeHandlers } from './runtime'
-import { registerNotesHandlers } from './notes'
+import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
 import { registerNotificationHandlers } from './notifications'
 import { registerNotebookHandlers } from './notebook'
 import { registerOnboardingHandlers } from './onboarding'
@@ -25,6 +30,7 @@ import { registerComputerUsePermissionHandlers } from './computer-use-permission
 import { setTrustedBrowserRendererWebContentsId, setAgentBrowserBridgeRef } from './browser'
 import { registerSessionHandlers } from './session'
 import { registerSettingsHandlers } from './settings'
+import { registerWorkspaceSpaceHandlers } from './workspace-space'
 import { registerAutomationHandlers } from './automations'
 import { registerTelemetryHandlers } from './telemetry'
 import { registerBrowserHandlers } from './browser'
@@ -48,6 +54,7 @@ import type { RateLimitService } from '../rate-limits/service'
 import type { CodexAccountService } from '../codex-accounts/service'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { AutomationService } from '../automations/service'
+import type { AgentAwakeService } from '../agent-awake-service'
 
 let registered = false
 
@@ -61,7 +68,9 @@ export function registerCoreHandlers(
   claudeAccounts: ClaudeAccountService,
   rateLimits: RateLimitService,
   mainWindowWebContentsId: number | null = null,
-  automations?: AutomationService
+  automations?: AutomationService,
+  commitMessageAgentEnv?: CommitMessageAgentEnvironmentResolvers,
+  agentAwakeService?: AgentAwakeService
 ): void {
   // Why: on macOS the app can stay alive after all windows close, then
   // openMainWindow() is called again on 'activate'. ipcMain.handle() throws
@@ -85,6 +94,8 @@ export function registerCoreHandlers(
   registerClaudeAccountHandlers(claudeAccounts)
   registerRateLimitHandlers(rateLimits)
   registerGitHubHandlers(store, stats)
+  registerGitLabHandlers(store)
+  registerHostedReviewHandlers(store, stats)
   registerLinearHandlers()
   registerFeedbackHandlers()
   registerExportHandlers()
@@ -95,7 +106,7 @@ export function registerCoreHandlers(
   registerOnboardingHandlers(store)
   registerDeveloperPermissionHandlers()
   registerComputerUsePermissionHandlers()
-  registerSettingsHandlers(store)
+  registerSettingsHandlers(store, agentAwakeService)
   if (automations) {
     registerAutomationHandlers(store, automations)
   }
@@ -111,10 +122,15 @@ export function registerCoreHandlers(
   registerPetHandlers()
   registerSessionHandlers(store)
   registerUIHandlers(store)
-  registerFilesystemHandlers(store)
+  registerWorkspaceSpaceHandlers(store)
+  if (commitMessageAgentEnv) {
+    registerFilesystemHandlers(store, commitMessageAgentEnv)
+  } else {
+    registerFilesystemHandlers(store)
+  }
   registerFilesystemWatcherHandlers()
   registerRuntimeHandlers(runtime)
-  registerNotesHandlers(runtime)
+  registerRuntimeEnvironmentHandlers()
   registerClipboardHandlers()
   registerUpdaterHandlers(store)
   registerSpeechHandlers(store)

@@ -32,7 +32,7 @@ export default function CacheTimer({
     }
     let oldest: number | null = null
     for (const tab of tabs) {
-      // Why: cache timer keys are `${tabId}:${paneId}` composites, so we check
+      // Why: cache timer keys are `${tabId}:${leafId}` composites, so we check
       // all keys that belong to this tab's panes.
       for (const key of Object.keys(s.cacheTimerByKey)) {
         if (!key.startsWith(`${tab.id}:`)) {

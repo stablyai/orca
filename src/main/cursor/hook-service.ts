@@ -1,5 +1,6 @@
 import { homedir } from 'os'
 import { join } from 'path'
+import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
   createManagedCommandMatcher,
@@ -11,6 +12,11 @@ import {
   writeManagedScript,
   type HookDefinition
 } from '../agent-hooks/installer-utils'
+import {
+  readHooksJsonRemote,
+  writeHooksJsonRemote,
+  writeManagedScriptRemote
+} from '../agent-hooks/installer-utils-remote'
 
 // Why: cursor-agent exposes a declarative hooks.json surface at
 // ~/.cursor/hooks.json (https://cursor.com/docs/hooks) with camelCase event
@@ -55,8 +61,8 @@ function getManagedCommand(scriptPath: string): string {
   return process.platform === 'win32' ? scriptPath : wrapPosixHookCommand(scriptPath)
 }
 
-function getManagedScript(): string {
-  if (process.platform === 'win32') {
+function getManagedScript(target: 'local' | 'posix' = 'local'): string {
+  if (target === 'local' && process.platform === 'win32') {
     return [
       '@echo off',
       'setlocal',
@@ -233,6 +239,73 @@ export class CursorHookService {
     writeManagedScript(scriptPath, getManagedScript())
     writeHooksJson(configPath, nextConfig)
     return this.getStatus()
+  }
+
+  // Why: install Orca's managed Cursor hooks on the remote box. Mirrors
+  // ClaudeHookService.installRemote — POSIX-only, uses the same SFTP-backed
+  // primitives, and emits Cursor's documented schema (top-level `command`
+  // on each definition + top-level `version: 1`) so cursor-agent on the
+  // remote actually invokes the script. See docs/design/agent-status-over-ssh.md
+  // §8.
+  async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
+    const remoteConfigPath = `${remoteHome.replace(/\/$/, '')}/.cursor/hooks.json`
+    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/cursor-hook.sh`
+    try {
+      const config = await readHooksJsonRemote(sftp, remoteConfigPath)
+      if (!config) {
+        return {
+          agent: 'cursor',
+          state: 'error',
+          configPath: remoteConfigPath,
+          managedHooksPresent: false,
+          detail: 'Could not parse remote Cursor hooks.json'
+        }
+      }
+
+      const command = wrapPosixHookCommand(remoteScriptPath)
+      const nextHooks = { ...config.hooks }
+      const isManagedCommand = createManagedCommandMatcher('cursor-hook.sh')
+
+      for (const eventName of CURSOR_EVENTS) {
+        const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
+        // Why: same dual-shape sweep as the local install — repeated
+        // installs converge on a single managed entry.
+        const cleaned = removeManagedCommands(current, isManagedCommand).filter(
+          (definition) => !isManagedCommand(definition.command as string | undefined)
+        )
+        const definition: HookDefinition = { command }
+        nextHooks[eventName] = [...cleaned, definition]
+      }
+
+      const nextConfig: Record<string, unknown> = { ...config, hooks: nextHooks }
+      if (nextConfig.version === undefined) {
+        nextConfig.version = 1
+      }
+
+      // Why: script-then-config order so a partial-failure mid-install at
+      // worst leaves a working script no settings.json points at — see
+      // ClaudeHookService.installRemote.
+      // Why: SSH remotes use POSIX `.sh` hook paths even when Orca itself is
+      // running on Windows; never derive remote script syntax from local OS.
+      await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
+      await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig)
+
+      return {
+        agent: 'cursor',
+        state: 'installed',
+        configPath: remoteConfigPath,
+        managedHooksPresent: true,
+        detail: null
+      }
+    } catch (err) {
+      return {
+        agent: 'cursor',
+        state: 'error',
+        configPath: remoteConfigPath,
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
   }
 
   remove(): AgentHookInstallStatus {

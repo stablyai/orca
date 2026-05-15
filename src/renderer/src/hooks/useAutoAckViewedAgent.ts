@@ -2,17 +2,26 @@ import { useEffect } from 'react'
 import { useAppStore } from '@/store'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { TerminalLayoutSnapshot } from '../../../shared/types'
+import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
+
+function resolveActiveLeafId(
+  state: { terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot> },
+  activeTabId: string
+): string | null {
+  const leafId = state.terminalLayoutsByTabId[activeTabId]?.activeLeafId ?? null
+  return leafId && isTerminalLeafId(leafId) ? leafId : null
+}
 
 /**
  * Pure helper used by the hook below — exported so the regression test for
  * the codex-row-stays-bold race (docs/codex-agent-row-bold-stuck.md) can
  * exercise the decision against a real test store without needing a DOM.
  *
- * Returns the list of paneKeys that should be acked given the active tab.
- * Walks BOTH the live agent map AND the retained snapshot map: the inline
- * agents list renders the union, so the ack scan must too. A paneKey may
- * appear in both maps simultaneously (paneKey reuse mid-frame); duplicate
- * pushes are harmless because acknowledgeAgents short-circuits per key.
+ * Returns the list of paneKeys that should be acked given the active tab and
+ * exact active leaf. Split tabs can host multiple agent panes, so equality on
+ * `${tabId}:${leafId}` is required; tab-prefix matching would mark siblings
+ * read without ever displaying them.
  */
 export function computeAutoAckTargets(
   state: {
@@ -20,29 +29,29 @@ export function computeAutoAckTargets(
     retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
     acknowledgedAgentsByPaneKey: Record<string, number>
   },
-  activeTabId: string
+  activeTabId: string,
+  activeLeafId: string | null
 ): string[] {
-  const prefix = `${activeTabId}:`
+  if (!activeLeafId || !isTerminalLeafId(activeLeafId)) {
+    return []
+  }
+  const targetKey = makePaneKey(activeTabId, activeLeafId)
   const targets: string[] = []
-  for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
-    if (!paneKey.startsWith(prefix)) {
-      continue
-    }
-    const ackAt = state.acknowledgedAgentsByPaneKey[paneKey] ?? 0
+  const liveEntry = state.agentStatusByPaneKey[targetKey]
+  if (liveEntry) {
+    const ackAt = state.acknowledgedAgentsByPaneKey[targetKey] ?? 0
     // Why: use stateStartedAt (not updatedAt) so tool/prompt pings within the
     // same state don't re-trigger ack work — keeping the comparison aligned
     // with WorktreeCardAgents' is-unvisited rule.
-    if (ackAt < entry.stateStartedAt) {
-      targets.push(paneKey)
+    if (ackAt < liveEntry.stateStartedAt) {
+      targets.push(targetKey)
     }
   }
-  for (const [paneKey, retained] of Object.entries(state.retainedAgentsByPaneKey)) {
-    if (!paneKey.startsWith(prefix)) {
-      continue
-    }
-    const ackAt = state.acknowledgedAgentsByPaneKey[paneKey] ?? 0
+  const retained = state.retainedAgentsByPaneKey[targetKey]
+  if (retained) {
+    const ackAt = state.acknowledgedAgentsByPaneKey[targetKey] ?? 0
     if (ackAt < retained.entry.stateStartedAt) {
-      targets.push(paneKey)
+      targets.push(targetKey)
     }
   }
   return targets
@@ -102,6 +111,7 @@ export function useAutoAckViewedAgent(): void {
     let lastAgentStatus: unknown = undefined
     let lastRetained: unknown = undefined
     let lastAcknowledged: unknown = undefined
+    let lastLayouts: unknown = undefined
 
     const maybeAck = (): void => {
       const s = useAppStore.getState()
@@ -110,7 +120,8 @@ export function useAutoAckViewedAgent(): void {
         s.activeTabId === lastActiveTabId &&
         s.agentStatusByPaneKey === lastAgentStatus &&
         s.retainedAgentsByPaneKey === lastRetained &&
-        s.acknowledgedAgentsByPaneKey === lastAcknowledged
+        s.acknowledgedAgentsByPaneKey === lastAcknowledged &&
+        s.terminalLayoutsByTabId === lastLayouts
       ) {
         return
       }
@@ -136,6 +147,7 @@ export function useAutoAckViewedAgent(): void {
       if (!activeTabId) {
         return
       }
+      const activeLeafId = resolveActiveLeafId(s, activeTabId)
       // Why: advance the refs ONLY after all gates have passed — if the
       // visibility gate (window hidden/unfocused or no activeTabId) caused an
       // early return, leave the refs stale so the next call (e.g. triggered by
@@ -148,7 +160,8 @@ export function useAutoAckViewedAgent(): void {
       lastAgentStatus = s.agentStatusByPaneKey
       lastRetained = s.retainedAgentsByPaneKey
       lastAcknowledged = s.acknowledgedAgentsByPaneKey
-      const toAck = computeAutoAckTargets(s, activeTabId)
+      lastLayouts = s.terminalLayoutsByTabId
+      const toAck = computeAutoAckTargets(s, activeTabId, activeLeafId)
       if (toAck.length > 0) {
         s.acknowledgeAgents(toAck)
       }

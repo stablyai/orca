@@ -8,10 +8,12 @@ import { createTabsSlice } from './slices/tabs'
 import { createUISlice } from './slices/ui'
 import { createSettingsSlice } from './slices/settings'
 import { createGitHubSlice } from './slices/github'
+import { createHostedReviewSlice } from './slices/hosted-review'
 import { createLinearSlice } from './slices/linear'
 import { createEditorSlice } from './slices/editor'
 import { createStatsSlice } from './slices/stats'
 import { createMemorySlice } from './slices/memory'
+import { createWorkspaceSpaceSlice } from './slices/workspace-space'
 import { createClaudeUsageSlice } from './slices/claude-usage'
 import { createCodexUsageSlice } from './slices/codex-usage'
 import { createBrowserSlice } from './slices/browser'
@@ -35,10 +37,12 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createUISlice(...a),
   ...createSettingsSlice(...a),
   ...createGitHubSlice(...a),
+  ...createHostedReviewSlice(...a),
   ...createLinearSlice(...a),
   ...createEditorSlice(...a),
   ...createStatsSlice(...a),
   ...createMemorySlice(...a),
+  ...createWorkspaceSpaceSlice(...a),
   ...createClaudeUsageSlice(...a),
   ...createCodexUsageSlice(...a),
   ...createBrowserSlice(...a),

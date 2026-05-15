@@ -1,11 +1,12 @@
 import React from 'react'
-import { Bell, CalendarClock, Github, List, Search } from 'lucide-react'
+import { Bell, CalendarClock, Github, Gitlab, List, Search } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getTaskPresetQuery, PER_REPO_FETCH_LIMIT } from '@/lib/new-workspace'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 
 const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
 
@@ -77,6 +78,15 @@ const SidebarNav = React.memo(function SidebarNav() {
         count += 1
       }
     }
+    for (const unsupported of Object.values(s.migrationUnsupportedByPtyId)) {
+      const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
+      if (!entry) {
+        continue
+      }
+      if ((s.acknowledgedAgentsByPaneKey[entry.paneKey] ?? 0) < entry.stateStartedAt) {
+        count += 1
+      }
+    }
     return count
   })
 
@@ -122,6 +132,21 @@ const SidebarNav = React.memo(function SidebarNav() {
               className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-foreground"
             >
               <Github className="size-3.5" aria-hidden />
+            </span>
+            <span
+              role="button"
+              tabIndex={-1}
+              onClick={(e) => {
+                e.stopPropagation()
+                if (!canBrowseTasks) {
+                  return
+                }
+                openTaskPage({ taskSource: 'gitlab' })
+              }}
+              className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-foreground"
+              aria-label="Open GitLab tasks"
+            >
+              <Gitlab className="size-3.5" aria-hidden />
             </span>
             <span
               role="button"

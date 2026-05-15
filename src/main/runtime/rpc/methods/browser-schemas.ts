@@ -143,6 +143,12 @@ export const ProfileDelete = z.object({
   profileId: requiredString('Missing required --profile')
 })
 
+export const ProfileImportFromBrowser = z.object({
+  profileId: requiredString('Missing required --profile'),
+  browserFamily: requiredString('Missing required --browser-family'),
+  browserProfile: OptionalString
+})
+
 export const Drag = BrowserTarget.extend({
   from: requiredString('Missing required --from and --to element refs'),
   to: requiredString('Missing required --from and --to element refs')

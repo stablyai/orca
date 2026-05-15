@@ -3,8 +3,10 @@ import type { SshRemotePtyLease, SshTarget } from './ssh-types'
 import type { Automation, AutomationRun } from './automations-types'
 import type { WorkspaceSource } from './telemetry-events'
 import type { GitHubProjectSettings } from './github-project-types'
+import type { MigrationUnsupportedPtyEntry } from './agent-status-types'
 import type { VoiceSettings } from './speech-types'
 import type { WorkspaceCleanupUIState } from './workspace-cleanup'
+import type { GitLabProjectSettings } from './gitlab-types'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -106,6 +108,15 @@ export type GitWorktreeInfo = {
 }
 
 // ─── Worktree (app-level, enriched) ──────────────────────────────────
+export type WorkspaceStatus = string
+
+export type WorkspaceStatusDefinition = {
+  id: WorkspaceStatus
+  label: string
+  color?: string
+  icon?: string
+}
+
 export type Worktree = {
   id: string // `${repoId}::${path}`
   repoId: string
@@ -114,6 +125,16 @@ export type Worktree = {
   linkedIssue: number | null
   linkedPR: number | null
   linkedLinearIssue: string | null
+  // Why: parallel slots for GitLab work-item references. Kept as separate
+  // fields (rather than reusing linkedIssue / linkedPR with a provider
+  // discriminator) so the persistence layer is unambiguous when a user
+  // has both a GitHub and a GitLab remote on the same repo, and so the
+  // existing GitHub renderer code keeps reading linkedPR / linkedIssue
+  // unchanged. Optional on the type so existing test fixtures and
+  // persisted older worktrees that never carried these fields continue
+  // to typecheck and load without migration.
+  linkedGitLabMR?: number | null
+  linkedGitLabIssue?: number | null
   isArchived: boolean
   isUnread: boolean
   isPinned: boolean
@@ -137,6 +158,7 @@ export type Worktree = {
   baseRef?: string
   /** Remote/branch Orca should publish review commits to when it created this worktree. */
   pushTarget?: GitPushTarget
+  workspaceStatus?: WorkspaceStatus
   diffComments?: DiffComment[]
 } & GitWorktreeInfo
 
@@ -153,6 +175,10 @@ export type WorktreeMeta = {
   linkedIssue: number | null
   linkedPR: number | null
   linkedLinearIssue: string | null
+  /** Optional for backward compatibility — see Worktree.linkedGitLabMR. */
+  linkedGitLabMR?: number | null
+  /** Optional for backward compatibility — see Worktree.linkedGitLabIssue. */
+  linkedGitLabIssue?: number | null
   isArchived: boolean
   isUnread: boolean
   isPinned: boolean
@@ -169,6 +195,8 @@ export type WorktreeMeta = {
   baseRef?: string
   /** See {@link Worktree.pushTarget}. Persisted so refreshed worktree lists keep the target. */
   pushTarget?: GitPushTarget
+  /** User-assigned workspace board status for manual sidebar organization. */
+  workspaceStatus?: WorkspaceStatus
   diffComments?: DiffComment[]
 }
 
@@ -177,10 +205,16 @@ export type WorktreeMeta = {
 // a diff so they can be handed back to an AI agent (pasted into a terminal
 // or used to bootstrap a new agent session). Stored on WorktreeMeta so the
 // existing persistence layer writes them to orca-data.json automatically.
+export type DiffCommentSource = 'diff' | 'markdown'
+
 export type DiffComment = {
   id: string
   worktreeId: string
   filePath: string
+  /** Undefined means a legacy diff note. */
+  source?: DiffCommentSource
+  /** Inclusive range start. Must be <= lineNumber when present. */
+  startLine?: number
   lineNumber: number
   body: string
   createdAt: number
@@ -203,15 +237,9 @@ export type TabGroupLayoutNode =
     }
 
 // ─── Unified Tab ────────────────────────────────────────────────────
-export type TabContentType =
-  | 'terminal'
-  | 'editor'
-  | 'diff'
-  | 'conflict-review'
-  | 'browser'
-  | 'notes'
+export type TabContentType = 'terminal' | 'editor' | 'diff' | 'conflict-review' | 'browser'
 
-export type WorkspaceVisibleTabType = 'terminal' | 'editor' | 'browser' | 'notes'
+export type WorkspaceVisibleTabType = 'terminal' | 'editor' | 'browser'
 
 export type Tab = {
   id: string // UUID for terminals, filePath for editors (preserves current convention)
@@ -226,7 +254,6 @@ export type Tab = {
   createdAt: number
   isPreview?: boolean // preview tabs get replaced by next single-click open
   isPinned?: boolean // pinned tabs survive "close others"
-  isDirty?: boolean // unsaved tab-local content, currently used by Project Notes
 }
 
 export type TabGroup = {
@@ -358,7 +385,7 @@ export type BrowserTab = BrowserWorkspace
 export type BrowserSessionProfileScope = 'default' | 'isolated' | 'imported'
 
 export type BrowserSessionProfileSource = {
-  browserFamily: 'chrome' | 'chromium' | 'arc' | 'edge' | 'firefox' | 'safari' | 'manual'
+  browserFamily: 'chrome' | 'chromium' | 'arc' | 'edge' | 'firefox' | 'safari' | 'comet' | 'manual'
   profileName?: string
   importedAt: number
 }
@@ -407,7 +434,7 @@ export type TerminalLayoutSnapshot = {
   ptyIdsByLeafId?: Record<string, string>
   /** Serialized terminal buffers per leaf for scrollback restoration on restart. */
   buffersByLeafId?: Record<string, string>
-  /** User-assigned pane titles, keyed by leafId (e.g. "pane:3").
+  /** User-assigned pane titles, keyed by stable layout leaf UUID.
    *  Persisted alongside buffers via the existing session:set flow. */
   titlesByLeafId?: Record<string, string>
 }
@@ -421,6 +448,7 @@ export type PersistedOpenFile = {
   worktreeId: string
   language: string
   isPreview?: boolean
+  runtimeEnvironmentId?: string
 }
 
 export type WorkspaceSessionState = {
@@ -653,16 +681,31 @@ export type GitHubWorkItemDetails = {
 export type LinearViewer = {
   displayName: string
   email: string | null
+  organizationId?: string
   organizationName: string
+  organizationUrlKey?: string
 }
+
+export type LinearWorkspace = LinearViewer & {
+  id: string
+  organizationId: string
+  isLegacy?: true
+}
+
+export type LinearWorkspaceSelection = string | 'all'
 
 export type LinearConnectionStatus = {
   connected: boolean
   viewer: LinearViewer | null
+  workspaces?: LinearWorkspace[]
+  activeWorkspaceId?: string | null
+  selectedWorkspaceId?: LinearWorkspaceSelection | null
 }
 
 export type LinearIssue = {
   id: string
+  workspaceId?: string
+  workspaceName?: string
   identifier: string
   title: string
   description?: string
@@ -739,6 +782,36 @@ export type ClassifiedError = {
 // Aliased as `OwnerRepo` in `src/main/github/gh-utils.ts` so main call sites
 // can continue using the short local name.
 export type GitHubOwnerRepo = { owner: string; repo: string }
+
+// Why: GitLab-specific types live in `./gitlab-types` so they can grow
+// independently from the central types file (which is touched by every
+// upstream feature). Re-exported here so existing call sites
+// (`from '../shared/types'`) keep working without changes.
+export type {
+  GitLabAssignableUser,
+  GitLabCommentResult,
+  GitLabIssueInfo,
+  GitLabIssueState,
+  GitLabIssueUpdate,
+  GitLabMRFile,
+  GitLabPagedResult,
+  GitLabPipelineJob,
+  GitLabProjectRef,
+  GitLabProjectSettings,
+  GitLabReaction,
+  GitLabTodo,
+  GitLabTodoTargetType,
+  GitLabViewer,
+  GitLabWorkItem,
+  GitLabWorkItemDetails,
+  ListMergeRequestsResult,
+  MRCheckDetail,
+  MRComment,
+  MRInfo,
+  MRListState,
+  MRMergeableState,
+  MRState
+} from './gitlab-types'
 
 /**
  * GitHub API rate-limit buckets surfaced in the TaskPage header so users can
@@ -828,6 +901,8 @@ export type LinearMember = {
 
 export type LinearTeam = {
   id: string
+  workspaceId?: string
+  workspaceName?: string
   name: string
   key: string
 }
@@ -895,6 +970,7 @@ export type CreateWorktreeArgs = {
   sparseCheckout?: CreateSparseCheckoutRequest
   linkedIssue?: number
   linkedPR?: number
+  linkedLinearIssue?: string
   pushTarget?: GitPushTarget
   /** Agent selected in the create surface. Omitted for blank-shell creates. */
   createdWithAgent?: TuiAgent
@@ -1068,6 +1144,7 @@ export type TuiAgent =
   | 'qwen-code' // Qwen Code
   | 'rovo' // Rovo Dev
   | 'hermes' // Hermes Agent
+  | 'openclaw' // OpenClaw
   | 'copilot' // GitHub Copilot CLI
 
 export type TaskViewPresetId = 'all' | 'issues' | 'review' | 'my-issues' | 'my-prs' | 'prs'
@@ -1133,6 +1210,8 @@ export type GlobalSettings = {
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number
   editorMinimapEnabled: boolean
+  /** Whether local markdown review note controls and the review panel are shown. */
+  markdownReviewToolsEnabled: boolean
   terminalFontSize: number
   terminalFontFamily: string
   terminalFontWeight: number
@@ -1270,7 +1349,7 @@ export type GlobalSettings = {
   defaultTaskViewPreset: TaskViewPresetId
   /** Why: persists the user's last-used task source so the Tasks page
    *  reopens to the same provider instead of always defaulting to GitHub. */
-  defaultTaskSource: 'github' | 'linear'
+  defaultTaskSource: 'github' | 'linear' | 'gitlab'
   /** Why: persists the user's repo selection in the cross-repo tasks view.
    *  `null` means sticky-all — every eligible repo is selected, including
    *  repos added in future sessions, so the "All repos" label stays
@@ -1292,6 +1371,8 @@ export type GlobalSettings = {
   geminiCliOAuthEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
+  /** When true, Orca prevents local app suspension while hook-reported agents are working. */
+  keepComputerAwakeWhileAgentsRun: boolean
   /** Why: macOS terminals must choose between letting Option compose layout
    *  characters (@ on German, € on French) or treating Option as Meta/Esc for
    *  readline shortcuts. Mirrors Ghostty's macos-option-as-alt setting — and
@@ -1338,11 +1419,22 @@ export type GlobalSettings = {
    *  configuration surface and edge cases (conflicts with existing paths,
    *  cleanup on worktree delete) are still being worked out. */
   experimentalWorktreeSymlinks: boolean
+  /** Active non-local runtime environment for client-routed RPC. `null`
+   *  preserves the current local desktop behavior. */
+  activeRuntimeEnvironmentId?: string | null
   /** GitHub Project mode state — pinned/recent/active project, last selected
    *  view per project. Optional because profiles created before this feature
    *  landed won't have the key; `getDefaultSettings()` hydrates the empty
    *  default via the persistence merge. */
   githubProjects?: GitHubProjectSettings
+  /** AI-generated commit messages: agent + model + per-model thinking +
+   *  user-customizable prompt suffix. Optional so existing profiles do not
+   *  require a migration step before this feature lands. */
+  commitMessageAi?: CommitMessageAiSettings
+  /** GitLab project preferences — pinned + recent project paths.
+   *  Optional for backward compatibility with profiles saved before
+   *  GitLab support; the persistence merge fills the empty default. */
+  gitlabProjects?: GitLabProjectSettings
   /** Anonymous product-telemetry state. Optional because the one-shot
    *  migration in `Store.load()` is what populates it on first boot of the
    *  telemetry release; before migration runs, the field is absent. After
@@ -1376,6 +1468,22 @@ export type GlobalSettings = {
    *  effectively present at runtime — the renderer should still fall back to
    *  defaults when reading optional sub-fields. */
   voice?: VoiceSettings
+}
+
+export type CommitMessageAiSettings = {
+  enabled: boolean
+  /** A TuiAgent id, the literal `'custom'` for a user-supplied command, or null. */
+  agentId: TuiAgent | 'custom' | null
+  /** Per-agent: switching agents preserves the previously-picked model. */
+  selectedModelByAgent: Partial<Record<TuiAgent, string>>
+  /** Per-model: thinking effort depends on the model, not the agent. Keyed by model id. */
+  selectedThinkingByModel: Record<string, string>
+  /** Optional user-provided suffix appended to the base prompt (style overrides, etc.). */
+  customPrompt: string
+  /** Command template used when `agentId === 'custom'`. Tokenized POSIX-style;
+   *  `{prompt}` is substituted with the diff prompt (argv delivery). When the
+   *  template has no `{prompt}`, the prompt is piped via stdin. */
+  customAgentCommand: string
 }
 
 export type GhosttyImportPreview = {
@@ -1519,6 +1627,9 @@ export type PersistedUIState = {
   uiZoomLevel: number
   editorFontZoomLevel: number
   worktreeCardProperties: WorktreeCardProperty[]
+  workspaceStatuses?: WorkspaceStatusDefinition[]
+  workspaceBoardOpacity?: number
+  workspaceBoardCompact?: boolean
   statusBarItems: StatusBarItem[]
   statusBarVisible: boolean
   dismissedUpdateVersion: string | null
@@ -1703,6 +1814,7 @@ export type PersistedState = {
   workspaceSession: WorkspaceSessionState
   sshTargets: SshTarget[]
   sshRemotePtyLeases: SshRemotePtyLease[]
+  migrationUnsupportedPtyEntries: MigrationUnsupportedPtyEntry[]
   automations: Automation[]
   automationRuns: AutomationRun[]
   onboarding: OnboardingState

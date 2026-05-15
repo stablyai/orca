@@ -6,6 +6,8 @@ import { Label } from '../ui/label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
 import {
+  ORCHESTRATION_ENABLED_STORAGE_KEY,
+  ORCHESTRATION_SKILL_INSTALLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_STATE_EVENT,
   isOrchestrationSetupEnabled,
   isOrchestrationSkillMarkedInstalled,
@@ -41,20 +43,20 @@ export function OrchestrationPane(): React.JSX.Element {
 
   const toggleOrchestration = (value: boolean): void => {
     setOrchestrationEnabled(value)
-    localStorage.setItem('orca.orchestration.enabled', value ? '1' : '0')
+    localStorage.setItem(ORCHESTRATION_ENABLED_STORAGE_KEY, value ? '1' : '0')
     notifyOrchestrationSetupStateChanged()
   }
 
   const markOrchestrationSkillInstalled = (value: boolean): void => {
     setOrchestrationSkillInstalled(value)
-    localStorage.setItem('orca.orchestration.skillInstalled', value ? '1' : '0')
+    localStorage.setItem(ORCHESTRATION_SKILL_INSTALLED_STORAGE_KEY, value ? '1' : '0')
     notifyOrchestrationSetupStateChanged()
   }
 
   const handleCopyOrchestrationCommand = async (): Promise<void> => {
     try {
       await window.api.ui.writeClipboardText(ORCHESTRATION_SKILL_INSTALL_COMMAND)
-      toast.success('Copied install command. Run it in your agent project.')
+      toast.success('Copied install command. Run it on this computer.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to copy command.')
     }
@@ -100,8 +102,7 @@ export function OrchestrationPane(): React.JSX.Element {
           <div className="space-y-1">
             <p className="text-sm font-medium">Install Orchestration Skill</p>
             <p className="text-xs text-muted-foreground">
-              Run this in your agent project so agents learn to use inter-agent orchestration
-              commands.
+              Run this once on your computer so agents learn to use inter-agent orchestration.
             </p>
           </div>
           <div className="flex max-w-full items-center gap-2 rounded-lg border border-border/60 bg-background/60 px-3 py-2">
@@ -130,7 +131,7 @@ export function OrchestrationPane(): React.JSX.Element {
             <span>
               {orchestrationSkillInstalled
                 ? 'Marked as installed on this machine.'
-                : "Check off once you've run it in your project."}
+                : "Check off once you've run it on this computer."}
             </span>
             <button
               type="button"

@@ -8,6 +8,7 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
 
 // Why: when an agent finishes or its terminal closes, the store cleans up the
 // explicit status entry and the agent vanishes from the live status set.
@@ -30,11 +31,7 @@ type RetainedAgentsSyncSnapshotInputs = RetainedAgentsSyncInputs & {
 }
 
 function paneKeyTabId(paneKey: string): string | null {
-  const colonIndex = paneKey.indexOf(':')
-  if (colonIndex <= 0) {
-    return null
-  }
-  return paneKey.slice(0, colonIndex)
+  return parsePaneKey(paneKey)?.tabId ?? null
 }
 
 function buildLiveTabIndex(args: {

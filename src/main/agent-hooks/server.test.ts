@@ -18,6 +18,7 @@ import {
   AGENT_STATUS_MAX_FIELD_LENGTH,
   parseAgentStatusPayload
 } from '../../shared/agent-status-types'
+import { makePaneKey } from '../../shared/stable-pane-id'
 
 const { trackMock } = vi.hoisted(() => ({
   trackMock: vi.fn()
@@ -27,7 +28,16 @@ vi.mock('../telemetry/client', () => ({
   track: trackMock
 }))
 
-const PANE = 'tab-1:0'
+const LEAF_1 = '11111111-1111-4111-8111-111111111111'
+const LEAF_2 = '22222222-2222-4222-8222-222222222222'
+const LEAF_3 = '33333333-3333-4333-8333-333333333333'
+const LEAF_4 = '44444444-4444-4444-8444-444444444444'
+const LEAF_5 = '55555555-5555-4555-8555-555555555555'
+const PANE = makePaneKey('tab-1', LEAF_1)
+const GOOD_PANE = makePaneKey('tab-good', LEAF_2)
+const OLD_PANE = makePaneKey('tab-old', LEAF_3)
+const FRESH_PANE = makePaneKey('tab-fresh', LEAF_4)
+const TAB_A_PANE = makePaneKey('tab-A', LEAF_5)
 
 type Body = {
   paneKey: string
@@ -59,6 +69,151 @@ afterEach(() => {
 })
 
 describe('AgentHookServer listener replay', () => {
+  it('allows multiple status-change subscribers to observe the same update', () => {
+    const server = new AgentHookServer()
+    const first = vi.fn()
+    const second = vi.fn()
+    server.subscribeStatusChanges(first)
+    server.subscribeStatusChanges(second)
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+
+    expect(first).toHaveBeenCalledWith([
+      expect.objectContaining({
+        state: 'working',
+        receivedAt: expect.any(Number),
+        observedInCurrentRuntime: true
+      })
+    ])
+    expect(second).toHaveBeenCalledWith([
+      expect.objectContaining({
+        state: 'working',
+        receivedAt: expect.any(Number),
+        observedInCurrentRuntime: true
+      })
+    ])
+  })
+
+  it('keeps status-change subscribers when renderer fanout listener is cleared', () => {
+    const server = new AgentHookServer()
+    const statusChangeListener = vi.fn()
+    const rendererListener = vi.fn()
+    server.subscribeStatusChanges(statusChangeListener)
+    server.setListener(rendererListener)
+    server.setListener(null)
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+
+    expect(statusChangeListener).toHaveBeenCalledTimes(1)
+    expect(rendererListener).not.toHaveBeenCalled()
+  })
+
+  it('unsubscribes status-change listeners without removing the remaining listeners', () => {
+    const server = new AgentHookServer()
+    const removed = vi.fn()
+    const remaining = vi.fn()
+    const unsubscribe = server.subscribeStatusChanges(removed)
+    server.subscribeStatusChanges(remaining)
+
+    unsubscribe()
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+
+    expect(removed).not.toHaveBeenCalled()
+    expect(remaining).toHaveBeenCalledWith([
+      expect.objectContaining({
+        state: 'working',
+        observedInCurrentRuntime: true
+      })
+    ])
+  })
+
+  it('notifies status-change subscribers when a working status is dropped or cleared', () => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.subscribeStatusChanges(listener)
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    server.dropStatusEntry(PANE)
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    server.clearPaneState(PANE)
+
+    expect(listener).toHaveBeenNthCalledWith(2, [])
+    expect(listener).toHaveBeenNthCalledWith(4, [])
+  })
+
+  it('hydrates cached statuses as not observed in the current runtime', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-agent-hooks-'))
+    const firstServer = new AgentHookServer()
+    const secondServer = new AgentHookServer()
+    try {
+      await firstServer.start({ env: 'production', userDataPath: dir })
+      firstServer.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'working', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+      firstServer.flushStatusPersistSync()
+      firstServer.stop()
+
+      await secondServer.start({ env: 'production', userDataPath: dir })
+
+      expect(secondServer.getStatusChangeSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'working',
+          observedInCurrentRuntime: false
+        })
+      ])
+    } finally {
+      firstServer.stop()
+      secondServer.stop()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('replays the latest retained pane status when a listener attaches after windowless events', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
@@ -213,14 +368,15 @@ describe('AgentHookServer listener replay', () => {
       )
 
       const warnsAfterFirst = warn.mock.calls.length
+      const secondPane = makePaneKey('tab-2', LEAF_2)
       server.ingestRemote(
         {
-          paneKey: 'tab-2:0',
+          paneKey: secondPane,
           env: 'development',
           version: '999',
           payload: {
             state: 'working',
-            paneKey: 'tab-2:0',
+            paneKey: secondPane,
             updatedAt: Date.now(),
             agentType: 'claude'
           }
@@ -246,9 +402,10 @@ describe('AgentHookServer listener replay', () => {
       server.setListener(listener)
 
       const oversizedPrompt = 'x'.repeat(AGENT_STATUS_MAX_FIELD_LENGTH + 50)
+      const remotePane = makePaneKey('tab-3', LEAF_3)
       server.ingestRemote(
         {
-          paneKey: ' tab-3:0 ',
+          paneKey: ` ${remotePane} `,
           tabId: ' tab-3 ',
           worktreeId: ' wt-3 ',
           env: 'remote',
@@ -265,7 +422,7 @@ describe('AgentHookServer listener replay', () => {
       expect(listener).toHaveBeenCalledTimes(1)
       expect(listener).toHaveBeenCalledWith(
         expect.objectContaining({
-          paneKey: 'tab-3:0',
+          paneKey: remotePane,
           tabId: 'tab-3',
           worktreeId: 'wt-3',
           connectionId: 'conn-9',
@@ -1617,9 +1774,10 @@ describe('Endpoint file lifecycle', () => {
       })
     })
     try {
+      const remotePane = makePaneKey('tab-3', LEAF_3)
       server.ingestRemote(
         {
-          paneKey: 'tab-3:0',
+          paneKey: remotePane,
           tabId: 'tab-3',
           worktreeId: 'wt-3',
           payload: {
@@ -1631,7 +1789,7 @@ describe('Endpoint file lifecycle', () => {
         'conn-42'
       )
       expect(events).toHaveLength(1)
-      expect(events[0].paneKey).toBe('tab-3:0')
+      expect(events[0].paneKey).toBe(remotePane)
       expect(events[0].connectionId).toBe('conn-42')
       expect(events[0].payload).toMatchObject({
         state: 'working',
@@ -1891,14 +2049,14 @@ describe('Last-status persistence', () => {
           },
           // Embedded paneKey mismatch — drop.
           [PANE]: {
-            paneKey: 'tab-x:99',
+            paneKey: makePaneKey('tab-x', LEAF_2),
             receivedAt: 1_700_000_000_000,
             stateStartedAt: 1_699_999_999_000,
             payload: { state: 'done', prompt: 'mismatch', agentType: 'claude' }
           },
           // Valid.
-          'tab-good:0': {
-            paneKey: 'tab-good:0',
+          [GOOD_PANE]: {
+            paneKey: GOOD_PANE,
             tabId: 'tab-good',
             receivedAt: recentTs(),
             stateStartedAt: recentTs(-1000),
@@ -1919,7 +2077,7 @@ describe('Last-status persistence', () => {
       expect(listener).toHaveBeenCalledTimes(1)
       expect(listener).toHaveBeenCalledWith(
         expect.objectContaining({
-          paneKey: 'tab-good:0',
+          paneKey: GOOD_PANE,
           payload: expect.objectContaining({ prompt: 'survived' })
         })
       )
@@ -1937,16 +2095,16 @@ describe('Last-status persistence', () => {
         version: 2,
         entries: {
           // Stale — should be dropped.
-          'tab-old:0': {
-            paneKey: 'tab-old:0',
+          [OLD_PANE]: {
+            paneKey: OLD_PANE,
             tabId: 'tab-old',
             receivedAt: eightDaysAgoMs,
             stateStartedAt: eightDaysAgoMs - 1000,
             payload: { state: 'done', prompt: 'old', agentType: 'claude' }
           },
           // Recent — should survive.
-          'tab-fresh:0': {
-            paneKey: 'tab-fresh:0',
+          [FRESH_PANE]: {
+            paneKey: FRESH_PANE,
             tabId: 'tab-fresh',
             receivedAt: recentTs(),
             stateStartedAt: recentTs(-1000),
@@ -1963,7 +2121,7 @@ describe('Last-status persistence', () => {
     })
     try {
       const snapshot = server.getStatusSnapshot()
-      expect(snapshot.map((e) => e.paneKey)).toEqual(['tab-fresh:0'])
+      expect(snapshot.map((e) => e.paneKey)).toEqual([FRESH_PANE])
     } finally {
       server.stop()
     }
@@ -1976,8 +2134,8 @@ describe('Last-status persistence', () => {
       JSON.stringify({
         version: 2,
         entries: {
-          'tab-A:0': {
-            paneKey: 'tab-A:0',
+          [TAB_A_PANE]: {
+            paneKey: TAB_A_PANE,
             // Why: deliberately divergent — paneKey says tab-A, the entry
             // claims tab-B. Sanitizer must drop rather than hydrate this
             // inconsistent row.
@@ -2043,7 +2201,7 @@ describe('Last-status persistence', () => {
       // Why: a no-op clearPaneState on a paneKey not in the cache is a
       // mutation site that should NOT trigger a redundant write. (clear was
       // designed to bail when nothing was evicted.)
-      server.clearPaneState('non-existent:0')
+      server.clearPaneState(makePaneKey('non-existent', LEAF_5))
       server.flushStatusPersistSync()
       // Touch back to the same mtime would let the test pass spuriously, so
       // assert no rewrite happened by checking that mtime is unchanged after
@@ -2140,6 +2298,42 @@ describe('AgentHookServer ingestRemote', () => {
       'conn-1'
     )
     expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('drops remote relay envelopes with legacy numeric paneKeys before cache mutation', () => {
+    const server = new AgentHookServer()
+    const payload = parseAgentStatusPayload(
+      JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
+    )
+    if (!payload) {
+      throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
+    }
+    const listener = vi.fn()
+    server.setListener(listener)
+    server.ingestRemote(
+      { paneKey: 'tab-1:0', tabId: 'tab-1', worktreeId: 'wt-1', payload },
+      'conn-1'
+    )
+    expect(listener).not.toHaveBeenCalled()
+    expect(server.getStatusSnapshot()).toEqual([])
+  })
+
+  it('drops remote relay envelopes whose tabId disagrees with the paneKey tab', () => {
+    const server = new AgentHookServer()
+    const payload = parseAgentStatusPayload(
+      JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
+    )
+    if (!payload) {
+      throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
+    }
+    const listener = vi.fn()
+    server.setListener(listener)
+    server.ingestRemote(
+      { paneKey: PANE, tabId: 'tab-other', worktreeId: 'wt-1', payload },
+      'conn-1'
+    )
+    expect(listener).not.toHaveBeenCalled()
+    expect(server.getStatusSnapshot()).toEqual([])
   })
 
   it('rejects empty connectionId', () => {

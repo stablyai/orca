@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import type { TerminalQuickCommand } from '../../../../shared/types'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { Button } from '../ui/button'
 import {
   Dialog,
@@ -30,12 +31,8 @@ type EditorState =
   | null
 
 function createQuickCommand(): TerminalQuickCommand {
-  const randomId =
-    typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(16).slice(2)}`
   return {
-    id: `quick-command-${randomId}`,
+    id: `quick-command-${createBrowserUuid()}`,
     label: '',
     command: '',
     appendEnter: true

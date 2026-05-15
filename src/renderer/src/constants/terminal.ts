@@ -24,7 +24,12 @@ export type ToggleTerminalPaneExpandDetail = {
 
 export type FocusTerminalPaneDetail = {
   tabId: string
-  paneId: number
+  /** Stable terminal layout leaf UUID. Numeric PaneManager ids are renderer-local
+   *  and can be reminted during replay/reload, so cross-component focus uses
+   *  the durable leaf identity and resolves it at the receiving TerminalPane. */
+  leafId: string | null
+  /** Optional paneKey to ack only after the target leaf resolves and focuses. */
+  ackPaneKeyOnSuccess?: string
 }
 
 export type PasteTerminalTextDetail = {

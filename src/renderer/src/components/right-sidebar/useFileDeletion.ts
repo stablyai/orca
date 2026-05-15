@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { dirname } from '@/lib/path'
 import { getConnectionId } from '@/lib/connection-context'
+import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { isPathEqualOrDescendant } from './file-explorer-paths'
 import type { TreeNode } from './file-explorer-types'
 import {
@@ -11,6 +12,12 @@ import {
   requestEditorSaveQuiesce
 } from '@/components/editor/editor-autosave'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
+import {
+  deleteRuntimePath,
+  isRemoteRuntimeFileOperation,
+  readRuntimeFileContent,
+  writeRuntimeFile
+} from '@/runtime/runtime-file-client'
 
 type UseFileDeletionParams = {
   activeWorktreeId: string | null
@@ -54,7 +61,18 @@ export function useFileDeletion({
       inFlightRef.current.add(node.path)
 
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-      const isRemote = connectionId !== undefined
+      const state = useAppStore.getState()
+      const worktree = activeWorktreeId
+        ? findWorktreeById(state.worktreesByRepo, activeWorktreeId)
+        : null
+      const fileContext = {
+        settings: state.settings,
+        worktreeId: activeWorktreeId,
+        worktreePath: worktree?.path ?? null,
+        connectionId
+      }
+      const isRemote =
+        connectionId !== undefined || isRemoteRuntimeFileOperation(fileContext, node.path)
 
       // Why: remote deletes go through `rm` on the relay — there is no OS-level
       // Trash/Recycle Bin, so the operation is permanent. Require an explicit
@@ -93,7 +111,13 @@ export function useFileDeletion({
         let undoContent: string | undefined
         if (!node.isDirectory) {
           try {
-            const rf = await window.api.fs.readFile({ filePath: node.path, connectionId })
+            const rf = await readRuntimeFileContent({
+              settings: fileContext.settings,
+              filePath: node.path,
+              relativePath: node.relativePath,
+              worktreeId: activeWorktreeId ?? undefined,
+              connectionId
+            })
             if (!rf.isBinary) {
               undoContent = rf.content
             }
@@ -103,28 +127,16 @@ export function useFileDeletion({
           }
         }
 
-        await window.api.fs.deletePath({
-          targetPath: node.path,
-          connectionId,
-          recursive: node.isDirectory
-        })
+        await deleteRuntimePath(fileContext, node.path, node.isDirectory)
 
         if (undoContent !== undefined) {
           commitFileExplorerOp({
             undo: async () => {
-              await window.api.fs.writeFile({
-                filePath: node.path,
-                content: undoContent,
-                connectionId
-              })
+              await writeRuntimeFile(fileContext, node.path, undoContent)
               await refreshDir(parentDir)
             },
             redo: async () => {
-              await window.api.fs.deletePath({
-                targetPath: node.path,
-                connectionId,
-                recursive: node.isDirectory
-              })
+              await deleteRuntimePath(fileContext, node.path, node.isDirectory)
               await refreshDir(parentDir)
             }
           })

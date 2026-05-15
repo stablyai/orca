@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: the worktree card centralizes sidebar card state (selection, drag, agent status, git info, context menu) in one cohesive component so sidebar rendering doesn't fan out across files. */
-import React, { useEffect, useMemo, useCallback, useRef, useState } from 'react'
-import { useShallow } from 'zustand/react/shallow'
+import React, { useEffect, useCallback, useState } from 'react'
 import { useAppStore } from '@/store'
+import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
@@ -21,29 +21,19 @@ import { SshDisconnectedDialog } from './SshDisconnectedDialog'
 import WorktreeCardAgents from './WorktreeCardAgents'
 import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import {
-  getWorktreeStatusLabel,
-  resolveWorktreeStatus,
-  type WorktreeStatus
-} from '@/lib/worktree-status'
-import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
+import { getWorktreeStatusLabel } from '@/lib/worktree-status'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
-import type { Worktree, Repo, PRInfo, IssueInfo } from '../../../../shared/types'
+import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { Worktree, Repo, IssueInfo } from '../../../../shared/types'
 import {
   branchDisplayName,
   checksLabel,
   CONFLICT_OPERATION_LABELS,
-  EMPTY_TABS,
-  EMPTY_BROWSER_TABS,
   FilledBellIcon
 } from './WorktreeCardHelpers'
-import { IssueSection, PrSection, CommentSection } from './WorktreeCardMeta'
-import { getWorktreeCardPrDisplay } from './worktree-card-pr-display'
-import {
-  selectLivePtyIdsForWorktree,
-  selectRuntimePaneTitlesForWorktree
-} from './worktree-card-status-inputs'
+import { IssueSection, ReviewSection, CommentSection } from './WorktreeCardMeta'
+import { writeWorkspaceDragData } from './workspace-status'
+import { useWorktreeActivityStatus } from './use-worktree-activity-status'
 
 type WorktreeCardProps = {
   worktree: Worktree
@@ -52,6 +42,7 @@ type WorktreeCardProps = {
   isMultiSelected?: boolean
   selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
+  onActivate?: () => void
   onSelectionGesture?: (event: React.MouseEvent<HTMLDivElement>, worktreeId: string) => boolean
   onContextMenuSelect?: (event: React.MouseEvent<HTMLDivElement>) => readonly Worktree[]
 }
@@ -67,13 +58,15 @@ const WorktreeCard = React.memo(function WorktreeCard({
   isActive,
   isMultiSelected = false,
   selectedWorktrees,
+  onActivate,
   onSelectionGesture,
   onContextMenuSelect,
   hideRepoBadge
 }: WorktreeCardProps) {
   const openModal = useAppStore((s) => s.openModal)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
-  const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
+  const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
+  const settings = useAppStore((s) => s.settings)
   const fetchIssue = useAppStore((s) => s.fetchIssue)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
   const handleEditIssue = useCallback(
@@ -150,39 +143,20 @@ const WorktreeCard = React.memo(function WorktreeCard({
     repo?.connectionId ? (s.sshTargetLabels.get(repo.connectionId) ?? '') : ''
   )
 
-  // ── GRANULAR selectors: only subscribe to THIS worktree's data ──
-  const tabs = useAppStore((s) => s.tabsByWorktree[worktree.id] ?? EMPTY_TABS)
-  const browserTabs = useAppStore((s) => s.browserTabsByWorktree[worktree.id] ?? EMPTY_BROWSER_TABS)
-  const hasNotesSurface = useAppStore((s) =>
-    (s.unifiedTabsByWorktree[worktree.id] ?? []).some((tab) => tab.contentType === 'notes')
-  )
-  // Why: keep these as separate shallow selectors. Combining them into one
-  // returned object nests freshly-created maps under fresh keys, so Zustand's
-  // shallow memoization sees every unrelated store write as a change and
-  // re-renders every mounted card.
-  // tab.ptyId is the wake-hint sessionId preserved across sleep, not a
-  // liveness signal; sleep-then-card-render would lie the dot green if we
-  // read tab.ptyId; ptyIdsByTabId is the source of truth.
-  // tab.title is the focused-pane title (onActivePaneChange overwrites it),
-  // so the per-pane title map is needed to keep the sidebar spinner
-  // reflecting *any* working pane, not just the focused one.
-  const runtimePaneTitlesForWorktree = useAppStore(
-    useShallow((s) => selectRuntimePaneTitlesForWorktree(s, worktree.id))
-  )
-  const ptyIdsForWorktree = useAppStore(
-    useShallow((s) => selectLivePtyIdsForWorktree(s, worktree.id))
-  )
-
   const branch = branchDisplayName(worktree.branch)
   const isFolder = repo ? isFolderRepo(repo) : false
-  const prCacheKey = repo && branch ? `${repo.path}::${branch}` : ''
-  const issueCacheKey = repo && worktree.linkedIssue ? `${repo.path}::${worktree.linkedIssue}` : ''
+  const hostedReviewCacheKey =
+    repo && branch ? getHostedReviewCacheKey(repo.path, branch, settings, repo.id) : ''
+  const issueCacheKey = repo && worktree.linkedIssue ? `${repo.id}::${worktree.linkedIssue}` : ''
 
-  // Subscribe to ONLY the specific cache entry, not entire prCache/issueCache
-  const prEntry = useAppStore((s) => (prCacheKey ? s.prCache[prCacheKey] : undefined))
+  // Subscribe to ONLY the specific cache entry, not entire review/issue caches.
+  const hostedReviewEntry = useAppStore((s) =>
+    hostedReviewCacheKey ? s.hostedReviewCache[hostedReviewCacheKey] : undefined
+  )
   const issueEntry = useAppStore((s) => (issueCacheKey ? s.issueCache[issueCacheKey] : undefined))
 
-  const pr: PRInfo | null | undefined = prEntry !== undefined ? prEntry.data : undefined
+  const hostedReview: HostedReviewInfo | null | undefined =
+    hostedReviewEntry !== undefined ? hostedReviewEntry.data : undefined
   const issue: IssueInfo | null | undefined = worktree.linkedIssue
     ? issueEntry !== undefined
       ? issueEntry.data
@@ -199,147 +173,37 @@ const WorktreeCard = React.memo(function WorktreeCard({
           title: issue === null ? 'Issue details unavailable' : 'Loading issue...'
         }
       : null)
-  const prDisplay = getWorktreeCardPrDisplay(pr, worktree.linkedPR)
-
   const isDeleting = deleteState?.isDeleting ?? false
 
-  // Why: the sidebar dot overlays the *stable* hook-reported states (blocked,
-  // waiting, done) onto the title-heuristic base. `working` remains on the
-  // heuristic because hook pings flip on/off mid-turn and users complained
-  // that the spinner flickered; the blocked/waiting/done states don't have
-  // that problem — they're terminal (done) or attention-needed (blocked/
-  // waiting) and persist until the user acts. Retained "done" snapshots are
-  // consulted too so the done dot keeps glowing after the agent process exits,
-  // matching the dashboard's retention behavior.
-  //
-  // Priority (highest first): permission (blocked/waiting) > heuristic
-  // 'working' > done > other heuristic ('active'/'inactive').
-  // permission wins over everything because a newer blocked agent in the same
-  // worktree means the user needs to act now, not admire a previous
-  // completion.
-  // heuristic 'working' wins over done because a spinner means the user has
-  // already re-prompted the agent after it reported done — the newer "work
-  // in progress" signal is more informative than a retained completion dot.
-  // Only the 'working' heuristic earns this precedence; 'active'/'inactive'
-  // mean "quiet terminal", which shouldn't drown out a recent done.
-  // Why: collapse live hook entries to booleans inside the selector so the
-  // snapshot is a stable scalar (useShallow compares element identity — an
-  // array of freshly-constructed {state,updatedAt} objects would never hit
-  // the cache and trip React's "getSnapshot should be cached" infinite-loop
-  // guard). Staleness is applied here too so the selector already reflects
-  // the 30-min TTL; agentStatusEpoch pulls in the tick that fires when a
-  // fresh entry crosses the stale boundary. The same useShallow wrapper
-  // covers hasPermission, hasLiveDone, *and* hasRetainedDone — merging the
-  // retained scan into the same selector avoids a second full-map iteration
-  // per card on every retention write (with N sidebar cards on screen a
-  // standalone retained selector scans Object.values(...) N times per tick).
-  const { hasPermission, hasLiveDone, hasRetainedDone } = useAppStore(
-    useShallow((s) => {
-      // Touch the epoch so this selector re-runs when the freshness scheduler
-      // ticks — otherwise a stale transition wouldn't flip the booleans until
-      // some unrelated store write happened to rerun us.
-      void s.agentStatusEpoch
-      const wtTabs = s.tabsByWorktree[worktree.id] ?? EMPTY_TABS
-      let perm = false
-      let live = false
-      if (wtTabs.length > 0) {
-        const tabIds = new Set(wtTabs.map((t) => t.id))
-        const now = Date.now()
-        for (const [paneKey, entry] of Object.entries(s.agentStatusByPaneKey)) {
-          const sepIdx = paneKey.indexOf(':')
-          if (sepIdx <= 0) {
-            continue
-          }
-          const tabId = paneKey.slice(0, sepIdx)
-          if (!tabIds.has(tabId)) {
-            continue
-          }
-          if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
-            continue
-          }
-          if (entry.state === 'blocked' || entry.state === 'waiting') {
-            perm = true
-          } else if (entry.state === 'done') {
-            live = true
-          }
-        }
-      }
-      // Retained scan — one pass in the same selector avoids a second
-      // Object.values(...) per store tick (one per sidebar card).
-      let retained = false
-      for (const ra of Object.values(s.retainedAgentsByPaneKey)) {
-        if (ra.worktreeId === worktree.id) {
-          retained = true
-          break
-        }
-      }
-      return { hasPermission: perm, hasLiveDone: live, hasRetainedDone: retained }
-    })
-  )
-
-  // Why: resolveWorktreeStatus enforces the runtime-liveness precondition —
-  // when no tab in this worktree has a live PTY (and no browser tab exists)
-  // it short-circuits to 'inactive' before consulting hook-reported state or
-  // retained-done snapshots. That keeps the dot honest across sleep, crash,
-  // and slept-with-retained-done while preserving the row data used by the
-  // inline agents list (retained 'done' rows still render inside the card).
-  const status: WorktreeStatus = useMemo(
-    () =>
-      resolveWorktreeStatus({
-        tabs,
-        browserTabs,
-        ptyIdsByTabId: ptyIdsForWorktree,
-        runtimePaneTitlesByTabId: runtimePaneTitlesForWorktree,
-        hasNotesSurface,
-        hasPermission,
-        hasLiveDone,
-        hasRetainedDone
-      }),
-    [
-      tabs,
-      browserTabs,
-      ptyIdsForWorktree,
-      runtimePaneTitlesForWorktree,
-      hasNotesSurface,
-      hasPermission,
-      hasLiveDone,
-      hasRetainedDone
-    ]
-  )
+  const status = useWorktreeActivityStatus(worktree.id)
 
   const showPR = cardProps.includes('pr')
   const showCI = cardProps.includes('ci')
   const showIssue = cardProps.includes('issue')
-  const previousPrLookupRef = useRef<{ cacheKey: string; linkedPRNumber: number | null } | null>(
-    null
-  )
 
-  // Skip GitHub fetches when the corresponding card sections are hidden.
+  // Skip hosted-review fetches when the corresponding card sections are hidden.
   // This preference is purely presentational, so background refreshes would
   // spend rate limit budget on data the user cannot see.
   useEffect(() => {
-    if (repo && !isFolder && !worktree.isBare && prCacheKey && (showPR || showCI)) {
-      const linkedPRNumber = worktree.linkedPR ?? null
-      const previousLookup = previousPrLookupRef.current
-      const linkedPRChanged =
-        previousLookup !== null &&
-        previousLookup.cacheKey === prCacheKey &&
-        previousLookup.linkedPRNumber !== linkedPRNumber
-      previousPrLookupRef.current = { cacheKey: prCacheKey, linkedPRNumber }
+    if (repo && !isFolder && !worktree.isBare && hostedReviewCacheKey && (showPR || showCI)) {
       // Why: pass linkedPR so worktrees created from a PR (whose new local
-      // branch differs from the PR's head ref) still resolve their PR via
-      // a number-based fallback in the main process. Force when that fallback
-      // changes so the branch cache stops showing stale linked-PR data.
-      fetchPRForBranch(repo.path, branch, { linkedPRNumber, force: linkedPRChanged })
+      // branch differs from the remote head ref) still resolve their PR/MR via
+      // a number-based fallback in the main process.
+      fetchHostedReviewForBranch(repo.path, branch, {
+        repoId: repo.id,
+        linkedGitHubPR: worktree.linkedPR ?? null,
+        linkedGitLabMR: worktree.linkedGitLabMR ?? null
+      })
     }
   }, [
     repo,
     isFolder,
     worktree.isBare,
     worktree.linkedPR,
-    fetchPRForBranch,
+    worktree.linkedGitLabMR,
+    fetchHostedReviewForBranch,
     branch,
-    prCacheKey,
+    hostedReviewCacheKey,
     showPR,
     showCI
   ])
@@ -351,11 +215,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
       return
     }
 
-    fetchIssue(repo.path, worktree.linkedIssue)
+    fetchIssue(repo.path, worktree.linkedIssue, { repoId: repo.id })
 
     // Background poll as fallback (activity triggers handle the fast path)
     const interval = setInterval(() => {
-      fetchIssue(repo.path, worktree.linkedIssue!)
+      fetchIssue(repo.path, worktree.linkedIssue!, { repoId: repo.id })
     }, 5 * 60_000) // 5 minutes
 
     return () => clearInterval(interval)
@@ -395,8 +259,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
       if (isSshDisconnected) {
         setShowDisconnectedDialog(true)
       }
+      onActivate?.()
     },
-    [worktree.id, isSshDisconnected, onSelectionGesture]
+    [worktree.id, isSshDisconnected, onActivate, onSelectionGesture]
   )
 
   const handleDoubleClick = useCallback(() => {
@@ -427,6 +292,17 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
   const unreadTooltip = worktree.isUnread ? 'Mark read' : 'Mark unread'
 
+  const handleDragStart = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      if (isDeleting) {
+        event.preventDefault()
+        return
+      }
+      writeWorkspaceDragData(event.dataTransfer, worktree.id)
+    },
+    [isDeleting, worktree.id]
+  )
+
   // Why: the 'unread' card property is the user's opt-out. When off, we render
   // as if the workspace is read so bold emphasis never appears. The persisted
   // `worktree.isUnread` flag is unchanged; only the rendering changes.
@@ -448,6 +324,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
       )}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
+      draggable={!isDeleting}
+      onDragStart={handleDragStart}
       aria-busy={isDeleting}
     >
       {isDeleting && (
@@ -581,29 +459,29 @@ const WorktreeCard = React.memo(function WorktreeCard({
             )}
           </div>
 
-          {/* CI Checks & PR state on the right */}
-          {cardProps.includes('ci') && pr && pr.checksStatus !== 'neutral' && (
-            <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
+            {/* CI Checks & PR state on the right */}
+            {cardProps.includes('ci') && hostedReview && hostedReview.status !== 'neutral' && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="inline-flex items-center opacity-80 hover:opacity-100 transition-opacity">
-                    {pr.checksStatus === 'success' && (
+                    {hostedReview.status === 'success' && (
                       <CircleCheck className="size-3.5 text-emerald-500" />
                     )}
-                    {pr.checksStatus === 'failure' && (
+                    {hostedReview.status === 'failure' && (
                       <CircleX className="size-3.5 text-rose-500" />
                     )}
-                    {pr.checksStatus === 'pending' && (
+                    {hostedReview.status === 'pending' && (
                       <LoaderCircle className="size-3.5 text-amber-500 animate-spin" />
                     )}
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="right" sideOffset={8}>
-                  <span>CI checks {checksLabel(pr.checksStatus).toLowerCase()}</span>
+                  <span>CI checks {checksLabel(hostedReview.status).toLowerCase()}</span>
                 </TooltipContent>
               </Tooltip>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Subtitle row: Repo badge + Branch */}
@@ -647,20 +525,19 @@ const WorktreeCard = React.memo(function WorktreeCard({
           <CacheTimer worktreeId={worktree.id} />
         </div>
 
-        {/* Meta section: Issue / PR Links / Comment
+        {/* Meta section: Issue / hosted review / Comment
              Layout coupling: spacing here is used to derive size estimates in
              WorktreeList's estimateSize. Update that function if changing spacing. */}
         {((cardProps.includes('issue') && issueDisplay) ||
-          (cardProps.includes('pr') && prDisplay) ||
+          (cardProps.includes('pr') && hostedReview) ||
           (cardProps.includes('comment') && worktree.comment)) && (
           <div className="flex flex-col gap-[3px] mt-0.5">
             {cardProps.includes('issue') && issueDisplay && (
               <IssueSection issue={issueDisplay} onClick={handleEditIssue} />
             )}
-            {cardProps.includes('pr') && prDisplay && (
-              <PrSection
-                pr={prDisplay}
-                onClick={handleEditIssue}
+            {cardProps.includes('pr') && hostedReview && (
+              <ReviewSection
+                review={hostedReview}
                 onEdit={handleEditPr}
                 onRemove={handleRemovePr}
               />

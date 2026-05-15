@@ -3,8 +3,11 @@ import type { ManagedPaneInternal, PaneManagerOptions } from './pane-manager-typ
 import { applyTerminalGpuAcceleration } from './pane-terminal-gpu-acceleration'
 
 function createPane(): ManagedPaneInternal {
+  const leafId = '11111111-1111-4111-8111-111111111111' as never
   return {
     id: 1,
+    leafId,
+    stablePaneId: leafId,
     terminal: {
       cols: 80,
       rows: 24

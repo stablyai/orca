@@ -42,6 +42,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.bulkStage', (p) => this.bulkStage(p))
     this.dispatcher.onRequest('git.bulkUnstage', (p) => this.bulkUnstage(p))
     this.dispatcher.onRequest('git.discard', (p) => this.discard(p))
+    this.dispatcher.onRequest('git.bulkDiscard', (p) => this.bulkDiscard(p))
     this.dispatcher.onRequest('git.conflictOperation', (p) => this.conflictOperation(p))
     this.dispatcher.onRequest('git.branchCompare', (p) => this.branchCompare(p))
     this.dispatcher.onRequest('git.upstreamStatus', (p) => this.upstreamStatus(p))
@@ -138,17 +139,40 @@ export class GitHandler {
     }
   }
 
-  private async discard(params: Record<string, unknown>) {
-    const worktreePath = params.worktreePath as string
-    const filePath = params.filePath as string
+  private normalizeGitPathForCompare(filePath: string): string {
+    return filePath.replace(/\\/g, '/').replace(/\/+$/, '')
+  }
 
+  private isTrackedPathSpec(filePath: string, trackedPaths: readonly string[]): boolean {
+    const normalized = this.normalizeGitPathForCompare(filePath)
+    return trackedPaths.some((trackedPath) => {
+      const normalizedTracked = this.normalizeGitPathForCompare(trackedPath)
+      return normalizedTracked === normalized || normalizedTracked.startsWith(`${normalized}/`)
+    })
+  }
+
+  private assertInWorktree(worktreePath: string, filePath: string): string {
     const resolved = path.resolve(worktreePath, filePath)
     const rel = path.relative(path.resolve(worktreePath), resolved)
     // Why: empty rel or '.' means the path IS the worktree root — rm -rf would
     // delete the entire worktree. Reject along with parent-escaping paths.
-    if (!rel || rel === '.' || rel === '..' || rel.startsWith('../') || path.isAbsolute(rel)) {
+    if (
+      !rel ||
+      rel === '.' ||
+      rel === '..' ||
+      rel.startsWith(`..${path.sep}`) ||
+      path.isAbsolute(rel)
+    ) {
       throw new Error(`Path "${filePath}" resolves outside the worktree`)
     }
+    return resolved
+  }
+
+  private async discard(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    const filePath = params.filePath as string
+
+    const resolved = this.assertInWorktree(worktreePath, filePath)
 
     let tracked = false
     try {
@@ -161,6 +185,43 @@ export class GitHandler {
     await (tracked
       ? this.git(['restore', '--worktree', '--source=HEAD', '--', filePath], worktreePath)
       : rm(resolved, { force: true, recursive: true }))
+  }
+
+  private async bulkDiscard(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    const filePaths = params.filePaths as string[]
+    if (filePaths.length === 0) {
+      return
+    }
+
+    for (const filePath of filePaths) {
+      this.assertInWorktree(worktreePath, filePath)
+    }
+
+    const trackedPathSpecs: string[] = []
+    for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
+      const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
+      const { stdout } = await this.git(['ls-files', '-z', '--', ...chunk], worktreePath)
+      trackedPathSpecs.push(...stdout.split('\0').filter(Boolean))
+    }
+
+    const trackedPaths = filePaths.filter((filePath) =>
+      this.isTrackedPathSpec(filePath, trackedPathSpecs)
+    )
+    const untrackedPaths = filePaths.filter(
+      (filePath) => !this.isTrackedPathSpec(filePath, trackedPathSpecs)
+    )
+
+    for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
+      const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
+      await this.git(['restore', '--worktree', '--source=HEAD', '--', ...chunk], worktreePath)
+    }
+
+    await Promise.all(
+      untrackedPaths.map((filePath) =>
+        rm(path.resolve(worktreePath, filePath), { force: true, recursive: true })
+      )
+    )
   }
 
   private async conflictOperation(params: Record<string, unknown>) {

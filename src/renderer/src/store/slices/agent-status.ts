@@ -7,6 +7,7 @@ import {
   type AgentStateHistoryEntry,
   type AgentStatusEntry,
   type AgentType,
+  type MigrationUnsupportedPtyEntry,
   type ParsedAgentStatusPayload
 } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/types'
@@ -30,9 +31,12 @@ export type RetainedAgentEntry = {
 }
 
 export type AgentStatusSlice = {
-  /** Explicit agent status entries keyed by `${tabId}:${paneId}` composite.
+  /** Explicit agent status entries keyed by `${tabId}:${leafId}` composite.
    *  Real-time only — lives in renderer memory, not persisted to disk. */
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  /** PTYs that still report legacy numeric pane keys but have registry-backed
+   *  UUID pane proof. Stored separately from normal hook-reported status. */
+  migrationUnsupportedByPtyId: Record<string, MigrationUnsupportedPtyEntry>
   /** Monotonic tick that advances when agent-status freshness boundaries pass. */
   agentStatusEpoch: number
 
@@ -54,6 +58,9 @@ export type AgentStatusSlice = {
     terminalTitle?: string,
     timing?: { updatedAt?: number; stateStartedAt?: number }
   ) => void
+
+  setMigrationUnsupportedPty: (entry: MigrationUnsupportedPtyEntry) => void
+  clearMigrationUnsupportedPty: (ptyId: string) => void
 
   /** Remove a single entry (e.g., when a pane's terminal exits). */
   removeAgentStatus: (paneKey: string) => void
@@ -116,6 +123,22 @@ function paneKeyMatchesAnyTabPrefix(paneKey: string, tabPrefixes: string[]): boo
   return false
 }
 
+function pruneMigrationUnsupportedEntries(
+  entries: Record<string, MigrationUnsupportedPtyEntry>,
+  predicate: (entry: MigrationUnsupportedPtyEntry) => boolean
+): { next: Record<string, MigrationUnsupportedPtyEntry>; changed: boolean } {
+  let changed = false
+  const next: Record<string, MigrationUnsupportedPtyEntry> = {}
+  for (const [ptyId, entry] of Object.entries(entries)) {
+    if (predicate(entry)) {
+      changed = true
+      continue
+    }
+    next[ptyId] = entry
+  }
+  return { next: changed ? next : entries, changed }
+}
+
 export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusSlice> = (
   set,
   get
@@ -142,6 +165,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
 
   return {
     agentStatusByPaneKey: {},
+    migrationUnsupportedByPtyId: {},
     agentStatusEpoch: 0,
     retainedAgentsByPaneKey: {},
     retentionSuppressedPaneKeys: {},
@@ -265,11 +289,20 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           nextRetentionSuppressedPaneKeys = { ...s.retentionSuppressedPaneKeys }
           delete nextRetentionSuppressedPaneKeys[paneKey]
         }
+        const migrationUnsupported = pruneMigrationUnsupportedEntries(
+          s.migrationUnsupportedByPtyId,
+          (entry) => entry.paneKey === paneKey
+        )
         return {
           agentStatusByPaneKey: { ...s.agentStatusByPaneKey, [paneKey]: entry },
+          migrationUnsupportedByPtyId: migrationUnsupported.next,
           retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
-          agentStatusEpoch: sortRelevantChange ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
-          sortEpoch: sortRelevantChange ? s.sortEpoch + 1 : s.sortEpoch
+          agentStatusEpoch:
+            sortRelevantChange || migrationUnsupported.changed
+              ? s.agentStatusEpoch + 1
+              : s.agentStatusEpoch,
+          sortEpoch:
+            sortRelevantChange || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
         }
       })
       // Why: schedule after set completes so the timer reads the updated map.
@@ -277,13 +310,55 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       queueMicrotask(() => freshness.schedule())
     },
 
-    removeAgentStatus: (paneKey) => {
-      if (!(paneKey in get().agentStatusByPaneKey)) {
+    setMigrationUnsupportedPty: (entry) => {
+      set((s) => {
+        const existing = s.migrationUnsupportedByPtyId[entry.ptyId]
+        if (existing && entry.updatedAt < existing.updatedAt) {
+          return s
+        }
+        return {
+          migrationUnsupportedByPtyId: {
+            ...s.migrationUnsupportedByPtyId,
+            [entry.ptyId]: entry
+          },
+          agentStatusEpoch: s.agentStatusEpoch + 1,
+          sortEpoch: s.sortEpoch + 1
+        }
+      })
+    },
+
+    clearMigrationUnsupportedPty: (ptyId) => {
+      if (!(ptyId in get().migrationUnsupportedByPtyId)) {
         return
       }
       set((s) => {
-        const next = { ...s.agentStatusByPaneKey }
-        delete next[paneKey]
+        const next = { ...s.migrationUnsupportedByPtyId }
+        delete next[ptyId]
+        return {
+          migrationUnsupportedByPtyId: next,
+          agentStatusEpoch: s.agentStatusEpoch + 1,
+          sortEpoch: s.sortEpoch + 1
+        }
+      })
+    },
+
+    removeAgentStatus: (paneKey) => {
+      if (
+        !(paneKey in get().agentStatusByPaneKey) &&
+        !Object.values(get().migrationUnsupportedByPtyId).some((entry) => entry.paneKey === paneKey)
+      ) {
+        return
+      }
+      set((s) => {
+        const hasLive = paneKey in s.agentStatusByPaneKey
+        const next = hasLive ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
+        if (hasLive) {
+          delete next[paneKey]
+        }
+        const migrationUnsupported = pruneMigrationUnsupportedEntries(
+          s.migrationUnsupportedByPtyId,
+          (entry) => entry.paneKey === paneKey
+        )
         // Why: acknowledgedAgentsByPaneKey is written per user-ack but owned
         // lifecycle-wise by the pane — drop the ack entry in lockstep with the
         // live-map entry so closed panes don't leave stale ack timestamps that
@@ -299,6 +374,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         // as setAgentStatus.
         return {
           agentStatusByPaneKey: next,
+          migrationUnsupportedByPtyId: migrationUnsupported.next,
           ...(nextAck !== s.acknowledgedAgentsByPaneKey
             ? { acknowledgedAgentsByPaneKey: nextAck }
             : {}),
@@ -313,7 +389,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       const prefix = `${tabIdPrefix}:`
       const currentKeys = Object.keys(get().agentStatusByPaneKey)
       const toRemove = currentKeys.filter((k) => k.startsWith(prefix))
-      if (toRemove.length === 0) {
+      const hasMigrationUnsupported = Object.values(get().migrationUnsupportedByPtyId).some(
+        (entry) => entry.paneKey?.startsWith(prefix)
+      )
+      if (toRemove.length === 0 && !hasMigrationUnsupported) {
         return
       }
       set((s) => {
@@ -321,6 +400,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         for (const key of toRemove) {
           delete next[key]
         }
+        const migrationUnsupported = pruneMigrationUnsupportedEntries(
+          s.migrationUnsupportedByPtyId,
+          (entry) => entry.paneKey?.startsWith(prefix) ?? false
+        )
         // See removeAgentStatus for rationale on ack cleanup.
         let nextAck = s.acknowledgedAgentsByPaneKey
         const ackKeys = Object.keys(nextAck).filter((k) => k.startsWith(prefix))
@@ -336,6 +419,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         // no keys matched the prefix.
         return {
           agentStatusByPaneKey: next,
+          migrationUnsupportedByPtyId: migrationUnsupported.next,
           ...(nextAck !== s.acknowledgedAgentsByPaneKey
             ? { acknowledgedAgentsByPaneKey: nextAck }
             : {}),
@@ -356,6 +440,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const hasLive = paneKey in s.agentStatusByPaneKey
         liveExisted = hasLive
         const hasRetained = paneKey in s.retainedAgentsByPaneKey
+        const migrationUnsupported = pruneMigrationUnsupportedEntries(
+          s.migrationUnsupportedByPtyId,
+          (entry) => entry.paneKey === paneKey
+        )
         // See removeAgentStatus for rationale on ack cleanup. Apply this
         // regardless of live/retained presence — the ack entry is owned by
         // the pane lifecycle independently of live/retained state.
@@ -371,7 +459,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         // paneKey with no live and no retained entry truly has nothing to
         // change, so short-circuit here — but still flush a pending ack
         // cleanup if one is present.
-        if (!hasLive && !hasRetained) {
+        if (!hasLive && !hasRetained && !migrationUnsupported.changed) {
           if (nextAck !== s.acknowledgedAgentsByPaneKey) {
             return { acknowledgedAgentsByPaneKey: nextAck }
           }
@@ -423,6 +511,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         return {
           agentStatusByPaneKey: nextLive,
           retainedAgentsByPaneKey: nextRetained,
+          migrationUnsupportedByPtyId: migrationUnsupported.next,
           ...(nextAck !== s.acknowledgedAgentsByPaneKey
             ? { acknowledgedAgentsByPaneKey: nextAck }
             : {}),
@@ -434,13 +523,14 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
                 }
               }
             : {}),
-          agentStatusEpoch: hasLive ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
+          agentStatusEpoch:
+            hasLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
           // Why: mirrors removeAgentStatus — dropping a live working/blocked
           // agent changes its contribution to the worktree sort score, so the
           // sidebar smart-sort must recompute. Without this bump, a user-
           // initiated dismissal from the inline agents list would leave the
           // sidebar ordering stale until some unrelated event repaired it.
-          sortEpoch: hasLive ? s.sortEpoch + 1 : s.sortEpoch
+          sortEpoch: hasLive || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
         }
       })
       // Why: freshness.schedule only matters when the live map changed —
@@ -470,6 +560,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const retainedKeys = Object.keys(s.retainedAgentsByPaneKey).filter((k) =>
           k.startsWith(prefix)
         )
+        const migrationUnsupported = pruneMigrationUnsupportedEntries(
+          s.migrationUnsupportedByPtyId,
+          (entry) => entry.paneKey?.startsWith(prefix) ?? false
+        )
         // See removeAgentStatus for rationale on ack cleanup. Apply this
         // regardless of live/retained presence — ack entries are owned by
         // the pane lifecycle independently of live/retained state.
@@ -481,7 +575,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             delete nextAck[k]
           }
         }
-        if (liveKeys.length === 0 && retainedKeys.length === 0) {
+        if (liveKeys.length === 0 && retainedKeys.length === 0 && !migrationUnsupported.changed) {
           if (nextAck !== s.acknowledgedAgentsByPaneKey) {
             return { acknowledgedAgentsByPaneKey: nextAck }
           }
@@ -527,6 +621,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         return {
           agentStatusByPaneKey: nextLive,
           retainedAgentsByPaneKey: nextRetained,
+          migrationUnsupportedByPtyId: migrationUnsupported.next,
           retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
           ...(nextAck !== s.acknowledgedAgentsByPaneKey
             ? { acknowledgedAgentsByPaneKey: nextAck }
@@ -534,8 +629,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           // Why: mirrors removeAgentStatusByTabPrefix — only bump the live-map
           // epoch / sortEpoch when the live map actually changed. Retained-only
           // sweeps do not participate in smart-sort or freshness calculations.
-          agentStatusEpoch: hadLive ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
-          sortEpoch: hadLive ? s.sortEpoch + 1 : s.sortEpoch
+          agentStatusEpoch:
+            hadLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
+          sortEpoch: hadLive || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
         }
       })
       if (hadLive) {
@@ -557,6 +653,12 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           )
           .map(([paneKey]) => paneKey)
         const retainedKeySet = new Set(retainedKeys)
+        const migrationUnsupported = pruneMigrationUnsupportedEntries(
+          s.migrationUnsupportedByPtyId,
+          (entry) =>
+            entry.worktreeId === worktreeId ||
+            (entry.paneKey ? paneKeyMatchesAnyTabPrefix(entry.paneKey, tabPrefixes) : false)
+        )
         // See removeAgentStatus for rationale on ack cleanup. Current tabs are
         // swept by prefix; orphan retained rows are swept by their retained key.
         let nextAck = s.acknowledgedAgentsByPaneKey
@@ -573,7 +675,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         // changed, narrow the return to just the ack delta (or s) so we don't
         // emit a new top-level state object that re-renders full-state
         // subscribers for nothing.
-        if (liveKeys.length === 0 && retainedKeys.length === 0) {
+        if (liveKeys.length === 0 && retainedKeys.length === 0 && !migrationUnsupported.changed) {
           if (nextAck !== s.acknowledgedAgentsByPaneKey) {
             return { acknowledgedAgentsByPaneKey: nextAck }
           }
@@ -608,12 +710,14 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         return {
           agentStatusByPaneKey: nextLive,
           retainedAgentsByPaneKey: nextRetained,
+          migrationUnsupportedByPtyId: migrationUnsupported.next,
           retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
           ...(nextAck !== s.acknowledgedAgentsByPaneKey
             ? { acknowledgedAgentsByPaneKey: nextAck }
             : {}),
-          agentStatusEpoch: hadLive ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
-          sortEpoch: hadLive ? s.sortEpoch + 1 : s.sortEpoch
+          agentStatusEpoch:
+            hadLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
+          sortEpoch: hadLive || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
         }
       })
       if (hadLive) {

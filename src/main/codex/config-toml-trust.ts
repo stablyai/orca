@@ -190,14 +190,24 @@ export function upsertHookTrustEntries(
   entries: readonly CodexTrustEntry[]
 ): void {
   const existing = existsSync(configPath) ? readTomlFile(configPath) : ''
-  let updated = existing
-  for (const entry of entries) {
-    updated = upsertTrustBlock(updated, computeTrustKey(entry), computeTrustedHash(entry))
-  }
+  const updated = upsertHookTrustEntriesInContent(existing, entries)
   if (updated === existing) {
     return
   }
   writeConfigAtomically(configPath, updated)
+}
+
+export function upsertHookTrustEntriesInContent(
+  existingContent: string,
+  entries: readonly CodexTrustEntry[]
+): string {
+  const existing =
+    existingContent.charCodeAt(0) === 0xfeff ? existingContent.slice(1) : existingContent
+  let updated = existing
+  for (const entry of entries) {
+    updated = upsertTrustBlock(updated, computeTrustKey(entry), computeTrustedHash(entry))
+  }
+  return updated
 }
 
 // Why: build the canonical block we own. The two field names mirror what

@@ -11,6 +11,7 @@ import {
   commonPropsSchema,
   errorClassSchema,
   eventSchemas,
+  featureWallTileIdSchema,
   SETTINGS_CHANGED_WHITELIST,
   settingsChangedKeySchema
 } from './telemetry-events'
@@ -210,6 +211,50 @@ describe('settings_changed schema', () => {
   })
 })
 
+describe('feature wall schemas', () => {
+  it('accepts the unconditional open and close payloads', () => {
+    expect(eventSchemas.feature_wall_opened.safeParse({ source: 'help_menu' }).success).toBe(true)
+    expect(eventSchemas.feature_wall_opened.safeParse({ source: 'popup' }).success).toBe(true)
+    expect(eventSchemas.feature_wall_closed.safeParse({ dwell_ms: 1200 }).success).toBe(true)
+  })
+
+  it('rejects stale or invalid source variants', () => {
+    expect(eventSchemas.feature_wall_opened.safeParse({}).success).toBe(false)
+    expect(eventSchemas.feature_wall_opened.safeParse({ surface: 'help_tour' }).success).toBe(false)
+    expect(eventSchemas.feature_wall_opened.safeParse({ source: 'help_tour' }).success).toBe(false)
+  })
+
+  it('rejects out-of-range dwell time', () => {
+    expect(eventSchemas.feature_wall_closed.safeParse({ dwell_ms: -1 }).success).toBe(false)
+  })
+
+  it('accepts only known tile ids for tile focus telemetry', () => {
+    expect(
+      eventSchemas.feature_wall_tile_focused.safeParse({
+        tile_id: 'tile-12'
+      }).success
+    ).toBe(true)
+    expect(
+      eventSchemas.feature_wall_tile_focused.safeParse({
+        tile_id: 'tile-99'
+      }).success
+    ).toBe(false)
+  })
+
+  it('accepts only known tile ids for tile click telemetry', () => {
+    expect(
+      eventSchemas.feature_wall_tile_clicked.safeParse({
+        tile_id: 'tile-03'
+      }).success
+    ).toBe(true)
+    expect(
+      eventSchemas.feature_wall_tile_clicked.safeParse({
+        tile_id: 'tile-99'
+      }).success
+    ).toBe(false)
+  })
+})
+
 describe('commonPropsSchema', () => {
   it('round-trips a realistic payload', () => {
     const parsed = commonPropsSchema.safeParse({
@@ -283,5 +328,9 @@ describe('exported enum schemas', () => {
     for (const key of SETTINGS_CHANGED_WHITELIST) {
       expect(settingsChangedKeySchema.safeParse(key).success).toBe(true)
     }
+  })
+
+  it('feature wall enum schemas accept known values', () => {
+    expect(featureWallTileIdSchema.safeParse('tile-01').success).toBe(true)
   })
 })

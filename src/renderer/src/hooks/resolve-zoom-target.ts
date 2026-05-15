@@ -3,8 +3,8 @@
  * based on current view, tab type, and focused element.
  */
 export function resolveZoomTarget(args: {
-  activeView: 'terminal' | 'settings' | 'tasks' | 'activity' | 'automations'
-  activeTabType: 'terminal' | 'editor' | 'browser' | 'notes'
+  activeView: 'terminal' | 'settings' | 'tasks' | 'activity' | 'automations' | 'space'
+  activeTabType: 'terminal' | 'editor' | 'browser'
   activeElement: unknown
 }): 'terminal' | 'editor' | 'ui' {
   const { activeView, activeTabType, activeElement } = args
@@ -35,7 +35,7 @@ export function resolveZoomTarget(args: {
   if (activeView !== 'terminal') {
     return 'ui'
   }
-  if (activeTabType === 'editor' || activeTabType === 'notes' || editorFocused) {
+  if (activeTabType === 'editor' || editorFocused) {
     return 'editor'
   }
   // Why: terminal tabs should keep using per-pane terminal font zoom even when
