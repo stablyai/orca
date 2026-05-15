@@ -531,6 +531,7 @@ const XTERM_HTML = `<!DOCTYPE html>
       nextSurface.style.top = '0';
       document.getElementById('terminal-container').appendChild(nextSurface);
       surface = nextSurface;
+      attachSurfaceEventHandlers(surface);
       oldSurface.removeAttribute('id');
     }
 
@@ -1385,12 +1386,6 @@ const XTERM_HTML = `<!DOCTYPE html>
     } catch (err) {}
   });
 
-  // Why: event listeners are registered once here (not inside init()) so
-  // they don't accumulate on re-init. They close over the mutable 'term'
-  // variable, so they always reference the current terminal instance.
-  surface.addEventListener('mousedown', function(e) { e.preventDefault(); e.stopPropagation(); }, true);
-  surface.addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); }, true);
-
   var ts = {
     lastX: 0, lastY: 0, lastTime: 0, velY: 0,
     accumDelta: 0, momentumId: null, isPinching: false,
@@ -1402,121 +1397,132 @@ const XTERM_HTML = `<!DOCTYPE html>
     return Math.sqrt(dx * dx + dy * dy);
   }
 
-  surface.addEventListener('touchstart', function(e) {
-    if (dispatcherShouldBlockSurface()) return;
-    if (ts.momentumId) {
-      cancelAnimationFrame(ts.momentumId);
-      ts.momentumId = null;
-    }
-    if (e.touches.length === 2) {
-      ts.isPinching = true;
-      ts.pinchDist = getDistance(e.touches[0], e.touches[1]);
-      ts.pinchScale = userScale;
-      var mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-      var my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-      var total = getTotalScale();
-      ts.pinchSurfX = (mx - panX) / total;
-      ts.pinchSurfY = (my - panY) / total;
-    } else if (e.touches.length === 1) {
-      ts.isPinching = false;
-      ts.lastX = e.touches[0].clientX;
-      ts.lastY = e.touches[0].clientY;
-      ts.lastTime = Date.now();
-      ts.velY = 0;
-      ts.accumDelta = 0;
-    }
-  }, { capture: true, passive: true });
+  function attachSurfaceEventHandlers(targetSurface) {
+    if (!targetSurface || targetSurface.__orcaSurfaceHandlersAttached) return;
+    targetSurface.__orcaSurfaceHandlersAttached = true;
+    // Why: init() swaps in a new hidden surface to avoid flicker; each
+    // replacement needs gesture handlers or tab-switch replays stop scrolling.
+    targetSurface.addEventListener('mousedown', function(e) { e.preventDefault(); e.stopPropagation(); }, true);
+    targetSurface.addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); }, true);
 
-  surface.addEventListener('touchmove', function(e) {
-    if (dispatcherShouldBlockSurface()) return;
-    if (!term) return;
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (e.touches.length === 2) {
-      ts.isPinching = true;
-      var dist = getDistance(e.touches[0], e.touches[1]);
-      var mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-      var my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-
-      var ratio = dist / ts.pinchDist;
-      userScale = Math.max(1, Math.min(5, ts.pinchScale * ratio));
-
-      var total = getTotalScale();
-      panX = mx - ts.pinchSurfX * total;
-      panY = my - ts.pinchSurfY * total;
-      clampPan();
-      updateTransform();
-
-    } else if (e.touches.length === 1 && !ts.isPinching) {
-      var x = e.touches[0].clientX;
-      var y = e.touches[0].clientY;
-      var now = Date.now();
-      var dt = now - ts.lastTime;
-
-      if (userScale > 1.05) {
-        panX += x - ts.lastX;
-        panY += y - ts.lastY;
-        clampPan();
-        updateTransform();
-      } else {
-        var deltaY = ts.lastY - y;
-        if (dt > 0) ts.velY = deltaY / dt;
-        ts.lastTime = now;
-        var effectiveCellH = getCellHeight() * currentScale;
-        ts.accumDelta += deltaY;
-        var lines = Math.trunc(ts.accumDelta / effectiveCellH);
-        if (lines !== 0) {
-          ts.accumDelta -= lines * effectiveCellH;
-          routeScrollLines(lines, x, y);
-        }
+    targetSurface.addEventListener('touchstart', function(e) {
+      if (dispatcherShouldBlockSurface()) return;
+      if (ts.momentumId) {
+        cancelAnimationFrame(ts.momentumId);
+        ts.momentumId = null;
       }
-      ts.lastX = x;
-      ts.lastY = y;
-    }
-  }, { capture: true, passive: false });
-
-  surface.addEventListener('touchend', function(e) {
-    if (dispatcherShouldBlockSurface()) return;
-    if (!term) return;
-
-    if (ts.isPinching && e.touches.length < 2) {
-      ts.isPinching = false;
-      if (userScale < 1.15) {
-        userScale = 1; panX = 0; panY = 0;
-        updateTransform();
-      }
-      if (e.touches.length === 1) {
+      if (e.touches.length === 2) {
+        ts.isPinching = true;
+        ts.pinchDist = getDistance(e.touches[0], e.touches[1]);
+        ts.pinchScale = userScale;
+        var mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        var my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        var total = getTotalScale();
+        ts.pinchSurfX = (mx - panX) / total;
+        ts.pinchSurfY = (my - panY) / total;
+      } else if (e.touches.length === 1) {
+        ts.isPinching = false;
         ts.lastX = e.touches[0].clientX;
         ts.lastY = e.touches[0].clientY;
         ts.lastTime = Date.now();
         ts.velY = 0;
         ts.accumDelta = 0;
       }
-      return;
-    }
+    }, { capture: true, passive: true });
 
-    if (e.touches.length === 0 && userScale <= 1.05) {
-      var vel = ts.velY;
-      var FRICTION = 0.95;
-      var MIN_VEL = 0.02;
-      function momentumStep() {
-        vel *= FRICTION;
-        if (Math.abs(vel) < MIN_VEL) { ts.momentumId = null; return; }
-        var effectiveCellH = getCellHeight() * currentScale;
-        ts.accumDelta += vel * 16;
-        var lines = Math.trunc(ts.accumDelta / effectiveCellH);
-        if (lines !== 0) {
-          ts.accumDelta -= lines * effectiveCellH;
-          routeScrollLines(lines, ts.lastX, ts.lastY);
+    targetSurface.addEventListener('touchmove', function(e) {
+      if (dispatcherShouldBlockSurface()) return;
+      if (!term) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (e.touches.length === 2) {
+        ts.isPinching = true;
+        var dist = getDistance(e.touches[0], e.touches[1]);
+        var mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        var my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+
+        var ratio = dist / ts.pinchDist;
+        userScale = Math.max(1, Math.min(5, ts.pinchScale * ratio));
+
+        var total = getTotalScale();
+        panX = mx - ts.pinchSurfX * total;
+        panY = my - ts.pinchSurfY * total;
+        clampPan();
+        updateTransform();
+
+      } else if (e.touches.length === 1 && !ts.isPinching) {
+        var x = e.touches[0].clientX;
+        var y = e.touches[0].clientY;
+        var now = Date.now();
+        var dt = now - ts.lastTime;
+
+        if (userScale > 1.05) {
+          panX += x - ts.lastX;
+          panY += y - ts.lastY;
+          clampPan();
+          updateTransform();
+        } else {
+          var deltaY = ts.lastY - y;
+          if (dt > 0) ts.velY = deltaY / dt;
+          ts.lastTime = now;
+          var effectiveCellH = getCellHeight() * currentScale;
+          ts.accumDelta += deltaY;
+          var lines = Math.trunc(ts.accumDelta / effectiveCellH);
+          if (lines !== 0) {
+            ts.accumDelta -= lines * effectiveCellH;
+            routeScrollLines(lines, x, y);
+          }
         }
-        ts.momentumId = requestAnimationFrame(momentumStep);
+        ts.lastX = x;
+        ts.lastY = y;
       }
-      if (Math.abs(vel) > MIN_VEL) {
-        ts.momentumId = requestAnimationFrame(momentumStep);
+    }, { capture: true, passive: false });
+
+    targetSurface.addEventListener('touchend', function(e) {
+      if (dispatcherShouldBlockSurface()) return;
+      if (!term) return;
+
+      if (ts.isPinching && e.touches.length < 2) {
+        ts.isPinching = false;
+        if (userScale < 1.15) {
+          userScale = 1; panX = 0; panY = 0;
+          updateTransform();
+        }
+        if (e.touches.length === 1) {
+          ts.lastX = e.touches[0].clientX;
+          ts.lastY = e.touches[0].clientY;
+          ts.lastTime = Date.now();
+          ts.velY = 0;
+          ts.accumDelta = 0;
+        }
+        return;
       }
-    }
-  }, { capture: true, passive: true });
+
+      if (e.touches.length === 0 && userScale <= 1.05) {
+        var vel = ts.velY;
+        var FRICTION = 0.95;
+        var MIN_VEL = 0.02;
+        function momentumStep() {
+          vel *= FRICTION;
+          if (Math.abs(vel) < MIN_VEL) { ts.momentumId = null; return; }
+          var effectiveCellH = getCellHeight() * currentScale;
+          ts.accumDelta += vel * 16;
+          var lines = Math.trunc(ts.accumDelta / effectiveCellH);
+          if (lines !== 0) {
+            ts.accumDelta -= lines * effectiveCellH;
+            routeScrollLines(lines, ts.lastX, ts.lastY);
+          }
+          ts.momentumId = requestAnimationFrame(momentumStep);
+        }
+        if (Math.abs(vel) > MIN_VEL) {
+          ts.momentumId = requestAnimationFrame(momentumStep);
+        }
+      }
+    }, { capture: true, passive: true });
+  }
+
+  attachSurfaceEventHandlers(surface);
 
   window.addEventListener('message', function(e) {
     try {
