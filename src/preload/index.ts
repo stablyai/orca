@@ -916,56 +916,70 @@ const api = {
     }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
       ipcRenderer.invoke('linear:connect', args),
 
-    disconnect: (): Promise<void> => ipcRenderer.invoke('linear:disconnect'),
+    disconnect: (args?: { workspaceId?: string }): Promise<void> =>
+      ipcRenderer.invoke('linear:disconnect', args),
+
+    selectWorkspace: (args: { workspaceId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('linear:selectWorkspace', args),
 
     status: (): Promise<unknown> => ipcRenderer.invoke('linear:status'),
 
-    testConnection: (): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
-      ipcRenderer.invoke('linear:testConnection'),
+    testConnection: (args?: {
+      workspaceId?: string
+    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('linear:testConnection', args),
 
-    searchIssues: (args: { query: string; limit?: number }): Promise<unknown[]> =>
-      ipcRenderer.invoke('linear:searchIssues', args),
+    searchIssues: (args: {
+      query: string
+      limit?: number
+      workspaceId?: string
+    }): Promise<unknown[]> => ipcRenderer.invoke('linear:searchIssues', args),
 
     listIssues: (args?: {
       filter?: 'assigned' | 'created' | 'all' | 'completed'
       limit?: number
+      workspaceId?: string
     }): Promise<unknown[]> => ipcRenderer.invoke('linear:listIssues', args),
 
     createIssue: (args: {
       teamId: string
       title: string
       description?: string
+      workspaceId?: string
     }): Promise<
       { ok: true; id: string; identifier: string; url: string } | { ok: false; error: string }
     > => ipcRenderer.invoke('linear:createIssue', args),
 
-    getIssue: (args: { id: string }): Promise<unknown> =>
+    getIssue: (args: { id: string; workspaceId?: string }): Promise<unknown> =>
       ipcRenderer.invoke('linear:getIssue', args),
 
     updateIssue: (args: {
       id: string
       updates: unknown
+      workspaceId?: string
     }): Promise<{ ok: true } | { ok: false; error: string }> =>
       ipcRenderer.invoke('linear:updateIssue', args),
 
     addIssueComment: (args: {
       issueId: string
       body: string
+      workspaceId?: string
     }): Promise<{ ok: true; id: string } | { ok: false; error: string }> =>
       ipcRenderer.invoke('linear:addIssueComment', args),
 
-    issueComments: (args: { issueId: string }): Promise<unknown[]> =>
+    issueComments: (args: { issueId: string; workspaceId?: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('linear:issueComments', args),
 
-    listTeams: (): Promise<unknown[]> => ipcRenderer.invoke('linear:listTeams'),
+    listTeams: (args?: { workspaceId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('linear:listTeams', args),
 
-    teamStates: (args: { teamId: string }): Promise<unknown[]> =>
+    teamStates: (args: { teamId: string; workspaceId?: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('linear:teamStates', args),
 
-    teamLabels: (args: { teamId: string }): Promise<unknown[]> =>
+    teamLabels: (args: { teamId: string; workspaceId?: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('linear:teamLabels', args),
 
-    teamMembers: (args: { teamId: string }): Promise<unknown[]> =>
+    teamMembers: (args: { teamId: string; workspaceId?: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('linear:teamMembers', args)
   },
 

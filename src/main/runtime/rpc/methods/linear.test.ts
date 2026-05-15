@@ -15,6 +15,7 @@ describe('linear RPC methods', () => {
       linearStatus: vi.fn().mockResolvedValue({ connected: true, viewer: null }),
       linearTestConnection: vi.fn().mockResolvedValue({ ok: true, viewer: { displayName: 'Ada' } }),
       linearConnect: vi.fn().mockResolvedValue({ ok: true, viewer: { displayName: 'Ada' } }),
+      linearSelectWorkspace: vi.fn().mockResolvedValue({ connected: true, viewer: null }),
       linearDisconnect: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: LINEAR_METHODS })
@@ -22,11 +23,13 @@ describe('linear RPC methods', () => {
     await dispatcher.dispatch(makeRequest('linear.status'))
     await dispatcher.dispatch(makeRequest('linear.testConnection'))
     await dispatcher.dispatch(makeRequest('linear.connect', { apiKey: 'lin_api_key' }))
+    await dispatcher.dispatch(makeRequest('linear.selectWorkspace', { workspaceId: 'workspace-1' }))
     await dispatcher.dispatch(makeRequest('linear.disconnect'))
 
     expect(runtime.linearStatus).toHaveBeenCalled()
     expect(runtime.linearTestConnection).toHaveBeenCalled()
     expect(runtime.linearConnect).toHaveBeenCalledWith('lin_api_key')
+    expect(runtime.linearSelectWorkspace).toHaveBeenCalledWith('workspace-1')
     expect(runtime.linearDisconnect).toHaveBeenCalled()
   })
 
@@ -43,39 +46,70 @@ describe('linear RPC methods', () => {
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: LINEAR_METHODS })
 
-    await dispatcher.dispatch(makeRequest('linear.searchIssues', { query: 'bug', limit: 30 }))
-    await dispatcher.dispatch(makeRequest('linear.listIssues', { filter: 'assigned', limit: 20 }))
-    await dispatcher.dispatch(makeRequest('linear.getIssue', { id: 'issue-3' }))
+    await dispatcher.dispatch(
+      makeRequest('linear.searchIssues', { query: 'bug', limit: 30, workspaceId: 'all' })
+    )
+    await dispatcher.dispatch(
+      makeRequest('linear.listIssues', {
+        filter: 'assigned',
+        limit: 20,
+        workspaceId: 'workspace-1'
+      })
+    )
+    await dispatcher.dispatch(
+      makeRequest('linear.getIssue', { id: 'issue-3', workspaceId: 'workspace-1' })
+    )
     await dispatcher.dispatch(
       makeRequest('linear.createIssue', {
         teamId: 'team-1',
         title: 'Fix bug',
-        description: 'Details'
+        description: 'Details',
+        workspaceId: 'workspace-1'
       })
     )
     await dispatcher.dispatch(
       makeRequest('linear.updateIssue', {
         id: 'issue-3',
+        workspaceId: 'workspace-1',
         updates: { stateId: 'state-1', assigneeId: null, priority: 2, labelIds: ['label-1'] }
       })
     )
     await dispatcher.dispatch(
-      makeRequest('linear.addIssueComment', { issueId: 'issue-3', body: 'Looks good' })
+      makeRequest('linear.addIssueComment', {
+        issueId: 'issue-3',
+        body: 'Looks good',
+        workspaceId: 'workspace-1'
+      })
     )
-    await dispatcher.dispatch(makeRequest('linear.issueComments', { issueId: 'issue-3' }))
+    await dispatcher.dispatch(
+      makeRequest('linear.issueComments', { issueId: 'issue-3', workspaceId: 'workspace-1' })
+    )
 
-    expect(runtime.linearSearchIssues).toHaveBeenCalledWith('bug', 30)
-    expect(runtime.linearListIssues).toHaveBeenCalledWith('assigned', 20)
-    expect(runtime.linearGetIssue).toHaveBeenCalledWith('issue-3')
-    expect(runtime.linearCreateIssue).toHaveBeenCalledWith('team-1', 'Fix bug', 'Details')
-    expect(runtime.linearUpdateIssue).toHaveBeenCalledWith('issue-3', {
-      stateId: 'state-1',
-      assigneeId: null,
-      priority: 2,
-      labelIds: ['label-1']
-    })
-    expect(runtime.linearAddIssueComment).toHaveBeenCalledWith('issue-3', 'Looks good')
-    expect(runtime.linearIssueComments).toHaveBeenCalledWith('issue-3')
+    expect(runtime.linearSearchIssues).toHaveBeenCalledWith('bug', 30, 'all')
+    expect(runtime.linearListIssues).toHaveBeenCalledWith('assigned', 20, 'workspace-1')
+    expect(runtime.linearGetIssue).toHaveBeenCalledWith('issue-3', 'workspace-1')
+    expect(runtime.linearCreateIssue).toHaveBeenCalledWith(
+      'team-1',
+      'Fix bug',
+      'Details',
+      'workspace-1'
+    )
+    expect(runtime.linearUpdateIssue).toHaveBeenCalledWith(
+      'issue-3',
+      {
+        stateId: 'state-1',
+        assigneeId: null,
+        priority: 2,
+        labelIds: ['label-1']
+      },
+      'workspace-1'
+    )
+    expect(runtime.linearAddIssueComment).toHaveBeenCalledWith(
+      'issue-3',
+      'Looks good',
+      'workspace-1'
+    )
+    expect(runtime.linearIssueComments).toHaveBeenCalledWith('issue-3', 'workspace-1')
   })
 
   it('routes Linear metadata requests to the runtime server', async () => {
@@ -88,14 +122,20 @@ describe('linear RPC methods', () => {
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: LINEAR_METHODS })
 
-    await dispatcher.dispatch(makeRequest('linear.listTeams'))
-    await dispatcher.dispatch(makeRequest('linear.teamStates', { teamId: 'team-1' }))
-    await dispatcher.dispatch(makeRequest('linear.teamLabels', { teamId: 'team-1' }))
-    await dispatcher.dispatch(makeRequest('linear.teamMembers', { teamId: 'team-1' }))
+    await dispatcher.dispatch(makeRequest('linear.listTeams', { workspaceId: 'all' }))
+    await dispatcher.dispatch(
+      makeRequest('linear.teamStates', { teamId: 'team-1', workspaceId: 'workspace-1' })
+    )
+    await dispatcher.dispatch(
+      makeRequest('linear.teamLabels', { teamId: 'team-1', workspaceId: 'workspace-1' })
+    )
+    await dispatcher.dispatch(
+      makeRequest('linear.teamMembers', { teamId: 'team-1', workspaceId: 'workspace-1' })
+    )
 
-    expect(runtime.linearListTeams).toHaveBeenCalled()
-    expect(runtime.linearTeamStates).toHaveBeenCalledWith('team-1')
-    expect(runtime.linearTeamLabels).toHaveBeenCalledWith('team-1')
-    expect(runtime.linearTeamMembers).toHaveBeenCalledWith('team-1')
+    expect(runtime.linearListTeams).toHaveBeenCalledWith('all')
+    expect(runtime.linearTeamStates).toHaveBeenCalledWith('team-1', 'workspace-1')
+    expect(runtime.linearTeamLabels).toHaveBeenCalledWith('team-1', 'workspace-1')
+    expect(runtime.linearTeamMembers).toHaveBeenCalledWith('team-1', 'workspace-1')
   })
 })

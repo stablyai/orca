@@ -27,6 +27,7 @@ import type {
   WorktreeRemoteBranchConflictEvent,
   WorktreeStartupLaunch,
   LinearIssueUpdate,
+  LinearWorkspaceSelection,
   TuiAgent
 } from '../../shared/types'
 import { splitWorktreeId } from '../../shared/worktree-id'
@@ -116,6 +117,7 @@ import {
   connect as connectLinear,
   disconnect as disconnectLinear,
   getStatus as getLinearStatus,
+  selectWorkspace as selectLinearWorkspace,
   testConnection as testLinearConnection
 } from '../linear/client'
 import {
@@ -7748,65 +7750,89 @@ export class OrcaRuntimeService {
     return connectLinear(apiKey)
   }
 
-  linearDisconnect(): { ok: true } {
-    disconnectLinear()
+  linearDisconnect(workspaceId?: string): { ok: true } {
+    disconnectLinear(workspaceId)
     return { ok: true }
+  }
+
+  linearSelectWorkspace(workspaceId: LinearWorkspaceSelection): ReturnType<typeof getLinearStatus> {
+    return selectLinearWorkspace(workspaceId)
   }
 
   linearStatus(): ReturnType<typeof getLinearStatus> {
     return getLinearStatus()
   }
 
-  linearTestConnection(): ReturnType<typeof testLinearConnection> {
-    return testLinearConnection()
+  linearTestConnection(workspaceId?: string): ReturnType<typeof testLinearConnection> {
+    return testLinearConnection(workspaceId)
   }
 
-  linearSearchIssues(query: string, limit = 20): ReturnType<typeof searchLinearIssues> {
-    return searchLinearIssues(query, Math.min(Math.max(1, limit), 50))
+  linearSearchIssues(
+    query: string,
+    limit = 20,
+    workspaceId?: LinearWorkspaceSelection
+  ): ReturnType<typeof searchLinearIssues> {
+    return searchLinearIssues(query, Math.min(Math.max(1, limit), 50), workspaceId)
   }
 
-  linearListIssues(filter?: LinearListFilter, limit = 20): ReturnType<typeof listLinearIssues> {
-    return listLinearIssues(filter, Math.min(Math.max(1, limit), 50))
+  linearListIssues(
+    filter?: LinearListFilter,
+    limit = 20,
+    workspaceId?: LinearWorkspaceSelection
+  ): ReturnType<typeof listLinearIssues> {
+    return listLinearIssues(filter, Math.min(Math.max(1, limit), 50), workspaceId)
   }
 
   linearCreateIssue(
     teamId: string,
     title: string,
-    description?: string
+    description?: string,
+    workspaceId?: string
   ): ReturnType<typeof createLinearIssue> {
-    return createLinearIssue(teamId, title, description)
+    return createLinearIssue(teamId, title, description, workspaceId)
   }
 
-  linearGetIssue(id: string): ReturnType<typeof getLinearIssue> {
-    return getLinearIssue(id)
+  linearGetIssue(id: string, workspaceId?: string): ReturnType<typeof getLinearIssue> {
+    return getLinearIssue(id, workspaceId)
   }
 
-  linearUpdateIssue(id: string, updates: LinearIssueUpdate): ReturnType<typeof updateLinearIssue> {
-    return updateLinearIssue(id, updates)
+  linearUpdateIssue(
+    id: string,
+    updates: LinearIssueUpdate,
+    workspaceId?: string
+  ): ReturnType<typeof updateLinearIssue> {
+    return updateLinearIssue(id, updates, workspaceId)
   }
 
-  linearAddIssueComment(issueId: string, body: string): ReturnType<typeof addLinearIssueComment> {
-    return addLinearIssueComment(issueId, body)
+  linearAddIssueComment(
+    issueId: string,
+    body: string,
+    workspaceId?: string
+  ): ReturnType<typeof addLinearIssueComment> {
+    return addLinearIssueComment(issueId, body, workspaceId)
   }
 
-  linearIssueComments(issueId: string): ReturnType<typeof getLinearIssueComments> {
-    return getLinearIssueComments(issueId)
+  linearIssueComments(
+    issueId: string,
+    workspaceId?: string
+  ): ReturnType<typeof getLinearIssueComments> {
+    return getLinearIssueComments(issueId, workspaceId)
   }
 
-  linearListTeams(): ReturnType<typeof listLinearTeams> {
-    return listLinearTeams()
+  linearListTeams(workspaceId?: LinearWorkspaceSelection): ReturnType<typeof listLinearTeams> {
+    return listLinearTeams(workspaceId)
   }
 
-  linearTeamStates(teamId: string): ReturnType<typeof getLinearTeamStates> {
-    return getLinearTeamStates(teamId)
+  linearTeamStates(teamId: string, workspaceId?: string): ReturnType<typeof getLinearTeamStates> {
+    return getLinearTeamStates(teamId, workspaceId)
   }
 
-  linearTeamLabels(teamId: string): ReturnType<typeof getLinearTeamLabels> {
-    return getLinearTeamLabels(teamId)
+  linearTeamLabels(teamId: string, workspaceId?: string): ReturnType<typeof getLinearTeamLabels> {
+    return getLinearTeamLabels(teamId, workspaceId)
   }
 
-  linearTeamMembers(teamId: string): ReturnType<typeof getLinearTeamMembers> {
-    return getLinearTeamMembers(teamId)
+  linearTeamMembers(teamId: string, workspaceId?: string): ReturnType<typeof getLinearTeamMembers> {
+    return getLinearTeamMembers(teamId, workspaceId)
   }
 
   // ── Browser automation ──

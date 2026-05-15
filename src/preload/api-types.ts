@@ -47,6 +47,7 @@ import type {
   IssueInfo,
   LinearViewer,
   LinearConnectionStatus,
+  LinearWorkspaceSelection,
   LinearIssue,
   LinearIssueUpdate,
   LinearComment,
@@ -857,35 +858,48 @@ export type PreloadApi = {
     connect: (args: {
       apiKey: string
     }) => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>
-    disconnect: () => Promise<void>
+    disconnect: (args?: { workspaceId?: string }) => Promise<void>
+    selectWorkspace: (args: {
+      workspaceId: LinearWorkspaceSelection
+    }) => Promise<LinearConnectionStatus>
     status: () => Promise<LinearConnectionStatus>
-    testConnection: () => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>
-    searchIssues: (args: { query: string; limit?: number }) => Promise<LinearIssue[]>
+    testConnection: (args?: {
+      workspaceId?: string
+    }) => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>
+    searchIssues: (args: {
+      query: string
+      limit?: number
+      workspaceId?: LinearWorkspaceSelection
+    }) => Promise<LinearIssue[]>
     listIssues: (args?: {
       filter?: 'assigned' | 'created' | 'all' | 'completed'
       limit?: number
+      workspaceId?: LinearWorkspaceSelection
     }) => Promise<LinearIssue[]>
     createIssue: (args: {
       teamId: string
       title: string
       description?: string
+      workspaceId?: string
     }) => Promise<
       { ok: true; id: string; identifier: string; url: string } | { ok: false; error: string }
     >
-    getIssue: (args: { id: string }) => Promise<LinearIssue | null>
+    getIssue: (args: { id: string; workspaceId?: string }) => Promise<LinearIssue | null>
     updateIssue: (args: {
       id: string
       updates: LinearIssueUpdate
+      workspaceId?: string
     }) => Promise<{ ok: true } | { ok: false; error: string }>
     addIssueComment: (args: {
       issueId: string
       body: string
+      workspaceId?: string
     }) => Promise<{ ok: true; id: string } | { ok: false; error: string }>
-    issueComments: (args: { issueId: string }) => Promise<LinearComment[]>
-    listTeams: () => Promise<LinearTeam[]>
-    teamStates: (args: { teamId: string }) => Promise<LinearWorkflowState[]>
-    teamLabels: (args: { teamId: string }) => Promise<LinearLabel[]>
-    teamMembers: (args: { teamId: string }) => Promise<LinearMember[]>
+    issueComments: (args: { issueId: string; workspaceId?: string }) => Promise<LinearComment[]>
+    listTeams: (args?: { workspaceId?: LinearWorkspaceSelection }) => Promise<LinearTeam[]>
+    teamStates: (args: { teamId: string; workspaceId?: string }) => Promise<LinearWorkflowState[]>
+    teamLabels: (args: { teamId: string; workspaceId?: string }) => Promise<LinearLabel[]>
+    teamMembers: (args: { teamId: string; workspaceId?: string }) => Promise<LinearMember[]>
   }
   starNag: {
     onShow: (callback: () => void) => () => void

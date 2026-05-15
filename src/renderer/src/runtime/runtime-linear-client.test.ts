@@ -3,6 +3,7 @@ import {
   linearCreateIssue,
   linearListTeams,
   linearSearchIssues,
+  linearSelectWorkspace,
   linearStatus,
   linearUpdateIssue
 } from './runtime-linear-client'
@@ -19,6 +20,7 @@ const linearSearchIssuesLocal = vi.fn()
 const linearCreateIssueLocal = vi.fn()
 const linearUpdateIssueLocal = vi.fn()
 const linearListTeamsLocal = vi.fn()
+const linearSelectWorkspaceLocal = vi.fn()
 
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
@@ -29,6 +31,7 @@ beforeEach(() => {
   linearCreateIssueLocal.mockReset()
   linearUpdateIssueLocal.mockReset()
   linearListTeamsLocal.mockReset()
+  linearSelectWorkspaceLocal.mockReset()
   runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
     return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
   })
@@ -40,7 +43,8 @@ beforeEach(() => {
         searchIssues: linearSearchIssuesLocal,
         createIssue: linearCreateIssueLocal,
         updateIssue: linearUpdateIssueLocal,
-        listTeams: linearListTeamsLocal
+        listTeams: linearListTeamsLocal,
+        selectWorkspace: linearSelectWorkspaceLocal
       }
     }
   })
@@ -60,7 +64,11 @@ describe('runtime linear client', () => {
     ).resolves.toEqual([{ id: 'issue-1' }])
 
     expect(linearStatusLocal).toHaveBeenCalled()
-    expect(linearSearchIssuesLocal).toHaveBeenCalledWith({ query: 'bug', limit: 10 })
+    expect(linearSearchIssuesLocal).toHaveBeenCalledWith({
+      query: 'bug',
+      limit: 10,
+      workspaceId: undefined
+    })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
@@ -80,7 +88,7 @@ describe('runtime linear client', () => {
       })
 
     await linearStatus({ activeRuntimeEnvironmentId: 'env-1' })
-    await linearSearchIssues({ activeRuntimeEnvironmentId: 'env-1' }, 'bug', 10)
+    await linearSearchIssues({ activeRuntimeEnvironmentId: 'env-1' }, 'bug', 10, 'all')
 
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
       selector: 'env-1',
@@ -91,7 +99,7 @@ describe('runtime linear client', () => {
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
       selector: 'env-1',
       method: 'linear.searchIssues',
-      params: { query: 'bug', limit: 10 },
+      params: { query: 'bug', limit: 10, workspaceId: 'all' },
       timeoutMs: 30_000
     })
     expect(linearStatusLocal).not.toHaveBeenCalled()
@@ -118,31 +126,49 @@ describe('runtime linear client', () => {
         result: [{ id: 'team-1' }],
         _meta: { runtimeId: 'runtime-1' }
       })
+      .mockResolvedValueOnce({
+        id: 'rpc-select',
+        ok: true,
+        result: { connected: true, viewer: null },
+        _meta: { runtimeId: 'runtime-1' }
+      })
 
     await linearCreateIssue(
       { activeRuntimeEnvironmentId: 'env-1' },
-      { teamId: 'team-1', title: 'Fix bug' }
+      { teamId: 'team-1', title: 'Fix bug', workspaceId: 'workspace-1' }
     )
-    await linearUpdateIssue({ activeRuntimeEnvironmentId: 'env-1' }, 'issue-1', { priority: 2 })
-    await linearListTeams({ activeRuntimeEnvironmentId: 'env-1' })
+    await linearUpdateIssue(
+      { activeRuntimeEnvironmentId: 'env-1' },
+      'issue-1',
+      { priority: 2 },
+      'workspace-1'
+    )
+    await linearListTeams({ activeRuntimeEnvironmentId: 'env-1' }, 'all')
+    await linearSelectWorkspace({ activeRuntimeEnvironmentId: 'env-1' }, 'workspace-1')
 
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
       selector: 'env-1',
       method: 'linear.createIssue',
-      params: { teamId: 'team-1', title: 'Fix bug' },
+      params: { teamId: 'team-1', title: 'Fix bug', workspaceId: 'workspace-1' },
       timeoutMs: 30_000
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
       selector: 'env-1',
       method: 'linear.updateIssue',
-      params: { id: 'issue-1', updates: { priority: 2 } },
+      params: { id: 'issue-1', updates: { priority: 2 }, workspaceId: 'workspace-1' },
       timeoutMs: 30_000
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(3, {
       selector: 'env-1',
       method: 'linear.listTeams',
-      params: undefined,
+      params: { workspaceId: 'all' },
       timeoutMs: 30_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(4, {
+      selector: 'env-1',
+      method: 'linear.selectWorkspace',
+      params: { workspaceId: 'workspace-1' },
+      timeoutMs: 15_000
     })
   })
 })
