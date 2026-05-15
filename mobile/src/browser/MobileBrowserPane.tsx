@@ -95,7 +95,8 @@ type PanGesture = {
   offsetY: number
 }
 
-const TAP_SLOP = 10
+const TAP_SLOP = 16
+const SCROLL_START_SLOP = 22
 const LONG_PRESS_MS = 550
 const WHEEL_INTERVAL_MS = 70
 const BROWSER_FRAME_FORMAT = 'jpeg'
@@ -141,6 +142,7 @@ export function MobileBrowserPane({
   const zoomRef = useRef<ZoomState>(DEFAULT_ZOOM)
   const pinchRef = useRef<PinchGesture | null>(null)
   const panRef = useRef<PanGesture | null>(null)
+  const scrollingRef = useRef(false)
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
@@ -361,6 +363,14 @@ export function MobileBrowserPane({
       if (!client || !base) {
         return
       }
+      const clickResult = await sendBrowserRequest(
+        'browser.mouseClick',
+        { x: point.x, y: point.y, button },
+        { suppressError: true, timeoutMs: 5_000 }
+      )
+      if (clickResult !== null) {
+        return
+      }
       try {
         assertRpcOk(
           await client.sendRequest('browser.mouseMove', { ...base, x: point.x, y: point.y }),
@@ -380,7 +390,7 @@ export function MobileBrowserPane({
         // actionable failures still surface through navigation/stream errors.
       }
     },
-    [client, pageParams]
+    [client, pageParams, sendBrowserRequest]
   )
 
   const sendWheel = useCallback(
@@ -498,6 +508,7 @@ export function MobileBrowserPane({
       const { locationX, locationY } = event.nativeEvent
       startPointRef.current = { x: locationX, y: locationY, t: Date.now() }
       rightClickSentRef.current = false
+      scrollingRef.current = false
       lastWheelRef.current = { dx: 0, dy: 0, at: 0 }
       panRef.current =
         zoomRef.current.scale > MIN_ZOOM
@@ -544,11 +555,17 @@ export function MobileBrowserPane({
       if (activePinch) {
         pinchRef.current = null
       }
-      if (Math.abs(gesture.dx) > TAP_SLOP || Math.abs(gesture.dy) > TAP_SLOP) {
+      const moved = Math.hypot(gesture.dx, gesture.dy)
+      if (moved > TAP_SLOP) {
         clearLongPressTimer()
       }
       const activePan = panRef.current
       if (activePan && frameGeometry) {
+        if (!scrollingRef.current && moved <= TAP_SLOP) {
+          return
+        }
+        scrollingRef.current = true
+        startPointRef.current = null
         const nextZoom = clampZoomState(
           {
             scale: zoomRef.current.scale,
@@ -560,6 +577,13 @@ export function MobileBrowserPane({
         zoomRef.current = nextZoom
         setZoom(nextZoom)
         return
+      }
+      if (!scrollingRef.current) {
+        if (moved <= SCROLL_START_SLOP) {
+          return
+        }
+        scrollingRef.current = true
+        startPointRef.current = null
       }
       const now = Date.now()
       if (now - lastWheelRef.current.at < WHEEL_INTERVAL_MS) {
@@ -587,12 +611,14 @@ export function MobileBrowserPane({
       panRef.current = null
       const start = startPointRef.current
       startPointRef.current = null
-      if (!start || rightClickSentRef.current) {
+      const wasScrolling = scrollingRef.current
+      scrollingRef.current = false
+      if (!start || rightClickSentRef.current || wasScrolling) {
         return
       }
       const moved = Math.hypot(gesture.dx, gesture.dy)
       if (moved <= TAP_SLOP && Date.now() - start.t < LONG_PRESS_MS) {
-        const point = mapTouchPoint(event.nativeEvent.locationX, event.nativeEvent.locationY)
+        const point = mapTouchPoint(start.x, start.y)
         if (point) {
           void sendPointerClick(point, 'left')
         }
@@ -613,6 +639,7 @@ export function MobileBrowserPane({
           clearLongPressTimer()
           pinchRef.current = null
           panRef.current = null
+          scrollingRef.current = false
           startPointRef.current = null
         },
         onPanResponderTerminationRequest: () => true

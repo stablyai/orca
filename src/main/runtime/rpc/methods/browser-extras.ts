@@ -21,6 +21,8 @@ import {
   Viewport
 } from './browser-schemas'
 
+const MouseClick = MouseXY.merge(MouseButton)
+
 export const BROWSER_EXTRA_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'browser.cookie.get',
@@ -71,6 +73,11 @@ export const BROWSER_EXTRA_METHODS: RpcMethod[] = [
     name: 'browser.mouseDown',
     params: MouseButton,
     handler: async (params, { runtime }) => runtime.browserMouseDown(params)
+  }),
+  defineMethod({
+    name: 'browser.mouseClick',
+    params: MouseClick,
+    handler: async (params, { runtime }) => runtime.browserMouseClick(params)
   }),
   defineMethod({
     name: 'browser.mouseUp',

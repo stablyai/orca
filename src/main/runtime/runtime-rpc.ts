@@ -129,6 +129,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'browser.keyboardInsertText',
   'browser.keypress',
   'browser.mouseDown',
+  'browser.mouseClick',
   'browser.mouseMove',
   'browser.mouseUp',
   'browser.mouseWheel',

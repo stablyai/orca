@@ -927,6 +927,19 @@ export class RuntimeBrowserCommands {
     )
   }
 
+  async browserMouseClick(
+    params: { x: number; y: number; button?: string } & BrowserCommandTargetParams
+  ): Promise<unknown> {
+    const target = await this.resolveBrowserCommandTarget(params)
+    return this.requireAgentBrowserBridge().mouseClick(
+      params.x,
+      params.y,
+      params.button,
+      target.worktreeId,
+      target.browserPageId
+    )
+  }
+
   async browserMouseUp(params: { button?: string } & BrowserCommandTargetParams): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
     return this.requireAgentBrowserBridge().mouseUp(

@@ -6,6 +6,7 @@ import { platform, arch } from 'os'
 import { app } from 'electron'
 import { CdpWsProxy } from './cdp-ws-proxy'
 import { captureFullPageScreenshot } from './cdp-screenshot'
+import { acquireElectronDebugger } from './electron-debugger-lease'
 import type { BrowserManager } from './browser-manager'
 import { BrowserError } from './cdp-bridge'
 import type {
@@ -181,6 +182,22 @@ function pageUnavailableMessageForSession(sessionName: string): string {
   return browserPageId
     ? `Browser page ${browserPageId} is no longer available`
     : 'Browser tab is no longer available'
+}
+
+type CdpMouseButton = 'left' | 'middle' | 'right'
+
+function normalizeCdpMouseButton(button?: string): CdpMouseButton {
+  return button === 'middle' || button === 'right' ? button : 'left'
+}
+
+function cdpMouseButtonMask(button: CdpMouseButton): number {
+  if (button === 'right') {
+    return 2
+  }
+  if (button === 'middle') {
+    return 4
+  }
+  return 1
 }
 
 function translateResult(
@@ -628,6 +645,52 @@ export class AgentBrowserBridge {
         args.push(button)
       }
       return await this.execAgentBrowser(sessionName, args)
+    })
+  }
+
+  async mouseClick(
+    x: number,
+    y: number,
+    button?: string,
+    worktreeId?: string,
+    browserPageId?: string
+  ): Promise<unknown> {
+    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (_sessionName, target) => {
+      const wc = this.getWebContents(target.webContentsId)
+      if (!wc || wc.isDestroyed()) {
+        throw new BrowserError(
+          'browser_tab_not_found',
+          `Browser page ${target.browserPageId} is no longer available`
+        )
+      }
+      const cdpButton = normalizeCdpMouseButton(button)
+      const buttons = cdpMouseButtonMask(cdpButton)
+      const lease = acquireElectronDebugger(wc)
+      try {
+        wc.focus()
+        // Why: mobile taps should land as one atomic input operation. Sending
+        // move/down/up through separate CLI calls visibly hovers targets and can
+        // miss small controls before the click lands.
+        await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
+          type: 'mousePressed',
+          x,
+          y,
+          button: cdpButton,
+          buttons,
+          clickCount: 1
+        })
+        await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
+          type: 'mouseReleased',
+          x,
+          y,
+          button: cdpButton,
+          buttons: 0,
+          clickCount: 1
+        })
+      } finally {
+        lease.release()
+      }
+      return { clicked: { x, y, button: cdpButton } }
     })
   }
 

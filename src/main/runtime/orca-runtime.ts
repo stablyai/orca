@@ -8807,6 +8807,9 @@ export class OrcaRuntimeService {
   browserMouseDown: RuntimeBrowserCommands['browserMouseDown'] =
     this.browserCommands.browserMouseDown.bind(this.browserCommands)
 
+  browserMouseClick: RuntimeBrowserCommands['browserMouseClick'] =
+    this.browserCommands.browserMouseClick.bind(this.browserCommands)
+
   browserMouseUp: RuntimeBrowserCommands['browserMouseUp'] =
     this.browserCommands.browserMouseUp.bind(this.browserCommands)
 
