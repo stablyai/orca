@@ -567,25 +567,25 @@ function CandidateGroup({
     return null
   }
   return (
-    <section className="space-y-2">
+    <section className="space-y-1.5">
       <button
         type="button"
-        className="flex w-full items-center justify-between gap-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground hover:text-foreground"
+        className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground hover:text-foreground"
         aria-expanded={expanded}
         onClick={() => onExpandedChange(!expanded)}
       >
-        <span className="flex min-w-0 items-center gap-1">
-          {expanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
-          <span className="truncate">{TIER_LABELS[tier]}</span>
-        </span>
-        <span className="tabular-nums">{rows.length}</span>
+        {expanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+        <span className="truncate">{TIER_LABELS[tier]}</span>
+        <span className="text-muted-foreground/60">·</span>
+        <span className="tabular-nums text-muted-foreground">{rows.length}</span>
       </button>
       {expanded ? (
-        <div className="space-y-2">
-          {rows.map((candidate) => (
+        <div className="overflow-hidden rounded-md border border-border/60 bg-background">
+          {rows.map((candidate, index) => (
             <CandidateRow
               key={candidate.worktreeId}
               candidate={candidate}
+              last={index === rows.length - 1}
               selected={selectedIds.has(candidate.worktreeId)}
               failure={rowFailures[candidate.worktreeId]}
               onToggleSelected={onToggleSelected}
@@ -603,6 +603,7 @@ function CandidateGroup({
 
 function CandidateRow({
   candidate,
+  last,
   selected,
   failure,
   onToggleSelected,
@@ -612,6 +613,7 @@ function CandidateRow({
   onRemove
 }: {
   candidate: WorkspaceCleanupCandidate
+  last: boolean
   selected: boolean
   failure?: string
   onToggleSelected: (worktreeId: string) => void
@@ -630,8 +632,13 @@ function CandidateRow({
   const shouldShowSleep = candidate.tier !== 'ready' && hasLiveSurfaces
 
   return (
-    <div className="rounded-md border border-border bg-card px-3 py-2.5 text-card-foreground">
-      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 lg:grid-cols-[auto_minmax(0,1fr)_auto]">
+    <div
+      className={cn(
+        'group border-b border-border/60 px-3 py-2 text-foreground transition-colors hover:bg-accent/40',
+        last && 'border-b-0'
+      )}
+    >
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2.5 gap-y-1 md:grid-cols-[auto_minmax(0,1fr)_auto]">
         <button
           type="button"
           role="checkbox"
@@ -640,7 +647,7 @@ function CandidateRow({
           disabled={!selectable}
           onClick={() => onToggleSelected(candidate.worktreeId)}
           className={cn(
-            'mt-1 flex size-4 shrink-0 items-center justify-center rounded border border-border bg-background text-primary',
+            'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border border-border bg-background text-primary',
             selectable && 'hover:bg-accent',
             !selectable && 'opacity-40'
           )}
@@ -648,15 +655,19 @@ function CandidateRow({
           {selected ? <Check className="size-3" strokeWidth={3} /> : null}
         </button>
         <div className="min-w-0">
-          <div className="min-w-0 truncate text-sm font-semibold">{candidate.displayName}</div>
-          <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">{primaryReason}</span>
-            <span>Last active {formatRelativeTime(candidate.lastActivityAt)}</span>
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <span className="min-w-0 truncate text-sm font-medium">{candidate.displayName}</span>
+            <span className="text-xs font-medium text-foreground">{primaryReason}</span>
+            <span className="text-xs text-muted-foreground">
+              Last active {formatRelativeTime(candidate.lastActivityAt)}
+            </span>
             {blockers.length > 0 ? (
-              <span className="min-w-0 truncate">{blockers.slice(0, 2).join(', ')}</span>
+              <span className="min-w-0 truncate text-xs text-muted-foreground">
+                {blockers.slice(0, 2).join(', ')}
+              </span>
             ) : null}
           </div>
-          <details className="mt-1.5 text-xs text-muted-foreground">
+          <details className="mt-1 text-xs text-muted-foreground">
             <summary className="inline-flex cursor-pointer select-none items-center gap-1 hover:text-foreground">
               Details
             </summary>
@@ -688,7 +699,7 @@ function CandidateRow({
             </div>
           ) : null}
         </div>
-        <div className="col-start-2 flex flex-wrap items-center gap-1.5 lg:col-start-auto lg:justify-end">
+        <div className="col-start-2 flex flex-wrap items-center gap-1 md:col-start-auto md:justify-end">
           <Button variant="ghost" size="xs" onClick={() => onView(candidate)}>
             <Search className="size-3.5" />
             View
