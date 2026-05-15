@@ -28,6 +28,7 @@ import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPreset
 import SmartWorkspaceNameField, {
   type SmartWorkspaceNameSelection
 } from '@/components/new-workspace/SmartWorkspaceNameField'
+import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
 
 const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
 
@@ -65,7 +66,7 @@ type NewWorkspaceComposerCardProps = {
   onSetupDecisionChange: (value: 'run' | 'skip') => void
   shouldWaitForSetupCheck: boolean
   resolvedSetupDecision: 'run' | 'skip' | null
-  createError: string | null
+  createError: WorkspaceCreateErrorDisplay | null
   canUseSparseCheckout: boolean
   sparsePresets: SparsePreset[]
   sparseSelectedPresetId: string | null
@@ -549,8 +550,19 @@ export default function NewWorkspaceComposerCard({
       </div>
 
       {createError ? (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          {createError}
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+        >
+          {createError.help ? (
+            <div className="space-y-1">
+              <p className="font-medium">{createError.title}</p>
+              <p>{createError.message}</p>
+              <p className="text-destructive/85">{createError.help}</p>
+            </div>
+          ) : (
+            createError.message
+          )}
         </div>
       ) : null}
 
