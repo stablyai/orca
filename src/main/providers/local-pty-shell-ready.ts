@@ -238,11 +238,26 @@ fi
     [`${bashDir}/rcfile`, bashRc]
   ] as const
 
-  for (const [path, content] of files) {
-    const dir = path.slice(0, path.lastIndexOf('/'))
-    mkdirSync(dir, { recursive: true })
-    writeFileSync(path, content, 'utf8')
-    chmodSync(path, 0o644)
+  try {
+    for (const [path, content] of files) {
+      const dir = path.slice(0, path.lastIndexOf('/'))
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(path, content, 'utf8')
+      chmodSync(path, 0o644)
+    }
+  } catch (error) {
+    // Why: wrapper file creation can fail due to read-only filesystems, permission
+    // issues, or disk space. Rather than crashing, log the error and continue.
+    // The shell will launch without the wrapper, which means no shell-ready marker
+    // but at least the PTY is usable.
+    const errorMessage =
+      error instanceof Error
+        ? `${error.message} (${(error as NodeJS.ErrnoException).code || 'unknown'})`
+        : String(error)
+    console.error(`[shell-ready] Failed to create wrapper files in ${root}: ${errorMessage}`)
+    console.error('[shell-ready] Shell will launch without wrapper (no shell-ready marker)')
+    // Reset the flag so next attempt will try again
+    didEnsureShellReadyWrappers = false
   }
 }
 

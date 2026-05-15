@@ -10,6 +10,7 @@ import {
 } from 'fs'
 import { dirname, join } from 'path'
 import { createHash, randomUUID } from 'crypto'
+import { escapeRegex } from '../../shared/string-utils'
 
 // Why: Codex 0.129+ gates each hook on a `trusted_hash` entry in
 // ~/.codex/config.toml under [hooks.state."<key>"]. Without it the hook is in
@@ -287,10 +288,6 @@ function buildHeaderPattern(key: string): RegExp {
   return new RegExp(
     `(^|\\r?\\n)[ \\t]*\\[hooks\\.state\\."${escapedKey}"\\][ \\t]*(?:#[^\\r\\n]*)?(?=\\r?\\n|$)`
   )
-}
-
-function escapeRegex(value: string): string {
-  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 // Why: quoted keys can contain `]` (e.g. `[hooks.state."a]b"]`) and `[` lines

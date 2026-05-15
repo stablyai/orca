@@ -295,10 +295,10 @@ describePosix('daemon shell-ready launch config', () => {
 
     // 2. Source user .zshenv in a subshell $(...) to preserve top-level scoping
     expect(zshenv).toMatch(/_orca_discovered_zdotdir=\$\(\s*unset ZDOTDIR/)
-    expect(zshenv).toContain('[[ -f "$HOME/.zshenv" ]] && source "$HOME/.zshenv"')
+    expect(zshenv).toContain('if [[ -n "${HOME:-}" && -f "$HOME/.zshenv" ]]; then')
 
     // 3. Capture the ZDOTDIR value via printf (safer than echo for special chars)
-    expect(zshenv).toMatch(/printf '%s\\n' "\$\{ZDOTDIR\}"/)
+    expect(zshenv).toMatch(/printf '%s\\n' "\$\{ZDOTDIR:-\}"/)
 
     // 4. Use discovered ZDOTDIR with fallback chain
     expect(zshenv).toContain(
