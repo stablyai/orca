@@ -1,10 +1,10 @@
 import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { Button } from '@/components/ui/button'
+import { DropdownMenuSubContent, DropdownMenuSubTrigger } from '@/components/ui/dropdown-menu'
 import {
   getLocalFileManagerLabel,
   openWorktreePath,
-  WorktreeOpenInControl
+  WorktreeOpenInSubMenu
 } from './WorktreeOpenInMenu'
 
 type ReactElementLike = {
@@ -55,15 +55,15 @@ function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
   }
 }
 
-function findButton(node: unknown): ReactElementLike {
+function findByType(node: unknown, type: unknown): ReactElementLike {
   let found: ReactElementLike | null = null
   visit(node, (entry) => {
-    if (entry.type === Button) {
+    if (entry.type === type) {
       found = entry
     }
   })
   if (!found) {
-    throw new Error('button not found')
+    throw new Error('element not found')
   }
   return found
 }
@@ -95,29 +95,27 @@ describe('WorktreeOpenInMenu', () => {
     expect(getLocalFileManagerLabel('Mozilla/5.0 X11 Linux x86_64')).toBe('Open in File Manager')
   })
 
-  it('disables the visible control while deleting', () => {
-    const tree = WorktreeOpenInControl({
+  it('disables the Open in submenu while deleting', () => {
+    const tree = WorktreeOpenInSubMenu({
       worktreePath: '/tmp/workspace',
       connectionId: null,
       disabled: true
     })
 
-    expect(findButton(tree).props.disabled).toBe(true)
+    expect(findByType(tree, DropdownMenuSubTrigger).props.disabled).toBe(true)
   })
 
-  it('stops card event propagation from the visible control', () => {
-    const tree = WorktreeOpenInControl({
+  it('stops menu item click propagation', () => {
+    const tree = WorktreeOpenInSubMenu({
       worktreePath: '/tmp/workspace',
       connectionId: null
     })
-    const button = findButton(tree)
+    const menuContent = findByType(tree, DropdownMenuSubContent)
 
-    for (const handlerName of ['onClick', 'onDoubleClick', 'onMouseDown', 'onPointerDown']) {
-      const stopPropagation = vi.fn()
-      const handler = button.props[handlerName] as ((event: React.SyntheticEvent) => void) | null
-      handler?.({ stopPropagation } as unknown as React.SyntheticEvent)
-      expect(stopPropagation).toHaveBeenCalled()
-    }
+    const stopPropagation = vi.fn()
+    const handler = menuContent.props.onClick as ((event: React.SyntheticEvent) => void) | null
+    handler?.({ stopPropagation } as unknown as React.SyntheticEvent)
+    expect(stopPropagation).toHaveBeenCalled()
   })
 
   it('uses the blocked-path toast without calling main IPC', async () => {

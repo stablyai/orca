@@ -33,7 +33,7 @@ import { isFolderRepo } from '../../../../shared/repo-kind'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { getWorkspaceStatus, getWorkspaceStatusVisualMeta } from './workspace-status'
-import { WorktreeOpenInMenuItems } from './WorktreeOpenInMenu'
+import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
 
 type Props = {
   worktree: Worktree
@@ -269,7 +269,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
         <DropdownMenuContent className={cn('w-52', contentClassName)} sideOffset={0} align="start">
           {!isMultiContext && (
             <>
-              <WorktreeOpenInMenuItems
+              <WorktreeOpenInSubMenu
                 worktreePath={worktree.path}
                 connectionId={repo?.connectionId ?? null}
                 disabled={isDeleting}

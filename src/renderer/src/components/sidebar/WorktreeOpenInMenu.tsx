@@ -1,16 +1,13 @@
 import React, { useCallback } from 'react'
-import { ChevronDown, ExternalLink, FolderOpen } from 'lucide-react'
+import { ExternalLink, FolderOpen } from 'lucide-react'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import type { ShellOpenLocalPathFailureReason } from '../../../../shared/shell-open-types'
 
@@ -18,10 +15,6 @@ type WorktreeOpenInMenuItemsProps = {
   worktreePath: string
   connectionId?: string | null
   disabled?: boolean
-}
-
-type WorktreeOpenInControlProps = WorktreeOpenInMenuItemsProps & {
-  className?: string
 }
 
 export function getLocalFileManagerLabel(userAgent?: string): string {
@@ -109,7 +102,7 @@ export function WorktreeOpenInMenuItems({
         disabled={disabled}
       >
         <ExternalLink className="size-3.5" />
-        Open in External Editor
+        VS Code
       </DropdownMenuItem>
       <DropdownMenuItem
         onClick={stopMenuPropagation}
@@ -125,47 +118,18 @@ export function WorktreeOpenInMenuItems({
   )
 }
 
-export function WorktreeOpenInControl({
+export function WorktreeOpenInSubMenu({
   worktreePath,
   connectionId,
-  disabled,
-  className
-}: WorktreeOpenInControlProps): React.JSX.Element | null {
-  if (connectionId) {
-    return null
-  }
-
+  disabled
+}: WorktreeOpenInMenuItemsProps): React.JSX.Element {
   return (
-    <DropdownMenu>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              className={cn(
-                'h-5 shrink-0 gap-0.5 px-1 text-muted-foreground hover:text-foreground',
-                className
-              )}
-              aria-label="Open in"
-              disabled={disabled}
-              onClick={stopMenuPropagation}
-              onDoubleClick={stopMenuPropagation}
-              onMouseDown={stopMenuPropagation}
-              onPointerDown={stopMenuPropagation}
-            >
-              <FolderOpen className="size-3" />
-              <ChevronDown className="size-3" />
-            </Button>
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent side="right" sideOffset={8}>
-          Open in
-        </TooltipContent>
-      </Tooltip>
-      <DropdownMenuContent
-        align="end"
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger disabled={disabled}>
+        <FolderOpen className="size-3.5" />
+        Open in
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent
         className="w-52"
         onClick={stopMenuPropagation}
         onPointerDown={stopMenuPropagation}
@@ -175,7 +139,7 @@ export function WorktreeOpenInControl({
           connectionId={connectionId}
           disabled={disabled}
         />
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
   )
 }
