@@ -67,14 +67,6 @@ import { registerFeatureWallFirstAgentTour } from './feature-wall/first-agent-to
 import { AutomationService } from './automations/service'
 import { AgentAwakeService } from './agent-awake-service'
 
-// Why: E2E specs reach the live runtime via electronApp.evaluate(globalThis.__orcaRuntime).
-// Augment the global typing so the spec doesn't restate the shape on every call. The
-// assignment itself is gated on `isE2E` below; production builds never set this.
-declare global {
-  // eslint-disable-next-line no-var
-  var __orcaRuntime: OrcaRuntimeService | undefined
-}
-
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
  *  window close handler so it can tell the renderer to skip the running-process
@@ -771,12 +763,6 @@ app.whenReady().then(async () => {
   // assign a random available port per instance while still exercising the
   // full WebSocket startup path.
   const isE2E = Boolean(process.env.ORCA_E2E_USER_DATA_DIR)
-  // Why: Playwright specs need to drive runtime methods (e.g. handleMobileSubscribe)
-  // normally reachable only via the mobile WebSocket RPC. The augmented global keeps
-  // the type single-source so tests don't restate the shape on every call.
-  if (isE2E) {
-    globalThis.__orcaRuntime = runtime
-  }
   // Why: a developer running `pnpm dev` while the packaged Orca is also open
   // would otherwise race the packaged app for 6768 and silently fall back to
   // a random OS-assigned port — breaking deterministic mobile pairing/repro

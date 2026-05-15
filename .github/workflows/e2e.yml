@@ -58,16 +58,14 @@ jobs:
       - name: Run E2E tests
         run: xvfb-run --auto-servernum pnpm run test:e2e
 
-      # Why: always upload test-results/ so reviewer-facing artifacts attached
-      # via testInfo.attach() (e.g. mobile-banner.spec.ts overlay screenshots)
-      # ride along with every PR run, not only failures. Failure traces and
-      # auto-captured screenshots from `screenshot: 'only-on-failure'` continue
-      # to land in the same directory and remain available for post-mortem.
-      - name: Upload Playwright artifacts
-        if: always()
+      # Why: Playwright retains traces/screenshots only on failure. Uploading
+      # them as an artifact makes post-mortem debugging on CI possible without
+      # re-running locally.
+      - name: Upload Playwright traces
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-artifacts
+          name: playwright-traces
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore

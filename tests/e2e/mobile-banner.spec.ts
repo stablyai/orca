@@ -4,24 +4,16 @@ import { ensureTerminalVisible, waitForSessionReady, waitForActiveWorktree } fro
 import { waitForActivePanePtyId, waitForActiveTerminalManager } from './helpers/terminal'
 
 // Why: regression coverage for the mobile-presence-lock UX (PR #1532,
-// docs/mobile-presence-lock.md, docs/mobile-fit-hold.md). Two things matter:
+// docs/mobile-presence-lock.md). The original bug was that the prior banner
+// mounted but was visually unobtrusive enough that users missed it. Strong DOM
+// assertions guard the "doesn't mount / doesn't dismiss" regression class;
+// screenshots attached via testInfo.attach surface in the Playwright artifacts
+// upload so reviewers can eyeball the rendering on a failed run.
 //
-//   1. When mobile subscribes, the desktop overlay MUST mount with a working
-//      Take back affordance. The original bug was that the predecessor banner
-//      mounted but was visually unobtrusive enough that users missed it
-//      entirely. Strong DOM assertions guard against the "doesn't mount /
-//      doesn't dismiss" regression class.
-//
-//   2. Reviewers should be able to eyeball the visual treatment on every PR
-//      without pulling the branch. Screenshots are attached via
-//      testInfo.attach so they ride along in the Playwright HTML report
-//      that the e2e workflow uploads as a GHA artifact.
-//
-// The spec drives the runtime directly via electronApp.evaluate against the
-// E2E-gated globalThis.__orcaRuntime exposure in src/main/index.ts (the same
-// gate that already controls dynamic ws ports). That matches the same code
-// path the mobile WebSocket RPC takes (terminal.subscribe →
-// handleMobileSubscribe), without standing up a fake WS client per test.
+// Drives the renderer by sending the same IPC events main fires in production
+// (runtime:terminalFitOverrideChanged, runtime:terminalDriverChanged — wired in
+// useIpcEvents.ts). No production-code test backdoor; the spec exercises the
+// renderer-side IPC listener → state mirror → banner JSX chain.
 
 test.describe.configure({ mode: 'serial' })
 
@@ -40,24 +32,29 @@ test('mobile subscribe mounts overlay; Take back dismisses it', async ({
   await expect(overlay).toHaveCount(0)
   await captureAttachment(orcaPage, testInfo, '01-desktop-clean.png')
 
-  // Simulate the iOS app subscribing in 'auto' mode with a phone-sized viewport.
-  // This is exactly what terminal.subscribe does on the mobile WS RPC
-  // (src/main/runtime/rpc/methods/terminal.ts) — it calls
-  // runtime.handleMobileSubscribe(ptyId, clientId, viewport).
+  // Fire the IPC events main emits when a mobile client subscribes in 'auto'
+  // mode (handleMobileSubscribe in src/main/runtime/orca-runtime.ts). The
+  // renderer's listener calls setFitOverride + setDriverForPty, the banner
+  // observes the change, and MobileDriverOverlay mounts.
   await electronApp.evaluate(
-    async (_app, args) => {
-      // The augmented global is declared in src/main/index.ts so the cast is unnecessary.
-      const runtime = globalThis.__orcaRuntime
-      if (!runtime) {
-        throw new Error('globalThis.__orcaRuntime missing — main/index.ts E2E gate not active')
+    ({ BrowserWindow }, args) => {
+      const wins = BrowserWindow.getAllWindows()
+      for (const win of wins) {
+        win.webContents.send('runtime:terminalFitOverrideChanged', {
+          ptyId: args.ptyId,
+          mode: 'mobile-fit',
+          cols: args.cols,
+          rows: args.rows
+        })
+        win.webContents.send('runtime:terminalDriverChanged', {
+          ptyId: args.ptyId,
+          driver: { kind: 'mobile', clientId: 'fake-phone-1' }
+        })
       }
-      await runtime.handleMobileSubscribe(args.ptyId, args.clientId, args.viewport)
     },
-    { ptyId, clientId: 'fake-phone-1', viewport: { cols: 45, rows: 20 } }
+    { ptyId, cols: 45, rows: 20 }
   )
 
-  // Overlay mounts via the runtime → notifier → renderer IPC chain. 15s budget
-  // matches waitForActivePanePtyId — IPC round-trips can be slow on CI.
   await expect(overlay).toBeVisible({ timeout: 15_000 })
   await expect(overlay).toContainText(/mobile is driving this terminal/i)
   await expect(overlay).toContainText(/your keyboard is paused/i)
@@ -67,19 +64,38 @@ test('mobile subscribe mounts overlay; Take back dismisses it', async ({
 
   await captureAttachment(orcaPage, testInfo, '02-mobile-driving.png')
 
-  // Clicking Take back must dismiss the overlay (driver flips to 'desktop',
-  // override clears, banner unmounts). Catches the "stuck overlay" regression.
+  // Take back dismisses the overlay. The button calls runtime.restoreTerminalFit
+  // via IPC; main responds with desktop-fit + idle driver events that we mirror
+  // here so the renderer state lands on the take-back terminal state.
   await takeBack.click()
+  await electronApp.evaluate(
+    ({ BrowserWindow }, args) => {
+      const wins = BrowserWindow.getAllWindows()
+      for (const win of wins) {
+        win.webContents.send('runtime:terminalFitOverrideChanged', {
+          ptyId: args.ptyId,
+          mode: 'desktop-fit',
+          cols: 0,
+          rows: 0
+        })
+        win.webContents.send('runtime:terminalDriverChanged', {
+          ptyId: args.ptyId,
+          driver: { kind: 'idle' }
+        })
+      }
+    },
+    { ptyId }
+  )
+
   await expect(overlay).toBeHidden({ timeout: 15_000 })
 
   await captureAttachment(orcaPage, testInfo, '03-after-take-back.png')
 })
 
-// Why: writing the screenshot to testInfo.outputPath() puts the file inside
-// the test's per-run output dir (the standard Playwright location uploaded as
-// the playwright-artifacts GHA artifact in .github/workflows/e2e.yml). The
-// `body` form of testInfo.attach didn't reliably persist the attachment to
-// disk for the `list` reporter; round-tripping through outputPath does.
+// Why: writing the screenshot to testInfo.outputPath() lands the file in the
+// per-test output dir that ships in the playwright-traces artifact uploaded by
+// .github/workflows/e2e.yml on failure. The `body` form of testInfo.attach
+// didn't reliably persist for the `list` reporter; the path round-trip does.
 async function captureAttachment(page: Page, testInfo: TestInfo, fileName: string): Promise<void> {
   const dest = testInfo.outputPath(fileName)
   await page.screenshot({ path: dest, fullPage: true })
