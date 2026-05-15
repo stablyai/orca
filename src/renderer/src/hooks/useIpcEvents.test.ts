@@ -7,9 +7,11 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 const FUTURE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const STALE_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 const ORPHAN_LEAF_ID = '33333333-3333-4333-8333-333333333333'
+const TAB_1_LEAF_ID = '44444444-4444-4444-8444-444444444444'
 const FUTURE_PANE_KEY = makePaneKey('tab-future', FUTURE_LEAF_ID)
 const STALE_PANE_KEY = makePaneKey('tab-future', STALE_LEAF_ID)
 const ORPHAN_PANE_KEY = makePaneKey('tab-orphan', ORPHAN_LEAF_ID)
+const TAB_1_PANE_KEY = makePaneKey('tab-1', TAB_1_LEAF_ID)
 
 function makeTarget(args: { hasXtermClass?: boolean; editorClosest?: boolean }): {
   classList: { contains: (token: string) => boolean }
@@ -161,6 +163,8 @@ describe('useIpcEvents updater integration', () => {
         },
         ui: {
           onOpenSettings: () => () => {},
+          onOpenFeatureTour: () => () => {},
+          onShowFeatureTourNudge: () => () => {},
           onToggleLeftSidebar: () => () => {},
           onToggleRightSidebar: () => () => {},
           onToggleWorktreePalette: () => () => {},
@@ -370,6 +374,8 @@ describe('useIpcEvents updater integration', () => {
         },
         ui: {
           onOpenSettings: () => () => {},
+          onOpenFeatureTour: () => () => {},
+          onShowFeatureTourNudge: () => () => {},
           onToggleLeftSidebar: () => () => {},
           onToggleRightSidebar: () => () => {},
           onToggleWorktreePalette: () => () => {},
@@ -529,6 +535,7 @@ describe('useIpcEvents updater integration', () => {
             title?: string
             ptyId?: string
             activate?: boolean
+            tabId?: string
           }) => void)
         | null
     } = { current: null }
@@ -586,6 +593,8 @@ describe('useIpcEvents updater integration', () => {
         },
         ui: {
           onOpenSettings: () => () => {},
+          onOpenFeatureTour: () => () => {},
+          onShowFeatureTourNudge: () => () => {},
           onToggleLeftSidebar: () => () => {},
           onToggleRightSidebar: () => () => {},
           onToggleWorktreePalette: () => () => {},
@@ -603,6 +612,7 @@ describe('useIpcEvents updater integration', () => {
               title?: string
               ptyId?: string
               activate?: boolean
+              tabId?: string
             }) => void
           ) => {
             createTerminalListenerRef.current = listener
@@ -718,12 +728,14 @@ describe('useIpcEvents updater integration', () => {
     createTerminalListenerRef.current({
       worktreeId: 'wt-2',
       ptyId: 'pty-bg-2',
-      activate: false
+      activate: false,
+      tabId: 'tab-cli-bg'
     })
 
     expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, {
       initialPtyId: 'pty-bg-2',
-      activate: false
+      activate: false,
+      id: 'tab-cli-bg'
     })
     expect(setActiveView).not.toHaveBeenCalled()
     expect(setActiveWorktree).not.toHaveBeenCalled()
@@ -867,6 +879,8 @@ describe('useIpcEvents browser tab close routing', () => {
         },
         ui: {
           onOpenSettings: () => () => {},
+          onOpenFeatureTour: () => () => {},
+          onShowFeatureTourNudge: () => () => {},
           onToggleLeftSidebar: () => () => {},
           onToggleRightSidebar: () => () => {},
           onToggleWorktreePalette: () => () => {},
@@ -1071,6 +1085,8 @@ describe('useIpcEvents browser tab close routing', () => {
         },
         ui: {
           onOpenSettings: () => () => {},
+          onOpenFeatureTour: () => () => {},
+          onShowFeatureTourNudge: () => () => {},
           onToggleLeftSidebar: () => () => {},
           onToggleRightSidebar: () => () => {},
           onToggleWorktreePalette: () => () => {},
@@ -1270,6 +1286,8 @@ describe('useIpcEvents browser tab close routing', () => {
         },
         ui: {
           onOpenSettings: () => () => {},
+          onOpenFeatureTour: () => () => {},
+          onShowFeatureTourNudge: () => () => {},
           onToggleLeftSidebar: () => () => {},
           onToggleRightSidebar: () => () => {},
           onToggleWorktreePalette: () => () => {},
@@ -1478,6 +1496,8 @@ describe('useIpcEvents CLI-created worktree activation', () => {
         },
         ui: {
           onOpenSettings: () => () => {},
+          onOpenFeatureTour: () => () => {},
+          onShowFeatureTourNudge: () => () => {},
           onToggleLeftSidebar: () => () => {},
           onToggleRightSidebar: () => () => {},
           onToggleWorktreePalette: () => () => {},
@@ -1614,6 +1634,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     toolInput?: string
     lastAssistantMessage?: string
     interrupted?: boolean
+    connectionId?: string | null
     receivedAt: number
     stateStartedAt: number
   }
@@ -1655,6 +1676,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
       clearTabPtyId: vi.fn(),
       runtimePaneTitlesByTabId: {},
       terminalLayoutsByTabId: {},
+      repos: [],
+      worktreesByRepo: {},
       tabsByWorktree: {},
       workspaceSessionReady: false,
       settings: { terminalFontSize: 13 },
@@ -1677,6 +1700,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
         },
         ui: {
           onOpenSettings: () => () => {},
+          onOpenFeatureTour: () => () => {},
+          onShowFeatureTourNudge: () => () => {},
           onToggleLeftSidebar: () => () => {},
           onToggleRightSidebar: () => () => {},
           onToggleWorktreePalette: () => () => {},
@@ -1891,6 +1916,64 @@ describe('useIpcEvents agent status snapshot integration', () => {
     )
   })
 
+  it('tracks ready push events whose paneKey does not resolve to a renderer tab', async () => {
+    const setAgentStatus = vi.fn()
+    const track = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-known', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Known' }]
+      },
+      workspaceSessionReady: true
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.doMock('@/lib/telemetry', () => ({ track }))
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+
+    if (typeof onSetListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onSet listener to be registered')
+    }
+
+    onSetListenerRef.current({
+      paneKey: 'tab-missing:0',
+      state: 'working',
+      prompt: 'p',
+      agentType: 'claude',
+      receivedAt: 1_700_000_000_100,
+      stateStartedAt: 1_699_999_999_100
+    })
+
+    expect(setAgentStatus).not.toHaveBeenCalled()
+    expect(track).toHaveBeenCalledWith('agent_hook_unattributed', {
+      reason: 'unknown_tab_id'
+    })
+  })
+
   it('pulls the snapshot once workspace session is ready even before settings load', async () => {
     const setAgentStatus = vi.fn()
     const getSnapshot = vi.fn(() => Promise.resolve([]))
@@ -2040,5 +2123,223 @@ describe('useIpcEvents agent status snapshot integration', () => {
     await Promise.resolve()
 
     expect(setAgentStatus).not.toHaveBeenCalled()
+  })
+
+  it('forwards events whose connectionId matches the live repo connection', async () => {
+    const setAgentStatus = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      repos: [{ id: 'repo-1', connectionId: 'conn-1' }],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }]
+      },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Terminal 1' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: TAB_1_LEAF_ID },
+          activeLeafId: TAB_1_LEAF_ID,
+          expandedLeafId: null
+        }
+      }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: { subscribe: vi.fn(() => () => {}), getState: () => storeState }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+
+    onSetListenerRef.current?.({
+      paneKey: TAB_1_PANE_KEY,
+      connectionId: 'conn-1',
+      state: 'working',
+      receivedAt: 1_700_000_000_100,
+      stateStartedAt: 1_699_999_999_100
+    })
+
+    expect(setAgentStatus).toHaveBeenCalledWith(
+      TAB_1_PANE_KEY,
+      expect.objectContaining({ state: 'working' }),
+      'Terminal 1',
+      { updatedAt: 1_700_000_000_100, stateStartedAt: 1_699_999_999_100 }
+    )
+  })
+
+  it('drops events whose connectionId no longer matches the live local repo', async () => {
+    const setAgentStatus = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      repos: [{ id: 'repo-1', connectionId: null }],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }]
+      },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Terminal 1' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: TAB_1_LEAF_ID },
+          activeLeafId: TAB_1_LEAF_ID,
+          expandedLeafId: null
+        }
+      }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: { subscribe: vi.fn(() => () => {}), getState: () => storeState }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+
+    onSetListenerRef.current?.({
+      paneKey: TAB_1_PANE_KEY,
+      connectionId: 'conn-stale',
+      state: 'working',
+      receivedAt: 1_700_000_000_100,
+      stateStartedAt: 1_699_999_999_100
+    })
+
+    expect(setAgentStatus).not.toHaveBeenCalled()
+  })
+
+  it('drops remote-stamped events when the owning worktree is no longer in worktreesByRepo', async () => {
+    const setAgentStatus = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      repos: [{ id: 'repo-1', connectionId: 'conn-1' }],
+      worktreesByRepo: { 'repo-1': [] },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Terminal 1' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: TAB_1_LEAF_ID },
+          activeLeafId: TAB_1_LEAF_ID,
+          expandedLeafId: null
+        }
+      }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: { subscribe: vi.fn(() => () => {}), getState: () => storeState }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+
+    onSetListenerRef.current?.({
+      paneKey: TAB_1_PANE_KEY,
+      connectionId: 'conn-other',
+      state: 'working',
+      receivedAt: 1_700_000_000_100,
+      stateStartedAt: 1_699_999_999_100
+    })
+
+    expect(setAgentStatus).not.toHaveBeenCalled()
+  })
+
+  it('accepts events without a stamped connectionId for preload compatibility', async () => {
+    const setAgentStatus = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      repos: [{ id: 'repo-1', connectionId: 'conn-1' }],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }]
+      },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Terminal 1' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: TAB_1_LEAF_ID },
+          activeLeafId: TAB_1_LEAF_ID,
+          expandedLeafId: null
+        }
+      }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: { subscribe: vi.fn(() => () => {}), getState: () => storeState }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+
+    onSetListenerRef.current?.({
+      paneKey: TAB_1_PANE_KEY,
+      state: 'working',
+      receivedAt: 1_700_000_000_100,
+      stateStartedAt: 1_699_999_999_100
+    })
+
+    expect(setAgentStatus).toHaveBeenCalledTimes(1)
   })
 })

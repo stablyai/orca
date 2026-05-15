@@ -26,6 +26,7 @@ import {
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { PaneIdentityRegistry } from './pane-identity-registry'
 import { closeManagedPane, splitManagedPane } from './pane-split-close'
+import { FIRST_PANE_ID } from '../../../../shared/pane-key'
 
 export type { PaneManagerOptions, PaneStyleOptions, ManagedPane, DropZone }
 
@@ -33,7 +34,7 @@ export class PaneManager {
   private root: HTMLElement
   private panes: Map<number, ManagedPaneInternal> = new Map()
   private activePaneId: number | null = null
-  private nextPaneId = 1
+  private nextPaneId = FIRST_PANE_ID
   private options: PaneManagerOptions
   private styleOptions: PaneStyleOptions = {}
   private destroyed = false

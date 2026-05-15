@@ -1,12 +1,19 @@
 import { readFile } from 'node:fs/promises'
-import { execFile } from 'node:child_process'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { net, session } from 'electron'
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 import { fetchViaPty } from './claude-pty'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
-import { readManagedClaudeKeychainCredentials } from '../claude-accounts/keychain'
+import {
+  readActiveClaudeKeychainCredentials,
+  readActiveClaudeKeychainCredentialsStrict,
+  readManagedClaudeKeychainCredentials
+} from '../claude-accounts/keychain'
+import {
+  readClaudeManagedAuthFile,
+  resolveOwnedClaudeManagedAuthPath
+} from '../claude-accounts/managed-auth-path'
 
 const OAUTH_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
 const OAUTH_BETA_HEADER = 'oauth-2025-04-20'
@@ -61,72 +68,93 @@ async function ensureProxyFromEnv(): Promise<void> {
 // Credential reading — tries multiple sources for an OAuth bearer token
 // ---------------------------------------------------------------------------
 
-type ClaudeCredentials = {
-  claudeAiOauth?: {
-    accessToken?: string
-    refreshToken?: string
-    expiresAt?: number // unix ms
-  }
-}
-
 type KeychainCredentials = {
   claudeAiOauth?: {
     accessToken?: string
+    refreshToken?: string
     expiresAt?: number
   }
 }
 
+type OAuthCredentialReadResult = {
+  token: string | null
+  hasRefreshableCredentials: boolean
+}
+
 // Why: factored out so both the active-account Keychain reader and the
 // managed-account reader share the same JSON parsing + expiry check.
-function parseOAuthTokenFromCredentialsJson(raw: string): string | null {
+function parseOAuthCredentialsJson(raw: string): OAuthCredentialReadResult {
   try {
     const parsed = JSON.parse(raw) as KeychainCredentials
-    const token = parsed?.claudeAiOauth?.accessToken
+    const oauth = parsed?.claudeAiOauth
+    const token = oauth?.accessToken
     if (!token || typeof token !== 'string') {
-      return null
+      return { token: null, hasRefreshableCredentials: false }
     }
-    const expiresAt = parsed.claudeAiOauth?.expiresAt
+    const refreshToken = oauth?.refreshToken
+    const expiresAt = oauth?.expiresAt
     if (typeof expiresAt === 'number' && expiresAt < Date.now()) {
-      return null
+      return {
+        token: null,
+        hasRefreshableCredentials: typeof refreshToken === 'string' && refreshToken.trim() !== ''
+      }
     }
-    return token
+    return { token, hasRefreshableCredentials: true }
   } catch {
-    return null
+    return { token: null, hasRefreshableCredentials: false }
   }
 }
 
 /**
  * Read OAuth token from macOS Keychain.
- * Why: Claude Code v2.x+ stores OAuth credentials in the macOS Keychain
- * under service "Claude Code-credentials". This is the standard location
- * for Claude Max/Pro OAuth tokens. Only returns a token if the keychain
- * entry has a `claudeAiOauth.accessToken` — API key users won't have this.
+ * Why: Claude Code 2.1+ scopes OAuth Keychain services by CLAUDE_CONFIG_DIR;
+ * older builds used the legacy unsuffixed service. The shared reader handles both.
  */
-async function readFromKeychain(): Promise<string | null> {
+async function readFromKeychain(configDir?: string): Promise<OAuthCredentialReadResult> {
   if (process.platform !== 'darwin') {
-    return null
+    return { token: null, hasRefreshableCredentials: false }
   }
 
-  return new Promise<string | null>((resolve) => {
-    const user = process.env.USER ?? ''
-    if (!user) {
-      resolve(null)
-      return
+  if (configDir) {
+    const scopedCredentials = await readCredentialsFromStrictKeychain(configDir)
+    if (scopedCredentials.token) {
+      return scopedCredentials
     }
+    if (scopedCredentials.hasRefreshableCredentials) {
+      return scopedCredentials
+    }
+    const legacyCredentials = await readCredentialsFromStrictKeychain()
+    if (legacyCredentials.token) {
+      return legacyCredentials
+    }
+    return {
+      token: null,
+      hasRefreshableCredentials:
+        scopedCredentials.hasRefreshableCredentials || legacyCredentials.hasRefreshableCredentials
+    }
+  }
 
-    execFile(
-      'security',
-      ['find-generic-password', '-s', 'Claude Code-credentials', '-a', user, '-w'],
-      { timeout: 3_000 },
-      (err, stdout) => {
-        if (err || !stdout.trim()) {
-          resolve(null)
-          return
-        }
-        resolve(parseOAuthTokenFromCredentialsJson(stdout.trim()))
-      }
-    )
-  })
+  try {
+    const credentials = await readActiveClaudeKeychainCredentials(configDir)
+    return credentials
+      ? parseOAuthCredentialsJson(credentials)
+      : { token: null, hasRefreshableCredentials: false }
+  } catch {
+    return { token: null, hasRefreshableCredentials: false }
+  }
+}
+
+async function readCredentialsFromStrictKeychain(
+  configDir?: string
+): Promise<OAuthCredentialReadResult> {
+  try {
+    const credentials = await readActiveClaudeKeychainCredentialsStrict(configDir)
+    return credentials
+      ? parseOAuthCredentialsJson(credentials)
+      : { token: null, hasRefreshableCredentials: false }
+  } catch {
+    return { token: null, hasRefreshableCredentials: false }
+  }
 }
 
 /**
@@ -134,24 +162,13 @@ async function readFromKeychain(): Promise<string | null> {
  * Why: older Claude CLI versions store credentials in this plain JSON
  * file. We keep it as a fallback for compatibility.
  */
-async function readFromCredentialsFile(configDir?: string): Promise<string | null> {
+async function readFromCredentialsFile(configDir?: string): Promise<OAuthCredentialReadResult> {
   const credPath = path.join(configDir ?? path.join(homedir(), '.claude'), '.credentials.json')
   try {
     const raw = await readFile(credPath, 'utf-8')
-    const parsed = JSON.parse(raw) as ClaudeCredentials
-    const token = parsed?.claudeAiOauth?.accessToken
-    if (!token || typeof token !== 'string') {
-      return null
-    }
-
-    const expiresAt = parsed.claudeAiOauth?.expiresAt
-    if (typeof expiresAt === 'number' && expiresAt < Date.now()) {
-      return null
-    }
-
-    return token
+    return parseOAuthCredentialsJson(raw)
   } catch {
-    return null
+    return { token: null, hasRefreshableCredentials: false }
   }
 }
 
@@ -161,20 +178,27 @@ async function readFromCredentialsFile(configDir?: string): Promise<string | nul
  * here — those are API keys which return 401 on the OAuth usage endpoint.
  * API-key users are served by the PTY fallback instead.
  */
-async function readOAuthCredentials(configDir?: string): Promise<string | null> {
+async function readOAuthCredentials(configDir?: string): Promise<OAuthCredentialReadResult> {
   // 1. macOS Keychain (Claude Max/Pro OAuth)
-  const fromKeychain = await readFromKeychain()
-  if (fromKeychain) {
+  const fromKeychain = await readFromKeychain(configDir)
+  if (fromKeychain.token) {
+    return fromKeychain
+  }
+  if (fromKeychain.hasRefreshableCredentials) {
     return fromKeychain
   }
 
   // 2. Legacy credentials file
   const fromFile = await readFromCredentialsFile(configDir)
-  if (fromFile) {
+  if (fromFile.token) {
     return fromFile
   }
 
-  return null
+  return {
+    token: null,
+    hasRefreshableCredentials:
+      fromKeychain.hasRefreshableCredentials || fromFile.hasRefreshableCredentials
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -274,21 +298,20 @@ export async function fetchClaudeRateLimits(options?: {
   authPreparation?: ClaudeRuntimeAuthPreparation
 }): Promise<ProviderRateLimits> {
   // Path A: try OAuth API if we have a genuine OAuth token
-  const oauthToken = await readOAuthCredentials(
-    options?.authPreparation?.envPatch.CLAUDE_CONFIG_DIR
-  )
-  if (oauthToken) {
+  const oauthCredentials = await readOAuthCredentials(options?.authPreparation?.configDir)
+  if (oauthCredentials.token) {
     try {
-      return await fetchViaOAuth(oauthToken)
+      return await fetchViaOAuth(oauthCredentials.token)
     } catch {
       // OAuth API failed — fall through to PTY scraping as a backup
       // for subscription users whose token may still be valid for the CLI.
     }
+  }
 
-    // Path B: PTY fallback — only for subscription plan users (Max/Pro)
-    // whose OAuth token we found but the API call failed. The CLI's
-    // `/usage` command is subscription-only, so there's no point
-    // attempting PTY for API key users.
+  // Path B: PTY fallback — only for subscription plan users (Max/Pro)
+  // whose OAuth credentials exist. The CLI can refresh expired OAuth tokens,
+  // so an expired access token should not be treated like API-key billing.
+  if (oauthCredentials.token || oauthCredentials.hasRefreshableCredentials) {
     try {
       return await fetchViaPty({ authPreparation: options?.authPreparation })
     } catch (err) {
@@ -332,14 +355,21 @@ export type InactiveClaudeAccountInfo = {
 // Using ClaudeRuntimeAuthService would overwrite the active account's auth.
 async function readManagedOAuthToken(account: InactiveClaudeAccountInfo): Promise<string | null> {
   try {
+    const managedAuthPath = resolveOwnedClaudeManagedAuthPath(account.id, account.managedAuthPath, {
+      adoptLegacyMarker: true
+    })
+    if (!managedAuthPath) {
+      return null
+    }
     if (process.platform === 'darwin') {
       const raw = await readManagedClaudeKeychainCredentials(account.id)
       if (raw) {
-        return parseOAuthTokenFromCredentialsJson(raw)
+        return parseOAuthCredentialsJson(raw).token
       }
       return null
     }
-    return await readFromCredentialsFile(account.managedAuthPath)
+    const raw = readClaudeManagedAuthFile(managedAuthPath, '.credentials.json')
+    return raw ? parseOAuthCredentialsJson(raw).token : null
   } catch {
     return null
   }

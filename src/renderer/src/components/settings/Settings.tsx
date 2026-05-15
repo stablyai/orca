@@ -4,6 +4,7 @@ import {
   BarChart3,
   Bell,
   Bot,
+  Cable,
   FlaskConical,
   GitBranch,
   Globe,
@@ -11,12 +12,14 @@ import {
   Keyboard,
   Lock,
   MousePointerClick,
+  Network,
   ShieldCheck,
   Palette,
   Server,
   SlidersHorizontal,
   Smartphone,
   Blocks,
+  Mic,
   SquareTerminal,
   UserCog
 } from 'lucide-react'
@@ -41,9 +44,13 @@ import { RepositoryPane, getRepositoryPaneSearchEntries } from './RepositoryPane
 import { getTerminalPaneSearchEntries } from './terminal-search'
 import { GitPane, GIT_PANE_SEARCH_ENTRIES } from './GitPane'
 import { NotificationsPane, NOTIFICATIONS_PANE_SEARCH_ENTRIES } from './NotificationsPane'
+import { VoicePane } from './VoicePane'
+import { VOICE_PANE_SEARCH_ENTRIES } from './voice-pane-search'
 import { SshPane, SSH_PANE_SEARCH_ENTRIES } from './SshPane'
 import { ExperimentalPane, EXPERIMENTAL_PANE_SEARCH_ENTRIES } from './ExperimentalPane'
 import { AgentsPane, AGENTS_PANE_SEARCH_ENTRIES } from './AgentsPane'
+import { OrchestrationPane } from './OrchestrationPane'
+import { ORCHESTRATION_PANE_SEARCH_ENTRIES } from './orchestration-search'
 import { AccountsPane, ACCOUNTS_PANE_SEARCH_ENTRIES } from './AccountsPane'
 import { StatsPane, STATS_PANE_SEARCH_ENTRIES } from '../stats/StatsPane'
 import { IntegrationsPane, INTEGRATIONS_PANE_SEARCH_ENTRIES } from './IntegrationsPane'
@@ -53,11 +60,16 @@ import {
 } from './DeveloperPermissionsPane'
 import { ComputerUsePane, COMPUTER_USE_PANE_SEARCH_ENTRIES } from './ComputerUsePane'
 import { MobileSettingsPane, MOBILE_SETTINGS_PANE_SEARCH_ENTRIES } from './MobileSettingsPane'
+import {
+  RuntimeEnvironmentsPane,
+  RUNTIME_ENVIRONMENTS_SEARCH_ENTRY
+} from './RuntimeEnvironmentsPane'
 import { PrivacyPane } from './PrivacyPane'
 import { PRIVACY_PANE_SEARCH_ENTRIES } from './privacy-search'
 import { SettingsSidebar } from './SettingsSidebar'
 import { SettingsSection } from './SettingsSection'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
+import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 
 type SettingsNavTarget =
   | 'general'
@@ -71,11 +83,14 @@ type SettingsNavTarget =
   | 'computer-use'
   | 'developer-permissions'
   | 'privacy'
+  | 'voice'
   | 'shortcuts'
   | 'stats'
   | 'ssh'
   | 'experimental'
   | 'agents'
+  | 'orchestration'
+  | 'servers'
   | 'mobile'
   | 'repo'
 
@@ -116,18 +131,25 @@ function computerUsePlatformLabel(args: { isWindows: boolean; isMac: boolean }):
 const SECTION_FLASH_CLASS = 'settings-section-flash'
 const SECTION_FLASH_DURATION_MS = 900
 
-function scrollSectionIntoView(sectionId: string, container: HTMLElement | null): void {
+function scrollSectionIntoView(sectionId: string, container?: HTMLElement | null): void {
   const target = document.getElementById(sectionId)
   if (!target) {
     return
   }
-  // Why: centering a tall section pushes its heading above the viewport,
-  // which defeats the purpose of jumping to it. Only center when the whole
-  // section fits; otherwise align to the top so the title is always visible.
-  const fitsInViewport = container
-    ? target.getBoundingClientRect().height <= container.clientHeight
-    : true
-  target.scrollIntoView({ block: fitsInViewport ? 'center' : 'start' })
+  if (!container) {
+    target.scrollIntoView({ block: 'start' })
+    return
+  }
+  const containerRect = container.getBoundingClientRect()
+  const targetRect = target.getBoundingClientRect()
+  const targetTop = targetRect.top - containerRect.top + container.scrollTop
+
+  // Why: the scroll spy samples 40% down the viewport. Put sidebar jump
+  // targets just above that probe so short sections like Voice do not
+  // immediately hand active selection to the next section.
+  const desiredTop = targetTop - container.clientHeight * 0.3
+  const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
+  container.scrollTo({ top: Math.min(Math.max(0, desiredTop), maxScrollTop) })
 }
 
 function flashSectionHighlight(sectionId: string): void {
@@ -158,6 +180,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
 function Settings(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const switchRuntimeEnvironment = useAppStore((s) => s.switchRuntimeEnvironment)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const closeSettingsPage = useAppStore((s) => s.closeSettingsPage)
   const repos = useAppStore((s) => s.repos)
@@ -340,7 +363,7 @@ function Settings(): React.JSX.Element {
             return [repo.id, { hasHooks: false, hooks: null, mayNeedUpdate: false }] as const
           }
           try {
-            const result = await window.api.hooks.check({ repoId: repo.id })
+            const result = await checkRuntimeHooks(settings, repo.id)
             return [repo.id, result] as const
           } catch {
             return [repo.id, { hasHooks: false, hooks: null, mayNeedUpdate: false }] as const
@@ -367,7 +390,7 @@ function Settings(): React.JSX.Element {
     return () => {
       stale = true
     }
-  }, [repos])
+  }, [repos, settings])
 
   const applyTheme = useCallback((theme: 'system' | 'dark' | 'light') => {
     applyDocumentTheme(theme)
@@ -434,6 +457,21 @@ function Settings(): React.JSX.Element {
         searchEntries: NOTIFICATIONS_PANE_SEARCH_ENTRIES
       },
       {
+        id: 'orchestration',
+        title: 'Orchestration',
+        description: 'Coordinate multiple coding agents through Orca.',
+        icon: Network,
+        searchEntries: ORCHESTRATION_PANE_SEARCH_ENTRIES
+      },
+      {
+        id: 'servers',
+        title: 'Servers',
+        description: 'Run this client locally or through a remote Orca server.',
+        icon: Server,
+        searchEntries: [RUNTIME_ENVIRONMENTS_SEARCH_ENTRY],
+        badge: 'Beta'
+      },
+      {
         id: 'mobile',
         title: 'Mobile',
         description: 'Control terminals and agents from your phone.',
@@ -447,6 +485,14 @@ function Settings(): React.JSX.Element {
         description: 'Enable agents to control any app on your computer.',
         icon: MousePointerClick,
         searchEntries: COMPUTER_USE_PANE_SEARCH_ENTRIES,
+        badge: 'Beta'
+      },
+      {
+        id: 'voice',
+        title: 'Voice',
+        description: 'Local speech-to-text dictation with on-device models.',
+        icon: Mic,
+        searchEntries: VOICE_PANE_SEARCH_ENTRIES,
         badge: 'Beta'
       },
       ...(isMac
@@ -492,7 +538,7 @@ function Settings(): React.JSX.Element {
         id: 'ssh',
         title: 'SSH',
         description: 'Remote SSH connections.',
-        icon: Server,
+        icon: Cable,
         searchEntries: SSH_PANE_SEARCH_ENTRIES
       },
       {
@@ -574,24 +620,20 @@ function Settings(): React.JSX.Element {
       const atBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 2
 
       let candidate: HTMLElement | undefined
-      if (atBottom) {
-        candidate = sections.at(-1)
-      } else {
-        for (const section of sections) {
-          const rect = section.getBoundingClientRect()
-          if (rect.top <= probeY && rect.bottom > probeY) {
-            candidate = section
-            break
-          }
-          if (rect.top <= probeY) {
-            // Last section whose heading is above the probe line — used
-            // when no section straddles the probe (e.g. between sections,
-            // or when the probe sits in the gutter above the first one).
-            candidate = section
-          }
+      for (const section of sections) {
+        const rect = section.getBoundingClientRect()
+        if (rect.top <= probeY && rect.bottom > probeY) {
+          candidate = section
+          break
         }
-        candidate ??= sections.at(0)
+        if (rect.top <= probeY) {
+          // Last section whose heading is above the probe line — used
+          // when no section straddles the probe (e.g. between sections,
+          // or when the probe sits in the gutter above the first one).
+          candidate = section
+        }
       }
+      candidate ??= atBottom ? sections.at(-1) : sections.at(0)
       if (!candidate) {
         return
       }
@@ -792,6 +834,28 @@ function Settings(): React.JSX.Element {
                 </SettingsSection>
 
                 <SettingsSection
+                  id="orchestration"
+                  title="Orchestration"
+                  description="Coordinate multiple coding agents through Orca."
+                  searchEntries={ORCHESTRATION_PANE_SEARCH_ENTRIES}
+                >
+                  <OrchestrationPane />
+                </SettingsSection>
+
+                <SettingsSection
+                  id="servers"
+                  title="Servers"
+                  badge="Beta"
+                  description="Run this desktop client locally or through a remote Orca server."
+                  searchEntries={[RUNTIME_ENVIRONMENTS_SEARCH_ENTRY]}
+                >
+                  <RuntimeEnvironmentsPane
+                    settings={settings}
+                    switchRuntimeEnvironment={switchRuntimeEnvironment}
+                  />
+                </SettingsSection>
+
+                <SettingsSection
                   id="mobile"
                   title="Mobile"
                   badge="Beta"
@@ -832,6 +896,16 @@ function Settings(): React.JSX.Element {
                   searchEntries={COMPUTER_USE_PANE_SEARCH_ENTRIES}
                 >
                   <ComputerUsePane />
+                </SettingsSection>
+
+                <SettingsSection
+                  id="voice"
+                  title="Voice"
+                  badge="Beta"
+                  description="Local speech-to-text dictation with on-device models."
+                  searchEntries={VOICE_PANE_SEARCH_ENTRIES}
+                >
+                  <VoicePane settings={settings} updateSettings={updateSettings} />
                 </SettingsSection>
 
                 {isMac ? (

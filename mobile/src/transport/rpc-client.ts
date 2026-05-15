@@ -26,6 +26,10 @@ type PendingRequest = {
   reject: (error: Error) => void
 }
 
+type SendRequestOptions = {
+  timeoutMs?: number
+}
+
 type StreamingListener = (result: unknown) => void
 
 type StreamRequest = {
@@ -41,7 +45,11 @@ type TerminalSnapshotState = {
 }
 
 export type RpcClient = {
-  sendRequest: (method: string, params?: unknown) => Promise<RpcResponse>
+  sendRequest: (
+    method: string,
+    params?: unknown,
+    options?: SendRequestOptions
+  ) => Promise<RpcResponse>
   subscribe: (method: string, params: unknown, onData: StreamingListener) => () => void
   getState: () => ConnectionState
   // Why: UI escalates "Reconnecting…" to "Can't connect" once attempts cross
@@ -797,7 +805,11 @@ export function connect(
   openConnection()
 
   return {
-    async sendRequest(method: string, params?: unknown): Promise<RpcResponse> {
+    async sendRequest(
+      method: string,
+      params?: unknown,
+      options?: SendRequestOptions
+    ): Promise<RpcResponse> {
       const waitStart = Date.now()
       const wasConnected = state === 'connected'
       await waitForConnected()
@@ -810,15 +822,16 @@ export function connect(
 
       return new Promise((resolve, reject) => {
         const id = nextId()
+        const timeoutMs = options?.timeoutMs ?? REQUEST_TIMEOUT_MS
         const timeout = setTimeout(() => {
           pending.delete(id)
           console.log('[net] sendRequest TIMEOUT', {
             method,
-            timeoutMs: REQUEST_TIMEOUT_MS,
+            timeoutMs,
             state
           })
           reject(new Error(`Request timed out: ${method}`))
-        }, REQUEST_TIMEOUT_MS)
+        }, timeoutMs)
 
         pending.set(id, {
           resolve: (response) => {

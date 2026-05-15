@@ -36,6 +36,7 @@ import {
   launchSourceSchema,
   requestKindSchema
 } from '../../shared/telemetry-events'
+import { isRemoteAgentHooksEnabled } from '../../shared/agent-hook-relay'
 import { readShellStartupEnvVar } from '../pty/shell-startup-env'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import {
@@ -138,6 +139,16 @@ function parseLegacyNumericPaneKey(
     return null
   }
   return { tabId: trimmed.slice(0, delimiter), numericPaneId }
+}
+
+function rememberPaneKeyForPty(ptyId: string, paneKey: unknown): string | null {
+  const normalizedPaneKey = typeof paneKey === 'string' ? paneKey.trim() : ''
+  if (!isValidPaneKey(normalizedPaneKey)) {
+    return null
+  }
+  ptyPaneKey.set(ptyId, normalizedPaneKey)
+  paneKeyPtyId.set(normalizedPaneKey, ptyId)
+  return normalizedPaneKey
 }
 
 function declarePendingPaneSerializer(paneKey: string): number {
@@ -889,12 +900,16 @@ export function registerPtyHandlers(
       if (isClaudeLaunch) {
         markClaudePtySpawned(result.id)
       }
+      // Why: runtime-owned CLI PTYs bypass the renderer `pty:spawn` handler,
+      // so record their spawn-time paneKey here too. Synthetic hook titles and
+      // paneKey-scoped cache cleanup both depend on this reverse lookup.
+      const paneKey = rememberPaneKeyForPty(result.id, env?.ORCA_PANE_KEY)
       if (!args.connectionId) {
         registerPty({
           ptyId: result.id,
           worktreeId: args.worktreeId ?? null,
           sessionId: sessionId ?? null,
-          paneKey: null,
+          paneKey,
           pid:
             typeof result.pid === 'number' && Number.isFinite(result.pid) && result.pid > 0
               ? result.pid
@@ -955,6 +970,13 @@ export function registerPtyHandlers(
         return await getProviderForPty(ptyId).getForegroundProcess(ptyId)
       } catch {
         return null
+      }
+    },
+    hasChildProcesses: async (ptyId) => {
+      try {
+        return await getProviderForPty(ptyId).hasChildProcesses(ptyId)
+      } catch {
+        return false
       }
     },
     clearBuffer: async (ptyId) => {
@@ -1086,7 +1108,27 @@ export function registerPtyHandlers(
       const isMintedSessionId = args.sessionId === undefined && isDaemonHostSpawn
       const effectiveSessionId =
         args.sessionId ?? (isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined)
-      const baseEnvWithAuth = claudeAuth ? { ...args.env, ...claudeAuth.envPatch } : args.env
+      // Why: the renderer sets pane env for SSH too. Only forward it to the
+      // remote when the relay hook path is enabled; otherwise a newer relay
+      // could emit statuses this Orca build is not prepared to route.
+      let sshSourceEnv = args.env
+      if (args.connectionId && !isRemoteAgentHooksEnabled()) {
+        if (
+          sshSourceEnv &&
+          ('ORCA_PANE_KEY' in sshSourceEnv ||
+            'ORCA_TAB_ID' in sshSourceEnv ||
+            'ORCA_WORKTREE_ID' in sshSourceEnv)
+        ) {
+          const stripped = { ...sshSourceEnv }
+          delete stripped.ORCA_PANE_KEY
+          delete stripped.ORCA_TAB_ID
+          delete stripped.ORCA_WORKTREE_ID
+          sshSourceEnv = stripped
+        }
+      }
+      const baseEnvWithAuth = claudeAuth
+        ? { ...sshSourceEnv, ...claudeAuth.envPatch }
+        : sshSourceEnv
       const spawnPaneKey = baseEnvWithAuth?.ORCA_PANE_KEY
       const parsedSpawnPaneKey = parseValidPaneKey(spawnPaneKey)
       const verifiedPaneKey =
@@ -1098,6 +1140,8 @@ export function registerPtyHandlers(
           : null
       const verifiedLeafId =
         verifiedPaneKey && parsedSpawnPaneKey ? parsedSpawnPaneKey.leafId : null
+      const metadataLeafId =
+        typeof args.leafId === 'string' && isTerminalLeafId(args.leafId) ? args.leafId : null
       const legacySpawnPaneKey = verifiedPaneKey ? null : parseLegacyNumericPaneKey(spawnPaneKey)
       const migrationUnsupportedPaneKey =
         legacySpawnPaneKey &&
@@ -1116,7 +1160,7 @@ export function registerPtyHandlers(
         delete baseEnv.ORCA_PANE_KEY
       }
       const validatedPaneKey = verifiedPaneKey
-      const validatedLeafId = verifiedLeafId
+      const validatedLeafId = verifiedLeafId ?? metadataLeafId
       let env: Record<string, string> | undefined = baseEnv
       const preAllocatedHandle =
         runtime && !(provider instanceof LocalPtyProvider)
@@ -1398,9 +1442,10 @@ export function registerPtyHandlers(
       // Record<string, string> type is not actually enforced at the boundary.
       // Narrow to a bounded string so malformed or oversized values cannot
       // pollute ptyPaneKey or the downstream clearPaneState call.
+      const rememberedPaneKey = validatedPaneKey
+        ? rememberPaneKeyForPty(result.id, validatedPaneKey)
+        : null
       if (validatedPaneKey) {
-        ptyPaneKey.set(result.id, validatedPaneKey)
-        paneKeyPtyId.set(validatedPaneKey, result.id)
         if (!result.isReattach) {
           clearMigrationUnsupportedPtysForPaneKey(validatedPaneKey)
         }
@@ -1449,7 +1494,7 @@ export function registerPtyHandlers(
             args.sessionId.length <= 256
               ? args.sessionId
               : null,
-          paneKey: validatedPaneKey,
+          paneKey: rememberedPaneKey,
           pid:
             typeof spawnedPid === 'number' && Number.isFinite(spawnedPid) && spawnedPid > 0
               ? spawnedPid
@@ -1685,6 +1730,34 @@ export function registerPtyHandlers(
       }
       settlePendingPaneSerializer(args.paneKey, args.gen)
     }
+  )
+}
+
+export function registerHeadlessPtyRuntime(
+  runtime: OrcaRuntimeService,
+  getSelectedCodexHomePath?: () => string | null,
+  getSettings?: () => GlobalSettings,
+  prepareClaudeAuth?: () => Promise<ClaudeRuntimeAuthPreparation>,
+  store?: Store
+): void {
+  // Why: headless `orca serve` has no renderer window, but the runtime still
+  // needs the same PTY controller and provider listeners as desktop so remote
+  // clients can create, stream, inspect, and stop terminals.
+  const headlessWindow = {
+    isDestroyed: () => true,
+    webContents: {
+      send: () => {},
+      on: () => {},
+      removeListener: () => {}
+    }
+  } as unknown as BrowserWindow
+  registerPtyHandlers(
+    headlessWindow,
+    runtime,
+    getSelectedCodexHomePath,
+    getSettings,
+    prepareClaudeAuth,
+    store
   )
 }
 

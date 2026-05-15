@@ -1,5 +1,5 @@
 import React from 'react'
-import { Bell, Github, List, Search } from 'lucide-react'
+import { Bell, CalendarClock, Github, Gitlab, List, Search } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
@@ -12,6 +12,7 @@ const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('
 
 const SidebarNav = React.memo(function SidebarNav() {
   const openTaskPage = useAppStore((s) => s.openTaskPage)
+  const openAutomationsPage = useAppStore((s) => s.openAutomationsPage)
   const openActivityPage = useAppStore((s) => s.openActivityPage)
   const openModal = useAppStore((s) => s.openModal)
   const activeView = useAppStore((s) => s.activeView)
@@ -50,6 +51,7 @@ const SidebarNav = React.memo(function SidebarNav() {
   }, [activeRepoId, canBrowseTasks, defaultTaskViewPreset, prefetchWorkItems, repoMap, repos])
 
   const tasksActive = activeView === 'tasks'
+  const automationsActive = activeView === 'automations'
   const activityActive = activeView === 'activity'
   const activityUnreadCount = useAppStore((s) => {
     let count = 0
@@ -139,6 +141,21 @@ const SidebarNav = React.memo(function SidebarNav() {
                 if (!canBrowseTasks) {
                   return
                 }
+                openTaskPage({ taskSource: 'gitlab' })
+              }}
+              className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-foreground"
+              aria-label="Open GitLab tasks"
+            >
+              <Gitlab className="size-3.5" aria-hidden />
+            </span>
+            <span
+              role="button"
+              tabIndex={-1}
+              onClick={(e) => {
+                e.stopPropagation()
+                if (!canBrowseTasks) {
+                  return
+                }
                 openTaskPage({ taskSource: 'linear' })
               }}
               className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-foreground"
@@ -148,6 +165,23 @@ const SidebarNav = React.memo(function SidebarNav() {
           </span>
         </button>
       ) : null}
+      <button
+        type="button"
+        onClick={openAutomationsPage}
+        aria-current={automationsActive ? 'page' : undefined}
+        className={cn(
+          'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+          automationsActive
+            ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+            : 'text-sidebar-foreground/60 hover:bg-sidebar-foreground/8'
+        )}
+      >
+        <CalendarClock
+          className={cn('size-4 shrink-0', !automationsActive && 'text-sidebar-foreground/30')}
+          strokeWidth={automationsActive ? 2.25 : 1.75}
+        />
+        <span className="flex-1">Automations</span>
+      </button>
       <button
         type="button"
         onClick={openActivityPage}
@@ -163,7 +197,7 @@ const SidebarNav = React.memo(function SidebarNav() {
           className={cn('size-4 shrink-0', !activityActive && 'text-sidebar-foreground/30')}
           strokeWidth={activityActive ? 2.25 : 1.75}
         />
-        <span className="flex-1">Activity</span>
+        <span className="flex-1">Agents</span>
         {activityUnreadCount > 0 ? (
           <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-semibold text-primary-foreground">
             {activityUnreadCount}

@@ -263,7 +263,11 @@ function registerRuntimeWindowLifecycle(
           worktreeId,
           ptyId: opts.ptyId,
           title: opts.title ?? undefined,
-          activate: opts.activate !== false
+          activate: opts.activate !== false,
+          // Why: pre-minted tabId from main keeps the renderer's tab id aligned
+          // with the paneKey baked into the PTY env at spawn time, so hook
+          // events route to the right slot. See docs/cli-terminal-hook-pane-key.md.
+          ...(opts.tabId !== undefined ? { tabId: opts.tabId } : {})
         })
       }),
     splitTerminal: (tabId, paneRuntimeId, opts) => {
@@ -321,7 +325,7 @@ function registerFileDropRelay(mainWindow: BrowserWindow): void {
       _event,
       args:
         | { paths: string[]; target: 'editor' }
-        | { paths: string[]; target: 'terminal' }
+        | { paths: string[]; target: 'terminal'; tabId?: string }
         | { paths: string[]; target: 'composer' }
         | { paths: string[]; target: 'file-explorer'; destinationDir: string }
     ) => {

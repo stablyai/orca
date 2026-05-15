@@ -702,6 +702,17 @@ function Send-OrcaDrag([IntPtr]$WindowHandle, $From, $To) {
 
 function Send-OrcaText([IntPtr]$WindowHandle, [string]$Text) {
     [void][OrcaDesktopWin32]::SetForegroundWindow($WindowHandle)
+    $hasNonAscii = $false
+    foreach ($character in $Text.ToCharArray()) {
+        if ([int][char]$character -gt 0x7F) { $hasNonAscii = $true; break }
+    }
+    if ($hasNonAscii) {
+        foreach ($character in $Text.ToCharArray()) {
+            [void][OrcaDesktopWin32]::PostMessage($WindowHandle, $WindowsMessages.Char, [IntPtr][int][char]$character, [IntPtr]::Zero)
+            Start-Sleep -Milliseconds 8
+        }
+        return
+    }
     [System.Windows.Forms.SendKeys]::SendWait((ConvertTo-OrcaSendKeysText $Text))
 }
 

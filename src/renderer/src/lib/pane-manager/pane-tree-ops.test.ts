@@ -109,6 +109,7 @@ describe('safeFit', () => {
       terminalRows: 32
     })
     pane.pendingSplitScrollState = {
+      bufferType: 'normal',
       wasAtBottom: true,
       firstVisibleLineContent: '',
       viewportY: 0,

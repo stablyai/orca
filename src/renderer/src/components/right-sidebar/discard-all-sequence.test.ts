@@ -156,10 +156,12 @@ describe('runDiscardAllForArea', () => {
   function makeDeps(
     overrides: {
       bulkUnstageError?: unknown
+      discardManyError?: unknown
       discardOneError?: (path: string) => unknown
     } = {}
   ) {
     const bulkUnstageCalls: string[][] = []
+    const discardManyCalls: string[][] = []
     const discardOneCalls: string[] = []
     const errors: unknown[] = []
 
@@ -167,6 +169,12 @@ describe('runDiscardAllForArea', () => {
       bulkUnstageCalls.push([...paths])
       if (overrides.bulkUnstageError !== undefined) {
         throw overrides.bulkUnstageError
+      }
+    })
+    const discardMany = vi.fn(async (paths: string[]) => {
+      discardManyCalls.push([...paths])
+      if (overrides.discardManyError !== undefined) {
+        throw overrides.discardManyError
       }
     })
     const discardOne = vi.fn(async (path: string) => {
@@ -184,10 +192,13 @@ describe('runDiscardAllForArea', () => {
 
     return {
       deps: { bulkUnstage, discardOne, onError },
+      depsWithBulkDiscard: { bulkUnstage, discardMany, discardOne, onError },
       bulkUnstageCalls,
+      discardManyCalls,
       discardOneCalls,
       errors,
       bulkUnstage,
+      discardMany,
       discardOne,
       onError
     }
@@ -229,6 +240,37 @@ describe('runDiscardAllForArea', () => {
     expect(ctx.bulkUnstage.mock.invocationCallOrder[0]).toBeLessThan(
       ctx.discardOne.mock.invocationCallOrder[0]
     )
+  })
+
+  it('uses bulk discard when the dependency is available', async () => {
+    const ctx = makeDeps()
+    const result = await runDiscardAllForArea('unstaged', ['a.ts', 'b.ts'], ctx.depsWithBulkDiscard)
+    expect(result).toEqual({ discarded: ['a.ts', 'b.ts'], failed: [], aborted: false })
+    expect(ctx.discardManyCalls).toEqual([['a.ts', 'b.ts']])
+    expect(ctx.discardOne).not.toHaveBeenCalled()
+  })
+
+  it('bulk-unstages staged paths before bulk discard', async () => {
+    const ctx = makeDeps()
+    const result = await runDiscardAllForArea('staged', ['a.ts', 'b.ts'], ctx.depsWithBulkDiscard)
+    expect(result).toEqual({ discarded: ['a.ts', 'b.ts'], failed: [], aborted: false })
+    expect(ctx.bulkUnstageCalls).toEqual([['a.ts', 'b.ts']])
+    expect(ctx.discardManyCalls).toEqual([['a.ts', 'b.ts']])
+    expect(ctx.discardOne).not.toHaveBeenCalled()
+    // Why: staged discard is a two-step mutation. The index must be reset
+    // before the worktree restore/delete batch runs or staged deltas survive.
+    expect(ctx.bulkUnstage.mock.invocationCallOrder[0]).toBeLessThan(
+      ctx.discardMany.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('falls back to per-file discard when bulk discard rejects', async () => {
+    const ctx = makeDeps({ discardManyError: new Error('unknown method') })
+    const result = await runDiscardAllForArea('unstaged', ['a.ts', 'b.ts'], ctx.depsWithBulkDiscard)
+    expect(result).toEqual({ discarded: ['a.ts', 'b.ts'], failed: [], aborted: false })
+    expect(ctx.discardManyCalls).toEqual([['a.ts', 'b.ts']])
+    expect(ctx.discardOneCalls).toEqual(['a.ts', 'b.ts'])
+    expect(ctx.onError).not.toHaveBeenCalled()
   })
 
   it('aborts and skips the discard loop if bulk-unstage rejects', async () => {

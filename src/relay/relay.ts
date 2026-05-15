@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+/* oxlint-disable max-lines -- Why: the relay entry point centralizes process
+   lifecycle (stdio, --connect bridge, grace timer, signal handlers, socket
+   server) and handler registration in one file so the boot sequence stays in
+   topological order. Splitting by line count would scatter ordered side-
+   effects across modules and obscure the lifecycle. */
 
 // Orca Relay — lightweight daemon deployed to remote hosts.
 // Communicates over stdin/stdout using the framed JSON-RPC protocol.
@@ -23,6 +28,15 @@ import { FsHandler } from './fs-handler'
 import { GitHandler } from './git-handler'
 import { PreflightHandler } from './preflight-handler'
 import { PortScanHandler } from './port-scan-handler'
+import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
+import { PluginOverlayManager } from './plugin-overlay'
+import {
+  AGENT_HOOK_INSTALL_PLUGINS_METHOD,
+  AGENT_HOOK_NOTIFICATION_METHOD,
+  AGENT_HOOK_REQUEST_REPLAY_METHOD
+} from '../shared/agent-hook-relay'
+import { assertPluginSourceUnderByteCap } from './plugin-source-limit'
+import { resolveOpenCodeSourceConfigDir, resolvePiSourceAgentDir } from './plugin-overlay-env'
 
 const DEFAULT_GRACE_MS = 5 * 60 * 1000
 const SOCK_NAME = 'relay.sock'
@@ -128,7 +142,7 @@ function runConnectMode(sockPath: string): void {
 
 // ── Normal mode ──────────────────────────────────────────────────────
 
-function main(): void {
+async function main(): Promise<void> {
   const { graceTimeMs, connectMode, detached, sockPath } = parseArgs(process.argv)
 
   if (connectMode) {
@@ -217,6 +231,140 @@ function main(): void {
 
   const _portScanHandler = new PortScanHandler(dispatcher)
   void _portScanHandler
+
+  // ── Agent-hook server ─────────────────────────────────────────────
+  // Why: hosts a loopback HTTP receiver inside the relay process so agent
+  // CLIs running in remote PTYs can post hook events without leaving the
+  // host. Each parsed payload is forwarded to Orca via an `agent.hook`
+  // JSON-RPC notification on the existing SSH channel — see
+  // docs/design/agent-status-over-ssh.md §2-§5.
+  const hookServer = new RelayAgentHookServer({
+    // Why: a remote account can host multiple target-specific relay daemons.
+    // Scope endpoint.env/cmd by the daemon socket path so their hook tokens
+    // cannot overwrite each other.
+    endpointDir: endpointDirForRelaySocket(sockPath),
+    forward: (envelope) => {
+      // Why: dispatcher.notify is fire-and-forget — when the SSH channel is
+      // mid-reconnect the write callback no-ops and the notification is
+      // silently dropped. The per-paneKey cache inside `hookServer` lets us
+      // replay the last status for each live pane after Orca re-wires its
+      // handler post-`--connect`.
+      dispatcher.notify(
+        AGENT_HOOK_NOTIFICATION_METHOD,
+        envelope as unknown as Record<string, unknown>
+      )
+    }
+  })
+  // Why: await the hook-server bind before announcing readiness so the very
+  // first PTY spawn (which can land within milliseconds of the sentinel)
+  // already sees populated ORCA_AGENT_HOOK_* env. The bind is a local-loopback
+  // listen — measured in ms — so the latency cost is trivial and removes a
+  // class of "first agent invocation has no status" races. Bind failure is
+  // treated as soft: log and continue, the augmenter returns {} and agent
+  // status simply does not flow.
+  try {
+    await hookServer.start()
+  } catch (err) {
+    process.stderr.write(
+      `[relay] agent-hook server failed to start: ${err instanceof Error ? err.message : String(err)}\n`
+    )
+  }
+
+  // Why: every relay-spawned PTY needs the live ORCA_AGENT_HOOK_* coords. The
+  // augmenter is read on every spawn so a hook-server bind that succeeded
+  // late (or after a stop/start) lands in the next PTY's env without a
+  // restart.
+  ptyHandler.addEnvAugmenter(() => hookServer.buildPtyEnv())
+
+  // Why: per-PTY plugin overlays for OpenCode and Pi. `OPENCODE_CONFIG_DIR`
+  // and `PI_CODING_AGENT_DIR` only make sense on the relay's own filesystem
+  // — paths the renderer would synthesize for the Orca host's userData are
+  // meaningless on the remote. The overlay manager materializes a per-PTY
+  // dir on the remote (rooted at $HOME/.orca-relay/) so the agent CLI inside
+  // the relay-spawned PTY loads the bundled status plugin and posts to the
+  // relay's hook server. Source bodies arrive over JSON-RPC (see
+  // `agent_hook.installPlugins` below) — not bundled with the relay binary.
+  const pluginOverlay = new PluginOverlayManager()
+  ptyHandler.addEnvAugmenter((ctx) => {
+    const env: Record<string, string> = {}
+    // Why: prefer paneKey for overlay identity so a renderer-side remount
+    // that reuses the paneKey lands in the same overlay dir. Falls back to
+    // the relay-internal pty-id when paneKey is absent (e.g. CLI-launched
+    // PTYs that don't go through the renderer).
+    const overlayId = ctx.paneKey ?? ctx.id
+    if (pluginOverlay.hasOpenCodeSource()) {
+      const sourceDir = resolveOpenCodeSourceConfigDir(ctx.env, ctx.shell)
+      const dir = pluginOverlay.materializeOpenCode(overlayId, sourceDir)
+      if (dir) {
+        env.OPENCODE_CONFIG_DIR = dir
+        env.ORCA_OPENCODE_CONFIG_DIR = dir
+        if (sourceDir) {
+          env.ORCA_OPENCODE_SOURCE_CONFIG_DIR = sourceDir
+        }
+      }
+    }
+    if (pluginOverlay.hasPiSource()) {
+      const sourceDir = resolvePiSourceAgentDir(ctx.env, ctx.shell)
+      const dir = pluginOverlay.materializePi(overlayId, sourceDir)
+      if (dir) {
+        env.PI_CODING_AGENT_DIR = dir
+        env.ORCA_PI_CODING_AGENT_DIR = dir
+        if (sourceDir) {
+          env.ORCA_PI_SOURCE_AGENT_DIR = sourceDir
+        }
+      }
+    }
+    return env
+  })
+
+  // Why: evict the per-pane last-status cache AND any plugin overlay dirs
+  // when the backing PTY exits so terminated panes do not (a) resurface as
+  // ghost events after a later reconnect (§5 Path 3) or (b) leak overlay
+  // dirs on a long-lived relay.
+  ptyHandler.setExitListener(({ paneKey, id }) => {
+    if (paneKey) {
+      hookServer.clearPaneState(paneKey)
+    }
+    pluginOverlay.clearOverlay(paneKey ?? id)
+  })
+
+  // Why: request-driven replay. Orca issues this *after* it re-wires the
+  // `agent.hook` filter on the new mux post-`--connect`. We forward each
+  // cached entry as a fresh notification BEFORE returning so the response
+  // strictly trails all replays on the dispatcher's single write callback —
+  // closing the race the push-on-`setWrite` shape would have lost. See
+  // docs/design/agent-status-over-ssh.md §5 Path 3.
+  dispatcher.onRequest(AGENT_HOOK_REQUEST_REPLAY_METHOD, async () => {
+    const replayed = hookServer.replayCachedPayloadsForPanes()
+    return { replayed }
+  })
+
+  // Why: Orca ships the OpenCode plugin / Pi extension source bodies over
+  // the wire at session-ready (the renderer's bundled hook-service strings
+  // change as new agent events are added — pinning them to the relay binary
+  // would force a relay redeploy on every Orca update). Cache them so each
+  // subsequent PTY spawn can materialize a per-PTY overlay rooted under
+  // $HOME/.orca-relay/. See docs/design/agent-status-over-ssh.md §4.
+  // Why: bound the per-source size so a buggy/hostile Orca can't OOM the
+  // relay by pushing a giant string. The HTTP path has HOOK_REQUEST_MAX_BYTES
+  // = 1 MB; the JSON-RPC path needs an equivalent ceiling. Real plugin sources
+  // are <50 KB today; 256 KB leaves generous headroom.
+  dispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async (params) => {
+    const opencode = params.opencodePluginSource
+    const pi = params.piExtensionSource
+    assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
+    assertPluginSourceUnderByteCap('piExtensionSource', pi)
+    pluginOverlay.setSources({
+      opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
+      piExtensionSource: typeof pi === 'string' ? pi : undefined
+    })
+    return {
+      installed: {
+        opencode: pluginOverlay.hasOpenCodeSource(),
+        pi: pluginOverlay.hasPiSource()
+      }
+    }
+  })
 
   // ── Socket server for reconnection ──────────────────────────────────
   // Why: the relay's original stdin/stdout is tied to the SSH exec channel.
@@ -378,6 +526,7 @@ function main(): void {
     dispatcher.dispose()
     ptyHandler.dispose()
     fsHandler.dispose()
+    hookServer.stop()
     if (socketServer) {
       socketServer.close()
     }
@@ -415,4 +564,9 @@ function cleanupSocket(sockPath: string): void {
   }
 }
 
-main()
+void main().catch((err) => {
+  process.stderr.write(
+    `[relay] Fatal startup error: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`
+  )
+  process.exit(1)
+})

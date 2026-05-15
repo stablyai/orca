@@ -15,6 +15,7 @@ import { randomUUID } from 'crypto'
 import { chmodSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
+import { track } from '../telemetry/client'
 import { ORCA_HOOK_PROTOCOL_VERSION } from '../../shared/agent-hook-types'
 import {
   clearAllListenerCaches,
@@ -27,6 +28,7 @@ import {
   parseFormEncodedBody,
   readRequestBody,
   resolveHookSource,
+  warnOnHookEnvOrVersionMismatch,
   writeEndpointFile,
   type AgentHookEventPayload,
   type HookListenerState
@@ -170,6 +172,17 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
   }
 }
 
+function trackEmptyPaneKeyHook(body: unknown): void {
+  if (typeof body !== 'object' || body === null) {
+    return
+  }
+  const paneKey = (body as Record<string, unknown>).paneKey
+  if (typeof paneKey === 'string' && paneKey.trim().length > 0) {
+    return
+  }
+  track('agent_hook_unattributed', { reason: 'empty_pane_key' })
+}
+
 export class AgentHookServer {
   private server: ReturnType<typeof createServer> | null = null
   private port = 0
@@ -250,19 +263,17 @@ export class AgentHookServer {
   /** Ingest a payload that arrived over the relay JSON-RPC channel rather
    *  than the local HTTP server. `connectionId` is the SshChannelMultiplexer
    *  identity Orca holds (the wire envelope carries connectionId: null and
-   *  Orca stamps the real value here). The relay pre-normalizes the inner
-   *  payload via the shared listener module; we re-run the canonical
-   *  normalizer here as a defense-in-depth check at the trust boundary
-   *  before feeding the event into the same `onAgentStatus` fanout the HTTP
-   *  path uses. See docs/design/agent-status-over-ssh.md §5. */
+   *  Orca stamps the real value here). The relay has already normalized the
+   *  payload via the shared listener module, but main is still the SSH trust
+   *  boundary: re-run the canonical status normalizer before caching or
+   *  persisting anything. The `env`/`version` fields are forwarded verbatim
+   *  from the agent CLI's POST body on the remote and validated here so the
+   *  warn-once diagnostics fire for real cross-build mismatches. */
   ingestRemote(
     envelope: {
       paneKey: string
       tabId?: string
       worktreeId?: string
-      // Why: forwarded verbatim from the agent CLI POST body on the remote so
-      // the warn-once cross-build / dev-vs-prod diagnostics fire identically
-      // to the local HTTP path. Declared on the type now; consumed in PR2.
       env?: string
       version?: string
       payload: unknown
@@ -279,7 +290,7 @@ export class AgentHookServer {
     if (trimmedConnectionId.length === 0) {
       return
     }
-    if (!envelope || typeof envelope.paneKey !== 'string' || envelope.paneKey.length === 0) {
+    if (!envelope || typeof envelope.paneKey !== 'string') {
       return
     }
     // Why: match the listener's HTTP path — `normalizeHookPayload` trims and
@@ -287,7 +298,14 @@ export class AgentHookServer {
     // the same rule or remote-vs-local events for the same pane would diverge.
     const paneKey = envelope.paneKey.trim()
     const parsedPaneKey = parsePaneKey(paneKey)
-    if (paneKey.length === 0 || paneKey.length > MAX_PANE_KEY_LEN || !parsedPaneKey) {
+    if (paneKey.length === 0) {
+      track('agent_hook_unattributed', { reason: 'empty_pane_key' })
+      return
+    }
+    if (paneKey.length > MAX_PANE_KEY_LEN) {
+      return
+    }
+    if (!parsedPaneKey) {
       return
     }
     if (envelope.tabId !== undefined && typeof envelope.tabId !== 'string') {
@@ -320,6 +338,14 @@ export class AgentHookServer {
     if (!normalizedPayload) {
       return
     }
+    // Why: run the same warn-once diagnostics the HTTP path runs (cross-build
+    // version mismatch, dev-vs-prod env mismatch). Use `this.env` as the
+    // expected env so the messages match what the local server produces.
+    warnOnHookEnvOrVersionMismatch(this.state, {
+      version: envelope.version,
+      env: envelope.env,
+      expectedEnv: this.env
+    })
     const event: AgentHookEventPayload = {
       paneKey,
       tabId,
@@ -386,6 +412,7 @@ export class AgentHookServer {
           return
         }
 
+        trackEmptyPaneKeyHook(body)
         const normalized = normalizeHookPayload(this.state, source, body, this.env)
         if (normalized) {
           const enriched = this.attachStatusTiming(normalized)
@@ -682,6 +709,14 @@ export class AgentHookServer {
       }
     }
   }
+
+  /** Test-only accessor for the per-instance listener state. The `_internals`
+   *  shim needs to reach this without exposing `state` on the public surface
+   *  to renderer/main callers. AGENTS.md disallows `as unknown as X` escapes,
+   *  so we expose a narrow getter rather than casting the private field. */
+  _getStateForTests(): HookListenerState {
+    return this.state
+  }
 }
 
 export const agentHookServer = new AgentHookServer()
@@ -695,19 +730,9 @@ export const _internals = {
     body: unknown,
     expectedEnv: string
   ): AgentHookEventPayload | null =>
-    normalizeHookPayload(_singletonState(), source, body, expectedEnv),
+    normalizeHookPayload(agentHookServer._getStateForTests(), source, body, expectedEnv),
   parseFormEncodedBody,
   resetCachesForTests: (): void => {
-    clearAllListenerCaches(_singletonState())
+    clearAllListenerCaches(agentHookServer._getStateForTests())
   }
-}
-
-// Why: ergonomic accessor so the `_internals` shim can reach the singleton's
-// per-instance state without exposing `state` on the public class surface.
-function _singletonState(): HookListenerState {
-  // The runtime field is private, but tests access this module exclusively
-  // through `_internals`, which only fires after the module-level
-  // `agentHookServer` is constructed. The cast keeps the compile-time
-  // private invariant intact.
-  return (agentHookServer as unknown as { state: HookListenerState }).state
 }

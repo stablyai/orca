@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
+import { getConnectionId } from '@/lib/connection-context'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import { detectLanguage } from '@/lib/language-detect'
 import type { MarkdownDocument, Worktree } from '../../../../shared/types'
@@ -48,13 +49,19 @@ import {
 } from './markdown-preview-search'
 import { usePreserveSectionDuringExternalEdit } from './usePreserveSectionDuringExternalEdit'
 import { openHttpLink } from '@/lib/http-link-routing'
+import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { markdownPreviewUrlTransform } from './markdown-preview-url-transform'
+import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { buildMarkdownTableOfContents } from './markdown-table-of-contents'
+import { MarkdownTableOfContentsPanel } from './MarkdownTableOfContentsPanel'
 
 type MarkdownPreviewProps = {
   content: string
   filePath: string
   scrollCacheKey: string
   initialAnchor?: string | null
+  showTableOfContents?: boolean
+  onCloseTableOfContents?: () => void
   markdownDocuments?: MarkdownDocument[]
   onOpenDocument?: (document: MarkdownDocument) => void | Promise<void>
 }
@@ -163,6 +170,8 @@ export default function MarkdownPreview({
   filePath,
   scrollCacheKey,
   initialAnchor = null,
+  showTableOfContents = false,
+  onCloseTableOfContents,
   markdownDocuments = [],
   onOpenDocument
 }: MarkdownPreviewProps): React.JSX.Element {
@@ -182,9 +191,25 @@ export default function MarkdownPreview({
   const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
   const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const sourceRuntimeEnvironmentId = useAppStore(
+    (s) => s.openFiles.find((file) => file.filePath === filePath)?.runtimeEnvironmentId
+  )
   const sourceWorktree = findWorktreeForMarkdownPreviewPath(worktreesByRepo, filePath)
+  const sourceConnectionId = sourceWorktree ? getConnectionId(sourceWorktree.id) : null
   const worktreeRoot = sourceWorktree?.path ?? null
   const settings = useAppStore((s) => s.settings)
+  const imageRuntimeContext = useMemo(
+    () =>
+      sourceWorktree
+        ? {
+            settings: settingsForRuntimeOwner(settings, sourceRuntimeEnvironmentId),
+            worktreeId: sourceWorktree.id,
+            worktreePath: sourceWorktree.path,
+            connectionId: sourceConnectionId
+          }
+        : undefined,
+    [settings, sourceConnectionId, sourceRuntimeEnvironmentId, sourceWorktree]
+  )
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const editorFontSize = computeEditorFontSize(14, editorFontZoomLevel)
   const isDark =
@@ -194,6 +219,10 @@ export default function MarkdownPreview({
   const renderedContent = usePreserveSectionDuringExternalEdit(content, bodyRef)
 
   const frontMatter = useMemo(() => extractFrontMatter(renderedContent), [renderedContent])
+  const tableOfContentsItems = useMemo(
+    () => buildMarkdownTableOfContents(renderedContent),
+    [renderedContent]
+  )
   const markdownDocumentIndex = useMemo(
     () => createMarkdownDocumentIndex(markdownDocuments),
     [markdownDocuments]
@@ -334,6 +363,13 @@ export default function MarkdownPreview({
     target.focus({ preventScroll: true })
     return true
   }, [])
+
+  const navigateToTableOfContentsItem = useCallback(
+    (id: string): void => {
+      scrollToAnchor(id)
+    },
+    [scrollToAnchor]
+  )
 
   useEffect(() => {
     if (isSearchOpen) {
@@ -499,6 +535,20 @@ export default function MarkdownPreview({
               return
             }
             if (parsed.protocol === 'file:') {
+              if (
+                isLocalPathOpenBlocked(
+                  settingsForRuntimeOwner(
+                    useAppStore.getState().settings,
+                    sourceRuntimeEnvironmentId
+                  ),
+                  { connectionId: sourceConnectionId }
+                )
+              ) {
+                // Why: modifier-open delegates to the client OS. Server-local
+                // file:// targets from remote runtime/SSH worktrees cannot be opened locally.
+                showLocalPathOpenBlockedToast()
+                return
+              }
               const classified = resolveMarkdownLinkTarget(href, filePath, worktreeRoot)
               if (classified?.kind === 'markdown') {
                 // Why: use the classifier's stripped absolutePath (no `:line:col`
@@ -548,8 +598,23 @@ export default function MarkdownPreview({
               void activateMarkdownLink(href, {
                 sourceFilePath: filePath,
                 worktreeId: sourceWorktree.id,
-                worktreeRoot: sourceWorktree.path
+                worktreeRoot: sourceWorktree.path,
+                runtimeEnvironmentId: sourceRuntimeEnvironmentId
               })
+              return
+            }
+            if (
+              isLocalPathOpenBlocked(
+                settingsForRuntimeOwner(
+                  useAppStore.getState().settings,
+                  sourceRuntimeEnvironmentId
+                ),
+                { connectionId: sourceConnectionId }
+              )
+            ) {
+              // Why: without a workspace match, opening a file URI delegates to
+              // the client OS. Remote runtime/SSH paths are not local files.
+              showLocalPathOpenBlockedToast()
               return
             }
             void window.api.shell.openFileUri(target.toString())
@@ -570,6 +635,7 @@ export default function MarkdownPreview({
               filePath: absolutePath,
               relativePath,
               worktreeId: targetWorktree.id,
+              runtimeEnvironmentId: sourceRuntimeEnvironmentId,
               language,
               mode: 'edit'
             })
@@ -593,6 +659,7 @@ export default function MarkdownPreview({
                 filePath: absolutePath,
                 relativePath,
                 worktreeId: targetWorktree.id,
+                runtimeEnvironmentId: sourceRuntimeEnvironmentId,
                 language
               },
               { anchor: target.hash ? target.hash.slice(1) : null }
@@ -604,6 +671,7 @@ export default function MarkdownPreview({
             filePath: absolutePath,
             relativePath,
             worktreeId: targetWorktree.id,
+            runtimeEnvironmentId: sourceRuntimeEnvironmentId,
             language,
             mode: 'edit'
           })
@@ -625,7 +693,7 @@ export default function MarkdownPreview({
         // eslint-disable-next-line react-hooks/rules-of-hooks -- react-markdown
         // instantiates component overrides as regular React components, so hooks
         // are valid here despite the lowercase function name.
-        const resolvedSrc = useLocalImageSrc(src, filePath)
+        const resolvedSrc = useLocalImageSrc(src, filePath, undefined, imageRuntimeContext)
         const handleImageClick = (event: React.MouseEvent<HTMLImageElement>): void => {
           if (!isMarkdownPreviewOpenModifier(event, isMac)) {
             return
@@ -640,7 +708,8 @@ export default function MarkdownPreview({
           void activateMarkdownLink(src, {
             sourceFilePath: filePath,
             worktreeId: sourceWorktree.id,
-            worktreeRoot: sourceWorktree.path
+            worktreeRoot: sourceWorktree.path,
+            runtimeEnvironmentId: sourceRuntimeEnvironmentId
           })
         }
 
@@ -735,6 +804,7 @@ export default function MarkdownPreview({
     activateMarkdownLink,
     isDark,
     isMac,
+    imageRuntimeContext,
     markdownDocumentIndex,
     onOpenDocument,
     openFile,
@@ -742,131 +812,142 @@ export default function MarkdownPreview({
     scrollToAnchor,
     setMarkdownViewMode,
     setPendingEditorReveal,
+    sourceConnectionId,
+    sourceRuntimeEnvironmentId,
     sourceWorktree,
     worktreeRoot,
     worktreesByRepo
   ])
 
   return (
-    <div
-      ref={rootRef}
-      tabIndex={0}
-      style={{ fontSize: `${editorFontSize}px` }}
-      className={`markdown-preview h-full min-h-0 overflow-auto scrollbar-editor ${isDark ? 'markdown-dark' : 'markdown-light'}`}
-    >
-      {isSearchOpen ? (
-        <div className="markdown-preview-search" onKeyDown={(event) => event.stopPropagation()}>
-          <div className="markdown-preview-search-field">
-            <Input
-              ref={inputRef}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && event.shiftKey) {
-                  event.preventDefault()
-                  moveToMatch(-1)
-                  return
-                }
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  moveToMatch(1)
-                  return
-                }
-                if (event.key === 'Escape') {
-                  event.preventDefault()
-                  closeSearch()
-                  rootRef.current?.focus()
-                }
-              }}
-              placeholder="Find in preview"
-              className="markdown-preview-search-input h-7 !border-0 bg-transparent px-2 shadow-none focus-visible:!border-0 focus-visible:ring-0"
-              aria-label="Find in markdown preview"
-            />
+    <div className="markdown-preview-shell">
+      <div
+        ref={rootRef}
+        tabIndex={0}
+        style={{ fontSize: `${editorFontSize}px` }}
+        className={`markdown-preview h-full min-h-0 overflow-auto scrollbar-editor ${isDark ? 'markdown-dark' : 'markdown-light'}`}
+      >
+        {isSearchOpen ? (
+          <div className="markdown-preview-search" onKeyDown={(event) => event.stopPropagation()}>
+            <div className="markdown-preview-search-field">
+              <Input
+                ref={inputRef}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && event.shiftKey) {
+                    event.preventDefault()
+                    moveToMatch(-1)
+                    return
+                  }
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    moveToMatch(1)
+                    return
+                  }
+                  if (event.key === 'Escape') {
+                    event.preventDefault()
+                    closeSearch()
+                    rootRef.current?.focus()
+                  }
+                }}
+                placeholder="Find in preview"
+                className="markdown-preview-search-input h-7 !border-0 bg-transparent px-2 shadow-none focus-visible:!border-0 focus-visible:ring-0"
+                aria-label="Find in markdown preview"
+              />
+            </div>
+            <div className="markdown-preview-search-status">
+              {query && matchCount === 0
+                ? 'No results'
+                : `${matchCount === 0 ? 0 : activeMatchIndex + 1}/${matchCount}`}
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => moveToMatch(-1)}
+              disabled={matchCount === 0}
+              title="Previous match"
+              aria-label="Previous match"
+              className="markdown-preview-search-button"
+            >
+              <ChevronUp size={14} />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => moveToMatch(1)}
+              disabled={matchCount === 0}
+              title="Next match"
+              aria-label="Next match"
+              className="markdown-preview-search-button"
+            >
+              <ChevronDown size={14} />
+            </Button>
+            <div className="markdown-preview-search-divider" />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              onClick={closeSearch}
+              title="Close search"
+              aria-label="Close search"
+              className="markdown-preview-search-button"
+            >
+              <X size={14} />
+            </Button>
           </div>
-          <div className="markdown-preview-search-status">
-            {query && matchCount === 0
-              ? 'No results'
-              : `${matchCount === 0 ? 0 : activeMatchIndex + 1}/${matchCount}`}
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => moveToMatch(-1)}
-            disabled={matchCount === 0}
-            title="Previous match"
-            aria-label="Previous match"
-            className="markdown-preview-search-button"
-          >
-            <ChevronUp size={14} />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            onClick={() => moveToMatch(1)}
-            disabled={matchCount === 0}
-            title="Next match"
-            aria-label="Next match"
-            className="markdown-preview-search-button"
-          >
-            <ChevronDown size={14} />
-          </Button>
-          <div className="markdown-preview-search-divider" />
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            onClick={closeSearch}
-            title="Close search"
-            aria-label="Close search"
-            className="markdown-preview-search-button"
-          >
-            <X size={14} />
-          </Button>
-        </div>
-      ) : null}
-      <div ref={bodyRef} className="markdown-body">
-        {/* Why: remarkFrontmatter silently strips front-matter from rendered
+        ) : null}
+        <div ref={bodyRef} className="markdown-body">
+          {/* Why: remarkFrontmatter silently strips front-matter from rendered
         output. We extract it ourselves and render it as a styled code block so
         the user can see the metadata in preview mode. */}
-        {frontMatter && (
-          <div className="mb-4 rounded border border-border/60 bg-muted/40 px-3 py-2">
-            <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              Front Matter
+          {frontMatter && (
+            <div className="mb-4 rounded border border-border/60 bg-muted/40 px-3 py-2">
+              <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                Front Matter
+              </div>
+              <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground font-mono scrollbar-editor">
+                {frontMatterInner}
+              </pre>
             </div>
-            <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground font-mono scrollbar-editor">
-              {frontMatterInner}
-            </pre>
-          </div>
-        )}
-        <Markdown
-          components={components}
-          // Why: react-markdown filters file:// after rehype-sanitize; preview
-          // click handlers need the target so they can authorize and open it.
-          urlTransform={markdownPreviewUrlTransform}
-          remarkPlugins={[
-            remarkGfm,
-            remarkBreaks,
-            remarkFrontmatter,
-            remarkMath,
-            remarkMarkdownDocLinks
-          ]}
-          // Why: raw HTML must be sanitized before any trusted renderer expands
-          // it into richer DOM. Running KaTeX and syntax highlighting after
-          // sanitize preserves VS Code-style math/code rendering without having
-          // to whitelist KaTeX's generated markup in the user-content schema.
-          rehypePlugins={[
-            rehypeRaw,
-            [rehypeSanitize, markdownPreviewSanitizeSchema],
-            rehypeSlug,
-            rehypeHighlight,
-            rehypeKatex
-          ]}
-        >
-          {renderedContent}
-        </Markdown>
+          )}
+          <Markdown
+            components={components}
+            // Why: react-markdown filters file:// after rehype-sanitize; preview
+            // click handlers need the target so they can authorize and open it.
+            urlTransform={markdownPreviewUrlTransform}
+            remarkPlugins={[
+              remarkGfm,
+              remarkBreaks,
+              remarkFrontmatter,
+              remarkMath,
+              remarkMarkdownDocLinks
+            ]}
+            // Why: raw HTML must be sanitized before any trusted renderer expands
+            // it into richer DOM. Running KaTeX and syntax highlighting after
+            // sanitize preserves VS Code-style math/code rendering without having
+            // to whitelist KaTeX's generated markup in the user-content schema.
+            rehypePlugins={[
+              rehypeRaw,
+              [rehypeSanitize, markdownPreviewSanitizeSchema],
+              rehypeSlug,
+              rehypeHighlight,
+              rehypeKatex
+            ]}
+          >
+            {renderedContent}
+          </Markdown>
+        </div>
       </div>
+      {showTableOfContents ? (
+        <MarkdownTableOfContentsPanel
+          items={tableOfContentsItems}
+          onClose={onCloseTableOfContents ?? (() => {})}
+          onNavigate={navigateToTableOfContentsItem}
+        />
+      ) : null}
     </div>
   )
 }

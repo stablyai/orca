@@ -1,6 +1,11 @@
 import { tmpdir } from 'os'
-import { basename, dirname, join } from 'path'
+import { basename, dirname, join, win32 as pathWin32 } from 'path'
 import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'fs'
+import {
+  encodePowerShellCommand,
+  getPowerShellOsc133Bootstrap,
+  isPowerShellExecutableName
+} from '../powershell-osc133-bootstrap'
 
 const ORCA_USER_DATA_PATH_ENV = 'ORCA_USER_DATA_PATH'
 const SHELL_READY_MARKER = '\\033]777;orca-shell-ready\\007'
@@ -69,6 +74,44 @@ function shellReadyWrappersExist(): boolean {
   return getRequiredShellReadyWrapperPaths().every((path) => existsSync(path))
 }
 
+export function getDaemonZshShellReadyRcfileContent(): string {
+  return `# Orca daemon zsh shell-ready wrapper
+_orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
+if [[ "$_orca_home" != "$ZDOTDIR" && -o interactive && -f "$_orca_home/.zshrc" ]]; then
+  source "$_orca_home/.zshrc"
+fi
+__orca_restore_attribution_path() {
+  [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
+  case "$PATH" in
+    "\${ORCA_ATTRIBUTION_SHIM_DIR}"|"\${ORCA_ATTRIBUTION_SHIM_DIR}:"*) return 0 ;;
+  esac
+  export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
+}
+[[ ! -o login ]] && __orca_restore_attribution_path
+if [[ ! -o login ]]; then
+  # Why: ~/.zshrc can export the user's default OpenCode config after spawn.
+  [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
+  # Why: PI_CODING_AGENT_DIR must keep the same PTY-scoped overlay after rc files.
+  [[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
+fi
+__orca_osc133_precmd() {
+  local exit_code=$?
+  if [[ -n "\${__orca_in_command:-}" ]]; then
+    printf "\\033]133;D;%s\\007" "$exit_code"
+    unset __orca_in_command
+  fi
+  printf "\\033]133;A\\007"
+}
+__orca_osc133_preexec() {
+  printf "\\033]133;C\\007"
+  __orca_in_command=1
+}
+# Why: prepend so Orca captures $? before user prompt hooks can overwrite it.
+precmd_functions=(__orca_osc133_precmd \${precmd_functions[@]})
+preexec_functions=(__orca_osc133_preexec \${preexec_functions[@]})
+`
+}
+
 function ensureShellReadyWrappers(): void {
   if (process.platform === 'win32') {
     return
@@ -97,29 +140,7 @@ case "\${_orca_home%/}" in
 esac
 [[ -f "$_orca_home/.zprofile" ]] && source "$_orca_home/.zprofile"
 `
-  const zshRc = `# Orca daemon zsh shell-ready wrapper
-_orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
-case "\${_orca_home%/}" in
-  */shell-ready/zsh) _orca_home="$HOME" ;;
-esac
-if [[ -o interactive && -f "$_orca_home/.zshrc" ]]; then
-  source "$_orca_home/.zshrc"
-fi
-__orca_restore_attribution_path() {
-  [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
-  case "$PATH" in
-    "\${ORCA_ATTRIBUTION_SHIM_DIR}"|"\${ORCA_ATTRIBUTION_SHIM_DIR}:"*) return 0 ;;
-  esac
-  export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
-}
-if [[ ! -o login ]]; then
-  __orca_restore_attribution_path
-  # Why: ~/.zshrc can export the user's default OpenCode config after spawn.
-  [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
-  # Why: PI_CODING_AGENT_DIR must keep the same PTY-scoped overlay after rc files.
-  [[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
-fi
-`
+  const zshRc = getDaemonZshShellReadyRcfileContent()
   const zshLogin = `# Orca daemon zsh shell-ready wrapper
 _orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
 case "\${_orca_home%/}" in
@@ -206,7 +227,7 @@ fi
 
 export function resolvePtyShellPath(env: Record<string, string>): string {
   if (process.platform === 'win32') {
-    return env.COMSPEC || 'powershell.exe'
+    return env.ORCA_TERMINAL_WINDOWS_SHELL || 'powershell.exe'
   }
   return env.SHELL || process.env.SHELL || '/bin/zsh'
 }
@@ -215,7 +236,8 @@ export function supportsPtyStartupBarrier(env: Record<string, string>): boolean 
   if (process.platform === 'win32') {
     return false
   }
-  const shellName = basename(resolvePtyShellPath(env)).toLowerCase()
+  const resolvedShell = resolvePtyShellPath(env)
+  const shellName = pathWin32.basename(basename(resolvedShell)).toLowerCase()
   return shellName === 'zsh' || shellName === 'bash'
 }
 
@@ -229,7 +251,7 @@ function getWrappedShellLaunchConfig(
   shellPath: string,
   options: { emitReadyMarker: boolean }
 ): ShellLaunchConfig {
-  const shellName = basename(shellPath).toLowerCase()
+  const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()
 
   if (shellName === 'zsh') {
     ensureShellReadyWrappers()
@@ -254,6 +276,19 @@ function getWrappedShellLaunchConfig(
         ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0'
       },
       supportsReadyMarker: options.emitReadyMarker
+    }
+  }
+
+  if (isPowerShellExecutableName(shellName)) {
+    return {
+      args: [
+        '-NoLogo',
+        '-NoExit',
+        '-EncodedCommand',
+        encodePowerShellCommand(getPowerShellOsc133Bootstrap())
+      ],
+      env: {},
+      supportsReadyMarker: false
     }
   }
 

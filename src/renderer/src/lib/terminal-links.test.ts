@@ -3,6 +3,7 @@ import {
   extractTerminalFileLinks,
   isPathInsideWorktree,
   resolveTerminalFileLink,
+  resolveTerminalFileLinkText,
   toWorktreeRelativePath
 } from './terminal-links'
 
@@ -71,5 +72,25 @@ describe('terminal path helpers', () => {
       line: 12,
       column: 3
     })
+  })
+
+  it('resolves exact repo-relative OSC hyperlink text', () => {
+    expect(resolveTerminalFileLinkText('docs/README.md', '/repo')).toEqual({
+      absolutePath: '/repo/docs/README.md',
+      line: null,
+      column: null
+    })
+  })
+
+  it('keeps line and column suffixes from exact OSC hyperlink text', () => {
+    expect(resolveTerminalFileLinkText('docs/README.md:12:3', '/repo')).toEqual({
+      absolutePath: '/repo/docs/README.md',
+      line: 12,
+      column: 3
+    })
+  })
+
+  it('does not resolve partial text as an OSC hyperlink target', () => {
+    expect(resolveTerminalFileLinkText('open docs/README.md', '/repo')).toBeNull()
   })
 })

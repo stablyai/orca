@@ -8,6 +8,7 @@ import type {
   NotificationPermissionStatusResult,
   NotificationSoundDataResult
 } from '../../shared/types'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
 const NOTIFICATION_COOLDOWN_MS = 5000
@@ -154,7 +155,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       // the click-to-navigate binding — the notification still fires but
       // clicking it will not attempt to switch to an unknown worktree.
       if (args.worktreeId && args.worktreeId.includes('::')) {
-        const repoId = args.worktreeId.slice(0, args.worktreeId.indexOf('::'))
+        const repoId = getRepoIdFromWorktreeId(args.worktreeId)
         notification.on('click', () => {
           release()
           const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())

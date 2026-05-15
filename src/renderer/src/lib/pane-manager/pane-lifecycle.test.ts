@@ -99,6 +99,7 @@ describe('attachWebgl', () => {
     attachWebgl(pane)
     expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
     expect(webglMock.contextLossHandler).not.toBeNull()
+    vi.mocked(pane.terminal.refresh).mockClear()
 
     webglMock.contextLossHandler?.()
 
@@ -110,6 +111,14 @@ describe('attachWebgl', () => {
     attachWebgl(pane)
 
     expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+  })
+
+  it('repaints the current buffer after WebGL attaches', () => {
+    const pane = createPane()
+
+    attachWebgl(pane)
+
+    expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
   })
 
   it('does not attach WebGL while initial rendering is deferred', () => {

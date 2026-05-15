@@ -21,6 +21,16 @@ function shouldUseWebgl(pane: ManagedPaneInternal): boolean {
   )
 }
 
+function refreshTerminalAfterWebglAttach(pane: ManagedPaneInternal): void {
+  try {
+    // Why: a newly attached WebGL canvas starts empty; repaint immediately so
+    // resume/reparent/settings toggles do not look frozen until new output.
+    pane.terminal.refresh(0, pane.terminal.rows - 1)
+  } catch {
+    /* ignore — pane may have been disposed in the meantime */
+  }
+}
+
 export function disposeWebgl(
   pane: ManagedPaneInternal,
   options?: { refreshDimensions?: boolean }
@@ -84,6 +94,7 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
     })
     pane.terminal.loadAddon(webglAddon)
     pane.webglAddon = webglAddon
+    refreshTerminalAfterWebglAttach(pane)
   } catch (err) {
     if (pane.terminalGpuAcceleration === 'auto') {
       // Why: mirrors VS Code's `terminal.integrated.gpuAcceleration=auto`

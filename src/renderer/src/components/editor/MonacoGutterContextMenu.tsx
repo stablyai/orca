@@ -9,6 +9,7 @@ import {
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { getRuntimeGitRemoteFileUrl } from '@/runtime/runtime-git-client'
 
 type MonacoGutterContextMenuProps = {
   open: boolean
@@ -60,12 +61,15 @@ export function MonacoGutterContextMenu({
               return
             }
             const connectionId = getConnectionId(activeFile?.worktreeId ?? null) ?? undefined
-            const url = await window.api.git.remoteFileUrl({
-              worktreePath: worktree.path,
-              relativePath,
-              line,
-              connectionId
-            })
+            const url = await getRuntimeGitRemoteFileUrl(
+              {
+                settings: state.settings,
+                worktreeId: activeFile.worktreeId,
+                worktreePath: worktree.path,
+                connectionId
+              },
+              { relativePath, line }
+            )
             if (url) {
               window.api.ui.writeClipboardText(url)
             }

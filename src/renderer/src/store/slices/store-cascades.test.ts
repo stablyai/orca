@@ -403,7 +403,7 @@ describe('setActiveWorktree', () => {
 
     const worktrees = [...store.getState().worktreesByRepo.repo1]
     const repoMap = new Map(store.getState().repos.map((repo) => [repo.id, repo]))
-    worktrees.sort(buildWorktreeComparator('smart', {}, repoMap, null, now))
+    worktrees.sort(buildWorktreeComparator('smart', repoMap, now, new Map()))
 
     expect(worktrees.map((worktree) => worktree.id)).toEqual([backgroundId, focusedId])
   })
@@ -1611,5 +1611,107 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     expect(s.agentStatusByPaneKey['tab-1:0']).toBeUndefined()
     expect(s.retainedAgentsByPaneKey['tab-1:0']).toBeUndefined()
     expect(s.acknowledgedAgentsByPaneKey['tab-1:0']).toBeUndefined()
+  })
+})
+
+// Why: CLI-spawned background terminals stamp ORCA_PANE_KEY=`${tabId}:1` into
+// the PTY env at spawn time. The renderer must adopt the tab under the same
+// id so hook events route to the correct slot. See
+// docs/cli-terminal-hook-pane-key.md.
+describe('createTab tabId hint', () => {
+  it('uses the supplied id when no collision exists', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt-hint'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt-hint' })]
+      },
+      groupsByWorktree: {},
+      activeGroupIdByWorktree: {},
+      unifiedTabsByWorktree: {}
+    })
+
+    const hintedId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    const tab = store.getState().createTab(wt, undefined, undefined, { id: hintedId })
+
+    expect(tab.id).toBe(hintedId)
+  })
+
+  it('falls back to a fresh id on collision and warns', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt-collision'
+    const existingId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt-collision' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: existingId, worktreeId: wt })]
+      },
+      groupsByWorktree: {},
+      activeGroupIdByWorktree: {},
+      unifiedTabsByWorktree: {}
+    })
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const tab = store.getState().createTab(wt, undefined, undefined, { id: existingId })
+      expect(tab.id).not.toBe(existingId)
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining(existingId))
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('treats tab ids as global and rejects hints that collide in another worktree', () => {
+    const store = createTestStore()
+    const wtA = 'repo1::/path/wt-a'
+    const wtB = 'repo1::/path/wt-b'
+    const existingId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: wtA, repoId: 'repo1', path: '/path/wt-a' }),
+          makeWorktree({ id: wtB, repoId: 'repo1', path: '/path/wt-b' })
+        ]
+      },
+      tabsByWorktree: {
+        [wtB]: [makeTab({ id: existingId, worktreeId: wtB })]
+      },
+      groupsByWorktree: {},
+      activeGroupIdByWorktree: {},
+      unifiedTabsByWorktree: {}
+    })
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const tab = store.getState().createTab(wtA, undefined, undefined, { id: existingId })
+      expect(tab.id).not.toBe(existingId)
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining(existingId))
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('ignores empty string hints instead of persisting an unusable tab id', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt-empty-hint'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt-empty-hint' })]
+      },
+      groupsByWorktree: {},
+      activeGroupIdByWorktree: {},
+      unifiedTabsByWorktree: {}
+    })
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const tab = store.getState().createTab(wt, undefined, undefined, { id: '' })
+      expect(tab.id).not.toBe('')
+      expect(warn).not.toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
   })
 })

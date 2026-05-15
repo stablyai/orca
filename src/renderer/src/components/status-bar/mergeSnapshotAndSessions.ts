@@ -4,7 +4,7 @@
    in ResourceUsageStatusSegment.tsx. Splitting would scatter logic that has
    exactly one consumer. See docs/resource-usage-merge-spec.md. */
 /**
- * Resource Usage popover merge helper.
+ * Resource Manager popover merge helper.
  *
  * Produces a single grouped list (repo → worktree → session) by unifying:
  *
@@ -28,8 +28,9 @@ import type {
   TerminalTab,
   WorktreeMemory
 } from '../../../../shared/types'
-import { parsePtySessionId, WORKTREE_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
+import { parsePtySessionId } from '../../../../shared/pty-session-id-format'
 import { parsePaneKey as parseStablePaneKey } from '../../../../shared/stable-pane-id'
+import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../../../shared/worktree-id'
 
 // ─── View-model types (renderer-local) ──────────────────────────────
 
@@ -106,16 +107,15 @@ export type MergeContext = {
 // ─── Helpers ────────────────────────────────────────────────────────
 
 function deriveRepoIdFromWorktreeId(worktreeId: string): string {
-  const sep = worktreeId.indexOf(WORKTREE_ID_SEPARATOR)
-  return sep > 0 ? worktreeId.slice(0, sep) : worktreeId
+  return getRepoIdFromWorktreeId(worktreeId)
 }
 
 function deriveWorktreeNameFromWorktreeId(worktreeId: string): string {
-  const sep = worktreeId.indexOf(WORKTREE_ID_SEPARATOR)
-  if (sep <= 0) {
+  const parsed = splitWorktreeId(worktreeId)
+  if (!parsed) {
     return worktreeId
   }
-  const path = worktreeId.slice(sep + WORKTREE_ID_SEPARATOR.length)
+  const path = parsed.worktreePath
   if (!path) {
     return worktreeId
   }

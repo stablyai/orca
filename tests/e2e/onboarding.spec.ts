@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: onboarding E2E coverage shares one first-launch wizard fixture and step helpers; splitting this file would make the linear flow harder to audit. */
 /**
  * E2E tests for the first-launch Onboarding flow.
  *
@@ -19,6 +20,9 @@ type OnboardingState = {
   checklist: Record<string, boolean>
 }
 
+const ORCHESTRATION_ENABLED_STORAGE_KEY = 'orca.orchestration.enabled'
+const BROWSER_USE_ENABLED_STORAGE_KEY = 'orca.browserUse.enabled'
+
 async function getOnboardingState(page: Page): Promise<OnboardingState> {
   return page.evaluate(() => window.api.onboarding.get() as Promise<OnboardingState>)
 }
@@ -31,6 +35,67 @@ async function getDocumentThemeClass(page: Page): Promise<'dark' | 'light'> {
   return page.evaluate(() =>
     document.documentElement.classList.contains('dark') ? 'dark' : 'light'
   )
+}
+
+async function installSafeOnboardingFeatureSetupDeps(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    window.__onboardingFeatureSetupDeps = {
+      getCliStatus: async () => ({
+        platform: 'darwin',
+        commandName: 'orca',
+        commandPath: '/usr/local/bin/orca',
+        pathDirectory: '/usr/local/bin',
+        pathConfigured: true,
+        launcherPath: '/Applications/Orca.app/Contents/MacOS/Orca',
+        installMethod: 'symlink',
+        supported: true,
+        state: 'installed',
+        currentTarget: '/Applications/Orca.app/Contents/MacOS/Orca',
+        unsupportedReason: null,
+        detail: null
+      }),
+      installCli: async () => {
+        throw new Error('CLI registration should not run in this onboarding E2E')
+      },
+      writeClipboardText: async (text) => {
+        localStorage.setItem('orca.e2e.onboardingFeatureSetupClipboard', text)
+      },
+      getComputerUsePermissionStatus: async () => ({
+        platform: 'darwin',
+        permissions: [
+          { id: 'accessibility', status: 'granted' },
+          { id: 'screenshots', status: 'granted' }
+        ]
+      }),
+      openComputerUsePermissionSetup: async () => {
+        throw new Error('Computer Use setup should not open in this onboarding E2E')
+      },
+      setStorageItem: (key, value) => localStorage.setItem(key, value),
+      removeStorageItem: (key) => localStorage.removeItem(key),
+      notifyOrchestrationStateChanged: () => {
+        window.dispatchEvent(new CustomEvent('orca:orchestration-setup-state'))
+      }
+    }
+  })
+}
+
+async function expectSkillSetupTerminalReady(page: Page): Promise<void> {
+  await expect(page.getByRole('region', { name: /Skill setup command/i })).toBeInViewport({
+    timeout: 10_000
+  })
+  await expect(
+    page.getByText(/Press Enter to run the command and confirm npm if asked/i)
+  ).toBeVisible()
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => document.activeElement?.classList.contains('xterm-helper-textarea')),
+      {
+        timeout: 10_000,
+        message: 'Skill setup command terminal did not receive keyboard focus'
+      }
+    )
+    .toBe(true)
 }
 
 test.describe('Onboarding flow', () => {
@@ -127,9 +192,7 @@ test.describe('Onboarding flow', () => {
       .toBe(oppositeTheme)
 
     await orcaPage.getByRole('button', { name: 'Continue' }).click()
-    await expect(
-      orcaPage.getByRole('heading', { name: /Know when an agent needs you/i })
-    ).toBeVisible()
+    await expect(orcaPage.getByRole('heading', { name: /Set up Orca for agents/i })).toBeVisible()
     await expect(orcaPage.getByText('3 of 4')).toBeVisible()
     await expect
       .poll(async () => (await getOnboardingState(orcaPage)).lastCompletedStep, {
@@ -144,10 +207,24 @@ test.describe('Onboarding flow', () => {
     // --- Step 3: notifications ---
     // Why: the wizard force-defaults every toggle ON (use-onboarding-flow.ts),
     // which intentionally diverges from the app defaults (terminalBell=false,
-    // suppressWhenFocused=true). Click Continue without touching the toggles —
-    // the post-Continue assertion proves the wizard wrote its opt-in defaults
-    // through the IPC boundary, including the inverted suppressWhenFocused.
-    await orcaPage.getByRole('button', { name: 'Continue' }).click()
+    // suppressWhenFocused=true). Use the default setup action without touching
+    // the toggles; the assertions prove the wizard wrote its opt-in defaults
+    // through IPC, including the inverted suppressWhenFocused.
+    // Why: the feature checklist also defaults ON; inject safe deps so this
+    // E2E validates persistence without registering the real CLI or opening
+    // OS permission prompts.
+    await installSafeOnboardingFeatureSetupDeps(orcaPage)
+    const browserUse = orcaPage.getByRole('checkbox', { name: /Agent Browser Use/i })
+    const computerUse = orcaPage.getByRole('checkbox', { name: /Computer Use/i })
+    const orchestration = orcaPage.getByRole('checkbox', { name: /Agent Orchestration/i })
+    await expect(browserUse).toHaveAttribute('aria-checked', 'true')
+    await expect(computerUse).toHaveAttribute('aria-checked', 'true')
+    await expect(orchestration).toHaveAttribute('aria-checked', 'true')
+
+    await orcaPage.getByRole('button', { name: 'Set up' }).click()
+    await expectSkillSetupTerminalReady(orcaPage)
+    await expect(orcaPage.getByRole('button', { name: 'Continue', exact: true })).toBeVisible()
+    await orcaPage.getByRole('button', { name: 'Continue', exact: true }).click()
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
     await expect(orcaPage.getByText('4 of 4')).toBeVisible()
     await expect(orcaPage.getByRole('button', { name: 'Continue' })).toHaveCount(0)
@@ -180,6 +257,23 @@ test.describe('Onboarding flow', () => {
         suppressWhenFocused: false,
         enabled: true
       })
+
+    await expect
+      .poll(
+        async () =>
+          orcaPage.evaluate(
+            ({ orchestrationKey, browserUseKey }) => ({
+              orchestration: localStorage.getItem(orchestrationKey),
+              browserUse: localStorage.getItem(browserUseKey)
+            }),
+            {
+              orchestrationKey: ORCHESTRATION_ENABLED_STORAGE_KEY,
+              browserUseKey: BROWSER_USE_ENABLED_STORAGE_KEY
+            }
+          ),
+        { timeout: 5_000 }
+      )
+      .toEqual({ orchestration: '1', browserUse: '1' })
   })
 
   test('Cmd/Ctrl+Enter advances steps like Continue', async ({ orcaPage }) => {
@@ -232,9 +326,7 @@ test.describe('Onboarding flow', () => {
     await orcaPage.getByRole('button', { name: 'Skip' }).click()
     await expect(orcaPage.getByRole('heading', { name: /Make it feel like home/i })).toBeVisible()
     await orcaPage.getByRole('button', { name: 'Skip' }).click()
-    await expect(
-      orcaPage.getByRole('heading', { name: /Know when an agent needs you/i })
-    ).toBeVisible()
+    await expect(orcaPage.getByRole('heading', { name: /Set up Orca for agents/i })).toBeVisible()
 
     // Why: NotificationStep buttons expose role="switch" + aria-checked. Flip
     // terminalBell off and verify the toggle reflects + persists. The other
@@ -244,7 +336,10 @@ test.describe('Onboarding flow', () => {
     await bellSwitch.click()
     await expect(bellSwitch).toHaveAttribute('aria-checked', 'false')
 
-    await orcaPage.getByRole('button', { name: 'Continue' }).click()
+    await installSafeOnboardingFeatureSetupDeps(orcaPage)
+    await orcaPage.getByRole('button', { name: 'Set up' }).click()
+    await expect(orcaPage.getByRole('region', { name: /Skill setup command/i })).toBeVisible()
+    await orcaPage.getByRole('button', { name: 'Continue', exact: true }).click()
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
     await expect
       .poll(
@@ -258,6 +353,93 @@ test.describe('Onboarding flow', () => {
         { timeout: 5_000 }
       )
       .toEqual({ agentTaskComplete: true, terminalBell: false })
+  })
+
+  test('can opt into orchestration setup without enabling browser or computer use', async ({
+    orcaPage
+  }) => {
+    await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
+      timeout: 15_000
+    })
+    await orcaPage.getByRole('button', { name: 'Skip' }).click()
+    await expect(orcaPage.getByRole('heading', { name: /Make it feel like home/i })).toBeVisible()
+    await orcaPage.getByRole('button', { name: 'Skip' }).click()
+    await expect(orcaPage.getByRole('heading', { name: /Set up Orca for agents/i })).toBeVisible()
+
+    // Why: this flow validates the orchestration-only setup path without
+    // touching Browser Use, Computer Use permission prompts, or real CLI mutation.
+    await orcaPage.evaluate(() => {
+      window.__onboardingFeatureSetupDeps = {
+        getCliStatus: async () => ({
+          platform: 'darwin',
+          commandName: 'orca',
+          commandPath: '/usr/local/bin/orca',
+          pathDirectory: '/usr/local/bin',
+          pathConfigured: true,
+          launcherPath: '/Applications/Orca.app/Contents/MacOS/Orca',
+          installMethod: 'symlink',
+          supported: true,
+          state: 'installed',
+          currentTarget: '/Applications/Orca.app/Contents/MacOS/Orca',
+          unsupportedReason: null,
+          detail: null
+        }),
+        installCli: async () => {
+          throw new Error('CLI registration should not run in this onboarding E2E')
+        },
+        writeClipboardText: async () => undefined,
+        getComputerUsePermissionStatus: async () => {
+          throw new Error('Computer Use permissions should stay untouched')
+        },
+        openComputerUsePermissionSetup: async () => {
+          throw new Error('Computer Use setup should stay untouched')
+        },
+        setStorageItem: (key, value) => localStorage.setItem(key, value),
+        removeStorageItem: (key) => localStorage.removeItem(key),
+        notifyOrchestrationStateChanged: () => {
+          window.dispatchEvent(new CustomEvent('orca:orchestration-setup-state'))
+        }
+      }
+    })
+
+    const browserUse = orcaPage.getByRole('checkbox', { name: /Agent Browser Use/i })
+    const computerUse = orcaPage.getByRole('checkbox', { name: /Computer Use/i })
+    const orchestration = orcaPage.getByRole('checkbox', { name: /Agent Orchestration/i })
+    await expect(browserUse).toHaveAttribute('aria-checked', 'true')
+    await expect(computerUse).toHaveAttribute('aria-checked', 'true')
+    await expect(orchestration).toHaveAttribute('aria-checked', 'true')
+
+    await browserUse.click()
+    await computerUse.click()
+    await expect(browserUse).toHaveAttribute('aria-checked', 'false')
+    await expect(computerUse).toHaveAttribute('aria-checked', 'false')
+    await expect(orchestration).toHaveAttribute('aria-checked', 'true')
+
+    await orcaPage.getByRole('button', { name: 'Set up' }).click()
+    await expect(orcaPage.getByRole('region', { name: /Skill setup command/i })).toBeVisible()
+    await orcaPage.getByRole('button', { name: 'Continue', exact: true }).click()
+    await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
+    await expect
+      .poll(async () => (await getOnboardingState(orcaPage)).lastCompletedStep, {
+        timeout: 5_000
+      })
+      .toBe(3)
+    await expect
+      .poll(
+        async () =>
+          orcaPage.evaluate(
+            ({ orchestrationKey, browserUseKey }) => ({
+              orchestration: localStorage.getItem(orchestrationKey),
+              browserUse: localStorage.getItem(browserUseKey)
+            }),
+            {
+              orchestrationKey: ORCHESTRATION_ENABLED_STORAGE_KEY,
+              browserUseKey: BROWSER_USE_ENABLED_STORAGE_KEY
+            }
+          ),
+        { timeout: 5_000 }
+      )
+      .toEqual({ orchestration: '1', browserUse: '0' })
   })
 
   test('typing in the clone-url input does not hijack Enter as a global shortcut', async ({
@@ -328,9 +510,7 @@ test.describe('Onboarding flow', () => {
     await orcaPage.getByRole('button', { name: 'Skip' }).click()
     await expect(orcaPage.getByRole('heading', { name: /Make it feel like home/i })).toBeVisible()
     await orcaPage.getByRole('button', { name: 'Skip' }).click()
-    await expect(
-      orcaPage.getByRole('heading', { name: /Know when an agent needs you/i })
-    ).toBeVisible()
+    await expect(orcaPage.getByRole('heading', { name: /Set up Orca for agents/i })).toBeVisible()
     await orcaPage.getByRole('button', { name: 'Skip' }).click()
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
 

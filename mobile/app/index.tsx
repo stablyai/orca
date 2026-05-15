@@ -400,7 +400,7 @@ export default function HomeScreen() {
       const wireUp = (state: ConnectionState) => {
         if (state === 'connected') {
           if (!unsubNotif) {
-            unsubNotif = subscribeToDesktopNotifications(entry.client)
+            unsubNotif = subscribeToDesktopNotifications(entry.client, entry.hostId)
           }
           if (!unsubAccounts) {
             unsubAccounts = entry.client.subscribe('accounts.subscribe', null, (payload) => {

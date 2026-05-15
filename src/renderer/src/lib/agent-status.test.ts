@@ -193,6 +193,13 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('Cursor - action required')).toBe('permission')
   })
 
+  it('classifies synthesized Droid titles', () => {
+    expect(detectAgentStatusFromTitle('⠋ Droid')).toBe('working')
+    expect(detectAgentStatusFromTitle('Droid ready')).toBe('idle')
+    expect(detectAgentStatusFromTitle('Droid - action required')).toBe('permission')
+    expect(detectAgentStatusFromTitle('Droid working')).toBe('working')
+  })
+
   // --- Case insensitivity ---
   it('is case-insensitive for agent names', () => {
     expect(detectAgentStatusFromTitle('CLAUDE')).toBe('idle')
@@ -217,6 +224,13 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('timestamp ready')).toBeNull()
     expect(detectAgentStatusFromTitle('clamp working')).toBeNull()
     expect(detectAgentStatusFromTitle('example permission needed')).toBeNull()
+  })
+
+  it('does not treat Android terminal titles as Droid agent titles', () => {
+    expect(detectAgentStatusFromTitle('android')).toBeNull()
+    expect(detectAgentStatusFromTitle('android emulator ready')).toBeNull()
+    expect(detectAgentStatusFromTitle('android build working')).toBeNull()
+    expect(detectAgentStatusFromTitle('android permission check')).toBeNull()
   })
 })
 
@@ -358,12 +372,18 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('✦ Gemini CLI')).toBe('Gemini CLI')
     expect(getAgentLabel('⠂ Claude Code')).toBe('Claude Code')
     expect(getAgentLabel('⠋ Codex is thinking')).toBe('Codex')
+    expect(getAgentLabel('⠋ Droid')).toBe('Droid')
+    expect(getAgentLabel('Droid ready')).toBe('Droid')
   })
 
   it('labels GitHub Copilot CLI', () => {
     expect(getAgentLabel('copilot working')).toBe('GitHub Copilot')
     expect(getAgentLabel('copilot idle')).toBe('GitHub Copilot')
     expect(getAgentLabel('GitHub Copilot CLI')).toBe('GitHub Copilot')
+  })
+
+  it('does not label Android titles as Droid', () => {
+    expect(getAgentLabel('android emulator ready')).toBeNull()
   })
 })
 

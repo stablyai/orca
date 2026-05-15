@@ -71,13 +71,25 @@ export type MarkdownDocLinkDecorationController = {
   dispose: () => void
 }
 
+export const MARKDOWN_DOC_LINK_DECORATION_REFRESH_DELAY_MS = 120
+
 export function createMarkdownDocLinkDecorationController(
   editorInstance: editor.IStandaloneCodeEditor,
   getLanguage: () => string
 ): MarkdownDocLinkDecorationController {
   const collection = editorInstance.createDecorationsCollection()
+  let refreshTimer: ReturnType<typeof setTimeout> | null = null
 
-  const refresh = (): void => {
+  const cancelPendingRefresh = (): void => {
+    if (refreshTimer === null) {
+      return
+    }
+    clearTimeout(refreshTimer)
+    refreshTimer = null
+  }
+
+  const refreshNow = (): void => {
+    cancelPendingRefresh()
     const model = editorInstance.getModel()
     if (!model || getLanguage() !== 'markdown') {
       collection.clear()
@@ -94,12 +106,24 @@ export function createMarkdownDocLinkDecorationController(
     )
   }
 
+  const refresh = (): void => {
+    if (getLanguage() !== 'markdown') {
+      refreshNow()
+      return
+    }
+    cancelPendingRefresh()
+    // Why: wiki-link decoration scans read the full Monaco model. During typing
+    // the exact highlight can lag briefly; coalescing avoids one full scan per key.
+    refreshTimer = setTimeout(refreshNow, MARKDOWN_DOC_LINK_DECORATION_REFRESH_DELAY_MS)
+  }
+
   const listener: IDisposable = editorInstance.onDidChangeModelContent(refresh)
-  refresh()
+  refreshNow()
 
   return {
     refresh,
     dispose: () => {
+      cancelPendingRefresh()
       listener.dispose()
       collection.clear()
     }

@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: this relay handler centralizes the git RPC
+protocol surface so local and SSH git behavior stay in one dispatch table. */
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { rm } from 'fs/promises'
@@ -14,6 +16,7 @@ import {
 } from './git-handler-ops'
 import { commitChangesRelay, addWorktreeOp, removeWorktreeOp } from './git-handler-worktree-ops'
 import { detectConflictOperation, getStatusOp } from './git-handler-status-ops'
+import { resolveRelayPushTarget } from './git-handler-push-target'
 import { normalizeGitErrorMessage, isNoUpstreamError } from '../shared/git-remote-error'
 
 const execFileAsync = promisify(execFile)
@@ -39,6 +42,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.bulkStage', (p) => this.bulkStage(p))
     this.dispatcher.onRequest('git.bulkUnstage', (p) => this.bulkUnstage(p))
     this.dispatcher.onRequest('git.discard', (p) => this.discard(p))
+    this.dispatcher.onRequest('git.bulkDiscard', (p) => this.bulkDiscard(p))
     this.dispatcher.onRequest('git.conflictOperation', (p) => this.conflictOperation(p))
     this.dispatcher.onRequest('git.branchCompare', (p) => this.branchCompare(p))
     this.dispatcher.onRequest('git.upstreamStatus', (p) => this.upstreamStatus(p))
@@ -135,17 +139,40 @@ export class GitHandler {
     }
   }
 
-  private async discard(params: Record<string, unknown>) {
-    const worktreePath = params.worktreePath as string
-    const filePath = params.filePath as string
+  private normalizeGitPathForCompare(filePath: string): string {
+    return filePath.replace(/\\/g, '/').replace(/\/+$/, '')
+  }
 
+  private isTrackedPathSpec(filePath: string, trackedPaths: readonly string[]): boolean {
+    const normalized = this.normalizeGitPathForCompare(filePath)
+    return trackedPaths.some((trackedPath) => {
+      const normalizedTracked = this.normalizeGitPathForCompare(trackedPath)
+      return normalizedTracked === normalized || normalizedTracked.startsWith(`${normalized}/`)
+    })
+  }
+
+  private assertInWorktree(worktreePath: string, filePath: string): string {
     const resolved = path.resolve(worktreePath, filePath)
     const rel = path.relative(path.resolve(worktreePath), resolved)
     // Why: empty rel or '.' means the path IS the worktree root — rm -rf would
     // delete the entire worktree. Reject along with parent-escaping paths.
-    if (!rel || rel === '.' || rel === '..' || rel.startsWith('../') || path.isAbsolute(rel)) {
+    if (
+      !rel ||
+      rel === '.' ||
+      rel === '..' ||
+      rel.startsWith(`..${path.sep}`) ||
+      path.isAbsolute(rel)
+    ) {
       throw new Error(`Path "${filePath}" resolves outside the worktree`)
     }
+    return resolved
+  }
+
+  private async discard(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    const filePath = params.filePath as string
+
+    const resolved = this.assertInWorktree(worktreePath, filePath)
 
     let tracked = false
     try {
@@ -158,6 +185,43 @@ export class GitHandler {
     await (tracked
       ? this.git(['restore', '--worktree', '--source=HEAD', '--', filePath], worktreePath)
       : rm(resolved, { force: true, recursive: true }))
+  }
+
+  private async bulkDiscard(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    const filePaths = params.filePaths as string[]
+    if (filePaths.length === 0) {
+      return
+    }
+
+    for (const filePath of filePaths) {
+      this.assertInWorktree(worktreePath, filePath)
+    }
+
+    const trackedPathSpecs: string[] = []
+    for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
+      const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
+      const { stdout } = await this.git(['ls-files', '-z', '--', ...chunk], worktreePath)
+      trackedPathSpecs.push(...stdout.split('\0').filter(Boolean))
+    }
+
+    const trackedPaths = filePaths.filter((filePath) =>
+      this.isTrackedPathSpec(filePath, trackedPathSpecs)
+    )
+    const untrackedPaths = filePaths.filter(
+      (filePath) => !this.isTrackedPathSpec(filePath, trackedPathSpecs)
+    )
+
+    for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
+      const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
+      await this.git(['restore', '--worktree', '--source=HEAD', '--', ...chunk], worktreePath)
+    }
+
+    await Promise.all(
+      untrackedPaths.map((filePath) =>
+        rm(path.resolve(worktreePath, filePath), { force: true, recursive: true })
+      )
+    )
   }
 
   private async conflictOperation(params: Record<string, unknown>) {
@@ -246,19 +310,19 @@ export class GitHandler {
 
   private async push(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
-    // Why: always pass --set-upstream (mirrors src/main/git/remote.ts).
-    // Orca's worktrees initially track the BASE ref (origin/main) because
-    // they're created via `git worktree add --track -b <name> <dir>
-    // <baseRef>` — without --set-upstream the local branch keeps tracking
-    // the base after the first push, so ahead/behind via @{u} measures
-    // "ahead of base" instead of "ahead of remote branch", and the UI's
-    // primary button never rotates from "Push" to "Commit". The `publish`
-    // flag is preserved in the param shape for IPC compatibility but is no
-    // longer load-bearing. On an already-published branch --set-upstream is
-    // a no-op for the tracking config.
+    // Why: mirror src/main/git/remote.ts. Push to a configured upstream when
+    // present so SSH worktrees with non-origin targets do not get repointed.
     void params.publish
     try {
-      await this.git(['push', '--set-upstream', 'origin', 'HEAD'], worktreePath)
+      const target = await resolveRelayPushTarget(
+        this.git.bind(this),
+        worktreePath,
+        params.pushTarget
+      )
+      const args = target
+        ? ['push', '--set-upstream', target.remote, target.refspec]
+        : ['push', '--set-upstream', 'origin', 'HEAD']
+      await this.git(args, worktreePath)
     } catch (error) {
       // Why: mirror the local gitPush normalization so SSH users see the same
       // "non-fast-forward / pull first" guidance instead of raw git stderr.

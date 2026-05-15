@@ -8,8 +8,10 @@ import {
   ExternalLink,
   GitBranch,
   GitBranchPlus,
+  GitMerge,
   GitPullRequest,
   Github,
+  Gitlab,
   LoaderCircle,
   Search,
   Sparkles,
@@ -36,13 +38,32 @@ import {
   parseGitHubIssueOrPRLink,
   type RepoSlug
 } from '@/lib/github-links'
+import { parseGitLabIssueOrMRLink } from '@/lib/gitlab-links'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
-import type { GitHubWorkItem, LinearIssue } from '../../../../shared/types'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import type {
+  GitHubWorkItem,
+  GitLabWorkItem,
+  GlobalSettings,
+  LinearIssue
+} from '../../../../shared/types'
 
-type SmartNameMode = 'smart' | 'github' | 'branches' | 'linear' | 'text'
+type SmartNameMode = 'smart' | 'github' | 'gitlab' | 'branches' | 'linear' | 'text'
+
+// Why: GitLab MR list filter — Open / Merged / Closed / All — replaces
+// GitHub's search-DSL on the GitLab tab per the agreed scope.
+type MrStateFilter = 'opened' | 'merged' | 'closed' | 'all'
+
+const MR_STATE_FILTERS: { id: MrStateFilter; label: string }[] = [
+  { id: 'opened', label: 'Open' },
+  { id: 'merged', label: 'Merged' },
+  { id: 'closed', label: 'Closed' },
+  { id: 'all', label: 'All' }
+]
 
 type RepoOption = ReturnType<typeof useAppStore.getState>['repos'][number]
+type GitHubWorkItemWithoutRepo = Omit<GitHubWorkItem, 'repoId'>
 
 type SmartWorkspaceNameFieldProps = {
   repos: RepoOption[]
@@ -51,6 +72,9 @@ type SmartWorkspaceNameFieldProps = {
   value: string
   onValueChange: (value: string) => void
   onGitHubItemSelect: (item: GitHubWorkItem) => void
+  /** Optional so callers that pre-date GitLab support don't need to wire
+   *  it. When omitted, GitLab paste-URL detection is silently skipped. */
+  onGitLabItemSelect?: (item: GitLabWorkItem) => void
   onBranchSelect: (refName: string) => void
   onLinearIssueSelect: (issue: LinearIssue) => void
   selectedSource: SmartWorkspaceNameSelection | null
@@ -60,7 +84,7 @@ type SmartWorkspaceNameFieldProps = {
 }
 
 export type SmartWorkspaceNameSelection = {
-  kind: 'github-pr' | 'github-issue' | 'branch' | 'linear'
+  kind: 'github-pr' | 'github-issue' | 'gitlab-mr' | 'gitlab-issue' | 'branch' | 'linear'
   label: string
   url?: string
 }
@@ -75,6 +99,7 @@ const MODES: {
 }[] = [
   { id: 'smart', label: 'Smart', Icon: Sparkles },
   { id: 'github', label: 'GitHub', Icon: Github },
+  { id: 'gitlab', label: 'GitLab', Icon: Gitlab },
   { id: 'branches', label: 'Branch', Icon: GitBranch },
   {
     id: 'linear',
@@ -91,6 +116,7 @@ const MODES: {
 const emptyHintByMode: Record<SmartNameMode, string> = {
   smart: 'Start typing to create a name or find a source.',
   github: 'Start typing to search GitHub PRs and issues.',
+  gitlab: 'Start typing to search GitLab MRs and issues.',
   branches: 'Start typing to find a branch or create a new one.',
   linear: 'Start typing to search Linear issues.',
   text: ''
@@ -100,6 +126,7 @@ type RowEntry =
   | { kind: 'use-name'; value: string; name: string }
   | { kind: 'create-branch'; value: string; name: string }
   | { kind: 'github'; value: string; item: GitHubWorkItem }
+  | { kind: 'gitlab'; value: string; item: GitLabWorkItem }
   | { kind: 'branch'; value: string; refName: string }
   | { kind: 'linear'; value: string; issue: LinearIssue }
 
@@ -110,6 +137,7 @@ export default function SmartWorkspaceNameField({
   value,
   onValueChange,
   onGitHubItemSelect,
+  onGitLabItemSelect,
   onBranchSelect,
   onLinearIssueSelect,
   selectedSource,
@@ -138,18 +166,22 @@ export default function SmartWorkspaceNameField({
       searchLinearIssues: s.searchLinearIssues
     }))
   )
+  const settings = useAppStore((s) => s.settings)
 
   const selectedRepo = useMemo(
     () => repos.find((repo) => repo.id === repoId) ?? null,
     [repoId, repos]
   )
   const [mode, setMode] = useState<SmartNameMode>('smart')
+  const [mrStateFilter, setMrStateFilter] = useState<MrStateFilter>('opened')
   const [open, setOpen] = useState(false)
   const [debouncedQuery, setDebouncedQuery] = useState(value)
   const [githubItems, setGithubItems] = useState<GitHubWorkItem[]>([])
+  const [gitlabItems, setGitlabItems] = useState<GitLabWorkItem[]>([])
   const [branches, setBranches] = useState<string[]>([])
   const [linearIssues, setLinearIssues] = useState<LinearIssue[]>([])
   const [githubLoading, setGithubLoading] = useState(false)
+  const [gitlabLoading, setGitlabLoading] = useState(false)
   const [branchesLoading, setBranchesLoading] = useState(false)
   const [linearLoading, setLinearLoading] = useState(false)
   const [commandValue, setCommandValue] = useState('')
@@ -213,20 +245,20 @@ export default function SmartWorkspaceNameField({
     const directLink = parsedGhLink
     if (directLink !== null && handledCrossRepoUrlRef.current !== debouncedQuery.trim()) {
       setGithubLoading(true)
-      void getRepoSlugCached(selectedRepo, repoSlugCacheRef.current)
+      void getRepoSlugCached(selectedRepo, repoSlugCacheRef.current, settings)
         .then(async (selectedSlug) => {
           if (stale) {
             return
           }
           if (!selectedSlug || sameSlug(selectedSlug, directLink.slug)) {
             handledCrossRepoUrlRef.current = debouncedQuery.trim()
-            const item = await window.api.gh.workItemByOwnerRepo({
-              repoPath: selectedRepo.path,
-              owner: directLink.slug.owner,
-              repo: directLink.slug.repo,
-              number: directLink.number,
-              type: directLink.type
-            })
+            const item = await getWorkItemByOwnerRepo(
+              selectedRepo,
+              directLink.slug,
+              directLink.number,
+              directLink.type,
+              settings
+            )
             if (!stale) {
               setGithubItems(item ? [{ ...item, repoId: selectedRepo.id } as GitHubWorkItem] : [])
             }
@@ -235,7 +267,8 @@ export default function SmartWorkspaceNameField({
           const matchingRepo = await findMatchingRepoForSlug(
             repos,
             directLink.slug,
-            repoSlugCacheRef.current
+            repoSlugCacheRef.current,
+            settings
           )
           if (!stale) {
             setGithubItems([])
@@ -256,14 +289,14 @@ export default function SmartWorkspaceNameField({
       setGithubLoading(true)
       const request =
         directLink !== null
-          ? window.api.gh.workItemByOwnerRepo({
-              repoPath: selectedRepo.path,
-              owner: directLink.slug.owner,
-              repo: directLink.slug.repo,
-              number: directLink.number,
-              type: directLink.type
-            })
-          : window.api.gh.workItem({ repoPath: selectedRepo.path, number: directNumber })
+          ? getWorkItemByOwnerRepo(
+              selectedRepo,
+              directLink.slug,
+              directLink.number,
+              directLink.type,
+              settings
+            )
+          : getWorkItem(selectedRepo, directNumber, undefined, settings)
       void request
         .then((item) => {
           if (!stale) {
@@ -321,6 +354,7 @@ export default function SmartWorkspaceNameField({
     parsedGhLink,
     repos,
     selectedRepo,
+    settings,
     shouldQueryGithub
   ])
 
@@ -394,6 +428,127 @@ export default function SmartWorkspaceNameField({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedQuery, linearStatus.connected, shouldQueryLinear])
 
+  // Why: GitLab paste-URL flow. Watches the debounced query for a GitLab
+  // issue/MR URL (parseGitLabIssueOrMRLink already filters non-GitLab URLs
+  // via the project-internal `/-/` separator) and resolves it to a
+  // GitLabWorkItem via the IPC. Skipped silently when the host hook
+  // hasn't supplied an onGitLabItemSelect handler.
+  const parsedGlLink = useMemo(() => parseGitLabIssueOrMRLink(debouncedQuery), [debouncedQuery])
+  const shouldQueryGitlab = mode === 'smart' || mode === 'gitlab'
+  useEffect(() => {
+    if (
+      !shouldQueryGitlab ||
+      !onGitLabItemSelect ||
+      !selectedRepo?.path ||
+      selectedRepo.connectionId
+    ) {
+      // Why: don't clobber list-mode items here — the listMRs effect below
+      // is the sole writer when the user is in 'gitlab' mode without a URL.
+      if (parsedGlLink === null && mode !== 'gitlab') {
+        setGitlabItems([])
+      }
+      setGitlabLoading(false)
+      return
+    }
+    if (parsedGlLink === null) {
+      // Same reason: only clear when leaving the gitlab/smart context.
+      if (mode !== 'gitlab') {
+        setGitlabItems([])
+      }
+      setGitlabLoading(false)
+      return
+    }
+    let stale = false
+    setGitlabLoading(true)
+    void window.api.gl
+      .workItemByPath({
+        repoPath: selectedRepo.path,
+        // Why: parseGitLabIssueOrMRLink doesn't carry the host (the URL
+        // pattern is host-agnostic on purpose so self-hosted instances
+        // work). Use 'gitlab.com' as the IPC arg — the main process maps
+        // by project path internally and the host param is currently
+        // informational; revisit when the picker grows multi-host UX.
+        host: 'gitlab.com',
+        path: parsedGlLink.slug.path,
+        iid: parsedGlLink.number,
+        type: parsedGlLink.type
+      })
+      .then((item) => {
+        if (stale) {
+          return
+        }
+        setGitlabItems(item ? [{ ...item, repoId: selectedRepo.id } as GitLabWorkItem] : [])
+      })
+      .catch(() => {
+        if (!stale) {
+          setGitlabItems([])
+        }
+      })
+      .finally(() => {
+        if (!stale) {
+          setGitlabLoading(false)
+        }
+      })
+    return () => {
+      stale = true
+    }
+  }, [mode, onGitLabItemSelect, parsedGlLink, selectedRepo, shouldQueryGitlab])
+
+  // Why: when the user is on the GitLab tab (or in 'smart' mix) and
+  // hasn't pasted a URL, surface the project's MRs filtered by the
+  // current state chip. Default 'opened' matches gitlab.com's default
+  // MR list view. Smart mode includes GitLab MRs alongside GitHub
+  // items so the unified picker actually surfaces both providers.
+  useEffect(() => {
+    if ((mode !== 'gitlab' && mode !== 'smart') || !onGitLabItemSelect) {
+      return
+    }
+    if (!selectedRepo?.path || selectedRepo.connectionId) {
+      setGitlabItems([])
+      setGitlabLoading(false)
+      return
+    }
+    if (parsedGlLink !== null) {
+      // Why: paste-URL effect owns the list while a URL is in the input.
+      return
+    }
+    let stale = false
+    setGitlabLoading(true)
+    void window.api.gl
+      .listMRs({
+        repoPath: selectedRepo.path,
+        state: mrStateFilter,
+        page: 1,
+        perPage: RESULT_LIMIT
+      })
+      .then((result) => {
+        if (stale) {
+          return
+        }
+        // Why: listMRs returns ListMergeRequestsResult { items, ... };
+        // each item is already a GitLabWorkItem. Stamp repoId on the
+        // way through so the picker can attribute rows.
+        const items = (result as { items: GitLabWorkItem[] }).items.map((item) => ({
+          ...item,
+          repoId: selectedRepo.id
+        }))
+        setGitlabItems(items)
+      })
+      .catch(() => {
+        if (!stale) {
+          setGitlabItems([])
+        }
+      })
+      .finally(() => {
+        if (!stale) {
+          setGitlabLoading(false)
+        }
+      })
+    return () => {
+      stale = true
+    }
+  }, [mode, mrStateFilter, onGitLabItemSelect, parsedGlLink, selectedRepo])
+
   const rows = useMemo<RowEntry[]>(() => {
     const trimmed = value.trim()
     // Why: on the Branches tab the generic "Use … as workspace name" row
@@ -430,6 +585,15 @@ export default function SmartWorkspaceNameField({
         }))
       )
     }
+    if (mode === 'smart' || mode === 'gitlab') {
+      nextRows.push(
+        ...gitlabItems.map((item) => ({
+          kind: 'gitlab' as const,
+          value: `gitlab-${item.type}-${item.number}`,
+          item
+        }))
+      )
+    }
     if (mode === 'smart' || mode === 'branches') {
       if (createBranchRow) {
         nextRows.push(createBranchRow)
@@ -452,7 +616,7 @@ export default function SmartWorkspaceNameField({
       )
     }
     return nextRows.slice(0, RESULT_LIMIT + 1)
-  }, [branches, githubItems, linearIssues, mode, value])
+  }, [branches, githubItems, gitlabItems, linearIssues, mode, value])
 
   // Why: source rows (GitHub/branches/Linear) are driven by debouncedQuery,
   // so they're stale until the user pauses typing for SEARCH_DEBOUNCE_MS.
@@ -517,7 +681,7 @@ export default function SmartWorkspaceNameField({
     )
   }, [isQueryStale, rows, sourceIntent])
 
-  const loading = githubLoading || branchesLoading || linearLoading
+  const loading = githubLoading || gitlabLoading || branchesLoading || linearLoading
   const ActiveInputIcon = mode === 'text' ? CaseSensitive : loading ? LoaderCircle : Search
 
   const handleSelect = useCallback(
@@ -529,6 +693,10 @@ export default function SmartWorkspaceNameField({
         onValueChange(row.name)
       } else if (row.kind === 'github') {
         onGitHubItemSelect(row.item)
+      } else if (row.kind === 'gitlab') {
+        // Why: optional handler — guarded so the surface degrades to a
+        // no-op for hosts that haven't wired GitLab support yet.
+        onGitLabItemSelect?.(row.item)
       } else if (row.kind === 'branch') {
         onBranchSelect(row.refName)
       } else {
@@ -536,7 +704,7 @@ export default function SmartWorkspaceNameField({
       }
       setOpen(false)
     },
-    [onBranchSelect, onGitHubItemSelect, onLinearIssueSelect, onValueChange]
+    [onBranchSelect, onGitHubItemSelect, onGitLabItemSelect, onLinearIssueSelect, onValueChange]
   )
 
   const acceptGitHubLink = useCallback(
@@ -547,13 +715,13 @@ export default function SmartWorkspaceNameField({
       handledCrossRepoUrlRef.current = debouncedQuery.trim()
       setGithubLoading(true)
       try {
-        const item = await window.api.gh.workItemByOwnerRepo({
-          repoPath: targetRepo.path,
-          owner: crossRepoPrompt.link.slug.owner,
-          repo: crossRepoPrompt.link.slug.repo,
-          number: crossRepoPrompt.link.number,
-          type: crossRepoPrompt.link.type
-        })
+        const item = await getWorkItemByOwnerRepo(
+          targetRepo,
+          crossRepoPrompt.link.slug,
+          crossRepoPrompt.link.number,
+          crossRepoPrompt.link.type,
+          settings
+        )
         if (!item) {
           return
         }
@@ -565,7 +733,7 @@ export default function SmartWorkspaceNameField({
         setGithubLoading(false)
       }
     },
-    [crossRepoPrompt, debouncedQuery, onGitHubItemSelect, onRepoChange]
+    [crossRepoPrompt, debouncedQuery, onGitHubItemSelect, onRepoChange, settings]
   )
 
   const handleUseCurrentRepo = useCallback(async (): Promise<void> => {
@@ -585,11 +753,11 @@ export default function SmartWorkspaceNameField({
       return
     }
     repoSlugCacheRef.current.delete(added.id)
-    const slug = await getRepoSlugCached(added, repoSlugCacheRef.current)
+    const slug = await getRepoSlugCached(added, repoSlugCacheRef.current, settings)
     if (slug && sameSlug(slug, crossRepoPrompt.link.slug)) {
       await acceptGitHubLink(added)
     }
-  }, [acceptGitHubLink, addRepo, crossRepoPrompt])
+  }, [acceptGitHubLink, addRepo, crossRepoPrompt, settings])
 
   const dismissCrossRepoPrompt = useCallback((): void => {
     handledCrossRepoUrlRef.current = debouncedQuery.trim()
@@ -813,6 +981,28 @@ export default function SmartWorkspaceNameField({
               }
             }}
           >
+            {mode === 'gitlab' ? (
+              // Why: GitLab MR-state filter — Open / Merged / Closed / All —
+              // mirrors the gitlab.com merge-requests page tab strip so users
+              // arriving from the web UI find a familiar control.
+              <div
+                className="flex shrink-0 items-center gap-1 border-b border-border/40 px-2 py-1.5"
+                onMouseDown={(e) => e.preventDefault()}
+              >
+                {MR_STATE_FILTERS.map(({ id, label }) => (
+                  <Button
+                    key={id}
+                    type="button"
+                    variant={mrStateFilter === id ? 'secondary' : 'ghost'}
+                    size="sm"
+                    onClick={() => setMrStateFilter(id)}
+                    className="h-6 px-2 text-xs"
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+            ) : null}
             <CommandList className="!max-h-none min-h-0 flex-1 scrollbar-sleek">
               {loading && rows.length === 0 ? (
                 <div className="space-y-1 p-1">
@@ -892,6 +1082,19 @@ function RowIcon({ row }: { row: RowEntry }): React.JSX.Element {
       <CircleDot className="size-3.5 shrink-0 text-muted-foreground" />
     )
   }
+  if (row.kind === 'gitlab') {
+    // Why: GitLab MRs use GitMerge (arrow-merge-into-line) rather than
+    // GitPullRequest so the row visually disambiguates from branches
+    // (GitBranch's fork shape reads similar to GitPullRequest at this
+    // size). GitMerge also matches gitlab.com's own MR iconography,
+    // so users coming from the web UI find it familiar. Issues stay
+    // on CircleDot — the shape is provider-agnostic.
+    return row.item.type === 'mr' ? (
+      <GitMerge className="size-3.5 shrink-0 text-muted-foreground" />
+    ) : (
+      <CircleDot className="size-3.5 shrink-0 text-muted-foreground" />
+    )
+  }
   if (row.kind === 'branch') {
     return <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
   }
@@ -902,7 +1105,12 @@ function SelectionIcon({ kind }: { kind: SmartWorkspaceNameSelection['kind'] }):
   if (kind === 'github-pr') {
     return <GitPullRequest className="size-3.5 shrink-0 text-muted-foreground" />
   }
-  if (kind === 'github-issue') {
+  if (kind === 'gitlab-mr') {
+    // Why: see RowIcon — GitMerge keeps MRs distinct from PRs and
+    // branches.
+    return <GitMerge className="size-3.5 shrink-0 text-muted-foreground" />
+  }
+  if (kind === 'github-issue' || kind === 'gitlab-issue') {
     return <CircleDot className="size-3.5 shrink-0 text-muted-foreground" />
   }
   if (kind === 'branch') {
@@ -935,6 +1143,21 @@ function RowLabel({ row }: { row: RowEntry }): React.JSX.Element {
       </span>
     )
   }
+  if (row.kind === 'gitlab') {
+    // Why: GitLab uses `!N` for MRs and `#N` for issues — show the
+    // appropriate prefix so the row is unambiguous to users coming from
+    // gitlab.com's UI.
+    const prefix = row.item.type === 'mr' ? '!' : '#'
+    return (
+      <span className="min-w-0 truncate">
+        <span className="font-medium text-foreground">
+          {prefix}
+          {row.item.number}
+        </span>{' '}
+        {row.item.title}
+      </span>
+    )
+  }
   if (row.kind === 'branch') {
     return <span className="min-w-0 truncate font-mono text-[11px]">{row.refName}</span>
   }
@@ -952,23 +1175,41 @@ function sameSlug(left: RepoSlug, right: RepoSlug): boolean {
   )
 }
 
+function runtimeSlugScope(
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+): string {
+  const target = getActiveRuntimeTarget(settings)
+  return target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
+}
+
 async function getRepoSlugCached(
   repo: RepoOption,
-  cache: Map<string, RepoSlug | null>
+  cache: Map<string, RepoSlug | null>,
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 ): Promise<RepoSlug | null> {
-  if (cache.has(repo.id)) {
-    return cache.get(repo.id) ?? null
+  const cacheKey = `${runtimeSlugScope(settings)}:${repo.id}`
+  if (cache.has(cacheKey)) {
+    return cache.get(cacheKey) ?? null
   }
   if (repo.connectionId) {
-    cache.set(repo.id, null)
+    cache.set(cacheKey, null)
     return null
   }
   try {
-    const slug = await window.api.gh.repoSlug({ repoPath: repo.path })
-    cache.set(repo.id, slug)
+    const target = getActiveRuntimeTarget(settings)
+    const slug =
+      target.kind === 'environment'
+        ? await callRuntimeRpc<RepoSlug | null>(
+            target,
+            'github.repoSlug',
+            { repo: repo.id },
+            { timeoutMs: 30_000 }
+          )
+        : await window.api.gh.repoSlug({ repoPath: repo.path })
+    cache.set(cacheKey, slug)
     return slug
   } catch {
-    cache.set(repo.id, null)
+    cache.set(cacheKey, null)
     return null
   }
 }
@@ -976,13 +1217,63 @@ async function getRepoSlugCached(
 async function findMatchingRepoForSlug(
   repos: RepoOption[],
   slug: RepoSlug,
-  cache: Map<string, RepoSlug | null>
+  cache: Map<string, RepoSlug | null>,
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 ): Promise<RepoOption | null> {
   for (const repo of repos) {
-    const candidate = await getRepoSlugCached(repo, cache)
+    const candidate = await getRepoSlugCached(repo, cache, settings)
     if (candidate && sameSlug(candidate, slug)) {
       return repo
     }
   }
   return null
+}
+
+function getWorkItem(
+  repo: RepoOption,
+  number: number,
+  type: 'issue' | 'pr' | undefined,
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+): Promise<GitHubWorkItemWithoutRepo | null> {
+  const target = getActiveRuntimeTarget(settings)
+  if (target.kind === 'environment') {
+    return callRuntimeRpc<GitHubWorkItemWithoutRepo | null>(
+      target,
+      'github.workItem',
+      { repo: repo.id, number, ...(type ? { type } : {}) },
+      { timeoutMs: 30_000 }
+    )
+  }
+  return window.api.gh.workItem({ repoPath: repo.path, number, ...(type ? { type } : {}) })
+}
+
+function getWorkItemByOwnerRepo(
+  repo: RepoOption,
+  slug: RepoSlug,
+  number: number,
+  type: 'issue' | 'pr',
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+): Promise<GitHubWorkItemWithoutRepo | null> {
+  const target = getActiveRuntimeTarget(settings)
+  if (target.kind === 'environment') {
+    return callRuntimeRpc<GitHubWorkItemWithoutRepo | null>(
+      target,
+      'github.workItemByOwnerRepo',
+      {
+        repo: repo.id,
+        owner: slug.owner,
+        ownerRepo: slug.repo,
+        number,
+        type
+      },
+      { timeoutMs: 30_000 }
+    )
+  }
+  return window.api.gh.workItemByOwnerRepo({
+    repoPath: repo.path,
+    owner: slug.owner,
+    repo: slug.repo,
+    number,
+    type
+  })
 }

@@ -7,7 +7,8 @@
 import * as path from 'path'
 import { existsSync } from 'fs'
 import { readFile } from 'fs/promises'
-import { parseStatusOutput, parseUnmergedEntry } from './git-handler-utils'
+import { parseUnmergedEntry } from './git-handler-utils'
+import { parseStatusOutput } from './git-status-output-parser'
 import type { GitExec } from './git-handler-ops'
 
 export async function resolveGitDir(worktreePath: string): Promise<string> {
@@ -53,12 +54,26 @@ export async function getStatusOp(
   conflictOperation: string
   head?: string
   branch?: string
+  upstreamStatus?: {
+    hasUpstream: boolean
+    upstreamName?: string
+    ahead: number
+    behind: number
+  }
 }> {
   const worktreePath = params.worktreePath as string
   const conflictOperation = await detectConflictOperation(worktreePath)
   const entries: Record<string, unknown>[] = []
   let head: string | undefined
   let branch: string | undefined
+  let upstreamStatus:
+    | {
+        hasUpstream: boolean
+        upstreamName?: string
+        ahead: number
+        behind: number
+      }
+    | undefined
 
   try {
     // Why: -c core.quotePath=false keeps non-ASCII filenames as raw UTF-8 in
@@ -80,6 +95,7 @@ export async function getStatusOp(
     entries.push(...parsed.entries)
     head = parsed.head
     branch = parsed.branch
+    upstreamStatus = parsed.upstreamStatus
 
     for (const uLine of parsed.unmergedLines) {
       const entry = parseUnmergedEntry(worktreePath, uLine)
@@ -91,5 +107,5 @@ export async function getStatusOp(
     // not a git repo or git not available
   }
 
-  return { entries, conflictOperation, head, branch }
+  return { entries, conflictOperation, head, branch, upstreamStatus }
 }

@@ -14,6 +14,7 @@ import TerminalSearch from '@/components/TerminalSearch'
 import type { PtyTransport } from './pty-transport'
 import { fitPanes, isWindowsUserAgent, shellEscapePath } from './pane-helpers'
 import { getConnectionId } from '@/lib/connection-context'
+import { resolveTerminalDropTargetShell } from './terminal-drop-handler'
 import { EMPTY_LAYOUT, serializeTerminalLayout } from './layout-serialization'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
@@ -34,6 +35,7 @@ import { useTerminalPaneLifecycle } from './use-terminal-pane-lifecycle'
 import { useTerminalPaneContextMenu } from './use-terminal-pane-context-menu'
 import { useNotificationDispatch } from './use-notification-dispatch'
 import { connectPanePty } from './pty-connection'
+import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session-terminal-buffers'
 import {
   getFitOverrideForPty,
   getPaneIdsForPty,
@@ -43,6 +45,12 @@ import { getDriverForPty, onDriverChange } from '@/lib/pane-manager/mobile-drive
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
+import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import {
+  getRemoteRuntimePtyEnvironmentId,
+  getRemoteRuntimeTerminalHandle
+} from '@/runtime/runtime-terminal-stream'
 
 // Why: registry lives in a leaf module so the store slice can import it
 // without re-entering the `slice → TerminalPane → store → slice` cycle
@@ -462,10 +470,10 @@ export default function TerminalPane({
         executeClosePane(paneId)
         return
       }
-      void window.api.pty
-        .hasChildProcesses(ptyId)
-        .then((hasChildren) => {
-          if (hasChildren) {
+      const settings = useAppStore.getState().settings
+      void inspectRuntimeTerminalProcess(settings, ptyId)
+        .then((process) => {
+          if (process.hasChildProcesses) {
             setCloseConfirmPaneId(paneId)
           } else {
             executeClosePane(paneId)
@@ -929,7 +937,7 @@ export default function TerminalPane({
   // Register a capture callback for shutdown. The beforeunload handler in
   // App.tsx calls all registered callbacks to serialize terminal buffers.
   useEffect(() => {
-    const captureBuffers = (): void => {
+    const captureBuffers = (options?: { includeLocalBuffers?: boolean }): void => {
       const manager = managerRef.current
       const container = containerRef.current
       if (!manager || !container) {
@@ -945,14 +953,22 @@ export default function TerminalPane({
       // bytes. Without preservation, that empty pass would wipe a known-good
       // buffer. Merge prior state in for leaves whose live capture came back
       // empty. Same shape as persistLayoutSnapshot.
-      const existing = useAppStore.getState().terminalLayoutsByTabId[tabId]
+      const state = useAppStore.getState()
+      const existing = state.terminalLayoutsByTabId[tabId]
+      const includeLocalBuffers = options?.includeLocalBuffers ?? true
+      const shouldCaptureScrollbackBuffers = includeLocalBuffers
+        ? true
+        : shouldPreserveTerminalScrollbackBuffers(worktreeId, state.repos)
       const layout = captureTerminalShutdownLayout({
         manager,
         container,
         expandedPaneId: expandedPaneIdRef.current,
         paneTransports: paneTransportsRef.current,
         paneTitlesByPaneId: paneTitlesRef.current,
-        existingLayout: existing
+        existingLayout: existing,
+        // Why: beforeunload skips local/floating bytes because session payloads
+        // immediately prune them; worktree sleep keeps them as defense-in-depth.
+        captureBuffers: shouldCaptureScrollbackBuffers
       })
       setTabLayout(tabId, layout)
     }
@@ -964,7 +980,7 @@ export default function TerminalPane({
         shutdownBufferCaptures.delete(tabId)
       }
     }
-  }, [tabId, setTabLayout])
+  }, [tabId, worktreeId, setTabLayout])
 
   const handleStartRename = useCallback((paneId: number) => {
     setRenameValue(paneTitlesRef.current[paneId] ?? '')
@@ -1096,20 +1112,21 @@ export default function TerminalPane({
           if (!transport) {
             return
           }
-          // Why: the explorer passes the worktree-absolute path via a DOM
-          // MIME, so for SSH worktrees this is a remote POSIX path destined
-          // for the remote shell. Quote for the target shell (remote = posix)
-          // rather than the client OS; otherwise a Windows client dropping
-          // onto an SSH-Linux worktree would emit Windows-style quoting.
-          // Why: `typeof === 'string'` (not `!== null`) so an unhydrated
-          // store (`undefined`) is treated as local and falls through to
-          // client-OS quoting, rather than being misclassified as remote.
-          const isRemote = typeof getConnectionId(worktreeId) === 'string'
-          const targetShell: 'posix' | 'windows' = isRemote
-            ? 'posix'
-            : isWindowsUserAgent()
-              ? 'windows'
-              : 'posix'
+          const state = useAppStore.getState()
+          const worktreePath =
+            Object.values(state.worktreesByRepo ?? {})
+              .flat()
+              .find((worktree) => worktree.id === worktreeId)?.path ??
+            cwd ??
+            filePath
+          const targetShell = resolveTerminalDropTargetShell({
+            activeRuntimeEnvironmentId: state.settings?.activeRuntimeEnvironmentId,
+            worktreePath,
+            // Why: internal Explorer drags paste a worktree-absolute path
+            // directly into the target shell. Runtime drops use the runtime
+            // worktree's path shape; legacy SSH drops remain POSIX.
+            connectionId: getConnectionId(worktreeId)
+          })
           transport.sendInput(shellEscapePath(filePath, targetShell))
           // Move focus to the terminal so the user can keep typing where the
           // dropped path just landed. Without this, focus stays on the file
@@ -1147,6 +1164,10 @@ export default function TerminalPane({
         onSplitDown={contextMenu.onSplitDown}
         onClosePane={contextMenu.onClosePane}
         onClearScreen={contextMenu.onClearScreen}
+        quickCommands={(settings?.terminalQuickCommands ?? []).filter(
+          (command) => command.label.trim() && command.command.trimEnd()
+        )}
+        onQuickCommand={contextMenu.onQuickCommand}
         onToggleExpand={contextMenu.onToggleExpand}
         onSetTitle={contextMenu.onSetTitle}
       />
@@ -1267,7 +1288,21 @@ export default function TerminalPane({
                   // active-mobile-subscriber path and the held-no-subscriber
                   // path (docs/mobile-fit-hold.md), so the banner unmounts
                   // and the PTY returns to desktop dims in either case.
-                  void window.api.runtime.restoreTerminalFit(ptyId)
+                  const remoteHandle = getRemoteRuntimeTerminalHandle(ptyId)
+                  const environmentId =
+                    getRemoteRuntimePtyEnvironmentId(ptyId) ??
+                    settingsRef.current?.activeRuntimeEnvironmentId ??
+                    null
+                  if (remoteHandle && environmentId) {
+                    void callRuntimeRpc(
+                      { kind: 'environment', environmentId },
+                      'terminal.restoreFit',
+                      { terminal: remoteHandle },
+                      { timeoutMs: 15_000 }
+                    ).catch(() => {})
+                  } else {
+                    void window.api.runtime.restoreTerminalFit(ptyId).catch(() => {})
+                  }
                 }
               }}
             >

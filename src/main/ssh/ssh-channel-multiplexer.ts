@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: the SSH relay protocol state machine keeps
+   request, notification, keepalive, and cancellation semantics paired. */
 import {
   FrameDecoder,
   MessageType,
@@ -24,6 +26,7 @@ type PendingRequest = {
   resolve: (result: unknown) => void
   reject: (error: Error) => void
   timer: ReturnType<typeof setTimeout>
+  cleanup: () => void
 }
 
 export type NotificationHandler = (method: string, params: Record<string, unknown>) => void
@@ -127,9 +130,18 @@ export class SshChannelMultiplexer {
   /**
    * Send a JSON-RPC request and wait for the response.
    */
-  async request(method: string, params?: Record<string, unknown>): Promise<unknown> {
+  async request(
+    method: string,
+    params?: Record<string, unknown>,
+    options?: { signal?: AbortSignal; timeoutMs?: number }
+  ): Promise<unknown> {
     if (this.disposed) {
       throw new Error('Multiplexer disposed')
+    }
+    if (options?.signal?.aborted) {
+      const error = new Error(`Request "${method}" was cancelled`) as Error & { name: string }
+      error.name = 'AbortError'
+      throw error
     }
 
     const id = this.nextRequestId++
@@ -139,14 +151,46 @@ export class SshChannelMultiplexer {
       method,
       ...(params !== undefined ? { params } : {})
     }
+    const timeoutMs = options?.timeoutMs ?? REQUEST_TIMEOUT_MS
 
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
+      let timer: ReturnType<typeof setTimeout>
+      const cleanup = (): void => {
+        clearTimeout(timer)
+        if (options?.signal) {
+          options.signal.removeEventListener('abort', onAbort)
+        }
+      }
+      const onAbort = (): void => {
+        const pending = this.pendingRequests.get(id)
+        if (!pending) {
+          return
+        }
+        pending.cleanup()
         this.pendingRequests.delete(id)
-        reject(new Error(`Request "${method}" timed out after ${REQUEST_TIMEOUT_MS}ms`))
-      }, REQUEST_TIMEOUT_MS)
+        // Why: Space scans can run long on SSH hosts. Let the relay stop its
+        // local filesystem work instead of only dropping the client promise.
+        this.notify('rpc.cancel', { id })
+        const error = new Error(`Request "${method}" was cancelled`) as Error & { name: string }
+        error.name = 'AbortError'
+        pending.reject(error)
+      }
+      timer = setTimeout(() => {
+        const pending = this.pendingRequests.get(id)
+        if (pending) {
+          pending.cleanup()
+          // Why: request timeouts should stop relay-side long-running work,
+          // not just detach the client from the eventual response.
+          this.notify('rpc.cancel', { id })
+        }
+        this.pendingRequests.delete(id)
+        reject(new Error(`Request "${method}" timed out after ${timeoutMs}ms`))
+      }, timeoutMs)
 
-      this.pendingRequests.set(id, { resolve, reject, timer })
+      if (options?.signal) {
+        options.signal.addEventListener('abort', onAbort, { once: true })
+      }
+      this.pendingRequests.set(id, { resolve, reject, timer, cleanup })
       this.sendMessage(msg)
     })
   }
@@ -194,7 +238,7 @@ export class SshChannelMultiplexer {
     const errorCode = reason === 'connection_lost' ? 'CONNECTION_LOST' : 'DISPOSED'
 
     for (const [id, pending] of this.pendingRequests) {
-      clearTimeout(pending.timer)
+      pending.cleanup()
       const err = new Error(errorMessage) as Error & { code: string }
       err.code = errorCode
       pending.reject(err)
@@ -295,7 +339,7 @@ export class SshChannelMultiplexer {
       return
     }
 
-    clearTimeout(pending.timer)
+    pending.cleanup()
     this.pendingRequests.delete(msg.id)
 
     if (msg.error) {

@@ -2,6 +2,7 @@
 concurrency acquire/release pattern and error handling consistent across operations. */
 import type {
   ClassifiedError,
+  GitPushTarget,
   IssueSourcePreference,
   ListWorkItemsResult,
   PRInfo,
@@ -19,6 +20,7 @@ import { getPRConflictSummary } from './conflict-summary'
 import {
   execFileAsync,
   ghExecFileAsync,
+  gitExecFileAsync,
   acquire,
   release,
   getOwnerRepo,
@@ -68,6 +70,90 @@ export async function checkOrcaStarred(): Promise<boolean | null> {
     }
     // Anything else (gh not installed, not authenticated, network issue)
     return null
+  } finally {
+    release()
+  }
+}
+
+function pickPushRemoteUrl(args: {
+  originUrl: string | null
+  cloneUrl: string
+  sshUrl: string
+}): string {
+  const { originUrl, cloneUrl, sshUrl } = args
+  if (originUrl && (/^(git@|ssh:)/.test(originUrl) || originUrl.includes('ssh.github.com'))) {
+    return sshUrl
+  }
+  return cloneUrl
+}
+
+function sanitizeRemoteName(owner: string, repo: string): string {
+  const slug = `${owner}-${repo}`
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[.-]+|[.-]+$/g, '')
+  return slug ? `pr-${slug}` : 'pr-head'
+}
+
+export async function getPullRequestPushTarget(
+  repoPath: string,
+  prNumber: number
+): Promise<GitPushTarget | null> {
+  const ownerRepo = await getOwnerRepo(repoPath)
+  if (!ownerRepo) {
+    return null
+  }
+
+  await acquire()
+  try {
+    const [{ stdout: prStdout }, origin] = await Promise.all([
+      ghExecFileAsync(['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${prNumber}`], {
+        cwd: repoPath
+      }),
+      getOwnerRepoForRemote(repoPath, 'origin')
+    ])
+    const pr = JSON.parse(prStdout) as {
+      head?: {
+        ref?: string
+        repo?: {
+          full_name?: string
+          clone_url?: string
+          ssh_url?: string
+          owner?: { login?: string }
+          name?: string
+        } | null
+      }
+    }
+    const headRepo = pr.head?.repo
+    const branchName = pr.head?.ref?.trim()
+    const owner = headRepo?.owner?.login?.trim()
+    const repo = headRepo?.name?.trim() ?? headRepo?.full_name?.split('/')[1]?.trim()
+    const cloneUrl = headRepo?.clone_url?.trim()
+    const sshUrl = headRepo?.ssh_url?.trim()
+    if (!owner || !repo || !branchName || !cloneUrl || !sshUrl) {
+      return null
+    }
+    if (
+      origin &&
+      origin.owner.toLowerCase() === owner.toLowerCase() &&
+      origin.repo.toLowerCase() === repo.toLowerCase()
+    ) {
+      return { remoteName: 'origin', branchName }
+    }
+
+    let originUrl: string | null = null
+    try {
+      const { stdout } = await gitExecFileAsync(['remote', 'get-url', 'origin'], { cwd: repoPath })
+      originUrl = stdout.trim() || null
+    } catch {
+      originUrl = null
+    }
+    return {
+      remoteName: sanitizeRemoteName(owner, repo),
+      branchName,
+      remoteUrl: pickPushRemoteUrl({ originUrl, cloneUrl, sshUrl })
+    }
   } finally {
     release()
   }
@@ -1125,13 +1211,10 @@ export async function getPRComments(
       // Each source is parsed independently; failed sources contribute zero
       // comments instead of aborting the entire fetch.
       const [issueResult, threadsResult, reviewsResult] = await Promise.allSettled([
-        execFileAsync(
-          'gh',
-          ['api', ...cacheArgs, `${base}/issues/${prNumber}/comments?per_page=100`],
-          { cwd: repoPath, encoding: 'utf-8' }
-        ),
-        execFileAsync(
-          'gh',
+        ghExecFileAsync(['api', ...cacheArgs, `${base}/issues/${prNumber}/comments?per_page=100`], {
+          cwd: repoPath
+        }),
+        ghExecFileAsync(
           [
             'api',
             'graphql',
@@ -1144,17 +1227,15 @@ export async function getPRComments(
             '-F',
             `pr=${prNumber}`
           ],
-          { cwd: repoPath, encoding: 'utf-8' }
+          { cwd: repoPath }
         ),
         // Why: review summaries (approve, request changes, general comments) live
         // under pulls/{n}/reviews, not under issue comments or review threads.
         // Without this, a reviewer who submits "LGTM" without inline threads
         // would have their comment silently dropped from the panel.
-        execFileAsync(
-          'gh',
-          ['api', ...cacheArgs, `${base}/pulls/${prNumber}/reviews?per_page=100`],
-          { cwd: repoPath, encoding: 'utf-8' }
-        )
+        ghExecFileAsync(['api', ...cacheArgs, `${base}/pulls/${prNumber}/reviews?per_page=100`], {
+          cwd: repoPath
+        })
       ])
 
       // Parse issue comments (REST)
@@ -1301,10 +1382,11 @@ export async function getPRComments(
     }
 
     // Fallback: non-GitHub remote — use gh pr view (only returns issue-level comments)
-    const { stdout } = await execFileAsync(
-      'gh',
+    const { stdout } = await ghExecFileAsync(
       ['pr', 'view', String(prNumber), '--json', 'comments'],
-      { cwd: repoPath, encoding: 'utf-8' }
+      {
+        cwd: repoPath
+      }
     )
     const data = JSON.parse(stdout) as {
       comments: {

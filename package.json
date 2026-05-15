@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.3.52-rc.2",
+  "version": "1.4.2-rc.7",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -14,6 +14,9 @@
     "lint": "oxlint",
     "prepare": "husky",
     "test": "vitest run --config config/vitest.config.ts",
+    "check:feature-wall-assets": "node config/scripts/check-feature-wall-assets.mjs",
+    "verify:macos-entitlements": "node config/scripts/verify-macos-entitlements.mjs",
+    "vendor:feature-wall-assets": "node config/scripts/vendor-feature-wall-assets.mjs",
     "tc:node": "tsgo --noEmit -p config/tsconfig.node.json",
     "tc:cli": "tsgo --noEmit -p config/tsconfig.tc.cli.json",
     "tc:web": "tsgo --noEmit -p config/tsconfig.tc.web.json",
@@ -57,6 +60,7 @@
     "@tiptap/extension-code-block-lowlight": "^3.22.5",
     "@tiptap/extension-image": "^3.22.5",
     "@tiptap/extension-link": "^3.22.5",
+    "@tiptap/extension-mathematics": "3.22.5",
     "@tiptap/extension-placeholder": "^3.22.5",
     "@tiptap/extension-table": "3.22.4",
     "@tiptap/extension-table-cell": "3.22.4",
@@ -84,13 +88,16 @@
     "cmdk": "^1.1.1",
     "dompurify": "^3.4.2",
     "electron-updater": "^6.8.3",
+    "emoji-picker-react": "^4.19.1",
+    "entities": "^6.0.1",
     "github-slugger": "^2.0.0",
     "hosted-git-info": "^9.0.3",
     "html-to-image": "^1.11.13",
     "katex": "^0.16.45",
     "lowlight": "^3.3.0",
     "lucide-react": "^0.577.0",
-    "mermaid": "^11.14.0",
+    "mdast-util-to-string": "^4.0.0",
+    "mermaid": "^11.15.0",
     "monaco-editor": "^0.55.1",
     "node-pty": "^1.1.0",
     "pdfjs-dist": "^5.7.284",
@@ -107,13 +114,16 @@
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
+    "remark-parse": "^11.0.0",
     "shadcn": "^4.7.0",
+    "sherpa-onnx": "1.12.37",
     "simple-git": "^3.36.0",
     "sonner": "^2.0.7",
     "ssh2": "^1.17.0",
     "tailwind-merge": "^3.5.0",
     "tw-animate-css": "^1.4.0",
     "tweetnacl": "^1.0.3",
+    "unified": "^11.0.5",
     "ws": "^8.20.0",
     "zod": "~4.4.3",
     "zustand": "^5.0.13"
@@ -148,6 +158,13 @@
     "vite": "^7.3.2",
     "vitest": "^4.1.5"
   },
+  "optionalDependencies": {
+    "sherpa-onnx-darwin-arm64": "1.12.37",
+    "sherpa-onnx-darwin-x64": "1.12.37",
+    "sherpa-onnx-linux-arm64": "1.12.37",
+    "sherpa-onnx-linux-x64": "1.12.37",
+    "sherpa-onnx-win-x64": "1.12.37"
+  },
   "lint-staged": {
     "*.{ts,tsx,js,jsx,mts,cts}": [
       "oxlint",
@@ -162,17 +179,32 @@
   },
   "packageManager": "pnpm@10.24.0+sha512.01ff8ae71b4419903b65c60fb2dc9d34cf8bb6e06d03bde112ef38f7a34d6904c424ba66bea5cdcf12890230bf39f9580473140ed9c946fef328b6e5238a345a",
   "pnpm": {
+    "supportedArchitectures": {
+      "os": [
+        "current",
+        "darwin",
+        "linux",
+        "win32"
+      ],
+      "cpu": [
+        "current",
+        "x64",
+        "arm64"
+      ]
+    },
     "onlyBuiltDependencies": [
       "@parcel/watcher",
       "better-sqlite3",
       "cpu-features",
       "electron",
       "esbuild",
-      "node-pty"
+      "node-pty",
+      "sherpa-onnx"
     ],
     "patchedDependencies": {
       "node-pty@1.1.0": "config/patches/node-pty@1.1.0.patch",
-      "@xterm/addon-ligatures@0.11.0-beta.216": "config/patches/@xterm__addon-ligatures@0.11.0-beta.216.patch"
+      "@xterm/addon-ligatures@0.11.0-beta.216": "config/patches/@xterm__addon-ligatures@0.11.0-beta.216.patch",
+      "@xterm/addon-webgl@0.20.0-beta.215": "config/patches/@xterm__addon-webgl@0.20.0-beta.215.patch"
     }
   }
 }

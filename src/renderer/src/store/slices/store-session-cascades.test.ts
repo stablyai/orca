@@ -98,10 +98,12 @@ import { createTabsSlice } from './tabs'
 import { createUISlice } from './ui'
 import { createSettingsSlice } from './settings'
 import { createGitHubSlice } from './github'
+import { createHostedReviewSlice } from './hosted-review'
 import { createLinearSlice } from './linear'
 import { createEditorSlice } from './editor'
 import { createStatsSlice } from './stats'
 import { createMemorySlice } from './memory'
+import { createWorkspaceSpaceSlice } from './workspace-space'
 import { createClaudeUsageSlice } from './claude-usage'
 import { createCodexUsageSlice } from './codex-usage'
 import { createBrowserSlice } from './browser'
@@ -111,6 +113,7 @@ import { createAgentStatusSlice } from './agent-status'
 import { createDiffCommentsSlice } from './diffComments'
 import { createDetectedAgentsSlice } from './detected-agents'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
+import { createDictationSlice } from './dictation'
 
 function createTestStore() {
   return create<AppState>()((...a) => ({
@@ -122,10 +125,12 @@ function createTestStore() {
     ...createUISlice(...a),
     ...createSettingsSlice(...a),
     ...createGitHubSlice(...a),
+    ...createHostedReviewSlice(...a),
     ...createLinearSlice(...a),
     ...createEditorSlice(...a),
     ...createStatsSlice(...a),
     ...createMemorySlice(...a),
+    ...createWorkspaceSpaceSlice(...a),
     ...createClaudeUsageSlice(...a),
     ...createCodexUsageSlice(...a),
     ...createBrowserSlice(...a),
@@ -134,7 +139,8 @@ function createTestStore() {
     ...createAgentStatusSlice(...a),
     ...createDiffCommentsSlice(...a),
     ...createDetectedAgentsSlice(...a),
-    ...createWorktreeNavHistorySlice(...a)
+    ...createWorktreeNavHistorySlice(...a),
+    ...createDictationSlice(...a)
   }))
 }
 
@@ -152,6 +158,8 @@ function makeWorktree(overrides: Partial<Worktree> & { id: string; repoId: strin
     linkedIssue: null,
     linkedPR: null,
     linkedLinearIssue: null,
+    linkedGitLabMR: null,
+    linkedGitLabIssue: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,
@@ -1367,6 +1375,48 @@ describe('hydrateEditorSession', () => {
     expect(s.openFiles[1].isPreview).toBe(true)
     expect(s.activeFileId).toBe('/path/wt1/src/index.ts')
     expect(s.activeTabType).toBe('editor')
+  })
+
+  it('re-detects restored file languages instead of trusting stale session data', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt
+    })
+
+    store.getState().hydrateEditorSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: wt,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        [wt]: [
+          {
+            filePath: '/path/wt1/notebooks/example.ipynb',
+            relativePath: 'notebooks/example.ipynb',
+            worktreeId: wt,
+            language: 'json'
+          }
+        ]
+      },
+      activeFileIdByWorktree: { [wt]: '/path/wt1/notebooks/example.ipynb' },
+      activeTabTypeByWorktree: { [wt]: 'editor' }
+    })
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({
+        filePath: '/path/wt1/notebooks/example.ipynb',
+        language: 'notebook'
+      })
+    )
   })
 
   it('does nothing when no editor files are persisted', () => {

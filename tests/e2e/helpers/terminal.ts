@@ -141,8 +141,10 @@ export async function discoverActivePtyId(page: Page): Promise<string> {
 
   await page.evaluate(
     ({ marker, candidateIds }) => {
-      for (const id of candidateIds) {
-        window.api.pty.write(String(id), `\x03\x15echo ${marker}_${id}\r`)
+      // Why: daemon PTY IDs can contain path separators and shell metacharacters.
+      // Echo a numeric probe index, then map it back to the opaque ID in Node.
+      for (const [index, id] of candidateIds.entries()) {
+        window.api.pty.write(String(id), `\x03\x15echo ${marker}_${index}\r`)
       }
     },
     { marker, candidateIds }
@@ -156,7 +158,8 @@ export async function discoverActivePtyId(page: Page): Promise<string> {
         const markerRe = new RegExp(`${marker}_(\\d+)`, 'g')
         const matches = [...content.matchAll(markerRe)]
         if (matches.length > 0) {
-          foundPtyId = matches.at(-1)?.[1] ?? null
+          const index = Number(matches.at(-1)?.[1] ?? Number.NaN)
+          foundPtyId = Number.isInteger(index) ? (candidateIds[index] ?? null) : null
           return true
         }
         return false

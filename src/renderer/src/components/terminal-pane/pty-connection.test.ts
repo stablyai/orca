@@ -31,7 +31,7 @@ type StoreState = {
   repos: { id: string; connectionId?: string | null }[]
   sshConnectionStates: Map<string, { status: string }>
   cacheTimerByKey: Record<string, number | null>
-  settings: { promptCacheTimerEnabled?: boolean } | null
+  settings: { promptCacheTimerEnabled?: boolean; activeRuntimeEnvironmentId?: string | null } | null
   codexRestartNoticeByPtyId: Record<
     string,
     { previousAccountLabel: string; nextAccountLabel: string }
@@ -42,6 +42,9 @@ type StoreState = {
   removeDeferredSshSessionId: ReturnType<typeof vi.fn>
   consumePendingColdRestore: ReturnType<typeof vi.fn>
   consumePendingSnapshot: ReturnType<typeof vi.fn>
+  agentStatusByPaneKey: Record<string, unknown>
+  removeAgentStatus: ReturnType<typeof vi.fn>
+  dropAgentStatus: ReturnType<typeof vi.fn>
 }
 
 type ConnectCallbacks = {
@@ -142,6 +145,19 @@ vi.mock('./pty-transport', () => ({
   })
 }))
 
+vi.mock('./remote-runtime-pty-transport', () => ({
+  createRemoteRuntimePtyTransport: vi.fn(
+    (_environmentId: string, options: Record<string, unknown>) => {
+      createdTransportOptions.push(options)
+      const nextTransport = transportFactoryQueue.shift()
+      if (!nextTransport) {
+        throw new Error('No mock transport queued')
+      }
+      return nextTransport
+    }
+  )
+}))
+
 function createMockTransport(initialPtyId: string | null = null): MockTransport {
   let ptyId = initialPtyId
   return {
@@ -173,7 +189,10 @@ function createPane(paneId: number) {
       write: vi.fn(),
       onData: vi.fn(() => ({ dispose: vi.fn() })),
       onResize: vi.fn(() => ({ dispose: vi.fn() })),
-      onTitleChange: vi.fn(() => ({ dispose: vi.fn() }))
+      onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
+      parser: {
+        registerOscHandler: vi.fn(() => ({ dispose: vi.fn() }))
+      }
     },
     container: { dataset: {} },
     fitAddon: {
@@ -268,7 +287,9 @@ describe('connectPanePty', () => {
       removeDeferredSshSessionId: vi.fn(),
       consumePendingColdRestore: vi.fn(() => null),
       consumePendingSnapshot: vi.fn(() => null),
-      removeAgentStatus: vi.fn()
+      agentStatusByPaneKey: {},
+      removeAgentStatus: vi.fn(),
+      dropAgentStatus: vi.fn()
     } as StoreState
     ;(globalThis as unknown as { window: unknown }).window = {
       api: {
@@ -568,6 +589,43 @@ describe('connectPanePty', () => {
     } finally {
       globalThis.setTimeout = originalSetTimeout
     }
+  })
+
+  it('drops agent status without retaining when OSC 133 reports the command finished', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-local-1'
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      agentStatusByPaneKey: {
+        'tab-1:1': {
+          paneKey: 'tab-1:1',
+          state: 'done',
+          prompt: 'hi',
+          updatedAt: 1000,
+          stateStartedAt: 1000,
+          agentType: 'codex',
+          stateHistory: []
+        }
+      }
+    }
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({ isVisibleRef: { current: false } })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    capturedDataCallback.current?.('\x1b]133;D;130\x07thebr ~/repo $ ')
+
+    expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith('tab-1:1')
+    expect(mockStoreState.removeAgentStatus).not.toHaveBeenCalled()
   })
 
   it('reattaches a remounted split pane to its restored leaf PTY instead of the tab-level PTY', async () => {
@@ -925,6 +983,65 @@ describe('connectPanePty', () => {
     expect(transport.attach).not.toHaveBeenCalled()
     await flushAsyncTicks()
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'pty-local-detached')
+  })
+
+  it('attaches remote runtime PTY handles instead of creating a replacement terminal', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'remote:terminal-1' }]
+      },
+      settings: {
+        ...mockStoreState.settings,
+        activeRuntimeEnvironmentId: 'env-1'
+      }
+    } as StoreState
+
+    const pane = createPane(2)
+    const manager = createManager(2)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    expect(transport.connect).not.toHaveBeenCalled()
+    expect(transport.attach).toHaveBeenCalledWith(
+      expect.objectContaining({ existingPtyId: 'remote:terminal-1' })
+    )
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'remote:terminal-1')
+  })
+
+  it('constructs restored encoded remote PTYs with their owning runtime environment', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'remote:env-1@@terminal-1' }]
+      },
+      settings: {
+        ...mockStoreState.settings,
+        activeRuntimeEnvironmentId: 'env-2'
+      }
+    } as StoreState
+
+    const pane = createPane(2)
+    const manager = createManager(2)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    expect(createRemoteRuntimePtyTransport).toHaveBeenCalledWith('env-1', expect.any(Object))
+    expect(transport.attach).toHaveBeenCalledWith(
+      expect.objectContaining({ existingPtyId: 'remote:env-1@@terminal-1' })
+    )
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'remote:env-1@@terminal-1')
   })
 
   it('persists a restarted pane PTY id and uses it on the next remount', async () => {

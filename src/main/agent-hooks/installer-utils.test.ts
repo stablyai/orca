@@ -6,15 +6,18 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  statSync,
   writeFileSync,
   chmodSync
 } from 'fs'
-import { tmpdir } from 'os'
+import { homedir, tmpdir } from 'os'
 import { join } from 'path'
 import { spawnSync } from 'child_process'
 import {
   createManagedCommandMatcher,
+  getSharedManagedScriptPath,
   wrapPosixHookCommand,
+  writeManagedScript,
   writeHooksJson,
   type HooksConfig
 } from './installer-utils'
@@ -160,6 +163,46 @@ describe('createManagedCommandMatcher', () => {
       )
     ).toBe(true)
   })
+
+  it('matches the legacy per-userData script path AND the new shared ~/.orca path', () => {
+    // Why: install() must sweep old per-userData commands when migrating to
+    // the shared ~/.orca script path, or stale launchers keep failing.
+    expect(
+      match("/bin/sh '/Users/alice/Library/Application Support/orca/agent-hooks/claude-hook.sh'")
+    ).toBe(true)
+    expect(match("/bin/sh '/Users/alice/.orca/agent-hooks/claude-hook.sh'")).toBe(true)
+  })
+})
+
+describe('getSharedManagedScriptPath', () => {
+  it("returns ~/.orca/agent-hooks/<scriptFileName> rooted at the user's home", () => {
+    expect(getSharedManagedScriptPath('claude-hook.sh')).toBe(
+      join(homedir(), '.orca', 'agent-hooks', 'claude-hook.sh')
+    )
+  })
+
+  it('does not depend on Electron app.getPath, so two Orca instances resolve to the same path', () => {
+    // Why: using userData here would reintroduce dev/prod settings thrash.
+    const a = getSharedManagedScriptPath('claude-hook.sh')
+    const b = getSharedManagedScriptPath('claude-hook.sh')
+    expect(a).toBe(b)
+  })
+})
+
+describe('writeManagedScript', () => {
+  it.skipIf(process.platform === 'win32')(
+    'repairs executable bits even when script content is unchanged',
+    () => {
+      const scriptPath = join(tmpDir, 'agent-hooks', 'claude-hook.sh')
+
+      writeManagedScript(scriptPath, '#!/bin/sh\nexit 0\n')
+      chmodSync(scriptPath, 0o644)
+
+      writeManagedScript(scriptPath, '#!/bin/sh\nexit 0\n')
+
+      expect(statSync(scriptPath).mode & 0o111).not.toBe(0)
+    }
+  )
 })
 
 describe('wrapPosixHookCommand', () => {

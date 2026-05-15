@@ -1,8 +1,34 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { monaco } from '@/lib/monaco-setup'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
+import { resolveDocumentTheme } from '@/lib/document-theme'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
+
+let pythonLanguageRegistrationPromise: Promise<void> | null = null
+
+async function ensureColorizationLanguage(language: string): Promise<void> {
+  if (language !== 'python') {
+    return
+  }
+  pythonLanguageRegistrationPromise ??=
+    import('monaco-editor/esm/vs/basic-languages/python/python.js').then(
+      ({ conf, language: pythonTokens }) => {
+        // Why: notebook excerpts colorize without mounting Monaco editors. Load
+        // Python tokens only on demand so non-notebook users do not pay at startup.
+        if (!monaco.languages.getLanguages().some((item) => item.id === 'python')) {
+          monaco.languages.register({
+            id: 'python',
+            extensions: ['.py', '.pyw'],
+            aliases: ['Python', 'py']
+          })
+        }
+        monaco.languages.setLanguageConfiguration('python', conf)
+        monaco.languages.setMonarchTokensProvider('python', pythonTokens)
+      }
+    )
+  await pythonLanguageRegistrationPromise
+}
 
 type MonacoCodeExcerptProps = {
   lines: string[]
@@ -26,9 +52,7 @@ export default function MonacoCodeExcerpt({
     editorFontZoomLevel
   )
   const fontFamily = settings?.terminalFontFamily || 'monospace'
-  const isDark =
-    settings?.theme === 'dark' ||
-    (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const isDark = resolveDocumentTheme(settings?.theme ?? 'system')
   const code = useMemo(() => lines.join('\n'), [lines])
   const [htmlLines, setHtmlLines] = useState<string[]>(() => lines.map(() => ''))
 
@@ -42,12 +66,24 @@ export default function MonacoCodeExcerpt({
       return
     }
 
-    // Why: colorizeModelLine gives the comment excerpt Monaco's token colors
-    // without mounting a full editor instance for every visible PR comment.
-    const model = monaco.editor.createModel(code, language)
-    const nextLines = lines.map((_, index) => monaco.editor.colorizeModelLine(model, index + 1, 2))
-    model.dispose()
-    setHtmlLines(nextLines)
+    let cancelled = false
+    // Why: notebook languages like Python are loaded lazily by Monaco. The
+    // async colorizer waits for that tokenizer; colorizeModelLine can render
+    // only default-token spans if called before the contribution finishes.
+    void ensureColorizationLanguage(language)
+      .catch(() => undefined)
+      .then(() => monaco.editor.colorize(code, language, { tabSize: 2 }))
+      .then((html) => {
+        if (cancelled) {
+          return
+        }
+        const nextLines = html.split('<br/>').slice(0, lines.length)
+        setHtmlLines(nextLines)
+      })
+
+    return () => {
+      cancelled = true
+    }
   }, [code, language, lines])
 
   return (

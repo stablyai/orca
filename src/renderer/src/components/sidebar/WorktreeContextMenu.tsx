@@ -3,7 +3,12 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -18,6 +23,7 @@ import {
   Pencil,
   Pin,
   PinOff,
+  Kanban,
   Trash2
 } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -27,6 +33,8 @@ import type { Worktree } from '../../../../shared/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
+import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
+import { getWorkspaceStatus, getWorkspaceStatusVisualMeta } from './workspace-status'
 
 type Props = {
   worktree: Worktree
@@ -37,6 +45,7 @@ type Props = {
 }
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
+const WORKTREE_CONTEXT_MENU_SCOPE_ATTR = 'data-worktree-context-menu-scope'
 
 const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   worktree,
@@ -46,6 +55,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   onContextMenuSelect
 }: Props) {
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
+  const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const openModal = useAppStore((s) => s.openModal)
   const repo = useRepoById(worktree.repoId)
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
@@ -75,6 +85,16 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     () => activeContextWorktrees.some((item) => deleteStateByWorktreeId[item.id]?.isDeleting),
     [activeContextWorktrees, deleteStateByWorktreeId]
   )
+  const contextWorkspaceStatus = useMemo(() => {
+    const [first, ...rest] = activeContextWorktrees
+    if (!first) {
+      return ''
+    }
+    const status = getWorkspaceStatus(first, workspaceStatuses)
+    return rest.every((item) => getWorkspaceStatus(item, workspaceStatuses) === status)
+      ? status
+      : ''
+  }, [activeContextWorktrees, workspaceStatuses])
   const batchDeleteWorktrees = useMemo(
     () =>
       activeContextWorktrees.filter((item) => {
@@ -99,8 +119,16 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   }, [])
 
   const handleOpenInFinder = useCallback(() => {
+    if (
+      isLocalPathOpenBlocked(useAppStore.getState().settings, {
+        connectionId: repo?.connectionId ?? null
+      })
+    ) {
+      showLocalPathOpenBlockedToast()
+      return
+    }
     window.api.shell.openPath(worktree.path)
-  }, [worktree.path])
+  }, [repo?.connectionId, worktree.path])
 
   const handleCopyPath = useCallback(() => {
     window.api.ui.writeClipboardText(worktree.path)
@@ -114,35 +142,73 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     updateWorktreeMeta(worktree.id, { isPinned: !worktree.isPinned })
   }, [worktree.id, worktree.isPinned, updateWorktreeMeta])
 
+  const handleAssignWorkspaceStatus = useCallback(
+    (status: string) => {
+      setMenuOpen(false)
+      void Promise.all(
+        activeContextWorktrees.map((item) =>
+          getWorkspaceStatus(item, workspaceStatuses) === status
+            ? Promise.resolve()
+            : updateWorktreeMeta(item.id, { workspaceStatus: status })
+        )
+      )
+    },
+    [activeContextWorktrees, updateWorktreeMeta, workspaceStatuses]
+  )
+
   const handleRename = useCallback(() => {
     openModal('edit-meta', {
       worktreeId: worktree.id,
       currentDisplayName: worktree.displayName,
       currentIssue: worktree.linkedIssue,
+      currentPR: worktree.linkedPR,
       currentComment: worktree.comment,
       focus: 'displayName'
     })
-  }, [worktree.id, worktree.displayName, worktree.linkedIssue, worktree.comment, openModal])
+  }, [
+    worktree.id,
+    worktree.displayName,
+    worktree.linkedIssue,
+    worktree.linkedPR,
+    worktree.comment,
+    openModal
+  ])
 
   const handleLinkIssue = useCallback(() => {
     openModal('edit-meta', {
       worktreeId: worktree.id,
       currentDisplayName: worktree.displayName,
       currentIssue: worktree.linkedIssue,
+      currentPR: worktree.linkedPR,
       currentComment: worktree.comment,
       focus: 'issue'
     })
-  }, [worktree.id, worktree.displayName, worktree.linkedIssue, worktree.comment, openModal])
+  }, [
+    worktree.id,
+    worktree.displayName,
+    worktree.linkedIssue,
+    worktree.linkedPR,
+    worktree.comment,
+    openModal
+  ])
 
   const handleComment = useCallback(() => {
     openModal('edit-meta', {
       worktreeId: worktree.id,
       currentDisplayName: worktree.displayName,
       currentIssue: worktree.linkedIssue,
+      currentPR: worktree.linkedPR,
       currentComment: worktree.comment,
       focus: 'comment'
     })
-  }, [worktree.id, worktree.displayName, worktree.linkedIssue, worktree.comment, openModal])
+  }, [
+    worktree.id,
+    worktree.displayName,
+    worktree.linkedIssue,
+    worktree.linkedPR,
+    worktree.comment,
+    openModal
+  ])
 
   const handleCloseTerminals = useCallback(async () => {
     await runSleepWorktrees(sleepableWorktrees.map((item) => item.id))
@@ -186,6 +252,13 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       <div
         className="relative"
         onContextMenuCapture={(event) => {
+          const target = event.target
+          if (
+            target instanceof Element &&
+            target.closest(`[${WORKTREE_CONTEXT_MENU_SCOPE_ATTR}]`)
+          ) {
+            return
+          }
           event.preventDefault()
           window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
           setContextWorktrees(onContextMenuSelect?.(event) ?? selectedWorktrees)
@@ -245,6 +318,30 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
               <DropdownMenuSeparator />
             </>
           )}
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger disabled={deletingContext}>
+              <Kanban className="size-3.5" />
+              {isMultiContext ? 'Move Selected to Status' : 'Move to Status'}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-44">
+              <DropdownMenuRadioGroup value={contextWorkspaceStatus}>
+                {workspaceStatuses.map((status) => {
+                  const meta = getWorkspaceStatusVisualMeta(status)
+                  return (
+                    <DropdownMenuRadioItem
+                      key={status.id}
+                      value={status.id}
+                      onSelect={() => handleAssignWorkspaceStatus(status.id)}
+                    >
+                      <meta.icon className={cn('size-3.5', meta.tone)} />
+                      {status.label}
+                    </DropdownMenuRadioItem>
+                  )
+                })}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuSeparator />
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuItem
@@ -295,3 +392,4 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
 })
 
 export default WorktreeContextMenu
+export { CLOSE_ALL_CONTEXT_MENUS_EVENT, WORKTREE_CONTEXT_MENU_SCOPE_ATTR }

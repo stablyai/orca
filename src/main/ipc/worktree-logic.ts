@@ -1,5 +1,7 @@
 import { basename, join, resolve, relative, isAbsolute, posix, win32 } from 'path'
 import type { GitWorktreeInfo, Worktree, WorktreeMeta } from '../../shared/types'
+import { splitWorktreeId } from '../../shared/worktree-id'
+import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import { getWslHome, parseWslPath } from '../wsl'
 
 /**
@@ -186,12 +188,15 @@ export function mergeWorktree(
     linkedIssue: meta?.linkedIssue ?? null,
     linkedPR: meta?.linkedPR ?? null,
     linkedLinearIssue: meta?.linkedLinearIssue ?? null,
+    linkedGitLabMR: meta?.linkedGitLabMR ?? null,
+    linkedGitLabIssue: meta?.linkedGitLabIssue ?? null,
     isArchived: meta?.isArchived ?? false,
     isUnread: meta?.isUnread ?? false,
     isPinned: meta?.isPinned ?? false,
     sortOrder: meta?.sortOrder ?? 0,
     lastActivityAt: meta?.lastActivityAt ?? 0,
     ...(meta?.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
+    ...(meta?.createdWithAgent !== undefined ? { createdWithAgent: meta.createdWithAgent } : {}),
     ...(git.isSparse === true
       ? {
           sparseDirectories: meta?.sparseDirectories,
@@ -200,6 +205,8 @@ export function mergeWorktree(
         }
       : {}),
     ...(meta?.baseRef !== undefined ? { baseRef: meta.baseRef } : {}),
+    ...(meta?.pushTarget !== undefined ? { pushTarget: meta.pushTarget } : {}),
+    workspaceStatus: meta?.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
     // Why: diff comments are persisted on WorktreeMeta (see `WorktreeMeta` in
     // shared/types) and forwarded verbatim so the renderer store mirrors
     // on-disk state. `undefined` here means the worktree has no comments yet.
@@ -211,14 +218,11 @@ export function mergeWorktree(
  * Parse a composite worktreeId ("repoId::worktreePath") into its parts.
  */
 export function parseWorktreeId(worktreeId: string): { repoId: string; worktreePath: string } {
-  const sepIdx = worktreeId.indexOf('::')
-  if (sepIdx === -1) {
+  const parsed = splitWorktreeId(worktreeId)
+  if (!parsed) {
     throw new Error(`Invalid worktreeId: ${worktreeId}`)
   }
-  return {
-    repoId: worktreeId.slice(0, sepIdx),
-    worktreePath: worktreeId.slice(sepIdx + 2)
-  }
+  return parsed
 }
 
 /**

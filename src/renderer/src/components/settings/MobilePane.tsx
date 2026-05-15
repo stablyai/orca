@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import type { SettingsSearchEntry } from './settings-search'
 import { useAppStore } from '../../store'
+import { useMobilePairingDevicePolling } from './mobile-pairing-device-polling'
 
 // Why: the section heading "When you leave the mobile app" carries the
 // "what happens" framing so the option labels only need to vary on the
@@ -177,13 +178,11 @@ export function MobilePane(): React.JSX.Element {
     setDeviceCountAtQr(devices.length)
   }, [qrDataUrl]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (deviceCountAtQr === null || devices.length > deviceCountAtQr) {
-      return
-    }
-    const interval = setInterval(() => void loadDevices(), 3000)
-    return () => clearInterval(interval)
-  }, [deviceCountAtQr, devices.length, loadDevices])
+  useMobilePairingDevicePolling({
+    deviceCountAtQr,
+    currentDeviceCount: devices.length,
+    loadDevices
+  })
 
   async function copyPairingCode() {
     if (!pairingUrl) {

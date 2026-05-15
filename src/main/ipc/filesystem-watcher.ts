@@ -239,6 +239,14 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
     // therefore never unsubscribed), leaking a native file-watcher handle.
     let errorCleanedUp = false
 
+    const watcherOptions = {
+      ignore: WATCHER_IGNORE_DIRS,
+      // Why: Parcel checks Watchman before the native Windows backend by
+      // default, and Windows prints a shell-level "watchman not recognized"
+      // error for that probe. Pinning the backend keeps local watches quiet.
+      ...(process.platform === 'win32' ? { backend: 'windows' as const } : {})
+    }
+
     root.subscription = await watcher.subscribe(
       rootPath,
       (err, events) => {
@@ -280,9 +288,7 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
         root.batch.events.push(...events)
         scheduleBatchFlush(rootKey, root)
       },
-      {
-        ignore: WATCHER_IGNORE_DIRS
-      }
+      watcherOptions
     )
 
     // Why: if the error callback already fired and cleaned up watchedRoots

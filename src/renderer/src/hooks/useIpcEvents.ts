@@ -1,6 +1,7 @@
 /* oxlint-disable max-lines -- Why: this App-level IPC bridge intentionally keeps the renderer's main-process event contract in one place so shortcut, runtime, updater, and agent-status wiring do not drift across files. */
 import { useEffect } from 'react'
 import { useAppStore } from '../store'
+import { getWorktreeMapFromState, getRepoMapFromState } from '@/store/selectors'
 import { applyUIZoom } from '@/lib/ui-zoom'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { runSleepWorktree } from '@/components/sidebar/sleep-worktree-flow'
@@ -34,10 +35,16 @@ import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { detectLanguage } from '@/lib/language-detect'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
+import { track } from '@/lib/telemetry'
+import { requestProjectNotesTabClose } from '@/lib/project-notes-close-request'
 
 export { resolveZoomTarget } from './resolve-zoom-target'
 
 const ZOOM_STEP = 0.5
+
+function isRuntimeEnvironmentActive(): boolean {
+  return Boolean(useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim())
+}
 
 export function useIpcEvents(): void {
   useEffect(() => {
@@ -47,12 +54,23 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.repos.onChanged(() => {
+        if (isRuntimeEnvironmentActive()) {
+          // Why: this event comes from the local Electron store. While a
+          // runtime server is selected, repo hydration must be driven by the
+          // selected server instead of local-disk changes.
+          return
+        }
         useAppStore.getState().fetchRepos()
       })
     )
 
     unsubs.push(
       window.api.worktrees.onChanged(async (data: { repoId: string }) => {
+        if (isRuntimeEnvironmentActive()) {
+          // Why: local worktree events carry local repo ids. Fetching the
+          // active runtime with those ids can purge or overwrite server state.
+          return
+        }
         // Why: diff before vs. after fetchWorktrees to detect server-side
         // deletions (CLI `orca worktree rm`, other window, out-of-band RPC)
         // and purge worktree-scoped state for removed ids. Without this,
@@ -76,18 +94,25 @@ export function useIpcEvents(): void {
             removed
           )
           afterState.purgeWorktreeTerminalState(removed)
+          afterState.removeWorkspaceSpaceWorktrees(removed)
         }
       })
     )
 
     unsubs.push(
       window.api.worktrees.onBaseStatus((event) => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
         useAppStore.getState().updateWorktreeBaseStatus(event)
       })
     )
 
     unsubs.push(
       window.api.worktrees.onRemoteBranchConflict((event) => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
         useAppStore.getState().updateWorktreeRemoteBranchConflict(event)
       })
     )
@@ -95,6 +120,18 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onOpenSettings(() => {
         useAppStore.getState().openSettingsPage()
+      })
+    )
+
+    unsubs.push(
+      window.api.ui.onOpenFeatureTour(() => {
+        useAppStore.getState().openModal('feature-wall', { source: 'help_menu' })
+      })
+    )
+
+    unsubs.push(
+      window.api.ui.onShowFeatureTourNudge(() => {
+        useAppStore.getState().showFeatureTourNudge()
       })
     )
 
@@ -217,6 +254,12 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onActivateWorktree(({ repoId, worktreeId, setup, startup }) => {
         void (async () => {
+          if (isRuntimeEnvironmentActive()) {
+            // Why: local CLI-created worktree events carry local repo/worktree
+            // ids. Runtime server activation arrives through runtime state,
+            // not this local Electron event.
+            return
+          }
           // Why: fetch worktrees first so the activation helper can resolve
           // the CLI-created worktree via findWorktreeById — it arrived from
           // the main process and is not yet in the renderer state.
@@ -235,8 +278,17 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onCreateTerminal(
-        ({ requestId, worktreeId, command, title, ptyId, activate }) => {
+        ({ requestId, worktreeId, command, title, ptyId, activate, tabId }) => {
           try {
+            if (isRuntimeEnvironmentActive()) {
+              if (requestId) {
+                window.api.ui.replyTerminalCreate({
+                  requestId,
+                  error: 'Local terminal reveal is unavailable while a remote runtime is active'
+                })
+              }
+              return
+            }
             const store = useAppStore.getState()
             const shouldActivate = activate !== false
             if (shouldActivate) {
@@ -256,9 +308,24 @@ export function useIpcEvents(): void {
                 ) ??
                 store.createTab(worktreeId, undefined, undefined, {
                   initialPtyId: ptyId,
-                  activate: shouldActivate
+                  activate: shouldActivate,
+                  // Why: tabId hint comes from CLI-spawned PTYs whose env
+                  // already has paneKey=`${tabId}:1` baked in. Adopting the
+                  // tab under the same id keeps hook-event attribution working;
+                  // see docs/cli-terminal-hook-pane-key.md.
+                  ...(tabId !== undefined ? { id: tabId } : {})
                 }))
               : store.createTab(worktreeId)
+            // Why: when an existing tab already owns this ptyId, we reuse it instead of
+            // minting a new one — but the PTY env already carries `paneKey=`${tabId}:1``
+            // from main. If the existing tab id doesn't match the hint, hook attribution
+            // will degrade for that PTY's lifetime. Warn so this is visible during
+            // development; in production this surfaces via `agent_hook_unattributed`.
+            if (tabId !== undefined && tab.id !== tabId) {
+              console.warn(
+                `[onCreateTerminal] tabId hint ${tabId} ignored for ptyId ${ptyId}; existing tab ${tab.id} adopted instead (hook attribution will degrade for this terminal)`
+              )
+            }
             if (shouldActivate) {
               store.setActiveTabType('terminal')
               store.setActiveTab(tab.id)
@@ -296,6 +363,13 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onRequestTerminalCreate((data) => {
         try {
+          if (isRuntimeEnvironmentActive()) {
+            window.api.ui.replyTerminalCreate({
+              requestId: data.requestId,
+              error: 'Local terminal creation is unavailable while a remote runtime is active'
+            })
+            return
+          }
           const store = useAppStore.getState()
           const worktreeId = data.worktreeId ?? store.activeWorktreeId
           if (!worktreeId) {
@@ -482,6 +556,9 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.browser.onGuestLoadFailed(({ browserPageId, loadError }) => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
         useAppStore.getState().updateBrowserPageState(browserPageId, {
           loading: false,
           loadError,
@@ -497,6 +574,9 @@ export function useIpcEvents(): void {
     // This IPC pushes the live URL/title from main after goto/click/back/reload.
     unsubs.push(
       window.api.browser.onNavigationUpdate(({ browserPageId, url, title }) => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
         const store = useAppStore.getState()
         store.setBrowserPageUrl(browserPageId, url)
         store.updateBrowserPageState(browserPageId, { title, loading: false })
@@ -509,6 +589,9 @@ export function useIpcEvents(): void {
     // before browser commands so the webview can start and registerGuest fires.
     unsubs.push(
       window.api.browser.onActivateView(() => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
         useAppStore.getState().setActiveTabType('browser')
       })
     )
@@ -524,6 +607,9 @@ export function useIpcEvents(): void {
     // pre-staging for whenever the user next visits that worktree.
     unsubs.push(
       window.api.browser.onPaneFocus(({ worktreeId, browserPageId }) => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
         const store = useAppStore.getState()
         // Why: main sends `worktreeId: null` if the tab closed between the
         // bridge resolving tabSwitch and getWorktreeIdForTab running. Falling
@@ -540,6 +626,9 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.browser.onOpenLinkInOrcaTab(({ browserPageId, url }) => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
         const store = useAppStore.getState()
         const sourcePage = Object.values(store.browserPagesByWorkspace)
           .flat()
@@ -559,6 +648,9 @@ export function useIpcEvents(): void {
     // capture keyboard focus and bypass the renderer's window-level keydown.
     unsubs.push(
       window.api.ui.onNewBrowserTab(() => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
         const store = useAppStore.getState()
         const worktreeId = store.activeWorktreeId
         if (worktreeId) {
@@ -576,6 +668,15 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onRequestTabCreate((data) => {
         try {
+          if (isRuntimeEnvironmentActive()) {
+            // Why: browser automation targets client-local Electron webviews.
+            // Runtime agents cannot see or control those surfaces.
+            window.api.ui.replyTabCreate({
+              requestId: data.requestId,
+              error: 'Browser tabs are unavailable while a remote runtime is active'
+            })
+            return
+          }
           const store = useAppStore.getState()
           const worktreeId = data.worktreeId ?? store.activeWorktreeId
           if (!worktreeId) {
@@ -615,6 +716,13 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onRequestTabSetProfile((data) => {
         try {
+          if (isRuntimeEnvironmentActive()) {
+            window.api.ui.replyTabSetProfile({
+              requestId: data.requestId,
+              error: 'Browser profiles are unavailable while a remote runtime is active'
+            })
+            return
+          }
           const store = useAppStore.getState()
           const owningWorkspace = Object.values(store.browserTabsByWorktree)
             .flat()
@@ -656,6 +764,13 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onRequestTabClose((data) => {
         try {
+          if (isRuntimeEnvironmentActive()) {
+            window.api.ui.replyTabClose({
+              requestId: data.requestId,
+              error: 'Browser tabs are unavailable while a remote runtime is active'
+            })
+            return
+          }
           const store = useAppStore.getState()
           const explicitTargetId = data.tabId ?? null
           let tabToClose =
@@ -751,6 +866,15 @@ export function useIpcEvents(): void {
         const store = useAppStore.getState()
         if (store.activeTabType === 'browser' && store.activeBrowserTabId) {
           store.closeBrowserTab(store.activeBrowserTabId)
+          return
+        }
+        if (store.activeTabType === 'notes' && store.activeWorktreeId) {
+          const activeTab = store.getActiveTab(store.activeWorktreeId)
+          if (activeTab?.contentType === 'notes') {
+            requestProjectNotesTabClose(activeTab.id, () => {
+              store.closeUnifiedTab(activeTab.id)
+            })
+          }
         }
       })
     )
@@ -769,6 +893,15 @@ export function useIpcEvents(): void {
         useAppStore.getState().setRateLimitsFromPush(state as RateLimitState)
       })
     )
+
+    const unsubscribeWorkspaceSpaceProgress = window.api.workspaceSpace?.onProgress?.(
+      (progress) => {
+        useAppStore.getState().applyWorkspaceSpaceProgress(progress)
+      }
+    )
+    if (unsubscribeWorkspaceSpaceProgress) {
+      unsubs.push(unsubscribeWorkspaceSpaceProgress)
+    }
 
     // Track SSH connection state changes so the renderer can show
     // disconnected indicators on remote worktrees.
@@ -976,7 +1109,10 @@ export function useIpcEvents(): void {
     // hook callback or an OSC fallback path. Startup pushes are ignored until
     // workspace session hydration finishes; the snapshot pull below replays the
     // main-process cache after tab identity is available.
-    const applyAgentStatus = (data: AgentStatusIpcPayload): void => {
+    const applyAgentStatus = (
+      data: AgentStatusIpcPayload,
+      options?: { replay?: boolean }
+    ): void => {
       const store = useAppStore.getState()
       if (!store.workspaceSessionReady) {
         return
@@ -993,8 +1129,29 @@ export function useIpcEvents(): void {
       if (!payload) {
         return
       }
-      const { exists, title } = resolvePaneKey(store, data.paneKey)
+      const { exists, title, repoConnectionId } = resolvePaneKey(store, data.paneKey)
       if (!exists) {
+        // Why: empty paneKeys are dropped in main before IPC fanout. Reaching
+        // this branch means a non-empty paneKey escaped without a matching
+        // renderer tab, so track the adoption/routing failure separately.
+        // Skipped during snapshot replay because main's durable cache may
+        // include entries whose tabs were closed before this session — that
+        // reconciliation miss is not a regression signal.
+        if (options?.replay !== true) {
+          track('agent_hook_unattributed', { reason: 'unknown_tab_id' })
+        }
+        return
+      }
+      // Why: drop in-flight events from a connection that no longer owns
+      // this pane. After an SSH disconnect (or tab destroy/recreate during
+      // reconnect), notifications may still arrive stamped with the
+      // connectionId of the dead connection. The renderer compares the
+      // stamped connectionId against the live repo's connectionId for the
+      // pane's worktree — see docs/design/agent-status-over-ssh.md §5.
+      // The IPC contract declares connectionId as required (string | null),
+      // so the undefined branch only fires under dev hot-reload skew where
+      // the renderer bundle is newer than the preload bundle.
+      if (data.connectionId !== undefined && data.connectionId !== repoConnectionId) {
         return
       }
       store.setAgentStatus(data.paneKey, payload, title, {
@@ -1030,7 +1187,7 @@ export function useIpcEvents(): void {
             return
           }
           for (const entry of entries) {
-            applyAgentStatus(entry)
+            applyAgentStatus(entry, { replay: true })
           }
           const getMigrationUnsupportedSnapshot =
             window.api.agentStatus.getMigrationUnsupportedSnapshot
@@ -1097,12 +1254,17 @@ export function useIpcEvents(): void {
 
     // Why: hydrate mobile-fit overrides before terminal panes run their first
     // attach/fit logic, so a renderer reload doesn't undo active mobile fits.
-    void window.api.runtime.getTerminalFitOverrides().then((overrides) => {
-      hydrateOverrides(overrides)
-    })
+    if (!isRuntimeEnvironmentActive()) {
+      void window.api.runtime.getTerminalFitOverrides().then((overrides) => {
+        hydrateOverrides(overrides)
+      })
+    }
 
     unsubs.push(
       window.api.runtime.onTerminalFitOverrideChanged((event) => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
         setFitOverride(event.ptyId, event.mode, event.cols, event.rows)
       })
     )
@@ -1113,6 +1275,9 @@ export function useIpcEvents(): void {
       // know which PTYs are currently driven by mobile. See
       // docs/mobile-presence-lock.md.
       window.api.runtime.onTerminalDriverChanged((event) => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
         setDriverForPty(event.ptyId, event.driver)
       })
     )
@@ -1122,25 +1287,29 @@ export function useIpcEvents(): void {
 }
 
 /** Resolve a paneKey (tabId:leafId) to both a liveness check and the current
- *  terminal title, in a single walk of tabsByWorktree. Used for agent type
- *  inference when the CLI payload omits agentType, plus to drop status updates
- *  targeted at panes whose tabs have already been torn down.
- *  Why combined: callers need both pieces per hook event, and hook events can
- *  fire many times per second during a tool-use run. Two separate O(N) scans
- *  over the same map is wasteful; one pass returns both. */
+ *  title, and the connectionId of the repo that owns the pane's worktree.
+ *  Walks tabsByWorktree to locate the tab, then resolves the owning worktree
+ *  and repo via cached selector maps. Used for agent type inference when the
+ *  CLI payload omits agentType, plus to drop status updates targeted at panes
+ *  whose tabs have already been torn down or whose owning connection is no
+ *  longer live (see docs/design/agent-status-over-ssh.md §5).
+ *  Why combined: callers need all three pieces per hook event, and hook
+ *  events can fire many times per second during a tool-use run. Bundling
+ *  liveness + title + connectionId into one helper keeps the per-event work
+ *  in one place and avoids re-deriving the owning repo at the call site. */
 function resolvePaneKey(
   store: ReturnType<typeof useAppStore.getState>,
   paneKey: string
-): { exists: boolean; title: string | undefined } {
+): { exists: boolean; title: string | undefined; repoConnectionId: string | null } {
   const parsed = parsePaneKey(paneKey)
   if (!parsed) {
-    return { exists: false, title: undefined }
+    return { exists: false, title: undefined, repoConnectionId: null }
   }
   const { tabId, leafId } = parsed
   const layout = store.terminalLayoutsByTabId?.[tabId]
   const leafExists = collectLeafIdsInOrder(layout?.root).includes(leafId)
   if (!leafExists) {
-    return { exists: false, title: undefined }
+    return { exists: false, title: undefined, repoConnectionId: null }
   }
   // Why: replay can remint numeric pane ids, so status title recovery must use
   // persisted leaf-keyed titles when crossing from hook state into tab state.
@@ -1152,11 +1321,13 @@ function resolvePaneKey(
   const paneTitle = rawPaneTitle && rawPaneTitle.length > 0 ? rawPaneTitle : undefined
   let exists = false
   let tabTitle: string | undefined
-  for (const tabs of Object.values(store.tabsByWorktree)) {
+  let owningWorktreeId: string | undefined
+  for (const [worktreeId, tabs] of Object.entries(store.tabsByWorktree)) {
     for (const tab of tabs) {
       if (tab.id === tabId) {
         exists = true
         tabTitle = tab.title
+        owningWorktreeId = worktreeId
         break
       }
     }
@@ -1164,5 +1335,17 @@ function resolvePaneKey(
       break
     }
   }
-  return { exists, title: paneTitle ?? tabTitle }
+  // Why: ownership lookup is `tab → worktree → repo → repo.connectionId`.
+  // Treat unknown owner (no matching worktree/repo) as `null` so remote
+  // events stamped with a string connectionId are dropped by the caller —
+  // we cannot prove they belong to the currently-live local repo.
+  let repoConnectionId: string | null = null
+  if (owningWorktreeId !== undefined) {
+    const worktree = getWorktreeMapFromState(store).get(owningWorktreeId)
+    if (worktree) {
+      const repo = getRepoMapFromState(store).get(worktree.repoId)
+      repoConnectionId = repo?.connectionId ?? null
+    }
+  }
+  return { exists, title: paneTitle ?? tabTitle, repoConnectionId }
 }

@@ -8,10 +8,12 @@ import { createTabsSlice } from './slices/tabs'
 import { createUISlice } from './slices/ui'
 import { createSettingsSlice } from './slices/settings'
 import { createGitHubSlice } from './slices/github'
+import { createHostedReviewSlice } from './slices/hosted-review'
 import { createLinearSlice } from './slices/linear'
 import { createEditorSlice } from './slices/editor'
 import { createStatsSlice } from './slices/stats'
 import { createMemorySlice } from './slices/memory'
+import { createWorkspaceSpaceSlice } from './slices/workspace-space'
 import { createClaudeUsageSlice } from './slices/claude-usage'
 import { createCodexUsageSlice } from './slices/codex-usage'
 import { createBrowserSlice } from './slices/browser'
@@ -21,6 +23,7 @@ import { createAgentStatusSlice } from './slices/agent-status'
 import { createDiffCommentsSlice } from './slices/diffComments'
 import { createDetectedAgentsSlice } from './slices/detected-agents'
 import { createWorktreeNavHistorySlice } from './slices/worktree-nav-history'
+import { createDictationSlice } from './slices/dictation'
 import { e2eConfig } from '@/lib/e2e-config'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 
@@ -33,10 +36,12 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createUISlice(...a),
   ...createSettingsSlice(...a),
   ...createGitHubSlice(...a),
+  ...createHostedReviewSlice(...a),
   ...createLinearSlice(...a),
   ...createEditorSlice(...a),
   ...createStatsSlice(...a),
   ...createMemorySlice(...a),
+  ...createWorkspaceSpaceSlice(...a),
   ...createClaudeUsageSlice(...a),
   ...createCodexUsageSlice(...a),
   ...createBrowserSlice(...a),
@@ -45,7 +50,8 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createAgentStatusSlice(...a),
   ...createDiffCommentsSlice(...a),
   ...createDetectedAgentsSlice(...a),
-  ...createWorktreeNavHistorySlice(...a)
+  ...createWorktreeNavHistorySlice(...a),
+  ...createDictationSlice(...a)
 }))
 
 registerHttpLinkStoreAccessor(() => useAppStore.getState())

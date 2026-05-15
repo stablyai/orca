@@ -14,8 +14,19 @@ import {
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { AgentHookServer, _internals } from './server'
-import { parseAgentStatusPayload } from '../../shared/agent-status-types'
+import {
+  AGENT_STATUS_MAX_FIELD_LENGTH,
+  parseAgentStatusPayload
+} from '../../shared/agent-status-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
+
+const { trackMock } = vi.hoisted(() => ({
+  trackMock: vi.fn()
+}))
+
+vi.mock('../telemetry/client', () => ({
+  track: trackMock
+}))
 
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
 const LEAF_2 = '22222222-2222-4222-8222-222222222222'
@@ -50,6 +61,7 @@ function buildBody(payload: Record<string, unknown>, overrides: Partial<Body> = 
 
 beforeEach(() => {
   _internals.resetCachesForTests()
+  trackMock.mockReset()
 })
 
 afterEach(() => {
@@ -128,6 +140,155 @@ describe('AgentHookServer listener replay', () => {
       server.setListener(listener)
 
       expect(listener).not.toHaveBeenCalled()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('tracks hook posts with an empty paneKey before dropping them', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify(
+          buildBody(
+            {
+              hook_event_name: 'UserPromptSubmit',
+              prompt: 'missing pane'
+            },
+            { paneKey: '' }
+          )
+        )
+      })
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      expect(response.status).toBe(204)
+      expect(listener).not.toHaveBeenCalled()
+      expect(trackMock).toHaveBeenCalledWith('agent_hook_unattributed', {
+        reason: 'empty_pane_key'
+      })
+    } finally {
+      server.stop()
+    }
+  })
+
+  // Why: agent-status-over-SSH §3 — ingestRemote must run the same warn-once
+  // cross-build diagnostics the local HTTP path runs, so a remote source of
+  // genuinely stale hooks emits the same signal locally.
+  it('runs warn-once env/version diagnostics on relay-forwarded events', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          env: 'development',
+          version: '999',
+          payload: {
+            state: 'working',
+            paneKey: PANE,
+            updatedAt: Date.now(),
+            agentType: 'claude'
+          }
+        },
+        'conn-1'
+      )
+
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          connectionId: 'conn-1',
+          payload: expect.objectContaining({ state: 'working', agentType: 'claude' })
+        })
+      )
+
+      const warnCalls = warn.mock.calls.map((c) => String(c[0]))
+      expect(warnCalls.some((m) => m.includes('v999'))).toBe(true)
+      expect(warnCalls.some((m) => m.includes('development') && m.includes('production'))).toBe(
+        true
+      )
+
+      const warnsAfterFirst = warn.mock.calls.length
+      const secondPane = makePaneKey('tab-2', LEAF_2)
+      server.ingestRemote(
+        {
+          paneKey: secondPane,
+          env: 'development',
+          version: '999',
+          payload: {
+            state: 'working',
+            paneKey: secondPane,
+            updatedAt: Date.now(),
+            agentType: 'claude'
+          }
+        },
+        'conn-1'
+      )
+      expect(warn.mock.calls.length).toBe(warnsAfterFirst)
+      // Why: pin both invariants — warn-once dedupe AND fanout still fires for
+      // the second event. Without the second assertion, a future refactor that
+      // drops the second event silently would still leave warn-count unchanged.
+      expect(listener).toHaveBeenCalledTimes(2)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('treats remote env as normal relay traffic and normalizes payload at the trust boundary', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      const oversizedPrompt = 'x'.repeat(AGENT_STATUS_MAX_FIELD_LENGTH + 50)
+      const remotePane = makePaneKey('tab-3', LEAF_3)
+      server.ingestRemote(
+        {
+          paneKey: ` ${remotePane} `,
+          tabId: ' tab-3 ',
+          worktreeId: ' wt-3 ',
+          env: 'remote',
+          version: '1',
+          payload: {
+            state: 'done',
+            prompt: oversizedPrompt,
+            agentType: 'codex'
+          }
+        },
+        ' conn-9 '
+      )
+
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: remotePane,
+          tabId: 'tab-3',
+          worktreeId: 'wt-3',
+          connectionId: 'conn-9',
+          payload: expect.objectContaining({
+            state: 'done',
+            agentType: 'codex',
+            prompt: 'x'.repeat(AGENT_STATUS_MAX_FIELD_LENGTH)
+          })
+        })
+      )
+      expect(warn).not.toHaveBeenCalled()
     } finally {
       server.stop()
     }
@@ -483,7 +644,7 @@ describe('Codex hook normalization', () => {
     // Why: Codex's PreToolUse is NOT an approval prompt — it fires for every
     // tool call. We map it to `working` (never `waiting`) and use it only to
     // give the dashboard a live readout during the gap between prompt and
-    // Stop. Real approval signals flow through Codex's `notify` callback.
+    // Stop. Real approval signals flow through PermissionRequest.
     const result = _internals.normalizeHookPayload(
       'codex',
       buildBody({
@@ -496,6 +657,26 @@ describe('Codex hook normalization', () => {
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.toolName).toBe('exec_command')
     expect(result?.payload.toolInput).toBe('git status')
+  })
+
+  it('PermissionRequest maps to waiting and surfaces the pending tool input', () => {
+    // Why: Codex asks for user attention through PermissionRequest. Orca's
+    // sidebar red dot depends on this becoming `waiting`; treating it like
+    // PreToolUse would leave the pane looking busy while it is blocked on the
+    // user.
+    const result = _internals.normalizeHookPayload(
+      'codex',
+      buildBody({
+        hook_event_name: 'PermissionRequest',
+        tool_name: 'exec_command',
+        tool_input: { cmd: 'rm -rf build', workdir: '/tmp' }
+      }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('waiting')
+    expect(result?.payload.agentType).toBe('codex')
+    expect(result?.payload.toolName).toBe('exec_command')
+    expect(result?.payload.toolInput).toBe('rm -rf build')
   })
 
   it('UserPromptSubmit does not extract tool fields even when the payload carries them', () => {
@@ -877,6 +1058,242 @@ describe('Cursor hook normalization', () => {
   })
 })
 
+describe('Droid hook normalization', () => {
+  it('UserPromptSubmit maps to working and captures the prompt', () => {
+    const result = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'ship this fix' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.agentType).toBe('droid')
+    expect(result?.payload.prompt).toBe('ship this fix')
+  })
+
+  it('Notification maps permission prompts to waiting and idle prompts to done', () => {
+    const waiting = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'Notification',
+        message: 'Droid needs your permission to use Execute'
+      }),
+      'production'
+    )
+    expect(waiting?.payload.state).toBe('waiting')
+
+    const done = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'Notification',
+        message: 'Droid is waiting for your input'
+      }),
+      'production'
+    )
+    expect(done?.payload.state).toBe('done')
+
+    const ignored = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'Notification',
+        message: 'Task completed successfully'
+      }),
+      'production'
+    )
+    expect(ignored).toBeNull()
+  })
+
+  it('Notification preserves the cached user prompt instead of using status text as prompt', () => {
+    _internals.normalizeHookPayload(
+      'droid',
+      buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'write tests' }),
+      'production'
+    )
+
+    const done = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'Notification',
+        message: 'Droid is waiting for your input'
+      }),
+      'production'
+    )
+
+    expect(done?.payload.state).toBe('done')
+    expect(done?.payload.prompt).toBe('write tests')
+  })
+
+  it('Notification ignores confirmation status text rather than treating it as permission', () => {
+    const result = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'Notification',
+        message: 'Confirmed configuration loaded'
+      }),
+      'production'
+    )
+
+    expect(result).toBeNull()
+  })
+
+  it('PreToolUse maps to working and surfaces the tool name and input preview', () => {
+    const result = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Read',
+        tool_input: { file_path: '/tmp/example.ts' }
+      }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.toolName).toBe('Read')
+    expect(result?.payload.toolInput).toBe('/tmp/example.ts')
+  })
+
+  it('PreToolUse falls back to the `name` and `input` fields when tool_name/tool_input are absent', () => {
+    const result = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        name: 'Bash',
+        input: { command: 'pnpm typecheck' }
+      }),
+      'production'
+    )
+    expect(result?.payload.toolName).toBe('Bash')
+    expect(result?.payload.toolInput).toBe('pnpm typecheck')
+  })
+
+  it('PreToolUse AskUser maps to waiting for human input', () => {
+    const result = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'AskUser',
+        tool_input: { question: 'Which permission-requiring action should I perform?' }
+      }),
+      'production'
+    )
+
+    expect(result?.payload.state).toBe('waiting')
+    expect(result?.payload.toolName).toBe('AskUser')
+  })
+
+  it('PreToolUse high-risk Execute maps to waiting for approval', () => {
+    const result = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Execute',
+        tool_input: {
+          command: 'echo "test modification" >> ~/.claude/config.json',
+          riskLevel: 'high',
+          riskLevelReason: "This command modifies the user's Claude Code config file."
+        }
+      }),
+      'production'
+    )
+
+    expect(result?.payload.state).toBe('waiting')
+    expect(result?.payload.toolName).toBe('Execute')
+    expect(result?.payload.toolInput).toBe('echo "test modification" >> ~/.claude/config.json')
+  })
+
+  it('PermissionRequest maps low-impact Edit approvals to waiting and carries cached tool', () => {
+    _internals.normalizeHookPayload(
+      'droid',
+      buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'edit it to none' }),
+      'production'
+    )
+    _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Edit',
+        tool_input: {
+          file_path: '/Users/thebr/.claude/settings.json',
+          old_str: '"preferredNotifChannel": "terminal_bell"',
+          new_str: '"preferredNotifChannel": "none"'
+        }
+      }),
+      'production'
+    )
+
+    const result = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({ hook_event_name: 'PermissionRequest' }),
+      'production'
+    )
+
+    expect(result?.payload.state).toBe('waiting')
+    expect(result?.payload.prompt).toBe('edit it to none')
+    expect(result?.payload.toolName).toBe('Edit')
+    expect(result?.payload.toolInput).toBe('/Users/thebr/.claude/settings.json')
+  })
+
+  it('SessionStart resets turn caches without marking Droid working', () => {
+    _internals.normalizeHookPayload(
+      'droid',
+      buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'old prompt' }),
+      'production'
+    )
+    _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Read',
+        tool_input: { file_path: '/tmp/old.ts' }
+      }),
+      'production'
+    )
+
+    const sessionStart = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({ hook_event_name: 'SessionStart' }),
+      'production'
+    )
+    expect(sessionStart).toBeNull()
+
+    const nextTool = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Execute',
+        tool_input: { command: 'pwd' }
+      }),
+      'production'
+    )
+    expect(nextTool?.payload.state).toBe('working')
+    expect(nextTool?.payload.prompt).toBe('')
+    expect(nextTool?.payload.toolName).toBe('Execute')
+    expect(nextTool?.payload.toolInput).toBe('pwd')
+  })
+
+  it('SubagentStop does not close the primary session row', () => {
+    const result = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({ hook_event_name: 'SubagentStop' }),
+      'production'
+    )
+    expect(result).toBeNull()
+  })
+
+  it('Stop maps to done and preserves the cached prompt', () => {
+    _internals.normalizeHookPayload(
+      'droid',
+      buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'write tests' }),
+      'production'
+    )
+    const stop = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({ hook_event_name: 'Stop' }),
+      'production'
+    )
+    expect(stop?.payload.state).toBe('done')
+    expect(stop?.payload.prompt).toBe('write tests')
+  })
+})
+
 describe('Pi hook normalization', () => {
   it('before_agent_start maps to working and captures the prompt', () => {
     const result = _internals.normalizeHookPayload(
@@ -1198,6 +1615,68 @@ describe('Endpoint file lifecycle', () => {
       expect(server.buildPtyEnv().ORCA_AGENT_HOOK_TOKEN).toBeTruthy()
     } finally {
       server.stop()
+    }
+  })
+
+  it('ingestRemote stamps connectionId and feeds the listener bypassing HTTP', () => {
+    const server = new AgentHookServer()
+    const events: { paneKey: string; connectionId: string | null; payload: unknown }[] = []
+    server.setListener((evt) => {
+      events.push({
+        paneKey: evt.paneKey,
+        connectionId: evt.connectionId,
+        payload: evt.payload
+      })
+    })
+    try {
+      const remotePane = makePaneKey('tab-3', LEAF_3)
+      server.ingestRemote(
+        {
+          paneKey: remotePane,
+          tabId: 'tab-3',
+          worktreeId: 'wt-3',
+          payload: {
+            state: 'working',
+            prompt: 'remote prompt',
+            agentType: 'claude'
+          }
+        },
+        'conn-42'
+      )
+      expect(events).toHaveLength(1)
+      expect(events[0].paneKey).toBe(remotePane)
+      expect(events[0].connectionId).toBe('conn-42')
+      expect(events[0].payload).toMatchObject({
+        state: 'working',
+        prompt: 'remote prompt',
+        agentType: 'claude'
+      })
+    } finally {
+      server.setListener(null)
+    }
+  })
+
+  it('ingestRemote ignores malformed envelopes (fail-open)', () => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.setListener(listener)
+    try {
+      // Missing paneKey
+      server.ingestRemote({ paneKey: '', payload: { state: 'working' } } as never, 'conn-x')
+      // Missing payload state
+      server.ingestRemote({ paneKey: 'tab-1:0', payload: { foo: 'bar' } }, 'conn-x')
+      // Invalid payload state
+      server.ingestRemote({ paneKey: 'tab-1:0', payload: { state: 'nonsense' } }, 'conn-x')
+      // Empty connection id
+      server.ingestRemote({ paneKey: 'tab-1:0', payload: { state: 'working' } }, '  ')
+      // Wrong types
+      server.ingestRemote(
+        { paneKey: 'tab-1:0', payload: 'not-an-object' as unknown } as never,
+        'conn-x'
+      )
+      expect(listener).not.toHaveBeenCalled()
+    } finally {
+      server.setListener(null)
     }
   })
 
@@ -1769,6 +2248,9 @@ describe('AgentHookServer ingestRemote', () => {
     server.setListener(listener)
     server.ingestRemote({ paneKey: '   ', tabId: 'tab-1', worktreeId: 'wt-1', payload }, 'conn-1')
     expect(listener).not.toHaveBeenCalled()
+    expect(trackMock).toHaveBeenCalledWith('agent_hook_unattributed', {
+      reason: 'empty_pane_key'
+    })
   })
 
   it('normalizes inner payload via normalizeAgentStatusPayload — clamps oversized prompt', () => {

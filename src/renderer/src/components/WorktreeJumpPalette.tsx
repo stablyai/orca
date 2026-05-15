@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils'
 import { getWorktreeStatus, getWorktreeStatusLabel } from '@/lib/worktree-status'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   searchWorktrees,
   type MatchRange,
@@ -38,7 +39,13 @@ import {
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
   queueBrowserFocusRequest
 } from '@/components/browser-pane/browser-focus'
-import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/types'
+import type {
+  BrowserPage,
+  BrowserWorkspace,
+  GitHubWorkItem,
+  Repo,
+  Worktree
+} from '../../../shared/types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 
 type WorktreePaletteItem = {
@@ -74,6 +81,55 @@ type BrowserSelection = {
   worktree: Worktree
   workspace: BrowserWorkspace
   page: BrowserPage
+}
+
+type GitHubWorkItemWithoutRepo = Omit<GitHubWorkItem, 'repoId'>
+
+function getRuntimeTargetForRepo(
+  repo: Repo
+): { kind: 'environment'; environmentId: string } | null {
+  const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+  if (target.kind !== 'environment') {
+    return null
+  }
+  return useAppStore.getState().repos.some((candidate) => candidate.id === repo.id) ? target : null
+}
+
+function getWorkItemForRepo(repo: Repo, number: number): Promise<GitHubWorkItemWithoutRepo | null> {
+  const target = getRuntimeTargetForRepo(repo)
+  if (target) {
+    return callRuntimeRpc<GitHubWorkItemWithoutRepo | null>(
+      target,
+      'github.workItem',
+      { repo: repo.id, number },
+      { timeoutMs: 30_000 }
+    )
+  }
+  return window.api.gh.workItem({ repoPath: repo.path, number })
+}
+
+function getWorkItemByOwnerRepoForRepo(
+  repo: Repo,
+  slug: { owner: string; repo: string },
+  number: number,
+  type: 'issue' | 'pr'
+): Promise<GitHubWorkItemWithoutRepo | null> {
+  const target = getRuntimeTargetForRepo(repo)
+  if (target) {
+    return callRuntimeRpc<GitHubWorkItemWithoutRepo | null>(
+      target,
+      'github.workItemByOwnerRepo',
+      { repo: repo.id, owner: slug.owner, ownerRepo: slug.repo, number, type },
+      { timeoutMs: 30_000 }
+    )
+  }
+  return window.api.gh.workItemByOwnerRepo({
+    repoPath: repo.path,
+    owner: slug.owner,
+    repo: slug.repo,
+    number,
+    type
+  })
 }
 
 function HighlightedText({
@@ -158,6 +214,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
   const prCache = useAppStore((s) => s.prCache)
   const issueCache = useAppStore((s) => s.issueCache)
+  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
+  const migrationUnsupportedByPtyId = useAppStore((s) => s.migrationUnsupportedByPtyId)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeTabType = useAppStore((s) => s.activeTabType)
   const activeBrowserTabId = useAppStore((s) => s.activeBrowserTabId)
@@ -171,7 +229,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const deferredQuery = useDeferredValue(query)
   const [selectedItemId, setSelectedItemId] = useState('')
   const previousWorktreeIdRef = useRef<string | null>(null)
-  const previousActiveTabTypeRef = useRef<'browser' | 'editor' | 'terminal'>('terminal')
+  const previousActiveTabTypeRef = useRef<'browser' | 'editor' | 'terminal' | 'notes'>('terminal')
   const previousBrowserPageIdRef = useRef<string | null>(null)
   const previousBrowserFocusTargetRef = useRef<'webview' | 'address-bar'>('webview')
   const wasVisibleRef = useRef(false)
@@ -233,9 +291,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
             visibleWorktrees,
             tabsByWorktree,
             repoMap,
-            prCache,
-            undefined,
-            ptyIdsByTabId
+            agentStatusByPaneKey,
+            runtimePaneTitlesByTabId,
+            ptyIdsByTabId,
+            migrationUnsupportedByPtyId
           )
         : switchableWorktreesForRows,
     [
@@ -244,8 +303,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       switchableWorktreesForRows,
       tabsByWorktree,
       repoMap,
-      prCache,
-      ptyIdsByTabId
+      agentStatusByPaneKey,
+      runtimePaneTitlesByTabId,
+      ptyIdsByTabId,
+      migrationUnsupportedByPtyId
     ]
   )
 
@@ -260,11 +321,20 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       allWorktrees,
       tabsByWorktree,
       repoMap,
-      prCache,
-      undefined,
-      ptyIdsByTabId
+      agentStatusByPaneKey,
+      runtimePaneTitlesByTabId,
+      ptyIdsByTabId,
+      migrationUnsupportedByPtyId
     )
-  }, [allWorktrees, tabsByWorktree, repoMap, prCache, ptyIdsByTabId])
+  }, [
+    allWorktrees,
+    tabsByWorktree,
+    repoMap,
+    agentStatusByPaneKey,
+    runtimePaneTitlesByTabId,
+    ptyIdsByTabId,
+    migrationUnsupportedByPtyId
+  ])
 
   // Why: browser rows need worktree lookups for repo badge colors, and browser
   // search intentionally includes archived worktrees. This map must cover all
@@ -666,8 +736,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       // indefinitely on slow networks. Close immediately and populate the
       // composer once the lookup returns.
       closeModal()
-      void window.api.gh
-        .workItem({ repoPath: repoForLookup.path, number })
+      void getWorkItemByOwnerRepoForRepo(repoForLookup, slug, number, ghLink.type)
         .then((item) => {
           const data: Record<string, unknown> = { initialRepoId: repoForLookup.id }
           if (item) {
@@ -720,8 +789,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       }
 
       closeModal()
-      void window.api.gh
-        .workItem({ repoPath: repoForLookup.path, number: ghNumber })
+      void getWorkItemForRepo(repoForLookup, ghNumber)
         .then((item) => {
           const data: Record<string, unknown> = { initialRepoId: repoForLookup.id }
           if (item) {

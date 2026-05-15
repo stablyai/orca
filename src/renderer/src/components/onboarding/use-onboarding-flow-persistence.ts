@@ -1,8 +1,16 @@
 import { useCallback } from 'react'
+import { toast } from 'sonner'
 import { track } from '@/lib/telemetry'
 import { ONBOARDING_FINAL_STEP } from '../../../../shared/constants'
 import type { GlobalSettings, OnboardingState, TuiAgent } from '../../../../shared/types'
 import type { NotificationDraft } from './NotificationStep'
+import {
+  hasSelectedOnboardingFeatureSetup,
+  onboardingFeatureSetupRunTelemetry,
+  runOnboardingFeatureSetup,
+  type OnboardingFeatureSetupResult,
+  type OnboardingFeatureSetupSelection
+} from './onboarding-feature-setup'
 import type { StepId, StepNumber } from './use-onboarding-flow-types'
 
 export async function persistStep(
@@ -109,6 +117,7 @@ type PersistCurrentStepDeps = {
   selectedAgent: TuiAgent | null
   theme: GlobalSettings['theme']
   notifications: NotificationDraft
+  featureSetupSelection: OnboardingFeatureSetupSelection
   settings: GlobalSettings | null
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
   onboardingChecklist: OnboardingState['checklist']
@@ -116,20 +125,26 @@ type PersistCurrentStepDeps = {
   setError: (msg: string | null) => void
 }
 
+export type PersistCurrentStepResult = {
+  ok: boolean
+  featureSetupResult?: OnboardingFeatureSetupResult
+}
+
 export function usePersistCurrentStep({
   currentStepId,
   selectedAgent,
   theme,
   notifications,
+  featureSetupSelection,
   settings,
   updateSettings,
   onboardingChecklist,
   onOnboardingChange,
   setError
 }: PersistCurrentStepDeps) {
-  return useCallback(async (): Promise<boolean> => {
+  return useCallback(async (): Promise<PersistCurrentStepResult> => {
     if (!settings) {
-      return false
+      return { ok: false }
     }
     try {
       if (currentStepId === 'agent') {
@@ -148,12 +163,12 @@ export function usePersistCurrentStep({
             time_since_completed_ms: 0
           })
         }
-        return true
+        return { ok: true }
       }
       if (currentStepId === 'theme') {
         await updateSettings({ theme })
         onOnboardingChange(await persistStep(2))
-        return true
+        return { ok: true }
       }
       if (currentStepId === 'notifications') {
         const enabled = notifications.agentTaskComplete || notifications.terminalBell
@@ -172,16 +187,38 @@ export function usePersistCurrentStep({
             suppressWhenFocused: !notifications.notifyWhenFocused
           }
         })
+        const setupResult = await runOnboardingFeatureSetup(featureSetupSelection)
+        const featureSetupResult: OnboardingFeatureSetupResult = setupResult
+        track('onboarding_feature_setup_run', {
+          ...onboardingFeatureSetupRunTelemetry(featureSetupSelection, setupResult)
+        })
+        if (hasSelectedOnboardingFeatureSetup(featureSetupSelection)) {
+          const firstWarning = setupResult.warnings[0]
+          if (firstWarning) {
+            toast.warning('Some feature setup needs attention', {
+              description: firstWarning.message
+            })
+          }
+          if (setupResult.skillCommandsCopied) {
+            toast.success('Feature setup ready', {
+              description: 'Skill command copied and inserted below for review.'
+            })
+          }
+          if (setupResult.computerUsePermissionsOpened) {
+            toast.message('Opened Computer Use permissions')
+          }
+        }
         onOnboardingChange(await persistStep(3))
-        return true
+        return { ok: true, featureSetupResult }
       }
-      return false
+      return { ok: false }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
-      return false
+      return { ok: false }
     }
   }, [
     currentStepId,
+    featureSetupSelection,
     notifications,
     onboardingChecklist,
     onOnboardingChange,

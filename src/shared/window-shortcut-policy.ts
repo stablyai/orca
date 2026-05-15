@@ -1,4 +1,5 @@
 export type WindowShortcutInput = {
+  type?: string
   key?: string
   code?: string
   alt?: boolean
@@ -17,6 +18,7 @@ export type WindowShortcutAction =
   | { type: 'openNewWorkspace' }
   | { type: 'jumpToWorktreeIndex'; index: number }
   | { type: 'worktreeHistoryNavigate'; direction: 'back' | 'forward' }
+  | { type: 'dictationKeyDown' }
 
 function platformPrimaryModifier(
   input: Pick<WindowShortcutInput, 'meta' | 'control'>,
@@ -188,6 +190,18 @@ export function resolveWindowShortcutAction(
     if (!input.alt) {
       return { type: 'openNewWorkspace' }
     }
+  }
+
+  // Why: Cmd/Ctrl+E activates voice dictation. Routed through the main process
+  // (same rationale as the other shortcuts in this allowlist) so the keydown
+  // reaches the renderer's dictation controller even when focus is inside a
+  // contentEditable surface or browser guest webContents. Acknowledged
+  // tradeoff: this preempts Ctrl+E (readline end-of-line) inside the terminal
+  // on Linux/Windows when the global window matches first. The renderer's
+  // dictation controller is responsible for forwarding the chord through to
+  // the PTY when dictation is intentionally disabled or the user is mid-input.
+  if (matchesLetterShortcut(input, 'e', 'KeyE') && !input.shift) {
+    return { type: 'dictationKeyDown' }
   }
 
   if (input.key && input.key >= '1' && input.key <= '9' && !input.shift) {

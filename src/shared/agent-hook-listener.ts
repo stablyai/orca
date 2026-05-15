@@ -28,7 +28,7 @@ import { join } from 'path'
 
 import { parseAgentStatusPayload, type ParsedAgentStatusPayload } from './agent-status-types'
 import { ORCA_HOOK_PROTOCOL_VERSION } from './agent-hook-types'
-import type { AgentHookSource } from './agent-hook-relay'
+import { REMOTE_AGENT_HOOK_ENV, type AgentHookSource } from './agent-hook-relay'
 import { parsePaneKey } from './stable-pane-id'
 
 /** Maximum request body size accepted by the listener (1 MB). */
@@ -43,7 +43,9 @@ const MAX_WARNED_KEYS = 32
 export const HOOK_REQUEST_SLOWLORIS_MS = 5_000
 
 /** Bound paneKey size — `${tabId}:${leafUuid}` is well under 200 chars in
- *  practice; cap defends per-pane caches against pathological input. */
+ *  practice; cap defends per-pane caches against pathological input.
+ *  Exported so non-HTTP ingest paths (e.g. Orca's `ingestRemote`) can apply
+ *  the same cap as defense-in-depth. */
 export const MAX_PANE_KEY_LEN = 200
 
 /** Per-listener-instance state that holds caches needing per-PTY teardown
@@ -73,12 +75,52 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.lastStatusByPaneKey.delete(paneKey)
 }
 
+function clearPaneTurnCacheState(state: HookListenerState, paneKey: string): void {
+  state.lastPromptByPaneKey.delete(paneKey)
+  state.lastToolByPaneKey.delete(paneKey)
+}
+
 export function clearAllListenerCaches(state: HookListenerState): void {
   state.lastPromptByPaneKey.clear()
   state.lastToolByPaneKey.clear()
   state.lastStatusByPaneKey.clear()
   state.warnedVersions.clear()
   state.warnedEnvs.clear()
+}
+
+/** Emit warn-once diagnostics for cross-build (`version`) and dev-vs-prod
+ *  (`env`) mismatches. Shared between the local HTTP path
+ *  (`normalizeHookPayload`) and the relay-forwarded path
+ *  (`AgentHookServer.ingestRemote`) so a remote-sourced event triggers the
+ *  same diagnostic noise as a local one. The relay's "remote" marker is a
+ *  location tag, not a build env, so it must not look like stale local hooks. */
+export function warnOnHookEnvOrVersionMismatch(
+  state: HookListenerState,
+  fields: { version?: string; env?: string; expectedEnv: string }
+): void {
+  const { version, env, expectedEnv } = fields
+  if (
+    version &&
+    version !== ORCA_HOOK_PROTOCOL_VERSION &&
+    !state.warnedVersions.has(version) &&
+    state.warnedVersions.size < MAX_WARNED_KEYS
+  ) {
+    state.warnedVersions.add(version)
+    console.warn(
+      `[agent-hooks] received hook v${version}; server expects v${ORCA_HOOK_PROTOCOL_VERSION}. ` +
+        'Reinstall agent hooks from Settings to upgrade the managed script.'
+    )
+  }
+  if (env && env !== REMOTE_AGENT_HOOK_ENV && env !== expectedEnv) {
+    const key = `${env}->${expectedEnv}`
+    if (!state.warnedEnvs.has(key) && state.warnedEnvs.size < MAX_WARNED_KEYS) {
+      state.warnedEnvs.add(key)
+      console.warn(
+        `[agent-hooks] received ${env} hook on ${expectedEnv} server. ` +
+          'Likely a stale terminal from another Orca install.'
+      )
+    }
+  }
 }
 
 export type AgentHookEventPayload = {
@@ -240,7 +282,9 @@ function resolveToolState(
 const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   Read: ['file_path', 'filePath', 'path'],
   Write: ['file_path', 'filePath', 'path'],
+  Create: ['file_path', 'filePath', 'path'],
   Edit: ['file_path', 'filePath', 'path'],
+  Execute: ['command'],
   MultiEdit: ['file_path', 'filePath', 'path'],
   NotebookEdit: ['file_path', 'filePath', 'path'],
   Bash: ['command'],
@@ -248,6 +292,7 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   Grep: ['pattern'],
   WebFetch: ['url'],
   WebSearch: ['query'],
+  FetchUrl: ['url'],
   read_file: ['file_path', 'path'],
   write_file: ['file_path', 'path'],
   read_many_files: ['file_path', 'paths', 'path'],
@@ -482,7 +527,11 @@ function extractCodexToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>
 ): ToolSnapshot {
-  if (eventName === 'PreToolUse' || eventName === 'PostToolUse') {
+  if (
+    eventName === 'PreToolUse' ||
+    eventName === 'PermissionRequest' ||
+    eventName === 'PostToolUse'
+  ) {
     const toolName = readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
     const toolInput =
       deriveToolInputPreview(toolName, hookPayload.tool_input) ??
@@ -605,8 +654,95 @@ function extractPiToolFields(
   return {}
 }
 
+function isDroidPermissionNotification(message: string | undefined): boolean {
+  if (!message) {
+    return false
+  }
+  const lower = message.toLowerCase()
+  // Why: 'confirm' is excluded — it false-positives on benign messages like
+  // "Confirmed configuration loaded" / "task confirmed" that aren't permission prompts.
+  return lower.includes('permission') || lower.includes('approve') || lower.includes('approval')
+}
+
+function isDroidIdleNotification(message: string | undefined): boolean {
+  if (!message) {
+    return false
+  }
+  const lower = message.toLowerCase()
+  return lower.includes('waiting for your input') || lower.includes('waiting for input')
+}
+
+function isDroidAskUserTool(toolName: string | undefined): boolean {
+  if (!toolName) {
+    return false
+  }
+  return toolName.replaceAll(/[^a-z0-9]/gi, '').toLowerCase() === 'askuser'
+}
+
+function readDroidToolRiskLevel(hookPayload: Record<string, unknown>): string | undefined {
+  const directRisk = readString(hookPayload, 'riskLevel') ?? readString(hookPayload, 'risk_level')
+  if (directRisk) {
+    return directRisk
+  }
+
+  for (const key of ['tool_input', 'input', 'arguments'] as const) {
+    const value = hookPayload[key]
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      continue
+    }
+    const record = value as Record<string, unknown>
+    const nestedRisk = readString(record, 'riskLevel') ?? readString(record, 'risk_level')
+    if (nestedRisk) {
+      return nestedRisk
+    }
+  }
+  return undefined
+}
+
+function isDroidHighRiskToolUse(hookPayload: Record<string, unknown>): boolean {
+  return readDroidToolRiskLevel(hookPayload)?.trim().toLowerCase() === 'high'
+}
+
+function extractDroidToolFields(
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): ToolSnapshot {
+  if (
+    eventName === 'PreToolUse' ||
+    eventName === 'PostToolUse' ||
+    eventName === 'PermissionRequest'
+  ) {
+    const toolName = readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
+    const toolInput =
+      deriveToolInputPreview(toolName, hookPayload.tool_input) ??
+      deriveToolInputPreview(toolName, hookPayload.input) ??
+      deriveToolInputPreview(toolName, hookPayload.arguments)
+    const update: ToolSnapshot = { toolName, toolInput }
+    if (eventName === 'PostToolUse') {
+      const responseText =
+        extractToolResponseText(hookPayload.tool_response) ??
+        extractToolResponseText(hookPayload.tool_output)
+      if (responseText) {
+        update.lastAssistantMessage = responseText
+      }
+    }
+    return update
+  }
+  if (eventName === 'Stop') {
+    const direct = readString(hookPayload, 'last_assistant_message')
+    if (direct) {
+      return { lastAssistantMessage: direct }
+    }
+    const fromTranscript = readLastAssistantFromTranscript(hookPayload.transcript_path)
+    if (fromTranscript) {
+      return { lastAssistantMessage: fromTranscript }
+    }
+  }
+  return {}
+}
+
 function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
-  // Why: exhaustive switch so adding a 7th source to AgentHookSource fails
+  // Why: exhaustive switch so adding an 8th source to AgentHookSource fails
   // typecheck here instead of silently falling through to `false`.
   switch (source) {
     case 'claude':
@@ -621,6 +757,8 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
       return eventName === 'beforeSubmitPrompt' || eventName === 'sessionStart'
     case 'pi':
       return eventName === 'before_agent_start'
+    case 'droid':
+      return eventName === 'UserPromptSubmit'
     default: {
       const _exhaustive: never = source
       void _exhaustive
@@ -634,7 +772,7 @@ function extractToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>
 ): ToolSnapshot {
-  // Why: exhaustive switch so adding a 7th source to AgentHookSource fails
+  // Why: exhaustive switch so adding an 8th source to AgentHookSource fails
   // typecheck here instead of silently routing through OpenCode's extractor.
   switch (source) {
     case 'claude':
@@ -649,6 +787,8 @@ function extractToolFields(
       return extractCursorToolFields(eventName, hookPayload)
     case 'pi':
       return extractPiToolFields(eventName, hookPayload)
+    case 'droid':
+      return extractDroidToolFields(eventName, hookPayload)
     default: {
       const _exhaustive: never = source
       void _exhaustive
@@ -760,9 +900,11 @@ function normalizeCodexEvent(
     eventName === 'PreToolUse' ||
     eventName === 'PostToolUse'
       ? 'working'
-      : eventName === 'Stop'
-        ? 'done'
-        : null
+      : eventName === 'PermissionRequest'
+        ? 'waiting'
+        : eventName === 'Stop'
+          ? 'done'
+          : null
 
   if (!stateName) {
     return null
@@ -928,6 +1070,77 @@ function normalizePiEvent(
   )
 }
 
+function normalizeDroidEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  if (eventName === 'SessionStart') {
+    // Why: Droid emits SessionStart when the TUI opens/resumes while still idle.
+    // Only UserPromptSubmit or tool activity should create a visible working row.
+    clearPaneTurnCacheState(state, paneKey)
+    return null
+  }
+
+  const notificationMessage = readString(hookPayload, 'message')
+  const droidToolName = readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
+  let stateName: 'working' | 'waiting' | 'done' | null = null
+  if (
+    eventName === 'PreToolUse' &&
+    (isDroidAskUserTool(droidToolName) || isDroidHighRiskToolUse(hookPayload))
+  ) {
+    // Why: Droid surfaces both AskUser and high-risk approval prompts as
+    // PreToolUse events; the observed approval path emits no Notification hook.
+    stateName = 'waiting'
+  } else if (
+    eventName === 'UserPromptSubmit' ||
+    eventName === 'PreToolUse' ||
+    eventName === 'PostToolUse'
+  ) {
+    stateName = 'working'
+  } else if (eventName === 'Stop') {
+    stateName = 'done'
+  } else if (eventName === 'PermissionRequest') {
+    stateName = 'waiting'
+  } else if (eventName === 'Notification' && isDroidPermissionNotification(notificationMessage)) {
+    stateName = 'waiting'
+  } else if (eventName === 'Notification' && isDroidIdleNotification(notificationMessage)) {
+    // Why: Factory does not emit Stop when the user interrupts Droid, but it
+    // does emit an idle notification when Droid is ready for input again.
+    stateName = 'done'
+  }
+  if (!stateName) {
+    return null
+  }
+
+  const snapshot = resolveToolState(
+    state,
+    paneKey,
+    extractToolFields('droid', eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent('droid', eventName) }
+  )
+
+  // Why: Droid's Notification.message contains status text (e.g. "Droid is
+  // waiting for your input"), not the user's prompt. Pass '' so resolvePrompt
+  // falls back to the cached UserPromptSubmit value instead of overwriting it.
+  const effectivePrompt = eventName === 'Notification' ? '' : promptText
+
+  return parseAgentStatusPayload(
+    JSON.stringify({
+      state: stateName,
+      prompt: resolvePrompt(state, paneKey, effectivePrompt, {
+        resetOnNewTurn: isNewTurnEvent('droid', eventName)
+      }),
+      agentType: 'droid',
+      toolName: snapshot.toolName,
+      toolInput: snapshot.toolInput,
+      lastAssistantMessage: snapshot.lastAssistantMessage
+    })
+  )
+}
+
 function readStringField(record: Record<string, unknown>, key: string): string | undefined {
   const value = record[key]
   if (typeof value !== 'string') {
@@ -971,31 +1184,11 @@ export function normalizeHookPayload(
     return null
   }
 
-  const version = readStringField(record, 'version')
-  if (
-    version &&
-    version !== ORCA_HOOK_PROTOCOL_VERSION &&
-    !state.warnedVersions.has(version) &&
-    state.warnedVersions.size < MAX_WARNED_KEYS
-  ) {
-    state.warnedVersions.add(version)
-    console.warn(
-      `[agent-hooks] received hook v${version}; server expects v${ORCA_HOOK_PROTOCOL_VERSION}. ` +
-        'Reinstall agent hooks from Settings to upgrade the managed script.'
-    )
-  }
-
-  const clientEnv = readStringField(record, 'env')
-  if (clientEnv && clientEnv !== expectedEnv) {
-    const key = `${clientEnv}->${expectedEnv}`
-    if (!state.warnedEnvs.has(key) && state.warnedEnvs.size < MAX_WARNED_KEYS) {
-      state.warnedEnvs.add(key)
-      console.warn(
-        `[agent-hooks] received ${clientEnv} hook on ${expectedEnv} server. ` +
-          'Likely a stale terminal from another Orca install.'
-      )
-    }
-  }
+  warnOnHookEnvOrVersionMismatch(state, {
+    version: readStringField(record, 'version'),
+    env: readStringField(record, 'env'),
+    expectedEnv
+  })
 
   const tabId = readStringField(record, 'tabId')
   if (tabId && tabId !== parsedPaneKey.tabId) {
@@ -1006,7 +1199,7 @@ export function normalizeHookPayload(
   const eventName = (hookPayload as Record<string, unknown>).hook_event_name
   const promptText = extractPromptText(hookPayload as Record<string, unknown>)
   const hookPayloadRecord = hookPayload as Record<string, unknown>
-  // Why: exhaustive switch so adding a 7th source to AgentHookSource fails
+  // Why: exhaustive switch so adding an 8th source to AgentHookSource fails
   // typecheck here instead of silently routing through OpenCode's normalizer.
   let payload: ParsedAgentStatusPayload | null
   switch (source) {
@@ -1027,6 +1220,9 @@ export function normalizeHookPayload(
       break
     case 'pi':
       payload = normalizePiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
+    case 'droid':
+      payload = normalizeDroidEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
     default: {
       const _exhaustive: never = source
@@ -1050,7 +1246,8 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/gemini': 'gemini',
   '/hook/opencode': 'opencode',
   '/hook/cursor': 'cursor',
-  '/hook/pi': 'pi'
+  '/hook/pi': 'pi',
+  '/hook/droid': 'droid'
 })
 
 export function resolveHookSource(pathname: string): AgentHookSource | null {

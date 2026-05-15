@@ -22,9 +22,11 @@ import {
 } from '@stablyai/playwright-test'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { execSync } from 'child_process'
+import { randomUUID } from 'crypto'
 import os from 'os'
 import path from 'path'
 import { TEST_REPO_PATH_FILE } from '../global-setup'
+import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
 
 type OrcaTestFixtures = {
   electronApp: ElectronApplication
@@ -87,8 +89,7 @@ function isValidGitRepo(repoPath: string): boolean {
 }
 
 function createSeededTestRepo(): string {
-  const testRepoDir = path.join(os.tmpdir(), `orca-e2e-repo-${Date.now()}`)
-  mkdirSync(testRepoDir, { recursive: true })
+  const testRepoDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-repo-'))
 
   execSync('git init', { cwd: testRepoDir, stdio: 'pipe' })
   execSync('git config user.email "e2e@test.local"', { cwd: testRepoDir, stdio: 'pipe' })
@@ -110,7 +111,9 @@ function createSeededTestRepo(): string {
   execSync('git add -A', { cwd: testRepoDir, stdio: 'pipe' })
   execSync('git commit -m "Initial commit for E2E tests"', { cwd: testRepoDir, stdio: 'pipe' })
 
-  const worktreeDir = path.join(testRepoDir, '..', `orca-e2e-worktree-${Date.now()}`)
+  // Why: worker-scoped fixture fallbacks can run in parallel; UUIDs avoid
+  // colliding on the same temp repo/worktree when workers start together.
+  const worktreeDir = path.join(testRepoDir, '..', `orca-e2e-worktree-${randomUUID()}`)
   execSync(`git worktree add "${worktreeDir}" -b e2e-secondary`, {
     cwd: testRepoDir,
     stdio: 'pipe'
@@ -211,35 +214,24 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       // Why: ORCA_E2E_HEADLESS suppresses mainWindow.show() for CI/headless
       // runs. ORCA_E2E_HEADFUL overrides this for tests that need a visible
       // window (e.g. pointer-capture drag tests).
+      // Why: local SSH E2E deploys the relay from the dev build output. The
+      // Electron app's getAppPath() points at the compiled main bundle in E2E,
+      // so pass the repo-root relay path explicitly for this opt-in suite.
       env: {
         ...cleanEnv,
         NODE_ENV: 'development',
         ORCA_E2E_USER_DATA_DIR: userDataDir,
+        ...(process.env.ORCA_E2E_SSH_LOCALHOST === '1' && !cleanEnv.ORCA_RELAY_PATH
+          ? { ORCA_RELAY_PATH: path.join(process.cwd(), 'out', 'relay') }
+          : {}),
         ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
       }
     })
     await provideFixture(app)
-    // Why: Electron's graceful shutdown runs before-quit/will-quit handlers,
-    // cleans up PTY child processes, and flushes session state to disk. Give
-    // it 10s for a clean exit, then SIGKILL the process tree immediately.
-    // SIGTERM doesn't reliably stop the Electron process tree on macOS.
-    const appProcess = app.process()
-    try {
-      await Promise.race([
-        app.close(),
-        new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Timed out closing Electron app')), 10_000)
-        })
-      ])
-    } catch {
-      if (appProcess) {
-        try {
-          appProcess.kill('SIGKILL')
-        } catch {
-          /* already dead */
-        }
-      }
-    }
+    // Why: the Playwright close promise can settle before all Electron and PTY
+    // descendants are gone in CI; worker teardown then hangs on open handles.
+    await closeElectronAppForE2E(app)
+    await cleanupE2EDaemons(userDataDir)
     rmSync(userDataDir, { recursive: true, force: true })
   },
 

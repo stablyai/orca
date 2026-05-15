@@ -2,6 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
 import type { DiffComment, Worktree } from '../../../../shared/types'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from '../../runtime/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 
 // Mock sonner (imported transitively by other slices)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -14,6 +19,13 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 })
 
 const updateMeta = vi.fn().mockResolvedValue({})
+const runtimeEnvironmentCall = vi.fn().mockResolvedValue({
+  id: 'rpc-1',
+  ok: true,
+  result: { ok: true },
+  _meta: { runtimeId: 'remote-runtime' }
+})
+const runtimeEnvironmentTransportCall = vi.fn()
 const mockApi = {
   worktrees: {
     list: vi.fn().mockResolvedValue([]),
@@ -21,6 +33,7 @@ const mockApi = {
     remove: vi.fn().mockResolvedValue(undefined),
     updateMeta
   },
+  runtimeEnvironments: { call: runtimeEnvironmentTransportCall },
   repos: {
     list: vi.fn().mockResolvedValue([]),
     add: vi.fn().mockResolvedValue({}),
@@ -80,10 +93,12 @@ import { createTabsSlice } from './tabs'
 import { createUISlice } from './ui'
 import { createSettingsSlice } from './settings'
 import { createGitHubSlice } from './github'
+import { createHostedReviewSlice } from './hosted-review'
 import { createLinearSlice } from './linear'
 import { createEditorSlice } from './editor'
 import { createStatsSlice } from './stats'
 import { createMemorySlice } from './memory'
+import { createWorkspaceSpaceSlice } from './workspace-space'
 import { createClaudeUsageSlice } from './claude-usage'
 import { createCodexUsageSlice } from './codex-usage'
 import { createBrowserSlice } from './browser'
@@ -93,6 +108,7 @@ import { createAgentStatusSlice } from './agent-status'
 import { createDiffCommentsSlice } from './diffComments'
 import { createDetectedAgentsSlice } from './detected-agents'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
+import { createDictationSlice } from './dictation'
 
 function createTestStore() {
   return create<AppState>()((...a) => ({
@@ -104,10 +120,12 @@ function createTestStore() {
     ...createUISlice(...a),
     ...createSettingsSlice(...a),
     ...createGitHubSlice(...a),
+    ...createHostedReviewSlice(...a),
     ...createLinearSlice(...a),
     ...createEditorSlice(...a),
     ...createStatsSlice(...a),
     ...createMemorySlice(...a),
+    ...createWorkspaceSpaceSlice(...a),
     ...createClaudeUsageSlice(...a),
     ...createCodexUsageSlice(...a),
     ...createBrowserSlice(...a),
@@ -116,7 +134,8 @@ function createTestStore() {
     ...createAgentStatusSlice(...a),
     ...createDiffCommentsSlice(...a),
     ...createDetectedAgentsSlice(...a),
-    ...createWorktreeNavHistorySlice(...a)
+    ...createWorktreeNavHistorySlice(...a),
+    ...createDictationSlice(...a)
   }))
 }
 
@@ -155,7 +174,18 @@ function seed(store: ReturnType<typeof createTestStore>, comments: DiffComment[]
 describe('updateDiffComment', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    clearRuntimeCompatibilityCacheForTests()
+    runtimeEnvironmentTransportCall.mockReset()
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
+    })
     updateMeta.mockResolvedValue({})
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { ok: true },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
   })
 
   it('updates the body, trims it, and persists', async () => {
@@ -181,6 +211,38 @@ describe('updateDiffComment', () => {
     expect(saved.lineNumber).toBe(10)
     expect(saved.createdAt).toBe(1000)
     expect(updateMeta).toHaveBeenCalledTimes(1)
+  })
+
+  it('persists through the selected runtime environment', async () => {
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never
+    })
+    seed(store, [
+      {
+        id: 'c1',
+        worktreeId: WT,
+        filePath: 'src/foo.ts',
+        lineNumber: 10,
+        body: 'old body',
+        createdAt: 1000,
+        side: 'modified'
+      }
+    ])
+
+    const ok = await store.getState().updateDiffComment(WT, 'c1', 'remote body')
+
+    expect(ok).toBe(true)
+    expect(updateMeta).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'worktree.set',
+      params: {
+        worktree: WT,
+        diffComments: [expect.objectContaining({ id: 'c1', body: 'remote body' })]
+      },
+      timeoutMs: 15_000
+    })
   })
 
   it('rejects an empty body without persisting', async () => {

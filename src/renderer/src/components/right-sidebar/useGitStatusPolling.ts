@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useAllWorktrees, useRepoById, useRepoMap } from '@/store/selectors'
-import type { GitConflictOperation, GitStatusResult } from '../../../../shared/types'
+import type { GitConflictOperation } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getConnectionId } from '@/lib/connection-context'
+import { getRuntimeGitConflictOperation } from '@/runtime/runtime-git-client'
+import { refreshGitStatusForWorktree } from './git-status-refresh'
 
 const POLL_INTERVAL_MS = 3000
 
@@ -14,6 +16,7 @@ export function useGitStatusPolling(): void {
   const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
   const setGitStatus = useAppStore((s) => s.setGitStatus)
   const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)
+  const setUpstreamStatus = useAppStore((s) => s.setUpstreamStatus)
   const setConflictOperation = useAppStore((s) => s.setConflictOperation)
   const conflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
   const repoMap = useRepoMap()
@@ -51,19 +54,18 @@ export function useGitStatusPolling(): void {
     }
     try {
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-      const status = (await window.api.git.status({
+      await refreshGitStatusForWorktree({
+        settings: useAppStore.getState().settings,
+        worktreeId: activeWorktreeId,
         worktreePath,
-        connectionId
-      })) as GitStatusResult
-      setGitStatus(activeWorktreeId, status)
-      // Why: branch switches can happen inside a terminal. `git status
-      // --branch` gives us the new identity without a separate worktree-list
-      // poll that would repeatedly touch repo/worktree roots.
-      updateWorktreeGitIdentity(activeWorktreeId, {
-        head: status.head,
-        branch: status.branch
+        connectionId,
+        deps: {
+          setGitStatus,
+          updateWorktreeGitIdentity,
+          setUpstreamStatus,
+          fetchUpstreamStatus
+        }
       })
-      await fetchUpstreamStatus(activeWorktreeId, worktreePath, connectionId)
     } catch {
       // ignore
     }
@@ -73,6 +75,7 @@ export function useGitStatusPolling(): void {
     fetchUpstreamStatus,
     worktreePath,
     setGitStatus,
+    setUpstreamStatus,
     updateWorktreeGitIdentity
   ])
 
@@ -108,7 +111,9 @@ export function useGitStatusPolling(): void {
     const pollStale = async (): Promise<void> => {
       for (const { id, path } of staleConflictWorktrees) {
         try {
-          const op = (await window.api.git.conflictOperation({
+          const op = (await getRuntimeGitConflictOperation({
+            settings: useAppStore.getState().settings,
+            worktreeId: id,
             worktreePath: path,
             connectionId: getConnectionId(id) ?? undefined
           })) as GitConflictOperation

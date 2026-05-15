@@ -78,6 +78,7 @@ export type ManagedPane = {
 // ---------------------------------------------------------------------------
 
 export type ScrollState = {
+  bufferType: 'normal' | 'alternate'
   wasAtBottom: boolean
   firstVisibleLineContent: string
   viewportY: number

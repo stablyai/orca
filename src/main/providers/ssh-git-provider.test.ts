@@ -107,6 +107,14 @@ describe('SshGitProvider', () => {
     })
   })
 
+  it('bulkDiscardChanges sends git.bulkDiscard request', async () => {
+    await provider.bulkDiscardChanges('/home/user/repo', ['a.ts', 'b.ts'])
+    expect(mux.request).toHaveBeenCalledWith('git.bulkDiscard', {
+      worktreePath: '/home/user/repo',
+      filePaths: ['a.ts', 'b.ts']
+    })
+  })
+
   it('detectConflictOperation sends git.conflictOperation request', async () => {
     mux.request.mockResolvedValue('rebase')
     const result = await provider.detectConflictOperation('/home/user/repo')
@@ -139,11 +147,18 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(upstreamResult)
   })
 
-  it('pushBranch sends git.push request and forwards publish mode', async () => {
-    await provider.pushBranch('/home/user/repo', true)
+  it('pushBranch sends git.push request and forwards publish mode and target', async () => {
+    await provider.pushBranch('/home/user/repo', true, {
+      remoteName: 'pr-fork-orca',
+      branchName: 'contributor/fix'
+    })
     expect(mux.request).toHaveBeenCalledWith('git.push', {
       worktreePath: '/home/user/repo',
-      publish: true
+      publish: true,
+      pushTarget: {
+        remoteName: 'pr-fork-orca',
+        branchName: 'contributor/fix'
+      }
     })
   })
 
@@ -185,8 +200,13 @@ describe('SshGitProvider', () => {
     ]
     mux.request.mockResolvedValue(worktrees)
 
-    const result = await provider.listWorktrees('/home/user/repo')
-    expect(mux.request).toHaveBeenCalledWith('git.listWorktrees', { repoPath: '/home/user/repo' })
+    const controller = new AbortController()
+    const result = await provider.listWorktrees('/home/user/repo', { signal: controller.signal })
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.listWorktrees',
+      { repoPath: '/home/user/repo' },
+      { signal: controller.signal }
+    )
     expect(result).toEqual(worktrees)
   })
 

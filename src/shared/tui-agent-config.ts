@@ -228,3 +228,7 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     preflightTrust: 'copilot'
   }
 }
+
+export function isTuiAgent(value: unknown): value is TuiAgent {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(TUI_AGENT_CONFIG, value)
+}

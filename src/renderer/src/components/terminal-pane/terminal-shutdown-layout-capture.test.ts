@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLayoutSnapshot } from '../../../../shared/types'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111' as const
@@ -38,7 +38,11 @@ beforeAll(() => {
   ;(globalThis as unknown as Record<string, unknown>).HTMLElement = MockHTMLElement
 })
 
-function mockRootForPane(paneId: number, leafId: string): HTMLDivElement {
+beforeEach(() => {
+  mocks.flushTerminalOutput.mockReset()
+})
+
+function mockRootForPane(paneId: number, leafId: string = LEAF_ID): HTMLDivElement {
   const pane = new MockHTMLElement({
     classList: ['pane'],
     dataset: { paneId: String(paneId), leafId }
@@ -94,5 +98,43 @@ describe('captureTerminalShutdownLayout', () => {
       ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' },
       titlesByLeafId: { [LEAF_ID]: 'build logs' }
     })
+  })
+
+  it('skips local shutdown scrollback serialization while preserving layout metadata', async () => {
+    const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+    const pane = {
+      id: 1,
+      leafId: LEAF_ID,
+      stablePaneId: LEAF_ID,
+      terminal: { options: { scrollback: 50_000 } },
+      serializeAddon: {
+        serialize: vi.fn(() => 'x'.repeat(512 * 1024))
+      }
+    }
+    const manager = {
+      getPanes: vi.fn(() => [pane]),
+      getActivePane: vi.fn(() => pane)
+    }
+
+    const layout = captureTerminalShutdownLayout({
+      manager: manager as never,
+      container: mockRootForPane(1),
+      expandedPaneId: null,
+      paneTransports: new Map([[1, { getPtyId: vi.fn(() => 'pty-1') }]]),
+      paneTitlesByPaneId: { 1: 'local shell' },
+      existingLayout: {
+        root: null,
+        activeLeafId: null,
+        expandedLeafId: null,
+        buffersByLeafId: { [LEAF_ID]: 'previous-local-scrollback' }
+      },
+      captureBuffers: false
+    })
+
+    expect(mocks.flushTerminalOutput).not.toHaveBeenCalled()
+    expect(pane.serializeAddon.serialize).not.toHaveBeenCalled()
+    expect(layout.buffersByLeafId).toBeUndefined()
+    expect(layout.ptyIdsByLeafId).toEqual({ [LEAF_ID]: 'pty-1' })
+    expect(layout.titlesByLeafId).toEqual({ [LEAF_ID]: 'local shell' })
   })
 })

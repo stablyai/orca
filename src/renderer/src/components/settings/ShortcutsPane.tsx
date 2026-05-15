@@ -98,6 +98,11 @@ const SHORTCUT_GROUP_DEFINITIONS: ShortcutGroupDefinition[] = [
         action: 'Force Reload',
         searchKeywords: ['shortcut', 'reload', 'refresh', 'force'],
         keys: ({ mod, shift }) => [mod, shift, 'R']
+      },
+      {
+        action: 'Dictation',
+        searchKeywords: ['shortcut', 'dictation', 'voice', 'speech', 'microphone'],
+        keys: ({ mod }) => [mod, 'E']
       }
     ]
   },

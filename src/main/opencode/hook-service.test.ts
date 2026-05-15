@@ -102,8 +102,8 @@ describe('OpenCode hook plugin source', () => {
     // must forward both so the server-side normalizer can map each to
     // `waiting` and render the red indicator. Dropping `question.asked`
     // leaves the pane stuck in `working` while the agent is actually idle,
-    // waiting on a human reply — exactly the bug three other OpenCode
-    // integrations (cmux, t3code, open-vibe-island) all handle.
+    // waiting on a human reply — exactly the bug other OpenCode integrations
+    // also handle.
     const source = _internals.getOpenCodePluginSource()
 
     expect(source).toContain('if (event.type === "question.asked")')

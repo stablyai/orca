@@ -146,10 +146,18 @@ import {
   setLocalPtyProvider,
   unregisterSshPtyProvider
 } from './pty'
+import { hasLiveClaudePtys } from '../claude-accounts/live-pty-gate'
+import {
+  encodePowerShellCommand,
+  getPowerShellOsc133Bootstrap
+} from '../powershell-osc133-bootstrap'
 
-const POWERSHELL_PROFILE_COMMAND = expect.stringMatching(
-  /\. \$PROFILE[\s\S]*ORCA_OPENCODE_CONFIG_DIR[\s\S]*ORCA_PI_CODING_AGENT_DIR[\s\S]*UTF8/
-)
+const POWERSHELL_OSC133_ARGS = [
+  '-NoLogo',
+  '-NoExit',
+  '-EncodedCommand',
+  encodePowerShellCommand(getPowerShellOsc133Bootstrap())
+]
 
 function makeDisposable() {
   return { dispose: vi.fn() }
@@ -376,6 +384,29 @@ describe('registerPtyHandlers', () => {
   }
 
   describe('spawn environment', () => {
+    it('marks local Claude launches live until the PTY is killed', async () => {
+      const prepareClaudeAuth = vi.fn(async () => ({
+        configDir: '/tmp/claude',
+        envPatch: {},
+        stripAuthEnv: false,
+        provenance: 'managed:account-1'
+      }))
+      registerPtyHandlers(mainWindow as never, undefined, undefined, undefined, prepareClaudeAuth)
+
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        command: 'claude'
+      })) as { id: string }
+
+      expect(prepareClaudeAuth).toHaveBeenCalledTimes(1)
+      expect(hasLiveClaudePtys()).toBe(true)
+
+      await handlers.get('pty:kill')!(null, { id: spawnResult.id })
+
+      expect(hasLiveClaudePtys()).toBe(false)
+    })
+
     it('defaults LANG to en_US.UTF-8 when not inherited from process.env', async () => {
       const env = await spawnAndGetEnv(undefined, { LANG: undefined })
       expect(env.LANG).toBe('en_US.UTF-8')
@@ -975,6 +1006,7 @@ describe('registerPtyHandlers', () => {
         // shipping any of them to a remote shell is at best useless and at
         // worst a credential leak.
         expect(env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
+        expect(env.ORCA_AGENT_HOOK_TOKEN).toBeUndefined()
         expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
         expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
         expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
@@ -1273,6 +1305,130 @@ describe('registerPtyHandlers', () => {
         )
         expect(runtime.onPtyExit).not.toHaveBeenCalled()
       })
+
+      it('strips ORCA_PANE_KEY/TAB_ID/WORKTREE_ID from SSH spawn env when feature flag is off', async () => {
+        const sshSpawn = vi.fn(async (_opts: { env: Record<string, string> }) => ({
+          id: 'ssh-pty'
+        }))
+        registerSshPtyProvider('ssh-1', {
+          spawn: sshSpawn,
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown: vi.fn(),
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never)
+        const prevFlag = process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+        delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+        try {
+          await handlers.get('pty:spawn')!(null, {
+            cols: 80,
+            rows: 24,
+            env: {
+              FOO: 'bar',
+              ORCA_PANE_KEY: 'tab-1:0',
+              ORCA_TAB_ID: 'tab-1',
+              ORCA_WORKTREE_ID: 'wt-1'
+            },
+            connectionId: 'ssh-1'
+          })
+          const env = sshSpawn.mock.calls.at(-1)![0].env
+          expect(env.FOO).toBe('bar')
+          expect(env.ORCA_PANE_KEY).toBeUndefined()
+          expect(env.ORCA_TAB_ID).toBeUndefined()
+          expect(env.ORCA_WORKTREE_ID).toBeUndefined()
+          expect(env.ORCA_AGENT_HOOK_TOKEN).toBeUndefined()
+          // Why: the local hook server's userData-relative endpoint file path
+          // is meaningless on the remote box; assert it does not leak.
+          expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+        } finally {
+          if (prevFlag === undefined) {
+            delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+          } else {
+            process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = prevFlag
+          }
+        }
+      })
+
+      it('forwards ORCA_PANE_KEY/TAB_ID/WORKTREE_ID over SSH when feature flag is on', async () => {
+        const sshSpawn = vi.fn(async (_opts: { env: Record<string, string> }) => ({
+          id: 'ssh-pty'
+        }))
+        registerSshPtyProvider('ssh-1', {
+          spawn: sshSpawn,
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown: vi.fn(),
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never)
+        const prevFlag = process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+        process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
+        try {
+          const leafId = '22222222-2222-4222-8222-222222222222'
+          const paneKey = makePaneKey('tab-2', leafId)
+          await handlers.get('pty:spawn')!(null, {
+            cols: 80,
+            rows: 24,
+            env: {
+              FOO: 'bar',
+              ORCA_PANE_KEY: paneKey,
+              ORCA_TAB_ID: 'tab-2',
+              ORCA_WORKTREE_ID: 'wt-2'
+            },
+            connectionId: 'ssh-1',
+            tabId: 'tab-2',
+            leafId
+          })
+          const env = sshSpawn.mock.calls.at(-1)![0].env
+          expect(env.ORCA_PANE_KEY).toBe(paneKey)
+          expect(env.ORCA_TAB_ID).toBe('tab-2')
+          expect(env.ORCA_WORKTREE_ID).toBe('wt-2')
+          // Local hook server coords still must NOT cross the wire — the
+          // relay is the source of truth for those.
+          expect(env.ORCA_AGENT_HOOK_TOKEN).toBeUndefined()
+          expect(env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
+          expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+        } finally {
+          if (prevFlag === undefined) {
+            delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+          } else {
+            process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = prevFlag
+          }
+        }
+      })
     })
   })
 
@@ -1511,6 +1667,47 @@ describe('registerPtyHandlers', () => {
     )
   })
 
+  it('maps runtime-owned spawn paneKeys for renderer serializer settlement', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        worktreeId?: string
+        env?: Record<string, string>
+      }): Promise<{ id: string }>
+      hasRendererSerializer?(ptyId: string): boolean
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const paneKey = makePaneKey('tab-cli', '11111111-1111-4111-8111-111111111111')
+    const gen = (await handlers.get('pty:declarePendingPaneSerializer')!(null, {
+      paneKey
+    })) as number
+    const spawnController = controller as unknown as RuntimeSpawnController
+    const result = await spawnController.spawn({
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      env: { ORCA_PANE_KEY: ` ${paneKey} ` }
+    })
+
+    expect(spawnController.hasRendererSerializer?.(result.id)).toBe(false)
+    await handlers.get('pty:settlePaneSerializer')!(null, { paneKey, gen })
+    expect(spawnController.hasRendererSerializer?.(result.id)).toBe(true)
+  })
+
   it('ignores renderer-provided ORCA_TERMINAL_HANDLE for local PTY spawns', async () => {
     const runtime = {
       setPtyController: vi.fn(),
@@ -1581,7 +1778,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
-        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
+        POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
     })
@@ -1594,7 +1791,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
-        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
+        POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
     })
@@ -1653,7 +1850,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'powershell.exe',
-        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
+        POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
     })
@@ -1675,7 +1872,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'powershell.exe',
-        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
+        POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
     })
@@ -1696,11 +1893,7 @@ describe('registerPtyHandlers', () => {
       )
       handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
-      expect(spawnMock).toHaveBeenCalledWith(
-        'pwsh.exe',
-        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
-        expect.any(Object)
-      )
+      expect(spawnMock).toHaveBeenCalledWith('pwsh.exe', POWERSHELL_OSC133_ARGS, expect.any(Object))
     })
 
     it('falls back to powershell.exe when PowerShell 7 is selected but unavailable', () => {
@@ -1721,7 +1914,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'powershell.exe',
-        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
+        POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
     })
@@ -1744,7 +1937,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'powershell.exe',
-        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
+        POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
     })

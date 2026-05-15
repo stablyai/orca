@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react'
 import { Import, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
+import { ORCA_CLI_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
+import {
+  BROWSER_USE_ENABLED_STORAGE_KEY,
+  BROWSER_USE_SKILL_INSTALLED_STORAGE_KEY
+} from '@/lib/browser-use-setup-state'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import {
@@ -23,9 +28,6 @@ import { BROWSER_USE_PANE_SEARCH_ENTRIES } from './browser-use-search'
 import { BrowserUseExamples } from './BrowserUseExamples'
 import { StepBadge } from './BrowserUseStepBadge'
 import { BrowserUseSkillStep } from './BrowserUseSkillStep'
-
-const ORCA_SKILL_INSTALL_COMMAND =
-  'npx skills add https://github.com/stablyai/orca --skill orca-cli'
 
 type BrowserUseSetupProps = {
   onConfigureMoreBrowsers?: () => void
@@ -50,12 +52,12 @@ export function BrowserUseSetup({
   // functional effect elsewhere in the app — it's a UI affordance local to
   // this pane, consistent with the skill-installed marker below.
   const [browserUseEnabled, setBrowserUseEnabled] = useState<boolean>(() => {
-    return localStorage.getItem('orca.browserUse.enabled') === '1'
+    return localStorage.getItem(BROWSER_USE_ENABLED_STORAGE_KEY) === '1'
   })
 
   const toggleBrowserUse = (value: boolean): void => {
     setBrowserUseEnabled(value)
-    localStorage.setItem('orca.browserUse.enabled', value ? '1' : '0')
+    localStorage.setItem(BROWSER_USE_ENABLED_STORAGE_KEY, value ? '1' : '0')
   }
 
   const refreshCli = async (): Promise<void> => {
@@ -94,12 +96,12 @@ export function BrowserUseSetup({
   // user mark it done explicitly after copying — this avoids falsely implying
   // progress and keeps the guided flow honest.
   const [skillInstalled, setSkillInstalled] = useState<boolean>(() => {
-    return localStorage.getItem('orca.browserUse.skillInstalled') === '1'
+    return localStorage.getItem(BROWSER_USE_SKILL_INSTALLED_STORAGE_KEY) === '1'
   })
 
   const markSkillInstalled = (value: boolean): void => {
     setSkillInstalled(value)
-    localStorage.setItem('orca.browserUse.skillInstalled', value ? '1' : '0')
+    localStorage.setItem(BROWSER_USE_SKILL_INSTALLED_STORAGE_KEY, value ? '1' : '0')
   }
 
   const handleEnableCli = async (): Promise<void> => {
@@ -117,8 +119,8 @@ export function BrowserUseSetup({
 
   const handleCopySkillCommand = async (): Promise<void> => {
     try {
-      await window.api.ui.writeClipboardText(ORCA_SKILL_INSTALL_COMMAND)
-      toast.success('Copied install command. Run it in your agent project.')
+      await window.api.ui.writeClipboardText(ORCA_CLI_SKILL_INSTALL_COMMAND)
+      toast.success('Copied install command. Run it on this computer.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to copy command.')
     }
@@ -280,7 +282,7 @@ export function BrowserUseSetup({
           }`}
         >
           <BrowserUseSkillStep
-            command={ORCA_SKILL_INSTALL_COMMAND}
+            command={ORCA_CLI_SKILL_INSTALL_COMMAND}
             skillInstalled={skillInstalled}
             disabled={!cliEnabled}
             onCopy={() => void handleCopySkillCommand()}

@@ -61,7 +61,8 @@ function hydrateUnifiedFormat(
     tabsByWorktree[worktreeId] = [...tabs]
       .map((tab) => ({
         ...tab,
-        entityId: tab.entityId ?? tab.id
+        entityId: tab.entityId ?? tab.id,
+        isDirty: false
       }))
       .filter((tab) => {
         if (!isTransientEditorContentType(tab.contentType)) {

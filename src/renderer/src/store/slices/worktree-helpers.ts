@@ -1,13 +1,16 @@
 import type {
   CreateWorktreeResult,
   CreateSparseCheckoutRequest,
+  GitPushTarget,
   SetupDecision,
+  TuiAgent,
   WorkspaceCreateTelemetrySource,
   Worktree,
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent,
   WorktreeMeta
 } from '../../../../shared/types'
+export { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 
 export type WorktreeDeleteState = {
   isDeleting: boolean
@@ -71,7 +74,9 @@ export type WorktreeSlice = {
     telemetrySource?: WorkspaceCreateTelemetrySource,
     displayName?: string,
     linkedIssue?: number,
-    linkedPR?: number
+    linkedPR?: number,
+    pushTarget?: GitPushTarget,
+    createdWithAgent?: TuiAgent
   ) => Promise<CreateWorktreeResult>
   removeWorktree: (
     worktreeId: string,
@@ -162,9 +167,4 @@ export function applyWorktreeUpdates(
   }
 
   return changed ? next : worktreesByRepo
-}
-
-export function getRepoIdFromWorktreeId(worktreeId: string): string {
-  const sepIdx = worktreeId.indexOf('::')
-  return sepIdx === -1 ? worktreeId : worktreeId.slice(0, sepIdx)
 }

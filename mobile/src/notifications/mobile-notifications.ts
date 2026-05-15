@@ -2,10 +2,11 @@ import * as Notifications from 'expo-notifications'
 import { Platform } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
 import { loadPushNotificationsEnabled } from '../storage/preferences'
+import { buildLocalNotificationData, type DesktopNotificationSource } from './notification-routing'
 
 type NotificationEvent = {
   type: 'notification'
-  source: 'agent-task-complete' | 'terminal-bell' | 'test'
+  source: DesktopNotificationSource
   title: string
   body: string
   worktreeId?: string
@@ -55,7 +56,7 @@ function configureNotificationChannel(): void {
   }
 }
 
-async function showLocalNotification(event: NotificationEvent): Promise<void> {
+async function showLocalNotification(event: NotificationEvent, hostId: string): Promise<void> {
   const enabled = await loadPushNotificationsEnabled()
   if (!enabled) return
 
@@ -66,7 +67,7 @@ async function showLocalNotification(event: NotificationEvent): Promise<void> {
     content: {
       title: event.title,
       body: event.body,
-      data: { source: event.source, worktreeId: event.worktreeId },
+      data: buildLocalNotificationData(event, hostId),
       ...(Platform.OS === 'android' ? { channelId: 'orca-desktop' } : {})
     },
     trigger: null
@@ -76,7 +77,7 @@ async function showLocalNotification(event: NotificationEvent): Promise<void> {
 // Why: each host connection gets its own notification subscription. When the
 // connection drops, the unsubscribe function cleans up the streaming RPC.
 // Returns an unsubscribe function.
-export function subscribeToDesktopNotifications(client: RpcClient): () => void {
+export function subscribeToDesktopNotifications(client: RpcClient, hostId: string): () => void {
   configureNotificationChannel()
 
   let subscriptionId: string | null = null
@@ -103,7 +104,7 @@ export function subscribeToDesktopNotifications(client: RpcClient): () => void {
     }
     if (disposed) return
     if (event.type === 'notification') {
-      void showLocalNotification(event as NotificationEvent)
+      void showLocalNotification(event as NotificationEvent, hostId)
     }
   })
 

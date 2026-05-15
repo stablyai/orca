@@ -23,6 +23,7 @@ import { basename } from 'node:path'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
 import os from 'node:os'
+import { splitWorktreeId } from '../../shared/worktree-id'
 import { app } from 'electron'
 import type {
   AppMemory,
@@ -374,9 +375,9 @@ function resolveWorktreeNames(
   repoName: string
 } {
   // Orca worktree ids look like `${repoId}::${absolutePath}`.
-  const sep = worktreeId.indexOf('::')
-  const repoId = sep > 0 ? worktreeId.slice(0, sep) : worktreeId
-  const worktreePath = sep > 0 ? worktreeId.slice(sep + 2) : ''
+  const parsed = splitWorktreeId(worktreeId)
+  const repoId = parsed?.repoId ?? worktreeId
+  const worktreePath = parsed?.worktreePath ?? ''
   const fallbackName = worktreePath ? basename(worktreePath) : worktreeId
 
   const meta = store.getWorktreeMeta(worktreeId)

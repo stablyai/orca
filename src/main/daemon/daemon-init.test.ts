@@ -14,6 +14,7 @@ import { PROTOCOL_VERSION } from './types'
 // non-daemon-init dependency is replaced by a minimal stub that records calls.
 const {
   getPathMock,
+  getAppPathMock,
   isPackagedMock,
   probeSocketExistsMock,
   netConnectMock,
@@ -30,9 +31,10 @@ const {
   rebindLocalProviderListenersMock
 } = vi.hoisted(() => {
   const getPathMock = vi.fn(() => '/fake/userData')
+  const getAppPathMock = vi.fn(() => '/fake/app')
   const isPackagedMock = vi.fn(() => false)
 
-  const probeSocketExistsMock = vi.fn(() => false)
+  const probeSocketExistsMock = vi.fn((_path?: string) => false)
   const forkMock = vi.fn()
   const netConnectMock = vi.fn(() => {
     // Why: the real probeSocket() in daemon-init connects to the socket and
@@ -79,6 +81,7 @@ const {
 
   return {
     getPathMock,
+    getAppPathMock,
     isPackagedMock,
     probeSocketExistsMock,
     netConnectMock,
@@ -134,13 +137,13 @@ vi.mock('electron', () => ({
       return isPackagedMock()
     },
     getPath: getPathMock,
-    getAppPath: () => '/fake/app'
+    getAppPath: getAppPathMock
   }
 }))
 
 vi.mock('fs', () => ({
   mkdirSync: vi.fn(),
-  existsSync: (p: string) => probeSocketExistsMock() || p.includes('.pid'),
+  existsSync: (p: string) => probeSocketExistsMock(p) || p.includes('.pid'),
   unlinkSync: vi.fn(),
   writeFileSync: vi.fn()
 }))
@@ -242,6 +245,8 @@ async function importFresh() {
   healthCheckDaemonMock.mockClear()
   getDaemonLaunchIdentityMock.mockClear()
   killStaleDaemonMock.mockClear()
+  getAppPathMock.mockReset()
+  getAppPathMock.mockReturnValue('/fake/app')
   forkMock.mockReset()
   isPackagedMock.mockReset()
   isPackagedMock.mockReturnValue(false)
@@ -663,6 +668,48 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       '/fake/socket',
       '/fake/token'
     )
+    expect(forkMock).toHaveBeenCalledWith(
+      '/fake/app/out/main/daemon-entry.js',
+      ['--socket', '/fake/socket', '--token', '/fake/token'],
+      expect.objectContaining({ detached: true })
+    )
+  })
+
+  it('uses the direct daemon entry when Electron app path is already out/main', async () => {
+    probeSocketExistsMock.mockImplementation(
+      (p?: string) => p === '/fake/app/out/main/daemon-entry.js'
+    )
+    healthCheckDaemonMock.mockResolvedValueOnce(false)
+    const mod = await importFresh()
+    getAppPathMock.mockReturnValue('/fake/app/out/main')
+    await mod.initDaemonPtyProvider()
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    forkMock.mockImplementationOnce(() => {
+      const handlers: Record<string, ((arg?: unknown) => void)[]> = {
+        message: [],
+        error: [],
+        exit: []
+      }
+      return {
+        pid: 12345,
+        on(event: string, cb: (arg?: unknown) => void) {
+          handlers[event]?.push(cb)
+          if (event === 'message') {
+            queueMicrotask(() => cb({ type: 'ready' }))
+          }
+          return this
+        },
+        disconnect: vi.fn(),
+        unref: vi.fn()
+      }
+    })
+
+    await launcher('/fake/socket', '/fake/token')
+
     expect(forkMock).toHaveBeenCalledWith(
       '/fake/app/out/main/daemon-entry.js',
       ['--socket', '/fake/socket', '--token', '/fake/token'],

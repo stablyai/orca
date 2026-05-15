@@ -13,22 +13,36 @@ import WorktreeCard from './WorktreeCard'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import type { Worktree, Repo } from '../../../../shared/types'
+import type {
+  Worktree,
+  Repo,
+  WorkspaceStatus,
+  WorkspaceStatusDefinition
+} from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { buildWorktreeComparator } from './smart-sort'
 import {
-  buildExplicitEntriesByTabId,
-  buildWorktreeComparator,
-  computeSmartScore,
-  hasAnyLivePty
-} from './smart-sort'
+  buildAttentionByWorktree,
+  type SmartClass,
+  type WorktreeAttention
+} from './smart-attention'
+import { track } from '@/lib/telemetry'
+import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import {
   type GroupHeaderRow,
   type Row,
-  ALL_GROUP_KEY,
+  type WorktreeGroupBy,
   PINNED_GROUP_KEY,
   buildRows,
   getGroupKeyForWorktree
 } from './worktree-list-groups'
+import {
+  getWorkspaceStatus,
+  getWorkspaceStatusFromGroupKey,
+  hasWorkspaceDragData,
+  readWorkspaceDragData
+} from './workspace-status'
+import { useWorkspaceStatusDocumentDrop } from './use-workspace-status-drop'
 import {
   computeClearFilterActions,
   computeVisibleWorktreeIds,
@@ -43,6 +57,7 @@ import {
   pruneWorktreeSelection,
   updateWorktreeSelection
 } from './worktree-multi-selection'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 
 // How long to wait after a sortEpoch bump before actually re-sorting.
 // Prevents jarring position shifts when background events (AI starting work,
@@ -77,7 +92,7 @@ function getWorktreeOptionId(worktreeId: string): string {
 type VirtualizedWorktreeViewportProps = {
   rows: Row[]
   activeWorktreeId: string | null
-  groupBy: 'none' | 'repo' | 'pr-status'
+  groupBy: WorktreeGroupBy
   toggleGroup: (key: string) => void
   collapsedGroups: Set<string>
   handleCreateForRepo: (repoId: string) => void
@@ -101,6 +116,9 @@ type VirtualizedWorktreeViewportProps = {
   allRepoIds: string[]
   reorderRepos: (orderedIds: string[]) => void
   prCache: Record<string, unknown> | null
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
+  onMoveWorktreeToStatus: (worktreeId: string, status: WorkspaceStatus) => void
+  onPinWorktree: (worktreeId: string) => void
   // Why: the viewport remounts when the row structure changes (see
   // viewportResetKey) so the virtualizer's measurementsCache cannot hold
   // heights tied to shifted indices. A fresh virtualizer would otherwise
@@ -130,9 +148,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   allRepoIds,
   reorderRepos,
   prCache,
+  workspaceStatuses,
+  onMoveWorktreeToStatus,
+  onPinWorktree,
   scrollOffsetRef
 }: VirtualizedWorktreeViewportProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const [dragOverStatus, setDragOverStatus] = useState<WorkspaceStatus | null>(null)
+  const [pinDragOver, setPinDragOver] = useState(false)
 
   // Drag is only meaningful when the user is grouping by repo. When inert
   // (groupBy !== 'repo'), the controller is still constructed for hook order
@@ -228,18 +251,16 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         if (collapsedGroups.has(PINNED_GROUP_KEY)) {
           toggleGroup(PINNED_GROUP_KEY)
         }
-      } else if (targetWorktree && groupBy !== 'none') {
-        const groupKey = getGroupKeyForWorktree(groupBy, targetWorktree, repoMap, prCache)
+      } else if (targetWorktree) {
+        const groupKey = getGroupKeyForWorktree(
+          groupBy,
+          targetWorktree,
+          repoMap,
+          prCache,
+          workspaceStatuses
+        )
         if (groupKey && collapsedGroups.has(groupKey)) {
           toggleGroup(groupKey)
-        }
-      } else if (targetWorktree && groupBy === 'none') {
-        // Why: when any worktree is pinned, buildRows emits a sibling "All"
-        // header for the unpinned block (see worktree-list-groups.ts). If that
-        // header is collapsed, revealing an unpinned target would otherwise
-        // leave it hidden — uncollapse it so the card is actually visible.
-        if (collapsedGroups.has(ALL_GROUP_KEY)) {
-          toggleGroup(ALL_GROUP_KEY)
         }
       }
     }
@@ -269,7 +290,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     virtualizer,
     clearPendingRevealWorktreeId,
     toggleGroup,
-    collapsedGroups
+    collapsedGroups,
+    workspaceStatuses
   ])
 
   const prCacheLen = useAppStore((s) => Object.keys(s.prCache).length)
@@ -298,7 +320,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         repoMap,
         prCache,
         new Set<string>(),
-        repoOrder
+        repoOrder,
+        workspaceStatuses
       ).filter((r): r is Extract<Row, { type: 'item' }> => r.type === 'item')
       if (worktreeRows.length === 0) {
         return
@@ -331,7 +354,17 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         virtualizer.scrollToIndex(rowIndex, { align: 'auto' })
       }
     },
-    [rows, activeWorktreeId, virtualizer, groupBy, worktrees, repoMap, prCache, repoOrder]
+    [
+      rows,
+      activeWorktreeId,
+      virtualizer,
+      groupBy,
+      worktrees,
+      repoMap,
+      prCache,
+      repoOrder,
+      workspaceStatuses
+    ]
   )
 
   useEffect(() => {
@@ -390,6 +423,76 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       ? getWorktreeOptionId(activeWorktreeId)
       : undefined
 
+  const hasWorkspaceDropTargets = useMemo(
+    () =>
+      groupBy === 'none' ||
+      rows.some((row) => row.type === 'header' && row.key === PINNED_GROUP_KEY),
+    [groupBy, rows]
+  )
+
+  const handleWorkspaceStatusDragOver = useCallback(
+    (event: React.DragEvent, status: WorkspaceStatus) => {
+      if (!hasWorkspaceDragData(event.dataTransfer)) {
+        return
+      }
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'move'
+      setDragOverStatus(status)
+    },
+    []
+  )
+
+  const handleWorkspaceStatusDragLeave = useCallback((event: React.DragEvent) => {
+    const relatedTarget = event.relatedTarget
+    if (relatedTarget instanceof Node && event.currentTarget.contains(relatedTarget)) {
+      return
+    }
+    setDragOverStatus(null)
+  }, [])
+
+  const handleWorkspacePinDragOver = useCallback((event: React.DragEvent) => {
+    if (!hasWorkspaceDragData(event.dataTransfer)) {
+      return
+    }
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    setPinDragOver(true)
+  }, [])
+
+  const handleWorkspacePinDragLeave = useCallback((event: React.DragEvent) => {
+    const relatedTarget = event.relatedTarget
+    if (relatedTarget instanceof Node && event.currentTarget.contains(relatedTarget)) {
+      return
+    }
+    setPinDragOver(false)
+  }, [])
+
+  const handleWorkspaceStatusDragFinish = useCallback(() => {
+    setDragOverStatus(null)
+    setPinDragOver(false)
+  }, [])
+
+  const handleWorkspaceStatusDrop = useCallback(
+    (event: React.DragEvent, status: WorkspaceStatus) => {
+      const worktreeId = readWorkspaceDragData(event.dataTransfer)
+      if (!worktreeId) {
+        return
+      }
+      event.preventDefault()
+      setDragOverStatus(null)
+      onMoveWorktreeToStatus(worktreeId, status)
+    },
+    [onMoveWorktreeToStatus]
+  )
+
+  useWorkspaceStatusDocumentDrop(
+    scrollRef,
+    onMoveWorktreeToStatus,
+    onPinWorktree,
+    handleWorkspaceStatusDragFinish,
+    hasWorkspaceDropTargets
+  )
+
   return (
     <div
       ref={scrollRef}
@@ -424,6 +527,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
             const isDraggingThis =
               repoDrag.state.draggingRepoId !== null &&
               repoDrag.state.draggingRepoId === repoIdForHeader
+            const headerWorkspaceStatus =
+              groupBy === 'none' ? getWorkspaceStatusFromGroupKey(row.key, workspaceStatuses) : null
+            const isPinnedHeader = row.key === PINNED_GROUP_KEY
             return (
               <div
                 key={vItem.key}
@@ -437,16 +543,44 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   role="button"
                   tabIndex={0}
                   data-repo-header-id={repoIdForHeader}
+                  data-workspace-status-drop-target={headerWorkspaceStatus ? '' : undefined}
+                  data-workspace-status={headerWorkspaceStatus ?? undefined}
+                  data-workspace-pin-drop-target={isPinnedHeader ? '' : undefined}
                   className={cn(
                     'group flex h-7 w-full items-center gap-1.5 pl-3 pr-1 text-left transition-all',
                     'cursor-pointer',
                     isDraggingThis &&
                       'bg-accent/80 ring-1 ring-ring/40 shadow-md rounded-md scale-[1.01]',
+                    headerWorkspaceStatus &&
+                      dragOverStatus === headerWorkspaceStatus &&
+                      'rounded-md bg-sidebar-accent ring-1 ring-sidebar-ring/40',
+                    isPinnedHeader &&
+                      pinDragOver &&
+                      'rounded-md bg-sidebar-accent ring-1 ring-sidebar-ring/40',
                     // First header sits directly under SidebarHeader, which already
                     // supplies its own spacing — only offset secondary group headers.
                     vItem.index !== firstHeaderIndex && 'mt-2',
                     row.repo ? 'overflow-hidden' : row.tone
                   )}
+                  onDragOver={
+                    isPinnedHeader
+                      ? handleWorkspacePinDragOver
+                      : headerWorkspaceStatus
+                        ? (event) => handleWorkspaceStatusDragOver(event, headerWorkspaceStatus)
+                        : undefined
+                  }
+                  onDragLeave={
+                    isPinnedHeader
+                      ? handleWorkspacePinDragLeave
+                      : headerWorkspaceStatus
+                        ? handleWorkspaceStatusDragLeave
+                        : undefined
+                  }
+                  onDrop={
+                    headerWorkspaceStatus
+                      ? (event) => handleWorkspaceStatusDrop(event, headerWorkspaceStatus)
+                      : undefined
+                  }
                   onClick={() => toggleGroup(row.key)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
@@ -524,6 +658,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
             )
           }
 
+          const itemWorkspaceStatus =
+            groupBy === 'none' ? getWorkspaceStatus(row.worktree, workspaceStatuses) : null
+
           return (
             <div
               key={vItem.key}
@@ -533,8 +670,21 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               aria-current={activeWorktreeId === row.worktree.id ? 'page' : undefined}
               data-index={vItem.index}
               ref={virtualizer.measureElement}
+              data-workspace-status-drop-target={itemWorkspaceStatus ? '' : undefined}
+              data-workspace-status={itemWorkspaceStatus ?? undefined}
               className="absolute left-0 right-0"
               style={{ transform: `translateY(${vItem.start}px)` }}
+              onDragOver={
+                itemWorkspaceStatus
+                  ? (event) => handleWorkspaceStatusDragOver(event, itemWorkspaceStatus)
+                  : undefined
+              }
+              onDragLeave={itemWorkspaceStatus ? handleWorkspaceStatusDragLeave : undefined}
+              onDrop={
+                itemWorkspaceStatus
+                  ? (event) => handleWorkspaceStatusDrop(event, itemWorkspaceStatus)
+                  : undefined
+              }
             >
               <WorktreeCard
                 worktree={row.worktree}
@@ -565,11 +715,13 @@ const WorktreeList = React.memo(function WorktreeList() {
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const groupBy = useAppStore((s) => s.groupBy)
+  const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const sortBy = useAppStore((s) => s.sortBy)
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const openModal = useAppStore((s) => s.openModal)
+  const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const activeView = useAppStore((s) => s.activeView)
   const activeModal = useAppStore((s) => s.activeModal)
   const pendingRevealWorktreeId = useAppStore((s) => s.pendingRevealWorktreeId)
@@ -579,16 +731,19 @@ const WorktreeList = React.memo(function WorktreeList() {
   const needsTabs = showActiveOnly || sortBy === 'smart'
   const tabsByWorktree = useAppStore((s) => (needsTabs ? s.tabsByWorktree : null))
   const ptyIdsByTabId = useAppStore((s) => (needsTabs ? s.ptyIdsByTabId : null))
+  const unifiedTabsByWorktree = useAppStore((s) =>
+    showActiveOnly ? s.unifiedTabsByWorktree : null
+  )
   const browserTabsByWorktree = useAppStore((s) =>
     showActiveOnly ? s.browserTabsByWorktree : null
   )
 
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
 
-  // PR cache is needed for PR-status grouping, smart sorting, and when the
-  // PR card property is visible.
+  // PR cache is needed for PR-status grouping and when the PR card property
+  // is visible.
   const prCache = useAppStore((s) =>
-    groupBy === 'pr-status' || sortBy === 'smart' || cardProps.includes('pr') ? s.prCache : null
+    groupBy === 'pr-status' || cardProps.includes('pr') ? s.prCache : null
   )
 
   const sortEpoch = useAppStore((s) => s.sortEpoch)
@@ -655,26 +810,40 @@ const WorktreeList = React.memo(function WorktreeList() {
   // Why useMemo instead of useEffect: the sort order must be computed
   // synchronously *before* the worktrees memo reads it, otherwise the
   // first render (and epoch bumps) would use stale/empty data from the ref.
+  // Why a ref alongside the memo: telemetry effects need access to the most
+  // recently computed attention map without forcing every render to read it
+  // from store state again. The ref captures whatever the memo last produced
+  // for the smart branch.
+  const lastAttentionByWorktreeRef = useRef<Map<string, WorktreeAttention> | null>(null)
+
   const sortedIds = useMemo(() => {
     const state = useAppStore.getState()
     const nonArchivedWorktrees = getAllWorktreesFromState(state).filter(
       (worktree) => !worktree.isArchived
     )
 
-    // Why cold-start detection: the smart score is dominated by ephemeral
-    // signals (running jobs +60, live terminals +12, needs attention +35)
-    // that vanish after restart. Recomputing the smart score on cold start
-    // produces a shuffled ordering because those signals are gone while
-    // persistent ones (unread, linked PR) survive — changing relative ranks.
-    // Instead, restore the pre-shutdown order from the persisted sortOrder
-    // snapshot, and switch to the live smart score once PTYs start spawning.
+    // Why cold-start detection: smart-class resolution depends on the
+    // agent-status snapshot (agentStatusByPaneKey) hydrating from the hook
+    // server, which lands asynchronously after launch. Running the warm
+    // comparator before that arrives would collapse every worktree to Class 4
+    // and shuffle the sidebar against the comparator's tiebreakers. Restore
+    // the pre-shutdown order from the persisted sortOrder snapshot until any
+    // live PTY appears, then switch to the live class layer. See Edge case 8
+    // in docs/smart-worktree-order-redesign.md.
     if (sortBy === 'smart' && !sessionHasHadPty.current) {
-      if (hasAnyLivePty(state.tabsByWorktree, state.ptyIdsByTabId)) {
+      // Why: `tabHasLivePty` (over `ptyIdsByTabId`) is the source of truth for
+      // liveness — slept terminals retain `tab.ptyId` as a wake hint, so reading
+      // it directly would falsely keep cold-start ordering off after restart.
+      const hasAnyLivePty = Object.values(state.tabsByWorktree)
+        .flat()
+        .some((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
+      if (hasAnyLivePty) {
         sessionHasHadPty.current = true
       } else {
         nonArchivedWorktrees.sort(
           (a, b) => b.sortOrder - a.sortOrder || a.displayName.localeCompare(b.displayName)
         )
+        lastAttentionByWorktreeRef.current = null
         return nonArchivedWorktrees.map((w) => w.id)
       }
     }
@@ -682,59 +851,118 @@ const WorktreeList = React.memo(function WorktreeList() {
     const currentTabs = state.tabsByWorktree
     const now = Date.now()
     // Why precompute: this is the hot sidebar sort. Array.sort invokes the
-    // comparator O(N log N) times, and the smart-score computation would
-    // otherwise scan `agentStatusByPaneKey` (O(E)) or do per-worktree O(T)
-    // index lookups on every call. Two layered optimizations:
-    //   1. Build the tabId → explicit-entries index ONCE (O(E)) so the
-    //      per-worktree scoring does cheap lookups instead of rescanning.
-    //   2. Precompute scores once per worktree (decorate-sort-undecorate) so
-    //      the comparator does O(1) map lookups instead of re-scoring per
-    //      comparison.
-    // Combined: O(E) index + O(N×T) scoring + O(N log N) sort, instead of
-    // O(N × E × T) per sortEpoch bump. Only smart mode uses the score map;
-    // other modes ignore it.
-    const explicitByTabId =
+    // comparator O(N log N) times. Build the per-worktree attention map ONCE
+    // (O(E + N×T×H) where H = stateHistory length, bounded at 20) so the
+    // comparator does O(1) map lookups instead of re-resolving per comparison.
+    const attentionByWorktree =
       sortBy === 'smart'
-        ? buildExplicitEntriesByTabId(state.agentStatusByPaneKey, state.migrationUnsupportedByPtyId)
-        : undefined
-    const precomputedScores =
-      sortBy === 'smart'
-        ? new Map<string, number>(
-            nonArchivedWorktrees.map((w) => [
-              w.id,
-              computeSmartScore(
-                w,
-                currentTabs,
-                repoMap,
-                state.prCache,
-                now,
-                state.agentStatusByPaneKey,
-                explicitByTabId,
-                state.ptyIdsByTabId
-              )
-            ])
+        ? buildAttentionByWorktree(
+            nonArchivedWorktrees,
+            currentTabs,
+            state.agentStatusByPaneKey,
+            state.runtimePaneTitlesByTabId,
+            state.ptyIdsByTabId,
+            now,
+            state.migrationUnsupportedByPtyId
           )
-        : undefined
-    nonArchivedWorktrees.sort(
-      buildWorktreeComparator(
-        sortBy,
-        currentTabs,
-        repoMap,
-        state.prCache,
-        now,
-        null,
-        state.agentStatusByPaneKey,
-        precomputedScores,
-        explicitByTabId,
-        state.ptyIdsByTabId
-      )
-    )
+        : new Map<string, WorktreeAttention>()
+    lastAttentionByWorktreeRef.current = sortBy === 'smart' ? attentionByWorktree : null
+    nonArchivedWorktrees.sort(buildWorktreeComparator(sortBy, repoMap, now, attentionByWorktree))
     return nonArchivedWorktrees.map((w) => w.id)
     // debouncedSortEpoch is an intentional trigger: it's not read inside the
     // memo, but its change signals that the sort order should be recomputed.
     // The debounce prevents jarring mid-interaction position shifts.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSortEpoch, repoMap, sortBy])
+
+  // Why a ref of prior class per worktree: smart_sort_class_1_promotion must
+  // fire only on transitions INTO Class 1, not on every recompute that keeps
+  // a worktree there. Suppressing repeats with a ref keeps the event signal
+  // clean without growing component state.
+  const prevClassByWorktreeIdRef = useRef<Map<string, SmartClass>>(new Map())
+  // Why gate the first observation: when Smart mode first activates (app
+  // start, or toggling away from Smart and back), the prev-class map is
+  // empty, so every existing Class-1 worktree would look like a fresh
+  // promotion and produce a burst of spurious events. Treat the first
+  // observation as a silent baseline — populate the map but don't fire.
+  const hasObservedSmartOnceRef = useRef<boolean>(false)
+
+  useEffect(() => {
+    const attention = lastAttentionByWorktreeRef.current
+    if (sortBy !== 'smart' || !attention) {
+      // Why reset: when the user switches off Smart, drop the prior-class map
+      // so re-entering Smart doesn't fire stale promotion events for worktrees
+      // whose state has since changed. Reset the first-observation gate too
+      // so the next Smart-mode session starts with a fresh silent baseline.
+      prevClassByWorktreeIdRef.current = new Map()
+      hasObservedSmartOnceRef.current = false
+      return
+    }
+    const next = new Map<string, SmartClass>()
+    const isFirstObservation = !hasObservedSmartOnceRef.current
+    for (const [worktreeId, info] of attention) {
+      const prev = prevClassByWorktreeIdRef.current.get(worktreeId)
+      if (!isFirstObservation && info.cls === 1 && prev !== 1 && info.cause) {
+        track('smart_sort_class_1_promotion', { cause: info.cause })
+      }
+      next.set(worktreeId, info.cls)
+    }
+    prevClassByWorktreeIdRef.current = next
+    hasObservedSmartOnceRef.current = true
+  }, [sortBy, sortedIds])
+
+  // Why a 30s timer owned by the component: the class-distribution event is
+  // a coarse health signal — we only need it often enough to see the steady
+  // state, not every render. Cancelling on unmount or sort switch keeps the
+  // timer from firing while the user is in Recent/Name/Repo modes.
+  useEffect(() => {
+    if (sortBy !== 'smart') {
+      return
+    }
+    const fire = () => {
+      const attention = lastAttentionByWorktreeRef.current
+      if (!attention) {
+        return
+      }
+      let class1 = 0
+      let class2 = 0
+      let class3 = 0
+      let class4 = 0
+      for (const info of attention.values()) {
+        if (info.cls === 1) {
+          class1++
+        } else if (info.cls === 2) {
+          class2++
+        } else if (info.cls === 3) {
+          class3++
+        } else {
+          class4++
+        }
+      }
+      track('smart_sort_class_distribution', {
+        class_1: class1,
+        class_2: class2,
+        class_3: class3,
+        class_4: class4,
+        total_worktrees: attention.size
+      })
+    }
+    fire()
+    const timer = setInterval(fire, 30_000)
+    return () => clearInterval(timer)
+  }, [sortBy])
+
+  // Why fire on the transition: switching away from Smart is the user signal
+  // we care about (regression). Use a ref to compare against the previous
+  // value so we don't double-fire when sortBy momentarily round-trips.
+  const prevSortByRef = useRef(sortBy)
+  useEffect(() => {
+    const prev = prevSortByRef.current
+    prevSortByRef.current = sortBy
+    if (prev === 'smart' && sortBy === 'recent') {
+      track('smart_to_recent_switch', {})
+    }
+  }, [sortBy])
 
   // Persist the computed sort order so the sidebar can be restored after
   // restart. Only persist during live sessions (sessionHasHadPty latched) —
@@ -743,7 +971,15 @@ const WorktreeList = React.memo(function WorktreeList() {
     if (sortBy !== 'smart' || sortedIds.length === 0 || !sessionHasHadPty.current) {
       return
     }
-    void window.api.worktrees.persistSortOrder({ orderedIds: sortedIds })
+    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    void (target.kind === 'environment'
+      ? callRuntimeRpc(
+          target,
+          'worktree.persistSortOrder',
+          { orderedIds: sortedIds },
+          { timeoutMs: 15_000 }
+        )
+      : window.api.worktrees.persistSortOrder({ orderedIds: sortedIds }))
   }, [sortedIds, sortBy])
 
   // Flatten, filter, and apply stable sort order via the shared utility so
@@ -754,6 +990,7 @@ const WorktreeList = React.memo(function WorktreeList() {
       showActiveOnly,
       tabsByWorktree,
       ptyIdsByTabId,
+      unifiedTabsByWorktree,
       browserTabsByWorktree,
       activeWorktreeId,
       hideDefaultBranchWorkspace,
@@ -768,6 +1005,7 @@ const WorktreeList = React.memo(function WorktreeList() {
     repoMap,
     tabsByWorktree,
     ptyIdsByTabId,
+    unifiedTabsByWorktree,
     browserTabsByWorktree,
     sortedIds,
     worktreeMap,
@@ -793,8 +1031,17 @@ const WorktreeList = React.memo(function WorktreeList() {
 
   // Build flat row list for rendering
   const rows: Row[] = useMemo(
-    () => buildRows(groupBy, worktrees, repoMap, prCache, collapsedGroups, repoOrder),
-    [groupBy, worktrees, repoMap, prCache, collapsedGroups, repoOrder]
+    () =>
+      buildRows(
+        groupBy,
+        worktrees,
+        repoMap,
+        prCache,
+        collapsedGroups,
+        repoOrder,
+        workspaceStatuses
+      ),
+    [groupBy, worktrees, repoMap, prCache, collapsedGroups, repoOrder, workspaceStatuses]
   )
   // Why: rows.length alone can stay the same when items migrate between
   // groups (e.g., PR cache loads on restart and a collapsed group absorbs
@@ -923,6 +1170,28 @@ const WorktreeList = React.memo(function WorktreeList() {
     [openModal]
   )
 
+  const moveWorktreeToStatus = useCallback(
+    (worktreeId: string, status: WorkspaceStatus) => {
+      const current = worktreeMap.get(worktreeId)
+      if (!current || getWorkspaceStatus(current, workspaceStatuses) === status) {
+        return
+      }
+      void updateWorktreeMeta(worktreeId, { workspaceStatus: status })
+    },
+    [updateWorktreeMeta, worktreeMap, workspaceStatuses]
+  )
+
+  const pinWorktree = useCallback(
+    (worktreeId: string) => {
+      const current = worktreeMap.get(worktreeId)
+      if (!current || current.isPinned) {
+        return
+      }
+      void updateWorktreeMeta(worktreeId, { isPinned: true })
+    },
+    [updateWorktreeMeta, worktreeMap]
+  )
+
   // Why: hideDefaultBranchWorkspace is counted as a filter here so the
   // empty-sidebar escape hatch (Clear Filters button below) is reachable when
   // it's the only reason the list is empty — otherwise a user whose only
@@ -993,6 +1262,9 @@ const WorktreeList = React.memo(function WorktreeList() {
         void reorderReposAction(orderedIds)
       }}
       prCache={prCache}
+      workspaceStatuses={workspaceStatuses}
+      onMoveWorktreeToStatus={moveWorktreeToStatus}
+      onPinWorktree={pinWorktree}
       scrollOffsetRef={sidebarScrollOffsetRef}
     />
   )

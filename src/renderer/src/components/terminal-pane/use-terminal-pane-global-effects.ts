@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react'
 import {
   FOCUS_TERMINAL_PANE_EVENT,
+  PASTE_TERMINAL_TEXT_EVENT,
   SYNC_FIT_PANES_EVENT,
   TOGGLE_TERMINAL_PANE_EXPAND_EVENT,
-  type FocusTerminalPaneDetail
+  type FocusTerminalPaneDetail,
+  type PasteTerminalTextDetail
 } from '@/constants/terminal'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
@@ -126,6 +128,27 @@ export function useTerminalPaneGlobalEffects({
     return () => window.removeEventListener(FOCUS_TERMINAL_PANE_EVENT, onFocusPane)
   }, [tabId, managerRef])
 
+  useEffect(() => {
+    const onPasteText = (event: Event): void => {
+      const detail = (event as CustomEvent<PasteTerminalTextDetail | undefined>).detail
+      if (!detail?.tabId || detail.tabId !== tabId || !detail.text) {
+        return
+      }
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      const pane = manager.getActivePane() ?? manager.getPanes()[0]
+      if (!pane) {
+        return
+      }
+      pane.terminal.paste(detail.text)
+      pane.terminal.focus()
+    }
+    window.addEventListener(PASTE_TERMINAL_TEXT_EVENT, onPasteText)
+    return () => window.removeEventListener(PASTE_TERMINAL_TEXT_EVENT, onPasteText)
+  }, [tabId, managerRef])
+
   // Why: sidebar open/close toggles dispatch SYNC_FIT_PANES_EVENT from a
   // useLayoutEffect (pre-paint, same frame as the width change) so the
   // terminal fits synchronously with the new container size, eliminating the
@@ -197,15 +220,63 @@ export function useTerminalPaneGlobalEffects({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVisible])
 
-  // Why: only the active tab's terminal should process file drops. Registering
-  // a listener per mounted tab causes a MaxListenersExceededWarning when 11+
-  // tabs are open. Gating on isActive ensures at most one listener exists.
+  // Why: dictation events are dispatched globally; gate on isActiveRef so only
+  // the foreground terminal pane consumes the inserted text — otherwise text
+  // would be duplicated across all mounted but inactive tabs.
   useEffect(() => {
-    if (!isActive) {
+    if (typeof document === 'undefined') {
+      return
+    }
+    const onDictationInsert = (event: Event): void => {
+      if (!isActiveRef.current) {
+        return
+      }
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      const detail = (
+        event as CustomEvent<string | { text?: string; tabId?: string; paneId?: number }>
+      ).detail
+      const text = typeof detail === 'string' ? detail : detail?.text
+      if (typeof detail === 'object' && detail.tabId !== tabId) {
+        return
+      }
+      const requestedPaneId = typeof detail === 'object' ? detail.paneId : undefined
+      const pane = requestedPaneId
+        ? manager.getPanes().find((candidate) => candidate.id === requestedPaneId)
+        : (manager.getActivePane() ?? manager.getPanes()[0])
+      if (!pane) {
+        return
+      }
+      const transport = paneTransportsRef.current.get(pane.id)
+      if (!transport) {
+        return
+      }
+      if (text) {
+        transport.sendInput(text)
+      }
+    }
+    document.addEventListener('dictation:insertText', onDictationInsert)
+    return () => document.removeEventListener('dictation:insertText', onDictationInsert)
+  }, [isActiveRef, managerRef, paneTransportsRef, tabId])
+
+  // Why: visible but unfocused split-group terminals can still receive native
+  // OS drops. Route tab-id-aware payloads to the dropped pane, while legacy
+  // payloads without a tab id keep the old active-terminal-only behavior.
+  useEffect(() => {
+    if (!isActive && !isVisible) {
       return
     }
     return window.api.ui.onFileDrop((data) => {
       if (data.target !== 'terminal') {
+        return
+      }
+      if (data.tabId) {
+        if (data.tabId !== tabId) {
+          return
+        }
+      } else if (!isActive) {
         return
       }
       const manager = managerRef.current
@@ -224,5 +295,5 @@ export function useTerminalPaneGlobalEffects({
         data
       })
     })
-  }, [isActive, managerRef, paneTransportsRef])
+  }, [isActive, isVisible, managerRef, paneTransportsRef, tabId])
 }

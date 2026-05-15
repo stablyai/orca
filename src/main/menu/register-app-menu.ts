@@ -10,6 +10,7 @@ export type AppearanceMenuKey = keyof AppearanceMenuState
 
 type RegisterAppMenuOptions = {
   onOpenSettings: () => void
+  onOpenFeatureTour: (window?: Electron.BaseWindow | null) => void
   onCheckForUpdates: (options: { includePrerelease: boolean }) => void
   onZoomIn: () => void
   onZoomOut: () => void
@@ -23,6 +24,7 @@ type RegisterAppMenuOptions = {
 function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   const {
     onOpenSettings,
+    onOpenFeatureTour,
     onCheckForUpdates,
     onZoomIn,
     onZoomOut,
@@ -71,6 +73,11 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     label: 'Settings',
     accelerator: 'CmdOrCtrl+,',
     click: () => onOpenSettings()
+  }
+
+  const featureTourItem: Electron.MenuItemConstructorOptions = {
+    label: 'Feature tour',
+    click: (_menuItem, window) => onOpenFeatureTour(window)
   }
 
   const exportPdfItem: Electron.MenuItemConstructorOptions = {
@@ -251,13 +258,21 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     submenu: [{ role: 'minimize' }, { role: 'zoom' }]
   }
 
-  // Why: Windows/Linux have no app-named menu, so About + Check for Updates
-  // go into a Help menu — the standard place for those entries on those
-  // platforms. On macOS the system "About Orca" and "Check for Updates"
-  // already sit under the app menu, so we don't duplicate them here.
+  // Why: the feature tour is product education, so it belongs under Help on
+  // every platform. macOS still keeps About/Updates in the app menu, while
+  // Windows/Linux keep those entries here because they have no app menu.
   const helpMenu: Electron.MenuItemConstructorOptions = {
     label: 'Help',
-    submenu: [{ role: 'about' }, checkForUpdatesItem]
+    submenu: [
+      featureTourItem,
+      ...(isMac
+        ? []
+        : ([
+            { type: 'separator' },
+            { role: 'about' },
+            checkForUpdatesItem
+          ] satisfies Electron.MenuItemConstructorOptions[]))
+    ]
   }
 
   const template: Electron.MenuItemConstructorOptions[] = [
@@ -266,7 +281,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     editMenu,
     viewMenu,
     windowMenu,
-    ...(isMac ? [] : [helpMenu])
+    helpMenu
   ]
 
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))

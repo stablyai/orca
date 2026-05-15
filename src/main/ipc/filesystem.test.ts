@@ -22,6 +22,7 @@ const {
   bulkStageFilesMock,
   unstageFileMock,
   bulkUnstageFilesMock,
+  bulkDiscardChangesMock,
   discardChangesMock,
   listWorktreesMock,
   getSshFilesystemProviderMock,
@@ -45,6 +46,7 @@ const {
   bulkStageFilesMock: vi.fn(),
   unstageFileMock: vi.fn(),
   bulkUnstageFilesMock: vi.fn(),
+  bulkDiscardChangesMock: vi.fn(),
   discardChangesMock: vi.fn(),
   listWorktreesMock: vi.fn(),
   getSshFilesystemProviderMock: vi.fn(),
@@ -80,6 +82,7 @@ vi.mock('../git/status', () => ({
   bulkStageFiles: bulkStageFilesMock,
   unstageFile: unstageFileMock,
   bulkUnstageFiles: bulkUnstageFilesMock,
+  bulkDiscardChanges: bulkDiscardChangesMock,
   discardChanges: discardChangesMock
 }))
 
@@ -162,6 +165,7 @@ describe('registerFilesystemHandlers', () => {
       bulkStageFilesMock,
       unstageFileMock,
       bulkUnstageFilesMock,
+      bulkDiscardChangesMock,
       discardChangesMock,
       listWorktreesMock,
       getSshFilesystemProviderMock,
@@ -493,6 +497,22 @@ describe('registerFilesystemHandlers', () => {
     ])
   })
 
+  it('normalizes git file paths for bulk discard requests', async () => {
+    bulkDiscardChangesMock.mockResolvedValue(undefined)
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:bulkDiscard')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      filePaths: ['./src/../src/file.ts', 'nested//child.ts']
+    })
+
+    expect(bulkDiscardChangesMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, [
+      path.join('src', 'file.ts'),
+      path.join('nested', 'child.ts')
+    ])
+  })
+
   it('rejects bulk unstage requests that escape the selected worktree', async () => {
     registerFilesystemHandlers(store as never)
 
@@ -504,6 +524,19 @@ describe('registerFilesystemHandlers', () => {
     ).rejects.toThrow('Access denied: git file path escapes the selected worktree')
 
     expect(bulkUnstageFilesMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects bulk discard requests that escape the selected worktree', async () => {
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:bulkDiscard')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH,
+        filePaths: ['src/file.ts', '../outside.txt']
+      })
+    ).rejects.toThrow('Access denied: git file path escapes the selected worktree')
+
+    expect(bulkDiscardChangesMock).not.toHaveBeenCalled()
   })
 
   it('lists markdown documents recursively for a registered worktree', async () => {
@@ -703,6 +736,22 @@ describe('registerFilesystemHandlers', () => {
 
     expect(sshCommitMock).toHaveBeenCalledWith('/remote/repo', 'feat: remote commit')
     expect(commitChangesMock).not.toHaveBeenCalled()
+  })
+
+  it('routes ssh git:bulkDiscard through the SSH provider', async () => {
+    const sshBulkDiscardMock = vi.fn().mockResolvedValue(undefined)
+    getSshGitProviderMock.mockReturnValue({ bulkDiscardChanges: sshBulkDiscardMock })
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:bulkDiscard')!(null, {
+      worktreePath: '/remote/repo',
+      filePaths: ['a.ts', 'b.ts'],
+      connectionId: 'conn-1'
+    })
+
+    expect(sshBulkDiscardMock).toHaveBeenCalledWith('/remote/repo', ['a.ts', 'b.ts'])
+    expect(bulkDiscardChangesMock).not.toHaveBeenCalled()
   })
 
   it('rejects git:commit with empty message and does not call commitChanges', async () => {

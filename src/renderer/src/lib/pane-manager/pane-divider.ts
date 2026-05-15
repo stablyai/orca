@@ -16,6 +16,59 @@ type DividerCallbacks = {
   onLayoutChanged?: () => void
 }
 
+type DividerFlexFrameScheduler = {
+  schedule: (prevFlex: number, nextFlex: number) => void
+  flush: () => void
+  cancel: () => void
+}
+
+export function createDividerFlexFrameScheduler({
+  apply,
+  requestFrame = requestAnimationFrame,
+  cancelFrame = cancelAnimationFrame
+}: {
+  apply: (prevFlex: number, nextFlex: number) => void
+  requestFrame?: (callback: FrameRequestCallback) => number
+  cancelFrame?: (handle: number) => void
+}): DividerFlexFrameScheduler {
+  let frameId: number | null = null
+  let pending: { prevFlex: number; nextFlex: number } | null = null
+
+  const applyPending = (): void => {
+    frameId = null
+    const next = pending
+    pending = null
+    if (!next) {
+      return
+    }
+    apply(next.prevFlex, next.nextFlex)
+  }
+
+  return {
+    schedule(prevFlex, nextFlex) {
+      pending = { prevFlex, nextFlex }
+      if (frameId !== null) {
+        return
+      }
+      frameId = requestFrame(applyPending)
+    },
+    flush() {
+      if (frameId !== null) {
+        cancelFrame(frameId)
+        frameId = null
+      }
+      applyPending()
+    },
+    cancel() {
+      if (frameId !== null) {
+        cancelFrame(frameId)
+        frameId = null
+      }
+      pending = null
+    }
+  }
+}
+
 export function createDivider(
   isVertical: boolean,
   styleOptions: PaneStyleOptions,
@@ -57,9 +110,19 @@ function attachDividerDrag(
   let totalSize = 0
   let prevEl: HTMLElement | null = null
   let nextEl: HTMLElement | null = null
+  const flexScheduler = createDividerFlexFrameScheduler({
+    apply: (newPrev, newNext) => {
+      if (!prevEl || !nextEl) {
+        return
+      }
+      prevEl.style.flex = `${newPrev} 1 0%`
+      nextEl.style.flex = `${newNext} 1 0%`
+    }
+  })
 
   const onPointerDown = (e: PointerEvent): void => {
     e.preventDefault()
+    flexScheduler.cancel()
     divider.setPointerCapture(e.pointerId)
     divider.classList.add('is-dragging')
     dragging = true
@@ -108,11 +171,9 @@ function attachDividerDrag(
       newPrev = totalSize - MIN_PANE_SIZE
     }
 
-    // Why: keep drag-time work to flex layout only; pane-local ResizeObservers
-    // schedule the terminal fit on the next frame so the divider stays smooth.
-    // Use flex-grow proportionally
-    prevEl.style.flex = `${newPrev} 1 0%`
-    nextEl.style.flex = `${newNext} 1 0%`
+    // Why: pointermove can outpace paint during split resizing. Coalescing the
+    // flex writes keeps drag reflow to one update per frame.
+    flexScheduler.schedule(newPrev, newNext)
   }
 
   const onPointerUp = (e: PointerEvent): void => {
@@ -120,6 +181,7 @@ function attachDividerDrag(
       return
     }
     dragging = false
+    flexScheduler.flush()
     divider.releasePointerCapture(e.pointerId)
     divider.classList.remove('is-dragging')
     // Final refit at the exact drop position.

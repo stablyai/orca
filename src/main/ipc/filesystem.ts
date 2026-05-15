@@ -11,6 +11,7 @@ import type {
   GitBranchCompareResult,
   GitConflictOperation,
   GitDiffResult,
+  GitPushTarget,
   GitUpstreamStatus,
   GitStatusResult,
   MarkdownDocument,
@@ -34,12 +35,15 @@ import {
   unstageFile,
   bulkStageFiles,
   bulkUnstageFiles,
+  bulkDiscardChanges,
   discardChanges,
   getBranchCompare,
   getBranchDiff
 } from '../git/status'
 import { getUpstreamStatus } from '../git/upstream'
 import { gitFetch, gitPull, gitPush } from '../git/remote'
+import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
+import { validateGitPushTarget } from '../git/push-target-validation'
 import { getRemoteFileUrl } from '../git/repo'
 import {
   resolveAuthorizedPath,
@@ -608,21 +612,32 @@ export function registerFilesystemHandlers(store: Store): void {
     'git:push',
     async (
       _event,
-      args: { worktreePath: string; publish?: boolean; connectionId?: string }
+      args: {
+        worktreePath: string
+        publish?: boolean
+        connectionId?: string
+        pushTarget?: GitPushTarget
+      }
     ): Promise<void> => {
       // Why: coerce to strict boolean at the IPC boundary so a malformed
       // renderer payload (e.g. string 'false') can't silently enable
       // --set-upstream mode. Mirrors the relay handler in src/relay/git-handler.ts.
       const publish = args.publish === true
       if (args.connectionId) {
+        if (args.pushTarget) {
+          assertGitPushTargetShape(args.pushTarget)
+        }
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
           throw new Error(`No git provider for connection "${args.connectionId}"`)
         }
-        return provider.pushBranch(args.worktreePath, publish)
+        return provider.pushBranch(args.worktreePath, publish, args.pushTarget)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      await gitPush(worktreePath, publish)
+      if (args.pushTarget) {
+        await validateGitPushTarget(worktreePath, args.pushTarget)
+      }
+      await gitPush(worktreePath, publish, args.pushTarget)
     }
   )
 
@@ -746,6 +761,25 @@ export function registerFilesystemHandlers(store: Store): void {
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
       await discardChanges(worktreePath, filePath)
+    }
+  )
+
+  ipcMain.handle(
+    'git:bulkDiscard',
+    async (
+      _event,
+      args: { worktreePath: string; filePaths: string[]; connectionId?: string }
+    ): Promise<void> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No git provider for connection "${args.connectionId}"`)
+        }
+        return provider.bulkDiscardChanges(args.worktreePath, args.filePaths)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
+      await bulkDiscardChanges(worktreePath, filePaths)
     }
   )
 

@@ -1,22 +1,56 @@
 import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
 
 const ACTIVE_CLAUDE_SERVICE = 'Claude Code-credentials'
 const ORCA_CLAUDE_SERVICE = 'Orca Claude Code Managed Credentials'
 
-export async function readActiveClaudeKeychainCredentials(): Promise<string | null> {
-  return readKeychainPassword(ACTIVE_CLAUDE_SERVICE, getKeychainUser())
+export async function readActiveClaudeKeychainCredentials(
+  configDir?: string
+): Promise<string | null> {
+  for (const service of getActiveClaudeServices(configDir)) {
+    const credentials = await readKeychainPassword(service, getKeychainUser())
+    if (credentials) {
+      return credentials
+    }
+  }
+  return null
 }
 
-export async function writeActiveClaudeKeychainCredentials(contents: string): Promise<void> {
-  await writeKeychainPassword(ACTIVE_CLAUDE_SERVICE, getKeychainUser(), contents)
+export async function readActiveClaudeKeychainCredentialsStrict(
+  configDir?: string
+): Promise<string | null> {
+  return readKeychainPassword(getActiveClaudeService(configDir), getKeychainUser())
 }
 
-export async function deleteActiveClaudeKeychainCredentials(): Promise<void> {
-  await deleteKeychainPassword(ACTIVE_CLAUDE_SERVICE, getKeychainUser())
+export async function writeActiveClaudeKeychainCredentials(
+  contents: string,
+  configDir?: string
+): Promise<void> {
+  await writeKeychainPassword(getActiveClaudeService(configDir), getKeychainUser(), contents)
 }
 
-export async function deleteActiveClaudeKeychainCredentialsStrict(): Promise<void> {
-  await deleteKeychainPassword(ACTIVE_CLAUDE_SERVICE, getKeychainUser(), {
+export async function writeActiveClaudeKeychainCredentialsForRuntime(
+  contents: string,
+  configDir: string
+): Promise<void> {
+  const user = getKeychainUser()
+  const scopedService = getActiveClaudeService(configDir)
+  await writeKeychainPassword(scopedService, user, contents)
+  if (scopedService !== ACTIVE_CLAUDE_SERVICE) {
+    await writeKeychainPassword(ACTIVE_CLAUDE_SERVICE, user, contents)
+  }
+}
+
+export async function deleteActiveClaudeKeychainCredentials(configDir?: string): Promise<void> {
+  for (const service of getActiveClaudeServices(configDir)) {
+    await deleteKeychainPassword(service, getKeychainUser())
+  }
+}
+
+export async function deleteActiveClaudeKeychainCredentialsStrict(
+  configDir?: string
+): Promise<void> {
+  await deleteKeychainPassword(getActiveClaudeService(configDir), getKeychainUser(), {
     failOnAccessError: true
   })
 }
@@ -40,6 +74,23 @@ export async function deleteManagedClaudeKeychainCredentials(accountId: string):
 
 function getKeychainUser(): string {
   return process.env.USER || process.env.USERNAME || 'user'
+}
+
+function getActiveClaudeService(configDir?: string): string {
+  if (!configDir) {
+    return ACTIVE_CLAUDE_SERVICE
+  }
+  // Why: Claude Code 2.1+ scopes macOS Keychain credentials by config dir
+  // using the first 8 hex chars of sha256(CLAUDE_CONFIG_DIR).
+  const suffix = createHash('sha256').update(configDir).digest('hex').slice(0, 8)
+  return `${ACTIVE_CLAUDE_SERVICE}-${suffix}`
+}
+
+function getActiveClaudeServices(configDir?: string): string[] {
+  const scopedService = getActiveClaudeService(configDir)
+  return scopedService === ACTIVE_CLAUDE_SERVICE
+    ? [ACTIVE_CLAUDE_SERVICE]
+    : [scopedService, ACTIVE_CLAUDE_SERVICE]
 }
 
 async function readKeychainPassword(service: string, account: string): Promise<string | null> {

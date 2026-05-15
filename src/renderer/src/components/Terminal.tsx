@@ -29,12 +29,14 @@ import {
   type EditorRequestFileCloseDetail,
   requestEditorSaveQuiesce
 } from './editor/editor-autosave'
+import { requestProjectNotesTabClose } from '@/lib/project-notes-close-request'
 import { isUpdaterQuitAndInstallInProgress } from '@/lib/updater-beforeunload'
 import EditorAutosaveController from './editor/EditorAutosaveController'
 import type { TabGroupLayoutNode } from '../../../shared/types'
 import BrowserPane from './browser-pane/BrowserPane'
 import { destroyPersistentWebview } from './browser-pane/webview-registry'
 import BrowserPaneOverlayLayer from './browser-pane/BrowserPaneOverlayLayer'
+import TerminalPaneOverlayLayer from './terminal-pane/TerminalPaneOverlayLayer'
 import {
   collectBrowserWebviewIds,
   destroyWorkspaceWebviews
@@ -48,6 +50,7 @@ import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
 import { shouldRepairActiveTerminalTab } from './terminal/active-terminal-repair'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { openProjectNotesTab } from '@/lib/open-project-notes-tab'
 import {
   getEffectiveLayoutForWorktree as getEffectiveLayout,
   anyMountedWorktreeHasLayout as computeAnyMountedWorktreeHasLayout
@@ -59,6 +62,7 @@ import {
   useActivityTerminalPortals,
   type ActivityTerminalPortalTarget
 } from './activity/activity-terminal-portal'
+import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
@@ -212,7 +216,9 @@ function Terminal(): React.JSX.Element | null {
           if (connectionId !== null) {
             return []
           }
-          return worktreeTabs.flatMap((tab) => state.ptyIdsByTabId[tab.id] ?? [])
+          return worktreeTabs
+            .flatMap((tab) => state.ptyIdsByTabId[tab.id] ?? [])
+            .filter((ptyId) => !isRemoteRuntimePtyId(ptyId))
         }
       )
       if (localPtyIds.length > 0) {
@@ -637,16 +643,28 @@ function Terminal(): React.JSX.Element | null {
       // the ambient/default group and open the file in the wrong pane.
       const targetGroupId = useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId]
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+      const settings = useAppStore.getState().settings
       const fileInfo = await createUntitledMarkdownFile(
         worktree.path,
         activeWorktreeId,
-        connectionId
+        connectionId,
+        settings
       )
       openFile(fileInfo, { preview: false, targetGroupId })
     } catch (err) {
       toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))
     }
   }, [activeWorktreeId, openFile])
+
+  const handleNewNotesTab = useCallback(
+    (noteId?: string) => {
+      if (!activeWorktreeId) {
+        return
+      }
+      void openProjectNotesTab(activeWorktreeId, noteId)
+    },
+    [activeWorktreeId]
+  )
 
   const handleCloseTab = useCallback(
     (tabId: string) => {
@@ -968,6 +986,13 @@ function Terminal(): React.JSX.Element | null {
           handleCloseFile(state.activeFileId)
         } else if (state.activeTabType === 'browser' && state.activeBrowserTabId) {
           closeBrowserTab(state.activeBrowserTabId)
+        } else if (state.activeTabType === 'notes') {
+          const activeTab = activeWorktreeId ? state.getActiveTab(activeWorktreeId) : null
+          if (activeTab?.contentType === 'notes') {
+            requestProjectNotesTabClose(activeTab.id, () => {
+              state.closeUnifiedTab(activeTab.id)
+            })
+          }
         }
         return
       }
@@ -1186,6 +1211,7 @@ function Terminal(): React.JSX.Element | null {
             onNewTerminalWithShell={handleNewTab}
             onNewBrowserTab={handleNewBrowserTab}
             onNewFileTab={handleNewFile}
+            onNewNotesTab={handleNewNotesTab}
             wslAvailable={wslAvailable}
             onSetCustomTitle={setTabCustomTitle}
             onSetTabColor={setTabColor}
@@ -1237,6 +1263,7 @@ function Terminal(): React.JSX.Element | null {
                 <WorktreeSplitSurface
                   key={`tab-groups-${worktree.id}`}
                   worktreeId={worktree.id}
+                  worktreePath={worktree.path}
                   layout={layout}
                   focusedGroupId={activeGroupIdByWorktree[worktree.id]}
                   isVisible={isVisible}
@@ -1250,8 +1277,9 @@ function Terminal(): React.JSX.Element | null {
       {!effectiveActiveLayout && !anyMountedWorktreeHasLayout && (
         <>
           {/* Why: split-group layouts render their own terminal/browser/editor
-              surfaces inside TabGroupPanel. Keeping the legacy workspace-level
-              panes mounted underneath as hidden DOM creates duplicate
+              surfaces through TabGroupPanel plus stable overlay layers.
+              Keeping the legacy workspace-level panes mounted underneath
+              as hidden DOM creates duplicate
               TerminalPane/BrowserPane instances for the same tab, which lets
               two React trees race over one PTY or webview. Render only one
               surface model at a time.
@@ -1468,13 +1496,11 @@ function Terminal(): React.JSX.Element | null {
 }
 
 // Why: each TabGroupPanel tags its body element with an `anchor-name`, and
-// a single worktree-level BrowserPaneOverlayLayer renders every browser tab
-// for this worktree once — keyed by browserTab.id only — and pins each pane
-// to the owning group's anchor via CSS `position-anchor`. Moving a tab
-// between groups now only changes which anchor-name the overlay references,
-// so the `<webview>` is never reparented (and never reloads). Mirrors
-// VS Code's OverlayWebview claim/release pattern, with the browser doing all
-// layout tracking for free.
+// worktree-level overlay layers render every terminal/browser tab once —
+// keyed by pane id only — then pin each pane to the owning group's anchor via
+// CSS `position-anchor`. Moving a tab between groups now only changes which
+// anchor-name the overlay references, so terminals do not remount and
+// webviews do not reparent/reload.
 //
 // Why `React.memo`: Terminal.tsx has many store subscriptions and re-renders
 // on unrelated updates (terminal keystrokes, editor edits, focus changes).
@@ -1484,12 +1510,14 @@ function Terminal(): React.JSX.Element | null {
 // focusedGroupId / isVisible) actually change.
 const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   worktreeId,
+  worktreePath,
   layout,
   focusedGroupId,
   isVisible,
   activityTerminalPortals
 }: {
   worktreeId: string
+  worktreePath: string
   layout: TabGroupLayoutNode
   focusedGroupId?: string
   isVisible: boolean
@@ -1505,6 +1533,11 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
         layout={layout}
         worktreeId={worktreeId}
         focusedGroupId={focusedGroupId}
+        isWorktreeActive={isVisible}
+      />
+      <TerminalPaneOverlayLayer
+        worktreeId={worktreeId}
+        worktreePath={worktreePath}
         isWorktreeActive={isVisible}
         activityTerminalPortals={activityTerminalPortals}
       />
