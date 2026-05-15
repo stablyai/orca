@@ -79,19 +79,9 @@ function formatRelativeTime(timestamp: number): string {
   return `${Math.floor(hours / 24)}d ago`
 }
 
-function isRemoteWorkspaceScanNotice(message: string): boolean {
-  return (
-    message === 'SSH provider is unavailable.' ||
-    message === 'Remote workspaces are not connected. Reconnect and refresh to check them.'
-  )
-}
-
 function formatScanNoticeMessage(errors: { repoId: string; message: string }[]): string | null {
   if (errors.length === 0) {
     return null
-  }
-  if (errors.every((entry) => isRemoteWorkspaceScanNotice(entry.message))) {
-    return 'Remote workspaces are not connected. Reconnect and refresh to check them.'
   }
   return errors.length === 1
     ? 'Some workspaces could not be checked. Refresh to try again.'
@@ -432,9 +422,6 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                 {initialLoading ? <SkeletonRows /> : null}
                 {!loading && scan && candidates.length === 0 && !scanNoticeMessage ? (
                   <EmptyState title="No old workspaces to clean up." />
-                ) : null}
-                {!loading && scan && candidates.length === 0 && scanNoticeMessage ? (
-                  <EmptyState title="No connected old workspaces to clean up." />
                 ) : null}
                 {!loading && scan && candidates.length > 0 && visibleCandidates.length === 0 ? (
                   <EmptyState

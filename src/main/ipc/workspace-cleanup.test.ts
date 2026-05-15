@@ -131,20 +131,51 @@ describe('workspace cleanup scan', () => {
     ])
   })
 
-  it('uses user-facing copy when remote workspaces are unavailable', async () => {
+  it('skips disconnected remote workspaces without a scan warning', async () => {
     const result = await scanWorkspaceCleanup(
       makeStore({
         repos: [{ ...REPO, connectionId: 'ssh-1' }]
       })
     )
 
-    expect(result.errors).toEqual([
-      {
-        repoId: 'repo-1',
-        message: 'Remote workspaces are not connected. Reconnect and refresh to check them.'
-      }
-    ])
+    expect(result.errors).toEqual([])
     expect(result.candidates).toEqual([])
+  })
+
+  it('scans connected remote workspaces through the SSH git provider', async () => {
+    const provider = {
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/repo-feature',
+          head: 'abc123',
+          branch: 'refs/heads/feature',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      getStatus: vi.fn().mockResolvedValue({
+        entries: [],
+        conflictOperation: 'unknown',
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
+      } satisfies GitStatusResult)
+    }
+    getSshGitProviderMock.mockReturnValue(provider)
+
+    const result = await scanWorkspaceCleanup(
+      makeStore({
+        repos: [{ ...REPO, connectionId: 'ssh-1' }]
+      })
+    )
+
+    expect(provider.listWorktrees).toHaveBeenCalledWith('/repo')
+    expect(provider.getStatus).toHaveBeenCalledWith('/remote/repo-feature')
+    expect(result.errors).toEqual([])
+    expect(result.candidates[0]).toMatchObject({
+      connectionId: 'ssh-1',
+      tier: 'ready',
+      selectedByDefault: true,
+      reasons: ['idle-clean']
+    })
   })
 
   it('filters out recent workspaces before running git status', async () => {

@@ -27,8 +27,6 @@ import {
 
 const GIT_READ_TIMEOUT_MS = 8_000
 const WORKTREE_SCAN_CONCURRENCY = 3
-const REMOTE_WORKSPACES_NOT_CONNECTED_MESSAGE =
-  'Remote workspaces are not connected. Reconnect and refresh to check them.'
 
 type GitEvidence = {
   clean: boolean | null
@@ -113,11 +111,14 @@ async function scanRepoWorkspaces(args: {
     } else if (repo.connectionId) {
       provider = getSshGitProvider(repo.connectionId) ?? null
       if (!provider) {
-        errors.push({ repoId: repo.id, message: REMOTE_WORKSPACES_NOT_CONNECTED_MESSAGE })
+        // Why: cleanup should reflect only workspaces Orca can currently
+        // inspect. Disconnected SSH repos are skipped in broad scans.
         return {
           scannedAt,
-          candidates: synthesizeDisconnectedSshCandidates(store, repo, scannedAt, targetWorktreeId),
-          errors
+          candidates: targetWorktreeId
+            ? synthesizeDisconnectedSshCandidates(store, repo, scannedAt, targetWorktreeId)
+            : [],
+          errors: []
         }
       }
       gitWorktrees = await withTimeout(
