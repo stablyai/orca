@@ -469,8 +469,16 @@ function SourceControlInner(): React.JSX.Element {
 
   const linkedGitHubPR = activeWorktree?.linkedPR ?? null
   const linkedGitLabMR = activeWorktree?.linkedGitLabMR ?? null
+  // Why: when activeRepo.connectionId is truthy, neither the SourceControl
+  // effect below nor WorktreeCard.tsx fetches hostedReview for this branch,
+  // so hostedReviewEntry would stay undefined forever and would permanently
+  // block Publish Branch on SSH-backed worktrees with a linkedPR/linkedGitLabMR
+  // and no upstream. Skip the loading state for those repos so the publish
+  // gate doesn't latch.
   const isHostedReviewStateLoading =
-    (linkedGitHubPR !== null || linkedGitLabMR !== null) && hostedReviewEntry === undefined
+    !activeRepo?.connectionId &&
+    (linkedGitHubPR !== null || linkedGitLabMR !== null) &&
+    hostedReviewEntry === undefined
   useEffect(() => {
     if (!isBranchVisible || !activeRepo || isFolder || !branchName || branchName === 'HEAD') {
       return
