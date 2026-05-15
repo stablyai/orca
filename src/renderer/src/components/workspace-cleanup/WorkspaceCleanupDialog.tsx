@@ -32,6 +32,7 @@ import {
   canSelectWorkspaceCleanupCandidate,
   type WorkspaceCleanupBlocker,
   type WorkspaceCleanupCandidate,
+  type WorkspaceCleanupScanError,
   type WorkspaceCleanupTier
 } from '../../../../shared/workspace-cleanup'
 
@@ -79,12 +80,26 @@ function formatRelativeTime(timestamp: number): string {
   return `${Math.floor(hours / 24)}d ago`
 }
 
-function formatScanNoticeMessage(errors: { repoId: string; message: string }[]): string | null {
+function formatScanNoticeMessage(errors: WorkspaceCleanupScanError[]): string | null {
   if (errors.length === 0) {
     return null
   }
+  if (errors.length === 1) {
+    const error = errors[0]
+    return `Could not check ${error.repoName}: ${formatScanErrorReason(error.message)}. Some old workspaces may be missing. Refresh to try again.`
+  }
   const repoLabel = errors.length === 1 ? 'repository' : 'repositories'
-  return `Could not check ${errors.length} ${repoLabel}. Some old workspaces may be missing. Refresh to try again.`
+  const repoNames = errors
+    .slice(0, 3)
+    .map((error) => error.repoName)
+    .join(', ')
+  const moreCount = errors.length - 3
+  const suffix = moreCount > 0 ? `, +${moreCount} more` : ''
+  return `Could not check ${errors.length} ${repoLabel} (${repoNames}${suffix}). Some old workspaces may be missing. Refresh to try again.`
+}
+
+function formatScanErrorReason(message: string): string {
+  return message.replace(/\.$/, '')
 }
 
 function isOldWorkspaceCandidate(candidate: WorkspaceCleanupCandidate): boolean {

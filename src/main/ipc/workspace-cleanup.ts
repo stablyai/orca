@@ -21,6 +21,7 @@ import {
   type WorkspaceCleanupCandidate,
   type WorkspaceCleanupDismissArgs,
   type WorkspaceCleanupReason,
+  type WorkspaceCleanupScanError,
   type WorkspaceCleanupScanArgs,
   type WorkspaceCleanupScanResult
 } from '../../shared/workspace-cleanup'
@@ -135,7 +136,7 @@ async function scanRepoWorkspaces(args: {
     }
   } catch (error) {
     console.error('Workspace cleanup repo scan failed', error)
-    errors.push({ repoId: repo.id, message: toSafeWorkspaceCleanupError(error) })
+    errors.push(createScanError(repo, toSafeRepoScanError(error)))
     return { scannedAt, candidates: [], errors }
   }
 
@@ -166,7 +167,6 @@ async function scanRepoWorkspaces(args: {
       forceGitCheck: Boolean(targetWorktreeId)
     }).catch((error) => {
       console.error('Workspace cleanup candidate scan failed', error)
-      errors.push({ repoId: repo.id, message: toSafeWorkspaceCleanupError(error) })
       return buildCandidateFromError(repo, worktree, scannedAt, toErrorMessage(error))
     })
   )
@@ -541,10 +541,42 @@ function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function toSafeWorkspaceCleanupError(error: unknown): string {
-  const message = toErrorMessage(error)
-  if (message.startsWith('Timed out ')) {
-    return message
+function createScanError(repo: Repo, message: string): WorkspaceCleanupScanError {
+  return {
+    repoId: repo.id,
+    repoName: repo.displayName || basename(repo.path),
+    message
   }
-  return 'Could not scan workspace cleanup for this repository.'
+}
+
+// Why: git errors often include absolute paths or command output. Keep the
+// cause useful without leaking raw local/remote filesystem details to the UI.
+function toSafeRepoScanError(error: unknown): string {
+  const message = toErrorMessage(error)
+  if (message === 'Timed out listing SSH worktrees.') {
+    return 'Timed out listing remote worktrees.'
+  }
+  if (message === 'Timed out listing worktrees.') {
+    return 'Timed out listing worktrees.'
+  }
+  if (message.startsWith('Timed out ')) {
+    return message.replace(/\.$/, '')
+  }
+
+  const lower = message.toLowerCase()
+  if (lower.includes('not a git repository') || lower.includes('not a git worktree')) {
+    return 'Repository is not a git checkout.'
+  }
+  if (
+    lower.includes('enoent') ||
+    lower.includes('no such file') ||
+    lower.includes('cannot find') ||
+    lower.includes('does not exist')
+  ) {
+    return 'Repository folder was not found.'
+  }
+  if (lower.includes('eacces') || lower.includes('eperm') || lower.includes('permission denied')) {
+    return 'Repository folder is not accessible.'
+  }
+  return 'Git could not list worktrees.'
 }

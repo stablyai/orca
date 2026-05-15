@@ -76,10 +76,16 @@ export type WorkspaceCleanupScanArgs = {
   skipGitWorktreeIds?: string[]
 }
 
+export type WorkspaceCleanupScanError = {
+  repoId: string
+  repoName: string
+  message: string
+}
+
 export type WorkspaceCleanupScanResult = {
   scannedAt: number
   candidates: WorkspaceCleanupCandidate[]
-  errors: { repoId: string; message: string }[]
+  errors: WorkspaceCleanupScanError[]
 }
 
 export type WorkspaceCleanupDismissArgs = {

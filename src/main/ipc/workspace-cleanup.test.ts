@@ -126,7 +126,8 @@ describe('workspace cleanup scan', () => {
     expect(result.errors).toEqual([
       {
         repoId: 'repo-1',
-        message: 'Could not scan workspace cleanup for this repository.'
+        repoName: 'Repo',
+        message: 'Git could not list worktrees.'
       }
     ])
   })
