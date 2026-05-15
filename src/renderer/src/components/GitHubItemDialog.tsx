@@ -80,6 +80,7 @@ import type {
   GitHubOwnerRepo,
   GitHubPRFile,
   GitHubPRFileContents,
+  GitHubPRFileViewedState,
   GitHubWorkItem,
   GitHubWorkItemDetails,
   GitHubAssignableUser,
@@ -355,6 +356,16 @@ function fileStatusLabel(status: GitHubPRFile['status']): string {
   }
 }
 
+function isPRFileViewed(file: GitHubPRFile): boolean {
+  return file.viewerViewedState === 'VIEWED'
+}
+
+// Why: GitHub's viewed toggle auto-collapses the file; keying rows by the
+// viewed state resets the row's local expanded/content state without an Effect.
+function getPRFileRowKey(file: GitHubPRFile): string {
+  return `${file.path}:${file.viewerViewedState ?? 'UNVIEWED'}`
+}
+
 function findNearestBraceBlock(
   lines: string[],
   targetLine: number
@@ -400,6 +411,9 @@ type FileRowProps = {
   prNumber: number
   headSha: string | undefined
   baseSha: string | undefined
+  viewed: boolean
+  viewedPending: boolean
+  onViewedChange: (path: string, viewed: boolean) => Promise<boolean>
 }
 
 type DiffViewMode = 'flat' | 'tree'
@@ -414,7 +428,9 @@ type DiffTreeNodeProps = {
   prNumber: number
   headSha: string | undefined
   baseSha: string | undefined
+  pendingViewedPaths: ReadonlySet<string>
   onCommentAdded: (comment: PRComment) => void
+  onViewedChange: (path: string, viewed: boolean) => Promise<boolean>
 }
 
 function PRDiffTreeNode({
@@ -425,7 +441,9 @@ function PRDiffTreeNode({
   prNumber,
   headSha,
   baseSha,
-  onCommentAdded
+  pendingViewedPaths,
+  onCommentAdded,
+  onViewedChange
 }: DiffTreeNodeProps): React.JSX.Element {
   const [open, setOpen] = useState(true)
 
@@ -438,7 +456,10 @@ function PRDiffTreeNode({
         prNumber={prNumber}
         headSha={headSha}
         baseSha={baseSha}
+        viewed={isPRFileViewed(node.file)}
+        viewedPending={pendingViewedPaths.has(node.file.path)}
         onCommentAdded={onCommentAdded}
+        onViewedChange={onViewedChange}
         // Why: tree-view file rows are indented by a CSS left-padding proportional
         // to depth so the expand chevron of PRFileRow stays at position 0 while
         // the folder hierarchy is communicated purely through indentation.
@@ -477,7 +498,7 @@ function PRDiffTreeNode({
         <div role="group">
           {node.children.map((child) => (
             <PRDiffTreeNode
-              key={child.kind === 'file' ? child.file.path : child.path}
+              key={child.kind === 'file' ? getPRFileRowKey(child.file) : child.path}
               node={child}
               depth={depth + 1}
               repoPath={repoPath}
@@ -485,7 +506,9 @@ function PRDiffTreeNode({
               prNumber={prNumber}
               headSha={headSha}
               baseSha={baseSha}
+              pendingViewedPaths={pendingViewedPaths}
               onCommentAdded={onCommentAdded}
+              onViewedChange={onViewedChange}
             />
           ))}
         </div>
@@ -501,7 +524,9 @@ type PRDiffTreeViewProps = {
   prNumber: number
   headSha: string | undefined
   baseSha: string | undefined
+  pendingViewedPaths: ReadonlySet<string>
   onCommentAdded: (comment: PRComment) => void
+  onViewedChange: (path: string, viewed: boolean) => Promise<boolean>
 }
 
 function PRDiffTreeView({
@@ -511,14 +536,16 @@ function PRDiffTreeView({
   prNumber,
   headSha,
   baseSha,
-  onCommentAdded
+  pendingViewedPaths,
+  onCommentAdded,
+  onViewedChange
 }: PRDiffTreeViewProps): React.JSX.Element {
   const tree = useMemo(() => buildDiffTree(files), [files])
   return (
     <div role="tree" aria-label="Changed files">
       {tree.map((node) => (
         <PRDiffTreeNode
-          key={node.kind === 'file' ? node.file.path : node.path}
+          key={node.kind === 'file' ? getPRFileRowKey(node.file) : node.path}
           node={node}
           depth={0}
           repoPath={repoPath}
@@ -526,7 +553,9 @@ function PRDiffTreeView({
           prNumber={prNumber}
           headSha={headSha}
           baseSha={baseSha}
+          pendingViewedPaths={pendingViewedPaths}
           onCommentAdded={onCommentAdded}
+          onViewedChange={onViewedChange}
         />
       ))}
     </div>
@@ -636,6 +665,35 @@ function invalidateWorkItemDetailsCacheByMatch(args: {
   if (removed) {
     notifyWorkItemDetailsCache()
   }
+}
+
+function patchCachedPRFileViewedState(
+  cacheKey: string,
+  path: string,
+  viewerViewedState: GitHubPRFileViewedState
+): GitHubPRFileViewedState | undefined {
+  const prev = workItemDetailsCache.get(cacheKey)
+  const files = prev?.details?.files
+  if (!prev?.details || !files) {
+    return undefined
+  }
+  let previousState: GitHubPRFileViewedState | undefined
+  const nextFiles = files.map((file) => {
+    if (file.path !== path) {
+      return file
+    }
+    previousState = file.viewerViewedState ?? 'UNVIEWED'
+    return { ...file, viewerViewedState }
+  })
+  if (previousState === undefined || previousState === viewerViewedState) {
+    return previousState
+  }
+  touchWorkItemDetailsCache(cacheKey, {
+    ...prev,
+    details: { ...prev.details, files: nextFiles },
+    error: undefined
+  })
+  return previousState
 }
 
 // Why: install once at module load — every dialog instance shares the cache,
@@ -798,6 +856,24 @@ function addPRReviewCommentReplyForRepo(args: {
   })
 }
 
+function setPRFileViewedForRepo(args: {
+  repoId?: string
+  repoPath: string
+  prNumber: number
+  pullRequestId: string
+  path: string
+  viewed: boolean
+}): Promise<boolean> {
+  return window.api.gh.setPRFileViewed({
+    repoPath: args.repoPath,
+    repoId: args.repoId,
+    prNumber: args.prNumber,
+    pullRequestId: args.pullRequestId,
+    path: args.path,
+    viewed: args.viewed
+  })
+}
+
 function getWorkItemDetailsForRepo(args: {
   repoId?: string
   repoPath: string
@@ -812,6 +888,60 @@ function getWorkItemDetailsForRepo(args: {
   })
 }
 
+function PRViewedCheckbox({
+  checked,
+  pending,
+  filePath,
+  onToggle
+}: {
+  checked: boolean
+  pending: boolean
+  filePath: string
+  onToggle: () => void
+}): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={checked}
+          aria-label={`${checked ? 'Unmark' : 'Mark'} ${filePath} as viewed`}
+          disabled={pending}
+          onClick={(event) => {
+            event.stopPropagation()
+            onToggle()
+          }}
+          className={cn(
+            'flex h-6 shrink-0 items-center gap-1.5 rounded-md px-1.5 text-[11px] text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            checked && 'text-foreground',
+            pending && 'cursor-default opacity-60'
+          )}
+        >
+          <span
+            className={cn(
+              'flex size-4 items-center justify-center rounded-sm border transition-colors',
+              checked
+                ? 'border-foreground bg-foreground text-background'
+                : 'border-muted-foreground/50 bg-background text-transparent'
+            )}
+          >
+            {pending ? (
+              <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
+            ) : checked ? (
+              <Check className="size-3" strokeWidth={3} />
+            ) : null}
+          </span>
+          <span>Viewed</span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={4}>
+        {checked ? 'Unmark viewed' : 'Mark viewed'}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 function PRFileRow({
   file,
   repoPath,
@@ -819,6 +949,9 @@ function PRFileRow({
   prNumber,
   headSha,
   baseSha,
+  viewed,
+  viewedPending,
+  onViewedChange,
   onCommentAdded,
   indentDepth = 0,
   label
@@ -899,76 +1032,99 @@ function PRFileRow({
     [file.path, headSha, onCommentAdded, prNumber, repoId, repoPath]
   )
 
+  const handleViewedToggle = useCallback(async () => {
+    if (viewedPending) {
+      return
+    }
+    await onViewedChange(file.path, !viewed)
+  }, [file.path, onViewedChange, viewed, viewedPending])
+
   return (
-    <div className="border-b border-border/50" {...(label != null ? { role: 'treeitem' } : {})}>
-      <button
-        type="button"
-        onClick={handleToggle}
-        className="flex w-full items-center gap-2 py-2 pr-3 text-left transition hover:bg-muted/40"
+    <div
+      className={cn('border-b border-border/50', viewed && 'bg-muted/15')}
+      {...(label != null ? { role: 'treeitem' } : {})}
+    >
+      <div
+        className={cn(
+          'flex w-full items-center gap-2 py-2 pr-3 text-left transition hover:bg-muted/40',
+          viewed && 'opacity-60'
+        )}
         style={{ paddingLeft: `${12 + indentDepth * 16}px` }}
       >
-        {expanded ? (
-          <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
-        ) : (
-          <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
-        )}
-        <span
-          className={cn(
-            'inline-flex size-5 shrink-0 items-center justify-center rounded border border-border/60 font-mono text-[10px]',
-            fileStatusTone(file.status)
-          )}
-          aria-label={file.status}
+        <button
+          type="button"
+          onClick={handleToggle}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          {fileStatusLabel(file.status)}
-        </span>
-        <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-foreground">
-          {file.oldPath && file.oldPath !== file.path ? (
-            label ? (
-              // Why: in tree view we only have room for basenames, but still need to
-              // communicate the rename so the user doesn't have to expand or switch
-              // to flat view to discover what was renamed. When basenames match (i.e.
-              // only the directory changed), we include the parent directory so the
-              // display isn't a meaningless "foo.ts → foo.ts".
-              (() => {
-                const oldBase = file.oldPath!.split('/').pop() ?? file.oldPath!
-                if (oldBase === label) {
-                  const oldParts = file.oldPath!.split('/')
-                  const newParts = file.path.split('/')
-                  const oldShort = oldParts.slice(-2).join('/')
-                  const newShort = newParts.slice(-2).join('/')
+          {expanded ? (
+            <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
+          )}
+          <span
+            className={cn(
+              'inline-flex size-5 shrink-0 items-center justify-center rounded border border-border/60 font-mono text-[10px]',
+              fileStatusTone(file.status)
+            )}
+            aria-label={file.status}
+          >
+            {fileStatusLabel(file.status)}
+          </span>
+          <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-foreground">
+            {file.oldPath && file.oldPath !== file.path ? (
+              label ? (
+                // Why: in tree view we only have room for basenames, but still need to
+                // communicate the rename so the user doesn't have to expand or switch
+                // to flat view to discover what was renamed. When basenames match (i.e.
+                // only the directory changed), we include the parent directory so the
+                // display isn't a meaningless "foo.ts → foo.ts".
+                (() => {
+                  const oldBase = file.oldPath!.split('/').pop() ?? file.oldPath!
+                  if (oldBase === label) {
+                    const oldParts = file.oldPath!.split('/')
+                    const newParts = file.path.split('/')
+                    const oldShort = oldParts.slice(-2).join('/')
+                    const newShort = newParts.slice(-2).join('/')
+                    return (
+                      <>
+                        <span className="text-muted-foreground">{oldShort}</span>
+                        <span className="mx-1 text-muted-foreground">→</span>
+                        {newShort}
+                      </>
+                    )
+                  }
                   return (
                     <>
-                      <span className="text-muted-foreground">{oldShort}</span>
+                      <span className="text-muted-foreground">{oldBase}</span>
                       <span className="mx-1 text-muted-foreground">→</span>
-                      {newShort}
+                      {label}
                     </>
                   )
-                }
-                return (
-                  <>
-                    <span className="text-muted-foreground">{oldBase}</span>
-                    <span className="mx-1 text-muted-foreground">→</span>
-                    {label}
-                  </>
-                )
-              })()
+                })()
+              ) : (
+                <>
+                  <span className="text-muted-foreground">{file.oldPath}</span>
+                  <span className="mx-1 text-muted-foreground">→</span>
+                  {file.path}
+                </>
+              )
             ) : (
-              <>
-                <span className="text-muted-foreground">{file.oldPath}</span>
-                <span className="mx-1 text-muted-foreground">→</span>
-                {file.path}
-              </>
-            )
-          ) : (
-            (label ?? file.path)
-          )}
-        </span>
+              (label ?? file.path)
+            )}
+          </span>
+        </button>
         <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
           <span className="text-emerald-500">+{file.additions}</span>
           <span className="mx-1">/</span>
           <span className="text-rose-500">−{file.deletions}</span>
         </span>
-      </button>
+        <PRViewedCheckbox
+          checked={viewed}
+          pending={viewedPending}
+          filePath={file.path}
+          onToggle={handleViewedToggle}
+        />
+      </div>
 
       {expanded && (
         // Why: DiffViewer's inner layout uses flex-1/min-h-0, so this wrapper
@@ -2845,6 +3001,8 @@ export default function GitHubItemDialog({
   const comments = details?.comments ?? []
   const files = details?.files ?? []
   const checks = details?.checks ?? []
+  const viewedFileCount = files.filter(isPRFileViewed).length
+  const [pendingViewedPaths, setPendingViewedPaths] = useState<Set<string>>(() => new Set())
 
   useEffect(() => {
     setLinkCopied(false)
@@ -2905,6 +3063,45 @@ export default function GitHubItemDialog({
       setOptimisticTick((n) => n + 1)
     },
     [detailsCacheKey]
+  )
+
+  const handlePRFileViewedChange = useCallback(
+    async (path: string, viewed: boolean): Promise<boolean> => {
+      if (!repoPath || !details?.pullRequestId || !workItem || workItem.type !== 'pr') {
+        toast.error('Unable to sync viewed state for this pull request.')
+        return false
+      }
+      setPendingViewedPaths((prev) => new Set(prev).add(path))
+      const nextState: GitHubPRFileViewedState = viewed ? 'VIEWED' : 'UNVIEWED'
+      const previousState = detailsCacheKey
+        ? patchCachedPRFileViewedState(detailsCacheKey, path, nextState)
+        : undefined
+      try {
+        const ok = await setPRFileViewedForRepo({
+          repoId: workItem.repoId,
+          repoPath,
+          prNumber: workItem.number,
+          pullRequestId: details.pullRequestId,
+          path,
+          viewed
+        })
+        if (!ok) {
+          if (detailsCacheKey && previousState) {
+            patchCachedPRFileViewedState(detailsCacheKey, path, previousState)
+          }
+          toast.error('Failed to sync viewed state with GitHub.')
+          return false
+        }
+        return true
+      } finally {
+        setPendingViewedPaths((prev) => {
+          const next = new Set(prev)
+          next.delete(path)
+          return next
+        })
+      }
+    },
+    [details?.pullRequestId, detailsCacheKey, repoPath, workItem]
   )
 
   return (
@@ -3108,63 +3305,71 @@ export default function GitHubItemDialog({
                         ) : (
                           <div>
                             {/* Files-tab toolbar: view-mode toggle */}
-                            <div className="flex items-center justify-end gap-1 border-b border-border/40 px-3 py-1.5">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    id="pr-files-flat-view"
-                                    type="button"
-                                    onClick={() => setDiffViewMode('flat')}
-                                    aria-label="Flat view"
-                                    aria-pressed={diffViewMode === 'flat'}
-                                    className={cn(
-                                      'flex size-6 items-center justify-center rounded transition hover:bg-muted',
-                                      diffViewMode === 'flat'
-                                        ? 'bg-muted text-foreground'
-                                        : 'text-muted-foreground'
-                                    )}
-                                  >
-                                    <AlignJustify className="size-3.5" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom" sideOffset={4}>
-                                  Flat view
-                                </TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    id="pr-files-tree-view"
-                                    type="button"
-                                    onClick={() => setDiffViewMode('tree')}
-                                    aria-label="Tree view"
-                                    aria-pressed={diffViewMode === 'tree'}
-                                    className={cn(
-                                      'flex size-6 items-center justify-center rounded transition hover:bg-muted',
-                                      diffViewMode === 'tree'
-                                        ? 'bg-muted text-foreground'
-                                        : 'text-muted-foreground'
-                                    )}
-                                  >
-                                    <LayoutList className="size-3.5" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom" sideOffset={4}>
-                                  Tree view
-                                </TooltipContent>
-                              </Tooltip>
+                            <div className="flex items-center justify-between gap-3 border-b border-border/40 px-3 py-1.5">
+                              <span className="text-[11px] text-muted-foreground">
+                                {viewedFileCount} / {files.length} files viewed
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      id="pr-files-flat-view"
+                                      type="button"
+                                      onClick={() => setDiffViewMode('flat')}
+                                      aria-label="Flat view"
+                                      aria-pressed={diffViewMode === 'flat'}
+                                      className={cn(
+                                        'flex size-6 items-center justify-center rounded transition hover:bg-muted',
+                                        diffViewMode === 'flat'
+                                          ? 'bg-muted text-foreground'
+                                          : 'text-muted-foreground'
+                                      )}
+                                    >
+                                      <AlignJustify className="size-3.5" />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="bottom" sideOffset={4}>
+                                    Flat view
+                                  </TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      id="pr-files-tree-view"
+                                      type="button"
+                                      onClick={() => setDiffViewMode('tree')}
+                                      aria-label="Tree view"
+                                      aria-pressed={diffViewMode === 'tree'}
+                                      className={cn(
+                                        'flex size-6 items-center justify-center rounded transition hover:bg-muted',
+                                        diffViewMode === 'tree'
+                                          ? 'bg-muted text-foreground'
+                                          : 'text-muted-foreground'
+                                      )}
+                                    >
+                                      <LayoutList className="size-3.5" />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="bottom" sideOffset={4}>
+                                    Tree view
+                                  </TooltipContent>
+                                </Tooltip>
+                              </div>
                             </div>
                             {diffViewMode === 'flat' ? (
                               files.map((file) => (
                                 <PRFileRow
-                                  key={file.path}
+                                  key={getPRFileRowKey(file)}
                                   file={file}
                                   repoPath={repoPath ?? ''}
                                   repoId={effectiveRepoId ?? ''}
                                   prNumber={workItem.number}
                                   headSha={details?.headSha}
                                   baseSha={details?.baseSha}
+                                  viewed={isPRFileViewed(file)}
+                                  viewedPending={pendingViewedPaths.has(file.path)}
                                   onCommentAdded={appendOptimisticComment}
+                                  onViewedChange={handlePRFileViewedChange}
                                 />
                               ))
                             ) : (
@@ -3175,7 +3380,9 @@ export default function GitHubItemDialog({
                                 prNumber={workItem.number}
                                 headSha={details?.headSha}
                                 baseSha={details?.baseSha}
+                                pendingViewedPaths={pendingViewedPaths}
                                 onCommentAdded={appendOptimisticComment}
+                                onViewedChange={handlePRFileViewedChange}
                               />
                             )}
                           </div>

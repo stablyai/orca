@@ -95,6 +95,7 @@ import {
   getPRComments,
   getIssue,
   resolveReviewThread,
+  setPRFileViewed,
   getWorkItemByOwnerRepo,
   updatePRTitle,
   mergePR,
@@ -4565,6 +4566,19 @@ export class OrcaRuntimeService {
     const repo = await this.resolveRepoSelector(repoSelector)
     this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_review_thread')
     return resolveReviewThread(repo.path, threadId, resolve)
+  }
+
+  async setRepoPRFileViewed(
+    repoSelector: string,
+    args: {
+      pullRequestId: string
+      path: string
+      viewed: boolean
+    }
+  ): Promise<Awaited<ReturnType<typeof setPRFileViewed>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_file_viewed')
+    return setPRFileViewed({ repoPath: repo.path, ...args })
   }
 
   async updateRepoPRTitle(

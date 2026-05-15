@@ -599,6 +599,7 @@ function createGitHubApi(): NonNullable<Partial<PreloadApi>['gh']> {
     prChecks: direct('github.prChecks'),
     prComments: direct('github.prComments'),
     resolveReviewThread: direct('github.resolveReviewThread'),
+    setPRFileViewed: direct('github.setPRFileViewed'),
     updatePRTitle: direct('github.updatePRTitle'),
     mergePR: direct('github.mergePR'),
     updateIssue: direct('github.updateIssue'),

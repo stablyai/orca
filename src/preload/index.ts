@@ -780,6 +780,15 @@ const api = {
       resolve: boolean
     }): Promise<boolean> => ipcRenderer.invoke('gh:resolveReviewThread', args),
 
+    setPRFileViewed: (args: {
+      repoPath: string
+      repoId?: string
+      prNumber: number
+      pullRequestId: string
+      path: string
+      viewed: boolean
+    }): Promise<boolean> => ipcRenderer.invoke('gh:setPRFileViewed', args),
+
     updatePRTitle: (args: {
       repoPath: string
       repoId?: string

@@ -610,6 +610,8 @@ export type GitHubAssignableUser = {
   avatarUrl: string
 }
 
+export type GitHubPRFileViewedState = 'DISMISSED' | 'VIEWED' | 'UNVIEWED'
+
 export type GitHubWorkItem = {
   id: string
   type: 'issue' | 'pr'
@@ -641,6 +643,8 @@ export type GitHubPRFile = {
   deletions: number
   /** GitHub marks files above its diff size limit as binary-like; we skip content fetches for these. */
   isBinary: boolean
+  /** GitHub's per-viewer review state. DISMISSED means new changes arrived after the file was viewed. */
+  viewerViewedState?: GitHubPRFileViewedState
 }
 
 export type GitHubPRFileContents = {
@@ -669,6 +673,8 @@ export type GitHubWorkItemDetails = {
   /** Only set for PRs. Head/base SHAs used by the Files tab to fetch per-file content. */
   headSha?: string
   baseSha?: string
+  /** GraphQL node ID required by GitHub's file-viewed mutations. Only set for PRs. */
+  pullRequestId?: string
   checks?: PRCheckDetail[]
   files?: GitHubPRFile[]
   participants?: GitHubAssignableUser[]
