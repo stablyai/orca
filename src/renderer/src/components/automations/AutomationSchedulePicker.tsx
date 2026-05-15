@@ -3,6 +3,7 @@ import { CalendarClock, ChevronsUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { cn } from '@/lib/utils'
 import {
   Select,
   SelectContent,
@@ -18,6 +19,8 @@ import {
 } from '../../../../shared/automation-schedules'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { Field } from './automation-page-parts'
+
+const FIELD_CONTROL_CLASS = 'border-input bg-input/30 shadow-xs dark:bg-input/30'
 
 const DAY_OPTIONS = [
   ['0', 'Sunday'],
@@ -54,11 +57,27 @@ function getDraftScheduleLabel(draft: AutomationDraft): string {
   )
 }
 
+function buildCustomCronFromDraft(draft: AutomationDraft): string {
+  const { hour, minute } = parseTime(draft.time)
+  if (draft.preset === 'hourly') {
+    return `${minute} * * * *`
+  }
+  if (draft.preset === 'weekdays') {
+    return `${minute} ${hour} * * 1-5`
+  }
+  if (draft.preset === 'weekly') {
+    return `${minute} ${hour} * * ${Number(draft.dayOfWeek)}`
+  }
+  return `${minute} ${hour} * * *`
+}
+
 export function AutomationSchedulePicker({
   draft,
+  triggerClassName,
   onDraftChange
 }: {
   draft: AutomationDraft
+  triggerClassName?: string
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
 }): React.JSX.Element {
   const [open, setOpen] = React.useState(false)
@@ -77,7 +96,7 @@ export function AutomationSchedulePicker({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="h-9 w-full justify-between px-3 text-sm font-normal"
+          className={cn('h-9 w-full justify-between px-3 text-sm font-normal', triggerClassName)}
         >
           <span className="flex min-w-0 items-center gap-2">
             <CalendarClock className="size-4 text-muted-foreground" />
@@ -98,11 +117,15 @@ export function AutomationSchedulePicker({
                 onDraftChange((current) => ({
                   ...current,
                   preset: preset as AutomationSchedulePreset,
+                  customSchedule:
+                    preset === 'custom' && !current.customSchedule.trim()
+                      ? buildCustomCronFromDraft(current)
+                      : current.customSchedule,
                   scheduleWarning: null
                 }))
               }
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger className={`w-full ${FIELD_CONTROL_CLASS}`}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -114,13 +137,32 @@ export function AutomationSchedulePicker({
               </SelectContent>
             </Select>
           </Field>
+          {draft.preset !== 'custom' ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="justify-start"
+              onClick={() =>
+                onDraftChange((current) => ({
+                  ...current,
+                  preset: 'custom',
+                  customSchedule:
+                    current.customSchedule.trim() || buildCustomCronFromDraft(current),
+                  scheduleWarning: null
+                }))
+              }
+            >
+              Use custom cron
+            </Button>
+          ) : null}
           {draft.preset === 'custom' ? (
             <Field label="Cron string">
               <Input
                 value={draft.customSchedule}
                 placeholder="0 9 * * 1-5"
                 spellCheck={false}
-                className="font-mono"
+                className={`font-mono ${FIELD_CONTROL_CLASS}`}
                 aria-invalid={customScheduleInvalid}
                 onChange={(event) =>
                   onDraftChange((current) => ({
@@ -148,7 +190,7 @@ export function AutomationSchedulePicker({
                   onDraftChange((current) => ({ ...current, dayOfWeek, scheduleWarning: null }))
                 }
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger className={`w-full ${FIELD_CONTROL_CLASS}`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -166,6 +208,7 @@ export function AutomationSchedulePicker({
               <Input
                 type="time"
                 value={draft.time}
+                className={FIELD_CONTROL_CLASS}
                 onChange={(event) =>
                   onDraftChange((current) => ({
                     ...current,

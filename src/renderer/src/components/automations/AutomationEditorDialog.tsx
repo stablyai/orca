@@ -27,6 +27,9 @@ import { AUTOMATION_TEMPLATES, type AutomationTemplate } from './automation-temp
 import { CreateFromPicker } from './CreateFromPicker'
 import { WorkspaceCombobox } from './WorkspaceCombobox'
 
+const PICKER_TRIGGER_CLASS =
+  'border-input bg-input/30 shadow-xs hover:bg-accent/60 dark:bg-input/30 dark:hover:bg-input/50'
+
 export type AutomationDraft = {
   name: string
   prompt: string
@@ -177,13 +180,11 @@ export function AutomationEditorDialog({
                 value={draft.projectId}
                 onValueChange={onProjectChange}
                 placeholder="Select project"
-                triggerClassName="h-9 w-full min-w-0"
+                triggerClassName={`h-9 w-full min-w-0 ${PICKER_TRIGGER_CLASS}`}
                 showStandaloneAddButton={false}
               />
             </Field>
-            <Field
-              label={draft.workspaceMode === 'new_per_run' ? 'Create from target' : 'Workspace'}
-            >
+            <Field label={draft.workspaceMode === 'new_per_run' ? 'Start branch' : 'Workspace'}>
               <ToggleGroup
                 type="single"
                 value={draft.workspaceMode}
@@ -198,10 +199,16 @@ export function AutomationEditorDialog({
                 size="sm"
                 className="mb-2 grid w-full grid-cols-2"
               >
-                <ToggleGroupItem value="existing" className="w-full">
+                <ToggleGroupItem
+                  value="existing"
+                  className="w-full border-input bg-input/30 shadow-xs data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground dark:bg-input/30"
+                >
                   Workspace
                 </ToggleGroupItem>
-                <ToggleGroupItem value="new_per_run" className="w-full">
+                <ToggleGroupItem
+                  value="new_per_run"
+                  className="w-full border-input bg-input/30 shadow-xs data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground dark:bg-input/30"
+                >
                   New run
                 </ToggleGroupItem>
               </ToggleGroup>
@@ -209,6 +216,7 @@ export function AutomationEditorDialog({
                 <WorkspaceCombobox
                   worktrees={worktrees}
                   value={draft.workspaceId}
+                  triggerClassName={PICKER_TRIGGER_CLASS}
                   onValueChange={(workspaceId) =>
                     onDraftChange((current) => ({ ...current, workspaceId }))
                   }
@@ -219,6 +227,7 @@ export function AutomationEditorDialog({
                   repoMap={repoMap}
                   worktrees={worktrees}
                   value={draft.baseBranch}
+                  triggerClassName={PICKER_TRIGGER_CLASS}
                   onValueChange={(baseBranch) =>
                     onDraftChange((current) => ({ ...current, baseBranch }))
                   }
@@ -233,11 +242,15 @@ export function AutomationEditorDialog({
                   agentId && onDraftChange((current) => ({ ...current, agentId }))
                 }
                 defaultAgent={settings?.defaultTuiAgent ?? null}
-                triggerClassName="h-9 w-full min-w-0"
+                triggerClassName={`h-9 w-full min-w-0 ${PICKER_TRIGGER_CLASS}`}
               />
             </Field>
             <Field label="Schedule">
-              <AutomationSchedulePicker draft={draft} onDraftChange={onDraftChange} />
+              <AutomationSchedulePicker
+                draft={draft}
+                triggerClassName={PICKER_TRIGGER_CLASS}
+                onDraftChange={onDraftChange}
+              />
             </Field>
             <Field
               label={
@@ -268,7 +281,7 @@ export function AutomationEditorDialog({
                   onDraftChange((current) => ({ ...current, missedRunGraceMinutes }))
                 }
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger className={`w-full ${PICKER_TRIGGER_CLASS}`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>

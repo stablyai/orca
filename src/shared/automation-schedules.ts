@@ -5,7 +5,9 @@ import type { AutomationSchedulePreset } from './automations-types'
 const DAY_MS = 24 * 60 * 60 * 1000
 const HOUR_MS = 60 * 60 * 1000
 const MINUTE_MS = 60 * 1000
-const CRON_SCAN_MINUTES = 370 * 24 * 60
+// Why: valid cron expressions like Feb 29 can have an 8-year gap across non-leap centuries.
+const CRON_SCAN_DAYS = 9 * 366
+const CRON_SCAN_MINUTES = CRON_SCAN_DAYS * 24 * 60
 
 type ParsedRrule = {
   kind: 'rrule'
@@ -103,7 +105,14 @@ function parseCronField(args: {
     if (!part) {
       throw new Error(`Invalid cron ${args.field}.`)
     }
-    const [rangePart, stepPart] = part.split('/')
+    const stepParts = part.split('/')
+    if (stepParts.length > 2) {
+      throw new Error(`Invalid cron ${args.field}.`)
+    }
+    const [rangePart, stepPart] = stepParts
+    if (!rangePart) {
+      throw new Error(`Invalid cron ${args.field}.`)
+    }
     const step = stepPart === undefined ? 1 : Number(stepPart)
     if (!Number.isInteger(step) || step < 1) {
       throw new Error(`Invalid cron ${args.field}.`)
@@ -115,7 +124,11 @@ function parseCronField(args: {
       start = args.min
       end = args.max
     } else if (rangePart.includes('-')) {
-      const [startPart, endPart] = rangePart.split('-')
+      const rangeParts = rangePart.split('-')
+      if (rangeParts.length !== 2 || !rangeParts[0] || !rangeParts[1]) {
+        throw new Error(`Invalid cron ${args.field}.`)
+      }
+      const [startPart, endPart] = rangeParts
       start = parseCronNumber(startPart, args.names ?? null, args.field)
       end = parseCronNumber(endPart, args.names ?? null, args.field)
     } else {
@@ -126,16 +139,20 @@ function parseCronField(args: {
     const normalizedStart = args.normalize?.(start) ?? start
     const normalizedEnd = args.normalize?.(end) ?? end
     if (
+      start < args.min ||
+      start > args.max ||
+      end < args.min ||
+      end > args.max ||
       normalizedStart < args.min ||
       normalizedStart > args.max ||
       normalizedEnd < args.min ||
       normalizedEnd > args.max ||
-      normalizedStart > normalizedEnd
+      start > end
     ) {
       throw new Error(`Invalid cron ${args.field}.`)
     }
-    for (let value = normalizedStart; value <= normalizedEnd; value += step) {
-      result.add(value)
+    for (let value = start; value <= end; value += step) {
+      result.add(args.normalize?.(value) ?? value)
     }
   }
   if (result.size === 0) {
@@ -150,22 +167,29 @@ function parseCronExpression(expression: string): ParsedCron {
     throw new Error('Cron schedule must have five fields.')
   }
   const [minute, hour, dayOfMonth, month, dayOfWeek] = parts
+  const daysOfMonth = parseCronField({
+    value: dayOfMonth,
+    min: 1,
+    max: 31,
+    field: 'day of month'
+  })
+  const daysOfWeek = parseCronField({
+    value: dayOfWeek,
+    min: 0,
+    max: 7,
+    field: 'day of week',
+    names: DAY_NAMES,
+    normalize: (value) => (value === 7 ? 0 : value)
+  })
   return {
     kind: 'cron',
     minutes: parseCronField({ value: minute, min: 0, max: 59, field: 'minute' }),
     hours: parseCronField({ value: hour, min: 0, max: 23, field: 'hour' }),
-    daysOfMonth: parseCronField({ value: dayOfMonth, min: 1, max: 31, field: 'day of month' }),
+    daysOfMonth,
     months: parseCronField({ value: month, min: 1, max: 12, field: 'month', names: MONTH_NAMES }),
-    daysOfWeek: parseCronField({
-      value: dayOfWeek,
-      min: 0,
-      max: 6,
-      field: 'day of week',
-      names: DAY_NAMES,
-      normalize: (value) => (value === 7 ? 0 : value)
-    }),
-    dayOfMonthRestricted: dayOfMonth !== '*',
-    dayOfWeekRestricted: dayOfWeek !== '*'
+    daysOfWeek,
+    dayOfMonthRestricted: daysOfMonth.size !== 31,
+    dayOfWeekRestricted: daysOfWeek.size !== 7
   }
 }
 
@@ -179,7 +203,10 @@ function parseSchedule(schedule: string): ParsedSchedule {
 
 export function isValidAutomationSchedule(schedule: string): boolean {
   try {
-    parseSchedule(schedule)
+    const parsed = parseSchedule(schedule)
+    if (parsed.kind === 'cron' && !cronHasPossibleOccurrence(parsed, Date.now())) {
+      throw new Error('Cron schedule has no possible run.')
+    }
     return true
   } catch {
     return false
@@ -302,11 +329,16 @@ function floorToMinute(timestamp: number): number {
 }
 
 function cronMatches(rule: ParsedCron, timestamp: number): boolean {
-  const date = new Date(timestamp)
-  if (!rule.months.has(date.getMonth() + 1)) {
+  if (!cronDateMatches(rule, timestamp)) {
     return false
   }
-  if (!rule.hours.has(date.getHours()) || !rule.minutes.has(date.getMinutes())) {
+  const date = new Date(timestamp)
+  return rule.hours.has(date.getHours()) && rule.minutes.has(date.getMinutes())
+}
+
+function cronDateMatches(rule: ParsedCron, timestamp: number): boolean {
+  const date = new Date(timestamp)
+  if (!rule.months.has(date.getMonth() + 1)) {
     return false
   }
   const dayOfMonthMatches = rule.daysOfMonth.has(date.getDate())
@@ -315,6 +347,17 @@ function cronMatches(rule: ParsedCron, timestamp: number): boolean {
     return dayOfMonthMatches || dayOfWeekMatches
   }
   return dayOfMonthMatches && dayOfWeekMatches
+}
+
+function cronHasPossibleOccurrence(rule: ParsedCron, anchor: number): boolean {
+  let day = startOfLocalDay(anchor)
+  for (let i = 0; i < CRON_SCAN_DAYS; i += 1) {
+    if (cronDateMatches(rule, day)) {
+      return true
+    }
+    day += DAY_MS
+  }
+  return false
 }
 
 export function buildAutomationRrule(args: {

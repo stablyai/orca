@@ -15,10 +15,12 @@ import type { Worktree } from '../../../../shared/types'
 export function WorkspaceCombobox({
   worktrees,
   value,
+  triggerClassName,
   onValueChange
 }: {
   worktrees: Worktree[]
   value: string
+  triggerClassName?: string
   onValueChange: (workspaceId: string) => void
 }): React.JSX.Element {
   const [open, setOpen] = React.useState(false)
@@ -41,7 +43,7 @@ export function WorkspaceCombobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="h-9 w-full justify-between px-3 text-sm font-normal"
+          className={cn('h-9 w-full justify-between px-3 text-sm font-normal', triggerClassName)}
         >
           <span className={cn('truncate', !selected && 'text-muted-foreground')}>
             {selected?.displayName ?? 'Select workspace'}
