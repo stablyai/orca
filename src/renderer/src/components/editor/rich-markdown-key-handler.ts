@@ -232,7 +232,16 @@ export function createRichMarkdownKeyHandler(
       return false
     }
 
+    const currentFilteredSlashCommands = ctx.filteredSlashCommandsRef.current
+
     if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.length === 1) {
+      // Why: when the current query has no matching commands the slash menu UI
+      // is already hidden; intercepting further keystrokes would silently
+      // swallow them. Fall through so ProseMirror inserts the character and
+      // syncSlashMenu refreshes the query from the document.
+      if (currentFilteredSlashCommands.length === 0) {
+        return false
+      }
       event.preventDefault()
       ctx.setSlashMenu((menu) => (menu ? { ...menu, query: `${menu.query}${event.key}` } : menu))
       ctx.setSelectedCommandIndex(0)
@@ -246,7 +255,6 @@ export function createRichMarkdownKeyHandler(
       return true
     }
 
-    const currentFilteredSlashCommands = ctx.filteredSlashCommandsRef.current
     if (currentFilteredSlashCommands.length === 0) {
       return false
     }
