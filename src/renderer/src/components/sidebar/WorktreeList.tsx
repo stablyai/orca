@@ -664,12 +664,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               ref={virtualizer.measureElement}
               data-workspace-status-drop-target={itemWorkspaceStatus ? '' : undefined}
               data-workspace-status={itemWorkspaceStatus ?? undefined}
-              className={cn(
-                'absolute left-0 right-0',
-                itemWorkspaceStatus &&
-                  dragOverStatus === itemWorkspaceStatus &&
-                  'rounded-lg bg-sidebar-accent/40'
-              )}
+              className="absolute left-0 right-0"
               style={{ transform: `translateY(${vItem.start}px)` }}
               onDragOver={
                 itemWorkspaceStatus
