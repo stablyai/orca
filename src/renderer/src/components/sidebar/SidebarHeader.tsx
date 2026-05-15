@@ -78,7 +78,8 @@ const SidebarHeader = React.memo(function SidebarHeader() {
                 size="icon-xs"
                 className="text-muted-foreground"
                 aria-label="Workspace board"
-                onClick={() => setWorkspaceBoardOpen(true)}
+                aria-pressed={workspaceBoardOpen}
+                onClick={() => setWorkspaceBoardOpen((open) => !open)}
               >
                 <Kanban className="size-3.5" strokeWidth={2.25} />
               </Button>
