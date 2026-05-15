@@ -46,6 +46,8 @@ export default function WorkspaceKanbanDrawer({
   const setWorkspaceStatuses = useAppStore((s) => s.setWorkspaceStatuses)
   const workspaceBoardOpacity = useAppStore((s) => s.workspaceBoardOpacity)
   const setWorkspaceBoardOpacity = useAppStore((s) => s.setWorkspaceBoardOpacity)
+  const sidebarOpen = useAppStore((s) => s.sidebarOpen)
+  const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const boardRef = useRef<HTMLDivElement>(null)
   const [dragOverStatus, setDragOverStatus] = useState<WorkspaceStatus | null>(null)
   const [pinDragOver, setPinDragOver] = useState(false)
@@ -213,18 +215,23 @@ export default function WorkspaceKanbanDrawer({
   useWorkspaceStatusDocumentDrop(boardRef, moveWorktreeToStatus, pinWorktree, handleDragFinish)
 
   const opacityPercent = Math.round(workspaceBoardOpacity * 100)
+  const drawerLeft = sidebarOpen ? sidebarWidth : 0
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="left"
         showCloseButton={false}
-        className="w-[min(96vw,1180px)] bg-sidebar p-0 sm:max-w-none"
-        overlayStyle={{ top: 36 }}
+        className="bg-sidebar p-0 sm:max-w-none"
+        overlayStyle={{ top: 36, left: drawerLeft }}
         style={
           {
+            // Why: the board is a companion to the workspace sidebar, so it
+            // expands from the sidebar edge instead of covering the sidebar.
+            left: drawerLeft,
             top: 36,
             height: 'calc(100% - 36px)',
+            width: `min(calc(100vw - ${drawerLeft}px), 1180px)`,
             opacity: workspaceBoardOpacity
           } as React.CSSProperties
         }
