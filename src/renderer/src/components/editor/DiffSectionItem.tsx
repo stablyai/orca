@@ -19,6 +19,7 @@ import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
+import { getDiffCommentPopoverTop } from '../diff-comments/diff-comment-popover-position'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import { computeLineStats } from './diff-line-stats'
 import type { DiffComment, GitDiffResult } from '../../../../shared/types'
@@ -155,8 +156,15 @@ export function DiffSectionItem({
       return
     }
     const update = (): void => {
-      const top =
-        modifiedEditor.getTopForLineNumber(popover.lineNumber) - modifiedEditor.getScrollTop()
+      const top = getDiffCommentPopoverTop(
+        modifiedEditor,
+        popover.lineNumber,
+        modifiedEditor.getOption(monaco.editor.EditorOption.lineHeight)
+      )
+      if (top == null) {
+        setPopover(null)
+        return
+      }
       setPopover((prev) => (prev ? { ...prev, top } : prev))
     }
     const scrollSub = modifiedEditor.onDidScrollChange(update)

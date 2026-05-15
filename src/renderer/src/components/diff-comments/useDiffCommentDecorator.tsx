@@ -4,6 +4,7 @@ import type { editor as monacoEditor, IDisposable } from 'monaco-editor'
 import { createRoot, type Root } from 'react-dom/client'
 import type { DiffComment } from '../../../../shared/types'
 import { DiffCommentCard } from './DiffCommentCard'
+import { getDiffCommentPopoverTop } from './diff-comment-popover-position'
 
 // Why: Monaco glyph-margin *decorations* don't expose click events in a way
 // that lets us show a polished popover anchored to a line. So instead we own a
@@ -203,7 +204,10 @@ export function useDiffCommentDecorator({
       }
       const startLine = Math.min(currentDrag.startLine, currentDrag.endLine)
       const lineNumber = Math.max(currentDrag.startLine, currentDrag.endLine)
-      const top = editor.getTopForLineNumber(lineNumber) - editor.getScrollTop()
+      const top = getDiffCommentPopoverTop(editor, lineNumber, getLineHeight())
+      if (top == null) {
+        return
+      }
       onAddCommentClickRef.current({
         lineNumber,
         startLine: startLine === lineNumber ? undefined : startLine,
