@@ -36,6 +36,7 @@ type AgentOption = {
 const AGENT_OPTIONS: AgentOption[] = [
   { id: 'claude', label: 'Claude' },
   { id: 'codex', label: 'Codex' },
+  { id: 'grok', label: 'Grok', faviconDomain: 'x.ai' },
   { id: 'copilot', label: 'GitHub Copilot', faviconDomain: 'github.com' },
   { id: 'opencode', label: 'OpenCode', faviconDomain: 'opencode.ai' },
   { id: 'pi', label: 'Pi' },
@@ -67,6 +68,7 @@ const ALL_AGENTS = [...AGENT_OPTIONS, BLANK_TERMINAL]
 const AGENT_COMMANDS: Record<string, string> = {
   claude: 'claude',
   codex: 'codex',
+  grok: 'grok',
   copilot: 'copilot',
   opencode: 'opencode',
   pi: 'pi',

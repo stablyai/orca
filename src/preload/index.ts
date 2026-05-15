@@ -1092,7 +1092,9 @@ const api = {
       ipcRenderer.invoke('agentHooks:geminiStatus'),
     cursorStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:cursorStatus'),
-    droidStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:droidStatus')
+    droidStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:droidStatus'),
+    grokStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:grokStatus')
   },
 
   agentTrust: {

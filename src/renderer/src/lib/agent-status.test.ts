@@ -377,6 +377,7 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('✦ Gemini CLI')).toBe('Gemini CLI')
     expect(getAgentLabel('⠂ Claude Code')).toBe('Claude Code')
     expect(getAgentLabel('⠋ Codex is thinking')).toBe('Codex')
+    expect(getAgentLabel('Grok running')).toBe('Grok')
     expect(getAgentLabel('⠋ Droid')).toBe('Droid')
     expect(getAgentLabel('Droid ready')).toBe('Droid')
   })

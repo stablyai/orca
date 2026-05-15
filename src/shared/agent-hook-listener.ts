@@ -305,6 +305,7 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   google_web_search: ['query'],
   exec_command: ['cmd', 'command'],
   shell_command: ['cmd', 'command'],
+  run_terminal_cmd: ['command'],
   apply_patch: ['path', 'file_path'],
   view_image: ['path', 'file_path'],
   bash: ['command'],
@@ -741,8 +742,102 @@ function extractDroidToolFields(
   return {}
 }
 
+function normalizeHookEventName(value: unknown): string {
+  if (typeof value !== 'string') {
+    return ''
+  }
+  return value
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/[-\s]+/g, '_')
+    .toLowerCase()
+}
+
+function isGrokEvent(eventName: unknown, ...expected: readonly string[]): boolean {
+  const normalized = normalizeHookEventName(eventName)
+  return expected.includes(normalized)
+}
+
+function extractGrokToolFields(
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): ToolSnapshot {
+  if (isGrokEvent(eventName, 'pre_tool_use', 'post_tool_use', 'post_tool_use_failure')) {
+    const toolName =
+      readString(hookPayload, 'toolName') ??
+      readString(hookPayload, 'tool_name') ??
+      readString(hookPayload, 'name')
+    const toolInput =
+      deriveToolInputPreview(toolName, hookPayload.toolInput) ??
+      deriveToolInputPreview(toolName, hookPayload.tool_input) ??
+      deriveToolInputPreview(toolName, hookPayload.input) ??
+      deriveToolInputPreview(toolName, hookPayload.arguments)
+    const update: ToolSnapshot = { toolName, toolInput }
+    if (isGrokEvent(eventName, 'post_tool_use', 'post_tool_use_failure')) {
+      const responseText =
+        extractToolResponseText(hookPayload.toolResponse) ??
+        extractToolResponseText(hookPayload.tool_response) ??
+        extractToolResponseText(hookPayload.toolOutput) ??
+        extractToolResponseText(hookPayload.tool_output) ??
+        readString(hookPayload, 'error') ??
+        readString(hookPayload, 'message')
+      if (responseText) {
+        update.lastAssistantMessage = responseText
+      }
+    }
+    return update
+  }
+  if (isGrokEvent(eventName, 'stop', 'session_end')) {
+    const direct =
+      readString(hookPayload, 'lastAssistantMessage') ??
+      readString(hookPayload, 'last_assistant_message')
+    if (direct) {
+      return { lastAssistantMessage: direct }
+    }
+    const fromTranscript = readLastAssistantFromTranscript(
+      hookPayload.transcriptPath ?? hookPayload.transcript_path
+    )
+    if (fromTranscript) {
+      return { lastAssistantMessage: fromTranscript }
+    }
+  }
+  return {}
+}
+
+function isGrokPermissionNotification(message: string | undefined): boolean {
+  if (!message) {
+    return false
+  }
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('permission') ||
+    lower.includes('approval') ||
+    lower.includes('approve') ||
+    lower.includes('allow') ||
+    lower.includes('confirm') ||
+    lower.includes('needs your') ||
+    lower.includes('requires your') ||
+    lower.includes('feedback') ||
+    lower.includes('clarify') ||
+    lower.includes('question')
+  )
+}
+
+function isGrokIdleNotification(message: string | undefined): boolean {
+  if (!message) {
+    return false
+  }
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('type your message') ||
+    lower.includes('enter send') ||
+    lower.includes('shift-tab normal') ||
+    lower.includes('ask a side question')
+  )
+}
+
 function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
-  // Why: exhaustive switch so adding an 8th source to AgentHookSource fails
+  // Why: exhaustive switch so adding a source to AgentHookSource fails
   // typecheck here instead of silently falling through to `false`.
   switch (source) {
     case 'claude':
@@ -759,6 +854,8 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
       return eventName === 'before_agent_start'
     case 'droid':
       return eventName === 'UserPromptSubmit'
+    case 'grok':
+      return isGrokEvent(eventName, 'user_prompt_submit')
     default: {
       const _exhaustive: never = source
       void _exhaustive
@@ -772,7 +869,7 @@ function extractToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>
 ): ToolSnapshot {
-  // Why: exhaustive switch so adding an 8th source to AgentHookSource fails
+  // Why: exhaustive switch so adding a source to AgentHookSource fails
   // typecheck here instead of silently routing through OpenCode's extractor.
   switch (source) {
     case 'claude':
@@ -789,6 +886,8 @@ function extractToolFields(
       return extractPiToolFields(eventName, hookPayload)
     case 'droid':
       return extractDroidToolFields(eventName, hookPayload)
+    case 'grok':
+      return extractGrokToolFields(eventName, hookPayload)
     default: {
       const _exhaustive: never = source
       void _exhaustive
@@ -1141,6 +1240,75 @@ function normalizeDroidEvent(
   )
 }
 
+function normalizeGrokEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  if (isGrokEvent(eventName, 'session_start')) {
+    // Why: Grok emits SessionStart when the TUI opens/resumes. It should reset
+    // stale per-turn details without creating a visible "working" row before a
+    // user prompt or tool event exists.
+    clearPaneTurnCacheState(state, paneKey)
+    return null
+  }
+
+  const notificationMessage = readString(hookPayload, 'message')
+  let stateName: 'working' | 'waiting' | 'done' | null = null
+  if (
+    isGrokEvent(
+      eventName,
+      'user_prompt_submit',
+      'pre_tool_use',
+      'post_tool_use',
+      'post_tool_use_failure'
+    )
+  ) {
+    stateName = 'working'
+  } else if (isGrokEvent(eventName, 'stop', 'session_end')) {
+    stateName = 'done'
+  } else if (
+    isGrokEvent(eventName, 'notification') &&
+    isGrokPermissionNotification(notificationMessage)
+  ) {
+    stateName = 'waiting'
+  } else if (
+    isGrokEvent(eventName, 'notification') &&
+    isGrokIdleNotification(notificationMessage)
+  ) {
+    stateName = 'done'
+  }
+  if (!stateName) {
+    return null
+  }
+
+  const snapshot = resolveToolState(
+    state,
+    paneKey,
+    extractToolFields('grok', eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent('grok', eventName) }
+  )
+
+  // Why: Grok Notification.message is status UI text, not necessarily the
+  // user's prompt. Preserve the cached UserPromptSubmit prompt for the row.
+  const effectivePrompt = isGrokEvent(eventName, 'notification') ? '' : promptText
+
+  return parseAgentStatusPayload(
+    JSON.stringify({
+      state: stateName,
+      prompt: resolvePrompt(state, paneKey, effectivePrompt, {
+        resetOnNewTurn: isNewTurnEvent('grok', eventName)
+      }),
+      agentType: 'grok',
+      toolName: snapshot.toolName,
+      toolInput: snapshot.toolInput,
+      lastAssistantMessage: snapshot.lastAssistantMessage
+    })
+  )
+}
+
 function readStringField(record: Record<string, unknown>, key: string): string | undefined {
   const value = record[key]
   if (typeof value !== 'string') {
@@ -1196,10 +1364,10 @@ export function normalizeHookPayload(
   }
   const worktreeId = readStringField(record, 'worktreeId')
 
-  const eventName = (hookPayload as Record<string, unknown>).hook_event_name
-  const promptText = extractPromptText(hookPayload as Record<string, unknown>)
   const hookPayloadRecord = hookPayload as Record<string, unknown>
-  // Why: exhaustive switch so adding an 8th source to AgentHookSource fails
+  const eventName = hookPayloadRecord.hook_event_name ?? hookPayloadRecord.hookEventName
+  const promptText = extractPromptText(hookPayload as Record<string, unknown>)
+  // Why: exhaustive switch so adding a source to AgentHookSource fails
   // typecheck here instead of silently routing through OpenCode's normalizer.
   let payload: ParsedAgentStatusPayload | null
   switch (source) {
@@ -1224,6 +1392,9 @@ export function normalizeHookPayload(
     case 'droid':
       payload = normalizeDroidEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
+    case 'grok':
+      payload = normalizeGrokEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
     default: {
       const _exhaustive: never = source
       void _exhaustive
@@ -1247,7 +1418,8 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/opencode': 'opencode',
   '/hook/cursor': 'cursor',
   '/hook/pi': 'pi',
-  '/hook/droid': 'droid'
+  '/hook/droid': 'droid',
+  '/hook/grok': 'grok'
 })
 
 export function resolveHookSource(pathname: string): AgentHookSource | null {

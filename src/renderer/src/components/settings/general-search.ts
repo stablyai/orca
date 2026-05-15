@@ -93,7 +93,8 @@ export const GENERAL_AGENT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'pi',
       'gemini',
       'aider',
-      'copilot'
+      'copilot',
+      'grok'
     ]
   }
 ]

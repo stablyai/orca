@@ -33,6 +33,7 @@ describe('shared agent-hook-listener', () => {
   it('routes pathnames to a known source or null', () => {
     expect(resolveHookSource('/hook/claude')).toBe('claude')
     expect(resolveHookSource('/hook/cursor')).toBe('cursor')
+    expect(resolveHookSource('/hook/grok')).toBe('grok')
     expect(resolveHookSource('/hook/unknown')).toBeNull()
     expect(resolveHookSource('/')).toBeNull()
   })
@@ -121,6 +122,75 @@ describe('shared agent-hook-listener', () => {
     )
     expect(event).not.toBeNull()
     expect(event!.payload.prompt).toBe('')
+  })
+
+  it('normalizes Grok hookEventName payloads and keeps prompt across tool events', () => {
+    const prompt = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        payload: { hookEventName: 'user_prompt_submit', prompt: 'run the check' }
+      },
+      'production'
+    )
+    expect(prompt).not.toBeNull()
+    expect(prompt!.payload).toMatchObject({
+      state: 'working',
+      prompt: 'run the check',
+      agentType: 'grok'
+    })
+
+    const tool = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        payload: {
+          hookEventName: 'pre_tool_use',
+          toolName: 'run_terminal_cmd',
+          toolInput: { command: 'pnpm test' }
+        }
+      },
+      'production'
+    )
+    expect(tool).not.toBeNull()
+    expect(tool!.payload).toMatchObject({
+      state: 'working',
+      prompt: 'run the check',
+      agentType: 'grok',
+      toolName: 'run_terminal_cmd',
+      toolInput: 'pnpm test'
+    })
+  })
+
+  it('maps Grok feedback notifications to waiting without overwriting the prompt', () => {
+    normalizeHookPayload(
+      state,
+      'grok',
+      { paneKey: PANE_KEY, payload: { hookEventName: 'UserPromptSubmit', prompt: 'ship it' } },
+      'production'
+    )
+
+    const event = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: { hookEventName: 'Notification', message: 'Grok needs your feedback to proceed' }
+      },
+      'production'
+    )
+
+    expect(event).not.toBeNull()
+    expect(event!.payload).toMatchObject({
+      state: 'waiting',
+      prompt: 'ship it',
+      agentType: 'grok'
+    })
   })
 
   describe('writeEndpointFile', () => {

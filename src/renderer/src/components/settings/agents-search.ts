@@ -31,6 +31,7 @@ export const AGENTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'hermes',
       'openclaw',
       'copilot',
+      'grok',
       'github',
       'github copilot',
       'command',

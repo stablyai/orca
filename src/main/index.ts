@@ -55,6 +55,7 @@ import { codexHookService } from './codex/hook-service'
 import { geminiHookService } from './gemini/hook-service'
 import { cursorHookService } from './cursor/hook-service'
 import { droidHookService } from './droid/hook-service'
+import { grokHookService } from './grok/hook-service'
 import {
   getPtyIdForPaneKey,
   registerPaneKeyTeardownListener,
@@ -712,7 +713,8 @@ app.whenReady().then(async () => {
     ['codex', () => codexHookService.install()],
     ['gemini', () => geminiHookService.install()],
     ['cursor', () => cursorHookService.install()],
-    ['droid', () => droidHookService.install()]
+    ['droid', () => droidHookService.install()],
+    ['grok', () => grokHookService.install()]
   ])
 
   registerAppMenu({

@@ -1145,6 +1145,7 @@ export type TuiAgent =
   | 'hermes' // Hermes Agent
   | 'openclaw' // OpenClaw
   | 'copilot' // GitHub Copilot CLI
+  | 'grok' // xAI Grok CLI
 
 export type TaskViewPresetId = 'all' | 'issues' | 'review' | 'my-issues' | 'my-prs' | 'prs'
 

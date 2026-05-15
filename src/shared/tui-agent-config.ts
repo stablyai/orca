@@ -232,6 +232,12 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // `addTrustedFolder` writes after the user accepts) makes the menu skip
     // entirely. See agent-trust-presets.ts for the file layout.
     preflightTrust: 'copilot'
+  },
+  grok: {
+    detectCmd: 'grok',
+    launchCmd: 'grok',
+    expectedProcess: 'grok',
+    promptInjectionMode: 'stdin-after-start'
   }
 }
 

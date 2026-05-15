@@ -29,7 +29,8 @@ export const AGENT_NAMES = [
   'gemini',
   'opencode',
   'openclaw',
-  'aider'
+  'aider',
+  'grok'
 ]
 
 // Why: `android` contains `droid`; unlike the legacy agent names above, Droid
@@ -353,6 +354,9 @@ export function getAgentLabel(title: string): string | null {
   }
   if (lower.includes('copilot')) {
     return 'GitHub Copilot'
+  }
+  if (lower.includes('grok')) {
+    return 'Grok'
   }
   if (lower.includes('opencode')) {
     return 'OpenCode'

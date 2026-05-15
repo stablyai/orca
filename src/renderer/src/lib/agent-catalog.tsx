@@ -29,6 +29,13 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
     homepageUrl: 'https://github.com/openai/codex'
   },
   {
+    id: 'grok',
+    label: 'Grok',
+    cmd: 'grok',
+    faviconDomain: 'x.ai',
+    homepageUrl: 'https://x.ai/cli'
+  },
+  {
     id: 'copilot',
     label: 'GitHub Copilot',
     cmd: 'copilot',
