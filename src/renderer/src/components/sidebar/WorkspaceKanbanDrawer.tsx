@@ -35,6 +35,7 @@ export default function WorkspaceKanbanDrawer({
   const repoMap = useRepoMap()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
+  const updateWorktreesMeta = useAppStore((s) => s.updateWorktreesMeta)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const setWorkspaceStatuses = useAppStore((s) => s.setWorkspaceStatuses)
   const workspaceBoardOpacity = useAppStore((s) => s.workspaceBoardOpacity)
@@ -87,11 +88,19 @@ export default function WorkspaceKanbanDrawer({
 
   const moveWorktreesToStatus = useCallback(
     (worktreeIds: readonly string[], status: WorkspaceStatus) => {
+      const updates = new Map<string, { workspaceStatus: WorkspaceStatus }>()
       for (const worktreeId of worktreeIds) {
-        moveWorktreeToStatus(worktreeId, status)
+        const current = allWorktrees.find((worktree) => worktree.id === worktreeId)
+        if (!current || getWorkspaceStatus(current, workspaceStatuses) === status) {
+          continue
+        }
+        updates.set(worktreeId, { workspaceStatus: status })
+      }
+      if (updates.size > 0) {
+        void updateWorktreesMeta(updates)
       }
     },
-    [moveWorktreeToStatus]
+    [allWorktrees, updateWorktreesMeta, workspaceStatuses]
   )
 
   const pinWorktree = useCallback(
