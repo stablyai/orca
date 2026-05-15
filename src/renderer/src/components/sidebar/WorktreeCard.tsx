@@ -28,6 +28,7 @@ import {
 } from '@/lib/worktree-status'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
+import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import type { Worktree, Repo, PRInfo, IssueInfo } from '../../../../shared/types'
 import {
@@ -44,6 +45,7 @@ import {
   selectLivePtyIdsForWorktree,
   selectRuntimePaneTitlesForWorktree
 } from './worktree-card-status-inputs'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
 
 type WorktreeCardProps = {
   worktree: Worktree
@@ -226,12 +228,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
         const tabIds = new Set(wtTabs.map((t) => t.id))
         const now = Date.now()
         for (const [paneKey, entry] of Object.entries(s.agentStatusByPaneKey)) {
-          const sepIdx = paneKey.indexOf(':')
-          if (sepIdx <= 0) {
+          const parsed = parsePaneKey(paneKey)
+          if (!parsed) {
             continue
           }
-          const tabId = paneKey.slice(0, sepIdx)
-          if (!tabIds.has(tabId)) {
+          if (!tabIds.has(parsed.tabId)) {
             continue
           }
           if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
@@ -241,6 +242,16 @@ const WorktreeCard = React.memo(function WorktreeCard({
             perm = true
           } else if (entry.state === 'done') {
             live = true
+          }
+        }
+        for (const unsupported of Object.values(s.migrationUnsupportedByPtyId)) {
+          const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
+          if (!entry) {
+            continue
+          }
+          const parsed = parsePaneKey(entry.paneKey)
+          if (parsed && tabIds.has(parsed.tabId)) {
+            perm = true
           }
         }
       }

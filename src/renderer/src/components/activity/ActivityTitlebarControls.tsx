@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
+import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 
 // Why: keep the unread accumulator local; "Mark all read" moved to the
 // thread-list overflow menu in ActivityPrototypePage so it lives next to
@@ -33,6 +34,12 @@ function useActivityUnreadCount(): number {
     }
     for (const [paneKey, retained] of Object.entries(s.retainedAgentsByPaneKey)) {
       accumulate(retained.entry, s.acknowledgedAgentsByPaneKey[paneKey] ?? 0)
+    }
+    for (const unsupported of Object.values(s.migrationUnsupportedByPtyId)) {
+      const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
+      if (entry) {
+        accumulate(entry, s.acknowledgedAgentsByPaneKey[entry.paneKey] ?? 0)
+      }
     }
     return count
   })

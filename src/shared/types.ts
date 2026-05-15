@@ -2,6 +2,7 @@
 import type { SshRemotePtyLease, SshTarget } from './ssh-types'
 import type { WorkspaceSource } from './telemetry-events'
 import type { GitHubProjectSettings } from './github-project-types'
+import type { MigrationUnsupportedPtyEntry } from './agent-status-types'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -381,7 +382,7 @@ export type TerminalLayoutSnapshot = {
   ptyIdsByLeafId?: Record<string, string>
   /** Serialized terminal buffers per leaf for scrollback restoration on restart. */
   buffersByLeafId?: Record<string, string>
-  /** User-assigned pane titles, keyed by leafId (e.g. "pane:3").
+  /** User-assigned pane titles, keyed by stable layout leaf UUID.
    *  Persisted alongside buffers via the existing session:set flow. */
   titlesByLeafId?: Record<string, string>
 }
@@ -1650,6 +1651,7 @@ export type PersistedState = {
   workspaceSession: WorkspaceSessionState
   sshTargets: SshTarget[]
   sshRemotePtyLeases: SshRemotePtyLease[]
+  migrationUnsupportedPtyEntries: MigrationUnsupportedPtyEntry[]
   onboarding: OnboardingState
 }
 

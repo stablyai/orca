@@ -1,7 +1,14 @@
 import { ipcMain } from 'electron'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type {
+  AgentStatusIpcPayload,
+  MigrationUnsupportedPtyEntry
+} from '../../shared/agent-status-types'
 import { agentHookServer, isValidPaneKey } from '../agent-hooks/server'
+import {
+  clearMigrationUnsupportedPtysForPaneKey,
+  getMigrationUnsupportedPtySnapshot
+} from '../agent-hooks/migration-unsupported-pty-state'
 import { claudeHookService } from '../claude/hook-service'
 import { codexHookService } from '../codex/hook-service'
 import { geminiHookService } from '../gemini/hook-service'
@@ -23,6 +30,7 @@ export function registerAgentHookHandlers(): void {
   ipcMain.removeHandler('agentHooks:geminiStatus')
   ipcMain.removeHandler('agentHooks:cursorStatus')
   ipcMain.removeHandler('agentStatus:getSnapshot')
+  ipcMain.removeHandler('agentStatus:getMigrationUnsupportedSnapshot')
   // Why: agentStatus:drop is sent fire-and-forget from the renderer via
   // ipcRenderer.send(); we listen with ipcMain.on (not handle) so we don't
   // round-trip a response. Removing first keeps re-registration safe even
@@ -38,6 +46,7 @@ export function registerAgentHookHandlers(): void {
       // wipe the per-pane prompt/tool caches, which the next hook event for that
       // (still-alive) pane needs to render a coherent row.
       agentHookServer.dropStatusEntry(paneKey)
+      clearMigrationUnsupportedPtysForPaneKey(paneKey)
     } catch (err) {
       console.warn('[agent-hooks] dropStatusEntry failed:', err)
     }
@@ -47,6 +56,10 @@ export function registerAgentHookHandlers(): void {
     // lose replayed statuses while its local store is still empty.
     return agentHookServer.getStatusSnapshot()
   })
+  ipcMain.handle(
+    'agentStatus:getMigrationUnsupportedSnapshot',
+    (): MigrationUnsupportedPtyEntry[] => getMigrationUnsupportedPtySnapshot()
+  )
 
   // Why: errors from getStatus() (fs permission denied, homedir resolution
   // failure, etc.) must be reported inline via state:'error' so the sidebar can

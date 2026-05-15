@@ -3,6 +3,7 @@ import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST_REPLAY_FOCUS_REPORTING_RESET, POST_REPLAY_MODE_RESET } from './layout-serialization'
 import type * as UseNotificationDispatchModule from './use-notification-dispatch'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 // Why: the fresh-spawn and reattach paths now chain pre-signal → spawn →
 // register/settle through multiple microtasks. Tests that previously flushed
@@ -15,6 +16,12 @@ async function flushAsyncTicks(count = 6): Promise<void> {
 }
 
 const toastInfo = vi.fn()
+const LEAF_1 = '11111111-1111-4111-8111-111111111111' as const
+const LEAF_2 = '22222222-2222-4222-8222-222222222222' as const
+
+function leafIdForPane(paneId: number): string {
+  return paneId === 2 ? LEAF_2 : LEAF_1
+}
 
 type StoreState = {
   tabsByWorktree: Record<string, { id: string; ptyId: string | null; title?: string }[]>
@@ -155,8 +162,11 @@ function createMockTransport(initialPtyId: string | null = null): MockTransport 
 }
 
 function createPane(paneId: number) {
+  const leafId = leafIdForPane(paneId)
   return {
     id: paneId,
+    leafId,
+    stablePaneId: leafId,
     terminal: {
       cols: 120,
       rows: 40,
@@ -176,7 +186,12 @@ function createManager(paneCount = 1) {
   return {
     setPaneGpuRendering: vi.fn(),
     markPaneHasComplexScriptOutput: vi.fn(),
-    getPanes: vi.fn(() => Array.from({ length: paneCount }, (_, index) => ({ id: index + 1 }))),
+    getPanes: vi.fn(() =>
+      Array.from({ length: paneCount }, (_, index) => ({
+        id: index + 1,
+        leafId: leafIdForPane(index + 1)
+      }))
+    ),
     closePane: vi.fn(),
     getActivePane: vi.fn<() => { id: number } | null>(() => null)
   }
@@ -568,8 +583,8 @@ describe('connectPanePty', () => {
     const pane = createPane(2)
     const manager = createManager(2)
     const deps = createDeps({
-      restoredLeafId: 'pane:2',
-      restoredPtyIdByLeafId: { 'pane:2': 'leaf-pty-2' }
+      restoredLeafId: LEAF_2,
+      restoredPtyIdByLeafId: { [LEAF_2]: 'leaf-pty-2' }
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
@@ -608,8 +623,8 @@ describe('connectPanePty', () => {
     const pane = createPane(2)
     const manager = createManager(2)
     const deps = createDeps({
-      restoredLeafId: 'pane:2',
-      restoredPtyIdByLeafId: { 'pane:2': 'stale-pty' }
+      restoredLeafId: LEAF_2,
+      restoredPtyIdByLeafId: { [LEAF_2]: 'stale-pty' }
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
@@ -647,8 +662,8 @@ describe('connectPanePty', () => {
     const pane = createPane(2)
     const manager = createManager(2)
     const deps = createDeps({
-      restoredLeafId: 'pane:2',
-      restoredPtyIdByLeafId: { 'pane:2': 'restored-session' }
+      restoredLeafId: LEAF_2,
+      restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
@@ -686,8 +701,8 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     const manager = createManager(1)
     const deps = createDeps({
-      restoredLeafId: 'pane:1',
-      restoredPtyIdByLeafId: { 'pane:1': 'tab-pty' }
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
@@ -737,8 +752,8 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     const manager = createManager(1)
     const deps = createDeps({
-      restoredLeafId: 'pane:1',
-      restoredPtyIdByLeafId: { 'pane:1': 'tab-pty' }
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
@@ -772,8 +787,8 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     const manager = createManager(1)
     const deps = createDeps({
-      restoredLeafId: 'pane:1',
-      restoredPtyIdByLeafId: { 'pane:1': 'tab-pty' }
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
@@ -952,8 +967,8 @@ describe('connectPanePty', () => {
     const remountPane = createPane(1)
     const remountManager = createManager(1)
     const remountDeps = createDeps({
-      restoredLeafId: 'pane:1',
-      restoredPtyIdByLeafId: { 'pane:1': 'pty-restarted' }
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'pty-restarted' }
     })
 
     connectPanePty(remountPane as never, remountManager as never, remountDeps as never)
@@ -1122,8 +1137,8 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     const manager = createManager(1)
     const deps = createDeps({
-      restoredLeafId: 'leaf-1',
-      restoredPtyIdByLeafId: { 'leaf-1': 'leaf-session' }
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'leaf-session' }
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
@@ -1226,8 +1241,8 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     const manager = createManager(1)
     const deps = createDeps({
-      restoredLeafId: 'leaf-1',
-      restoredPtyIdByLeafId: { 'leaf-1': 'leaf-session' }
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'leaf-session' }
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
@@ -1317,6 +1332,6 @@ describe('connectPanePty', () => {
 
     agentExitedHandler()
 
-    expect(deps.setCacheTimerStartedAt).toHaveBeenCalledWith('tab-1:1', null)
+    expect(deps.setCacheTimerStartedAt).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1), null)
   })
 })

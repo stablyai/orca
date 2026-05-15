@@ -20,11 +20,17 @@ const {
   openCodeBuildPtyEnvMock,
   openCodeClearPtyMock,
   buildAgentHookEnvMock,
+  clearAgentHookPaneStateMock,
   piBuildPtyEnvMock,
   piClearPtyMock,
   isPwshAvailableMock,
   trackMock,
-  classifyErrorMock
+  classifyErrorMock,
+  registerPtyMock,
+  unregisterPtyMock,
+  setMigrationUnsupportedPtyMock,
+  clearMigrationUnsupportedPtyMock,
+  clearMigrationUnsupportedPtysForPaneKeyMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   onMock: vi.fn(),
@@ -43,10 +49,16 @@ const {
   isPwshAvailableMock: vi.fn(),
   openCodeClearPtyMock: vi.fn(),
   buildAgentHookEnvMock: vi.fn(),
+  clearAgentHookPaneStateMock: vi.fn(),
   piBuildPtyEnvMock: vi.fn(),
   piClearPtyMock: vi.fn(),
   trackMock: vi.fn(),
-  classifyErrorMock: vi.fn()
+  classifyErrorMock: vi.fn(),
+  registerPtyMock: vi.fn(),
+  unregisterPtyMock: vi.fn(),
+  setMigrationUnsupportedPtyMock: vi.fn(),
+  clearMigrationUnsupportedPtyMock: vi.fn(),
+  clearMigrationUnsupportedPtysForPaneKeyMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -88,7 +100,8 @@ vi.mock('../opencode/hook-service', () => ({
 
 vi.mock('../agent-hooks/server', () => ({
   agentHookServer: {
-    buildPtyEnv: buildAgentHookEnvMock
+    buildPtyEnv: buildAgentHookEnvMock,
+    clearPaneState: clearAgentHookPaneStateMock
   }
 }))
 
@@ -110,11 +123,25 @@ vi.mock('../telemetry/client', () => ({
 vi.mock('../telemetry/classify-error', () => ({
   classifyError: classifyErrorMock
 }))
+
+vi.mock('../memory/pty-registry', () => ({
+  registerPty: registerPtyMock,
+  unregisterPty: unregisterPtyMock
+}))
+
+vi.mock('../agent-hooks/migration-unsupported-pty-state', () => ({
+  setMigrationUnsupportedPty: setMigrationUnsupportedPtyMock,
+  clearMigrationUnsupportedPty: clearMigrationUnsupportedPtyMock,
+  clearMigrationUnsupportedPtysForPaneKey: clearMigrationUnsupportedPtysForPaneKeyMock
+}))
 import { LocalPtyProvider } from '../providers/local-pty-provider'
+import { makePaneKey } from '../../shared/stable-pane-id'
 import {
   registerPtyHandlers,
   registerSshPtyProvider,
+  clearProviderPtyState,
   deletePtyOwnership,
+  getPtyIdForPaneKey,
   setPtyOwnership,
   setLocalPtyProvider,
   unregisterSshPtyProvider
@@ -170,11 +197,17 @@ describe('registerPtyHandlers', () => {
     openCodeBuildPtyEnvMock.mockReset()
     openCodeClearPtyMock.mockReset()
     buildAgentHookEnvMock.mockReset()
+    clearAgentHookPaneStateMock.mockReset()
     piBuildPtyEnvMock.mockReset()
     piClearPtyMock.mockReset()
     isPwshAvailableMock.mockReset()
     trackMock.mockReset()
     classifyErrorMock.mockReset()
+    registerPtyMock.mockReset()
+    unregisterPtyMock.mockReset()
+    setMigrationUnsupportedPtyMock.mockReset()
+    clearMigrationUnsupportedPtyMock.mockReset()
+    clearMigrationUnsupportedPtysForPaneKeyMock.mockReset()
     mainWindow.webContents.on.mockReset()
     mainWindow.webContents.send.mockReset()
 
@@ -925,14 +958,15 @@ describe('registerPtyHandlers', () => {
           undefined,
           store as never
         )
+        const leafId = '11111111-1111-4111-8111-111111111111'
         await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
-          env: { FOO: 'bar' },
+          env: { FOO: 'bar', ORCA_PANE_KEY: makePaneKey('tab-1', leafId) },
           connectionId: 'ssh-1',
           worktreeId: 'wt-1',
           tabId: 'tab-1',
-          leafId: 'leaf-1'
+          leafId
         })
         const env = sshSpawn.mock.calls.at(-1)![0].env
         // Why: every host-local var must be absent over SSH — the hook
@@ -958,16 +992,32 @@ describe('registerPtyHandlers', () => {
             ptyId: 'ssh-pty',
             worktreeId: 'wt-1',
             tabId: 'tab-1',
-            leafId: 'leaf-1',
+            leafId,
             state: 'attached'
           })
         )
         expect(store.persistPtyBinding).toHaveBeenCalledWith({
           worktreeId: 'wt-1',
           tabId: 'tab-1',
-          leafId: 'leaf-1',
+          leafId,
           ptyId: 'ssh-pty'
         })
+
+        store.upsertSshRemotePtyLease.mockClear()
+        store.persistPtyBinding.mockClear()
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          env: { ORCA_PANE_KEY: 'tab-1:pane:1' },
+          connectionId: 'ssh-1',
+          worktreeId: 'wt-1',
+          tabId: 'tab-1',
+          leafId: 'pane:1'
+        })
+        expect(store.upsertSshRemotePtyLease).toHaveBeenCalledTimes(1)
+        expect(sshSpawn.mock.calls.at(-1)?.[0].env.ORCA_PANE_KEY).toBeUndefined()
+        expect(store.upsertSshRemotePtyLease.mock.calls[0]?.[0]).not.toHaveProperty('leafId')
+        expect(store.persistPtyBinding).not.toHaveBeenCalled()
       })
 
       it('marks a caller-supplied SSH session expired when remote reattach is gone', async () => {
@@ -2081,6 +2131,102 @@ describe('registerPtyHandlers', () => {
         process.env.SHELL = originalShell
       }
     }
+  })
+
+  it('registers only validated stable pane keys in the local PTY memory registry', async () => {
+    registerPtyHandlers(mainWindow as never)
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId,
+      env: { ORCA_PANE_KEY: 'tab-1:0' }
+    })
+
+    expect(registerPtyMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        paneKey: null
+      })
+    )
+    expect(setMigrationUnsupportedPtyMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ptyId: expect.any(String),
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId,
+        paneKey: makePaneKey('tab-1', leafId),
+        reason: 'legacy-numeric-pane-key',
+        source: 'local'
+      })
+    )
+
+    const stablePaneKey = makePaneKey('tab-1', leafId)
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId,
+      env: { ORCA_PANE_KEY: stablePaneKey }
+    })
+
+    expect(registerPtyMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        paneKey: stablePaneKey
+      })
+    )
+    expect(clearMigrationUnsupportedPtysForPaneKeyMock).toHaveBeenCalledWith(stablePaneKey)
+
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId,
+      env: { ORCA_PANE_KEY: makePaneKey('tab-2', leafId) }
+    })
+
+    expect(registerPtyMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        paneKey: null
+      })
+    )
+  })
+
+  it('does not let an old PTY teardown clear a newer pane-key owner', async () => {
+    registerPtyHandlers(mainWindow as never)
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const stablePaneKey = makePaneKey('tab-1', leafId)
+
+    const first = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId,
+      env: { ORCA_PANE_KEY: stablePaneKey }
+    })) as { id: string }
+    const second = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId,
+      env: { ORCA_PANE_KEY: stablePaneKey }
+    })) as { id: string }
+
+    expect(getPtyIdForPaneKey(stablePaneKey)).toBe(second.id)
+    clearAgentHookPaneStateMock.mockClear()
+    clearProviderPtyState(first.id)
+
+    expect(getPtyIdForPaneKey(stablePaneKey)).toBe(second.id)
+    expect(clearAgentHookPaneStateMock).not.toHaveBeenCalledWith(stablePaneKey)
+
+    clearProviderPtyState(second.id)
+    expect(getPtyIdForPaneKey(stablePaneKey)).toBeUndefined()
+    expect(clearAgentHookPaneStateMock).toHaveBeenCalledWith(stablePaneKey)
   })
 
   it('prefers args.env.SHELL and normalizes the child env after fallback', async () => {

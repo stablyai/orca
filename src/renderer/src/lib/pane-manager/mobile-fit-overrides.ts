@@ -10,9 +10,13 @@ type FitOverride = {
 }
 
 const overridesByPtyId = new Map<string, FitOverride>()
-// Why: keyed by 'tabId:paneId' composite to avoid collisions when different
-// tabs have panes with the same numeric ID (pane IDs are per-tab, not global).
-const ptyIdByPaneKey = new Map<string, string>()
+// Why: this is an in-memory renderer fit binding, not an agent paneKey.
+// Numeric pane ids are valid here because fit overrides never cross replay.
+const ptyIdByFitBindingKey = new Map<string, string>()
+
+function fitBindingKey(tabId: string, paneId: number): string {
+  return `${tabId}:${paneId}`
+}
 
 // Why: the override maps are plain JS — React components that read them
 // (e.g. the desktop mobile-fit banner) have no way to know when entries
@@ -69,7 +73,7 @@ export function setFitOverride(
 
 export function getPaneIdsForPty(ptyId: string): number[] {
   const result: number[] = []
-  for (const [key, boundPtyId] of ptyIdByPaneKey) {
+  for (const [key, boundPtyId] of ptyIdByFitBindingKey) {
     if (boundPtyId === ptyId) {
       const paneId = Number(key.split(':').pop())
       if (!Number.isNaN(paneId)) {
@@ -86,7 +90,7 @@ export function getFitOverrideForPty(ptyId: string): FitOverride | null {
 
 export function getFitOverrideForPane(paneId: number, tabId?: string): FitOverride | null {
   if (tabId) {
-    const ptyId = ptyIdByPaneKey.get(`${tabId}:${paneId}`)
+    const ptyId = ptyIdByFitBindingKey.get(fitBindingKey(tabId, paneId))
     if (!ptyId) {
       return null
     }
@@ -97,18 +101,18 @@ export function getFitOverrideForPane(paneId: number, tabId?: string): FitOverri
 
 export function bindPanePtyId(paneId: number, ptyId: string | null, tabId?: string): void {
   if (tabId) {
-    const key = `${tabId}:${paneId}`
+    const key = fitBindingKey(tabId, paneId)
     if (ptyId) {
-      ptyIdByPaneKey.set(key, ptyId)
+      ptyIdByFitBindingKey.set(key, ptyId)
     } else {
-      ptyIdByPaneKey.delete(key)
+      ptyIdByFitBindingKey.delete(key)
     }
   }
 }
 
 export function unbindPane(paneId: number, tabId?: string): void {
   if (tabId) {
-    ptyIdByPaneKey.delete(`${tabId}:${paneId}`)
+    ptyIdByFitBindingKey.delete(fitBindingKey(tabId, paneId))
   }
 }
 

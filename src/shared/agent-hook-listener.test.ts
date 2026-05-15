@@ -12,6 +12,10 @@ import {
   writeEndpointFile,
   type HookListenerState
 } from './agent-hook-listener'
+import { makePaneKey } from './stable-pane-id'
+
+const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
 
 describe('shared agent-hook-listener', () => {
   let state: HookListenerState
@@ -47,7 +51,7 @@ describe('shared agent-hook-listener', () => {
       state,
       'claude',
       {
-        paneKey: 'tab-1:0',
+        paneKey: PANE_KEY,
         tabId: 'tab-1',
         worktreeId: 'wt',
         env: 'production',
@@ -57,7 +61,7 @@ describe('shared agent-hook-listener', () => {
       'production'
     )
     expect(event).not.toBeNull()
-    expect(event!.paneKey).toBe('tab-1:0')
+    expect(event!.paneKey).toBe(PANE_KEY)
     expect(event!.connectionId).toBeNull()
     expect(event!.payload.state).toBe('working')
     expect(event!.payload.prompt).toBe('hello')
@@ -69,7 +73,7 @@ describe('shared agent-hook-listener', () => {
       state,
       'claude',
       {
-        paneKey: 'tab-1:0',
+        paneKey: PANE_KEY,
         payload: { hook_event_name: 'UserPromptSubmit', prompt: '   hi   ' }
       },
       'production'
@@ -97,7 +101,7 @@ describe('shared agent-hook-listener', () => {
     normalizeHookPayload(
       a,
       'claude',
-      { paneKey: 'p', payload: { hook_event_name: 'UserPromptSubmit', prompt: 'first' } },
+      { paneKey: PANE_KEY, payload: { hook_event_name: 'UserPromptSubmit', prompt: 'first' } },
       'production'
     )
     // The second listener has no cached prompt for this paneKey, so a tool
@@ -106,7 +110,7 @@ describe('shared agent-hook-listener', () => {
       b,
       'claude',
       {
-        paneKey: 'p',
+        paneKey: PANE_KEY,
         payload: {
           hook_event_name: 'PreToolUse',
           tool_name: 'Read',

@@ -694,7 +694,9 @@ const WorktreeList = React.memo(function WorktreeList() {
     // O(N × E × T) per sortEpoch bump. Only smart mode uses the score map;
     // other modes ignore it.
     const explicitByTabId =
-      sortBy === 'smart' ? buildExplicitEntriesByTabId(state.agentStatusByPaneKey) : undefined
+      sortBy === 'smart'
+        ? buildExplicitEntriesByTabId(state.agentStatusByPaneKey, state.migrationUnsupportedByPtyId)
+        : undefined
     const precomputedScores =
       sortBy === 'smart'
         ? new Map<string, number>(

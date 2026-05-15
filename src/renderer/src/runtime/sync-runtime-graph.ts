@@ -1,11 +1,11 @@
 /* eslint-disable max-lines -- Why: runtime graph sync and mobile session-tab publication share the same injected renderer state and terminal registry. Keeping them together prevents a second store/registry reader from drifting. */
 import {
   collectLeafIdsInOrder,
-  paneLeafId,
   serializePaneTree
 } from '@/components/terminal-pane/layout-serialization'
 import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/terminal-lifecycle-diagnostics'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
 import type { AppState } from '@/store/types'
 import type {
   RuntimeMobileSessionFileTab,
@@ -14,6 +14,7 @@ import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeSyncWindowGraph
 } from '../../../shared/runtime-types'
+import { isTerminalLeafId } from '../../../shared/stable-pane-id'
 import { getActiveTabNavOrder } from '../components/tab-bar/group-tab-order'
 
 type RegisteredTerminalTab = {
@@ -66,11 +67,11 @@ export function focusRuntimeTerminalSurface(tabId: string, leafId?: string | nul
     manager.getActivePane()?.terminal.focus()
     return true
   }
-  const pane = manager.getPanes().find((candidate) => paneLeafId(candidate.id) === leafId)
-  if (!pane) {
+  const resolution = resolveLeafIdForManager(tabId, leafId, manager)
+  if (resolution.status !== 'resolved') {
     return false
   }
-  manager.setActivePane(pane.id, { focus: true })
+  manager.setActivePane(resolution.numericPaneId, { focus: true })
   scheduleRuntimeGraphSync()
   return true
 }
@@ -217,13 +218,13 @@ async function syncRuntimeGraph(): Promise<void> {
       tabId,
       worktreeId: registeredTab.worktreeId,
       title: tab.customTitle ?? tab.title,
-      activeLeafId: activePaneId === null ? null : paneLeafId(activePaneId),
+      activeLeafId: activePaneId === null ? null : (manager?.getLeafId(activePaneId) ?? null),
       layout: serializePaneTree(root)
     })
 
     const savedPtyIdsByLeafId = state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}
     for (const pane of manager?.getPanes() ?? []) {
-      const leafId = paneLeafId(pane.id)
+      const leafId = pane.leafId
       const ptyId = registeredTab.getPtyIdForPane(pane.id)
       const savedPtyId = savedPtyIdsByLeafId[leafId] ?? null
       const registeredTime = tabRegisteredAt.get(tabId) ?? 0
@@ -312,21 +313,21 @@ function mobileTerminalSurfaceId(parentTabId: string, leafId: string): string {
 function getRuntimeLeafIdsForTerminal(tabId: string, state: AppState): string[] {
   const registered = registeredTabs.get(tabId)
   const manager = registered?.getManager()
-  const liveLeafIds = manager?.getPanes().map((pane) => paneLeafId(pane.id)) ?? []
+  const liveLeafIds = manager?.getPanes().map((pane) => pane.leafId) ?? []
   if (liveLeafIds.length > 0) {
     return liveLeafIds
   }
 
   const layout = state.terminalLayoutsByTabId[tabId]
-  const persistedLeafIds = collectLeafIdsInOrder(layout?.root)
+  const persistedLeafIds = collectLeafIdsInOrder(layout?.root).filter(isTerminalLeafId)
   if (persistedLeafIds.length > 0) {
     return persistedLeafIds
   }
 
   // Why: a newly-created terminal tab can be in the store before TerminalPane
-  // mounts. Publish its deterministic first-pane surface so mobile does not
-  // fill the startup gap from terminal.list.
-  return [paneLeafId(1)]
+  // mounts. Without a live or persisted UUID leaf, there is no stable mobile
+  // surface to publish yet; fabricating pane:1 would become stale after mount.
+  return []
 }
 
 function buildMobileTerminalSurfaceTabs(
@@ -347,16 +348,23 @@ function buildMobileTerminalSurfaceTabs(
           group.activeTabId === unifiedTabId
       ) === true
     : state.activeTabId === terminal.id
-  const liveActiveLeafId =
-    registeredTabs.get(terminalTabId)?.getManager()?.getActivePane()?.id ?? null
+  const manager = registeredTabs.get(terminalTabId)?.getManager()
+  const liveActivePaneId = manager?.getActivePane()?.id ?? null
+  const leafIds = getRuntimeLeafIdsForTerminal(terminalTabId, state)
   const activeLeafId =
-    liveActiveLeafId !== null
-      ? paneLeafId(liveActiveLeafId)
-      : (state.terminalLayoutsByTabId[terminalTabId]?.activeLeafId ?? paneLeafId(1))
+    liveActivePaneId !== null
+      ? (manager?.getLeafId(liveActivePaneId) ?? null)
+      : (state.terminalLayoutsByTabId[terminalTabId]?.activeLeafId ?? leafIds[0] ?? null)
   const paneTitles = state.runtimePaneTitlesByTabId[terminalTabId] ?? {}
-  return getRuntimeLeafIdsForTerminal(terminalTabId, state).map((leafId) => {
-    const paneId = /^pane:(\d+)$/.exec(leafId)?.[1]
-    const paneTitle = paneId ? paneTitles[Number(paneId)] : undefined
+  return leafIds.map((leafId) => {
+    const numericPaneId = manager?.getNumericIdForLeaf(leafId) ?? null
+    const legacyPaneId = numericPaneId === null ? /^pane:(\d+)$/.exec(leafId)?.[1] : null
+    const paneTitle =
+      numericPaneId !== null
+        ? paneTitles[numericPaneId]
+        : legacyPaneId
+          ? paneTitles[Number(legacyPaneId)]
+          : undefined
     return {
       type: 'terminal' as const,
       id: mobileTerminalSurfaceId(terminalTabId, leafId),

@@ -25,6 +25,7 @@ import {
   ensurePtyDispatcher,
   unregisterPtyDataHandlers
 } from '@/components/terminal-pane/pty-transport'
+import { normalizeTerminalLayoutSnapshot } from '@/components/terminal-pane/terminal-layout-leaf-ids'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '@/lib/floating-terminal'
 
@@ -204,7 +205,7 @@ export type TerminalSlice = {
     tabId: string
   ) => { command: string; env?: Record<string, string> } | null
   /** Per-pane timestamp (ms) when the prompt-cache countdown started (agent became idle).
-   *  Keys are `${tabId}:${paneId}` composites so split-pane tabs can track each pane
+   *  Keys are `${tabId}:${leafId}` composites so split-pane tabs can track each pane
    *  independently. null means no active timer for that pane. */
   cacheTimerByKey: Record<string, number | null>
   setCacheTimerStartedAt: (key: string, ts: number | null) => void
@@ -257,7 +258,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   setCacheTimerStartedAt: (key, ts) => {
     set((s) => {
       const next = { ...s.cacheTimerByKey, [key]: ts }
-      // Why: when a real pane transition writes a key like `${tabId}:${paneId}`,
+      // Why: when a real pane transition writes a key like `${tabId}:${leafId}`,
       // clean up any `${tabId}:seed` sentinel left by seedCacheTimersForIdleTabs.
       // This prevents phantom timers when the seeded key doesn't match the real
       // pane ID (e.g., idle Claude in pane 2 of a split tab).
@@ -489,7 +490,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const nextPendingIssueCommandSplitByTabId = { ...s.pendingIssueCommandSplitByTabId }
       delete nextPendingIssueCommandSplitByTabId[tabId]
       const nextCacheTimer = { ...s.cacheTimerByKey }
-      // Why: cache timer keys are `${tabId}:${paneId}` composites. Remove all
+      // Why: cache timer keys are `${tabId}:${leafId}` composites. Remove all
       // entries for the closing tab, regardless of how many panes it had.
       for (const key of Object.keys(nextCacheTimer)) {
         if (key.startsWith(`${tabId}:`)) {
@@ -1634,7 +1635,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         // reconnectPersistedTerminals can reattach each split-pane leaf
         // to its specific daemon session (not just the tab-level ptyId).
         terminalLayoutsByTabId: Object.fromEntries(
-          Object.entries(session.terminalLayoutsByTabId).filter(([tabId]) => validTabIds.has(tabId))
+          Object.entries(session.terminalLayoutsByTabId)
+            .filter(([tabId]) => validTabIds.has(tabId))
+            .map(([tabId, layout]) => {
+              // Why: old sessions can contain renderer-local pane:1-style leaf
+              // ids. Normalize during hydration before runtime/mobile surfaces read them.
+              return [tabId, normalizeTerminalLayoutSnapshot(layout).snapshot]
+            })
         )
       }
     })

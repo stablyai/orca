@@ -359,11 +359,10 @@ export default function TabGroupPanel({
         {model.groupTabs
           .filter((item) => item.contentType === 'terminal')
           .map((item) => {
-            const activityTerminalPortal = findActivityTerminalPortal(
-              activityTerminalPortals,
+            const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
               worktreeId,
-              item.entityId
-            )
+              tabId: item.entityId
+            })
             const isActivityPortalTab = activityTerminalPortal !== null
             const isActiveTerminalTab =
               isFocused && activeTab?.id === item.id && activeTab.contentType === 'terminal'
@@ -384,7 +383,7 @@ export default function TabGroupPanel({
                 // Why: when portaled to Activity for a specific agent pane,
                 // isolate that leaf so split siblings stay hidden. Workspace
                 // renders pass null → no override.
-                isolatedPaneId={activityTerminalPortal?.paneId ?? null}
+                isolatedPaneKey={activityTerminalPortal?.paneKey ?? null}
                 onPtyExit={(ptyId) => {
                   if (commands.consumeSuppressedPtyExit(ptyId)) {
                     return

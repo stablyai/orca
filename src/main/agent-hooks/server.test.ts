@@ -15,8 +15,18 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { AgentHookServer, _internals } from './server'
 import { parseAgentStatusPayload } from '../../shared/agent-status-types'
+import { makePaneKey } from '../../shared/stable-pane-id'
 
-const PANE = 'tab-1:0'
+const LEAF_1 = '11111111-1111-4111-8111-111111111111'
+const LEAF_2 = '22222222-2222-4222-8222-222222222222'
+const LEAF_3 = '33333333-3333-4333-8333-333333333333'
+const LEAF_4 = '44444444-4444-4444-8444-444444444444'
+const LEAF_5 = '55555555-5555-4555-8555-555555555555'
+const PANE = makePaneKey('tab-1', LEAF_1)
+const GOOD_PANE = makePaneKey('tab-good', LEAF_2)
+const OLD_PANE = makePaneKey('tab-old', LEAF_3)
+const FRESH_PANE = makePaneKey('tab-fresh', LEAF_4)
+const TAB_A_PANE = makePaneKey('tab-A', LEAF_5)
 
 type Body = {
   paneKey: string
@@ -1415,14 +1425,14 @@ describe('Last-status persistence', () => {
           },
           // Embedded paneKey mismatch — drop.
           [PANE]: {
-            paneKey: 'tab-x:99',
+            paneKey: makePaneKey('tab-x', LEAF_2),
             receivedAt: 1_700_000_000_000,
             stateStartedAt: 1_699_999_999_000,
             payload: { state: 'done', prompt: 'mismatch', agentType: 'claude' }
           },
           // Valid.
-          'tab-good:0': {
-            paneKey: 'tab-good:0',
+          [GOOD_PANE]: {
+            paneKey: GOOD_PANE,
             tabId: 'tab-good',
             receivedAt: recentTs(),
             stateStartedAt: recentTs(-1000),
@@ -1443,7 +1453,7 @@ describe('Last-status persistence', () => {
       expect(listener).toHaveBeenCalledTimes(1)
       expect(listener).toHaveBeenCalledWith(
         expect.objectContaining({
-          paneKey: 'tab-good:0',
+          paneKey: GOOD_PANE,
           payload: expect.objectContaining({ prompt: 'survived' })
         })
       )
@@ -1461,16 +1471,16 @@ describe('Last-status persistence', () => {
         version: 2,
         entries: {
           // Stale — should be dropped.
-          'tab-old:0': {
-            paneKey: 'tab-old:0',
+          [OLD_PANE]: {
+            paneKey: OLD_PANE,
             tabId: 'tab-old',
             receivedAt: eightDaysAgoMs,
             stateStartedAt: eightDaysAgoMs - 1000,
             payload: { state: 'done', prompt: 'old', agentType: 'claude' }
           },
           // Recent — should survive.
-          'tab-fresh:0': {
-            paneKey: 'tab-fresh:0',
+          [FRESH_PANE]: {
+            paneKey: FRESH_PANE,
             tabId: 'tab-fresh',
             receivedAt: recentTs(),
             stateStartedAt: recentTs(-1000),
@@ -1487,7 +1497,7 @@ describe('Last-status persistence', () => {
     })
     try {
       const snapshot = server.getStatusSnapshot()
-      expect(snapshot.map((e) => e.paneKey)).toEqual(['tab-fresh:0'])
+      expect(snapshot.map((e) => e.paneKey)).toEqual([FRESH_PANE])
     } finally {
       server.stop()
     }
@@ -1500,8 +1510,8 @@ describe('Last-status persistence', () => {
       JSON.stringify({
         version: 2,
         entries: {
-          'tab-A:0': {
-            paneKey: 'tab-A:0',
+          [TAB_A_PANE]: {
+            paneKey: TAB_A_PANE,
             // Why: deliberately divergent — paneKey says tab-A, the entry
             // claims tab-B. Sanitizer must drop rather than hydrate this
             // inconsistent row.
@@ -1567,7 +1577,7 @@ describe('Last-status persistence', () => {
       // Why: a no-op clearPaneState on a paneKey not in the cache is a
       // mutation site that should NOT trigger a redundant write. (clear was
       // designed to bail when nothing was evicted.)
-      server.clearPaneState('non-existent:0')
+      server.clearPaneState(makePaneKey('non-existent', LEAF_5))
       server.flushStatusPersistSync()
       // Touch back to the same mtime would let the test pass spuriously, so
       // assert no rewrite happened by checking that mtime is unchanged after
@@ -1664,6 +1674,42 @@ describe('AgentHookServer ingestRemote', () => {
       'conn-1'
     )
     expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('drops remote relay envelopes with legacy numeric paneKeys before cache mutation', () => {
+    const server = new AgentHookServer()
+    const payload = parseAgentStatusPayload(
+      JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
+    )
+    if (!payload) {
+      throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
+    }
+    const listener = vi.fn()
+    server.setListener(listener)
+    server.ingestRemote(
+      { paneKey: 'tab-1:0', tabId: 'tab-1', worktreeId: 'wt-1', payload },
+      'conn-1'
+    )
+    expect(listener).not.toHaveBeenCalled()
+    expect(server.getStatusSnapshot()).toEqual([])
+  })
+
+  it('drops remote relay envelopes whose tabId disagrees with the paneKey tab', () => {
+    const server = new AgentHookServer()
+    const payload = parseAgentStatusPayload(
+      JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
+    )
+    if (!payload) {
+      throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
+    }
+    const listener = vi.fn()
+    server.setListener(listener)
+    server.ingestRemote(
+      { paneKey: PANE, tabId: 'tab-other', worktreeId: 'wt-1', payload },
+      'conn-1'
+    )
+    expect(listener).not.toHaveBeenCalled()
+    expect(server.getStatusSnapshot()).toEqual([])
   })
 
   it('rejects empty connectionId', () => {

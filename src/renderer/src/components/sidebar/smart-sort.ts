@@ -1,11 +1,17 @@
+/* eslint-disable max-lines -- Why: keep smart-sort scoring, comparator construction,
+and exported test helpers together so sidebar, palette, and shortcut ordering share
+one ranking contract. */
 import { detectAgentStatusFromTitle, isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { branchName } from '@/lib/git-utils'
 import type { Worktree, Repo, TerminalTab } from '../../../../shared/types'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
+  type AgentStatusEntry,
+  type MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 
 type SortBy = 'name' | 'smart' | 'recent' | 'repo'
 
@@ -73,26 +79,31 @@ export function hasAnyLivePty(
 // precompute pay the scan N times even though the map is global. Entries are
 // keyed by the `tabId` prefix of their paneKey (paneKey format: `${tabId}:…`).
 export function buildExplicitEntriesByTabId(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined
+  agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined,
+  migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry> | undefined
 ): Map<string, AgentStatusEntry[]> {
   const byTab = new Map<string, AgentStatusEntry[]>()
-  if (!agentStatusByPaneKey) {
+  const entries = [
+    ...Object.values(agentStatusByPaneKey ?? {}),
+    ...Object.values(migrationUnsupportedByPtyId ?? {}).flatMap((entry) => {
+      const agentEntry = migrationUnsupportedToAgentStatusEntry(entry)
+      return agentEntry ? [agentEntry] : []
+    })
+  ]
+  if (entries.length === 0) {
     return byTab
   }
-  for (const entry of Object.values(agentStatusByPaneKey)) {
-    const colon = entry.paneKey.indexOf(':')
-    // Why: paneKey must be `${tabId}:${paneId}`. Skip malformed entries (no
-    // colon or leading colon) rather than bucketing them under an empty tabId,
-    // where they would never match a real tab and just waste memory.
-    if (colon <= 0) {
+  for (const entry of entries) {
+    const parsed = parsePaneKey(entry.paneKey)
+    // Why: malformed or legacy numeric paneKeys are not routable after replay.
+    if (!parsed) {
       continue
     }
-    const tabId = entry.paneKey.slice(0, colon)
-    const bucket = byTab.get(tabId)
+    const bucket = byTab.get(parsed.tabId)
     if (bucket) {
       bucket.push(entry)
     } else {
-      byTab.set(tabId, [entry])
+      byTab.set(parsed.tabId, [entry])
     }
   }
   return byTab
@@ -381,7 +392,8 @@ export function sortWorktreesSmart(
   repoMap: Map<string, Repo>,
   prCache: Record<string, PRCacheEntry> | null,
   agentStatusByPaneKey?: Record<string, AgentStatusEntry>,
-  ptyIdsByTabId?: Record<string, string[]> | null
+  ptyIdsByTabId?: Record<string, string[]> | null,
+  migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>
 ): Worktree[] {
   if (!hasAnyLivePty(tabsByWorktree, ptyIdsByTabId)) {
     // Cold start: use persisted sortOrder snapshot
@@ -404,7 +416,10 @@ export function sortWorktreesSmart(
   // Combined cost: O(E) index build + O(N × T) scoring + O(N log N) sort,
   // instead of the prior O(N × E × T + N log N).
   const now = Date.now()
-  const explicitByTabId = buildExplicitEntriesByTabId(agentStatusByPaneKey)
+  const explicitByTabId = buildExplicitEntriesByTabId(
+    agentStatusByPaneKey,
+    migrationUnsupportedByPtyId
+  )
   const precomputedScores = new Map<string, number>(
     worktrees.map((w) => [
       w.id,

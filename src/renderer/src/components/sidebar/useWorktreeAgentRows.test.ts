@@ -6,6 +6,11 @@ import {
 import type { TerminalTab } from '../../../../shared/types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import { buildWorktreeAgentRows } from './useWorktreeAgentRows'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
+
+const ORPHAN_PANE_KEY = makePaneKey('tab-orphan', '11111111-1111-4111-8111-111111111111')
+const PANE_KEY_1 = makePaneKey('tab-1', '22222222-2222-4222-8222-222222222222')
+const PANE_KEY_2 = makePaneKey('tab-2', '33333333-3333-4333-8333-333333333333')
 
 function makeTab(id: string): TerminalTab {
   return {
@@ -57,20 +62,20 @@ describe('buildWorktreeAgentRows', () => {
       // Why: useWorktreeAgentRows filters retained snapshots by worktreeId, not
       // current tab membership. This is the sidebar behavior that sleep cleanup
       // must counter by dropping worktree-scoped retained rows.
-      retained: [makeRetained('tab-orphan:0', 'wt-1', 1000)],
+      retained: [makeRetained(ORPHAN_PANE_KEY, 'wt-1', 1000)],
       now: 2000
     })
 
-    expect(rows.map((row) => row.paneKey)).toEqual(['tab-orphan:0'])
+    expect(rows.map((row) => row.paneKey)).toEqual([ORPHAN_PANE_KEY])
     expect(rows[0].state).toBe('done')
   })
 
   it('prefers a live row over a retained snapshot with the same paneKey', () => {
-    const liveEntry = makeEntry('tab-1:0', 2000)
+    const liveEntry = makeEntry(PANE_KEY_1, 2000)
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1')],
       entries: [liveEntry],
-      retained: [makeRetained('tab-1:0', 'wt-1', 1000)],
+      retained: [makeRetained(PANE_KEY_1, 'wt-1', 1000)],
       now: 3000
     })
 
@@ -90,15 +95,15 @@ describe('buildWorktreeAgentRows', () => {
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1'), makeTab('tab-2')],
       entries: [
-        makeEntry('tab-1:0', staleAt, { state: 'working', updatedAt: staleAt }),
-        makeEntry('tab-2:0', freshDoneAt, { state: 'done', updatedAt: freshDoneAt })
+        makeEntry(PANE_KEY_1, staleAt, { state: 'working', updatedAt: staleAt }),
+        makeEntry(PANE_KEY_2, freshDoneAt, { state: 'done', updatedAt: freshDoneAt })
       ],
       retained: [],
       now
     })
 
-    const working = rows.find((r) => r.paneKey === 'tab-1:0')
-    const done = rows.find((r) => r.paneKey === 'tab-2:0')
+    const working = rows.find((r) => r.paneKey === PANE_KEY_1)
+    const done = rows.find((r) => r.paneKey === PANE_KEY_2)
     expect(working?.state).toBe('idle')
     expect(done?.state).toBe('done')
   })

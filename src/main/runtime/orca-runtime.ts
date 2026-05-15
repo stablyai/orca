@@ -4542,7 +4542,7 @@ export class OrcaRuntimeService {
     })
 
     if (opts.activate !== false) {
-      this.notifier?.focusTerminal(reply.tabId, worktreeId, 'pane:1')
+      this.notifier?.focusTerminal(reply.tabId, worktreeId, null)
     }
     return await this.waitForMobileTerminalSurface(worktreeId, reply.tabId)
   }
@@ -4727,7 +4727,7 @@ export class OrcaRuntimeService {
       }
     }
     const { leaf } = this.getLiveLeafForHandle(handle)
-    this.notifier?.focusTerminal(leaf.tabId, leaf.worktreeId)
+    this.notifier?.focusTerminal(leaf.tabId, leaf.worktreeId, leaf.leafId)
     return { handle, tabId: leaf.tabId, worktreeId: leaf.worktreeId }
   }
 

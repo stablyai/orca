@@ -8,6 +8,7 @@
  * - closing panes works
  */
 
+import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import {
   discoverActivePtyId,
@@ -24,6 +25,7 @@ import {
 import {
   waitForSessionReady,
   waitForActiveWorktree,
+  getActiveTabId,
   getActiveWorktreeId,
   getActiveTabType,
   getWorktreeTabs,
@@ -33,6 +35,82 @@ import {
   ensureTerminalVisible
 } from './helpers/store'
 import { pressShortcut } from './helpers/shortcuts'
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+
+type PaneIdentitySnapshot = {
+  tabId: string
+  panes: {
+    numericPaneId: number
+    leafId: string
+    stablePaneId: string
+    datasetLeafId: string | null
+    ptyId: string | null
+  }[]
+  ptyIdsByLeafId: Record<string, string>
+}
+
+async function readPaneIdentitySnapshot(page: Page): Promise<PaneIdentitySnapshot | null> {
+  const tabId = await getActiveTabId(page)
+  if (!tabId) {
+    return null
+  }
+
+  return page.evaluate((tabId) => {
+    const manager = window.__paneManagers?.get(tabId)
+    const store = window.__store
+    if (!manager || !store) {
+      return null
+    }
+
+    return {
+      tabId,
+      panes: manager.getPanes().map((pane) => ({
+        numericPaneId: pane.id,
+        leafId: pane.leafId,
+        stablePaneId: pane.stablePaneId,
+        datasetLeafId: pane.container.dataset.leafId ?? null,
+        ptyId: pane.container.dataset.ptyId ?? null
+      })),
+      ptyIdsByLeafId: store.getState().terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}
+    }
+  }, tabId)
+}
+
+async function waitForPaneIdentitySnapshot(
+  page: Page,
+  paneCount: number
+): Promise<PaneIdentitySnapshot> {
+  await expect
+    .poll(
+      async () => {
+        const snapshot = await readPaneIdentitySnapshot(page)
+        return Boolean(
+          snapshot &&
+          snapshot.panes.length === paneCount &&
+          snapshot.panes.every(
+            (pane) =>
+              UUID_RE.test(pane.leafId) &&
+              pane.stablePaneId === pane.leafId &&
+              pane.datasetLeafId === pane.leafId &&
+              pane.ptyId !== null &&
+              snapshot.ptyIdsByLeafId[pane.leafId] === pane.ptyId
+          )
+        )
+      },
+      {
+        timeout: 15_000,
+        message: 'Split terminal panes did not settle with UUID leaf-keyed PTY bindings'
+      }
+    )
+    .toBe(true)
+
+  const snapshot = await readPaneIdentitySnapshot(page)
+  if (!snapshot) {
+    throw new Error('Pane identity snapshot disappeared after settling')
+  }
+  return snapshot
+}
 
 // Why: only the pointer-drag resize test needs a visible window (pointer
 // capture requires a real pointer id). Every other pane operation here is
@@ -91,6 +169,28 @@ test.describe('Terminal Panes', () => {
 
     const paneCountAfter = await countVisibleTerminalPanes(orcaPage)
     expect(paneCountAfter).toBe(paneCountBefore + 1)
+  })
+
+  test('split panes persist PTY bindings by stable UUID leaf id', async ({ orcaPage }) => {
+    const paneCountBefore = await countVisibleTerminalPanes(orcaPage)
+
+    await splitActiveTerminalPane(orcaPage, 'vertical')
+    await waitForPaneCount(orcaPage, paneCountBefore + 1)
+
+    const snapshot = await waitForPaneIdentitySnapshot(orcaPage, paneCountBefore + 1)
+    const leafIds = snapshot.panes.map((pane) => pane.leafId)
+    const ptyIds = snapshot.panes.map((pane) => pane.ptyId)
+
+    expect(new Set(leafIds).size).toBe(leafIds.length)
+    expect(new Set(ptyIds).size).toBe(ptyIds.length)
+    expect(Object.keys(snapshot.ptyIdsByLeafId).sort()).toEqual([...leafIds].sort())
+    expect(Object.keys(snapshot.ptyIdsByLeafId).every((leafId) => UUID_RE.test(leafId))).toBe(true)
+    expect(
+      snapshot.panes.some(
+        (pane) =>
+          String(pane.numericPaneId) === pane.leafId || `pane:${pane.numericPaneId}` === pane.leafId
+      )
+    ).toBe(false)
   })
 
   /**

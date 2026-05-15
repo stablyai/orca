@@ -32,6 +32,8 @@ import { setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
 import { destroyPersistentWebview } from '@/components/browser-pane/webview-registry'
 import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { detectLanguage } from '@/lib/language-detect'
+import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
 
 export { resolveZoomTarget } from './resolve-zoom-target'
 
@@ -381,7 +383,7 @@ export function useIpcEvents(): void {
         store.setActiveTab(tabId)
         store.revealWorktreeInSidebar(worktreeId)
         if (!focusRuntimeTerminalSurface(tabId, leafId)) {
-          focusTerminalTabSurface(tabId)
+          focusTerminalTabSurface(tabId, leafId)
         }
       })
     )
@@ -1030,6 +1032,22 @@ export function useIpcEvents(): void {
           for (const entry of entries) {
             applyAgentStatus(entry)
           }
+          const getMigrationUnsupportedSnapshot =
+            window.api.agentStatus.getMigrationUnsupportedSnapshot
+          if (typeof getMigrationUnsupportedSnapshot !== 'function') {
+            return
+          }
+          void getMigrationUnsupportedSnapshot().then((unsupportedEntries) => {
+            const unsupportedStore = useAppStore.getState()
+            if (!unsupportedStore.workspaceSessionReady) {
+              return
+            }
+            for (const entry of unsupportedEntries) {
+              if (entry.paneKey && resolvePaneKey(unsupportedStore, entry.paneKey).exists) {
+                unsupportedStore.setMigrationUnsupportedPty(entry)
+              }
+            }
+          })
         })
         .catch((err) => {
           // Why: keep snapshotRequestedForReadyWindow latched on failure. The
@@ -1048,6 +1066,27 @@ export function useIpcEvents(): void {
         applyAgentStatus(data)
       })
     )
+    const unsubscribeMigrationUnsupported = window.api.agentStatus.onMigrationUnsupported?.(
+      (entry) => {
+        const store = useAppStore.getState()
+        if (!store.workspaceSessionReady) {
+          return
+        }
+        if (entry.paneKey && resolvePaneKey(store, entry.paneKey).exists) {
+          store.setMigrationUnsupportedPty(entry)
+        }
+      }
+    )
+    if (unsubscribeMigrationUnsupported) {
+      unsubs.push(unsubscribeMigrationUnsupported)
+    }
+    const unsubscribeMigrationUnsupportedClear =
+      window.api.agentStatus.onMigrationUnsupportedClear?.(({ ptyId }) => {
+        useAppStore.getState().clearMigrationUnsupportedPty(ptyId)
+      })
+    if (unsubscribeMigrationUnsupportedClear) {
+      unsubs.push(unsubscribeMigrationUnsupportedClear)
+    }
 
     // Why: the main hook server is the durable source of truth. Pull a
     // snapshot only after workspace tabs are ready, so early startup pushes
@@ -1082,7 +1121,7 @@ export function useIpcEvents(): void {
   }, [])
 }
 
-/** Resolve a paneKey (tabId:paneId) to both a liveness check and the current
+/** Resolve a paneKey (tabId:leafId) to both a liveness check and the current
  *  terminal title, in a single walk of tabsByWorktree. Used for agent type
  *  inference when the CLI payload omits agentType, plus to drop status updates
  *  targeted at panes whose tabs have already been torn down.
@@ -1093,16 +1132,19 @@ function resolvePaneKey(
   store: ReturnType<typeof useAppStore.getState>,
   paneKey: string
 ): { exists: boolean; title: string | undefined } {
-  const [tabId, paneIdRaw] = paneKey.split(':')
-  if (!tabId) {
+  const parsed = parsePaneKey(paneKey)
+  if (!parsed) {
     return { exists: false, title: undefined }
   }
-  // Why: split panes track per-pane titles in runtimePaneTitlesByTabId; prefer
-  // the pane's own title over the tab-level (last-winning) title so agent type
-  // inference attributes status to the correct pane.
-  const paneTitles = store.runtimePaneTitlesByTabId?.[tabId]
-  const paneIdNum = paneIdRaw !== undefined ? Number(paneIdRaw) : NaN
-  const rawPaneTitle = paneTitles && !Number.isNaN(paneIdNum) ? paneTitles[paneIdNum] : undefined
+  const { tabId, leafId } = parsed
+  const layout = store.terminalLayoutsByTabId?.[tabId]
+  const leafExists = collectLeafIdsInOrder(layout?.root).includes(leafId)
+  if (!leafExists) {
+    return { exists: false, title: undefined }
+  }
+  // Why: replay can remint numeric pane ids, so status title recovery must use
+  // persisted leaf-keyed titles when crossing from hook state into tab state.
+  const rawPaneTitle = layout?.titlesByLeafId?.[leafId]
   // Why: treat an empty-string paneTitle as "no title" so the tab-level
   // fallback still fires. `paneTitle ?? tabTitle` alone would short-circuit on
   // '' and also erase any previously-cached terminalTitle in the store

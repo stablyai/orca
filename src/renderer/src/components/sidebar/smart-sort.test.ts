@@ -10,8 +10,10 @@ import {
   type SmartSortOverride
 } from './smart-sort'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 const NOW = new Date('2026-03-27T12:00:00.000Z').getTime()
+const PANE_KEY = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
 
 const repoMap = new Map<string, Repo>([
   [
@@ -209,8 +211,8 @@ describe('computeSmartScore', () => {
       [worktree.id]: [makeTab({ worktreeId: worktree.id, title: 'codex permission needed' })]
     }
     const score = computeSmartScore(worktree, tabsByWorktree, repoMap, null, NOW, {
-      'tab-1:1': makeAgentStatusEntry({
-        paneKey: 'tab-1:1',
+      [PANE_KEY]: makeAgentStatusEntry({
+        paneKey: PANE_KEY,
         state: 'done',
         updatedAt: NOW - 45 * 60_000
       })
@@ -227,8 +229,8 @@ describe('computeSmartScore', () => {
 
     expect(
       computeSmartScore(worktree, tabsByWorktree, repoMap, null, NOW, {
-        'tab-1:1': makeAgentStatusEntry({
-          paneKey: 'tab-1:1',
+        [PANE_KEY]: makeAgentStatusEntry({
+          paneKey: PANE_KEY,
           state: 'done',
           updatedAt: NOW - 60_000
         })

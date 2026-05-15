@@ -186,7 +186,8 @@ export function getVisibleWorktreeIds(): string[] {
       repoMap,
       state.prCache,
       state.agentStatusByPaneKey,
-      state.ptyIdsByTabId
+      state.ptyIdsByTabId,
+      state.migrationUnsupportedByPtyId
     ).map((w) => w.id)
   } else {
     const sorted = [...allWorktrees].sort(

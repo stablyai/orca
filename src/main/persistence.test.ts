@@ -6,9 +6,14 @@ import { writeFileSync, readFileSync, rmSync, mkdtempSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import type { Repo } from '../shared/types'
+import { isTerminalLeafId } from '../shared/stable-pane-id'
 
 // Shared mutable state so the electron mock can reference a per-test directory
 const testState = { dir: '' }
+const TEST_LEAF_1 = '11111111-1111-4111-8111-111111111111'
+const TEST_LEAF_2 = '22222222-2222-4222-8222-222222222222'
+const TEST_LEAF_LIVE = '33333333-3333-4333-8333-333333333333'
+const TEST_LEAF_EXPIRED = '44444444-4444-4444-8444-444444444444'
 
 vi.mock('electron', () => ({
   app: {
@@ -880,16 +885,121 @@ describe('Store', () => {
     expect(store.getWorkspaceSession()).toEqual(session)
   })
 
-  it('does not restore cleared SSH bindings after a lease expired', async () => {
-    const store = await createStore()
-    store.upsertSshRemotePtyLease({
-      targetId: 'ssh-1',
-      ptyId: 'remote-pty',
-      worktreeId: 'wt1',
-      tabId: 'tab1',
-      leafId: 'leaf1',
-      state: 'expired'
+  it('remaps legacy SSH lease leaf ids when loading legacy workspace layouts', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {
+        activeRepoId: 'r1',
+        activeWorktreeId: 'wt1',
+        activeTabId: 'tab1',
+        tabsByWorktree: {
+          wt1: [
+            {
+              id: 'tab1',
+              worktreeId: 'wt1',
+              title: 'Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1,
+              ptyId: 'remote-pty'
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            root: { type: 'leaf', leafId: 'pane:1' },
+            activeLeafId: 'pane:1',
+            expandedLeafId: null,
+            ptyIdsByLeafId: { 'pane:1': 'remote-pty' }
+          }
+        }
+      },
+      sshRemotePtyLeases: [
+        {
+          targetId: 'ssh-1',
+          ptyId: 'remote-pty',
+          worktreeId: 'wt1',
+          tabId: 'tab1',
+          leafId: 'pane:1',
+          state: 'detached',
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
     })
+
+    const store = await createStore()
+    const layout = store.getWorkspaceSession().terminalLayoutsByTabId.tab1
+    const leafId = layout.root?.type === 'leaf' ? layout.root.leafId : null
+    if (leafId === null) {
+      throw new Error('Expected remapped leaf id')
+    }
+    expect(isTerminalLeafId(leafId)).toBe(true)
+    expect(layout.ptyIdsByLeafId).toEqual({ [leafId]: 'remote-pty' })
+    expect(store.getSshRemotePtyLeases('ssh-1')[0].leafId).toBe(leafId)
+  })
+
+  it('remaps legacy SSH lease leaf ids by PTY when the layout is already normalized', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {
+        activeRepoId: 'r1',
+        activeWorktreeId: 'wt1',
+        activeTabId: 'tab1',
+        tabsByWorktree: {
+          wt1: [
+            {
+              id: 'tab1',
+              worktreeId: 'wt1',
+              title: 'Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1,
+              ptyId: 'remote-pty'
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            root: { type: 'leaf', leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'remote-pty' }
+          }
+        }
+      },
+      sshRemotePtyLeases: [
+        {
+          targetId: 'ssh-1',
+          ptyId: 'remote-pty',
+          worktreeId: 'wt1',
+          tabId: 'tab1',
+          leafId: 'pane:1',
+          state: 'detached',
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+    })
+
+    const store = await createStore()
+    expect(store.getSshRemotePtyLeases('ssh-1')[0].leafId).toBe(TEST_LEAF_1)
+  })
+
+  it('normalizes stale legacy session writes to prior UUID leaves before preserving bindings', async () => {
+    const store = await createStore()
     store.setWorkspaceSession({
       activeRepoId: 'r1',
       activeWorktreeId: 'wt1',
@@ -910,10 +1020,10 @@ describe('Store', () => {
       },
       terminalLayoutsByTabId: {
         tab1: {
-          root: { type: 'leaf', leafId: 'leaf1' },
-          activeLeafId: 'leaf1',
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
           expandedLeafId: null,
-          ptyIdsByLeafId: { leaf1: 'remote-pty' }
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'remote-pty' }
         }
       }
     })
@@ -938,8 +1048,402 @@ describe('Store', () => {
       },
       terminalLayoutsByTabId: {
         tab1: {
-          root: { type: 'leaf', leafId: 'leaf1' },
-          activeLeafId: 'leaf1',
+          root: { type: 'leaf', leafId: 'pane:1' },
+          activeLeafId: 'pane:1',
+          expandedLeafId: null,
+          ptyIdsByLeafId: {}
+        }
+      }
+    })
+
+    const session = store.getWorkspaceSession()
+    const layout = session.terminalLayoutsByTabId.tab1
+    expect(layout.root).toEqual({ type: 'leaf', leafId: TEST_LEAF_1 })
+    expect(layout.ptyIdsByLeafId).toEqual({ [TEST_LEAF_1]: 'remote-pty' })
+    expect(session.tabsByWorktree.wt1[0].ptyId).toBe('remote-pty')
+  })
+
+  it('promotes an empty tab layout to a durable UUID root when persisting the first PTY binding', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: null
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: null,
+          activeLeafId: null,
+          expandedLeafId: null
+        }
+      }
+    })
+
+    store.persistPtyBinding({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      leafId: TEST_LEAF_1,
+      ptyId: 'daemon-pty'
+    })
+
+    const session = store.getWorkspaceSession()
+    expect(session.tabsByWorktree.wt1[0].ptyId).toBe('daemon-pty')
+    expect(session.terminalLayoutsByTabId.tab1).toEqual({
+      root: { type: 'leaf', leafId: TEST_LEAF_1 },
+      activeLeafId: TEST_LEAF_1,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [TEST_LEAF_1]: 'daemon-pty' }
+    })
+  })
+
+  it('adds a missing split leaf to the durable root when a new pane spawns before layout debounce', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: 'pty-1'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-1' }
+        }
+      }
+    })
+
+    store.persistPtyBinding({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      leafId: TEST_LEAF_2,
+      ptyId: 'pty-2'
+    })
+
+    const layout = store.getWorkspaceSession().terminalLayoutsByTabId.tab1
+    expect(layout.root).toEqual({
+      type: 'split',
+      direction: 'vertical',
+      first: { type: 'leaf', leafId: TEST_LEAF_1 },
+      second: { type: 'leaf', leafId: TEST_LEAF_2 }
+    })
+    expect(layout.activeLeafId).toBe(TEST_LEAF_2)
+    expect(layout.ptyIdsByLeafId).toEqual({
+      [TEST_LEAF_1]: 'pty-1',
+      [TEST_LEAF_2]: 'pty-2'
+    })
+
+    const reloaded = await createStore()
+    expect(reloaded.getWorkspaceSession().terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({
+      [TEST_LEAF_1]: 'pty-1',
+      [TEST_LEAF_2]: 'pty-2'
+    })
+  })
+
+  it('preserves a sync-persisted UUID root when a stale empty layout write arrives', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: null
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: null,
+          activeLeafId: null,
+          expandedLeafId: null
+        }
+      }
+    })
+
+    store.persistPtyBinding({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      leafId: TEST_LEAF_1,
+      ptyId: 'daemon-pty'
+    })
+
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: null
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: null,
+          activeLeafId: null,
+          expandedLeafId: null,
+          ptyIdsByLeafId: {}
+        }
+      }
+    })
+
+    const session = store.getWorkspaceSession()
+    expect(session.tabsByWorktree.wt1[0].ptyId).toBe('daemon-pty')
+    expect(session.terminalLayoutsByTabId.tab1).toEqual({
+      root: { type: 'leaf', leafId: TEST_LEAF_1 },
+      activeLeafId: TEST_LEAF_1,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [TEST_LEAF_1]: 'daemon-pty' }
+    })
+  })
+
+  it('drops legacy leaf-keyed records from mixed-version writes before binding preservation', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: 'daemon-pty'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'daemon-pty' },
+          buffersByLeafId: { [TEST_LEAF_1]: 'Current buffer' },
+          titlesByLeafId: { [TEST_LEAF_1]: 'Current' }
+        }
+      }
+    })
+
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: null
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: 'pane:1',
+          expandedLeafId: 'pane:1',
+          ptyIdsByLeafId: { 'pane:1': 'stale-pty' },
+          buffersByLeafId: { 'pane:1': 'Stale buffer' },
+          titlesByLeafId: { 'pane:1': 'Stale' }
+        }
+      }
+    })
+
+    const session = store.getWorkspaceSession()
+    const layout = session.terminalLayoutsByTabId.tab1
+    expect(layout.activeLeafId).toBe(TEST_LEAF_1)
+    expect(layout.expandedLeafId).toBeNull()
+    expect(layout.ptyIdsByLeafId).toEqual({ [TEST_LEAF_1]: 'daemon-pty' })
+    expect(layout.buffersByLeafId).toEqual({ [TEST_LEAF_1]: 'Current buffer' })
+    expect(layout.titlesByLeafId).toEqual({ [TEST_LEAF_1]: 'Current' })
+    expect(session.tabsByWorktree.wt1[0].ptyId).toBe('daemon-pty')
+  })
+
+  it('does not reuse prior UUID leaves by position when legacy leaf counts changed', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: null
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: TEST_LEAF_1 },
+            second: { type: 'leaf', leafId: TEST_LEAF_2 },
+            ratio: 0.5
+          },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null
+        }
+      }
+    })
+
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: null
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: 'pane:1' },
+          activeLeafId: 'pane:1',
+          expandedLeafId: null
+        }
+      }
+    })
+
+    const root = store.getWorkspaceSession().terminalLayoutsByTabId.tab1.root
+    const leafId = root?.type === 'leaf' ? root.leafId : null
+    if (leafId === null) {
+      throw new Error('Expected normalized leaf')
+    }
+    expect(isTerminalLeafId(leafId)).toBe(true)
+    expect(leafId).not.toBe(TEST_LEAF_1)
+    expect(leafId).not.toBe(TEST_LEAF_2)
+  })
+
+  it('does not restore cleared SSH bindings after a lease expired', async () => {
+    const store = await createStore()
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty',
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      leafId: TEST_LEAF_1,
+      state: 'expired'
+    })
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: 'remote-pty'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'remote-pty' }
+        }
+      }
+    })
+
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: null
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
           expandedLeafId: null,
           ptyIdsByLeafId: {}
         }
@@ -958,7 +1462,7 @@ describe('Store', () => {
       ptyId: 'remote-pty',
       worktreeId: 'wt1',
       tabId: 'tab-expired',
-      leafId: 'leaf-expired',
+      leafId: TEST_LEAF_EXPIRED,
       state: 'expired'
     })
     store.setWorkspaceSession({
@@ -981,10 +1485,10 @@ describe('Store', () => {
       },
       terminalLayoutsByTabId: {
         'tab-live': {
-          root: { type: 'leaf', leafId: 'leaf-live' },
-          activeLeafId: 'leaf-live',
+          root: { type: 'leaf', leafId: TEST_LEAF_LIVE },
+          activeLeafId: TEST_LEAF_LIVE,
           expandedLeafId: null,
-          ptyIdsByLeafId: { 'leaf-live': 'remote-pty' }
+          ptyIdsByLeafId: { [TEST_LEAF_LIVE]: 'remote-pty' }
         }
       }
     })
@@ -1009,8 +1513,8 @@ describe('Store', () => {
       },
       terminalLayoutsByTabId: {
         'tab-live': {
-          root: { type: 'leaf', leafId: 'leaf-live' },
-          activeLeafId: 'leaf-live',
+          root: { type: 'leaf', leafId: TEST_LEAF_LIVE },
+          activeLeafId: TEST_LEAF_LIVE,
           expandedLeafId: null,
           ptyIdsByLeafId: {}
         }
@@ -1020,7 +1524,7 @@ describe('Store', () => {
     const session = store.getWorkspaceSession()
     expect(session.tabsByWorktree.wt1[0].ptyId).toBe('remote-pty')
     expect(session.terminalLayoutsByTabId['tab-live'].ptyIdsByLeafId).toEqual({
-      'leaf-live': 'remote-pty'
+      [TEST_LEAF_LIVE]: 'remote-pty'
     })
   })
 
@@ -1032,7 +1536,7 @@ describe('Store', () => {
       ptyId: 'remote-pty',
       worktreeId: 'repo-live::/wt',
       tabId: 'tab-live',
-      leafId: 'leaf-live',
+      leafId: TEST_LEAF_LIVE,
       state: 'expired'
     })
     store.upsertSshRemotePtyLease({
@@ -1040,7 +1544,7 @@ describe('Store', () => {
       ptyId: 'remote-pty',
       worktreeId: 'repo-live::/wt',
       tabId: 'tab-live',
-      leafId: 'leaf-live',
+      leafId: TEST_LEAF_LIVE,
       state: 'detached'
     })
     store.setWorkspaceSession({
@@ -1063,10 +1567,10 @@ describe('Store', () => {
       },
       terminalLayoutsByTabId: {
         'tab-live': {
-          root: { type: 'leaf', leafId: 'leaf-live' },
-          activeLeafId: 'leaf-live',
+          root: { type: 'leaf', leafId: TEST_LEAF_LIVE },
+          activeLeafId: TEST_LEAF_LIVE,
           expandedLeafId: null,
-          ptyIdsByLeafId: { 'leaf-live': 'remote-pty' }
+          ptyIdsByLeafId: { [TEST_LEAF_LIVE]: 'remote-pty' }
         }
       }
     })
@@ -1091,8 +1595,8 @@ describe('Store', () => {
       },
       terminalLayoutsByTabId: {
         'tab-live': {
-          root: { type: 'leaf', leafId: 'leaf-live' },
-          activeLeafId: 'leaf-live',
+          root: { type: 'leaf', leafId: TEST_LEAF_LIVE },
+          activeLeafId: TEST_LEAF_LIVE,
           expandedLeafId: null,
           ptyIdsByLeafId: {}
         }
@@ -1102,7 +1606,7 @@ describe('Store', () => {
     const session = store.getWorkspaceSession()
     expect(session.tabsByWorktree['repo-live::/wt'][0].ptyId).toBe('remote-pty')
     expect(session.terminalLayoutsByTabId['tab-live'].ptyIdsByLeafId).toEqual({
-      'leaf-live': 'remote-pty'
+      [TEST_LEAF_LIVE]: 'remote-pty'
     })
   })
 
@@ -1133,10 +1637,10 @@ describe('Store', () => {
       },
       terminalLayoutsByTabId: {
         tab1: {
-          root: { type: 'leaf', leafId: 'leaf1' },
-          activeLeafId: 'leaf1',
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
           expandedLeafId: null,
-          ptyIdsByLeafId: { leaf1: 'remote-pty' }
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'remote-pty' }
         }
       }
     })
@@ -1161,8 +1665,8 @@ describe('Store', () => {
       },
       terminalLayoutsByTabId: {
         tab1: {
-          root: { type: 'leaf', leafId: 'leaf1' },
-          activeLeafId: 'leaf1',
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
           expandedLeafId: null,
           ptyIdsByLeafId: {}
         }
@@ -1171,7 +1675,9 @@ describe('Store', () => {
 
     const session = store.getWorkspaceSession()
     expect(session.tabsByWorktree.wt1[0].ptyId).toBe('remote-pty')
-    expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({ leaf1: 'remote-pty' })
+    expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({
+      [TEST_LEAF_1]: 'remote-pty'
+    })
   })
 
   it('does not treat layout-level leases missing worktree context as contextual matches', async () => {
@@ -1180,7 +1686,7 @@ describe('Store', () => {
       targetId: 'ssh-1',
       ptyId: 'remote-pty',
       tabId: 'tab1',
-      leafId: 'leaf1',
+      leafId: TEST_LEAF_1,
       state: 'expired'
     })
     store.setWorkspaceSession({
@@ -1203,10 +1709,10 @@ describe('Store', () => {
       },
       terminalLayoutsByTabId: {
         tab1: {
-          root: { type: 'leaf', leafId: 'leaf1' },
-          activeLeafId: 'leaf1',
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
           expandedLeafId: null,
-          ptyIdsByLeafId: { leaf1: 'remote-pty' }
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'remote-pty' }
         }
       }
     })
@@ -1231,8 +1737,8 @@ describe('Store', () => {
       },
       terminalLayoutsByTabId: {
         tab1: {
-          root: { type: 'leaf', leafId: 'leaf1' },
-          activeLeafId: 'leaf1',
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
           expandedLeafId: null,
           ptyIdsByLeafId: {}
         }
@@ -1240,7 +1746,7 @@ describe('Store', () => {
     })
 
     expect(store.getWorkspaceSession().terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({
-      leaf1: 'remote-pty'
+      [TEST_LEAF_1]: 'remote-pty'
     })
   })
 
@@ -1251,7 +1757,7 @@ describe('Store', () => {
       ptyId: 'remote-pty-1',
       worktreeId: 'wt1',
       tabId: 'tab1',
-      leafId: 'leaf1',
+      leafId: TEST_LEAF_1,
       state: 'detached'
     })
     store.upsertSshRemotePtyLease({
@@ -1259,7 +1765,7 @@ describe('Store', () => {
       ptyId: 'remote-pty-2',
       worktreeId: 'wt1',
       tabId: 'tab1',
-      leafId: 'leaf2',
+      leafId: TEST_LEAF_2,
       state: 'detached'
     })
     store.setWorkspaceSession({
@@ -1285,13 +1791,16 @@ describe('Store', () => {
           root: {
             type: 'split',
             direction: 'horizontal',
-            first: { type: 'leaf', leafId: 'leaf1' },
-            second: { type: 'leaf', leafId: 'leaf2' },
+            first: { type: 'leaf', leafId: TEST_LEAF_1 },
+            second: { type: 'leaf', leafId: TEST_LEAF_2 },
             ratio: 0.5
           },
-          activeLeafId: 'leaf2',
+          activeLeafId: TEST_LEAF_2,
           expandedLeafId: null,
-          ptyIdsByLeafId: { leaf1: 'remote-pty-1', leaf2: 'remote-pty-2' }
+          ptyIdsByLeafId: {
+            [TEST_LEAF_1]: 'remote-pty-1',
+            [TEST_LEAF_2]: 'remote-pty-2'
+          }
         }
       }
     })
@@ -1319,20 +1828,20 @@ describe('Store', () => {
           root: {
             type: 'split',
             direction: 'horizontal',
-            first: { type: 'leaf', leafId: 'leaf1' },
-            second: { type: 'leaf', leafId: 'leaf2' },
+            first: { type: 'leaf', leafId: TEST_LEAF_1 },
+            second: { type: 'leaf', leafId: TEST_LEAF_2 },
             ratio: 0.5
           },
-          activeLeafId: 'leaf1',
+          activeLeafId: TEST_LEAF_1,
           expandedLeafId: null,
-          ptyIdsByLeafId: { leaf1: 'remote-pty-1' }
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'remote-pty-1' }
         }
       }
     })
 
     expect(store.getWorkspaceSession().terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({
-      leaf1: 'remote-pty-1',
-      leaf2: 'remote-pty-2'
+      [TEST_LEAF_1]: 'remote-pty-1',
+      [TEST_LEAF_2]: 'remote-pty-2'
     })
   })
 
@@ -1342,14 +1851,14 @@ describe('Store', () => {
       targetId: 'ssh-1',
       ptyId: 'remote-pty-1',
       tabId: 'tab1',
-      leafId: 'leaf1',
+      leafId: TEST_LEAF_1,
       state: 'detached'
     })
     store.upsertSshRemotePtyLease({
       targetId: 'ssh-1',
       ptyId: 'remote-pty-2',
       tabId: 'tab1',
-      leafId: 'leaf2',
+      leafId: TEST_LEAF_2,
       state: 'detached'
     })
     store.setWorkspaceSession({
@@ -1375,13 +1884,16 @@ describe('Store', () => {
           root: {
             type: 'split',
             direction: 'horizontal',
-            first: { type: 'leaf', leafId: 'leaf1' },
-            second: { type: 'leaf', leafId: 'leaf2' },
+            first: { type: 'leaf', leafId: TEST_LEAF_1 },
+            second: { type: 'leaf', leafId: TEST_LEAF_2 },
             ratio: 0.5
           },
-          activeLeafId: 'leaf2',
+          activeLeafId: TEST_LEAF_2,
           expandedLeafId: null,
-          ptyIdsByLeafId: { leaf1: 'remote-pty-1', leaf2: 'remote-pty-2' }
+          ptyIdsByLeafId: {
+            [TEST_LEAF_1]: 'remote-pty-1',
+            [TEST_LEAF_2]: 'remote-pty-2'
+          }
         }
       }
     })
@@ -1406,16 +1918,16 @@ describe('Store', () => {
       },
       terminalLayoutsByTabId: {
         tab1: {
-          root: { type: 'leaf', leafId: 'leaf1' },
-          activeLeafId: 'leaf1',
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
           expandedLeafId: null,
-          ptyIdsByLeafId: { leaf1: 'remote-pty-1' }
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'remote-pty-1' }
         }
       }
     })
 
     expect(store.getWorkspaceSession().terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({
-      leaf1: 'remote-pty-1'
+      [TEST_LEAF_1]: 'remote-pty-1'
     })
   })
 
@@ -1444,13 +1956,16 @@ describe('Store', () => {
           root: {
             type: 'split',
             direction: 'horizontal',
-            first: { type: 'leaf', leafId: 'leaf1' },
-            second: { type: 'leaf', leafId: 'leaf2' },
+            first: { type: 'leaf', leafId: TEST_LEAF_1 },
+            second: { type: 'leaf', leafId: TEST_LEAF_2 },
             ratio: 0.5
           },
-          activeLeafId: 'leaf2',
+          activeLeafId: TEST_LEAF_2,
           expandedLeafId: null,
-          ptyIdsByLeafId: { leaf1: 'local-pty-1', leaf2: 'local-pty-2' }
+          ptyIdsByLeafId: {
+            [TEST_LEAF_1]: 'local-pty-1',
+            [TEST_LEAF_2]: 'local-pty-2'
+          }
         }
       }
     })
@@ -1478,19 +1993,19 @@ describe('Store', () => {
           root: {
             type: 'split',
             direction: 'horizontal',
-            first: { type: 'leaf', leafId: 'leaf1' },
-            second: { type: 'leaf', leafId: 'leaf2' },
+            first: { type: 'leaf', leafId: TEST_LEAF_1 },
+            second: { type: 'leaf', leafId: TEST_LEAF_2 },
             ratio: 0.5
           },
-          activeLeafId: 'leaf1',
+          activeLeafId: TEST_LEAF_1,
           expandedLeafId: null,
-          ptyIdsByLeafId: { leaf1: 'local-pty-1' }
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'local-pty-1' }
         }
       }
     })
 
     expect(store.getWorkspaceSession().terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({
-      leaf1: 'local-pty-1'
+      [TEST_LEAF_1]: 'local-pty-1'
     })
   })
 
@@ -1501,7 +2016,7 @@ describe('Store', () => {
       ptyId: 'remote-pty',
       worktreeId: 'wt1',
       tabId: 'tab1',
-      leafId: 'leaf1',
+      leafId: TEST_LEAF_1,
       state: 'detached'
     })
     store.setWorkspaceSession({
@@ -1524,10 +2039,10 @@ describe('Store', () => {
       },
       terminalLayoutsByTabId: {
         tab1: {
-          root: { type: 'leaf', leafId: 'leaf1' },
-          activeLeafId: 'leaf1',
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
           expandedLeafId: null,
-          ptyIdsByLeafId: { leaf1: 'remote-pty' }
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'remote-pty' }
         }
       }
     })
@@ -1567,10 +2082,10 @@ describe('Store', () => {
       },
       terminalLayoutsByTabId: {
         tab1: {
-          root: { type: 'leaf', leafId: 'leaf1' },
-          activeLeafId: 'leaf1',
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
           expandedLeafId: null,
-          ptyIdsByLeafId: { leaf1: 'remote-pty' }
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'remote-pty' }
         }
       }
     })

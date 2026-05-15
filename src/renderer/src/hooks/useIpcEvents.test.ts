@@ -2,6 +2,14 @@
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveZoomTarget } from './useIpcEvents'
+import { makePaneKey } from '../../../shared/stable-pane-id'
+
+const FUTURE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
+const STALE_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+const ORPHAN_LEAF_ID = '33333333-3333-4333-8333-333333333333'
+const FUTURE_PANE_KEY = makePaneKey('tab-future', FUTURE_LEAF_ID)
+const STALE_PANE_KEY = makePaneKey('tab-future', STALE_LEAF_ID)
+const ORPHAN_PANE_KEY = makePaneKey('tab-orphan', ORPHAN_LEAF_ID)
 
 function makeTarget(args: { hasXtermClass?: boolean; editorClosest?: boolean }): {
   classList: { contains: (token: string) => boolean }
@@ -1646,6 +1654,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       removeSshCredentialRequest: vi.fn(),
       clearTabPtyId: vi.fn(),
       runtimePaneTitlesByTabId: {},
+      terminalLayoutsByTabId: {},
       tabsByWorktree: {},
       workspaceSessionReady: false,
       settings: { terminalFontSize: 13 },
@@ -1791,7 +1800,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const getSnapshot = vi.fn(() =>
       Promise.resolve([
         {
-          paneKey: 'tab-future:0',
+          paneKey: FUTURE_PANE_KEY,
           state: 'working' as const,
           prompt: 'p',
           agentType: 'claude',
@@ -1846,7 +1855,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
     // Fire an event for an unknown paneKey while not ready — must NOT call setAgentStatus.
     onSetListenerRef.current({
-      paneKey: 'tab-future:0',
+      paneKey: FUTURE_PANE_KEY,
       state: 'working',
       prompt: 'p',
       agentType: 'claude',
@@ -1860,6 +1869,13 @@ describe('useIpcEvents agent status snapshot integration', () => {
     storeState.tabsByWorktree = {
       'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Future Tab' }]
     }
+    storeState.terminalLayoutsByTabId = {
+      'tab-future': {
+        root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+        activeLeafId: FUTURE_LEAF_ID,
+        expandedLeafId: null
+      }
+    }
     if (typeof subscribeListenerRef.current !== 'function') {
       throw new Error('Expected useAppStore.subscribe listener to be registered')
     }
@@ -1868,7 +1884,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
     expect(setAgentStatus).toHaveBeenCalledTimes(1)
     expect(setAgentStatus).toHaveBeenCalledWith(
-      'tab-future:0',
+      FUTURE_PANE_KEY,
       expect.objectContaining({ state: 'working', prompt: 'p', agentType: 'claude' }),
       'Future Tab',
       { updatedAt: 1_700_000_000_000, stateStartedAt: 1_699_999_999_000 }
@@ -1921,7 +1937,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const getSnapshot = vi.fn(() =>
       Promise.resolve([
         {
-          paneKey: 'tab-orphan:0',
+          paneKey: ORPHAN_PANE_KEY,
           state: 'done' as const,
           prompt: 'p',
           agentType: 'claude',
@@ -1935,6 +1951,68 @@ describe('useIpcEvents agent status snapshot integration', () => {
       setAgentStatus,
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-other', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Other' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-orphan': {
+          root: { type: 'leaf', leafId: ORPHAN_LEAF_ID },
+          activeLeafId: ORPHAN_LEAF_ID,
+          expandedLeafId: null
+        }
+      },
+      workspaceSessionReady: true
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        getSnapshot,
+        onSet: () => () => {}
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(setAgentStatus).not.toHaveBeenCalled()
+  })
+
+  it('silently discards valid paneKeys whose leaf is not in the current layout', async () => {
+    const setAgentStatus = vi.fn()
+    const getSnapshot = vi.fn(() =>
+      Promise.resolve([
+        {
+          paneKey: STALE_PANE_KEY,
+          state: 'done' as const,
+          prompt: 'p',
+          agentType: 'claude',
+          receivedAt: 1_700_000_000_000,
+          stateStartedAt: 1_699_999_999_000
+        }
+      ])
+    )
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Future Tab' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
       },
       workspaceSessionReady: true
     })

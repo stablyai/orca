@@ -123,7 +123,10 @@ import type { ElectronAPI } from '@electron-toolkit/preload'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { E2EConfig } from '../shared/e2e-config'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
-import type { AgentStatusIpcPayload } from '../shared/agent-status-types'
+import type {
+  AgentStatusIpcPayload,
+  MigrationUnsupportedPtyEntry
+} from '../shared/agent-status-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
 import type {
   RuntimeMobileMarkdownRequest,
@@ -1279,6 +1282,11 @@ export type PreloadApi = {
     onSet: (callback: (data: AgentStatusIpcPayload) => void) => () => void
     /** Return the current main-process hook cache after renderer hydration. */
     getSnapshot: () => Promise<AgentStatusIpcPayload[]>
+    /** Listen for PTYs that still use a legacy numeric pane key but have
+     *  registry-backed UUID pane proof. */
+    onMigrationUnsupported: (callback: (entry: MigrationUnsupportedPtyEntry) => void) => () => void
+    onMigrationUnsupportedClear: (callback: (data: { ptyId: string }) => void) => () => void
+    getMigrationUnsupportedSnapshot: () => Promise<MigrationUnsupportedPtyEntry[]>
     /** Drop a paneKey from the main-process hook cache and the on-disk
      *  last-status file. Fire-and-forget. */
     drop: (paneKey: string) => void
