@@ -165,6 +165,7 @@ const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   'qwen-code': true,
   rovo: true,
   hermes: true,
+  openclaw: true,
   copilot: true
 }
 

@@ -100,6 +100,8 @@ import type {
   AutomationCreateInput,
   AutomationDispatchRequest,
   AutomationDispatchResult,
+  ExternalAutomationActionInput,
+  ExternalAutomationManager,
   AutomationRun,
   AutomationUpdateInput
 } from '../shared/automations-types'
@@ -2596,6 +2598,10 @@ const api = {
     list: (): Promise<Automation[]> => ipcRenderer.invoke('automations:list'),
     listRuns: (args?: { automationId?: string }): Promise<AutomationRun[]> =>
       ipcRenderer.invoke('automations:listRuns', args),
+    listExternalManagers: (): Promise<ExternalAutomationManager[]> =>
+      ipcRenderer.invoke('automations:listExternalManagers'),
+    runExternalAction: (input: ExternalAutomationActionInput): Promise<void> =>
+      ipcRenderer.invoke('automations:runExternalAction', input),
     create: (input: AutomationCreateInput): Promise<Automation> =>
       ipcRenderer.invoke('automations:create', input),
     update: (args: { id: string; updates: AutomationUpdateInput }): Promise<Automation> =>

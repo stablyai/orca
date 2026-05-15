@@ -182,6 +182,13 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
     cmd: 'hermes',
     faviconDomain: 'nousresearch.com',
     homepageUrl: 'https://hermes-agent.nousresearch.com/docs/'
+  },
+  {
+    id: 'openclaw',
+    label: 'OpenClaw',
+    cmd: 'openclaw',
+    faviconDomain: 'openclaw.ai',
+    homepageUrl: 'https://github.com/openclaw/openclaw'
   }
 ]
 

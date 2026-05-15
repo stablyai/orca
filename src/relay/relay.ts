@@ -31,6 +31,7 @@ import { PtyHandler } from './pty-handler'
 import { FsHandler } from './fs-handler'
 import { GitHandler } from './git-handler'
 import { PreflightHandler } from './preflight-handler'
+import { ExternalAutomationsHandler } from './external-automations-handler'
 import { PortScanHandler } from './port-scan-handler'
 import { AgentExecHandler } from './agent-exec-handler'
 import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
@@ -232,7 +233,9 @@ async function main(): Promise<void> {
   void _gitHandler
 
   const _preflightHandler = new PreflightHandler(dispatcher)
+  const _externalAutomationsHandler = new ExternalAutomationsHandler(dispatcher)
   void _preflightHandler
+  void _externalAutomationsHandler
 
   const _portScanHandler = new PortScanHandler(dispatcher)
   void _portScanHandler

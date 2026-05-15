@@ -29,6 +29,7 @@ export const AGENTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'qwen',
       'rovo',
       'hermes',
+      'openclaw',
       'copilot',
       'github',
       'github copilot',
