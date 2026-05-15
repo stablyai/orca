@@ -40,10 +40,6 @@ import { useDaemonActions, DaemonActionDialog } from '../shared/useDaemonActions
 import type { AppMemory, UsageValues, Worktree } from '../../../../shared/types'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
 import {
-  WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS,
-  WORKSPACE_CLEANUP_IDLE_MS
-} from '../../../../shared/workspace-cleanup'
-import {
   mergeSnapshotAndSessions,
   UNATTRIBUTED_REPO_ID,
   type DaemonSession,
@@ -661,7 +657,6 @@ export function ResourceUsageStatusSegment({
   const setActiveView = useAppStore((s) => s.setActiveView)
   const openModal = useAppStore((s) => s.openModal)
   const repos = useAppStore((s) => s.repos)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
 
   const [open, setOpen] = useState(false)
   const [sortOption, setSortOption] = useState<SortOption>('memory')
@@ -830,35 +825,6 @@ export function ResourceUsageStatusSegment({
       memBadgeLabel: snapshot ? formatMemory(memory) : '—'
     }
   }, [snapshot])
-
-  const oldWorkspaceCount = useMemo(() => {
-    const now = Date.now()
-    let count = 0
-    for (const worktrees of Object.values(worktreesByRepo)) {
-      for (const worktree of worktrees) {
-        if (worktree.isMainWorktree) {
-          continue
-        }
-        const ageMs = now - worktree.lastActivityAt
-        if (
-          (worktree.isArchived && ageMs >= WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS) ||
-          ageMs >= WORKSPACE_CLEANUP_IDLE_MS
-        ) {
-          count += 1
-        }
-      }
-    }
-    return count
-  }, [worktreesByRepo])
-  // Why: after restart, SSH-backed repos can be temporarily disconnected. An
-  // empty remote list means the local count is partial, so label it as known.
-  const hasUnloadedRemoteWorktrees = useMemo(
-    () => repos.some((repo) => repo.connectionId && (worktreesByRepo[repo.id]?.length ?? 0) === 0),
-    [repos, worktreesByRepo]
-  )
-  const oldWorkspaceCountLabel = hasUnloadedRemoteWorktrees
-    ? `${oldWorkspaceCount}+`
-    : String(oldWorkspaceCount)
 
   // Why: memorySnapshotError is null both for "last fetch succeeded" and
   // "never fetched". When the segment is mounted but the popover hasn't
@@ -1318,7 +1284,7 @@ export function ResourceUsageStatusSegment({
           >
             <span className="inline-flex min-w-0 items-center gap-1.5">
               <ArchiveX className="size-3.5 shrink-0" />
-              <span className="truncate">Clean up old workspaces ({oldWorkspaceCountLabel})</span>
+              <span className="truncate">Clean up old workspaces</span>
             </span>
             <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
           </button>
