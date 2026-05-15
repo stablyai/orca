@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { buildRows, getPRGroupKey } from './worktree-list-groups'
+import { buildRows, getPRGroupKey, getRepoGroupOrdering } from './worktree-list-groups'
 import type { Repo, Worktree } from '../../../../shared/types'
 
 const repo: Repo = {
@@ -209,6 +209,7 @@ describe('buildRows repo grouping order', () => {
     [repoC.id, repoC]
   ])
   const wA: Worktree = { ...worktree, id: 'wt-a', repoId: repoA.id, displayName: 'a' }
+  const wAStale: Worktree = { ...worktree, id: 'wt-a-stale', repoId: repoA.id, displayName: 'a2' }
   const wB: Worktree = { ...worktree, id: 'wt-b', repoId: repoB.id, displayName: 'b' }
   const wC: Worktree = { ...worktree, id: 'wt-c', repoId: repoC.id, displayName: 'c' }
 
@@ -256,6 +257,34 @@ describe('buildRows repo grouping order', () => {
     expect(headerKeys).toEqual(['repo:repo-c', 'repo:repo-a', 'repo:repo-b'])
   })
 
+  it('orders repo headers by each repo highest-ranked visible child', () => {
+    const repoOrder = new Map([
+      [repoB.id, 0],
+      [repoA.id, 1],
+      [repoC.id, 2]
+    ])
+    const rows = buildRows(
+      'repo',
+      [wA, wB, wAStale, wC],
+      map,
+      null,
+      new Set(),
+      repoOrder,
+      undefined,
+      'visible-worktree-order'
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: 'repo:repo-a' },
+      { type: 'item', worktree: { id: 'wt-a' } },
+      { type: 'item', worktree: { id: 'wt-a-stale' } },
+      { type: 'header', key: 'repo:repo-b' },
+      { type: 'item', worktree: { id: 'wt-b' } },
+      { type: 'header', key: 'repo:repo-c' },
+      { type: 'item', worktree: { id: 'wt-c' } }
+    ])
+  })
+
   it('keeps repoOrder for manual repo group ordering', () => {
     const repoOrder = new Map([
       [repoB.id, 0],
@@ -265,6 +294,19 @@ describe('buildRows repo grouping order', () => {
     const rows = buildRows('repo', [wC, wA, wB], map, null, new Set(), repoOrder)
     const headerKeys = rows.filter((r) => r.type === 'header').map((r) => r.key)
     expect(headerKeys).toEqual(['repo:repo-b', 'repo:repo-a', 'repo:repo-c'])
+  })
+})
+
+describe('getRepoGroupOrdering', () => {
+  it.each([
+    ['repo', 'recent', 'visible-worktree-order'],
+    ['repo', 'smart', 'visible-worktree-order'],
+    ['repo', 'name', 'manual'],
+    ['repo', 'repo', 'manual'],
+    ['none', 'recent', 'manual'],
+    ['pr-status', 'recent', 'manual']
+  ] as const)('uses %s/%s -> %s', (groupBy, sortBy, expected) => {
+    expect(getRepoGroupOrdering(groupBy, sortBy)).toBe(expected)
   })
 })
 

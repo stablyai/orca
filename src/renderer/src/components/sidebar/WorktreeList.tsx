@@ -35,6 +35,7 @@ import {
   type WorktreeGroupBy,
   PINNED_GROUP_KEY,
   buildRows,
+  getRepoGroupOrdering,
   getGroupKeyForWorktree
 } from './worktree-list-groups'
 import {
@@ -1021,9 +1022,8 @@ const WorktreeList = React.memo(function WorktreeList() {
   const collapsedGroups = useAppStore((s) => s.collapsedGroups)
   const toggleGroup = useAppStore((s) => s.toggleCollapsedGroup)
 
-  // Why: header order in groupBy='repo' is bound to state.repos array order so
-  // manual reorder is the single source of truth. The Map lets buildRows do an
-  // O(1) rank lookup per group without depending on Repo identity.
+  // Why: manual repo header order is bound to state.repos. Recent/Smart derive
+  // header order from the sorted visible worktree stream instead.
   const repos = useAppStore((s) => s.repos)
   const repoOrder = useMemo(() => {
     const map = new Map<string, number>()
@@ -1032,10 +1032,7 @@ const WorktreeList = React.memo(function WorktreeList() {
   }, [repos])
   const allRepoIds = useMemo(() => repos.map((r) => r.id), [repos])
   const reorderReposAction = useAppStore((s) => s.reorderRepos)
-  const repoGroupOrdering: RepoGroupOrdering =
-    groupBy === 'repo' && (sortBy === 'recent' || sortBy === 'smart')
-      ? 'visible-worktree-order'
-      : 'manual'
+  const repoGroupOrdering = getRepoGroupOrdering(groupBy, sortBy)
 
   // Build flat row list for rendering
   const rows: Row[] = useMemo(

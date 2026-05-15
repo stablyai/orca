@@ -6,7 +6,7 @@ import type {
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { IDLE, buildAttentionByWorktree, type WorktreeAttention } from './smart-attention'
 
-type SortBy = 'name' | 'smart' | 'recent' | 'repo'
+export type SortBy = 'name' | 'smart' | 'recent' | 'repo'
 
 // Why: a newly-created worktree's lastActivityAt is stamped at the moment
 // createLocalWorktree finishes git + setup-runner prep (often several seconds

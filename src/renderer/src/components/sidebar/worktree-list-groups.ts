@@ -9,11 +9,18 @@ import {
   getWorkspaceStatusVisualMeta
 } from './workspace-status'
 import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
+import type { SortBy } from './smart-sort'
 
 export { branchName }
 
 export type WorktreeGroupBy = 'none' | 'repo' | 'pr-status'
 export type RepoGroupOrdering = 'manual' | 'visible-worktree-order'
+
+export function getRepoGroupOrdering(groupBy: WorktreeGroupBy, sortBy: SortBy): RepoGroupOrdering {
+  return groupBy === 'repo' && (sortBy === 'recent' || sortBy === 'smart')
+    ? 'visible-worktree-order'
+    : 'manual'
+}
 
 export type GroupHeaderRow = {
   type: 'header'
