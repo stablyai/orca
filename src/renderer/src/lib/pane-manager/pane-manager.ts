@@ -14,7 +14,7 @@ import {
 import { createDragReorderState, hideDropOverlay, handlePaneDrop } from './pane-drag-reorder'
 import { createPaneDOM, openTerminal, setLigaturesEnabled, disposePane } from './pane-lifecycle'
 import { shouldFollowMouseFocus } from './focus-follows-mouse'
-import { safeFit, fitAllPanesInternal, refitPanesUnder } from './pane-tree-ops'
+import { equalizePaneSplitSizes, safeFit, fitAllPanesInternal, refitPanesUnder } from './pane-tree-ops'
 import { toPublicPane } from './pane-public-view'
 import { applyTerminalGpuAcceleration } from './pane-terminal-gpu-acceleration'
 import {
@@ -117,6 +117,21 @@ export class PaneManager {
 
   fitAllPanes(): void {
     fitAllPanesInternal(this.panes)
+  }
+
+  equalizePaneSizes(): void {
+    if (this.panes.size < 2) {
+      return
+    }
+
+    const changed = equalizePaneSplitSizes(
+      this.root.firstElementChild instanceof HTMLElement ? this.root.firstElementChild : null
+    )
+    if (!changed) {
+      return
+    }
+
+    this.options.onLayoutChanged?.()
   }
 
   getActivePane(): ManagedPane | null {

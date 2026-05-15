@@ -1,7 +1,23 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { safeFit } from './pane-tree-ops'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { equalizePaneSplitSizes, safeFit } from './pane-tree-ops'
 import type { ManagedPaneInternal, ScrollState } from './pane-manager-types'
 import { setFitOverride, hydrateOverrides } from './mobile-fit-overrides'
+
+class MockHTMLElement {
+  classList: { contains: (cls: string) => boolean }
+  children: MockHTMLElement[]
+  style: Record<string, string>
+
+  constructor(classes: string[], children: MockHTMLElement[] = [], flex = '') {
+    this.classList = { contains: (cls: string) => classes.includes(cls) }
+    this.children = children
+    this.style = { flex }
+  }
+}
+
+beforeAll(() => {
+  ;(globalThis as unknown as Record<string, unknown>).HTMLElement = MockHTMLElement
+})
 
 afterEach(() => {
   hydrateOverrides([])
@@ -212,5 +228,54 @@ describe('safeFit', () => {
     expect(paneA.fitAddon.fit).not.toHaveBeenCalled()
     expect(paneB.fitAddon.fit).toHaveBeenCalledTimes(1)
     expect(paneB.terminal.resize).not.toHaveBeenCalled()
+  })
+})
+
+describe('equalizePaneSplitSizes', () => {
+  const pane = (flex = '1 1 0%'): MockHTMLElement => new MockHTMLElement(['pane'], [], flex)
+  const split = (
+    direction: 'vertical' | 'horizontal',
+    children: MockHTMLElement[],
+    flex = '1 1 0%'
+  ): MockHTMLElement =>
+    new MockHTMLElement(
+      ['pane-split', direction === 'vertical' ? 'is-vertical' : 'is-horizontal'],
+      children,
+      flex
+    )
+
+  it('weights nested same-axis splits so same-axis panes equalize evenly', () => {
+    const left = pane('10 1 0%')
+    const middle = pane('20 1 0%')
+    const right = pane('30 1 0%')
+    const rightSplit = split('vertical', [middle, right], '90 1 0%')
+    const root = split('vertical', [left, rightSplit])
+
+    expect(equalizePaneSplitSizes(root as unknown as HTMLElement)).toBe(true)
+
+    expect(left.style.flex).toBe('1 1 0%')
+    expect(rightSplit.style.flex).toBe('2 1 0%')
+    expect(middle.style.flex).toBe('1 1 0%')
+    expect(right.style.flex).toBe('1 1 0%')
+  })
+
+  it('treats perpendicular child splits as one weighted region', () => {
+    const top = pane('7 1 0%')
+    const bottom = pane('3 1 0%')
+    const leftStack = split('horizontal', [top, bottom], '15 1 0%')
+    const right = pane('85 1 0%')
+    const root = split('vertical', [leftStack, right])
+
+    expect(equalizePaneSplitSizes(root as unknown as HTMLElement)).toBe(true)
+
+    expect(leftStack.style.flex).toBe('1 1 0%')
+    expect(right.style.flex).toBe('1 1 0%')
+    expect(top.style.flex).toBe('1 1 0%')
+    expect(bottom.style.flex).toBe('1 1 0%')
+  })
+
+  it('returns false when there is no split tree to change', () => {
+    expect(equalizePaneSplitSizes(pane() as unknown as HTMLElement)).toBe(false)
+    expect(equalizePaneSplitSizes(null)).toBe(false)
   })
 })

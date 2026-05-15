@@ -30,6 +30,7 @@ type TerminalMenuState = {
   onPaste: () => Promise<void>
   onSplitRight: () => void
   onSplitDown: () => void
+  onEqualizePaneSizes: () => void
   onClosePane: () => void
   onClearScreen: () => void
   onQuickCommand: (command: TerminalQuickCommand) => void
@@ -148,6 +149,16 @@ export function useTerminalPaneContextMenu({
   const onSplitRight = (): void => splitWithInheritedCwd('vertical')
   const onSplitDown = (): void => splitWithInheritedCwd('horizontal')
 
+  const onEqualizePaneSizes = (): void => {
+    const pane = resolveMenuPane()
+    const manager = managerRef.current
+    if (!pane || !manager) {
+      return
+    }
+    manager.equalizePaneSizes()
+    pane.terminal.focus()
+  }
+
   const onClosePane = (): void => {
     const pane = resolveMenuPane()
     if (pane && (managerRef.current?.getPanes().length ?? 0) > 1) {
@@ -241,6 +252,7 @@ export function useTerminalPaneContextMenu({
     onPaste,
     onSplitRight,
     onSplitDown,
+    onEqualizePaneSizes,
     onClosePane,
     onClearScreen,
     onQuickCommand,

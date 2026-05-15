@@ -1150,6 +1150,7 @@ export default function TerminalPane({
         menuOpenedAtRef={contextMenu.menuOpenedAtRef}
         canClosePane={contextMenu.paneCount > 1}
         canExpandPane={contextMenu.paneCount > 1}
+        canEqualizePaneSizes={contextMenu.paneCount > 1 && expandedPaneId === null}
         menuPaneIsExpanded={
           contextMenu.menuPaneId !== null && contextMenu.menuPaneId === expandedPaneId
         }
@@ -1157,6 +1158,7 @@ export default function TerminalPane({
         onPaste={() => void contextMenu.onPaste()}
         onSplitRight={contextMenu.onSplitRight}
         onSplitDown={contextMenu.onSplitDown}
+        onEqualizePaneSizes={contextMenu.onEqualizePaneSizes}
         onClosePane={contextMenu.onClosePane}
         onClearScreen={contextMenu.onClearScreen}
         quickCommands={(settings?.terminalQuickCommands ?? []).filter(
