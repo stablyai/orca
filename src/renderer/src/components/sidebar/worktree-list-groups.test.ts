@@ -57,9 +57,14 @@ describe('buildRows with pinned worktrees', () => {
     expect(rows[1]).toMatchObject({ type: 'item', worktree: { id: 'wt-pinned' } })
   })
 
-  it('emits an All header between pinned and unpinned in groupBy none', () => {
+  it('emits status headers for unpinned worktrees in groupBy none', () => {
     const rows = buildRows('none', [unpinned1, pinned, unpinned2], repoMap, null, new Set())
-    expect(rows[2]).toMatchObject({ type: 'header', key: 'all', label: 'All', count: 2 })
+    expect(rows[2]).toMatchObject({
+      type: 'header',
+      key: 'workspace-status:in-progress',
+      label: 'In progress',
+      count: 2
+    })
     expect(rows[3]).toMatchObject({ type: 'item', worktree: { id: 'wt-1' } })
     expect(rows[4]).toMatchObject({ type: 'item', worktree: { id: 'wt-2' } })
   })
@@ -76,22 +81,36 @@ describe('buildRows with pinned worktrees', () => {
     }
   })
 
-  it('does not emit pinned section when no worktrees are pinned', () => {
+  it('keeps an empty pinned drop section above statuses in groupBy none', () => {
     const rows = buildRows('none', [unpinned1, unpinned2], repoMap, null, new Set())
-    expect(rows.every((r) => r.type === 'item')).toBe(true)
+    expect(rows[0]).toMatchObject({
+      type: 'header',
+      key: 'pinned',
+      label: 'Pinned',
+      count: 0
+    })
+    expect(rows[1]).toMatchObject({
+      type: 'header',
+      key: 'workspace-status:in-progress',
+      label: 'In progress',
+      count: 2
+    })
+    expect(rows[2]).toMatchObject({ type: 'item', worktree: { id: 'wt-1' } })
+    expect(rows[3]).toMatchObject({ type: 'item', worktree: { id: 'wt-2' } })
   })
 
   it('collapses pinned group when in collapsedGroups', () => {
     const rows = buildRows('none', [pinned, unpinned1], repoMap, null, new Set(['pinned']))
     expect(rows[0]).toMatchObject({ type: 'header', key: 'pinned' })
-    expect(rows[1]).toMatchObject({ type: 'header', key: 'all' })
+    expect(rows[1]).toMatchObject({ type: 'header', key: 'workspace-status:in-progress' })
     expect(rows[2]).toMatchObject({ type: 'item', worktree: { id: 'wt-1' } })
   })
 
-  it('does not emit All header when all worktrees are pinned', () => {
+  it('does not emit empty status sections when all worktrees are pinned', () => {
     const allPinned = { ...unpinned1, isPinned: true }
     const rows = buildRows('none', [pinned, allPinned], repoMap, null, new Set())
-    expect(rows.some((r) => r.type === 'header' && r.key === 'all')).toBe(false)
+    expect(rows.filter((r) => r.type === 'header')).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ type: 'header', key: 'pinned', count: 2 })
   })
 
   it('preserves repo display casing in group labels', () => {
@@ -134,6 +153,49 @@ describe('buildRows with pinned worktrees', () => {
       repo: folderRepo
     })
     expect(rows[1]).toMatchObject({ type: 'item', worktree: { id: folderWorktree.id } })
+  })
+
+  it('emits assigned workspace statuses as sections in groupBy none', () => {
+    const review = { ...worktree, id: 'wt-review', workspaceStatus: 'in-review' as const }
+    const rows = buildRows('none', [review], repoMap, null, new Set())
+
+    expect(
+      rows
+        .filter((r) => r.type === 'header')
+        .map((r) => ({ key: r.key, label: r.label, count: r.count }))
+    ).toEqual([
+      { key: 'pinned', label: 'Pinned', count: 0 },
+      { key: 'workspace-status:in-review', label: 'In review', count: 1 }
+    ])
+  })
+
+  it('uses customized workspace status labels and order', () => {
+    const customStatuses = [
+      { id: 'blocked', label: 'Blocked' },
+      { id: 'todo', label: 'Ready' },
+      { id: 'in-progress', label: 'Doing' }
+    ]
+    const blocked = { ...worktree, id: 'wt-blocked', workspaceStatus: 'blocked' }
+    const doing = { ...worktree, id: 'wt-doing', workspaceStatus: 'in-progress' }
+    const rows = buildRows(
+      'none',
+      [doing, blocked],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      customStatuses
+    )
+
+    expect(
+      rows
+        .filter((r) => r.type === 'header')
+        .map((r) => ({ key: r.key, label: r.label, count: r.count }))
+    ).toEqual([
+      { key: 'pinned', label: 'Pinned', count: 0 },
+      { key: 'workspace-status:blocked', label: 'Blocked', count: 1 },
+      { key: 'workspace-status:in-progress', label: 'Doing', count: 1 }
+    ])
   })
 })
 

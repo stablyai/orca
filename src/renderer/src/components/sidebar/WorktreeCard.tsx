@@ -45,6 +45,7 @@ import {
   selectLivePtyIdsForWorktree,
   selectRuntimePaneTitlesForWorktree
 } from './worktree-card-status-inputs'
+import { writeWorkspaceDragData } from './workspace-status'
 
 type WorktreeCardProps = {
   worktree: Worktree
@@ -53,6 +54,7 @@ type WorktreeCardProps = {
   isMultiSelected?: boolean
   selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
+  onActivate?: () => void
   onSelectionGesture?: (event: React.MouseEvent<HTMLDivElement>, worktreeId: string) => boolean
   onContextMenuSelect?: (event: React.MouseEvent<HTMLDivElement>) => readonly Worktree[]
 }
@@ -68,6 +70,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   isActive,
   isMultiSelected = false,
   selectedWorktrees,
+  onActivate,
   onSelectionGesture,
   onContextMenuSelect,
   hideRepoBadge
@@ -399,8 +402,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
       if (isSshDisconnected) {
         setShowDisconnectedDialog(true)
       }
+      onActivate?.()
     },
-    [worktree.id, isSshDisconnected, onSelectionGesture]
+    [worktree.id, isSshDisconnected, onActivate, onSelectionGesture]
   )
 
   const handleDoubleClick = useCallback(() => {
@@ -431,6 +435,17 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
   const unreadTooltip = worktree.isUnread ? 'Mark read' : 'Mark unread'
 
+  const handleDragStart = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      if (isDeleting) {
+        event.preventDefault()
+        return
+      }
+      writeWorkspaceDragData(event.dataTransfer, worktree.id)
+    },
+    [isDeleting, worktree.id]
+  )
+
   // Why: the 'unread' card property is the user's opt-out. When off, we render
   // as if the workspace is read so bold emphasis never appears. The persisted
   // `worktree.isUnread` flag is unchanged; only the rendering changes.
@@ -452,6 +467,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
       )}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
+      draggable={!isDeleting}
+      onDragStart={handleDragStart}
       aria-busy={isDeleting}
     >
       {isDeleting && (
