@@ -53,6 +53,7 @@ import {
   type ActivityTerminalPortalTarget
 } from './activity-terminal-portal'
 import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStateHistoryEntry,
@@ -145,6 +146,7 @@ const ACTIVITY_STATUS_GROUP_ORDER: ActivityStatusGroupId[] = [
   'done',
   'interrupted'
 ]
+const STANDALONE_ACTIVITY_WORKTREE_REPO_ID = '__activity_standalone__'
 
 const absoluteDateFormatter = new Intl.DateTimeFormat(undefined, {
   year: 'numeric',
@@ -475,6 +477,30 @@ function freshActivityLiveAgentState(
   return isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS) ? entry.state : null
 }
 
+function standaloneActivityWorktree(worktreeId: string): Worktree {
+  const displayName =
+    worktreeId === FLOATING_TERMINAL_WORKTREE_ID ? 'Floating terminal' : 'Standalone terminal'
+  return {
+    id: worktreeId,
+    repoId: STANDALONE_ACTIVITY_WORKTREE_REPO_ID,
+    path: '',
+    head: '',
+    branch: displayName,
+    isBare: false,
+    isMainWorktree: false,
+    displayName,
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0
+  }
+}
+
 // Why: per-pane cap guarantees each agent appears in the left list even when one pane has a long history.
 const EVENTS_PER_PANE_CAP = 5
 
@@ -585,8 +611,8 @@ export function buildActivityEvents(args: {
   const tabContext = new Map<string, { worktree: Worktree; tab: TerminalTab }>()
   const liveAgentByPaneKey: Record<string, ActivityLiveAgentSnapshot> = {}
 
-  for (const worktree of args.worktreeMap.values()) {
-    const tabs = args.tabsByWorktree[worktree.id] ?? []
+  for (const [worktreeId, tabs] of Object.entries(args.tabsByWorktree)) {
+    const worktree = args.worktreeMap.get(worktreeId) ?? standaloneActivityWorktree(worktreeId)
     for (const tab of tabs) {
       tabContext.set(tab.id, { worktree, tab })
     }
@@ -671,7 +697,11 @@ export function buildActivityEvents(args: {
     if (!parsePaneKey(paneKey)) {
       continue
     }
-    const worktree = args.worktreeMap.get(retained.worktreeId)
+    const worktree =
+      args.worktreeMap.get(retained.worktreeId) ??
+      (args.tabsByWorktree[retained.worktreeId]
+        ? standaloneActivityWorktree(retained.worktreeId)
+        : null)
     if (!worktree) {
       continue
     }
@@ -1000,6 +1030,7 @@ function ThreadRow({
   onSelect,
   onJump,
   onMarkUnread,
+  canJump,
   compactMode
 }: {
   thread: AgentPaneThread
@@ -1007,6 +1038,7 @@ function ThreadRow({
   onSelect: () => void
   onJump: () => void
   onMarkUnread: () => void
+  canJump: boolean
   compactMode: boolean
 }): React.JSX.Element {
   const renderedResponsePreview = activityThreadResponseRenderPreview({
@@ -1140,32 +1172,34 @@ function ThreadRow({
             the worktree name. Reserved layout via `invisible` +
             `pointer-events-none` keeps the worktree-name's flex-1 width
             stable across hover. */}
-        <span
-          className={cn(
-            'ml-auto inline-flex shrink-0 items-center transition-opacity',
-            'pointer-events-none invisible opacity-0',
-            'group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100'
-          )}
-        >
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-xs"
-                aria-label="Jump to workspace"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onJump()
-                }}
-                onMouseDown={(event) => event.stopPropagation()}
-              >
-                <ExternalLink className="size-3" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="left">Jump to workspace</TooltipContent>
-          </Tooltip>
-        </span>
+        {canJump ? (
+          <span
+            className={cn(
+              'ml-auto inline-flex shrink-0 items-center transition-opacity',
+              'pointer-events-none invisible opacity-0',
+              'group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100'
+            )}
+          >
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-xs"
+                  aria-label="Jump to workspace"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onJump()
+                  }}
+                  onMouseDown={(event) => event.stopPropagation()}
+                >
+                  <ExternalLink className="size-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="left">Jump to workspace</TooltipContent>
+            </Tooltip>
+          </span>
+        ) : null}
       </div>
     </div>
   )
@@ -1271,8 +1305,10 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     ? (allThreads.find((thread) => thread.paneKey === selectedPaneKey) ?? null)
     : null
   const selectedTabId = selectedThread?.tab.id ?? null
+  // Why: repo-less terminal buckets can still produce Activity rows, but the
+  // workspace Terminal tree only portals real worktrees.
   const selectedHasLiveTab =
-    selectedThread && selectedTabId
+    selectedThread && selectedTabId && storeData.worktreeMap.has(selectedThread.worktree.id)
       ? (storeData.tabsByWorktree[selectedThread.worktree.id] ?? []).some(
           (tab) => tab.id === selectedTabId
         )
@@ -1282,7 +1318,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     : null
   const displayedTabId = displayedThread?.tab.id ?? null
   const displayedHasLiveTab =
-    displayedThread && displayedTabId
+    displayedThread && displayedTabId && storeData.worktreeMap.has(displayedThread.worktree.id)
       ? (storeData.tabsByWorktree[displayedThread.worktree.id] ?? []).some(
           (tab) => tab.id === displayedTabId
         )
@@ -1443,19 +1479,23 @@ export default function ActivityPrototypePage(): React.JSX.Element {
 
   const activateThreadTerminal = (thread: AgentPaneThread): void => {
     const state = useAppStore.getState()
+    const worktree = getWorktreeMapFromState(state).get(thread.worktree.id)
+    if (!worktree) {
+      return
+    }
     // Why: retained-agent threads can outlive their tab. With no live tab, the
     // right pane shows the empty-state placeholder; reorienting the workspace
     // and dispatching focus to a dead tab id would just confuse the user.
-    const liveTabs = state.tabsByWorktree[thread.worktree.id] ?? []
+    const liveTabs = state.tabsByWorktree[worktree.id] ?? []
     const hasLiveTab = liveTabs.some((t) => t.id === thread.tab.id)
     if (!hasLiveTab) {
       return
     }
-    if (state.activeRepoId !== thread.worktree.repoId) {
-      state.setActiveRepo(thread.worktree.repoId)
+    if (state.activeRepoId !== worktree.repoId) {
+      state.setActiveRepo(worktree.repoId)
     }
-    if (state.activeWorktreeId !== thread.worktree.id) {
-      state.setActiveWorktree(thread.worktree.id)
+    if (state.activeWorktreeId !== worktree.id) {
+      state.setActiveWorktree(worktree.id)
     }
     state.setActiveTabType('terminal')
     const parsed = parsePaneKey(thread.paneKey)
@@ -1497,6 +1537,10 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   ])
 
   const jumpToWorkspace = (thread: AgentPaneThread): void => {
+    const state = useAppStore.getState()
+    if (!getWorktreeMapFromState(state).has(thread.worktree.id)) {
+      return
+    }
     markThreadRead(thread)
     activateAndRevealWorktree(thread.worktree.id)
   }
@@ -1626,6 +1670,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                     onSelect={() => selectThread(thread)}
                     onJump={() => jumpToWorkspace(thread)}
                     onMarkUnread={() => markThreadUnread(thread)}
+                    canJump={storeData.worktreeMap.has(thread.worktree.id)}
                     compactMode={compactMode}
                   />
                 ))}
@@ -1695,7 +1740,9 @@ export default function ActivityPrototypePage(): React.JSX.Element {
                   return (
                     <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
                       <TerminalSquare className="size-7" />
-                      Agent terminal closed. Open a new terminal in this workspace to continue.
+                      {storeData.worktreeMap.has(selectedThread.worktree.id)
+                        ? 'Agent terminal closed. Open a new terminal in this workspace to continue.'
+                        : 'Standalone terminal unavailable in Activity.'}
                     </div>
                   )
                 }

@@ -5,6 +5,7 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
@@ -237,6 +238,38 @@ describe('buildActivityEvents', () => {
       latestTimestamp: 3_000,
       latestEvent: null,
       unread: false
+    })
+  })
+
+  it('creates a thread for a repo-less floating terminal agent', () => {
+    const tab = makeTabWithIds('tab-1', FLOATING_TERMINAL_WORKTREE_ID, 'Claude')
+    const result = buildActivityEvents({
+      agentStatusByPaneKey: {
+        [PANE_KEY]: makeWorkingEntryWithoutHistory()
+      },
+      retainedAgentsByPaneKey: {},
+      tabsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [tab]
+      },
+      worktreeMap: new Map(),
+      repoMap: new Map(),
+      acknowledgedAgentsByPaneKey: {},
+      now: 3_000
+    })
+
+    const threads = makeThreads(result)
+
+    expect(result.events).toHaveLength(0)
+    expect(threads).toHaveLength(1)
+    expect(threads[0]).toMatchObject({
+      paneKey: PANE_KEY,
+      paneTitle: 'New run',
+      currentAgentState: 'working',
+      repo: null
+    })
+    expect(threads[0].worktree).toMatchObject({
+      id: FLOATING_TERMINAL_WORKTREE_ID,
+      displayName: 'Floating terminal'
     })
   })
 
