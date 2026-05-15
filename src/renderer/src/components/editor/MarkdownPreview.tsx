@@ -14,9 +14,24 @@ import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import rehypeSlug from 'rehype-slug'
 import GithubSlugger from 'github-slugger'
 import { extractFrontMatter } from './markdown-frontmatter'
-import { ChevronDown, ChevronUp, CornerDownLeft, Plus, X } from 'lucide-react'
+import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  CornerDownLeft,
+  MessageSquare,
+  Plus,
+  Send,
+  X
+} from 'lucide-react'
 import type { Components } from 'react-markdown'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
@@ -54,8 +69,16 @@ import { markdownPreviewUrlTransform } from './markdown-preview-url-transform'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { buildMarkdownTableOfContents } from './markdown-table-of-contents'
 import { MarkdownTableOfContentsPanel } from './MarkdownTableOfContentsPanel'
-import { isMarkdownComment } from '@/lib/diff-comment-compat'
+import { getDiffCommentLineLabel, isMarkdownComment } from '@/lib/diff-comment-compat'
 import { DiffCommentCard } from '../diff-comments/DiffCommentCard'
+import {
+  formatMarkdownReviewNotes,
+  getMarkdownReviewExcerpt,
+  sortMarkdownReviewNotes,
+  type MarkdownReviewNote
+} from '@/lib/markdown-review-notes'
+import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 
 type MarkdownPreviewProps = {
   content: string
@@ -298,6 +321,20 @@ export default function MarkdownPreview({
   }, [frontMatter])
   const sluggerRef = useRef(new GithubSlugger())
   const [activeAnnotationBlockKey, setActiveAnnotationBlockKey] = useState<string | null>(null)
+  const [reviewPanelOpen, setReviewPanelOpen] = useState(false)
+  const [reviewNotesCopied, setReviewNotesCopied] = useState(false)
+  const [activeReviewCommentId, setActiveReviewCommentId] = useState<string | null>(null)
+  const markdownReviewNotes = useMemo(
+    () => sortMarkdownReviewNotes(markdownComments as MarkdownReviewNote[]),
+    [markdownComments]
+  )
+  const markdownReviewPrompt = useMemo(
+    () => formatMarkdownReviewNotes(markdownReviewNotes, renderedContent),
+    [markdownReviewNotes, renderedContent]
+  )
+  const canShowReviewTools = Boolean(
+    markdownAnnotationsEnabled && sourceWorktree && sourceRelativePath !== null
+  )
 
   // Why: each split pane needs its own markdown preview viewport even when the
   // underlying file is shared. The caller passes a pane-scoped cache key so
@@ -529,18 +566,56 @@ export default function MarkdownPreview({
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
   }, [closeSearch, isSearchOpen, openSearch])
 
+  const handleCopyMarkdownReviewNotes = useCallback(async (): Promise<void> => {
+    if (markdownReviewNotes.length === 0) {
+      return
+    }
+    try {
+      await window.api.ui.writeClipboardText(markdownReviewPrompt)
+      setReviewNotesCopied(true)
+    } catch {
+      // Best-effort clipboard action; failures usually mean the window is not focused.
+    }
+  }, [markdownReviewNotes.length, markdownReviewPrompt])
+
+  useEffect(() => {
+    if (!reviewNotesCopied) {
+      return
+    }
+    const timeout = window.setTimeout(() => setReviewNotesCopied(false), 1600)
+    return () => window.clearTimeout(timeout)
+  }, [reviewNotesCopied])
+
+  const scrollToReviewNote = useCallback((comment: DiffComment): void => {
+    setActiveReviewCommentId(comment.id)
+    const root = rootRef.current
+    if (!root) {
+      return
+    }
+    const blocks = root.querySelectorAll<HTMLElement>('[data-source-line][data-source-end-line]')
+    let target: HTMLElement | null = null
+    for (const block of blocks) {
+      const startLine = Number(block.dataset.sourceLine)
+      const endLine = Number(block.dataset.sourceEndLine)
+      if (startLine <= comment.lineNumber && comment.lineNumber <= endLine) {
+        target = block
+        break
+      }
+    }
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [])
+
   const renderAnnotationControls = useCallback(
     (range: { startLine: number; endLine: number }, blockKey: string): React.ReactNode => {
       if (!sourceWorktree || sourceRelativePath === null) {
         return null
       }
+      if (!markdownAnnotationsEnabled) {
+        return null
+      }
       const commentsForBlock = markdownComments.filter(
         (comment) => range.startLine <= comment.lineNumber && comment.lineNumber <= range.endLine
       )
-      const canAuthor = markdownAnnotationsEnabled
-      if (!canAuthor && commentsForBlock.length === 0) {
-        return null
-      }
 
       const handleSubmit = async (body: string): Promise<boolean> => {
         const result = await addDiffComment({
@@ -561,21 +636,19 @@ export default function MarkdownPreview({
 
       return (
         <div className="markdown-annotation-controls">
-          {canAuthor ? (
-            <button
-              type="button"
-              className="markdown-annotation-add"
-              aria-label={`Add note on line ${range.startLine}`}
-              title="Add note"
-              onClick={(event) => {
-                event.preventDefault()
-                event.stopPropagation()
-                setActiveAnnotationBlockKey((current) => (current === blockKey ? null : blockKey))
-              }}
-            >
-              <Plus className="size-3" />
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className="markdown-annotation-add"
+            aria-label={`Add note on line ${range.startLine}`}
+            title="Add note"
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              setActiveAnnotationBlockKey((current) => (current === blockKey ? null : blockKey))
+            }}
+          >
+            <Plus className="size-3" />
+          </button>
           {activeAnnotationBlockKey === blockKey ? (
             <MarkdownAnnotationComposer
               lineNumber={range.endLine}
@@ -585,7 +658,12 @@ export default function MarkdownPreview({
             />
           ) : null}
           {commentsForBlock.map((comment) => (
-            <div key={comment.id} className="markdown-annotation-card">
+            <div
+              key={comment.id}
+              className={`markdown-annotation-card ${
+                activeReviewCommentId === comment.id ? 'is-active' : ''
+              }`.trim()}
+            >
               <DiffCommentCard
                 lineNumber={comment.lineNumber}
                 startLine={comment.startLine}
@@ -600,6 +678,7 @@ export default function MarkdownPreview({
     },
     [
       activeAnnotationBlockKey,
+      activeReviewCommentId,
       addDiffComment,
       deleteDiffComment,
       markdownAnnotationsEnabled,
@@ -946,7 +1025,7 @@ export default function MarkdownPreview({
         }
         const blockKey = `li:${range.startLine}-${range.endLine}`
         return (
-          <li {...props}>
+          <li {...props} data-source-line={range.startLine} data-source-end-line={range.endLine}>
             {children}
             {renderAnnotationControls(range, blockKey)}
           </li>
@@ -1118,6 +1197,55 @@ export default function MarkdownPreview({
             </Button>
           </div>
         ) : null}
+        {canShowReviewTools ? (
+          <div className="markdown-review-toolbar">
+            <button
+              type="button"
+              className="markdown-review-toolbar-button"
+              onClick={() => setReviewPanelOpen((open) => !open)}
+              aria-expanded={reviewPanelOpen}
+              title={reviewPanelOpen ? 'Hide review notes' : 'Show review notes'}
+            >
+              <MessageSquare className="size-3.5" />
+              <span>Review notes</span>
+              <span className="markdown-review-count">{markdownReviewNotes.length}</span>
+            </button>
+            <button
+              type="button"
+              className="markdown-review-icon-button"
+              onClick={() => void handleCopyMarkdownReviewNotes()}
+              disabled={markdownReviewNotes.length === 0}
+              title="Copy notes for agent"
+              aria-label="Copy notes for agent"
+            >
+              {reviewNotesCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+            </button>
+            {sourceWorktree ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="markdown-review-icon-button"
+                    disabled={markdownReviewNotes.length === 0}
+                    title="Send notes to a new agent"
+                    aria-label="Send notes to a new agent"
+                  >
+                    <Send className="size-3.5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[180px]">
+                  <QuickLaunchAgentMenuItems
+                    worktreeId={sourceWorktree.id}
+                    groupId={sourceWorktree.id}
+                    onFocusTerminal={focusTerminalTabSurface}
+                    prompt={markdownReviewPrompt}
+                    launchSource="notes_send"
+                  />
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+          </div>
+        ) : null}
         <div ref={bodyRef} className="markdown-body">
           {/* Why: remarkFrontmatter silently strips front-matter from rendered
         output. We extract it ourselves and render it as a styled code block so
@@ -1160,6 +1288,21 @@ export default function MarkdownPreview({
           </Markdown>
         </div>
       </div>
+      {canShowReviewTools && reviewPanelOpen && sourceWorktree ? (
+        <MarkdownReviewNotesPanel
+          notes={markdownReviewNotes}
+          content={renderedContent}
+          activeId={activeReviewCommentId}
+          copied={reviewNotesCopied}
+          onClose={() => setReviewPanelOpen(false)}
+          onCopy={() => void handleCopyMarkdownReviewNotes()}
+          onSelect={scrollToReviewNote}
+          onDelete={(id) => void deleteDiffComment(sourceWorktree.id, id)}
+          onSubmitEdit={(id, body) => updateDiffComment(sourceWorktree.id, id, body)}
+          prompt={markdownReviewPrompt}
+          worktreeId={sourceWorktree.id}
+        />
+      ) : null}
       {showTableOfContents ? (
         <MarkdownTableOfContentsPanel
           items={tableOfContentsItems}
@@ -1168,6 +1311,119 @@ export default function MarkdownPreview({
         />
       ) : null}
     </div>
+  )
+}
+
+function MarkdownReviewNotesPanel({
+  notes,
+  content,
+  activeId,
+  copied,
+  onClose,
+  onCopy,
+  onSelect,
+  onDelete,
+  onSubmitEdit,
+  prompt,
+  worktreeId
+}: {
+  notes: MarkdownReviewNote[]
+  content: string
+  activeId: string | null
+  copied: boolean
+  onClose: () => void
+  onCopy: () => void
+  onSelect: (note: MarkdownReviewNote) => void
+  onDelete: (id: string) => void
+  onSubmitEdit: (id: string, body: string) => Promise<boolean>
+  prompt: string
+  worktreeId: string
+}): React.JSX.Element {
+  return (
+    <aside className="markdown-review-panel">
+      <div className="markdown-review-panel-header">
+        <div className="markdown-review-panel-title">
+          <MessageSquare className="size-3.5" />
+          <span>Review notes</span>
+          <span className="markdown-review-count">{notes.length}</span>
+        </div>
+        <div className="markdown-review-panel-actions">
+          <button
+            type="button"
+            className="markdown-review-icon-button"
+            onClick={onCopy}
+            disabled={notes.length === 0}
+            title="Copy notes for agent"
+            aria-label="Copy notes for agent"
+          >
+            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="markdown-review-icon-button"
+                disabled={notes.length === 0}
+                title="Send notes to a new agent"
+                aria-label="Send notes to a new agent"
+              >
+                <Send className="size-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[180px]">
+              <QuickLaunchAgentMenuItems
+                worktreeId={worktreeId}
+                groupId={worktreeId}
+                onFocusTerminal={focusTerminalTabSurface}
+                prompt={prompt}
+                launchSource="notes_send"
+              />
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <button
+            type="button"
+            className="markdown-review-icon-button"
+            onClick={onClose}
+            title="Close notes"
+            aria-label="Close notes"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      </div>
+      <div className="markdown-review-note-list scrollbar-sleek">
+        {notes.length === 0 ? (
+          <div className="markdown-review-empty">No review notes for this file.</div>
+        ) : (
+          notes.map((note) => (
+            <div
+              key={note.id}
+              className={`markdown-review-note ${activeId === note.id ? 'is-active' : ''}`.trim()}
+            >
+              <button
+                type="button"
+                className="markdown-review-note-anchor"
+                onClick={() => onSelect(note)}
+              >
+                <span className="markdown-review-note-line">
+                  {getDiffCommentLineLabel(note, true)}
+                </span>
+                <span className="markdown-review-note-excerpt">
+                  {getMarkdownReviewExcerpt(content, note).replace(/^> /gm, '') || 'No preview'}
+                </span>
+              </button>
+              <DiffCommentCard
+                lineNumber={note.lineNumber}
+                startLine={note.startLine}
+                body={note.body}
+                onDelete={() => onDelete(note.id)}
+                onSubmitEdit={(body) => onSubmitEdit(note.id, body)}
+              />
+            </div>
+          ))
+        )}
+      </div>
+    </aside>
   )
 }
 

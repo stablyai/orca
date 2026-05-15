@@ -58,6 +58,7 @@ type EditorPanelHeaderProps = {
   canShowMarkdownTableOfContents: boolean
   isMarkdownTableOfContentsDisabled: boolean
   showMarkdownTableOfContents: boolean
+  markdownReviewToolsEnabled: boolean
   sideBySide: boolean
   openFileState: EditorHeaderOpenFileState
   onCopyPath: () => void
@@ -68,6 +69,7 @@ type EditorPanelHeaderProps = {
   onToggleSideBySide: () => void
   onEditorToggleChange: (next: EditorToggleValue) => void
   onToggleMarkdownTableOfContents: () => void
+  onToggleMarkdownReviewTools: () => void
   onExportMarkdownToPdf: () => void
 }
 
@@ -89,6 +91,7 @@ export function EditorPanelHeader({
   canShowMarkdownTableOfContents,
   isMarkdownTableOfContentsDisabled,
   showMarkdownTableOfContents,
+  markdownReviewToolsEnabled,
   sideBySide,
   openFileState,
   onCopyPath,
@@ -99,6 +102,7 @@ export function EditorPanelHeader({
   onToggleSideBySide,
   onEditorToggleChange,
   onToggleMarkdownTableOfContents,
+  onToggleMarkdownReviewTools,
   onExportMarkdownToPdf
 }: EditorPanelHeaderProps): React.JSX.Element {
   const [pathMenuOpen, setPathMenuOpen] = useState(false)
@@ -303,6 +307,10 @@ export function EditorPanelHeader({
               onSelect={onExportMarkdownToPdf}
             >
               Export as PDF
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={onToggleMarkdownReviewTools}>
+              {markdownReviewToolsEnabled ? 'Hide Review Notes' : 'Show Review Notes'}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -18,6 +18,7 @@ type EditorPanelShellProps = {
   model: EditorPanelRenderModel
   copiedPathVisible: boolean
   showMarkdownTableOfContents: boolean
+  markdownReviewToolsEnabled: boolean
   sideBySide: boolean
   fileContents: Record<string, FileContent>
   diffContents: Record<string, DiffContent>
@@ -34,6 +35,7 @@ type EditorPanelShellProps = {
   onToggleSideBySide: () => void
   onEditorToggleChange: (next: EditorToggleValue) => void
   onToggleMarkdownTableOfContents: () => void
+  onToggleMarkdownReviewTools: () => void
   onExportMarkdownToPdf: () => void
   onContentChange: (content: string) => void
   onDirtyStateHint: (dirty: boolean) => void
@@ -51,6 +53,7 @@ export function EditorPanelShell({
   model,
   copiedPathVisible,
   showMarkdownTableOfContents,
+  markdownReviewToolsEnabled,
   sideBySide,
   fileContents,
   diffContents,
@@ -67,6 +70,7 @@ export function EditorPanelShell({
   onToggleSideBySide,
   onEditorToggleChange,
   onToggleMarkdownTableOfContents,
+  onToggleMarkdownReviewTools,
   onExportMarkdownToPdf,
   onContentChange,
   onDirtyStateHint,
@@ -97,6 +101,7 @@ export function EditorPanelShell({
           canShowMarkdownTableOfContents={model.canShowMarkdownTableOfContents}
           isMarkdownTableOfContentsDisabled={model.isMarkdownTableOfContentsDisabled}
           showMarkdownTableOfContents={showMarkdownTableOfContents}
+          markdownReviewToolsEnabled={markdownReviewToolsEnabled}
           sideBySide={sideBySide}
           openFileState={model.openFileState}
           onCopyPath={onCopyPath}
@@ -107,6 +112,7 @@ export function EditorPanelShell({
           onToggleSideBySide={onToggleSideBySide}
           onEditorToggleChange={onEditorToggleChange}
           onToggleMarkdownTableOfContents={onToggleMarkdownTableOfContents}
+          onToggleMarkdownReviewTools={onToggleMarkdownReviewTools}
           onExportMarkdownToPdf={onExportMarkdownToPdf}
         />
       )}
@@ -132,6 +138,7 @@ export function EditorPanelShell({
           handleSave={onSave}
           reloadFileContent={onReloadFileContent}
           showMarkdownTableOfContents={showMarkdownTableOfContents}
+          markdownReviewToolsEnabled={markdownReviewToolsEnabled}
           onCloseMarkdownTableOfContents={onCloseMarkdownTableOfContents}
         />
       </Suspense>

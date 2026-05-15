@@ -48,6 +48,7 @@ function EditorPanelInner({
   const editorDrafts = useAppStore((s) => s.editorDrafts)
   const setEditorDraft = useAppStore((s) => s.setEditorDraft)
   const settings = useAppStore((s) => s.settings)
+  const updateSettings = useAppStore((s) => s.updateSettings)
   const panelRef = useRef<HTMLDivElement>(null)
   const [copiedPathToast, setCopiedPathToast] = useState<{ fileId: string; token: number } | null>(
     null
@@ -55,6 +56,7 @@ function EditorPanelInner({
   const [showMarkdownTableOfContents, setShowMarkdownTableOfContents] = useState(false)
   const [sideBySide, setSideBySide] = useState(settings?.diffDefaultView === 'side-by-side')
   const [prevDiffView, setPrevDiffView] = useState(settings?.diffDefaultView)
+  const markdownReviewToolsEnabled = settings?.markdownReviewToolsEnabled ?? true
 
   if (settings?.diffDefaultView !== prevDiffView) {
     setPrevDiffView(settings?.diffDefaultView)
@@ -252,6 +254,9 @@ function EditorPanelInner({
     }
     window.api.shell.openPath(activeFile.filePath)
   }
+  const handleToggleMarkdownReviewTools = (): void => {
+    void updateSettings({ markdownReviewToolsEnabled: !markdownReviewToolsEnabled })
+  }
   const disableRenameBrowse = Boolean(
     settingsForRuntimeOwner(
       settings,
@@ -268,6 +273,7 @@ function EditorPanelInner({
       model={model}
       copiedPathVisible={copiedPathToast?.fileId === activeFile.id}
       showMarkdownTableOfContents={showMarkdownTableOfContents}
+      markdownReviewToolsEnabled={markdownReviewToolsEnabled}
       sideBySide={sideBySide}
       fileContents={fileContents}
       diffContents={diffContents}
@@ -284,6 +290,7 @@ function EditorPanelInner({
       onToggleSideBySide={() => setSideBySide((prev) => !prev)}
       onEditorToggleChange={handleEditorToggleChange}
       onToggleMarkdownTableOfContents={() => setShowMarkdownTableOfContents((shown) => !shown)}
+      onToggleMarkdownReviewTools={handleToggleMarkdownReviewTools}
       onExportMarkdownToPdf={() => void exportActiveMarkdownToPdf()}
       onContentChange={handleContentChange}
       onDirtyStateHint={handleDirtyStateHint}
