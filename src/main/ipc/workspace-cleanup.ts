@@ -211,7 +211,10 @@ async function buildCandidate(args: {
   const prHit = rawPrHit
     ? {
         ...rawPrHit,
-        trustedForReady: rawPrHit.trustedForReady && !rawPrHit.stale && !prCacheAmbiguous
+        trustedForReady:
+          rawPrHit.trustedForReady &&
+          !prCacheAmbiguous &&
+          (!rawPrHit.stale || rawPrHit.pr?.state === 'merged')
       }
     : null
   const linkedPR = prHit?.pr
@@ -275,7 +278,7 @@ async function buildCandidate(args: {
       checkedAt: gitEvidence.checkedAt
     },
     prStateCheckedAt: prHit?.fetchedAt ?? null,
-    staleEvidence: rawPrHit?.stale ?? false,
+    staleEvidence: rawPrHit?.stale === true && prHit?.trustedForReady !== true,
     fingerprint: ''
   }
 
@@ -339,9 +342,6 @@ function shouldReadGitEvidence(args: {
   const { repoIsFolder, blockers, worktree, scannedAt, localContext, prHit, linkedPR, skipGit } =
     args
   if (skipGit || repoIsFolder || worktree.isMainWorktree) {
-    return false
-  }
-  if (prHit?.stale) {
     return false
   }
   if (

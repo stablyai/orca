@@ -137,10 +137,10 @@ describe('workspace cleanup scan', () => {
     vi.useRealTimers()
   })
 
-  it('does not default-select from stale cached PR evidence', async () => {
+  it('does not default-select from stale non-merged PR evidence', async () => {
     const staleFetchedAt = NOW - 5 * 60_000
 
-    const result = await scanWorkspaceCleanup(makeStore(staleFetchedAt))
+    const result = await scanWorkspaceCleanup(makeStore(staleFetchedAt, { prState: 'closed' }))
 
     expect(result.candidates[0]).toMatchObject({
       tier: 'review',
@@ -150,6 +150,25 @@ describe('workspace cleanup scan', () => {
     })
     expect(result.candidates[0].reasons).not.toContain('pr-merged')
     expect(getStatusMock).not.toHaveBeenCalled()
+  })
+
+  it('can default-select stale merged PR evidence after git proves the workspace clean', async () => {
+    const staleFetchedAt = NOW - 5 * 60_000
+
+    const result = await scanWorkspaceCleanup(makeStore(staleFetchedAt))
+
+    expect(getStatusMock).toHaveBeenCalledTimes(1)
+    expect(result.candidates[0]).toMatchObject({
+      tier: 'ready',
+      selectedByDefault: true,
+      staleEvidence: false,
+      prStateCheckedAt: staleFetchedAt,
+      reasons: ['pr-merged', 'idle-clean'],
+      git: {
+        clean: true,
+        upstreamAhead: 0
+      }
+    })
   })
 
   it('keeps raw scan errors out of renderer-facing results', async () => {
