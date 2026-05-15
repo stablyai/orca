@@ -137,6 +137,7 @@ import {
 import {
   clearProjectItemFieldValue,
   getProjectViewTable,
+  getWorkItemDetailsBySlug,
   listAccessibleProjects,
   listProjectViews,
   resolveProjectRef,
@@ -158,6 +159,7 @@ import type {
   ListIssueTypesBySlugArgs,
   ListLabelsBySlugArgs,
   ListProjectViewsArgs,
+  ProjectWorkItemDetailsBySlugArgs,
   ResolveProjectRefArgs,
   AddIssueCommentBySlugArgs,
   DeleteIssueCommentBySlugArgs,
@@ -4653,6 +4655,12 @@ export class OrcaRuntimeService {
     args: GetProjectViewTableArgs
   ): Promise<Awaited<ReturnType<typeof getProjectViewTable>>> {
     return getProjectViewTable(args)
+  }
+
+  async getGitHubProjectWorkItemDetailsBySlug(
+    args: ProjectWorkItemDetailsBySlugArgs
+  ): Promise<Awaited<ReturnType<typeof getWorkItemDetailsBySlug>>> {
+    return getWorkItemDetailsBySlug(args)
   }
 
   async updateGitHubProjectItemField(

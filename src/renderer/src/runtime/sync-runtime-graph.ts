@@ -6,6 +6,7 @@ import {
 } from '@/components/terminal-pane/layout-serialization'
 import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/terminal-lifecycle-diagnostics'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { AppState } from '@/store/types'
 import type {
   RuntimeMobileSessionFileTab,
@@ -46,10 +47,7 @@ let cachedOpenFileIndexesSource: AppState['openFiles'] | null = null
 let cachedOpenFileIndexes: OpenFileIndexes | null = null
 let cachedEditorDraftsSource: AppState['editorDrafts'] | null = null
 let cachedEditorDraftVersionByFileId: Map<string, string> | null = null
-const mobileSessionPublicationEpoch =
-  typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `renderer:${Date.now().toString(36)}`
+const mobileSessionPublicationEpoch = `renderer:${createBrowserUuid()}`
 
 export function setRuntimeGraphStoreStateGetter(getter: (() => AppState) | null): void {
   getStoreState = getter

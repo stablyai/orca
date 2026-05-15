@@ -3,6 +3,8 @@
    startup. Splitting by line count would fragment tightly coupled startup
    logic across files without a cleaner ownership seam. */
 import { grantDirAcl } from './win32-utils'
+import { existsSync } from 'fs'
+import { join } from 'path'
 import { app, BrowserWindow, nativeImage, nativeTheme } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
 import * as QRCode from 'qrcode'
@@ -449,6 +451,11 @@ function getServeOptions(argv = process.argv): ServeOptions {
   }
 }
 
+function getBundledWebClientRoot(): string | undefined {
+  const root = join(app.getAppPath(), 'out', 'web')
+  return existsSync(join(root, 'web-index.html')) ? root : undefined
+}
+
 async function renderTerminalPairingQr(pairingUrl: string): Promise<string | null> {
   try {
     return await QRCode.toString(pairingUrl, { type: 'terminal', small: true })
@@ -488,6 +495,7 @@ async function printServeReady(options: ServeOptions): Promise<void> {
               url: pairing.pairingUrl,
               endpoint: pairing.endpoint,
               deviceId: pairing.deviceId,
+              webClientUrl: pairing.webClientUrl,
               scope: options.mobilePairing ? 'mobile' : 'runtime',
               qr: pairingQr
             }
@@ -498,6 +506,9 @@ async function printServeReady(options: ServeOptions): Promise<void> {
   }
   console.log(`Orca server ready: ${endpoint ?? 'websocket unavailable'}`)
   if (pairing.available) {
+    if (pairing.webClientUrl) {
+      console.log(`Web client URL: ${pairing.webClientUrl}`)
+    }
     if (options.mobilePairing && pairingQr) {
       console.log(`Mobile pairing QR:\n${pairingQr}`)
     }
@@ -760,7 +771,8 @@ app.whenReady().then(async () => {
     enableWebSocket: true,
     ...(isE2E ? { wsPort: 0 } : {}),
     ...(devWsPort !== undefined ? { wsPort: devWsPort } : {}),
-    ...(serveOptions?.wsPort !== undefined ? { wsPort: serveOptions.wsPort } : {})
+    ...(serveOptions?.wsPort !== undefined ? { wsPort: serveOptions.wsPort } : {}),
+    webClientRoot: getBundledWebClientRoot()
   })
   registerMobileHandlers(runtimeRpc)
 

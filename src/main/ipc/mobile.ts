@@ -86,6 +86,36 @@ export function registerMobileHandlers(rpcServer: OrcaRuntimeRpcServer): void {
     }
   )
 
+  ipcMain.handle(
+    'mobile:getRuntimePairingUrl',
+    async (_event, args?: { address?: string; rotate?: boolean }) => {
+      const ip = args?.address ?? getLanAddress()
+      if (!ip) {
+        return { available: false as const }
+      }
+
+      // Why: web/desktop runtime clients need full runtime access, not the
+      // mobile allowlist used by phone QR pairing.
+      const offer = rpcServer.createPairingOffer({
+        address: ip,
+        rotate: args?.rotate,
+        name: `Runtime ${new Date().toLocaleDateString()}`,
+        scope: 'runtime'
+      })
+      if (!offer.available) {
+        return { available: false as const }
+      }
+
+      return {
+        available: true as const,
+        pairingUrl: offer.pairingUrl,
+        webClientUrl: offer.webClientUrl,
+        endpoint: offer.endpoint,
+        deviceId: offer.deviceId
+      }
+    }
+  )
+
   ipcMain.handle('mobile:listDevices', () => {
     const registry = rpcServer.getDeviceRegistry()
     if (!registry) {

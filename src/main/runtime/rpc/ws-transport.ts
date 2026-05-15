@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: the WebSocket transport owns connection
+   admission, heartbeat, pre-auth timeout, and client-id cleanup together; those
+   invariants are easier to audit in one transport boundary. */
 // Why: the WebSocket transport enables mobile clients to connect to the Orca
 // runtime over the local network. When TLS cert/key are provided it uses wss://
 // to prevent passive sniffing; otherwise it falls back to plain ws://. Per-device
@@ -7,6 +10,7 @@ import { createServer as createHttpsServer, type Server as HttpsServer } from 'h
 import { createServer as createHttpServer, type Server as HttpServer } from 'http'
 import { WebSocketServer, type WebSocket } from 'ws'
 import type { RpcTransport } from './transport'
+import { createStaticWebClientHandler } from './static-web-client-handler'
 
 const MAX_WS_MESSAGE_BYTES = 1024 * 1024
 const MAX_WS_CONNECTIONS = 32
@@ -41,6 +45,9 @@ export type WebSocketTransportOptions = {
   heartbeatIntervalMs?: number
   // Why: test-only override. Production uses PRE_AUTH_TIMEOUT_MS.
   preAuthTimeoutMs?: number
+  // Why: the pairing server can also serve the browser client, so users do
+  // not need a second dev/static server once the web bundle is built.
+  staticRoot?: string
 }
 
 export class WebSocketTransport implements RpcTransport {
@@ -50,6 +57,7 @@ export class WebSocketTransport implements RpcTransport {
   private readonly tlsKey: string | undefined
   private readonly heartbeatIntervalMs: number
   private readonly preAuthTimeoutMs: number
+  private readonly staticRoot: string | undefined
   private httpServer: HttpsServer | HttpServer | null = null
   private wss: WebSocketServer | null = null
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null
@@ -72,7 +80,8 @@ export class WebSocketTransport implements RpcTransport {
     tlsCert,
     tlsKey,
     heartbeatIntervalMs,
-    preAuthTimeoutMs
+    preAuthTimeoutMs,
+    staticRoot
   }: WebSocketTransportOptions) {
     this.host = host
     this.port = port
@@ -80,6 +89,7 @@ export class WebSocketTransport implements RpcTransport {
     this.tlsKey = tlsKey
     this.heartbeatIntervalMs = heartbeatIntervalMs ?? HEARTBEAT_INTERVAL_MS
     this.preAuthTimeoutMs = preAuthTimeoutMs ?? PRE_AUTH_TIMEOUT_MS
+    this.staticRoot = staticRoot
   }
 
   onMessage(handler: WebSocketMessageHandler): void {
@@ -150,9 +160,12 @@ export class WebSocketTransport implements RpcTransport {
   }
 
   private createHttpServer(): HttpServer | HttpsServer {
+    const requestListener = this.staticRoot
+      ? createStaticWebClientHandler(this.staticRoot)
+      : undefined
     return this.tlsCert && this.tlsKey
-      ? createHttpsServer({ cert: this.tlsCert, key: this.tlsKey })
-      : createHttpServer()
+      ? createHttpsServer({ cert: this.tlsCert, key: this.tlsKey }, requestListener)
+      : createHttpServer(requestListener)
   }
 
   // Why: the WebSocketServer is attached only after listen succeeds. If we

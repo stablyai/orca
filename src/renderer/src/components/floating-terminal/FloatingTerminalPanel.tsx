@@ -17,6 +17,7 @@ import { notifyProjectNotesSelectionChanged } from '@/lib/open-project-notes-tab
 import { requestProjectNotesTabClose } from '@/lib/project-notes-close-request'
 import { linkRuntimeProjectNote, showRuntimeProjectNote } from '@/runtime/runtime-notes-client'
 import { useAppStore } from '@/store'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { TerminalTab } from '../../../../shared/types'
 import { FloatingTerminalOrchestrationDialog } from './FloatingTerminalOrchestrationDialog'
@@ -237,7 +238,7 @@ export function FloatingTerminalPanel({
           notifyProjectNotesSelectionChanged()
         }
       }
-      const id = `floating-project-notes:${globalThis.crypto.randomUUID()}`
+      const id = `floating-project-notes:${createBrowserUuid()}`
       setNotesTabs((current) => [...current, { id, label, noteId: noteId ?? null, isDirty: false }])
       setActiveNotesTabId(id)
       setActiveSurface('notes')

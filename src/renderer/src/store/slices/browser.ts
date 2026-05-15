@@ -34,6 +34,7 @@ import type {
   BrowserProfileImportFromBrowserResult,
   BrowserProfileListResult
 } from '../../../../shared/runtime-types'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 type CreateBrowserTabOptions = {
   activate?: boolean
@@ -221,7 +222,7 @@ function buildBrowserPage(
 ): BrowserPage {
   const normalizedUrl = normalizeUrl(url)
   return {
-    id: globalThis.crypto.randomUUID(),
+    id: createBrowserUuid(),
     workspaceId,
     worktreeId,
     url: normalizedUrl,
@@ -355,7 +356,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   },
 
   createBrowserTab: (worktreeId, url, options) => {
-    const workspaceId = globalThis.crypto.randomUUID()
+    const workspaceId = createBrowserUuid()
     const page = buildBrowserPage(workspaceId, worktreeId, url, options?.title)
     // Why: when no explicit profile is passed, inherit the user's chosen default
     // profile. This lets users set a preferred profile in Settings that all new
@@ -1243,7 +1244,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         for (const tab of tabs) {
           const persistedPages = persistedPagesByWorkspace[tab.id] ?? [
             {
-              id: globalThis.crypto.randomUUID(),
+              id: createBrowserUuid(),
               workspaceId: tab.id,
               worktreeId,
               url: normalizeUrl(tab.url),

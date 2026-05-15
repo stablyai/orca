@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: these tests exercise one stateful transport
+   boundary across connection lifecycle, heartbeat, pre-auth timeout, and
+   shutdown behavior; splitting the setup would obscure the shared invariants. */
 import { mkdtempSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'

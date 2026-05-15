@@ -114,6 +114,17 @@ export async function refreshShellPathAndDetectAgents(): Promise<RefreshAgentsRe
   }
 }
 
+export async function detectRemoteAgents(args: { connectionId: string }): Promise<string[]> {
+  const mux = getActiveMultiplexer(args.connectionId)
+  if (!mux || mux.isDisposed()) {
+    throw new Error(`No active SSH connection for "${args.connectionId}"`)
+  }
+  const result = (await mux.request('preflight.detectAgents', {
+    commands: KNOWN_AGENT_COMMANDS
+  })) as { agents: string[] }
+  return result.agents
+}
+
 async function isGhAuthenticated(): Promise<boolean> {
   try {
     await execFileAsync('gh', ['auth', 'status'], {
@@ -199,14 +210,7 @@ export function registerPreflightHandlers(): void {
   ipcMain.handle(
     'preflight:detectRemoteAgents',
     async (_event, args: { connectionId: string }): Promise<string[]> => {
-      const mux = getActiveMultiplexer(args.connectionId)
-      if (!mux || mux.isDisposed()) {
-        throw new Error(`No active SSH connection for "${args.connectionId}"`)
-      }
-      const result = (await mux.request('preflight.detectAgents', {
-        commands: KNOWN_AGENT_COMMANDS
-      })) as { agents: string[] }
-      return result.agents
+      return detectRemoteAgents(args)
     }
   )
 }
