@@ -601,11 +601,12 @@ describe('connectPanePty', () => {
       return 'pty-local-1'
     })
     transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
     mockStoreState = {
       ...mockStoreState,
       agentStatusByPaneKey: {
-        'tab-1:1': {
-          paneKey: 'tab-1:1',
+        [paneKey]: {
+          paneKey,
           state: 'done',
           prompt: 'hi',
           updatedAt: 1000,
@@ -624,7 +625,7 @@ describe('connectPanePty', () => {
 
     capturedDataCallback.current?.('\x1b]133;D;130\x07thebr ~/repo $ ')
 
-    expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith('tab-1:1')
+    expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
     expect(mockStoreState.removeAgentStatus).not.toHaveBeenCalled()
   })
 
