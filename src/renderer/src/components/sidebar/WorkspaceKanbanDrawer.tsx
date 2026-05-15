@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useAllWorktrees, useRepoMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
@@ -234,6 +234,30 @@ export default function WorkspaceKanbanDrawer({
 
   useWorkspaceStatusDocumentDrop(boardRef, moveWorktreeToStatus, pinWorktree, handleDragFinish)
 
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    const handlePointerDown = (event: PointerEvent): void => {
+      const content = boardRef.current?.closest<HTMLElement>('[data-slot="sheet-content"]')
+      if (!content) {
+        return
+      }
+      const target = event.target
+      if (target instanceof Node && content.contains(target)) {
+        return
+      }
+      const rect = content.getBoundingClientRect()
+      if (event.clientX > rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom) {
+        onOpenChange(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown, true)
+    return () => document.removeEventListener('pointerdown', handlePointerDown, true)
+  }, [onOpenChange, open])
+
   const opacityPercent = Math.round(workspaceBoardOpacity * 100)
   const drawerLeft = sidebarOpen ? sidebarWidth : 0
   const BoardModeIcon = workspaceBoardCompact ? Rows3 : LayoutList
@@ -244,7 +268,7 @@ export default function WorkspaceKanbanDrawer({
         side="left"
         showCloseButton={false}
         className="workspace-kanban-sheet-content bg-sidebar p-0 sm:max-w-none"
-        overlayStyle={{ top: 36, left: drawerLeft }}
+        overlayStyle={{ top: 36, left: drawerLeft, pointerEvents: 'none' }}
         style={
           {
             // Why: the board is a companion to the workspace sidebar, so it
@@ -257,10 +281,18 @@ export default function WorkspaceKanbanDrawer({
           } as React.CSSProperties
         }
         data-workspace-board-compact={workspaceBoardCompact ? 'true' : 'false'}
-        onInteractOutside={(event) => {
-          // Why: users need to scroll, click, and drag from the workspace
-          // sidebar while the companion board stays open.
+        onOpenAutoFocus={(event) => {
+          // Why: Radix focuses the first toolbar button on open, which opens
+          // its tooltip without hover and makes the drawer feel noisy.
           event.preventDefault()
+        }}
+        onInteractOutside={(event) => {
+          const originalEvent = event.detail.originalEvent
+          if (originalEvent instanceof PointerEvent && originalEvent.clientX < drawerLeft) {
+            // Why: users need to scroll, click, and drag from the workspace
+            // sidebar while the companion board stays open.
+            event.preventDefault()
+          }
         }}
       >
         <SheetHeader className="border-b border-sidebar-border px-4 py-3 pr-24">
