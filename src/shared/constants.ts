@@ -59,6 +59,15 @@ function defaultTerminalFontFamily(): string {
   }
   return 'SF Mono' // macOS default
 }
+
+export function getDefaultPrimarySelectionMiddleClickPaste(platform = ''): boolean {
+  return platform === 'linux'
+}
+
+function defaultPrimarySelectionMiddleClickPaste(): boolean {
+  const platform = typeof process !== 'undefined' ? process.platform : ''
+  return getDefaultPrimarySelectionMiddleClickPaste(platform)
+}
 /**
  * Why: ProseMirror builds an in-memory tree for the entire document, so large
  * markdown files cause noticeable typing lag in the rich editor. Files above
@@ -168,6 +177,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
     editorMinimapEnabled: false,
     markdownReviewToolsEnabled: true,
+    primarySelectionMiddleClickPaste: defaultPrimarySelectionMiddleClickPaste(),
     terminalFontSize: 14,
     terminalFontFamily: defaultTerminalFontFamily(),
     terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT,

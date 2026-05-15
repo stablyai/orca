@@ -1271,6 +1271,10 @@ export type GlobalSettings = {
   editorMinimapEnabled: boolean
   /** Whether local markdown review note controls and the review panel are shown. */
   markdownReviewToolsEnabled: boolean
+  /** Why: mirrors X11 primary-selection muscle memory without mutating the
+   *  normal system clipboard; Linux enables it by default, other platforms
+   *  leave middle-click semantics unchanged unless the user opts in. */
+  primarySelectionMiddleClickPaste?: boolean
   terminalFontSize: number
   terminalFontFamily: string
   terminalFontWeight: number

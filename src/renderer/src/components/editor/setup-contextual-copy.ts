@@ -1,5 +1,6 @@
 import type { editor } from 'monaco-editor'
 import { formatCopiedSelectionWithContext, getContextualCopyLineRange } from './selection-copy'
+import { setPrimarySelectionText } from '@/lib/primary-selection'
 
 export function setupContextualCopy({
   editorInstance,
@@ -180,6 +181,15 @@ export function setupContextualCopy({
     })
   }
 
+  const updatePrimarySelectionBuffer = (): void => {
+    const model = editorInstance.getModel()
+    const selection = editorInstance.getSelection()
+    if (!model || !selection || selection.isEmpty()) {
+      return
+    }
+    setPrimarySelectionText(model.getValueInRange(selection))
+  }
+
   const copySelectionWithContext = async (): Promise<boolean> => {
     const copiedText = getContextualCopyText()
     if (!copiedText) {
@@ -212,6 +222,7 @@ export function setupContextualCopy({
   })
 
   editorInstance.onDidChangeCursorSelection(() => {
+    updatePrimarySelectionBuffer()
     if (getSelectionKey() !== lastCopiedSelectionKey) {
       lastCopiedSelectionKey = null
     }

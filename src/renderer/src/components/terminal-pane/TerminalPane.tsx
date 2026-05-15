@@ -48,6 +48,7 @@ import {
   getRemoteRuntimePtyEnvironmentId,
   getRemoteRuntimeTerminalHandle
 } from '@/runtime/runtime-terminal-stream'
+import { getPrimarySelectionText, isPrimarySelectionEnabled } from '@/lib/primary-selection'
 
 // Why: registry lives in a leaf module so the store slice can import it
 // without re-entering the `slice → TerminalPane → store → slice` cycle
@@ -1066,6 +1067,67 @@ export default function TerminalPane({
     rightClickToPaste
   })
 
+  const terminalShouldHandleMiddleClick = useCallback(
+    (target: EventTarget | null): target is Node => {
+      if (!(target instanceof Element)) {
+        return false
+      }
+      if (target.closest('[data-terminal-search-root]')) {
+        return false
+      }
+      const editable = target.closest(
+        'input, textarea, [contenteditable=""], [contenteditable="true"]'
+      )
+      return !editable || editable.classList.contains('xterm-helper-textarea')
+    },
+    []
+  )
+
+  const handlePrimarySelectionMiddleMouseDown = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>): void => {
+      const target = event.target
+      if (event.button !== 1 || !terminalShouldHandleMiddleClick(target)) {
+        return
+      }
+      if (!isPrimarySelectionEnabled()) {
+        return
+      }
+      const text = getPrimarySelectionText()
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      const clickedPane =
+        manager.getPanes().find((pane) => pane.container.contains(target)) ??
+        manager.getActivePane() ??
+        manager.getPanes()[0]
+      if (!clickedPane) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      if (text) {
+        clickedPane.terminal.paste(text)
+      }
+      clickedPane.terminal.focus()
+    },
+    [terminalShouldHandleMiddleClick]
+  )
+
+  const handlePrimarySelectionAuxClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>): void => {
+      if (
+        event.button === 1 &&
+        isPrimarySelectionEnabled() &&
+        terminalShouldHandleMiddleClick(event.target)
+      ) {
+        event.preventDefault()
+        event.stopPropagation()
+      }
+    },
+    [terminalShouldHandleMiddleClick]
+  )
+
   const effectiveAppearance = settings
     ? resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
     : null
@@ -1093,6 +1155,8 @@ export default function TerminalPane({
         data-terminal-tab-id={tabId}
         style={terminalContainerStyle}
         onContextMenuCapture={contextMenu.onContextMenuCapture}
+        onMouseDownCapture={handlePrimarySelectionMiddleMouseDown}
+        onAuxClickCapture={handlePrimarySelectionAuxClick}
         onDragOver={(e) => {
           if (e.dataTransfer.types.includes('text/x-orca-file-path')) {
             e.preventDefault()

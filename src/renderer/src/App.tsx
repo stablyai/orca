@@ -62,6 +62,10 @@ import { useEditorExternalWatch } from './hooks/useEditorExternalWatch'
 import { useAutoAckViewedAgent } from './hooks/useAutoAckViewedAgent'
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
 import {
+  resolvePrimarySelectionMiddleClickPaste,
+  usePrimarySelectionPaste
+} from './hooks/usePrimarySelectionPaste'
+import {
   getRuntimeMobileSessionSyncKey,
   runtimeMobileSessionSyncKeysEqual,
   scheduleRuntimeGraphSync,
@@ -336,6 +340,10 @@ function App(): React.JSX.Element {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
+  const primarySelectionMiddleClickPaste = resolvePrimarySelectionMiddleClickPaste(
+    settings?.primarySelectionMiddleClickPaste
+  )
+  usePrimarySelectionPaste(primarySelectionMiddleClickPaste)
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
   const petVisible = useAppStore((s) => s.petVisible)
   const canGoBackWorktree = useAppStore(canGoBackWorktreeHistory)

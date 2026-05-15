@@ -44,6 +44,7 @@ import { isPaneReplaying, type ReplayingPanesRef } from './replay-guard'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import { registerRuntimeTerminalTab, scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { e2eConfig } from '@/lib/e2e-config'
+import { setPrimarySelectionText } from '@/lib/primary-selection'
 import {
   SPLIT_TERMINAL_PANE_EVENT,
   CLOSE_TERMINAL_PANE_EVENT,
@@ -474,11 +475,12 @@ export function useTerminalPaneLifecycle({
         // Why: skip empty selections so clicking to deselect doesn't clobber
         // whatever the user last copied elsewhere.
         const selectionDisposable = pane.terminal.onSelectionChange(() => {
-          if (!settingsRef.current?.terminalClipboardOnSelect) {
-            return
-          }
           const selection = pane.terminal.getSelection()
           if (!selection) {
+            return
+          }
+          setPrimarySelectionText(selection)
+          if (!settingsRef.current?.terminalClipboardOnSelect) {
             return
           }
           void window.api.ui.writeClipboardText(selection).catch(() => {
