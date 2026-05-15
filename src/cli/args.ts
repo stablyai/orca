@@ -14,7 +14,7 @@ export type CommandSpec = {
   notes?: string[]
 }
 
-export const GLOBAL_FLAGS = ['help', 'json']
+export const GLOBAL_FLAGS = ['help', 'json', 'pairing-code', 'environment']
 
 export function parseArgs(argv: string[]): ParsedArgs {
   const commandPath: string[] = []
@@ -93,6 +93,7 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'storage',
         'orchestration',
         'computer',
+        'environment',
         'note'
       ].includes(commandPath[0])) ||
     (commandPath.length === 2 &&

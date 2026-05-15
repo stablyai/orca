@@ -26,6 +26,7 @@ import { toast } from 'sonner'
 
 import { useAppStore } from '@/store'
 import { useRepoMap } from '@/store/selectors'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -85,9 +86,16 @@ import type {
   GitLabTodo,
   GitLabWorkItem,
   LinearIssue,
+  Repo,
   TaskViewPresetId
 } from '../../../shared/types'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
+import {
+  linearCreateIssue,
+  linearGetIssue,
+  linearListTeams,
+  linearUpdateIssue
+} from '@/runtime/runtime-linear-client'
 
 type TaskSource = 'github' | 'linear' | 'gitlab'
 
@@ -103,6 +111,18 @@ type TaskQueryPreset = {
   id: TaskViewPresetId
   label: string
   query: string
+}
+
+function getRuntimeTargetForRepoId(repoId: string | null | undefined) {
+  if (!repoId) {
+    return null
+  }
+  const state = useAppStore.getState()
+  const target = getActiveRuntimeTarget(state.settings)
+  if (target.kind !== 'environment') {
+    return null
+  }
+  return state.repos.some((repo) => repo.id === repoId) ? target : null
 }
 
 type SourceOption = {
@@ -219,10 +239,10 @@ const LINEAR_PRIORITY_LABELS: Record<number, string> = {
 
 function GHStatusCell({
   item,
-  repoPath
+  repo
 }: {
   item: GitHubWorkItem
-  repoPath: string | null
+  repo: Repo | null
 }): React.JSX.Element {
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const [localState, setLocalState] = useState(item.state)
@@ -235,15 +255,28 @@ function GHStatusCell({
 
   const handleStateChange = useCallback(
     (newState: 'open' | 'closed') => {
-      if (newState === localState || !repoPath || item.type !== 'issue') {
+      if (newState === localState || !repo || item.type !== 'issue') {
         return
       }
       reqRef.current += 1
       const reqId = reqRef.current
       setLocalState(newState)
       patchWorkItem(item.id, { state: newState })
-      window.api.gh
-        .updateIssue({ repoPath, number: item.number, updates: { state: newState } })
+      const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+      const updatePromise =
+        target.kind === 'environment'
+          ? callRuntimeRpc<{ ok?: boolean; error?: string }>(
+              target,
+              'github.updateIssue',
+              { repo: repo.id, number: item.number, updates: { state: newState } },
+              { timeoutMs: 30_000 }
+            )
+          : window.api.gh.updateIssue({
+              repoPath: repo.path,
+              number: item.number,
+              updates: { state: newState }
+            })
+      updatePromise
         .then((result) => {
           if (reqId !== reqRef.current) {
             return
@@ -264,10 +297,10 @@ function GHStatusCell({
           toast.error('Failed to update state')
         })
     },
-    [item.id, item.number, item.type, localState, repoPath, patchWorkItem]
+    [item.id, item.number, item.type, localState, repo, patchWorkItem]
   )
 
-  if (item.type !== 'issue' || !repoPath) {
+  if (item.type !== 'issue' || !repo) {
     return (
       <span
         className={cn(
@@ -334,6 +367,7 @@ function GHStatusCell({
 function LinearStatusCell({ issue }: { issue: LinearIssue }): React.JSX.Element {
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
+  const settings = useAppStore((s) => s.settings)
   const [localState, setLocalState] = useState(issue.state)
   const reqRef = useRef(0)
 
@@ -342,7 +376,7 @@ function LinearStatusCell({ issue }: { issue: LinearIssue }): React.JSX.Element 
   }, [issue.state])
 
   const teamId = issue.team?.id || null
-  const states = useTeamStates(teamId)
+  const states = useTeamStates(teamId, settings)
 
   const handleStateChange = useCallback(
     (stateId: string) => {
@@ -357,8 +391,7 @@ function LinearStatusCell({ issue }: { issue: LinearIssue }): React.JSX.Element 
 
       setLocalState(stateValue)
       patchLinearIssue(issue.id, { state: stateValue })
-      window.api.linear
-        .updateIssue({ id: issue.id, updates: { stateId } })
+      linearUpdateIssue(settings, issue.id, { stateId })
         .then((result) => {
           if (reqId !== reqRef.current) {
             return
@@ -381,7 +414,7 @@ function LinearStatusCell({ issue }: { issue: LinearIssue }): React.JSX.Element 
           toast.error('Failed to update status')
         })
     },
-    [issue.id, issue.state, states.data, patchLinearIssue, fetchLinearIssue]
+    [issue.id, issue.state, settings, states.data, patchLinearIssue, fetchLinearIssue]
   )
 
   const currentStateId = states.data.find(
@@ -442,6 +475,7 @@ function LinearStatusCell({ issue }: { issue: LinearIssue }): React.JSX.Element 
 function LinearPriorityCell({ issue }: { issue: LinearIssue }): React.JSX.Element {
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
+  const settings = useAppStore((s) => s.settings)
   const [localPriority, setLocalPriority] = useState(issue.priority)
   const [pending, setPending] = useState(false)
   const reqRef = useRef(0)
@@ -460,8 +494,7 @@ function LinearPriorityCell({ issue }: { issue: LinearIssue }): React.JSX.Elemen
       setLocalPriority(priority)
       patchLinearIssue(issue.id, { priority })
       setPending(true)
-      window.api.linear
-        .updateIssue({ id: issue.id, updates: { priority } })
+      linearUpdateIssue(settings, issue.id, { priority })
         .then((result) => {
           if (reqId !== reqRef.current) {
             return
@@ -490,7 +523,7 @@ function LinearPriorityCell({ issue }: { issue: LinearIssue }): React.JSX.Elemen
           setPending(false)
         })
     },
-    [issue.id, issue.priority, localPriority, patchLinearIssue, fetchLinearIssue]
+    [issue.id, issue.priority, localPriority, settings, patchLinearIssue, fetchLinearIssue]
   )
 
   const [open, setOpen] = useState(false)
@@ -1066,14 +1099,13 @@ export default function TaskPage(): React.JSX.Element {
     if (taskSource !== 'linear' || !linearStatus.connected) {
       return
     }
-    void window.api.linear
-      .listTeams()
+    void linearListTeams(settings)
       .then(setAvailableTeams)
       .catch(() => {
         console.warn('[TaskPage] Failed to fetch Linear teams')
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskSource, linearStatus.connected, taskResumeApplied])
+  }, [settings, taskSource, linearStatus.connected, taskResumeApplied])
 
   // Why: stable key for `selectedRepos` so the GitLab fetch effect below
   // doesn't re-run on every parent re-render just because the array
@@ -1619,11 +1651,19 @@ export default function TaskPage(): React.JSX.Element {
     }
     setNewIssueSubmitting(true)
     try {
-      const result = await window.api.gh.createIssue({
-        repoPath: newIssueTargetRepo.path,
-        title,
-        body: newIssueBody
-      })
+      const target = getRuntimeTargetForRepoId(newIssueTargetRepo.id)
+      const result = target
+        ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.createIssue>>>(
+            target,
+            'github.createIssue',
+            { repo: newIssueTargetRepo.id, title, body: newIssueBody },
+            { timeoutMs: 30_000 }
+          )
+        : await window.api.gh.createIssue({
+            repoPath: newIssueTargetRepo.path,
+            title,
+            body: newIssueBody
+          })
       if (!result.ok) {
         toast.error(result.error || 'Failed to create issue.')
         return
@@ -1659,8 +1699,19 @@ export default function TaskPage(): React.JSX.Element {
       }
       setDialogWorkItem(stub)
       const stubRepoId = newIssueTargetRepo.id
-      void window.api.gh
-        .workItem({ repoPath: newIssueTargetRepo.path, number: result.number, type: 'issue' })
+      const fullIssuePromise = target
+        ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.workItem>>>(
+            target,
+            'github.workItem',
+            { repo: newIssueTargetRepo.id, number: result.number, type: 'issue' },
+            { timeoutMs: 30_000 }
+          )
+        : window.api.gh.workItem({
+            repoPath: newIssueTargetRepo.path,
+            number: result.number,
+            type: 'issue'
+          })
+      void fullIssuePromise
         .then((full) => {
           if (full) {
             // Why: `full` is `Omit<GitHubWorkItem, 'repoId'>` (IPC shape).
@@ -1687,7 +1738,7 @@ export default function TaskPage(): React.JSX.Element {
     }
     setNewLinearIssueSubmitting(true)
     try {
-      const result = await window.api.linear.createIssue({
+      const result = await linearCreateIssue(settings, {
         teamId: newLinearIssueTargetTeam.id,
         title,
         description: newLinearIssueBody || undefined
@@ -1711,8 +1762,7 @@ export default function TaskPage(): React.JSX.Element {
 
       // Why: auto-open the new issue in the side drawer so the user sees
       // exactly what was filed, mirroring the GitHub create-issue flow.
-      void window.api.linear
-        .getIssue({ id: result.id })
+      void linearGetIssue(settings, result.id)
         .then((full) => {
           if (full) {
             setDrawerLinearIssue(full)
@@ -1727,6 +1777,7 @@ export default function TaskPage(): React.JSX.Element {
     newLinearIssueSubmitting,
     newLinearIssueTargetTeam,
     newLinearIssueTitle,
+    settings,
     setDrawerLinearIssue
   ])
 
@@ -2693,7 +2744,7 @@ export default function TaskPage(): React.JSX.Element {
                         </div>
 
                         <div className="flex items-center">
-                          <GHStatusCell item={item} repoPath={itemRepo?.path ?? null} />
+                          <GHStatusCell item={item} repo={itemRepo ?? null} />
                         </div>
 
                         <Tooltip>

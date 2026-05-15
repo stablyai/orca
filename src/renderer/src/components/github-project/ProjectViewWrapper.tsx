@@ -29,6 +29,7 @@ import { GhAuthErrorHelp } from '@/components/github-project/GhAuthErrorHelp'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { useRepoSlugIndex } from '@/lib/repo-slug-index'
 import { cn } from '@/lib/utils'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 import { projectViewCacheKey } from '@/store/slices/github'
 import type {
@@ -38,7 +39,8 @@ import type {
   GitHubProjectRow,
   GitHubProjectTable,
   GitHubProjectViewError,
-  GitHubProjectViewSummary
+  GitHubProjectViewSummary,
+  ListProjectViewsResult
 } from '../../../../shared/github-project-types'
 import type { GitHubWorkItem } from '../../../../shared/types'
 import ProjectPicker, { type ResolvedProjectSelection } from './ProjectPicker'
@@ -46,6 +48,18 @@ import ProjectViewList from './ProjectViewList'
 import ProjectItemSlugDialog from './ProjectItemSlugDialog'
 
 type Props = Record<string, never>
+
+function listProjectViewsForRuntime(
+  settings: Parameters<typeof getActiveRuntimeTarget>[0],
+  args: { owner: string; ownerType: 'organization' | 'user'; projectNumber: number }
+): Promise<ListProjectViewsResult> {
+  const target = getActiveRuntimeTarget(settings)
+  return target.kind === 'environment'
+    ? callRuntimeRpc<ListProjectViewsResult>(target, 'github.project.listViews', args, {
+        timeoutMs: 30_000
+      })
+    : window.api.gh.listProjectViews(args)
+}
 
 export default function ProjectViewWrapper(_props: Props = {} as Props): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
@@ -59,7 +73,10 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
   const lookupSlug = useRepoSlugIndex()
 
   const activeProject = settings?.githubProjects?.activeProject ?? null
-  const lastViewByProject = settings?.githubProjects?.lastViewByProject ?? {}
+  const lastViewByProject = useMemo(
+    () => settings?.githubProjects?.lastViewByProject ?? {},
+    [settings?.githubProjects?.lastViewByProject]
+  )
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<{
@@ -165,12 +182,11 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
       return
     }
     let cancelled = false
-    void window.api.gh
-      .listProjectViews({
-        owner: activeProject.owner,
-        ownerType: activeProject.ownerType,
-        projectNumber: activeProject.number
-      })
+    void listProjectViewsForRuntime(settings, {
+      owner: activeProject.owner,
+      ownerType: activeProject.ownerType,
+      projectNumber: activeProject.number
+    })
       .then((res) => {
         if (cancelled) {
           return
@@ -192,7 +208,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
     return () => {
       cancelled = true
     }
-  }, [activeProject, viewListByProject])
+  }, [activeProject, viewListByProject, settings])
 
   const handleSwitchView = useCallback(
     async (viewId: string) => {
@@ -232,7 +248,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
         viewId
       })
     },
-    [activeProject, doFetch, lastViewByProject, settings]
+    [activeProject, doFetch, lastViewByProject]
   )
 
   const currentProjectViewKey = useMemo(() => {

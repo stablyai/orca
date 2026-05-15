@@ -272,7 +272,7 @@ function FileExplorerInner(): React.JSX.Element {
     scrollRef
   })
 
-  const handleDuplicate = useFileDuplicate({ worktreePath, refreshDir })
+  const handleDuplicate = useFileDuplicate({ activeWorktreeId, worktreePath, refreshDir })
 
   if (!worktreePath) {
     return (

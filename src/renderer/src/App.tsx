@@ -368,6 +368,10 @@ function App(): React.JSX.Element {
     let reconnectStarted = false
     void (async () => {
       try {
+        // Why: repo/worktree hydration routes through settings.activeRuntimeEnvironmentId.
+        // Load settings first so a persisted remote runtime does not boot against
+        // the local filesystem and then hydrate stale local workspace state.
+        await actions.fetchSettings()
         await actions.fetchRepos()
         await actions.fetchAllWorktrees()
         const persistedUI = await window.api.ui.get()
@@ -377,10 +381,6 @@ function App(): React.JSX.Element {
           hydratePersistedUI: actions.hydratePersistedUI
         })
         const session = await window.api.session.get()
-        // Why: settings must be loaded before hydrateWorkspaceSession so that
-        // hydration has access to user preferences. Without this, settings
-        // would still be null at hydration time.
-        await actions.fetchSettings()
         if (!cancelled) {
           actions.hydrateWorkspaceSession(session)
           actions.hydrateTabsSession(session)

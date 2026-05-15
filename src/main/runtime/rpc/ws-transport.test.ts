@@ -23,7 +23,8 @@ describe('WebSocketTransport', () => {
   })
 
   async function createTransport(
-    handler?: (msg: string, reply: (response: string) => void) => void
+    handler?: (msg: string, reply: (response: string) => void) => void,
+    options: { preAuthTimeoutMs?: number } = {}
   ) {
     const tls = makeTls()
     const transport = new WebSocketTransport({
@@ -32,7 +33,8 @@ describe('WebSocketTransport', () => {
       // Port 0 lets the OS reserve an available port atomically.
       port: 0,
       tlsCert: tls.cert,
-      tlsKey: tls.key
+      tlsKey: tls.key,
+      preAuthTimeoutMs: options.preAuthTimeoutMs
     })
     if (handler) {
       transport.onMessage(handler)
@@ -41,7 +43,8 @@ describe('WebSocketTransport', () => {
     return { transport, tls }
   }
 
-  function connectWs(port: number): Promise<WebSocket> {
+  function connectWs(target: number | WebSocketTransport): Promise<WebSocket> {
+    const port = typeof target === 'number' ? target : target.resolvedPort
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(`wss://127.0.0.1:${port}`, {
         rejectUnauthorized: false
@@ -75,7 +78,7 @@ describe('WebSocketTransport', () => {
 
     await transport.start()
 
-    const ws = await connectWs(transport.resolvedPort)
+    const ws = await connectWs(transport)
     const response = await sendAndReceive(
       ws,
       JSON.stringify({ id: 'req-1', method: 'test', deviceToken: 'tok' })
@@ -99,9 +102,9 @@ describe('WebSocketTransport', () => {
     await transport.start()
 
     const clients = await Promise.all([
-      connectWs(transport.resolvedPort),
-      connectWs(transport.resolvedPort),
-      connectWs(transport.resolvedPort)
+      connectWs(transport),
+      connectWs(transport),
+      connectWs(transport)
     ])
 
     const responses = await Promise.all(
@@ -125,7 +128,7 @@ describe('WebSocketTransport', () => {
 
     await transport.start()
 
-    const ws = await connectWs(transport.resolvedPort)
+    const ws = await connectWs(transport)
 
     const r1 = sendAndReceive(ws, JSON.stringify({ id: 'a', method: 'first' }))
     const resp1 = JSON.parse(await r1)
@@ -148,7 +151,7 @@ describe('WebSocketTransport', () => {
 
     await transport.start()
 
-    const ws = await connectWs(transport.resolvedPort)
+    const ws = await connectWs(transport)
     const messages: string[] = []
 
     await new Promise<void>((resolve) => {
@@ -173,7 +176,7 @@ describe('WebSocketTransport', () => {
 
     await transport.start()
 
-    const ws = await connectWs(transport.resolvedPort)
+    const ws = await connectWs(transport)
 
     // Why: ws maxPayload is 1MB — sending >1MB should trigger close.
     const oversized = 'x'.repeat(1024 * 1024 + 100)
@@ -193,7 +196,7 @@ describe('WebSocketTransport', () => {
 
     await transport.start()
 
-    const ws = await connectWs(transport.resolvedPort)
+    const ws = await connectWs(transport)
     ws.send(JSON.stringify({ id: 'req-1', method: 'test' }))
 
     // Why: wait for the handler to capture the reply function.
@@ -213,6 +216,87 @@ describe('WebSocketTransport', () => {
 
     // Should not throw — guards with readyState check.
     expect(() => capturedReply!(JSON.stringify({ id: 'req-1', ok: true }))).not.toThrow()
+  })
+
+  it('runs connection cleanup for sockets that close before auth', async () => {
+    const { transport } = await createTransport()
+    const calls: { clientId: string | null; hasOtherConnections: boolean }[] = []
+    transport.onConnectionClose((clientId, _ws, hasOtherConnections) => {
+      calls.push({ clientId, hasOtherConnections })
+    })
+
+    await transport.start()
+
+    const ws = await connectWs(transport)
+    ws.close()
+
+    const start = Date.now()
+    while (calls.length === 0 && Date.now() - start < 2_000) {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+
+    expect(calls).toEqual([{ clientId: null, hasOtherConnections: false }])
+  })
+
+  it('terminates every active connection for a revoked client id', async () => {
+    const { transport } = await createTransport()
+    const closedClientIds: (string | null)[] = []
+    transport.onConnectionClose((clientId) => {
+      closedClientIds.push(clientId)
+    })
+
+    await transport.start()
+
+    const clients = await Promise.all([connectWs(transport), connectWs(transport)])
+    const wss = (transport as unknown as { wss: { clients: Set<WebSocket> } }).wss
+    for (const client of wss.clients) {
+      transport.setClientId(client, 'device-token')
+    }
+
+    expect(transport.terminateClientConnections('device-token')).toBe(2)
+
+    await Promise.all(
+      clients.map(
+        (client) =>
+          new Promise<void>((resolve) => {
+            if (client.readyState === client.CLOSED) {
+              resolve()
+              return
+            }
+            client.once('close', () => resolve())
+          })
+      )
+    )
+
+    const start = Date.now()
+    while (closedClientIds.length < 2 && Date.now() - start < 2_000) {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+
+    expect(closedClientIds).toEqual(['device-token', 'device-token'])
+  })
+
+  it('reaps silent pre-auth sockets so they cannot hold the connection cap', async () => {
+    const { transport } = await createTransport(undefined, { preAuthTimeoutMs: 50 })
+    await transport.start()
+
+    const clients = await Promise.all(Array.from({ length: 32 }, () => connectWs(transport)))
+    await Promise.all(
+      clients.map(
+        (client) =>
+          new Promise<void>((resolve) => {
+            if (client.readyState === client.CLOSED) {
+              resolve()
+              return
+            }
+            client.once('close', () => resolve())
+          })
+      )
+    )
+
+    const liveClient = await connectWs(transport)
+    expect(liveClient.readyState).toBe(liveClient.OPEN)
+    liveClient.close()
   })
 
   it('is idempotent on double start', async () => {
@@ -282,7 +366,7 @@ describe('WebSocketTransport', () => {
     // start so we can stamp every accepted ws with a token.
     await transport.start()
 
-    const ws = await connectWs(transport.resolvedPort)
+    const ws = await connectWs(transport)
     // Why: pausing the underlying TCP socket halts both read (ping in)
     // and write (pong out) at the kernel level, so the `ws` library's
     // auto-pong can't actually be flushed back. From the server's

@@ -49,10 +49,10 @@ export async function sendRequest<TResult>(
       settled = true
       clearTimeout(timeout)
       socket.end()
-      if (result.ok) {
-        resolve(result.response)
-      } else {
+      if (result.ok === false) {
         reject(result.error)
+      } else {
+        resolve(result.response)
       }
     }
 

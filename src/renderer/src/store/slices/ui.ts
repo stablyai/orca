@@ -259,6 +259,7 @@ export type UISlice = {
       | 'accounts'
       | 'voice'
       | 'experimental'
+      | 'servers'
       | 'mobile'
       | 'ssh'
     repoId: string | null

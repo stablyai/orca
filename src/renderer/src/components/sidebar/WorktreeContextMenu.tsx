@@ -27,6 +27,7 @@ import type { Worktree } from '../../../../shared/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
+import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 
 type Props = {
   worktree: Worktree
@@ -100,8 +101,16 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   }, [])
 
   const handleOpenInFinder = useCallback(() => {
+    if (
+      isLocalPathOpenBlocked(useAppStore.getState().settings, {
+        connectionId: repo?.connectionId ?? null
+      })
+    ) {
+      showLocalPathOpenBlockedToast()
+      return
+    }
     window.api.shell.openPath(worktree.path)
-  }, [worktree.path])
+  }, [repo?.connectionId, worktree.path])
 
   const handleCopyPath = useCallback(() => {
     window.api.ui.writeClipboardText(worktree.path)

@@ -32,6 +32,14 @@ import {
   notifyProjectNotesSelectionChanged
 } from '@/lib/open-project-notes-tab'
 import {
+  createRuntimeProjectNote,
+  listRuntimeProjectNotes,
+  linkRuntimeProjectNote,
+  resolveRuntimeNotesPanelState,
+  saveRuntimeProjectNote,
+  showRuntimeProjectNote
+} from '@/runtime/runtime-notes-client'
+import {
   ORCA_PROJECT_NOTES_REQUEST_CLOSE_EVENT,
   type ProjectNotesCloseRequestDetail
 } from '@/lib/project-notes-close-request'
@@ -78,6 +86,7 @@ export default function ProjectNotesTabContent({
   const worktree = useWorktreeById(worktreeId)
   const repo = useRepoById(worktree?.repoId ?? null)
   const projectId = repo?.id ?? worktree?.repoId ?? null
+  const settings = useAppStore((s) => s.settings)
 
   const [panelState, setPanelState] = useState<NotesPanelOpenState>({ state: 'noProject' })
   const [notes, setNotes] = useState<NoteSummary[]>([])
@@ -101,15 +110,19 @@ export default function ProjectNotesTabContent({
       setNotes([])
       return
     }
-    const result = await window.api.notes.list({ projectId, worktreeId, limit: 100 })
+    const result = await listRuntimeProjectNotes(settings, { projectId, worktreeId, limit: 100 })
     setNotes(result.notes)
-  }, [projectId, worktreeId])
+  }, [projectId, settings, worktreeId])
 
   const loadPanelState = useCallback(async (): Promise<void> => {
     try {
       setError(null)
       if (selectedNoteId && projectId) {
-        const result = await window.api.notes.show({ projectId, worktreeId, note: selectedNoteId })
+        const result = await showRuntimeProjectNote(settings, {
+          projectId,
+          worktreeId,
+          note: selectedNoteId
+        })
         setPanelState({ state: 'active', projectId, worktreeId, note: result.note })
         setDraft({
           id: result.note.id,
@@ -134,7 +147,7 @@ export default function ProjectNotesTabContent({
         await refreshNotes()
         return
       }
-      const next = await window.api.notes.panelState({ projectId, worktreeId })
+      const next = await resolveRuntimeNotesPanelState(settings, { projectId, worktreeId })
       setPanelState(next)
       if (next.state === 'active') {
         setDraft({
@@ -164,7 +177,7 @@ export default function ProjectNotesTabContent({
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }
-  }, [forceNew, projectId, refreshNotes, selectedNoteId, tabId, worktreeId])
+  }, [forceNew, projectId, refreshNotes, selectedNoteId, settings, tabId, worktreeId])
 
   useEffect(() => {
     void loadPanelState()
@@ -213,8 +226,13 @@ export default function ProjectNotesTabContent({
       if (!projectId) {
         return
       }
-      const result = await window.api.notes.show({ projectId, worktreeId, note: noteId })
-      await window.api.notes.link({ projectId, worktreeId, note: noteId, kind: 'active' })
+      const result = await showRuntimeProjectNote(settings, { projectId, worktreeId, note: noteId })
+      await linkRuntimeProjectNote(settings, {
+        projectId,
+        worktreeId,
+        note: noteId,
+        kind: 'active'
+      })
       setSelectedNoteId(noteId)
       setDraft({
         id: result.note.id,
@@ -231,7 +249,7 @@ export default function ProjectNotesTabContent({
       setDirty(false)
       await refreshNotes()
     },
-    [projectId, refreshNotes, tabId, worktreeId]
+    [projectId, refreshNotes, settings, tabId, worktreeId]
   )
 
   const saveDraft = useCallback(
@@ -251,7 +269,7 @@ export default function ProjectNotesTabContent({
       }
       setSaving(true)
       try {
-        const result = await window.api.notes.save({
+        const result = await saveRuntimeProjectNote(settings, {
           projectId,
           worktreeId,
           note: draft.id,
@@ -284,7 +302,7 @@ export default function ProjectNotesTabContent({
         setSaving(false)
       }
     },
-    [canSave, draft, projectId, refreshNotes, tabId, worktreeId]
+    [canSave, draft, projectId, refreshNotes, settings, tabId, worktreeId]
   )
 
   useEffect(() => {
@@ -350,7 +368,7 @@ export default function ProjectNotesTabContent({
     }
     setSaving(true)
     try {
-      const result = await window.api.notes.create({
+      const result = await createRuntimeProjectNote(settings, {
         projectId,
         worktreeId,
         title,
@@ -385,7 +403,7 @@ export default function ProjectNotesTabContent({
     } finally {
       setSaving(false)
     }
-  }, [draft.bodyMarkdown, projectId, refreshNotes, saveAsTitle, tabId, worktreeId])
+  }, [draft.bodyMarkdown, projectId, refreshNotes, saveAsTitle, settings, tabId, worktreeId])
 
   const handleClosePromptSave = useCallback(async (): Promise<void> => {
     setClosePromptOpen(false)

@@ -1,5 +1,9 @@
 import { useAppStore } from '@/store'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
+import {
+  inspectRuntimeTerminalProcess,
+  sendRuntimePtyInput
+} from '@/runtime/runtime-terminal-inspection'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import { isShellProcess } from '@/lib/tui-agent-startup'
 import type { OrcaHooks, TaskViewPresetId } from '../../../shared/types'
@@ -242,7 +246,7 @@ export async function ensureAgentStartupInTerminal(args: {
   // session and submitted. Wait until the agent owns the PTY before writing.
   if (startup.followupPrompt) {
     await waitForAgentForeground(ptyId, startup.expectedProcess)
-    window.api.pty.write(ptyId, `${startup.followupPrompt}\r`)
+    sendRuntimePtyInput(useAppStore.getState().settings, ptyId, `${startup.followupPrompt}\r`)
   }
 
   // Why: draftPrompt uses bracketed-paste so the URL lands atomically in the
@@ -267,7 +271,8 @@ async function waitForAgentForeground(ptyId: string, expectedProcess: string): P
       await new Promise((resolve) => window.setTimeout(resolve, 150))
     }
     try {
-      const foreground = (await window.api.pty.getForegroundProcess(ptyId))?.toLowerCase() ?? ''
+      const process = await inspectRuntimeTerminalProcess(useAppStore.getState().settings, ptyId)
+      const foreground = process.foregroundProcess?.toLowerCase() ?? ''
       const owns =
         foreground === expectedProcess ||
         foreground.startsWith(`${expectedProcess}.`) ||
@@ -276,8 +281,7 @@ async function waitForAgentForeground(ptyId: string, expectedProcess: string): P
         return
       }
       if (attempt >= 4 && !isShellProcess(foreground)) {
-        const hasChildProcesses = await window.api.pty.hasChildProcesses(ptyId)
-        if (hasChildProcesses) {
+        if (process.hasChildProcesses) {
           return
         }
       }

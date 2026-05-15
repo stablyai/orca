@@ -12,6 +12,7 @@ import {
   getWorkspaceSeedName
 } from '@/lib/new-workspace'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
+import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import type {
   OrcaHooks,
@@ -91,7 +92,7 @@ async function resolveSetupDecision(
 ): Promise<{ kind: 'decided'; decision: SetupDecision } | { kind: 'needs-modal' }> {
   let yamlHooks: OrcaHooks | null = null
   try {
-    const result = await window.api.hooks.check({ repoId })
+    const result = await checkRuntimeHooks(useAppStore.getState().settings, repoId)
     yamlHooks = (result.hooks as OrcaHooks | null) ?? null
   } catch {
     yamlHooks = null

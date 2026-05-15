@@ -14,6 +14,12 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 })
 
 const updateMeta = vi.fn().mockResolvedValue({})
+const runtimeEnvironmentCall = vi.fn().mockResolvedValue({
+  id: 'rpc-1',
+  ok: true,
+  result: { ok: true },
+  _meta: { runtimeId: 'remote-runtime' }
+})
 const mockApi = {
   worktrees: {
     list: vi.fn().mockResolvedValue([]),
@@ -21,6 +27,7 @@ const mockApi = {
     remove: vi.fn().mockResolvedValue(undefined),
     updateMeta
   },
+  runtimeEnvironments: { call: runtimeEnvironmentCall },
   repos: {
     list: vi.fn().mockResolvedValue([]),
     add: vi.fn().mockResolvedValue({}),
@@ -162,6 +169,12 @@ describe('updateDiffComment', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     updateMeta.mockResolvedValue({})
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { ok: true },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
   })
 
   it('updates the body, trims it, and persists', async () => {
@@ -187,6 +200,38 @@ describe('updateDiffComment', () => {
     expect(saved.lineNumber).toBe(10)
     expect(saved.createdAt).toBe(1000)
     expect(updateMeta).toHaveBeenCalledTimes(1)
+  })
+
+  it('persists through the selected runtime environment', async () => {
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never
+    })
+    seed(store, [
+      {
+        id: 'c1',
+        worktreeId: WT,
+        filePath: 'src/foo.ts',
+        lineNumber: 10,
+        body: 'old body',
+        createdAt: 1000,
+        side: 'modified'
+      }
+    ])
+
+    const ok = await store.getState().updateDiffComment(WT, 'c1', 'remote body')
+
+    expect(ok).toBe(true)
+    expect(updateMeta).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'worktree.set',
+      params: {
+        worktree: WT,
+        diffComments: [expect.objectContaining({ id: 'c1', body: 'remote body' })]
+      },
+      timeoutMs: 15_000
+    })
   })
 
   it('rejects an empty body without persisting', async () => {

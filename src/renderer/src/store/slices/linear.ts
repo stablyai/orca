@@ -3,6 +3,15 @@ import type { AppState } from '../types'
 import type { LinearViewer, LinearConnectionStatus, LinearIssue } from '../../../../shared/types'
 import type { CacheEntry } from './github'
 import { clearLinearMetadataCache } from '../../hooks/useIssueMetadata'
+import {
+  linearConnect,
+  linearDisconnect,
+  linearGetIssue,
+  linearListIssues,
+  linearSearchIssues,
+  linearStatus,
+  linearTestConnection
+} from '@/runtime/runtime-linear-client'
 
 const CACHE_TTL = 60_000 // 60s — same as GitHub work-items TTL
 const MAX_CACHE_ENTRIES = 500
@@ -67,7 +76,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
 
   checkLinearConnection: async () => {
     try {
-      const status = (await window.api.linear.status()) as LinearConnectionStatus
+      const status = (await linearStatus(get().settings)) as LinearConnectionStatus
       const prev = get().linearStatus
       if (prev.connected !== status.connected || prev.viewer?.email !== status.viewer?.email) {
         set({ linearStatus: status, linearStatusChecked: true })
@@ -85,7 +94,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
 
   testLinearConnection: async () => {
     try {
-      const result = (await window.api.linear.testConnection()) as
+      const result = (await linearTestConnection(get().settings)) as
         | { ok: true; viewer: LinearViewer }
         | { ok: false; error: string }
       if (result.ok) {
@@ -110,7 +119,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
 
   connectLinear: async (apiKey: string) => {
     try {
-      const result = await window.api.linear.connect({ apiKey })
+      const result = await linearConnect(get().settings, apiKey)
       if (result.ok) {
         set({
           linearStatus: {
@@ -127,7 +136,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   disconnectLinear: async () => {
-    await window.api.linear.disconnect()
+    await linearDisconnect(get().settings)
     inflightIssueRequests.clear()
     inflightSearchRequests.clear()
     inflightListRequests.clear()
@@ -150,8 +159,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       return inflight
     }
 
-    const promise = window.api.linear
-      .getIssue({ id })
+    const promise = linearGetIssue(get().settings, id)
       .then((issue) => {
         const data = issue as LinearIssue | null
         set((s) => ({
@@ -189,8 +197,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       return inflight
     }
 
-    const promise = window.api.linear
-      .searchIssues({ query, limit })
+    const promise = linearSearchIssues(get().settings, query, limit)
       .then((issues) => {
         const data = issues as LinearIssue[]
         set((s) => ({
@@ -228,8 +235,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       return inflight
     }
 
-    const promise = window.api.linear
-      .listIssues({ filter, limit })
+    const promise = linearListIssues(get().settings, filter, limit)
       .then((issues) => {
         const data = issues as LinearIssue[]
         set((s) => ({

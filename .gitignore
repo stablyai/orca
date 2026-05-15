@@ -67,6 +67,9 @@ design-docs/
 .context/
 .atl/
 
+# Machine-local agent hook endpoint files may contain auth tokens.
+/agent-hooks/
+
 # Local-only design/planning docs (not checked in)
 docs/*.md
 !docs/README*.md

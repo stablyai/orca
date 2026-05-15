@@ -3,15 +3,19 @@
 // compromising one device doesn't expose others. The registry is a simple
 // JSON file with hardened permissions matching the runtime metadata pattern.
 import { randomBytes, randomUUID } from 'crypto'
-import { existsSync, readFileSync, writeFileSync, chmodSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
+import { hardenExistingSecureFile, writeSecureJsonFile } from '../../shared/secure-file'
 
 const DEVICE_REGISTRY_FILENAME = 'orca-devices.json'
+
+export type DeviceScope = 'mobile' | 'runtime'
 
 export type DeviceEntry = {
   deviceId: string
   name: string
   token: string
+  scope: DeviceScope
   pairedAt: number
   lastSeenAt: number
 }
@@ -25,11 +29,12 @@ export class DeviceRegistry {
     this.load()
   }
 
-  addDevice(name: string): DeviceEntry {
+  addDevice(name: string, scope: DeviceScope = 'mobile'): DeviceEntry {
     const entry: DeviceEntry = {
       deviceId: randomUUID(),
       name,
       token: randomBytes(24).toString('hex'),
+      scope,
       pairedAt: Date.now(),
       lastSeenAt: 0
     }
@@ -44,12 +49,12 @@ export class DeviceRegistry {
   // copy-button flow that encourages regeneration) leaves an orphaned token
   // forever. Returns an existing never-scanned entry if present; otherwise
   // mints a new one and drops any stale pending entries.
-  getOrCreatePendingDevice(name: string): DeviceEntry {
-    const existing = this.devices.find((d) => d.lastSeenAt === 0)
+  getOrCreatePendingDevice(name: string, scope: DeviceScope = 'mobile'): DeviceEntry {
+    const existing = this.devices.find((d) => d.lastSeenAt === 0 && d.scope === scope)
     if (existing) {
       return existing
     }
-    return this.addDevice(name)
+    return this.addDevice(name, scope)
   }
 
   // Why: explicit rotation path for "Regenerate QR" — invalidates any
@@ -58,9 +63,9 @@ export class DeviceRegistry {
   // this, getOrCreatePendingDevice keeps returning the same token forever
   // until a phone actually pairs, so users have no way to revoke a leaked
   // pre-pairing token.
-  rotatePendingDevice(name: string): DeviceEntry {
-    this.devices = this.devices.filter((d) => d.lastSeenAt !== 0)
-    return this.addDevice(name)
+  rotatePendingDevice(name: string, scope: DeviceScope = 'mobile'): DeviceEntry {
+    this.devices = this.devices.filter((d) => d.lastSeenAt !== 0 || d.scope !== scope)
+    return this.addDevice(name, scope)
   }
 
   removeDevice(deviceId: string): boolean {
@@ -71,6 +76,10 @@ export class DeviceRegistry {
       return true
     }
     return false
+  }
+
+  getDevice(deviceId: string): DeviceEntry | null {
+    return this.devices.find((d) => d.deviceId === deviceId) ?? null
   }
 
   listDevices(): readonly DeviceEntry[] {
@@ -95,14 +104,20 @@ export class DeviceRegistry {
       return
     }
     try {
-      this.devices = JSON.parse(readFileSync(this.registryPath, 'utf-8')) as DeviceEntry[]
+      hardenExistingSecureFile(this.registryPath)
+      const parsed = JSON.parse(readFileSync(this.registryPath, 'utf-8')) as DeviceEntry[]
+      this.devices = parsed.map((device) => ({
+        ...device,
+        // Why: older registries only existed for phone pairing. Treat missing
+        // scope as mobile so legacy device tokens do not gain new CLI powers.
+        scope: device.scope === 'runtime' ? 'runtime' : 'mobile'
+      }))
     } catch {
       this.devices = []
     }
   }
 
   private save(): void {
-    writeFileSync(this.registryPath, JSON.stringify(this.devices, null, 2), { mode: 0o600 })
-    chmodSync(this.registryPath, 0o600)
+    writeSecureJsonFile(this.registryPath, this.devices)
   }
 }

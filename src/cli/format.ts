@@ -33,6 +33,7 @@ import type {
   RuntimeWorktreePsResult,
   RuntimeWorktreeRecord
 } from '../shared/runtime-types'
+import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
 import type { NoteListResult, NoteMutationResult, NoteShowResult } from '../shared/notes-types'
 import type { RuntimeRpcFailure, RuntimeRpcSuccess } from './runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
@@ -99,6 +100,33 @@ export function formatCliStatus(status: CliStatusResult): string {
 
 export function formatStatus(status: CliStatusResult): string {
   return formatCliStatus(status)
+}
+
+export function formatEnvironmentList(result: {
+  environments: PublicKnownRuntimeEnvironment[]
+}): string {
+  if (result.environments.length === 0) {
+    return 'No saved environments.'
+  }
+  return result.environments
+    .map(
+      (environment) =>
+        `${environment.id}  ${environment.name}  ${environment.endpoints[0]?.endpoint ?? 'no-endpoint'}`
+    )
+    .join('\n')
+}
+
+export function formatEnvironment(environment: PublicKnownRuntimeEnvironment): string {
+  return [
+    `id: ${environment.id}`,
+    `name: ${environment.name}`,
+    `runtimeId: ${environment.runtimeId ?? 'unknown'}`,
+    `lastUsedAt: ${environment.lastUsedAt ?? 'never'}`,
+    `preferredEndpointId: ${environment.preferredEndpointId}`,
+    ...environment.endpoints.map(
+      (endpoint) => `endpoint: ${endpoint.id} ${endpoint.kind} ${endpoint.endpoint}`
+    )
+  ].join('\n')
 }
 
 export function formatTerminalList(result: RuntimeTerminalListResult): string {

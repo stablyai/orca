@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
+import { getConnectionId } from '@/lib/connection-context'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import { detectLanguage } from '@/lib/language-detect'
 import type { MarkdownDocument, Worktree } from '../../../../shared/types'
@@ -48,7 +49,9 @@ import {
 } from './markdown-preview-search'
 import { usePreserveSectionDuringExternalEdit } from './usePreserveSectionDuringExternalEdit'
 import { openHttpLink } from '@/lib/http-link-routing'
+import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { markdownPreviewUrlTransform } from './markdown-preview-url-transform'
+import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 
 type MarkdownPreviewProps = {
   content: string
@@ -182,9 +185,25 @@ export default function MarkdownPreview({
   const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
   const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const sourceRuntimeEnvironmentId = useAppStore(
+    (s) => s.openFiles.find((file) => file.filePath === filePath)?.runtimeEnvironmentId
+  )
   const sourceWorktree = findWorktreeForMarkdownPreviewPath(worktreesByRepo, filePath)
+  const sourceConnectionId = sourceWorktree ? getConnectionId(sourceWorktree.id) : null
   const worktreeRoot = sourceWorktree?.path ?? null
   const settings = useAppStore((s) => s.settings)
+  const imageRuntimeContext = useMemo(
+    () =>
+      sourceWorktree
+        ? {
+            settings: settingsForRuntimeOwner(settings, sourceRuntimeEnvironmentId),
+            worktreeId: sourceWorktree.id,
+            worktreePath: sourceWorktree.path,
+            connectionId: sourceConnectionId
+          }
+        : undefined,
+    [settings, sourceConnectionId, sourceRuntimeEnvironmentId, sourceWorktree]
+  )
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const editorFontSize = computeEditorFontSize(14, editorFontZoomLevel)
   const isDark =
@@ -499,6 +518,20 @@ export default function MarkdownPreview({
               return
             }
             if (parsed.protocol === 'file:') {
+              if (
+                isLocalPathOpenBlocked(
+                  settingsForRuntimeOwner(
+                    useAppStore.getState().settings,
+                    sourceRuntimeEnvironmentId
+                  ),
+                  { connectionId: sourceConnectionId }
+                )
+              ) {
+                // Why: modifier-open delegates to the client OS. Server-local
+                // file:// targets from remote runtime/SSH worktrees cannot be opened locally.
+                showLocalPathOpenBlockedToast()
+                return
+              }
               const classified = resolveMarkdownLinkTarget(href, filePath, worktreeRoot)
               if (classified?.kind === 'markdown') {
                 // Why: use the classifier's stripped absolutePath (no `:line:col`
@@ -548,8 +581,23 @@ export default function MarkdownPreview({
               void activateMarkdownLink(href, {
                 sourceFilePath: filePath,
                 worktreeId: sourceWorktree.id,
-                worktreeRoot: sourceWorktree.path
+                worktreeRoot: sourceWorktree.path,
+                runtimeEnvironmentId: sourceRuntimeEnvironmentId
               })
+              return
+            }
+            if (
+              isLocalPathOpenBlocked(
+                settingsForRuntimeOwner(
+                  useAppStore.getState().settings,
+                  sourceRuntimeEnvironmentId
+                ),
+                { connectionId: sourceConnectionId }
+              )
+            ) {
+              // Why: without a workspace match, opening a file URI delegates to
+              // the client OS. Remote runtime/SSH paths are not local files.
+              showLocalPathOpenBlockedToast()
               return
             }
             void window.api.shell.openFileUri(target.toString())
@@ -570,6 +618,7 @@ export default function MarkdownPreview({
               filePath: absolutePath,
               relativePath,
               worktreeId: targetWorktree.id,
+              runtimeEnvironmentId: sourceRuntimeEnvironmentId,
               language,
               mode: 'edit'
             })
@@ -593,6 +642,7 @@ export default function MarkdownPreview({
                 filePath: absolutePath,
                 relativePath,
                 worktreeId: targetWorktree.id,
+                runtimeEnvironmentId: sourceRuntimeEnvironmentId,
                 language
               },
               { anchor: target.hash ? target.hash.slice(1) : null }
@@ -604,6 +654,7 @@ export default function MarkdownPreview({
             filePath: absolutePath,
             relativePath,
             worktreeId: targetWorktree.id,
+            runtimeEnvironmentId: sourceRuntimeEnvironmentId,
             language,
             mode: 'edit'
           })
@@ -625,7 +676,7 @@ export default function MarkdownPreview({
         // eslint-disable-next-line react-hooks/rules-of-hooks -- react-markdown
         // instantiates component overrides as regular React components, so hooks
         // are valid here despite the lowercase function name.
-        const resolvedSrc = useLocalImageSrc(src, filePath)
+        const resolvedSrc = useLocalImageSrc(src, filePath, undefined, imageRuntimeContext)
         const handleImageClick = (event: React.MouseEvent<HTMLImageElement>): void => {
           if (!isMarkdownPreviewOpenModifier(event, isMac)) {
             return
@@ -640,7 +691,8 @@ export default function MarkdownPreview({
           void activateMarkdownLink(src, {
             sourceFilePath: filePath,
             worktreeId: sourceWorktree.id,
-            worktreeRoot: sourceWorktree.path
+            worktreeRoot: sourceWorktree.path,
+            runtimeEnvironmentId: sourceRuntimeEnvironmentId
           })
         }
 
@@ -735,6 +787,7 @@ export default function MarkdownPreview({
     activateMarkdownLink,
     isDark,
     isMac,
+    imageRuntimeContext,
     markdownDocumentIndex,
     onOpenDocument,
     openFile,
@@ -742,6 +795,8 @@ export default function MarkdownPreview({
     scrollToAnchor,
     setMarkdownViewMode,
     setPendingEditorReveal,
+    sourceConnectionId,
+    sourceRuntimeEnvironmentId,
     sourceWorktree,
     worktreeRoot,
     worktreesByRepo

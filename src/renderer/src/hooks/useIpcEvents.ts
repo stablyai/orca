@@ -40,6 +40,10 @@ export { resolveZoomTarget } from './resolve-zoom-target'
 
 const ZOOM_STEP = 0.5
 
+function isRuntimeEnvironmentActive(): boolean {
+  return Boolean(useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim())
+}
+
 export function useIpcEvents(): void {
   useEffect(() => {
     const unsubs: (() => void)[] = []
@@ -48,12 +52,23 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.repos.onChanged(() => {
+        if (isRuntimeEnvironmentActive()) {
+          // Why: this event comes from the local Electron store. While a
+          // runtime server is selected, repo hydration must be driven by the
+          // selected server instead of local-disk changes.
+          return
+        }
         useAppStore.getState().fetchRepos()
       })
     )
 
     unsubs.push(
       window.api.worktrees.onChanged(async (data: { repoId: string }) => {
+        if (isRuntimeEnvironmentActive()) {
+          // Why: local worktree events carry local repo ids. Fetching the
+          // active runtime with those ids can purge or overwrite server state.
+          return
+        }
         // Why: diff before vs. after fetchWorktrees to detect server-side
         // deletions (CLI `orca worktree rm`, other window, out-of-band RPC)
         // and purge worktree-scoped state for removed ids. Without this,
@@ -83,12 +98,18 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.worktrees.onBaseStatus((event) => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
         useAppStore.getState().updateWorktreeBaseStatus(event)
       })
     )
 
     unsubs.push(
       window.api.worktrees.onRemoteBranchConflict((event) => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
         useAppStore.getState().updateWorktreeRemoteBranchConflict(event)
       })
     )
@@ -230,6 +251,12 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onActivateWorktree(({ repoId, worktreeId, setup, startup }) => {
         void (async () => {
+          if (isRuntimeEnvironmentActive()) {
+            // Why: local CLI-created worktree events carry local repo/worktree
+            // ids. Runtime server activation arrives through runtime state,
+            // not this local Electron event.
+            return
+          }
           // Why: fetch worktrees first so the activation helper can resolve
           // the CLI-created worktree via findWorktreeById — it arrived from
           // the main process and is not yet in the renderer state.
@@ -250,6 +277,15 @@ export function useIpcEvents(): void {
       window.api.ui.onCreateTerminal(
         ({ requestId, worktreeId, command, title, ptyId, activate, tabId }) => {
           try {
+            if (isRuntimeEnvironmentActive()) {
+              if (requestId) {
+                window.api.ui.replyTerminalCreate({
+                  requestId,
+                  error: 'Local terminal reveal is unavailable while a remote runtime is active'
+                })
+              }
+              return
+            }
             const store = useAppStore.getState()
             const shouldActivate = activate !== false
             if (shouldActivate) {
@@ -324,6 +360,13 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onRequestTerminalCreate((data) => {
         try {
+          if (isRuntimeEnvironmentActive()) {
+            window.api.ui.replyTerminalCreate({
+              requestId: data.requestId,
+              error: 'Local terminal creation is unavailable while a remote runtime is active'
+            })
+            return
+          }
           const store = useAppStore.getState()
           const worktreeId = data.worktreeId ?? store.activeWorktreeId
           if (!worktreeId) {
@@ -510,6 +553,9 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.browser.onGuestLoadFailed(({ browserPageId, loadError }) => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
         useAppStore.getState().updateBrowserPageState(browserPageId, {
           loading: false,
           loadError,
@@ -525,6 +571,9 @@ export function useIpcEvents(): void {
     // This IPC pushes the live URL/title from main after goto/click/back/reload.
     unsubs.push(
       window.api.browser.onNavigationUpdate(({ browserPageId, url, title }) => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
         const store = useAppStore.getState()
         store.setBrowserPageUrl(browserPageId, url)
         store.updateBrowserPageState(browserPageId, { title, loading: false })
@@ -537,6 +586,9 @@ export function useIpcEvents(): void {
     // before browser commands so the webview can start and registerGuest fires.
     unsubs.push(
       window.api.browser.onActivateView(() => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
         useAppStore.getState().setActiveTabType('browser')
       })
     )
@@ -552,6 +604,9 @@ export function useIpcEvents(): void {
     // pre-staging for whenever the user next visits that worktree.
     unsubs.push(
       window.api.browser.onPaneFocus(({ worktreeId, browserPageId }) => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
         const store = useAppStore.getState()
         // Why: main sends `worktreeId: null` if the tab closed between the
         // bridge resolving tabSwitch and getWorktreeIdForTab running. Falling
@@ -568,6 +623,9 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.browser.onOpenLinkInOrcaTab(({ browserPageId, url }) => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
         const store = useAppStore.getState()
         const sourcePage = Object.values(store.browserPagesByWorkspace)
           .flat()
@@ -587,6 +645,9 @@ export function useIpcEvents(): void {
     // capture keyboard focus and bypass the renderer's window-level keydown.
     unsubs.push(
       window.api.ui.onNewBrowserTab(() => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
         const store = useAppStore.getState()
         const worktreeId = store.activeWorktreeId
         if (worktreeId) {
@@ -604,6 +665,15 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onRequestTabCreate((data) => {
         try {
+          if (isRuntimeEnvironmentActive()) {
+            // Why: browser automation targets client-local Electron webviews.
+            // Runtime agents cannot see or control those surfaces.
+            window.api.ui.replyTabCreate({
+              requestId: data.requestId,
+              error: 'Browser tabs are unavailable while a remote runtime is active'
+            })
+            return
+          }
           const store = useAppStore.getState()
           const worktreeId = data.worktreeId ?? store.activeWorktreeId
           if (!worktreeId) {
@@ -643,6 +713,13 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onRequestTabSetProfile((data) => {
         try {
+          if (isRuntimeEnvironmentActive()) {
+            window.api.ui.replyTabSetProfile({
+              requestId: data.requestId,
+              error: 'Browser profiles are unavailable while a remote runtime is active'
+            })
+            return
+          }
           const store = useAppStore.getState()
           const owningWorkspace = Object.values(store.browserTabsByWorktree)
             .flat()
@@ -684,6 +761,13 @@ export function useIpcEvents(): void {
     unsubs.push(
       window.api.ui.onRequestTabClose((data) => {
         try {
+          if (isRuntimeEnvironmentActive()) {
+            window.api.ui.replyTabClose({
+              requestId: data.requestId,
+              error: 'Browser tabs are unavailable while a remote runtime is active'
+            })
+            return
+          }
           const store = useAppStore.getState()
           const explicitTargetId = data.tabId ?? null
           let tabToClose =
@@ -1121,12 +1205,17 @@ export function useIpcEvents(): void {
 
     // Why: hydrate mobile-fit overrides before terminal panes run their first
     // attach/fit logic, so a renderer reload doesn't undo active mobile fits.
-    void window.api.runtime.getTerminalFitOverrides().then((overrides) => {
-      hydrateOverrides(overrides)
-    })
+    if (!isRuntimeEnvironmentActive()) {
+      void window.api.runtime.getTerminalFitOverrides().then((overrides) => {
+        hydrateOverrides(overrides)
+      })
+    }
 
     unsubs.push(
       window.api.runtime.onTerminalFitOverrideChanged((event) => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
         setFitOverride(event.ptyId, event.mode, event.cols, event.rows)
       })
     )
@@ -1137,6 +1226,9 @@ export function useIpcEvents(): void {
       // know which PTYs are currently driven by mobile. See
       // docs/mobile-presence-lock.md.
       window.api.runtime.onTerminalDriverChanged((event) => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
         setDriverForPty(event.ptyId, event.driver)
       })
     )

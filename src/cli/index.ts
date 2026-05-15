@@ -15,6 +15,10 @@ import { COMMAND_SPECS } from './specs'
 export { COMMAND_SPECS } from './specs'
 export { buildCurrentWorktreeSelector, normalizeWorktreeSelector } from './selectors'
 
+function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
+  return commandPath[0] === 'environment' || commandPath[0] === 'serve'
+}
+
 export async function main(argv = process.argv.slice(2), cwd = process.cwd()): Promise<void> {
   const parsed = parseArgs(argv)
   const helpPath = resolveHelpPath(parsed)
@@ -40,7 +44,15 @@ export async function main(argv = process.argv.slice(2), cwd = process.cwd()): P
     // lookup so users do not get misleading "Orca is not running" failures for
     // simple command typos or unsupported flags.
     validateCommandAndFlags(COMMAND_SPECS, parsed)
-    const client = new RuntimeClient()
+    const ignoreRemoteSelection = shouldIgnoreRemoteSelection(parsed.commandPath)
+    const pairingCode = ignoreRemoteSelection ? null : parsed.flags.get('pairing-code')
+    const environmentSelector = ignoreRemoteSelection ? null : parsed.flags.get('environment')
+    const client = new RuntimeClient(
+      undefined,
+      undefined,
+      typeof pairingCode === 'string' ? pairingCode : undefined,
+      typeof environmentSelector === 'string' ? environmentSelector : undefined
+    )
     await dispatch(parsed.commandPath, {
       flags: parsed.flags,
       client,

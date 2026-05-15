@@ -551,7 +551,7 @@ async function resolveCompareRef(worktreePath: string): Promise<string> {
 }
 
 async function resolveRefOid(worktreePath: string, ref: string): Promise<string> {
-  const { stdout } = await gitExecFileAsync(['rev-parse', '--verify', ref], {
+  const { stdout } = await gitExecFileAsync(['rev-parse', '--verify', '--end-of-options', ref], {
     cwd: worktreePath
   })
   return stdout.trim()
@@ -613,10 +613,13 @@ async function readGitBlobAtOidPath(
   filePath: string
 ): Promise<GitBlobReadResult> {
   try {
-    const { stdout } = await gitExecFileAsyncBuffer(['show', `${oid}:${filePath}`], {
-      cwd: worktreePath,
-      maxBuffer: MAX_GIT_SHOW_BYTES
-    })
+    const { stdout } = await gitExecFileAsyncBuffer(
+      ['show', '--end-of-options', `${oid}:${filePath}`],
+      {
+        cwd: worktreePath,
+        maxBuffer: MAX_GIT_SHOW_BYTES
+      }
+    )
 
     return { ...bufferToBlob(stdout, filePath), exists: true }
   } catch {

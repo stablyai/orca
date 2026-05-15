@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: relay filesystem request handling shares
+   path expansion, file IO, search, streaming reads, and watch lifecycle state. */
 import { readdir, writeFile, stat, lstat, mkdir, rename, cp, rm, realpath } from 'fs/promises'
 import { execFile } from 'child_process'
 import { join } from 'path'
@@ -64,6 +66,7 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.deletePath', (p) => this.deletePath(p))
     this.dispatcher.onRequest('fs.createFile', (p) => this.createFile(p))
     this.dispatcher.onRequest('fs.createDir', (p) => this.createDir(p))
+    this.dispatcher.onRequest('fs.createDirNoClobber', (p) => this.createDirNoClobber(p))
     this.dispatcher.onRequest('fs.rename', (p) => this.rename(p))
     this.dispatcher.onRequest('fs.copy', (p) => this.copy(p))
     this.dispatcher.onRequest('fs.realpath', (p) => this.realpath(p))
@@ -175,6 +178,11 @@ export class FsHandler {
     await mkdir(dirPath, { recursive: true })
   }
 
+  private async createDirNoClobber(params: Record<string, unknown>) {
+    const dirPath = expandTilde(params.dirPath as string)
+    await mkdir(dirPath, { recursive: false })
+  }
+
   private async rename(params: Record<string, unknown>) {
     const oldPath = expandTilde(params.oldPath as string)
     const newPath = expandTilde(params.newPath as string)
@@ -184,7 +192,15 @@ export class FsHandler {
   private async copy(params: Record<string, unknown>) {
     const source = expandTilde(params.source as string)
     const destination = expandTilde(params.destination as string)
-    await cp(source, destination, { recursive: true })
+    try {
+      await cp(source, destination, { recursive: true, force: false, errorOnExist: true })
+    } catch (error) {
+      const code = error instanceof Error ? (error as NodeJS.ErrnoException).code : undefined
+      if (code === 'EEXIST' || code === 'ERR_FS_CP_EEXIST') {
+        throw new Error('EEXIST: destination already exists')
+      }
+      throw error
+    }
   }
 
   private async realpath(params: Record<string, unknown>) {
@@ -266,16 +282,20 @@ export class FsHandler {
   private async watch(params: Record<string, unknown>, context?: RequestContext) {
     const rootPath = expandTilde(params.rootPath as string)
 
-    if (this.watches.size >= 20) {
-      throw new Error('Maximum number of file watchers reached')
-    }
-
     const existing = this.watches.get(rootPath)
     if (existing && !existing.isStale()) {
       if (existing.setupPromise) {
         await existing.setupPromise
       }
       return
+    }
+    if (existing?.isStale()) {
+      existing.unwatchFn?.()
+      this.watches.delete(rootPath)
+    }
+
+    if (this.watches.size >= 20) {
+      throw new Error('Maximum number of file watchers reached')
     }
 
     const watchState: WatchState = {

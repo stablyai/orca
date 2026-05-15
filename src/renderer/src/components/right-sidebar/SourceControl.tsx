@@ -30,6 +30,7 @@ import {
 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById, useWorktreeMap } from '@/store/selectors'
+import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import { detectLanguage } from '@/lib/language-detect'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
@@ -92,6 +93,16 @@ import {
   requestEditorSaveQuiesce
 } from '@/components/editor/editor-autosave'
 import { getConnectionId } from '@/lib/connection-context'
+import {
+  bulkStageRuntimeGitPaths,
+  bulkUnstageRuntimeGitPaths,
+  commitRuntimeGit,
+  discardRuntimeGitPath,
+  getRuntimeGitBranchCompare,
+  stageRuntimeGitPath,
+  unstageRuntimeGitPath
+} from '@/runtime/runtime-git-client'
+import { getRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
 import { PullRequestIcon } from './checks-panel-content'
 import type {
   DiffComment,
@@ -233,6 +244,7 @@ function SourceControlInner(): React.JSX.Element {
   const remoteStatusesByWorktree = useAppStore((s) => s.remoteStatusesByWorktree)
   const isRemoteOperationActive = useAppStore((s) => s.isRemoteOperationActive)
   const inFlightRemoteOpKind = useAppStore((s) => s.inFlightRemoteOpKind)
+  const settings = useAppStore((s) => s.settings)
   const hostedReviewCache = useAppStore((s) => s.hostedReviewCache)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
   const updateRepo = useAppStore((s) => s.updateRepo)
@@ -366,6 +378,7 @@ function SourceControlInner(): React.JSX.Element {
     }
     const connectionId = getConnectionId(activeWorktreeId) ?? undefined
     await refreshGitStatusForWorktree({
+      settings: useAppStore.getState().settings,
       worktreeId: activeWorktreeId,
       worktreePath,
       connectionId,
@@ -407,8 +420,7 @@ function SourceControlInner(): React.JSX.Element {
     setDefaultBaseRef(null)
 
     let stale = false
-    void window.api.repos
-      .getBaseRefDefault({ repoId: activeRepo.id })
+    void getRuntimeRepoBaseRefDefault(useAppStore.getState().settings, activeRepo.id)
       .then((result) => {
         if (!stale) {
           // Why: IPC now returns a `{ defaultBaseRef, remoteCount }` envelope;
@@ -436,7 +448,8 @@ function SourceControlInner(): React.JSX.Element {
   const hasUncommittedEntries = entries.length > 0
 
   const branchName = activeWorktree?.branch.replace(/^refs\/heads\//, '') ?? 'HEAD'
-  const hostedReviewCacheKey = activeRepo && branchName ? `${activeRepo.path}::${branchName}` : null
+  const hostedReviewCacheKey =
+    activeRepo && branchName ? getHostedReviewCacheKey(activeRepo.path, branchName, settings) : null
   const hostedReview: HostedReviewInfo | null = hostedReviewCacheKey
     ? (hostedReviewCache[hostedReviewCacheKey]?.data ?? null)
     : null
@@ -612,11 +625,15 @@ function SourceControlInner(): React.JSX.Element {
     setCommitInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
     setCommitErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
     try {
-      const commitResult = await window.api.git.commit({
-        worktreePath,
-        message,
-        connectionId
-      })
+      const commitResult = await commitRuntimeGit(
+        {
+          settings: useAppStore.getState().settings,
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId
+        },
+        message
+      )
       if (!commitResult.success) {
         setCommitErrors((prev) => ({
           ...prev,
@@ -948,7 +965,15 @@ function SourceControlInner(): React.JSX.Element {
     setIsExecutingBulk(true)
     try {
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-      await window.api.git.bulkStage({ worktreePath, filePaths: bulkStagePaths, connectionId })
+      await bulkStageRuntimeGitPaths(
+        {
+          settings: useAppStore.getState().settings,
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId
+        },
+        bulkStagePaths
+      )
       await refreshActiveGitStatusAfterMutation()
       clearSelection()
     } finally {
@@ -969,7 +994,15 @@ function SourceControlInner(): React.JSX.Element {
     setIsExecutingBulk(true)
     try {
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-      await window.api.git.bulkUnstage({ worktreePath, filePaths: bulkUnstagePaths, connectionId })
+      await bulkUnstageRuntimeGitPaths(
+        {
+          settings: useAppStore.getState().settings,
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId
+        },
+        bulkUnstagePaths
+      )
       await refreshActiveGitStatusAfterMutation()
       clearSelection()
     } finally {
@@ -999,7 +1032,15 @@ function SourceControlInner(): React.JSX.Element {
       setIsExecutingBulk(true)
       try {
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-        await window.api.git.bulkStage({ worktreePath, filePaths: paths, connectionId })
+        await bulkStageRuntimeGitPaths(
+          {
+            settings: useAppStore.getState().settings,
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId
+          },
+          paths
+        )
         await refreshActiveGitStatusAfterMutation()
         clearSelection()
       } finally {
@@ -1034,7 +1075,15 @@ function SourceControlInner(): React.JSX.Element {
     setIsExecutingBulk(true)
     try {
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-      await window.api.git.bulkStage({ worktreePath, filePaths, connectionId })
+      await bulkStageRuntimeGitPaths(
+        {
+          settings: useAppStore.getState().settings,
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId
+        },
+        filePaths
+      )
       await refreshActiveGitStatusAfterMutation()
       clearSelection()
     } finally {
@@ -1086,7 +1135,15 @@ function SourceControlInner(): React.JSX.Element {
     setIsExecutingBulk(true)
     try {
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-      await window.api.git.bulkUnstage({ worktreePath, filePaths: paths, connectionId })
+      await bulkUnstageRuntimeGitPaths(
+        {
+          settings: useAppStore.getState().settings,
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId
+        },
+        paths
+      )
       await refreshActiveGitStatusAfterMutation()
       clearSelection()
     } finally {
@@ -1132,11 +1189,15 @@ function SourceControlInner(): React.JSX.Element {
 
     try {
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-      const result = await window.api.git.branchCompare({
-        worktreePath,
-        baseRef: effectiveBaseRef,
-        connectionId
-      })
+      const result = await getRuntimeGitBranchCompare(
+        {
+          settings: useAppStore.getState().settings,
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId
+        },
+        effectiveBaseRef
+      )
       setGitBranchCompareResult(activeWorktreeId, requestKey, result)
     } catch (error) {
       setGitBranchCompareResult(activeWorktreeId, requestKey, {
@@ -1314,7 +1375,15 @@ function SourceControlInner(): React.JSX.Element {
       }
       try {
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-        await window.api.git.stage({ worktreePath, filePath, connectionId })
+        await stageRuntimeGitPath(
+          {
+            settings: useAppStore.getState().settings,
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId
+          },
+          filePath
+        )
         await refreshActiveGitStatusAfterMutation()
       } catch {
         // git operation failed silently
@@ -1330,7 +1399,15 @@ function SourceControlInner(): React.JSX.Element {
       }
       try {
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-        await window.api.git.unstage({ worktreePath, filePath, connectionId })
+        await unstageRuntimeGitPath(
+          {
+            settings: useAppStore.getState().settings,
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId
+          },
+          filePath
+        )
         await refreshActiveGitStatusAfterMutation()
       } catch {
         // git operation failed silently
@@ -1357,7 +1434,15 @@ function SourceControlInner(): React.JSX.Element {
         relativePath: filePath
       })
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-      await window.api.git.discard({ worktreePath, filePath, connectionId })
+      await discardRuntimeGitPath(
+        {
+          settings: useAppStore.getState().settings,
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId
+        },
+        filePath
+      )
       notifyEditorExternalFileChange({
         worktreeId: activeWorktreeId,
         worktreePath,
@@ -1438,7 +1523,15 @@ function SourceControlInner(): React.JSX.Element {
         const errors: unknown[] = []
         const result = await runDiscardAllForArea(area, paths, {
           bulkUnstage: (filePaths) =>
-            window.api.git.bulkUnstage({ worktreePath, filePaths, connectionId }),
+            bulkUnstageRuntimeGitPaths(
+              {
+                settings: useAppStore.getState().settings,
+                worktreeId: activeWorktreeId,
+                worktreePath,
+                connectionId
+              },
+              filePaths
+            ),
           discardMany,
           discardOne: discardSingle,
           onError: (error) => {

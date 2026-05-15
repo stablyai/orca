@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useCallback, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
+import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
@@ -74,6 +75,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const openModal = useAppStore((s) => s.openModal)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
+  const settings = useAppStore((s) => s.settings)
   const fetchIssue = useAppStore((s) => s.fetchIssue)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
   const handleEditIssue = useCallback(
@@ -175,7 +177,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
   const branch = branchDisplayName(worktree.branch)
   const isFolder = repo ? isFolderRepo(repo) : false
-  const hostedReviewCacheKey = repo && branch ? `${repo.path}::${branch}` : ''
+  const hostedReviewCacheKey =
+    repo && branch ? getHostedReviewCacheKey(repo.path, branch, settings) : ''
   const issueCacheKey = repo && worktree.linkedIssue ? `${repo.path}::${worktree.linkedIssue}` : ''
 
   // Subscribe to ONLY the specific cache entry, not entire review/issue caches.

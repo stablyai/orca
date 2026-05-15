@@ -4,6 +4,7 @@ import { useActiveWorktree, useAllWorktrees, useRepoById, useRepoMap } from '@/s
 import type { GitConflictOperation } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getConnectionId } from '@/lib/connection-context'
+import { getRuntimeGitConflictOperation } from '@/runtime/runtime-git-client'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
 
 const POLL_INTERVAL_MS = 3000
@@ -54,6 +55,7 @@ export function useGitStatusPolling(): void {
     try {
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
       await refreshGitStatusForWorktree({
+        settings: useAppStore.getState().settings,
         worktreeId: activeWorktreeId,
         worktreePath,
         connectionId,
@@ -109,7 +111,9 @@ export function useGitStatusPolling(): void {
     const pollStale = async (): Promise<void> => {
       for (const { id, path } of staleConflictWorktrees) {
         try {
-          const op = (await window.api.git.conflictOperation({
+          const op = (await getRuntimeGitConflictOperation({
+            settings: useAppStore.getState().settings,
+            worktreeId: id,
             worktreePath: path,
             connectionId: getConnectionId(id) ?? undefined
           })) as GitConflictOperation

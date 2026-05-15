@@ -11,13 +11,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 import type {
   GitHubProjectOwnerType,
   GitHubProjectSettings,
   GitHubProjectSummary,
   GitHubProjectViewError,
-  GitHubProjectViewSummary
+  GitHubProjectViewSummary,
+  ListAccessibleProjectsResult,
+  ListProjectViewsResult,
+  ResolveProjectRefResult
 } from '../../../../shared/github-project-types'
 
 export type ResolvedProjectSelection = {
@@ -44,15 +48,60 @@ let browseCache: {
   partialFailures?: { owner: string; message: string }[]
 } | null = null
 
+async function listAccessibleProjectsForRuntime(
+  settings: Parameters<typeof getActiveRuntimeTarget>[0]
+): Promise<ListAccessibleProjectsResult> {
+  const target = getActiveRuntimeTarget(settings)
+  return target.kind === 'environment'
+    ? callRuntimeRpc<ListAccessibleProjectsResult>(
+        target,
+        'github.project.listAccessible',
+        {},
+        { timeoutMs: 60_000 }
+      )
+    : window.api.gh.listAccessibleProjects()
+}
+
+async function listProjectViewsForRuntime(
+  settings: Parameters<typeof getActiveRuntimeTarget>[0],
+  args: { owner: string; ownerType: GitHubProjectOwnerType; projectNumber: number }
+): Promise<ListProjectViewsResult> {
+  const target = getActiveRuntimeTarget(settings)
+  return target.kind === 'environment'
+    ? callRuntimeRpc<ListProjectViewsResult>(target, 'github.project.listViews', args, {
+        timeoutMs: 30_000
+      })
+    : window.api.gh.listProjectViews(args)
+}
+
+async function resolveProjectRefForRuntime(
+  settings: Parameters<typeof getActiveRuntimeTarget>[0],
+  input: string
+): Promise<ResolveProjectRefResult> {
+  const target = getActiveRuntimeTarget(settings)
+  return target.kind === 'environment'
+    ? callRuntimeRpc<ResolveProjectRefResult>(
+        target,
+        'github.project.resolveRef',
+        { input },
+        { timeoutMs: 30_000 }
+      )
+    : window.api.gh.resolveProjectRef({ input })
+}
+
 export default function ProjectPicker({ activeProject, onSelect }: Props): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const projectSettings: GitHubProjectSettings = settings?.githubProjects ?? {
-    pinned: [],
-    recent: [],
-    lastViewByProject: {},
-    activeProject: null
-  }
+  const projectSettings: GitHubProjectSettings = useMemo(
+    () =>
+      settings?.githubProjects ?? {
+        pinned: [],
+        recent: [],
+        lastViewByProject: {},
+        activeProject: null
+      },
+    [settings?.githubProjects]
+  )
 
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -86,7 +135,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
     setBrowseLoading(true)
     setBrowseError(null)
     try {
-      const res = await window.api.gh.listAccessibleProjects()
+      const res = await listAccessibleProjectsForRuntime(settings)
       if (res.ok) {
         browseCache = {
           fetchedAt: Date.now(),
@@ -106,7 +155,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
     } finally {
       setBrowseLoading(false)
     }
-  }, [])
+  }, [settings])
 
   useEffect(() => {
     if (open && !viewPickFor) {
@@ -199,7 +248,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
       })
       setViewLoading(true)
       try {
-        const res = await window.api.gh.listProjectViews({
+        const res = await listProjectViewsForRuntime(settings, {
           owner: selection.owner,
           ownerType: selection.ownerType,
           projectNumber: selection.number
@@ -240,7 +289,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
         setViewLoading(false)
       }
     },
-    [commitSelection, projectSettings.lastViewByProject]
+    [commitSelection, projectSettings.lastViewByProject, settings]
   )
 
   const handlePaste = useCallback(async () => {
@@ -252,7 +301,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
     setPasteError(null)
     setPasteBusy(true)
     try {
-      const res = await window.api.gh.resolveProjectRef({ input: pasteInput.trim() })
+      const res = await resolveProjectRefForRuntime(settings, pasteInput.trim())
       if (!res.ok) {
         setPasteError(res.error.message)
         return
@@ -270,7 +319,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
     } finally {
       setPasteBusy(false)
     }
-  }, [handleChooseProject, pasteInput])
+  }, [handleChooseProject, pasteInput, settings])
 
   const filteredBrowse = useMemo(() => {
     const q = query.trim().toLowerCase()

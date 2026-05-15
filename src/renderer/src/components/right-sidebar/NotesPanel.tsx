@@ -23,6 +23,11 @@ import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { getProjectNotesEntityId, openProjectNotesTab } from '@/lib/open-project-notes-tab'
 import { NOTES_ACTIVE_CHANGED_EVENT } from '@/lib/notes-events'
+import {
+  deleteRuntimeProjectNote,
+  listRuntimeProjectNotes,
+  renameRuntimeProjectNote
+} from '@/runtime/runtime-notes-client'
 import type { NoteSummary } from '../../../../shared/notes-types'
 
 export default function NotesPanel(): React.JSX.Element {
@@ -30,6 +35,7 @@ export default function NotesPanel(): React.JSX.Element {
   const repo = useRepoById(activeWorktree?.repoId ?? null)
   const projectId = repo?.id ?? activeWorktree?.repoId ?? null
   const worktreeId = activeWorktree?.id ?? null
+  const settings = useAppStore((s) => s.settings)
 
   const [notes, setNotes] = useState<NoteSummary[]>([])
   const [loading, setLoading] = useState(false)
@@ -49,14 +55,14 @@ export default function NotesPanel(): React.JSX.Element {
     setLoading(true)
     setError(null)
     try {
-      const result = await window.api.notes.list({ projectId, worktreeId, limit: 100 })
+      const result = await listRuntimeProjectNotes(settings, { projectId, worktreeId, limit: 100 })
       setNotes(result.notes)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setLoading(false)
     }
-  }, [projectId, worktreeId])
+  }, [projectId, settings, worktreeId])
 
   useEffect(() => {
     void refresh()
@@ -106,7 +112,7 @@ export default function NotesPanel(): React.JSX.Element {
         return
       }
       try {
-        const result = await window.api.notes.rename({
+        const result = await renameRuntimeProjectNote(settings, {
           projectId,
           worktreeId,
           note: note.id,
@@ -126,7 +132,7 @@ export default function NotesPanel(): React.JSX.Element {
         toast.error(err instanceof Error ? err.message : `Failed to rename '${note.title}'.`)
       }
     },
-    [projectId, refresh, renameValue, worktreeId]
+    [projectId, refresh, renameValue, settings, worktreeId]
   )
 
   const cancelRename = useCallback(() => {
@@ -140,7 +146,7 @@ export default function NotesPanel(): React.JSX.Element {
     }
     setDeleting(true)
     try {
-      await window.api.notes.delete({ projectId, worktreeId, note: deleteTarget.id })
+      await deleteRuntimeProjectNote(settings, { projectId, worktreeId, note: deleteTarget.id })
       const entityId = getProjectNotesEntityId(projectId, deleteTarget.id)
       const state = useAppStore.getState()
       const tabIdsToClose: string[] = []
@@ -162,7 +168,7 @@ export default function NotesPanel(): React.JSX.Element {
     } finally {
       setDeleting(false)
     }
-  }, [deleteTarget, deleting, projectId, refresh, worktreeId])
+  }, [deleteTarget, deleting, projectId, refresh, settings, worktreeId])
 
   const copyNotePath = useCallback(async (note: NoteSummary): Promise<void> => {
     await navigator.clipboard.writeText(note.relativePath)

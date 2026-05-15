@@ -1,4 +1,4 @@
-/* eslint-disable max-lines -- Why: the Orca runtime is the authoritative live control plane for the CLI, so handle validation, selector resolution, wait state, and summaries are kept together to avoid split-brain behavior. */
+/* eslint-disable max-lines -- Why: OrcaRuntimeService still owns the mutable live graph, PTY handles, waiters, mobile floor/layout state, and managed-worktree reconciliation. Stateless browser and file command adapters live beside it; the remaining split points need state-owner extraction before enforcing max-lines. */
 /* eslint-disable unicorn/no-useless-spread -- Why: waiter sets and handle keys are cloned intentionally before mutation so resolution and rejection can safely remove entries while iterating. */
 /* eslint-disable no-control-regex -- Why: terminal normalization must strip ANSI and OSC control sequences from PTY output before returning bounded text to agents. */
 import {
@@ -7,29 +7,40 @@ import {
   isShellProcess
 } from '../../shared/agent-detection'
 import type { AgentStatus } from '../../shared/agent-detection'
-import { gitExecFileAsync } from '../git/runner'
+import { gitExecFileAsync, wslAwareSpawn } from '../git/runner'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
 import { createHash, randomUUID } from 'crypto'
-import { join, posix, win32 } from 'path'
-import { open, rm, stat } from 'fs/promises'
+import { basename, isAbsolute, join } from 'path'
+import { mkdir, readdir, rm, stat } from 'fs/promises'
 import { OrchestrationDb } from './orchestration/db'
 import { formatMessagesForInjection } from './orchestration/formatter'
 import type {
   CreateWorktreeResult,
+  GitPushTarget,
+  GitWorktreeInfo,
   GlobalSettings,
   Repo,
   StatsSummary,
+  Worktree,
+  WorktreeMeta,
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent,
-  WorktreeStartupLaunch
+  WorktreeStartupLaunch,
+  LinearIssueUpdate,
+  TuiAgent
 } from '../../shared/types'
-import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../shared/worktree-id'
+import { splitWorktreeId } from '../../shared/worktree-id'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { buildSetupRunnerCommand } from '../../shared/setup-runner-command'
 import { FIRST_PANE_ID } from '../../shared/pane-key'
 import {
-  DESKTOP_PROTOCOL_VERSION,
-  MIN_COMPATIBLE_MOBILE_VERSION
+  isPathInsideOrEqual,
+  normalizeRuntimePathForComparison
+} from '../../shared/cross-platform-path'
+import {
+  MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+  RUNTIME_CAPABILITIES,
+  RUNTIME_PROTOCOL_VERSION
 } from '../../shared/protocol-version'
 import type {
   RuntimeGraphStatus,
@@ -57,87 +68,146 @@ import type {
   RuntimeMobileSessionCreateTerminalResult,
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionMarkdownTab,
+  RuntimeMobileSessionTerminalTab,
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot,
-  RuntimeFileListResult,
-  RuntimeFileOpenResult,
-  RuntimeFileReadResult,
   RuntimeSyncWindowGraph,
-  RuntimeWorktreeListResult,
-  BrowserSnapshotResult,
-  BrowserClickResult,
-  BrowserGotoResult,
-  BrowserFillResult,
-  BrowserTypeResult,
-  BrowserSelectResult,
-  BrowserScrollResult,
-  BrowserBackResult,
-  BrowserReloadResult,
-  BrowserProfileCreateResult,
-  BrowserProfileDeleteResult,
-  BrowserProfileListResult,
-  BrowserScreenshotResult,
-  BrowserEvalResult,
-  BrowserTabCurrentResult,
-  BrowserTabListResult,
-  BrowserTabProfileCloneResult,
-  BrowserTabProfileShowResult,
-  BrowserTabSetProfileResult,
-  BrowserTabShowResult,
-  BrowserTabSwitchResult,
-  BrowserHoverResult,
-  BrowserDragResult,
-  BrowserUploadResult,
-  BrowserWaitResult,
-  BrowserCheckResult,
-  BrowserFocusResult,
-  BrowserClearResult,
-  BrowserSelectAllResult,
-  BrowserKeypressResult,
-  BrowserPdfResult,
-  BrowserCookieGetResult,
-  BrowserCookieSetResult,
-  BrowserCookieDeleteResult,
-  BrowserViewportResult,
-  BrowserGeolocationResult,
-  BrowserInterceptEnableResult,
-  BrowserInterceptDisableResult,
-  BrowserCaptureStartResult,
-  BrowserCaptureStopResult,
-  BrowserConsoleResult,
-  BrowserNetworkLogResult
+  RuntimeWorktreeListResult
 } from '../../shared/runtime-types'
+import { RuntimeBrowserCommands } from './orca-runtime-browser'
+import { RuntimeFileCommands } from './orca-runtime-files'
+import { RuntimeGitCommands } from './orca-runtime-git'
+import { joinWorktreeRelativePath } from './runtime-relative-paths'
 import { app, BrowserWindow, ipcMain } from 'electron'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
-import { browserManager } from '../browser/browser-manager'
-import { BrowserError } from '../browser/cdp-bridge'
-import { browserSessionRegistry } from '../browser/browser-session-registry'
-import { waitForTabRegistration } from '../ipc/browser'
-import { getPRForBranch } from '../github/client'
+import {
+  getPRForBranch,
+  getPullRequestPushTarget,
+  getRepoSlug,
+  getWorkItem,
+  listWorkItems,
+  countWorkItems,
+  getPRChecks,
+  getPRComments,
+  getIssue,
+  resolveReviewThread,
+  getWorkItemByOwnerRepo,
+  updatePRTitle,
+  mergePR,
+  createIssue,
+  updateIssue,
+  addIssueComment,
+  addPRReviewComment,
+  addPRReviewCommentReply,
+  listLabels,
+  listAssignableUsers
+} from '../github/client'
+import { getWorkItemDetails, getPRFileContents } from '../github/work-item-details'
+import { getRateLimit } from '../github/rate-limit'
+import type {
+  GitHubIssueUpdate,
+  GitHubPRFile,
+  GitHubPRReviewCommentInput
+} from '../../shared/types'
+import type { HostedReviewInfo } from '../../shared/hosted-review'
+import { getHostedReviewForBranch as getHostedReviewForBranchFromRepo } from '../source-control/hosted-review'
+import {
+  connect as connectLinear,
+  disconnect as disconnectLinear,
+  getStatus as getLinearStatus,
+  testConnection as testLinearConnection
+} from '../linear/client'
+import {
+  addIssueComment as addLinearIssueComment,
+  createIssue as createLinearIssue,
+  getIssue as getLinearIssue,
+  getIssueComments as getLinearIssueComments,
+  listIssues as listLinearIssues,
+  searchIssues as searchLinearIssues,
+  updateIssue as updateLinearIssue,
+  type LinearListFilter
+} from '../linear/issues'
+import {
+  getTeamLabels as getLinearTeamLabels,
+  getTeamMembers as getLinearTeamMembers,
+  getTeamStates as getLinearTeamStates,
+  listTeams as listLinearTeams
+} from '../linear/teams'
+import {
+  clearProjectItemFieldValue,
+  getProjectViewTable,
+  listAccessibleProjects,
+  listProjectViews,
+  resolveProjectRef,
+  addIssueCommentBySlug,
+  deleteIssueCommentBySlug,
+  listAssignableUsersBySlug,
+  listIssueTypesBySlug,
+  listLabelsBySlug,
+  updateIssueCommentBySlug,
+  updateIssueBySlug,
+  updateIssueTypeBySlug,
+  updateProjectItemFieldValue,
+  updatePullRequestBySlug
+} from '../github/project-view'
+import type {
+  ClearProjectItemFieldArgs,
+  GetProjectViewTableArgs,
+  ListAssignableUsersBySlugArgs,
+  ListIssueTypesBySlugArgs,
+  ListLabelsBySlugArgs,
+  ListProjectViewsArgs,
+  ResolveProjectRefArgs,
+  AddIssueCommentBySlugArgs,
+  DeleteIssueCommentBySlugArgs,
+  UpdateIssueBySlugArgs,
+  UpdateIssueCommentBySlugArgs,
+  UpdateIssueTypeBySlugArgs,
+  UpdateProjectItemFieldArgs,
+  UpdatePullRequestBySlugArgs
+} from '../../shared/github-project-types'
 import {
   getGitUsername,
+  getBaseRefDefault,
   getDefaultBaseRef,
+  getDefaultRemote,
   getBranchConflictKind,
   isGitRepo,
   getRepoName,
   searchBaseRefs,
+  getRemoteCount,
+  normalizeRefSearchQuery,
+  parseAndFilterSearchRefs,
+  parseRemoteCount,
+  resolveDefaultBaseRefViaExec,
+  buildSearchBaseRefsArgv,
   getRemoteDrift,
   getRecentDriftSubjects
 } from '../git/repo'
-import { listWorktrees, addWorktree, removeWorktree } from '../git/worktree'
-import { listQuickOpenFiles } from '../ipc/filesystem-list-files'
-import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
+import { listWorktrees, addWorktree, addSparseWorktree, removeWorktree } from '../git/worktree'
+import { isENOENT } from '../ipc/filesystem-auth'
 import {
   createSetupRunnerScript,
   getEffectiveHooks,
   getEffectiveSetupRunPolicy,
+  hasUnrecognizedOrcaYamlKeys,
   hasHooksFile,
+  loadHooks,
+  parseOrcaYaml,
+  readIssueCommand,
   runHook,
-  shouldRunSetupForCreate
+  shouldRunSetupForCreate,
+  writeIssueCommand
 } from '../hooks'
 import { REPO_COLORS, getDefaultVoiceSettings } from '../../shared/constants'
 import { listRepoWorktrees } from '../repo-worktrees'
+import { createWorktreeSymlinks } from '../ipc/worktree-symlinks'
+import {
+  configureCreatedWorktreePushTarget,
+  prepareWorktreePushTarget
+} from '../ipc/worktree-remote'
+import { normalizeSparseDirectories } from '../ipc/sparse-checkout-directories'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
 import { AgentDetector } from '../stats/agent-detector'
@@ -156,8 +226,9 @@ import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 import { killAllProcessesForWorktree } from './worktree-teardown'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
-import type { IPtyProvider } from '../providers/types'
+import type { IFilesystemProvider, IPtyProvider } from '../providers/types'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { CodexAccountService } from '../codex-accounts/service'
 import type { RateLimitService } from '../rate-limits/service'
@@ -170,6 +241,8 @@ import type {
   NoteDeleteArgs,
   NoteDeleteResult,
   NoteLinkArgs,
+  NoteLink,
+  NoteLinkKind,
   NoteListArgs,
   NoteListResult,
   NoteMutationResult,
@@ -210,6 +283,8 @@ type RuntimeStore = {
   getRepo: Store['getRepo']
   addRepo: Store['addRepo']
   updateRepo: Store['updateRepo']
+  removeRepo?: Store['removeRepo']
+  reorderRepos?: Store['reorderRepos']
   getAllWorktreeMeta: Store['getAllWorktreeMeta']
   getWorktreeMeta: Store['getWorktreeMeta']
   setWorktreeMeta: Store['setWorktreeMeta']
@@ -222,6 +297,7 @@ type RuntimeStore = {
     refreshLocalBaseRefOnWorktreeCreate: boolean
     branchPrefix: string
     branchPrefixCustom: string
+    experimentalWorktreeSymlinks?: boolean
     mobileAutoRestoreFitMs?: number | null
     voice?: VoiceSettings
   }
@@ -290,6 +366,7 @@ type RuntimePtyController = {
   write(ptyId: string, data: string): boolean
   kill(ptyId: string): boolean
   getForegroundProcess(ptyId: string): Promise<string | null>
+  hasChildProcesses?(ptyId: string): Promise<boolean>
   clearBuffer?(ptyId: string): Promise<void>
   resize?(ptyId: string, cols: number, rows: number): boolean
   listProcesses?(): Promise<{ id: string; cwd: string; title: string }[]>
@@ -303,25 +380,6 @@ type RuntimePtyController = {
   hasRendererSerializer?(ptyId: string): boolean
   getSize?(ptyId: string): { cols: number; rows: number } | null
 }
-
-const MOBILE_FILE_LIST_LIMIT = 5000
-const MOBILE_FILE_READ_MAX_BYTES = 512 * 1024
-const MOBILE_BINARY_EXTENSIONS = new Set([
-  '.avif',
-  '.bmp',
-  '.gif',
-  '.heic',
-  '.ico',
-  '.jpeg',
-  '.jpg',
-  '.mov',
-  '.mp3',
-  '.mp4',
-  '.pdf',
-  '.png',
-  '.webp',
-  '.zip'
-])
 
 type RuntimeNotifier = {
   worktreesChanged(repoId: string): void
@@ -403,36 +461,22 @@ type MessageWaiter = {
   timeout: NodeJS.Timeout | null
 }
 
-type ResolvedWorktree = {
-  id: string
-  repoId: string
-  path: string
-  branch: string
-  linkedIssue: number | null
-  git: {
-    path: string
-    head: string
-    branch: string
-    isBare: boolean
-    isMainWorktree: boolean
-  }
-  displayName: string
-  comment: string
+function omitUndefinedProperties<T extends Record<string, unknown>>(value: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => entry !== undefined)
+  ) as Partial<T>
 }
 
-type BrowserCommandTargetParams = {
-  worktree?: string
-  page?: string
-}
-
-type ResolvedBrowserCommandTarget = {
-  worktreeId?: string
-  browserPageId?: string
-}
+type ResolvedWorktree = Worktree & { git: GitWorktreeInfo }
 
 type ResolvedWorktreeCache = {
   expiresAt: number
   worktrees: ResolvedWorktree[]
+}
+
+type ResolvedWorktreeInFlight = {
+  generation: number
+  promise: Promise<ResolvedWorktree[]>
 }
 
 export type MobileNotificationEvent = {
@@ -510,7 +554,8 @@ export class OrcaRuntimeService {
   private notifier: RuntimeNotifier | null = null
   private agentBrowserBridge: AgentBrowserBridge | null = null
   private resolvedWorktreeCache: ResolvedWorktreeCache | null = null
-  private resolvedWorktreeInFlight: Promise<ResolvedWorktree[]> | null = null
+  private resolvedWorktreeInFlight: ResolvedWorktreeInFlight | null = null
+  private resolvedWorktreeGeneration = 0
   private agentDetector: AgentDetector | null = null
   private _orchestrationDb: OrchestrationDb | null = null
   private messageWaitersByHandle = new Map<string, Set<MessageWaiter>>()
@@ -525,6 +570,7 @@ export class OrcaRuntimeService {
     string,
     Set<(event: { mode: 'mobile-fit' | 'desktop-fit'; cols: number; rows: number }) => void>
   >()
+  private driverListeners = new Map<string, Set<(driver: DriverState) => void>>()
   private subscriptionCleanups = new Map<string, () => void>()
   // Why: index of subscriptionIds by per-WebSocket connectionId so the
   // server can sweep all subscriptions for a closing socket without
@@ -814,8 +860,11 @@ export class OrcaRuntimeService {
       authoritativeWindowId: this.authoritativeWindowId,
       liveTabCount: this.tabs.size,
       liveLeafCount: this.leaves.size,
-      protocolVersion: DESKTOP_PROTOCOL_VERSION,
-      minCompatibleMobileVersion: MIN_COMPATIBLE_MOBILE_VERSION
+      runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+      minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+      capabilities: [...RUNTIME_CAPABILITIES],
+      protocolVersion: RUNTIME_PROTOCOL_VERSION,
+      minCompatibleMobileVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
     }
   }
 
@@ -989,7 +1038,12 @@ export class OrcaRuntimeService {
       throw new Error('tab_not_found')
     }
     if (tab.type === 'terminal') {
-      this.notifier?.closeTerminal(tab.parentTabId)
+      const pty = this.findPtyForMobileTerminalTab(tab)
+      if (pty) {
+        this.ptyController?.kill(pty.ptyId)
+      } else {
+        this.notifier?.closeTerminal(tab.parentTabId)
+      }
     } else {
       this.notifier?.closeSessionTab?.(tab.id, worktreeId)
     }
@@ -1020,117 +1074,112 @@ export class OrcaRuntimeService {
     return await this.notifier.saveMobileMarkdownTab(worktreeId, tabId, baseVersion, content)
   }
 
-  async listMobileFiles(worktreeSelector: string): Promise<RuntimeFileListResult> {
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
+  private readonly fileCommands = new RuntimeFileCommands({
+    getRuntimeId: () => this.runtimeId,
+    requireStore: () => this.requireStore(),
+    resolveWorktreeSelector: (selector) => this.resolveWorktreeSelector(selector),
+    resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
+    openFile: (worktreeId, filePath, relativePath) => {
+      if (!this.notifier?.openFile) {
+        throw new Error('renderer_unavailable')
+      }
+      this.notifier.openFile(worktreeId, filePath, relativePath)
     }
+  })
+
+  listMobileFiles: RuntimeFileCommands['listMobileFiles'] = this.fileCommands.listMobileFiles.bind(
+    this.fileCommands
+  )
+  openMobileFile: RuntimeFileCommands['openMobileFile'] = this.fileCommands.openMobileFile.bind(
+    this.fileCommands
+  )
+  readMobileFile: RuntimeFileCommands['readMobileFile'] = this.fileCommands.readMobileFile.bind(
+    this.fileCommands
+  )
+  readFileExplorerDir: RuntimeFileCommands['readFileExplorerDir'] =
+    this.fileCommands.readFileExplorerDir.bind(this.fileCommands)
+  watchFileExplorer: RuntimeFileCommands['watchFileExplorer'] =
+    this.fileCommands.watchFileExplorer.bind(this.fileCommands)
+  readFileExplorerPreview: RuntimeFileCommands['readFileExplorerPreview'] =
+    this.fileCommands.readFileExplorerPreview.bind(this.fileCommands)
+  writeFileExplorerFile: RuntimeFileCommands['writeFileExplorerFile'] =
+    this.fileCommands.writeFileExplorerFile.bind(this.fileCommands)
+  writeFileExplorerFileBase64: RuntimeFileCommands['writeFileExplorerFileBase64'] =
+    this.fileCommands.writeFileExplorerFileBase64.bind(this.fileCommands)
+  writeFileExplorerFileBase64Chunk: RuntimeFileCommands['writeFileExplorerFileBase64Chunk'] =
+    this.fileCommands.writeFileExplorerFileBase64Chunk.bind(this.fileCommands)
+  createFileExplorerFile: RuntimeFileCommands['createFileExplorerFile'] =
+    this.fileCommands.createFileExplorerFile.bind(this.fileCommands)
+  createFileExplorerDir: RuntimeFileCommands['createFileExplorerDir'] =
+    this.fileCommands.createFileExplorerDir.bind(this.fileCommands)
+  createFileExplorerDirNoClobber: RuntimeFileCommands['createFileExplorerDirNoClobber'] =
+    this.fileCommands.createFileExplorerDirNoClobber.bind(this.fileCommands)
+  commitFileExplorerUpload: RuntimeFileCommands['commitFileExplorerUpload'] =
+    this.fileCommands.commitFileExplorerUpload.bind(this.fileCommands)
+  renameFileExplorerPath: RuntimeFileCommands['renameFileExplorerPath'] =
+    this.fileCommands.renameFileExplorerPath.bind(this.fileCommands)
+  copyFileExplorerPath: RuntimeFileCommands['copyFileExplorerPath'] =
+    this.fileCommands.copyFileExplorerPath.bind(this.fileCommands)
+  deleteFileExplorerPath: RuntimeFileCommands['deleteFileExplorerPath'] =
+    this.fileCommands.deleteFileExplorerPath.bind(this.fileCommands)
+  searchRuntimeFiles: RuntimeFileCommands['searchRuntimeFiles'] =
+    this.fileCommands.searchRuntimeFiles.bind(this.fileCommands)
+  listRuntimeFiles: RuntimeFileCommands['listRuntimeFiles'] =
+    this.fileCommands.listRuntimeFiles.bind(this.fileCommands)
+  listRuntimeMarkdownDocuments: RuntimeFileCommands['listRuntimeMarkdownDocuments'] =
+    this.fileCommands.listRuntimeMarkdownDocuments.bind(this.fileCommands)
+  statRuntimeFile: RuntimeFileCommands['statRuntimeFile'] = this.fileCommands.statRuntimeFile.bind(
+    this.fileCommands
+  )
+
+  private readonly gitCommands = new RuntimeGitCommands({
+    resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector)
+  })
+
+  getRuntimeGitStatus: RuntimeGitCommands['getRuntimeGitStatus'] =
+    this.gitCommands.getRuntimeGitStatus.bind(this.gitCommands)
+  getRuntimeGitConflictOperation: RuntimeGitCommands['getRuntimeGitConflictOperation'] =
+    this.gitCommands.getRuntimeGitConflictOperation.bind(this.gitCommands)
+  getRuntimeGitDiff: RuntimeGitCommands['getRuntimeGitDiff'] =
+    this.gitCommands.getRuntimeGitDiff.bind(this.gitCommands)
+  getRuntimeGitBranchCompare: RuntimeGitCommands['getRuntimeGitBranchCompare'] =
+    this.gitCommands.getRuntimeGitBranchCompare.bind(this.gitCommands)
+  getRuntimeGitUpstreamStatus: RuntimeGitCommands['getRuntimeGitUpstreamStatus'] =
+    this.gitCommands.getRuntimeGitUpstreamStatus.bind(this.gitCommands)
+  fetchRuntimeGit: RuntimeGitCommands['fetchRuntimeGit'] = this.gitCommands.fetchRuntimeGit.bind(
+    this.gitCommands
+  )
+  pullRuntimeGit: RuntimeGitCommands['pullRuntimeGit'] = this.gitCommands.pullRuntimeGit.bind(
+    this.gitCommands
+  )
+  pushRuntimeGit: RuntimeGitCommands['pushRuntimeGit'] = this.gitCommands.pushRuntimeGit.bind(
+    this.gitCommands
+  )
+  getRuntimeGitBranchDiff: RuntimeGitCommands['getRuntimeGitBranchDiff'] =
+    this.gitCommands.getRuntimeGitBranchDiff.bind(this.gitCommands)
+  commitRuntimeGit: RuntimeGitCommands['commitRuntimeGit'] = this.gitCommands.commitRuntimeGit.bind(
+    this.gitCommands
+  )
+  stageRuntimeGitPath: RuntimeGitCommands['stageRuntimeGitPath'] =
+    this.gitCommands.stageRuntimeGitPath.bind(this.gitCommands)
+  unstageRuntimeGitPath: RuntimeGitCommands['unstageRuntimeGitPath'] =
+    this.gitCommands.unstageRuntimeGitPath.bind(this.gitCommands)
+  bulkStageRuntimeGitPaths: RuntimeGitCommands['bulkStageRuntimeGitPaths'] =
+    this.gitCommands.bulkStageRuntimeGitPaths.bind(this.gitCommands)
+  bulkUnstageRuntimeGitPaths: RuntimeGitCommands['bulkUnstageRuntimeGitPaths'] =
+    this.gitCommands.bulkUnstageRuntimeGitPaths.bind(this.gitCommands)
+  discardRuntimeGitPath: RuntimeGitCommands['discardRuntimeGitPath'] =
+    this.gitCommands.discardRuntimeGitPath.bind(this.gitCommands)
+  getRuntimeGitRemoteFileUrl: RuntimeGitCommands['getRuntimeGitRemoteFileUrl'] =
+    this.gitCommands.getRuntimeGitRemoteFileUrl.bind(this.gitCommands)
+
+  private async resolveRuntimeGitTarget(
+    worktreeSelector: string
+  ): Promise<{ worktree: ResolvedWorktree; connectionId?: string }> {
+    const store = this.requireStore()
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
-    const repo = this.store.getRepo(worktree.repoId)
-    const connectionId = repo?.connectionId ?? undefined
-    const files = connectionId
-      ? await this.listRemoteMobileFiles(worktree.path, connectionId)
-      : await listQuickOpenFiles(worktree.path, this.store as unknown as Store)
-    const entries = files
-      .filter((relativePath) => isSafeMobileRelativePath(relativePath))
-      .sort((a, b) => a.localeCompare(b))
-      .slice(0, MOBILE_FILE_LIST_LIMIT)
-      .map((relativePath) => ({
-        relativePath,
-        basename: basenameFromRelativePath(relativePath),
-        kind: isMobileBinaryPath(relativePath) ? ('binary' as const) : ('text' as const)
-      }))
-
-    return {
-      worktree: worktree.id,
-      rootPath: worktree.path,
-      files: entries,
-      totalCount: files.length,
-      truncated: files.length > MOBILE_FILE_LIST_LIMIT
-    }
-  }
-
-  async openMobileFile(
-    worktreeSelector: string,
-    relativePath: string
-  ): Promise<RuntimeFileOpenResult> {
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
-    }
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
-    if (!isSafeMobileRelativePath(relativePath)) {
-      throw new Error('invalid_relative_path')
-    }
-    const kind = isMobileBinaryPath(relativePath)
-      ? 'binary'
-      : isMobileMarkdownPath(relativePath)
-        ? 'markdown'
-        : 'text'
-    if (kind === 'binary') {
-      return { worktree: worktree.id, relativePath, kind, opened: false }
-    }
-    if (!this.notifier?.openFile) {
-      throw new Error('renderer_unavailable')
-    }
-    const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    this.notifier.openFile(worktree.id, filePath, relativePath)
-    return { worktree: worktree.id, relativePath, kind, opened: true }
-  }
-
-  async readMobileFile(
-    worktreeSelector: string,
-    relativePath: string
-  ): Promise<RuntimeFileReadResult> {
-    if (!this.store) {
-      throw new Error('runtime_unavailable')
-    }
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
-    if (!isSafeMobileRelativePath(relativePath)) {
-      throw new Error('invalid_relative_path')
-    }
-    if (isMobileBinaryPath(relativePath)) {
-      throw new Error('binary_file')
-    }
-
-    const repo = this.store.getRepo(worktree.repoId)
-    const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    const content = repo?.connectionId
-      ? await this.readRemoteMobileFile(filePath, repo.connectionId)
-      : await readLocalMobileFile(filePath, this.store as unknown as Store)
-    const truncated = truncateMobileFilePreview(content)
-
-    return {
-      worktree: worktree.id,
-      relativePath,
-      content: truncated.content,
-      truncated: truncated.truncated,
-      byteLength: truncated.byteLength
-    }
-  }
-
-  private async listRemoteMobileFiles(rootPath: string, connectionId: string): Promise<string[]> {
-    const provider = getSshFilesystemProvider(connectionId)
-    if (!provider) {
-      return []
-    }
-    return provider.listFiles(rootPath)
-  }
-
-  private async readRemoteMobileFile(filePath: string, connectionId: string): Promise<string> {
-    const provider = getSshFilesystemProvider(connectionId)
-    if (!provider) {
-      throw new Error('remote_filesystem_unavailable')
-    }
-    const fileStat = await provider.stat(filePath)
-    // Why: the SSH filesystem API does not expose ranged reads here, so reject
-    // oversized remote previews instead of streaming a large file just to trim it.
-    if (fileStat.size > MOBILE_FILE_READ_MAX_BYTES) {
-      throw new Error('file_too_large')
-    }
-    const result = await provider.readFile(filePath)
-    if (result.isBinary) {
-      throw new Error('binary_file')
-    }
-    return result.content
+    const repo = store.getRepo(worktree.repoId)
+    return { worktree, connectionId: repo?.connectionId ?? undefined }
   }
 
   onMobileSessionTabsChanged(
@@ -1315,6 +1364,21 @@ export class OrcaRuntimeService {
       listeners.delete(listener)
       if (listeners.size === 0) {
         this.fitOverrideListeners.delete(ptyId)
+      }
+    }
+  }
+
+  subscribeToDriverChanges(ptyId: string, listener: (driver: DriverState) => void): () => void {
+    let listeners = this.driverListeners.get(ptyId)
+    if (!listeners) {
+      listeners = new Set()
+      this.driverListeners.set(ptyId, listeners)
+    }
+    listeners.add(listener)
+    return () => {
+      listeners.delete(listener)
+      if (listeners.size === 0) {
+        this.driverListeners.delete(ptyId)
       }
     }
   }
@@ -1619,9 +1683,7 @@ export class OrcaRuntimeService {
     // listener leaks in dataListeners and duplicates every PTY data event.
     const existing = this.subscriptionCleanups.get(subscriptionId)
     if (existing) {
-      existing()
-      // Why: existing() already evicts itself from the per-connection index
-      // via cleanupSubscription, so no extra bookkeeping is needed here.
+      this.cleanupSubscription(subscriptionId)
     }
     this.subscriptionCleanups.set(subscriptionId, cleanup)
     if (connectionId) {
@@ -2318,6 +2380,12 @@ export class OrcaRuntimeService {
       this.currentDriver.set(ptyId, next)
     }
     this.notifier?.terminalDriverChanged(ptyId, next)
+    const listeners = this.driverListeners.get(ptyId)
+    if (listeners) {
+      for (const listener of listeners) {
+        listener(next)
+      }
+    }
   }
 
   // Why: invoked from mobile RPC method handlers (terminal.send / setDisplayMode /
@@ -2395,6 +2463,36 @@ export class OrcaRuntimeService {
       rows: clampedRows,
       ownerClientId: winner.clientId
     })
+    return true
+  }
+
+  // Why: remote desktop clients do not have the local `pty:resize` IPC path.
+  // Their measured xterm size still has to resize the source PTY so TUIs
+  // reflow to the visible client dimensions.
+  async updateDesktopViewport(
+    ptyId: string,
+    viewport: { cols: number; rows: number }
+  ): Promise<boolean> {
+    if (
+      this.isResizeSuppressed() ||
+      this.getDriver(ptyId).kind === 'mobile' ||
+      this.terminalFitOverrides.has(ptyId)
+    ) {
+      return false
+    }
+    const cols = Math.max(20, Math.min(240, Math.round(viewport.cols)))
+    const rows = Math.max(8, Math.min(120, Math.round(viewport.rows)))
+    let resized = false
+    try {
+      resized = this.ptyController?.resize?.(ptyId, cols, rows) ?? false
+    } catch {
+      return false
+    }
+    if (!resized) {
+      return false
+    }
+    this.resizeHeadlessTerminal(ptyId, cols, rows)
+    this.onExternalPtyResize(ptyId, cols, rows)
     return true
   }
 
@@ -3867,11 +3965,16 @@ export class OrcaRuntimeService {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
+    if (!isAbsolute(path)) {
+      // Why: remote clients may run in a different cwd than the server. Require
+      // server-side repo paths to be explicit so `orca serve` cwd is irrelevant.
+      throw new Error('Repo path must be an absolute path')
+    }
     if (kind === 'git' && !isGitRepo(path)) {
       throw new Error(`Not a valid git repository: ${path}`)
     }
 
-    const existing = this.store.getRepos().find((repo) => repo.path === path)
+    const existing = this.store.getRepos().find((repo) => runtimePathsEqual(repo.path, path))
     if (existing) {
       return existing
     }
@@ -3885,6 +3988,182 @@ export class OrcaRuntimeService {
       kind
     }
     this.store.addRepo(repo)
+    this.invalidateResolvedWorktreeCache()
+    this.notifier?.reposChanged()
+    return this.store.getRepo(repo.id) ?? repo
+  }
+
+  async createRepo(
+    parentPath: string,
+    name: string,
+    kind: 'git' | 'folder' = 'git'
+  ): Promise<{ repo: Repo } | { error: string }> {
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    const trimmedName = name.trim()
+    const trimmedParentPath = parentPath.trim()
+    const repoKind: 'git' | 'folder' = kind === 'folder' ? 'folder' : 'git'
+    if (!trimmedName) {
+      return { error: 'Name cannot be empty' }
+    }
+    if (/[\\/]/.test(trimmedName) || trimmedName === '.' || trimmedName === '..') {
+      return { error: 'Name cannot contain slashes or be "." / ".."' }
+    }
+    if (!trimmedParentPath) {
+      return { error: 'Parent directory is required' }
+    }
+    if (!isAbsolute(trimmedParentPath)) {
+      return { error: 'Parent directory must be an absolute path' }
+    }
+
+    const targetPath = join(trimmedParentPath, trimmedName)
+    const existing = this.store.getRepos().find((repo) => runtimePathsEqual(repo.path, targetPath))
+    if (existing) {
+      return { repo: existing }
+    }
+
+    let createdDir = false
+    try {
+      const existingStat = await stat(targetPath).catch((error: unknown) => {
+        if (isENOENT(error)) {
+          return null
+        }
+        throw error
+      })
+      if (existingStat) {
+        if (!existingStat.isDirectory()) {
+          return { error: `"${trimmedName}" already exists at this location and is not a folder.` }
+        }
+        const entries = await readdir(targetPath)
+        if (entries.length > 0) {
+          return { error: `"${trimmedName}" already exists at this location and is not empty.` }
+        }
+      } else {
+        await mkdir(targetPath, { recursive: false })
+        createdDir = true
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return { error: `Failed to prepare directory: ${message}` }
+    }
+
+    if (repoKind === 'git') {
+      let step: 'init' | 'commit' = 'init'
+      try {
+        await gitExecFileAsync(['init'], { cwd: targetPath })
+        step = 'commit'
+        await gitExecFileAsync(['commit', '--allow-empty', '-m', 'Initial commit'], {
+          cwd: targetPath
+        })
+      } catch (error) {
+        if (createdDir) {
+          await rm(targetPath, { recursive: true, force: true }).catch(() => {})
+        } else if (step === 'commit') {
+          await rm(join(targetPath, '.git'), { recursive: true, force: true }).catch(() => {})
+        }
+        const message = error instanceof Error ? error.message : String(error)
+        if (
+          step === 'commit' &&
+          /Please tell me who you are|user\.name|user\.email/i.test(message)
+        ) {
+          return {
+            error:
+              'Git author identity is not configured. Run `git config --global user.name "Your Name"` and `git config --global user.email "you@example.com"`, then try again.'
+          }
+        }
+        const stepLabel =
+          step === 'init'
+            ? 'Failed to initialize git repository'
+            : 'Failed to create initial commit'
+        return { error: `${stepLabel}: ${message}` }
+      }
+    }
+
+    const raceWinner = this.store
+      .getRepos()
+      .find((repo) => runtimePathsEqual(repo.path, targetPath))
+    if (raceWinner) {
+      return { repo: raceWinner }
+    }
+
+    const repo: Repo = {
+      id: randomUUID(),
+      path: targetPath,
+      displayName: trimmedName,
+      badgeColor: REPO_COLORS[this.store.getRepos().length % REPO_COLORS.length],
+      addedAt: Date.now(),
+      kind: repoKind
+    }
+    this.store.addRepo(repo)
+    invalidateAuthorizedRootsCache()
+    this.invalidateResolvedWorktreeCache()
+    this.notifier?.reposChanged()
+    return { repo: this.store.getRepo(repo.id) ?? repo }
+  }
+
+  async cloneRepo(url: string, destination: string): Promise<Repo> {
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    const trimmedUrl = url.trim()
+    const trimmedDestination = destination.trim()
+    const repoName = basename(trimmedUrl.replace(/\.git\/?$/, ''))
+    if (!repoName) {
+      throw new Error('Could not determine repository name from URL')
+    }
+    if (!trimmedDestination) {
+      throw new Error('Clone destination is required')
+    }
+    if (!isAbsolute(trimmedDestination)) {
+      throw new Error('Clone destination must be an absolute path')
+    }
+    await mkdir(trimmedDestination, { recursive: true })
+    const clonePath = join(trimmedDestination, repoName)
+    await new Promise<void>((resolve, reject) => {
+      const proc = wslAwareSpawn('git', ['clone', '--progress', '--', trimmedUrl, clonePath], {
+        cwd: trimmedDestination,
+        stdio: ['ignore', 'ignore', 'pipe']
+      })
+      let stderrTail = ''
+      proc.stderr?.on('data', (chunk: Buffer) => {
+        stderrTail = (stderrTail + chunk.toString()).slice(-4096)
+      })
+      proc.on('error', (error) => reject(new Error(`Clone failed: ${error.message}`)))
+      proc.on('close', (code, signal) => {
+        if (signal === 'SIGTERM') {
+          reject(new Error('Clone aborted'))
+        } else if (code === 0) {
+          resolve()
+        } else {
+          const lastLine = stderrTail.trim().split('\n').pop() ?? 'unknown error'
+          reject(new Error(`Clone failed: ${lastLine}`))
+        }
+      })
+    })
+
+    const existing = this.store.getRepos().find((repo) => runtimePathsEqual(repo.path, clonePath))
+    if (existing) {
+      if (isFolderRepo(existing)) {
+        const updated = this.store.updateRepo(existing.id, { kind: 'git' })
+        if (updated) {
+          this.notifier?.reposChanged()
+          return updated
+        }
+      }
+      return existing
+    }
+
+    const repo: Repo = {
+      id: randomUUID(),
+      path: clonePath,
+      displayName: getRepoName(clonePath),
+      badgeColor: REPO_COLORS[this.store.getRepos().length % REPO_COLORS.length],
+      addedAt: Date.now(),
+      kind: 'git'
+    }
+    this.store.addRepo(repo)
+    invalidateAuthorizedRootsCache()
     this.invalidateResolvedWorktreeCache()
     this.notifier?.reposChanged()
     return this.store.getRepo(repo.id) ?? repo
@@ -3911,6 +4190,75 @@ export class OrcaRuntimeService {
     return updated
   }
 
+  async updateRepo(
+    repoSelector: string,
+    updates: Partial<
+      Pick<
+        Repo,
+        | 'displayName'
+        | 'badgeColor'
+        | 'hookSettings'
+        | 'worktreeBaseRef'
+        | 'kind'
+        | 'symlinkPaths'
+        | 'issueSourcePreference'
+      >
+    >
+  ): Promise<Repo> {
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    const repo = await this.resolveRepoSelector(repoSelector)
+    const updated = this.store.updateRepo(repo.id, omitUndefinedProperties(updates))
+    if (!updated) {
+      throw new Error('repo_not_found')
+    }
+    this.invalidateResolvedWorktreeCache()
+    this.notifier?.reposChanged()
+    return updated
+  }
+
+  async removeRepo(repoSelector: string): Promise<{ removed: true }> {
+    if (!this.store?.removeRepo) {
+      throw new Error('runtime_unavailable')
+    }
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.store.removeRepo(repo.id)
+    this.invalidateResolvedWorktreeCache()
+    invalidateAuthorizedRootsCache()
+    this.notifier?.reposChanged()
+    return { removed: true }
+  }
+
+  async inspectTerminalProcess(
+    terminalSelector: string
+  ): Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean }> {
+    const leaf = this.resolveLeafForHandle(terminalSelector)
+    if (!leaf?.ptyId || !this.ptyController) {
+      return { foregroundProcess: null, hasChildProcesses: false }
+    }
+    const foregroundProcess = await this.ptyController.getForegroundProcess(leaf.ptyId)
+    const hasChildProcesses =
+      (await this.ptyController.hasChildProcesses?.(leaf.ptyId).catch(() => false)) ?? false
+    return { foregroundProcess, hasChildProcesses }
+  }
+
+  reorderRepos(orderedIds: string[]): { status: 'applied' | 'rejected' } {
+    if (!this.store?.reorderRepos) {
+      throw new Error('runtime_unavailable')
+    }
+    // Why: remote clients can race repo add/remove on the server just like
+    // local drag-reorder can race another window. Let the store validate the
+    // full permutation and signal a resync-worthy rejection.
+    const applied = this.store.reorderRepos(orderedIds)
+    if (!applied) {
+      return { status: 'rejected' }
+    }
+    this.invalidateResolvedWorktreeCache()
+    this.notifier?.reposChanged()
+    return { status: 'applied' }
+  }
+
   async searchRepoRefs(
     repoSelector: string,
     query: string,
@@ -3926,15 +4274,462 @@ export class OrcaRuntimeService {
         truncated: false
       }
     }
-    const refs = await searchBaseRefs(repo.path, query, limit + 1)
+    const refs = repo.connectionId
+      ? await this.searchRemoteRepoRefs(repo, query, limit + 1)
+      : await searchBaseRefs(repo.path, query, limit + 1)
     return {
       refs: refs.slice(0, limit),
       truncated: refs.length > limit
     }
   }
 
+  async getRepoBaseRefDefault(
+    repoSelector: string
+  ): Promise<{ defaultBaseRef: string | null; remoteCount: number }> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    if (isFolderRepo(repo)) {
+      return { defaultBaseRef: null, remoteCount: 0 }
+    }
+    if (repo.connectionId) {
+      return this.getRemoteRepoBaseRefDefault(repo)
+    }
+    const [defaultBaseRef, remoteCount] = await Promise.all([
+      getBaseRefDefault(repo.path),
+      getRemoteCount(repo.path)
+    ])
+    return { defaultBaseRef, remoteCount }
+  }
+
+  private async getRemoteRepoBaseRefDefault(
+    repo: Repo
+  ): Promise<{ defaultBaseRef: string | null; remoteCount: number }> {
+    const provider = repo.connectionId ? getSshGitProvider(repo.connectionId) : null
+    if (!provider) {
+      return { defaultBaseRef: null, remoteCount: 0 }
+    }
+    const [defaultBaseRef, remoteCount] = await Promise.all([
+      resolveDefaultBaseRefViaExec(async (argv) => {
+        try {
+          return await provider.exec(argv, repo.path)
+        } catch (err) {
+          if (argv[0] === 'symbolic-ref') {
+            console.warn('[runtime:repo.baseRefDefault] SSH symbolic-ref failed', {
+              path: repo.path,
+              err
+            })
+          }
+          throw err
+        }
+      }),
+      provider
+        .exec(['remote'], repo.path)
+        .then((result) => parseRemoteCount(result.stdout))
+        .catch((err) => {
+          console.warn('[runtime:repo.baseRefDefault] SSH git remote count failed', {
+            path: repo.path,
+            err
+          })
+          return 0
+        })
+    ])
+    return { defaultBaseRef, remoteCount }
+  }
+
+  private async searchRemoteRepoRefs(repo: Repo, query: string, limit: number): Promise<string[]> {
+    const provider = repo.connectionId ? getSshGitProvider(repo.connectionId) : null
+    if (!provider) {
+      return []
+    }
+    const normalizedQuery = normalizeRefSearchQuery(query)
+    if (!normalizedQuery) {
+      return []
+    }
+    try {
+      const result = await provider.exec(buildSearchBaseRefsArgv(normalizedQuery), repo.path)
+      return parseAndFilterSearchRefs(result.stdout, limit)
+    } catch (err) {
+      console.warn('[runtime:repo.searchRefs] SSH for-each-ref failed', {
+        path: repo.path,
+        err
+      })
+      return []
+    }
+  }
+
+  private assertHostIntegrationRepoIsLocal(repo: Repo, operation: string): void {
+    if (repo.connectionId) {
+      throw new Error(`${operation}_unsupported_for_ssh_repo`)
+    }
+  }
+
+  async getRepoSlug(repoSelector: string): Promise<{ owner: string; repo: string } | null> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_slug')
+    return getRepoSlug(repo.path)
+  }
+
+  async listRepoWorkItems(
+    repoSelector: string,
+    limit?: number,
+    query?: string,
+    before?: string
+  ): Promise<Awaited<ReturnType<typeof listWorkItems>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_work_items')
+    return listWorkItems(repo.path, limit, query, before, repo.issueSourcePreference)
+  }
+
+  async getRepoWorkItem(
+    repoSelector: string,
+    number: number,
+    type?: 'issue' | 'pr'
+  ): Promise<Awaited<ReturnType<typeof getWorkItem>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_work_item')
+    return getWorkItem(repo.path, number, type)
+  }
+
+  async getRepoWorkItemByOwnerRepo(
+    repoSelector: string,
+    ownerRepo: { owner: string; repo: string },
+    number: number,
+    type: 'issue' | 'pr'
+  ): Promise<Awaited<ReturnType<typeof getWorkItemByOwnerRepo>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_work_item')
+    return getWorkItemByOwnerRepo(repo.path, ownerRepo, number, type)
+  }
+
+  async getRepoWorkItemDetails(
+    repoSelector: string,
+    number: number,
+    type?: 'issue' | 'pr'
+  ): Promise<Awaited<ReturnType<typeof getWorkItemDetails>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_work_item_details')
+    return getWorkItemDetails(repo.path, number, type)
+  }
+
+  async countRepoWorkItems(repoSelector: string, query?: string): Promise<number> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_work_items')
+    return countWorkItems(repo.path, query, repo.issueSourcePreference)
+  }
+
+  async listRepoLabels(repoSelector: string): Promise<Awaited<ReturnType<typeof listLabels>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_labels')
+    return listLabels(repo.path, repo.issueSourcePreference)
+  }
+
+  async listRepoAssignableUsers(
+    repoSelector: string
+  ): Promise<Awaited<ReturnType<typeof listAssignableUsers>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_assignable_users')
+    return listAssignableUsers(repo.path, repo.issueSourcePreference)
+  }
+
+  getGitHubRateLimit(options?: {
+    force?: boolean
+  }): Promise<Awaited<ReturnType<typeof getRateLimit>>> {
+    return getRateLimit(options)
+  }
+
+  async getRepoPRForBranch(
+    repoSelector: string,
+    branch: string,
+    linkedPRNumber?: number | null
+  ): Promise<Awaited<ReturnType<typeof getPRForBranch>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr')
+    return getPRForBranch(repo.path, branch, linkedPRNumber ?? null)
+  }
+
+  async getHostedReviewForBranch(args: {
+    repoSelector: string
+    branch: string
+    linkedGitHubPR?: number | null
+    linkedGitLabMR?: number | null
+    linkedBitbucketPR?: number | null
+  }): Promise<HostedReviewInfo | null> {
+    const repo = await this.resolveRepoSelector(args.repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'hosted_review')
+    const review = await getHostedReviewForBranchFromRepo({
+      repoPath: repo.path,
+      branch: args.branch,
+      linkedGitHubPR: args.linkedGitHubPR ?? null,
+      linkedGitLabMR: args.linkedGitLabMR ?? null,
+      linkedBitbucketPR: args.linkedBitbucketPR ?? null
+    })
+    if (review?.provider === 'github' && this.stats && !this.stats.hasCountedPR(review.url)) {
+      this.stats.record({
+        type: 'pr_created',
+        at: Date.now(),
+        repoId: repo.id,
+        meta: { prNumber: review.number, prUrl: review.url }
+      })
+    }
+    return review
+  }
+
+  async getRepoIssue(
+    repoSelector: string,
+    number: number
+  ): Promise<Awaited<ReturnType<typeof getIssue>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_issue')
+    return getIssue(repo.path, number)
+  }
+
+  async getRepoPRChecks(
+    repoSelector: string,
+    prNumber: number,
+    headSha?: string,
+    options?: { noCache?: boolean }
+  ): Promise<Awaited<ReturnType<typeof getPRChecks>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_checks')
+    return getPRChecks(repo.path, prNumber, headSha, options)
+  }
+
+  async getRepoPRComments(
+    repoSelector: string,
+    prNumber: number,
+    options?: { noCache?: boolean }
+  ): Promise<Awaited<ReturnType<typeof getPRComments>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_comments')
+    return getPRComments(repo.path, prNumber, options)
+  }
+
+  async getRepoPRFileContents(
+    repoSelector: string,
+    args: {
+      prNumber: number
+      path: string
+      oldPath?: string
+      status: GitHubPRFile['status']
+      headSha: string
+      baseSha: string
+    }
+  ): Promise<Awaited<ReturnType<typeof getPRFileContents>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_file_contents')
+    return getPRFileContents({ repoPath: repo.path, ...args })
+  }
+
+  async resolveRepoReviewThread(
+    repoSelector: string,
+    threadId: string,
+    resolve: boolean
+  ): Promise<Awaited<ReturnType<typeof resolveReviewThread>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_review_thread')
+    return resolveReviewThread(repo.path, threadId, resolve)
+  }
+
+  async updateRepoPRTitle(
+    repoSelector: string,
+    prNumber: number,
+    title: string
+  ): Promise<Awaited<ReturnType<typeof updatePRTitle>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_title')
+    return updatePRTitle(repo.path, prNumber, title)
+  }
+
+  async mergeRepoPR(
+    repoSelector: string,
+    prNumber: number,
+    method?: 'merge' | 'squash' | 'rebase'
+  ): Promise<Awaited<ReturnType<typeof mergePR>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_merge')
+    return mergePR(repo.path, prNumber, method)
+  }
+
+  async createRepoIssue(
+    repoSelector: string,
+    title: string,
+    body: string
+  ): Promise<Awaited<ReturnType<typeof createIssue>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_issue_create')
+    return createIssue(repo.path, title, body, repo.issueSourcePreference)
+  }
+
+  async updateRepoIssue(
+    repoSelector: string,
+    number: number,
+    updates: GitHubIssueUpdate
+  ): Promise<Awaited<ReturnType<typeof updateIssue>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_issue_update')
+    return updateIssue(repo.path, number, updates)
+  }
+
+  async addRepoIssueComment(
+    repoSelector: string,
+    number: number,
+    body: string
+  ): Promise<Awaited<ReturnType<typeof addIssueComment>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_issue_comment')
+    return addIssueComment(repo.path, number, body)
+  }
+
+  async addRepoPRReviewComment(
+    repoSelector: string,
+    args: Omit<GitHubPRReviewCommentInput, 'repoPath'>
+  ): Promise<Awaited<ReturnType<typeof addPRReviewComment>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_review_comment')
+    return addPRReviewComment({ repoPath: repo.path, ...args })
+  }
+
+  async addRepoPRReviewCommentReply(
+    repoSelector: string,
+    args: {
+      prNumber: number
+      commentId: number
+      body: string
+      threadId?: string
+      path?: string
+      line?: number
+    }
+  ): Promise<Awaited<ReturnType<typeof addPRReviewCommentReply>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_review_comment_reply')
+    return addPRReviewCommentReply(
+      repo.path,
+      args.prNumber,
+      args.commentId,
+      args.body,
+      args.threadId,
+      args.path,
+      args.line
+    )
+  }
+
+  async listGitHubProjects(): Promise<Awaited<ReturnType<typeof listAccessibleProjects>>> {
+    return listAccessibleProjects()
+  }
+
+  async listGitHubLabelsBySlug(
+    args: ListLabelsBySlugArgs
+  ): Promise<Awaited<ReturnType<typeof listLabelsBySlug>>> {
+    return listLabelsBySlug(args)
+  }
+
+  async listGitHubAssignableUsersBySlug(
+    args: ListAssignableUsersBySlugArgs
+  ): Promise<Awaited<ReturnType<typeof listAssignableUsersBySlug>>> {
+    return listAssignableUsersBySlug(args)
+  }
+
+  async listGitHubIssueTypesBySlug(
+    args: ListIssueTypesBySlugArgs
+  ): Promise<Awaited<ReturnType<typeof listIssueTypesBySlug>>> {
+    return listIssueTypesBySlug(args)
+  }
+
+  async resolveGitHubProjectRef(
+    args: ResolveProjectRefArgs
+  ): Promise<Awaited<ReturnType<typeof resolveProjectRef>>> {
+    return resolveProjectRef(args)
+  }
+
+  async listGitHubProjectViews(
+    args: ListProjectViewsArgs
+  ): Promise<Awaited<ReturnType<typeof listProjectViews>>> {
+    return listProjectViews(args)
+  }
+
+  async getGitHubProjectViewTable(
+    args: GetProjectViewTableArgs
+  ): Promise<Awaited<ReturnType<typeof getProjectViewTable>>> {
+    return getProjectViewTable(args)
+  }
+
+  async updateGitHubProjectItemField(
+    args: UpdateProjectItemFieldArgs
+  ): Promise<Awaited<ReturnType<typeof updateProjectItemFieldValue>>> {
+    return updateProjectItemFieldValue(args)
+  }
+
+  async clearGitHubProjectItemField(
+    args: ClearProjectItemFieldArgs
+  ): Promise<Awaited<ReturnType<typeof clearProjectItemFieldValue>>> {
+    return clearProjectItemFieldValue(args)
+  }
+
+  async updateGitHubIssueBySlug(
+    args: UpdateIssueBySlugArgs
+  ): Promise<Awaited<ReturnType<typeof updateIssueBySlug>>> {
+    return updateIssueBySlug(args)
+  }
+
+  async updateGitHubPullRequestBySlug(
+    args: UpdatePullRequestBySlugArgs
+  ): Promise<Awaited<ReturnType<typeof updatePullRequestBySlug>>> {
+    return updatePullRequestBySlug(args)
+  }
+
+  async updateGitHubIssueTypeBySlug(
+    args: UpdateIssueTypeBySlugArgs
+  ): Promise<Awaited<ReturnType<typeof updateIssueTypeBySlug>>> {
+    return updateIssueTypeBySlug(args)
+  }
+
+  async addGitHubIssueCommentBySlug(
+    args: AddIssueCommentBySlugArgs
+  ): Promise<Awaited<ReturnType<typeof addIssueCommentBySlug>>> {
+    return addIssueCommentBySlug(args)
+  }
+
+  async updateGitHubIssueCommentBySlug(
+    args: UpdateIssueCommentBySlugArgs
+  ): Promise<Awaited<ReturnType<typeof updateIssueCommentBySlug>>> {
+    return updateIssueCommentBySlug(args)
+  }
+
+  async deleteGitHubIssueCommentBySlug(
+    args: DeleteIssueCommentBySlugArgs
+  ): Promise<Awaited<ReturnType<typeof deleteIssueCommentBySlug>>> {
+    return deleteIssueCommentBySlug(args)
+  }
+
   async getRepoHooks(repoSelector: string) {
     const repo = await this.resolveRepoSelector(repoSelector)
+    if (repo.connectionId) {
+      const fsProvider = getSshFilesystemProvider(repo.connectionId)
+      if (!fsProvider) {
+        return {
+          hasHooksFile: false,
+          hooks: null,
+          setupRunPolicy: getEffectiveSetupRunPolicy(repo),
+          source: null
+        }
+      }
+      try {
+        const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, '.orca.yaml'))
+        const hooks = result.isBinary ? null : parseOrcaYaml(result.content)
+        return {
+          hasHooksFile: Boolean(hooks),
+          hooks,
+          setupRunPolicy: getEffectiveSetupRunPolicy(repo),
+          source: hooks ? 'orca.yaml' : null
+        }
+      } catch {
+        return {
+          hasHooksFile: false,
+          hooks: null,
+          setupRunPolicy: getEffectiveSetupRunPolicy(repo),
+          source: null
+        }
+      }
+    }
     const hasFile = hasHooksFile(repo.path)
     const hooks = getEffectiveHooks(repo)
     const setupRunPolicy = getEffectiveSetupRunPolicy(repo)
@@ -3943,6 +4738,164 @@ export class OrcaRuntimeService {
       hooks,
       setupRunPolicy,
       source: hasFile ? 'orca.yaml' : hooks ? 'legacy' : null
+    }
+  }
+
+  async checkRepoHooks(repoSelector: string) {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    if (isFolderRepo(repo)) {
+      return { hasHooks: false, hooks: null, mayNeedUpdate: false }
+    }
+
+    if (repo.connectionId) {
+      const fsProvider = getSshFilesystemProvider(repo.connectionId)
+      if (!fsProvider) {
+        return { hasHooks: false, hooks: null, mayNeedUpdate: false }
+      }
+      try {
+        const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, '.orca.yaml'))
+        if (result.isBinary) {
+          return { hasHooks: false, hooks: null, mayNeedUpdate: false }
+        }
+        const { parse } = await import('yaml')
+        const parsed = parse(result.content)
+        return { hasHooks: true, hooks: parsed, mayNeedUpdate: false }
+      } catch {
+        return { hasHooks: false, hooks: null, mayNeedUpdate: false }
+      }
+    }
+
+    const has = hasHooksFile(repo.path)
+    const hooks = has ? loadHooks(repo.path) : null
+    return {
+      hasHooks: has,
+      hooks,
+      mayNeedUpdate: has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path)
+    }
+  }
+
+  async readRepoIssueCommand(repoSelector: string) {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    if (isFolderRepo(repo)) {
+      return {
+        localContent: null,
+        sharedContent: null,
+        effectiveContent: null,
+        localFilePath: '',
+        source: 'none' as const
+      }
+    }
+
+    if (repo.connectionId) {
+      const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
+      const fsProvider = getSshFilesystemProvider(repo.connectionId)
+      if (!fsProvider) {
+        return {
+          localContent: null,
+          sharedContent: null,
+          effectiveContent: null,
+          localFilePath: issueCommandPath,
+          source: 'none' as const
+        }
+      }
+      const localContent = await this.readRemoteIssueCommandOverride(fsProvider, issueCommandPath)
+      const sharedContent = await this.readRemoteSharedIssueCommand(fsProvider, repo.path)
+      const effectiveContent = localContent ?? sharedContent
+      return {
+        localContent,
+        sharedContent,
+        effectiveContent,
+        localFilePath: issueCommandPath,
+        source: localContent
+          ? ('local' as const)
+          : sharedContent
+            ? ('shared' as const)
+            : ('none' as const)
+      }
+    }
+
+    return readIssueCommand(repo.path)
+  }
+
+  private async readRemoteIssueCommandOverride(
+    fsProvider: IFilesystemProvider,
+    issueCommandPath: string
+  ): Promise<string | null> {
+    try {
+      const result = await fsProvider.readFile(issueCommandPath)
+      if (result.isBinary) {
+        return null
+      }
+      return result.content.trim() || null
+    } catch {
+      return null
+    }
+  }
+
+  private async readRemoteSharedIssueCommand(
+    fsProvider: IFilesystemProvider,
+    repoPath: string
+  ): Promise<string | null> {
+    try {
+      const result = await fsProvider.readFile(joinWorktreeRelativePath(repoPath, 'orca.yaml'))
+      if (result.isBinary) {
+        return null
+      }
+      return parseOrcaYaml(result.content)?.issueCommand?.trim() || null
+    } catch {
+      return null
+    }
+  }
+
+  async writeRepoIssueCommand(repoSelector: string, content: string): Promise<{ ok: true }> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    if (isFolderRepo(repo)) {
+      return { ok: true }
+    }
+
+    if (repo.connectionId) {
+      const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
+      const fsProvider = getSshFilesystemProvider(repo.connectionId)
+      if (!fsProvider) {
+        return { ok: true }
+      }
+      const trimmed = content.trim()
+      if (!trimmed) {
+        await fsProvider.deletePath(issueCommandPath, false).catch((error: unknown) => {
+          if (!isENOENT(error)) {
+            throw error
+          }
+        })
+        return { ok: true }
+      }
+      await fsProvider.createDir(joinWorktreeRelativePath(repo.path, '.orca'))
+      await this.ensureRemoteOrcaDirIgnored(fsProvider, repo.path)
+      await fsProvider.writeFile(issueCommandPath, `${trimmed}\n`)
+      return { ok: true }
+    }
+
+    writeIssueCommand(repo.path, content)
+    return { ok: true }
+  }
+
+  private async ensureRemoteOrcaDirIgnored(
+    fsProvider: IFilesystemProvider,
+    repoPath: string
+  ): Promise<void> {
+    const gitignorePath = joinWorktreeRelativePath(repoPath, '.gitignore')
+    try {
+      const result = await fsProvider.readFile(gitignorePath)
+      if (result.isBinary || /^\.orca\/?$/m.test(result.content)) {
+        return
+      }
+      const separator = result.content.endsWith('\n') ? '' : '\n'
+      await fsProvider.writeFile(gitignorePath, `${result.content}${separator}.orca\n`)
+    } catch {
+      try {
+        await fsProvider.writeFile(gitignorePath, '.orca\n')
+      } catch (error) {
+        console.warn('[runtime] Could not update remote .gitignore to exclude .orca', error)
+      }
     }
   }
 
@@ -3982,6 +4935,53 @@ export class OrcaRuntimeService {
     })
   }
 
+  async saveNote(args: {
+    worktreeSelector: string
+    note: string
+    title?: string
+    bodyMarkdown: string
+    revision?: number
+    makeActive?: boolean
+    updatedBySessionId?: string | null
+  }): Promise<NoteMutationResult> {
+    const scope = await this.resolveNotesScope(args.worktreeSelector)
+    return await this.getNotesStore().save(this.getNotesScope(scope.projectId), {
+      projectId: scope.projectId,
+      worktreeId: scope.worktreeId,
+      note: args.note,
+      title: args.title,
+      bodyMarkdown: args.bodyMarkdown,
+      revision: args.revision,
+      makeActive: args.makeActive,
+      updatedBySessionId: args.updatedBySessionId
+    })
+  }
+
+  async renameNote(args: {
+    worktreeSelector: string
+    note: string
+    title: string
+    updatedBySessionId?: string | null
+  }): Promise<NoteMutationResult> {
+    const scope = await this.resolveNotesScope(args.worktreeSelector)
+    return await this.getNotesStore().rename(this.getNotesScope(scope.projectId), {
+      projectId: scope.projectId,
+      worktreeId: scope.worktreeId,
+      note: args.note,
+      title: args.title,
+      updatedBySessionId: args.updatedBySessionId
+    })
+  }
+
+  async deleteNote(args: { worktreeSelector: string; note: string }): Promise<NoteDeleteResult> {
+    const scope = await this.resolveNotesScope(args.worktreeSelector)
+    return await this.getNotesStore().delete(this.getNotesScope(scope.projectId), {
+      projectId: scope.projectId,
+      worktreeId: scope.worktreeId,
+      note: args.note
+    })
+  }
+
   async appendNote(args: {
     worktreeSelector: string
     note: string
@@ -4011,6 +5011,30 @@ export class OrcaRuntimeService {
       worktreeId: scope.worktreeId,
       query: args.query,
       limit: args.limit
+    })
+  }
+
+  async linkNote(args: {
+    worktreeSelector: string
+    note: string
+    kind: NoteLinkKind
+  }): Promise<NoteLink> {
+    const scope = await this.resolveNotesScope(args.worktreeSelector)
+    return await this.getNotesStore().setLink(this.getNotesScope(scope.projectId), {
+      projectId: scope.projectId,
+      worktreeId: scope.worktreeId,
+      note: args.note,
+      kind: args.kind
+    })
+  }
+
+  async resolveNotesPanelOpenStateForWorktree(args: {
+    worktreeSelector: string
+  }): Promise<NotesPanelOpenState> {
+    const scope = await this.resolveNotesScope(args.worktreeSelector)
+    return await this.getNotesStore().resolvePanelOpenState(this.getNotesScope(scope.projectId), {
+      projectId: scope.projectId,
+      worktreeId: scope.worktreeId
     })
   }
 
@@ -4127,10 +5151,15 @@ export class OrcaRuntimeService {
     name: string
     baseBranch?: string
     linkedIssue?: number | null
+    linkedPR?: number | null
     comment?: string
+    displayName?: string
+    sparseCheckout?: { directories: string[]; presetId?: string }
+    pushTarget?: GitPushTarget
     runHooks?: boolean
     activate?: boolean
     setupDecision?: 'run' | 'skip' | 'inherit'
+    createdWithAgent?: TuiAgent
     startup?: WorktreeStartupLaunch
   }): Promise<CreateWorktreeResult> {
     if (!this.store) {
@@ -4141,8 +5170,15 @@ export class OrcaRuntimeService {
     if (isFolderRepo(repo)) {
       throw new Error('Folder mode does not support creating worktrees.')
     }
+    if (repo.connectionId) {
+      // Why: SSH-backed worktree creation still relies on the desktop SSH
+      // flow, which can prime relay roots and enforce its remote constraints.
+      // Runtime RPC must not fall through to local git against server paths.
+      throw new Error('SSH-backed worktree creation is not supported through runtime RPC yet.')
+    }
     const settings = this.store.getSettings()
     const requestedName = args.name
+    const requestedDisplayName = args.displayName?.trim() || undefined
     const sanitizedName = sanitizeWorktreeName(args.name)
     const username = getGitUsername(repo.path)
     const branchName = computeBranchName(sanitizedName, settings, username)
@@ -4200,13 +5236,47 @@ export class OrcaRuntimeService {
       // if future refactors change that contract.
     }
 
-    await addWorktree(
-      repo.path,
-      worktreePath,
-      branchName,
-      baseBranch,
-      settings.refreshLocalBaseRefOnWorktreeCreate
-    )
+    const sparseDirectories = args.sparseCheckout
+      ? normalizeSparseDirectories(args.sparseCheckout.directories)
+      : []
+    if (args.sparseCheckout && sparseDirectories.length === 0) {
+      throw new Error('Sparse checkout requires at least one repo-relative directory.')
+    }
+
+    let preparedPushTarget: GitPushTarget | undefined
+    if (args.pushTarget) {
+      // Why: fork-PR worktrees created through a remote runtime need the same
+      // upstream target setup as local desktop creates, or Push would publish
+      // to the wrong remote after the client/server split.
+      preparedPushTarget = await prepareWorktreePushTarget(repo.path, args.pushTarget)
+    }
+
+    await (sparseDirectories.length > 0
+      ? addSparseWorktree(
+          repo.path,
+          worktreePath,
+          branchName,
+          sparseDirectories,
+          baseBranch,
+          settings.refreshLocalBaseRefOnWorktreeCreate
+        )
+      : addWorktree(
+          repo.path,
+          worktreePath,
+          branchName,
+          baseBranch,
+          settings.refreshLocalBaseRefOnWorktreeCreate
+        ))
+
+    let configuredPushTarget: GitPushTarget | undefined
+    if (preparedPushTarget) {
+      configuredPushTarget = await configureCreatedWorktreePushTarget(
+        worktreePath,
+        branchName,
+        preparedPushTarget
+      )
+    }
+
     const gitWorktrees = await listWorktrees(repo.path)
     const created = gitWorktrees.find((gw) => areWorktreePathsEqual(gw.path, worktreePath))
     if (!created) {
@@ -4215,6 +5285,11 @@ export class OrcaRuntimeService {
 
     const worktreeId = `${repo.id}::${created.path}`
     const now = Date.now()
+    const displayNameMeta = requestedDisplayName
+      ? { displayName: requestedDisplayName }
+      : shouldSetDisplayName(requestedName, branchName, sanitizedName)
+        ? { displayName: requestedName }
+        : {}
     const meta = this.store.setWorktreeMeta(worktreeId, {
       lastActivityAt: now,
       // See createRemoteWorktree: createdAt grants the new worktree a grace
@@ -4222,14 +5297,30 @@ export class OrcaRuntimeService {
       // push it down before the user has had a chance to notice it. Smart-sort
       // uses max(lastActivityAt, createdAt + CREATE_GRACE_MS).
       createdAt: now,
-      ...(shouldSetDisplayName(requestedName, branchName, sanitizedName)
-        ? { displayName: requestedName }
-        : {}),
+      ...displayNameMeta,
       baseRef: baseBranch,
+      ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
+      ...(sparseDirectories.length > 0
+        ? {
+            sparseDirectories,
+            sparseBaseRef: baseBranch,
+            sparsePresetId: args.sparseCheckout?.presetId
+          }
+        : {}),
       ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
+      ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {}),
+      ...(args.createdWithAgent ? { createdWithAgent: args.createdWithAgent } : {}),
       ...(args.comment !== undefined ? { comment: args.comment } : {})
     })
     const worktree = mergeWorktree(repo.id, created, meta)
+
+    if (
+      settings.experimentalWorktreeSymlinks &&
+      repo.symlinkPaths &&
+      repo.symlinkPaths.length > 0
+    ) {
+      await createWorktreeSymlinks(repo.path, created.path, repo.symlinkPaths)
+    }
 
     let setup: CreateWorktreeResult['setup']
     let warning: string | undefined
@@ -4277,6 +5368,7 @@ export class OrcaRuntimeService {
     // are not recognized and all git operations fail with "Access denied:
     // unknown repository or worktree path".
     invalidateAuthorizedRootsCache()
+
     this.notifier?.worktreesChanged(repo.id)
     const shouldActivate = args.activate === true || args.runHooks === true
     let didSpawnStartup = false
@@ -4669,6 +5761,12 @@ export class OrcaRuntimeService {
     if (!repo) {
       return null
     }
+    if (repo.connectionId) {
+      // Why: the drift probe uses local git helpers. Until the SSH provider
+      // exposes equivalent remote refs/log plumbing, fail closed to "unknown"
+      // instead of probing a server path on the desktop filesystem.
+      return null
+    }
     const meta = this.store.getWorktreeMeta(wt.id)
     const base =
       meta?.baseRef || meta?.sparseBaseRef || repo.worktreeBaseRef || getDefaultBaseRef(repo.path)
@@ -4694,30 +5792,138 @@ export class OrcaRuntimeService {
     return { base, behind: drift.behind, recentSubjects }
   }
 
-  async updateManagedWorktreeMeta(
-    worktreeSelector: string,
-    updates: {
-      displayName?: string
-      linkedIssue?: number | null
-      comment?: string
-      isPinned?: boolean
-    }
-  ) {
+  async updateManagedWorktreeMeta(worktreeSelector: string, updates: Partial<WorktreeMeta>) {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
-    const meta = this.store.setWorktreeMeta(worktree.id, {
-      ...(updates.displayName !== undefined ? { displayName: updates.displayName } : {}),
-      ...(updates.linkedIssue !== undefined ? { linkedIssue: updates.linkedIssue } : {}),
-      ...(updates.comment !== undefined ? { comment: updates.comment } : {}),
-      ...(updates.isPinned !== undefined ? { isPinned: updates.isPinned } : {})
-    })
+    const meta = this.store.setWorktreeMeta(worktree.id, omitUndefinedProperties(updates))
     // Why: unlike renderer-initiated optimistic updates, CLI callers need an
     // explicit push so the editor refreshes metadata changed outside the UI.
     this.invalidateResolvedWorktreeCache()
     this.notifier?.worktreesChanged(worktree.repoId)
     return mergeWorktree(worktree.repoId, worktree.git, meta)
+  }
+
+  persistManagedWorktreeSortOrder(orderedIds: string[]): { updated: number } {
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    const now = Date.now()
+    let updated = 0
+    for (let i = 0; i < orderedIds.length; i++) {
+      this.store.setWorktreeMeta(orderedIds[i], { sortOrder: now - i * 1000 })
+      updated++
+    }
+    this.invalidateResolvedWorktreeCache()
+    this.notifier?.reposChanged()
+    return { updated }
+  }
+
+  async resolveManagedPrBase(args: {
+    repoId: string
+    prNumber: number
+    headRefName?: string
+    isCrossRepository?: boolean
+  }): Promise<{ baseBranch: string; pushTarget?: GitPushTarget } | { error: string }> {
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    const repo = this.store.getRepo(args.repoId)
+    if (!repo) {
+      return { error: 'Repo not found' }
+    }
+    if (repo.connectionId) {
+      return { error: 'PR start points are not supported for remote repos yet.' }
+    }
+    if (isFolderRepo(repo)) {
+      return { error: 'Folder mode does not support creating worktrees.' }
+    }
+
+    let headRefName = args.headRefName?.trim() ?? ''
+    let isCrossRepository = args.isCrossRepository === true
+    let pushTarget: GitPushTarget | undefined
+
+    if (!headRefName) {
+      const item = await getWorkItem(repo.path, args.prNumber, 'pr')
+      if (!item || item.type !== 'pr') {
+        return { error: `PR #${args.prNumber} not found.` }
+      }
+      headRefName = (item.branchName ?? '').trim()
+      if (!headRefName) {
+        return { error: `PR #${args.prNumber} has no head branch.` }
+      }
+      if (item.isCrossRepository === true) {
+        isCrossRepository = true
+      }
+    }
+
+    if (isCrossRepository) {
+      try {
+        pushTarget = (await getPullRequestPushTarget(repo.path, args.prNumber)) ?? undefined
+      } catch (error) {
+        return {
+          error:
+            error instanceof Error
+              ? error.message
+              : `Could not resolve PR #${args.prNumber} head push target.`
+        }
+      }
+      if (!pushTarget) {
+        return { error: `Could not resolve PR #${args.prNumber} head push target.` }
+      }
+    }
+
+    let remote: string
+    try {
+      remote = await getDefaultRemote(repo.path)
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : 'Could not resolve git remote.' }
+    }
+
+    if (isCrossRepository) {
+      const pullRef = `refs/pull/${args.prNumber}/head`
+      try {
+        await gitExecFileAsync(['fetch', remote, pullRef], { cwd: repo.path })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        return { error: `Failed to fetch ${pullRef}: ${message.split('\n')[0]}` }
+      }
+      try {
+        const { stdout } = await gitExecFileAsync(['rev-parse', '--verify', 'FETCH_HEAD'], {
+          cwd: repo.path
+        })
+        const sha = stdout.trim()
+        if (!sha) {
+          return { error: `Empty SHA resolving fork PR #${args.prNumber} head.` }
+        }
+        return { baseBranch: sha, ...(pushTarget ? { pushTarget } : {}) }
+      } catch {
+        return { error: `Could not resolve fork PR #${args.prNumber} head after fetch.` }
+      }
+    }
+
+    try {
+      await gitExecFileAsync(
+        ['fetch', remote, `+refs/heads/${headRefName}:refs/remotes/${remote}/${headRefName}`],
+        { cwd: repo.path }
+      )
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return { error: `Failed to fetch ${remote}/${headRefName}: ${message.split('\n')[0]}` }
+    }
+
+    const remoteRef = `${remote}/${headRefName}`
+    try {
+      await gitExecFileAsync(['rev-parse', '--verify', remoteRef], { cwd: repo.path })
+    } catch {
+      return { error: `Remote ref ${remoteRef} does not exist after fetch.` }
+    }
+
+    return {
+      baseBranch: remoteRef,
+      pushTarget: pushTarget ?? { remoteName: remote, branchName: headRefName }
+    }
   }
 
   async removeManagedWorktree(
@@ -4735,6 +5941,19 @@ export class OrcaRuntimeService {
     }
     if (isFolderRepo(repo)) {
       throw new Error('Folder mode does not support deleting worktrees.')
+    }
+    if (repo.connectionId) {
+      const provider = getSshGitProvider(repo.connectionId)
+      if (!provider) {
+        throw new Error(`No git provider for connection "${repo.connectionId}"`)
+      }
+      await provider.removeWorktree(worktree.path, force)
+      this.clearOptimisticReconcileToken(worktree.id)
+      this.store.removeWorktreeMeta(worktree.id)
+      this.invalidateResolvedWorktreeCache()
+      invalidateAuthorizedRootsCache()
+      this.notifier?.worktreesChanged(repo.id)
+      return {}
     }
 
     // Why: kill every PTY belonging to this worktree BEFORE the git-level
@@ -4967,7 +6186,14 @@ export class OrcaRuntimeService {
       afterDesktopTabId = anchor.type === 'terminal' ? anchor.parentTabId : anchor.id
     }
 
-    const win = this.getAuthoritativeWindow()
+    const win = this.getAvailableAuthoritativeWindow()
+    if (!win) {
+      return await this.createHeadlessMobileSessionTerminal(
+        worktreeId,
+        opts.activate !== false,
+        opts.afterTabId
+      )
+    }
     const requestId = randomUUID()
     const reply = await new Promise<{ tabId: string; title: string }>((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -5002,6 +6228,64 @@ export class OrcaRuntimeService {
       this.notifier?.focusTerminal(reply.tabId, worktreeId, 'pane:1')
     }
     return await this.waitForMobileTerminalSurface(worktreeId, reply.tabId)
+  }
+
+  private async createHeadlessMobileSessionTerminal(
+    worktreeId: string,
+    activate: boolean,
+    afterTabId?: string
+  ): Promise<RuntimeMobileSessionCreateTerminalResult> {
+    const terminal = await this.createTerminal(`id:${worktreeId}`, { focus: false })
+    const livePty = this.getLivePtyForHandle(terminal.handle)
+    if (!livePty) {
+      throw new Error('terminal_handle_stale')
+    }
+    const parentTabId = livePty.pty.tabId ?? `pty:${livePty.pty.ptyId}`
+    const leafId = `pane:${FIRST_PANE_ID}`
+    const tab: RuntimeMobileSessionTerminalTab = {
+      type: 'terminal',
+      id: `${parentTabId}::${leafId}`,
+      parentTabId,
+      leafId,
+      title: terminal.title ?? livePty.pty.title ?? 'Terminal',
+      isActive: activate
+    }
+    const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
+    const tabs = (existing?.tabs ?? [])
+      .filter((candidate) => candidate.id !== tab.id)
+      .map((candidate) => ({
+        ...candidate,
+        isActive: activate ? false : candidate.isActive
+      }))
+    const insertAfter = afterTabId ? tabs.findIndex((candidate) => candidate.id === afterTabId) : -1
+    if (insertAfter >= 0) {
+      tabs.splice(insertAfter + 1, 0, tab)
+    } else {
+      tabs.push(tab)
+    }
+    const next: RuntimeMobileSessionTabsSnapshot = {
+      worktree: worktreeId,
+      publicationEpoch: `headless:${Date.now().toString(36)}`,
+      snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
+      activeGroupId: existing?.activeGroupId ?? null,
+      activeTabId: activate ? tab.id : (existing?.activeTabId ?? null),
+      activeTabType: activate ? 'terminal' : (existing?.activeTabType ?? null),
+      tabs
+    }
+    this.mobileSessionTabsByWorktree.set(worktreeId, next)
+    const result = this.toMobileSessionTabsResult(next)
+    for (const listener of this.mobileSessionTabListeners) {
+      listener(result)
+    }
+    const created = result.tabs.find((candidate) => candidate.id === tab.id)
+    if (!created || created.type !== 'terminal') {
+      throw new Error('terminal_handle_stale')
+    }
+    return {
+      tab: created,
+      publicationEpoch: result.publicationEpoch,
+      snapshotVersion: result.snapshotVersion
+    }
   }
 
   private waitForMobileTerminalSurface(
@@ -5392,7 +6676,9 @@ export class OrcaRuntimeService {
     if (selector.startsWith('id:')) {
       candidates = worktrees.filter((worktree) => worktree.id === selector.slice(3))
     } else if (selector.startsWith('path:')) {
-      candidates = worktrees.filter((worktree) => worktree.path === selector.slice(5))
+      candidates = worktrees.filter((worktree) =>
+        runtimePathsEqual(worktree.path, selector.slice(5))
+      )
     } else if (selector.startsWith('branch:')) {
       const branchSelector = selector.slice(7)
       candidates = worktrees.filter((worktree) =>
@@ -5407,7 +6693,7 @@ export class OrcaRuntimeService {
       candidates = worktrees.filter(
         (worktree) =>
           worktree.id === selector ||
-          worktree.path === selector ||
+          runtimePathsEqual(worktree.path, selector) ||
           branchSelectorMatches(worktree.branch, selector)
       )
     }
@@ -5467,12 +6753,15 @@ export class OrcaRuntimeService {
     if (selector.startsWith('id:')) {
       candidates = repos.filter((repo) => repo.id === selector.slice(3))
     } else if (selector.startsWith('path:')) {
-      candidates = repos.filter((repo) => repo.path === selector.slice(5))
+      candidates = repos.filter((repo) => runtimePathsEqual(repo.path, selector.slice(5)))
     } else if (selector.startsWith('name:')) {
       candidates = repos.filter((repo) => repo.displayName === selector.slice(5))
     } else {
       candidates = repos.filter(
-        (repo) => repo.id === selector || repo.path === selector || repo.displayName === selector
+        (repo) =>
+          repo.id === selector ||
+          runtimePathsEqual(repo.path, selector) ||
+          repo.displayName === selector
       )
     }
 
@@ -5485,6 +6774,13 @@ export class OrcaRuntimeService {
     throw new Error('repo_not_found')
   }
 
+  private requireStore(): Store {
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    return this.store as unknown as Store
+  }
+
   private async listResolvedWorktrees(): Promise<ResolvedWorktree[]> {
     if (!this.store) {
       return []
@@ -5493,19 +6789,23 @@ export class OrcaRuntimeService {
     if (this.resolvedWorktreeCache && this.resolvedWorktreeCache.expiresAt > now) {
       return this.resolvedWorktreeCache.worktrees
     }
-    if (this.resolvedWorktreeInFlight) {
-      return this.resolvedWorktreeInFlight
+    const generation = this.resolvedWorktreeGeneration
+    if (this.resolvedWorktreeInFlight?.generation === generation) {
+      return this.resolvedWorktreeInFlight.promise
     }
 
-    this.resolvedWorktreeInFlight = this.computeResolvedWorktrees()
+    const promise = this.computeResolvedWorktrees(generation)
+    this.resolvedWorktreeInFlight = { generation, promise }
     try {
-      return await this.resolvedWorktreeInFlight
+      return await promise
     } finally {
-      this.resolvedWorktreeInFlight = null
+      if (this.resolvedWorktreeInFlight?.promise === promise) {
+        this.resolvedWorktreeInFlight = null
+      }
     }
   }
 
-  private async computeResolvedWorktrees(): Promise<ResolvedWorktree[]> {
+  private async computeResolvedWorktrees(generation: number): Promise<ResolvedWorktree[]> {
     if (!this.store) {
       return []
     }
@@ -5524,11 +6824,7 @@ export class OrcaRuntimeService {
           const worktreeId = `${repo.id}::${gitWorktree.path}`
           const merged = mergeWorktree(repo.id, gitWorktree, metaById[worktreeId], repo.displayName)
           return {
-            id: merged.id,
-            repoId: repo.id,
-            path: merged.path,
-            branch: merged.branch,
-            linkedIssue: metaById[worktreeId]?.linkedIssue ?? null,
+            ...merged,
             git: {
               path: gitWorktree.path,
               head: gitWorktree.head,
@@ -5546,9 +6842,11 @@ export class OrcaRuntimeService {
     // Why: terminal polling can be frequent, but git worktree state is still
     // allowed to change outside Orca. A short TTL avoids shelling out on every
     // read without pretending the cache is authoritative for long.
-    this.resolvedWorktreeCache = {
-      worktrees,
-      expiresAt: now + RESOLVED_WORKTREE_CACHE_TTL_MS
+    if (generation === this.resolvedWorktreeGeneration) {
+      this.resolvedWorktreeCache = {
+        worktrees,
+        expiresAt: now + RESOLVED_WORKTREE_CACHE_TTL_MS
+      }
     }
     return worktrees
   }
@@ -5558,6 +6856,7 @@ export class OrcaRuntimeService {
   }
 
   private invalidateResolvedWorktreeCache(): void {
+    this.resolvedWorktreeGeneration += 1
     this.resolvedWorktreeCache = null
   }
 
@@ -5800,16 +7099,19 @@ export class OrcaRuntimeService {
       }
       const syncedTab = this.tabs.get(tab.parentTabId)
       const leaf = this.leaves.get(this.getLeafKey(tab.parentTabId, tab.leafId)) ?? null
+      const pty = leaf ? null : this.findPtyForMobileTerminalTab(tab)
       tabs.push({
         type: 'terminal',
         id: tab.id,
         parentTabId: tab.parentTabId,
         leafId: tab.leafId,
-        title: leaf?.paneTitle ?? syncedTab?.title ?? tab.title,
+        title: leaf?.paneTitle ?? syncedTab?.title ?? pty?.title ?? tab.title,
         isActive: tab.isActive,
         ...(leaf
           ? { status: 'ready' as const, terminal: this.issueHandle(leaf) }
-          : { status: 'pending-handle' as const, terminal: null })
+          : pty
+            ? { status: 'ready' as const, terminal: this.issuePtyHandle(pty) }
+            : { status: 'pending-handle' as const, terminal: null })
       })
     }
     const active = tabs.find((tab) => tab.isActive) ?? null
@@ -5822,6 +7124,21 @@ export class OrcaRuntimeService {
       activeTabType: active?.type ?? null,
       tabs
     }
+  }
+
+  private findPtyForMobileTerminalTab(
+    tab: RuntimeMobileSessionTerminalTab
+  ): RuntimePtyWorktreeRecord | null {
+    const paneKeys = new Set([`${tab.parentTabId}:${tab.leafId}`])
+    if (tab.leafId === `pane:${FIRST_PANE_ID}`) {
+      paneKeys.add(`${tab.parentTabId}:${FIRST_PANE_ID}`)
+    }
+    for (const pty of this.ptysById.values()) {
+      if (pty.tabId === tab.parentTabId && pty.paneKey && paneKeys.has(pty.paneKey)) {
+        return pty
+      }
+    }
+    return null
   }
 
   // Why: group address resolution (Section 4.5) needs to query per-handle agent
@@ -6418,1317 +7735,354 @@ export class OrcaRuntimeService {
     return `${tabId}::${leafId}`
   }
 
+  // ── Linear integration ──
+
+  linearConnect(apiKey: string): ReturnType<typeof connectLinear> {
+    return connectLinear(apiKey)
+  }
+
+  linearDisconnect(): { ok: true } {
+    disconnectLinear()
+    return { ok: true }
+  }
+
+  linearStatus(): ReturnType<typeof getLinearStatus> {
+    return getLinearStatus()
+  }
+
+  linearTestConnection(): ReturnType<typeof testLinearConnection> {
+    return testLinearConnection()
+  }
+
+  linearSearchIssues(query: string, limit = 20): ReturnType<typeof searchLinearIssues> {
+    return searchLinearIssues(query, Math.min(Math.max(1, limit), 50))
+  }
+
+  linearListIssues(filter?: LinearListFilter, limit = 20): ReturnType<typeof listLinearIssues> {
+    return listLinearIssues(filter, Math.min(Math.max(1, limit), 50))
+  }
+
+  linearCreateIssue(
+    teamId: string,
+    title: string,
+    description?: string
+  ): ReturnType<typeof createLinearIssue> {
+    return createLinearIssue(teamId, title, description)
+  }
+
+  linearGetIssue(id: string): ReturnType<typeof getLinearIssue> {
+    return getLinearIssue(id)
+  }
+
+  linearUpdateIssue(id: string, updates: LinearIssueUpdate): ReturnType<typeof updateLinearIssue> {
+    return updateLinearIssue(id, updates)
+  }
+
+  linearAddIssueComment(issueId: string, body: string): ReturnType<typeof addLinearIssueComment> {
+    return addLinearIssueComment(issueId, body)
+  }
+
+  linearIssueComments(issueId: string): ReturnType<typeof getLinearIssueComments> {
+    return getLinearIssueComments(issueId)
+  }
+
+  linearListTeams(): ReturnType<typeof listLinearTeams> {
+    return listLinearTeams()
+  }
+
+  linearTeamStates(teamId: string): ReturnType<typeof getLinearTeamStates> {
+    return getLinearTeamStates(teamId)
+  }
+
+  linearTeamLabels(teamId: string): ReturnType<typeof getLinearTeamLabels> {
+    return getLinearTeamLabels(teamId)
+  }
+
+  linearTeamMembers(teamId: string): ReturnType<typeof getLinearTeamMembers> {
+    return getLinearTeamMembers(teamId)
+  }
+
   // ── Browser automation ──
 
-  private requireAgentBrowserBridge(): AgentBrowserBridge {
-    if (!this.agentBrowserBridge) {
-      throw new BrowserError('browser_no_tab', 'No browser session is active')
-    }
-    return this.agentBrowserBridge
-  }
-
-  // Why: the CLI sends worktree selectors (e.g. "path:/Users/...") but the
-  // bridge stores worktreeIds in "repoId::path" format (from the renderer's
-  // Zustand store). This helper resolves the selector to the store-compatible
-  // ID so the bridge can filter tabs correctly.
-  private async resolveBrowserWorktreeId(selector?: string): Promise<string | undefined> {
-    if (!selector) {
-      // Why: after app restart, webviews only mount when the browser pane is visible.
-      // Without --worktree, we still need to activate the view so persisted tabs
-      // become operable via registerGuest.
-      const bridge = this.agentBrowserBridge
-      if (bridge && bridge.getRegisteredTabs().size === 0) {
-        try {
-          const win = this.getAuthoritativeWindow()
-          win.webContents.send('browser:activateView', {})
-          await new Promise((resolve) => setTimeout(resolve, 500))
-        } catch {
-          // Window may not exist yet (e.g. during startup or in tests)
-        }
-      }
-      return undefined
-    }
-
-    const worktreeId = (await this.resolveWorktreeSelector(selector)).id
-    // Why: explicit worktree selectors are user intent, so resolution errors
-    // must surface instead of silently widening browser routing scope. Only the
-    // activation step remains best-effort because missing windows during tests
-    // or startup should not erase the validated worktree target itself.
-    const bridge = this.agentBrowserBridge
-    if (bridge && bridge.getRegisteredTabs(worktreeId).size === 0) {
-      try {
-        await this.ensureBrowserWorktreeActive(worktreeId)
-      } catch {
-        // Fall through with the validated worktree id so downstream routing
-        // still stays scoped to the caller's explicit selector.
-      }
-    }
-    return worktreeId
-  }
-
-  private async resolveBrowserCommandTarget(
-    params: BrowserCommandTargetParams
-  ): Promise<ResolvedBrowserCommandTarget> {
-    const browserPageId =
-      typeof params.page === 'string' && params.page.length > 0 ? params.page : undefined
-    if (!browserPageId) {
-      return {
-        worktreeId: await this.resolveBrowserWorktreeId(params.worktree)
-      }
-    }
-
-    return {
-      // Why: explicit browserPageId is already a stable tab identity, so we do
-      // not auto-resolve cwd worktree scoping on top of it. Only honor an
-      // explicit --worktree when the caller asked for that extra validation.
-      worktreeId: params.worktree
-        ? await this.resolveBrowserWorktreeId(params.worktree)
-        : undefined,
-      browserPageId
-    }
-  }
-
-  // Why: browser tabs only mount (and become operable) when their worktree is
-  // the active worktree in the renderer AND activeTabType is 'browser'. If either
-  // condition is false, the webview stays in display:none and Electron won't start
-  // its guest process — dom-ready never fires, registerGuest never runs, and CLI
-  // browser commands fail with "CDP connection refused".
-  private async ensureBrowserWorktreeActive(worktreeId: string): Promise<void> {
-    const win = this.getAuthoritativeWindow()
-    const repoId = getRepoIdFromWorktreeId(worktreeId)
-    if (!repoId) {
-      return
-    }
-    win.webContents.send('ui:activateWorktree', { repoId, worktreeId })
-    // Why: switching worktree alone sets activeView='terminal'. Browser webviews
-    // won't mount until activeTabType is 'browser'. Send a second IPC to flip it.
-    win.webContents.send('browser:activateView', { worktreeId })
-    // Why: give the renderer time to mount the webview after switching worktrees.
-    // The webview needs to attach and fire dom-ready before registerGuest runs.
-    await new Promise((resolve) => setTimeout(resolve, 500))
-  }
-
-  // Why: agent-browser drives navigation via CDP, which bypasses Electron's
-  // webview event system. The renderer's did-navigate / page-title-updated
-  // listeners never fire, leaving the Zustand store (and thus the Orca UI's
-  // address bar and tab title) stale. Push updates from main → renderer after
-  // any navigation-causing command so the UI stays in sync.
-  private notifyRendererNavigation(browserPageId: string, url: string, title: string): void {
-    try {
-      const win = this.getAuthoritativeWindow()
-      win.webContents.send('browser:navigation-update', { browserPageId, url, title })
-    } catch {
-      // Window may not exist during shutdown
-    }
-  }
-
-  // Why: `tabSwitch` only flips the bridge's `activeWebContentsId` — it
-  // does not surface the browser pane in the renderer. Without --focus, the
-  // switch is invisible to the user. With --focus, we send a dedicated IPC
-  // so the renderer can update its per-worktree active-tab state.
-  //
-  // Why this IPC carries `worktreeId` instead of letting the renderer
-  // dispatch `setActiveWorktree`: multiple agents drive browsers in parallel
-  // worktrees. A global focus call from agent X would steal the user's
-  // screen from agent Y's worktree. The renderer-side handler
-  // (focusBrowserTabInWorktree) updates per-worktree state unconditionally
-  // and only flips globals when the user is already on the targeted
-  // worktree. Cross-worktree --focus calls pre-stage silently.
-  private notifyRendererBrowserPaneFocus(
-    worktreeId: string | undefined,
-    browserPageId: string
-  ): void {
-    try {
-      const win = this.getAuthoritativeWindow()
-      win.webContents.send('browser:pane-focus', {
-        worktreeId: worktreeId ?? null,
-        browserPageId
-      })
-    } catch {
-      // Window may not exist during shutdown
-    }
-  }
-
-  async browserSnapshot(params: BrowserCommandTargetParams): Promise<BrowserSnapshotResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().snapshot(target.worktreeId, target.browserPageId)
-  }
-
-  async browserClick(
-    params: { element: string } & BrowserCommandTargetParams
-  ): Promise<BrowserClickResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    const bridge = this.requireAgentBrowserBridge()
-    const result = await bridge.click(params.element, target.worktreeId, target.browserPageId)
-    // Why: clicks can trigger navigation (e.g. submitting a form, clicking a link).
-    // Read the target tab's live URL/title after the click and push to the
-    // renderer so the UI updates even when automation targeted a non-active page.
-    const page = bridge.getPageInfo(target.worktreeId, target.browserPageId)
-    if (page) {
-      this.notifyRendererNavigation(page.browserPageId, page.url, page.title)
-    }
-    return result
-  }
-
-  async browserGoto(
-    params: { url: string } & BrowserCommandTargetParams
-  ): Promise<BrowserGotoResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    const bridge = this.requireAgentBrowserBridge()
-    const result = await bridge.goto(params.url, target.worktreeId, target.browserPageId)
-    const pageId = bridge.getActivePageId(target.worktreeId, target.browserPageId)
-    if (pageId) {
-      this.notifyRendererNavigation(pageId, result.url, result.title)
-    }
-    return result
-  }
-
-  async browserFill(
-    params: {
-      element: string
-      value: string
-    } & BrowserCommandTargetParams
-  ): Promise<BrowserFillResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().fill(
-      params.element,
-      params.value,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserType(
-    params: { input: string } & BrowserCommandTargetParams
-  ): Promise<BrowserTypeResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().type(
-      params.input,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserSelect(
-    params: {
-      element: string
-      value: string
-    } & BrowserCommandTargetParams
-  ): Promise<BrowserSelectResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().select(
-      params.element,
-      params.value,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserScroll(
-    params: { direction: 'up' | 'down'; amount?: number } & BrowserCommandTargetParams
-  ): Promise<BrowserScrollResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().scroll(
-      params.direction,
-      params.amount,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserBack(params: BrowserCommandTargetParams): Promise<BrowserBackResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    const bridge = this.requireAgentBrowserBridge()
-    const result = await bridge.back(target.worktreeId, target.browserPageId)
-    const pageId = bridge.getActivePageId(target.worktreeId, target.browserPageId)
-    if (pageId) {
-      this.notifyRendererNavigation(pageId, result.url, result.title)
-    }
-    return result
-  }
-
-  async browserReload(params: BrowserCommandTargetParams): Promise<BrowserReloadResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    const bridge = this.requireAgentBrowserBridge()
-    const result = await bridge.reload(target.worktreeId, target.browserPageId)
-    const pageId = bridge.getActivePageId(target.worktreeId, target.browserPageId)
-    if (pageId) {
-      this.notifyRendererNavigation(pageId, result.url, result.title)
-    }
-    return result
-  }
-
-  async browserScreenshot(
-    params: {
-      format?: 'png' | 'jpeg'
-    } & BrowserCommandTargetParams
-  ): Promise<BrowserScreenshotResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().screenshot(
-      params.format,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserEval(
-    params: { expression: string } & BrowserCommandTargetParams
-  ): Promise<BrowserEvalResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().evaluate(
-      params.expression,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserTabList(params: { worktree?: string }): Promise<BrowserTabListResult> {
-    const worktreeId = await this.resolveBrowserWorktreeId(params.worktree)
-    const result = this.requireAgentBrowserBridge().tabList(worktreeId)
-    return {
-      tabs: result.tabs.map((tab) => this.enrichBrowserTabInfo(tab))
-    }
-  }
-
-  async browserTabShow(params: { page: string; worktree?: string }): Promise<BrowserTabShowResult> {
-    const worktreeId = await this.resolveBrowserWorktreeId(params.worktree)
-    return { tab: this.describeBrowserTab(params.page, worktreeId) }
-  }
-
-  async browserTabCurrent(params: { worktree?: string }): Promise<BrowserTabCurrentResult> {
-    const worktreeId = await this.resolveBrowserWorktreeId(params.worktree)
-    const browserPageId = this.requireAgentBrowserBridge().getActivePageId(worktreeId)
-    if (!browserPageId) {
-      throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
-    }
-    return { tab: this.describeBrowserTab(browserPageId, worktreeId) }
-  }
-
-  async browserTabSwitch(
-    params: {
-      index?: number
-      focus?: boolean
-    } & BrowserCommandTargetParams
-  ): Promise<BrowserTabSwitchResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    const bridge = this.requireAgentBrowserBridge()
-    const result = await bridge.tabSwitch(params.index, target.worktreeId, target.browserPageId)
-    if (params.focus) {
-      // Why: prefer the explicit --worktree the caller passed; fall back to
-      // the bridge's owning-worktree map for the just-switched tab. The
-      // owning worktree is what the renderer needs to scope the focus to.
-      // The renderer NEVER yanks the user across worktrees on this signal
-      // (see focusBrowserTabInWorktree).
-      const worktreeId =
-        target.worktreeId ?? browserManager.getWorktreeIdForTab(result.browserPageId) ?? undefined
-      this.notifyRendererBrowserPaneFocus(worktreeId, result.browserPageId)
-    }
-    return result
-  }
-
-  async browserHover(
-    params: { element: string } & BrowserCommandTargetParams
-  ): Promise<BrowserHoverResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().hover(
-      params.element,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserDrag(
-    params: {
-      from: string
-      to: string
-    } & BrowserCommandTargetParams
-  ): Promise<BrowserDragResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().drag(
-      params.from,
-      params.to,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserUpload(
-    params: { element: string; files: string[] } & BrowserCommandTargetParams
-  ): Promise<BrowserUploadResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().upload(
-      params.element,
-      params.files,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserWait(
-    params: {
-      selector?: string
-      timeout?: number
-      text?: string
-      url?: string
-      load?: string
-      fn?: string
-      state?: string
-    } & BrowserCommandTargetParams
-  ): Promise<BrowserWaitResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    const { worktree: _, page: __, ...options } = params
-    return this.requireAgentBrowserBridge().wait(options, target.worktreeId, target.browserPageId)
-  }
-
-  async browserCheck(
-    params: { element: string; checked: boolean } & BrowserCommandTargetParams
-  ): Promise<BrowserCheckResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().check(
-      params.element,
-      params.checked,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserFocus(
-    params: { element: string } & BrowserCommandTargetParams
-  ): Promise<BrowserFocusResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().focus(
-      params.element,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserClear(
-    params: { element: string } & BrowserCommandTargetParams
-  ): Promise<BrowserClearResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().clear(
-      params.element,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserSelectAll(
-    params: { element: string } & BrowserCommandTargetParams
-  ): Promise<BrowserSelectAllResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().selectAll(
-      params.element,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserKeypress(
-    params: { key: string } & BrowserCommandTargetParams
-  ): Promise<BrowserKeypressResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().keypress(
-      params.key,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserPdf(params: BrowserCommandTargetParams): Promise<BrowserPdfResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().pdf(target.worktreeId, target.browserPageId)
-  }
-
-  async browserFullScreenshot(
-    params: {
-      format?: 'png' | 'jpeg'
-    } & BrowserCommandTargetParams
-  ): Promise<BrowserScreenshotResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().fullPageScreenshot(
-      params.format,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  // ── Cookie management ──
-
-  async browserCookieGet(
-    params: { url?: string } & BrowserCommandTargetParams
-  ): Promise<BrowserCookieGetResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().cookieGet(
-      params.url,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserCookieSet(
-    params: {
-      name: string
-      value: string
-      domain?: string
-      path?: string
-      secure?: boolean
-      httpOnly?: boolean
-      sameSite?: string
-      expires?: number
-    } & BrowserCommandTargetParams
-  ): Promise<BrowserCookieSetResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().cookieSet(
-      params,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserCookieDelete(
-    params: {
-      name: string
-      domain?: string
-      url?: string
-    } & BrowserCommandTargetParams
-  ): Promise<BrowserCookieDeleteResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().cookieDelete(
-      params.name,
-      params.domain,
-      params.url,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  // ── Viewport ──
-
-  async browserSetViewport(
-    params: {
-      width: number
-      height: number
-      deviceScaleFactor?: number
-      mobile?: boolean
-    } & BrowserCommandTargetParams
-  ): Promise<BrowserViewportResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().setViewport(
-      params.width,
-      params.height,
-      params.deviceScaleFactor,
-      params.mobile,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  // ── Geolocation ──
-
-  async browserSetGeolocation(
-    params: {
-      latitude: number
-      longitude: number
-      accuracy?: number
-    } & BrowserCommandTargetParams
-  ): Promise<BrowserGeolocationResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().setGeolocation(
-      params.latitude,
-      params.longitude,
-      params.accuracy,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  // ── Request interception ──
-
-  async browserInterceptEnable(
-    params: {
-      patterns?: string[]
-    } & BrowserCommandTargetParams
-  ): Promise<BrowserInterceptEnableResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().interceptEnable(
-      params.patterns,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserInterceptDisable(
-    params: BrowserCommandTargetParams
-  ): Promise<BrowserInterceptDisableResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().interceptDisable(
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserInterceptList(params: BrowserCommandTargetParams): Promise<{ requests: unknown[] }> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().interceptList(target.worktreeId, target.browserPageId)
-  }
-
-  // ── Console/network capture ──
-
-  async browserCaptureStart(
-    params: BrowserCommandTargetParams
-  ): Promise<BrowserCaptureStartResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().captureStart(target.worktreeId, target.browserPageId)
-  }
-
-  async browserCaptureStop(params: BrowserCommandTargetParams): Promise<BrowserCaptureStopResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().captureStop(target.worktreeId, target.browserPageId)
-  }
-
-  async browserConsoleLog(
-    params: { limit?: number } & BrowserCommandTargetParams
-  ): Promise<BrowserConsoleResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().consoleLog(
-      params.limit,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserNetworkLog(
-    params: { limit?: number } & BrowserCommandTargetParams
-  ): Promise<BrowserNetworkLogResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().networkLog(
-      params.limit,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  // ── Additional core commands ──
-
-  async browserDblclick(
-    params: { element: string } & BrowserCommandTargetParams
-  ): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().dblclick(
-      params.element,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserForward(params: BrowserCommandTargetParams): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().forward(target.worktreeId, target.browserPageId)
-  }
-
-  async browserScrollIntoView(
-    params: { element: string } & BrowserCommandTargetParams
-  ): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().scrollIntoView(
-      params.element,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserGet(
-    params: {
-      what: string
-      selector?: string
-    } & BrowserCommandTargetParams
-  ): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().get(
-      params.what,
-      params.selector,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserIs(
-    params: { what: string; selector: string } & BrowserCommandTargetParams
-  ): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().is(
-      params.what,
-      params.selector,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  // ── Keyboard insert text ──
-
-  async browserKeyboardInsertText(
-    params: { text: string } & BrowserCommandTargetParams
-  ): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().keyboardInsertText(
-      params.text,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  // ── Mouse commands ──
-
-  async browserMouseMove(
-    params: { x: number; y: number } & BrowserCommandTargetParams
-  ): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().mouseMove(
-      params.x,
-      params.y,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserMouseDown(
-    params: { button?: string } & BrowserCommandTargetParams
-  ): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().mouseDown(
-      params.button,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserMouseUp(params: { button?: string } & BrowserCommandTargetParams): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().mouseUp(
-      params.button,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserMouseWheel(
-    params: {
-      dy: number
-      dx?: number
-    } & BrowserCommandTargetParams
-  ): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().mouseWheel(
-      params.dy,
-      params.dx,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  // ── Find (semantic locators) ──
-
-  async browserFind(
-    params: {
-      locator: string
-      value: string
-      action: string
-      text?: string
-    } & BrowserCommandTargetParams
-  ): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().find(
-      params.locator,
-      params.value,
-      params.action,
-      params.text,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  // ── Set commands ──
-
-  async browserSetDevice(params: { name: string } & BrowserCommandTargetParams): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().setDevice(
-      params.name,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserSetOffline(
-    params: { state?: string } & BrowserCommandTargetParams
-  ): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().setOffline(
-      params.state,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserSetHeaders(
-    params: { headers: string } & BrowserCommandTargetParams
-  ): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().setHeaders(
-      params.headers,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserSetCredentials(
-    params: {
-      user: string
-      pass: string
-    } & BrowserCommandTargetParams
-  ): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().setCredentials(
-      params.user,
-      params.pass,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserSetMedia(
-    params: {
-      colorScheme?: string
-      reducedMotion?: string
-    } & BrowserCommandTargetParams
-  ): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().setMedia(
-      params.colorScheme,
-      params.reducedMotion,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  // ── Clipboard commands ──
-
-  async browserClipboardRead(params: BrowserCommandTargetParams): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().clipboardRead(target.worktreeId, target.browserPageId)
-  }
-
-  async browserClipboardWrite(
-    params: { text: string } & BrowserCommandTargetParams
-  ): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().clipboardWrite(
-      params.text,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  // ── Dialog commands ──
-
-  async browserDialogAccept(
-    params: { text?: string } & BrowserCommandTargetParams
-  ): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().dialogAccept(
-      params.text,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserDialogDismiss(params: BrowserCommandTargetParams): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().dialogDismiss(target.worktreeId, target.browserPageId)
-  }
-
-  // ── Storage commands ──
-
-  async browserStorageLocalGet(
-    params: { key: string } & BrowserCommandTargetParams
-  ): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().storageLocalGet(
-      params.key,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserStorageLocalSet(
-    params: {
-      key: string
-      value: string
-    } & BrowserCommandTargetParams
-  ): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().storageLocalSet(
-      params.key,
-      params.value,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserStorageLocalClear(params: BrowserCommandTargetParams): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().storageLocalClear(
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserStorageSessionGet(
-    params: { key: string } & BrowserCommandTargetParams
-  ): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().storageSessionGet(
-      params.key,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserStorageSessionSet(
-    params: {
-      key: string
-      value: string
-    } & BrowserCommandTargetParams
-  ): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().storageSessionSet(
-      params.key,
-      params.value,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserStorageSessionClear(params: BrowserCommandTargetParams): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().storageSessionClear(
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  // ── Download command ──
-
-  async browserDownload(
-    params: {
-      selector: string
-      path: string
-    } & BrowserCommandTargetParams
-  ): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().download(
-      params.selector,
-      params.path,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  // ── Highlight command ──
-
-  async browserHighlight(
-    params: { selector: string } & BrowserCommandTargetParams
-  ): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().highlight(
-      params.selector,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  // ── New: exec passthrough + tab lifecycle ──
-
-  async browserExec(params: { command: string } & BrowserCommandTargetParams): Promise<unknown> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().exec(
-      params.command,
-      target.worktreeId,
-      target.browserPageId
-    )
-  }
-
-  async browserTabCreate(params: {
-    url?: string
-    worktree?: string
-    profileId?: string
-  }): Promise<{ browserPageId: string }> {
-    const url = params.url ?? 'about:blank'
-    const worktreeId = params.worktree
-      ? (await this.resolveWorktreeSelector(params.worktree)).id
-      : undefined
-    const { browserPageId } = await this.createBrowserTabInRenderer(
-      url,
-      worktreeId,
-      params.profileId
-    )
-
-    // Why: the renderer creates the Zustand tab immediately, but the webview must
-    // mount and fire dom-ready before registerGuest runs. Waiting here ensures the
-    // tab is operable by subsequent CLI commands (snapshot, click, etc.).
-    // If registration doesn't complete within timeout, return the ID anyway — the
-    // tab exists in the UI but may not be ready for automation commands yet.
-    try {
-      await waitForTabRegistration(browserPageId)
-    } catch {
-      // Tab was created in the renderer but the webview hasn't finished mounting.
-      // Return success since the tab exists; subsequent commands will fail with a
-      // clear "tab not available" error if the webview never loads.
-    }
-
-    // Why: newly created tabs should be auto-activated so subsequent commands
-    // (snapshot, click, goto) target the new tab without requiring an explicit
-    // tab switch. Without this, the bridge's active tab still points at the
-    // previously active tab and the new tab shows active: false in tab list.
-    const bridge = this.requireAgentBrowserBridge()
-    const wcId = bridge.getRegisteredTabs(worktreeId).get(browserPageId)
-    if (wcId != null) {
-      bridge.setActiveTab(wcId, worktreeId)
-    }
-
-    // Why: the renderer sets webview.src=url on mount, but agent-browser connects
-    // via CDP after the webview loads about:blank. Without an explicit goto, the
-    // page stays blank from agent-browser's perspective. Navigate via the bridge
-    // so agent-browser's CDP session tracks the correct page state.
-    if (url && url !== 'about:blank') {
-      try {
-        const result = await bridge.goto(url, worktreeId, browserPageId)
-        this.notifyRendererNavigation(browserPageId, result.url, result.title)
-      } catch {
-        // Tab exists but navigation failed — caller can retry with explicit goto
-      }
-    }
-
-    return { browserPageId }
-  }
-
-  async browserTabSetProfile(
-    params: {
-      profileId: string
-    } & BrowserCommandTargetParams
-  ): Promise<BrowserTabSetProfileResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    const browserPageId =
-      target.browserPageId ?? this.requireAgentBrowserBridge().getActivePageId(target.worktreeId)
-    if (!browserPageId) {
-      throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
-    }
-    // Why: 'default' is a synthetic id; fall back to the registry's default profile when not registered.
-    const profile =
-      browserSessionRegistry.getProfile(params.profileId) ??
-      (params.profileId === 'default' ? browserSessionRegistry.getDefaultProfile() : null)
-    if (!profile) {
-      throw new BrowserError(
-        'invalid_argument',
-        `Browser profile ${params.profileId} was not found`
-      )
-    }
-
-    // Why: short-circuit no-op switches so the renderer doesn't tear down and
-    // remount the webview when the tab is already on the requested profile.
-    const currentProfileId = browserManager.getSessionProfileIdForTab(browserPageId) ?? 'default'
-    if (currentProfileId === profile.id) {
-      return {
-        browserPageId,
-        profileId: profile.id,
-        profileLabel: profile.label
-      }
-    }
-
-    const win = this.getAuthoritativeWindow()
-    const requestId = randomUUID()
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        ipcMain.removeListener('browser:tabSetProfileReply', handler)
-        reject(new Error('Tab profile update timed out'))
-      }, 10_000)
-
-      const handler = (
-        _event: Electron.IpcMainEvent,
-        reply: { requestId: string; error?: string }
-      ): void => {
-        if (reply.requestId !== requestId) {
-          return
-        }
-        clearTimeout(timer)
-        ipcMain.removeListener('browser:tabSetProfileReply', handler)
-        if (reply.error) {
-          reject(new Error(reply.error))
-        } else {
-          resolve()
-        }
-      }
-      ipcMain.on('browser:tabSetProfileReply', handler)
-      win.webContents.send('browser:requestTabSetProfile', {
-        requestId,
-        browserPageId,
-        profileId: profile.id
-      })
-    })
-
-    // Why: the renderer destroys the old webview and remounts on the new
-    // partition. Wait for the re-register so a follow-up tab list
-    // --show-profile reads the updated sessionProfileId from BrowserManager
-    // instead of stale data, and so subsequent CLI ops (snapshot, click, etc.)
-    // hit a guest that's already attached.
-    try {
-      await waitForTabRegistration(browserPageId)
-    } catch {
-      // Best-effort: re-register won't fire if the worktree is hidden. The
-      // store already reflects the new profile; downstream commands retry
-      // once the pane re-mounts.
-    }
-
-    return {
-      browserPageId,
-      profileId: profile.id,
-      profileLabel: profile.label
-    }
-  }
-
-  async browserTabProfileShow(params: {
-    page: string
-    worktree?: string
-  }): Promise<BrowserTabProfileShowResult> {
-    const worktreeId = await this.resolveBrowserWorktreeId(params.worktree)
-    const tab = this.describeBrowserTab(params.page, worktreeId)
-    return {
-      browserPageId: tab.browserPageId,
-      worktreeId: tab.worktreeId ?? null,
-      profileId: tab.profileId ?? null,
-      profileLabel: tab.profileLabel ?? null
-    }
-  }
-
-  async browserTabProfileClone(
-    params: {
-      profileId: string
-    } & BrowserCommandTargetParams
-  ): Promise<BrowserTabProfileCloneResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    const sourceBrowserPageId =
-      target.browserPageId ?? this.requireAgentBrowserBridge().getActivePageId(target.worktreeId)
-    if (!sourceBrowserPageId) {
-      throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
-    }
-    const sourceTab = this.describeBrowserTab(sourceBrowserPageId, target.worktreeId)
-    const profile = browserSessionRegistry.getProfile(params.profileId)
-    if (!profile) {
-      throw new BrowserError(
-        'invalid_argument',
-        `Browser profile ${params.profileId} was not found`
-      )
-    }
-    const created = await this.createBrowserTabInRenderer(
-      sourceTab.url,
-      sourceTab.worktreeId ?? target.worktreeId,
-      profile.id
-    )
-    // Why: parity with browserTabCreate. Wait for the cloned tab's webview to
-    // register so the returned browserPageId is operable by the next CLI call.
-    try {
-      await waitForTabRegistration(created.browserPageId)
-    } catch {
-      // Best-effort: registration may not fire if the worktree is hidden.
-    }
-    return {
-      browserPageId: created.browserPageId,
-      sourceBrowserPageId,
-      profileId: profile.id,
-      profileLabel: profile.label
-    }
-  }
-
-  async browserProfileList(): Promise<BrowserProfileListResult> {
-    return { profiles: browserSessionRegistry.listProfiles() }
-  }
-
-  async browserProfileCreate(params: {
-    label: string
-    scope: 'isolated' | 'imported'
-  }): Promise<BrowserProfileCreateResult> {
-    return {
-      profile: browserSessionRegistry.createProfile(params.scope, params.label)
-    }
-  }
-
-  async browserProfileDelete(params: { profileId: string }): Promise<BrowserProfileDeleteResult> {
-    return {
-      deleted: await browserSessionRegistry.deleteProfile(params.profileId),
-      profileId: params.profileId
-    }
-  }
-
-  async browserTabClose(params: {
-    index?: number
-    page?: string
-    worktree?: string
-  }): Promise<{ closed: boolean }> {
-    const bridge = this.requireAgentBrowserBridge()
-    const worktreeId = await this.resolveBrowserWorktreeId(params.worktree)
-
-    let tabId: string | null = null
-    if (typeof params.page === 'string' && params.page.length > 0) {
-      if (!bridge.getRegisteredTabs(worktreeId).has(params.page)) {
-        const scope = worktreeId ? ' in this worktree' : ''
-        throw new BrowserError(
-          'browser_tab_not_found',
-          `Browser page ${params.page} was not found${scope}`
-        )
-      }
-      tabId = params.page
-    } else if (params.index !== undefined) {
-      const tabs = bridge.getRegisteredTabs(worktreeId)
-      const entries = [...tabs.entries()]
-      if (params.index < 0 || params.index >= entries.length) {
-        throw new Error(`Tab index ${params.index} out of range (0-${entries.length - 1})`)
-      }
-      tabId = entries[params.index][0]
-    } else {
-      // Why: try the bridge first (registered tabs with webviews), then fall back
-      // to asking the renderer to close its active browser tab (handles cases where
-      // the webview hasn't mounted yet, e.g. tab was just created).
-      const tabs = bridge.getRegisteredTabs(worktreeId)
-      const entries = [...tabs.entries()]
-      const activeEntry = entries.find(([, wcId]) => wcId === bridge.getActiveWebContentsId())
-      if (activeEntry) {
-        tabId = activeEntry[0]
-      }
-    }
-
-    const win = this.getAuthoritativeWindow()
-    const requestId = randomUUID()
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        ipcMain.removeListener('browser:tabCloseReply', handler)
-        reject(new Error('Tab close timed out'))
-      }, 10_000)
-
-      const handler = (
-        _event: Electron.IpcMainEvent,
-        reply: { requestId: string; error?: string }
-      ): void => {
-        if (reply.requestId !== requestId) {
-          return
-        }
-        clearTimeout(timer)
-        ipcMain.removeListener('browser:tabCloseReply', handler)
-        if (reply.error) {
-          reject(new Error(reply.error))
-        } else {
-          resolve()
-        }
-      }
-      ipcMain.on('browser:tabCloseReply', handler)
-      // Why: when main cannot resolve a concrete tab id itself (for example if a
-      // browser workspace exists in the renderer before its guest mounts), the
-      // renderer still needs the intended worktree scope. Otherwise it falls
-      // back to the globally active browser tab and can close a tab in the
-      // wrong worktree.
-      win.webContents.send('browser:requestTabClose', { requestId, tabId, worktreeId })
-    })
-
-    return { closed: true }
-  }
-
-  private enrichBrowserTabInfo(
-    tab: BrowserTabListResult['tabs'][number]
-  ): BrowserTabListResult['tabs'][number] {
-    const rawProfileId = browserManager.getSessionProfileIdForTab(tab.browserPageId)
-    const profile =
-      browserSessionRegistry.getProfile(rawProfileId ?? 'default') ??
-      browserSessionRegistry.getDefaultProfile()
-    return {
-      ...tab,
-      worktreeId: browserManager.getWorktreeIdForTab(tab.browserPageId) ?? null,
-      profileId: profile.id,
-      profileLabel: profile.label
-    }
-  }
-
-  private describeBrowserTab(
-    browserPageId: string,
-    explicitWorktreeId?: string
-  ): BrowserTabListResult['tabs'][number] {
-    const worktreeId = explicitWorktreeId ?? browserManager.getWorktreeIdForTab(browserPageId)
-    const tab = this.requireAgentBrowserBridge()
-      .tabList(worktreeId)
-      .tabs.find((entry) => entry.browserPageId === browserPageId)
-    if (!tab) {
-      const scope = worktreeId ? ' in this worktree' : ''
-      throw new BrowserError(
-        'browser_tab_not_found',
-        `Browser page ${browserPageId} was not found${scope}`
-      )
-    }
-    return this.enrichBrowserTabInfo(tab)
-  }
-
-  private async createBrowserTabInRenderer(
-    url: string,
-    worktreeId?: string,
-    profileId?: string
-  ): Promise<{ browserPageId: string }> {
-    const win = this.getAuthoritativeWindow()
-    const requestId = randomUUID()
-
-    if (worktreeId) {
-      await this.ensureBrowserWorktreeActive(worktreeId)
-    }
-
-    const browserPageId = await new Promise<string>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        ipcMain.removeListener('browser:tabCreateReply', handler)
-        reject(new Error('Tab creation timed out'))
-      }, 10_000)
-
-      const handler = (
-        _event: Electron.IpcMainEvent,
-        reply: { requestId: string; browserPageId?: string; error?: string }
-      ): void => {
-        if (reply.requestId !== requestId) {
-          return
-        }
-        clearTimeout(timer)
-        ipcMain.removeListener('browser:tabCreateReply', handler)
-        if (reply.error) {
-          reject(new Error(reply.error))
-        } else {
-          resolve(reply.browserPageId!)
-        }
-      }
-      ipcMain.on('browser:tabCreateReply', handler)
-      win.webContents.send('browser:requestTabCreate', {
-        requestId,
-        url,
-        worktreeId,
-        sessionProfileId: profileId
-      })
-    })
-
-    return { browserPageId }
-  }
+  private readonly browserCommands = new RuntimeBrowserCommands({
+    getAgentBrowserBridge: () => this.agentBrowserBridge,
+    resolveWorktreeSelector: (selector) => this.resolveWorktreeSelector(selector),
+    getAuthoritativeWindow: () => this.getAuthoritativeWindow(),
+    getAvailableAuthoritativeWindow: () => this.getAvailableAuthoritativeWindow()
+  })
+
+  browserSnapshot: RuntimeBrowserCommands['browserSnapshot'] =
+    this.browserCommands.browserSnapshot.bind(this.browserCommands)
+
+  browserClick: RuntimeBrowserCommands['browserClick'] = this.browserCommands.browserClick.bind(
+    this.browserCommands
+  )
+
+  browserGoto: RuntimeBrowserCommands['browserGoto'] = this.browserCommands.browserGoto.bind(
+    this.browserCommands
+  )
+
+  browserFill: RuntimeBrowserCommands['browserFill'] = this.browserCommands.browserFill.bind(
+    this.browserCommands
+  )
+
+  browserType: RuntimeBrowserCommands['browserType'] = this.browserCommands.browserType.bind(
+    this.browserCommands
+  )
+
+  browserSelect: RuntimeBrowserCommands['browserSelect'] = this.browserCommands.browserSelect.bind(
+    this.browserCommands
+  )
+
+  browserScroll: RuntimeBrowserCommands['browserScroll'] = this.browserCommands.browserScroll.bind(
+    this.browserCommands
+  )
+
+  browserBack: RuntimeBrowserCommands['browserBack'] = this.browserCommands.browserBack.bind(
+    this.browserCommands
+  )
+
+  browserReload: RuntimeBrowserCommands['browserReload'] = this.browserCommands.browserReload.bind(
+    this.browserCommands
+  )
+
+  browserScreenshot: RuntimeBrowserCommands['browserScreenshot'] =
+    this.browserCommands.browserScreenshot.bind(this.browserCommands)
+
+  browserEval: RuntimeBrowserCommands['browserEval'] = this.browserCommands.browserEval.bind(
+    this.browserCommands
+  )
+
+  browserTabList: RuntimeBrowserCommands['browserTabList'] =
+    this.browserCommands.browserTabList.bind(this.browserCommands)
+
+  browserTabShow: RuntimeBrowserCommands['browserTabShow'] =
+    this.browserCommands.browserTabShow.bind(this.browserCommands)
+
+  browserTabCurrent: RuntimeBrowserCommands['browserTabCurrent'] =
+    this.browserCommands.browserTabCurrent.bind(this.browserCommands)
+
+  browserTabSwitch: RuntimeBrowserCommands['browserTabSwitch'] =
+    this.browserCommands.browserTabSwitch.bind(this.browserCommands)
+
+  browserHover: RuntimeBrowserCommands['browserHover'] = this.browserCommands.browserHover.bind(
+    this.browserCommands
+  )
+
+  browserDrag: RuntimeBrowserCommands['browserDrag'] = this.browserCommands.browserDrag.bind(
+    this.browserCommands
+  )
+
+  browserUpload: RuntimeBrowserCommands['browserUpload'] = this.browserCommands.browserUpload.bind(
+    this.browserCommands
+  )
+
+  browserWait: RuntimeBrowserCommands['browserWait'] = this.browserCommands.browserWait.bind(
+    this.browserCommands
+  )
+
+  browserCheck: RuntimeBrowserCommands['browserCheck'] = this.browserCommands.browserCheck.bind(
+    this.browserCommands
+  )
+
+  browserFocus: RuntimeBrowserCommands['browserFocus'] = this.browserCommands.browserFocus.bind(
+    this.browserCommands
+  )
+
+  browserClear: RuntimeBrowserCommands['browserClear'] = this.browserCommands.browserClear.bind(
+    this.browserCommands
+  )
+
+  browserSelectAll: RuntimeBrowserCommands['browserSelectAll'] =
+    this.browserCommands.browserSelectAll.bind(this.browserCommands)
+
+  browserKeypress: RuntimeBrowserCommands['browserKeypress'] =
+    this.browserCommands.browserKeypress.bind(this.browserCommands)
+
+  browserPdf: RuntimeBrowserCommands['browserPdf'] = this.browserCommands.browserPdf.bind(
+    this.browserCommands
+  )
+
+  browserFullScreenshot: RuntimeBrowserCommands['browserFullScreenshot'] =
+    this.browserCommands.browserFullScreenshot.bind(this.browserCommands)
+
+  browserCookieGet: RuntimeBrowserCommands['browserCookieGet'] =
+    this.browserCommands.browserCookieGet.bind(this.browserCommands)
+
+  browserCookieSet: RuntimeBrowserCommands['browserCookieSet'] =
+    this.browserCommands.browserCookieSet.bind(this.browserCommands)
+
+  browserCookieDelete: RuntimeBrowserCommands['browserCookieDelete'] =
+    this.browserCommands.browserCookieDelete.bind(this.browserCommands)
+
+  browserSetViewport: RuntimeBrowserCommands['browserSetViewport'] =
+    this.browserCommands.browserSetViewport.bind(this.browserCommands)
+
+  browserSetGeolocation: RuntimeBrowserCommands['browserSetGeolocation'] =
+    this.browserCommands.browserSetGeolocation.bind(this.browserCommands)
+
+  browserInterceptEnable: RuntimeBrowserCommands['browserInterceptEnable'] =
+    this.browserCommands.browserInterceptEnable.bind(this.browserCommands)
+
+  browserInterceptDisable: RuntimeBrowserCommands['browserInterceptDisable'] =
+    this.browserCommands.browserInterceptDisable.bind(this.browserCommands)
+
+  browserInterceptList: RuntimeBrowserCommands['browserInterceptList'] =
+    this.browserCommands.browserInterceptList.bind(this.browserCommands)
+
+  browserCaptureStart: RuntimeBrowserCommands['browserCaptureStart'] =
+    this.browserCommands.browserCaptureStart.bind(this.browserCommands)
+
+  browserCaptureStop: RuntimeBrowserCommands['browserCaptureStop'] =
+    this.browserCommands.browserCaptureStop.bind(this.browserCommands)
+
+  browserConsoleLog: RuntimeBrowserCommands['browserConsoleLog'] =
+    this.browserCommands.browserConsoleLog.bind(this.browserCommands)
+
+  browserNetworkLog: RuntimeBrowserCommands['browserNetworkLog'] =
+    this.browserCommands.browserNetworkLog.bind(this.browserCommands)
+
+  browserDblclick: RuntimeBrowserCommands['browserDblclick'] =
+    this.browserCommands.browserDblclick.bind(this.browserCommands)
+
+  browserForward: RuntimeBrowserCommands['browserForward'] =
+    this.browserCommands.browserForward.bind(this.browserCommands)
+
+  browserScrollIntoView: RuntimeBrowserCommands['browserScrollIntoView'] =
+    this.browserCommands.browserScrollIntoView.bind(this.browserCommands)
+
+  browserGet: RuntimeBrowserCommands['browserGet'] = this.browserCommands.browserGet.bind(
+    this.browserCommands
+  )
+
+  browserIs: RuntimeBrowserCommands['browserIs'] = this.browserCommands.browserIs.bind(
+    this.browserCommands
+  )
+
+  browserKeyboardInsertText: RuntimeBrowserCommands['browserKeyboardInsertText'] =
+    this.browserCommands.browserKeyboardInsertText.bind(this.browserCommands)
+
+  browserMouseMove: RuntimeBrowserCommands['browserMouseMove'] =
+    this.browserCommands.browserMouseMove.bind(this.browserCommands)
+
+  browserMouseDown: RuntimeBrowserCommands['browserMouseDown'] =
+    this.browserCommands.browserMouseDown.bind(this.browserCommands)
+
+  browserMouseUp: RuntimeBrowserCommands['browserMouseUp'] =
+    this.browserCommands.browserMouseUp.bind(this.browserCommands)
+
+  browserMouseWheel: RuntimeBrowserCommands['browserMouseWheel'] =
+    this.browserCommands.browserMouseWheel.bind(this.browserCommands)
+
+  browserFind: RuntimeBrowserCommands['browserFind'] = this.browserCommands.browserFind.bind(
+    this.browserCommands
+  )
+
+  browserSetDevice: RuntimeBrowserCommands['browserSetDevice'] =
+    this.browserCommands.browserSetDevice.bind(this.browserCommands)
+
+  browserSetOffline: RuntimeBrowserCommands['browserSetOffline'] =
+    this.browserCommands.browserSetOffline.bind(this.browserCommands)
+
+  browserSetHeaders: RuntimeBrowserCommands['browserSetHeaders'] =
+    this.browserCommands.browserSetHeaders.bind(this.browserCommands)
+
+  browserSetCredentials: RuntimeBrowserCommands['browserSetCredentials'] =
+    this.browserCommands.browserSetCredentials.bind(this.browserCommands)
+
+  browserSetMedia: RuntimeBrowserCommands['browserSetMedia'] =
+    this.browserCommands.browserSetMedia.bind(this.browserCommands)
+
+  browserClipboardRead: RuntimeBrowserCommands['browserClipboardRead'] =
+    this.browserCommands.browserClipboardRead.bind(this.browserCommands)
+
+  browserClipboardWrite: RuntimeBrowserCommands['browserClipboardWrite'] =
+    this.browserCommands.browserClipboardWrite.bind(this.browserCommands)
+
+  browserDialogAccept: RuntimeBrowserCommands['browserDialogAccept'] =
+    this.browserCommands.browserDialogAccept.bind(this.browserCommands)
+
+  browserDialogDismiss: RuntimeBrowserCommands['browserDialogDismiss'] =
+    this.browserCommands.browserDialogDismiss.bind(this.browserCommands)
+
+  browserStorageLocalGet: RuntimeBrowserCommands['browserStorageLocalGet'] =
+    this.browserCommands.browserStorageLocalGet.bind(this.browserCommands)
+
+  browserStorageLocalSet: RuntimeBrowserCommands['browserStorageLocalSet'] =
+    this.browserCommands.browserStorageLocalSet.bind(this.browserCommands)
+
+  browserStorageLocalClear: RuntimeBrowserCommands['browserStorageLocalClear'] =
+    this.browserCommands.browserStorageLocalClear.bind(this.browserCommands)
+
+  browserStorageSessionGet: RuntimeBrowserCommands['browserStorageSessionGet'] =
+    this.browserCommands.browserStorageSessionGet.bind(this.browserCommands)
+
+  browserStorageSessionSet: RuntimeBrowserCommands['browserStorageSessionSet'] =
+    this.browserCommands.browserStorageSessionSet.bind(this.browserCommands)
+
+  browserStorageSessionClear: RuntimeBrowserCommands['browserStorageSessionClear'] =
+    this.browserCommands.browserStorageSessionClear.bind(this.browserCommands)
+
+  browserDownload: RuntimeBrowserCommands['browserDownload'] =
+    this.browserCommands.browserDownload.bind(this.browserCommands)
+
+  browserHighlight: RuntimeBrowserCommands['browserHighlight'] =
+    this.browserCommands.browserHighlight.bind(this.browserCommands)
+
+  browserExec: RuntimeBrowserCommands['browserExec'] = this.browserCommands.browserExec.bind(
+    this.browserCommands
+  )
+
+  browserTabCreate: RuntimeBrowserCommands['browserTabCreate'] =
+    this.browserCommands.browserTabCreate.bind(this.browserCommands)
+
+  browserTabSetProfile: RuntimeBrowserCommands['browserTabSetProfile'] =
+    this.browserCommands.browserTabSetProfile.bind(this.browserCommands)
+
+  browserTabProfileShow: RuntimeBrowserCommands['browserTabProfileShow'] =
+    this.browserCommands.browserTabProfileShow.bind(this.browserCommands)
+
+  browserTabProfileClone: RuntimeBrowserCommands['browserTabProfileClone'] =
+    this.browserCommands.browserTabProfileClone.bind(this.browserCommands)
+
+  browserProfileList: RuntimeBrowserCommands['browserProfileList'] =
+    this.browserCommands.browserProfileList.bind(this.browserCommands)
+
+  browserProfileCreate: RuntimeBrowserCommands['browserProfileCreate'] =
+    this.browserCommands.browserProfileCreate.bind(this.browserCommands)
+
+  browserProfileDelete: RuntimeBrowserCommands['browserProfileDelete'] =
+    this.browserCommands.browserProfileDelete.bind(this.browserCommands)
+
+  browserProfileDetectBrowsers: RuntimeBrowserCommands['browserProfileDetectBrowsers'] =
+    this.browserCommands.browserProfileDetectBrowsers.bind(this.browserCommands)
+
+  browserProfileImportFromBrowser: RuntimeBrowserCommands['browserProfileImportFromBrowser'] =
+    this.browserCommands.browserProfileImportFromBrowser.bind(this.browserCommands)
+
+  browserProfileClearDefaultCookies: RuntimeBrowserCommands['browserProfileClearDefaultCookies'] =
+    this.browserCommands.browserProfileClearDefaultCookies.bind(this.browserCommands)
+
+  browserTabClose: RuntimeBrowserCommands['browserTabClose'] =
+    this.browserCommands.browserTabClose.bind(this.browserCommands)
 
   private getAuthoritativeWindow(): BrowserWindow {
-    if (this.authoritativeWindowId === null) {
-      throw new Error('No renderer window available')
-    }
-    const win = BrowserWindow.fromId(this.authoritativeWindowId)
+    const win = this.getAvailableAuthoritativeWindow()
     if (!win || win.isDestroyed()) {
       throw new Error('No renderer window available')
     }
     return win
+  }
+
+  private getAvailableAuthoritativeWindow(): BrowserWindow | null {
+    if (this.authoritativeWindowId === null) {
+      return null
+    }
+    if (!BrowserWindow?.fromId) {
+      return null
+    }
+    const win = BrowserWindow.fromId(this.authoritativeWindowId)
+    return win && !win.isDestroyed() ? win : null
   }
 }
 
@@ -7922,6 +8276,10 @@ function branchSelectorMatches(branch: string, selector: string): boolean {
   return normalizeBranchRef(branch) === normalizeBranchRef(selector)
 }
 
+function runtimePathsEqual(left: string, right: string): boolean {
+  return normalizeRuntimePathForComparison(left) === normalizeRuntimePathForComparison(right)
+}
+
 function normalizeBranchRef(branch: string): string {
   return branch.startsWith('refs/heads/') ? branch.slice('refs/heads/'.length) : branch
 }
@@ -7956,21 +8314,9 @@ function findResolvedWorktreeIdForPath(
     return null
   }
   const matches = resolvedWorktrees
-    .filter(
-      (worktree) =>
-        areWorktreePathsEqual(worktree.path, cwd) || isPathInsideWorktree(cwd, worktree.path)
-    )
+    .filter((worktree) => isPathInsideOrEqual(worktree.path, cwd))
     .sort((left, right) => right.path.length - left.path.length)
   return matches[0]?.id ?? null
-}
-
-function isPathInsideWorktree(candidatePath: string, worktreePath: string): boolean {
-  if (candidatePath === worktreePath) {
-    return true
-  }
-  const normalizedCandidate = candidatePath.replace(/\\/g, '/').replace(/\/+$/, '')
-  const normalizedWorktree = worktreePath.replace(/\\/g, '/').replace(/\/+$/, '')
-  return normalizedCandidate.startsWith(`${normalizedWorktree}/`)
 }
 
 function getLeafWorktreeStatus(
@@ -8031,72 +8377,6 @@ function maxTimestamp(left: number | null, right: number | null): number | null 
     return left
   }
   return Math.max(left, right)
-}
-
-function isSafeMobileRelativePath(relativePath: string): boolean {
-  if (!relativePath || relativePath.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(relativePath)) {
-    return false
-  }
-  const parts = relativePath.replace(/\\/g, '/').split('/')
-  return parts.every((part) => part !== '' && part !== '.' && part !== '..')
-}
-
-function isMobileMarkdownPath(relativePath: string): boolean {
-  return /\.(md|mdx|markdown)$/i.test(relativePath)
-}
-
-function isMobileBinaryPath(relativePath: string): boolean {
-  const basename = basenameFromRelativePath(relativePath)
-  const dotIndex = basename.lastIndexOf('.')
-  if (dotIndex <= 0) {
-    return false
-  }
-  return MOBILE_BINARY_EXTENSIONS.has(basename.slice(dotIndex).toLowerCase())
-}
-
-function basenameFromRelativePath(relativePath: string): string {
-  const normalized = relativePath.replace(/\\/g, '/')
-  return normalized.slice(normalized.lastIndexOf('/') + 1)
-}
-
-function joinWorktreeRelativePath(rootPath: string, relativePath: string): string {
-  const normalizedRelativePath = relativePath.replace(/\\/g, '/')
-  if (/^[a-zA-Z]:[\\/]/.test(rootPath) || rootPath.startsWith('\\\\')) {
-    return win32.join(rootPath, ...normalizedRelativePath.split('/'))
-  }
-  return posix.join(rootPath, ...normalizedRelativePath.split('/'))
-}
-
-async function readLocalMobileFile(filePath: string, store: Store): Promise<string> {
-  const authorizedPath = await resolveAuthorizedPath(filePath, store)
-  const fileStat = await stat(authorizedPath)
-  // Why: mobile file previews are read-only convenience views; cap the read so
-  // opening a generated log or bundle cannot block the WebSocket like oversized scrollback.
-  const readLimit = Math.min(fileStat.size, MOBILE_FILE_READ_MAX_BYTES + 1)
-  const handle = await open(authorizedPath, 'r')
-  try {
-    const buffer = Buffer.alloc(readLimit)
-    const { bytesRead } = await handle.read(buffer, 0, readLimit, 0)
-    return buffer.subarray(0, bytesRead).toString('utf8')
-  } finally {
-    await handle.close()
-  }
-}
-
-function truncateMobileFilePreview(content: string): {
-  content: string
-  truncated: boolean
-  byteLength: number
-} {
-  const buffer = Buffer.from(content, 'utf8')
-  if (buffer.byteLength <= MOBILE_FILE_READ_MAX_BYTES) {
-    return { content, truncated: false, byteLength: buffer.byteLength }
-  }
-  return {
-    content: buffer.subarray(0, MOBILE_FILE_READ_MAX_BYTES).toString('utf8'),
-    truncated: true,
-    byteLength: buffer.byteLength
-  }
 }
 
 function compareWorktreePs(

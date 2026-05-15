@@ -349,6 +349,42 @@ describe('orchestration RPC methods', () => {
       // Must not have marked read
       expect(db.getUnreadMessages('b')).toHaveLength(1)
     })
+
+    it('does not mark messages read when a waiting check is aborted', async () => {
+      setup()
+      const abortController = new AbortController()
+      ctx = { runtime, signal: abortController.signal }
+      vi.spyOn(runtime, 'waitForMessage').mockImplementation(async () => {
+        db.insertMessage({ from: 'a', to: 'b', subject: 'arrived during close' })
+        abortController.abort()
+      })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'b',
+        wait: true,
+        timeoutMs: 100
+      })) as { messages: unknown[]; count: number }
+
+      expect(result).toEqual({ messages: [], count: 0 })
+      expect(db.getUnreadMessages('b')).toHaveLength(1)
+    })
+
+    it('does not mark existing messages read when the check starts aborted', async () => {
+      setup()
+      const abortController = new AbortController()
+      abortController.abort()
+      ctx = { runtime, signal: abortController.signal }
+      db.insertMessage({ from: 'a', to: 'b', subject: 'already unread' })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'b',
+        wait: true,
+        timeoutMs: 100
+      })) as { messages: unknown[]; count: number }
+
+      expect(result).toEqual({ messages: [], count: 0 })
+      expect(db.getUnreadMessages('b')).toHaveLength(1)
+    })
   })
 
   describe('orchestration.reply', () => {

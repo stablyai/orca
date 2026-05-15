@@ -4,8 +4,14 @@ type RepoStepProps = {
   cloneUrl: string
   onCloneUrlChange: (value: string) => void
   onOpenFolder: () => void
+  onOpenServerFolder: (kind: 'git' | 'folder') => void
   onClone: () => void
+  serverPath: string
+  onServerPathChange: (value: string) => void
+  cloneDestination: string
+  onCloneDestinationChange: (value: string) => void
   workspaceDir: string
+  runtimeActive: boolean
   busyLabel: string | null
   error: string | null
 }
@@ -14,36 +20,89 @@ export function RepoStep({
   cloneUrl,
   onCloneUrlChange,
   onOpenFolder,
+  onOpenServerFolder,
   onClone,
+  serverPath,
+  onServerPathChange,
+  cloneDestination,
+  onCloneDestinationChange,
   workspaceDir,
+  runtimeActive,
   busyLabel,
   error
 }: RepoStepProps) {
   const disabled = Boolean(busyLabel)
   return (
     <div className="space-y-3">
-      <button
-        type="button"
-        className="group flex w-full items-center gap-4 rounded-xl border border-border bg-muted/30 p-5 text-left transition hover:border-foreground/40 hover:bg-muted/60 disabled:opacity-60"
-        disabled={disabled}
-        onClick={onOpenFolder}
-      >
-        <div className="grid size-11 shrink-0 place-items-center rounded-lg bg-muted text-foreground">
-          <FolderOpen className="size-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="text-base font-semibold text-foreground">Open a folder</div>
-          <div className="mt-0.5 text-[13px] text-muted-foreground">
-            Choose any local directory, git repo or not.
+      {runtimeActive ? (
+        <form
+          className="rounded-lg border border-border bg-muted/30 p-5"
+          onSubmit={(event) => {
+            event.preventDefault()
+            onOpenServerFolder('git')
+          }}
+        >
+          <div className="flex items-center gap-4">
+            <div className="grid size-11 shrink-0 place-items-center rounded-lg bg-muted text-foreground">
+              <FolderOpen className="size-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-base font-semibold text-foreground">Open a server project</div>
+              <div className="mt-0.5 text-[13px] text-muted-foreground">
+                Enter a path that exists on the runtime server.
+              </div>
+            </div>
           </div>
-        </div>
-        <span className="shrink-0 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition group-hover:border-foreground/40">
-          Browse…
-        </span>
-      </button>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            <input
+              className="min-w-0 flex-1 rounded-lg border border-border bg-background px-4 py-3 font-mono text-sm text-foreground outline-none transition focus:border-foreground/50 focus:ring-2 focus:ring-foreground/15"
+              placeholder="/home/user/project"
+              value={serverPath}
+              disabled={disabled}
+              spellCheck={false}
+              onChange={(event) => onServerPathChange(event.target.value)}
+            />
+            <button
+              type="submit"
+              className="shrink-0 rounded-lg bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
+              disabled={!serverPath.trim() || disabled}
+            >
+              Add Git Project
+            </button>
+            <button
+              type="button"
+              className="shrink-0 rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium text-foreground hover:bg-muted/60 disabled:opacity-40"
+              disabled={!serverPath.trim() || disabled}
+              onClick={() => onOpenServerFolder('folder')}
+            >
+              Open as Folder
+            </button>
+          </div>
+        </form>
+      ) : (
+        <button
+          type="button"
+          className="group flex w-full items-center gap-4 rounded-xl border border-border bg-muted/30 p-5 text-left transition hover:border-foreground/40 hover:bg-muted/60 disabled:opacity-60"
+          disabled={disabled}
+          onClick={onOpenFolder}
+        >
+          <div className="grid size-11 shrink-0 place-items-center rounded-lg bg-muted text-foreground">
+            <FolderOpen className="size-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-base font-semibold text-foreground">Open a folder</div>
+            <div className="mt-0.5 text-[13px] text-muted-foreground">
+              Choose any local directory, git repo or not.
+            </div>
+          </div>
+          <span className="shrink-0 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition group-hover:border-foreground/40">
+            Browse...
+          </span>
+        </button>
+      )}
 
       <form
-        className="rounded-xl border border-border bg-muted/30 p-5"
+        className="rounded-lg border border-border bg-muted/30 p-5"
         onSubmit={(e) => {
           e.preventDefault()
           onClone()
@@ -71,21 +130,38 @@ export function RepoStep({
           <button
             type="submit"
             className="shrink-0 rounded-lg bg-primary px-5 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
-            disabled={!cloneUrl.trim() || disabled}
+            disabled={!cloneUrl.trim() || (runtimeActive && !cloneDestination.trim()) || disabled}
           >
             Clone
           </button>
         </div>
+        {runtimeActive && (
+          <div className="mt-2 space-y-1">
+            <label className="text-[11px] font-medium text-muted-foreground">
+              Clone into server path
+            </label>
+            <input
+              className="w-full rounded-lg border border-border bg-background px-4 py-3 font-mono text-sm text-foreground outline-none transition focus:border-foreground/50 focus:ring-2 focus:ring-foreground/15"
+              placeholder="/home/user"
+              value={cloneDestination}
+              disabled={disabled}
+              spellCheck={false}
+              onChange={(event) => onCloneDestinationChange(event.target.value)}
+            />
+          </div>
+        )}
       </form>
 
       <div className="flex flex-wrap items-center justify-between gap-3 px-1 pt-1 text-xs text-muted-foreground">
         <div className="flex min-w-0 items-center gap-2">
           <span>Workspace</span>
-          <span className="truncate font-mono text-foreground">{workspaceDir}</span>
+          <span className="truncate font-mono text-foreground">
+            {runtimeActive ? 'Runtime server' : workspaceDir}
+          </span>
         </div>
         <div className="flex items-center gap-1.5">
           <Server className="size-3.5" />
-          <span>SSH? Set hosts up in Settings</span>
+          <span>{runtimeActive ? 'Server paths only' : 'SSH? Set hosts up in Settings'}</span>
         </div>
       </div>
 

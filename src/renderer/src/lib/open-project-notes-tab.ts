@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
 import { NOTES_ACTIVE_CHANGED_EVENT } from '@/lib/notes-events'
+import { linkRuntimeProjectNote, showRuntimeProjectNote } from '@/runtime/runtime-notes-client'
 
 export function getProjectNotesEntityId(projectId: string, noteId?: string): string {
   if (noteId) {
@@ -27,15 +28,16 @@ export async function openProjectNotesTab(worktreeId: string, noteId?: string): 
     .find((candidate) => candidate.id === worktreeId)
   const repo = state.repos.find((candidate) => candidate.id === worktree?.repoId)
   const projectId = repo?.id ?? worktree?.repoId ?? null
+  const settings = state.settings
 
   if (noteId && projectId) {
-    await window.api.notes.link({ projectId, worktreeId, note: noteId, kind: 'active' })
+    await linkRuntimeProjectNote(settings, { projectId, worktreeId, note: noteId, kind: 'active' })
   }
 
   let label = 'Project Notes'
   if (noteId && projectId) {
     try {
-      const result = await window.api.notes.show({ projectId, worktreeId, note: noteId })
+      const result = await showRuntimeProjectNote(settings, { projectId, worktreeId, note: noteId })
       label = result.note.title
     } catch {
       label = 'Project Notes'

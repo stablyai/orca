@@ -22,6 +22,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Gauge } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type { GetRateLimitResult, GitHubRateLimitSnapshot } from '../../../../shared/types'
 
 // Why: 60s client-side cadence. Aligns with typical user action rhythm
@@ -100,34 +102,43 @@ function tightestBucket(snapshot: GitHubRateLimitSnapshot): BucketMeta {
 export default function GitHubRateLimitPill(): React.JSX.Element | null {
   const [snapshot, setSnapshot] = useState<GitHubRateLimitSnapshot | null>(null)
   const [hasError, setHasError] = useState(false)
+  const settings = useAppStore((s) => s.settings)
   // Why: StrictMode double-invokes effects in dev. Without this guard the
   // first mount fires two rate_limit IPCs back-to-back — benign (exempt
   // endpoint, cached) but noisy in logs. Tracks the latest in-flight token
   // so stale responses from an unmounted instance are dropped.
   const latestToken = useRef(0)
 
-  const fetchSnapshot = useCallback(async (force: boolean): Promise<void> => {
-    const token = ++latestToken.current
-    try {
-      const res = (await window.api.gh.rateLimit(force ? { force: true } : undefined)) as
-        | GetRateLimitResult
-        | undefined
-      if (token !== latestToken.current) {
-        return
-      }
-      if (res?.ok) {
-        setSnapshot(res.snapshot)
-        setHasError(false)
-      } else {
+  const fetchSnapshot = useCallback(
+    async (force: boolean): Promise<void> => {
+      const token = ++latestToken.current
+      try {
+        const target = getActiveRuntimeTarget(settings)
+        const params = force ? { force: true } : undefined
+        const res =
+          target.kind === 'environment'
+            ? await callRuntimeRpc<GetRateLimitResult>(target, 'github.rateLimit', params ?? {}, {
+                timeoutMs: 30_000
+              })
+            : ((await window.api.gh.rateLimit(params)) as GetRateLimitResult | undefined)
+        if (token !== latestToken.current) {
+          return
+        }
+        if (res?.ok) {
+          setSnapshot(res.snapshot)
+          setHasError(false)
+        } else {
+          setHasError(true)
+        }
+      } catch {
+        if (token !== latestToken.current) {
+          return
+        }
         setHasError(true)
       }
-    } catch {
-      if (token !== latestToken.current) {
-        return
-      }
-      setHasError(true)
-    }
-  }, [])
+    },
+    [settings]
+  )
 
   useEffect(() => {
     const fetchIfVisible = (): void => {

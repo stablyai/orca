@@ -1,7 +1,16 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { isMethodNotFoundError, readFileViaStream } from '../ssh/ssh-filesystem-stream-reader'
+import { uploadBuffer } from '../ssh/sftp-upload'
 import type { IFilesystemProvider, FileStat, FileReadResult } from './types'
 import type { DirEntry, FsChangeEvent, SearchOptions, SearchResult } from '../../shared/types'
+import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
+import type { SFTPWrapper } from 'ssh2'
+
+type SftpFactory = () => Promise<SFTPWrapper>
+type WatchRegistration = {
+  callbacks: Set<(events: FsChangeEvent[]) => void>
+  setupPromise: Promise<void>
+}
 
 export class SshFilesystemProvider implements IFilesystemProvider {
   private connectionId: string
@@ -9,7 +18,7 @@ export class SshFilesystemProvider implements IFilesystemProvider {
   // Why: each watch() call registers for a specific rootPath, but the relay
   // sends all fs.changed events on one notification channel. Keying by rootPath
   // prevents cross-pollination between different worktree watchers.
-  private watchListeners = new Map<string, (events: FsChangeEvent[]) => void>()
+  private watchListeners = new Map<string, WatchRegistration>()
   // Why: store the unsubscribe handle so dispose() can detach from the
   // multiplexer. Without this, notification callbacks keep firing after
   // the provider is torn down on disconnect, routing events to stale state.
@@ -19,17 +28,23 @@ export class SshFilesystemProvider implements IFilesystemProvider {
   // relays get diagnosed quickly without per-read log spam.
   private loggedStreamFallback = false
 
-  constructor(connectionId: string, mux: SshChannelMultiplexer) {
+  constructor(
+    connectionId: string,
+    mux: SshChannelMultiplexer,
+    private readonly createSftp?: SftpFactory
+  ) {
     this.connectionId = connectionId
     this.mux = mux
 
     this.unsubscribeNotifications = mux.onNotification((method, params) => {
       if (method === 'fs.changed') {
         const events = params.events as FsChangeEvent[]
-        for (const [rootPath, cb] of this.watchListeners) {
-          const matching = events.filter((e) => e.absolutePath.startsWith(rootPath))
+        for (const [rootPath, registration] of this.watchListeners) {
+          const matching = events.filter((e) => isPathInsideOrEqual(rootPath, e.absolutePath))
           if (matching.length > 0) {
-            cb(matching)
+            for (const cb of registration.callbacks) {
+              cb(matching)
+            }
           }
         }
       }
@@ -78,6 +93,31 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     await this.mux.request('fs.writeFile', { filePath, content })
   }
 
+  async writeFileBase64(filePath: string, contentBase64: string): Promise<void> {
+    await this.writeFileBase64Chunk(filePath, contentBase64, false)
+  }
+
+  async writeFileBase64Chunk(
+    filePath: string,
+    contentBase64: string,
+    append: boolean
+  ): Promise<void> {
+    if (!this.createSftp) {
+      throw new Error('remote_binary_upload_unavailable')
+    }
+    const sftp = await this.createSftp()
+    try {
+      // Why: relay fs.writeFile is text-only. SFTP writes the decoded bytes
+      // directly so runtime uploads do not corrupt images, PDFs, or archives.
+      await uploadBuffer(sftp, Buffer.from(contentBase64, 'base64'), filePath, {
+        append,
+        exclusive: !append
+      })
+    } finally {
+      sftp.end()
+    }
+  }
+
   async stat(filePath: string): Promise<FileStat> {
     return (await this.mux.request('fs.stat', { filePath })) as FileStat
   }
@@ -92,6 +132,10 @@ export class SshFilesystemProvider implements IFilesystemProvider {
 
   async createDir(dirPath: string): Promise<void> {
     await this.mux.request('fs.createDir', { dirPath })
+  }
+
+  async createDirNoClobber(dirPath: string): Promise<void> {
+    await this.mux.request('fs.createDirNoClobber', { dirPath })
   }
 
   async rename(oldPath: string, newPath: string): Promise<void> {
@@ -122,15 +166,41 @@ export class SshFilesystemProvider implements IFilesystemProvider {
   }
 
   async watch(rootPath: string, callback: (events: FsChangeEvent[]) => void): Promise<() => void> {
-    this.watchListeners.set(rootPath, callback)
-    await this.mux.request('fs.watch', { rootPath })
+    let registration = this.watchListeners.get(rootPath)
+    if (registration) {
+      registration.callbacks.add(callback)
+      await registration.setupPromise
+      return this.createWatchUnsubscribe(rootPath, registration, callback)
+    }
 
+    const callbacks = new Set<(events: FsChangeEvent[]) => void>([callback])
+    const setupPromise = this.mux.request('fs.watch', { rootPath }).then(
+      () => undefined,
+      (error) => {
+        if (this.watchListeners.get(rootPath) === registration) {
+          this.watchListeners.delete(rootPath)
+        }
+        throw error
+      }
+    )
+    registration = { callbacks, setupPromise }
+    this.watchListeners.set(rootPath, registration)
+    await setupPromise
+
+    return this.createWatchUnsubscribe(rootPath, registration, callback)
+  }
+
+  private createWatchUnsubscribe(
+    rootPath: string,
+    registration: WatchRegistration,
+    callback: (events: FsChangeEvent[]) => void
+  ): () => void {
     return () => {
-      this.watchListeners.delete(rootPath)
-      // Why: each watch() starts a @parcel/watcher on the relay for this specific
-      // rootPath. We must always notify the relay to stop it, not only when all
-      // watchers are gone — otherwise the remote watcher leaks inotify descriptors.
-      this.mux.notify('fs.unwatch', { rootPath })
+      registration.callbacks.delete(callback)
+      if (registration.callbacks.size === 0 && this.watchListeners.get(rootPath) === registration) {
+        this.watchListeners.delete(rootPath)
+        this.mux.notify('fs.unwatch', { rootPath })
+      }
     }
   }
 }

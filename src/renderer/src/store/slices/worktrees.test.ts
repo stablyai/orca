@@ -19,6 +19,9 @@ const mockApi = {
   },
   hooks: {
     check: vi.fn().mockResolvedValue({ hasHooks: false, hooks: null, mayNeedUpdate: false })
+  },
+  runtimeEnvironments: {
+    call: vi.fn()
   }
 }
 
@@ -191,6 +194,34 @@ describe('fetchWorktrees', () => {
 
     expect(store.getState().worktreesByRepo.repo1).toEqual([])
     expect(store.getState().sortEpoch).toBe(8)
+  })
+
+  it('fetches worktrees from the active remote runtime environment', async () => {
+    const store = createTestStore()
+    const remote = makeWorktree({
+      id: 'repo1::/remote/wt1',
+      repoId: 'repo1',
+      path: '/remote/wt1',
+      branch: 'refs/heads/remote'
+    })
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
+    mockApi.runtimeEnvironments.call.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { worktrees: [remote], totalCount: 1, truncated: false },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+
+    await store.getState().fetchWorktrees('repo1')
+
+    expect(store.getState().worktreesByRepo.repo1).toEqual([remote])
+    expect(mockApi.runtimeEnvironments.call).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'worktree.list',
+      params: { repo: 'repo1' },
+      timeoutMs: 15_000
+    })
+    expect(mockApi.worktrees.list).not.toHaveBeenCalled()
   })
 })
 
@@ -606,6 +637,119 @@ describe('removeWorktree state cleanup', () => {
 
     // The same reference should be returned (no unnecessary shallow copy)
     expect(store.getState().editorDrafts).toBe(drafts)
+  })
+})
+
+describe('worktree remote runtime mutations', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('creates worktrees through the active remote runtime environment', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/feature',
+      repoId: 'repo1',
+      path: '/path/feature'
+    })
+    mockApi.runtimeEnvironments.call.mockResolvedValue({
+      id: 'rpc-create',
+      ok: true,
+      result: { worktree: wt },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+
+    const result = await store
+      .getState()
+      .createWorktree(
+        'repo1',
+        'feature',
+        'origin/main',
+        'skip',
+        { directories: ['src'], presetId: 'preset-1' },
+        'sidebar',
+        'Feature title',
+        123,
+        456,
+        { remoteName: 'fork', branchName: 'feature' }
+      )
+
+    expect(result).toEqual({ worktree: wt })
+    expect(mockApi.runtimeEnvironments.call).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'worktree.create',
+      params: {
+        repo: 'repo1',
+        name: 'feature',
+        baseBranch: 'origin/main',
+        setupDecision: 'skip',
+        sparseCheckout: { directories: ['src'], presetId: 'preset-1' },
+        displayName: 'Feature title',
+        linkedIssue: 123,
+        linkedPR: 456,
+        pushTarget: { remoteName: 'fork', branchName: 'feature' }
+      },
+      timeoutMs: 10 * 60_000
+    })
+    expect(mockApi.worktrees.create).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo.repo1).toEqual([wt])
+  })
+
+  it('removes worktrees through the active remote runtime environment', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    mockApi.runtimeEnvironments.call.mockResolvedValue({
+      id: 'rpc-rm',
+      ok: true,
+      result: { removed: true },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [wt] }
+    } as Partial<AppState>)
+
+    const result = await store.getState().removeWorktree(wt.id)
+
+    expect(result).toEqual({ ok: true })
+    expect(mockApi.runtimeEnvironments.call).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'worktree.rm',
+      params: { worktree: wt.id, force: undefined, runHooks: true },
+      timeoutMs: 60_000
+    })
+    expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo.repo1).toEqual([])
+  })
+
+  it('persists worktree metadata through the active remote runtime environment', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    mockApi.runtimeEnvironments.call.mockResolvedValue({
+      id: 'rpc-set',
+      ok: true,
+      result: { worktree: { ...wt, comment: 'remote note' } },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [wt] }
+    } as Partial<AppState>)
+
+    await store.getState().updateWorktreeMeta(wt.id, { comment: 'remote note' })
+
+    expect(mockApi.runtimeEnvironments.call).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'worktree.set',
+      params: expect.objectContaining({ worktree: wt.id, comment: 'remote note' }),
+      timeoutMs: 15_000
+    })
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo.repo1[0]?.comment).toBe('remote note')
   })
 })
 

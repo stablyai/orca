@@ -118,10 +118,13 @@ export type IFilesystemProvider = {
   readDir(dirPath: string): Promise<DirEntry[]>
   readFile(filePath: string): Promise<FileReadResult>
   writeFile(filePath: string, content: string): Promise<void>
+  writeFileBase64(filePath: string, contentBase64: string): Promise<void>
+  writeFileBase64Chunk(filePath: string, contentBase64: string, append: boolean): Promise<void>
   stat(filePath: string): Promise<FileStat>
   deletePath(targetPath: string, recursive?: boolean): Promise<void>
   createFile(filePath: string): Promise<void>
   createDir(dirPath: string): Promise<void>
+  createDirNoClobber(dirPath: string): Promise<void>
   rename(oldPath: string, newPath: string): Promise<void>
   copy(source: string, destination: string): Promise<void>
   realpath(filePath: string): Promise<string>

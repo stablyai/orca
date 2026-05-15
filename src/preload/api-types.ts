@@ -85,6 +85,8 @@ import type {
   WorktreeStartupLaunch,
   WorkspaceSessionState
 } from '../shared/types'
+import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
+import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 import type {
   AddIssueCommentBySlugArgs,
   ClearProjectItemFieldArgs,
@@ -139,6 +141,11 @@ import type { E2EConfig } from '../shared/e2e-config'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { AgentStatusIpcPayload } from '../shared/agent-status-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
+
+type RuntimeEnvironmentSubscriptionHandle = {
+  unsubscribe: () => void
+  sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => void
+}
 import type {
   RuntimeMobileMarkdownRequest,
   RuntimeMobileMarkdownResponse
@@ -1061,6 +1068,11 @@ export type PreloadApi = {
     createFile: (args: { filePath: string; connectionId?: string }) => Promise<void>
     createDir: (args: { dirPath: string; connectionId?: string }) => Promise<void>
     rename: (args: { oldPath: string; newPath: string; connectionId?: string }) => Promise<void>
+    copy: (args: {
+      sourcePath: string
+      destinationPath: string
+      connectionId?: string
+    }) => Promise<void>
     deletePath: (args: {
       targetPath: string
       connectionId?: string
@@ -1081,6 +1093,7 @@ export type PreloadApi = {
       sourcePaths: string[]
       destDir: string
       connectionId?: string
+      ensureDir?: boolean
     }) => Promise<{
       results: (
         | {
@@ -1089,6 +1102,30 @@ export type PreloadApi = {
             destPath: string
             kind: 'file' | 'directory'
             renamed: boolean
+          }
+        | {
+            sourcePath: string
+            status: 'skipped'
+            reason: 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
+          }
+        | {
+            sourcePath: string
+            status: 'failed'
+            reason: string
+          }
+      )[]
+    }>
+    stageExternalPathsForRuntimeUpload: (args: { sourcePaths: string[] }) => Promise<{
+      sources: (
+        | {
+            sourcePath: string
+            status: 'staged'
+            name: string
+            kind: 'file' | 'directory'
+            entries: (
+              | { relativePath: string; kind: 'directory' }
+              | { relativePath: string; kind: 'file'; contentBase64: string }
+            )[]
           }
         | {
             sourcePath: string
@@ -1357,6 +1394,7 @@ export type PreloadApi = {
   runtime: {
     syncWindowGraph: (graph: RuntimeSyncWindowGraph) => Promise<RuntimeStatus>
     getStatus: () => Promise<RuntimeStatus>
+    call: (args: { method: string; params?: unknown }) => Promise<RuntimeRpcResponse<unknown>>
     getTerminalFitOverrides: () => Promise<
       { ptyId: string; mode: 'mobile-fit'; cols: number; rows: number }[]
     >
@@ -1375,6 +1413,39 @@ export type PreloadApi = {
         driver: { kind: 'idle' } | { kind: 'desktop' } | { kind: 'mobile'; clientId: string }
       }) => void
     ) => () => void
+  }
+  runtimeEnvironments: {
+    list: () => Promise<PublicKnownRuntimeEnvironment[]>
+    addFromPairingCode: (args: {
+      name: string
+      pairingCode: string
+    }) => Promise<{ environment: PublicKnownRuntimeEnvironment }>
+    resolve: (args: { selector: string }) => Promise<PublicKnownRuntimeEnvironment>
+    remove: (args: { selector: string }) => Promise<{ removed: PublicKnownRuntimeEnvironment }>
+    getStatus: (args: {
+      selector: string
+      timeoutMs?: number
+    }) => Promise<RuntimeRpcResponse<RuntimeStatus>>
+    call: (args: {
+      selector: string
+      method: string
+      params?: unknown
+      timeoutMs?: number
+    }) => Promise<RuntimeRpcResponse<unknown>>
+    subscribe: (
+      args: {
+        selector: string
+        method: string
+        params?: unknown
+        timeoutMs?: number
+      },
+      callbacks: {
+        onResponse: (response: RuntimeRpcResponse<unknown>) => void
+        onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
+        onError?: (error: { code: string; message: string }) => void
+        onClose?: () => void
+      }
+    ) => Promise<RuntimeEnvironmentSubscriptionHandle>
   }
   rateLimits: {
     get: () => Promise<RateLimitState>

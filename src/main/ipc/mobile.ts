@@ -2,7 +2,6 @@ import { ipcMain } from 'electron'
 import { networkInterfaces } from 'os'
 import QRCode from 'qrcode'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 
 export type NetworkInterface = {
   name: string
@@ -46,12 +45,6 @@ export function registerMobileHandlers(rpcServer: OrcaRuntimeRpcServer): void {
   ipcMain.handle(
     'mobile:getPairingQR',
     async (_event, args?: { address?: string; rotate?: boolean }) => {
-      const rawEndpoint = rpcServer.getWebSocketEndpoint()
-      const registry = rpcServer.getDeviceRegistry()
-      if (!rawEndpoint || !registry) {
-        return { available: false as const }
-      }
-
       // Why: allow the caller to specify which network interface address to
       // embed in the QR code. This supports overlay networks (Tailscale,
       // ZeroTier) where the default LAN IP isn't reachable from the phone.
@@ -59,7 +52,6 @@ export function registerMobileHandlers(rpcServer: OrcaRuntimeRpcServer): void {
       if (!ip) {
         return { available: false as const }
       }
-      const endpoint = rawEndpoint.replace('0.0.0.0', ip)
 
       // Why: coalesce repeated QR regenerations onto a single never-scanned
       // pending token so the copy-button flow doesn't accumulate orphaned
@@ -68,24 +60,17 @@ export function registerMobileHandlers(rpcServer: OrcaRuntimeRpcServer): void {
       // `rotate: true` (explicit "Regenerate" intent because the prior token
       // may have been exposed), we discard any pending token and mint a fresh
       // one so the new QR carries a different credential.
-      const name = `Mobile ${new Date().toLocaleDateString()}`
-      const device = args?.rotate
-        ? registry.rotatePendingDevice(name)
-        : registry.getOrCreatePendingDevice(name)
-
-      const publicKeyB64 = rpcServer.getE2EEPublicKey()
-      if (!publicKeyB64) {
+      const offer = rpcServer.createPairingOffer({
+        address: ip,
+        rotate: args?.rotate,
+        name: `Mobile ${new Date().toLocaleDateString()}`,
+        scope: 'mobile'
+      })
+      if (!offer.available) {
         return { available: false as const }
       }
 
-      const url = encodePairingOffer({
-        v: PAIRING_OFFER_VERSION,
-        endpoint,
-        deviceToken: device.token,
-        publicKeyB64
-      })
-
-      const qrDataUrl = await QRCode.toDataURL(url, {
+      const qrDataUrl = await QRCode.toDataURL(offer.pairingUrl, {
         errorCorrectionLevel: 'M',
         margin: 2,
         width: 256
@@ -94,9 +79,9 @@ export function registerMobileHandlers(rpcServer: OrcaRuntimeRpcServer): void {
       return {
         available: true as const,
         qrDataUrl,
-        pairingUrl: url,
-        endpoint,
-        deviceId: device.deviceId
+        pairingUrl: offer.pairingUrl,
+        endpoint: offer.endpoint,
+        deviceId: offer.deviceId
       }
     }
   )
@@ -112,7 +97,7 @@ export function registerMobileHandlers(rpcServer: OrcaRuntimeRpcServer): void {
     return {
       devices: registry
         .listDevices()
-        .filter((d) => d.lastSeenAt > 0)
+        .filter((d) => d.scope === 'mobile' && d.lastSeenAt > 0)
         .map((d) => ({
           deviceId: d.deviceId,
           name: d.name,
@@ -127,7 +112,7 @@ export function registerMobileHandlers(rpcServer: OrcaRuntimeRpcServer): void {
     if (!registry) {
       return { revoked: false }
     }
-    return { revoked: registry.removeDevice(args.deviceId) }
+    return { revoked: rpcServer.revokeMobileDevice(args.deviceId) }
   })
 
   ipcMain.handle('mobile:isWebSocketReady', () => {

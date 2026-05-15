@@ -5,7 +5,12 @@
 // existing repoPath-keyed hooks stay focused on the local-workspace flow
 // and so this file remains under the lint line cap.
 import { useEffect, useRef, useState } from 'react'
-import type { GitHubAssignableUser } from '../../../shared/types'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import type { GitHubAssignableUser, GlobalSettings } from '../../../shared/types'
+import type {
+  ListAssignableUsersBySlugResult,
+  ListLabelsBySlugResult
+} from '../../../shared/github-project-types'
 import {
   clearMetadataRequestStore,
   createMetadataRequestStore,
@@ -29,7 +34,8 @@ export function clearGitHubSlugMetadataCache(): void {
 
 export function useRepoLabelsBySlug(
   owner: string | null,
-  repo: string | null
+  repo: string | null,
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
 ): MetadataState<string[]> {
   const [state, setState] = useState<MetadataState<string[]>>({
     data: [],
@@ -42,7 +48,11 @@ export function useRepoLabelsBySlug(
     if (!owner || !repo) {
       return
     }
-    const key = `${owner}/${repo}`
+    const target = getActiveRuntimeTarget(settings)
+    const key =
+      target.kind === 'environment'
+        ? `runtime:${target.environmentId}:${owner}/${repo}`
+        : `${owner}/${repo}`
 
     const cached = getFreshMetadata(slugLabelStore, key)
     if (cached) {
@@ -64,7 +74,15 @@ export function useRepoLabelsBySlug(
       error: null
     }))
     loadMetadata(slugLabelStore, key, () =>
-      window.api.gh.listLabelsBySlug({ owner, repo }).then((res) => {
+      (target.kind === 'environment'
+        ? callRuntimeRpc<ListLabelsBySlugResult>(
+            target,
+            'github.project.listLabelsBySlug',
+            { owner, repo },
+            { timeoutMs: 30_000 }
+          )
+        : window.api.gh.listLabelsBySlug({ owner, repo })
+      ).then((res) => {
         if (!res.ok) {
           throw new Error(res.error.message)
         }
@@ -88,7 +106,7 @@ export function useRepoLabelsBySlug(
           error: err instanceof Error ? err.message : 'Failed to load labels'
         }))
       })
-  }, [owner, repo])
+  }, [owner, repo, settings])
 
   return state
 }
@@ -96,7 +114,8 @@ export function useRepoLabelsBySlug(
 export function useRepoAssigneesBySlug(
   owner: string | null,
   repo: string | null,
-  seedLogins?: string[]
+  seedLogins?: string[],
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
 ): MetadataState<GitHubAssignableUser[]> {
   const [state, setState] = useState<MetadataState<GitHubAssignableUser[]>>({
     data: [],
@@ -113,7 +132,11 @@ export function useRepoAssigneesBySlug(
     if (!owner || !repo) {
       return
     }
-    const key = `${owner}/${repo}#${seedKey}`
+    const target = getActiveRuntimeTarget(settings)
+    const key =
+      target.kind === 'environment'
+        ? `runtime:${target.environmentId}:${owner}/${repo}#${seedKey}`
+        : `${owner}/${repo}#${seedKey}`
 
     const cached = getFreshMetadata(slugAssigneeStore, key)
     if (cached) {
@@ -133,19 +156,26 @@ export function useRepoAssigneesBySlug(
       loading: true,
       error: null
     }))
+    const args = {
+      owner,
+      repo,
+      ...(seedKey ? { seedLogins: seedKey.split(',') } : {})
+    }
     loadMetadata(slugAssigneeStore, key, () =>
-      window.api.gh
-        .listAssignableUsersBySlug({
-          owner,
-          repo,
-          ...(seedKey ? { seedLogins: seedKey.split(',') } : {})
-        })
-        .then((res) => {
-          if (!res.ok) {
-            throw new Error(res.error.message)
-          }
-          return res.users
-        })
+      (target.kind === 'environment'
+        ? callRuntimeRpc<ListAssignableUsersBySlugResult>(
+            target,
+            'github.project.listAssignableUsersBySlug',
+            args,
+            { timeoutMs: 30_000 }
+          )
+        : window.api.gh.listAssignableUsersBySlug(args)
+      ).then((res) => {
+        if (!res.ok) {
+          throw new Error(res.error.message)
+        }
+        return res.users
+      })
     )
       .then((data) => {
         if (activeKeyRef.current !== requestKey) {
@@ -164,7 +194,7 @@ export function useRepoAssigneesBySlug(
           error: err instanceof Error ? err.message : 'Failed to load assignees'
         }))
       })
-  }, [owner, repo, seedKey])
+  }, [owner, repo, seedKey, settings])
 
   return state
 }

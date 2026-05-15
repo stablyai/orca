@@ -6,7 +6,9 @@ const setActiveWorktreeMock = vi.fn()
 const createBrowserTabMock = vi.fn()
 
 const storeState = {
-  settings: undefined as { openLinksInApp?: boolean } | undefined,
+  settings: undefined as
+    | { openLinksInApp?: boolean; activeRuntimeEnvironmentId?: string | null }
+    | undefined,
   setActiveWorktree: setActiveWorktreeMock,
   createBrowserTab: createBrowserTabMock
 }
@@ -57,6 +59,16 @@ describe('openHttpLink', () => {
 
     expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
     expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+
+  it('routes to the system browser when a remote runtime environment is active', () => {
+    storeState.settings = { openLinksInApp: true, activeRuntimeEnvironmentId: 'env-1' }
+
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
+
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+    expect(setActiveWorktreeMock).not.toHaveBeenCalled()
   })
 
   it('routes to the system browser when no worktree id is provided', () => {

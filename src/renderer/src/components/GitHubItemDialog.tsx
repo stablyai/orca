@@ -70,6 +70,7 @@ import {
   type PRCommentGroup
 } from '@/lib/pr-comment-groups'
 import { useAppStore } from '@/store'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
@@ -371,6 +372,7 @@ function findNearestBraceBlock(
 
 type FileRowProps = {
   file: GitHubPRFile
+  repoId?: string
   repoPath: string
   prNumber: number
   headSha: string | undefined
@@ -384,6 +386,7 @@ type DiffViewMode = 'flat' | 'tree'
 type DiffTreeNodeProps = {
   node: DiffTreeNode
   depth: number
+  repoId?: string
   repoPath: string
   prNumber: number
   headSha: string | undefined
@@ -394,6 +397,7 @@ type DiffTreeNodeProps = {
 function PRDiffTreeNode({
   node,
   depth,
+  repoId,
   repoPath,
   prNumber,
   headSha,
@@ -406,6 +410,7 @@ function PRDiffTreeNode({
     return (
       <PRFileRow
         file={node.file}
+        repoId={repoId}
         repoPath={repoPath}
         prNumber={prNumber}
         headSha={headSha}
@@ -452,6 +457,7 @@ function PRDiffTreeNode({
               key={child.kind === 'file' ? child.file.path : child.path}
               node={child}
               depth={depth + 1}
+              repoId={repoId}
               repoPath={repoPath}
               prNumber={prNumber}
               headSha={headSha}
@@ -467,6 +473,7 @@ function PRDiffTreeNode({
 
 type PRDiffTreeViewProps = {
   files: GitHubPRFile[]
+  repoId?: string
   repoPath: string
   prNumber: number
   headSha: string | undefined
@@ -476,6 +483,7 @@ type PRDiffTreeViewProps = {
 
 function PRDiffTreeView({
   files,
+  repoId,
   repoPath,
   prNumber,
   headSha,
@@ -490,6 +498,7 @@ function PRDiffTreeView({
           key={node.kind === 'file' ? node.file.path : node.path}
           node={node}
           depth={0}
+          repoId={repoId}
           repoPath={repoPath}
           prNumber={prNumber}
           headSha={headSha}
@@ -536,6 +545,7 @@ function notifyWorkItemDetailsCache(): void {
 }
 
 function getWorkItemDetailsCacheKey(args: {
+  runtimeScope: string
   repoPath: string
   issueSourcePreference: string | undefined
   type: 'issue' | 'pr'
@@ -543,7 +553,13 @@ function getWorkItemDetailsCacheKey(args: {
 }): string {
   // Why: include all axes that change which (repo, item) the IPC resolves to.
   // `\0` separator avoids ambiguity between fields that may contain `:` or `/`.
-  return [args.repoPath, args.issueSourcePreference ?? 'auto', args.type, args.number].join('\0')
+  return [
+    args.runtimeScope,
+    args.repoPath,
+    args.issueSourcePreference ?? 'auto',
+    args.type,
+    args.number
+  ].join('\0')
 }
 
 function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCacheEntry): void {
@@ -590,11 +606,10 @@ function invalidateWorkItemDetailsCacheByMatch(args: {
   number: number
 }): void {
   workItemDetailsCacheGeneration += 1
-  const suffix = `\0${args.type}\0${args.number}`
-  const prefix = `${args.repoPath}\0`
   let removed = false
   for (const key of Array.from(workItemDetailsCache.keys())) {
-    if (key.startsWith(prefix) && key.endsWith(suffix)) {
+    const [, repoPath, , type, number] = key.split('\0')
+    if (repoPath === args.repoPath && type === args.type && number === String(args.number)) {
       workItemDetailsCache.delete(key)
       removed = true
     }
@@ -648,6 +663,7 @@ function touchPRFileContentCache(
 }
 
 function getPRFileContentCacheKey(args: {
+  repoId?: string
   repoPath: string
   prNumber: number
   file: GitHubPRFile
@@ -655,6 +671,7 @@ function getPRFileContentCacheKey(args: {
   baseSha: string
 }): string {
   return [
+    args.repoId ?? '',
     args.repoPath,
     args.prNumber,
     args.file.path,
@@ -666,6 +683,7 @@ function getPRFileContentCacheKey(args: {
 }
 
 function loadPRFileContents(args: {
+  repoId?: string
   repoPath: string
   prNumber: number
   file: GitHubPRFile
@@ -678,16 +696,33 @@ function loadPRFileContents(args: {
     touchPRFileContentCache(cacheKey, cached)
     return Promise.resolve(cached)
   }
-  const request = window.api.gh
-    .prFileContents({
-      repoPath: args.repoPath,
-      prNumber: args.prNumber,
-      path: args.file.path,
-      oldPath: args.file.oldPath,
-      status: args.file.status,
-      headSha: args.headSha,
-      baseSha: args.baseSha
-    })
+  const target = getRuntimeTargetForRepoId(args.repoId)
+  const request = (
+    target
+      ? callRuntimeRpc<GitHubPRFileContents>(
+          target,
+          'github.prFileContents',
+          {
+            repo: args.repoId,
+            prNumber: args.prNumber,
+            path: args.file.path,
+            oldPath: args.file.oldPath,
+            status: args.file.status,
+            headSha: args.headSha,
+            baseSha: args.baseSha
+          },
+          { timeoutMs: 30_000 }
+        )
+      : window.api.gh.prFileContents({
+          repoPath: args.repoPath,
+          prNumber: args.prNumber,
+          path: args.file.path,
+          oldPath: args.file.oldPath,
+          status: args.file.status,
+          headSha: args.headSha,
+          baseSha: args.baseSha
+        })
+  )
     .then((contents) => {
       touchPRFileContentCache(cacheKey, contents)
       return contents
@@ -700,8 +735,143 @@ function loadPRFileContents(args: {
   return request
 }
 
+function getRuntimeTargetForRepoId(repoId: string | null | undefined) {
+  if (!repoId) {
+    return null
+  }
+  const state = useAppStore.getState()
+  const target = getActiveRuntimeTarget(state.settings)
+  if (target.kind !== 'environment') {
+    return null
+  }
+  return state.repos.some((repo) => repo.id === repoId) ? target : null
+}
+
+function addIssueCommentForRepo(args: {
+  repoId?: string
+  repoPath: string
+  number: number
+  body: string
+  type?: 'issue' | 'pr'
+}): Promise<Awaited<ReturnType<typeof window.api.gh.addIssueComment>>> {
+  const target = getRuntimeTargetForRepoId(args.repoId)
+  if (target) {
+    return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.addIssueComment>>>(
+      target,
+      'github.addIssueComment',
+      { repo: args.repoId, number: args.number, body: args.body, type: args.type },
+      { timeoutMs: 30_000 }
+    )
+  }
+  return window.api.gh.addIssueComment({
+    repoPath: args.repoPath,
+    number: args.number,
+    body: args.body,
+    type: args.type
+  })
+}
+
+function addPRReviewCommentForRepo(args: {
+  repoId?: string
+  repoPath: string
+  prNumber: number
+  commitId: string
+  path: string
+  line: number
+  startLine?: number
+  body: string
+}): Promise<Awaited<ReturnType<typeof window.api.gh.addPRReviewComment>>> {
+  const target = getRuntimeTargetForRepoId(args.repoId)
+  if (target) {
+    return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.addPRReviewComment>>>(
+      target,
+      'github.addPRReviewComment',
+      {
+        repo: args.repoId,
+        prNumber: args.prNumber,
+        commitId: args.commitId,
+        path: args.path,
+        line: args.line,
+        startLine: args.startLine,
+        body: args.body
+      },
+      { timeoutMs: 30_000 }
+    )
+  }
+  return window.api.gh.addPRReviewComment({
+    repoPath: args.repoPath,
+    prNumber: args.prNumber,
+    commitId: args.commitId,
+    path: args.path,
+    line: args.line,
+    startLine: args.startLine,
+    body: args.body
+  })
+}
+
+function addPRReviewCommentReplyForRepo(args: {
+  repoId?: string
+  repoPath: string
+  prNumber: number
+  commentId: number
+  body: string
+  threadId?: string
+  path?: string
+  line?: number
+}): Promise<Awaited<ReturnType<typeof window.api.gh.addPRReviewCommentReply>>> {
+  const target = getRuntimeTargetForRepoId(args.repoId)
+  if (target) {
+    return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.addPRReviewCommentReply>>>(
+      target,
+      'github.addPRReviewCommentReply',
+      {
+        repo: args.repoId,
+        prNumber: args.prNumber,
+        commentId: args.commentId,
+        body: args.body,
+        threadId: args.threadId,
+        path: args.path,
+        line: args.line
+      },
+      { timeoutMs: 30_000 }
+    )
+  }
+  return window.api.gh.addPRReviewCommentReply({
+    repoPath: args.repoPath,
+    prNumber: args.prNumber,
+    commentId: args.commentId,
+    body: args.body,
+    threadId: args.threadId,
+    path: args.path,
+    line: args.line
+  })
+}
+
+function getWorkItemDetailsForRepo(args: {
+  repoId?: string
+  repoPath: string
+  number: number
+  type: 'issue' | 'pr'
+}): Promise<GitHubWorkItemDetails | null> {
+  const target = getRuntimeTargetForRepoId(args.repoId)
+  if (target) {
+    return callRuntimeRpc<GitHubWorkItemDetails | null>(
+      target,
+      'github.workItemDetails',
+      { repo: args.repoId, number: args.number, type: args.type },
+      { timeoutMs: 30_000 }
+    )
+  }
+  return window.api.gh.workItemDetails({
+    repoPath: args.repoPath,
+    number: args.number,
+    type: args.type
+  })
+}
+
 function PRFileRow({
   file,
+  repoId,
   repoPath,
   prNumber,
   headSha,
@@ -728,6 +898,7 @@ function PRFileRow({
         setLoading(true)
         setError(null)
         loadPRFileContents({
+          repoId,
           repoPath,
           prNumber,
           file,
@@ -746,7 +917,7 @@ function PRFileRow({
       }
       return next
     })
-  }, [baseSha, canLoadDiff, contents, file, headSha, loading, prNumber, repoPath])
+  }, [baseSha, canLoadDiff, contents, file, headSha, loading, prNumber, repoId, repoPath])
 
   const language = useMemo(() => detectLanguage(file.path), [file.path])
   const modelKey = `gh-dialog:pr:${prNumber}:${file.path}`
@@ -764,7 +935,8 @@ function PRFileRow({
         toast.error('Unable to comment without the PR head SHA.')
         return false
       }
-      const result = await window.api.gh.addPRReviewComment({
+      const result = await addPRReviewCommentForRepo({
+        repoId,
         repoPath,
         prNumber,
         commitId: headSha,
@@ -781,7 +953,7 @@ function PRFileRow({
       toast.success('Review comment added.')
       return true
     },
-    [file.path, headSha, onCommentAdded, prNumber, repoPath]
+    [file.path, headSha, onCommentAdded, prNumber, repoId, repoPath]
   )
 
   return (
@@ -1149,6 +1321,7 @@ function CommentCodeContext({
 
 function ConversationTab({
   item,
+  repoId,
   repoPath,
   body,
   comments,
@@ -1162,6 +1335,7 @@ function ConversationTab({
   onCommentAdded
 }: {
   item: GitHubWorkItem
+  repoId?: string
   repoPath: string | null
   body: string
   comments: PRComment[]
@@ -1174,10 +1348,11 @@ function ConversationTab({
   onUse: (item: GitHubWorkItem) => void
   onCommentAdded: (comment: PRComment) => void
 }): React.JSX.Element {
+  const settings = useAppStore((s) => s.settings)
   const authorLabel = item.author ?? 'unknown'
   const [replyingTo, setReplyingTo] = useState<number | null>(null)
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
-  const repoAssignees = useRepoAssignees(repoPath)
+  const repoAssignees = useRepoAssignees(repoPath, repoId, settings)
   const commentCounts = useMemo(() => getPRCommentAudienceCounts(comments), [comments])
   const visibleComments = useMemo(
     () => filterPRCommentsByAudience(comments, commentFilter),
@@ -1209,7 +1384,8 @@ function ConversationTab({
       }
       const result =
         comment.path && item.type === 'pr'
-          ? await window.api.gh.addPRReviewCommentReply({
+          ? await addPRReviewCommentReplyForRepo({
+              repoId,
               repoPath,
               prNumber: item.number,
               commentId: comment.id,
@@ -1218,7 +1394,8 @@ function ConversationTab({
               path: comment.path,
               line: comment.line
             })
-          : await window.api.gh.addIssueComment({
+          : await addIssueCommentForRepo({
+              repoId,
               repoPath,
               number: item.number,
               body: `@${comment.author} ${replyBody}`,
@@ -1234,7 +1411,7 @@ function ConversationTab({
       toast.success('Reply posted.')
       return true
     },
-    [item.number, item.type, onCommentAdded, repoPath]
+    [item.number, item.type, onCommentAdded, repoId, repoPath]
   )
 
   const startWorkspaceButton = (
@@ -1483,6 +1660,7 @@ function ConversationTab({
         {repoPath && (
           <GHCommentComposer
             className="mt-1"
+            repoId={repoId}
             repoPath={repoPath}
             issueNumber={item.number}
             itemType={item.type}
@@ -1798,18 +1976,29 @@ function MentionTextarea({
 // to a thrown rejection so the existing `useImmediateMutation` flow
 // (which expects throws on failure) continues to work unchanged.
 async function runIssueUpdate(args: {
+  repoId?: string
   repoPath: string | null
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
   number: number
   updates: Parameters<typeof window.api.gh.updateIssue>[0]['updates']
 }): Promise<void> {
   if (args.projectOrigin) {
-    const res = await window.api.gh.updateIssueBySlug({
+    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    const updateArgs = {
       owner: args.projectOrigin.owner,
       repo: args.projectOrigin.repo,
       number: args.number,
       updates: args.updates
-    })
+    }
+    const res =
+      target.kind === 'environment'
+        ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updateIssueBySlug>>>(
+            target,
+            'github.project.updateIssueBySlug',
+            updateArgs,
+            { timeoutMs: 30_000 }
+          )
+        : await window.api.gh.updateIssueBySlug(updateArgs)
     if (!res.ok) {
       throw new Error(res.error.message)
     }
@@ -1817,6 +2006,19 @@ async function runIssueUpdate(args: {
   }
   if (!args.repoPath) {
     throw new Error('No repo context available for this edit.')
+  }
+  const target = getRuntimeTargetForRepoId(args.repoId)
+  if (target) {
+    const res = await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updateIssue>>>(
+      target,
+      'github.updateIssue',
+      { repo: args.repoId, number: args.number, updates: args.updates },
+      { timeoutMs: 30_000 }
+    )
+    if (!res.ok) {
+      throw new Error(res.error)
+    }
+    return
   }
   await window.api.gh.updateIssue({
     repoPath: args.repoPath,
@@ -1858,6 +2060,7 @@ function GHEditSection({
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
   const { isPending, run } = useImmediateMutation()
+  const settings = useAppStore((s) => s.settings)
 
   // Why: when the dialog opens from a Project view, mutations route through
   // *BySlug IPCs and we must keep `projectViewCache` in sync alongside
@@ -1879,11 +2082,19 @@ function GHEditSection({
   // values from a different repo than the writes target.
   const slugOwner = projectOrigin?.owner ?? null
   const slugRepo = projectOrigin?.repo ?? null
-  const repoLabelsByPath = useRepoLabels(projectOrigin ? null : repoPath)
-  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo)
+  const repoLabelsByPath = useRepoLabels(
+    projectOrigin ? null : repoPath,
+    projectOrigin ? null : item.repoId,
+    settings
+  )
+  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo, settings)
   const repoLabels = projectOrigin ? repoLabelsBySlug : repoLabelsByPath
-  const repoAssigneesByPath = useRepoAssignees(projectOrigin ? null : repoPath)
-  const repoAssigneesBySlug = useRepoAssigneesBySlug(slugOwner, slugRepo, assignees)
+  const repoAssigneesByPath = useRepoAssignees(
+    projectOrigin ? null : repoPath,
+    projectOrigin ? null : item.repoId,
+    settings
+  )
+  const repoAssigneesBySlug = useRepoAssigneesBySlug(slugOwner, slugRepo, assignees, settings)
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath
 
   // Why: sync local assignees when item changes or when the detail fetch
@@ -1910,6 +2121,7 @@ function GHEditSection({
       run('state', {
         mutate: () =>
           runIssueUpdate({
+            repoId: item.repoId,
             repoPath,
             projectOrigin,
             number: item.number,
@@ -1936,6 +2148,7 @@ function GHEditSection({
     [
       item.id,
       item.number,
+      item.repoId,
       localState,
       repoPath,
       projectOrigin,
@@ -1957,6 +2170,7 @@ function GHEditSection({
         run('labels', {
           mutate: () =>
             runIssueUpdate({
+              repoId: item.repoId,
               repoPath,
               projectOrigin,
               number: item.number,
@@ -1981,6 +2195,7 @@ function GHEditSection({
         run('labels', {
           mutate: () =>
             runIssueUpdate({
+              repoId: item.repoId,
               repoPath,
               projectOrigin,
               number: item.number,
@@ -2006,6 +2221,7 @@ function GHEditSection({
     [
       item.id,
       item.number,
+      item.repoId,
       localLabels,
       repoPath,
       projectOrigin,
@@ -2030,6 +2246,7 @@ function GHEditSection({
         run('assignees', {
           mutate: () =>
             runIssueUpdate({
+              repoId: item.repoId,
               repoPath,
               projectOrigin,
               number: item.number,
@@ -2052,6 +2269,7 @@ function GHEditSection({
         run('assignees', {
           mutate: () =>
             runIssueUpdate({
+              repoId: item.repoId,
               repoPath,
               projectOrigin,
               number: item.number,
@@ -2072,7 +2290,16 @@ function GHEditSection({
         })
       }
     },
-    [item.number, repoPath, projectOrigin, localAssignees, patchProjectRowIfNeeded, run, onMutated]
+    [
+      item.number,
+      item.repoId,
+      repoPath,
+      projectOrigin,
+      localAssignees,
+      patchProjectRowIfNeeded,
+      run,
+      onMutated
+    ]
   )
 
   if (item.type === 'pr') {
@@ -2267,6 +2494,7 @@ function GHEditSection({
 
 function GHCommentComposer({
   className,
+  repoId,
   repoPath,
   issueNumber,
   itemType,
@@ -2274,6 +2502,7 @@ function GHCommentComposer({
   onCommentAdded
 }: {
   className?: string
+  repoId?: string
   repoPath: string
   issueNumber: number
   itemType: 'issue' | 'pr'
@@ -2300,7 +2529,8 @@ function GHCommentComposer({
     }
     setSubmitting(true)
     try {
-      const result = await window.api.gh.addIssueComment({
+      const result = await addIssueCommentForRepo({
+        repoId,
         repoPath,
         number: issueNumber,
         body: trimmed,
@@ -2320,7 +2550,7 @@ function GHCommentComposer({
     } finally {
       setSubmitting(false)
     }
-  }, [autoGrow, body, repoPath, issueNumber, itemType, onCommentAdded])
+  }, [autoGrow, body, repoId, repoPath, issueNumber, itemType, onCommentAdded])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -2453,17 +2683,23 @@ export default function GitHubItemDialog({
     }
     return s.repos.find((r) => r.path === repoPath)?.issueSourcePreference
   })
+  const runtimeScope = useAppStore((s) =>
+    s.settings?.activeRuntimeEnvironmentId
+      ? `runtime:${s.settings.activeRuntimeEnvironmentId}`
+      : 'local'
+  )
   const detailsCacheKey = useMemo(() => {
     if (!workItem || !repoPath) {
       return null
     }
     return getWorkItemDetailsCacheKey({
+      runtimeScope,
       repoPath,
       issueSourcePreference,
       type: workItem.type,
       number: workItem.number
     })
-  }, [repoPath, workItem, issueSourcePreference])
+  }, [runtimeScope, repoPath, workItem, issueSourcePreference])
 
   // Why: reset lifted edit state when the dialog switches items or when the
   // same item receives an optimistic cache patch from the surrounding table.
@@ -2605,7 +2841,8 @@ export default function GitHubItemDialog({
     // racing two `gh` subprocesses against each other.
     const inflight: Promise<GitHubWorkItemDetails | null> =
       cached?.pending ??
-      window.api.gh.workItemDetails({
+      getWorkItemDetailsForRepo({
+        repoId: workItem.repoId,
         repoPath,
         number: workItem.number,
         type: workItem.type
@@ -2859,6 +3096,7 @@ export default function GitHubItemDialog({
                     <TabsContent value="conversation" className="mt-0">
                       <ConversationTab
                         item={workItem}
+                        repoId={workItem.repoId}
                         repoPath={repoPath}
                         body={body}
                         comments={comments}
@@ -2937,6 +3175,7 @@ export default function GitHubItemDialog({
                                 <PRFileRow
                                   key={file.path}
                                   file={file}
+                                  repoId={workItem.repoId}
                                   repoPath={repoPath ?? ''}
                                   prNumber={workItem.number}
                                   headSha={details?.headSha}
@@ -2947,6 +3186,7 @@ export default function GitHubItemDialog({
                             ) : (
                               <PRDiffTreeView
                                 files={files}
+                                repoId={workItem.repoId}
                                 repoPath={repoPath ?? ''}
                                 prNumber={workItem.number}
                                 headSha={details?.headSha}

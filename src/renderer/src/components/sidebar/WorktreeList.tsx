@@ -45,6 +45,7 @@ import {
   pruneWorktreeSelection,
   updateWorktreeSelection
 } from './worktree-multi-selection'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 
 // How long to wait after a sortEpoch bump before actually re-sorting.
 // Prevents jarring position shifts when background events (AI starting work,
@@ -820,7 +821,15 @@ const WorktreeList = React.memo(function WorktreeList() {
     if (sortBy !== 'smart' || sortedIds.length === 0 || !sessionHasHadPty.current) {
       return
     }
-    void window.api.worktrees.persistSortOrder({ orderedIds: sortedIds })
+    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    void (target.kind === 'environment'
+      ? callRuntimeRpc(
+          target,
+          'worktree.persistSortOrder',
+          { orderedIds: sortedIds },
+          { timeoutMs: 15_000 }
+        )
+      : window.api.worktrees.persistSortOrder({ orderedIds: sortedIds }))
   }, [sortedIds, sortBy])
 
   // Flatten, filter, and apply stable sort order via the shared utility so

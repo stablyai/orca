@@ -15,6 +15,7 @@ import {
 } from '@/lib/orchestration-setup-state'
 import { notifyProjectNotesSelectionChanged } from '@/lib/open-project-notes-tab'
 import { requestProjectNotesTabClose } from '@/lib/project-notes-close-request'
+import { linkRuntimeProjectNote, showRuntimeProjectNote } from '@/runtime/runtime-notes-client'
 import { useAppStore } from '@/store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { TerminalTab } from '../../../../shared/types'
@@ -213,10 +214,11 @@ export function FloatingTerminalPanel({
         .find((candidate) => candidate.id === activeWorktreeId)
       const projectId =
         state.repos.find((candidate) => candidate.id === worktree?.repoId)?.id ?? worktree?.repoId
+      const settings = state.settings
       let label = 'Project Notes'
       if (noteId && projectId) {
         try {
-          const result = await window.api.notes.show({
+          const result = await showRuntimeProjectNote(settings, {
             projectId,
             worktreeId: activeWorktreeId,
             note: noteId
@@ -226,7 +228,7 @@ export function FloatingTerminalPanel({
           label = 'Project Notes'
         }
         if (projectId) {
-          await window.api.notes.link({
+          await linkRuntimeProjectNote(settings, {
             projectId,
             worktreeId: activeWorktreeId,
             note: noteId,

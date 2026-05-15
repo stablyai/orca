@@ -220,10 +220,14 @@ describe('getDiff', () => {
 
     const result = await getDiff('/repo', 'src/file.ts', false)
 
-    expect(gitExecFileAsyncBufferMock).toHaveBeenNthCalledWith(2, ['show', 'HEAD:src/file.ts'], {
-      cwd: '/repo',
-      maxBuffer: 10 * 1024 * 1024
-    })
+    expect(gitExecFileAsyncBufferMock).toHaveBeenNthCalledWith(
+      2,
+      ['show', '--end-of-options', 'HEAD:src/file.ts'],
+      {
+        cwd: '/repo',
+        maxBuffer: 10 * 1024 * 1024
+      }
+    )
     expect(result.originalContent).toBe('head-content\n')
     expect(result.modifiedContent).toBe('working-tree-content')
   })

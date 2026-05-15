@@ -4,7 +4,7 @@ export type OpenHttpLinkOptions = {
 }
 
 type StoreAccessor = () => {
-  settings?: { openLinksInApp?: boolean } | null
+  settings?: { openLinksInApp?: boolean; activeRuntimeEnvironmentId?: string | null } | null
   setActiveWorktree: (worktreeId: string) => void
   createBrowserTab: (worktreeId: string, url: string, opts: { activate: boolean }) => unknown
 }
@@ -28,8 +28,12 @@ export function registerHttpLinkStoreAccessor(fn: StoreAccessor): void {
 export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void {
   const { worktreeId, forceSystemBrowser } = opts
   const state = storeAccessor?.()
+  const remoteRuntimeActive = Boolean(state?.settings?.activeRuntimeEnvironmentId?.trim())
   const routeToOrca =
-    !forceSystemBrowser && Boolean(worktreeId) && state?.settings?.openLinksInApp !== false
+    !remoteRuntimeActive &&
+    !forceSystemBrowser &&
+    Boolean(worktreeId) &&
+    state?.settings?.openLinksInApp !== false
 
   if (routeToOrca && worktreeId && state) {
     // Why: http clicks from inside a worktree should not push a worktree-switch

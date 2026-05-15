@@ -4,6 +4,7 @@ import {
   BarChart3,
   Bell,
   Bot,
+  Cable,
   FlaskConical,
   GitBranch,
   Globe,
@@ -59,11 +60,16 @@ import {
 } from './DeveloperPermissionsPane'
 import { ComputerUsePane, COMPUTER_USE_PANE_SEARCH_ENTRIES } from './ComputerUsePane'
 import { MobileSettingsPane, MOBILE_SETTINGS_PANE_SEARCH_ENTRIES } from './MobileSettingsPane'
+import {
+  RuntimeEnvironmentsPane,
+  RUNTIME_ENVIRONMENTS_SEARCH_ENTRY
+} from './RuntimeEnvironmentsPane'
 import { PrivacyPane } from './PrivacyPane'
 import { PRIVACY_PANE_SEARCH_ENTRIES } from './privacy-search'
 import { SettingsSidebar } from './SettingsSidebar'
 import { SettingsSection } from './SettingsSection'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
+import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 
 type SettingsNavTarget =
   | 'general'
@@ -84,6 +90,7 @@ type SettingsNavTarget =
   | 'experimental'
   | 'agents'
   | 'orchestration'
+  | 'servers'
   | 'mobile'
   | 'repo'
 
@@ -173,6 +180,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
 function Settings(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const switchRuntimeEnvironment = useAppStore((s) => s.switchRuntimeEnvironment)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const closeSettingsPage = useAppStore((s) => s.closeSettingsPage)
   const repos = useAppStore((s) => s.repos)
@@ -355,7 +363,7 @@ function Settings(): React.JSX.Element {
             return [repo.id, { hasHooks: false, hooks: null, mayNeedUpdate: false }] as const
           }
           try {
-            const result = await window.api.hooks.check({ repoId: repo.id })
+            const result = await checkRuntimeHooks(settings, repo.id)
             return [repo.id, result] as const
           } catch {
             return [repo.id, { hasHooks: false, hooks: null, mayNeedUpdate: false }] as const
@@ -382,7 +390,7 @@ function Settings(): React.JSX.Element {
     return () => {
       stale = true
     }
-  }, [repos])
+  }, [repos, settings])
 
   const applyTheme = useCallback((theme: 'system' | 'dark' | 'light') => {
     applyDocumentTheme(theme)
@@ -456,6 +464,14 @@ function Settings(): React.JSX.Element {
         searchEntries: ORCHESTRATION_PANE_SEARCH_ENTRIES
       },
       {
+        id: 'servers',
+        title: 'Servers',
+        description: 'Run this client locally or through a remote Orca server.',
+        icon: Server,
+        searchEntries: [RUNTIME_ENVIRONMENTS_SEARCH_ENTRY],
+        badge: 'Beta'
+      },
+      {
         id: 'mobile',
         title: 'Mobile',
         description: 'Control terminals and agents from your phone.',
@@ -522,7 +538,7 @@ function Settings(): React.JSX.Element {
         id: 'ssh',
         title: 'SSH',
         description: 'Remote SSH connections.',
-        icon: Server,
+        icon: Cable,
         searchEntries: SSH_PANE_SEARCH_ENTRIES
       },
       {
@@ -824,6 +840,19 @@ function Settings(): React.JSX.Element {
                   searchEntries={ORCHESTRATION_PANE_SEARCH_ENTRIES}
                 >
                   <OrchestrationPane />
+                </SettingsSection>
+
+                <SettingsSection
+                  id="servers"
+                  title="Servers"
+                  badge="Beta"
+                  description="Run this desktop client locally or through a remote Orca server."
+                  searchEntries={[RUNTIME_ENVIRONMENTS_SEARCH_ENTRY]}
+                >
+                  <RuntimeEnvironmentsPane
+                    settings={settings}
+                    switchRuntimeEnvironment={switchRuntimeEnvironment}
+                  />
                 </SettingsSection>
 
                 <SettingsSection

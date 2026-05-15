@@ -435,6 +435,7 @@ export type PersistedOpenFile = {
   worktreeId: string
   language: string
   isPreview?: boolean
+  runtimeEnvironmentId?: string
 }
 
 export type WorkspaceSessionState = {
@@ -1382,6 +1383,9 @@ export type GlobalSettings = {
    *  configuration surface and edge cases (conflicts with existing paths,
    *  cleanup on worktree delete) are still being worked out. */
   experimentalWorktreeSymlinks: boolean
+  /** Active non-local runtime environment for client-routed RPC. `null`
+   *  preserves the current local desktop behavior. */
+  activeRuntimeEnvironmentId?: string | null
   /** GitHub Project mode state — pinned/recent/active project, last selected
    *  view per project. Optional because profiles created before this feature
    *  landed won't have the key; `getDefaultSettings()` hydrates the empty

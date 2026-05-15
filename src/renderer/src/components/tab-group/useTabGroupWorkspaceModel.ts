@@ -16,6 +16,7 @@ import { requestEditorFileClose } from '../editor/editor-autosave'
 import { focusTerminalTabSurface } from '../../lib/focus-terminal-tab-surface'
 import { getProjectNotesEntityId } from '../../lib/open-project-notes-tab'
 import { requestProjectNotesTabClose } from '../../lib/project-notes-close-request'
+import { linkRuntimeProjectNote, showRuntimeProjectNote } from '@/runtime/runtime-notes-client'
 
 export type GroupEditorItem = OpenFile & { tabId: string }
 export type GroupBrowserItem = BrowserTabState & { tabId: string }
@@ -484,7 +485,8 @@ export function useTabGroupWorkspaceModel({
       closeToRight,
       createSplitGroup,
       newBrowserTab: () => {
-        const defaultUrl = useAppStore.getState().browserDefaultUrl ?? 'about:blank'
+        const state = useAppStore.getState()
+        const defaultUrl = state.browserDefaultUrl ?? 'about:blank'
         createBrowserTab(worktreeId, defaultUrl, {
           title: 'New Browser Tab',
           focusAddressBar: true
@@ -513,7 +515,13 @@ export function useTabGroupWorkspaceModel({
         }
         try {
           const connectionId = getConnectionId(worktreeId) ?? undefined
-          const fileInfo = await createUntitledMarkdownFile(path, worktreeId, connectionId)
+          const settings = useAppStore.getState().settings
+          const fileInfo = await createUntitledMarkdownFile(
+            path,
+            worktreeId,
+            connectionId,
+            settings
+          )
           openFile(fileInfo, { preview: false, targetGroupId: groupId })
         } catch (err) {
           toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))
@@ -524,9 +532,19 @@ export function useTabGroupWorkspaceModel({
         let label = 'Project Notes'
         if (noteId) {
           try {
-            const result = await window.api.notes.show({ projectId, worktreeId, note: noteId })
+            const settings = useAppStore.getState().settings
+            const result = await showRuntimeProjectNote(settings, {
+              projectId,
+              worktreeId,
+              note: noteId
+            })
             label = result.note.title
-            await window.api.notes.link({ projectId, worktreeId, note: noteId, kind: 'active' })
+            await linkRuntimeProjectNote(settings, {
+              projectId,
+              worktreeId,
+              note: noteId,
+              kind: 'active'
+            })
           } catch {
             label = 'Project Notes'
           }

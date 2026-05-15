@@ -38,6 +38,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { listRuntimeProjectNotes } from '@/runtime/runtime-notes-client'
 import type { NoteSummary } from '../../../../shared/notes-types'
 
 const isMac = navigator.userAgent.includes('Mac')
@@ -173,6 +174,7 @@ function TabBarInner({
   const defaultWindowsPowerShellImplementation = useAppStore(
     (s) => s.settings?.terminalWindowsPowerShellImplementation ?? 'auto'
   )
+  const settings = useAppStore((s) => s.settings)
   const [pwshAvailable, setPwshAvailable] = useState(false)
   const [projectNotes, setProjectNotes] = useState<NoteSummary[]>([])
   const [projectNotesLoading, setProjectNotesLoading] = useState(false)
@@ -237,7 +239,7 @@ function TabBarInner({
       setProjectNotesLoading(true)
       setProjectNotesError(null)
       try {
-        const result = await window.api.notes.list({
+        const result = await listRuntimeProjectNotes(settings, {
           projectId: context.projectId,
           worktreeId: context.worktreeId,
           limit: 100
@@ -250,7 +252,7 @@ function TabBarInner({
       }
     }
     void refreshProjectNotes()
-  }, [newTabMenuOpen, onNewNotesTab, targetNotesWorktreeId])
+  }, [newTabMenuOpen, onNewNotesTab, settings, targetNotesWorktreeId])
 
   const terminalMap = useMemo(() => new Map(tabs.map((t) => [t.id, t])), [tabs])
   const editorMap = useMemo(

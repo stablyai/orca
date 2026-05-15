@@ -4,6 +4,20 @@ import type { AppState } from '../types'
 import { createHostedReviewSlice } from './hosted-review'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 
+const runtimeRpc = vi.hoisted(() => ({
+  callRuntimeRpc: vi.fn()
+}))
+
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: runtimeRpc.callRuntimeRpc,
+  getActiveRuntimeTarget: (
+    settings: { activeRuntimeEnvironmentId?: string | null } | null | undefined
+  ) => {
+    const environmentId = settings?.activeRuntimeEnvironmentId?.trim()
+    return environmentId ? { kind: 'environment', environmentId } : { kind: 'local' }
+  }
+}))
+
 const mockApi = {
   hostedReview: {
     forBranch: vi.fn()
@@ -12,9 +26,12 @@ const mockApi = {
 
 globalThis.window = { api: mockApi } as never
 
-function makeStore() {
-  return create<Pick<AppState, 'hostedReviewCache' | 'fetchHostedReviewForBranch'>>()((...args) =>
-    createHostedReviewSlice(...(args as Parameters<typeof createHostedReviewSlice>))
+function makeStore(settings: AppState['settings'] = null) {
+  return create<Pick<AppState, 'hostedReviewCache' | 'fetchHostedReviewForBranch' | 'settings'>>()(
+    (...args) => ({
+      settings,
+      ...createHostedReviewSlice(...(args as Parameters<typeof createHostedReviewSlice>))
+    })
   )
 }
 
@@ -32,6 +49,7 @@ const review: HostedReviewInfo = {
 describe('hosted review slice', () => {
   beforeEach(() => {
     mockApi.hostedReview.forBranch.mockReset()
+    runtimeRpc.callRuntimeRpc.mockReset()
   })
 
   it('fetches and caches branch review status through the common IPC surface', async () => {
@@ -55,5 +73,32 @@ describe('hosted review slice', () => {
       linkedGitLabMR: 5,
       linkedBitbucketPR: null
     })
+  })
+
+  it('routes active runtime review lookups through runtime RPC', async () => {
+    runtimeRpc.callRuntimeRpc.mockResolvedValueOnce(review)
+    const store = makeStore({
+      activeRuntimeEnvironmentId: 'env-win'
+    } as AppState['settings'])
+
+    await expect(
+      store.getState().fetchHostedReviewForBranch('C:\\repo', 'feature/windows', {
+        linkedGitHubPR: 12
+      })
+    ).resolves.toEqual(review)
+
+    expect(mockApi.hostedReview.forBranch).not.toHaveBeenCalled()
+    expect(runtimeRpc.callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'env-win' },
+      'hostedReview.forBranch',
+      {
+        repo: 'C:\\repo',
+        branch: 'feature/windows',
+        linkedGitHubPR: 12,
+        linkedGitLabMR: null,
+        linkedBitbucketPR: null
+      },
+      { timeoutMs: 30_000 }
+    )
   })
 })

@@ -33,6 +33,8 @@ import type {
   WorktreeRemoteBranchConflictEvent
 } from '../shared/types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
+import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
+import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
 import type {
   RuntimeMobileMarkdownRequest,
   RuntimeMobileMarkdownResponse
@@ -98,6 +100,8 @@ import {
   ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
   ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT
 } from '../shared/updater-renderer-events'
+import { subscribeRuntimeEnvironmentFromPreload } from './runtime-environment-subscriptions'
+import type { RuntimeEnvironmentSubscriptionHandle } from './runtime-environment-subscriptions'
 import type { HostedReviewForBranchArgs } from '../shared/hosted-review'
 
 type NativeDropResolution =
@@ -1631,6 +1635,11 @@ const api = {
       ipcRenderer.invoke('fs:createDir', args),
     rename: (args: { oldPath: string; newPath: string; connectionId?: string }): Promise<void> =>
       ipcRenderer.invoke('fs:rename', args),
+    copy: (args: {
+      sourcePath: string
+      destinationPath: string
+      connectionId?: string
+    }): Promise<void> => ipcRenderer.invoke('fs:copy', args),
     deletePath: (args: {
       targetPath: string
       connectionId?: string
@@ -1663,6 +1672,7 @@ const api = {
       sourcePaths: string[]
       destDir: string
       connectionId?: string
+      ensureDir?: boolean
     }): Promise<{
       results: (
         | {
@@ -1684,6 +1694,32 @@ const api = {
           }
       )[]
     }> => ipcRenderer.invoke('fs:importExternalPaths', args),
+    stageExternalPathsForRuntimeUpload: (args: {
+      sourcePaths: string[]
+    }): Promise<{
+      sources: (
+        | {
+            sourcePath: string
+            status: 'staged'
+            name: string
+            kind: 'file' | 'directory'
+            entries: (
+              | { relativePath: string; kind: 'directory' }
+              | { relativePath: string; kind: 'file'; contentBase64: string }
+            )[]
+          }
+        | {
+            sourcePath: string
+            status: 'skipped'
+            reason: 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
+          }
+        | {
+            sourcePath: string
+            status: 'failed'
+            reason: string
+          }
+      )[]
+    }> => ipcRenderer.invoke('fs:stageExternalPathsForRuntimeUpload', args),
     resolveDroppedPathsForAgent: (args: {
       paths: string[]
       worktreePath: string
@@ -2277,6 +2313,8 @@ const api = {
     syncWindowGraph: (graph: RuntimeSyncWindowGraph): Promise<RuntimeStatus> =>
       ipcRenderer.invoke('runtime:syncWindowGraph', graph),
     getStatus: (): Promise<RuntimeStatus> => ipcRenderer.invoke('runtime:getStatus'),
+    call: (args: { method: string; params?: unknown }): Promise<RuntimeRpcResponse<unknown>> =>
+      ipcRenderer.invoke('runtime:call', args),
     getTerminalFitOverrides: (): Promise<
       { ptyId: string; mode: 'mobile-fit'; cols: number; rows: number }[]
     > => ipcRenderer.invoke('runtime:getTerminalFitOverrides'),
@@ -2313,6 +2351,47 @@ const api = {
       ipcRenderer.on('runtime:terminalDriverChanged', listener)
       return () => ipcRenderer.removeListener('runtime:terminalDriverChanged', listener)
     }
+  },
+
+  runtimeEnvironments: {
+    list: (): Promise<PublicKnownRuntimeEnvironment[]> =>
+      ipcRenderer.invoke('runtimeEnvironments:list'),
+    addFromPairingCode: (args: {
+      name: string
+      pairingCode: string
+    }): Promise<{ environment: PublicKnownRuntimeEnvironment }> =>
+      ipcRenderer.invoke('runtimeEnvironments:addFromPairingCode', args),
+    resolve: (args: { selector: string }): Promise<PublicKnownRuntimeEnvironment> =>
+      ipcRenderer.invoke('runtimeEnvironments:resolve', args),
+    remove: (args: { selector: string }): Promise<{ removed: PublicKnownRuntimeEnvironment }> =>
+      ipcRenderer.invoke('runtimeEnvironments:remove', args),
+    getStatus: (args: {
+      selector: string
+      timeoutMs?: number
+    }): Promise<RuntimeRpcResponse<RuntimeStatus>> =>
+      ipcRenderer.invoke('runtimeEnvironments:getStatus', args),
+    call: (args: {
+      selector: string
+      method: string
+      params?: unknown
+      timeoutMs?: number
+    }): Promise<RuntimeRpcResponse<unknown>> =>
+      ipcRenderer.invoke('runtimeEnvironments:call', args),
+    subscribe: async (
+      args: {
+        selector: string
+        method: string
+        params?: unknown
+        timeoutMs?: number
+      },
+      callbacks: {
+        onResponse: (response: RuntimeRpcResponse<unknown>) => void
+        onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
+        onError?: (error: { code: string; message: string }) => void
+        onClose?: () => void
+      }
+    ): Promise<RuntimeEnvironmentSubscriptionHandle> =>
+      subscribeRuntimeEnvironmentFromPreload(ipcRenderer, args, callbacks)
   },
 
   rateLimits: {

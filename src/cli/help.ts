@@ -8,7 +8,14 @@ Usage: orca <command> [options]
 
 Startup:
   open                      Launch Orca and wait for the runtime to be reachable
+  serve                     Start a headless Orca runtime server
   status                    Show app/runtime/graph readiness
+
+Environments:
+  environment add           Save a remote Orca runtime from a pairing code
+  environment list          List saved remote Orca runtimes
+  environment show          Show one saved remote Orca runtime
+  environment rm            Remove a saved remote Orca runtime
 
 Repos:
   repo list                 List repos registered in Orca
@@ -138,7 +145,12 @@ Browser Automation:
 
 Common Commands:
   orca open [--json]
+  orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--json]
   orca status [--json]
+  orca environment add --name <name> --pairing-code <code> [--json]
+  orca environment list [--json]
+  orca environment show --environment <selector> [--json]
+  orca environment rm --environment <selector> [--json]
   orca worktree list [--repo <selector>] [--limit <n>] [--json]
   orca worktree create --repo <selector> --name <name> [--base-branch <ref>] [--issue <number>] [--comment <text>] [--run-hooks] [--activate] [--json]
   orca worktree show --worktree <selector> [--json]
@@ -178,10 +190,13 @@ Wait Options:
 
 Output Options:
   --json                    Emit machine-readable JSON instead of human text
+  --pairing-code <code>      Connect to a remote Orca runtime using an orca://pair#... code
+  --environment <selector>   Connect using a saved environment id or name
   --help                    Show this help message
 
 Behavior:
   Most commands require a running Orca runtime. If Orca is not open yet, run \`orca open\` first.
+  Remote runtime access can also be supplied with ORCA_PAIRING_CODE or ORCA_ENVIRONMENT.
   Use selectors for discovery and handles for repeated live terminal operations.
 
 Browser Workflow:

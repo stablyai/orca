@@ -12,7 +12,11 @@ const mockApi = {
     prForBranch: vi.fn().mockResolvedValue(null),
     issue: vi.fn().mockResolvedValue(null),
     prChecks: vi.fn().mockResolvedValue([]),
-    listWorkItems: vi.fn()
+    listWorkItems: vi.fn(),
+    getProjectViewTable: vi.fn()
+  },
+  runtimeEnvironments: {
+    call: vi.fn()
   },
   cache: {
     getGitHub: vi.fn().mockResolvedValue(null),
@@ -265,6 +269,12 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
 describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockApi.runtimeEnvironments.call.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { items: [], sources: { issues: null, prs: null, upstreamCandidate: null } },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
   })
 
   it('stores resolved sources on the cache entry for the indicator to read', async () => {
@@ -341,6 +351,104 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(2)
     const after = store.getState().getWorkItemsSourcesAndError('/repo', 24, '')
     expect(after.error).toBeNull()
+  })
+
+  it('routes work item fetches through the active runtime environment', async () => {
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      repos: [
+        {
+          id: 'repo-id',
+          path: '/server/repo',
+          displayName: 'repo',
+          badgeColor: 'blue',
+          addedAt: 1
+        }
+      ]
+    } as Partial<AppState>)
+    mockApi.runtimeEnvironments.call.mockResolvedValueOnce({
+      id: 'rpc-1',
+      ok: true,
+      result: {
+        items: [{ type: 'issue', number: 7, title: 'Server issue', url: 'https://example.test/7' }],
+        sources: { issues: { owner: 'up', repo: 'r' }, prs: { owner: 'up', repo: 'r' } }
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    await store.getState().fetchWorkItems('repo-id', '/server/repo', 24, '')
+
+    expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
+    expect(mockApi.runtimeEnvironments.call).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'github.listWorkItems',
+      params: { repo: 'repo-id', limit: 24, query: undefined },
+      timeoutMs: 30_000
+    })
+    expect(store.getState().workItemsCache['/server/repo::24::'].data?.[0]).toMatchObject({
+      repoId: 'repo-id',
+      number: 7
+    })
+  })
+
+  it('routes project table fetches through the active runtime environment', async () => {
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' }
+    } as Partial<AppState>)
+    mockApi.runtimeEnvironments.call.mockResolvedValueOnce({
+      id: 'rpc-1',
+      ok: true,
+      result: {
+        ok: true,
+        data: {
+          project: {
+            id: 'project-1',
+            owner: 'acme',
+            ownerType: 'organization',
+            number: 1,
+            title: 'Roadmap',
+            url: 'https://github.com/orgs/acme/projects/1'
+          },
+          selectedView: {
+            id: 'view-1',
+            number: 1,
+            name: 'Table',
+            layout: 'TABLE_LAYOUT',
+            filter: '',
+            fields: [],
+            groupByFields: [],
+            sortByFields: []
+          },
+          rows: [],
+          totalCount: 0,
+          parentFieldDropped: false
+        }
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    const result = await store.getState().fetchProjectViewTable({
+      owner: 'acme',
+      ownerType: 'organization',
+      projectNumber: 1,
+      viewId: 'view-1'
+    })
+
+    expect(result.ok).toBe(true)
+    expect(mockApi.gh.getProjectViewTable).not.toHaveBeenCalled()
+    expect(mockApi.runtimeEnvironments.call).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'github.project.viewTable',
+      params: {
+        owner: 'acme',
+        ownerType: 'organization',
+        projectNumber: 1,
+        viewId: 'view-1'
+      },
+      timeoutMs: 60_000
+    })
   })
 })
 

@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: this suite covers relay filesystem RPCs,
+   file watcher lifecycle edges, and cross-platform path behavior together. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { FsHandler } from './fs-handler'
 import { RelayContext } from './context'
@@ -93,6 +95,7 @@ describe('FsHandler', () => {
     expect(methods).toContain('fs.deletePath')
     expect(methods).toContain('fs.createFile')
     expect(methods).toContain('fs.createDir')
+    expect(methods).toContain('fs.createDirNoClobber')
     expect(methods).toContain('fs.rename')
     expect(methods).toContain('fs.copy')
     expect(methods).toContain('fs.realpath')
@@ -268,6 +271,13 @@ describe('FsHandler', () => {
     expect(stats.isDirectory()).toBe(true)
   })
 
+  it('createDirNoClobber fails when the directory already exists', async () => {
+    const dirPath = path.join(tmpDir, 'existing')
+    mkdirSync(dirPath)
+
+    await expect(dispatcher.callRequest('fs.createDirNoClobber', { dirPath })).rejects.toThrow()
+  })
+
   it('rename moves files', async () => {
     const oldPath = path.join(tmpDir, 'old.txt')
     const newPath = path.join(tmpDir, 'new.txt')
@@ -289,6 +299,20 @@ describe('FsHandler', () => {
 
     const content = await fs.readFile(dst, 'utf-8')
     expect(content).toBe('original')
+  })
+
+  it('copy does not overwrite an existing destination', async () => {
+    const src = path.join(tmpDir, 'src.txt')
+    const dst = path.join(tmpDir, 'dst.txt')
+    writeFileSync(src, 'original')
+    writeFileSync(dst, 'existing')
+
+    await expect(
+      dispatcher.callRequest('fs.copy', { source: src, destination: dst })
+    ).rejects.toThrow('EEXIST')
+
+    const content = await fs.readFile(dst, 'utf-8')
+    expect(content).toBe('existing')
   })
 
   it('realpath resolves symlinks', async () => {
@@ -331,5 +355,45 @@ describe('FsHandler', () => {
     expect(secondUnsubscribe).not.toHaveBeenCalled()
     dispatcher.callNotification('fs.unwatch', { rootPath: tmpDir })
     expect(secondUnsubscribe).toHaveBeenCalled()
+  })
+
+  it('unsubscribes an active stale watch before replacing it', async () => {
+    const firstUnsubscribe = vi.fn()
+    const secondUnsubscribe = vi.fn()
+    mockSubscribe
+      .mockResolvedValueOnce({ unsubscribe: firstUnsubscribe })
+      .mockResolvedValueOnce({ unsubscribe: secondUnsubscribe })
+
+    let stale = false
+    await dispatcher.callRequest('fs.watch', { rootPath: tmpDir }, { isStale: () => stale })
+    stale = true
+    await dispatcher.callRequest('fs.watch', { rootPath: tmpDir }, { isStale: () => false })
+
+    expect(firstUnsubscribe).toHaveBeenCalled()
+    expect(secondUnsubscribe).not.toHaveBeenCalled()
+    dispatcher.callNotification('fs.unwatch', { rootPath: tmpDir })
+    expect(secondUnsubscribe).toHaveBeenCalled()
+  })
+
+  it('replaces a stale watch for the same root before enforcing the watch cap', async () => {
+    const firstUnsubscribe = vi.fn()
+    const replacementUnsubscribe = vi.fn()
+    mockSubscribe
+      .mockResolvedValueOnce({ unsubscribe: firstUnsubscribe })
+      .mockResolvedValueOnce({ unsubscribe: replacementUnsubscribe })
+
+    let stale = false
+    await dispatcher.callRequest('fs.watch', { rootPath: tmpDir }, { isStale: () => stale })
+    for (let index = 0; index < 19; index++) {
+      await dispatcher.callRequest('fs.watch', {
+        rootPath: path.join(tmpDir, `watched-${index}`)
+      })
+    }
+
+    stale = true
+    await dispatcher.callRequest('fs.watch', { rootPath: tmpDir }, { isStale: () => false })
+
+    expect(firstUnsubscribe).toHaveBeenCalled()
+    expect(replacementUnsubscribe).not.toHaveBeenCalled()
   })
 })

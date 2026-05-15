@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react'
 import { ScrollArea } from '../ui/scroll-area'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
+import { useAppStore } from '@/store'
+import {
+  getRuntimeRepoBaseRefDefault,
+  searchRuntimeRepoBaseRefs
+} from '@/runtime/runtime-repo-client'
 
 type BaseRefPickerProps = {
   repoId: string
@@ -16,6 +21,9 @@ export function BaseRefPicker({
   onSelect,
   onUsePrimary
 }: BaseRefPickerProps): React.JSX.Element {
+  const activeRuntimeEnvironmentId = useAppStore(
+    (state) => state.settings?.activeRuntimeEnvironmentId ?? null
+  )
   // Why: null until the IPC resolves (or when the repo has no default base ref
   // available). We avoid seeding with 'origin/main' because that would display
   // a fabricated default in repos that don't actually have origin/main.
@@ -34,7 +42,7 @@ export function BaseRefPicker({
 
     const loadDefaultBaseRef = async (): Promise<void> => {
       try {
-        const result = await window.api.repos.getBaseRefDefault({ repoId })
+        const result = await getRuntimeRepoBaseRefDefault({ activeRuntimeEnvironmentId }, repoId)
         if (!stale) {
           setDefaultBaseRef(result.defaultBaseRef)
           setRemoteCount(result.remoteCount)
@@ -60,7 +68,7 @@ export function BaseRefPicker({
     return () => {
       stale = true
     }
-  }, [repoId])
+  }, [activeRuntimeEnvironmentId, repoId])
 
   useEffect(() => {
     const trimmedQuery = baseRefQuery.trim()
@@ -74,12 +82,7 @@ export function BaseRefPicker({
     setIsSearchingBaseRefs(true)
 
     const timer = window.setTimeout(() => {
-      void window.api.repos
-        .searchBaseRefs({
-          repoId,
-          query: trimmedQuery,
-          limit: 20
-        })
+      void searchRuntimeRepoBaseRefs({ activeRuntimeEnvironmentId }, repoId, trimmedQuery, 20)
         .then((results) => {
           if (!stale) {
             setBaseRefResults(results)
@@ -102,7 +105,7 @@ export function BaseRefPicker({
       stale = true
       window.clearTimeout(timer)
     }
-  }, [baseRefQuery, repoId])
+  }, [activeRuntimeEnvironmentId, baseRefQuery, repoId])
 
   const effectiveBaseRef = currentBaseRef ?? defaultBaseRef
 

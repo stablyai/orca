@@ -251,6 +251,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     experimentalPet: false,
     experimentalActivity: true,
     experimentalWorktreeSymlinks: false,
+    // Why: local desktop remains the default server until the user explicitly
+    // selects a saved runtime environment.
+    activeRuntimeEnvironmentId: null,
     // Why: hydrate an empty default so the renderer's optional-chained reads
     // (`settings?.githubProjects?.activeProject`) land on a stable shape
     // instead of `undefined`. Upgraded profiles inherit this via the

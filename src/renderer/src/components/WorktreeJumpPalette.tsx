@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils'
 import { getWorktreeStatus, getWorktreeStatusLabel } from '@/lib/worktree-status'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   searchWorktrees,
   type MatchRange,
@@ -38,7 +39,13 @@ import {
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
   queueBrowserFocusRequest
 } from '@/components/browser-pane/browser-focus'
-import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/types'
+import type {
+  BrowserPage,
+  BrowserWorkspace,
+  GitHubWorkItem,
+  Repo,
+  Worktree
+} from '../../../shared/types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 
 type WorktreePaletteItem = {
@@ -74,6 +81,55 @@ type BrowserSelection = {
   worktree: Worktree
   workspace: BrowserWorkspace
   page: BrowserPage
+}
+
+type GitHubWorkItemWithoutRepo = Omit<GitHubWorkItem, 'repoId'>
+
+function getRuntimeTargetForRepo(
+  repo: Repo
+): { kind: 'environment'; environmentId: string } | null {
+  const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+  if (target.kind !== 'environment') {
+    return null
+  }
+  return useAppStore.getState().repos.some((candidate) => candidate.id === repo.id) ? target : null
+}
+
+function getWorkItemForRepo(repo: Repo, number: number): Promise<GitHubWorkItemWithoutRepo | null> {
+  const target = getRuntimeTargetForRepo(repo)
+  if (target) {
+    return callRuntimeRpc<GitHubWorkItemWithoutRepo | null>(
+      target,
+      'github.workItem',
+      { repo: repo.id, number },
+      { timeoutMs: 30_000 }
+    )
+  }
+  return window.api.gh.workItem({ repoPath: repo.path, number })
+}
+
+function getWorkItemByOwnerRepoForRepo(
+  repo: Repo,
+  slug: { owner: string; repo: string },
+  number: number,
+  type: 'issue' | 'pr'
+): Promise<GitHubWorkItemWithoutRepo | null> {
+  const target = getRuntimeTargetForRepo(repo)
+  if (target) {
+    return callRuntimeRpc<GitHubWorkItemWithoutRepo | null>(
+      target,
+      'github.workItemByOwnerRepo',
+      { repo: repo.id, owner: slug.owner, ownerRepo: slug.repo, number, type },
+      { timeoutMs: 30_000 }
+    )
+  }
+  return window.api.gh.workItemByOwnerRepo({
+    repoPath: repo.path,
+    owner: slug.owner,
+    repo: slug.repo,
+    number,
+    type
+  })
 }
 
 function HighlightedText({
@@ -675,8 +731,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       // indefinitely on slow networks. Close immediately and populate the
       // composer once the lookup returns.
       closeModal()
-      void window.api.gh
-        .workItem({ repoPath: repoForLookup.path, number })
+      void getWorkItemByOwnerRepoForRepo(repoForLookup, slug, number, ghLink.type)
         .then((item) => {
           const data: Record<string, unknown> = { initialRepoId: repoForLookup.id }
           if (item) {
@@ -729,8 +784,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       }
 
       closeModal()
-      void window.api.gh
-        .workItem({ repoPath: repoForLookup.path, number: ghNumber })
+      void getWorkItemForRepo(repoForLookup, ghNumber)
         .then((item) => {
           const data: Record<string, unknown> = { initialRepoId: repoForLookup.id }
           if (item) {

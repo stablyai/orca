@@ -9,6 +9,7 @@ import { extractIpcErrorMessage, renameFileOnDisk } from '@/lib/rename-file'
 import type { InlineInput } from './FileExplorerRow'
 import type { TreeNode } from './file-explorer-types'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
+import { createRuntimePath, deleteRuntimePath } from '@/runtime/runtime-file-client'
 
 type UseFileExplorerInlineInputParams = {
   activeWorktreeId: string | null
@@ -110,6 +111,12 @@ export function useFileExplorerInlineInput({
       }
       const run = async (): Promise<void> => {
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+        const fileContext = {
+          settings: useAppStore.getState().settings,
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId
+        }
         if (inlineInput.type === 'rename' && inlineInput.existingPath) {
           await renameFileOnDisk({
             oldPath: inlineInput.existingPath,
@@ -121,29 +128,31 @@ export function useFileExplorerInlineInput({
         } else {
           const fullPath = joinPath(inlineInput.parentPath, name)
           try {
-            await (inlineInput.type === 'folder'
-              ? window.api.fs.createDir({ dirPath: fullPath, connectionId })
-              : window.api.fs.createFile({ filePath: fullPath, connectionId }))
+            await createRuntimePath(
+              fileContext,
+              fullPath,
+              inlineInput.type === 'folder' ? 'directory' : 'file'
+            )
             const parentForRefresh = inlineInput.parentPath
             if (inlineInput.type === 'folder') {
               commitFileExplorerOp({
                 undo: async () => {
-                  await window.api.fs.deletePath({ targetPath: fullPath, connectionId })
+                  await deleteRuntimePath(fileContext, fullPath, true)
                   await refreshDir(parentForRefresh)
                 },
                 redo: async () => {
-                  await window.api.fs.createDir({ dirPath: fullPath, connectionId })
+                  await createRuntimePath(fileContext, fullPath, 'directory')
                   await refreshDir(parentForRefresh)
                 }
               })
             } else {
               commitFileExplorerOp({
                 undo: async () => {
-                  await window.api.fs.deletePath({ targetPath: fullPath, connectionId })
+                  await deleteRuntimePath(fileContext, fullPath)
                   await refreshDir(parentForRefresh)
                 },
                 redo: async () => {
-                  await window.api.fs.createFile({ filePath: fullPath, connectionId })
+                  await createRuntimePath(fileContext, fullPath, 'file')
                   await refreshDir(parentForRefresh)
                 }
               })

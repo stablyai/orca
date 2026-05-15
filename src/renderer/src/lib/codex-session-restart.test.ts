@@ -39,7 +39,12 @@ describe('markLiveCodexSessionsForRestart', () => {
         ...originalWindow?.api,
         pty: {
           ...originalWindow?.api?.pty,
-          getForegroundProcess: vi.fn()
+          getForegroundProcess: vi.fn(),
+          hasChildProcesses: vi.fn().mockResolvedValue(false)
+        },
+        runtimeEnvironments: {
+          ...originalWindow?.api?.runtimeEnvironments,
+          call: vi.fn()
         }
       }
     } as unknown as typeof window
@@ -141,6 +146,54 @@ describe('markLiveCodexSessionsForRestart', () => {
     expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_C
+    })
+  })
+
+  it('inspects remote runtime PTYs through the active runtime environment', async () => {
+    useAppStore.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab-1',
+            ptyId: 'remote:term-1',
+            worktreeId: 'wt1',
+            title: 'orca-1',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['remote:term-1']
+      }
+    })
+    vi.mocked(window.api.runtimeEnvironments.call).mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: {
+        process: { foregroundProcess: 'codex', hasChildProcesses: true }
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    await markLiveCodexSessionsForRestart({
+      previousAccountLabel: ACCOUNT_A,
+      nextAccountLabel: ACCOUNT_B
+    })
+
+    expect(window.api.pty.getForegroundProcess).not.toHaveBeenCalled()
+    expect(window.api.runtimeEnvironments.call).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'terminal.inspectProcess',
+      params: { terminal: 'term-1' },
+      timeoutMs: 15_000
+    })
+    expect(useAppStore.getState().codexRestartNoticeByPtyId['remote:term-1']).toEqual({
+      previousAccountLabel: ACCOUNT_A,
+      nextAccountLabel: ACCOUNT_B
     })
   })
 })

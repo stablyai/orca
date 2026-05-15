@@ -3,13 +3,18 @@ import { existsSync, mkdtempSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { createConnection, type Socket } from 'net'
+import { EventEmitter } from 'events'
 import { describe, expect, it, vi } from 'vitest'
 import Database from 'better-sqlite3'
+import WebSocket from 'ws'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
 import * as runtimeMetadataModule from './runtime-metadata'
 import { readRuntimeMetadata } from './runtime-metadata'
 import { createRuntimeTransportMetadata, OrcaRuntimeRpcServer } from './runtime-rpc'
+import { parsePairingCode } from '../../shared/pairing'
+import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from './rpc/e2ee-crypto'
+import { DeviceRegistry } from './device-registry'
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([
@@ -104,6 +109,73 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+async function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<void> {
+  const start = Date.now()
+  while (!predicate()) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error('timed out waiting for condition')
+    }
+    await sleep(20)
+  }
+}
+
+function connectWs(endpoint: string): Promise<WebSocket> {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(endpoint)
+    ws.once('open', () => resolve(ws))
+    ws.once('error', reject)
+  })
+}
+
+function nextWsMessage(ws: WebSocket): Promise<string> {
+  return new Promise((resolve) => {
+    ws.once('message', (data) => {
+      resolve(typeof data === 'string' ? data : data.toString('utf-8'))
+    })
+  })
+}
+
+function waitForWsClose(ws: WebSocket): Promise<void> {
+  return new Promise((resolve) => {
+    if (ws.readyState === ws.CLOSED) {
+      resolve()
+      return
+    }
+    ws.once('close', () => resolve())
+  })
+}
+
+async function authenticateMobileWs(pairingUrl: string): Promise<WebSocket> {
+  const parsed = parsePairingCode(pairingUrl)
+  expect(parsed).toBeTruthy()
+  const ws = await connectWs(parsed!.endpoint)
+  const mobileKeys = generateKeyPair()
+  const serverPublicKey = Uint8Array.from(Buffer.from(parsed!.publicKeyB64, 'base64'))
+  const sharedKey = deriveSharedKey(mobileKeys.secretKey, serverPublicKey)
+
+  ws.send(
+    JSON.stringify({
+      type: 'e2ee_hello',
+      publicKeyB64: Buffer.from(mobileKeys.publicKey).toString('base64')
+    })
+  )
+  expect(JSON.parse(await nextWsMessage(ws))).toEqual({ type: 'e2ee_ready' })
+
+  ws.send(
+    encrypt(JSON.stringify({ type: 'e2ee_auth', deviceToken: parsed!.deviceToken }), sharedKey)
+  )
+  expect(JSON.parse(decrypt(await nextWsMessage(ws), sharedKey)!)).toEqual({
+    type: 'e2ee_authenticated'
+  })
+
+  return ws
+}
+
+class FakeWebSocket extends EventEmitter {
+  readonly OPEN = 1
+  readyState = this.OPEN
+}
+
 describe('OrcaRuntimeRpcServer', () => {
   const makeStore = (overrides?: { isUnread?: boolean }) => ({
     getRepo: (id: string) =>
@@ -174,6 +246,418 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(readRuntimeMetadata(userDataPath)).toMatchObject({
       runtimeId: runtime.getRuntimeId()
     })
+  })
+
+  it('creates a pairing offer for the active WebSocket transport', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+
+    const offer = server.createPairingOffer({ address: '100.64.1.20', name: 'CLI test' })
+    expect(offer.available).toBe(true)
+    if (offer.available) {
+      expect(offer.endpoint).toContain('100.64.1.20')
+      const parsed = parsePairingCode(offer.pairingUrl)
+      expect(parsed?.endpoint).toBe(offer.endpoint)
+      expect(parsed?.deviceToken).toBeTruthy()
+      expect(parsed?.publicKeyB64).toBeTruthy()
+      expect(server.getDeviceRegistry()?.getDevice(offer.deviceId)?.scope).toBe('runtime')
+    }
+
+    await server.stop()
+  })
+
+  it('formats pairing-address overrides for IPv6 and host-port tunnel endpoints', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+
+    try {
+      const ipv6 = server.createPairingOffer({ address: '::1', name: 'IPv6 test' })
+      expect(ipv6.available).toBe(true)
+      if (ipv6.available) {
+        expect(ipv6.endpoint).toMatch(/^ws:\/\/\[::1\]:\d+$/)
+        expect(parsePairingCode(ipv6.pairingUrl)?.endpoint).toBe(ipv6.endpoint)
+      }
+
+      const tunnel = server.createPairingOffer({
+        address: 'tunnel.example.com:443',
+        name: 'Tunnel test'
+      })
+      expect(tunnel.available).toBe(true)
+      if (tunnel.available) {
+        expect(tunnel.endpoint).toBe('ws://tunnel.example.com:443')
+      }
+
+      const fullUrl = server.createPairingOffer({
+        address: 'wss://runtime.example.com/orca',
+        name: 'Full URL test'
+      })
+      expect(fullUrl.available).toBe(true)
+      if (fullUrl.available) {
+        expect(fullUrl.endpoint).toBe('wss://runtime.example.com/orca')
+      }
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('creates mobile-scoped pairing offers for headless mobile pairing', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+
+    try {
+      const offer = server.createPairingOffer({
+        address: '100.64.1.20',
+        name: 'Mobile test',
+        scope: 'mobile'
+      })
+      expect(offer.available).toBe(true)
+      if (!offer.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+
+      expect(server.getDeviceRegistry()?.getDevice(offer.deviceId)?.scope).toBe('mobile')
+      const parsed = parsePairingCode(offer.pairingUrl)
+      expect(parsed?.endpoint).toBe(offer.endpoint)
+      expect(parsed?.endpoint).toContain('100.64.1.20')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('cleans up pre-auth E2EE WebSocket state when the socket closes', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+
+    try {
+      const offer = server.createPairingOffer({
+        address: '127.0.0.1',
+        name: 'mobile-test',
+        scope: 'mobile'
+      })
+      expect(offer.available).toBe(true)
+      if (!offer.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      const parsed = parsePairingCode(offer.pairingUrl)!
+      const ws = await connectWs(parsed.endpoint)
+      const mobileKeys = generateKeyPair()
+      ws.send(
+        JSON.stringify({
+          type: 'e2ee_hello',
+          publicKeyB64: Buffer.from(mobileKeys.publicKey).toString('base64')
+        })
+      )
+      expect(JSON.parse(await nextWsMessage(ws))).toEqual({ type: 'e2ee_ready' })
+      expect(server['e2eeChannels'].size).toBe(1)
+      expect(server['wsConnectionIds'].size).toBe(1)
+
+      ws.close()
+      await waitForWsClose(ws)
+      await waitFor(() => server['e2eeChannels'].size === 0 && server['wsConnectionIds'].size === 0)
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('terminates active WebSockets for a revoked mobile device', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    const disconnectSpy = vi.spyOn(runtime, 'onClientDisconnected')
+
+    await server.start()
+
+    try {
+      const offer = server.createPairingOffer({
+        address: '127.0.0.1',
+        name: 'mobile-test',
+        scope: 'mobile'
+      })
+      expect(offer.available).toBe(true)
+      if (!offer.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      const first = await authenticateMobileWs(offer.pairingUrl)
+      const second = await authenticateMobileWs(offer.pairingUrl)
+
+      expect(server.revokeMobileDevice(offer.deviceId)).toBe(true)
+      await Promise.all([waitForWsClose(first), waitForWsClose(second)])
+      await waitFor(() => server['e2eeChannels'].size === 0 && server['wsConnectionIds'].size === 0)
+
+      expect(disconnectSpy).toHaveBeenCalledTimes(1)
+    } finally {
+      disconnectSpy.mockRestore()
+      await server.stop()
+    }
+  })
+
+  it('does not revoke runtime-scoped devices through mobile revocation', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+
+    try {
+      const offer = server.createPairingOffer({
+        address: '127.0.0.1',
+        name: 'runtime-test',
+        scope: 'runtime'
+      })
+      expect(offer.available).toBe(true)
+      if (!offer.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+
+      expect(server.revokeMobileDevice(offer.deviceId)).toBe(false)
+      expect(server.getDeviceRegistry()?.getDevice(offer.deviceId)?.scope).toBe('runtime')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('caps WebSocket long-polls and aborts them when the socket closes', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const db = new OrchestrationDb(':memory:')
+    runtime.setOrchestrationDb(db)
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: false,
+      longPollCap: 1
+    })
+    const device = server['deviceRegistry'] ?? null
+    expect(device).toBeNull()
+    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+    const entry = server['deviceRegistry']!.addDevice('runtime-test', 'runtime')
+    const ws = new FakeWebSocket()
+    server['wsConnectionIds'].set(ws as unknown as WebSocket, 'conn-test')
+    const replies: Record<string, unknown>[] = []
+
+    try {
+      const first = server['handleWebSocketMessage'](
+        JSON.stringify({
+          id: 'req_wait',
+          method: 'orchestration.check',
+          deviceToken: entry.token,
+          params: { terminal: 'term_wait', wait: true, timeoutMs: 10_000 }
+        }),
+        (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+        () => {},
+        undefined,
+        ws as unknown as WebSocket
+      )
+
+      await waitFor(() => server['activeLongPolls'] === 1)
+
+      await server['handleWebSocketMessage'](
+        JSON.stringify({
+          id: 'req_busy',
+          method: 'orchestration.check',
+          deviceToken: entry.token,
+          params: { terminal: 'term_busy', wait: true, timeoutMs: 10_000 }
+        }),
+        (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+        () => {},
+        undefined,
+        ws as unknown as WebSocket
+      )
+
+      expect(replies).toContainEqual(
+        expect.objectContaining({
+          id: 'req_busy',
+          ok: false,
+          error: expect.objectContaining({ code: 'runtime_busy' })
+        })
+      )
+      expect(server['activeLongPolls']).toBe(1)
+
+      ws.readyState = 3
+      ws.emit('close')
+      await first
+
+      expect(server['activeLongPolls']).toBe(0)
+      expect(replies).toContainEqual(expect.objectContaining({ id: 'req_wait', ok: true }))
+    } finally {
+      db.close()
+      await server.stop()
+    }
+  })
+
+  it('limits mobile-scoped WebSocket tokens to the mobile RPC surface', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const pushRuntimeGit = vi.fn().mockResolvedValue({ ok: true })
+    const selectClaudeAccount = vi.fn().mockResolvedValue({ ok: true })
+    const selectCodexAccount = vi.fn().mockResolvedValue({ ok: true })
+    const removeClaudeAccount = vi.fn().mockResolvedValue({ ok: true })
+    const readTerminal = vi.fn().mockResolvedValue({ tail: ['ok'] })
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getStatus: vi.fn().mockResolvedValue({ graphStatus: 'ok' }),
+      pushRuntimeGit,
+      selectClaudeAccount,
+      selectCodexAccount,
+      removeClaudeAccount,
+      readTerminal
+    } as unknown as OrcaRuntimeService
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
+    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+    const mobile = server['deviceRegistry']!.addDevice('phone', 'mobile')
+    const replies: Record<string, unknown>[] = []
+
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_forbidden',
+        method: 'git.push',
+        deviceToken: mobile.token,
+        params: { worktree: 'id:wt-1' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_allowed',
+        method: 'status.get',
+        deviceToken: mobile.token
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_select_claude',
+        method: 'accounts.selectClaude',
+        deviceToken: mobile.token,
+        params: { accountId: 'claude-account' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_select_codex',
+        method: 'accounts.selectCodex',
+        deviceToken: mobile.token,
+        params: { accountId: null }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_remove_claude',
+        method: 'accounts.removeClaude',
+        deviceToken: mobile.token,
+        params: { accountId: 'claude-account' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_terminal_read',
+        method: 'terminal.read',
+        deviceToken: mobile.token,
+        params: { terminal: 'term-1' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+
+    expect(replies).toContainEqual(
+      expect.objectContaining({
+        id: 'req_forbidden',
+        ok: false,
+        error: expect.objectContaining({ code: 'forbidden' })
+      })
+    )
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_allowed', ok: true }))
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_select_claude', ok: true }))
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_select_codex', ok: true }))
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_terminal_read', ok: true }))
+    expect(replies).toContainEqual(
+      expect.objectContaining({
+        id: 'req_remove_claude',
+        ok: false,
+        error: expect.objectContaining({ code: 'forbidden' })
+      })
+    )
+    expect(selectClaudeAccount).toHaveBeenCalledWith('claude-account')
+    expect(selectCodexAccount).toHaveBeenCalledWith(null)
+    expect(readTerminal).toHaveBeenCalledWith('term-1', { cursor: undefined })
+    expect(removeClaudeAccount).not.toHaveBeenCalled()
+    expect(pushRuntimeGit).not.toHaveBeenCalled()
+  })
+
+  it('allows runtime-scoped WebSocket tokens to use the full RPC surface', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const pushRuntimeGit = vi.fn().mockResolvedValue({ ok: true })
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      pushRuntimeGit
+    } as unknown as OrcaRuntimeService
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
+    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+    const runtimeDevice = server['deviceRegistry']!.addDevice('cli', 'runtime')
+    const replies: Record<string, unknown>[] = []
+
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_push',
+        method: 'git.push',
+        deviceToken: runtimeDevice.token,
+        params: { worktree: 'id:wt-1' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_push', ok: true }))
+    expect(pushRuntimeGit).toHaveBeenCalledWith('id:wt-1', undefined, undefined)
   })
 
   it('leaves the last published metadata in place when a runtime stops', async () => {

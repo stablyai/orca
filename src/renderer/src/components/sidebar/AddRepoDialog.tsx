@@ -11,12 +11,14 @@ import {
   DialogDescription
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { track } from '@/lib/telemetry'
 import { RemoteStep, CloneStep, useRemoteRepo } from './AddRepoSteps'
 import { CreateStep, useCreateRepo } from './AddRepoCreateStep'
 import { SetupStep } from './AddRepoSetupStep'
 import { getDefaultCloneParent } from './clone-defaults'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { Repo, Worktree } from '../../../../shared/types'
 
@@ -24,6 +26,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
   const closeModal = useAppStore((s) => s.closeModal)
   const addRepo = useAppStore((s) => s.addRepo)
+  const addRepoPath = useAppStore((s) => s.addRepoPath)
   const repos = useAppStore((s) => s.repos)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
@@ -35,6 +38,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const [step, setStep] = useState<'add' | 'clone' | 'remote' | 'create' | 'setup'>('add')
   const [addedRepo, setAddedRepo] = useState<Repo | null>(null)
   const [isAdding, setIsAdding] = useState(false)
+  const [serverPath, setServerPath] = useState('')
+  const [isAddingServerPath, setIsAddingServerPath] = useState(false)
   const [cloneUrl, setCloneUrl] = useState('')
   const [cloneDestination, setCloneDestination] = useState('')
   const [isCloning, setIsCloning] = useState(false)
@@ -71,6 +76,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     createError,
     isCreating,
     setCreateName,
+    setCreateParent,
     setCreateKind,
     setCreateError,
     resetCreateState,
@@ -95,15 +101,19 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     if (cloneDestination) {
       return
     }
+    if (settings?.activeRuntimeEnvironmentId?.trim()) {
+      return
+    }
     if (!settings?.workspaceDir) {
       return
     }
     cloneStepAutoFilledRef.current = true
     setCloneDestination(getDefaultCloneParent(settings.workspaceDir))
-  }, [step, cloneDestination, settings?.workspaceDir])
+  }, [step, cloneDestination, settings?.activeRuntimeEnvironmentId, settings?.workspaceDir])
 
   const isOpen = activeModal === 'add-repo'
   const repoId = addedRepo?.id ?? ''
+  const isRuntimeEnvironmentActive = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
 
   const worktrees = useMemo(() => {
     return worktreesByRepo[repoId] ?? []
@@ -127,6 +137,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     setStep('add')
     setAddedRepo(null)
     setIsAdding(false)
+    setServerPath('')
+    setIsAddingServerPath(false)
     setCloneUrl('')
     setCloneDestination('')
     setIsCloning(false)
@@ -162,13 +174,42 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     }
   }, [addRepo, fetchWorktrees, closeModal])
 
+  const handleAddServerPath = useCallback(
+    async (kind: 'git' | 'folder') => {
+      const path = serverPath.trim()
+      if (!path) {
+        return
+      }
+      setIsAddingServerPath(true)
+      try {
+        const repo = await addRepoPath(path, kind)
+        if (repo && isGitRepoKind(repo)) {
+          setAddedRepo(repo)
+          await fetchWorktrees(repo.id)
+          setStep('setup')
+        } else if (repo) {
+          closeModal()
+        }
+      } finally {
+        setIsAddingServerPath(false)
+      }
+    },
+    [addRepoPath, closeModal, fetchWorktrees, serverPath]
+  )
+
   const handlePickDestination = useCallback(async () => {
+    if (settings?.activeRuntimeEnvironmentId?.trim()) {
+      // Why: the native folder picker returns a client-local path. Runtime
+      // clone destinations must be typed as server paths.
+      toast.error('Enter a server path for the clone destination.')
+      return
+    }
     const dir = await window.api.repos.pickDirectory()
     if (dir) {
       setCloneDestination(dir)
       setCloneError(null)
     }
-  }, [])
+  }, [settings?.activeRuntimeEnvironmentId])
 
   const handleClone = useCallback(async () => {
     const trimmedUrl = cloneUrl.trim()
@@ -180,10 +221,24 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     setCloneError(null)
     setCloneProgress(null)
     try {
-      const repo = (await window.api.repos.clone({
-        url: trimmedUrl,
-        destination: cloneDestination.trim()
-      })) as Repo
+      const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+      const repo =
+        target.kind === 'environment'
+          ? (
+              await callRuntimeRpc<{ repo: Repo }>(
+                target,
+                'repo.clone',
+                {
+                  url: trimmedUrl,
+                  destination: cloneDestination.trim()
+                },
+                { timeoutMs: 10 * 60_000 }
+              )
+            ).repo
+          : ((await window.api.repos.clone({
+              url: trimmedUrl,
+              destination: cloneDestination.trim()
+            })) as Repo)
       // Why: if the user closed the dialog or clicked Back during the clone,
       // cloneGenRef will have been bumped by resetState. Ignore this stale result.
       if (gen !== cloneGenRef.current) {
@@ -310,7 +365,76 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           </div>
         </div>
 
-        {step === 'add' ? (
+        {step === 'add' && isRuntimeEnvironmentActive ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>Add a server project</DialogTitle>
+              <DialogDescription>
+                Add a Git repository or folder that already exists on the selected runtime server.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 pt-2">
+              <div className="space-y-1">
+                <label
+                  htmlFor="server-project-path"
+                  className="text-[11px] font-medium text-muted-foreground block"
+                >
+                  Server path
+                </label>
+                <Input
+                  id="server-project-path"
+                  value={serverPath}
+                  onChange={(event) => setServerPath(event.target.value)}
+                  placeholder="/home/user/project"
+                  className="h-11 text-sm font-mono"
+                  disabled={isAddingServerPath}
+                  autoFocus
+                  spellCheck={false}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  onClick={() => void handleAddServerPath('git')}
+                  disabled={!serverPath.trim() || isAddingServerPath}
+                  className="h-10"
+                >
+                  Add Git Project
+                </Button>
+                <Button
+                  onClick={() => void handleAddServerPath('folder')}
+                  disabled={!serverPath.trim() || isAddingServerPath}
+                  variant="outline"
+                  className="h-10"
+                >
+                  Open as Folder
+                </Button>
+              </div>
+              <div className="flex items-center justify-center gap-4 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCloneError(null)
+                    setStep('clone')
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  Clone into server path
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCreateError(null)
+                    setStep('create')
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  Create on server
+                </button>
+              </div>
+            </div>
+          </>
+        ) : step === 'add' ? (
           <>
             <DialogHeader>
               <DialogTitle>Add a project</DialogTitle>
@@ -411,6 +535,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
             cloneError={cloneError}
             cloneProgress={cloneProgress}
             isCloning={isCloning}
+            disableDestinationPicker={isRuntimeEnvironmentActive}
             onUrlChange={(value) => {
               setCloneUrl(value)
               setCloneError(null)
@@ -429,8 +554,13 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
             createKind={createKind}
             createError={createError}
             isCreating={isCreating}
+            manualParentEntry={isRuntimeEnvironmentActive}
             onNameChange={(value) => {
               setCreateName(value)
+              setCreateError(null)
+            }}
+            onParentChange={(value) => {
+              setCreateParent(value)
               setCreateError(null)
             }}
             onKindChange={(kind) => {

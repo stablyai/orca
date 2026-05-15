@@ -24,6 +24,7 @@ const {
   registerUIHandlersMock,
   registerFilesystemHandlersMock,
   registerRuntimeHandlersMock,
+  registerRuntimeEnvironmentHandlersMock,
   registerCodexAccountHandlersMock,
   registerAgentHookHandlersMock,
   registerAgentTrustHandlersMock,
@@ -65,6 +66,7 @@ const {
   registerUIHandlersMock: vi.fn(),
   registerFilesystemHandlersMock: vi.fn(),
   registerRuntimeHandlersMock: vi.fn(),
+  registerRuntimeEnvironmentHandlersMock: vi.fn(),
   registerCodexAccountHandlersMock: vi.fn(),
   registerAgentHookHandlersMock: vi.fn(),
   registerAgentTrustHandlersMock: vi.fn(),
@@ -194,6 +196,10 @@ vi.mock('./runtime', () => ({
   registerRuntimeHandlers: registerRuntimeHandlersMock
 }))
 
+vi.mock('./runtime-environments', () => ({
+  registerRuntimeEnvironmentHandlers: registerRuntimeEnvironmentHandlersMock
+}))
+
 vi.mock('./codex-accounts', () => ({
   registerCodexAccountHandlers: registerCodexAccountHandlersMock
 }))
@@ -262,6 +268,7 @@ describe('registerCoreHandlers', () => {
     registerUIHandlersMock.mockReset()
     registerFilesystemHandlersMock.mockReset()
     registerRuntimeHandlersMock.mockReset()
+    registerRuntimeEnvironmentHandlersMock.mockReset()
     registerCodexAccountHandlersMock.mockReset()
     registerAgentHookHandlersMock.mockReset()
     registerAgentTrustHandlersMock.mockReset()
@@ -328,6 +335,7 @@ describe('registerCoreHandlers', () => {
     expect(registerUIHandlersMock).toHaveBeenCalledWith(store)
     expect(registerFilesystemHandlersMock).toHaveBeenCalledWith(store)
     expect(registerRuntimeHandlersMock).toHaveBeenCalledWith(runtime)
+    expect(registerRuntimeEnvironmentHandlersMock).toHaveBeenCalled()
     expect(registerCliHandlersMock).toHaveBeenCalled()
     expect(registerPreflightHandlersMock).toHaveBeenCalled()
     expect(registerShellHandlersMock).toHaveBeenCalled()

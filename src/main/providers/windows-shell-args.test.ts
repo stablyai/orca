@@ -41,8 +41,11 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(opencodeRestoreIndex).toBeGreaterThan(outputEncodingIndex)
     expect(piRestoreIndex).toBeGreaterThan(outputEncodingIndex)
     expect(promptIndex).toBeGreaterThan(piRestoreIndex)
-    expect(command).toContain('`e]133;D;$fakeExitCode`a')
-    expect(command).toContain('`e]133;C`a')
+    expect(command).toContain('Esc = [char]27')
+    expect(command).toContain('Bel = [char]7')
+    expect(command).toContain(')]133;D;$fakeExitCode$(')
+    expect(command).toContain(')]133;C$(')
+    expect(command).not.toContain('`e]133')
   })
 
   it('handles pwsh.exe (PowerShell Core) the same as Windows PowerShell', () => {

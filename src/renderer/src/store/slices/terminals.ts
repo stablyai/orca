@@ -28,6 +28,7 @@ import {
   unregisterPtyDataHandlers
 } from '@/components/terminal-pane/pty-transport'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 
 function getNextTerminalOrdinal(tabs: TerminalTab[]): number {
   const usedOrdinals = new Set<number>()
@@ -1252,8 +1253,20 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       return
     }
 
+    const target = getActiveRuntimeTarget(get().settings)
+    if (target.kind === 'environment') {
+      await callRuntimeRpc(
+        target,
+        'terminal.stop',
+        { worktree: worktreeId },
+        { timeoutMs: 15_000 }
+      ).catch(() => null)
+    }
+
     await Promise.allSettled(
-      ptyIds.map((ptyId) => window.api.pty.kill(ptyId, { keepHistory: keepIdentifiers }))
+      ptyIds
+        .filter((ptyId) => !ptyId.startsWith('remote:'))
+        .map((ptyId) => window.api.pty.kill(ptyId, { keepHistory: keepIdentifiers }))
     )
   },
 
