@@ -30,6 +30,16 @@ type OpenFileIndexes = {
   byWorktreeAndId: OpenFileByWorktreeAndId
   idsByWorktree: Map<string, string[]>
 }
+type TabsProjectionCacheEntry = {
+  tabs: NonNullable<AppState['tabsByWorktree'][string]>
+  worktreeIdJson: string
+  projection: string
+}
+type TabsProjectionCache = {
+  source: AppState['tabsByWorktree']
+  entries: Map<string, TabsProjectionCacheEntry>
+  projection: string
+}
 
 const registeredTabs = new Map<string, RegisteredTerminalTab>()
 // Why: track when each tab was registered so we can suppress the "no live
@@ -43,6 +53,7 @@ let syncScheduled = false
 let syncEnabled = false
 let getStoreState: (() => AppState) | null = null
 let mobileSessionSnapshotVersion = 0
+let cachedTabsProjection: TabsProjectionCache | null = null
 let cachedOpenFileIndexesSource: AppState['openFiles'] | null = null
 let cachedOpenFileIndexes: OpenFileIndexes | null = null
 let cachedEditorDraftsSource: AppState['editorDrafts'] | null = null
@@ -117,10 +128,11 @@ export type RuntimeMobileSessionSyncKey = {
   tabBarOrderByWorktree: AppState['tabBarOrderByWorktree']
   activeFileId: AppState['activeFileId']
   activeFileIdByWorktree: AppState['activeFileIdByWorktree']
+  activeTabId: AppState['activeTabId']
   // Why: these projections still need value-level inspection because the
   // underlying references churn even when the mobile-relevant shape is
-  // unchanged (`tabsByWorktree` reallocates on every OSC title frame; the
-  // active-tab marker depends on `activeTabId`). Pre-serialize them once.
+  // unchanged (`tabsByWorktree` reallocates on every OSC title frame).
+  // Pre-serialize them once.
   tabsProjection: string
   openFilesProjection: string
   editorDraftsProjection: string
@@ -142,15 +154,14 @@ export function getRuntimeMobileSessionSyncKey(
     tabBarOrderByWorktree: state.tabBarOrderByWorktree,
     activeFileId: state.activeFileId,
     activeFileIdByWorktree: state.activeFileIdByWorktree,
+    activeTabId: state.activeTabId,
     // Why: background agent title ticks can change runtimePaneTitlesByTabId
     // many times per second while the user types elsewhere. Reuse unchanged
     // projections so those ticks do not rescan all tabs, files, and drafts.
     tabsProjection:
-      canReusePrevious &&
-      state.tabsByWorktree === previousState.tabsByWorktree &&
-      state.activeTabId === previousState.activeTabId
+      canReusePrevious && state.tabsByWorktree === previousState.tabsByWorktree
         ? previousKey.tabsProjection
-        : buildRuntimeMobileTabsProjection(state),
+        : buildRuntimeMobileTabsProjection(state.tabsByWorktree),
     openFilesProjection:
       canReusePrevious && state.openFiles === previousState.openFiles
         ? previousKey.openFilesProjection
@@ -162,20 +173,41 @@ export function getRuntimeMobileSessionSyncKey(
   }
 }
 
-function buildRuntimeMobileTabsProjection(state: AppState): string {
-  return JSON.stringify(
-    Object.fromEntries(
-      Object.entries(state.tabsByWorktree).map(([worktreeId, tabs]) => [
-        worktreeId,
-        tabs.map((tab) => ({
-          id: tab.id,
-          title: tab.title,
-          customTitle: tab.customTitle,
-          active: state.activeTabId === tab.id
-        }))
-      ])
-    )
-  )
+function buildRuntimeMobileTabsProjection(tabsByWorktree: AppState['tabsByWorktree']): string {
+  if (cachedTabsProjection?.source === tabsByWorktree) {
+    return cachedTabsProjection.projection
+  }
+
+  const previousEntries = cachedTabsProjection?.entries
+  const entries = new Map<string, TabsProjectionCacheEntry>()
+  const parts: string[] = []
+
+  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+    const previous = previousEntries?.get(worktreeId)
+    const entry =
+      previous?.tabs === tabs
+        ? previous
+        : {
+            tabs,
+            worktreeIdJson: previous?.worktreeIdJson ?? JSON.stringify(worktreeId),
+            projection: JSON.stringify(
+              tabs.map((tab) => ({
+                id: tab.id,
+                title: tab.title,
+                customTitle: tab.customTitle
+              }))
+            )
+          }
+    entries.set(worktreeId, entry)
+    parts.push(`${entry.worktreeIdJson}:${entry.projection}`)
+  }
+
+  cachedTabsProjection = {
+    source: tabsByWorktree,
+    entries,
+    projection: `{${parts.join(',')}}`
+  }
+  return cachedTabsProjection.projection
 }
 
 function buildRuntimeMobileOpenFilesProjection(openFiles: AppState['openFiles']): string {
@@ -215,6 +247,7 @@ export function runtimeMobileSessionSyncKeysEqual(
     a.tabBarOrderByWorktree === b.tabBarOrderByWorktree &&
     a.activeFileId === b.activeFileId &&
     a.activeFileIdByWorktree === b.activeFileIdByWorktree &&
+    a.activeTabId === b.activeTabId &&
     a.tabsProjection === b.tabsProjection &&
     a.openFilesProjection === b.openFilesProjection &&
     a.editorDraftsProjection === b.editorDraftsProjection
