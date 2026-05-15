@@ -2744,7 +2744,10 @@ export default function SessionScreen() {
           </View>
         ) : activeBrowserTab ? (
           <View style={styles.browserFrame}>
+            {/* Why: the pane owns imperative frame refs; browser tabs should
+            never render a stale frame while the old stream effect cleans up. */}
             <MobileBrowserPane
+              key={activeBrowserTab.browserPageId ?? activeBrowserTab.id}
               client={client}
               worktreeId={worktreeId}
               tab={activeBrowserTab}

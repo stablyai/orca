@@ -88,6 +88,7 @@ type BrowserScreencastParams = {
   viewportWidth?: number
   viewportHeight?: number
   everyNthFrame?: number
+  minFrameIntervalMs?: number
 } & BrowserCommandTargetParams
 
 type BrowserScreencastStartResult = {
@@ -440,6 +441,7 @@ export class RuntimeBrowserCommands {
         viewportWidth: clampOptionalInteger(params.viewportWidth, 320, 3840),
         viewportHeight: clampOptionalInteger(params.viewportHeight, 240, 2160),
         everyNthFrame: clampInteger(params.everyNthFrame, 1, 10, 2),
+        minFrameIntervalMs: clampInteger(params.minFrameIntervalMs, 0, 1000, 0),
         onFrame: stream.sendBinary
       })
     } catch (error) {

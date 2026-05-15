@@ -136,6 +136,11 @@ export function MobileBrowserPane({
   const streamGenerationRef = useRef(0)
   const layoutRef = useRef<ViewportLayout | null>(null)
   const frameMetadataRef = useRef<BrowserScreencastFrameMetadata | null>(null)
+  const frameUriRef = useRef<string | null>(null)
+  const frameMountedRef = useRef(false)
+  const browserImageRef = useRef<Image | null>(null)
+  const readyRef = useRef(false)
+  const busyRef = useRef(false)
   const lastAppliedFrameAtRef = useRef(0)
   const rotatedRef = useRef(false)
   const startPointRef = useRef<{ x: number; y: number; t: number } | null>(null)
@@ -216,9 +221,21 @@ export function MobileBrowserPane({
       frameMetadataRef.current = frame.metadata
       setFrameMetadata(frame.metadata)
     }
-    setFrameUri(`data:image/${frame.format};base64,${Buffer.from(frame.image).toString('base64')}`)
-    setBusy(false)
-    setReady(true)
+    const nextFrameUri = createBrowserFrameDataUri(frame)
+    frameUriRef.current = nextFrameUri
+    updateBrowserImageSource(browserImageRef.current, nextFrameUri)
+    if (!frameMountedRef.current) {
+      frameMountedRef.current = true
+      setFrameUri(nextFrameUri)
+    }
+    if (busyRef.current) {
+      busyRef.current = false
+      setBusy(false)
+    }
+    if (!readyRef.current) {
+      readyRef.current = true
+      setReady(true)
+    }
   }, [])
 
   const streamViewport = useMemo(() => computeStreamViewport(layout, rotated), [layout, rotated])
@@ -231,10 +248,14 @@ export function MobileBrowserPane({
   useEffect(() => {
     streamGenerationRef.current += 1
     const generation = streamGenerationRef.current
+    frameUriRef.current = null
+    frameMountedRef.current = false
     setFrameUri(null)
     setFrameMetadata(null)
     frameMetadataRef.current = null
     lastAppliedFrameAtRef.current = 0
+    readyRef.current = false
+    busyRef.current = false
     setReady(false)
     setError(null)
     if (
@@ -244,6 +265,7 @@ export function MobileBrowserPane({
       !appActive ||
       !streamViewport
     ) {
+      busyRef.current = false
       setBusy(false)
       if (screencastSupported === false) {
         setError('Update desktop Orca to stream browser tabs on mobile.')
@@ -254,9 +276,11 @@ export function MobileBrowserPane({
       }
       return
     }
+    busyRef.current = true
     setBusy(true)
     let startupTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
       if (streamGenerationRef.current !== generation) return
+      busyRef.current = false
       setBusy(false)
       setError('Browser stream timed out.')
     }, 15_000)
@@ -275,7 +299,8 @@ export function MobileBrowserPane({
         quality: BROWSER_FRAME_QUALITY,
         maxWidth: streamViewport.width,
         maxHeight: streamViewport.height,
-        everyNthFrame: BROWSER_FRAME_EVERY_NTH_FRAME
+        everyNthFrame: BROWSER_FRAME_EVERY_NTH_FRAME,
+        minFrameIntervalMs: BROWSER_FRAME_MIN_INTERVAL_MS
       },
       (payload) => {
         if (streamGenerationRef.current !== generation) return
@@ -287,8 +312,14 @@ export function MobileBrowserPane({
         }
         if (event.type === 'ready') {
           clearStartupTimer()
-          setReady(true)
-          setBusy(false)
+          if (!readyRef.current) {
+            readyRef.current = true
+            setReady(true)
+          }
+          if (busyRef.current) {
+            busyRef.current = false
+            setBusy(false)
+          }
           if (typeof event.tab?.url === 'string') {
             setAddressValue(event.tab.url)
             if (event.tab.url !== lastZoomResetUrlRef.current) {
@@ -298,14 +329,26 @@ export function MobileBrowserPane({
           }
         } else if (event.type === 'end') {
           clearStartupTimer()
-          setReady(false)
-          setBusy(false)
+          if (readyRef.current) {
+            readyRef.current = false
+            setReady(false)
+          }
+          if (busyRef.current) {
+            busyRef.current = false
+            setBusy(false)
+          }
         } else if (event.type === 'error') {
           clearStartupTimer()
-          setBusy(false)
+          if (busyRef.current) {
+            busyRef.current = false
+            setBusy(false)
+          }
           const message = event.message ?? event.error?.message ?? 'Browser stream failed.'
           if (shouldSurfaceBrowserError(message)) {
-            setReady(false)
+            if (readyRef.current) {
+              readyRef.current = false
+              setReady(false)
+            }
             setError(message)
           }
         }
@@ -315,7 +358,7 @@ export function MobileBrowserPane({
           if (streamGenerationRef.current !== generation) return
           clearStartupTimer()
           const now = Date.now()
-          // Why: each frame is a large base64 state update; applying every
+          // Why: each image swap crosses RN's native boundary; applying every
           // desktop screencast frame can starve tab switching on the phone.
           if (
             lastAppliedFrameAtRef.current > 0 &&
@@ -354,6 +397,7 @@ export function MobileBrowserPane({
         return null
       }
       if (opts.showBusy) {
+        busyRef.current = true
         setBusy(true)
       }
       try {
@@ -375,6 +419,7 @@ export function MobileBrowserPane({
         return null
       } finally {
         if (opts.showBusy) {
+          busyRef.current = false
           setBusy(false)
         }
       }
@@ -708,7 +753,16 @@ export function MobileBrowserPane({
     [sendBrowserRequest]
   )
 
+  const setBrowserImageRef = useCallback((image: Image | null) => {
+    browserImageRef.current = image
+    const currentFrameUri = frameUriRef.current
+    if (image && currentFrameUri) {
+      updateBrowserImageSource(image, currentFrameUri)
+    }
+  }, [])
+
   const controlsDisabled = !client || !tab.browserPageId || screencastSupported !== true
+  const initialFrameSource = useMemo(() => (frameUri ? { uri: frameUri } : null), [frameUri])
 
   return (
     <View style={styles.root}>
@@ -755,7 +809,7 @@ export function MobileBrowserPane({
         }}
         {...panResponder.panHandlers}
       >
-        {frameUri ? (
+        {initialFrameSource ? (
           <View style={styles.browserImageHost}>
             {frameGeometry ? (
               <View
@@ -780,7 +834,8 @@ export function MobileBrowserPane({
                   ]}
                 >
                   <Image
-                    source={{ uri: frameUri }}
+                    ref={setBrowserImageRef}
+                    source={initialFrameSource}
                     resizeMode="stretch"
                     fadeDuration={0}
                     style={
@@ -806,7 +861,8 @@ export function MobileBrowserPane({
               </View>
             ) : (
               <Image
-                source={{ uri: frameUri }}
+                ref={setBrowserImageRef}
+                source={initialFrameSource}
                 resizeMode="contain"
                 fadeDuration={0}
                 style={styles.browserImageFill}
@@ -814,7 +870,7 @@ export function MobileBrowserPane({
             )}
           </View>
         ) : null}
-        {!frameUri || busy || error ? (
+        {!initialFrameSource || busy || error ? (
           <View pointerEvents="none" style={styles.overlay}>
             {busy || (!ready && !error) ? (
               <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -906,6 +962,17 @@ function IconButton({
 
 function buttonColor(enabled: boolean): string {
   return enabled ? colors.textSecondary : colors.textMuted
+}
+
+function createBrowserFrameDataUri(frame: BrowserScreencastFrame): string {
+  return `data:image/${frame.format};base64,${Buffer.from(frame.image).toString('base64')}`
+}
+
+function updateBrowserImageSource(image: Image | null, uri: string): void {
+  // Why: browser frames are large strings; mutating only the native Image
+  // source avoids re-rendering the whole tab view for every streamed frame.
+  const source = [{ uri }]
+  image?.setNativeProps({ source, src: source })
 }
 
 function assertRpcOk(

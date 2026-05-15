@@ -46,6 +46,7 @@ describe('startBrowserScreencast', () => {
       maxWidth: 1440,
       maxHeight: 1200,
       everyNthFrame: 2,
+      minFrameIntervalMs: 0,
       onFrame
     })
 
@@ -84,6 +85,7 @@ describe('startBrowserScreencast', () => {
       maxWidth: 1440,
       maxHeight: 1200,
       everyNthFrame: 2,
+      minFrameIntervalMs: 0,
       onFrame
     })
 
@@ -108,6 +110,56 @@ describe('startBrowserScreencast', () => {
     await session.done
   })
 
+  it('throttles live frames before sending them to the client stream', async () => {
+    const webContents = createMockWebContents()
+    const onFrame = vi.fn()
+    let now = 1000
+    const dateNow = vi.spyOn(Date, 'now').mockImplementation(() => now)
+
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 1440,
+      maxHeight: 1200,
+      everyNthFrame: 2,
+      minFrameIntervalMs: 100,
+      onFrame
+    })
+
+    try {
+      webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
+        data: Buffer.from('first-live-frame').toString('base64'),
+        sessionId: 42,
+        metadata: { deviceWidth: 800, deviceHeight: 600 }
+      })
+      now = 1050
+      webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
+        data: Buffer.from('dropped-live-frame').toString('base64'),
+        sessionId: 43,
+        metadata: { deviceWidth: 800, deviceHeight: 600 }
+      })
+      now = 1120
+      webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
+        data: Buffer.from('second-live-frame').toString('base64'),
+        sessionId: 44,
+        metadata: { deviceWidth: 800, deviceHeight: 600 }
+      })
+
+      expect(onFrame).toHaveBeenCalledTimes(2)
+      expect(webContents.debugger.sendCommand).toHaveBeenCalledWith('Page.screencastFrameAck', {
+        sessionId: 43
+      })
+      const secondFrame = decodeBrowserScreencastFrame(onFrame.mock.calls[1][0])
+      expect(Buffer.from(secondFrame?.image ?? new Uint8Array()).toString()).toBe(
+        'second-live-frame'
+      )
+    } finally {
+      dateNow.mockRestore()
+      session.stop()
+      await session.done
+    }
+  })
+
   it('applies the client viewport before the screencast starts', async () => {
     const webContents = createMockWebContents()
 
@@ -119,6 +171,7 @@ describe('startBrowserScreencast', () => {
       viewportWidth: 1010,
       viewportHeight: 640,
       everyNthFrame: 2,
+      minFrameIntervalMs: 0,
       onFrame: vi.fn()
     })
 

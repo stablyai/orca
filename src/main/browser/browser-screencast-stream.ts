@@ -19,6 +19,7 @@ export type BrowserScreencastOptions = {
   viewportWidth?: number
   viewportHeight?: number
   everyNthFrame: number
+  minFrameIntervalMs: number
   onFrame: (bytes: Uint8Array<ArrayBufferLike>) => void
   onError?: (message: string) => void
 }
@@ -92,6 +93,7 @@ export async function startBrowserScreencast(
 
   let closed = false
   let seq = 0
+  let lastFrameSentAt = 0
   let deviceMetricsOverridden = false
   let resolveDone!: () => void
   const done = new Promise<void>((resolve) => {
@@ -136,6 +138,15 @@ export async function startBrowserScreencast(
     }
 
     try {
+      const now = Date.now()
+      if (
+        options.minFrameIntervalMs > 0 &&
+        lastFrameSentAt > 0 &&
+        now - lastFrameSentAt < options.minFrameIntervalMs
+      ) {
+        return
+      }
+      lastFrameSentAt = now
       options.onFrame(
         encodeBrowserScreencastFrame({
           opcode: BrowserScreencastOpcode.Frame,
@@ -173,6 +184,7 @@ export async function startBrowserScreencast(
       if (!data) {
         return
       }
+      lastFrameSentAt = Date.now()
       options.onFrame(
         encodeBrowserScreencastFrame({
           opcode: BrowserScreencastOpcode.Frame,
