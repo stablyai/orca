@@ -816,6 +816,15 @@ export default function AutomationsPage(): React.JSX.Element {
                     </div>
                   </button>
                 ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mt-1 w-full justify-start"
+                  onClick={() => openCreateDialog()}
+                >
+                  <Plus className="size-4" />
+                  Add new
+                </Button>
               </div>
             ) : null}
           </div>
