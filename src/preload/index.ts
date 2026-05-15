@@ -41,6 +41,7 @@ import type {
 } from '../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
+import type { ExternalEditorOpenRequest } from '../shared/external-editor'
 import type { SkillDiscoveryResult } from '../shared/skills'
 import type {
   RuntimeBrowserDriverState,
@@ -1620,6 +1621,9 @@ const api = {
 
     openInExternalEditor: (path: string, command?: string): Promise<ShellOpenLocalPathResult> =>
       ipcRenderer.invoke('shell:openInExternalEditor', path, command),
+
+    openExternalEditor: (args: ExternalEditorOpenRequest): Promise<boolean> =>
+      ipcRenderer.invoke('shell:openExternalEditor', args),
 
     openUrl: (url: string): Promise<void> => ipcRenderer.invoke('shell:openUrl', url),
 

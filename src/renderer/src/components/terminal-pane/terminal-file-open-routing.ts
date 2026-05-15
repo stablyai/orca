@@ -33,6 +33,23 @@ function openHtmlFileInBrowser(filePath: string, worktreeId: string): void {
   store.createBrowserTab(worktreeId, fileUrl, { title, activate: true })
 }
 
+async function tryOpenFileInExternalEditor(
+  filePath: string,
+  line: number | null,
+  column: number | null
+): Promise<boolean> {
+  const settings = useAppStore.getState().settings
+  if (settings?.fileLinkOpenTarget !== 'external-editor') {
+    return false
+  }
+
+  try {
+    return await window.api.shell.openExternalEditor({ filePath, line, column })
+  } catch {
+    return false
+  }
+}
+
 export function getTerminalFileContext(
   worktreeId: string,
   worktreePath: string,
@@ -96,6 +113,18 @@ export function openDetectedFilePath(
       !isRemoteRuntimeFileOperation(fileContext, filePath)
     ) {
       openHtmlFileInBrowser(filePath, worktreeId)
+      return
+    }
+
+    if (
+      !fileContext.connectionId &&
+      !isRemoteRuntimeFileOperation(fileContext, filePath) &&
+      (await tryOpenFileInExternalEditor(filePath, line, column))
+    ) {
+      return
+    }
+
+    if (requestId !== latestOpenDetectedFilePathRequestId) {
       return
     }
 

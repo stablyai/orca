@@ -24,6 +24,7 @@ import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-cl
 const openUrlMock = vi.fn()
 const openFileUriMock = vi.fn()
 const openFilePathMock = vi.fn()
+const openExternalEditorMock = vi.fn()
 const openFileMock = vi.fn()
 const authorizeExternalPathMock = vi.fn()
 const statMock = vi.fn().mockResolvedValue({ isDirectory: false })
@@ -36,7 +37,11 @@ const setPendingEditorRevealMock = vi.fn()
 const deps = { worktreeId: 'wt-1', worktreePath: '/tmp' }
 const storeState = {
   settings: undefined as
-    | { openLinksInApp?: boolean; activeRuntimeEnvironmentId?: string | null }
+    | {
+        openLinksInApp?: boolean
+        activeRuntimeEnvironmentId?: string | null
+        fileLinkOpenTarget?: 'orca' | 'external-editor'
+      }
     | undefined,
   setActiveWorktree: setActiveWorktreeMock,
   createBrowserTab: createBrowserTabMock,
@@ -90,6 +95,8 @@ async function flushDoubleRaf(): Promise<void> {
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   vi.clearAllMocks()
+  openExternalEditorMock.mockReset()
+  openExternalEditorMock.mockResolvedValue(false)
   runtimeEnvironmentTransportCallMock.mockReset()
   runtimeEnvironmentTransportCallMock.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
     return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCallMock(args)
@@ -104,6 +111,7 @@ beforeEach(() => {
         openUrl: openUrlMock,
         openFileUri: openFileUriMock,
         openFilePath: openFilePathMock,
+        openExternalEditor: openExternalEditorMock,
         pathExists: vi.fn().mockResolvedValue(true)
       },
       fs: {
@@ -394,9 +402,53 @@ describe('handleOscLink', () => {
     )
   })
 
+  it('opens local terminal file links in the configured external editor', async () => {
+    setPlatform('Macintosh')
+    storeState.settings = { fileLinkOpenTarget: 'external-editor' }
+    openExternalEditorMock.mockResolvedValueOnce(true)
+
+    openDetectedFilePath('/tmp/src/main.ts', 42, 7, deps)
+    await flushAsyncWork()
+
+    expect(openExternalEditorMock).toHaveBeenCalledWith({
+      filePath: '/tmp/src/main.ts',
+      line: 42,
+      column: 7
+    })
+    expect(openFileMock).not.toHaveBeenCalled()
+  })
+
+  it('falls back to Orca when external editor launch fails', async () => {
+    setPlatform('Macintosh')
+    storeState.settings = { fileLinkOpenTarget: 'external-editor' }
+    openExternalEditorMock.mockResolvedValueOnce(false)
+
+    openDetectedFilePath('/tmp/src/main.ts', 42, null, deps)
+    await flushAsyncWork()
+    await flushDoubleRaf()
+
+    expect(openExternalEditorMock).toHaveBeenCalledWith({
+      filePath: '/tmp/src/main.ts',
+      line: 42,
+      column: null
+    })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/tmp/src/main.ts' })
+    )
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
+      filePath: '/tmp/src/main.ts',
+      line: 42,
+      column: 1,
+      matchLength: 0
+    })
+  })
+
   it('stats remote-runtime file links through the active runtime environment', async () => {
     setPlatform('Macintosh')
-    storeState.settings = { activeRuntimeEnvironmentId: 'env-1' }
+    storeState.settings = {
+      activeRuntimeEnvironmentId: 'env-1',
+      fileLinkOpenTarget: 'external-editor'
+    }
     runtimeEnvironmentCallMock.mockResolvedValueOnce({
       id: 'rpc-1',
       ok: true,
@@ -409,6 +461,7 @@ describe('handleOscLink', () => {
 
     expect(authorizeExternalPathMock).not.toHaveBeenCalled()
     expect(statMock).not.toHaveBeenCalled()
+    expect(openExternalEditorMock).not.toHaveBeenCalled()
     await vi.waitFor(() => {
       expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
         selector: 'env-1',
@@ -460,6 +513,7 @@ describe('handleOscLink', () => {
 
   it('opens SSH file links through Orca without local authorization', async () => {
     setPlatform('Macintosh')
+    storeState.settings = { fileLinkOpenTarget: 'external-editor' }
     vi.mocked(getConnectionId).mockReturnValue('ssh-1')
 
     openDetectedFilePath('/home/me/repo/src/main.ts', null, null, {
@@ -469,6 +523,7 @@ describe('handleOscLink', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(openExternalEditorMock).not.toHaveBeenCalled()
     expect(statMock).toHaveBeenCalledWith({
       filePath: '/home/me/repo/src/main.ts',
       connectionId: 'ssh-1'

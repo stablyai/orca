@@ -43,6 +43,7 @@ vi.mock('node:fs/promises', () => ({
 }))
 
 vi.mock('node:child_process', () => ({
+  execFile: vi.fn(),
   spawn: spawnMock
 }))
 

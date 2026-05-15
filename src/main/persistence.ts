@@ -330,6 +330,61 @@ function normalizeNotificationSettings(value: unknown): NotificationSettings {
   }
 }
 
+function normalizeFileLinkOpenTarget(value: unknown): GlobalSettings['fileLinkOpenTarget'] {
+  return value === 'external-editor' ? 'external-editor' : 'orca'
+}
+
+function normalizeExternalEditorSettings(
+  value: unknown,
+  base: GlobalSettings['externalEditor'] = { kind: 'none', strategy: 'cli' }
+): GlobalSettings['externalEditor'] {
+  const defaults: GlobalSettings['externalEditor'] = base
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return defaults
+  }
+
+  const raw = value as Record<string, unknown>
+  const kind =
+    raw.kind === 'vscode' ||
+    raw.kind === 'vscode-insiders' ||
+    raw.kind === 'cursor' ||
+    raw.kind === 'jetbrains-idea' ||
+    raw.kind === 'custom' ||
+    raw.kind === 'none'
+      ? raw.kind
+      : defaults.kind
+  const strategy =
+    raw.strategy === 'url' || raw.strategy === 'cli' ? raw.strategy : defaults.strategy
+  const settings: GlobalSettings['externalEditor'] = { ...defaults, kind, strategy }
+
+  if ('command' in raw) {
+    if (typeof raw.command === 'string') {
+      settings.command = raw.command
+    } else {
+      delete settings.command
+    }
+  }
+  if ('argsTemplate' in raw) {
+    if (
+      Array.isArray(raw.argsTemplate) &&
+      raw.argsTemplate.every((entry) => typeof entry === 'string')
+    ) {
+      settings.argsTemplate = raw.argsTemplate
+    } else {
+      delete settings.argsTemplate
+    }
+  }
+  if ('urlTemplate' in raw) {
+    if (typeof raw.urlTemplate === 'string') {
+      settings.urlTemplate = raw.urlTemplate
+    } else {
+      delete settings.urlTemplate
+    }
+  }
+
+  return settings
+}
+
 function normalizeAutomationRunWorkspaceDisplayName(value: string | null): string | null {
   const trimmed = value?.trim()
   return trimmed ? trimmed : null
@@ -1621,6 +1676,8 @@ export class Store {
             ),
             disabledTuiAgents: normalizeDisabledTuiAgents(parsed.settings?.disabledTuiAgents),
             openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications),
+            fileLinkOpenTarget: normalizeFileLinkOpenTarget(parsed.settings?.fileLinkOpenTarget),
+            externalEditor: normalizeExternalEditorSettings(parsed.settings?.externalEditor),
             notifications: normalizeNotificationSettings(parsed.settings?.notifications),
             sourceControlAi: migratedSourceControlAi,
             // Why: new builds read sourceControlAi, but rollback builds still
@@ -2729,6 +2786,15 @@ export class Store {
     if ('openInApplications' in updates) {
       sanitizedUpdates.openInApplications = normalizeOpenInApplications(updates.openInApplications)
     }
+    if ('fileLinkOpenTarget' in updates) {
+      sanitizedUpdates.fileLinkOpenTarget = normalizeFileLinkOpenTarget(updates.fileLinkOpenTarget)
+    }
+    if ('externalEditor' in updates) {
+      sanitizedUpdates.externalEditor = normalizeExternalEditorSettings(
+        updates.externalEditor,
+        this.state.settings.externalEditor
+      )
+    }
     if ('terminalShortcutPolicy' in updates) {
       sanitizedUpdates.terminalShortcutPolicy = normalizeTerminalShortcutPolicy(
         updates.terminalShortcutPolicy
@@ -2774,6 +2840,10 @@ export class Store {
       notifications: normalizeNotificationSettings({
         ...this.state.settings.notifications,
         ...sanitizedUpdates.notifications
+      }),
+      externalEditor: normalizeExternalEditorSettings({
+        ...this.state.settings.externalEditor,
+        ...sanitizedUpdates.externalEditor
       }),
       ...(mergedTelemetry !== undefined ? { telemetry: mergedTelemetry } : {})
     }

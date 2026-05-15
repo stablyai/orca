@@ -1967,6 +1967,41 @@ describe('Store', () => {
     ])
   })
 
+  it('updateSettings normalizes and merges external editor settings', async () => {
+    const store = await createStore()
+    const first = store.updateSettings({
+      fileLinkOpenTarget: 'external-editor',
+      externalEditor: {
+        kind: 'custom',
+        strategy: 'cli',
+        command: 'my-editor',
+        argsTemplate: ['--goto', '{path}:{line}:{column}']
+      }
+    })
+    expect(first.fileLinkOpenTarget).toBe('external-editor')
+    expect(first.externalEditor).toMatchObject({
+      kind: 'custom',
+      strategy: 'cli',
+      command: 'my-editor',
+      argsTemplate: ['--goto', '{path}:{line}:{column}']
+    })
+
+    const second = store.updateSettings({
+      fileLinkOpenTarget: 'unsafe' as never,
+      externalEditor: {
+        strategy: 'url',
+        urlTemplate: 'vscode://file/{path}:{line}:{column}'
+      } as never
+    })
+    expect(second.fileLinkOpenTarget).toBe('orca')
+    expect(second.externalEditor).toMatchObject({
+      kind: 'custom',
+      strategy: 'url',
+      command: 'my-editor',
+      urlTemplate: 'vscode://file/{path}:{line}:{column}'
+    })
+  })
+
   it('updateSettings deep-merges and clamps notification custom sound volume', async () => {
     const store = await createStore()
     const updated = store.updateSettings({

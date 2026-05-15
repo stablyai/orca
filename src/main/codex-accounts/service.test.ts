@@ -62,6 +62,11 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     setupScriptLaunchMode: 'split-vertical',
     terminalScrollbackBytes: 10_000_000,
     openLinksInApp: false,
+    fileLinkOpenTarget: 'orca',
+    externalEditor: {
+      kind: 'none',
+      strategy: 'cli'
+    },
     rightSidebarOpenByDefault: true,
     sourceControlViewMode: 'list',
     showTitlebarAppName: true,

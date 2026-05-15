@@ -2,7 +2,13 @@
    splitting individual settings into separate files would scatter related controls without a
    meaningful abstraction boundary. */
 import { useEffect, useRef, useState } from 'react'
-import type { GlobalSettings, OpenInApplication } from '../../../../shared/types'
+import type {
+  ExternalEditorKind,
+  ExternalEditorOpenStrategy,
+  ExternalEditorSettings,
+  GlobalSettings,
+  OpenInApplication
+} from '../../../../shared/types'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -22,6 +28,7 @@ import {
   GENERAL_CACHE_TIMER_SEARCH_ENTRIES,
   GENERAL_CLI_SEARCH_ENTRIES,
   GENERAL_EDITOR_SEARCH_ENTRIES,
+  GENERAL_FILE_LINK_SEARCH_ENTRIES,
   GENERAL_NAVIGATION_SEARCH_ENTRIES,
   GENERAL_PANE_SEARCH_ENTRIES,
   GENERAL_SUPPORT_SEARCH_ENTRIES,
@@ -38,6 +45,24 @@ import {
   SettingsSwitch,
   SettingsSwitchRow
 } from './SettingsFormControls'
+
+const EXTERNAL_EDITOR_LABELS: Record<ExternalEditorKind, string> = {
+  none: 'None',
+  vscode: 'VS Code',
+  'vscode-insiders': 'VS Code Insiders',
+  cursor: 'Cursor',
+  'jetbrains-idea': 'JetBrains IDEA',
+  custom: 'Custom'
+}
+
+const EXTERNAL_EDITOR_KINDS: ExternalEditorKind[] = [
+  'none',
+  'vscode',
+  'vscode-insiders',
+  'cursor',
+  'jetbrains-idea',
+  'custom'
+]
 
 function createOpenInApplication(): OpenInApplication {
   return {
@@ -71,6 +96,17 @@ export function getDesktopPlatformFromUserAgent(userAgent: string): 'darwin' | '
     return 'win32'
   }
   return 'other'
+}
+
+function formatArgsTemplateForInput(template: string[] | undefined): string {
+  return template?.join('\n') ?? ''
+}
+
+function parseArgsTemplateInput(value: string): string[] {
+  return value
+    .split(/\r?\n/)
+    .map((part) => part.trim())
+    .filter(Boolean)
 }
 
 export { GENERAL_PANE_SEARCH_ENTRIES }
@@ -182,6 +218,15 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
   const applyOpenInApplicationsDraft = (applications: OpenInApplication[]): void => {
     setOpenInApplicationsDraft(applications)
     commitOpenInApplications(applications)
+  }
+
+  const updateExternalEditor = (updates: Partial<ExternalEditorSettings>): void => {
+    updateSettings({
+      externalEditor: {
+        ...settings.externalEditor,
+        ...updates
+      }
+    })
   }
 
   const handleBrowseWorkspace = async () => {
@@ -558,6 +603,161 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
             }
           />
         </SearchableSetting>
+      </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, GENERAL_FILE_LINK_SEARCH_ENTRIES) ? (
+      <section key="file-links" className="space-y-4">
+        <SettingsSubsectionHeader
+          title="File Links"
+          description="Choose where terminal file paths open."
+        />
+
+        <SearchableSetting
+          title="Open File Links In"
+          description="Choose where terminal file links open."
+          keywords={['file links', 'terminal links', 'editor', 'external']}
+          className="flex flex-col items-start gap-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <Label>Open File Links In</Label>
+            <p className="text-xs text-muted-foreground">
+              Terminal paths keep using Orca unless you opt into an external editor.
+            </p>
+          </div>
+          <SettingsSegmentedControl
+            ariaLabel="Open File Links In"
+            value={settings.fileLinkOpenTarget}
+            onChange={(option) => {
+              const fileLinkOpenTarget = option as GlobalSettings['fileLinkOpenTarget']
+              updateSettings({
+                fileLinkOpenTarget,
+                ...(fileLinkOpenTarget === 'external-editor' &&
+                settings.externalEditor.kind === 'none'
+                  ? { externalEditor: { ...settings.externalEditor, kind: 'vscode' } }
+                  : {})
+              })
+            }}
+            options={[
+              { value: 'orca', label: 'Orca' },
+              { value: 'external-editor', label: 'External' }
+            ]}
+          />
+        </SearchableSetting>
+
+        {settings.fileLinkOpenTarget === 'external-editor' ? (
+          <>
+            <SearchableSetting
+              title="External Editor"
+              description="Choose the external editor used for terminal file links."
+              keywords={['external editor', 'vscode', 'cursor', 'intellij', 'idea', 'custom']}
+              className="flex flex-col items-start gap-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <Label>External Editor</Label>
+                <p className="text-xs text-muted-foreground">
+                  Uses the selected editor launcher or URL template.
+                </p>
+              </div>
+              <Select
+                value={settings.externalEditor.kind}
+                onValueChange={(value) =>
+                  updateExternalEditor({ kind: value as ExternalEditorKind })
+                }
+              >
+                <SelectTrigger size="sm" className="h-8 w-[190px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {EXTERNAL_EDITOR_KINDS.map((kind) => (
+                    <SelectItem key={kind} value={kind}>
+                      {EXTERNAL_EDITOR_LABELS[kind]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </SearchableSetting>
+
+            <SearchableSetting
+              title="Open Strategy"
+              description="Choose whether Orca launches an editor command or opens an editor URL."
+              keywords={['external editor', 'cli', 'url', 'launcher']}
+              className="flex flex-col items-start gap-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <Label>Open Strategy</Label>
+                <p className="text-xs text-muted-foreground">CLI launchers are used by default.</p>
+              </div>
+              <SettingsSegmentedControl
+                ariaLabel="Open Strategy"
+                value={settings.externalEditor.strategy}
+                onChange={(option) =>
+                  updateExternalEditor({ strategy: option as ExternalEditorOpenStrategy })
+                }
+                options={[
+                  { value: 'cli', label: 'CLI' },
+                  { value: 'url', label: 'URL' }
+                ]}
+              />
+            </SearchableSetting>
+
+            {settings.externalEditor.kind === 'custom' &&
+            settings.externalEditor.strategy === 'cli' ? (
+              <>
+                <SearchableSetting
+                  title="Custom Command"
+                  description="Command to run when opening terminal file links."
+                  keywords={['custom', 'command', 'external editor']}
+                  className="space-y-2 py-2"
+                >
+                  <Label>Custom Command</Label>
+                  <Input
+                    value={settings.externalEditor.command ?? ''}
+                    onChange={(event) => updateExternalEditor({ command: event.target.value })}
+                    placeholder="my-editor"
+                    className="max-w-md text-xs"
+                  />
+                </SearchableSetting>
+
+                <SearchableSetting
+                  title="Custom Args Template"
+                  description="One argument per line. Supports {path}, {pathEncoded}, {line}, and {column}."
+                  keywords={['custom', 'args', 'template', 'path', 'line', 'column']}
+                  className="space-y-2 py-2"
+                >
+                  <Label>Custom Args Template</Label>
+                  <textarea
+                    value={formatArgsTemplateForInput(settings.externalEditor.argsTemplate)}
+                    onChange={(event) =>
+                      updateExternalEditor({
+                        argsTemplate: parseArgsTemplateInput(event.target.value)
+                      })
+                    }
+                    placeholder={'-g\n{path}:{line}:{column}'}
+                    className="min-h-20 w-full max-w-md rounded-md border border-input bg-background px-3 py-2 text-xs shadow-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  />
+                </SearchableSetting>
+              </>
+            ) : null}
+
+            {settings.externalEditor.kind === 'custom' &&
+            settings.externalEditor.strategy === 'url' ? (
+              <SearchableSetting
+                title="Custom URL Template"
+                description="Supports {path}, {pathEncoded}, {line}, and {column}."
+                keywords={['custom', 'url', 'template', 'path', 'line', 'column']}
+                className="space-y-2 py-2"
+              >
+                <Label>Custom URL Template</Label>
+                <Input
+                  value={settings.externalEditor.urlTemplate ?? ''}
+                  onChange={(event) => updateExternalEditor({ urlTemplate: event.target.value })}
+                  placeholder="vscode://file/{path}:{line}:{column}"
+                  className="max-w-xl text-xs"
+                />
+              </SearchableSetting>
+            ) : null}
+          </>
+        ) : null}
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, GENERAL_CLI_SEARCH_ENTRIES) ? (

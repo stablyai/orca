@@ -78,6 +78,32 @@ export const GENERAL_NAVIGATION_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
+export const GENERAL_FILE_LINK_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'Open File Links In',
+    description: 'Choose where terminal file links open.',
+    keywords: [
+      'file links',
+      'terminal links',
+      'editor',
+      'external',
+      'vscode',
+      'cursor',
+      'jetbrains'
+    ]
+  },
+  {
+    title: 'External Editor',
+    description: 'Choose the external editor used for terminal file links.',
+    keywords: ['file links', 'external editor', 'vscode', 'cursor', 'intellij', 'idea', 'custom']
+  },
+  {
+    title: 'Custom Editor Templates',
+    description: 'Configure command arguments or URL templates for a custom editor.',
+    keywords: ['custom', 'command', 'args', 'template', 'url']
+  }
+]
+
 export const GENERAL_CLI_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Shell command',
@@ -139,6 +165,7 @@ export const GENERAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   ...GENERAL_WORKSPACE_SEARCH_ENTRIES,
   ...GENERAL_NAVIGATION_SEARCH_ENTRIES,
   ...GENERAL_EDITOR_SEARCH_ENTRIES,
+  ...GENERAL_FILE_LINK_SEARCH_ENTRIES,
   ...GENERAL_CLI_SEARCH_ENTRIES,
   ...GENERAL_CACHE_TIMER_SEARCH_ENTRIES,
   ...GENERAL_UPDATE_SEARCH_ENTRIES,

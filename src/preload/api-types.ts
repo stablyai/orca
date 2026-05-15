@@ -8,6 +8,7 @@ import type {
   HostedReviewInfo
 } from '../shared/hosted-review'
 import type { AppIdentity } from '../shared/app-identity'
+import type { ExternalEditorOpenRequest } from '../shared/external-editor'
 import type {
   BaseRefDefaultResult,
   BaseRefSearchResult,
@@ -1402,6 +1403,7 @@ export type PreloadApi = {
     openPath: (path: string) => Promise<void>
     openInFileManager: (path: string) => Promise<ShellOpenLocalPathResult>
     openInExternalEditor: (path: string, command?: string) => Promise<ShellOpenLocalPathResult>
+    openExternalEditor: (args: ExternalEditorOpenRequest) => Promise<boolean>
     openUrl: (url: string) => Promise<void>
     openFilePath: (path: string) => Promise<void>
     openFileUri: (uri: string) => Promise<void>

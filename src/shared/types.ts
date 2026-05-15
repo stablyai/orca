@@ -1628,6 +1628,24 @@ export type OpenInApplication = {
   command: string
 }
 
+export type ExternalEditorKind =
+  | 'none'
+  | 'vscode'
+  | 'vscode-insiders'
+  | 'cursor'
+  | 'jetbrains-idea'
+  | 'custom'
+
+export type ExternalEditorOpenStrategy = 'cli' | 'url'
+
+export type ExternalEditorSettings = {
+  kind: ExternalEditorKind
+  strategy: ExternalEditorOpenStrategy
+  command?: string
+  argsTemplate?: string[]
+  urlTemplate?: string
+}
+
 export type SourceControlViewMode = 'list' | 'tree'
 
 export type FloatingTerminalCwdRequest = {
@@ -1737,6 +1755,8 @@ export type GlobalSettings = {
    *  The setting stays opt-in so existing workflows continue to use the system browser
    *  until the user explicitly wants worktree-scoped in-app browsing. */
   openLinksInApp: boolean
+  fileLinkOpenTarget: 'orca' | 'external-editor'
+  externalEditor: ExternalEditorSettings
   /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */
   openInApplications?: OpenInApplication[]
   /** Deprecated: migration/backward-compat only. Use PersistedUIState.rightSidebarOpen. */

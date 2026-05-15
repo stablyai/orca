@@ -7,6 +7,8 @@ import type { ShellOpenLocalPathResult } from '../../shared/shell-open-types'
 import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../shared/repo-icon'
 import { resolveCliCommand } from '../codex-cli/command'
 import { getSpawnArgsForWindows } from '../win32-utils'
+import type { Store } from '../persistence'
+import { registerExternalEditorFileLinkHandler } from './external-editor-file-links'
 
 export const EXTERNAL_EDITOR_CLI_COMMAND = 'code'
 
@@ -118,7 +120,7 @@ async function openInExternalEditor(
   }
 }
 
-export function registerShellHandlers(): void {
+export function registerShellHandlers(store?: Store): void {
   ipcMain.handle('shell:openPath', (_event, path: string) => {
     shell.showItemInFolder(path)
   })
@@ -133,6 +135,8 @@ export function registerShellHandlers(): void {
     (_event, path: string, command?: string): Promise<ShellOpenLocalPathResult> =>
       openInExternalEditor(path, command)
   )
+
+  registerExternalEditorFileLinkHandler(store)
 
   ipcMain.handle('shell:openUrl', (_event, rawUrl: string) => {
     let parsed: URL

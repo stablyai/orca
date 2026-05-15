@@ -213,6 +213,11 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     setupScriptLaunchMode: 'new-tab',
     terminalScrollbackBytes: 10_000_000,
     openLinksInApp: true,
+    fileLinkOpenTarget: 'orca',
+    externalEditor: {
+      kind: 'none',
+      strategy: 'cli'
+    },
     openInApplications: [],
     rightSidebarOpenByDefault: true,
     showGitIgnoredFiles: true,

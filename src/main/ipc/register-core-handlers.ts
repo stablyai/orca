@@ -144,7 +144,7 @@ export function registerCoreHandlers(
   // CookieMonster reads the imported cookies on first access.
   browserSessionRegistry.applyPendingCookieImport()
   browserSessionRegistry.restorePersistedUserAgent()
-  registerShellHandlers()
+  registerShellHandlers(store)
   registerPetHandlers()
   registerSessionHandlers(store)
   registerUIHandlers(store)
