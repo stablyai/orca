@@ -100,7 +100,19 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
   scanWorkspaceCleanup: async (args) => {
     set({ workspaceCleanupLoading: true, workspaceCleanupError: null })
     try {
-      const scan = await window.api.workspaceCleanup.scan(args)
+      const scanArgs =
+        args?.worktreeId !== undefined
+          ? args
+          : {
+              ...args,
+              skipGitWorktreeIds: [
+                ...new Set([
+                  ...(args?.skipGitWorktreeIds ?? []),
+                  ...getInitialWorkspaceCleanupGitDeferrals(get())
+                ])
+              ]
+            }
+      const scan = await window.api.workspaceCleanup.scan(scanArgs)
       const enriched = await enrichWorkspaceCleanupCandidates(scan.candidates, get())
       const result = { ...scan, candidates: enriched }
       set({ workspaceCleanupScan: result, workspaceCleanupLoading: false })
@@ -213,6 +225,51 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
     return { removedIds, failures }
   }
 })
+
+function getInitialWorkspaceCleanupGitDeferrals(state: AppState): string[] {
+  const ids = new Set<string>()
+  if (state.activeWorktreeId) {
+    ids.add(state.activeWorktreeId)
+  }
+
+  for (const file of state.openFiles) {
+    if (file.isDirty || state.editorDrafts[file.id] !== undefined) {
+      ids.add(file.worktreeId)
+    }
+  }
+
+  const openEditorWorktreeIds = new Set(state.openFiles.map((file) => file.worktreeId))
+  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
+    const tabIds = new Set(tabs.map((tab) => tab.id))
+    if (tabs.some((tab) => (state.ptyIdsByTabId[tab.id]?.length ?? 0) > 0)) {
+      ids.add(worktreeId)
+    }
+    if (hasFreshLiveAgent(state, tabIds) || hasWorkingTitleAgent(state, tabs)) {
+      ids.add(worktreeId)
+    }
+  }
+
+  for (const worktreeId of new Set([
+    ...openEditorWorktreeIds,
+    ...Object.keys(state.browserTabsByWorktree)
+  ])) {
+    const hasVisibleContext =
+      openEditorWorktreeIds.has(worktreeId) ||
+      (state.browserTabsByWorktree[worktreeId]?.length ?? 0) > 0
+    const lastVisitedAt = state.lastVisitedAtByWorktreeId[worktreeId] ?? 0
+    if (
+      hasVisibleContext &&
+      lastVisitedAt > 0 &&
+      Date.now() - lastVisitedAt <= RECENT_VISIBLE_CONTEXT_MS
+    ) {
+      ids.add(worktreeId)
+    }
+  }
+
+  // Why: these rows must stay visible, but they already need user attention.
+  // Defer expensive git reads until a focused refresh/remove preflight.
+  return [...ids]
+}
 
 export async function enrichWorkspaceCleanupCandidates(
   candidates: readonly WorkspaceCleanupCandidate[],

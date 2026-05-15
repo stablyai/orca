@@ -75,6 +75,7 @@ export type WorkspaceCleanupCandidate = {
 
 export type WorkspaceCleanupScanArgs = {
   worktreeId?: string
+  skipGitWorktreeIds?: string[]
 }
 
 export type WorkspaceCleanupScanResult = {

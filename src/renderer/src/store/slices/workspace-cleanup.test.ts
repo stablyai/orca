@@ -175,4 +175,63 @@ describe('workspace cleanup viewed rows', () => {
     })
     expect(removeWorktree).not.toHaveBeenCalled()
   })
+
+  it('defers git checks for locally active workspaces on initial scans', async () => {
+    const scan = vi.fn().mockResolvedValue({
+      scannedAt: NOW,
+      candidates: [],
+      errors: []
+    } satisfies WorkspaceCleanupScanResult)
+    ;(globalThis as { window: unknown }).window = {
+      api: {
+        workspaceCleanup: {
+          scan,
+          dismiss: vi.fn().mockResolvedValue(undefined),
+          clearDismissals: vi.fn().mockResolvedValue(undefined)
+        }
+      }
+    }
+
+    const store = createCleanupTestStore()
+    store.setState({
+      activeWorktreeId: WORKTREE_ID,
+      tabsByWorktree: {
+        'repo1::/tmp/terminal-workspace': [
+          { id: 'tab-1', title: 'zsh' }
+        ] as AppState['tabsByWorktree'][string]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    } as Partial<AppState>)
+
+    await store.getState().scanWorkspaceCleanup()
+
+    expect(scan).toHaveBeenCalledWith({
+      skipGitWorktreeIds: expect.arrayContaining([WORKTREE_ID, 'repo1::/tmp/terminal-workspace'])
+    })
+  })
+
+  it('does not defer git checks for focused remove preflights', async () => {
+    const scan = vi.fn().mockResolvedValue({
+      scannedAt: NOW,
+      candidates: [makeCandidate()],
+      errors: []
+    } satisfies WorkspaceCleanupScanResult)
+    ;(globalThis as { window: unknown }).window = {
+      api: {
+        workspaceCleanup: {
+          scan,
+          dismiss: vi.fn().mockResolvedValue(undefined),
+          clearDismissals: vi.fn().mockResolvedValue(undefined)
+        }
+      }
+    }
+
+    const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
+    const store = createCleanupTestStore(removeWorktree)
+    store.setState({ activeWorktreeId: 'repo1::/tmp/other-workspace' } as Partial<AppState>)
+
+    await store.getState().removeWorkspaceCleanupCandidates([WORKTREE_ID])
+
+    expect(scan).toHaveBeenCalledWith({ worktreeId: WORKTREE_ID })
+  })
 })

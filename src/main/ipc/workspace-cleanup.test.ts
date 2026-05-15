@@ -53,7 +53,10 @@ function makeStore(
   options: {
     baseRef?: string
     diffComments?: DiffComment[]
+    lastActivityAt?: number
+    linkedIssue?: number | null
     linkedPR?: number | null
+    prState?: PRInfo['state']
     repos?: Repo[]
   } = {}
 ): Store {
@@ -68,7 +71,7 @@ function makeStore(
             data: {
               number: 123,
               title: 'Feature',
-              state: 'merged',
+              state: options.prState ?? 'merged',
               url: 'https://github.example/pull/123',
               checksStatus: 'success',
               updatedAt: '2026-05-14T00:00:00Z',
@@ -80,7 +83,8 @@ function makeStore(
     getRepos: () => options.repos ?? [REPO],
     getWorktreeMeta: () => ({
       linkedPR,
-      lastActivityAt: NOW - 40 * 24 * 60 * 60 * 1000,
+      linkedIssue: options.linkedIssue ?? null,
+      lastActivityAt: options.lastActivityAt ?? NOW - 40 * 24 * 60 * 60 * 1000,
       baseRef,
       diffComments: options.diffComments
     }),
@@ -145,6 +149,7 @@ describe('workspace cleanup scan', () => {
       prStateCheckedAt: staleFetchedAt
     })
     expect(result.candidates[0].reasons).not.toContain('pr-merged')
+    expect(getStatusMock).not.toHaveBeenCalled()
   })
 
   it('keeps raw scan errors out of renderer-facing results', async () => {
@@ -174,6 +179,74 @@ describe('workspace cleanup scan', () => {
       }
     ])
     expect(result.candidates).toEqual([])
+  })
+
+  it('skips git status for workspaces with no cleanup signal', async () => {
+    const result = await scanWorkspaceCleanup(
+      makeStore(null, {
+        linkedPR: null,
+        lastActivityAt: NOW - 2 * 24 * 60 * 60 * 1000
+      })
+    )
+
+    expect(getStatusMock).not.toHaveBeenCalled()
+    expect(getBranchCompareMock).not.toHaveBeenCalled()
+    expect(result.candidates[0]).toMatchObject({
+      tier: 'review',
+      selectedByDefault: false,
+      git: {
+        clean: null,
+        checkedAt: null
+      }
+    })
+  })
+
+  it('honors renderer git deferrals without hiding the workspace', async () => {
+    const result = await scanWorkspaceCleanup(makeStore(NOW), {
+      skipGitWorktreeIds: ['repo-1::/repo-feature']
+    })
+
+    expect(getStatusMock).not.toHaveBeenCalled()
+    expect(result.candidates[0]).toMatchObject({
+      tier: 'review',
+      selectedByDefault: false,
+      reasons: ['pr-merged'],
+      git: {
+        clean: null,
+        checkedAt: null
+      }
+    })
+  })
+
+  it('skips branch compare when upstream status already proves no unpushed commits', async () => {
+    const result = await scanWorkspaceCleanup(makeStore(NOW))
+
+    expect(getStatusMock).toHaveBeenCalledTimes(1)
+    expect(getBranchCompareMock).not.toHaveBeenCalled()
+    expect(result.candidates[0]).toMatchObject({
+      tier: 'ready',
+      selectedByDefault: true,
+      git: {
+        clean: true,
+        upstreamAhead: 0,
+        branchCompareChangedFiles: null
+      }
+    })
+  })
+
+  it('runs branch compare for trusted closed PRs before marking them clean', async () => {
+    const result = await scanWorkspaceCleanup(makeStore(NOW, { prState: 'closed' }))
+
+    expect(getStatusMock).toHaveBeenCalledTimes(1)
+    expect(getBranchCompareMock).toHaveBeenCalledTimes(1)
+    expect(result.candidates[0]).toMatchObject({
+      tier: 'ready',
+      selectedByDefault: true,
+      reasons: ['pr-closed-clean', 'idle-clean'],
+      git: {
+        branchCompareChangedFiles: 0
+      }
+    })
   })
 
   it('does not default-select idle-only workspaces with local diff comments', async () => {
