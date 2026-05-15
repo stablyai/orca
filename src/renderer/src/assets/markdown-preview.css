@@ -210,6 +210,64 @@
   background: color-mix(in srgb, #fb923c 60%, transparent);
 }
 
+.markdown-annotation-block {
+  position: relative;
+}
+
+.markdown-annotation-block:hover > .markdown-annotation-controls > .markdown-annotation-add,
+.markdown-annotation-block:focus-within > .markdown-annotation-controls > .markdown-annotation-add,
+li:hover > .markdown-annotation-controls > .markdown-annotation-add,
+li:focus-within > .markdown-annotation-controls > .markdown-annotation-add {
+  opacity: 1;
+}
+
+.markdown-annotation-controls {
+  margin-top: 6px;
+}
+
+.markdown-annotation-add {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-radius: 4px;
+  background: var(--background);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 100ms ease,
+    color 100ms ease,
+    background-color 100ms ease;
+}
+
+.markdown-annotation-add:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.markdown-annotation-add:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+  opacity: 1;
+}
+
+.markdown-annotation-composer,
+.markdown-annotation-card {
+  max-width: 520px;
+  margin-top: 6px;
+}
+
+.markdown-annotation-composer {
+  border: 1px solid color-mix(in srgb, var(--foreground) 18%, transparent);
+  border-radius: 6px;
+  background: var(--editor-surface);
+  padding: 8px;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
 .markdown-body h1,
 .markdown-body h2,
 .markdown-body h3,

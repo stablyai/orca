@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: this test file owns the diff-comments
+slice's persistence, runtime routing, rollback, and compatibility behavior. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
@@ -170,6 +172,61 @@ function seed(store: ReturnType<typeof createTestStore>, comments: DiffComment[]
     worktreesByRepo: { [REPO]: [makeWorktree(comments)] }
   })
 }
+
+describe('addDiffComment', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    clearRuntimeCompatibilityCacheForTests()
+    runtimeEnvironmentTransportCall.mockReset()
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
+    })
+    updateMeta.mockResolvedValue({})
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { ok: true },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+  })
+
+  it('persists source and startLine for ranged comments', async () => {
+    const store = createTestStore()
+    seed(store, [])
+
+    const saved = await store.getState().addDiffComment({
+      worktreeId: WT,
+      filePath: 'README.md',
+      source: 'markdown',
+      startLine: 2,
+      lineNumber: 4,
+      body: 'range note',
+      side: 'modified'
+    })
+
+    expect(saved).toEqual(
+      expect.objectContaining({
+        filePath: 'README.md',
+        source: 'markdown',
+        startLine: 2,
+        lineNumber: 4,
+        body: 'range note'
+      })
+    )
+    expect(updateMeta).toHaveBeenCalledWith({
+      worktreeId: WT,
+      updates: {
+        diffComments: [
+          expect.objectContaining({
+            source: 'markdown',
+            startLine: 2,
+            lineNumber: 4
+          })
+        ]
+      }
+    })
+  })
+})
 
 describe('updateDiffComment', () => {
   beforeEach(() => {
