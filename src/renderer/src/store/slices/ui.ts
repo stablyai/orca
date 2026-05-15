@@ -8,6 +8,7 @@ import type {
   PersistedTrustedOrcaHooks,
   PersistedUIState,
   StatusBarItem,
+  TaskProvider,
   TaskResumeState,
   TaskViewPresetId,
   TuiAgent,
@@ -17,6 +18,10 @@ import type {
 } from '../../../../shared/types'
 import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/types'
 import { PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items'
+import {
+  normalizeVisibleTaskProviders,
+  resolveVisibleTaskProvider
+} from '../../../../shared/task-providers'
 import {
   DEFAULT_STATUS_BAR_ITEMS,
   DEFAULT_WORKTREE_CARD_PROPERTIES
@@ -211,7 +216,7 @@ export type UISlice = {
   taskPageData: {
     preselectedRepoId?: string
     prefilledName?: string
-    taskSource?: 'github' | 'linear' | 'gitlab'
+    taskSource?: TaskProvider
   }
   taskResumeState: TaskResumeState | undefined
   setTaskResumeState: (updates: Partial<TaskResumeState>) => void
@@ -257,6 +262,7 @@ export type UISlice = {
       | 'general'
       | 'browser'
       | 'appearance'
+      | 'tasks'
       | 'terminal'
       | 'computer-use'
       | 'developer-permissions'
@@ -465,7 +471,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     // be deduped. This removes ~300–800ms of perceived latency on initial
     // page load.
     const state = get()
-    const resolvedSource = data.taskSource ?? state.settings?.defaultTaskSource ?? 'github'
+    const visibleTaskProviders = normalizeVisibleTaskProviders(state.settings?.visibleTaskProviders)
+    const resolvedSource = resolveVisibleTaskProvider(
+      data.taskSource ?? state.settings?.defaultTaskSource,
+      visibleTaskProviders
+    )
     const resolvedMode = state.taskResumeState?.githubMode ?? 'items'
     if (resolvedSource === 'github' && resolvedMode === 'items') {
       const eligibleRepos = state.repos.filter((repo) => isGitRepoKind(repo) && repo.path)

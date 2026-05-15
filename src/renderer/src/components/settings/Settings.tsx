@@ -10,6 +10,7 @@ import {
   Globe,
   Info,
   Keyboard,
+  ListChecks,
   Lock,
   MousePointerClick,
   Network,
@@ -56,6 +57,8 @@ import { ORCHESTRATION_PANE_SEARCH_ENTRIES } from './orchestration-search'
 import { AccountsPane, ACCOUNTS_PANE_SEARCH_ENTRIES } from './AccountsPane'
 import { StatsPane, STATS_PANE_SEARCH_ENTRIES } from '../stats/StatsPane'
 import { IntegrationsPane, INTEGRATIONS_PANE_SEARCH_ENTRIES } from './IntegrationsPane'
+import { TasksPane } from './TasksPane'
+import { TASKS_PANE_SEARCH_ENTRIES } from './tasks-search'
 import {
   DeveloperPermissionsPane,
   DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES
@@ -80,6 +83,7 @@ type SettingsNavTarget =
   | 'accounts'
   | 'browser'
   | 'git'
+  | 'tasks'
   | 'appearance'
   | 'terminal'
   | 'notifications'
@@ -446,6 +450,13 @@ function Settings(): React.JSX.Element {
         // so its search entries belong to Git too — that way a query like
         // "claude" or "thinking" still surfaces the section.
         searchEntries: [...GIT_PANE_SEARCH_ENTRIES, ...COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES]
+      },
+      {
+        id: 'tasks',
+        title: 'Tasks',
+        description: 'Choose which task providers appear in the Tasks page and sidebar.',
+        icon: ListChecks,
+        searchEntries: TASKS_PANE_SEARCH_ENTRIES
       },
       {
         id: 'appearance',
@@ -829,6 +840,15 @@ function Settings(): React.JSX.Element {
                     displayedGitUsername={displayedGitUsername}
                   />
                   <CommitMessageAiPane settings={settings} updateSettings={updateSettings} />
+                </SettingsSection>
+
+                <SettingsSection
+                  id="tasks"
+                  title="Tasks"
+                  description="Choose which task providers appear in the Tasks page and sidebar."
+                  searchEntries={TASKS_PANE_SEARCH_ENTRIES}
+                >
+                  <TasksPane settings={settings} updateSettings={updateSettings} />
                 </SettingsSection>
 
                 <SettingsSection

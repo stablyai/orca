@@ -8,6 +8,7 @@ import {
   getRemoteRuntimeTerminalHandle
 } from '@/runtime/runtime-terminal-stream'
 import { normalizeTerminalQuickCommands } from '../../../../shared/terminal-quick-commands'
+import { normalizeVisibleTaskProviders } from '../../../../shared/task-providers'
 
 export type SettingsSlice = {
   settings: GlobalSettings | null
@@ -227,6 +228,11 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       if ('terminalQuickCommands' in updates) {
         sanitizedUpdates.terminalQuickCommands = normalizeTerminalQuickCommands(
           updates.terminalQuickCommands
+        )
+      }
+      if ('visibleTaskProviders' in updates) {
+        sanitizedUpdates.visibleTaskProviders = normalizeVisibleTaskProviders(
+          updates.visibleTaskProviders
         )
       }
       await window.api.settings.set(sanitizedUpdates)

@@ -6,10 +6,12 @@ import type { GitHubProjectSettings } from './github-project-types'
 import type { MigrationUnsupportedPtyEntry } from './agent-status-types'
 import type { VoiceSettings } from './speech-types'
 import type { GitLabProjectSettings } from './gitlab-types'
+import type { TaskProvider } from './task-providers'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
 export type { WorkspaceSource as WorkspaceCreateTelemetrySource } from './telemetry-events'
+export type { TaskProvider } from './task-providers'
 
 // ─── Shell PATH hydration ────────────────────────────────────────────
 // Why: shared so the main-side `HydrationResult` discriminator and the
@@ -1348,7 +1350,11 @@ export type GlobalSettings = {
   defaultTaskViewPreset: TaskViewPresetId
   /** Why: persists the user's last-used task source so the Tasks page
    *  reopens to the same provider instead of always defaulting to GitHub. */
-  defaultTaskSource: 'github' | 'linear' | 'gitlab'
+  defaultTaskSource: TaskProvider
+  /** Why: users may only work from one hosted task system. Persisting this
+   *  list hides unused providers from Tasks chrome and sidebar shortcuts while
+   *  leaving the chosen default source stable when it is still visible. */
+  visibleTaskProviders: TaskProvider[]
   /** Why: persists the user's repo selection in the cross-repo tasks view.
    *  `null` means sticky-all — every eligible repo is selected, including
    *  repos added in future sessions, so the "All repos" label stays

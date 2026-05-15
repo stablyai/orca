@@ -66,6 +66,7 @@ import { pruneLocalTerminalScrollbackBuffers } from '../shared/workspace-session
 import { pruneWorkspaceSessionBrowserHistory } from '../shared/workspace-session-browser-history'
 import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
 import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
+import { normalizeVisibleTaskProviders } from '../shared/task-providers'
 import {
   DEFAULT_WORKSPACE_STATUS_ID,
   clampWorkspaceBoardOpacity,
@@ -989,6 +990,9 @@ export class Store {
             terminalQuickCommands: normalizeTerminalQuickCommands(
               parsed.settings?.terminalQuickCommands
             ),
+            visibleTaskProviders: normalizeVisibleTaskProviders(
+              parsed.settings?.visibleTaskProviders
+            ),
             notifications: {
               ...getDefaultNotificationSettings(),
               ...parsed.settings?.notifications
@@ -1739,6 +1743,11 @@ export class Store {
     if ('terminalQuickCommands' in updates) {
       sanitizedUpdates.terminalQuickCommands = normalizeTerminalQuickCommands(
         updates.terminalQuickCommands
+      )
+    }
+    if ('visibleTaskProviders' in updates) {
+      sanitizedUpdates.visibleTaskProviders = normalizeVisibleTaskProviders(
+        updates.visibleTaskProviders
       )
     }
     // Why: `telemetry` is deep-merged for the same reason `notifications` is —
