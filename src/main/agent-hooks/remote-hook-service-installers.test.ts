@@ -12,6 +12,7 @@ import { CursorHookService } from '../cursor/hook-service'
 import { GeminiHookService } from '../gemini/hook-service'
 import { ClaudeHookService } from '../claude/hook-service'
 import { GrokHookService } from '../grok/hook-service'
+import { HermesHookService } from '../hermes/hook-service'
 
 type FakeFs = {
   files: Map<string, string>
@@ -247,5 +248,21 @@ describe('remote hook service installers', () => {
       expect(command).toMatch(/^if \[ -x /)
     }
     expect(grokConfig.hooks.PreToolUse?.[0]?.matcher).toBe('*')
+  })
+
+  it('installs remote Hermes plugin files and enables the plugin', async () => {
+    const { sftp, fs } = createFakeSftp()
+
+    const status = await new HermesHookService().installRemote(sftp, '/home/dev')
+
+    expect(status.state).toBe('installed')
+    expect(status.configPath).toBe('/home/dev/.hermes/config.yaml')
+    expect(fs.files.get('/home/dev/.hermes/plugins/orca-status/plugin.yaml')).toContain(
+      'pre_llm_call'
+    )
+    expect(fs.files.get('/home/dev/.hermes/plugins/orca-status/__init__.py')).toContain(
+      '/hook/hermes'
+    )
+    expect(fs.files.get('/home/dev/.hermes/config.yaml')).toContain('orca-status')
   })
 })
