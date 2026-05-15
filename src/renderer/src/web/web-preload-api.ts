@@ -489,6 +489,11 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.commit', { worktree: worktree.id, message })
     },
+    generateCommitMessage: async () => ({
+      success: false,
+      error: 'Commit message generation is unavailable in the web client.'
+    }),
+    cancelGenerateCommitMessage: () => Promise.resolve(),
     stage: async ({ worktreePath, filePath }) => mutateGitPath('git.stage', worktreePath, filePath),
     bulkStage: async ({ worktreePath, filePaths }) =>
       mutateGitPaths('git.bulkStage', worktreePath, filePaths),
