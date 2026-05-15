@@ -309,14 +309,16 @@ function RightSidebarInner(): React.JSX.Element {
         {activityBarPosition === 'top' ? (
           /* ── Top activity bar: horizontal icon row ── */
           <ContextMenu>
-            <ContextMenuTrigger asChild>
-              <div className="flex items-center justify-between border-b border-border h-[36px] min-h-[36px] pl-2 pr-1 right-sidebar-header-inset">
-                <TooltipProvider delayDuration={400}>
-                  <div className="flex items-center">{activityBarIcons}</div>
-                  <div className="flex items-center">{closeButton}</div>
-                </TooltipProvider>
-              </div>
-            </ContextMenuTrigger>
+            <div className="flex items-center justify-between border-b border-border h-[36px] min-h-[36px] pl-2 pr-1 right-sidebar-header-inset right-sidebar-header-drag">
+              <TooltipProvider delayDuration={400}>
+                <ContextMenuTrigger asChild>
+                  <div className="flex items-center right-sidebar-header-no-drag">
+                    {activityBarIcons}
+                  </div>
+                </ContextMenuTrigger>
+                <div className="flex items-center">{closeButton}</div>
+              </TooltipProvider>
+            </div>
             <ActivityBarPositionMenu
               currentPosition={activityBarPosition}
               onChangePosition={setActivityBarPosition}
@@ -329,7 +331,7 @@ function RightSidebarInner(): React.JSX.Element {
              the panel header. right-sidebar-header-side-inset applies exactly
              that remainder (138-40=98px) as padding-right so the close button
              clears the minimize button without the full 138px gap. */
-          <div className="flex items-center justify-between h-[36px] min-h-[36px] px-3 border-b border-border right-sidebar-header-side-inset">
+          <div className="flex items-center justify-between h-[36px] min-h-[36px] px-3 border-b border-border right-sidebar-header-side-inset right-sidebar-header-drag">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
               {visibleItems.find((item) => item.id === effectiveTab)?.title ?? ''}
             </span>
@@ -423,7 +425,7 @@ function ActivityBarButton({
       <TooltipTrigger asChild>
         <button
           className={cn(
-            'relative flex items-center justify-center transition-colors',
+            'relative flex items-center justify-center transition-colors right-sidebar-header-no-drag',
             isTop ? 'h-[36px] w-9' : 'w-10 h-10',
             active ? 'text-foreground' : 'text-muted-foreground/60 hover:text-muted-foreground'
           )}
