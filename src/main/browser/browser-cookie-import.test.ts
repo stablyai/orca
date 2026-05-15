@@ -15,6 +15,7 @@ import { importCookiesFromFile, detectInstalledBrowsers } from './browser-cookie
 import { writeFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { BROWSER_FAMILY_LABELS } from '../../shared/constants'
 
 describe('importCookiesFromFile', () => {
   let tmpDir: string
@@ -356,5 +357,72 @@ describe('detectInstalledBrowsers — Comet', () => {
     const { detectInstalledBrowsers } = await import('./browser-cookie-import')
     const detected = detectInstalledBrowsers()
     expect(detected.find((b) => b.family === 'comet')).toBeUndefined()
+  })
+})
+
+describe('getUserAgentForBrowser — Comet', () => {
+  const originalPlatform = process.platform
+
+  beforeEach(() => {
+    vi.resetModules()
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+  })
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: originalPlatform })
+    vi.restoreAllMocks()
+  })
+
+  it('returns a Chrome-shaped UA string when Comet plist version reads successfully', async () => {
+    vi.doMock('node:child_process', async () => {
+      const actual = await vi.importActual<typeof import('node:child_process')>('node:child_process')
+      return {
+        ...actual,
+        execFileSync: (cmd: string, args: readonly string[]) => {
+          if (cmd === 'defaults' && args[1]?.includes('/Applications/Comet.app/Contents/Info')) {
+            return '120.0.6099.71\n'
+          }
+          return actual.execFileSync(cmd, args as never)
+        }
+      }
+    })
+
+    const { getUserAgentForBrowser } = await import('./browser-cookie-import')
+    const ua = getUserAgentForBrowser('comet')
+
+    expect(ua).not.toBeNull()
+    expect(ua).toContain('Macintosh; Intel Mac OS X 10_15_7')
+    expect(ua).toContain('AppleWebKit/537.36')
+    expect(ua).toContain('Chrome/120.0.6099.71')
+    expect(ua).toContain('Safari/537.36')
+  })
+
+  it('returns null when reading the Comet plist version throws', async () => {
+    vi.doMock('node:child_process', async () => {
+      const actual = await vi.importActual<typeof import('node:child_process')>('node:child_process')
+      return {
+        ...actual,
+        execFileSync: () => {
+          throw new Error('defaults: domain not found')
+        }
+      }
+    })
+
+    const { getUserAgentForBrowser } = await import('./browser-cookie-import')
+    const ua = getUserAgentForBrowser('comet')
+    expect(ua).toBeNull()
+  })
+
+  it('returns null on non-darwin platforms regardless of family', async () => {
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    const { getUserAgentForBrowser } = await import('./browser-cookie-import')
+    const ua = getUserAgentForBrowser('comet')
+    expect(ua).toBeNull()
+  })
+})
+
+describe('BROWSER_FAMILY_LABELS — Comet', () => {
+  it('maps the comet family key to the user-facing label "Comet"', () => {
+    expect(BROWSER_FAMILY_LABELS.comet).toBe('Comet')
   })
 })
