@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: cleanup store tests share a Zustand store
+   harness and mocked window API; splitting would obscure the state transitions. */
 import { create } from 'zustand'
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
@@ -136,6 +138,32 @@ describe('workspace cleanup viewed rows', () => {
     expect(candidate.blockers).toContain('active-workspace')
   })
 
+  it('protects recently visible old workspaces with open context', async () => {
+    const [candidate] = await enrichWorkspaceCleanupCandidates(
+      [makeCandidate()],
+      makeState({
+        openFiles: [
+          {
+            id: 'file-1',
+            worktreeId: WORKTREE_ID,
+            filePath: '/tmp/old-workspace/src/app.ts',
+            relativePath: 'src/app.ts',
+            language: 'typescript',
+            isDirty: false
+          }
+        ] as AppState['openFiles'],
+        lastVisitedAtByWorktreeId: {
+          [WORKTREE_ID]: Date.now()
+        }
+      }),
+      { applyDismissals: false }
+    )
+
+    expect(candidate.tier).toBe('protected')
+    expect(candidate.selectedByDefault).toBe(false)
+    expect(candidate.blockers).toContain('recent-visible-context')
+  })
+
   it('uses current renderer state after async delete preflight scan resolves', async () => {
     let resolveScan: (value: WorkspaceCleanupScanResult) => void
     const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
@@ -151,7 +179,10 @@ describe('workspace cleanup viewed rows', () => {
               })
           ),
           dismiss: vi.fn().mockResolvedValue(undefined),
-          clearDismissals: vi.fn().mockResolvedValue(undefined)
+          clearDismissals: vi.fn().mockResolvedValue(undefined),
+          hasKillableLocalProcesses: vi.fn().mockResolvedValue({
+            hasKillableProcesses: false
+          })
         }
       }
     }
@@ -161,16 +192,10 @@ describe('workspace cleanup viewed rows', () => {
     resolveScan!({ scannedAt: NOW, candidates: [makeCandidate()], errors: [] })
 
     await expect(removal).resolves.toEqual({
-      removedIds: [],
-      failures: [
-        {
-          worktreeId: WORKTREE_ID,
-          displayName: 'old-workspace',
-          message: 'active-workspace'
-        }
-      ]
+      removedIds: [WORKTREE_ID],
+      failures: []
     })
-    expect(removeWorktree).not.toHaveBeenCalled()
+    expect(removeWorktree).toHaveBeenCalledWith(WORKTREE_ID, false)
   })
 
   it('defers git checks for locally active workspaces on initial scans', async () => {
@@ -184,7 +209,10 @@ describe('workspace cleanup viewed rows', () => {
         workspaceCleanup: {
           scan,
           dismiss: vi.fn().mockResolvedValue(undefined),
-          clearDismissals: vi.fn().mockResolvedValue(undefined)
+          clearDismissals: vi.fn().mockResolvedValue(undefined),
+          hasKillableLocalProcesses: vi.fn().mockResolvedValue({
+            hasKillableProcesses: false
+          })
         }
       }
     }
@@ -218,7 +246,10 @@ describe('workspace cleanup viewed rows', () => {
         workspaceCleanup: {
           scan,
           dismiss: vi.fn().mockResolvedValue(undefined),
-          clearDismissals: vi.fn().mockResolvedValue(undefined)
+          clearDismissals: vi.fn().mockResolvedValue(undefined),
+          hasKillableLocalProcesses: vi.fn().mockResolvedValue({
+            hasKillableProcesses: false
+          })
         }
       }
     }
@@ -230,5 +261,103 @@ describe('workspace cleanup viewed rows', () => {
     await store.getState().removeWorkspaceCleanupCandidates([WORKTREE_ID])
 
     expect(scan).toHaveBeenCalledWith({ worktreeId: WORKTREE_ID })
+  })
+
+  it('lets explicitly selected not-suggested workspaces reach the removal path', async () => {
+    const scan = vi.fn().mockResolvedValue({
+      scannedAt: NOW,
+      candidates: [makeCandidate()],
+      errors: []
+    } satisfies WorkspaceCleanupScanResult)
+    const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
+    ;(globalThis as { window: unknown }).window = {
+      api: {
+        workspaceCleanup: {
+          scan,
+          dismiss: vi.fn().mockResolvedValue(undefined),
+          clearDismissals: vi.fn().mockResolvedValue(undefined),
+          hasKillableLocalProcesses: vi.fn().mockResolvedValue({
+            hasKillableProcesses: true
+          })
+        }
+      }
+    }
+
+    const store = createCleanupTestStore(removeWorktree)
+
+    store.setState({
+      tabsByWorktree: {
+        [WORKTREE_ID]: [{ id: 'tab-1', title: 'zsh' }] as AppState['tabsByWorktree'][string]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    } as Partial<AppState>)
+
+    await expect(store.getState().removeWorkspaceCleanupCandidates([WORKTREE_ID])).resolves.toEqual(
+      {
+        removedIds: [WORKTREE_ID],
+        failures: []
+      }
+    )
+    expect(removeWorktree).toHaveBeenCalledWith(WORKTREE_ID, false)
+  })
+
+  it('protects old workspaces when an agent process is still foregrounded', async () => {
+    ;(globalThis as { window: unknown }).window = {
+      api: {
+        pty: {
+          hasChildProcesses: vi.fn().mockResolvedValue(true),
+          getForegroundProcess: vi.fn().mockResolvedValue('codex')
+        }
+      }
+    }
+
+    const [candidate] = await enrichWorkspaceCleanupCandidates(
+      [makeCandidate()],
+      makeState({
+        tabsByWorktree: {
+          [WORKTREE_ID]: [{ id: 'tab-1', title: 'zsh' }] as AppState['tabsByWorktree'][string]
+        },
+        ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+      }),
+      { applyDismissals: false }
+    )
+
+    expect(candidate.tier).toBe('protected')
+    expect(candidate.selectedByDefault).toBe(false)
+    expect(candidate.blockers).toContain('running-terminal')
+  })
+
+  it('does not let an idle title in another tab mask a running agent process', async () => {
+    ;(globalThis as { window: unknown }).window = {
+      api: {
+        pty: {
+          hasChildProcesses: vi.fn(async (ptyId: string) => ptyId === 'pty-running'),
+          getForegroundProcess: vi.fn(async (ptyId: string) =>
+            ptyId === 'pty-running' ? 'codex' : 'zsh'
+          )
+        }
+      }
+    }
+
+    const [candidate] = await enrichWorkspaceCleanupCandidates(
+      [makeCandidate()],
+      makeState({
+        tabsByWorktree: {
+          [WORKTREE_ID]: [
+            { id: 'tab-running', title: 'zsh' },
+            { id: 'tab-idle', title: 'Codex done' }
+          ] as AppState['tabsByWorktree'][string]
+        },
+        ptyIdsByTabId: {
+          'tab-running': ['pty-running'],
+          'tab-idle': ['pty-idle']
+        }
+      }),
+      { applyDismissals: false }
+    )
+
+    expect(candidate.tier).toBe('protected')
+    expect(candidate.selectedByDefault).toBe(false)
+    expect(candidate.blockers).toContain('running-terminal')
   })
 })

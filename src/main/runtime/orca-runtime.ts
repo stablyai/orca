@@ -5312,6 +5312,23 @@ export class OrcaRuntimeService {
     return { stopped }
   }
 
+  async hasTerminalsForWorktree(worktreeSelector: string): Promise<boolean> {
+    const graphEpoch = this.captureReadyGraphEpoch()
+    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    this.assertStableReadyGraph(graphEpoch)
+    for (const leaf of this.leaves.values()) {
+      if (leaf.worktreeId === worktree.id && leaf.ptyId) {
+        return true
+      }
+    }
+    for (const pty of this.ptysById.values()) {
+      if (pty.worktreeId === worktree.id && pty.connected) {
+        return true
+      }
+    }
+    return false
+  }
+
   markRendererReloading(windowId: number): void {
     if (windowId !== this.authoritativeWindowId) {
       return

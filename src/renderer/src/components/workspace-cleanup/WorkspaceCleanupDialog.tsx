@@ -3,9 +3,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AlertTriangle,
   Check,
-  ChevronDown,
-  ChevronRight,
+  EyeOff,
   Loader2,
+  Minus,
   RefreshCcw,
   Search,
   Trash2,
@@ -27,7 +27,7 @@ import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import {
-  canSelectWorkspaceCleanupCandidate,
+  canQueueWorkspaceCleanupCandidate,
   type WorkspaceCleanupBlocker,
   type WorkspaceCleanupCandidate,
   type WorkspaceCleanupScanError,
@@ -39,6 +39,8 @@ const TIER_LABELS: Record<WorkspaceCleanupTier, string> = {
   review: 'Needs a closer look',
   protected: 'Not suggested for cleanup'
 }
+
+type CleanupView = WorkspaceCleanupTier | 'hidden'
 
 const BLOCKER_LABELS: Record<WorkspaceCleanupBlocker, string> = {
   'main-worktree': 'Main workspace',
@@ -56,7 +58,7 @@ const BLOCKER_LABELS: Record<WorkspaceCleanupBlocker, string> = {
   'dirty-files': 'Changed files',
   'unpushed-commits': 'Unpushed commits',
   'unknown-base': 'Could not verify unpushed commits',
-  dismissed: 'Hidden from cleanup'
+  dismissed: 'Ignored'
 }
 
 function formatRelativeTime(timestamp: number): string {
@@ -178,10 +180,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
 
   const open = activeModal === 'workspace-cleanup'
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
-  const [showKept, setShowKept] = useState(false)
-  const [showSuggested, setShowSuggested] = useState(true)
-  const [showReview, setShowReview] = useState(false)
-  const [showProtected, setShowProtected] = useState(false)
+  const [activeView, setActiveView] = useState<CleanupView>('ready')
   const [confirming, setConfirming] = useState(false)
   const [removing, setRemoving] = useState(false)
   const [rowFailures, setRowFailures] = useState<Record<string, string>>({})
@@ -189,9 +188,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   useEffect(() => {
     if (open) {
       setRowFailures({})
-      setShowSuggested(true)
-      setShowReview(false)
-      setShowProtected(false)
+      setActiveView('ready')
       void scanWorkspaceCleanup().catch((err: unknown) => {
         toast.error('Workspace cleanup scan failed', {
           description: err instanceof Error ? err.message : String(err)
@@ -217,11 +214,16 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   }, [open, scan, scan?.scannedAt, candidates])
 
   const visibleCandidates = useMemo(() => {
-    const rows = showKept
-      ? candidates
-      : candidates.filter((candidate) => !candidate.blockers.includes('dismissed'))
+    const rows = candidates.filter((candidate) => !candidate.blockers.includes('dismissed'))
     return [...rows].sort(compareCleanupCandidates)
-  }, [candidates, showKept])
+  }, [candidates])
+  const hiddenCandidates = useMemo(
+    () =>
+      candidates
+        .filter((candidate) => candidate.blockers.includes('dismissed'))
+        .sort(compareCleanupCandidates),
+    [candidates]
+  )
   const groups = useMemo(
     () => ({
       ready: visibleCandidates.filter((candidate) => candidate.tier === 'ready'),
@@ -236,7 +238,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
       .map((id) => byId.get(id))
       .filter(
         (candidate): candidate is WorkspaceCleanupCandidate =>
-          candidate != null && canSelectWorkspaceCleanupCandidate(candidate)
+          candidate != null && canQueueWorkspaceCleanupCandidate(candidate)
       )
   }, [candidates, selectedIds])
 
@@ -257,16 +259,50 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     [candidates]
   )
   const initialLoading = loading && !scan
+  const activeRows = activeView === 'hidden' ? hiddenCandidates : groups[activeView]
+  const activeQueueableRows = useMemo(
+    () => activeRows.filter(canQueueWorkspaceCleanupCandidate),
+    [activeRows]
+  )
+  const activeQueueableSelected = useMemo(
+    () => activeQueueableRows.filter((candidate) => selectedIds.has(candidate.worktreeId)).length,
+    [activeQueueableRows, selectedIds]
+  )
+  const allActiveQueueableSelected =
+    activeQueueableRows.length > 0 && activeQueueableSelected === activeQueueableRows.length
+  const someActiveQueueableSelected = activeQueueableSelected > 0
+  const activeSelectionState = allActiveQueueableSelected
+    ? 'checked'
+    : someActiveQueueableSelected
+      ? 'mixed'
+      : 'unchecked'
 
   useEffect(() => {
     if (!open || loading || !scan) {
       return
     }
-    if (readyCount === 0 && groups.review.length > 0) {
-      setShowSuggested(false)
-      setShowReview(true)
+    if (activeRows.length > 0) {
+      return
     }
-  }, [groups.review.length, loading, open, readyCount, scan?.scannedAt, scan])
+    if (readyCount > 0) {
+      setActiveView('ready')
+    } else if (groups.review.length > 0) {
+      setActiveView('review')
+    } else if (groups.protected.length > 0) {
+      setActiveView('protected')
+    } else if (hiddenCandidates.length > 0) {
+      setActiveView('hidden')
+    }
+  }, [
+    activeRows.length,
+    groups.protected.length,
+    groups.review.length,
+    hiddenCandidates.length,
+    loading,
+    open,
+    readyCount,
+    scan
+  ])
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -286,33 +322,43 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     })
   }, [scanWorkspaceCleanup])
 
-  const selectReady = useCallback(() => {
-    setSelectedIds(
-      new Set(
-        visibleCandidates
-          .filter((row) => row.tier === 'ready' && canSelectWorkspaceCleanupCandidate(row))
-          .map((row) => row.worktreeId)
-      )
-    )
-  }, [visibleCandidates])
-
-  const keepSelected = useCallback(() => {
-    if (selectedCandidates.length === 0) {
+  const toggleActiveSelection = useCallback(() => {
+    if (activeQueueableRows.length === 0) {
       return
     }
-    void dismissCandidates(selectedCandidates)
-      .then(() => {
-        setSelectedIds(new Set())
-        toast.success(
-          `Hidden ${selectedCandidates.length} workspace${selectedCandidates.length === 1 ? '' : 's'}`
-        )
-      })
-      .catch((err: unknown) => {
-        toast.error('Could not hide selected workspaces', {
-          description: err instanceof Error ? err.message : String(err)
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (allActiveQueueableSelected) {
+        for (const candidate of activeQueueableRows) {
+          next.delete(candidate.worktreeId)
+        }
+      } else {
+        for (const candidate of activeQueueableRows) {
+          next.add(candidate.worktreeId)
+        }
+      }
+      return next
+    })
+  }, [activeQueueableRows, allActiveQueueableSelected])
+
+  const ignoreCandidate = useCallback(
+    (candidate: WorkspaceCleanupCandidate) => {
+      void dismissCandidates([candidate])
+        .then(() => {
+          setSelectedIds((current) => {
+            const next = new Set(current)
+            next.delete(candidate.worktreeId)
+            return next
+          })
         })
-      })
-  }, [dismissCandidates, selectedCandidates])
+        .catch((err: unknown) => {
+          toast.error('Could not ignore cleanup suggestion', {
+            description: err instanceof Error ? err.message : String(err)
+          })
+        })
+    },
+    [dismissCandidates]
+  )
 
   const confirmRemove = useCallback(async () => {
     if (selectedCandidates.length === 0) {
@@ -359,7 +405,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="flex h-[min(820px,90vh)] w-[calc(100vw-3rem)] max-w-[calc(100vw-3rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[calc(100vw-3rem)] xl:w-[800px] xl:max-w-[800px]"
+        className="flex h-[min(820px,90vh)] w-[calc(100vw-3rem)] max-w-[calc(100vw-3rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[calc(100vw-3rem)] xl:w-[920px] xl:max-w-[920px]"
       >
         {!confirming ? (
           <>
@@ -407,33 +453,19 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                 Checking old workspaces
               </div>
             ) : oldCandidateCount > 0 || hiddenByKeepCount > 0 ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/25 px-5 py-2.5">
-                <div className="min-w-0 text-sm font-medium text-foreground">
-                  {selectedCount} selected
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/25 px-4 py-2.5">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <div className="min-w-0 text-sm font-medium text-foreground">
+                    {selectedCount} selected
+                  </div>
+                  {readyCount > 0 ? (
+                    <StatusPill tone="ready">{readyCount} safe to remove</StatusPill>
+                  ) : null}
+                  {groups.review.length > 0 ? (
+                    <StatusPill tone="review">{groups.review.length} need review</StatusPill>
+                  ) : null}
                 </div>
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  {hiddenByKeepCount > 0 ? (
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      onClick={() => setShowKept((value) => !value)}
-                    >
-                      {showKept ? 'Hide hidden workspaces' : 'Show hidden workspaces'}
-                    </Button>
-                  ) : null}
-                  {readyCount > 0 && selectedCount < readyCount ? (
-                    <Button variant="ghost" size="xs" onClick={selectReady}>
-                      Select all removable
-                    </Button>
-                  ) : null}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={keepSelected}
-                    disabled={selectedCount === 0}
-                  >
-                    Hide selected
-                  </Button>
                   <Button
                     variant="destructive"
                     size="sm"
@@ -458,88 +490,104 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
               </div>
             ) : null}
 
-            <ScrollArea className="min-h-0 flex-1">
-              <div className="space-y-3 px-5 pb-5 pt-3">
-                {initialLoading ? <SkeletonRows /> : null}
-                {!loading && scan && candidates.length === 0 && !scanNoticeMessage ? (
-                  <EmptyState title="No old workspaces to clean up." />
-                ) : null}
-                {!loading && scan && candidates.length === 0 && scanNoticeMessage ? (
-                  <EmptyState title="No old workspaces found in checked repositories." />
-                ) : null}
-                {!loading && scan && candidates.length > 0 && visibleCandidates.length === 0 ? (
-                  <EmptyState
-                    title="All cleanup suggestions are hidden."
-                    actionLabel="Show hidden workspaces"
-                    onAction={() => setShowKept(true)}
-                  />
-                ) : null}
-                <CandidateGroup
-                  tier="ready"
-                  rows={groups.ready}
-                  expanded={showSuggested}
-                  onExpandedChange={setShowSuggested}
-                  selectedIds={selectedIds}
-                  rowFailures={rowFailures}
-                  onToggleSelected={(id) =>
-                    setSelectedIds((current) => toggleSetMember(current, id))
-                  }
-                  onView={closeAndView}
-                  onKeep={(candidate) => void dismissCandidates([candidate])}
-                  onRemove={(candidate) => {
-                    setSelectedIds(new Set([candidate.worktreeId]))
-                    setConfirming(true)
-                  }}
-                />
-                <CandidateGroup
-                  tier="review"
-                  rows={groups.review}
-                  expanded={showReview}
-                  onExpandedChange={setShowReview}
-                  selectedIds={selectedIds}
-                  rowFailures={rowFailures}
-                  onToggleSelected={(id) =>
-                    setSelectedIds((current) => toggleSetMember(current, id))
-                  }
-                  onView={closeAndView}
-                  onKeep={(candidate) => void dismissCandidates([candidate])}
-                  onRemove={(candidate) => {
-                    setSelectedIds(new Set([candidate.worktreeId]))
-                    setConfirming(true)
-                  }}
-                />
-                <CandidateGroup
-                  tier="protected"
-                  rows={groups.protected}
-                  expanded={showProtected}
-                  onExpandedChange={setShowProtected}
-                  selectedIds={selectedIds}
-                  rowFailures={rowFailures}
-                  onToggleSelected={(id) =>
-                    setSelectedIds((current) => toggleSetMember(current, id))
-                  }
-                  onView={closeAndView}
-                  onKeep={(candidate) => void dismissCandidates([candidate])}
-                  onRemove={(candidate) => {
-                    setSelectedIds(new Set([candidate.worktreeId]))
-                    setConfirming(true)
-                  }}
-                />
+            <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[185px_minmax(0,1fr)]">
+              <CleanupViewNav
+                activeView={activeView}
+                counts={{
+                  ready: groups.ready.length,
+                  review: groups.review.length,
+                  protected: groups.protected.length,
+                  hidden: hiddenByKeepCount
+                }}
+                onViewChange={setActiveView}
+              />
+              <div className="flex min-w-0 flex-col border-t border-border md:border-l md:border-t-0">
+                <div className="flex min-h-10 items-center justify-between gap-3 border-b border-border px-3 py-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    {activeView !== 'hidden' && activeQueueableRows.length > 0 ? (
+                      <button
+                        type="button"
+                        role="checkbox"
+                        aria-checked={
+                          activeSelectionState === 'mixed' ? 'mixed' : allActiveQueueableSelected
+                        }
+                        aria-label={
+                          allActiveQueueableSelected
+                            ? `Unselect all in ${TIER_LABELS[activeView]}`
+                            : `Select all in ${TIER_LABELS[activeView]}`
+                        }
+                        onClick={toggleActiveSelection}
+                        className="flex size-4 shrink-0 items-center justify-center rounded border border-border bg-background text-primary hover:bg-accent"
+                      >
+                        {activeSelectionState === 'checked' ? (
+                          <Check className="size-3" strokeWidth={3} />
+                        ) : activeSelectionState === 'mixed' ? (
+                          <Minus className="size-3" strokeWidth={3} />
+                        ) : null}
+                      </button>
+                    ) : null}
+                    <div className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+                      {activeView === 'hidden'
+                        ? 'Ignored cleanup suggestions'
+                        : TIER_LABELS[activeView]}
+                    </div>
+                  </div>
+                  {activeView === 'hidden' && hiddenByKeepCount > 0 ? (
+                    <Button
+                      variant="link"
+                      size="xs"
+                      className="h-auto shrink-0 px-0 text-xs"
+                      onClick={() => void resetDismissals()}
+                    >
+                      Restore ignored suggestions
+                    </Button>
+                  ) : (
+                    <div className="shrink-0 text-xs text-muted-foreground">
+                      Sorted by oldest activity
+                    </div>
+                  )}
+                </div>
+                <ScrollArea className="min-h-0 flex-1">
+                  <div>
+                    {initialLoading ? <SkeletonRows /> : null}
+                    {!loading && scan && candidates.length === 0 && !scanNoticeMessage ? (
+                      <EmptyState title="No old workspaces to clean up." />
+                    ) : null}
+                    {!loading && scan && candidates.length === 0 && scanNoticeMessage ? (
+                      <EmptyState title="No old workspaces found in checked repositories." />
+                    ) : null}
+                    {!loading && scan && candidates.length > 0 && visibleCandidates.length === 0 ? (
+                      <EmptyState
+                        title="All cleanup suggestions are ignored."
+                        actionLabel="Review ignored workspaces"
+                        onAction={() => setActiveView('hidden')}
+                      />
+                    ) : null}
+                    {!loading && scan && activeRows.length === 0 && visibleCandidates.length > 0 ? (
+                      <EmptyState title="No workspaces in this cleanup set." />
+                    ) : null}
+                    {activeRows.map((candidate, index) => (
+                      <CandidateRow
+                        key={candidate.worktreeId}
+                        candidate={candidate}
+                        last={index === activeRows.length - 1}
+                        selected={selectedIds.has(candidate.worktreeId)}
+                        failure={rowFailures[candidate.worktreeId]}
+                        onToggleSelected={(id) =>
+                          setSelectedIds((current) => toggleSetMember(current, id))
+                        }
+                        onView={closeAndView}
+                        onIgnore={ignoreCandidate}
+                        onRemove={(candidate) => {
+                          setSelectedIds(new Set([candidate.worktreeId]))
+                          setConfirming(true)
+                        }}
+                      />
+                    ))}
+                  </div>
+                </ScrollArea>
               </div>
-            </ScrollArea>
-
-            {hiddenByKeepCount > 0 ? (
-              <div className="border-t border-border px-5 py-2">
-                <Button
-                  variant="link"
-                  size="xs"
-                  className="h-auto px-0 text-xs"
-                  onClick={() => void resetDismissals()}
-                >
-                  Show all cleanup suggestions
-                </Button>
-              </div>
-            ) : null}
+            </div>
           </>
         ) : (
           <ConfirmRemove
@@ -560,63 +608,63 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   }
 }
 
-function CandidateGroup({
-  tier,
-  rows,
-  expanded,
-  onExpandedChange,
-  selectedIds,
-  rowFailures,
-  onToggleSelected,
-  onView,
-  onKeep,
-  onRemove
+function StatusPill({
+  children,
+  tone = 'neutral'
 }: {
-  tier: WorkspaceCleanupTier
-  rows: WorkspaceCleanupCandidate[]
-  expanded: boolean
-  onExpandedChange: (expanded: boolean) => void
-  selectedIds: Set<string>
-  rowFailures: Record<string, string>
-  onToggleSelected: (worktreeId: string) => void
-  onView: (candidate: WorkspaceCleanupCandidate) => void
-  onKeep: (candidate: WorkspaceCleanupCandidate) => void
-  onRemove: (candidate: WorkspaceCleanupCandidate) => void
-}): React.JSX.Element | null {
-  if (rows.length === 0) {
-    return null
-  }
+  children: React.ReactNode
+  tone?: 'neutral' | 'ready' | 'review' | 'destructive'
+}): React.JSX.Element {
   return (
-    <section className="space-y-1.5">
-      <button
-        type="button"
-        className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground hover:text-foreground"
-        aria-expanded={expanded}
-        onClick={() => onExpandedChange(!expanded)}
-      >
-        {expanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
-        <span className="truncate">{TIER_LABELS[tier]}</span>
-        <span className="text-muted-foreground/60">·</span>
-        <span className="tabular-nums text-muted-foreground">{rows.length}</span>
-      </button>
-      {expanded ? (
-        <div className="overflow-hidden rounded-md border border-border/60 bg-background">
-          {rows.map((candidate, index) => (
-            <CandidateRow
-              key={candidate.worktreeId}
-              candidate={candidate}
-              last={index === rows.length - 1}
-              selected={selectedIds.has(candidate.worktreeId)}
-              failure={rowFailures[candidate.worktreeId]}
-              onToggleSelected={onToggleSelected}
-              onView={onView}
-              onKeep={onKeep}
-              onRemove={onRemove}
-            />
-          ))}
-        </div>
-      ) : null}
-    </section>
+    <span
+      className={cn(
+        'inline-flex h-5 items-center rounded-full border px-2 text-[11px] font-medium',
+        tone === 'neutral' && 'border-border bg-background text-muted-foreground',
+        tone === 'ready' && 'border-border text-[var(--git-decoration-added)]',
+        tone === 'review' && 'border-border text-[var(--git-decoration-modified)]',
+        tone === 'destructive' && 'border-destructive/30 text-destructive'
+      )}
+    >
+      {children}
+    </span>
+  )
+}
+
+function CleanupViewNav({
+  activeView,
+  counts,
+  onViewChange
+}: {
+  activeView: CleanupView
+  counts: Record<CleanupView, number>
+  onViewChange: (view: CleanupView) => void
+}): React.JSX.Element {
+  const items: { view: CleanupView; label: string }[] = [
+    { view: 'ready', label: 'Suggested' },
+    { view: 'review', label: 'Needs review' },
+    { view: 'protected', label: 'Not suggested' },
+    { view: 'hidden', label: 'Ignored' }
+  ]
+
+  return (
+    <aside className="border-t border-border bg-background md:border-t-0">
+      <div className="space-y-1 p-2">
+        {items.map((item) => (
+          <button
+            key={item.view}
+            type="button"
+            className={cn(
+              'flex h-8 w-full items-center justify-between gap-2 rounded-md px-2 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
+              activeView === item.view && 'bg-accent text-accent-foreground'
+            )}
+            onClick={() => onViewChange(item.view)}
+          >
+            <span className="truncate">{item.label}</span>
+            <span className="tabular-nums text-muted-foreground">{counts[item.view]}</span>
+          </button>
+        ))}
+      </div>
+    </aside>
   )
 }
 
@@ -627,7 +675,7 @@ function CandidateRow({
   failure,
   onToggleSelected,
   onView,
-  onKeep,
+  onIgnore,
   onRemove
 }: {
   candidate: WorkspaceCleanupCandidate
@@ -636,18 +684,20 @@ function CandidateRow({
   failure?: string
   onToggleSelected: (worktreeId: string) => void
   onView: (candidate: WorkspaceCleanupCandidate) => void
-  onKeep: (candidate: WorkspaceCleanupCandidate) => void
+  onIgnore: (candidate: WorkspaceCleanupCandidate) => void
   onRemove: (candidate: WorkspaceCleanupCandidate) => void
 }): React.JSX.Element {
-  const selectable = canSelectWorkspaceCleanupCandidate(candidate)
+  const selectable = canQueueWorkspaceCleanupCandidate(candidate)
+  const ignored = candidate.blockers.includes('dismissed')
   const blockers = candidate.blockers.map((blocker) => BLOCKER_LABELS[blocker])
   const contextDetails = formatContextDetails(candidate)
   const branchSafetyDetails = formatBranchSafetyDetails(candidate)
+  const status = getCandidateStatus(candidate)
 
   return (
     <div
       className={cn(
-        'group border-b border-border/60 px-3 py-2 text-foreground transition-colors hover:bg-accent/40',
+        'group w-full border-b border-border/60 px-3 py-3 text-left text-foreground transition-colors hover:bg-accent/40',
         last && 'border-b-0'
       )}
     >
@@ -669,9 +719,7 @@ function CandidateRow({
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <span className="min-w-0 truncate text-sm font-medium">{candidate.displayName}</span>
-            {candidate.reasons.includes('archived') ? (
-              <span className="text-xs font-medium text-foreground">Archived</span>
-            ) : null}
+            <StatusPill tone={status.tone}>{status.label}</StatusPill>
             <span className="text-xs text-muted-foreground">
               Last active {formatRelativeTime(candidate.lastActivityAt)}
             </span>
@@ -681,31 +729,18 @@ function CandidateRow({
               </span>
             ) : null}
           </div>
-          <details className="mt-1 text-xs text-muted-foreground">
-            <summary className="inline-flex cursor-pointer select-none items-center gap-1 hover:text-foreground">
-              Details
-            </summary>
-            <div className="mt-2 grid gap-1 sm:grid-cols-2">
-              <span className="min-w-0 truncate">Repo {candidate.repoName}</span>
-              <span className="min-w-0 truncate font-mono">Branch {candidate.branch}</span>
-              <span className="min-w-0 truncate font-mono sm:col-span-2">{candidate.path}</span>
-              <span>
-                {candidate.git.clean === true
-                  ? 'Clean git'
-                  : candidate.git.clean === false
-                    ? 'Dirty'
-                    : 'Git unknown'}
-              </span>
-              {branchSafetyDetails.map((detail) => (
-                <span key={detail}>{detail}</span>
-              ))}
-              {contextDetails ? <span className="sm:col-span-2">{contextDetails}</span> : null}
-              <span>Last activity {formatRelativeTime(candidate.lastActivityAt)}</span>
-              {candidate.git.checkedAt ? (
-                <span>Git checked {formatRelativeTime(candidate.git.checkedAt)}</span>
-              ) : null}
-            </div>
-          </details>
+          <div className="mt-1 min-w-0 truncate font-mono text-[11px] text-muted-foreground">
+            {candidate.path}
+          </div>
+          <div className="mt-1 flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <span className="min-w-0 truncate">Repo {candidate.repoName}</span>
+            <span className="min-w-0 truncate font-mono">Branch {candidate.branch}</span>
+            <span>{formatGitStatus(candidate)}</span>
+            {branchSafetyDetails.slice(0, 1).map((detail) => (
+              <span key={detail}>{detail}</span>
+            ))}
+            {contextDetails ? <span className="min-w-0 truncate">{contextDetails}</span> : null}
+          </div>
           {failure ? (
             <div className="mt-2 flex items-center gap-1.5 text-xs text-destructive">
               <AlertTriangle className="size-3.5" />
@@ -713,28 +748,96 @@ function CandidateRow({
             </div>
           ) : null}
         </div>
-        <div className="col-start-2 flex flex-wrap items-center gap-1 md:col-start-auto md:justify-end">
-          <Button variant="ghost" size="xs" onClick={() => onView(candidate)}>
-            <Search className="size-3.5" />
-            View
-          </Button>
-          <Button variant="ghost" size="xs" onClick={() => onKeep(candidate)}>
-            Hide
-          </Button>
+        <div className="col-start-2 flex flex-wrap items-center gap-0.5 md:col-start-auto md:justify-end">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`View ${candidate.displayName}`}
+                onClick={() => onView(candidate)}
+              >
+                <Search className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              View
+            </TooltipContent>
+          </Tooltip>
+          {!ignored ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`Ignore ${candidate.displayName}`}
+                  onClick={() => onIgnore(candidate)}
+                >
+                  <EyeOff className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                Ignore
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
           {selectable ? (
-            <Button
-              variant="ghost"
-              size="xs"
-              className="text-destructive hover:text-destructive"
-              onClick={() => onRemove(candidate)}
-            >
-              Remove
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`Remove ${candidate.displayName}`}
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => onRemove(candidate)}
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                Remove
+              </TooltipContent>
+            </Tooltip>
           ) : null}
         </div>
       </div>
     </div>
   )
+}
+
+function getCandidateStatus(candidate: WorkspaceCleanupCandidate): {
+  label: string
+  tone: 'neutral' | 'ready' | 'review' | 'destructive'
+} {
+  if (candidate.blockers.includes('dismissed')) {
+    return { label: 'Ignored', tone: 'neutral' }
+  }
+  if (candidate.tier === 'ready') {
+    return { label: candidate.reasons.includes('archived') ? 'Archived' : 'Clean', tone: 'ready' }
+  }
+  if (candidate.blockers.length > 0) {
+    return { label: BLOCKER_LABELS[candidate.blockers[0]], tone: 'neutral' }
+  }
+  if (candidate.git.upstreamAhead && candidate.git.upstreamAhead > 0) {
+    return { label: 'Unpushed commits', tone: 'review' }
+  }
+  if (candidate.git.clean === false) {
+    return { label: 'Dirty', tone: 'review' }
+  }
+  if (candidate.tier === 'review') {
+    return { label: 'Review', tone: 'review' }
+  }
+  return { label: 'Not suggested', tone: 'neutral' }
+}
+
+function formatGitStatus(candidate: WorkspaceCleanupCandidate): string {
+  if (candidate.git.clean === true) {
+    return 'Clean git'
+  }
+  if (candidate.git.clean === false) {
+    return 'Dirty git'
+  }
+  return 'Git unknown'
 }
 
 function formatBranchSafetyDetails(candidate: WorkspaceCleanupCandidate): string[] {
@@ -815,8 +918,9 @@ function ConfirmRemove({
         </DialogDescription>
       </DialogHeader>
       <div className="flex-1 px-5 py-4 text-sm">
-        Cleanup rechecks each selected workspace before deletion. Rows that are now dirty, active,
-        running, disconnected, or have unverified commits are skipped.
+        Cleanup rechecks each selected workspace before deletion. Suggested rows use the normal
+        git-safe removal path; not suggested rows may need forced worktree removal and are reported
+        if they cannot be removed.
       </div>
       <DialogFooter className="border-t border-border px-5 py-3">
         <Button variant="outline" onClick={onCancel} disabled={removing}>

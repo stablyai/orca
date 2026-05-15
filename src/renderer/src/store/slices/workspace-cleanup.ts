@@ -8,7 +8,9 @@ import {
 import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
   applyWorkspaceCleanupPolicy,
+  canQueueWorkspaceCleanupCandidate,
   canSelectWorkspaceCleanupCandidate,
+  shouldForceWorkspaceCleanupRemoval,
   shouldHideWorkspaceCleanupCandidate,
   type WorkspaceCleanupBlocker,
   type WorkspaceCleanupCandidate,
@@ -197,7 +199,10 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
         continue
       }
 
-      const result = await get().removeWorktree(worktreeId, false)
+      const result = await get().removeWorktree(
+        worktreeId,
+        shouldForceWorkspaceCleanupRemoval(preflight.candidate)
+      )
       if (result.ok) {
         removedIds.push(worktreeId)
       } else {
@@ -288,7 +293,6 @@ async function enrichWorkspaceCleanupCandidate(
 ): Promise<WorkspaceCleanupCandidate> {
   const tabs = state.tabsByWorktree[candidate.worktreeId] ?? []
   const tabIds = new Set(tabs.map((tab) => tab.id))
-  const livePtyIds = tabs.flatMap((tab) => state.ptyIdsByTabId[tab.id] ?? [])
   const openFiles = state.openFiles.filter((file) => file.worktreeId === candidate.worktreeId)
   const dirtyEditorBuffers = openFiles.filter(
     (file) => file.isDirty || state.editorDrafts[file.id] !== undefined
@@ -314,7 +318,7 @@ async function enrichWorkspaceCleanupCandidate(
     blockers.push('live-agent')
   }
 
-  const terminalProbe = await probeTerminalLiveness(candidate, state, tabs, livePtyIds)
+  const terminalProbe = await probeTerminalLiveness(state, tabs)
   if (terminalProbe === 'running') {
     blockers.push('running-terminal')
   } else if (terminalProbe === 'unknown') {
@@ -323,10 +327,8 @@ async function enrichWorkspaceCleanupCandidate(
 
   const lastVisitedAt = state.lastVisitedAtByWorktreeId[candidate.worktreeId] ?? 0
   const hasVisibleContext = cleanEditorTabCount > 0 || browserTabCount > 0
-  const hasStrongCompletion = hasStrongCompletionEvidence(candidate)
   if (
     hasVisibleContext &&
-    !hasStrongCompletion &&
     !preserveCleanupInspection &&
     lastVisitedAt > 0 &&
     Date.now() - lastVisitedAt <= RECENT_VISIBLE_CONTEXT_MS
@@ -398,7 +400,7 @@ async function preflightWorkspaceCleanupCandidate(
       }
     }
   }
-  if (!canSelectWorkspaceCleanupCandidate(candidate)) {
+  if (!canQueueWorkspaceCleanupCandidate(candidate)) {
     return {
       ok: false,
       failure: {
@@ -442,17 +444,18 @@ function hasWorkingTitleAgent(state: AppState, tabs: { id: string; title: string
 }
 
 async function probeTerminalLiveness(
-  candidate: WorkspaceCleanupCandidate,
   state: AppState,
-  tabs: { id: string; title: string }[],
-  livePtyIds: string[]
+  tabs: { id: string; title: string }[]
 ): Promise<'idle' | 'running' | 'unknown'> {
-  if (livePtyIds.length === 0) {
+  const ptyChecks = tabs.flatMap((tab) =>
+    (state.ptyIdsByTabId[tab.id] ?? []).map((ptyId) => ({ tab, ptyId }))
+  )
+  if (ptyChecks.length === 0) {
     return 'idle'
   }
 
   let unknown = false
-  for (const ptyId of livePtyIds) {
+  for (const { tab, ptyId } of ptyChecks) {
     try {
       const [hasChildProcesses, foregroundProcess] = await Promise.all([
         window.api.pty.hasChildProcesses(ptyId),
@@ -465,7 +468,7 @@ async function probeTerminalLiveness(
       if (
         processName &&
         AGENT_PROCESS_NAMES.has(processName) &&
-        (hasStrongCompletionEvidence(candidate) || hasIdleAgentTitle(state, tabs))
+        hasIdleAgentTitleForPty(state, tab, ptyId)
       ) {
         continue
       }
@@ -478,23 +481,35 @@ async function probeTerminalLiveness(
   return unknown ? 'unknown' : 'idle'
 }
 
-function hasIdleAgentTitle(state: AppState, tabs: { id: string; title: string }[]): boolean {
-  for (const tab of tabs) {
-    const paneTitles = state.runtimePaneTitlesByTabId[tab.id]
-    const titles =
-      paneTitles && Object.keys(paneTitles).length > 0 ? Object.values(paneTitles) : [tab.title]
-    for (const title of titles) {
-      const status = detectAgentStatusFromTitle(title)
-      if (status === 'idle') {
-        return true
-      }
-    }
+function hasIdleAgentTitleForPty(
+  state: AppState,
+  tab: { id: string; title: string },
+  ptyId: string
+): boolean {
+  const paneTitles = state.runtimePaneTitlesByTabId[tab.id] ?? {}
+  const layoutPtyIds = state.terminalLayoutsByTabId?.[tab.id]?.ptyIdsByLeafId ?? {}
+  const matchingTitles = Object.entries(layoutPtyIds)
+    .filter(([, leafPtyId]) => leafPtyId === ptyId)
+    .map(([leafId]) => paneTitles[leafId.replace(/^pane:/, '')])
+    .filter((title): title is string => typeof title === 'string')
+
+  if (matchingTitles.length > 0) {
+    return matchingTitles.some(isIdleAgentTitle)
   }
-  return false
+
+  // Why: without a pane->PTY binding, a tab-level idle title is safe evidence
+  // only when this tab has a single live PTY. Multi-pane tabs stay protected.
+  const tabPtyIds = state.ptyIdsByTabId[tab.id] ?? []
+  if (tabPtyIds.length !== 1) {
+    return false
+  }
+
+  const titles = Object.keys(paneTitles).length > 0 ? Object.values(paneTitles) : [tab.title]
+  return titles.some(isIdleAgentTitle)
 }
 
-function hasStrongCompletionEvidence(candidate: WorkspaceCleanupCandidate): boolean {
-  return candidate.reasons.includes('idle-clean') || candidate.reasons.includes('archived')
+function isIdleAgentTitle(title: string): boolean {
+  return detectAgentStatusFromTitle(title) === 'idle'
 }
 
 function getPaneKeyTabId(paneKey: AgentStatusEntry['paneKey']): string {

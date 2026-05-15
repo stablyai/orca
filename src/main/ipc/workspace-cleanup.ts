@@ -6,7 +6,10 @@ import { getStatus } from '../git/status'
 import { gitExecFileAsync } from '../git/runner'
 import { listRepoWorktrees, createFolderWorktree } from '../repo-worktrees'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
-import type { IGitProvider } from '../providers/types'
+import type { IGitProvider, IPtyProvider } from '../providers/types'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { listRegisteredPtys } from '../memory/pty-registry'
+import { getSshPtyProvider } from './pty'
 import { isFolderRepo } from '../../shared/repo-kind'
 import type { GitStatusResult, GitWorktreeInfo, Repo, Worktree } from '../../shared/types'
 import { mergeWorktree } from './worktree-logic'
@@ -20,6 +23,8 @@ import {
   type WorkspaceCleanupBlocker,
   type WorkspaceCleanupCandidate,
   type WorkspaceCleanupDismissArgs,
+  type WorkspaceCleanupLocalProcessArgs,
+  type WorkspaceCleanupLocalProcessResult,
   type WorkspaceCleanupReason,
   type WorkspaceCleanupScanError,
   type WorkspaceCleanupScanArgs,
@@ -37,10 +42,19 @@ type GitEvidence = {
   blockers: WorkspaceCleanupBlocker[]
 }
 
-export function registerWorkspaceCleanupHandlers(store: Store): void {
+type WorkspaceCleanupHandlerDeps = {
+  runtime?: OrcaRuntimeService
+  getLocalPtyProvider?: () => IPtyProvider
+}
+
+export function registerWorkspaceCleanupHandlers(
+  store: Store,
+  deps: WorkspaceCleanupHandlerDeps = {}
+): void {
   ipcMain.removeHandler('workspaceCleanup:scan')
   ipcMain.removeHandler('workspaceCleanup:dismiss')
   ipcMain.removeHandler('workspaceCleanup:clearDismissals')
+  ipcMain.removeHandler('workspaceCleanup:hasKillableLocalProcesses')
 
   ipcMain.handle(
     'workspaceCleanup:scan',
@@ -67,6 +81,105 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
   ipcMain.handle('workspaceCleanup:clearDismissals', () => {
     store.updateUI({ workspaceCleanup: { dismissals: {} } })
   })
+
+  ipcMain.handle(
+    'workspaceCleanup:hasKillableLocalProcesses',
+    async (
+      _event,
+      args: WorkspaceCleanupLocalProcessArgs
+    ): Promise<WorkspaceCleanupLocalProcessResult> => ({
+      hasKillableProcesses: await hasKillableProcesses(args, deps)
+    })
+  )
+}
+
+async function hasKillableProcesses(
+  args: WorkspaceCleanupLocalProcessArgs,
+  deps: WorkspaceCleanupHandlerDeps
+): Promise<boolean | null> {
+  const { worktreeId } = args
+  if (typeof worktreeId !== 'string' || worktreeId.length === 0) {
+    return false
+  }
+
+  let livenessUnknown = false
+  if (deps.runtime) {
+    try {
+      if (await deps.runtime.hasTerminalsForWorktree(worktreeId)) {
+        return true
+      }
+    } catch {
+      livenessUnknown = true
+    }
+  }
+
+  if (args.connectionId) {
+    return hasKillableSshProcesses(args.connectionId, args.worktreePath ?? '', livenessUnknown)
+  }
+
+  const registryPtyIds = new Set(
+    listRegisteredPtys()
+      .filter((entry) => entry.worktreeId === worktreeId)
+      .map((entry) => entry.ptyId)
+  )
+
+  const provider = deps.getLocalPtyProvider?.()
+  if (!provider) {
+    return registryPtyIds.size > 0 ? true : null
+  }
+
+  try {
+    const prefix = `${worktreeId}@@`
+    const sessions = await provider.listProcesses()
+    if (
+      sessions.some((session) => session.id.startsWith(prefix) || registryPtyIds.has(session.id))
+    ) {
+      return true
+    }
+    return livenessUnknown ? null : false
+  } catch {
+    return registryPtyIds.size > 0 ? true : null
+  }
+}
+
+async function hasKillableSshProcesses(
+  connectionId: string,
+  worktreePath: string,
+  livenessUnknown: boolean
+): Promise<boolean | null> {
+  const provider = getSshPtyProvider(connectionId)
+  if (!provider) {
+    return null
+  }
+
+  try {
+    const normalizedWorktreePath = normalizeRemotePath(worktreePath)
+    const sessions = await provider.listProcesses()
+    if (
+      sessions.some((session) => {
+        if (session.id.startsWith(`${worktreePath}@@`)) {
+          return true
+        }
+        return (
+          normalizedWorktreePath.length > 0 &&
+          isPathWithin(normalizeRemotePath(session.cwd), normalizedWorktreePath)
+        )
+      })
+    ) {
+      return true
+    }
+    return livenessUnknown ? null : false
+  } catch {
+    return null
+  }
+}
+
+function normalizeRemotePath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/\/+$/, '')
+}
+
+function isPathWithin(candidatePath: string, parentPath: string): boolean {
+  return candidatePath === parentPath || candidatePath.startsWith(`${parentPath}/`)
 }
 
 export async function scanWorkspaceCleanup(

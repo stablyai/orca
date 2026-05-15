@@ -1,0 +1,1657 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Workspace Cleanup Redesign Mockups</title>
+    <style>
+      @font-face {
+        font-family: 'Geist';
+        src: url('./src/renderer/src/assets/fonts/Geist-Variable.woff2') format('woff2');
+        font-weight: 100 900;
+        font-style: normal;
+        font-display: swap;
+      }
+
+      :root {
+        --app-font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        --font-mono:
+          'SF Mono', SFMono-Regular, ui-monospace, 'Cascadia Code', Menlo, Consolas,
+          'Liberation Mono', monospace;
+        --radius: 0.625rem;
+        --background: #fff;
+        --editor-surface: #fff;
+        --foreground: #0a0a0a;
+        --card: #fff;
+        --card-foreground: #0a0a0a;
+        --popover: #fff;
+        --popover-foreground: #0a0a0a;
+        --primary: #171717;
+        --primary-foreground: #fafafa;
+        --secondary: #f5f5f5;
+        --secondary-foreground: #171717;
+        --muted: #f5f5f5;
+        --muted-foreground: #737373;
+        --accent: #f5f5f5;
+        --accent-foreground: #171717;
+        --destructive: #e40014;
+        --destructive-foreground: #fcf3f3;
+        --border: #e5e5e5;
+        --input: #e5e5e5;
+        --ring: #a1a1a1;
+        --git-decoration-added: #587c0c;
+        --git-decoration-modified: #895503;
+        --git-decoration-deleted: #ad0707;
+        --git-decoration-untracked: #007100;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--background);
+        color: var(--foreground);
+        font-family: var(--app-font-family);
+        letter-spacing: 0.01em;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      .page {
+        width: min(1440px, calc(100vw - 40px));
+        margin: 0 auto;
+        padding: 28px 0 48px;
+      }
+
+      .topbar {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 0 0 18px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 20px;
+        font-weight: 650;
+        line-height: 1.25;
+      }
+
+      .intro {
+        margin-top: 6px;
+        max-width: 760px;
+        color: var(--muted-foreground);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .source-note {
+        max-width: 430px;
+        color: var(--muted-foreground);
+        font-size: 12px;
+        line-height: 1.45;
+        text-align: right;
+      }
+
+      .grid {
+        display: grid;
+        gap: 28px;
+        margin-top: 28px;
+      }
+
+      .concept {
+        border: 1px solid var(--border);
+        background: var(--card);
+        border-radius: calc(var(--radius) * 1.4);
+        overflow: hidden;
+      }
+
+      .concept-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--border);
+        background: color-mix(in srgb, var(--muted) 48%, var(--background));
+      }
+
+      .concept-title {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+
+      .number {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--background);
+        color: var(--muted-foreground);
+        font-size: 11px;
+        font-weight: 650;
+      }
+
+      h2 {
+        font-size: 15px;
+        font-weight: 650;
+      }
+
+      .concept-copy {
+        margin-top: 5px;
+        color: var(--muted-foreground);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .inspired {
+        min-width: 220px;
+        color: var(--muted-foreground);
+        font-size: 11px;
+        line-height: 1.4;
+        text-align: right;
+      }
+
+      .surface {
+        padding: 18px;
+        background:
+          linear-gradient(var(--background), var(--background)) padding-box,
+          repeating-linear-gradient(
+              45deg,
+              color-mix(in srgb, var(--border) 42%, transparent) 0 1px,
+              transparent 1px 12px
+            )
+            border-box;
+      }
+
+      .dialog {
+        margin: 0 auto;
+        width: min(100%, 980px);
+        min-height: 560px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--background);
+        box-shadow: 0 10px 24px rgb(0 0 0 / 0.12);
+        overflow: hidden;
+      }
+
+      .dialog.compact {
+        width: min(100%, 840px);
+        min-height: 520px;
+      }
+
+      .dialog.wide {
+        width: min(100%, 1120px);
+      }
+
+      .dialog-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .dialog-title {
+        font-size: 14px;
+        font-weight: 650;
+      }
+
+      .dialog-subtitle {
+        margin-top: 4px;
+        color: var(--muted-foreground);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--border);
+        background: color-mix(in srgb, var(--muted) 55%, var(--background));
+      }
+
+      .toolbar-left,
+      .toolbar-right,
+      .button-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: 28px;
+        padding: 0 10px;
+        border: 1px solid transparent;
+        border-radius: calc(var(--radius) * 0.8);
+        background: transparent;
+        color: var(--foreground);
+        font-size: 12px;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+
+      .btn.ghost {
+        color: var(--muted-foreground);
+      }
+
+      .btn.ghost:hover,
+      .seg.active {
+        background: var(--accent);
+        color: var(--accent-foreground);
+      }
+
+      .btn.outline {
+        border-color: var(--border);
+        background: var(--background);
+      }
+
+      .btn.secondary {
+        background: var(--secondary);
+        color: var(--secondary-foreground);
+      }
+
+      .btn.primary {
+        background: var(--primary);
+        color: var(--primary-foreground);
+      }
+
+      .btn.danger {
+        background: var(--destructive);
+        color: var(--destructive-foreground);
+      }
+
+      .icon-btn {
+        width: 28px;
+        padding: 0;
+      }
+
+      .meta {
+        color: var(--muted-foreground);
+        font-size: 11px;
+      }
+
+      .mono {
+        font-family: var(--font-mono);
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        min-height: 20px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 0 7px;
+        background: var(--background);
+        color: var(--muted-foreground);
+        font-size: 11px;
+        font-weight: 520;
+        white-space: nowrap;
+      }
+
+      .badge.ready {
+        color: var(--git-decoration-added);
+        border-color: color-mix(in srgb, var(--git-decoration-added) 28%, var(--border));
+      }
+
+      .badge.review {
+        color: var(--git-decoration-modified);
+        border-color: color-mix(in srgb, var(--git-decoration-modified) 28%, var(--border));
+      }
+
+      .badge.blocked {
+        color: var(--muted-foreground);
+        background: var(--muted);
+      }
+
+      .badge.danger {
+        color: var(--destructive);
+        border-color: color-mix(in srgb, var(--destructive) 30%, var(--border));
+      }
+
+      .checkbox {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 15px;
+        height: 15px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: var(--background);
+        color: var(--primary);
+        font-size: 11px;
+        font-weight: 800;
+        line-height: 1;
+      }
+
+      .checkbox.on {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: var(--primary-foreground);
+      }
+
+      .checkbox.on::after {
+        content: '';
+        width: 7px;
+        height: 4px;
+        border-left: 2px solid currentColor;
+        border-bottom: 2px solid currentColor;
+        transform: translateY(-1px) rotate(-45deg);
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+        padding: 10px 12px;
+        border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+      }
+
+      .row:last-child {
+        border-bottom: 0;
+      }
+
+      .row:hover {
+        background: var(--accent);
+      }
+
+      .row.selected {
+        background: color-mix(in srgb, var(--accent) 78%, var(--background));
+        box-shadow: inset 2px 0 0 var(--ring);
+      }
+
+      .row-main {
+        min-width: 0;
+      }
+
+      .row-title {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .path {
+        margin-top: 3px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--muted-foreground);
+        font-family: var(--font-mono);
+        font-size: 11px;
+      }
+
+      .row-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 6px;
+      }
+
+      .split {
+        display: grid;
+        min-height: 478px;
+      }
+
+      .split.triage {
+        grid-template-columns: 185px minmax(0, 1fr) 260px;
+      }
+
+      .split.preview {
+        grid-template-columns: 330px minmax(0, 1fr);
+      }
+
+      .split.inbox {
+        grid-template-columns: minmax(0, 1fr) 300px;
+      }
+
+      .pane {
+        min-width: 0;
+        border-right: 1px solid var(--border);
+      }
+
+      .pane:last-child {
+        border-right: 0;
+      }
+
+      .pane-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        min-height: 42px;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .pane-title {
+        color: var(--muted-foreground);
+        font-size: 11px;
+        font-weight: 650;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .side-nav {
+        padding: 8px;
+      }
+
+      .nav-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        width: 100%;
+        height: 30px;
+        padding: 0 8px;
+        border: 0;
+        border-radius: calc(var(--radius) * 0.8);
+        background: transparent;
+        color: var(--muted-foreground);
+        font-size: 12px;
+        text-align: left;
+      }
+
+      .nav-item.active {
+        background: var(--accent);
+        color: var(--foreground);
+      }
+
+      .count {
+        color: var(--muted-foreground);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .inspector {
+        padding: 12px;
+      }
+
+      .inspector-card {
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 11px;
+        background: var(--background);
+      }
+
+      .inspector-card + .inspector-card {
+        margin-top: 10px;
+      }
+
+      .kv {
+        display: grid;
+        grid-template-columns: 92px minmax(0, 1fr);
+        gap: 7px 8px;
+        margin-top: 9px;
+        color: var(--muted-foreground);
+        font-size: 11px;
+      }
+
+      .kv strong {
+        color: var(--foreground);
+        font-weight: 520;
+      }
+
+      .footer-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 16px;
+        border-top: 1px solid var(--border);
+        background: var(--background);
+      }
+
+      .segmented {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        padding: 2px;
+        border: 1px solid var(--border);
+        border-radius: calc(var(--radius) * 0.8);
+        background: var(--background);
+      }
+
+      .seg {
+        height: 24px;
+        padding: 0 8px;
+        border: 0;
+        border-radius: calc(var(--radius) * 0.6);
+        background: transparent;
+        color: var(--muted-foreground);
+        font-size: 11px;
+      }
+
+      .notice {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        padding: 9px 12px;
+        border-bottom: 1px solid var(--border);
+        background: color-mix(in srgb, var(--muted) 55%, var(--background));
+        color: var(--muted-foreground);
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      .table th,
+      .table td {
+        height: 38px;
+        border-bottom: 1px solid var(--border);
+        padding: 0 10px;
+        font-size: 12px;
+        text-align: left;
+        white-space: nowrap;
+      }
+
+      .table th {
+        background: var(--muted);
+        color: var(--muted-foreground);
+        font-size: 11px;
+        font-weight: 650;
+      }
+
+      .table td {
+        color: var(--foreground);
+      }
+
+      .table .muted-cell {
+        color: var(--muted-foreground);
+      }
+
+      .stepper {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        border-bottom: 1px solid var(--border);
+      }
+
+      .step {
+        display: flex;
+        gap: 8px;
+        padding: 12px 14px;
+        border-right: 1px solid var(--border);
+        background: var(--muted);
+      }
+
+      .step:last-child {
+        border-right: 0;
+      }
+
+      .step.active {
+        background: var(--background);
+        box-shadow: inset 0 -2px 0 var(--primary);
+      }
+
+      .step-label {
+        color: var(--muted-foreground);
+        font-size: 11px;
+        font-weight: 650;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .step-title {
+        margin-top: 2px;
+        font-size: 12px;
+        font-weight: 620;
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        padding: 14px;
+      }
+
+      .mini-card {
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 12px;
+        background: var(--background);
+      }
+
+      .mini-card.selected-card {
+        border-color: color-mix(in srgb, var(--ring) 80%, var(--border));
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ring) 35%, transparent);
+      }
+
+      .card-metric {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .metric-number {
+        font-size: 26px;
+        font-weight: 680;
+        letter-spacing: 0;
+      }
+
+      .card-list {
+        margin-top: 12px;
+        display: grid;
+        gap: 7px;
+      }
+
+      .pill-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        min-height: 28px;
+        padding: 0 8px;
+        border: 1px solid var(--border);
+        border-radius: calc(var(--radius) * 0.8);
+        background: color-mix(in srgb, var(--muted) 45%, var(--background));
+        font-size: 12px;
+      }
+
+      .confirm-panel {
+        margin: 0 14px 14px;
+        border: 1px solid color-mix(in srgb, var(--destructive) 28%, var(--border));
+        border-radius: var(--radius);
+        overflow: hidden;
+      }
+
+      .confirm-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 11px 12px;
+        background: color-mix(in srgb, var(--destructive) 8%, var(--background));
+      }
+
+      .confirm-body {
+        padding: 12px;
+        color: var(--muted-foreground);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .search {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: min(100%, 300px);
+        height: 28px;
+        padding: 0 9px;
+        border: 1px solid var(--border);
+        border-radius: calc(var(--radius) * 0.8);
+        background: var(--background);
+        color: var(--muted-foreground);
+        font-size: 12px;
+      }
+
+      .status-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        background: var(--muted-foreground);
+      }
+
+      .status-dot.ready {
+        background: var(--git-decoration-added);
+      }
+
+      .status-dot.review {
+        background: var(--git-decoration-modified);
+      }
+
+      .status-dot.danger {
+        background: var(--destructive);
+      }
+
+      .preview-list {
+        padding: 8px 0;
+      }
+
+      .preview-row {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 9px;
+        min-height: 36px;
+        padding: 0 12px;
+        border-left: 2px solid transparent;
+      }
+
+      .preview-row.active {
+        background: var(--accent);
+        border-left-color: var(--ring);
+      }
+
+      .manifest {
+        padding: 12px;
+      }
+
+      .manifest-block {
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+      }
+
+      .manifest-line {
+        display: grid;
+        grid-template-columns: 78px minmax(0, 1fr);
+        gap: 10px;
+        padding: 9px 11px;
+        border-bottom: 1px solid var(--border);
+        font-size: 12px;
+      }
+
+      .manifest-line:last-child {
+        border-bottom: 0;
+      }
+
+      .manifest-label {
+        color: var(--muted-foreground);
+      }
+
+      .diff-strip {
+        margin-top: 12px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+        font-family: var(--font-mono);
+        font-size: 11px;
+      }
+
+      .diff-line {
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr);
+        gap: 8px;
+        padding: 5px 9px;
+        border-bottom: 1px solid color-mix(in srgb, var(--border) 58%, transparent);
+        color: var(--muted-foreground);
+      }
+
+      .diff-line:last-child {
+        border-bottom: 0;
+      }
+
+      .diff-line.delete {
+        background: color-mix(in srgb, var(--destructive) 8%, var(--background));
+        color: color-mix(in srgb, var(--destructive) 74%, var(--foreground));
+      }
+
+      .timeline {
+        padding: 12px 0;
+      }
+
+      .time-group {
+        padding: 0 14px 7px;
+        color: var(--muted-foreground);
+        font-size: 11px;
+        font-weight: 650;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .inbox-row {
+        display: grid;
+        grid-template-columns: 72px minmax(0, 1fr) auto;
+        gap: 12px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .age {
+        color: var(--muted-foreground);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .side-summary {
+        padding: 14px;
+      }
+
+      .summary-number {
+        font-size: 34px;
+        font-weight: 700;
+        letter-spacing: 0;
+      }
+
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        margin-top: 14px;
+      }
+
+      .summary-cell {
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 10px;
+      }
+
+      .sticky-actions {
+        position: sticky;
+        bottom: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        border-top: 1px solid var(--border);
+        background: color-mix(in srgb, var(--background) 94%, transparent);
+        backdrop-filter: blur(8px);
+      }
+
+      @media (max-width: 980px) {
+        .topbar,
+        .concept-head,
+        .toolbar,
+        .footer-bar {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .source-note,
+        .inspired {
+          text-align: left;
+        }
+
+        .split.triage,
+        .split.preview,
+        .split.inbox {
+          grid-template-columns: 1fr;
+        }
+
+        .pane {
+          border-right: 0;
+          border-bottom: 1px solid var(--border);
+        }
+
+        .cards {
+          grid-template-columns: 1fr;
+        }
+
+        .row,
+        .inbox-row {
+          grid-template-columns: auto minmax(0, 1fr);
+        }
+
+        .row-actions,
+        .inbox-row .row-actions {
+          grid-column: 2;
+          justify-content: flex-start;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="topbar">
+        <div>
+          <h1>Workspace cleanup redesign mockups</h1>
+          <p class="intro">
+            Five broad directions for the branch's old-workspace cleanup flow. These are static HTML
+            mockups that keep Orca's quiet token system while exploring different selection, review,
+            and destructive-action models.
+          </p>
+        </div>
+        <p class="source-note">
+          OSS read: VS Code bulk edit preview and tree/list behavior, plus Superset workspace
+          multi-select, context menu, and delete confirmation patterns.
+        </p>
+      </header>
+
+      <div class="grid">
+        <section class="concept">
+          <div class="concept-head">
+            <div>
+              <div class="concept-title">
+                <span class="number">1</span>
+                <h2>Triage queue with inspector</h2>
+              </div>
+              <p class="concept-copy">
+                Best default candidate: selection stays central, risk detail moves to a stable
+                inspector, and the destructive action remains gated behind the selected count.
+              </p>
+            </div>
+            <p class="inspired">
+              Broad OSS advice: use VS Code-style list focus plus Superset-style contextual details
+              instead of expanding every row.
+            </p>
+          </div>
+          <div class="surface">
+            <div class="dialog wide">
+              <div class="dialog-header">
+                <div>
+                  <h3 class="dialog-title">Clean Up Old Workspaces</h3>
+                  <p class="dialog-subtitle">
+                    Review idle worktrees before deleting local files and Orca state.
+                  </p>
+                </div>
+                <div class="button-row">
+                  <button class="btn outline icon-btn" aria-label="Refresh">R</button>
+                  <button class="btn ghost icon-btn" aria-label="Close">X</button>
+                </div>
+              </div>
+              <div class="toolbar">
+                <div class="toolbar-left">
+                  <strong class="meta">4 selected</strong>
+                  <span class="badge ready">6 safe to remove</span>
+                  <span class="badge review">3 need review</span>
+                </div>
+                <div class="toolbar-right">
+                  <button class="btn ghost">Select safe</button>
+                  <button class="btn outline">Hide selected</button>
+                  <button class="btn danger">Remove selected</button>
+                </div>
+              </div>
+              <div class="split triage">
+                <aside class="pane">
+                  <div class="pane-head">
+                    <span class="pane-title">Cleanup set</span>
+                  </div>
+                  <nav class="side-nav" aria-label="Cleanup filters">
+                    <button class="nav-item active">
+                      <span>Suggested</span><span class="count">6</span>
+                    </button>
+                    <button class="nav-item">
+                      <span>Needs review</span><span class="count">3</span>
+                    </button>
+                    <button class="nav-item">
+                      <span>Not suggested</span><span class="count">5</span>
+                    </button>
+                    <button class="nav-item">
+                      <span>Hidden</span><span class="count">2</span>
+                    </button>
+                  </nav>
+                </aside>
+                <section class="pane">
+                  <div class="pane-head">
+                    <span class="pane-title">Suggested cleanup</span>
+                    <span class="meta">Sorted by oldest activity</span>
+                  </div>
+                  <div>
+                    <div class="row selected">
+                      <span class="checkbox on"></span>
+                      <div class="row-main">
+                        <div class="row-title">
+                          <span class="name">old-workspace-cleanup-review</span>
+                          <span class="badge ready">Clean</span>
+                          <span class="meta">18d idle</span>
+                        </div>
+                        <div class="path">orca/worktrees/old-workspace-cleanup-review</div>
+                      </div>
+                      <div class="row-actions">
+                        <button class="btn ghost">View</button>
+                        <button class="btn ghost">Hide</button>
+                      </div>
+                    </div>
+                    <div class="row selected">
+                      <span class="checkbox on"></span>
+                      <div class="row-main">
+                        <div class="row-title">
+                          <span class="name">archive-tab-state-fix</span>
+                          <span class="badge ready">Merged</span>
+                          <span class="meta">12d idle</span>
+                        </div>
+                        <div class="path">orca/worktrees/archive-tab-state-fix</div>
+                      </div>
+                      <div class="row-actions">
+                        <button class="btn ghost">View</button>
+                        <button class="btn ghost">Hide</button>
+                      </div>
+                    </div>
+                    <div class="row">
+                      <span class="checkbox"></span>
+                      <div class="row-main">
+                        <div class="row-title">
+                          <span class="name">resource-panel-refresh</span>
+                          <span class="badge review">Unpushed commits</span>
+                          <span class="meta">9d idle</span>
+                        </div>
+                        <div class="path">orca/worktrees/resource-panel-refresh</div>
+                      </div>
+                      <div class="row-actions">
+                        <button class="btn ghost">View</button>
+                        <button class="btn ghost">Hide</button>
+                      </div>
+                    </div>
+                    <div class="row">
+                      <span class="checkbox"></span>
+                      <div class="row-main">
+                        <div class="row-title">
+                          <span class="name">ssh-relay-testbed</span>
+                          <span class="badge blocked">Remote unavailable</span>
+                          <span class="meta">6d idle</span>
+                        </div>
+                        <div class="path">ssh://devbox/orca/worktrees/ssh-relay-testbed</div>
+                      </div>
+                      <div class="row-actions">
+                        <button class="btn ghost">Reconnect</button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+                <aside class="pane">
+                  <div class="pane-head">
+                    <span class="pane-title">Selection details</span>
+                  </div>
+                  <div class="inspector">
+                    <div class="inspector-card">
+                      <div class="row-title">
+                        <span class="status-dot ready"></span>
+                        <strong class="name">Ready to remove</strong>
+                      </div>
+                      <div class="kv">
+                        <span>Selected</span><strong>4 workspaces</strong> <span>Disk</span
+                        ><strong>2.4 GB</strong> <span>Branches</span
+                        ><strong>4 local branches</strong> <span>Git</span
+                        ><strong>No dirty files</strong>
+                      </div>
+                    </div>
+                    <div class="inspector-card">
+                      <strong class="name">What will be deleted</strong>
+                      <div class="kv">
+                        <span>Files</span><strong>Worktree folders</strong> <span>Orca state</span
+                        ><strong>Tabs, terminals, browser state</strong> <span>Skipped</span
+                        ><strong>Active or unsafe rows</strong>
+                      </div>
+                    </div>
+                    <div class="inspector-card">
+                      <strong class="name">Last scan</strong>
+                      <p class="concept-copy">
+                        Checked local repos just now. SSH workspaces are shown but not selected
+                        until connected.
+                      </p>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="concept">
+          <div class="concept-head">
+            <div>
+              <div class="concept-title">
+                <span class="number">2</span>
+                <h2>Preview before delete</h2>
+              </div>
+              <p class="concept-copy">
+                Treat cleanup like a bulk edit: users check rows on the left and inspect a manifest
+                of filesystem, state, and branch effects before applying.
+              </p>
+            </div>
+            <p class="inspired">
+              Broad OSS advice: VS Code's bulk edit preview makes irreversible batch operations feel
+              auditable before the final action.
+            </p>
+          </div>
+          <div class="surface">
+            <div class="dialog wide">
+              <div class="dialog-header">
+                <div>
+                  <h3 class="dialog-title">Preview Workspace Cleanup</h3>
+                  <p class="dialog-subtitle">
+                    Select cleanup entries, inspect the delete manifest, then apply.
+                  </p>
+                </div>
+                <div class="segmented" aria-label="Group by">
+                  <button class="seg active">By repo</button>
+                  <button class="seg">By risk</button>
+                  <button class="seg">By age</button>
+                </div>
+              </div>
+              <div class="notice">
+                <span class="status-dot review"></span>
+                <span
+                  >3 of 8 checked entries will be applied. Rows with unverified commits are
+                  unchecked by default.</span
+                >
+              </div>
+              <div class="split preview">
+                <section class="pane">
+                  <div class="pane-head">
+                    <span class="pane-title">Cleanup preview</span>
+                    <button class="btn ghost">Check safe</button>
+                  </div>
+                  <div class="preview-list">
+                    <div class="preview-row active">
+                      <span class="checkbox on"></span>
+                      <span class="name">orca / old-workspace-cleanup-review</span>
+                      <span class="badge ready">Remove</span>
+                    </div>
+                    <div class="preview-row">
+                      <span class="checkbox on"></span>
+                      <span class="name">orca / archive-tab-state-fix</span>
+                      <span class="badge ready">Remove</span>
+                    </div>
+                    <div class="preview-row">
+                      <span class="checkbox"></span>
+                      <span class="name">orca / resource-panel-refresh</span>
+                      <span class="badge review">Review</span>
+                    </div>
+                    <div class="preview-row">
+                      <span class="checkbox on"></span>
+                      <span class="name">relay / stale-daemon-sweep</span>
+                      <span class="badge ready">Remove</span>
+                    </div>
+                    <div class="preview-row">
+                      <span class="checkbox"></span>
+                      <span class="name">remote / ssh-relay-testbed</span>
+                      <span class="badge blocked">Skipped</span>
+                    </div>
+                  </div>
+                </section>
+                <section>
+                  <div class="pane-head">
+                    <span class="pane-title">Manifest for selected row</span>
+                    <span class="meta">18d idle</span>
+                  </div>
+                  <div class="manifest">
+                    <div class="manifest-block">
+                      <div class="manifest-line">
+                        <span class="manifest-label">Folder</span>
+                        <span class="mono"
+                          >/Users/thebr/orca/worktrees/old-workspace-cleanup-review</span
+                        >
+                      </div>
+                      <div class="manifest-line">
+                        <span class="manifest-label">Branch</span>
+                        <span class="mono">brennan/old-workspace-cleanup-review</span>
+                      </div>
+                      <div class="manifest-line">
+                        <span class="manifest-label">Orca state</span>
+                        <span>2 terminal histories, 3 tabs, 1 browser session</span>
+                      </div>
+                      <div class="manifest-line">
+                        <span class="manifest-label">Safety</span>
+                        <span>No dirty files, no unpushed commits, no running processes</span>
+                      </div>
+                    </div>
+                    <div class="diff-strip" aria-label="Deletion preview">
+                      <div class="diff-line delete">
+                        <span>-</span><span>worktree folder and local metadata</span>
+                      </div>
+                      <div class="diff-line delete">
+                        <span>-</span><span>terminal scrollback attached to this workspace</span>
+                      </div>
+                      <div class="diff-line delete">
+                        <span>-</span><span>local branch if git confirms it is unused</span>
+                      </div>
+                      <div class="diff-line">
+                        <span>=</span
+                        ><span>main repo, active tabs, and not-suggested workspaces unchanged</span>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+              <div class="footer-bar">
+                <span class="meta">Unchecked rows stay visible after cleanup.</span>
+                <div class="button-row">
+                  <button class="btn outline">Discard</button>
+                  <button class="btn danger">Apply 3 removals</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="concept">
+          <div class="concept-head">
+            <div>
+              <div class="concept-title">
+                <span class="number">3</span>
+                <h2>Guided cleanup wizard</h2>
+              </div>
+              <p class="concept-copy">
+                A more conservative flow for users who fear losing work. It separates discovery,
+                selection, and final confirmation into visible stages.
+              </p>
+            </div>
+            <p class="inspired">
+              Broad OSS advice: separate safe navigation from destructive confirmation; make the
+              back-out path quiet and obvious.
+            </p>
+          </div>
+          <div class="surface">
+            <div class="dialog compact">
+              <div class="dialog-header">
+                <div>
+                  <h3 class="dialog-title">Clean Up Workspaces</h3>
+                  <p class="dialog-subtitle">Step through old workspaces by confidence level.</p>
+                </div>
+                <button class="btn ghost icon-btn" aria-label="Close">X</button>
+              </div>
+              <div class="stepper">
+                <div class="step">
+                  <span class="number">1</span>
+                  <div>
+                    <div class="step-label">Scan</div>
+                    <div class="step-title">14 found</div>
+                  </div>
+                </div>
+                <div class="step active">
+                  <span class="number">2</span>
+                  <div>
+                    <div class="step-label">Choose</div>
+                    <div class="step-title">4 selected</div>
+                  </div>
+                </div>
+                <div class="step">
+                  <span class="number">3</span>
+                  <div>
+                    <div class="step-label">Confirm</div>
+                    <div class="step-title">Recheck then remove</div>
+                  </div>
+                </div>
+              </div>
+              <div class="cards">
+                <div class="mini-card selected-card">
+                  <div class="card-metric">
+                    <span class="metric-number">6</span>
+                    <span class="badge ready">Suggested</span>
+                  </div>
+                  <p class="concept-copy">Clean, idle, archived, no live local context.</p>
+                  <div class="card-list">
+                    <div class="pill-row">
+                      <span>archive-tab-state-fix</span><span class="checkbox on"></span>
+                    </div>
+                    <div class="pill-row">
+                      <span>stale-daemon-sweep</span><span class="checkbox on"></span>
+                    </div>
+                    <div class="pill-row">
+                      <span>landing-copy-pass</span><span class="checkbox"></span>
+                    </div>
+                  </div>
+                </div>
+                <div class="mini-card">
+                  <div class="card-metric">
+                    <span class="metric-number">3</span>
+                    <span class="badge review">Review</span>
+                  </div>
+                  <p class="concept-copy">
+                    Has local context, unpushed commits, or older scan data.
+                  </p>
+                  <div class="card-list">
+                    <div class="pill-row">
+                      <span>resource-panel-refresh</span><span class="badge review">2 commits</span>
+                    </div>
+                    <div class="pill-row">
+                      <span>diff-comment-polish</span><span class="badge review">tabs</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="mini-card">
+                  <div class="card-metric">
+                    <span class="metric-number">5</span>
+                    <span class="badge blocked">Not suggested</span>
+                  </div>
+                  <p class="concept-copy">Active, pinned, remote unavailable, or main worktree.</p>
+                  <div class="card-list">
+                    <div class="pill-row">
+                      <span>main</span><span class="badge blocked">Main</span>
+                    </div>
+                    <div class="pill-row">
+                      <span>ssh-relay-testbed</span><span class="badge blocked">Remote</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="confirm-panel">
+                <div class="confirm-head">
+                  <strong class="name">Ready to confirm 4 removals</strong>
+                  <span class="badge danger">Destructive</span>
+                </div>
+                <div class="confirm-body">
+                  Orca will recheck each selected workspace before deletion and skip anything that
+                  became active, dirty, disconnected, or branch-unsafe.
+                </div>
+              </div>
+              <div class="footer-bar">
+                <button class="btn ghost">Back</button>
+                <div class="button-row">
+                  <button class="btn outline">Hide selected</button>
+                  <button class="btn primary">Continue</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="concept">
+          <div class="concept-head">
+            <div>
+              <div class="concept-title">
+                <span class="number">4</span>
+                <h2>Dense table for power users</h2>
+              </div>
+              <p class="concept-copy">
+                Keeps the current modal shape but shifts from card-like rows to a compact, sortable
+                table with persistent columns for age, git safety, context, and action.
+              </p>
+            </div>
+            <p class="inspired">
+              Broad OSS advice: VS Code and terminal tools favor dense rows when the user is
+              comparing many local resources.
+            </p>
+          </div>
+          <div class="surface">
+            <div class="dialog wide">
+              <div class="dialog-header">
+                <div>
+                  <h3 class="dialog-title">Clean Up Old Workspaces</h3>
+                  <p class="dialog-subtitle">
+                    Compare stale workspaces across repos and remove safe ones.
+                  </p>
+                </div>
+                <div class="search">
+                  <span>Search</span><span class="mono">repo, branch, path</span>
+                </div>
+              </div>
+              <div class="toolbar">
+                <div class="toolbar-left">
+                  <span class="badge">All repos</span>
+                  <span class="badge ready">Safe</span>
+                  <span class="badge review">Review</span>
+                  <span class="badge blocked">Not suggested</span>
+                </div>
+                <div class="toolbar-right">
+                  <span class="meta">4 selected</span>
+                  <button class="btn outline">Hide</button>
+                  <button class="btn danger">Remove</button>
+                </div>
+              </div>
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 34px"><span class="checkbox on"></span></th>
+                    <th>Workspace</th>
+                    <th>Repo</th>
+                    <th>Age</th>
+                    <th>Git</th>
+                    <th>Context</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><span class="checkbox on"></span></td>
+                    <td>
+                      <strong>old-workspace-cleanup-review</strong><br /><span
+                        class="mono muted-cell"
+                        >brennan/cleanup-review</span
+                      >
+                    </td>
+                    <td>orca</td>
+                    <td>18d</td>
+                    <td><span class="badge ready">Clean</span></td>
+                    <td class="muted-cell">No tabs</td>
+                    <td><button class="btn ghost">View</button></td>
+                  </tr>
+                  <tr>
+                    <td><span class="checkbox on"></span></td>
+                    <td>
+                      <strong>archive-tab-state-fix</strong><br /><span class="mono muted-cell"
+                        >brennan/archive-tabs</span
+                      >
+                    </td>
+                    <td>orca</td>
+                    <td>12d</td>
+                    <td><span class="badge ready">Merged</span></td>
+                    <td class="muted-cell">1 done agent</td>
+                    <td><button class="btn ghost">View</button></td>
+                  </tr>
+                  <tr>
+                    <td><span class="checkbox"></span></td>
+                    <td>
+                      <strong>resource-panel-refresh</strong><br /><span class="mono muted-cell"
+                        >feature/resource-refresh</span
+                      >
+                    </td>
+                    <td>orca</td>
+                    <td>9d</td>
+                    <td><span class="badge review">2 commits</span></td>
+                    <td class="muted-cell">3 tabs</td>
+                    <td><button class="btn ghost">Open</button></td>
+                  </tr>
+                  <tr>
+                    <td><span class="checkbox"></span></td>
+                    <td>
+                      <strong>ssh-relay-testbed</strong><br /><span class="mono muted-cell"
+                        >ssh://devbox/orca</span
+                      >
+                    </td>
+                    <td>remote</td>
+                    <td>6d</td>
+                    <td><span class="badge blocked">Unknown</span></td>
+                    <td class="muted-cell">Disconnected</td>
+                    <td><button class="btn ghost">Reconnect</button></td>
+                  </tr>
+                  <tr>
+                    <td><span class="checkbox on"></span></td>
+                    <td>
+                      <strong>stale-daemon-sweep</strong><br /><span class="mono muted-cell"
+                        >fix/stale-daemon-sweep</span
+                      >
+                    </td>
+                    <td>relay</td>
+                    <td>21d</td>
+                    <td><span class="badge ready">Clean</span></td>
+                    <td class="muted-cell">No tabs</td>
+                    <td><button class="btn ghost">View</button></td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="footer-bar">
+                <span class="meta"
+                  >Rows that are not suggested are visible for trust but cannot be selected.</span
+                >
+                <div class="button-row">
+                  <button class="btn ghost">Reset hidden</button>
+                  <button class="btn outline">Cancel</button>
+                  <button class="btn danger">Remove 4</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="concept">
+          <div class="concept-head">
+            <div>
+              <div class="concept-title">
+                <span class="number">5</span>
+                <h2>Workspace inbox</h2>
+              </div>
+              <p class="concept-copy">
+                Frames stale workspaces as an inbox to process: keep, snooze, open, or remove. This
+                is strongest if cleanup becomes a recurring maintenance habit.
+              </p>
+            </div>
+            <p class="inspired">
+              Broad OSS advice: Superset's workspace sidebar treats workspaces as an attention
+              queue, with hover actions and multi-selection captured at action time.
+            </p>
+          </div>
+          <div class="surface">
+            <div class="dialog wide">
+              <div class="dialog-header">
+                <div>
+                  <h3 class="dialog-title">Workspace Cleanup Inbox</h3>
+                  <p class="dialog-subtitle">
+                    Process stale workspaces without leaving the maintenance flow.
+                  </p>
+                </div>
+                <div class="button-row">
+                  <button class="btn outline">Refresh</button>
+                  <button class="btn ghost icon-btn" aria-label="Close">X</button>
+                </div>
+              </div>
+              <div class="split inbox">
+                <section class="pane">
+                  <div class="toolbar">
+                    <div class="toolbar-left">
+                      <span class="meta">4 selected</span>
+                      <span class="badge">This repo</span>
+                      <span class="badge">Older than 7d</span>
+                    </div>
+                    <div class="toolbar-right">
+                      <button class="btn ghost">Select clean</button>
+                      <button class="btn outline">Snooze</button>
+                      <button class="btn danger">Remove</button>
+                    </div>
+                  </div>
+                  <div class="timeline">
+                    <div class="time-group">Older than 2 weeks</div>
+                    <div class="inbox-row">
+                      <span class="age">21d</span>
+                      <div>
+                        <div class="row-title">
+                          <span class="checkbox on"></span>
+                          <span class="name">stale-daemon-sweep</span>
+                          <span class="badge ready">Clean</span>
+                        </div>
+                        <div class="path">relay/worktrees/stale-daemon-sweep</div>
+                      </div>
+                      <div class="row-actions">
+                        <button class="btn ghost">Open</button>
+                        <button class="btn ghost">Keep</button>
+                      </div>
+                    </div>
+                    <div class="inbox-row">
+                      <span class="age">18d</span>
+                      <div>
+                        <div class="row-title">
+                          <span class="checkbox on"></span>
+                          <span class="name">old-workspace-cleanup-review</span>
+                          <span class="badge ready">Archived</span>
+                        </div>
+                        <div class="path">orca/worktrees/old-workspace-cleanup-review</div>
+                      </div>
+                      <div class="row-actions">
+                        <button class="btn ghost">Open</button>
+                        <button class="btn ghost">Keep</button>
+                      </div>
+                    </div>
+                    <div class="time-group" style="padding-top: 14px">Last week</div>
+                    <div class="inbox-row">
+                      <span class="age">9d</span>
+                      <div>
+                        <div class="row-title">
+                          <span class="checkbox"></span>
+                          <span class="name">resource-panel-refresh</span>
+                          <span class="badge review">Review</span>
+                        </div>
+                        <div class="path">orca/worktrees/resource-panel-refresh</div>
+                      </div>
+                      <div class="row-actions">
+                        <button class="btn ghost">Open</button>
+                        <button class="btn ghost">Snooze</button>
+                      </div>
+                    </div>
+                    <div class="inbox-row">
+                      <span class="age">6d</span>
+                      <div>
+                        <div class="row-title">
+                          <span class="checkbox"></span>
+                          <span class="name">ssh-relay-testbed</span>
+                          <span class="badge blocked">Remote</span>
+                        </div>
+                        <div class="path">ssh://devbox/orca/worktrees/ssh-relay-testbed</div>
+                      </div>
+                      <div class="row-actions">
+                        <button class="btn ghost">Reconnect</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="sticky-actions">
+                    <span class="meta"
+                      >Inbox actions are reversible until removal confirmation.</span
+                    >
+                    <button class="btn danger">Review removal summary</button>
+                  </div>
+                </section>
+                <aside>
+                  <div class="side-summary">
+                    <span class="pane-title">Cleanup opportunity</span>
+                    <div class="summary-number">2.4 GB</div>
+                    <p class="concept-copy">
+                      Estimated local disk and Orca state from selected clean workspaces.
+                    </p>
+                    <div class="summary-grid">
+                      <div class="summary-cell">
+                        <div class="metric-number" style="font-size: 20px">6</div>
+                        <div class="meta">Safe</div>
+                      </div>
+                      <div class="summary-cell">
+                        <div class="metric-number" style="font-size: 20px">3</div>
+                        <div class="meta">Review</div>
+                      </div>
+                      <div class="summary-cell">
+                        <div class="metric-number" style="font-size: 20px">5</div>
+                        <div class="meta">Not suggested</div>
+                      </div>
+                      <div class="summary-cell">
+                        <div class="metric-number" style="font-size: 20px">2</div>
+                        <div class="meta">Hidden</div>
+                      </div>
+                    </div>
+                    <div class="inspector-card" style="margin-top: 14px">
+                      <strong class="name">Recurring cleanup model</strong>
+                      <p class="concept-copy">
+                        Good when stale workspace review should feel like processing a queue rather
+                        than making one large deletion decision.
+                      </p>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

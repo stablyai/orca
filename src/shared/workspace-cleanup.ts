@@ -76,6 +76,12 @@ export type WorkspaceCleanupScanArgs = {
   skipGitWorktreeIds?: string[]
 }
 
+export type WorkspaceCleanupLocalProcessArgs = {
+  worktreeId: string
+  connectionId?: string | null
+  worktreePath?: string
+}
+
 export type WorkspaceCleanupScanError = {
   repoId: string
   repoName: string
@@ -86,6 +92,10 @@ export type WorkspaceCleanupScanResult = {
   scannedAt: number
   candidates: WorkspaceCleanupCandidate[]
   errors: WorkspaceCleanupScanError[]
+}
+
+export type WorkspaceCleanupLocalProcessResult = {
+  hasKillableProcesses: boolean | null
 }
 
 export type WorkspaceCleanupDismissArgs = {
@@ -102,6 +112,7 @@ export const WORKSPACE_CLEANUP_HARD_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocke
   'dirty-editor-buffer',
   'volatile-local-context',
   'live-agent',
+  'recent-visible-context',
   'ssh-disconnected',
   'git-status-error',
   'dirty-files',
@@ -110,8 +121,36 @@ export const WORKSPACE_CLEANUP_HARD_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocke
   'dismissed'
 ])
 
+const WORKSPACE_CLEANUP_QUEUE_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = new Set([
+  'main-worktree',
+  'folder-repo',
+  'dismissed'
+])
+
+export const WORKSPACE_CLEANUP_FORCE_REMOVE_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> =
+  new Set(['dirty-files', 'unpushed-commits', 'unknown-base', 'git-status-error'])
+
 export function isWorkspaceCleanupHardBlocker(blocker: WorkspaceCleanupBlocker): boolean {
   return WORKSPACE_CLEANUP_HARD_BLOCKERS.has(blocker)
+}
+
+export function canQueueWorkspaceCleanupCandidate(
+  candidate: Pick<WorkspaceCleanupCandidate, 'blockers' | 'reasons'>
+): boolean {
+  return (
+    candidate.reasons.length > 0 &&
+    !candidate.blockers.some((blocker) => WORKSPACE_CLEANUP_QUEUE_BLOCKERS.has(blocker))
+  )
+}
+
+export function shouldForceWorkspaceCleanupRemoval(
+  candidate: Pick<WorkspaceCleanupCandidate, 'blockers' | 'git'>
+): boolean {
+  return (
+    candidate.git.clean !== true ||
+    candidate.git.checkedAt === null ||
+    candidate.blockers.some((blocker) => WORKSPACE_CLEANUP_FORCE_REMOVE_BLOCKERS.has(blocker))
+  )
 }
 
 export function canSelectWorkspaceCleanupCandidate(

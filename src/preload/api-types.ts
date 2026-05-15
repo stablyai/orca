@@ -199,6 +199,8 @@ import type {
 } from '../shared/notes-types'
 import type {
   WorkspaceCleanupDismissArgs,
+  WorkspaceCleanupLocalProcessArgs,
+  WorkspaceCleanupLocalProcessResult,
   WorkspaceCleanupScanArgs,
   WorkspaceCleanupScanResult
 } from '../shared/workspace-cleanup'
@@ -506,6 +508,9 @@ export type PreloadApi = {
     scan: (args?: WorkspaceCleanupScanArgs) => Promise<WorkspaceCleanupScanResult>
     dismiss: (args: WorkspaceCleanupDismissArgs) => Promise<void>
     clearDismissals: () => Promise<void>
+    hasKillableLocalProcesses: (
+      args: WorkspaceCleanupLocalProcessArgs
+    ) => Promise<WorkspaceCleanupLocalProcessResult>
   }
   pty: {
     spawn: (opts: {

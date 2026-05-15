@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
   applyWorkspaceCleanupPolicy,
+  canQueueWorkspaceCleanupCandidate,
   canSelectWorkspaceCleanupCandidate,
   createWorkspaceCleanupFingerprint,
+  shouldForceWorkspaceCleanupRemoval,
   shouldHideWorkspaceCleanupCandidate,
   type WorkspaceCleanupCandidate
 } from './workspace-cleanup'
@@ -69,12 +71,22 @@ describe('workspace cleanup policy', () => {
     expect(candidate.selectedByDefault).toBe(false)
   })
 
-  it('protects candidates with hard blockers even when git evidence is clean', () => {
+  it('keeps not-suggested candidates queueable when git evidence is clean', () => {
     const candidate = applyWorkspaceCleanupPolicy(makeCandidate({ blockers: ['unpushed-commits'] }))
 
     expect(candidate.tier).toBe('protected')
     expect(candidate.selectedByDefault).toBe(false)
     expect(canSelectWorkspaceCleanupCandidate(candidate)).toBe(false)
+    expect(canQueueWorkspaceCleanupCandidate(candidate)).toBe(true)
+    expect(shouldForceWorkspaceCleanupRemoval(candidate)).toBe(true)
+  })
+
+  it('does not queue main worktrees or folder projects for cleanup removal', () => {
+    const mainWorktree = applyWorkspaceCleanupPolicy(makeCandidate({ blockers: ['main-worktree'] }))
+    const folderProject = applyWorkspaceCleanupPolicy(makeCandidate({ blockers: ['folder-repo'] }))
+
+    expect(canQueueWorkspaceCleanupCandidate(mainWorktree)).toBe(false)
+    expect(canQueueWorkspaceCleanupCandidate(folderProject)).toBe(false)
   })
 
   it('requires current git status before selecting a workspace', () => {
