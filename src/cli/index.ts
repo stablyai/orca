@@ -47,11 +47,19 @@ export async function main(argv = process.argv.slice(2), cwd = process.cwd()): P
     const ignoreRemoteSelection = shouldIgnoreRemoteSelection(parsed.commandPath)
     const pairingCode = ignoreRemoteSelection ? null : parsed.flags.get('pairing-code')
     const environmentSelector = ignoreRemoteSelection ? null : parsed.flags.get('environment')
+    // Why: pass `null` (not `undefined`) when remote selection is suppressed
+    // so the RuntimeClient default parameter does not re-activate the
+    // ORCA_PAIRING_CODE / ORCA_ENVIRONMENT env-var fallback for commands
+    // that must run locally (environment / serve).
     const client = new RuntimeClient(
       undefined,
       undefined,
-      typeof pairingCode === 'string' ? pairingCode : undefined,
-      typeof environmentSelector === 'string' ? environmentSelector : undefined
+      typeof pairingCode === 'string' ? pairingCode : ignoreRemoteSelection ? null : undefined,
+      typeof environmentSelector === 'string'
+        ? environmentSelector
+        : ignoreRemoteSelection
+          ? null
+          : undefined
     )
     await dispatch(parsed.commandPath, {
       flags: parsed.flags,
