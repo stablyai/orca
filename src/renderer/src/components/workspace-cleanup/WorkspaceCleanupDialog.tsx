@@ -409,51 +409,58 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                 Checking old workspaces
               </div>
             ) : (
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/25 px-5 py-2.5">
-                <div className="min-w-0 text-xs leading-5 text-muted-foreground">
+              <>
+                <div className="border-b border-border bg-muted/25 px-5 py-2.5 text-xs leading-5 text-muted-foreground">
                   {oldCandidateCount > 0 ? (
                     <>
                       <span className="font-medium text-foreground">{oldCandidateCount}</span> old
-                      workspace{oldCandidateCount === 1 ? '' : 's'} found. {selectedCount} selected.
+                      workspace{oldCandidateCount === 1 ? '' : 's'} found.
                     </>
                   ) : (
                     'No old workspaces found.'
                   )}
                 </div>
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  {hiddenByKeepCount > 0 ? (
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      onClick={() => setShowKept((value) => !value)}
-                    >
-                      {showKept ? 'Hide hidden workspaces' : 'Show hidden workspaces'}
-                    </Button>
-                  ) : null}
-                  {readyCount > 0 && selectedCount < readyCount ? (
-                    <Button variant="ghost" size="xs" onClick={selectReady}>
-                      Select all removable
-                    </Button>
-                  ) : null}
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    onClick={keepSelected}
-                    disabled={selectedCount === 0}
-                  >
-                    Hide selected
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => setConfirming(true)}
-                    disabled={selectedCount === 0}
-                  >
-                    <Trash2 className="size-3.5" />
-                    Remove selected
-                  </Button>
-                </div>
-              </div>
+                {oldCandidateCount > 0 || hiddenByKeepCount > 0 ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-background px-5 py-2">
+                    <div className="min-w-0 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">{selectedCount}</span> selected
+                    </div>
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      {hiddenByKeepCount > 0 ? (
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          onClick={() => setShowKept((value) => !value)}
+                        >
+                          {showKept ? 'Hide hidden workspaces' : 'Show hidden workspaces'}
+                        </Button>
+                      ) : null}
+                      {readyCount > 0 && selectedCount < readyCount ? (
+                        <Button variant="ghost" size="xs" onClick={selectReady}>
+                          Select all removable
+                        </Button>
+                      ) : null}
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        onClick={keepSelected}
+                        disabled={selectedCount === 0}
+                      >
+                        Hide selected
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setConfirming(true)}
+                        disabled={selectedCount === 0}
+                      >
+                        <Trash2 className="size-3.5" />
+                        Remove selected
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+              </>
             )}
 
             {error ? (
