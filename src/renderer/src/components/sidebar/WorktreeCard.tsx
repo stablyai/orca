@@ -19,6 +19,7 @@ import CacheTimer from './CacheTimer'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import { SshDisconnectedDialog } from './SshDisconnectedDialog'
 import WorktreeCardAgents from './WorktreeCardAgents'
+import { WorktreeOpenInControl } from './WorktreeOpenInMenu'
 import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { getWorktreeStatusLabel } from '@/lib/worktree-status'
@@ -465,9 +466,14 @@ const WorktreeCard = React.memo(function WorktreeCard({
             )}
           </div>
 
-          {/* CI Checks & PR state on the right */}
-          {cardProps.includes('ci') && hostedReview && hostedReview.status !== 'neutral' && (
-            <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
+            <WorktreeOpenInControl
+              worktreePath={worktree.path}
+              connectionId={repo?.connectionId ?? null}
+              disabled={isDeleting}
+            />
+            {/* CI Checks & PR state on the right */}
+            {cardProps.includes('ci') && hostedReview && hostedReview.status !== 'neutral' && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="inline-flex items-center opacity-80 hover:opacity-100 transition-opacity">
@@ -486,8 +492,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
                   <span>CI checks {checksLabel(hostedReview.status).toLowerCase()}</span>
                 </TooltipContent>
               </Tooltip>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Subtitle row: Repo badge + Branch */}
