@@ -308,6 +308,25 @@ describe('registerWorktreeHandlers', () => {
     registerWorktreeHandlers(mainWindow as never, store as never, runtimeStub as never)
   })
 
+  function mockKnownFeatureWorktree(path = '/workspace/feature-wt'): void {
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/repo',
+        head: 'main',
+        branch: 'main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path,
+        head: 'feature',
+        branch: 'feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+  }
+
   it('auto-suffixes the branch name when the first choice collides with a remote branch', async () => {
     // Why: new-workspace flow should silently try improve-dashboard-2, -3, ...
     // rather than failing and forcing the user back to the name picker.
@@ -1218,6 +1237,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('prunes git worktree tracking when removing an orphaned worktree', async () => {
+    mockKnownFeatureWorktree()
     const orphanError = Object.assign(new Error('git worktree remove failed'), {
       stderr: "fatal: '/workspace/feature-wt' is not a working tree"
     })
@@ -1241,7 +1261,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('runs the archive hook on remove when skipArchive is not set', async () => {
-    listWorktreesMock.mockResolvedValue([])
+    mockKnownFeatureWorktree()
     removeWorktreeMock.mockResolvedValue(undefined)
     getEffectiveHooksMock.mockReturnValue({
       scripts: {
@@ -1267,7 +1287,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('skips the archive hook on remove when skipArchive is true', async () => {
-    listWorktreesMock.mockResolvedValue([])
+    mockKnownFeatureWorktree()
     removeWorktreeMock.mockResolvedValue(undefined)
     getEffectiveHooksMock.mockReturnValue({
       scripts: {
@@ -1289,8 +1309,43 @@ describe('registerWorktreeHandlers', () => {
     )
   })
 
+  it('rejects unregistered delete paths before teardown, hooks, or git removal', async () => {
+    mockKnownFeatureWorktree('/workspace/real-feature')
+    getEffectiveHooksMock.mockReturnValue({
+      scripts: {
+        archive: 'echo archived'
+      }
+    })
+
+    await expect(
+      handlers['worktrees:remove'](null, {
+        worktreeId: 'repo-1::/workspace/not-a-worktree'
+      })
+    ).rejects.toThrow('Refusing to delete unregistered worktree path')
+
+    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+    expect(runHookMock).not.toHaveBeenCalled()
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+  })
+
+  it('rejects the main worktree before teardown, hooks, or git removal', async () => {
+    mockKnownFeatureWorktree()
+
+    await expect(
+      handlers['worktrees:remove'](null, {
+        worktreeId: 'repo-1::/workspace/repo'
+      })
+    ).rejects.toThrow('Refusing to delete protected worktree path')
+
+    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+    expect(runHookMock).not.toHaveBeenCalled()
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+  })
+
   it('IPC-initiated delete kills PTYs BEFORE git-level removal (design §4.3)', async () => {
-    listWorktreesMock.mockResolvedValue([])
+    mockKnownFeatureWorktree()
     getEffectiveHooksMock.mockReturnValue(null)
     const callOrder: string[] = []
     killAllProcessesForWorktreeMock.mockImplementation(async () => {

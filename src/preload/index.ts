@@ -40,7 +40,10 @@ import type {
   RuntimeMobileMarkdownResponse
 } from '../shared/mobile-markdown-document'
 import type { RateLimitState } from '../shared/rate-limit-types'
-import type { WorkspaceSpaceAnalysis } from '../shared/workspace-space-types'
+import type {
+  WorkspaceSpaceAnalyzeResult,
+  WorkspaceSpaceScanProgress
+} from '../shared/workspace-space-types'
 import type { GhAuthDiagnostic } from '../shared/github-auth-types'
 import type {
   AddIssueCommentBySlugArgs,
@@ -495,7 +498,17 @@ const api = {
   },
 
   workspaceSpace: {
-    analyze: (): Promise<WorkspaceSpaceAnalysis> => ipcRenderer.invoke('workspaceSpace:analyze')
+    analyze: (): Promise<WorkspaceSpaceAnalyzeResult> =>
+      ipcRenderer.invoke('workspaceSpace:analyze'),
+    cancel: (): Promise<boolean> => ipcRenderer.invoke('workspaceSpace:cancel'),
+    onProgress: (callback: (progress: WorkspaceSpaceScanProgress) => void): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        progress: WorkspaceSpaceScanProgress
+      ): void => callback(progress)
+      ipcRenderer.on('workspaceSpace:progress', listener)
+      return () => ipcRenderer.removeListener('workspaceSpace:progress', listener)
+    }
   },
 
   pty: {

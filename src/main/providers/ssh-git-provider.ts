@@ -123,10 +123,17 @@ export class SshGitProvider implements IGitProvider {
     })) as GitDiffResult[]
   }
 
-  async listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]> {
-    return (await this.mux.request('git.listWorktrees', {
-      repoPath
-    })) as GitWorktreeInfo[]
+  async listWorktrees(
+    repoPath: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<GitWorktreeInfo[]> {
+    return (await this.mux.request(
+      'git.listWorktrees',
+      {
+        repoPath
+      },
+      { signal: options?.signal }
+    )) as GitWorktreeInfo[]
   }
 
   async addWorktree(

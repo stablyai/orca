@@ -579,9 +579,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           sortEpoch: s.sortEpoch + 1
         }
       })
+      get().removeWorkspaceSpaceWorktrees?.([worktreeId])
       return { ok: true as const }
     } catch (err) {
-      console.error('Failed to remove worktree:', err)
+      // Why: git refusing a non-force delete for dirty/untracked files is a
+      // handled user decision point surfaced by the delete toast, not an app error.
+      console.warn('Failed to remove worktree:', err)
       const error = err instanceof Error ? err.message : String(err)
       set((s) => ({
         deleteStateByWorktreeId: {

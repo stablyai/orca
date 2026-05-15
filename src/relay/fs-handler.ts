@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: relay filesystem request handling shares
-   path expansion, file IO, search, streaming reads, and watch lifecycle state. */
+   path expansion, file IO, search, streaming reads, Space scans, and watch lifecycle state. */
 import { readdir, writeFile, stat, lstat, mkdir, rename, cp, rm, realpath } from 'fs/promises'
 import { execFile } from 'child_process'
 import { join } from 'path'
@@ -20,6 +20,7 @@ import { buildExcludePathPrefixes } from '../shared/quick-open-filter'
 import { buildInstallRgMessage } from './fs-handler-install-rg'
 import { readRelayFileContent, readRelayFileStreamMetadata } from './fs-handler-file-read'
 import { RelayStreamRegistry } from './fs-stream-registry'
+import { scanWorkspaceSpaceDirectory } from './workspace-space-scan'
 
 type WatchState = {
   rootPath: string
@@ -72,6 +73,7 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.realpath', (p) => this.realpath(p))
     this.dispatcher.onRequest('fs.search', (p) => this.search(p))
     this.dispatcher.onRequest('fs.listFiles', (p) => this.listFiles(p))
+    this.dispatcher.onRequest('fs.workspaceSpaceScan', (p, c) => this.workspaceSpaceScan(p, c))
     this.dispatcher.onRequest('fs.watch', (p, context) => this.watch(p, context))
     this.dispatcher.onNotification('fs.unwatch', (p) => this.unwatch(p))
     this.dispatcher.onNotification('fs.cancelStream', (p) => this.cancelStream(p))
@@ -277,6 +279,11 @@ export class FsHandler {
     } catch (err) {
       throw new Error(await buildInstallRgMessage(err))
     }
+  }
+
+  private async workspaceSpaceScan(params: Record<string, unknown>, context: RequestContext) {
+    const rootPath = expandTilde(params.rootPath as string)
+    return scanWorkspaceSpaceDirectory(rootPath, context)
   }
 
   private async watch(params: Record<string, unknown>, context?: RequestContext) {

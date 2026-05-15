@@ -11,6 +11,7 @@ import type {
   SearchOptions,
   SearchResult
 } from '../../shared/types'
+import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 
 // ─── PTY Provider ───────────────────────────────────────────────────
 
@@ -130,6 +131,10 @@ export type IFilesystemProvider = {
   realpath(filePath: string): Promise<string>
   search(opts: SearchOptions): Promise<SearchResult>
   listFiles(rootPath: string, options?: { excludePaths?: string[] }): Promise<string[]>
+  scanWorkspaceSpace?(
+    rootPath: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<WorkspaceSpaceDirectoryScanResult>
   watch(rootPath: string, callback: (events: FsChangeEvent[]) => void): Promise<() => void>
 }
 
@@ -161,7 +166,7 @@ export type IGitProvider = {
     baseRef: string,
     options?: { includePatch?: boolean; filePath?: string; oldPath?: string }
   ): Promise<GitDiffResult[]>
-  listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]>
+  listWorktrees(repoPath: string, options?: { signal?: AbortSignal }): Promise<GitWorktreeInfo[]>
   addWorktree(
     repoPath: string,
     branchName: string,

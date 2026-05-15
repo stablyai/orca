@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: this suite covers relay filesystem RPCs,
-   file watcher lifecycle edges, and cross-platform path behavior together. */
+   Space scans, file watcher lifecycle edges, and cross-platform path behavior together. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { FsHandler } from './fs-handler'
 import { RelayContext } from './context'
@@ -101,6 +101,7 @@ describe('FsHandler', () => {
     expect(methods).toContain('fs.realpath')
     expect(methods).toContain('fs.search')
     expect(methods).toContain('fs.listFiles')
+    expect(methods).toContain('fs.workspaceSpaceScan')
     expect(methods).toContain('fs.watch')
 
     const notifMethods = Array.from(dispatcher._notificationHandlers.keys())
@@ -245,6 +246,25 @@ describe('FsHandler', () => {
     }
 
     expect(result.type).toBe('directory')
+  })
+
+  it('workspaceSpaceScan returns bounded top-level size details', async () => {
+    mkdirSync(path.join(tmpDir, 'node_modules'))
+    writeFileSync(path.join(tmpDir, 'node_modules', 'pkg.js'), Buffer.alloc(512))
+    writeFileSync(path.join(tmpDir, 'file.log'), Buffer.alloc(128))
+
+    const result = (await dispatcher.callRequest(
+      'fs.workspaceSpaceScan',
+      { rootPath: tmpDir },
+      { isStale: () => false }
+    )) as {
+      sizeBytes: number
+      topLevelItems: { name: string; sizeBytes: number }[]
+    }
+
+    expect(result.sizeBytes).toBeGreaterThanOrEqual(640)
+    expect(result.topLevelItems.map((item) => item.name)).toContain('node_modules')
+    expect(result.topLevelItems.map((item) => item.name)).toContain('file.log')
   })
 
   it('deletePath removes files', async () => {

@@ -1,9 +1,15 @@
 import type {
+  WorkspaceSpaceScanProgress,
   WorkspaceSpaceScanStatus,
   WorkspaceSpaceWorktree
 } from '../../../../shared/workspace-space-types'
 
 const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'] as const
+const relativeTimeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
+const fullDateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  dateStyle: 'medium',
+  timeStyle: 'short'
+})
 
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) {
@@ -34,8 +40,45 @@ export function formatCompactCount(count: number): string {
   return `${(count / 1_000_000).toFixed(count >= 10_000_000 ? 0 : 1)}m`
 }
 
-export function getWorkspaceSpaceScanTimeLabel(scannedAt: number): string {
-  return new Date(scannedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+export function getWorkspaceSpaceScanTimeLabel(scannedAt: number, now = Date.now()): string {
+  const diffMs = scannedAt - now
+  const diffMinutes = Math.round(diffMs / 60_000)
+  if (Math.abs(diffMinutes) < 60) {
+    return relativeTimeFormatter.format(diffMinutes, 'minute')
+  }
+
+  const diffHours = Math.round(diffMinutes / 60)
+  if (Math.abs(diffHours) < 24) {
+    return relativeTimeFormatter.format(diffHours, 'hour')
+  }
+
+  const diffDays = Math.round(diffHours / 24)
+  return relativeTimeFormatter.format(diffDays, 'day')
+}
+
+export function getWorkspaceSpaceScanDateTimeLabel(scannedAt: number): string {
+  return fullDateTimeFormatter.format(new Date(scannedAt))
+}
+
+export function getWorkspaceSpaceProgressLabel(
+  progress: WorkspaceSpaceScanProgress | null
+): string | null {
+  if (!progress) {
+    return null
+  }
+  if (progress.state === 'cancelling') {
+    return 'Cancelling scan'
+  }
+
+  const current =
+    progress.currentWorktreeDisplayName ?? progress.currentRepoDisplayName ?? 'workspaces'
+  if (progress.totalWorktreeCount > 0) {
+    return `Scanning ${progress.scannedWorktreeCount} of ${progress.totalWorktreeCount} · ${current}`
+  }
+  if (progress.totalRepoCount > 0) {
+    return `Scanning ${progress.scannedRepoCount} of ${progress.totalRepoCount} repos · ${current}`
+  }
+  return 'Scanning workspace sizes'
 }
 
 export function getWorkspaceSpaceStatusLabel(status: WorkspaceSpaceScanStatus): string {

@@ -4,6 +4,7 @@ import { uploadBuffer } from '../ssh/sftp-upload'
 import type { IFilesystemProvider, FileStat, FileReadResult } from './types'
 import type { DirEntry, FsChangeEvent, SearchOptions, SearchResult } from '../../shared/types'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
+import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 import type { SFTPWrapper } from 'ssh2'
 
 type SftpFactory = () => Promise<SFTPWrapper>
@@ -11,6 +12,8 @@ type WatchRegistration = {
   callbacks: Set<(events: FsChangeEvent[]) => void>
   setupPromise: Promise<void>
 }
+
+const WORKSPACE_SPACE_SCAN_TIMEOUT_MS = 130_000
 
 export class SshFilesystemProvider implements IFilesystemProvider {
   private connectionId: string
@@ -120,6 +123,17 @@ export class SshFilesystemProvider implements IFilesystemProvider {
 
   async stat(filePath: string): Promise<FileStat> {
     return (await this.mux.request('fs.stat', { filePath })) as FileStat
+  }
+
+  async scanWorkspaceSpace(
+    rootPath: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<WorkspaceSpaceDirectoryScanResult> {
+    return (await this.mux.request(
+      'fs.workspaceSpaceScan',
+      { rootPath },
+      { signal: options?.signal, timeoutMs: WORKSPACE_SPACE_SCAN_TIMEOUT_MS }
+    )) as WorkspaceSpaceDirectoryScanResult
   }
 
   async deletePath(targetPath: string, recursive?: boolean): Promise<void> {

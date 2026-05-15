@@ -222,6 +222,7 @@ import {
   shouldSetDisplayName,
   areWorktreePathsEqual
 } from '../ipc/worktree-logic'
+import { canSafelyRemoveOrphanedWorktreeDirectory } from '../worktree-removal-safety'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 import { killAllProcessesForWorktree } from './worktree-teardown'
@@ -6004,7 +6005,13 @@ export class OrcaRuntimeService {
       await removeWorktree(repo.path, worktree.path, force)
     } catch (error) {
       if (isOrphanedWorktreeError(error)) {
-        await rm(worktree.path, { recursive: true, force: true }).catch(() => {})
+        if (await canSafelyRemoveOrphanedWorktreeDirectory(worktree.path, repo.path)) {
+          await rm(worktree.path, { recursive: true, force: true }).catch(() => {})
+        } else {
+          console.warn(
+            `[worktrees] Refusing recursive cleanup for unproven worktree directory: ${worktree.path}`
+          )
+        }
         // Why: `git worktree remove` failed, so git's internal worktree tracking
         // (`.git/worktrees/<name>`) is still intact. Without pruning, `git worktree
         // list` continues to show the stale entry and the branch it had checked out

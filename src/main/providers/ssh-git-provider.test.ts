@@ -200,8 +200,13 @@ describe('SshGitProvider', () => {
     ]
     mux.request.mockResolvedValue(worktrees)
 
-    const result = await provider.listWorktrees('/home/user/repo')
-    expect(mux.request).toHaveBeenCalledWith('git.listWorktrees', { repoPath: '/home/user/repo' })
+    const controller = new AbortController()
+    const result = await provider.listWorktrees('/home/user/repo', { signal: controller.signal })
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.listWorktrees',
+      { repoPath: '/home/user/repo' },
+      { signal: controller.signal }
+    )
     expect(result).toEqual(worktrees)
   })
 

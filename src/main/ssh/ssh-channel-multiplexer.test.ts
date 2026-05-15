@@ -123,6 +123,34 @@ describe('SshChannelMultiplexer', () => {
       vi.advanceTimersByTime(1_000)
 
       await expect(promise).rejects.toThrow('timed out')
+      const cancelPayload = JSON.parse(
+        transport.written
+          .at(-1)!
+          .subarray(HEADER_LENGTH, HEADER_LENGTH + transport.written.at(-1)!.readUInt32BE(9))
+          .toString()
+      )
+      expect(cancelPayload).toMatchObject({
+        method: 'rpc.cancel',
+        params: { id: 1 }
+      })
+    })
+
+    it('uses per-request timeout overrides', async () => {
+      const promise = mux.request('fs.workspaceSpaceScan', {}, { timeoutMs: 60_000 })
+
+      for (let i = 0; i < 6; i++) {
+        vi.advanceTimersByTime(5_000)
+        transport.dataCallbacks[0](encodeKeepAliveFrame(i + 1, 0))
+      }
+      await Promise.resolve()
+      const requestWrites = transport.written.filter((frame) => frame[0] === MessageType.Regular)
+      expect(requestWrites).toHaveLength(1)
+
+      for (let i = 6; i < 12; i++) {
+        vi.advanceTimersByTime(5_000)
+        transport.dataCallbacks[0](encodeKeepAliveFrame(i + 1, 0))
+      }
+      await expect(promise).rejects.toThrow('timed out after 60000ms')
     })
 
     it('assigns unique request IDs', async () => {

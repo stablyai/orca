@@ -172,7 +172,10 @@ import type {
 } from '../shared/claude-usage-types'
 import type { RateLimitState } from '../shared/rate-limit-types'
 import type { SpeechModelManifest, SpeechModelState } from '../shared/speech-types'
-import type { WorkspaceSpaceAnalysis } from '../shared/workspace-space-types'
+import type {
+  WorkspaceSpaceAnalyzeResult,
+  WorkspaceSpaceScanProgress
+} from '../shared/workspace-space-types'
 import type { GhAuthDiagnostic } from '../shared/github-auth-types'
 import type {
   SshConnectionState,
@@ -535,7 +538,9 @@ export type PreloadApi = {
     ) => () => void
   }
   workspaceSpace: {
-    analyze: () => Promise<WorkspaceSpaceAnalysis>
+    analyze: () => Promise<WorkspaceSpaceAnalyzeResult>
+    cancel: () => Promise<boolean>
+    onProgress: (callback: (progress: WorkspaceSpaceScanProgress) => void) => () => void
   }
   pty: {
     spawn: (opts: {

@@ -162,6 +162,27 @@ describe('SshFilesystemProvider', () => {
     })
   })
 
+  it('scanWorkspaceSpace sends an abortable bulk scan request', async () => {
+    const result = {
+      sizeBytes: 1024,
+      skippedEntryCount: 0,
+      topLevelItems: [],
+      omittedTopLevelItemCount: 0,
+      omittedTopLevelSizeBytes: 0
+    }
+    const controller = new AbortController()
+    mux.request.mockResolvedValue(result)
+
+    await expect(
+      provider.scanWorkspaceSpace('/home/user/project', { signal: controller.signal })
+    ).resolves.toBe(result)
+    expect(mux.request).toHaveBeenCalledWith(
+      'fs.workspaceSpaceScan',
+      { rootPath: '/home/user/project' },
+      { signal: controller.signal, timeoutMs: 130000 }
+    )
+  })
+
   it('deletePath sends fs.deletePath request', async () => {
     await provider.deletePath('/home/user/file.txt')
     expect(mux.request).toHaveBeenCalledWith('fs.deletePath', { targetPath: '/home/user/file.txt' })

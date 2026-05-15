@@ -13,7 +13,7 @@ import type {
   Repo,
   WorktreeMeta
 } from '../../shared/types'
-import { removeWorktree } from '../git/worktree'
+import { listWorktrees as listGitWorktrees, removeWorktree } from '../git/worktree'
 import { gitExecFileAsync } from '../git/runner'
 import { getDefaultRemote } from '../git/repo'
 import { getPullRequestPushTarget, getWorkItem } from '../github/client'
@@ -51,6 +51,10 @@ import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { workspaceSourceSchema, type WorkspaceSource } from '../../shared/telemetry-events'
 import { classifyWorkspaceCreateError } from './workspace-create-error-classifier'
+import {
+  canSafelyRemoveOrphanedWorktreeDirectory,
+  getRegisteredDeletableWorktree
+} from '../worktree-removal-safety'
 
 // Why: worktrees discovered on disk (not created via Orca's UI) have no
 // persisted WorktreeMeta, so mergeWorktree falls back to `lastActivityAt: 0`.
@@ -517,6 +521,21 @@ export function registerWorktreeHandlers(
         throw new Error('Folder mode does not support deleting worktrees.')
       }
 
+      // Why: the renderer-supplied worktreeId contains a filesystem path.
+      // Re-derive the canonical path from git before any destructive action.
+      const provider = repo.connectionId ? getSshGitProvider(repo.connectionId) : null
+      if (repo.connectionId && !provider) {
+        throw new Error(`No git provider for connection "${repo.connectionId}"`)
+      }
+      const registeredWorktrees = repo.connectionId
+        ? await provider!.listWorktrees(repo.path)
+        : await listGitWorktrees(repo.path)
+      const canonicalWorktreePath = getRegisteredDeletableWorktree(
+        repo.path,
+        worktreePath,
+        registeredWorktrees
+      ).path
+
       // Why: kill every PTY belonging to this worktree BEFORE git-level
       // removal. The renderer pre-kills via shutdownWorktreeTerminals, but
       // defensive teardown here protects against: (a) a future renderer bug,
@@ -543,11 +562,7 @@ export function registerWorktreeHandlers(
       }
 
       if (repo.connectionId) {
-        const provider = getSshGitProvider(repo.connectionId)
-        if (!provider) {
-          throw new Error(`No git provider for connection "${repo.connectionId}"`)
-        }
-        await provider.removeWorktree(worktreePath, args.force)
+        await provider!.removeWorktree(canonicalWorktreePath, args.force)
         runtime.clearOptimisticReconcileToken(args.worktreeId)
         await runtime.unlinkNotesWorktree(repoId, args.worktreeId)
         store.removeWorktreeMeta(args.worktreeId)
@@ -559,9 +574,9 @@ export function registerWorktreeHandlers(
       // Run archive hook before removal
       const hooks = getEffectiveHooks(repo)
       if (hooks?.scripts.archive && !args.skipArchive) {
-        const result = await runHook('archive', worktreePath, repo)
+        const result = await runHook('archive', canonicalWorktreePath, repo)
         if (!result.success) {
-          console.error(`[hooks] archive hook failed for ${worktreePath}:`, result.output)
+          console.error(`[hooks] archive hook failed for ${canonicalWorktreePath}:`, result.output)
         }
       }
 
@@ -571,16 +586,24 @@ export function registerWorktreeHandlers(
       // first so the normal delete path keeps working — otherwise every
       // deletion would require the Force Delete toast once the feature is on.
       if (repo.symlinkPaths && repo.symlinkPaths.length > 0) {
-        await removeWorktreeSymlinks(worktreePath, repo.symlinkPaths)
+        await removeWorktreeSymlinks(canonicalWorktreePath, repo.symlinkPaths)
       }
 
       try {
-        await removeWorktree(repo.path, worktreePath, args.force ?? false)
+        await removeWorktree(repo.path, canonicalWorktreePath, args.force ?? false)
       } catch (error) {
         // If git no longer tracks this worktree, clean up the directory and metadata
         if (isOrphanedWorktreeError(error)) {
-          console.warn(`[worktrees] Orphaned worktree detected at ${worktreePath}, cleaning up`)
-          await rm(worktreePath, { recursive: true, force: true }).catch(() => {})
+          console.warn(
+            `[worktrees] Orphaned worktree detected at ${canonicalWorktreePath}, cleaning up`
+          )
+          if (await canSafelyRemoveOrphanedWorktreeDirectory(canonicalWorktreePath, repo.path)) {
+            await rm(canonicalWorktreePath, { recursive: true, force: true }).catch(() => {})
+          } else {
+            console.warn(
+              `[worktrees] Refusing recursive cleanup for unproven worktree directory: ${canonicalWorktreePath}`
+            )
+          }
           // Why: `git worktree remove` failed, so git's internal worktree tracking
           // (`.git/worktrees/<name>`) is still intact. Without pruning, `git worktree
           // list` continues to show the stale entry and the branch it had checked out
@@ -594,7 +617,9 @@ export function registerWorktreeHandlers(
           notifyWorktreesChanged(mainWindow, repoId)
           return
         }
-        throw new Error(formatWorktreeRemovalError(error, worktreePath, args.force ?? false))
+        throw new Error(
+          formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false)
+        )
       }
       runtime.clearOptimisticReconcileToken(args.worktreeId)
       await runtime.unlinkNotesWorktree(repoId, args.worktreeId)
