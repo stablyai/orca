@@ -326,14 +326,14 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
             <DropdownMenuSubContent className="w-44">
               <DropdownMenuRadioGroup value={contextWorkspaceStatus}>
                 {workspaceStatuses.map((status) => {
-                  const meta = getWorkspaceStatusVisualMeta(status.id)
+                  const meta = getWorkspaceStatusVisualMeta(status)
                   return (
                     <DropdownMenuRadioItem
                       key={status.id}
                       value={status.id}
                       onSelect={() => handleAssignWorkspaceStatus(status.id)}
                     >
-                      <meta.icon className="size-3.5" />
+                      <meta.icon className={cn('size-3.5', meta.tone)} />
                       {status.label}
                     </DropdownMenuRadioItem>
                   )

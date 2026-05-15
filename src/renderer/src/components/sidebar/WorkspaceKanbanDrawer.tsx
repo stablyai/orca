@@ -168,6 +168,24 @@ export default function WorkspaceKanbanDrawer({
     [setWorkspaceStatuses, workspaceStatuses]
   )
 
+  const handleChangeStatusColor = useCallback(
+    (statusId: string, color: string) => {
+      setWorkspaceStatuses(
+        workspaceStatuses.map((status) => (status.id === statusId ? { ...status, color } : status))
+      )
+    },
+    [setWorkspaceStatuses, workspaceStatuses]
+  )
+
+  const handleChangeStatusIcon = useCallback(
+    (statusId: string, icon: string) => {
+      setWorkspaceStatuses(
+        workspaceStatuses.map((status) => (status.id === statusId ? { ...status, icon } : status))
+      )
+    },
+    [setWorkspaceStatuses, workspaceStatuses]
+  )
+
   const handleMoveStatus = useCallback(
     (statusId: string, direction: -1 | 1) => {
       const index = workspaceStatuses.findIndex((status) => status.id === statusId)
@@ -249,6 +267,8 @@ export default function WorkspaceKanbanDrawer({
             workspaceStatuses={workspaceStatuses}
             onOpacityChange={handleOpacityChange}
             onRenameStatus={handleRenameStatus}
+            onChangeStatusColor={handleChangeStatusColor}
+            onChangeStatusIcon={handleChangeStatusIcon}
             onMoveStatus={handleMoveStatus}
             onRemoveStatus={handleRemoveStatus}
             onAddStatus={handleAddStatus}
@@ -283,7 +303,7 @@ export default function WorkspaceKanbanDrawer({
               }}
             >
               {workspaceStatuses.map((status) => {
-                const meta = getWorkspaceStatusVisualMeta(status.id)
+                const meta = getWorkspaceStatusVisualMeta(status)
                 const items = worktreesByStatus.get(status.id) ?? []
                 const isDragTarget = dragOverStatus === status.id
 
@@ -293,7 +313,9 @@ export default function WorkspaceKanbanDrawer({
                     data-workspace-status-drop-target=""
                     data-workspace-status={status.id}
                     className={cn(
-                      'flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-sidebar-border bg-background/55 transition-colors',
+                      'flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-t-2 border-sidebar-border transition-colors',
+                      meta.border,
+                      meta.laneTint,
                       isDragTarget && 'border-sidebar-ring bg-sidebar-accent/70'
                     )}
                     onDragOver={(event) => handleDragOver(event, status.id)}

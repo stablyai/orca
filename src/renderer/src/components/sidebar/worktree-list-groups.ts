@@ -244,7 +244,7 @@ export function buildRows(
                 workspaceStatuses[0]?.id ??
                 'in-progress'
               const definition = workspaceStatuses.find((status) => status.id === workspaceStatus)
-              const meta = getWorkspaceStatusVisualMeta(workspaceStatus)
+              const meta = getWorkspaceStatusVisualMeta(definition ?? workspaceStatus)
               return {
                 type: 'header' as const,
                 key,
