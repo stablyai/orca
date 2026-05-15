@@ -46,7 +46,7 @@ watching.
 Repurpose the banner into a general presence-based lock with this single
 rule:
 
-> At any moment, each PTY has exactly one *driver* — desktop, a specific
+> At any moment, each PTY has exactly one _driver_ — desktop, a specific
 > mobile client, or nobody. While mobile drives, desktop input and resize
 > are dropped; the desktop banner explains why and offers **Take back** to
 > hand the floor over. While desktop drives, mobile keystrokes silently
@@ -69,10 +69,7 @@ exactly one driver per PTY at any moment, and transitions are atomic
 (updated and emitted together from the runtime).
 
 ```ts
-type DriverState =
-  | { kind: 'idle' }
-  | { kind: 'desktop' }
-  | { kind: 'mobile'; clientId: string }
+type DriverState = { kind: 'idle' } | { kind: 'desktop' } | { kind: 'mobile'; clientId: string }
 ```
 
 - `idle` — no mobile subscribers; desktop input and resize flow through
@@ -98,26 +95,26 @@ Invariants:
   that window passes the renderer guard and is dropped by the server
   guard.
 - Only one driver per PTY at any moment. Multiple mobile clients can
-  *subscribe* simultaneously (see "Multi-mobile subscriber model"), but
+  _subscribe_ simultaneously (see "Multi-mobile subscriber model"), but
   only the most recent mobile actor is the driver.
 
 ### Transitions
 
-| Current driver | Trigger | Next driver | Side effect |
-|---|---|---|---|
-| `idle` | mobile subscribes with `displayMode='auto'` (first client for this ptyId) | `mobile{clientId}` | banner mounts on desktop; PTY resizes to phone dims |
-| `idle` | mobile subscribes with `displayMode='desktop'` (first client for this ptyId) | `desktop` | inner subscriber map populated; **no** banner; PTY stays at desktop dims |
-| `idle` | desktop input or first PTY data after no subscribers | `idle` (no transition) | — |
-| `mobile{A}` | desktop clicks **Take back** | `desktop` | banner unmounts; PTY snaps to desktop dims if at phone dims |
-| `mobile{A}` | mobile A sends input/resize/setDisplayMode | `mobile{A}` (no transition) | — |
-| `mobile{A}` | mobile B sends input | `mobile{B}` | (no banner change; both are "mobile") |
-| `mobile{A}` | last mobile client unsubscribes | `idle` | banner unmounts |
-| `desktop` | any mobile client sends input/resize | `mobile{thatClient}` | banner mounts; PTY snaps to phone dims if that client's mode is auto |
-| `desktop` | mobile sets `displayMode` to `auto` or `phone` | `mobile{thatClient}` | banner mounts; PTY snaps to phone dims (deliberate "I want to drive" gesture) |
-| `desktop` | mobile sets `displayMode` to `desktop` | `desktop` (no transition) | — (already desktop-mode watching) |
-| `desktop` | mobile subscribes-fresh with `auto`/`phone` | `mobile{thatClient}` | banner mounts; PTY snaps to phone dims |
-| `desktop` | mobile subscribes-fresh with `desktop` | `desktop` (no transition) | inner map updated; no banner |
-| `desktop` | last mobile client unsubscribes | `idle` | (banner already unmounted) |
+| Current driver | Trigger                                                                      | Next driver                 | Side effect                                                                   |
+| -------------- | ---------------------------------------------------------------------------- | --------------------------- | ----------------------------------------------------------------------------- |
+| `idle`         | mobile subscribes with `displayMode='auto'` (first client for this ptyId)    | `mobile{clientId}`          | banner mounts on desktop; PTY resizes to phone dims                           |
+| `idle`         | mobile subscribes with `displayMode='desktop'` (first client for this ptyId) | `desktop`                   | inner subscriber map populated; **no** banner; PTY stays at desktop dims      |
+| `idle`         | desktop input or first PTY data after no subscribers                         | `idle` (no transition)      | —                                                                             |
+| `mobile{A}`    | desktop clicks **Take back**                                                 | `desktop`                   | banner unmounts; PTY snaps to desktop dims if at phone dims                   |
+| `mobile{A}`    | mobile A sends input/resize/setDisplayMode                                   | `mobile{A}` (no transition) | —                                                                             |
+| `mobile{A}`    | mobile B sends input                                                         | `mobile{B}`                 | (no banner change; both are "mobile")                                         |
+| `mobile{A}`    | last mobile client unsubscribes                                              | `idle`                      | banner unmounts                                                               |
+| `desktop`      | any mobile client sends input/resize                                         | `mobile{thatClient}`        | banner mounts; PTY snaps to phone dims if that client's mode is auto          |
+| `desktop`      | mobile sets `displayMode` to `auto` or `phone`                               | `mobile{thatClient}`        | banner mounts; PTY snaps to phone dims (deliberate "I want to drive" gesture) |
+| `desktop`      | mobile sets `displayMode` to `desktop`                                       | `desktop` (no transition)   | — (already desktop-mode watching)                                             |
+| `desktop`      | mobile subscribes-fresh with `auto`/`phone`                                  | `mobile{thatClient}`        | banner mounts; PTY snaps to phone dims                                        |
+| `desktop`      | mobile subscribes-fresh with `desktop`                                       | `desktop` (no transition)   | inner map updated; no banner                                                  |
+| `desktop`      | last mobile client unsubscribes                                              | `idle`                      | (banner already unmounted)                                                    |
 
 **Subscribe-in-desktop-mode rule.** A mobile client subscribing in
 `displayMode='desktop'` is treated as a passive watch, not a take-floor
@@ -125,13 +122,13 @@ gesture. The driver stays at `idle`/`desktop`, so the desktop user is not
 interrupted. The instant that client (or any peer) sends input, sets the
 display mode to `auto`/`phone`, or sends a resize, the runtime transitions
 to `mobile{thatClient}` and the banner appears. This matches the rest of
-the design: the lock engages on *interaction*, not on *presence*.
+the design: the lock engages on _interaction_, not on _presence_.
 
 The protocol is "first-mover wins until the other party acts." Desktop
 clicks Take back, mobile types, desktop types again — banner ping-pongs as
 each side acts. The `clientId` carried in `mobile{clientId}` is updated
 each time a mobile actor takes the floor; this is the wire channel by
-which the runtime knows *which* phone last drove (useful for the
+which the runtime knows _which_ phone last drove (useful for the
 forward-path coordinator described at the bottom of this doc, and for the
 multi-mobile semantics described below).
 
@@ -156,27 +153,29 @@ In the symmetric direction, mobile reclaim:
 
 ## End-user UX
 
-| Driver | Banner (desktop) | Desktop input | Desktop resize |
-|---|---|---|---|
-| `idle` | hidden | allowed | allowed |
-| `mobile{*}` | "🔒 Mobile is driving this terminal — your input is paused. Click **Take back** to resume." | blocked at xterm.onData (silent drop) | blocked in renderer + dropped in `pty:resize` IPC server-side |
-| `desktop` | hidden | allowed | allowed |
+| Driver      | Overlay (desktop)                                                                                 | Desktop input                         | Desktop resize                                                |
+| ----------- | ------------------------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------- |
+| `idle`      | hidden                                                                                            | allowed                               | allowed                                                       |
+| `mobile{*}` | loud lock overlay with **Take back** and **Collapse**; collapsed chip keeps **Take back** visible | blocked at xterm.onData (silent drop) | blocked in renderer + dropped in `pty:resize` IPC server-side |
+| `desktop`   | hidden                                                                                            | allowed                               | allowed                                                       |
 
 Walkthroughs:
 
-**Phone connects while you're typing.** Banner pops in. PTY may resize to
+**Phone connects while you're typing.** Overlay appears. PTY may resize to
 phone dims (existing). Your next keystroke is dropped. Click Take back to
 unlock and (if needed) restore desktop dims.
 
-**You click Take back.** Banner gone. You type freely. Mobile stays
+**You click Take back.** Overlay gone. You type freely. Mobile stays
 connected; mobile sees the desktop-sized terminal because PTY snapped back
 (or stayed at desktop dims if mobile was in desktop mode).
 
-**Mobile types something while you're reclaimed.** Banner reappears. Your
+**Mobile types something while you're reclaimed.** Overlay reappears. Your
 next keystroke is blocked. PTY may snap back to phone dims (if mobile is in
 auto mode).
 
-**Mobile disconnects.** Banner gone permanently. Driver returns to `idle`.
+**Mobile disconnects.** The active-driver overlay is gone. If the PTY is
+still held at phone dimensions, the held-fit Restore overlay remains until
+desktop restores or the finite auto-restore timer fires.
 
 **Multiple panes.** Driver state is per-pane. Phone on pane A doesn't
 affect pane B.
@@ -184,7 +183,7 @@ affect pane B.
 **Text selection / scrollback / copy.** Always allowed. The lock is
 keystroke and resize only.
 
-**Output continues to render.** While the banner is mounted, terminal
+**Output continues to render.** While the overlay is mounted, terminal
 output streams to xterm normally — it is the mobile actor's bytes you
 are seeing. Only desktop-side keystrokes and resize are dropped. This
 matters because "your input is paused" can read ambiguously; output
@@ -216,7 +215,7 @@ This is asymmetric and we are accepting it deliberately:
   surface; a banner with no actionable control is closer to noise than
   signal.
 
-The flip side: a mobile user typing into a stale view *won't* be told
+The flip side: a mobile user typing into a stale view _won't_ be told
 "hold on, desktop is driving" before their keystroke lands. They just take
 the floor. We consider that acceptable because (a) they're explicitly
 acting, and (b) the desktop user gets the warning side of the tradeoff
@@ -268,7 +267,7 @@ other.
 
 ### Why a structured payload vs `locked: boolean`?
 
-The runtime needs to know *which* mobile client most recently drove (for
+The runtime needs to know _which_ mobile client most recently drove (for
 multi-mobile semantics today and for the future write coordinator). A
 structured `DriverState` payload makes that information first-class on
 the wire instead of smuggling it through a side channel. The cost is ~70
@@ -301,7 +300,7 @@ callsite:
   driver-change; peers still have the floor.
 - **`applyMobileDisplayMode(ptyId)`** — iterate the inner map. The
   restore-resize semantics need a single representative subscriber (the
-  desktop dims to restore *to* are stored on the subscriber record). Pick
+  desktop dims to restore _to_ are stored on the subscriber record). Pick
   the earliest by subscribe time so the restore target is stable as
   later phones come and go. The display mode itself is per-PTY runtime
   state, not per-client.
@@ -333,9 +332,9 @@ callsite:
     wasResizedToPhone: boolean
     previousCols: number | null
     previousRows: number | null
-    subscribedAt: number  // ms since epoch, set on insert
-    lastActedAt: number   // ms since epoch, init = subscribedAt;
-                          // updated on every mobileTookFloor for this client
+    subscribedAt: number // ms since epoch, set on insert
+    lastActedAt: number // ms since epoch, init = subscribedAt;
+    // updated on every mobileTookFloor for this client
   }
   ```
 
@@ -358,6 +357,7 @@ callsite:
   Both operations are O(n) over the inner map, which is bounded by
   the number of concurrently subscribed mobile clients (typically 1,
   rarely 2-3). No indexing needed.
+
 - **`isMobileSubscriberActive(ptyId)`** — returns `true` iff the inner map
   is non-empty.
 - **Driver state for the mobile side** stores the `clientId` of the most
@@ -384,7 +384,7 @@ Files touched:
    `applyMobileDisplayMode` / `isMobileSubscriberActive` per the
    multi-mobile model above. **Extend `onPtyExit` cleanup** to
    `currentDriver.delete(ptyId)` and emit `terminalDriverChanged(ptyId,
-   { kind: 'idle' })` so any banner mounted on the dead pane unmounts.
+{ kind: 'idle' })` so any banner mounted on the dead pane unmounts.
    Without this, a dead PTY's last driver state lingers and the
    renderer banner could persist on a dead pane until tab teardown.
 2. `src/main/runtime/orca-runtime.ts` interface `RuntimeNotifier` — add
@@ -410,16 +410,15 @@ Files touched:
 
    **Canonical identity shape.** Use the existing
    `terminal.subscribe` shape: `client: { id: string; type: 'mobile'
-   \| 'desktop' }` (with `type` optional). `TerminalResizeForClient`
+\| 'desktop' }` (with `type` optional). `TerminalResizeForClient`
    keeps its grandfathered top-level `clientId: string` field for
    backward compatibility — implementers may add an aliased nested
    `client.id` setter for consistency at the call site, but the wire
    shape is preserved.
 
    New fields on existing schemas:
-
    - `TerminalSend` gains `client: { id: string; type?: 'mobile' \|
-     'desktop' }` (optional for backward compatibility — falls back
+'desktop' }` (optional for backward compatibility — falls back
      to "the most recent mobile actor" when absent).
    - `TerminalSetDisplayMode` gains the same `client` field.
    - `TerminalUnsubscribe` gains `client: { id: string }` so the
@@ -439,13 +438,13 @@ Files touched:
 
    **Unsubscribe-side composite key.** The mobile RPC client today
    emits `terminal.unsubscribe` with `params: { subscriptionId:
-   stream.params.terminal }` — the bare handle. With the subscribe
+stream.params.terminal }` — the bare handle. With the subscribe
    side now keying by composite, a bare-handle unsubscribe will miss
    in `subscriptionCleanups.get(bareHandle)` and silently no-op,
    leaking the data listener and leaving `mobileSubscribers`
    populated forever (banner stuck, driver never returns to `idle`).
    Fix: the mobile RPC client emits `{ subscriptionId:
-   ${terminal}:${clientId}, client: { id: clientId } }`, and the
+${terminal}:${clientId}, client: { id: clientId } }`, and the
    server's `cleanupSubscription` uses whichever the caller sent —
    if both `subscriptionId` and `client.id` are present and the
    caller passed only `terminal` in `subscriptionId`, the server
@@ -461,12 +460,13 @@ Files touched:
    that direction is moot because the stale server has not adopted
    composite keys on subscribe either. No client newer than server,
    so this is safe.
+
 7. `src/main/ipc/pty.ts` — defense in depth: drop `pty:write` and
    `pty:resize` calls when
    `runtime.getDriver(id).kind === 'mobile'`. **Preserve the existing
    `runtime.isResizeSuppressed()` short-circuit at the top of the
-   `pty:resize` handler** — the new driver-state guard is *in
-   addition to*, not in place of, the suppression window. The two
+   `pty:resize` handler** — the new driver-state guard is _in
+   addition to_, not in place of, the suppression window. The two
    guards have different purposes: `isResizeSuppressed()` blocks the
    safeFit cascade after a take-back transition (preventing
    collateral resize corruption of background panes), while the
@@ -539,7 +539,7 @@ deliberate mobile actions, not to internal runtime calls.
 ```ts
 // pty-connection.ts onData
 if (currentPtyId && getDriverForPty(currentPtyId).kind === 'mobile') {
-  return  // Mobile is driving this PTY; banner explains.
+  return // Mobile is driving this PTY; banner explains.
 }
 // existing transport.sendInput(data)
 
@@ -551,28 +551,40 @@ if (currentPtyId && getDriverForPty(currentPtyId).kind === 'mobile') {
 // was added to prevent.
 if (
   currentPtyId &&
-  (getFitOverrideForPty(currentPtyId) ||
-    getDriverForPty(currentPtyId).kind === 'mobile')
+  (getFitOverrideForPty(currentPtyId) || getDriverForPty(currentPtyId).kind === 'mobile')
 ) {
   return
 }
 ```
 
-### Banner copy
+### Overlay copy
 
-```
-🔒 Mobile is driving this terminal — your input is paused. [ Take back ]
-```
+The lock UI is a full-pane overlay (not a thin banner) so users cannot
+miss it. The driving state can be collapsed to a corner chip while the
+session is being watched; the held-fit state stays loud because there is
+no live output to monitor (see `MobileDriverOverlay.tsx`).
 
-When PTY is at phone dims, append the dim suffix:
-```
-🔒 Mobile is driving this terminal (80×24) — your input is paused. [ Take back ]
-```
+Driving state, expanded:
 
-The phrasing makes Take back the discoverable resolution. There is no
-auto-unlock-on-WS-silence and no liveness probing; the banner stays up
-until the desktop user takes back, until mobile actor sends input (which
-keeps mobile as driver), or until the last mobile subscriber disconnects.
+- Eyebrow: `Mobile is driving this terminal`
+- Title: `Your keyboard is paused`
+- Body: `Output below is being typed from your phone. Take back to resume typing on the desktop, or collapse to keep watching.`
+- Buttons: `Collapse`, `Take back`
+
+Driving state, collapsed (corner chip): `● Mobile driving [ Take back ]`.
+Clicking the label re-expands.
+
+Held-at-phone-fit (no active mobile subscriber, PTY still at phone dims):
+
+- Eyebrow: `Held at phone size`
+- Title: `This terminal is sized for your mobile app`
+- Body: `The session is still being held at the dimensions your phone last reported. Restore to use it on your desktop.`
+- Button: `Restore desktop size`
+
+There is no auto-unlock-on-WS-silence and no liveness probing; the overlay
+stays up until the desktop user takes back / restores, until mobile actor
+sends input (which keeps mobile as driver), or until the last mobile
+subscriber disconnects.
 
 ## Edge cases
 
@@ -584,7 +596,7 @@ keeps mobile as driver), or until the last mobile subscriber disconnects.
   (`desktop → mobile{thatClient}`).
 - **Two phones on same PTY**. The inner map carries both subscribers.
   Driver state is `mobile{whicheverActedLast}`. Phone A unsubscribing
-  while phone B is still on does *not* drop the banner; only the last
+  while phone B is still on does _not_ drop the banner; only the last
   client leaving the inner map transitions to `idle`.
 - **Pre-locked input in flight**. `transport.sendInput` is
   fire-and-forget; there is no in-flight queue to drain. The first
@@ -600,18 +612,14 @@ keeps mobile as driver), or until the last mobile subscriber disconnects.
   `idle → mobile{thatClient}`) transition. A mobile reconnect takes back
   the floor from desktop — correct semantic since the user actively
   reopened the mobile view.
-- **Restore-debounce window on last-subscriber-leaves**. When the
-  last mobile subscriber unsubscribes, the driver transitions to
-  `idle` synchronously (banner unmounts immediately on desktop), but
-  the PTY-dim restore runs inside the existing 300ms
-  `pendingRestoreTimers` debounce. For up to 300ms after the banner
-  unmounts, the PTY remains at phone dims while desktop input flows
-  through. Desktop typing into a still-squished terminal is a brief
-  visual mismatch, not a correctness bug — the existing debounce is
-  there to absorb rapid tab switches without thrashing PTY size, and
-  emitting `idle` synchronously preserves that behavior. Do not
-  reorder these (driver-emit-first, then debounced restore) without
-  re-introducing thrash.
+- **Held-fit window on last-subscriber-leaves**. When the last mobile
+  subscriber unsubscribes, the driver transitions to `idle`
+  synchronously. The active-driver overlay swaps to the held-fit Restore
+  overlay while the phone-fit override remains. With the default
+  indefinite hold, that Restore overlay stays up until desktop restores;
+  with finite auto-restore, it stays up until the timer restores the PTY
+  back to desktop dims. This keeps the "why is my terminal phone-sized?"
+  explanation visible even after the mobile driver is gone.
 
 ## Tests
 
@@ -640,9 +648,9 @@ keeps mobile as driver), or until the last mobile subscriber disconnects.
   - `applyMobileDisplayMode` picks the **most-recent-actor's**
     viewport for active phone-fit dims and the
     **earliest-by-subscribe-time** desktop dims for restore.
-  - Mobile sets `displayMode` to `desktop` from `mobile{*}` does *not*
+  - Mobile sets `displayMode` to `desktop` from `mobile{*}` does _not_
     transition to `desktop` automatically (existing setDisplayMode
-    semantics stand) — but the runtime's *driver* transition rule for
+    semantics stand) — but the runtime's _driver_ transition rule for
     `desktop → desktop` (mode change to desktop while already in
     desktop driver) is a no-op.
 - `terminal.test.ts` (subscriptionId per-client keying):
@@ -658,7 +666,7 @@ keeps mobile as driver), or until the last mobile subscriber disconnects.
   - `onResize` is dropped while driver is `mobile`.
 - `pty.test.ts` (or new `pty-driver-state.test.ts`):
   - `pty:write` IPC is dropped when `runtime.getDriver(id).kind ===
-    'mobile'`.
+'mobile'`.
   - `pty:resize` IPC is dropped under the same predicate.
 
 ## Out of scope

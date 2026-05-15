@@ -182,10 +182,14 @@ const linearMemberStore = createMetadataRequestStore<LinearMember[]>()
 
 function linearMetadataCacheKey(
   teamId: string,
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  workspaceId?: string | null
 ): string {
   const target = getActiveRuntimeTarget(settings)
-  return target.kind === 'environment' ? `runtime:${target.environmentId}:${teamId}` : teamId
+  const workspaceKey = workspaceId ?? 'selected'
+  return target.kind === 'environment'
+    ? `runtime:${target.environmentId}:${workspaceKey}:${teamId}`
+    : `${workspaceKey}:${teamId}`
 }
 
 export function clearLinearMetadataCache(): void {
@@ -201,7 +205,8 @@ export function clearGitHubMetadataCache(): void {
 
 export function useTeamStates(
   teamId: string | null,
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
+  workspaceId?: string | null
 ): MetadataState<LinearWorkflowState[]> {
   const [state, setState] = useState<MetadataState<LinearWorkflowState[]>>({
     data: [],
@@ -215,7 +220,7 @@ export function useTeamStates(
       return
     }
 
-    const cacheKey = linearMetadataCacheKey(teamId, settings)
+    const cacheKey = linearMetadataCacheKey(teamId, settings, workspaceId)
     const cached = getFreshMetadata(linearStateStore, cacheKey)
     if (cached) {
       if (activeKeyRef.current !== cacheKey) {
@@ -234,7 +239,9 @@ export function useTeamStates(
       error: null
     }))
     loadMetadata(linearStateStore, cacheKey, () =>
-      linearTeamStates(settings, teamId).then((states) => states as LinearWorkflowState[])
+      linearTeamStates(settings, teamId, workspaceId).then(
+        (states) => states as LinearWorkflowState[]
+      )
     )
       .then((data) => {
         if (activeKeyRef.current !== requestKey) {
@@ -253,14 +260,15 @@ export function useTeamStates(
           error: err instanceof Error ? err.message : 'Failed to load states'
         }))
       })
-  }, [settings, teamId])
+  }, [settings, teamId, workspaceId])
 
   return state
 }
 
 export function useTeamLabels(
   teamId: string | null,
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
+  workspaceId?: string | null
 ): MetadataState<LinearLabel[]> {
   const [state, setState] = useState<MetadataState<LinearLabel[]>>({
     data: [],
@@ -274,7 +282,7 @@ export function useTeamLabels(
       return
     }
 
-    const cacheKey = linearMetadataCacheKey(teamId, settings)
+    const cacheKey = linearMetadataCacheKey(teamId, settings, workspaceId)
     const cached = getFreshMetadata(linearLabelStore, cacheKey)
     if (cached) {
       if (activeKeyRef.current !== cacheKey) {
@@ -293,7 +301,7 @@ export function useTeamLabels(
       error: null
     }))
     loadMetadata(linearLabelStore, cacheKey, () =>
-      linearTeamLabels(settings, teamId).then((labels) => labels as LinearLabel[])
+      linearTeamLabels(settings, teamId, workspaceId).then((labels) => labels as LinearLabel[])
     )
       .then((data) => {
         if (activeKeyRef.current !== requestKey) {
@@ -312,14 +320,15 @@ export function useTeamLabels(
           error: err instanceof Error ? err.message : 'Failed to load labels'
         }))
       })
-  }, [settings, teamId])
+  }, [settings, teamId, workspaceId])
 
   return state
 }
 
 export function useTeamMembers(
   teamId: string | null,
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
+  workspaceId?: string | null
 ): MetadataState<LinearMember[]> {
   const [state, setState] = useState<MetadataState<LinearMember[]>>({
     data: [],
@@ -333,7 +342,7 @@ export function useTeamMembers(
       return
     }
 
-    const cacheKey = linearMetadataCacheKey(teamId, settings)
+    const cacheKey = linearMetadataCacheKey(teamId, settings, workspaceId)
     const cached = getFreshMetadata(linearMemberStore, cacheKey)
     if (cached) {
       if (activeKeyRef.current !== cacheKey) {
@@ -352,7 +361,7 @@ export function useTeamMembers(
       error: null
     }))
     loadMetadata(linearMemberStore, cacheKey, () =>
-      linearTeamMembers(settings, teamId).then((members) => members as LinearMember[])
+      linearTeamMembers(settings, teamId, workspaceId).then((members) => members as LinearMember[])
     )
       .then((data) => {
         if (activeKeyRef.current !== requestKey) {
@@ -371,7 +380,7 @@ export function useTeamMembers(
           error: err instanceof Error ? err.message : 'Failed to load members'
         }))
       })
-  }, [settings, teamId])
+  }, [settings, teamId, workspaceId])
 
   return state
 }

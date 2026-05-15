@@ -166,7 +166,6 @@ describe('registerWorktreeHandlers', () => {
     recordOptimisticReconcileToken: ReturnType<typeof vi.fn>
     reconcileWorktreeBaseStatus: ReturnType<typeof vi.fn>
     clearOptimisticReconcileToken: ReturnType<typeof vi.fn>
-    unlinkNotesWorktree: ReturnType<typeof vi.fn>
   }
 
   beforeEach(() => {
@@ -302,8 +301,7 @@ describe('registerWorktreeHandlers', () => {
       emitWorktreeBaseStatus: vi.fn(),
       recordOptimisticReconcileToken: vi.fn().mockReturnValue('token-1'),
       reconcileWorktreeBaseStatus: vi.fn(),
-      clearOptimisticReconcileToken: vi.fn(),
-      unlinkNotesWorktree: vi.fn().mockResolvedValue(undefined)
+      clearOptimisticReconcileToken: vi.fn()
     }
     registerWorktreeHandlers(mainWindow as never, store as never, runtimeStub as never)
   })

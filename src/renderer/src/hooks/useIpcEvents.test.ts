@@ -227,6 +227,7 @@ describe('useIpcEvents updater integration', () => {
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
+          getTerminalDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {}
         },
@@ -435,6 +436,7 @@ describe('useIpcEvents updater integration', () => {
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
+          getTerminalDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {}
         },
@@ -667,6 +669,7 @@ describe('useIpcEvents updater integration', () => {
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
+          getTerminalDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {}
         },
@@ -960,6 +963,7 @@ describe('useIpcEvents browser tab close routing', () => {
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
+          getTerminalDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {}
         },
@@ -1166,6 +1170,7 @@ describe('useIpcEvents browser tab close routing', () => {
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
+          getTerminalDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {}
         },
@@ -1367,6 +1372,7 @@ describe('useIpcEvents browser tab close routing', () => {
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
+          getTerminalDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {}
         },
@@ -1577,6 +1583,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
+          getTerminalDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {}
         },
@@ -1759,6 +1766,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
+          getTerminalDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {}
         },

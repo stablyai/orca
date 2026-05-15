@@ -564,7 +564,6 @@ export function registerWorktreeHandlers(
       if (repo.connectionId) {
         await provider!.removeWorktree(canonicalWorktreePath, args.force)
         runtime.clearOptimisticReconcileToken(args.worktreeId)
-        await runtime.unlinkNotesWorktree(repoId, args.worktreeId)
         store.removeWorktreeMeta(args.worktreeId)
         deleteWorktreeHistoryDir(args.worktreeId)
         notifyWorktreesChanged(mainWindow, repoId)
@@ -610,7 +609,6 @@ export function registerWorktreeHandlers(
           // remains locked — other worktrees cannot check it out.
           await gitExecFileAsync(['worktree', 'prune'], { cwd: repo.path }).catch(() => {})
           runtime.clearOptimisticReconcileToken(args.worktreeId)
-          await runtime.unlinkNotesWorktree(repoId, args.worktreeId)
           store.removeWorktreeMeta(args.worktreeId)
           deleteWorktreeHistoryDir(args.worktreeId)
           invalidateAuthorizedRootsCache()
@@ -622,7 +620,6 @@ export function registerWorktreeHandlers(
         )
       }
       runtime.clearOptimisticReconcileToken(args.worktreeId)
-      await runtime.unlinkNotesWorktree(repoId, args.worktreeId)
       store.removeWorktreeMeta(args.worktreeId)
       deleteWorktreeHistoryDir(args.worktreeId)
       invalidateAuthorizedRootsCache()

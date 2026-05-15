@@ -15,9 +15,6 @@ import {
 export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
   const tabs = useAppStore((s) => s.tabsByWorktree[worktreeId] ?? EMPTY_TABS)
   const browserTabs = useAppStore((s) => s.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS)
-  const hasNotesSurface = useAppStore((s) =>
-    (s.unifiedTabsByWorktree[worktreeId] ?? []).some((tab) => tab.contentType === 'notes')
-  )
   const runtimePaneTitlesForWorktree = useAppStore(
     useShallow((s) => selectRuntimePaneTitlesForWorktree(s, worktreeId))
   )
@@ -82,7 +79,6 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
         browserTabs,
         ptyIdsByTabId: ptyIdsForWorktree,
         runtimePaneTitlesByTabId: runtimePaneTitlesForWorktree,
-        hasNotesSurface,
         hasPermission,
         hasLiveDone,
         hasRetainedDone
@@ -92,7 +88,6 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
       browserTabs,
       ptyIdsForWorktree,
       runtimePaneTitlesForWorktree,
-      hasNotesSurface,
       hasPermission,
       hasLiveDone,
       hasRetainedDone

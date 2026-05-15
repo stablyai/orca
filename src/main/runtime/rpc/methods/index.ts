@@ -17,7 +17,6 @@ import { GIT_METHODS } from './git'
 import { GITHUB_METHODS } from './github'
 import { HOSTED_REVIEW_METHODS } from './hosted-review'
 import { LINEAR_METHODS } from './linear'
-import { NOTE_METHODS } from './notes'
 import { SPEECH_METHODS } from './speech'
 
 // Why: a flat manifest keeps registration order explicit and provides one
@@ -42,6 +41,5 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...GITHUB_METHODS,
   ...HOSTED_REVIEW_METHODS,
   ...LINEAR_METHODS,
-  ...NOTE_METHODS,
   ...SPEECH_METHODS
 ]

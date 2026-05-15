@@ -129,7 +129,6 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     browser: createBrowserApi(),
     gh: createGitHubApi(),
     linear: createRuntimeNamespaceApi('linear'),
-    notes: createNotesApi(),
     hooks: createHooksApi(),
     stats: {
       getSummary: async () =>
@@ -188,6 +187,7 @@ function createRuntimeApi(): NonNullable<Partial<PreloadApi>['runtime']> {
     getStatus: () => getRemoteRuntimeStatus(),
     call: ({ method, params }) => callRuntimeEnvelope(method, params),
     getTerminalFitOverrides: () => Promise.resolve([]),
+    getTerminalDrivers: () => Promise.resolve([]),
     restoreTerminalFit: () => Promise.resolve({ restored: false }),
     onTerminalFitOverrideChanged: () => noopUnsubscribe,
     onTerminalDriverChanged: () => noopUnsubscribe
@@ -638,23 +638,6 @@ function createRuntimeNamespaceApi(prefix: string): never {
   }) as never
 }
 
-function createNotesApi(): NonNullable<Partial<PreloadApi>['notes']> {
-  const noteCall = (method: string) => (args: Record<string, unknown>) =>
-    callRuntimeResult(method, { ...args, worktree: args.worktreeId })
-  return {
-    list: noteCall('note.list'),
-    show: noteCall('note.show'),
-    create: noteCall('note.create'),
-    save: noteCall('note.save'),
-    rename: noteCall('note.rename'),
-    delete: noteCall('note.delete'),
-    append: noteCall('note.append'),
-    search: noteCall('note.search'),
-    link: noteCall('note.link'),
-    panelState: noteCall('note.panelState')
-  } as NonNullable<Partial<PreloadApi>['notes']>
-}
-
 function createHooksApi(): NonNullable<Partial<PreloadApi>['hooks']> {
   return {
     check: async ({ repoId }) => callRuntimeResult('repo.hooksCheck', { repo: repoId }),
@@ -911,9 +894,12 @@ function createUpdaterApi(): NonNullable<Partial<PreloadApi>['updater']> {
 }
 
 function createShellApi(): NonNullable<Partial<PreloadApi>['shell']> {
+  const openResult = { ok: true } as const
   return {
     openPath: (path) =>
       Promise.resolve(window.open(path, '_blank', 'noopener,noreferrer') as never),
+    openInFileManager: () => Promise.resolve(openResult),
+    openInExternalEditor: () => Promise.resolve(openResult),
     openUrl: (url) => Promise.resolve(window.open(url, '_blank', 'noopener,noreferrer') as never),
     openFilePath: () => Promise.resolve(),
     openFileUri: (uri) =>

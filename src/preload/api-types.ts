@@ -47,6 +47,7 @@ import type {
   IssueInfo,
   LinearViewer,
   LinearConnectionStatus,
+  LinearWorkspaceSelection,
   LinearIssue,
   LinearIssueUpdate,
   LinearComment,
@@ -143,7 +144,14 @@ import type {
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
 } from '../shared/agent-status-types'
-import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
+import type {
+  RuntimeStatus,
+  RuntimeSyncWindowGraph,
+  RuntimeTerminalDriverState
+} from '../shared/runtime-types'
+import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
+
+export type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
 
 type RuntimeEnvironmentSubscriptionHandle = {
   unsubscribe: () => void
@@ -206,24 +214,6 @@ import type {
   AutomationRun,
   AutomationUpdateInput
 } from '../shared/automations-types'
-import type {
-  NoteAppendArgs,
-  NoteCreateArgs,
-  NoteDeleteArgs,
-  NoteDeleteResult,
-  NoteLinkArgs,
-  NoteLink,
-  NoteListArgs,
-  NoteListResult,
-  NoteMutationResult,
-  NoteRenameArgs,
-  NoteSaveArgs,
-  NoteSearchArgs,
-  NoteShowArgs,
-  NoteShowResult,
-  NotesPanelOpenState,
-  NotesPanelStateArgs
-} from '../shared/notes-types'
 
 export type BrowserApi = {
   registerGuest: (args: {
@@ -867,35 +857,48 @@ export type PreloadApi = {
     connect: (args: {
       apiKey: string
     }) => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>
-    disconnect: () => Promise<void>
+    disconnect: (args?: { workspaceId?: string }) => Promise<void>
+    selectWorkspace: (args: {
+      workspaceId: LinearWorkspaceSelection
+    }) => Promise<LinearConnectionStatus>
     status: () => Promise<LinearConnectionStatus>
-    testConnection: () => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>
-    searchIssues: (args: { query: string; limit?: number }) => Promise<LinearIssue[]>
+    testConnection: (args?: {
+      workspaceId?: string
+    }) => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>
+    searchIssues: (args: {
+      query: string
+      limit?: number
+      workspaceId?: LinearWorkspaceSelection
+    }) => Promise<LinearIssue[]>
     listIssues: (args?: {
       filter?: 'assigned' | 'created' | 'all' | 'completed'
       limit?: number
+      workspaceId?: LinearWorkspaceSelection
     }) => Promise<LinearIssue[]>
     createIssue: (args: {
       teamId: string
       title: string
       description?: string
+      workspaceId?: string
     }) => Promise<
       { ok: true; id: string; identifier: string; url: string } | { ok: false; error: string }
     >
-    getIssue: (args: { id: string }) => Promise<LinearIssue | null>
+    getIssue: (args: { id: string; workspaceId?: string }) => Promise<LinearIssue | null>
     updateIssue: (args: {
       id: string
       updates: LinearIssueUpdate
+      workspaceId?: string
     }) => Promise<{ ok: true } | { ok: false; error: string }>
     addIssueComment: (args: {
       issueId: string
       body: string
+      workspaceId?: string
     }) => Promise<{ ok: true; id: string } | { ok: false; error: string }>
-    issueComments: (args: { issueId: string }) => Promise<LinearComment[]>
-    listTeams: () => Promise<LinearTeam[]>
-    teamStates: (args: { teamId: string }) => Promise<LinearWorkflowState[]>
-    teamLabels: (args: { teamId: string }) => Promise<LinearLabel[]>
-    teamMembers: (args: { teamId: string }) => Promise<LinearMember[]>
+    issueComments: (args: { issueId: string; workspaceId?: string }) => Promise<LinearComment[]>
+    listTeams: (args?: { workspaceId?: LinearWorkspaceSelection }) => Promise<LinearTeam[]>
+    teamStates: (args: { teamId: string; workspaceId?: string }) => Promise<LinearWorkflowState[]>
+    teamLabels: (args: { teamId: string; workspaceId?: string }) => Promise<LinearLabel[]>
+    teamMembers: (args: { teamId: string; workspaceId?: string }) => Promise<LinearMember[]>
   }
   starNag: {
     onShow: (callback: () => void) => () => void
@@ -995,6 +998,8 @@ export type PreloadApi = {
   }
   shell: {
     openPath: (path: string) => Promise<void>
+    openInFileManager: (path: string) => Promise<ShellOpenLocalPathResult>
+    openInExternalEditor: (path: string) => Promise<ShellOpenLocalPathResult>
     openUrl: (url: string) => Promise<void>
     openFilePath: (path: string) => Promise<void>
     openFileUri: (uri: string) => Promise<void>
@@ -1265,18 +1270,6 @@ export type PreloadApi = {
       connectionId?: string
     }) => Promise<string | null>
   }
-  notes: {
-    list: (args: NoteListArgs) => Promise<NoteListResult>
-    show: (args: NoteShowArgs) => Promise<NoteShowResult>
-    create: (args: NoteCreateArgs) => Promise<NoteMutationResult>
-    save: (args: NoteSaveArgs) => Promise<NoteMutationResult>
-    rename: (args: NoteRenameArgs) => Promise<NoteMutationResult>
-    delete: (args: NoteDeleteArgs) => Promise<NoteDeleteResult>
-    append: (args: NoteAppendArgs) => Promise<NoteMutationResult>
-    search: (args: NoteSearchArgs) => Promise<NoteListResult>
-    link: (args: NoteLinkArgs) => Promise<NoteLink>
-    panelState: (args: NotesPanelStateArgs) => Promise<NotesPanelOpenState>
-  }
   ui: {
     get: () => Promise<PersistedUIState>
     set: (args: Partial<PersistedUIState>) => Promise<void>
@@ -1425,6 +1418,12 @@ export type PreloadApi = {
     getTerminalFitOverrides: () => Promise<
       { ptyId: string; mode: 'mobile-fit'; cols: number; rows: number }[]
     >
+    getTerminalDrivers: () => Promise<
+      {
+        ptyId: string
+        driver: RuntimeTerminalDriverState
+      }[]
+    >
     restoreTerminalFit: (ptyId: string) => Promise<{ restored: boolean }>
     onTerminalFitOverrideChanged: (
       callback: (event: {
@@ -1435,10 +1434,7 @@ export type PreloadApi = {
       }) => void
     ) => () => void
     onTerminalDriverChanged: (
-      callback: (event: {
-        ptyId: string
-        driver: { kind: 'idle' } | { kind: 'desktop' } | { kind: 'mobile'; clientId: string }
-      }) => void
+      callback: (event: { ptyId: string; driver: RuntimeTerminalDriverState }) => void
     ) => () => void
   }
   runtimeEnvironments: {

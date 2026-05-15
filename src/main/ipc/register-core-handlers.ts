@@ -22,7 +22,6 @@ import { registerMemoryHandlers } from './memory'
 import { registerRateLimitHandlers } from './rate-limits'
 import { registerRuntimeHandlers } from './runtime'
 import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
-import { registerNotesHandlers } from './notes'
 import { registerNotificationHandlers } from './notifications'
 import { registerNotebookHandlers } from './notebook'
 import { registerOnboardingHandlers } from './onboarding'
@@ -55,6 +54,7 @@ import type { RateLimitService } from '../rate-limits/service'
 import type { CodexAccountService } from '../codex-accounts/service'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { AutomationService } from '../automations/service'
+import type { AgentAwakeService } from '../agent-awake-service'
 
 let registered = false
 
@@ -69,7 +69,8 @@ export function registerCoreHandlers(
   rateLimits: RateLimitService,
   mainWindowWebContentsId: number | null = null,
   automations?: AutomationService,
-  commitMessageAgentEnv?: CommitMessageAgentEnvironmentResolvers
+  commitMessageAgentEnv?: CommitMessageAgentEnvironmentResolvers,
+  agentAwakeService?: AgentAwakeService
 ): void {
   // Why: on macOS the app can stay alive after all windows close, then
   // openMainWindow() is called again on 'activate'. ipcMain.handle() throws
@@ -105,7 +106,7 @@ export function registerCoreHandlers(
   registerOnboardingHandlers(store)
   registerDeveloperPermissionHandlers()
   registerComputerUsePermissionHandlers()
-  registerSettingsHandlers(store)
+  registerSettingsHandlers(store, agentAwakeService)
   if (automations) {
     registerAutomationHandlers(store, automations)
   }
@@ -130,7 +131,6 @@ export function registerCoreHandlers(
   registerFilesystemWatcherHandlers()
   registerRuntimeHandlers(runtime)
   registerRuntimeEnvironmentHandlers()
-  registerNotesHandlers(runtime)
   registerClipboardHandlers()
   registerUpdaterHandlers(store)
   registerSpeechHandlers(store)

@@ -7,6 +7,11 @@ export type McpConfigCandidate = {
   serversPath: string[]
 }
 
+export type McpConfigDirectoryEntry = {
+  name: string
+  isDirectory: boolean
+}
+
 export type McpServerTransport = 'stdio' | 'http' | 'unknown'
 export type McpServerStatus = 'enabled' | 'disabled' | 'invalid'
 
@@ -59,6 +64,41 @@ export const MCP_STARTER_CONFIG = `{
   "mcpServers": {}
 }
 `
+
+export function getMcpConfigParentDirs(
+  candidates: readonly McpConfigCandidate[] = MCP_CONFIG_CANDIDATES
+): string[] {
+  return Array.from(
+    new Set(
+      candidates
+        .map((candidate) => getRelativeParentDir(candidate.relativePath))
+        .filter((parentDir) => parentDir !== '')
+    )
+  )
+}
+
+export function getMcpConfigCandidateParentDir(candidate: McpConfigCandidate): string {
+  return getRelativeParentDir(candidate.relativePath)
+}
+
+export function selectExistingMcpConfigCandidates(
+  entriesByRelativeDir: ReadonlyMap<string, readonly McpConfigDirectoryEntry[]>,
+  candidates: readonly McpConfigCandidate[] = MCP_CONFIG_CANDIDATES
+): McpConfigCandidate[] {
+  return candidates.filter((candidate) => {
+    const parentDir = getRelativeParentDir(candidate.relativePath)
+    const basename = getRelativeBasename(candidate.relativePath)
+    const entries = entriesByRelativeDir.get(parentDir) ?? []
+    return entries.some((entry) => entry.name === basename && !entry.isDirectory)
+  })
+}
+
+export function canInspectLocalMcpConfigRoot(rootPath: string, isWindowsHost: boolean): boolean {
+  if (isWindowsHost) {
+    return true
+  }
+  return !/^(?:[A-Za-z]:[\\/]|[\\/]{2}[^\\/]+[\\/][^\\/]+)/.test(rootPath)
+}
 
 const SENSITIVE_ENV_KEY_PATTERN =
   /(api[_-]?key|auth|bearer|cookie|credential|password|private[_-]?key|secret|session|token)/i
@@ -113,6 +153,18 @@ export function maskMcpEnv(env: unknown): Record<string, string> | undefined {
         : value
   }
   return masked
+}
+
+function getRelativeParentDir(relativePath: string): string {
+  const normalizedPath = relativePath.replace(/\\/g, '/')
+  const separatorIndex = normalizedPath.lastIndexOf('/')
+  return separatorIndex === -1 ? '' : normalizedPath.slice(0, separatorIndex)
+}
+
+function getRelativeBasename(relativePath: string): string {
+  const normalizedPath = relativePath.replace(/\\/g, '/')
+  const separatorIndex = normalizedPath.lastIndexOf('/')
+  return separatorIndex === -1 ? normalizedPath : normalizedPath.slice(separatorIndex + 1)
 }
 
 function extractObjectAtPath(

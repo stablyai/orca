@@ -182,6 +182,16 @@ describe('resolvePrimaryAction', () => {
     })
   })
 
+  it.each([
+    [{ prState: 'merged' as const }, 'Nothing to commit. PR is already merged.'],
+    [{ isPRStateLoading: true }, 'Checking PR status…']
+  ])('does not offer Publish Branch when linked PR state blocks it', (overrides, title) => {
+    const result = resolvePrimaryAction(
+      inputs({ upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }, ...overrides })
+    )
+    expect(result).toEqual({ kind: 'commit', label: 'Commit', title, disabled: true })
+  })
+
   it('returns Sync when clean + tracked + diverged both ways', () => {
     const result = resolvePrimaryAction(
       inputs({ upstreamStatus: { hasUpstream: true, ahead: 2, behind: 3 } })

@@ -12,6 +12,7 @@ import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-fon
 import type { UpdateStatus } from '../../../shared/types'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { SshConnectionState } from '../../../shared/ssh-types'
+import type { RuntimeTerminalDriverState } from '../../../shared/runtime-types'
 import { zoomLevelToPercent, ZOOM_MIN, ZOOM_MAX } from '@/components/settings/SettingsConstants'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import { resolveZoomTarget } from './resolve-zoom-target'
@@ -29,14 +30,13 @@ import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { focusRuntimeTerminalSurface } from '@/runtime/sync-runtime-graph'
 import { setFitOverride, hydrateOverrides } from '@/lib/pane-manager/mobile-fit-overrides'
-import { setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
+import { setDriverForPty, hydrateDrivers } from '@/lib/pane-manager/mobile-driver-state'
 import { destroyPersistentWebview } from '@/components/browser-pane/webview-registry'
 import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { detectLanguage } from '@/lib/language-detect'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
 import { track } from '@/lib/telemetry'
-import { requestProjectNotesTabClose } from '@/lib/project-notes-close-request'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 
 export { resolveZoomTarget } from './resolve-zoom-target'
@@ -871,15 +871,6 @@ export function useIpcEvents(): void {
         const store = useAppStore.getState()
         if (store.activeTabType === 'browser' && store.activeBrowserTabId) {
           store.closeBrowserTab(store.activeBrowserTabId)
-          return
-        }
-        if (store.activeTabType === 'notes' && store.activeWorktreeId) {
-          const activeTab = store.getActiveTab(store.activeWorktreeId)
-          if (activeTab?.contentType === 'notes') {
-            requestProjectNotesTabClose(activeTab.id, () => {
-              store.closeUnifiedTab(activeTab.id)
-            })
-          }
         }
       })
     )
@@ -1257,17 +1248,45 @@ export function useIpcEvents(): void {
     requestAgentStatusSnapshotIfReady()
     unsubs.push(useAppStore.subscribe(() => requestAgentStatusSnapshotIfReady()))
 
-    // Why: hydrate mobile-fit overrides before terminal panes run their first
-    // attach/fit logic, so a renderer reload doesn't undo active mobile fits.
-    if (!isRuntimeEnvironmentActive()) {
-      void window.api.runtime.getTerminalFitOverrides().then((overrides) => {
-        hydrateOverrides(overrides)
-      })
+    let mobileStateHydrated = isRuntimeEnvironmentActive()
+    type PendingMobileStateEvent =
+      | {
+          kind: 'fit'
+          event: {
+            ptyId: string
+            mode: 'mobile-fit' | 'desktop-fit'
+            cols: number
+            rows: number
+          }
+        }
+      | {
+          kind: 'driver'
+          event: {
+            ptyId: string
+            driver: RuntimeTerminalDriverState
+          }
+        }
+    const pendingMobileStateEvents: PendingMobileStateEvent[] = []
+
+    const applyPendingMobileStateEvents = (): void => {
+      for (const pending of pendingMobileStateEvents) {
+        if (pending.kind === 'fit') {
+          const { ptyId, mode, cols, rows } = pending.event
+          setFitOverride(ptyId, mode, cols, rows)
+        } else {
+          setDriverForPty(pending.event.ptyId, pending.event.driver)
+        }
+      }
+      pendingMobileStateEvents.length = 0
     }
 
     unsubs.push(
       window.api.runtime.onTerminalFitOverrideChanged((event) => {
         if (isRuntimeEnvironmentActive()) {
+          return
+        }
+        if (!mobileStateHydrated) {
+          pendingMobileStateEvents.push({ kind: 'fit', event })
           return
         }
         setFitOverride(event.ptyId, event.mode, event.cols, event.rows)
@@ -1283,9 +1302,34 @@ export function useIpcEvents(): void {
         if (isRuntimeEnvironmentActive()) {
           return
         }
+        if (!mobileStateHydrated) {
+          pendingMobileStateEvents.push({ kind: 'driver', event })
+          return
+        }
         setDriverForPty(event.ptyId, event.driver)
       })
     )
+
+    // Why: hydrate mobile-owned terminal state on renderer reload. Subscribe
+    // first and buffer live events during the snapshot round trip; otherwise an
+    // older snapshot could overwrite a newer live lock and hide the overlay.
+    if (!isRuntimeEnvironmentActive()) {
+      void Promise.all([
+        window.api.runtime.getTerminalFitOverrides(),
+        window.api.runtime.getTerminalDrivers()
+      ])
+        .then(([overrides, drivers]) => {
+          hydrateOverrides(overrides)
+          hydrateDrivers(drivers)
+          mobileStateHydrated = true
+          applyPendingMobileStateEvents()
+        })
+        .catch((error: unknown) => {
+          console.error('Failed to hydrate mobile terminal state:', error)
+          mobileStateHydrated = true
+          applyPendingMobileStateEvents()
+        })
+    }
 
     return () => unsubs.forEach((fn) => fn())
   }, [])

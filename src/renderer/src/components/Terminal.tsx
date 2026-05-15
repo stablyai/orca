@@ -29,7 +29,6 @@ import {
   type EditorRequestFileCloseDetail,
   requestEditorSaveQuiesce
 } from './editor/editor-autosave'
-import { requestProjectNotesTabClose } from '@/lib/project-notes-close-request'
 import { isUpdaterQuitAndInstallInProgress } from '@/lib/updater-beforeunload'
 import EditorAutosaveController from './editor/EditorAutosaveController'
 import type { TabGroupLayoutNode } from '../../../shared/types'
@@ -50,7 +49,6 @@ import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
 import { shouldRepairActiveTerminalTab } from './terminal/active-terminal-repair'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { openProjectNotesTab } from '@/lib/open-project-notes-tab'
 import {
   getEffectiveLayoutForWorktree as getEffectiveLayout,
   anyMountedWorktreeHasLayout as computeAnyMountedWorktreeHasLayout
@@ -656,16 +654,6 @@ function Terminal(): React.JSX.Element | null {
     }
   }, [activeWorktreeId, openFile])
 
-  const handleNewNotesTab = useCallback(
-    (noteId?: string) => {
-      if (!activeWorktreeId) {
-        return
-      }
-      void openProjectNotesTab(activeWorktreeId, noteId)
-    },
-    [activeWorktreeId]
-  )
-
   const handleCloseTab = useCallback(
     (tabId: string) => {
       const state = useAppStore.getState()
@@ -986,13 +974,6 @@ function Terminal(): React.JSX.Element | null {
           handleCloseFile(state.activeFileId)
         } else if (state.activeTabType === 'browser' && state.activeBrowserTabId) {
           closeBrowserTab(state.activeBrowserTabId)
-        } else if (state.activeTabType === 'notes') {
-          const activeTab = activeWorktreeId ? state.getActiveTab(activeWorktreeId) : null
-          if (activeTab?.contentType === 'notes') {
-            requestProjectNotesTabClose(activeTab.id, () => {
-              state.closeUnifiedTab(activeTab.id)
-            })
-          }
         }
         return
       }
@@ -1211,7 +1192,6 @@ function Terminal(): React.JSX.Element | null {
             onNewTerminalWithShell={handleNewTab}
             onNewBrowserTab={handleNewBrowserTab}
             onNewFileTab={handleNewFile}
-            onNewNotesTab={handleNewNotesTab}
             wslAvailable={wslAvailable}
             onSetCustomTitle={setTabCustomTitle}
             onSetTabColor={setTabColor}

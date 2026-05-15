@@ -9,7 +9,7 @@ import {
 import type { AgentStatus } from '../../shared/agent-detection'
 import { gitExecFileAsync, wslAwareSpawn } from '../git/runner'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
-import { createHash, randomUUID } from 'crypto'
+import { randomUUID } from 'crypto'
 import { basename, isAbsolute, join } from 'path'
 import { mkdir, readdir, rm, stat } from 'fs/promises'
 import { OrchestrationDb } from './orchestration/db'
@@ -27,6 +27,7 @@ import type {
   WorktreeRemoteBranchConflictEvent,
   WorktreeStartupLaunch,
   LinearIssueUpdate,
+  LinearWorkspaceSelection,
   TuiAgent
 } from '../../shared/types'
 import { splitWorktreeId } from '../../shared/worktree-id'
@@ -73,6 +74,7 @@ import type {
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot,
+  RuntimeTerminalDriverState,
   RuntimeSyncWindowGraph,
   RuntimeWorktreeListResult
 } from '../../shared/runtime-types'
@@ -80,7 +82,7 @@ import { RuntimeBrowserCommands } from './orca-runtime-browser'
 import { RuntimeFileCommands } from './orca-runtime-files'
 import { RuntimeGitCommands } from './orca-runtime-git'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { BrowserWindow, ipcMain } from 'electron'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import {
   getPRForBranch,
@@ -117,6 +119,7 @@ import {
   connect as connectLinear,
   disconnect as disconnectLinear,
   getStatus as getLinearStatus,
+  selectWorkspace as selectLinearWorkspace,
   testConnection as testLinearConnection
 } from '../linear/client'
 import {
@@ -238,26 +241,6 @@ import type { CodexAccountService } from '../codex-accounts/service'
 import type { RateLimitService } from '../rate-limits/service'
 import type { ClaudeRateLimitAccountsState, CodexRateLimitAccountsState } from '../../shared/types'
 import type { RateLimitState } from '../../shared/rate-limit-types'
-import { NotesMarkdownStore } from '../notes/notes-markdown-store'
-import type {
-  NoteAppendArgs,
-  NoteCreateArgs,
-  NoteDeleteArgs,
-  NoteDeleteResult,
-  NoteLinkArgs,
-  NoteLink,
-  NoteLinkKind,
-  NoteListArgs,
-  NoteListResult,
-  NoteMutationResult,
-  NoteRenameArgs,
-  NoteSaveArgs,
-  NoteSearchArgs,
-  NoteShowArgs,
-  NoteShowResult,
-  NotesPanelOpenState,
-  NotesPanelStateArgs
-} from '../../shared/notes-types'
 import type { VoiceSettings } from '../../shared/speech-types'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 
@@ -505,10 +488,7 @@ export type MobileNotificationEvent = {
 //   - `mobile{clientId}`: a mobile client is the active driver; desktop
 //      input/resize are dropped server-side and the lock banner is mounted.
 //      `clientId` is the most recent mobile actor for this PTY.
-export type DriverState =
-  | { kind: 'idle' }
-  | { kind: 'desktop' }
-  | { kind: 'mobile'; clientId: string }
+export type DriverState = RuntimeTerminalDriverState
 
 // Why: per-PTY layout target — what the PTY *should* be at right now.
 // `desktop` ⇒ runs at the desktop renderer's pane geometry; mobile passive
@@ -788,7 +768,6 @@ export class OrcaRuntimeService {
   private optimisticReconcileTokens = new Map<string, string>()
   private readonly getLocalProviderFn: (() => IPtyProvider) | null
   private accountServices: RuntimeAccountServices | null = null
-  private _notesStore: NotesMarkdownStore | null = null
   private mobileDictation: {
     id: string
     owner: string
@@ -841,17 +820,6 @@ export class OrcaRuntimeService {
 
   setOrchestrationDb(db: OrchestrationDb): void {
     this._orchestrationDb = db
-  }
-
-  getNotesStore(): NotesMarkdownStore {
-    if (!this._notesStore) {
-      this._notesStore = new NotesMarkdownStore()
-    }
-    return this._notesStore
-  }
-
-  setNotesStore(store: NotesMarkdownStore): void {
-    this._notesStore = store
   }
 
   getRuntimeId(): string {
@@ -2158,6 +2126,10 @@ export class OrcaRuntimeService {
       result.set(ptyId, { mode: override.mode, cols: override.cols, rows: override.rows })
     }
     return result
+  }
+
+  getAllTerminalDrivers(): Map<string, DriverState> {
+    return new Map(this.currentDriver)
   }
 
   onClientDisconnected(clientId: string): void {
@@ -4917,205 +4889,6 @@ export class OrcaRuntimeService {
     }
   }
 
-  async listNotes(args: { worktreeSelector: string; limit?: number }): Promise<NoteListResult> {
-    const scope = await this.resolveNotesScope(args.worktreeSelector)
-    return await this.getNotesStore().list(this.getNotesScope(scope.projectId), {
-      projectId: scope.projectId,
-      worktreeId: scope.worktreeId,
-      limit: args.limit
-    })
-  }
-
-  async showNote(args: { worktreeSelector: string; note: string }): Promise<NoteShowResult> {
-    const scope = await this.resolveNotesScope(args.worktreeSelector)
-    return await this.getNotesStore().show(this.getNotesScope(scope.projectId), {
-      projectId: scope.projectId,
-      worktreeId: scope.worktreeId,
-      note: args.note
-    })
-  }
-
-  async createNote(args: {
-    worktreeSelector: string
-    title: string
-    bodyMarkdown?: string
-    makeActive?: boolean
-    createdBySessionId?: string | null
-  }): Promise<NoteMutationResult> {
-    const scope = await this.resolveNotesScope(args.worktreeSelector)
-    return await this.getNotesStore().create(this.getNotesScope(scope.projectId), {
-      projectId: scope.projectId,
-      worktreeId: scope.worktreeId,
-      title: args.title,
-      bodyMarkdown: args.bodyMarkdown,
-      makeActive: args.makeActive,
-      createdBySessionId: args.createdBySessionId
-    })
-  }
-
-  async saveNote(args: {
-    worktreeSelector: string
-    note: string
-    title?: string
-    bodyMarkdown: string
-    revision?: number
-    makeActive?: boolean
-    updatedBySessionId?: string | null
-  }): Promise<NoteMutationResult> {
-    const scope = await this.resolveNotesScope(args.worktreeSelector)
-    return await this.getNotesStore().save(this.getNotesScope(scope.projectId), {
-      projectId: scope.projectId,
-      worktreeId: scope.worktreeId,
-      note: args.note,
-      title: args.title,
-      bodyMarkdown: args.bodyMarkdown,
-      revision: args.revision,
-      makeActive: args.makeActive,
-      updatedBySessionId: args.updatedBySessionId
-    })
-  }
-
-  async renameNote(args: {
-    worktreeSelector: string
-    note: string
-    title: string
-    updatedBySessionId?: string | null
-  }): Promise<NoteMutationResult> {
-    const scope = await this.resolveNotesScope(args.worktreeSelector)
-    return await this.getNotesStore().rename(this.getNotesScope(scope.projectId), {
-      projectId: scope.projectId,
-      worktreeId: scope.worktreeId,
-      note: args.note,
-      title: args.title,
-      updatedBySessionId: args.updatedBySessionId
-    })
-  }
-
-  async deleteNote(args: { worktreeSelector: string; note: string }): Promise<NoteDeleteResult> {
-    const scope = await this.resolveNotesScope(args.worktreeSelector)
-    return await this.getNotesStore().delete(this.getNotesScope(scope.projectId), {
-      projectId: scope.projectId,
-      worktreeId: scope.worktreeId,
-      note: args.note
-    })
-  }
-
-  async appendNote(args: {
-    worktreeSelector: string
-    note: string
-    bodyMarkdown: string
-    makeActive?: boolean
-    updatedBySessionId?: string | null
-  }): Promise<NoteMutationResult> {
-    const scope = await this.resolveNotesScope(args.worktreeSelector)
-    return await this.getNotesStore().append(this.getNotesScope(scope.projectId), {
-      projectId: scope.projectId,
-      worktreeId: scope.worktreeId,
-      note: args.note,
-      bodyMarkdown: args.bodyMarkdown,
-      makeActive: args.makeActive,
-      updatedBySessionId: args.updatedBySessionId
-    })
-  }
-
-  async searchNotes(args: {
-    worktreeSelector: string
-    query: string
-    limit?: number
-  }): Promise<NoteListResult> {
-    const scope = await this.resolveNotesScope(args.worktreeSelector)
-    return await this.getNotesStore().search(this.getNotesScope(scope.projectId), {
-      projectId: scope.projectId,
-      worktreeId: scope.worktreeId,
-      query: args.query,
-      limit: args.limit
-    })
-  }
-
-  async linkNote(args: {
-    worktreeSelector: string
-    note: string
-    kind: NoteLinkKind
-  }): Promise<NoteLink> {
-    const scope = await this.resolveNotesScope(args.worktreeSelector)
-    return await this.getNotesStore().setLink(this.getNotesScope(scope.projectId), {
-      projectId: scope.projectId,
-      worktreeId: scope.worktreeId,
-      note: args.note,
-      kind: args.kind
-    })
-  }
-
-  async resolveNotesPanelOpenStateForWorktree(args: {
-    worktreeSelector: string
-  }): Promise<NotesPanelOpenState> {
-    const scope = await this.resolveNotesScope(args.worktreeSelector)
-    return await this.getNotesStore().resolvePanelOpenState(this.getNotesScope(scope.projectId), {
-      projectId: scope.projectId,
-      worktreeId: scope.worktreeId
-    })
-  }
-
-  async listProjectNotes(args: NoteListArgs): Promise<NoteListResult> {
-    this.assertKnownNotesProject(args.projectId)
-    return await this.getNotesStore().list(this.getNotesScope(args.projectId), args)
-  }
-
-  async showProjectNote(args: NoteShowArgs): Promise<NoteShowResult> {
-    this.assertKnownNotesProject(args.projectId)
-    return await this.getNotesStore().show(this.getNotesScope(args.projectId), args)
-  }
-
-  async createProjectNote(args: NoteCreateArgs): Promise<NoteMutationResult> {
-    this.assertKnownNotesProject(args.projectId)
-    return await this.getNotesStore().create(this.getNotesScope(args.projectId), args)
-  }
-
-  async saveProjectNote(args: NoteSaveArgs): Promise<NoteMutationResult> {
-    this.assertKnownNotesProject(args.projectId)
-    return await this.getNotesStore().save(this.getNotesScope(args.projectId), args)
-  }
-
-  async renameProjectNote(args: NoteRenameArgs): Promise<NoteMutationResult> {
-    this.assertKnownNotesProject(args.projectId)
-    return await this.getNotesStore().rename(this.getNotesScope(args.projectId), args)
-  }
-
-  async deleteProjectNote(args: NoteDeleteArgs): Promise<NoteDeleteResult> {
-    this.assertKnownNotesProject(args.projectId)
-    return await this.getNotesStore().delete(this.getNotesScope(args.projectId), args)
-  }
-
-  async appendProjectNote(args: NoteAppendArgs): Promise<NoteMutationResult> {
-    this.assertKnownNotesProject(args.projectId)
-    return await this.getNotesStore().append(this.getNotesScope(args.projectId), args)
-  }
-
-  async searchProjectNotes(args: NoteSearchArgs): Promise<NoteListResult> {
-    this.assertKnownNotesProject(args.projectId)
-    return await this.getNotesStore().search(this.getNotesScope(args.projectId), args)
-  }
-
-  async linkProjectNote(args: NoteLinkArgs) {
-    this.assertKnownNotesProject(args.projectId)
-    return await this.getNotesStore().setLink(this.getNotesScope(args.projectId), args)
-  }
-
-  async unlinkNotesWorktree(projectId: string, worktreeId: string): Promise<void> {
-    this.assertKnownNotesProject(projectId)
-    await this.getNotesStore().unlinkWorktree(this.getNotesScope(projectId), worktreeId)
-  }
-
-  async resolveNotesPanelOpenState(args: NotesPanelStateArgs): Promise<NotesPanelOpenState> {
-    if (args.projectId) {
-      this.assertKnownNotesProject(args.projectId)
-    }
-    return await this.getNotesStore().resolvePanelOpenState(
-      args.projectId ? this.getNotesScope(args.projectId) : null,
-      args
-    )
-  }
-
   async listManagedWorktrees(
     repoSelector?: string,
     limit = DEFAULT_WORKTREE_LIST_LIMIT
@@ -6035,7 +5808,6 @@ export class OrcaRuntimeService {
         // remains locked — other worktrees cannot check it out.
         await gitExecFileAsync(['worktree', 'prune'], { cwd: repo.path }).catch(() => {})
         this.clearOptimisticReconcileToken(worktree.id)
-        await this.getNotesStore().unlinkWorktree(this.getNotesScope(repo.id), worktree.id)
         this.store.removeWorktreeMeta(worktree.id)
         this.invalidateResolvedWorktreeCache()
         invalidateAuthorizedRootsCache()
@@ -6048,7 +5820,6 @@ export class OrcaRuntimeService {
     }
 
     this.clearOptimisticReconcileToken(worktree.id)
-    await this.getNotesStore().unlinkWorktree(this.getNotesScope(repo.id), worktree.id)
     this.store.removeWorktreeMeta(worktree.id)
     this.invalidateResolvedWorktreeCache()
     invalidateAuthorizedRootsCache()
@@ -6746,42 +6517,6 @@ export class OrcaRuntimeService {
       throw new Error('selector_ambiguous')
     }
     throw new Error('selector_not_found')
-  }
-
-  private async resolveNotesScope(worktreeSelector: string): Promise<{
-    projectId: string
-    worktreeId: string
-  }> {
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
-    return {
-      projectId: worktree.repoId,
-      worktreeId: worktree.id
-    }
-  }
-
-  private assertKnownNotesProject(projectId: string): void {
-    if (!this.store?.getRepo(projectId)) {
-      throw new Error('repo_not_found')
-    }
-  }
-
-  private getNotesScope(projectId: string): {
-    projectId: string
-    rootPath: string
-  } {
-    const repo = this.store?.getRepo(projectId)
-    if (!repo) {
-      throw new Error('repo_not_found')
-    }
-    const identity = `${repo.connectionId ?? 'local'}:${repo.path}`
-    const notesRoot = createHash('sha256').update(identity).digest('hex').slice(0, 24)
-    return {
-      projectId,
-      // Why: notes are Orca workspace memory, not repo source files. Keeping
-      // them in userData prevents accidental git commits while still sharing
-      // one notes folder across every Orca worktree for the same repo.
-      rootPath: join(app.getPath('userData'), 'project-notes', notesRoot)
-    }
   }
 
   private async resolveRepoSelector(selector: string): Promise<Repo> {
@@ -7790,65 +7525,89 @@ export class OrcaRuntimeService {
     return connectLinear(apiKey)
   }
 
-  linearDisconnect(): { ok: true } {
-    disconnectLinear()
+  linearDisconnect(workspaceId?: string): { ok: true } {
+    disconnectLinear(workspaceId)
     return { ok: true }
+  }
+
+  linearSelectWorkspace(workspaceId: LinearWorkspaceSelection): ReturnType<typeof getLinearStatus> {
+    return selectLinearWorkspace(workspaceId)
   }
 
   linearStatus(): ReturnType<typeof getLinearStatus> {
     return getLinearStatus()
   }
 
-  linearTestConnection(): ReturnType<typeof testLinearConnection> {
-    return testLinearConnection()
+  linearTestConnection(workspaceId?: string): ReturnType<typeof testLinearConnection> {
+    return testLinearConnection(workspaceId)
   }
 
-  linearSearchIssues(query: string, limit = 20): ReturnType<typeof searchLinearIssues> {
-    return searchLinearIssues(query, Math.min(Math.max(1, limit), 50))
+  linearSearchIssues(
+    query: string,
+    limit = 20,
+    workspaceId?: LinearWorkspaceSelection
+  ): ReturnType<typeof searchLinearIssues> {
+    return searchLinearIssues(query, Math.min(Math.max(1, limit), 50), workspaceId)
   }
 
-  linearListIssues(filter?: LinearListFilter, limit = 20): ReturnType<typeof listLinearIssues> {
-    return listLinearIssues(filter, Math.min(Math.max(1, limit), 50))
+  linearListIssues(
+    filter?: LinearListFilter,
+    limit = 20,
+    workspaceId?: LinearWorkspaceSelection
+  ): ReturnType<typeof listLinearIssues> {
+    return listLinearIssues(filter, Math.min(Math.max(1, limit), 50), workspaceId)
   }
 
   linearCreateIssue(
     teamId: string,
     title: string,
-    description?: string
+    description?: string,
+    workspaceId?: string
   ): ReturnType<typeof createLinearIssue> {
-    return createLinearIssue(teamId, title, description)
+    return createLinearIssue(teamId, title, description, workspaceId)
   }
 
-  linearGetIssue(id: string): ReturnType<typeof getLinearIssue> {
-    return getLinearIssue(id)
+  linearGetIssue(id: string, workspaceId?: string): ReturnType<typeof getLinearIssue> {
+    return getLinearIssue(id, workspaceId)
   }
 
-  linearUpdateIssue(id: string, updates: LinearIssueUpdate): ReturnType<typeof updateLinearIssue> {
-    return updateLinearIssue(id, updates)
+  linearUpdateIssue(
+    id: string,
+    updates: LinearIssueUpdate,
+    workspaceId?: string
+  ): ReturnType<typeof updateLinearIssue> {
+    return updateLinearIssue(id, updates, workspaceId)
   }
 
-  linearAddIssueComment(issueId: string, body: string): ReturnType<typeof addLinearIssueComment> {
-    return addLinearIssueComment(issueId, body)
+  linearAddIssueComment(
+    issueId: string,
+    body: string,
+    workspaceId?: string
+  ): ReturnType<typeof addLinearIssueComment> {
+    return addLinearIssueComment(issueId, body, workspaceId)
   }
 
-  linearIssueComments(issueId: string): ReturnType<typeof getLinearIssueComments> {
-    return getLinearIssueComments(issueId)
+  linearIssueComments(
+    issueId: string,
+    workspaceId?: string
+  ): ReturnType<typeof getLinearIssueComments> {
+    return getLinearIssueComments(issueId, workspaceId)
   }
 
-  linearListTeams(): ReturnType<typeof listLinearTeams> {
-    return listLinearTeams()
+  linearListTeams(workspaceId?: LinearWorkspaceSelection): ReturnType<typeof listLinearTeams> {
+    return listLinearTeams(workspaceId)
   }
 
-  linearTeamStates(teamId: string): ReturnType<typeof getLinearTeamStates> {
-    return getLinearTeamStates(teamId)
+  linearTeamStates(teamId: string, workspaceId?: string): ReturnType<typeof getLinearTeamStates> {
+    return getLinearTeamStates(teamId, workspaceId)
   }
 
-  linearTeamLabels(teamId: string): ReturnType<typeof getLinearTeamLabels> {
-    return getLinearTeamLabels(teamId)
+  linearTeamLabels(teamId: string, workspaceId?: string): ReturnType<typeof getLinearTeamLabels> {
+    return getLinearTeamLabels(teamId, workspaceId)
   }
 
-  linearTeamMembers(teamId: string): ReturnType<typeof getLinearTeamMembers> {
-    return getLinearTeamMembers(teamId)
+  linearTeamMembers(teamId: string, workspaceId?: string): ReturnType<typeof getLinearTeamMembers> {
+    return getLinearTeamMembers(teamId, workspaceId)
   }
 
   // ── Browser automation ──
