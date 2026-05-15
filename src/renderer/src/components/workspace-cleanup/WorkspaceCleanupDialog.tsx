@@ -29,6 +29,7 @@ import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { runSleepWorktrees } from '@/components/sidebar/sleep-worktree-flow'
 import {
+  WORKSPACE_CLEANUP_IDLE_MS,
   canSelectWorkspaceCleanupCandidate,
   type WorkspaceCleanupBlocker,
   type WorkspaceCleanupCandidate,
@@ -105,6 +106,16 @@ function formatScanNoticeMessage(errors: { repoId: string; message: string }[]):
   return errors.length === 1
     ? 'Some workspaces could not be checked. Refresh to try again.'
     : `${errors.length} repositories could not be checked. Refresh to try again.`
+}
+
+function isOldWorkspaceCandidate(candidate: WorkspaceCleanupCandidate, scannedAt: number): boolean {
+  if (candidate.blockers.includes('main-worktree') || candidate.blockers.includes('folder-repo')) {
+    return false
+  }
+  return (
+    candidate.reasons.includes('archived') ||
+    scannedAt - candidate.lastActivityAt >= WORKSPACE_CLEANUP_IDLE_MS
+  )
 }
 
 export default function WorkspaceCleanupDialog(): React.JSX.Element {
@@ -192,6 +203,13 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     [scan?.errors]
   )
   const readyCount = groups.ready.length
+  const oldCandidateCount = useMemo(() => {
+    const scannedAt = scan?.scannedAt ?? Date.now()
+    return candidates.filter((candidate) => isOldWorkspaceCandidate(candidate, scannedAt)).length
+  }, [candidates, scan?.scannedAt])
+  const oldCandidateCountLabel = scanNoticeMessage
+    ? `${oldCandidateCount}+`
+    : String(oldCandidateCount)
   const initialLoading = loading && !scan
 
   const handleOpenChange = useCallback(
@@ -338,16 +356,36 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                   {selectedCount > 0 ? (
                     <>
                       <span className="font-medium text-foreground">
-                        {selectedCount} workspace{selectedCount === 1 ? '' : 's'}
+                        {selectedCount} safe to remove
                       </span>{' '}
-                      selected for removal.
+                      selected.
+                      {oldCandidateCount > selectedCount ? (
+                        <>
+                          {' '}
+                          {oldCandidateCountLabel} old workspace
+                          {oldCandidateCount === 1 ? '' : 's'} found.
+                        </>
+                      ) : null}
                     </>
                   ) : readyCount > 0 ? (
                     <>
                       <span className="font-medium text-foreground">
-                        {readyCount} workspace{readyCount === 1 ? '' : 's'}
+                        {readyCount} safe to remove
                       </span>{' '}
-                      suggested for cleanup.
+                      found.
+                      {oldCandidateCount > readyCount ? (
+                        <>
+                          {' '}
+                          {oldCandidateCountLabel} old workspace
+                          {oldCandidateCount === 1 ? '' : 's'} found.
+                        </>
+                      ) : null}
+                    </>
+                  ) : oldCandidateCount > 0 ? (
+                    <>
+                      <span className="font-medium text-foreground">{oldCandidateCountLabel}</span>{' '}
+                      old workspace{oldCandidateCount === 1 ? '' : 's'} found. None selected for
+                      removal.
                     </>
                   ) : (
                     'No workspaces selected.'
