@@ -141,7 +141,7 @@ function LoudOverlay({
       <div className="pointer-events-auto flex w-full max-w-[30rem] flex-col gap-3 rounded-lg border border-border bg-card p-6 pb-5 text-card-foreground shadow-xs">
         <div
           className={cn(
-            'flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.05em]',
+            'flex items-center gap-1.5 text-xs font-medium',
             tone === 'driving' ? 'text-foreground' : 'text-muted-foreground'
           )}
         >
