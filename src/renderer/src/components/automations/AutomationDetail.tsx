@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import type { Worktree } from '../../../../shared/types'
-import { parseAutomationRrule } from '../../../../shared/automation-schedules'
+import { formatAutomationSchedule } from '../../../../shared/automation-schedules'
 import {
   formatAutomationDateTime,
   formatAutomationDateTimeWithRelative,
@@ -44,15 +44,6 @@ function DetailMetric({ label, value }: { label: string; value: string }): React
   )
 }
 
-function formatTime(hour: number, minute: number): string {
-  const date = new Date()
-  date.setHours(hour, minute, 0, 0)
-  return new Intl.DateTimeFormat(undefined, {
-    hour: 'numeric',
-    minute: '2-digit'
-  }).format(date)
-}
-
 function formatGrace(minutes: number): string {
   if (minutes <= 0) {
     return 'No grace'
@@ -62,24 +53,6 @@ function formatGrace(minutes: number): string {
   }
   const hours = minutes / 60
   return `${hours} ${hours === 1 ? 'hour' : 'hours'}`
-}
-
-function formatSchedule(rrule: string): string {
-  const schedule = parseAutomationRrule(rrule)
-  if (schedule.preset === 'hourly') {
-    return `Hourly at :${String(schedule.minute).padStart(2, '0')}`
-  }
-  const time = formatTime(schedule.hour, schedule.minute)
-  if (schedule.preset === 'daily') {
-    return `Daily at ${time}`
-  }
-  if (schedule.preset === 'weekdays') {
-    return `Weekdays at ${time}`
-  }
-  const day = new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(
-    new Date(2026, 0, 4 + schedule.dayOfWeek)
-  )
-  return `${day}s at ${time}`
 }
 
 function ToolbarIconButton({
@@ -223,7 +196,7 @@ export function AutomationDetail({
               </span>
             </div>
           </div>
-          <DetailMetric label="Schedule" value={formatSchedule(automation.rrule)} />
+          <DetailMetric label="Schedule" value={formatAutomationSchedule(automation.rrule)} />
           <DetailMetric
             label={automation.workspaceMode === 'new_per_run' ? 'Create from' : 'Workspace'}
             value={

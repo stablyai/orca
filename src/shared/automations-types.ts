@@ -15,7 +15,7 @@ export type AutomationRunStatus =
   | 'dispatch_failed'
 export type AutomationRunTrigger = 'scheduled' | 'manual'
 
-export type AutomationSchedulePreset = 'hourly' | 'daily' | 'weekdays' | 'weekly'
+export type AutomationSchedulePreset = 'hourly' | 'daily' | 'weekdays' | 'weekly' | 'custom'
 export type AutomationRunUsageProvider = 'claude' | 'codex'
 export type AutomationRunUsageStatus = 'known' | 'unavailable'
 export type AutomationRunUsageAttribution = 'provider_session_time_window'
