@@ -111,7 +111,8 @@ export function buildEditorSessionData(
       relativePath: f.relativePath,
       worktreeId: f.worktreeId,
       language: f.language,
-      isPreview: f.isPreview || undefined
+      isPreview: f.isPreview || undefined,
+      runtimeEnvironmentId: f.runtimeEnvironmentId
     })
     const ids =
       editFileIdsByWorktree[f.worktreeId] ?? (editFileIdsByWorktree[f.worktreeId] = new Set())

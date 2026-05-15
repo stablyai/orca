@@ -2,6 +2,8 @@ import type { TuiAgent } from '../../../shared/types'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { useAppStore } from '@/store'
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-dispatcher'
+import { isRemoteRuntimePtyId, sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
+import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
 
 // Why: bracketed paste markers let modern TUIs (Claude Code / Codex / Pi /
 // OpenCode / Gemini / cursor-agent / copilot) treat the inserted text as a
@@ -89,7 +91,8 @@ export async function pasteDraftWhenAgentReady(args: {
     return false
   }
 
-  window.api.pty.write(
+  sendRuntimePtyInput(
+    useAppStore.getState().settings,
     ptyId,
     `${BRACKETED_PASTE_BEGIN}${content}${BRACKETED_PASTE_END}${submit ? '\r' : ''}`
   )
@@ -136,7 +139,7 @@ function waitForInputBoxReady(ptyId: string, timeoutMs: number): Promise<boolean
       quietTimer = window.setTimeout(() => finish(true), BRACKETED_PASTE_QUIET_MS)
     }
 
-    unsubscribe = subscribeToPtyData(ptyId, (data) => {
+    const observeData = (data: string): void => {
       // Why: keep just enough recent bytes that an escape sequence split
       // across two IPC frames is still detectable. 64 bytes >> 8-byte
       // sequence; cheap and bounded.
@@ -151,7 +154,26 @@ function waitForInputBoxReady(ptyId: string, timeoutMs: number): Promise<boolean
         // mounted and bracketed paste lands in the input buffer.
         armQuietTimer()
       }
-    })
+    }
+
+    if (isRemoteRuntimePtyId(ptyId)) {
+      void subscribeToRuntimeTerminalData(
+        useAppStore.getState().settings,
+        ptyId,
+        `desktop:paste-ready:${ptyId}`,
+        observeData
+      )
+        .then((remoteUnsubscribe) => {
+          if (settled) {
+            remoteUnsubscribe()
+            return
+          }
+          unsubscribe = remoteUnsubscribe
+        })
+        .catch(() => finish(false))
+    } else {
+      unsubscribe = subscribeToPtyData(ptyId, observeData)
+    }
 
     const hardTimer = window.setTimeout(() => finish(false), timeoutMs)
   })

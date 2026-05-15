@@ -13,8 +13,15 @@ import {
   type AgentStateHistoryEntry,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 const NOW = new Date('2026-03-27T12:00:00.000Z').getTime()
+const LEAF_ID_1 = '11111111-1111-4111-8111-111111111111'
+const LEAF_ID_2 = '22222222-2222-4222-8222-222222222222'
+
+function paneKey(tabId: string, leaf: '1' | '2' = '1'): string {
+  return makePaneKey(tabId, leaf === '1' ? LEAF_ID_1 : LEAF_ID_2)
+}
 
 const repoMap = new Map<string, Repo>([
   [
@@ -126,15 +133,15 @@ describe('smart sort — class invariants', () => {
       [done.id]: [makeTab({ id: 'tab-done', worktreeId: done.id })]
     }
     const entries = {
-      'tab-blocked:1': makeEntry({
-        paneKey: 'tab-blocked:1',
+      [paneKey('tab-blocked', '1')]: makeEntry({
+        paneKey: paneKey('tab-blocked', '1'),
         state: 'blocked',
         // older than the done timestamp
         stateStartedAt: NOW - 5 * 60_000,
         updatedAt: NOW - 1_000
       }),
-      'tab-done:1': makeEntry({
-        paneKey: 'tab-done:1',
+      [paneKey('tab-done', '1')]: makeEntry({
+        paneKey: paneKey('tab-done', '1'),
         state: 'done',
         // newer
         stateStartedAt: NOW - 10_000,
@@ -153,14 +160,14 @@ describe('smart sort — class invariants', () => {
       [working.id]: [makeTab({ id: 'tab-working', worktreeId: working.id })]
     }
     const entries = {
-      'tab-done:1': makeEntry({
-        paneKey: 'tab-done:1',
+      [paneKey('tab-done', '1')]: makeEntry({
+        paneKey: paneKey('tab-done', '1'),
         state: 'done',
         stateStartedAt: NOW - 10 * 60_000,
         updatedAt: NOW - 1_000
       }),
-      'tab-working:1': makeEntry({
-        paneKey: 'tab-working:1',
+      [paneKey('tab-working', '1')]: makeEntry({
+        paneKey: paneKey('tab-working', '1'),
         state: 'working',
         // newer than the done — must still lose because class wins
         stateStartedAt: NOW - 1_000,
@@ -185,8 +192,8 @@ describe('smart sort — class invariants', () => {
       [idle.id]: [makeTab({ id: 'tab-idle', worktreeId: idle.id })]
     }
     const entries = {
-      'tab-working:1': makeEntry({
-        paneKey: 'tab-working:1',
+      [paneKey('tab-working', '1')]: makeEntry({
+        paneKey: paneKey('tab-working', '1'),
         state: 'working',
         stateStartedAt: NOW - 60_000,
         updatedAt: NOW - 1_000
@@ -206,14 +213,14 @@ describe('smart sort — within-class recency', () => {
       [newer.id]: [makeTab({ id: 'tab-newer', worktreeId: newer.id })]
     }
     const entries = {
-      'tab-older:1': makeEntry({
-        paneKey: 'tab-older:1',
+      [paneKey('tab-older', '1')]: makeEntry({
+        paneKey: paneKey('tab-older', '1'),
         state: 'blocked',
         stateStartedAt: NOW - 5 * 60_000,
         updatedAt: NOW - 1_000
       }),
-      'tab-newer:1': makeEntry({
-        paneKey: 'tab-newer:1',
+      [paneKey('tab-newer', '1')]: makeEntry({
+        paneKey: paneKey('tab-newer', '1'),
         state: 'blocked',
         stateStartedAt: NOW - 30_000,
         updatedAt: NOW - 1_000
@@ -231,16 +238,16 @@ describe('smart sort — within-class recency', () => {
       [fresh.id]: [makeTab({ id: 'tab-fresh', worktreeId: fresh.id })]
     }
     const entries = {
-      'tab-with:1': makeEntry({
-        paneKey: 'tab-with:1',
+      [paneKey('tab-with', '1')]: makeEntry({
+        paneKey: paneKey('tab-with', '1'),
         state: 'working',
         stateStartedAt: NOW - 60_000,
         updatedAt: NOW - 1_000,
         // Prior done from earlier in the session bumps within-class recency.
         stateHistory: [makeHistory('done', NOW - 5_000)]
       }),
-      'tab-fresh:1': makeEntry({
-        paneKey: 'tab-fresh:1',
+      [paneKey('tab-fresh', '1')]: makeEntry({
+        paneKey: paneKey('tab-fresh', '1'),
         state: 'working',
         // Even newer current stateStartedAt — but with no history, falls back
         // to this timestamp (older than the prior done above).
@@ -263,15 +270,15 @@ describe('smart sort — within-class recency', () => {
       [fresh.id]: [makeTab({ id: 'tab-f', worktreeId: fresh.id })]
     }
     const entries = {
-      'tab-i:1': makeEntry({
-        paneKey: 'tab-i:1',
+      [paneKey('tab-i', '1')]: makeEntry({
+        paneKey: paneKey('tab-i', '1'),
         state: 'working',
         stateStartedAt: NOW - 60_000,
         updatedAt: NOW - 1_000,
         stateHistory: [makeHistory('done', NOW - 5_000, true)]
       }),
-      'tab-f:1': makeEntry({
-        paneKey: 'tab-f:1',
+      [paneKey('tab-f', '1')]: makeEntry({
+        paneKey: paneKey('tab-f', '1'),
         state: 'working',
         stateStartedAt: NOW - 30_000,
         updatedAt: NOW - 1_000
@@ -297,15 +304,15 @@ describe('smart sort — interrupted and stale handling', () => {
       [realDone.id]: [makeTab({ id: 'tab-d', worktreeId: realDone.id })]
     }
     const entries = {
-      'tab-i:1': makeEntry({
-        paneKey: 'tab-i:1',
+      [paneKey('tab-i', '1')]: makeEntry({
+        paneKey: paneKey('tab-i', '1'),
         state: 'done',
         interrupted: true,
         stateStartedAt: NOW - 1_000,
         updatedAt: NOW - 500
       }),
-      'tab-d:1': makeEntry({
-        paneKey: 'tab-d:1',
+      [paneKey('tab-d', '1')]: makeEntry({
+        paneKey: paneKey('tab-d', '1'),
         state: 'done',
         stateStartedAt: NOW - 5 * 60_000,
         updatedAt: NOW - 1_000
@@ -327,14 +334,14 @@ describe('smart sort — interrupted and stale handling', () => {
       [fresh.id]: [makeTab({ id: 'tab-f', worktreeId: fresh.id })]
     }
     const entries = {
-      'tab-s:1': makeEntry({
-        paneKey: 'tab-s:1',
+      [paneKey('tab-s', '1')]: makeEntry({
+        paneKey: paneKey('tab-s', '1'),
         state: 'blocked',
         stateStartedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 60_000,
         updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 60_000
       }),
-      'tab-f:1': makeEntry({
-        paneKey: 'tab-f:1',
+      [paneKey('tab-f', '1')]: makeEntry({
+        paneKey: paneKey('tab-f', '1'),
         state: 'done',
         stateStartedAt: NOW - 5 * 60_000,
         updatedAt: NOW - 1_000
@@ -417,20 +424,20 @@ describe('smart sort — multi-pane resolution', () => {
       [otherDone.id]: [makeTab({ id: 'tab-other', worktreeId: otherDone.id })]
     }
     const entries = {
-      'tab-split:1': makeEntry({
-        paneKey: 'tab-split:1',
+      [paneKey('tab-split', '1')]: makeEntry({
+        paneKey: paneKey('tab-split', '1'),
         state: 'working',
         stateStartedAt: NOW - 60_000,
         updatedAt: NOW - 1_000
       }),
-      'tab-split:2': makeEntry({
-        paneKey: 'tab-split:2',
+      [paneKey('tab-split', '2')]: makeEntry({
+        paneKey: paneKey('tab-split', '2'),
         state: 'blocked',
         stateStartedAt: NOW - 30_000,
         updatedAt: NOW - 1_000
       }),
-      'tab-other:1': makeEntry({
-        paneKey: 'tab-other:1',
+      [paneKey('tab-other', '1')]: makeEntry({
+        paneKey: paneKey('tab-other', '1'),
         state: 'done',
         stateStartedAt: NOW - 5_000,
         updatedAt: NOW - 1_000
@@ -473,14 +480,14 @@ describe('sortWorktreesSmart — cold start fallback', () => {
       [done.id]: [makeTab({ id: 'tab-done', worktreeId: done.id })]
     }
     const entries = {
-      'tab-blocked:1': makeEntry({
-        paneKey: 'tab-blocked:1',
+      [paneKey('tab-blocked', '1')]: makeEntry({
+        paneKey: paneKey('tab-blocked', '1'),
         state: 'blocked',
         stateStartedAt: NOW - 60_000,
         updatedAt: NOW - 1_000
       }),
-      'tab-done:1': makeEntry({
-        paneKey: 'tab-done:1',
+      [paneKey('tab-done', '1')]: makeEntry({
+        paneKey: paneKey('tab-done', '1'),
         state: 'done',
         stateStartedAt: NOW - 30_000,
         updatedAt: NOW - 1_000
@@ -511,14 +518,14 @@ describe('sortWorktreesSmart — palette caller regression', () => {
       [working.id]: [makeTab({ id: 'tab-working', worktreeId: working.id })]
     }
     const agentStatusByPaneKey: Record<string, AgentStatusEntry> = {
-      'tab-blocked:1': makeEntry({
-        paneKey: 'tab-blocked:1',
+      [paneKey('tab-blocked', '1')]: makeEntry({
+        paneKey: paneKey('tab-blocked', '1'),
         state: 'blocked',
         stateStartedAt: NOW - 60_000,
         updatedAt: NOW - 1_000
       }),
-      'tab-working:1': makeEntry({
-        paneKey: 'tab-working:1',
+      [paneKey('tab-working', '1')]: makeEntry({
+        paneKey: paneKey('tab-working', '1'),
         state: 'working',
         // newer than the blocked one — would win on recency alone
         stateStartedAt: NOW - 1_000,

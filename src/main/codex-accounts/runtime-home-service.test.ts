@@ -98,6 +98,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     opencodeWorkspaceId: '',
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
+    keepComputerAwakeWhileAgentsRun: false,
     terminalMacOptionAsAlt: 'false',
     terminalMacOptionAsAltMigrated: true,
     experimentalMobile: false,

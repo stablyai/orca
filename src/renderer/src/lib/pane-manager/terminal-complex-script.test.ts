@@ -10,6 +10,15 @@ describe('terminalOutputPrefersDomRenderer', () => {
     expect(terminalOutputPrefersDomRenderer('Hebrew: שלום')).toBe(true)
   })
 
+  it('detects East Asian wide and fullwidth terminal output', () => {
+    expect(
+      terminalOutputPrefersDomRenderer('直接接请求本地 /api/mcp，带同一个 Bearer token，成功')
+    ).toBe(true)
+    expect(terminalOutputPrefersDomRenderer('Japanese: ターミナル')).toBe(true)
+    expect(terminalOutputPrefersDomRenderer('Korean: 터미널')).toBe(true)
+    expect(terminalOutputPrefersDomRenderer('Fullwidth: ＡＢＣ１２３')).toBe(true)
+  })
+
   it('detects glyph classes common in agent terminal UIs', () => {
     expect(terminalOutputPrefersDomRenderer('⠋ Working')).toBe(true)
     expect(terminalOutputPrefersDomRenderer('├─ file.ts')).toBe(true)

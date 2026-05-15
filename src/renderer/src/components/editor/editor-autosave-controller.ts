@@ -1,7 +1,13 @@
+/* eslint-disable max-lines -- Why: autosave owns the save queue, quiesce
+coordination, and dirty-file shutdown hooks; keeping those lifecycles together
+avoids split-brain saves across visible and hidden editors. */
 import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { getConnectionId } from '@/lib/connection-context'
+import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { writeRuntimeFile } from '@/runtime/runtime-file-client'
+import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import {
   canAutoSaveOpenFile,
   getOpenFilesForExternalFileChange,
@@ -69,6 +75,9 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
 
         const contentToSave = state.editorDrafts[file.id] ?? fallbackContent
         const connectionId = getConnectionId(liveFile.worktreeId) ?? undefined
+        const worktree = liveFile.worktreeId
+          ? findWorktreeById(state.worktreesByRepo ?? {}, liveFile.worktreeId)
+          : null
         // Why: stamp before the write so the fs:changed event that our own
         // write produces is ignored by useEditorExternalWatch instead of
         // round-tripping back into a setContent that jumps the cursor to the
@@ -76,11 +85,16 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         // debounce window). See editor-self-write-registry.
         recordSelfWrite(liveFile.filePath)
         try {
-          await window.api.fs.writeFile({
-            filePath: liveFile.filePath,
-            content: contentToSave,
-            connectionId
-          })
+          await writeRuntimeFile(
+            {
+              settings: settingsForRuntimeOwner(state.settings, liveFile.runtimeEnvironmentId),
+              worktreeId: liveFile.worktreeId,
+              worktreePath: worktree?.path ?? null,
+              connectionId
+            },
+            liveFile.filePath,
+            contentToSave
+          )
         } catch (error) {
           // Why: the self-write stamp is only valid if a disk write actually
           // happened. Clearing it on failure keeps the external watcher from

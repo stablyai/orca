@@ -46,6 +46,7 @@ export class E2EEChannel {
         encryptedBinaryReply: (response: Uint8Array<ArrayBufferLike>) => void
       ) => void)
     | null = null
+  private binaryMessageHandler: ((plaintext: Uint8Array<ArrayBufferLike>) => void) | null = null
 
   deviceToken: string | null = null
 
@@ -71,6 +72,10 @@ export class E2EEChannel {
     this.messageHandler = handler
   }
 
+  onBinaryMessage(handler: (plaintext: Uint8Array<ArrayBufferLike>) => void): void {
+    this.binaryMessageHandler = handler
+  }
+
   handleRawMessage(raw: string | Uint8Array<ArrayBufferLike>): void {
     if (this.state === 'awaiting_hello') {
       if (typeof raw !== 'string') {
@@ -89,7 +94,14 @@ export class E2EEChannel {
       const plaintextBytes = decryptBytes(raw, this.sharedKey)
       if (plaintextBytes === null) {
         this.trackDecryptFailure()
+        return
       }
+      this.consecutiveFailures = 0
+      if (this.state !== 'ready') {
+        this.onError(4001, 'Invalid binary message before authentication')
+        return
+      }
+      this.binaryMessageHandler?.(plaintextBytes)
       return
     }
 
@@ -211,5 +223,6 @@ export class E2EEChannel {
     }
     this.sharedKey = null
     this.messageHandler = null
+    this.binaryMessageHandler = null
   }
 }

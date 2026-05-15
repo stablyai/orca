@@ -28,8 +28,9 @@ import type {
   TerminalTab,
   WorktreeMemory
 } from '../../../../shared/types'
-import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../../../shared/worktree-id'
 import { parsePtySessionId } from '../../../../shared/pty-session-id-format'
+import { parsePaneKey as parseStablePaneKey } from '../../../../shared/stable-pane-id'
+import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../../../shared/worktree-id'
 
 // ─── View-model types (renderer-local) ──────────────────────────────
 
@@ -131,19 +132,12 @@ function shortCwd(cwd: string): string {
   return parts.length > 2 ? parts.slice(-2).join(sep) : cwd
 }
 
-function parsePaneKey(paneKey: string | null): { tabId: string; paneRuntimeId: number } | null {
+function parsePaneKey(paneKey: string | null): { tabId: string; leafId: string } | null {
   if (!paneKey) {
     return null
   }
-  const sepIdx = paneKey.indexOf(':')
-  if (sepIdx <= 0) {
-    return null
-  }
-  const paneRuntimeId = Number(paneKey.slice(sepIdx + 1))
-  if (!Number.isFinite(paneRuntimeId)) {
-    return null
-  }
-  return { tabId: paneKey.slice(0, sepIdx), paneRuntimeId }
+  const parsed = parseStablePaneKey(paneKey)
+  return parsed ? { tabId: parsed.tabId, leafId: parsed.leafId } : null
 }
 
 function resolveSnapshotSessionLabel(
@@ -160,10 +154,6 @@ function resolveSnapshotSessionLabel(
       const custom = tab.customTitle?.trim()
       if (custom) {
         return custom
-      }
-      const runtime = ctx.runtimePaneTitlesByTabId[parsed.tabId]?.[parsed.paneRuntimeId]?.trim()
-      if (runtime) {
-        return runtime
       }
       return tab.defaultTitle?.trim() || tab.title?.trim() || `Terminal ${tabIndex + 1}`
     }

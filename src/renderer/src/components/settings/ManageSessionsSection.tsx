@@ -96,6 +96,9 @@ function getConfirmCopy(confirm: PendingConfirm): {
 }
 
 export function ManageSessionsSection(): React.JSX.Element {
+  const activeRuntimeEnvironmentId = useAppStore(
+    (s) => s.settings?.activeRuntimeEnvironmentId ?? null
+  )
   const [sessions, setSessions] = useState<PtyManagementSession[]>([])
   const [isRefreshing, setIsRefreshing] = useState(true)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
@@ -176,6 +179,14 @@ export function ManageSessionsSection(): React.JSX.Element {
   }, [])
 
   const refresh = useCallback(async (): Promise<PtyManagementSession[]> => {
+    if (activeRuntimeEnvironmentId?.trim()) {
+      if (isMounted.current) {
+        setSessions([])
+        setIsRefreshing(false)
+        setHasLoadedOnce(true)
+      }
+      return []
+    }
     setIsRefreshing(true)
     try {
       const result = await window.api.pty.management.listSessions()
@@ -198,7 +209,7 @@ export function ManageSessionsSection(): React.JSX.Element {
         setHasLoadedOnce(true)
       }
     }
-  }, [])
+  }, [activeRuntimeEnvironmentId])
 
   useEffect(() => {
     void refresh()
@@ -274,6 +285,29 @@ export function ManageSessionsSection(): React.JSX.Element {
 
   const copy = useMemo(() => getConfirmCopy(confirm), [confirm])
   const isBusy = busyKind !== null || daemonActions.isBusy
+
+  if (activeRuntimeEnvironmentId?.trim()) {
+    return (
+      <section className="space-y-4">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">Manage Sessions</h3>
+          <p className="text-xs text-muted-foreground">
+            Session management is unavailable while a remote runtime server is active.
+          </p>
+        </div>
+        <SearchableSetting
+          title={MANAGE_SESSIONS_SEARCH_ENTRIES[0].title}
+          description={MANAGE_SESSIONS_SEARCH_ENTRIES[0].description}
+          keywords={MANAGE_SESSIONS_SEARCH_ENTRIES[0].keywords}
+          className="space-y-3"
+        >
+          <div className="rounded-lg border border-border/60 px-3 py-3 text-xs text-muted-foreground">
+            Switch back to the local runtime to restart or kill local daemon sessions.
+          </div>
+        </SearchableSetting>
+      </section>
+    )
+  }
 
   return (
     <section className="space-y-4">

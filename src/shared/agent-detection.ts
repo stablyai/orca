@@ -151,9 +151,13 @@ function containsBrailleSpinner(title: string): boolean {
   return false
 }
 
-function containsAgentName(title: string): boolean {
+function containsLegacyAgentName(title: string): boolean {
   const lower = title.toLowerCase()
-  return AGENT_NAMES.some((name) => lower.includes(name)) || DROID_AGENT_NAME_RE.test(title)
+  return AGENT_NAMES.some((name) => lower.includes(name))
+}
+
+function containsAgentName(title: string): boolean {
+  return containsLegacyAgentName(title) || DROID_AGENT_NAME_RE.test(title)
 }
 
 function containsAny(title: string, words: readonly string[]): boolean {
@@ -413,7 +417,9 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
     return 'working'
   }
 
-  if (containsAgentName(title)) {
+  const hasDroidAgentName = DROID_AGENT_NAME_RE.test(title)
+  const hasLegacyAgentName = containsLegacyAgentName(title)
+  if (hasLegacyAgentName || hasDroidAgentName) {
     if (containsAny(title, ['action required', 'permission', 'waiting'])) {
       return 'permission'
     }
@@ -441,6 +447,13 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
     }
     if (title.startsWith('* ')) {
       return 'idle'
+    }
+
+    // Why: Factory Droid can publish native titles like "Factory Droid needs
+    // input" while an Execute tool is still sleeping. Droid's hook events are
+    // authoritative; don't turn a name-only native title into a completion.
+    if (hasDroidAgentName && !hasLegacyAgentName) {
+      return null
     }
 
     return 'idle'

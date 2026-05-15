@@ -1,6 +1,6 @@
 // Why: split from the combined primary+dropdown module because the primary and dropdown are independent derivations with different priority ladders; together they exceed the max-lines budget and tangle unrelated concerns.
 
-import type { GitUpstreamStatus } from '../../../../shared/types'
+import type { GitUpstreamStatus, PRState } from '../../../../shared/types'
 
 // Why: this module owns the pure state-machine logic for the Source Control
 // primary action (split button). Keeping the logic outside the React component
@@ -39,6 +39,8 @@ export type PrimaryActionInputs = {
   isCommitting: boolean
   isRemoteOperationActive: boolean
   upstreamStatus: GitUpstreamStatus | undefined
+  prState?: PRState | null
+  isPRStateLoading?: boolean
   // Why: which remote op is currently running, when one is. null when no
   // remote op is in flight. Used by the in-flight branch below to mirror
   // the user-triggered action on the primary button instead of leaving a
@@ -93,6 +95,8 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
     isCommitting,
     isRemoteOperationActive,
     upstreamStatus,
+    prState,
+    isPRStateLoading,
     inFlightRemoteOpKind
   } = inputs
 
@@ -214,6 +218,24 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
   }
 
   if (!upstreamStatus.hasUpstream) {
+    if (isPRStateLoading) {
+      return {
+        kind: 'commit',
+        label: 'Commit',
+        title: 'Checking PR status…',
+        disabled: true
+      }
+    }
+
+    if (prState === 'merged') {
+      return {
+        kind: 'commit',
+        label: 'Commit',
+        title: 'Nothing to commit. PR is already merged.',
+        disabled: true
+      }
+    }
+
     return {
       kind: 'publish',
       label: 'Publish Branch',

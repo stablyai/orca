@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: relay filesystem request handling shares
+   path expansion, file IO, search, streaming reads, Space scans, and watch lifecycle state. */
 import { readdir, writeFile, stat, lstat, mkdir, rename, cp, rm, realpath } from 'fs/promises'
 import { execFile } from 'child_process'
 import { join } from 'path'
@@ -18,12 +20,13 @@ import { buildExcludePathPrefixes } from '../shared/quick-open-filter'
 import { buildInstallRgMessage } from './fs-handler-install-rg'
 import { readRelayFileContent, readRelayFileStreamMetadata } from './fs-handler-file-read'
 import { RelayStreamRegistry } from './fs-stream-registry'
+import { scanWorkspaceSpaceDirectory } from './workspace-space-scan'
 
 type WatchState = {
   rootPath: string
   unwatchFn: (() => void) | null
   setupPromise: Promise<void> | null
-  isStale: () => boolean
+  clients: Map<number, () => boolean>
 }
 
 async function isDirectoryEntry(
@@ -53,6 +56,7 @@ export class FsHandler {
   constructor(dispatcher: RelayDispatcher, _context: RelayContext) {
     this.dispatcher = dispatcher
     this.registerHandlers()
+    this.dispatcher.onClientDetached?.((clientId) => this.releaseClientWatches(clientId))
   }
 
   private registerHandlers(): void {
@@ -64,13 +68,15 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.deletePath', (p) => this.deletePath(p))
     this.dispatcher.onRequest('fs.createFile', (p) => this.createFile(p))
     this.dispatcher.onRequest('fs.createDir', (p) => this.createDir(p))
+    this.dispatcher.onRequest('fs.createDirNoClobber', (p) => this.createDirNoClobber(p))
     this.dispatcher.onRequest('fs.rename', (p) => this.rename(p))
     this.dispatcher.onRequest('fs.copy', (p) => this.copy(p))
     this.dispatcher.onRequest('fs.realpath', (p) => this.realpath(p))
     this.dispatcher.onRequest('fs.search', (p) => this.search(p))
     this.dispatcher.onRequest('fs.listFiles', (p) => this.listFiles(p))
+    this.dispatcher.onRequest('fs.workspaceSpaceScan', (p, c) => this.workspaceSpaceScan(p, c))
     this.dispatcher.onRequest('fs.watch', (p, context) => this.watch(p, context))
-    this.dispatcher.onNotification('fs.unwatch', (p) => this.unwatch(p))
+    this.dispatcher.onNotification('fs.unwatch', (p, context) => this.unwatch(p, context))
     this.dispatcher.onNotification('fs.cancelStream', (p) => this.cancelStream(p))
   }
 
@@ -97,12 +103,9 @@ export class FsHandler {
     return readRelayFileContent(filePath)
   }
 
-  private async readFileStream(
-    params: Record<string, unknown>,
-    context?: { isStale: () => boolean }
-  ) {
+  private async readFileStream(params: Record<string, unknown>, context?: RequestContext) {
     const filePath = expandTilde(params.filePath as string)
-    const ctx = context ?? { isStale: () => false }
+    const ctx = context ?? { clientId: 0, isStale: () => false }
     return readRelayFileStreamMetadata(filePath, this.dispatcher, this.streamRegistry, ctx)
   }
 
@@ -175,6 +178,11 @@ export class FsHandler {
     await mkdir(dirPath, { recursive: true })
   }
 
+  private async createDirNoClobber(params: Record<string, unknown>) {
+    const dirPath = expandTilde(params.dirPath as string)
+    await mkdir(dirPath, { recursive: false })
+  }
+
   private async rename(params: Record<string, unknown>) {
     const oldPath = expandTilde(params.oldPath as string)
     const newPath = expandTilde(params.newPath as string)
@@ -184,7 +192,15 @@ export class FsHandler {
   private async copy(params: Record<string, unknown>) {
     const source = expandTilde(params.source as string)
     const destination = expandTilde(params.destination as string)
-    await cp(source, destination, { recursive: true })
+    try {
+      await cp(source, destination, { recursive: true, force: false, errorOnExist: true })
+    } catch (error) {
+      const code = error instanceof Error ? (error as NodeJS.ErrnoException).code : undefined
+      if (code === 'EEXIST' || code === 'ERR_FS_CP_EEXIST') {
+        throw new Error('EEXIST: destination already exists')
+      }
+      throw error
+    }
   }
 
   private async realpath(params: Record<string, unknown>) {
@@ -263,26 +279,38 @@ export class FsHandler {
     }
   }
 
+  private async workspaceSpaceScan(params: Record<string, unknown>, context: RequestContext) {
+    const rootPath = expandTilde(params.rootPath as string)
+    return scanWorkspaceSpaceDirectory(rootPath, context)
+  }
+
   private async watch(params: Record<string, unknown>, context?: RequestContext) {
     const rootPath = expandTilde(params.rootPath as string)
 
-    if (this.watches.size >= 20) {
-      throw new Error('Maximum number of file watchers reached')
-    }
+    this.releaseStaleWatches()
 
     const existing = this.watches.get(rootPath)
-    if (existing && !existing.isStale()) {
-      if (existing.setupPromise) {
-        await existing.setupPromise
+    if (existing) {
+      if ([...existing.clients.values()].some((isStale) => !isStale())) {
+        existing.clients.set(context?.clientId ?? 0, context?.isStale ?? (() => false))
+        if (existing.setupPromise) {
+          await existing.setupPromise
+        }
+        return
       }
-      return
+      existing.unwatchFn?.()
+      this.watches.delete(rootPath)
+    }
+
+    if (this.watches.size >= 20) {
+      throw new Error('Maximum number of file watchers reached')
     }
 
     const watchState: WatchState = {
       rootPath,
       unwatchFn: null,
       setupPromise: null,
-      isStale: () => context?.isStale() ?? false
+      clients: new Map([[context?.clientId ?? 0, context?.isStale ?? (() => false)]])
     }
     this.watches.set(rootPath, watchState)
 
@@ -308,11 +336,14 @@ export class FsHandler {
       watchState.unwatchFn = () => {
         void subscription.unsubscribe()
       }
-      if (watchState.isStale() || this.watches.get(rootPath) !== watchState) {
-        // Why: if the client reconnects while watcher setup is in flight, the
-        // response is discarded and no client can later balance it with
-        // fs.unwatch. Tear down only this request's subscription so a newer
-        // replacement watch for the same root is not removed.
+      if (
+        [...watchState.clients.values()].every((isStale) => isStale()) ||
+        this.watches.get(rootPath) !== watchState
+      ) {
+        // Why: if the only requesting client reconnects while watcher setup is
+        // in flight, no client can later balance it with fs.unwatch. Tear down
+        // only this request's subscription so a newer replacement watch for the
+        // same root is not removed.
         void subscription.unsubscribe()
         if (this.watches.get(rootPath) === watchState) {
           this.watches.delete(rootPath)
@@ -332,13 +363,37 @@ export class FsHandler {
     }
   }
 
-  private unwatch(params: Record<string, unknown>): void {
+  private unwatch(params: Record<string, unknown>, context?: RequestContext): void {
     const rootPath = expandTilde(params.rootPath as string)
     const state = this.watches.get(rootPath)
     if (state) {
+      this.releaseWatchClient(rootPath, state, context?.clientId ?? 0)
+    }
+  }
+
+  private releaseClientWatches(clientId: number): void {
+    for (const [rootPath, state] of this.watches) {
+      this.releaseWatchClient(rootPath, state, clientId)
+    }
+  }
+
+  private releaseStaleWatches(): void {
+    for (const [rootPath, state] of this.watches) {
+      if ([...state.clients.values()].some((isStale) => !isStale())) {
+        continue
+      }
       state.unwatchFn?.()
       this.watches.delete(rootPath)
     }
+  }
+
+  private releaseWatchClient(rootPath: string, state: WatchState, clientId: number): void {
+    state.clients.delete(clientId)
+    if (state.clients.size > 0) {
+      return
+    }
+    state.unwatchFn?.()
+    this.watches.delete(rootPath)
   }
 
   dispose(): void {

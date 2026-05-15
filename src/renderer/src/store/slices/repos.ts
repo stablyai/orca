@@ -1,9 +1,14 @@
+/* eslint-disable max-lines -- Why: repo slice owns local/runtime routing,
+add/remove/reorder side effects, and cross-slice teardown. Splitting it during
+the client-server refactor would obscure the invariants this file is currently
+auditing and preserving. */
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getRepoIdFromWorktreeId } from './worktree-helpers'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 
 const ERROR_TOAST_DURATION = 60_000
 
@@ -12,6 +17,7 @@ export type RepoSlice = {
   activeRepoId: string | null
   fetchRepos: () => Promise<void>
   addRepo: () => Promise<Repo | null>
+  addRepoPath: (path: string, kind?: 'git' | 'folder') => Promise<Repo | null>
   addNonGitFolder: (path: string) => Promise<Repo | null>
   removeRepo: (repoId: string) => Promise<void>
   updateRepo: (
@@ -39,7 +45,21 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   fetchRepos: async () => {
     try {
-      const repos = await window.api.repos.list()
+      const target = getActiveRuntimeTarget(get().settings)
+      const repos =
+        target.kind === 'local'
+          ? ((await window.api.repos.list()) as Repo[])
+          : (
+              await callRuntimeRpc<{ repos: Repo[] }>(
+                target,
+                'repo.list',
+                undefined,
+                // Why: remote environment fetches cross the network; keep the
+                // boot-time repo hydration bounded instead of inheriting an
+                // unbounded renderer promise.
+                { timeoutMs: 15_000 }
+              )
+            ).repos
       set((s) => {
         const validRepoIds = new Set(repos.map((repo) => repo.id))
         return {
@@ -53,22 +73,30 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  addRepo: async () => {
+  addRepoPath: async (path, kind = 'git') => {
     try {
-      const path = await window.api.repos.pickFolder()
-      if (!path) {
-        return null
-      }
+      const target = getActiveRuntimeTarget(get().settings)
       let repo: Repo
       try {
-        const result = await window.api.repos.add({ path })
-        if ('error' in result) {
-          throw new Error(result.error)
+        if (target.kind === 'local') {
+          const result = await window.api.repos.add({ path, kind })
+          if ('error' in result) {
+            throw new Error(result.error)
+          }
+          repo = result.repo
+        } else {
+          repo = (
+            await callRuntimeRpc<{ repo: Repo }>(
+              target,
+              'repo.add',
+              { path, kind },
+              { timeoutMs: 15_000 }
+            )
+          ).repo
         }
-        repo = result.repo
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
-        if (!message.includes('Not a valid git repository')) {
+        if (kind !== 'git' || !message.includes('Not a valid git repository')) {
           throw err
         }
         // Why: folder mode is a capability downgrade, not a silent fallback.
@@ -109,27 +137,26 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
+  addRepo: async () => {
+    const target = getActiveRuntimeTarget(get().settings)
+    if (target.kind !== 'local') {
+      // Why: OS folder pickers return client-local paths. Remote environments
+      // need an explicit server path, which the Add Project dialog handles.
+      toast.error('Use a server path to add projects from a remote runtime.')
+      return null
+    }
+    const path = await window.api.repos.pickFolder()
+    if (!path) {
+      return null
+    }
+    return get().addRepoPath(path)
+  },
+
   addNonGitFolder: async (path) => {
     try {
-      const result = await window.api.repos.add({ path, kind: 'folder' })
-      if ('error' in result) {
-        throw new Error(result.error)
-      }
-      const repo = result.repo
-      const alreadyAdded = get().repos.some((r) => r.id === repo.id)
-      if (alreadyAdded) {
-        get().clearOrcaHookTrustForRepo(repo.id)
-      }
-      set((s) => {
-        if (s.repos.some((r) => r.id === repo.id)) {
-          return s
-        }
-        return { repos: [...s.repos, repo] }
-      })
-      if (alreadyAdded) {
-        toast.info('Project already added', { description: repo.displayName })
-      } else {
-        toast.success('Folder added', { description: repo.displayName })
+      const repo = await get().addRepoPath(path, 'folder')
+      if (!repo) {
+        return null
       }
       // Why: without focusing the new folder, the UI looks unchanged after
       // the dialog closes and users think nothing happened. Fetch the
@@ -154,7 +181,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   removeRepo: async (repoId) => {
     try {
-      await window.api.repos.remove({ repoId })
+      const target = getActiveRuntimeTarget(get().settings)
+      await (target.kind === 'local'
+        ? window.api.repos.remove({ repoId })
+        : callRuntimeRpc(target, 'repo.rm', { repo: repoId }, { timeoutMs: 15_000 }))
 
       get().clearOrcaHookTrustForRepo(repoId)
 
@@ -162,13 +192,22 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const worktreeIds = (get().worktreesByRepo[repoId] ?? []).map((w) => w.id)
       const killedTabIds = new Set<string>()
       const killedPtyIds = new Set<string>()
+      if (target.kind === 'environment') {
+        await Promise.allSettled(
+          worktreeIds.map((worktreeId) =>
+            callRuntimeRpc(target, 'terminal.stop', { worktree: worktreeId }, { timeoutMs: 15_000 })
+          )
+        )
+      }
       for (const wId of worktreeIds) {
         const tabs = get().tabsByWorktree[wId] ?? []
         for (const tab of tabs) {
           killedTabIds.add(tab.id)
           for (const ptyId of get().ptyIdsByTabId[tab.id] ?? []) {
             killedPtyIds.add(ptyId)
-            window.api.pty.kill(ptyId)
+            if (!ptyId.startsWith('remote:')) {
+              window.api.pty.kill(ptyId)
+            }
           }
         }
       }
@@ -259,7 +298,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   updateRepo: async (repoId, updates) => {
     try {
-      await window.api.repos.update({ repoId, updates })
+      const target = getActiveRuntimeTarget(get().settings)
+      await (target.kind === 'local'
+        ? window.api.repos.update({ repoId, updates })
+        : callRuntimeRpc(target, 'repo.update', { repo: repoId, updates }, { timeoutMs: 15_000 }))
       set((s) => ({
         repos: s.repos.map((r) => (r.id === repoId ? { ...r, ...updates } : r))
       }))
@@ -288,7 +330,16 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
     set({ repos: next })
     try {
-      const result = await window.api.repos.reorder({ orderedIds })
+      const target = getActiveRuntimeTarget(get().settings)
+      const result =
+        target.kind === 'local'
+          ? await window.api.repos.reorder({ orderedIds })
+          : await callRuntimeRpc<{ status: 'applied' | 'rejected' }>(
+              target,
+              'repo.reorder',
+              { orderedIds },
+              { timeoutMs: 15_000 }
+            )
       if (result.status === 'rejected') {
         await get().fetchRepos()
       }

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: scan, cancellation, SSH fallback, and compaction tests share temp-repo fixtures. */
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -32,7 +33,7 @@ vi.mock('./providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock
 }))
 
-import { analyzeWorkspaceSpace } from './workspace-space-analysis'
+import { analyzeWorkspaceSpace, WorkspaceSpaceScanCancelledError } from './workspace-space-analysis'
 
 function createStore(repos: Repo[]): Store {
   return {
@@ -121,6 +122,70 @@ describe('analyzeWorkspaceSpace', () => {
     expect(feature?.reclaimableBytes).toBe(feature?.sizeBytes)
     expect(feature?.topLevelItems[0]?.name).toBe('node_modules')
     expect(result.reclaimableBytes).toBe(feature?.sizeBytes)
+  })
+
+  it('reports scan progress as repos and worktrees are scanned', async () => {
+    const root = tempDir!
+    const repoPath = join(root, 'repo')
+    await mkdir(repoPath, { recursive: true })
+    await writeSizedFile(join(repoPath, 'file.txt'), 128)
+    const repo: Repo = {
+      id: 'repo-1',
+      path: repoPath,
+      displayName: 'orca',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    listRepoWorktreesMock.mockResolvedValue([
+      {
+        path: repoPath,
+        head: 'a',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+    const progress: unknown[] = []
+
+    await analyzeWorkspaceSpace(createStore([repo]), {
+      scanId: 'scan-1',
+      onProgress: (event) => progress.push(event)
+    })
+
+    expect(progress[0]).toMatchObject({
+      scanId: 'scan-1',
+      totalRepoCount: 1,
+      scannedRepoCount: 0,
+      totalWorktreeCount: 0,
+      scannedWorktreeCount: 0
+    })
+    expect(progress).toContainEqual(
+      expect.objectContaining({
+        totalWorktreeCount: 1,
+        currentRepoDisplayName: 'orca'
+      })
+    )
+    expect(progress.at(-1)).toMatchObject({
+      scannedRepoCount: 1,
+      scannedWorktreeCount: 1
+    })
+  })
+
+  it('rejects when a scan is cancelled before it starts', async () => {
+    const repo: Repo = {
+      id: 'repo-1',
+      path: tempDir!,
+      displayName: 'orca',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      analyzeWorkspaceSpace(createStore([repo]), { signal: controller.signal })
+    ).rejects.toBeInstanceOf(WorkspaceSpaceScanCancelledError)
+    expect(listRepoWorktreesMock).not.toHaveBeenCalled()
   })
 
   it('isolates missing worktrees as row-level scan failures', async () => {
@@ -217,6 +282,55 @@ describe('analyzeWorkspaceSpace', () => {
       'linked-cache'
     ])
     expect(statMock).not.toHaveBeenCalledWith('/remote/feature/linked-cache')
+  })
+
+  it('uses the SSH bulk Space scan provider when available', async () => {
+    const repo: Repo = {
+      id: 'repo-remote',
+      path: '/remote/repo',
+      displayName: 'remote',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'ssh-1'
+    }
+    getSshGitProviderMock.mockReturnValue({
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/feature',
+          head: 'c',
+          branch: 'refs/heads/feature',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    })
+    const scanWorkspaceSpace = vi.fn().mockResolvedValue({
+      sizeBytes: 4096,
+      skippedEntryCount: 0,
+      topLevelItems: [
+        {
+          name: 'node_modules',
+          path: '/remote/feature/node_modules',
+          kind: 'directory',
+          sizeBytes: 4096
+        }
+      ],
+      omittedTopLevelItemCount: 0,
+      omittedTopLevelSizeBytes: 0
+    })
+    const readDir = vi.fn()
+    const stat = vi.fn()
+    getSshFilesystemProviderMock.mockReturnValue({ scanWorkspaceSpace, readDir, stat })
+
+    const result = await analyzeWorkspaceSpace(createStore([repo]))
+
+    expect(scanWorkspaceSpace).toHaveBeenCalledWith(
+      '/remote/feature',
+      expect.objectContaining({ signal: undefined })
+    )
+    expect(readDir).not.toHaveBeenCalled()
+    expect(stat).not.toHaveBeenCalled()
+    expect(result.worktrees[0]?.sizeBytes).toBe(4096)
   })
 
   it('reports disconnected SSH repos without failing the whole analysis', async () => {

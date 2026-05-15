@@ -12,6 +12,7 @@ export type SessionWriteSubscriberDeps = {
     getState: () => AppState
   }
   persist: (payload: WorkspaceSessionState) => void
+  shouldSchedulePersist?: () => boolean
   debounceMs?: number
 }
 
@@ -24,6 +25,7 @@ export type SessionWriteSubscriberDeps = {
 export function createSessionWriteSubscriber({
   store,
   persist,
+  shouldSchedulePersist,
   debounceMs = 150
 }: SessionWriteSubscriberDeps): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -59,6 +61,13 @@ export function createSessionWriteSubscriber({
       next[key] = state[key]
     }
     prev = next
+    if (shouldSchedulePersist && !shouldSchedulePersist()) {
+      if (timer !== null) {
+        clearTimeout(timer)
+        timer = null
+      }
+      return
+    }
     if (timer !== null) {
       clearTimeout(timer)
     }

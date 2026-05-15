@@ -5,6 +5,8 @@ import { AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '../ui/button'
 import { SearchableSetting } from './SearchableSetting'
+import { useAppStore } from '@/store'
+import { readRuntimeIssueCommand, writeRuntimeIssueCommand } from '@/runtime/runtime-hooks-client'
 
 type RepositoryHooksSectionProps = {
   repo: Repo
@@ -154,6 +156,7 @@ export function RepositoryHooksSection({
   onClearLegacyHooks,
   onUpdateSetupRunPolicy
 }: RepositoryHooksSectionProps): React.JSX.Element {
+  const settings = useAppStore((s) => s.settings)
   // Why: distinguish "file has unrecognised top-level keys" from "file is
   // genuinely malformed" so users see a helpful update prompt instead of a
   // confusing parse-error when a newer Orca version adds keys to `orca.yaml`.
@@ -192,8 +195,7 @@ export function RepositoryHooksSection({
     // Why: settings only edit the local override, but we still need to know
     // whether `orca.yaml` defines a shared default so the helper copy can
     // explain what happens when the override is blank.
-    void window.api.hooks
-      .readIssueCommand({ repoId })
+    void readRuntimeIssueCommand(settings, repoId)
       .then((result) => {
         if (cancelled) {
           return
@@ -215,18 +217,18 @@ export function RepositoryHooksSection({
       cancelled = true
       const draft = issueCommandDraftRef.current.trim()
       if (draft !== lastCommittedIssueCommandRef.current) {
-        void window.api.hooks.writeIssueCommand({ repoId, content: draft }).catch((err) => {
+        void writeRuntimeIssueCommand(settings, repoId, draft).catch((err) => {
           console.error('[RepositoryHooksSection] Failed to save issue command on unmount:', err)
         })
       }
     }
-  }, [repo.id])
+  }, [repo.id, settings])
 
   const commitIssueCommand = useCallback(async (): Promise<void> => {
     const trimmed = issueCommandDraft.trim()
     setIssueCommandDraft(trimmed)
     try {
-      await window.api.hooks.writeIssueCommand({ repoId: repo.id, content: trimmed })
+      await writeRuntimeIssueCommand(settings, repo.id, trimmed)
       lastCommittedIssueCommandRef.current = trimmed
       setIssueCommandSaveError(null)
     } catch (err) {
@@ -235,7 +237,7 @@ export function RepositoryHooksSection({
       setIssueCommandSaveError(message)
       toast.error(message)
     }
-  }, [issueCommandDraft, repo.id])
+  }, [issueCommandDraft, repo.id, settings])
 
   return (
     <section className="space-y-6">

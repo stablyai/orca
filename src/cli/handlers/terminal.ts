@@ -116,6 +116,12 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatTerminalRename)
   },
   'terminal create': async ({ flags, client, cwd, json }) => {
+    if (client.isRemote && !flags.has('worktree')) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Remote terminal create requires --worktree because the client cwd cannot identify a server worktree.'
+      )
+    }
     const result = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
       worktree: await getBrowserWorktreeSelector(flags, cwd, client),
       command: getOptionalStringFlag(flags, 'command'),

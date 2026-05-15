@@ -234,7 +234,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     // Why: pin commonjs so a future Node default flip doesn't silently
     // break `require('node-pty')`.
     expect(parsed.type).toBe('commonjs')
-    expect(parsed.dependencies).toEqual({ '@parcel/watcher': '*', 'node-pty': '*' })
+    expect(parsed.dependencies).toEqual({ '@parcel/watcher': '2.5.6', 'node-pty': '1.1.0' })
 
     const execCalls = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
     const npmInstallIdx = execCalls.findIndex(

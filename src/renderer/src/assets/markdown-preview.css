@@ -5,6 +5,17 @@
   padding: 24px 32px;
   font-size: inherit;
   line-height: 1.7;
+  min-width: 0;
+  flex: 1;
+}
+
+.markdown-preview-shell {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  height: 100%;
+  min-width: 0;
+  container-type: inline-size;
 }
 
 .markdown-preview:focus-visible {
@@ -81,6 +92,113 @@
   color: var(--foreground);
 }
 
+.markdown-toc-panel {
+  display: flex;
+  width: 240px;
+  min-width: 200px;
+  max-width: 30%;
+  flex-shrink: 0;
+  flex-direction: column;
+  border-left: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--background) 88%, var(--editor-surface));
+}
+
+.markdown-toc-header {
+  display: flex;
+  min-height: 40px;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  padding: 0 10px 0 12px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.markdown-toc-header > svg,
+.markdown-toc-header > button {
+  flex-shrink: 0;
+}
+
+.markdown-toc-header > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.markdown-toc-list {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.markdown-toc-row {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding-top: 6px;
+  padding-right: 8px;
+  padding-bottom: 6px;
+  color: var(--foreground);
+  font-size: 12px;
+  line-height: 1.25;
+  text-align: left;
+}
+
+.markdown-toc-row:hover {
+  background: var(--accent);
+}
+
+.markdown-toc-level {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.markdown-toc-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.markdown-toc-empty {
+  padding: 8px 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .markdown-toc-panel {
+    width: 200px;
+    max-width: 42%;
+  }
+}
+
+@container (max-width: 560px) {
+  .markdown-toc-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    width: min(240px, 72cqw);
+    min-width: 0;
+    max-width: calc(100cqw - 44px);
+    box-shadow: -10px 0 24px rgb(0 0 0 / 0.14);
+  }
+}
+
 .markdown-preview-search-match {
   padding: 0;
   border-radius: 2px;
@@ -90,6 +208,64 @@
 
 .markdown-preview-search-match[data-active] {
   background: color-mix(in srgb, #fb923c 60%, transparent);
+}
+
+.markdown-annotation-block {
+  position: relative;
+}
+
+.markdown-annotation-block:hover > .markdown-annotation-controls > .markdown-annotation-add,
+.markdown-annotation-block:focus-within > .markdown-annotation-controls > .markdown-annotation-add,
+li:hover > .markdown-annotation-controls > .markdown-annotation-add,
+li:focus-within > .markdown-annotation-controls > .markdown-annotation-add {
+  opacity: 1;
+}
+
+.markdown-annotation-controls {
+  margin-top: 6px;
+}
+
+.markdown-annotation-add {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-radius: 4px;
+  background: var(--background);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 100ms ease,
+    color 100ms ease,
+    background-color 100ms ease;
+}
+
+.markdown-annotation-add:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.markdown-annotation-add:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+  opacity: 1;
+}
+
+.markdown-annotation-composer,
+.markdown-annotation-card {
+  max-width: 520px;
+  margin-top: 6px;
+}
+
+.markdown-annotation-composer {
+  border: 1px solid color-mix(in srgb, var(--foreground) 18%, transparent);
+  border-radius: 6px;
+  background: var(--editor-surface);
+  padding: 8px;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 12%, transparent);
 }
 
 .markdown-body h1,

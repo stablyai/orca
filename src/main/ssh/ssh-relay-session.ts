@@ -41,6 +41,7 @@ import {
   getSshFilesystemProvider
 } from '../providers/ssh-filesystem-dispatch'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
+import { notifyRemoteWorkspaceHandlers } from '../ipc/remote-workspace-events'
 import { PortScanner } from './ssh-port-scanner'
 import type { SshPortForwardManager } from './ssh-port-forward'
 import type { SshConnection } from './ssh-connection'
@@ -74,6 +75,7 @@ export class SshRelaySession {
     | null = null
   private _onReady: ((targetId: string) => void) | null = null
   private portScanner: PortScanner | null = null
+  private currentConnection: SshConnection | null = null
 
   constructor(
     readonly targetId: string,
@@ -113,6 +115,13 @@ export class SshRelaySession {
     return (this._state as RelaySessionState) === 'disposed'
   }
 
+  private requireReadyConnection(): SshConnection {
+    if (!this.currentConnection) {
+      throw new Error('SSH connection is not active')
+    }
+    return this.currentConnection
+  }
+
   getMux(): SshChannelMultiplexer | null {
     return this.mux
   }
@@ -129,6 +138,7 @@ export class SshRelaySession {
       throw new Error(`Cannot establish relay session in state: ${this._state}`)
     }
     this._state = 'deploying'
+    this.currentConnection = conn
 
     try {
       const { transport } = await deployAndLaunchRelay(
@@ -239,6 +249,7 @@ export class SshRelaySession {
     this.abortController = abortController
 
     this._state = 'reconnecting'
+    this.currentConnection = conn
 
     // Why: stop scanning before teardownProviders so the polling timer doesn't
     // fire against a disposed multiplexer.
@@ -371,6 +382,7 @@ export class SshRelaySession {
     this.broadcastEmptyLists()
     this.teardownProviders('shutdown')
     this.store.markSshRemotePtyLeases(this.targetId, 'terminated')
+    this.currentConnection = null
     this._state = 'disposed'
   }
 
@@ -386,6 +398,7 @@ export class SshRelaySession {
     // clearing PTY ownership needed for reattach.
     this.teardownProviders('connection_lost')
     this.store.markSshRemotePtyLeases(this.targetId, 'detached')
+    this.currentConnection = null
     this._state = 'disposed'
   }
 
@@ -427,7 +440,9 @@ export class SshRelaySession {
     const ptyProvider = new SshPtyProvider(this.targetId, mux)
     registerSshPtyProvider(this.targetId, ptyProvider)
 
-    const fsProvider = new SshFilesystemProvider(this.targetId, mux)
+    const fsProvider = new SshFilesystemProvider(this.targetId, mux, () =>
+      this.requireReadyConnection().sftp()
+    )
     registerSshFilesystemProvider(this.targetId, fsProvider)
 
     const gitProvider = new SshGitProvider(this.targetId, mux)
@@ -435,6 +450,7 @@ export class SshRelaySession {
 
     this.wireUpPtyEvents(ptyProvider)
     this.wireUpAgentHookEvents(mux)
+    this.wireUpRemoteWorkspaceEvents(mux)
     return true
   }
 
@@ -477,6 +493,12 @@ export class SshRelaySession {
         }`
       )
     }
+  }
+
+  private wireUpRemoteWorkspaceEvents(mux: SshChannelMultiplexer): void {
+    mux.onNotification((method, params) => {
+      notifyRemoteWorkspaceHandlers(this.targetId, method, params)
+    })
   }
 
   // Why: route the relay's `agent.hook` JSON-RPC notification into Orca's

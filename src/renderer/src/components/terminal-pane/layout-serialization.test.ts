@@ -1,3 +1,5 @@
+/* oxlint-disable max-lines -- Why: this test keeps split layout replay fixtures together so
+ * stable leaf-id migration regressions are visible in one focused suite. */
 import { describe, expect, it, beforeAll } from 'vitest'
 import type { TerminalPaneLayoutNode } from '../../../../shared/types'
 
@@ -33,7 +35,6 @@ beforeAll(() => {
 })
 
 import {
-  paneLeafId,
   buildFontFamily,
   serializePaneTree,
   serializeTerminalLayout,
@@ -55,22 +56,10 @@ function mockElement(opts: {
   return new MockHTMLElement(opts) as unknown as HTMLElement
 }
 
-// ---------------------------------------------------------------------------
-// paneLeafId
-// ---------------------------------------------------------------------------
-describe('paneLeafId', () => {
-  it('returns "pane:0" for paneId 0', () => {
-    expect(paneLeafId(0)).toBe('pane:0')
-  })
-
-  it('returns "pane:1" for paneId 1', () => {
-    expect(paneLeafId(1)).toBe('pane:1')
-  })
-
-  it('returns "pane:42" for paneId 42', () => {
-    expect(paneLeafId(42)).toBe('pane:42')
-  })
-})
+const LEAF_1 = '11111111-1111-4111-8111-111111111111'
+const LEAF_2 = '22222222-2222-4222-8222-222222222222'
+const LEAF_3 = '33333333-3333-4333-8333-333333333333'
+const LEAF_4 = '44444444-4444-4444-8444-444444444444'
 
 // ---------------------------------------------------------------------------
 // buildFontFamily
@@ -132,12 +121,17 @@ describe('serializePaneTree', () => {
   })
 
   it('returns a leaf node for a single pane', () => {
-    const pane = mockElement({ classList: ['pane'], dataset: { paneId: '1' } })
-    expect(serializePaneTree(pane)).toEqual({ type: 'leaf', leafId: 'pane:1' })
+    const pane = mockElement({ classList: ['pane'], dataset: { paneId: '1', leafId: LEAF_1 } })
+    expect(serializePaneTree(pane)).toEqual({ type: 'leaf', leafId: LEAF_1 })
   })
 
-  it('returns null for a pane with non-numeric paneId', () => {
+  it('returns null for a pane without a UUID leaf id', () => {
     const pane = mockElement({ classList: ['pane'], dataset: { paneId: 'abc' } })
+    expect(serializePaneTree(pane)).toBeNull()
+  })
+
+  it('returns null for a pane with a legacy leaf id', () => {
+    const pane = mockElement({ classList: ['pane'], dataset: { paneId: '1', leafId: 'pane:1' } })
     expect(serializePaneTree(pane)).toBeNull()
   })
 
@@ -147,21 +141,33 @@ describe('serializePaneTree', () => {
   })
 
   it('returns a vertical split node with two pane children', () => {
-    const first = new MockHTMLElement({ classList: ['pane'], dataset: { paneId: '1' } })
-    const second = new MockHTMLElement({ classList: ['pane'], dataset: { paneId: '2' } })
+    const first = new MockHTMLElement({
+      classList: ['pane'],
+      dataset: { paneId: '1', leafId: LEAF_1 }
+    })
+    const second = new MockHTMLElement({
+      classList: ['pane'],
+      dataset: { paneId: '2', leafId: LEAF_2 }
+    })
     const split = mockElement({ classList: ['pane-split'], children: [first, second] })
 
     expect(serializePaneTree(split)).toEqual({
       type: 'split',
       direction: 'vertical',
-      first: { type: 'leaf', leafId: 'pane:1' },
-      second: { type: 'leaf', leafId: 'pane:2' }
+      first: { type: 'leaf', leafId: LEAF_1 },
+      second: { type: 'leaf', leafId: LEAF_2 }
     })
   })
 
   it('returns horizontal direction when split has is-horizontal class', () => {
-    const first = new MockHTMLElement({ classList: ['pane'], dataset: { paneId: '3' } })
-    const second = new MockHTMLElement({ classList: ['pane'], dataset: { paneId: '4' } })
+    const first = new MockHTMLElement({
+      classList: ['pane'],
+      dataset: { paneId: '3', leafId: LEAF_3 }
+    })
+    const second = new MockHTMLElement({
+      classList: ['pane'],
+      dataset: { paneId: '4', leafId: LEAF_4 }
+    })
     const split = mockElement({
       classList: ['pane-split', 'is-horizontal'],
       children: [first, second]
@@ -170,20 +176,20 @@ describe('serializePaneTree', () => {
     expect(serializePaneTree(split)).toEqual({
       type: 'split',
       direction: 'horizontal',
-      first: { type: 'leaf', leafId: 'pane:3' },
-      second: { type: 'leaf', leafId: 'pane:4' }
+      first: { type: 'leaf', leafId: LEAF_3 },
+      second: { type: 'leaf', leafId: LEAF_4 }
     })
   })
 
   it('captures flex ratio when children have unequal flex', () => {
     const first = new MockHTMLElement({
       classList: ['pane'],
-      dataset: { paneId: '1' },
+      dataset: { paneId: '1', leafId: LEAF_1 },
       style: { flex: '3' }
     })
     const second = new MockHTMLElement({
       classList: ['pane'],
-      dataset: { paneId: '2' },
+      dataset: { paneId: '2', leafId: LEAF_2 },
       style: { flex: '1' }
     })
     const split = mockElement({ classList: ['pane-split'], children: [first, second] })
@@ -192,8 +198,8 @@ describe('serializePaneTree', () => {
     expect(result).toEqual({
       type: 'split',
       direction: 'vertical',
-      first: { type: 'leaf', leafId: 'pane:1' },
-      second: { type: 'leaf', leafId: 'pane:2' },
+      first: { type: 'leaf', leafId: LEAF_1 },
+      second: { type: 'leaf', leafId: LEAF_2 },
       ratio: 0.75
     })
   })
@@ -201,12 +207,12 @@ describe('serializePaneTree', () => {
   it('omits ratio when flex values are equal (both 1)', () => {
     const first = new MockHTMLElement({
       classList: ['pane'],
-      dataset: { paneId: '1' },
+      dataset: { paneId: '1', leafId: LEAF_1 },
       style: { flex: '1' }
     })
     const second = new MockHTMLElement({
       classList: ['pane'],
-      dataset: { paneId: '2' },
+      dataset: { paneId: '2', leafId: LEAF_2 },
       style: { flex: '1' }
     })
     const split = mockElement({ classList: ['pane-split'], children: [first, second] })
@@ -216,9 +222,18 @@ describe('serializePaneTree', () => {
   })
 
   it('handles nested splits recursively', () => {
-    const leaf1 = new MockHTMLElement({ classList: ['pane'], dataset: { paneId: '1' } })
-    const leaf2 = new MockHTMLElement({ classList: ['pane'], dataset: { paneId: '2' } })
-    const leaf3 = new MockHTMLElement({ classList: ['pane'], dataset: { paneId: '3' } })
+    const leaf1 = new MockHTMLElement({
+      classList: ['pane'],
+      dataset: { paneId: '1', leafId: LEAF_1 }
+    })
+    const leaf2 = new MockHTMLElement({
+      classList: ['pane'],
+      dataset: { paneId: '2', leafId: LEAF_2 }
+    })
+    const leaf3 = new MockHTMLElement({
+      classList: ['pane'],
+      dataset: { paneId: '3', leafId: LEAF_3 }
+    })
 
     const innerSplit = new MockHTMLElement({
       classList: ['pane-split', 'is-horizontal'],
@@ -232,12 +247,12 @@ describe('serializePaneTree', () => {
     expect(serializePaneTree(outerSplit)).toEqual({
       type: 'split',
       direction: 'vertical',
-      first: { type: 'leaf', leafId: 'pane:1' },
+      first: { type: 'leaf', leafId: LEAF_1 },
       second: {
         type: 'split',
         direction: 'horizontal',
-        first: { type: 'leaf', leafId: 'pane:2' },
-        second: { type: 'leaf', leafId: 'pane:3' }
+        first: { type: 'leaf', leafId: LEAF_2 },
+        second: { type: 'leaf', leafId: LEAF_3 }
       }
     })
   })
@@ -257,7 +272,51 @@ describe('serializeTerminalLayout', () => {
     const result = serializeTerminalLayout(root, 5, null)
     expect(result).toEqual({
       root: null,
-      activeLeafId: 'pane:5',
+      activeLeafId: null,
+      expandedLeafId: null
+    })
+  })
+
+  it('uses UUID leaf ids from the live pane map for active and expanded panes', () => {
+    const child = new MockHTMLElement({
+      classList: ['pane'],
+      dataset: { paneId: '5', leafId: LEAF_1 }
+    })
+    const root = mockElement({ firstElementChild: child }) as unknown as HTMLDivElement
+    const result = serializeTerminalLayout(
+      root,
+      5,
+      6,
+      new Map([
+        [5, LEAF_1],
+        [6, LEAF_2]
+      ])
+    )
+    expect(result).toEqual({
+      root: { type: 'leaf', leafId: LEAF_1 },
+      activeLeafId: LEAF_1,
+      expandedLeafId: LEAF_2
+    })
+  })
+
+  it('does not serialize legacy active pane ids when the live map is missing UUIDs', () => {
+    const child = new MockHTMLElement({
+      classList: ['pane'],
+      dataset: { paneId: '5', leafId: LEAF_1 }
+    })
+    const root = mockElement({ firstElementChild: child }) as unknown as HTMLDivElement
+    const result = serializeTerminalLayout(
+      root,
+      5,
+      6,
+      new Map([
+        [5, 'pane:5'],
+        [6, 'pane:6']
+      ])
+    )
+    expect(result).toEqual({
+      root: { type: 'leaf', leafId: LEAF_1 },
+      activeLeafId: null,
       expandedLeafId: null
     })
   })

@@ -40,6 +40,14 @@ jobs:
           run_install: false
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y python3 python3-gi gir1.2-atspi-2.0 at-spi2-core xclip xdotool
+      # Why: pnpm's bundled node-gyp can ship gyp_main.py without execute
+      # permission on Linux runners; node-pty's install fallback then fails
+      # before this smoke job can exercise the native package.
+      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          npm install -g node-gyp@11.5.0
+          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
@@ -80,6 +88,12 @@ jobs:
         with:
           run_install: false
       - run: sudo apt-get update && sudo apt-get install -y build-essential python3 python3-gi gir1.2-atspi-2.0 gedit at-spi2-core xvfb xclip xdotool
+      # Why: keep scheduled Linux e2e on the same native install path as PR
+      # smoke and pr.yml's verify job.
+      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
+        run: |
+          npm install -g node-gyp@11.5.0
+          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify:computer-native
       - run: pnpm build:cli

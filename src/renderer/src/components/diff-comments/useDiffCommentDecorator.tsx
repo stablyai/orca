@@ -395,6 +395,7 @@ export function useDiffCommentDecorator({
       root.render(
         <DiffCommentCard
           lineNumber={comment.lineNumber}
+          startLine={comment.startLine}
           body={comment.body}
           onDelete={() => onDeleteCommentRef.current(comment.id)}
           onSubmitEdit={

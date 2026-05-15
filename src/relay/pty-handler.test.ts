@@ -284,6 +284,32 @@ describe('PtyHandler', () => {
     expect(mockKill).toHaveBeenCalledWith('SIGTERM')
   })
 
+  it('notifies pty.exit when graceful shutdown falls back to SIGKILL', async () => {
+    let onExitCb: ((evt: { exitCode: number }) => void) | undefined
+    const mockKill = vi.fn()
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      kill: mockKill,
+      onData: vi.fn(),
+      onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+        onExitCb = cb
+      })
+    })
+    const exits: { id: string; paneKey?: string }[] = []
+    handler.setExitListener((evt) => exits.push(evt))
+
+    await dispatcher.callRequest('pty.spawn', { env: { ORCA_PANE_KEY: 'tab-fallback:0' } })
+    await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
+    vi.advanceTimersByTime(5000)
+    onExitCb!({ exitCode: 137 })
+
+    expect(mockKill).toHaveBeenCalledWith('SIGTERM')
+    expect(mockKill).toHaveBeenCalledWith('SIGKILL')
+    expect(dispatcher.notify).toHaveBeenCalledWith('pty.exit', { id: 'pty-1', code: -1 })
+    expect(exits).toEqual([{ id: 'pty-1', paneKey: 'tab-fallback:0' }])
+    expect(handler.activePtyCount).toBe(0)
+  })
+
   it('kills PTY on shutdown with SIGKILL when immediate', async () => {
     const mockKill = vi.fn()
     mockPtySpawn.mockReturnValue({

@@ -16,6 +16,7 @@ const ALLOWED_GIT_SUBCOMMANDS = new Set([
   'remote',
   'symbolic-ref',
   'merge-base',
+  'diff',
   'ls-files',
   'for-each-ref',
   'config'
@@ -69,6 +70,15 @@ const REMOTE_WRITE_SUBCOMMANDS = new Set([
   'update'
 ])
 const SYMBOLIC_REF_WRITE_FLAGS = new Set(['-d', '--delete', '-m'])
+const DIFF_ALLOWED_FLAGS = new Set([
+  '--cached',
+  '--staged',
+  '--name-status',
+  '--patch',
+  '--minimal',
+  '--no-color',
+  '--no-ext-diff'
+])
 
 // Why: git accepts --flag=value compound syntax (e.g. --file=/etc/passwd),
 // which bypasses exact-match Set.has() checks. This helper catches both forms.
@@ -131,6 +141,18 @@ export function validateGitExecArgs(args: string[]): void {
     const positionalArgs = restArgs.filter((a) => !a.startsWith('-'))
     if (positionalArgs.length >= 2) {
       throw new Error('git symbolic-ref write operations are not allowed via exec')
+    }
+  }
+  if (subcommand === 'diff') {
+    // Why: SSH commit-message generation only needs read-only staged diffs.
+    // Keep this narrow so `git.exec` cannot become a general file reader via
+    // arbitrary revisions, pathspecs, or --no-index.
+    if (!restArgs.some((a) => a === '--cached' || a === '--staged')) {
+      throw new Error('git diff via exec is restricted to staged changes')
+    }
+    const unsupportedArg = restArgs.find((a) => !DIFF_ALLOWED_FLAGS.has(a))
+    if (unsupportedArg) {
+      throw new Error(`git diff flag not allowed via exec: ${unsupportedArg}`)
     }
   }
 }

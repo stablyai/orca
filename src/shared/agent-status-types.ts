@@ -61,7 +61,7 @@ export type AgentStatusEntry = {
    *  (tool/prompt pings reset updatedAt but not stateStartedAt). */
   stateStartedAt: number
   agentType?: AgentType
-  /** Composite key: `${tabId}:${paneId}` — matches the cacheTimerByKey convention. */
+  /** Composite key: `${tabId}:${leafId}` where leafId is a stable UUID layout leaf. */
   paneKey: string
   terminalTitle?: string
   /** Rolling log of previous states. Each entry records a state the agent was in
@@ -79,6 +79,18 @@ export type AgentStatusEntry = {
    *  cancelled it. Undefined while the agent is working or for non-Claude
    *  agents that don't surface this signal. */
   interrupted?: boolean
+}
+
+export type MigrationUnsupportedPtyEntry = {
+  ptyId: string
+  worktreeId?: string
+  tabId?: string
+  leafId?: string
+  /** Registry-backed UUID pane proof, when available. */
+  paneKey?: string
+  reason: 'legacy-numeric-pane-key'
+  source: 'local' | 'ssh'
+  updatedAt: number
 }
 
 // ─── Agent status payload shape (what hook receivers send via IPC) ──────────

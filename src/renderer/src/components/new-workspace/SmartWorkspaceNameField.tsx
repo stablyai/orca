@@ -159,7 +159,6 @@ export default function SmartWorkspaceNameField({
       searchLinearIssues: s.searchLinearIssues
     }))
   )
-
   const selectedRepo = useMemo(
     () => repos.find((repo) => repo.id === repoId) ?? null,
     [repoId, repos]
@@ -227,7 +226,7 @@ export default function SmartWorkspaceNameField({
   const shouldQueryLinear = mode === 'smart' || mode === 'linear'
 
   useEffect(() => {
-    if (!shouldQueryGithub || !selectedRepo?.path || selectedRepo.connectionId) {
+    if (!shouldQueryGithub || !selectedRepo?.path) {
       setGithubItems([])
       setGithubLoading(false)
       return
@@ -246,6 +245,7 @@ export default function SmartWorkspaceNameField({
             handledCrossRepoUrlRef.current = debouncedQuery.trim()
             const item = await window.api.gh.workItemByOwnerRepo({
               repoPath: selectedRepo.path,
+              repoId: selectedRepo.id,
               owner: directLink.slug.owner,
               repo: directLink.slug.repo,
               number: directLink.number,
@@ -282,12 +282,17 @@ export default function SmartWorkspaceNameField({
         directLink !== null
           ? window.api.gh.workItemByOwnerRepo({
               repoPath: selectedRepo.path,
+              repoId: selectedRepo.id,
               owner: directLink.slug.owner,
               repo: directLink.slug.repo,
               number: directLink.number,
               type: directLink.type
             })
-          : window.api.gh.workItem({ repoPath: selectedRepo.path, number: directNumber })
+          : window.api.gh.workItem({
+              repoPath: selectedRepo.path,
+              repoId: selectedRepo.id,
+              number: directNumber
+            })
       void request
         .then((item) => {
           if (!stale) {
@@ -311,7 +316,7 @@ export default function SmartWorkspaceNameField({
 
     const trimmed = normalizedGhQuery.query.trim()
     const query = trimmed ? normalizedGhQuery.query : ''
-    const cached = getCachedWorkItems(selectedRepo.path, RESULT_LIMIT, query)
+    const cached = getCachedWorkItems(selectedRepo.id, RESULT_LIMIT, query)
     if (cached) {
       setGithubItems(cached.slice(0, RESULT_LIMIT))
       setGithubLoading(false)
@@ -707,6 +712,7 @@ export default function SmartWorkspaceNameField({
       try {
         const item = await window.api.gh.workItemByOwnerRepo({
           repoPath: targetRepo.path,
+          repoId: targetRepo.id,
           owner: crossRepoPrompt.link.slug.owner,
           repo: crossRepoPrompt.link.slug.repo,
           number: crossRepoPrompt.link.number,
@@ -1169,19 +1175,16 @@ async function getRepoSlugCached(
   repo: RepoOption,
   cache: Map<string, RepoSlug | null>
 ): Promise<RepoSlug | null> {
-  if (cache.has(repo.id)) {
-    return cache.get(repo.id) ?? null
-  }
-  if (repo.connectionId) {
-    cache.set(repo.id, null)
-    return null
+  const cacheKey = repo.id
+  if (cache.has(cacheKey)) {
+    return cache.get(cacheKey) ?? null
   }
   try {
-    const slug = await window.api.gh.repoSlug({ repoPath: repo.path })
-    cache.set(repo.id, slug)
+    const slug = await window.api.gh.repoSlug({ repoPath: repo.path, repoId: repo.id })
+    cache.set(cacheKey, slug)
     return slug
   } catch {
-    cache.set(repo.id, null)
+    cache.set(cacheKey, null)
     return null
   }
 }

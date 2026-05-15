@@ -9,6 +9,8 @@ import { flushPendingEditorChange } from '@/components/editor/editor-pending-flu
 import { getConnectionId } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
+import { readRuntimeFileContent } from './runtime-file-client'
+import { settingsForRuntimeOwner } from './runtime-rpc-client'
 import {
   hashMarkdownContent,
   MOBILE_MARKDOWN_EDIT_MAX_BYTES,
@@ -238,8 +240,12 @@ async function readCurrentContent(
 
 async function readFileContent(file: OpenFile): Promise<string> {
   const connectionId = getConnectionId(file.worktreeId) ?? undefined
-  const result = (await window.api.fs.readFile({
+  const state = useAppStore.getState()
+  const result = (await readRuntimeFileContent({
+    settings: settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId),
     filePath: file.filePath,
+    relativePath: file.relativePath,
+    worktreeId: file.worktreeId,
     connectionId
   })) as FileContent
   if (result.isBinary) {

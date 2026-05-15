@@ -23,9 +23,15 @@ function getDevUserDataPath() {
     return path.join(process.env.HOME ?? '', 'Library', 'Application Support', 'orca-dev')
   }
   if (process.platform === 'win32') {
-    return path.join(process.env.APPDATA ?? path.join(process.env.USERPROFILE ?? '', 'AppData', 'Roaming'), 'orca-dev')
+    return path.join(
+      process.env.APPDATA ?? path.join(process.env.USERPROFILE ?? '', 'AppData', 'Roaming'),
+      'orca-dev'
+    )
   }
-  return path.join(process.env.XDG_CONFIG_HOME ?? path.join(process.env.HOME ?? '', '.config'), 'orca-dev')
+  return path.join(
+    process.env.XDG_CONFIG_HOME ?? path.join(process.env.HOME ?? '', '.config'),
+    'orca-dev'
+  )
 }
 
 function prepareDevCliWrapper() {
@@ -33,18 +39,19 @@ function prepareDevCliWrapper() {
   mkdirSync(binDir, { recursive: true })
   const userDataPath = getDevUserDataPath()
   const cliPath = path.join(repoRoot, 'out', 'cli', 'index.js')
+  const electronBin = getElectronExecutable()
 
   if (process.platform === 'win32') {
     writeFileSync(
       path.join(binDir, 'orca-dev.cmd'),
-      `@echo off\r\nset "ORCA_USER_DATA_PATH=${userDataPath}"\r\nnode "${cliPath}" %*\r\n`,
+      `@echo off\r\nset "ORCA_USER_DATA_PATH=${userDataPath}"\r\nset "ORCA_APP_EXECUTABLE=${electronBin}"\r\nset "ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT=1"\r\nnode "${cliPath}" %*\r\n`,
       'utf8'
     )
   } else {
     const wrapperPath = path.join(binDir, 'orca-dev')
     writeFileSync(
       wrapperPath,
-      `#!/usr/bin/env bash\nexport ORCA_USER_DATA_PATH=${JSON.stringify(userDataPath)}\nexec node ${JSON.stringify(cliPath)} "$@"\n`,
+      `#!/usr/bin/env bash\nexport ORCA_USER_DATA_PATH=${JSON.stringify(userDataPath)}\nexport ORCA_APP_EXECUTABLE=${JSON.stringify(electronBin)}\nexport ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT=1\nexec node ${JSON.stringify(cliPath)} "$@"\n`,
       'utf8'
     )
     chmodSync(wrapperPath, 0o755)
@@ -52,6 +59,13 @@ function prepareDevCliWrapper() {
 
   process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH ?? ''}`
   console.log(`[orca-dev] Prepared wrapper in ${binDir}`)
+}
+
+function getElectronExecutable() {
+  if (process.platform === 'win32') {
+    return path.join(repoRoot, 'node_modules', 'electron', 'dist', 'electron.exe')
+  }
+  return path.join(repoRoot, 'node_modules', '.bin', 'electron')
 }
 
 if (process.env.ORCA_SKIP_DEV_CLI_PREPARE !== '1') {
@@ -109,7 +123,10 @@ function parseDebugPortEnv(raw) {
 // space-separated form. `--remote-debugging-pipe` opts into pipe-based
 // debugging — don't fight the user's choice by injecting a port.
 const userPassedPort = forwardedRaw.some(
-  (a) => a === '--remote-debugging-port' || a.startsWith('--remote-debugging-port=') || a === '--remote-debugging-pipe'
+  (a) =>
+    a === '--remote-debugging-port' ||
+    a.startsWith('--remote-debugging-port=') ||
+    a === '--remote-debugging-pipe'
 )
 // Why: --help/--version exit immediately; binding a probe socket and printing
 // a debug-port line would be noise.
@@ -136,7 +153,9 @@ if (!userPassedPort && !isHelpOrVersion) {
     // resolve to ::1 on IPv6-first hosts).
     console.error(`[orca-dev] Remote debugging on http://127.0.0.1:${port}`)
   } else {
-    console.error('[orca-dev] No free debug port found in sweep; starting without --remote-debugging-port.')
+    console.error(
+      '[orca-dev] No free debug port found in sweep; starting without --remote-debugging-port.'
+    )
   }
 }
 const forwardedArgs = ['dev', ...forwardedRaw, ...forwardedExtras]

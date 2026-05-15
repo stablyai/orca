@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getTaskPresetQuery, PER_REPO_FETCH_LIMIT } from '@/lib/new-workspace'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 
 const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
 
@@ -74,6 +75,15 @@ const SidebarNav = React.memo(function SidebarNav() {
         continue
       }
       if ((s.acknowledgedAgentsByPaneKey[paneKey] ?? 0) < retained.entry.stateStartedAt) {
+        count += 1
+      }
+    }
+    for (const unsupported of Object.values(s.migrationUnsupportedByPtyId)) {
+      const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
+      if (!entry) {
+        continue
+      }
+      if ((s.acknowledgedAgentsByPaneKey[entry.paneKey] ?? 0) < entry.stateStartedAt) {
         count += 1
       }
     }

@@ -11,6 +11,8 @@ import type {
   SearchOptions,
   SearchResult
 } from '../../shared/types'
+import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
+import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 
 // ─── PTY Provider ───────────────────────────────────────────────────
 
@@ -118,15 +120,22 @@ export type IFilesystemProvider = {
   readDir(dirPath: string): Promise<DirEntry[]>
   readFile(filePath: string): Promise<FileReadResult>
   writeFile(filePath: string, content: string): Promise<void>
+  writeFileBase64(filePath: string, contentBase64: string): Promise<void>
+  writeFileBase64Chunk(filePath: string, contentBase64: string, append: boolean): Promise<void>
   stat(filePath: string): Promise<FileStat>
   deletePath(targetPath: string, recursive?: boolean): Promise<void>
   createFile(filePath: string): Promise<void>
   createDir(dirPath: string): Promise<void>
+  createDirNoClobber(dirPath: string): Promise<void>
   rename(oldPath: string, newPath: string): Promise<void>
   copy(source: string, destination: string): Promise<void>
   realpath(filePath: string): Promise<string>
   search(opts: SearchOptions): Promise<SearchResult>
   listFiles(rootPath: string, options?: { excludePaths?: string[] }): Promise<string[]>
+  scanWorkspaceSpace?(
+    rootPath: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<WorkspaceSpaceDirectoryScanResult>
   watch(rootPath: string, callback: (events: FsChangeEvent[]) => void): Promise<() => void>
 }
 
@@ -135,6 +144,7 @@ export type IFilesystemProvider = {
 export type IGitProvider = {
   getStatus(worktreePath: string): Promise<GitStatusResult>
   commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>
+  getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null>
   getDiff(
     worktreePath: string,
     filePath: string,
@@ -158,7 +168,7 @@ export type IGitProvider = {
     baseRef: string,
     options?: { includePatch?: boolean; filePath?: string; oldPath?: string }
   ): Promise<GitDiffResult[]>
-  listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]>
+  listWorktrees(repoPath: string, options?: { signal?: AbortSignal }): Promise<GitWorktreeInfo[]>
   addWorktree(
     repoPath: string,
     branchName: string,

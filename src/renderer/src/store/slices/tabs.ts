@@ -27,6 +27,7 @@ import {
 } from './tab-group-state'
 import { buildHydratedTabState } from './tabs-hydration'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
 
@@ -60,9 +61,7 @@ export type TabsSlice = {
     tabId: string
   ) => { closedTabId: string; wasLastTab: boolean; worktreeId: string } | null
   reorderUnifiedTabs: (groupId: string, tabIds: string[]) => void
-  setTabEntityId: (tabId: string, entityId: string) => void
   setTabLabel: (tabId: string, label: string) => void
-  setTabDirty: (tabId: string, isDirty: boolean) => void
   setTabCustomLabel: (tabId: string, label: string | null) => void
   setUnifiedTabColor: (tabId: string, color: string | null) => void
   pinTab: (tabId: string) => void
@@ -229,13 +228,7 @@ function collapseGroupLayout(
 }
 
 function toVisibleTabType(contentType: TabContentType): WorkspaceVisibleTabType {
-  return contentType === 'browser'
-    ? 'browser'
-    : contentType === 'terminal'
-      ? 'terminal'
-      : contentType === 'notes'
-        ? 'notes'
-        : 'editor'
+  return contentType === 'browser' ? 'browser' : contentType === 'terminal' ? 'terminal' : 'editor'
 }
 
 function deriveActiveSurfaceForWorktree(
@@ -402,7 +395,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
   layoutByWorktree: {},
 
   createUnifiedTab: (worktreeId, contentType, init) => {
-    const id = init?.id ?? globalThis.crypto.randomUUID()
+    const id = init?.id ?? createBrowserUuid()
     let created!: Tab
     set((state) => {
       const { group, groupsByWorktree, activeGroupIdByWorktree } = ensureGroup(
@@ -438,8 +431,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         sortOrder: nextOrder.length,
         createdAt: Date.now(),
         isPreview: init?.isPreview,
-        isPinned: init?.isPinned,
-        isDirty: false
+        isPinned: init?.isPinned
       }
 
       nextOrder = dedupeTabOrder([...nextOrder, created.id])
@@ -737,12 +729,6 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
   setTabLabel: (tabId, label) =>
     set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { label }) ?? {}),
 
-  setTabEntityId: (tabId, entityId) =>
-    set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { entityId }) ?? {}),
-
-  setTabDirty: (tabId, isDirty) =>
-    set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { isDirty }) ?? {}),
-
   setTabCustomLabel: (tabId, label) =>
     set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { customLabel: label }) ?? {}),
 
@@ -812,7 +798,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       return get().activeGroupIdByWorktree[worktreeId] ?? existingGroups[0].id
     }
 
-    const groupId = globalThis.crypto.randomUUID()
+    const groupId = createBrowserUuid()
     set((state) => ({
       // Why: a freshly selected worktree can legitimately have zero tabs, but
       // split-group affordances still need a canonical root group so new tabs
@@ -943,7 +929,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
   },
 
   createEmptySplitGroup: (worktreeId, sourceGroupId, direction) => {
-    const newGroupId = globalThis.crypto.randomUUID()
+    const newGroupId = createBrowserUuid()
     const newGroup: TabGroup = {
       id: newGroupId,
       worktreeId,
@@ -1091,7 +1077,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       let resolvedTargetGroupId = target.groupId
 
       if (target.splitDirection) {
-        const newGroupId = globalThis.crypto.randomUUID()
+        const newGroupId = createBrowserUuid()
         const newGroup: TabGroup = {
           id: newGroupId,
           worktreeId,
@@ -1373,12 +1359,6 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       }
       if (tab.contentType === 'browser') {
         return liveBrowserIds.has(tab.entityId)
-      }
-      if (tab.contentType === 'notes') {
-        // Why: project notes are backed by the project notes store, not by
-        // openFiles. Treating them as editor-backed files makes reconcile
-        // prune valid notes tabs and can leave the workspace looking empty.
-        return true
       }
       return liveEditorIds.has(tab.entityId)
     }

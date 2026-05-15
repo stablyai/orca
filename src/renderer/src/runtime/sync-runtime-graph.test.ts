@@ -25,11 +25,12 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
 // Why: the comparator at `runtimeMobileSessionSyncKeysEqual` checks
 // `terminalLayoutsByTabId`, `runtimePaneTitlesByTabId`, `groupsByWorktree`,
 // `activeGroupIdByWorktree`, `unifiedTabsByWorktree`, `tabBarOrderByWorktree`,
-// and `activeFileIdByWorktree` by reference. `makeState`'s defaults allocate
-// fresh `{}` for each, so two unrelated `makeState({...})` calls trivially
-// diverge. Tests that want to isolate a single field must share every other
-// reference-checked map between the two states; this factory produces one
-// `Partial<AppState>` whose fields can be spread into both `makeState` calls.
+// and `activeFileIdByWorktree` by reference, and checks `activeTabId` by scalar
+// equality. `makeState`'s defaults allocate fresh `{}` for each map, so two
+// unrelated `makeState({...})` calls trivially diverge. Tests that want to
+// isolate a single field must share every other reference-checked map between
+// the two states; this factory produces one `Partial<AppState>` whose fields
+// can be spread into both `makeState` calls.
 function makeSharedOverrides(): Partial<AppState> {
   return {
     tabsByWorktree: {},

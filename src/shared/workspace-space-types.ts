@@ -61,3 +61,28 @@ export type WorkspaceSpaceAnalysis = {
   repos: WorkspaceSpaceRepoSummary[]
   worktrees: WorkspaceSpaceWorktree[]
 }
+
+export type WorkspaceSpaceAnalyzeResult =
+  | { ok: true; analysis: WorkspaceSpaceAnalysis }
+  | { ok: false; cancelled: true }
+
+export type WorkspaceSpaceDirectoryScanResult = {
+  sizeBytes: number
+  skippedEntryCount: number
+  topLevelItems: WorkspaceSpaceItem[]
+  omittedTopLevelItemCount: number
+  omittedTopLevelSizeBytes: number
+}
+
+export type WorkspaceSpaceScanProgress = {
+  scanId: string
+  state: 'running' | 'cancelling'
+  startedAt: number
+  updatedAt: number
+  totalRepoCount: number
+  scannedRepoCount: number
+  totalWorktreeCount: number
+  scannedWorktreeCount: number
+  currentRepoDisplayName: string | null
+  currentWorktreeDisplayName: string | null
+}

@@ -18,6 +18,7 @@ const {
   getDiffMock,
   getBranchCompareMock,
   getBranchDiffMock,
+  getStagedCommitContextMock,
   stageFileMock,
   bulkStageFilesMock,
   unstageFileMock,
@@ -25,6 +26,9 @@ const {
   bulkDiscardChangesMock,
   discardChangesMock,
   listWorktreesMock,
+  resolveCommitMessageSettingsMock,
+  generateCommitMessageFromContextMock,
+  cancelGenerateCommitMessageLocalMock,
   getSshFilesystemProviderMock,
   getSshGitProviderMock
 } = vi.hoisted(() => ({
@@ -42,6 +46,7 @@ const {
   getDiffMock: vi.fn(),
   getBranchCompareMock: vi.fn(),
   getBranchDiffMock: vi.fn(),
+  getStagedCommitContextMock: vi.fn(),
   stageFileMock: vi.fn(),
   bulkStageFilesMock: vi.fn(),
   unstageFileMock: vi.fn(),
@@ -49,6 +54,9 @@ const {
   bulkDiscardChangesMock: vi.fn(),
   discardChangesMock: vi.fn(),
   listWorktreesMock: vi.fn(),
+  resolveCommitMessageSettingsMock: vi.fn(),
+  generateCommitMessageFromContextMock: vi.fn(),
+  cancelGenerateCommitMessageLocalMock: vi.fn(),
   getSshFilesystemProviderMock: vi.fn(),
   getSshGitProviderMock: vi.fn()
 }))
@@ -78,6 +86,7 @@ vi.mock('../git/status', () => ({
   getDiff: getDiffMock,
   getBranchCompare: getBranchCompareMock,
   getBranchDiff: getBranchDiffMock,
+  getStagedCommitContext: getStagedCommitContextMock,
   stageFile: stageFileMock,
   bulkStageFiles: bulkStageFilesMock,
   unstageFile: unstageFileMock,
@@ -96,6 +105,12 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock
+}))
+
+vi.mock('../text-generation/commit-message-text-generation', () => ({
+  resolveCommitMessageSettings: resolveCommitMessageSettingsMock,
+  generateCommitMessageFromContext: generateCommitMessageFromContextMock,
+  cancelGenerateCommitMessageLocal: cancelGenerateCommitMessageLocalMock
 }))
 
 import { registerFilesystemHandlers } from './filesystem'
@@ -161,6 +176,7 @@ describe('registerFilesystemHandlers', () => {
       getDiffMock,
       getBranchCompareMock,
       getBranchDiffMock,
+      getStagedCommitContextMock,
       stageFileMock,
       bulkStageFilesMock,
       unstageFileMock,
@@ -168,6 +184,9 @@ describe('registerFilesystemHandlers', () => {
       bulkDiscardChangesMock,
       discardChangesMock,
       listWorktreesMock,
+      resolveCommitMessageSettingsMock,
+      generateCommitMessageFromContextMock,
+      cancelGenerateCommitMessageLocalMock,
       getSshFilesystemProviderMock,
       getSshGitProviderMock
     ]) {
@@ -718,6 +737,294 @@ describe('registerFilesystemHandlers', () => {
         message: 'feat: ship commit'
       })
     ).resolves.toEqual({ success: false, error: 'hook failed' })
+  })
+
+  it('generates a local commit message from main-process staged context', async () => {
+    const context = {
+      branch: 'feature/ai',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const params = { agentId: 'codex', model: 'gpt-5.4-mini', thinkingLevel: 'low' }
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getStagedCommitContextMock.mockResolvedValue(context)
+    generateCommitMessageFromContextMock.mockResolvedValue({
+      success: true,
+      message: 'Update README'
+    })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:generateCommitMessage')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH
+      })
+    ).resolves.toEqual({ success: true, message: 'Update README' })
+
+    expect(getStagedCommitContextMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH)
+    expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(context, params, {
+      kind: 'local',
+      cwd: WORKTREE_FEATURE_PATH
+    })
+  })
+
+  it('prepares the selected Codex account home before local generation', async () => {
+    const context = {
+      branch: 'feature/ai',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const params = { agentId: 'codex', model: 'gpt-5.4-mini', thinkingLevel: 'low' }
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getStagedCommitContextMock.mockResolvedValue(context)
+    generateCommitMessageFromContextMock.mockResolvedValue({
+      success: true,
+      message: 'Update README'
+    })
+
+    registerFilesystemHandlers(store as never, {
+      prepareForCodexLaunch: () => '/managed/codex-home'
+    })
+
+    await handlers.get('git:generateCommitMessage')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH
+    })
+
+    expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(
+      context,
+      params,
+      expect.objectContaining({
+        kind: 'local',
+        cwd: WORKTREE_FEATURE_PATH,
+        env: expect.objectContaining({ CODEX_HOME: '/managed/codex-home' })
+      })
+    )
+  })
+
+  it('preserves the inherited Codex environment when no managed account is selected', async () => {
+    const previousCodexHome = process.env.CODEX_HOME
+    process.env.CODEX_HOME = '/system/codex-home'
+    const context = {
+      branch: 'feature/ai',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const params = { agentId: 'codex', model: 'gpt-5.4-mini', thinkingLevel: 'low' }
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getStagedCommitContextMock.mockResolvedValue(context)
+    generateCommitMessageFromContextMock.mockResolvedValue({
+      success: true,
+      message: 'Update README'
+    })
+
+    try {
+      registerFilesystemHandlers(store as never, {
+        prepareForCodexLaunch: () => null
+      })
+
+      await handlers.get('git:generateCommitMessage')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH
+      })
+
+      expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(context, params, {
+        kind: 'local',
+        cwd: WORKTREE_FEATURE_PATH
+      })
+    } finally {
+      if (previousCodexHome === undefined) {
+        delete process.env.CODEX_HOME
+      } else {
+        process.env.CODEX_HOME = previousCodexHome
+      }
+    }
+  })
+
+  it('returns a sanitized error when local agent account preparation fails', async () => {
+    const context = {
+      branch: 'feature/ai',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const params = { agentId: 'codex', model: 'gpt-5.4-mini', thinkingLevel: 'low' }
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getStagedCommitContextMock.mockResolvedValue(context)
+
+    registerFilesystemHandlers(store as never, {
+      prepareForCodexLaunch: () => {
+        throw new Error('failed to read /Users/alice/.codex/auth.json')
+      }
+    })
+
+    await expect(
+      handlers.get('git:generateCommitMessage')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH
+      })
+    ).resolves.toEqual({
+      success: false,
+      error: 'Failed to prepare the selected agent account for commit message generation.'
+    })
+    expect(generateCommitMessageFromContextMock).not.toHaveBeenCalled()
+  })
+
+  it('prepares the selected Claude auth environment before local generation', async () => {
+    const previousAnthropicApiKey = process.env.ANTHROPIC_API_KEY
+    process.env.ANTHROPIC_API_KEY = 'do-not-leak-managed-auth-conflict'
+    const context = {
+      branch: 'feature/ai',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const params = { agentId: 'claude', model: 'claude-haiku-4-5' }
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getStagedCommitContextMock.mockResolvedValue(context)
+    generateCommitMessageFromContextMock.mockResolvedValue({
+      success: true,
+      message: 'Update README'
+    })
+
+    try {
+      registerFilesystemHandlers(store as never, {
+        prepareForClaudeLaunch: async () => ({
+          configDir: '/managed/claude',
+          envPatch: { CLAUDE_CONFIG_DIR: '/managed/claude' },
+          stripAuthEnv: true,
+          provenance: 'managed:account-1'
+        })
+      })
+
+      await handlers.get('git:generateCommitMessage')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH
+      })
+
+      const target = generateCommitMessageFromContextMock.mock.calls[0]?.[2] as
+        | { env?: NodeJS.ProcessEnv }
+        | undefined
+      expect(target?.env).toEqual(
+        expect.objectContaining({
+          CLAUDE_CONFIG_DIR: '/managed/claude'
+        })
+      )
+      expect(target?.env?.ANTHROPIC_API_KEY).toBeUndefined()
+    } finally {
+      if (previousAnthropicApiKey === undefined) {
+        delete process.env.ANTHROPIC_API_KEY
+      } else {
+        process.env.ANTHROPIC_API_KEY = previousAnthropicApiKey
+      }
+    }
+  })
+
+  it('generates an SSH commit message using remote staged context and relay execution', async () => {
+    const context = {
+      branch: 'main',
+      stagedSummary: 'A\tremote.txt',
+      stagedPatch: '+remote'
+    }
+    const params = { agentId: 'custom', model: '', customAgentCommand: 'agent' }
+    const executeCommitMessagePlan = vi.fn()
+    const prepareForCodexLaunch = vi.fn(() => '/managed/codex-home')
+    const prepareForClaudeLaunch = vi.fn()
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getSshGitProviderMock.mockReturnValue({
+      getStagedCommitContext: vi.fn().mockResolvedValue(context),
+      executeCommitMessagePlan
+    })
+    generateCommitMessageFromContextMock.mockResolvedValue({
+      success: true,
+      message: 'Add remote file'
+    })
+
+    registerFilesystemHandlers(store as never, {
+      prepareForCodexLaunch,
+      prepareForClaudeLaunch
+    })
+
+    await expect(
+      handlers.get('git:generateCommitMessage')!(null, {
+        worktreePath: '/remote/repo',
+        connectionId: 'conn-1'
+      })
+    ).resolves.toEqual({ success: true, message: 'Add remote file' })
+
+    expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(
+      context,
+      params,
+      expect.objectContaining({
+        kind: 'remote',
+        cwd: '/remote/repo',
+        missingBinaryLocation: 'remote PATH'
+      })
+    )
+    const target = generateCommitMessageFromContextMock.mock.calls[0]?.[2]
+    await target.execute(
+      { binary: 'agent', args: [], stdinPayload: null, label: 'agent' },
+      '/cwd',
+      1
+    )
+    expect(executeCommitMessagePlan).toHaveBeenCalledWith(
+      { binary: 'agent', args: [], stdinPayload: null, label: 'agent' },
+      '/cwd',
+      1
+    )
+    expect(prepareForCodexLaunch).not.toHaveBeenCalled()
+    expect(prepareForClaudeLaunch).not.toHaveBeenCalled()
+  })
+
+  it('does not call the generator when no staged changes exist', async () => {
+    resolveCommitMessageSettingsMock.mockReturnValue({
+      ok: true,
+      params: { agentId: 'codex', model: 'gpt-5.4-mini' }
+    })
+    getStagedCommitContextMock.mockResolvedValue(null)
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:generateCommitMessage')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH
+      })
+    ).resolves.toEqual({ success: false, error: 'No staged changes to summarize.' })
+
+    expect(generateCommitMessageFromContextMock).not.toHaveBeenCalled()
+  })
+
+  it('sanitizes local staged-context read failures before returning to the renderer', async () => {
+    resolveCommitMessageSettingsMock.mockReturnValue({
+      ok: true,
+      params: { agentId: 'codex', model: 'gpt-5.4-mini' }
+    })
+    getStagedCommitContextMock.mockRejectedValue(new Error('fatal: /secret/repo failed'))
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:generateCommitMessage')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH
+      })
+    ).resolves.toEqual({ success: false, error: 'Failed to read staged changes.' })
+
+    expect(generateCommitMessageFromContextMock).not.toHaveBeenCalled()
+  })
+
+  it('sanitizes SSH staged-context read failures before returning to the renderer', async () => {
+    resolveCommitMessageSettingsMock.mockReturnValue({
+      ok: true,
+      params: { agentId: 'codex', model: 'gpt-5.4-mini' }
+    })
+    getSshGitProviderMock.mockReturnValue({
+      getStagedCommitContext: vi.fn().mockRejectedValue(new Error('fatal: /remote/secret failed'))
+    })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:generateCommitMessage')!(null, {
+        worktreePath: '/remote/repo',
+        connectionId: 'conn-1'
+      })
+    ).resolves.toEqual({ success: false, error: 'Failed to read staged changes.' })
+
+    expect(generateCommitMessageFromContextMock).not.toHaveBeenCalled()
   })
 
   it('routes ssh git:commit through the SSH provider instead of local commitChanges', async () => {

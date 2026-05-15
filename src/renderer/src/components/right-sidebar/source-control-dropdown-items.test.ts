@@ -168,6 +168,39 @@ describe('resolveDropdownItems', () => {
     expect(byKind.publish.disabled).toBe(false)
   })
 
+  it('does not mention Publish Branch when the linked PR is already merged', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        prState: 'merged'
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.push.title).toBe('PR is already merged')
+    expect(byKind.pull.title).toBe('PR is already merged')
+    expect(byKind.sync.title).toBe('PR is already merged')
+    expect(byKind.publish.label).toBe('PR Status')
+    expect(byKind.publish.title).toBe('PR is already merged')
+    expect(byKind.publish.disabled).toBe(true)
+  })
+
+  it('waits for linked PR state before showing a publish prompt', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        isPRStateLoading: true
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.publish.label).toBe('PR Status')
+    expect(byKind.publish.title).toBe('Checking PR status…')
+    expect(byKind.publish.disabled).toBe(true)
+  })
+
   it('omits counts from compound commit labels even when ahead/behind are nonzero', () => {
     // Why: the commit itself changes ahead/behind, so pre-commit counts would
     // be stale the moment the action fires. Plain Push/Pull/Sync continue to

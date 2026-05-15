@@ -10,6 +10,7 @@ import {
 } from './worktree-helpers'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 function arraysShallowEqual(a: string[] | undefined, b: string[] | undefined): boolean {
@@ -47,6 +48,7 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
       worktree.isPinned === candidate.isPinned &&
       worktree.sortOrder === candidate.sortOrder &&
       worktree.lastActivityAt === candidate.lastActivityAt &&
+      worktree.workspaceStatus === candidate.workspaceStatus &&
       worktree.createdWithAgent === candidate.createdWithAgent &&
       worktree.baseRef === candidate.baseRef &&
       worktree.pushTarget?.remoteName === candidate.pushTarget?.remoteName &&
@@ -59,13 +61,44 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
 }
 
 function toVisibleTabType(contentType: string): WorkspaceVisibleTabType {
-  return contentType === 'browser'
-    ? 'browser'
-    : contentType === 'terminal'
-      ? 'terminal'
-      : contentType === 'notes'
-        ? 'notes'
-        : 'editor'
+  return contentType === 'browser' ? 'browser' : contentType === 'terminal' ? 'terminal' : 'editor'
+}
+
+async function listWorktreesForRepo(
+  settings: AppState['settings'],
+  repoId: string
+): Promise<Worktree[]> {
+  const target = getActiveRuntimeTarget(settings)
+  if (target.kind === 'local') {
+    return window.api.worktrees.list({ repoId })
+  }
+  const result = await callRuntimeRpc<{ worktrees: Worktree[] }>(
+    target,
+    'worktree.list',
+    { repo: repoId },
+    // Why: remote environment hydration crosses the network. Bound the call
+    // so startup can recover instead of leaving the renderer waiting forever.
+    { timeoutMs: 15_000 }
+  )
+  return result.worktrees
+}
+
+async function persistWorktreeMeta(
+  settings: AppState['settings'],
+  worktreeId: string,
+  updates: Partial<WorktreeMeta>
+): Promise<void> {
+  const target = getActiveRuntimeTarget(settings)
+  if (target.kind === 'local') {
+    await window.api.worktrees.updateMeta({ worktreeId, updates })
+    return
+  }
+  await callRuntimeRpc(
+    target,
+    'worktree.set',
+    { worktree: worktreeId, ...updates },
+    { timeoutMs: 15_000 }
+  )
 }
 
 export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> = (set, get) => ({
@@ -81,7 +114,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
   fetchWorktrees: async (repoId) => {
     try {
-      const worktrees = await window.api.worktrees.list({ repoId })
+      const worktrees = await listWorktreesForRepo(get().settings, repoId)
       const current = get().worktreesByRepo[repoId]
       if (areWorktreesEqual(current, worktrees)) {
         return
@@ -135,7 +168,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     const results = await Promise.all(
       repos.map(async (r) => {
         try {
-          const list = await window.api.worktrees.list({ repoId: r.id })
+          const list = await listWorktreesForRepo(get().settings, r.id)
           const current = get().worktreesByRepo[r.id]
           if (
             !areWorktreesEqual(current, list) &&
@@ -238,7 +271,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     linkedIssue,
     linkedPR,
     pushTarget,
-    createdWithAgent
+    createdWithAgent,
+    linkedLinearIssue
   ) => {
     const retryableConflictPatterns = [
       /already exists locally/i,
@@ -252,7 +286,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       for (let attempt = 0; attempt < 25; attempt += 1) {
         const candidateName = nextCandidateName(name, attempt)
         try {
-          const result = await window.api.worktrees.create({
+          const createArgs = {
             repoId,
             name: candidateName,
             baseBranch,
@@ -263,8 +297,31 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(linkedIssue !== undefined ? { linkedIssue } : {}),
             ...(linkedPR !== undefined ? { linkedPR } : {}),
             ...(pushTarget ? { pushTarget } : {}),
-            ...(createdWithAgent ? { createdWithAgent } : {})
-          })
+            ...(createdWithAgent ? { createdWithAgent } : {}),
+            ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {})
+          }
+          const target = getActiveRuntimeTarget(get().settings)
+          const result =
+            target.kind === 'local'
+              ? await window.api.worktrees.create(createArgs)
+              : await callRuntimeRpc<Awaited<ReturnType<typeof window.api.worktrees.create>>>(
+                  target,
+                  'worktree.create',
+                  {
+                    repo: repoId,
+                    name: candidateName,
+                    baseBranch,
+                    setupDecision,
+                    sparseCheckout,
+                    ...(displayName ? { displayName } : {}),
+                    ...(linkedIssue !== undefined ? { linkedIssue } : {}),
+                    ...(linkedPR !== undefined ? { linkedPR } : {}),
+                    ...(pushTarget ? { pushTarget } : {}),
+                    ...(createdWithAgent ? { createdWithAgent } : {}),
+                    ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {})
+                  },
+                  { timeoutMs: 10 * 60_000 }
+                )
           // Why: a file watcher (worktrees.onChanged) can fire between the
           // backend creating the worktree and this callback running, causing
           // fetchWorktrees to add the worktree first. Appending unconditionally
@@ -338,7 +395,15 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // can intercept them.
       await get().shutdownWorktreeBrowsers(worktreeId)
       await get().shutdownWorktreeTerminals(worktreeId)
-      await window.api.worktrees.remove({ worktreeId, force, skipArchive })
+      const target = getActiveRuntimeTarget(get().settings)
+      await (target.kind === 'local'
+        ? window.api.worktrees.remove({ worktreeId, force, skipArchive })
+        : callRuntimeRpc(
+            target,
+            'worktree.rm',
+            { worktree: worktreeId, force, runHooks: !skipArchive },
+            { timeoutMs: 60_000 }
+          ))
       const tabs = get().tabsByWorktree[worktreeId] ?? []
       const tabIds = new Set(tabs.map((t) => t.id))
 
@@ -512,9 +577,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           sortEpoch: s.sortEpoch + 1
         }
       })
+      get().removeWorkspaceSpaceWorktrees?.([worktreeId])
       return { ok: true as const }
     } catch (err) {
-      console.error('Failed to remove worktree:', err)
+      // Why: git refusing a non-force delete for dirty/untracked files is a
+      // handled user decision point surfaced by the delete toast, not an app error.
+      console.warn('Failed to remove worktree:', err)
       const error = err instanceof Error ? err.message : String(err)
       set((s) => ({
         deleteStateByWorktreeId: {
@@ -557,7 +625,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     })
 
     try {
-      await window.api.worktrees.updateMeta({ worktreeId, updates: enriched })
+      await persistWorktreeMeta(get().settings, worktreeId, enriched)
     } catch (err) {
       console.error('Failed to update worktree meta:', err)
       void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
@@ -591,12 +659,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       return
     }
 
-    void window.api.worktrees
-      .updateMeta({ worktreeId, updates: { isUnread: true, lastActivityAt: now } })
-      .catch((err) => {
-        console.error('Failed to persist unread worktree state:', err)
-        void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
-      })
+    void persistWorktreeMeta(get().settings, worktreeId, {
+      isUnread: true,
+      lastActivityAt: now
+    }).catch((err) => {
+      console.error('Failed to persist unread worktree state:', err)
+      void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+    })
   },
 
   clearWorktreeUnread: (worktreeId) => {
@@ -622,12 +691,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       return
     }
 
-    void window.api.worktrees
-      .updateMeta({ worktreeId, updates: { isUnread: false } })
-      .catch((err) => {
-        console.error('Failed to persist cleared unread worktree state:', err)
-        void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
-      })
+    void persistWorktreeMeta(get().settings, worktreeId, { isUnread: false }).catch((err) => {
+      console.error('Failed to persist cleared unread worktree state:', err)
+      void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+    })
   },
 
   bumpWorktreeActivity: (worktreeId) => {
@@ -655,12 +722,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       }
     })
 
-    void window.api.worktrees
-      .updateMeta({ worktreeId, updates: { lastActivityAt: now } })
-      .catch((err) => {
-        console.error('Failed to persist worktree activity timestamp:', err)
-        void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
-      })
+    void persistWorktreeMeta(get().settings, worktreeId, { lastActivityAt: now }).catch((err) => {
+      console.error('Failed to persist worktree activity timestamp:', err)
+      void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+    })
   },
 
   markWorktreeVisited: (worktreeId, visitedAt) => {
@@ -947,11 +1012,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }
 
     if (shouldClearUnread) {
-      const updates: Parameters<typeof window.api.worktrees.updateMeta>[0]['updates'] = {
+      const updates: Partial<WorktreeMeta> = {
         isUnread: false
       }
 
-      void window.api.worktrees.updateMeta({ worktreeId, updates }).catch((err) => {
+      void persistWorktreeMeta(get().settings, worktreeId, updates).catch((err) => {
         console.error('Failed to persist worktree activation state:', err)
         void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
       })

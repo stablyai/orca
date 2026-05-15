@@ -122,6 +122,17 @@ describe('BrowserSessionRegistry', () => {
     expect(updated!.source?.browserFamily).toBe('edge')
   })
 
+  it('updates profile source with comet family', () => {
+    const profile = browserSessionRegistry.createProfile('imported', 'Comet Source Test')
+    expect(profile).not.toBeNull()
+    const updated = browserSessionRegistry.updateProfileSource(profile!.id, {
+      browserFamily: 'comet',
+      importedAt: Date.now()
+    })
+    expect(updated).not.toBeNull()
+    expect(updated!.source?.browserFamily).toBe('comet')
+  })
+
   it('deletes a non-default profile', async () => {
     const profile = browserSessionRegistry.createProfile('isolated', 'Delete Test')
     expect(profile).not.toBeNull()

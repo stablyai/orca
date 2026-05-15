@@ -37,9 +37,16 @@ import {
   bulkUnstageFiles,
   bulkDiscardChanges,
   discardChanges,
+  getStagedCommitContext,
   getBranchCompare,
   getBranchDiff
 } from '../git/status'
+import {
+  cancelGenerateCommitMessageLocal,
+  generateCommitMessageFromContext,
+  resolveCommitMessageSettings,
+  type GenerateCommitMessageResult
+} from '../text-generation/commit-message-text-generation'
 import { getUpstreamStatus } from '../git/upstream'
 import { gitFetch, gitPull, gitPush } from '../git/remote'
 import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
@@ -59,6 +66,8 @@ import { listMarkdownDocuments, markdownDocumentsFromRelativePaths } from './mar
 import { checkRgAvailable } from './rg-availability'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
+import { applyClaudeEnvPatch } from '../claude-accounts/environment'
 
 // Why: Monaco has large-file optimizations like VS Code; blocking at 5MB makes
 // ordinary JSON/log files inaccessible before the editor can degrade features.
@@ -82,6 +91,56 @@ const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
   '.pdf': 'application/pdf'
+}
+
+export type CommitMessageAgentEnvironmentResolvers = {
+  prepareForCodexLaunch?: () => string | null
+  prepareForClaudeLaunch?: () => Promise<ClaudeRuntimeAuthPreparation>
+}
+
+function cloneProcessEnv(): Record<string, string> {
+  const env: Record<string, string> = {}
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined) {
+      env[key] = value
+    }
+  }
+  return env
+}
+
+async function prepareLocalCommitMessageAgentEnv(
+  agentId: string,
+  resolvers: CommitMessageAgentEnvironmentResolvers | undefined
+): Promise<{ ok: true; env?: NodeJS.ProcessEnv } | { ok: false; error: string }> {
+  if (!resolvers) {
+    return { ok: true }
+  }
+
+  try {
+    if (agentId === 'codex' && resolvers.prepareForCodexLaunch) {
+      const codexHomePath = resolvers.prepareForCodexLaunch()
+      return {
+        ok: true,
+        env: codexHomePath ? { ...cloneProcessEnv(), CODEX_HOME: codexHomePath } : undefined
+      }
+    }
+
+    if (agentId === 'claude' && resolvers.prepareForClaudeLaunch) {
+      const preparation = await resolvers.prepareForClaudeLaunch()
+      const env = applyClaudeEnvPatch(cloneProcessEnv(), preparation.envPatch, {
+        stripAuthEnv: preparation.stripAuthEnv
+      })
+      return { ok: true, env }
+    }
+  } catch (error) {
+    console.error('[filesystem] Failed to prepare commit message agent environment:', error)
+    return {
+      ok: false,
+      error: 'Failed to prepare the selected agent account for commit message generation.'
+    }
+  }
+
+  return { ok: true }
 }
 
 /**
@@ -129,7 +188,10 @@ async function isDirectoryEntry(
   }
 }
 
-export function registerFilesystemHandlers(store: Store): void {
+export function registerFilesystemHandlers(
+  store: Store,
+  commitMessageAgentEnv?: CommitMessageAgentEnvironmentResolvers
+): void {
   const activeTextSearches = new Map<string, ChildProcess>()
 
   // ─── Filesystem ─────────────────────────────────────────
@@ -554,6 +616,93 @@ export function registerFilesystemHandlers(store: Store): void {
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       return commitChanges(worktreePath, args.message)
+    }
+  )
+
+  ipcMain.handle(
+    'git:generateCommitMessage',
+    async (
+      _event,
+      args: {
+        worktreePath: string
+        connectionId?: string
+      }
+    ): Promise<GenerateCommitMessageResult> => {
+      const resolvedSettings = resolveCommitMessageSettings(store.getSettings())
+      if (!resolvedSettings.ok) {
+        return { success: false, error: resolvedSettings.error }
+      }
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          return {
+            success: false,
+            error: `No git provider for connection "${args.connectionId}"`
+          }
+        }
+        let context
+        try {
+          context = await provider.getStagedCommitContext(args.worktreePath)
+        } catch (error) {
+          console.error('[filesystem] Failed to read remote staged commit context:', error)
+          return {
+            success: false,
+            error: 'Failed to read staged changes.'
+          }
+        }
+        if (!context) {
+          return { success: false, error: 'No staged changes to summarize.' }
+        }
+        return generateCommitMessageFromContext(context, resolvedSettings.params, {
+          kind: 'remote',
+          cwd: args.worktreePath,
+          execute: (plan, cwd, timeoutMs) =>
+            provider.executeCommitMessagePlan(plan, cwd, timeoutMs),
+          missingBinaryLocation: 'remote PATH'
+        })
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      let context
+      try {
+        context = await getStagedCommitContext(worktreePath)
+      } catch (error) {
+        console.error('[filesystem] Failed to read staged commit context:', error)
+        return {
+          success: false,
+          error: 'Failed to read staged changes.'
+        }
+      }
+      if (!context) {
+        return { success: false, error: 'No staged changes to summarize.' }
+      }
+      const localEnv = await prepareLocalCommitMessageAgentEnv(
+        resolvedSettings.params.agentId,
+        commitMessageAgentEnv
+      )
+      if (!localEnv.ok) {
+        return { success: false, error: localEnv.error }
+      }
+      return generateCommitMessageFromContext(context, resolvedSettings.params, {
+        kind: 'local',
+        cwd: worktreePath,
+        ...(localEnv.env ? { env: localEnv.env } : {})
+      })
+    }
+  )
+
+  ipcMain.handle(
+    'git:cancelGenerateCommitMessage',
+    async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          return
+        }
+        await provider.cancelGenerateCommitMessage(args.worktreePath)
+        return
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      cancelGenerateCommitMessageLocal(worktreePath)
     }
   )
 

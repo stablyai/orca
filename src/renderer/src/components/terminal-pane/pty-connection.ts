@@ -6,6 +6,7 @@ import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 import type { PtyConnectResult } from './pty-transport'
 import { createIpcPtyTransport } from './pty-transport'
+import { createRemoteRuntimePtyTransport } from './remote-runtime-pty-transport'
 import { shouldSeedCacheTimerOnInitialTitle } from './cache-timer-seeding'
 import type { PtyConnectionDeps } from './pty-connection-types'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
@@ -13,23 +14,22 @@ import { getFitOverrideForPty, bindPanePtyId } from '@/lib/pane-manager/mobile-f
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { isPaneReplaying, replayIntoTerminal } from './replay-guard'
 import { terminalOutputPrefersDomRenderer } from '@/lib/pane-manager/terminal-complex-script'
-import {
-  paneLeafId,
-  POST_REPLAY_MODE_RESET,
-  POST_REPLAY_FOCUS_REPORTING_RESET
-} from './layout-serialization'
+import { POST_REPLAY_MODE_RESET, POST_REPLAY_FOCUS_REPORTING_RESET } from './layout-serialization'
 import { warnTerminalLifecycleAnomaly } from './terminal-lifecycle-diagnostics'
 import { registerPtySerializer, registerPtyTitleSource } from './pty-buffer-serializer'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import {
   discardTerminalOutput,
   flushTerminalOutput,
   waitForTerminalOutputParsed,
   writeTerminalOutput
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
+const REMOTE_PTY_ID_PREFIX = 'remote:'
 
 // Why: when multiple panes/tabs need the same deferred SSH connection,
 // the first one calls ssh.connect() and subsequent ones must wait for it
@@ -46,6 +46,10 @@ function isSshSessionExpiredError(err: unknown): boolean {
 
 function formatSshSessionExpiredMessage(): string {
   return 'Previous SSH session expired. Start a new terminal to continue.'
+}
+
+function isRemoteRuntimePtyId(ptyId: string | null | undefined): boolean {
+  return typeof ptyId === 'string' && ptyId.startsWith(REMOTE_PTY_ID_PREFIX)
 }
 
 function sshPromptConnectOutcomeForStatus(
@@ -146,10 +150,10 @@ export function connectPanePty(
   const paneStartup = deps.startup ?? null
   deps.startup = undefined
 
-  // Why: cache timer state is keyed per-pane (not per-tab) so split-pane tabs
-  // can track each Claude session independently without overwriting each other.
-  const cacheKey = `${deps.tabId}:${pane.id}`
-  const pendingSpawnKey = `${deps.tabId}:${paneLeafId(pane.id)}`
+  // Why: paneKey crosses PTY env, hook IPC, retained rows, and reload/replay.
+  // Use the stable layout leaf UUID, not the renderer-local numeric pane id.
+  const cacheKey = makePaneKey(deps.tabId, pane.leafId)
+  const pendingSpawnKey = cacheKey
   const commandLifecycle = createTerminalCommandLifecycle({
     onCommandFinished: () => {
       const state = useAppStore.getState()
@@ -320,9 +324,8 @@ export function connectPanePty(
   }
   // Why: inject ORCA_PANE_KEY so global Claude/Codex hooks can attribute their
   // callbacks to the correct Orca pane without resolving worktrees from cwd.
-  // The key matches the `${tabId}:${paneId}` composite used for cacheTimerByKey.
-  // ORCA_TAB_ID / ORCA_WORKTREE_ID are exposed separately so the receiver has
-  // routing context without having to split paneKey back into its parts.
+  // The key matches the `${tabId}:${leafId}` composite used for cacheTimerByKey
+  // and agentStatusByPaneKey. Treat it as opaque outside Orca.
   const paneEnv = {
     ...paneStartup?.env,
     ORCA_PANE_KEY: cacheKey,
@@ -340,7 +343,17 @@ export function connectPanePty(
   const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find((t) => t.id === deps.tabId)
   const shellOverride = tab?.shellOverride
 
-  const transport = createIpcPtyTransport({
+  const restoredPtyIdForTransport =
+    deps.restoredLeafId && deps.restoredPtyIdByLeafId
+      ? (deps.restoredPtyIdByLeafId[deps.restoredLeafId] ?? null)
+      : null
+  const remoteRuntimeOwnerForTransport =
+    (restoredPtyIdForTransport
+      ? getRemoteRuntimePtyEnvironmentId(restoredPtyIdForTransport)
+      : null) ?? (tab?.ptyId ? getRemoteRuntimePtyEnvironmentId(tab.ptyId) : null)
+  const activeRuntimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim() || null
+  const runtimeEnvironmentId = remoteRuntimeOwnerForTransport ?? activeRuntimeEnvironmentId
+  const transportOptions = {
     cwd: deps.cwd,
     env: paneEnv,
     command: paneStartup?.command,
@@ -351,7 +364,7 @@ export function connectPanePty(
     // pty:spawn returns. Daemon-host-only: SSH path leaves these undefined
     // and the main-side guard short-circuits.
     tabId: deps.tabId,
-    leafId: paneLeafId(pane.id),
+    leafId: pane.leafId,
     ...(shellOverride ? { shellOverride } : {}),
     ...(paneStartup?.telemetry ? { telemetry: paneStartup.telemetry } : {}),
     onPtyExit: onExit,
@@ -374,7 +387,10 @@ export function connectPanePty(
       const title = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
       currentState.setAgentStatus(cacheKey, payload, title)
     }
-  })
+  }
+  const transport = runtimeEnvironmentId
+    ? createRemoteRuntimePtyTransport(runtimeEnvironmentId, transportOptions)
+    : createIpcPtyTransport(transportOptions)
   const hasExistingPaneTransport = deps.paneTransportsRef.current.size > 0
   deps.paneTransportsRef.current.set(pane.id, transport)
 
@@ -466,7 +482,9 @@ export function connectPanePty(
     if (!proposed || proposed.cols <= 0 || proposed.rows <= 0) {
       return
     }
-    window.api.pty.reportGeometry(currentPtyId, proposed.cols, proposed.rows)
+    if (!isRemoteRuntimePtyId(currentPtyId)) {
+      window.api.pty.reportGeometry(currentPtyId, proposed.cols, proposed.rows)
+    }
   }
   const geometryReportObserver =
     typeof ResizeObserver === 'undefined'
@@ -580,9 +598,9 @@ export function connectPanePty(
       // calls from the same renderer. The cooperation gate at pty:spawn time
       // sees pendingByPaneKey populated. Settle/clear later echoes the gen
       // token captured here. See docs/mobile-prefer-renderer-scrollback.md.
-      const preSignalPromise = window.api.pty
-        .declarePendingPaneSerializer(cacheKey)
-        .catch(() => null)
+      const preSignalPromise = runtimeEnvironmentId
+        ? Promise.resolve(null)
+        : window.api.pty.declarePendingPaneSerializer(cacheKey).catch(() => null)
 
       const spawnedRaw = transport.connect({
         url: '',
@@ -601,8 +619,10 @@ export function connectPanePty(
             typeof spawnedPtyId === 'string' ? spawnedPtyId : transport.getPtyId()
           const gen = await preSignalPromise
           if (typeof gen === 'number' && resolvedPtyId) {
-            registerPaneSerializerFor(resolvedPtyId)
-            void window.api.pty.settlePaneSerializer(cacheKey, gen).catch(() => {})
+            if (!isRemoteRuntimePtyId(resolvedPtyId)) {
+              registerPaneSerializerFor(resolvedPtyId)
+              void window.api.pty.settlePaneSerializer(cacheKey, gen).catch(() => {})
+            }
           } else if (typeof gen === 'number') {
             void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
           }
@@ -690,7 +710,7 @@ export function connectPanePty(
         warnTerminalLifecycleAnomaly('restored PTY reattach returned no PTY id', {
           tabId: deps.tabId,
           worktreeId: deps.worktreeId,
-          leafId: deps.restoredLeafId ?? paneLeafId(pane.id),
+          leafId: deps.restoredLeafId ?? pane.leafId,
           paneId: pane.id,
           ptyId: staleSessionId ?? null
         })
@@ -742,7 +762,9 @@ export function connectPanePty(
         if (connectResult.coldRestore) {
           // Snapshot superseded the cold-restore payload — ack it so the
           // daemon does not redeliver it on the next reattach.
-          window.api.pty.ackColdRestore(ptyId)
+          if (!isRemoteRuntimePtyId(ptyId)) {
+            window.api.pty.ackColdRestore(ptyId)
+          }
         }
       } else if (connectResult?.replay) {
         // Relay replay holds the last 100 KB of raw output. The xterm may
@@ -753,7 +775,9 @@ export function connectPanePty(
         writeReplayData(connectResult.replay)
         writeReplayData(POST_REPLAY_FOCUS_REPORTING_RESET)
         if (connectResult.coldRestore) {
-          window.api.pty.ackColdRestore(ptyId)
+          if (!isRemoteRuntimePtyId(ptyId)) {
+            window.api.pty.ackColdRestore(ptyId)
+          }
         }
       } else if (connectResult?.coldRestore) {
         // restoreScrollbackBuffers() already wrote the saved xterm buffer
@@ -771,7 +795,9 @@ export function connectPanePty(
         // crashed TUI (e.g. Claude's \e[?1004h) left in the scrollback, so
         // reset them to match the fresh shell's expectations.
         writeReplayData(POST_REPLAY_MODE_RESET)
-        window.api.pty.ackColdRestore(ptyId)
+        if (!isRemoteRuntimePtyId(ptyId)) {
+          window.api.pty.ackColdRestore(ptyId)
+        }
       }
       // Why: when a mobile-fit override is active, skip sending desktop dims
       // to the PTY — the PTY is already at phone dimensions and must stay there.
@@ -782,7 +808,9 @@ export function connectPanePty(
       // Why: POSIX only delivers SIGWINCH when terminal dimensions actually
       // change. Sending it explicitly guarantees restored TUIs repaint at
       // the correct cursor position after snapshot replay.
-      window.api.pty.signal(ptyId, 'SIGWINCH')
+      if (!isRemoteRuntimePtyId(ptyId)) {
+        window.api.pty.signal(ptyId, 'SIGWINCH')
+      }
 
       scheduleRuntimeGraphSync()
     }
@@ -946,9 +974,10 @@ export function connectPanePty(
             // cooperation gate uniformly applies to remote sessions. Issue
             // declare and connect back-to-back; Electron preserves order. See
             // docs/mobile-prefer-renderer-scrollback.md.
-            const preSignalPromise = window.api.pty
-              .declarePendingPaneSerializer(cacheKey)
-              .catch(() => null)
+            const preSignalPromise =
+              runtimeEnvironmentId || isRemoteRuntimePtyId(pendingSessionId)
+                ? Promise.resolve(null)
+                : window.api.pty.declarePendingPaneSerializer(cacheKey).catch(() => null)
             let expiredReattachError = false
             const reattachPromise = transport.connect({
               url: '',
@@ -991,7 +1020,9 @@ export function connectPanePty(
                 handleReattachResult(result, pendingSessionId)
                 const gen = await preSignalPromise
                 if (typeof gen === 'number') {
-                  void window.api.pty.settlePaneSerializer(cacheKey, gen).catch(() => {})
+                  if (!isRemoteRuntimePtyId(pendingSessionId)) {
+                    void window.api.pty.settlePaneSerializer(cacheKey, gen).catch(() => {})
+                  }
                 }
               })
               .catch(async (err) => {
@@ -1051,6 +1082,7 @@ export function connectPanePty(
     // the reattach and spawn a fresh session instead.
     const deferredReattachSessionId =
       candidateReattachSessionId &&
+      !isRemoteRuntimePtyId(candidateReattachSessionId) &&
       isSessionOwnedByWorktree(candidateReattachSessionId, deps.worktreeId)
         ? candidateReattachSessionId
         : null
@@ -1074,9 +1106,10 @@ export function connectPanePty(
       // channel preserves order. See
       // docs/mobile-prefer-renderer-scrollback.md (Renderer-side prerequisite
       // requirement #4).
-      const preSignalPromise = window.api.pty
-        .declarePendingPaneSerializer(cacheKey)
-        .catch(() => null)
+      const preSignalPromise =
+        runtimeEnvironmentId || isRemoteRuntimePtyId(deferredReattachSessionId)
+          ? Promise.resolve(null)
+          : window.api.pty.declarePendingPaneSerializer(cacheKey).catch(() => null)
 
       let expiredReattachError = false
       const reattachPromise = transport.connect({
@@ -1112,7 +1145,9 @@ export function connectPanePty(
           handleReattachResult(result, deferredReattachSessionId)
           const gen = await preSignalPromise
           if (typeof gen === 'number') {
-            void window.api.pty.settlePaneSerializer(cacheKey, gen).catch(() => {})
+            if (!isRemoteRuntimePtyId(deferredReattachSessionId)) {
+              void window.api.pty.settlePaneSerializer(cacheKey, gen).catch(() => {})
+            }
           }
         })
         .catch(async (err) => {
@@ -1124,7 +1159,7 @@ export function connectPanePty(
           warnTerminalLifecycleAnomaly('restored PTY reattach threw', {
             tabId: deps.tabId,
             worktreeId: deps.worktreeId,
-            leafId: deps.restoredLeafId ?? paneLeafId(pane.id),
+            leafId: deps.restoredLeafId ?? pane.leafId,
             paneId: pane.id,
             ptyId: deferredReattachSessionId,
             reason: message
@@ -1173,11 +1208,9 @@ export function connectPanePty(
       }
     } else {
       allowInitialIdleCacheSeed = false
-      const pendingSpawn = hasExistingPaneTransport
-        ? undefined
-        : pendingSpawnByPaneKey.get(pendingSpawnKey)
+      const pendingSpawn = pendingSpawnByPaneKey.get(pendingSpawnKey)
       if (pendingSpawn) {
-        console.log(`[pty-connect] pane=${pane.id} → PENDING SPAWN (waiting on sibling)`)
+        console.log(`[pty-connect] pane=${pane.id} → PENDING SPAWN (waiting on same leaf)`)
         ;((globalThis as Record<string, unknown>).__ptyConnectDiag as string[])?.push(
           `pane=${pane.id} → PENDING SPAWN`
         )

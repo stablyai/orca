@@ -9,21 +9,47 @@ export default function WorkspaceSpacePage(): React.JSX.Element {
   const closeSpacePage = useAppStore((state) => state.closeSpacePage)
 
   useEffect(() => {
+    const hasVisibleOverlay = (): boolean =>
+      Array.from(
+        document.querySelectorAll('[role="dialog"], [role="listbox"], [role="menu"]')
+      ).some((element) => {
+        if (!(element instanceof HTMLElement)) {
+          return false
+        }
+        if (element.closest('[aria-hidden="true"]')) {
+          return false
+        }
+        const style = window.getComputedStyle(element)
+        return (
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          element.getClientRects().length > 0
+        )
+      })
+
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || event.defaultPrevented) {
+      if (event.key !== 'Escape') {
         return
       }
       // Why: confirmation dialogs own Escape first; page-level Escape should
-      // only leave the full Space surface when no modal is active.
-      if (document.querySelector('[role="dialog"]')) {
+      // only leave the full Space surface when no modal or popover is active.
+      if (hasVisibleOverlay()) {
+        return
+      }
+      const target = event.target as HTMLElement | null
+      if (
+        target?.matches('input, textarea, select, [contenteditable="true"], [contenteditable=""]')
+      ) {
         return
       }
       event.preventDefault()
       closeSpacePage()
     }
 
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    // Why: tooltips can consume Escape before bubble listeners see it. Capture
+    // keeps the first Escape reliable while still deferring to real overlays.
+    window.addEventListener('keydown', handleKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
   }, [closeSpacePage])
 
   return (

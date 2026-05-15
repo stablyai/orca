@@ -83,6 +83,8 @@ export function EditorContent({
   mdViewMode,
   isChangesMode,
   sideBySide,
+  showMarkdownTableOfContents = false,
+  onCloseMarkdownTableOfContents = () => {},
   pendingEditorReveal,
   handleContentChange,
   handleDirtyStateHint,
@@ -103,6 +105,8 @@ export function EditorContent({
   mdViewMode: MarkdownViewMode
   isChangesMode: boolean
   sideBySide: boolean
+  showMarkdownTableOfContents?: boolean
+  onCloseMarkdownTableOfContents?: () => void
   pendingEditorReveal: {
     filePath?: string
     line?: number
@@ -154,6 +158,8 @@ export function EditorContent({
       language={monacoLanguage}
       onContentChange={handleContentChange}
       onSave={isMarkdown ? md.mdSave : handleSave}
+      worktreeId={activeFile.worktreeId}
+      markdownAnnotationsEnabled={isMarkdown && mdViewMode !== 'rich'}
       revealLine={
         pendingEditorReveal?.filePath === activeFile.filePath ? pendingEditorReveal.line : undefined
       }
@@ -233,12 +239,15 @@ export function EditorContent({
                 content={editorContent}
                 filePath={activeFile.filePath}
                 worktreeId={activeFile.worktreeId}
+                runtimeEnvironmentId={activeFile.runtimeEnvironmentId}
                 scrollCacheKey={`${editorViewStateKey}:rich`}
                 onContentChange={onContentChangeWithFm}
                 onDirtyStateHint={handleDirtyStateHint}
                 onSave={onSaveWithFm}
                 onOpenDocLink={md.onOpenDocLink}
                 markdownDocuments={md.markdownDocuments}
+                showTableOfContents={showMarkdownTableOfContents}
+                onCloseTableOfContents={onCloseMarkdownTableOfContents}
                 // Why: render the front-matter banner below the editor toolbar
                 // (inside the editor shell) so formatting controls remain at
                 // the top of the pane — the banner is read-only context, not
@@ -270,6 +279,9 @@ export function EditorContent({
               content={currentContent}
               filePath={activeFile.filePath}
               scrollCacheKey={`${editorViewStateKey}:preview`}
+              showTableOfContents={showMarkdownTableOfContents}
+              onCloseTableOfContents={onCloseMarkdownTableOfContents}
+              markdownAnnotationsEnabled={mdViewMode !== 'rich'}
               {...md.previewProps}
             />
           </div>
@@ -357,6 +369,9 @@ export function EditorContent({
           filePath={activeFile.filePath}
           scrollCacheKey={markdownPreviewViewStateKey}
           initialAnchor={activeFile.markdownPreviewAnchor ?? null}
+          showTableOfContents={showMarkdownTableOfContents}
+          onCloseTableOfContents={onCloseMarkdownTableOfContents}
+          markdownAnnotationsEnabled={mdViewMode !== 'rich'}
           {...md.previewProps}
         />
       </div>
@@ -498,6 +513,9 @@ export function EditorContent({
             content={modifiedDiffContent}
             filePath={activeFile.filePath}
             scrollCacheKey={`${diffViewStateKey}:preview`}
+            showTableOfContents={showMarkdownTableOfContents}
+            onCloseTableOfContents={onCloseMarkdownTableOfContents}
+            markdownAnnotationsEnabled
             {...md.previewProps}
           />
         </div>

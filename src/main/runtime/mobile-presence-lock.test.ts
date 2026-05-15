@@ -295,6 +295,27 @@ describe('mobile presence lock — multi-mobile semantics', () => {
     expect(driverEvents.slice(before).every((e) => e.driver.kind === 'mobile')).toBe(true)
   })
 
+  it('updateDesktopViewport resizes the source PTY and records desktop geometry', async () => {
+    const { runtime, ptySizes, resizes } = createRuntime()
+
+    expect(await runtime.updateDesktopViewport('pty-1', { cols: 132, rows: 44 })).toBe(true)
+
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 132, rows: 44 })
+    expect(resizes.at(-1)).toEqual({ ptyId: 'pty-1', cols: 132, rows: 44 })
+    expect(runtime.getLastRendererSize('pty-1')).toEqual({ cols: 132, rows: 44 })
+  })
+
+  it('updateDesktopViewport does not resize while mobile is driving', async () => {
+    const { runtime, ptySizes, resizes } = createRuntime()
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 49, rows: 20 })
+    resizes.length = 0
+
+    expect(await runtime.updateDesktopViewport('pty-1', { cols: 132, rows: 44 })).toBe(false)
+
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 49, rows: 20 })
+    expect(resizes).toEqual([])
+  })
+
   it('updateMobileViewport then disconnect restores PTY to original baseline', async () => {
     const { runtime, ptySizes } = createRuntime()
     await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 49, rows: 38 })

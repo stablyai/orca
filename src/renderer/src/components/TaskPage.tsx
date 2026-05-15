@@ -26,6 +26,7 @@ import { toast } from 'sonner'
 
 import { useAppStore } from '@/store'
 import { useRepoMap } from '@/store/selectors'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -85,9 +86,17 @@ import type {
   GitLabTodo,
   GitLabWorkItem,
   LinearIssue,
+  LinearTeam,
+  Repo,
   TaskViewPresetId
 } from '../../../shared/types'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
+import {
+  linearCreateIssue,
+  linearGetIssue,
+  linearListTeams,
+  linearUpdateIssue
+} from '@/runtime/runtime-linear-client'
 
 type TaskSource = 'github' | 'linear' | 'gitlab'
 
@@ -103,6 +112,18 @@ type TaskQueryPreset = {
   id: TaskViewPresetId
   label: string
   query: string
+}
+
+function getRuntimeTargetForRepoId(repoId: string | null | undefined) {
+  if (!repoId) {
+    return null
+  }
+  const state = useAppStore.getState()
+  const target = getActiveRuntimeTarget(state.settings)
+  if (target.kind !== 'environment') {
+    return null
+  }
+  return state.repos.some((repo) => repo.id === repoId) ? target : null
 }
 
 type SourceOption = {
@@ -219,10 +240,10 @@ const LINEAR_PRIORITY_LABELS: Record<number, string> = {
 
 function GHStatusCell({
   item,
-  repoPath
+  repo
 }: {
   item: GitHubWorkItem
-  repoPath: string | null
+  repo: Repo | null
 }): React.JSX.Element {
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const [localState, setLocalState] = useState(item.state)
@@ -235,15 +256,29 @@ function GHStatusCell({
 
   const handleStateChange = useCallback(
     (newState: 'open' | 'closed') => {
-      if (newState === localState || !repoPath || item.type !== 'issue') {
+      if (newState === localState || !repo || item.type !== 'issue') {
         return
       }
       reqRef.current += 1
       const reqId = reqRef.current
       setLocalState(newState)
       patchWorkItem(item.id, { state: newState })
-      window.api.gh
-        .updateIssue({ repoPath, number: item.number, updates: { state: newState } })
+      const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+      const updatePromise =
+        target.kind === 'environment'
+          ? callRuntimeRpc<{ ok?: boolean; error?: string }>(
+              target,
+              'github.updateIssue',
+              { repo: repo.id, number: item.number, updates: { state: newState } },
+              { timeoutMs: 30_000 }
+            )
+          : window.api.gh.updateIssue({
+              repoPath: repo.path,
+              repoId: repo.id,
+              number: item.number,
+              updates: { state: newState }
+            })
+      updatePromise
         .then((result) => {
           if (reqId !== reqRef.current) {
             return
@@ -264,10 +299,10 @@ function GHStatusCell({
           toast.error('Failed to update state')
         })
     },
-    [item.id, item.number, item.type, localState, repoPath, patchWorkItem]
+    [item.id, item.number, item.type, localState, repo, patchWorkItem]
   )
 
-  if (item.type !== 'issue' || !repoPath) {
+  if (item.type !== 'issue' || !repo) {
     return (
       <span
         className={cn(
@@ -334,6 +369,7 @@ function GHStatusCell({
 function LinearStatusCell({ issue }: { issue: LinearIssue }): React.JSX.Element {
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
+  const settings = useAppStore((s) => s.settings)
   const [localState, setLocalState] = useState(issue.state)
   const reqRef = useRef(0)
 
@@ -342,7 +378,7 @@ function LinearStatusCell({ issue }: { issue: LinearIssue }): React.JSX.Element 
   }, [issue.state])
 
   const teamId = issue.team?.id || null
-  const states = useTeamStates(teamId)
+  const states = useTeamStates(teamId, settings, issue.workspaceId)
 
   const handleStateChange = useCallback(
     (stateId: string) => {
@@ -357,8 +393,7 @@ function LinearStatusCell({ issue }: { issue: LinearIssue }): React.JSX.Element 
 
       setLocalState(stateValue)
       patchLinearIssue(issue.id, { state: stateValue })
-      window.api.linear
-        .updateIssue({ id: issue.id, updates: { stateId } })
+      linearUpdateIssue(settings, issue.id, { stateId }, issue.workspaceId)
         .then((result) => {
           if (reqId !== reqRef.current) {
             return
@@ -369,7 +404,7 @@ function LinearStatusCell({ issue }: { issue: LinearIssue }): React.JSX.Element 
             patchLinearIssue(issue.id, { state: issue.state })
             toast.error(typed.error ?? 'Failed to update status')
           } else {
-            fetchLinearIssue(issue.id)
+            fetchLinearIssue(issue.id, issue.workspaceId)
           }
         })
         .catch(() => {
@@ -381,7 +416,15 @@ function LinearStatusCell({ issue }: { issue: LinearIssue }): React.JSX.Element 
           toast.error('Failed to update status')
         })
     },
-    [issue.id, issue.state, states.data, patchLinearIssue, fetchLinearIssue]
+    [
+      issue.id,
+      issue.state,
+      issue.workspaceId,
+      settings,
+      states.data,
+      patchLinearIssue,
+      fetchLinearIssue
+    ]
   )
 
   const currentStateId = states.data.find(
@@ -442,6 +485,7 @@ function LinearStatusCell({ issue }: { issue: LinearIssue }): React.JSX.Element 
 function LinearPriorityCell({ issue }: { issue: LinearIssue }): React.JSX.Element {
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
+  const settings = useAppStore((s) => s.settings)
   const [localPriority, setLocalPriority] = useState(issue.priority)
   const [pending, setPending] = useState(false)
   const reqRef = useRef(0)
@@ -460,8 +504,7 @@ function LinearPriorityCell({ issue }: { issue: LinearIssue }): React.JSX.Elemen
       setLocalPriority(priority)
       patchLinearIssue(issue.id, { priority })
       setPending(true)
-      window.api.linear
-        .updateIssue({ id: issue.id, updates: { priority } })
+      linearUpdateIssue(settings, issue.id, { priority }, issue.workspaceId)
         .then((result) => {
           if (reqId !== reqRef.current) {
             return
@@ -472,7 +515,7 @@ function LinearPriorityCell({ issue }: { issue: LinearIssue }): React.JSX.Elemen
             patchLinearIssue(issue.id, { priority: issue.priority })
             toast.error(typed.error ?? 'Failed to update priority')
           } else {
-            fetchLinearIssue(issue.id)
+            fetchLinearIssue(issue.id, issue.workspaceId)
           }
         })
         .catch(() => {
@@ -490,7 +533,15 @@ function LinearPriorityCell({ issue }: { issue: LinearIssue }): React.JSX.Elemen
           setPending(false)
         })
     },
-    [issue.id, issue.priority, localPriority, patchLinearIssue, fetchLinearIssue]
+    [
+      issue.id,
+      issue.priority,
+      issue.workspaceId,
+      localPriority,
+      settings,
+      patchLinearIssue,
+      fetchLinearIssue
+    ]
   )
 
   const [open, setOpen] = useState(false)
@@ -684,6 +735,7 @@ export default function TaskPage(): React.JSX.Element {
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const connectLinear = useAppStore((s) => s.connectLinear)
+  const selectLinearWorkspace = useAppStore((s) => s.selectLinearWorkspace)
   const searchLinearIssues = useAppStore((s) => s.searchLinearIssues)
   const listLinearIssues = useAppStore((s) => s.listLinearIssues)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
@@ -757,6 +809,12 @@ export default function TaskPage(): React.JSX.Element {
   // optimistic stub) need *a* repo. First selected is used as the default;
   // cross-repo dialogs still let the user override per-action.
   const primaryRepo = selectedRepos[0] ?? null
+  const linearWorkspaces = linearStatus.workspaces ?? []
+  const selectedLinearWorkspaceId =
+    linearStatus.selectedWorkspaceId ??
+    linearStatus.activeWorkspaceId ??
+    linearWorkspaces[0]?.id ??
+    null
 
   // Why: seed the preset + query from the user's saved default synchronously
   // so the first fetch effect issues exactly one request keyed to the final
@@ -812,6 +870,7 @@ export default function TaskPage(): React.JSX.Element {
 
   const [taskSearchInput, setTaskSearchInput] = useState(initialTaskQuery)
   const [appliedTaskSearch, setAppliedTaskSearch] = useState(initialTaskQuery)
+  const taskSearchInputRef = useRef<HTMLInputElement>(null)
   const [activeTaskPreset, setActiveTaskPreset] = useState<TaskViewPresetId | null>(
     defaultTaskViewPreset
   )
@@ -838,7 +897,7 @@ export default function TaskPage(): React.JSX.Element {
     const trimmed = initialTaskQuery.trim()
     const merged: GitHubWorkItem[] = []
     for (const r of selectedRepos) {
-      const cached = getCachedWorkItems(r.path, PER_REPO_FETCH_LIMIT, trimmed)
+      const cached = getCachedWorkItems(r.id, PER_REPO_FETCH_LIMIT, trimmed)
       if (cached) {
         merged.push(...cached)
       }
@@ -1055,25 +1114,36 @@ export default function TaskPage(): React.JSX.Element {
   // Why: fetch the full team list from the Linear API so the selector shows
   // all teams the user belongs to, not just teams with issues in the current
   // fetch window. Fetched once when the Linear tab is active and connected.
-  const [availableTeams, setAvailableTeams] = useState<{ id: string; name: string; key: string }[]>(
-    []
-  )
+  const [availableTeams, setAvailableTeams] = useState<LinearTeam[]>([])
 
   useEffect(() => {
     if (!taskResumeApplied) {
       return
     }
     if (taskSource !== 'linear' || !linearStatus.connected) {
+      setAvailableTeams([])
       return
     }
-    void window.api.linear
-      .listTeams()
-      .then(setAvailableTeams)
-      .catch(() => {
-        console.warn('[TaskPage] Failed to fetch Linear teams')
+    let cancelled = false
+    // Why: workspace switches must not leave the prior workspace's teams
+    // available for new-issue creation while the replacement fetch is pending.
+    setAvailableTeams([])
+    void linearListTeams(settings, selectedLinearWorkspaceId)
+      .then((teams) => {
+        if (!cancelled) {
+          setAvailableTeams(teams)
+        }
       })
+      .catch(() => {
+        if (!cancelled) {
+          console.warn('[TaskPage] Failed to fetch Linear teams')
+        }
+      })
+    return () => {
+      cancelled = true
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskSource, linearStatus.connected, taskResumeApplied])
+  }, [settings, taskSource, linearStatus.connected, selectedLinearWorkspaceId, taskResumeApplied])
 
   // Why: stable key for `selectedRepos` so the GitLab fetch effect below
   // doesn't re-run on every parent re-render just because the array
@@ -1405,7 +1475,7 @@ export default function TaskPage(): React.JSX.Element {
     const preMerged: GitHubWorkItem[] = []
     let anyUncached = false
     for (const r of selectedRepos) {
-      const cached = getCachedWorkItems(r.path, PER_REPO_FETCH_LIMIT, q)
+      const cached = getCachedWorkItems(r.id, PER_REPO_FETCH_LIMIT, q)
       if (cached === null) {
         anyUncached = true
       } else {
@@ -1505,7 +1575,7 @@ export default function TaskPage(): React.JSX.Element {
     // The search API is cached 120s server-side so this doesn't add
     // meaningful latency or rate-limit pressure.
     void countWorkItemsAcrossRepos(
-      selectedRepos.map((r) => ({ path: r.path })),
+      selectedRepos.map((r) => ({ repoId: r.id, path: r.path })),
       q
     ).then((count) => {
       if (!cancelled) {
@@ -1577,6 +1647,59 @@ export default function TaskPage(): React.JSX.Element {
     [handleApplyTaskSearch]
   )
 
+  useEffect(() => {
+    if (
+      taskSource !== 'github' ||
+      githubMode !== 'items' ||
+      dialogWorkItem ||
+      drawerLinearIssue ||
+      newIssueOpen ||
+      newLinearIssueOpen ||
+      activeModal !== 'none'
+    ) {
+      return
+    }
+
+    const onKeyDown = (event: KeyboardEvent): void => {
+      const isMac = navigator.userAgent.includes('Mac')
+      const modifierPressed = isMac ? event.metaKey : event.ctrlKey
+      if (!modifierPressed || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'f') {
+        return
+      }
+
+      const input = taskSearchInputRef.current
+      if (!input) {
+        return
+      }
+      const target = event.target
+      if (
+        target instanceof HTMLElement &&
+        target !== input &&
+        (target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          target.isContentEditable)
+      ) {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+      input.focus()
+      input.select()
+    }
+
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+  }, [
+    activeModal,
+    dialogWorkItem,
+    drawerLinearIssue,
+    githubMode,
+    newIssueOpen,
+    newLinearIssueOpen,
+    taskSource
+  ])
+
   const openComposerForItem = useCallback(
     (item: GitHubWorkItem): void => {
       const linkedWorkItem: LinkedWorkItemSummary = {
@@ -1619,11 +1742,20 @@ export default function TaskPage(): React.JSX.Element {
     }
     setNewIssueSubmitting(true)
     try {
-      const result = await window.api.gh.createIssue({
-        repoPath: newIssueTargetRepo.path,
-        title,
-        body: newIssueBody
-      })
+      const target = getRuntimeTargetForRepoId(newIssueTargetRepo.id)
+      const result = target
+        ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.createIssue>>>(
+            target,
+            'github.createIssue',
+            { repo: newIssueTargetRepo.id, title, body: newIssueBody },
+            { timeoutMs: 30_000 }
+          )
+        : await window.api.gh.createIssue({
+            repoPath: newIssueTargetRepo.path,
+            repoId: newIssueTargetRepo.id,
+            title,
+            body: newIssueBody
+          })
       if (!result.ok) {
         toast.error(result.error || 'Failed to create issue.')
         return
@@ -1659,8 +1791,20 @@ export default function TaskPage(): React.JSX.Element {
       }
       setDialogWorkItem(stub)
       const stubRepoId = newIssueTargetRepo.id
-      void window.api.gh
-        .workItem({ repoPath: newIssueTargetRepo.path, number: result.number, type: 'issue' })
+      const fullIssuePromise = target
+        ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.workItem>>>(
+            target,
+            'github.workItem',
+            { repo: newIssueTargetRepo.id, number: result.number, type: 'issue' },
+            { timeoutMs: 30_000 }
+          )
+        : window.api.gh.workItem({
+            repoPath: newIssueTargetRepo.path,
+            repoId: newIssueTargetRepo.id,
+            number: result.number,
+            type: 'issue'
+          })
+      void fullIssuePromise
         .then((full) => {
           if (full) {
             // Why: `full` is `Omit<GitHubWorkItem, 'repoId'>` (IPC shape).
@@ -1687,10 +1831,11 @@ export default function TaskPage(): React.JSX.Element {
     }
     setNewLinearIssueSubmitting(true)
     try {
-      const result = await window.api.linear.createIssue({
+      const result = await linearCreateIssue(settings, {
         teamId: newLinearIssueTargetTeam.id,
         title,
-        description: newLinearIssueBody || undefined
+        description: newLinearIssueBody || undefined,
+        workspaceId: newLinearIssueTargetTeam.workspaceId
       })
       if (!result.ok) {
         toast.error(result.error || 'Failed to create issue.')
@@ -1711,8 +1856,7 @@ export default function TaskPage(): React.JSX.Element {
 
       // Why: auto-open the new issue in the side drawer so the user sees
       // exactly what was filed, mirroring the GitHub create-issue flow.
-      void window.api.linear
-        .getIssue({ id: result.id })
+      void linearGetIssue(settings, result.id, newLinearIssueTargetTeam.workspaceId)
         .then((full) => {
           if (full) {
             setDrawerLinearIssue(full)
@@ -1727,6 +1871,7 @@ export default function TaskPage(): React.JSX.Element {
     newLinearIssueSubmitting,
     newLinearIssueTargetTeam,
     newLinearIssueTitle,
+    settings,
     setDrawerLinearIssue
   ])
 
@@ -1860,6 +2005,7 @@ export default function TaskPage(): React.JSX.Element {
   }, [
     taskSource,
     linearStatus.connected,
+    selectedLinearWorkspaceId,
     appliedLinearSearch,
     activeLinearPreset,
     linearRefreshNonce,
@@ -1876,7 +2022,8 @@ export default function TaskPage(): React.JSX.Element {
         type: 'issue',
         number: 0,
         title: issue.title,
-        url: issue.url
+        url: issue.url,
+        linearIdentifier: issue.identifier
       }
       openModal('new-workspace-composer', {
         linkedWorkItem,
@@ -1990,27 +2137,55 @@ export default function TaskPage(): React.JSX.Element {
                       )
                     })}
                   </div>
-                  {taskSource === 'linear' && availableTeams.length > 0 ? (
-                    <div className="w-[200px]">
-                      <TeamMultiCombobox
-                        teams={availableTeams}
-                        selected={linearTeamSelection}
-                        onChange={(next) => {
-                          setLinearTeamSelection(next)
-                          void updateSettings({ defaultLinearTeamSelection: [...next] }).catch(
-                            () => {
-                              toast.error('Failed to save team selection.')
-                            }
-                          )
-                        }}
-                        onSelectAll={() => {
-                          setLinearTeamSelection(new Set(availableTeams.map((t) => t.id)))
-                          void updateSettings({ defaultLinearTeamSelection: null }).catch(() => {
-                            toast.error('Failed to save team selection.')
-                          })
-                        }}
-                        triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
-                      />
+                  {taskSource === 'linear' && linearStatus.connected ? (
+                    <div className="flex items-center gap-2">
+                      {linearWorkspaces.length > 1 ? (
+                        <Select
+                          value={selectedLinearWorkspaceId ?? undefined}
+                          onValueChange={(value) => {
+                            void selectLinearWorkspace(value).catch(() => {
+                              toast.error('Failed to switch Linear workspace.')
+                            })
+                          }}
+                        >
+                          <SelectTrigger className="h-8 w-[200px] rounded-md border-border/50 bg-muted/50 text-xs font-medium shadow-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All workspaces</SelectItem>
+                            {linearWorkspaces.map((workspace) => (
+                              <SelectItem key={workspace.id} value={workspace.id}>
+                                {workspace.organizationName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : null}
+                      {availableTeams.length > 0 ? (
+                        <div className="w-[200px]">
+                          <TeamMultiCombobox
+                            teams={availableTeams}
+                            selected={linearTeamSelection}
+                            onChange={(next) => {
+                              setLinearTeamSelection(next)
+                              void updateSettings({ defaultLinearTeamSelection: [...next] }).catch(
+                                () => {
+                                  toast.error('Failed to save team selection.')
+                                }
+                              )
+                            }}
+                            onSelectAll={() => {
+                              setLinearTeamSelection(new Set(availableTeams.map((t) => t.id)))
+                              void updateSettings({ defaultLinearTeamSelection: null }).catch(
+                                () => {
+                                  toast.error('Failed to save team selection.')
+                                }
+                              )
+                            }}
+                            triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
+                          />
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
@@ -2168,6 +2343,8 @@ export default function TaskPage(): React.JSX.Element {
                       <div className="relative min-w-[320px] flex-1">
                         <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                         <Input
+                          ref={taskSearchInputRef}
+                          data-github-items-search-input
                           value={taskSearchInput}
                           onChange={handleTaskSearchChange}
                           onKeyDown={handleTaskSearchKeyDown}
@@ -2693,7 +2870,7 @@ export default function TaskPage(): React.JSX.Element {
                         </div>
 
                         <div className="flex items-center">
-                          <GHStatusCell item={item} repoPath={itemRepo?.path ?? null} />
+                          <GHStatusCell item={item} repo={itemRepo ?? null} />
                         </div>
 
                         <Tooltip>
@@ -3068,6 +3245,9 @@ export default function TaskPage(): React.JSX.Element {
                           {issue.title}
                         </h3>
                         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                          {selectedLinearWorkspaceId === 'all' && issue.workspaceName ? (
+                            <span>{issue.workspaceName}</span>
+                          ) : null}
                           {issue.assignee ? <span>{issue.assignee.displayName}</span> : null}
                           {issue.labels.slice(0, 3).map((label) => (
                             <span
@@ -3333,7 +3513,11 @@ export default function TaskPage(): React.JSX.Element {
             <DialogDescription>
               {availableTeams.length > 1
                 ? 'Creates a new issue in the selected team.'
-                : `Creates a new issue in ${newLinearIssueTargetTeam?.name ?? 'your team'}.`}
+                : `Creates a new issue in ${
+                    newLinearIssueTargetTeam?.workspaceName
+                      ? `${newLinearIssueTargetTeam.workspaceName} / `
+                      : ''
+                  }${newLinearIssueTargetTeam?.name ?? 'your team'}.`}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
@@ -3351,6 +3535,9 @@ export default function TaskPage(): React.JSX.Element {
                   <SelectContent>
                     {availableTeams.map((t) => (
                       <SelectItem key={t.id} value={t.id}>
+                        {selectedLinearWorkspaceId === 'all' && t.workspaceName
+                          ? `${t.workspaceName} · `
+                          : ''}
                         {t.key} — {t.name}
                       </SelectItem>
                     ))}
@@ -3425,6 +3612,7 @@ export default function TaskPage(): React.JSX.Element {
           // scan on every render while the dialog is open.
           dialogWorkItem ? (repoMap.get(dialogWorkItem.repoId)?.path ?? null) : null
         }
+        repoId={dialogWorkItem?.repoId ?? null}
         onUse={(item) => {
           setDialogWorkItem(null)
           handleUseWorkItem(item)
@@ -3478,10 +3666,10 @@ export default function TaskPage(): React.JSX.Element {
           }}
         >
           <DialogHeader className="gap-3">
-            <DialogTitle className="leading-tight">Connect Linear</DialogTitle>
+            <DialogTitle className="leading-tight">Connect Linear workspace</DialogTitle>
             <DialogDescription>
               Paste a <strong className="font-semibold text-foreground">Personal API key</strong> to
-              browse your assigned issues.
+              browse issues from that workspace.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">

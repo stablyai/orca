@@ -2,6 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeAutoAckTargets } from './useAutoAckViewedAgent'
 import { createTestStore, makeTab } from '../store/slices/store-test-helpers'
 import type { RetainedAgentEntry } from '../store/slices/agent-status'
+import { makePaneKey } from '../../../shared/stable-pane-id'
+
+const CODEX_LEAF_ID = '11111111-1111-4111-8111-111111111111'
+const OTHER_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 
 // Why: regression coverage for the codex inline-agent row that stayed bold
 // after returning from another workspace (docs/codex-agent-row-bold-stuck.md).
@@ -26,8 +30,8 @@ describe('computeAutoAckTargets — codex retain race regression', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-05-05T12:00:00.000Z'))
     const store = createTestStore()
-    const paneKey = 'tab-codex:2'
     const activeTabId = 'tab-codex'
+    const paneKey = makePaneKey(activeTabId, CODEX_LEAF_ID)
 
     // 1. Codex starts working, user acks it (e.g. by clicking the row).
     store.getState().setAgentStatus(paneKey, {
@@ -72,7 +76,7 @@ describe('computeAutoAckTargets — codex retain race regression', () => {
 
     // 5. The user is back on the codex tab. computeAutoAckTargets must see
     //    the retained row and surface it for ack — pre-fix this returned [].
-    const targets = computeAutoAckTargets(store.getState(), activeTabId)
+    const targets = computeAutoAckTargets(store.getState(), activeTabId, CODEX_LEAF_ID)
     expect(targets).toEqual([paneKey])
   })
 
@@ -80,8 +84,8 @@ describe('computeAutoAckTargets — codex retain race regression', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-05-05T12:00:00.000Z'))
     const store = createTestStore()
-    const paneKey = 'tab-codex:2'
     const activeTabId = 'tab-codex'
+    const paneKey = makePaneKey(activeTabId, CODEX_LEAF_ID)
 
     store.getState().setAgentStatus(paneKey, {
       state: 'done',
@@ -101,19 +105,19 @@ describe('computeAutoAckTargets — codex retain race regression', () => {
     store.getState().removeAgentStatus(paneKey)
 
     // First scan: the retained row is unvisited.
-    expect(computeAutoAckTargets(store.getState(), activeTabId)).toEqual([paneKey])
+    expect(computeAutoAckTargets(store.getState(), activeTabId, CODEX_LEAF_ID)).toEqual([paneKey])
 
     // Simulate the ack effect.
     vi.setSystemTime(new Date('2026-05-05T12:00:01.000Z'))
     store.getState().acknowledgeAgents([paneKey])
 
     // Second scan: idempotent — nothing to ack.
-    expect(computeAutoAckTargets(store.getState(), activeTabId)).toEqual([])
+    expect(computeAutoAckTargets(store.getState(), activeTabId, CODEX_LEAF_ID)).toEqual([])
   })
 
   it('skips retained rows whose paneKey is on a different tab', () => {
     const store = createTestStore()
-    const paneKey = 'tab-other:0'
+    const paneKey = makePaneKey('tab-other', OTHER_LEAF_ID)
     store.getState().setAgentStatus(paneKey, {
       state: 'done',
       prompt: 'p',
@@ -134,15 +138,15 @@ describe('computeAutoAckTargets — codex retain race regression', () => {
     // Active tab differs — the retained row must NOT be acked while the user
     // is looking at a different tab; the bold-until-viewed signal must
     // survive the tab switch.
-    expect(computeAutoAckTargets(store.getState(), 'tab-codex')).toEqual([])
+    expect(computeAutoAckTargets(store.getState(), 'tab-codex', CODEX_LEAF_ID)).toEqual([])
   })
 
   it('acks a paneKey present in BOTH live and retained without throwing', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-05-05T12:00:00.000Z'))
     const store = createTestStore()
-    const paneKey = 'tab-codex:2'
     const activeTabId = 'tab-codex'
+    const paneKey = makePaneKey(activeTabId, CODEX_LEAF_ID)
 
     // Construct a (rare) state where retainedAgentsByPaneKey and
     // agentStatusByPaneKey both contain the same paneKey — e.g. the
@@ -165,7 +169,7 @@ describe('computeAutoAckTargets — codex retain race regression', () => {
       }
     ])
 
-    const targets = computeAutoAckTargets(store.getState(), activeTabId)
+    const targets = computeAutoAckTargets(store.getState(), activeTabId, CODEX_LEAF_ID)
     // Two pushes, same paneKey — duplicates are intentional and harmless;
     // acknowledgeAgents short-circuits per key.
     expect(targets.length).toBeLessThanOrEqual(2)

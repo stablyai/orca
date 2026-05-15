@@ -1,10 +1,17 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../shared/runtime-types'
+import type {
+  RuntimeStatus,
+  RuntimeSyncWindowGraph,
+  RuntimeTerminalDriverState
+} from '../../shared/runtime-types'
+import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 
 export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
   ipcMain.removeHandler('runtime:syncWindowGraph')
   ipcMain.removeHandler('runtime:getStatus')
+  ipcMain.removeHandler('runtime:call')
 
   ipcMain.handle(
     'runtime:syncWindowGraph',
@@ -21,6 +28,21 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
     return runtime.getStatus()
   })
 
+  ipcMain.handle(
+    'runtime:call',
+    async (
+      _event,
+      args: { method: string; params?: unknown }
+    ): Promise<RuntimeRpcResponse<unknown>> => {
+      return (await new RpcDispatcher({ runtime }).dispatch({
+        id: 'desktop-ipc',
+        authToken: 'desktop-ipc',
+        method: args.method,
+        params: args.params
+      })) as RuntimeRpcResponse<unknown>
+    }
+  )
+
   ipcMain.removeHandler('runtime:getTerminalFitOverrides')
   ipcMain.handle(
     'runtime:getTerminalFitOverrides',
@@ -30,6 +52,15 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
         ptyId,
         ...override
       }))
+    }
+  )
+
+  ipcMain.removeHandler('runtime:getTerminalDrivers')
+  ipcMain.handle(
+    'runtime:getTerminalDrivers',
+    (): { ptyId: string; driver: RuntimeTerminalDriverState }[] => {
+      const drivers = runtime.getAllTerminalDrivers()
+      return Array.from(drivers.entries()).map(([ptyId, driver]) => ({ ptyId, driver }))
     }
   )
 

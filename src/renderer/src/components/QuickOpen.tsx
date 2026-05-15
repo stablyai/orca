@@ -6,6 +6,7 @@ import { useActiveWorktree, useWorktreesForRepo } from '@/store/selectors'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
 import { getConnectionId } from '@/lib/connection-context'
+import { listRuntimeFiles } from '@/runtime/runtime-file-client'
 import {
   CommandDialog,
   CommandInput,
@@ -254,15 +255,18 @@ export default function QuickOpen(): React.JSX.Element | null {
 
     const excludePaths = excludePathsKey ? excludePathsKey.split('\n') : undefined
 
-    void window.api.fs
-      // Why: quick-open shares the active worktree path model with file explorer
-      // and search, so remote worktrees must include connectionId. Without this,
-      // Windows resolves Linux roots (e.g. /home/*) as local C:\home\* paths.
-      .listFiles({
+    void listRuntimeFiles(
+      {
+        settings: useAppStore.getState().settings,
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        connectionId
+      },
+      {
         rootPath: worktreePath,
-        connectionId,
         excludePaths
-      })
+      }
+    )
       .then((result) => {
         if (!cancelled) {
           setFiles(result)
@@ -289,7 +293,7 @@ export default function QuickOpen(): React.JSX.Element | null {
     return () => {
       cancelled = true
     }
-  }, [visible, worktreePath, connectionId, excludePathsKey, filesRequestKey])
+  }, [visible, activeWorktreeId, worktreePath, connectionId, excludePathsKey, filesRequestKey])
 
   // Filter files by fuzzy match
   const filtered = useMemo(() => {

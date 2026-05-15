@@ -36,8 +36,10 @@ import {
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import {
   type AgentStatusIpcPayload,
+  type AgentStatusState,
   normalizeAgentStatusPayload
 } from '../../shared/agent-status-types'
+import { parsePaneKey } from '../../shared/stable-pane-id'
 
 export type { AgentHookSource }
 
@@ -53,6 +55,14 @@ type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   receivedAt: number
   stateStartedAt: number
 }
+
+export type AgentHookStatusChangeEntry = {
+  state: AgentStatusState
+  receivedAt: number
+  observedInCurrentRuntime: boolean
+}
+
+type StatusChangeListener = (statuses: AgentHookStatusChangeEntry[]) => void
 
 // Why: name of the on-disk cache that survives Orca restart. Lives next to
 // the endpoint file in userData/agent-hooks/ so all hook-server-owned cross-
@@ -86,26 +96,18 @@ type LastStatusFile = {
   entries: Record<string, EnrichedAgentHookEventPayload>
 }
 
-// Why: paneKey is `${tabId}:${paneId}` — exactly one ':' with non-empty
-// segments on either side. Used both at write time (defensive) and at
-// hydrate time (drop on mismatch).
+// Why: paneKey is `${tabId}:${leafUuid}` — validate the durable leaf suffix
+// at write/hydrate time so legacy numeric rows fail closed.
 export function isValidPaneKey(value: unknown): value is string {
-  if (typeof value !== 'string' || value.length === 0) {
-    return false
-  }
-  const colon = value.indexOf(':')
-  if (colon <= 0 || colon === value.length - 1) {
-    return false
-  }
-  // Why: exactly one colon. Anything weirder is corruption.
-  return !value.includes(':', colon + 1)
+  return typeof value === 'string' && parsePaneKey(value) !== null
 }
 
 function sanitizeHydratedEntry(
   paneKey: string,
   rawEntry: unknown
 ): EnrichedAgentHookEventPayload | null {
-  if (!isValidPaneKey(paneKey)) {
+  const parsedPaneKey = parsePaneKey(paneKey)
+  if (!parsedPaneKey) {
     return null
   }
   if (typeof rawEntry !== 'object' || rawEntry === null) {
@@ -119,10 +121,10 @@ function sanitizeHydratedEntry(
   if (tabId !== undefined && (typeof tabId !== 'string' || tabId.length === 0)) {
     return null
   }
-  // Why: paneKey is `${tabId}:${paneId}`; a stored entry whose tabId field
+  // Why: paneKey is `${tabId}:${leafUuid}`; a stored entry whose tabId field
   // diverges from the key's tab segment is corruption (renamer bug, manual
   // edit, future shape drift). Drop instead of hydrating an inconsistent row.
-  if (typeof tabId === 'string' && tabId !== paneKey.slice(0, paneKey.indexOf(':'))) {
+  if (typeof tabId === 'string' && tabId !== parsedPaneKey.tabId) {
     return null
   }
   const worktreeId = record.worktreeId
@@ -199,6 +201,7 @@ export class AgentHookServer {
   // caller's knowledge of whether this is a packaged build.
   private env = 'production'
   private onAgentStatus: ((payload: EnrichedAgentHookEventPayload) => void) | null = null
+  private statusChangeListeners = new Set<StatusChangeListener>()
   // Why: directory that holds the on-disk endpoint file. Set via start()'s
   // `userDataPath` option so the class has no direct Electron dependency
   // (keeps it mockable in the vitest node environment).
@@ -209,6 +212,9 @@ export class AgentHookServer {
   // by paneKey). Held on the instance instead of as module-level Maps so
   // tests can spin up multiple servers without state cross-contamination.
   private state: HookListenerState = createHookListenerState()
+  // Why: hydrated last-status rows are useful UI continuity, but they are not
+  // evidence of live agent work in this main-process runtime.
+  private runtimeObservedStatusPaneKeys = new Set<string>()
   // Why: full path to the on-disk last-status cache. Set in start() from
   // userDataPath. Null when the server runs without a userDataPath (e.g.
   // tests that skip the userDataPath option) — in that case, persistence is
@@ -243,6 +249,13 @@ export class AgentHookServer {
     }
   }
 
+  subscribeStatusChanges(listener: StatusChangeListener): () => void {
+    this.statusChangeListeners.add(listener)
+    return () => {
+      this.statusChangeListeners.delete(listener)
+    }
+  }
+
   /** Snapshot of the current cached statuses, in the IPC-shaped form the
    *  renderer consumes. Used by the `agentStatus:getSnapshot` IPC after
    *  workspace tabs have hydrated, so the dashboard catches up on any
@@ -251,6 +264,31 @@ export class AgentHookServer {
     return Array.from(this.state.lastStatusByPaneKey.values(), (entry) =>
       toAgentStatusIpcPayload(entry as EnrichedAgentHookEventPayload)
     )
+  }
+
+  getStatusChangeSnapshot(): AgentHookStatusChangeEntry[] {
+    return Array.from(this.state.lastStatusByPaneKey.entries(), ([paneKey, entry]) => {
+      const enriched = entry as EnrichedAgentHookEventPayload
+      return {
+        state: enriched.payload.state,
+        receivedAt: enriched.receivedAt,
+        observedInCurrentRuntime: this.runtimeObservedStatusPaneKeys.has(paneKey)
+      }
+    })
+  }
+
+  private notifyStatusChangeListeners(): void {
+    if (this.statusChangeListeners.size === 0) {
+      return
+    }
+    const snapshot = this.getStatusChangeSnapshot()
+    for (const listener of this.statusChangeListeners) {
+      try {
+        listener(snapshot)
+      } catch (err) {
+        console.error('[agent-hooks] status-change listener threw', err)
+      }
+    }
   }
 
   private attachStatusTiming(payload: AgentHookEventPayload): EnrichedAgentHookEventPayload {
@@ -304,11 +342,15 @@ export class AgentHookServer {
     // length-caps paneKey before caching, so the cache key here must follow
     // the same rule or remote-vs-local events for the same pane would diverge.
     const paneKey = envelope.paneKey.trim()
+    const parsedPaneKey = parsePaneKey(paneKey)
     if (paneKey.length === 0) {
       track('agent_hook_unattributed', { reason: 'empty_pane_key' })
       return
     }
     if (paneKey.length > MAX_PANE_KEY_LEN) {
+      return
+    }
+    if (!parsedPaneKey) {
       return
     }
     if (envelope.tabId !== undefined && typeof envelope.tabId !== 'string') {
@@ -324,6 +366,9 @@ export class AgentHookServer {
       envelope.tabId !== undefined && envelope.tabId.trim().length > 0
         ? envelope.tabId.trim()
         : undefined
+    if (tabId !== undefined && tabId !== parsedPaneKey.tabId) {
+      return
+    }
     const worktreeId =
       envelope.worktreeId !== undefined && envelope.worktreeId.trim().length > 0
         ? envelope.worktreeId.trim()
@@ -354,8 +399,10 @@ export class AgentHookServer {
       payload: normalizedPayload
     }
     const enriched = this.attachStatusTiming(event)
+    this.runtimeObservedStatusPaneKeys.add(paneKey)
     this.state.lastStatusByPaneKey.set(paneKey, enriched)
     this.scheduleStatusPersist()
+    this.notifyStatusChangeListeners()
     this.onAgentStatus?.(enriched)
   }
 
@@ -416,8 +463,10 @@ export class AgentHookServer {
         const normalized = normalizeHookPayload(this.state, source, body, this.env)
         if (normalized) {
           const enriched = this.attachStatusTiming(normalized)
+          this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
           this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
           this.scheduleStatusPersist()
+          this.notifyStatusChangeListeners()
           this.onAgentStatus?.(enriched)
         }
 
@@ -477,7 +526,9 @@ export class AgentHookServer {
     this.endpointFileWritten = false
     this.lastStatusFilePath = null
     this.lastWrittenJson = null
+    this.runtimeObservedStatusPaneKeys.clear()
     clearAllListenerCaches(this.state)
+    this.notifyStatusChangeListeners()
   }
 
   /** Why: invoked from the renderer-driven agentStatus:drop IPC when a user
@@ -492,7 +543,9 @@ export class AgentHookServer {
       return
     }
     this.state.lastStatusByPaneKey.delete(paneKey)
+    this.runtimeObservedStatusPaneKeys.delete(paneKey)
     this.scheduleStatusPersist()
+    this.notifyStatusChangeListeners()
   }
 
   clearPaneState(paneKey: string): void {
@@ -503,7 +556,9 @@ export class AgentHookServer {
     const hadStatus = this.state.lastStatusByPaneKey.has(paneKey)
     clearPaneCacheState(this.state, paneKey)
     if (hadStatus) {
+      this.runtimeObservedStatusPaneKeys.delete(paneKey)
       this.scheduleStatusPersist()
+      this.notifyStatusChangeListeners()
     }
   }
 

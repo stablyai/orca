@@ -1,9 +1,13 @@
 import { useCallback } from 'react'
-import { AlertTriangle, HardDrive, Loader2, RefreshCw } from 'lucide-react'
+import { AlertTriangle, HardDrive, Loader2, RefreshCw, X } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
-import { formatBytes, getWorkspaceSpaceScanTimeLabel } from './workspace-space-format'
+import {
+  formatBytes,
+  getWorkspaceSpaceProgressLabel,
+  getWorkspaceSpaceScanTimeLabel
+} from './workspace-space-format'
 
 export function WorkspaceSpaceCompactPanel({
   onOpenFullPage
@@ -11,15 +15,22 @@ export function WorkspaceSpaceCompactPanel({
   onOpenFullPage: () => void
 }): React.JSX.Element {
   const analysis = useAppStore((state) => state.workspaceSpaceAnalysis)
+  const progress = useAppStore((state) => state.workspaceSpaceScanProgress)
   const scanError = useAppStore((state) => state.workspaceSpaceScanError)
   const isScanning = useAppStore((state) => state.workspaceSpaceScanning)
   const refreshWorkspaceSpace = useAppStore((state) => state.refreshWorkspaceSpace)
+  const cancelWorkspaceSpaceScan = useAppStore((state) => state.cancelWorkspaceSpaceScan)
+  const progressLabel = getWorkspaceSpaceProgressLabel(progress)
 
   const scan = useCallback((): void => {
     void refreshWorkspaceSpace().catch(() => {
       /* scanError is stored by the slice */
     })
   }, [refreshWorkspaceSpace])
+
+  const cancelScan = useCallback((): void => {
+    void cancelWorkspaceSpaceScan()
+  }, [cancelWorkspaceSpaceScan])
 
   return (
     <div className="border-t border-border/50 bg-muted/15 px-3 py-2">
@@ -35,25 +46,45 @@ export function WorkspaceSpaceCompactPanel({
             </div>
             <div className="truncate text-[11px] text-muted-foreground">
               {analysis
-                ? `${formatBytes(analysis.reclaimableBytes)} reclaimable · ${analysis.scannedWorktreeCount} workspaces`
+                ? isScanning
+                  ? `${progressLabel ?? 'Scanning workspace sizes'} · last result kept`
+                  : analysis.unavailableWorktreeCount > 0
+                    ? `${formatBytes(analysis.reclaimableBytes)} reclaimable · ${analysis.unavailableWorktreeCount} unavailable`
+                    : `${formatBytes(analysis.reclaimableBytes)} reclaimable · ${analysis.scannedWorktreeCount} workspaces`
                 : isScanning
-                  ? 'Scanning workspace sizes.'
+                  ? (progressLabel ?? 'Scanning workspace sizes.')
                   : 'Workspace disk usage is not scanned.'}
             </div>
           </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
-          <Button variant="outline" size="xs" onClick={scan} disabled={isScanning}>
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={isScanning ? cancelScan : scan}
+            disabled={progress?.state === 'cancelling'}
+            className="w-24"
+          >
             {isScanning ? (
-              <Loader2 className="size-3 animate-spin" />
+              progress?.state === 'cancelling' ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <X className="size-3" />
+              )
             ) : (
               <RefreshCw className="size-3" />
             )}
-            {isScanning ? 'Scanning' : analysis ? 'Refresh' : 'Scan'}
+            {isScanning
+              ? progress?.state === 'cancelling'
+                ? 'Stopping'
+                : 'Cancel'
+              : analysis
+                ? 'Refresh'
+                : 'Scan'}
           </Button>
           <Button variant="ghost" size="xs" onClick={onOpenFullPage}>
-            Open
+            Review
           </Button>
         </div>
       </div>

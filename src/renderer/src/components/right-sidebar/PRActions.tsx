@@ -41,6 +41,7 @@ export default function PRActions({
       try {
         const result = await window.api.gh.mergePR({
           repoPath: repo.path,
+          repoId: repo.id,
           prNumber: pr.number,
           method
         })
@@ -55,7 +56,7 @@ export default function PRActions({
         setMerging(false)
       }
     },
-    [repo.path, pr.number, onRefreshPR]
+    [repo.id, repo.path, pr.number, onRefreshPR]
   )
 
   useEffect(() => {

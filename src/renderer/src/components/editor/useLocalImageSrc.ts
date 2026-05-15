@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { resolveImageAbsolutePath } from './markdown-preview-links'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import { readRuntimeFilePreview } from '@/runtime/runtime-file-client'
 
 // Why: the renderer is served from http://localhost in dev mode, so file://
 // URLs in <img> tags are blocked by cross-origin restrictions. Loading images
@@ -8,6 +10,21 @@ import { resolveImageAbsolutePath } from './markdown-preview-links'
 
 const BLOB_URL_CACHE_MAX_SIZE = 100
 const blobUrlCache = new Map<string, string>()
+
+export function getLocalImageCacheKey(
+  absolutePath: string,
+  connectionId?: string | null,
+  runtimeContext?: Omit<RuntimeFileOperationArgs, 'connectionId'> & { connectionId?: string | null }
+): string {
+  const runtimeEnvironmentId =
+    runtimeContext?.settings?.activeRuntimeEnvironmentId?.trim() ?? 'client'
+  return [
+    runtimeEnvironmentId,
+    runtimeContext?.connectionId ?? connectionId ?? 'local',
+    runtimeContext?.worktreeId ?? 'unknown-worktree',
+    absolutePath
+  ].join('\0')
+}
 
 // Why: blob URLs hold references to in-memory Blob objects; without eviction
 // the cache grows without bound and leaks memory. We evict the oldest entry
@@ -97,7 +114,8 @@ function isExternalUrl(src: string): boolean {
 export function useLocalImageSrc(
   rawSrc: string | undefined,
   filePath: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  runtimeContext?: Omit<RuntimeFileOperationArgs, 'connectionId'> & { connectionId?: string | null }
 ): string | undefined {
   const [generation, setGeneration] = useState(cacheGeneration)
 
@@ -113,8 +131,11 @@ export function useLocalImageSrc(
       return rawSrc
     }
     const absolutePath = resolveImageAbsolutePath(rawSrc, filePath)
-    if (absolutePath && blobUrlCache.has(absolutePath)) {
-      return blobUrlCache.get(absolutePath)
+    if (absolutePath) {
+      const cacheKey = getLocalImageCacheKey(absolutePath, connectionId, runtimeContext)
+      if (blobUrlCache.has(cacheKey)) {
+        return blobUrlCache.get(cacheKey)
+      }
     }
     return undefined
   })
@@ -136,21 +157,21 @@ export function useLocalImageSrc(
       return
     }
 
-    if (blobUrlCache.has(absolutePath)) {
-      setDisplaySrc(blobUrlCache.get(absolutePath))
+    const cacheKey = getLocalImageCacheKey(absolutePath, connectionId, runtimeContext)
+    if (blobUrlCache.has(cacheKey)) {
+      setDisplaySrc(blobUrlCache.get(cacheKey))
       return
     }
 
     let cancelled = false
-    window.api.fs
-      .readFile({ filePath: absolutePath, connectionId: connectionId ?? undefined })
+    readImagePreview(absolutePath, connectionId, runtimeContext)
       .then((result) => {
         if (cancelled) {
           return
         }
         if (result.isBinary && result.content) {
           const url = base64ToBlobUrl(result.content, result.mimeType ?? 'image/png')
-          cacheBlobUrl(absolutePath, url)
+          cacheBlobUrl(cacheKey, url)
           setDisplaySrc(url)
         } else {
           // Why: if the file exists but is not binary (e.g. an SVG stored as
@@ -168,7 +189,7 @@ export function useLocalImageSrc(
     return () => {
       cancelled = true
     }
-  }, [rawSrc, filePath, generation, connectionId])
+  }, [rawSrc, filePath, generation, connectionId, runtimeContext])
 
   return displaySrc
 }
@@ -181,7 +202,8 @@ export function useLocalImageSrc(
 export async function loadLocalImageSrc(
   rawSrc: string,
   filePath: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  runtimeContext?: Omit<RuntimeFileOperationArgs, 'connectionId'> & { connectionId?: string | null }
 ): Promise<string | null> {
   if (
     rawSrc.startsWith('http://') ||
@@ -197,19 +219,17 @@ export async function loadLocalImageSrc(
     return null
   }
 
-  const cached = blobUrlCache.get(absolutePath)
+  const cacheKey = getLocalImageCacheKey(absolutePath, connectionId, runtimeContext)
+  const cached = blobUrlCache.get(cacheKey)
   if (cached) {
     return cached
   }
 
   try {
-    const result = await window.api.fs.readFile({
-      filePath: absolutePath,
-      connectionId: connectionId ?? undefined
-    })
+    const result = await readImagePreview(absolutePath, connectionId, runtimeContext)
     if (result.isBinary && result.content) {
       const url = base64ToBlobUrl(result.content, result.mimeType ?? 'image/png')
-      cacheBlobUrl(absolutePath, url)
+      cacheBlobUrl(cacheKey, url)
       return url
     }
     // Why: if the file is not binary (e.g. an SVG stored as text) or content
@@ -221,4 +241,24 @@ export async function loadLocalImageSrc(
   }
 
   return null
+}
+
+function readImagePreview(
+  absolutePath: string,
+  connectionId?: string | null,
+  runtimeContext?: Omit<RuntimeFileOperationArgs, 'connectionId'> & { connectionId?: string | null }
+) {
+  if (!runtimeContext) {
+    return window.api.fs.readFile({
+      filePath: absolutePath,
+      connectionId: connectionId ?? undefined
+    })
+  }
+  return readRuntimeFilePreview(
+    {
+      ...runtimeContext,
+      connectionId: runtimeContext.connectionId ?? connectionId ?? undefined
+    },
+    absolutePath
+  )
 }
