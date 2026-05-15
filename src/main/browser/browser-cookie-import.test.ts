@@ -227,9 +227,134 @@ describe('detectInstalledBrowsers', () => {
 
   it('each detected browser has a valid family', () => {
     const browsers = detectInstalledBrowsers()
-    const validFamilies = ['chrome', 'edge', 'arc', 'chromium', 'firefox', 'safari']
+    const validFamilies = ['chrome', 'edge', 'arc', 'chromium', 'firefox', 'safari', 'comet']
     for (const browser of browsers) {
       expect(validFamilies).toContain(browser.family)
     }
+  })
+})
+
+describe('detectInstalledBrowsers — Comet', () => {
+  const originalPlatform = process.platform
+  const originalHome = process.env.HOME
+
+  beforeEach(() => {
+    // Why: browser-cookie-import.ts uses destructured named imports from
+    // 'node:fs' which are bound at module-load time. Without vi.resetModules(),
+    // only the first test's vi.doMock takes effect — subsequent tests see the
+    // cached module with the first mock still applied. resetModules must run
+    // BEFORE each doMock so the next import() picks up the fresh mock factory.
+    vi.resetModules()
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    process.env.HOME = '/Users/test'
+  })
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: originalPlatform })
+    process.env.HOME = originalHome
+    vi.restoreAllMocks()
+  })
+
+  it('detects Comet when its data directory and Cookies DB exist', async () => {
+    vi.doMock('node:fs', async () => {
+      const actual = await vi.importActual<typeof import('node:fs')>('node:fs')
+      return {
+        ...actual,
+        existsSync: (p: string) => {
+          if (p.includes('Comet/Default/Network/Cookies')) return true
+          if (p.includes('Comet/Local State')) return true
+          return false
+        },
+        readFileSync: (p: string, enc?: string) => {
+          if (typeof p === 'string' && p.includes('Comet/Local State')) {
+            return JSON.stringify({ profile: { info_cache: { Default: { name: 'Default' } } } })
+          }
+          return actual.readFileSync(p as never, enc as never)
+        }
+      }
+    })
+
+    const { detectInstalledBrowsers } = await import('./browser-cookie-import')
+    const detected = detectInstalledBrowsers()
+    const comet = detected.find((b) => b.family === 'comet')
+    expect(comet).toBeDefined()
+    expect(comet?.label).toBe('Comet')
+    expect(comet?.cookiesPath).toContain('Comet/Default/Network/Cookies')
+    expect(comet?.keychainService).toBe('Comet Safe Storage')
+  })
+
+  it('does not list Comet when its data directory is absent', async () => {
+    vi.doMock('node:fs', async () => {
+      const actual = await vi.importActual<typeof import('node:fs')>('node:fs')
+      return {
+        ...actual,
+        existsSync: () => false
+      }
+    })
+
+    const { detectInstalledBrowsers } = await import('./browser-cookie-import')
+    const detected = detectInstalledBrowsers()
+    expect(detected.find((b) => b.family === 'comet')).toBeUndefined()
+  })
+
+  it('enumerates all Comet profiles from Local State info_cache', async () => {
+    vi.doMock('node:fs', async () => {
+      const actual = await vi.importActual<typeof import('node:fs')>('node:fs')
+      return {
+        ...actual,
+        existsSync: (p: string) => {
+          if (p.includes('Comet/Default/Network/Cookies')) return true
+          if (p.includes('Comet/Local State')) return true
+          return false
+        },
+        readFileSync: (p: string, enc?: string) => {
+          if (typeof p === 'string' && p.includes('Comet/Local State')) {
+            return JSON.stringify({
+              profile: {
+                info_cache: {
+                  Default: { name: 'Personal' },
+                  'Profile 1': { name: 'Work' },
+                  'Profile 2': { name: 'Research' }
+                }
+              }
+            })
+          }
+          return actual.readFileSync(p as never, enc as never)
+        }
+      }
+    })
+
+    const { detectInstalledBrowsers } = await import('./browser-cookie-import')
+    const detected = detectInstalledBrowsers()
+    const comet = detected.find((b) => b.family === 'comet')
+    expect(comet).toBeDefined()
+    const directories = comet!.profiles.map((p) => p.directory).sort()
+    expect(directories).toEqual(['Default', 'Profile 1', 'Profile 2'])
+    const names = comet!.profiles.map((p) => p.name).sort()
+    expect(names).toEqual(['Personal', 'Research', 'Work'])
+  })
+
+  it('skips Comet when the data directory exists but no Cookies DB is present', async () => {
+    vi.doMock('node:fs', async () => {
+      const actual = await vi.importActual<typeof import('node:fs')>('node:fs')
+      return {
+        ...actual,
+        existsSync: (p: string) => {
+          if (p.includes('Comet/Local State')) return true
+          if (p.includes('Network/Cookies') || p.endsWith('/Cookies')) return false
+          return false
+        },
+        readFileSync: (p: string, enc?: string) => {
+          if (typeof p === 'string' && p.includes('Comet/Local State')) {
+            return JSON.stringify({ profile: { info_cache: { Default: { name: 'Default' } } } })
+          }
+          return actual.readFileSync(p as never, enc as never)
+        }
+      }
+    })
+
+    const { detectInstalledBrowsers } = await import('./browser-cookie-import')
+    const detected = detectInstalledBrowsers()
+    expect(detected.find((b) => b.family === 'comet')).toBeUndefined()
   })
 })
