@@ -6,6 +6,8 @@ export type DropdownActionKind =
   | 'commit'
   | 'commit_push'
   | 'commit_sync'
+  | 'create_pr'
+  | 'push_create_pr'
   | 'push'
   | 'pull'
   | 'sync'
@@ -17,6 +19,7 @@ export type DropdownItem = {
   label: string
   title: string
   disabled: boolean
+  hint?: string
 }
 
 export type DropdownSeparator = { kind: 'separator' }
@@ -58,7 +61,10 @@ export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry
     hasUnresolvedConflicts,
     isCommitting,
     isRemoteOperationActive,
-    upstreamStatus
+    upstreamStatus,
+    prState,
+    isPRStateLoading,
+    hostedReviewCreation
   } = inputs
 
   const hasStaged = stagedCount > 0
@@ -71,6 +77,8 @@ export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry
   // button's stable-frame guarantee extends to the dropdown.
   const upstreamLoading = upstreamStatus === undefined
   const hasUpstream = upstreamStatus?.hasUpstream ?? false
+  const publishBlockedByMergedPR = !hasUpstream && prState === 'merged'
+  const publishBlockedByPRLoading = !hasUpstream && !!isPRStateLoading
   const ahead = upstreamStatus?.ahead ?? 0
   const behind = upstreamStatus?.behind ?? 0
 
@@ -108,19 +116,35 @@ export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry
   // so the "publish first" instruction is consistent across the menu.
   const commitPushTitle = upstreamLoading
     ? 'Checking branch status…'
-    : !hasUpstream
-      ? 'Publish the branch first to push commits'
-      : (commitDisabledReason ?? 'Commit staged changes and push')
+    : publishBlockedByPRLoading
+      ? 'Checking PR status…'
+      : publishBlockedByMergedPR
+        ? 'PR is already merged'
+        : !hasUpstream
+          ? 'Publish the branch first to push commits'
+          : (commitDisabledReason ?? 'Commit staged changes and push')
   const commitPushItem: DropdownItem = {
     kind: 'commit_push',
     label: 'Commit & Push',
     title: commitPushTitle,
-    disabled: globalBusy || upstreamLoading || !hasUpstream || commitDisabledReason !== null
+    disabled:
+      globalBusy ||
+      upstreamLoading ||
+      !hasUpstream ||
+      publishBlockedByPRLoading ||
+      publishBlockedByMergedPR ||
+      commitDisabledReason !== null
   }
 
   const commitSyncTitle = (() => {
     if (upstreamLoading) {
       return 'Checking branch status…'
+    }
+    if (publishBlockedByPRLoading) {
+      return 'Checking PR status…'
+    }
+    if (publishBlockedByMergedPR) {
+      return 'PR is already merged'
     }
     if (!hasUpstream) {
       // Why: mirror pushItem/syncItem — direct the user to Publish Branch
@@ -146,11 +170,15 @@ export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry
     label: formatCountLabel('Push', ahead),
     title: upstreamLoading
       ? 'Checking branch status…'
-      : !hasUpstream
-        ? 'Publish the branch first to push commits'
-        : ahead === 0
-          ? 'Nothing to push'
-          : describePushCount(ahead),
+      : publishBlockedByPRLoading
+        ? 'Checking PR status…'
+        : publishBlockedByMergedPR
+          ? 'PR is already merged'
+          : !hasUpstream
+            ? 'Publish the branch first to push commits'
+            : ahead === 0
+              ? 'Nothing to push'
+              : describePushCount(ahead),
     disabled: globalBusy || upstreamLoading || !hasUpstream || ahead === 0
   }
 
@@ -159,11 +187,15 @@ export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry
     label: formatCountLabel('Pull', behind),
     title: upstreamLoading
       ? 'Checking branch status…'
-      : !hasUpstream
-        ? 'Publish the branch first to pull commits'
-        : behind === 0
-          ? 'Nothing to pull'
-          : describePullCount(behind),
+      : publishBlockedByPRLoading
+        ? 'Checking PR status…'
+        : publishBlockedByMergedPR
+          ? 'PR is already merged'
+          : !hasUpstream
+            ? 'Publish the branch first to pull commits'
+            : behind === 0
+              ? 'Nothing to pull'
+              : describePullCount(behind),
     disabled: globalBusy || upstreamLoading || !hasUpstream || behind === 0
   }
 
@@ -172,11 +204,15 @@ export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry
     label: formatSyncLabel('Sync', ahead, behind),
     title: upstreamLoading
       ? 'Checking branch status…'
-      : !hasUpstream
-        ? 'Publish the branch first to sync commits'
-        : ahead === 0 && behind === 0
-          ? 'Branch is up to date'
-          : describeSyncCounts(ahead, behind),
+      : publishBlockedByPRLoading
+        ? 'Checking PR status…'
+        : publishBlockedByMergedPR
+          ? 'PR is already merged'
+          : !hasUpstream
+            ? 'Publish the branch first to sync commits'
+            : ahead === 0 && behind === 0
+              ? 'Branch is up to date'
+              : describeSyncCounts(ahead, behind),
     disabled: globalBusy || upstreamLoading || !hasUpstream || (ahead === 0 && behind === 0)
   }
 
@@ -189,13 +225,72 @@ export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry
 
   const publishItem: DropdownItem = {
     kind: 'publish',
-    label: 'Publish Branch',
+    label: publishBlockedByMergedPR || publishBlockedByPRLoading ? 'PR Status' : 'Publish Branch',
     title: upstreamLoading
       ? 'Checking branch status…'
-      : hasUpstream
-        ? 'Branch is already published'
-        : 'Publish this branch to origin',
-    disabled: globalBusy || upstreamLoading || hasUpstream
+      : publishBlockedByPRLoading
+        ? 'Checking PR status…'
+        : publishBlockedByMergedPR
+          ? 'PR is already merged'
+          : hasUpstream
+            ? 'Branch is already published'
+            : 'Publish this branch to origin',
+    disabled:
+      globalBusy ||
+      upstreamLoading ||
+      hasUpstream ||
+      publishBlockedByPRLoading ||
+      publishBlockedByMergedPR
+  }
+
+  const createBlockedHint = (() => {
+    switch (hostedReviewCreation?.blockedReason) {
+      case 'dirty':
+        return 'Commit changes first'
+      case 'detached_head':
+        return 'Check out a branch first'
+      case 'default_branch':
+        return 'Switch to a feature branch'
+      case 'no_upstream':
+        return 'Publish Branch'
+      case 'needs_push':
+        return 'Push first'
+      case 'needs_sync':
+        return 'Sync first'
+      case 'auth_required':
+        return 'Run gh auth login in this environment'
+      case 'unsupported_provider':
+        return 'Unsupported provider'
+      case 'existing_review':
+        return 'A pull request already exists'
+      case 'fork_head_unsupported':
+        return 'Fork head unsupported'
+      default:
+        return upstreamLoading ? 'Checking branch status…' : 'Branch is not ready'
+    }
+  })()
+
+  const createPRItem: DropdownItem = {
+    kind: 'create_pr',
+    label: 'Create PR',
+    title: hostedReviewCreation?.canCreate
+      ? 'Create a pull request for this branch'
+      : createBlockedHint,
+    hint: hostedReviewCreation?.canCreate ? undefined : createBlockedHint,
+    disabled: globalBusy || upstreamLoading || !hostedReviewCreation?.canCreate
+  }
+
+  const canPushAndCreate =
+    !globalBusy &&
+    !upstreamLoading &&
+    hostedReviewCreation?.provider === 'github' &&
+    hostedReviewCreation.blockedReason === 'needs_push'
+  const pushCreatePRItem: DropdownItem = {
+    kind: 'push_create_pr',
+    label: 'Push & Create PR',
+    title: canPushAndCreate ? 'Push local commits, then create a pull request' : createBlockedHint,
+    hint: canPushAndCreate ? undefined : createBlockedHint,
+    disabled: !canPushAndCreate
   }
 
   return [
@@ -204,6 +299,8 @@ export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry
     commitSyncItem,
     { kind: 'separator' },
     pushItem,
+    createPRItem,
+    pushCreatePRItem,
     pullItem,
     syncItem,
     fetchItem,

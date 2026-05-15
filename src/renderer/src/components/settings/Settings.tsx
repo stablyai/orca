@@ -10,6 +10,7 @@ import {
   Globe,
   Info,
   Keyboard,
+  ListChecks,
   Lock,
   MousePointerClick,
   Network,
@@ -56,6 +57,8 @@ import { ORCHESTRATION_PANE_SEARCH_ENTRIES } from './orchestration-search'
 import { AccountsPane, ACCOUNTS_PANE_SEARCH_ENTRIES } from './AccountsPane'
 import { StatsPane, STATS_PANE_SEARCH_ENTRIES } from '../stats/StatsPane'
 import { IntegrationsPane, INTEGRATIONS_PANE_SEARCH_ENTRIES } from './IntegrationsPane'
+import { TasksPane } from './TasksPane'
+import { TASKS_PANE_SEARCH_ENTRIES } from './tasks-search'
 import {
   DeveloperPermissionsPane,
   DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES
@@ -80,6 +83,7 @@ type SettingsNavTarget =
   | 'accounts'
   | 'browser'
   | 'git'
+  | 'tasks'
   | 'appearance'
   | 'terminal'
   | 'notifications'
@@ -240,6 +244,7 @@ function Settings(): React.JSX.Element {
     Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...getFallbackTerminalFonts()]))
   )
   const [activeSectionId, setActiveSectionId] = useState('general')
+  const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
   // Why: the hidden-experimental group is an unlock — Shift-clicking the
   // Experimental sidebar entry reveals it for the remainder of the session.
   // Not persisted on purpose: it's a power-user affordance we don't want to
@@ -447,6 +452,13 @@ function Settings(): React.JSX.Element {
         searchEntries: [...GIT_PANE_SEARCH_ENTRIES, ...COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES]
       },
       {
+        id: 'tasks',
+        title: 'Tasks',
+        description: 'Choose which task providers appear in the Tasks page and sidebar.',
+        icon: ListChecks,
+        searchEntries: TASKS_PANE_SEARCH_ENTRIES
+      },
+      {
         id: 'appearance',
         title: 'Appearance',
         description: 'Theme and UI scaling.',
@@ -558,7 +570,7 @@ function Settings(): React.JSX.Element {
       {
         id: 'stats',
         title: 'Stats & Usage',
-        description: 'Orca stats and Claude usage analytics.',
+        description: 'Orca stats plus Claude, Codex, and OpenCode usage analytics.',
         icon: BarChart3,
         searchEntries: STATS_PANE_SEARCH_ENTRIES
       },
@@ -628,7 +640,13 @@ function Settings(): React.JSX.Element {
     if (!visibleIds.has(activeSectionId) && visibleNavSections.length > 0) {
       setActiveSectionId(getFallbackVisibleSection(visibleNavSections)?.id ?? activeSectionId)
     }
-  }, [activeSectionId, setSettingsSearchQuery, settingsSearchQuery, visibleNavSections])
+  }, [
+    activeSectionId,
+    pendingNavRequestTick,
+    setSettingsSearchQuery,
+    settingsSearchQuery,
+    visibleNavSections
+  ])
 
   useEffect(() => {
     const container = contentScrollRef.current
@@ -719,6 +737,18 @@ function Settings(): React.JSX.Element {
     },
     []
   )
+
+  const openComputerUseFromBrowser = useCallback(() => {
+    pendingNavSectionRef.current = 'computer-use'
+    pendingScrollTargetRef.current = 'computer-use'
+    if (settingsSearchQuery !== '') {
+      setSettingsSearchQuery('')
+      return
+    }
+    // Why: the pending section refs do not schedule a render by themselves.
+    // When search is already clear, this reruns the centralized jump effect.
+    setPendingNavRequestTick((tick) => tick + 1)
+  }, [setSettingsSearchQuery, settingsSearchQuery])
 
   if (!settings) {
     return (
@@ -813,6 +843,15 @@ function Settings(): React.JSX.Element {
                 </SettingsSection>
 
                 <SettingsSection
+                  id="tasks"
+                  title="Tasks"
+                  description="Choose which task providers appear in the Tasks page and sidebar."
+                  searchEntries={TASKS_PANE_SEARCH_ENTRIES}
+                >
+                  <TasksPane settings={settings} updateSettings={updateSettings} />
+                </SettingsSection>
+
+                <SettingsSection
                   id="appearance"
                   title="Appearance"
                   description="Theme and UI scaling."
@@ -866,7 +905,11 @@ function Settings(): React.JSX.Element {
                       description="Home page, link routing, and session cookies."
                       searchEntries={BROWSER_PANE_SEARCH_ENTRIES}
                     >
-                      <BrowserPane settings={settings} updateSettings={updateSettings} />
+                      <BrowserPane
+                        settings={settings}
+                        updateSettings={updateSettings}
+                        onOpenComputerUse={openComputerUseFromBrowser}
+                      />
                     </SettingsSection>
 
                     <SettingsSection

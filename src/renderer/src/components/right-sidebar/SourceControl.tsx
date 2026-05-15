@@ -88,6 +88,7 @@ import {
 } from '@/components/ui/dialog'
 import { BaseRefPicker } from '@/components/settings/BaseRefPicker'
 import { formatDiffComment, formatDiffComments } from '@/lib/diff-comments-format'
+import { getDiffCommentLineLabel, getDiffCommentSource } from '@/lib/diff-comment-compat'
 import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
@@ -106,6 +107,7 @@ import {
 } from '@/runtime/runtime-git-client'
 import { getRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
 import { PullRequestIcon } from './checks-panel-content'
+import { CreatePullRequestDialog } from './CreatePullRequestDialog'
 import type {
   DiffComment,
   GitBranchChangeEntry,
@@ -115,7 +117,10 @@ import type {
   GitStatusEntry,
   GitUpstreamStatus
 } from '../../../../shared/types'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type {
+  HostedReviewCreationEligibility,
+  HostedReviewInfo
+} from '../../../../shared/hosted-review'
 import { STATUS_COLORS, STATUS_LABELS } from './status-display'
 
 type SourceControlScope = 'all' | 'uncommitted'
@@ -149,7 +154,8 @@ const PRIMARY_ICONS: Partial<
   stage: Plus,
   push: ArrowUp,
   sync: ArrowDownUp,
-  publish: CloudUpload
+  publish: CloudUpload,
+  create_pr: GitPullRequestArrow
 }
 
 // Why: unstaged ("Changes") is listed first so that conflict files — which
@@ -249,6 +255,10 @@ function SourceControlInner(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const hostedReviewCache = useAppStore((s) => s.hostedReviewCache)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
+  const getHostedReviewCreationEligibility = useAppStore(
+    (s) => s.getHostedReviewCreationEligibility
+  )
+  const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const updateRepo = useAppStore((s) => s.updateRepo)
   const setGitStatus = useAppStore((s) => s.setGitStatus)
   const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
@@ -265,6 +275,8 @@ function SourceControlInner(): React.JSX.Element {
   const openDiff = useAppStore((s) => s.openDiff)
   const openFile = useAppStore((s) => s.openFile)
   const setEditorViewMode = useAppStore((s) => s.setEditorViewMode)
+  const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
+  const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
   const openConflictFile = useAppStore((s) => s.openConflictFile)
   const openConflictReview = useAppStore((s) => s.openConflictReview)
   const openBranchDiff = useAppStore((s) => s.openBranchDiff)
@@ -272,6 +284,8 @@ function SourceControlInner(): React.JSX.Element {
   const openBranchAllDiffs = useAppStore((s) => s.openBranchAllDiffs)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
+  const setRightSidebarOpen = useAppStore((s) => s.setRightSidebarOpen)
+  const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   // Why: pass activeWorktreeId directly (even when null/undefined) so the
   // slice's getDiffComments returns its stable EMPTY_COMMENTS sentinel. An
   // inline `[]` fallback would allocate a new array each store update, break
@@ -349,6 +363,10 @@ function SourceControlInner(): React.JSX.Element {
   const [generateErrors, setGenerateErrors] = useState<Record<string, string | null>>({})
   const isGenerating = generateInFlightByWorktree[activeWorktreeId ?? ''] ?? false
   const generateError = generateErrors[activeWorktreeId ?? ''] ?? null
+  const [hostedReviewCreation, setHostedReviewCreation] =
+    useState<HostedReviewCreationEligibility | null>(null)
+  const [createPrDialogOpen, setCreatePrDialogOpen] = useState(false)
+  const [createPrPushFirst, setCreatePrPushFirst] = useState(false)
   const commitMessageAi = useAppStore((s) => s.settings?.commitMessageAi)
   const filterInputRef = useRef<HTMLInputElement>(null)
   const commitMessage = readCommitDraftForWorktree(commitDrafts, activeWorktreeId)
@@ -461,27 +479,34 @@ function SourceControlInner(): React.JSX.Element {
 
   const branchName = activeWorktree?.branch.replace(/^refs\/heads\//, '') ?? 'HEAD'
   const hostedReviewCacheKey =
-    activeRepo && branchName ? getHostedReviewCacheKey(activeRepo.path, branchName, settings) : null
+    activeRepo && branchName
+      ? getHostedReviewCacheKey(activeRepo.path, branchName, settings, activeRepo.id)
+      : null
+  const hostedReviewEntry = hostedReviewCacheKey
+    ? hostedReviewCache[hostedReviewCacheKey]
+    : undefined
   const hostedReview: HostedReviewInfo | null = hostedReviewCacheKey
-    ? (hostedReviewCache[hostedReviewCacheKey]?.data ?? null)
+    ? (hostedReviewEntry?.data ?? null)
     : null
 
   const linkedGitHubPR = activeWorktree?.linkedPR ?? null
   const linkedGitLabMR = activeWorktree?.linkedGitLabMR ?? null
+  const isHostedReviewStateLoading =
+    (linkedGitHubPR !== null || linkedGitLabMR !== null) && hostedReviewEntry === undefined
   useEffect(() => {
     if (!isBranchVisible || !activeRepo || isFolder || !branchName || branchName === 'HEAD') {
       return
     }
-    if (activeRepo.connectionId) {
-      return
-    }
-
     // Why: the Source Control panel renders branch review status directly.
     // When a terminal checkout moves this worktree onto a new branch, we need
     // to fetch that branch's PR/MR immediately instead of waiting for the user
     // to reselect the worktree. The linked ids handle create-from-review
     // worktrees whose local branch differs from the remote head branch.
-    void fetchHostedReviewForBranch(activeRepo.path, branchName, { linkedGitHubPR, linkedGitLabMR })
+    void fetchHostedReviewForBranch(activeRepo.path, branchName, {
+      repoId: activeRepo.id,
+      linkedGitHubPR,
+      linkedGitLabMR
+    })
   }, [
     activeRepo,
     branchName,
@@ -490,6 +515,52 @@ function SourceControlInner(): React.JSX.Element {
     isFolder,
     linkedGitHubPR,
     linkedGitLabMR
+  ])
+
+  useEffect(() => {
+    if (!isBranchVisible || !activeRepo || isFolder || !branchName) {
+      setHostedReviewCreation(null)
+      return
+    }
+    let stale = false
+    void getHostedReviewCreationEligibility({
+      repoPath: activeRepo.path,
+      branch: branchName,
+      base: effectiveBaseRef ?? null,
+      hasUncommittedChanges: hasUncommittedEntries,
+      hasUpstream: remoteStatus?.hasUpstream,
+      ahead: remoteStatus?.ahead,
+      behind: remoteStatus?.behind,
+      linkedGitHubPR,
+      linkedGitLabMR
+    })
+      .then((result) => {
+        if (!stale) {
+          setHostedReviewCreation(result)
+        }
+      })
+      .catch((error) => {
+        console.warn('[SourceControl] hosted review creation eligibility failed', error)
+        if (!stale) {
+          setHostedReviewCreation(null)
+        }
+      })
+    return () => {
+      stale = true
+    }
+  }, [
+    activeRepo,
+    branchName,
+    effectiveBaseRef,
+    getHostedReviewCreationEligibility,
+    hasUncommittedEntries,
+    isBranchVisible,
+    isFolder,
+    linkedGitHubPR,
+    linkedGitLabMR,
+    remoteStatus?.ahead,
+    remoteStatus?.behind,
+    remoteStatus?.hasUpstream
   ])
 
   const grouped = useMemo(() => {
@@ -617,6 +688,8 @@ function SourceControlInner(): React.JSX.Element {
     // repos and back to re-trigger the resolver.
     setFilterQuery('')
     setIsExecutingBulk(false)
+    setCreatePrDialogOpen(false)
+    setCreatePrPushFirst(false)
     // Why: no reset for commit-in-flight state — it now lives in a per-worktree
     // map, so it cannot leak across worktrees. Resetting here would actually
     // clear in-flight state for the *incoming* worktree if the user is coming
@@ -882,6 +955,76 @@ function SourceControlInner(): React.JSX.Element {
     [handleCommit, runRemoteAction]
   )
 
+  const openCreatePullRequestDialog = useCallback((pushFirst: boolean): void => {
+    setCreatePrPushFirst(pushFirst)
+    setCreatePrDialogOpen(true)
+  }, [])
+
+  const pushBeforeCreatePullRequest = useCallback(async (): Promise<boolean> => {
+    if (!activeWorktreeId || !worktreePath) {
+      return false
+    }
+    const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+    try {
+      await pushBranch(
+        activeWorktreeId,
+        worktreePath,
+        false,
+        connectionId,
+        activeWorktree?.pushTarget
+      )
+      await refreshActiveGitStatusAfterMutation()
+      return true
+    } catch {
+      return false
+    }
+  }, [
+    activeWorktree?.pushTarget,
+    activeWorktreeId,
+    pushBranch,
+    refreshActiveGitStatusAfterMutation,
+    worktreePath
+  ])
+
+  const handlePullRequestCreated = useCallback(
+    async (result: { number: number; url: string }): Promise<void> => {
+      if (!activeRepo || !branchName) {
+        return
+      }
+      setRightSidebarOpen(true)
+      setRightSidebarTab('checks')
+      try {
+        await Promise.all([
+          fetchHostedReviewForBranch(activeRepo.path, branchName, {
+            force: true,
+            linkedGitHubPR: result.number,
+            linkedGitLabMR
+          }),
+          fetchPRForBranch(activeRepo.path, branchName, {
+            force: true,
+            linkedPRNumber: result.number
+          })
+        ])
+      } catch {
+        toast.warning('Pull request created, but Orca could not refresh it yet.', {
+          action: {
+            label: 'Open on GitHub',
+            onClick: () => window.api.shell.openUrl(result.url)
+          }
+        })
+      }
+    },
+    [
+      activeRepo,
+      branchName,
+      fetchHostedReviewForBranch,
+      fetchPRForBranch,
+      linkedGitLabMR,
+      setRightSidebarOpen,
+      setRightSidebarTab
+    ]
+  )
+
   const hasUnstagedChanges = grouped.unstaged.length > 0 || grouped.untracked.length > 0
 
   const primaryAction: PrimaryAction = useMemo(
@@ -894,7 +1037,10 @@ function SourceControlInner(): React.JSX.Element {
         isCommitting,
         isRemoteOperationActive,
         upstreamStatus: remoteStatus,
-        inFlightRemoteOpKind
+        prState: hostedReview?.state ?? null,
+        isPRStateLoading: isHostedReviewStateLoading,
+        inFlightRemoteOpKind,
+        hostedReviewCreation
       }),
     [
       commitMessage,
@@ -903,6 +1049,9 @@ function SourceControlInner(): React.JSX.Element {
       isCommitting,
       isRemoteOperationActive,
       inFlightRemoteOpKind,
+      hostedReviewCreation,
+      isHostedReviewStateLoading,
+      hostedReview?.state,
       remoteStatus,
       unresolvedConflicts.length
     ]
@@ -918,7 +1067,10 @@ function SourceControlInner(): React.JSX.Element {
         isCommitting,
         isRemoteOperationActive,
         upstreamStatus: remoteStatus,
-        inFlightRemoteOpKind
+        prState: hostedReview?.state ?? null,
+        isPRStateLoading: isHostedReviewStateLoading,
+        inFlightRemoteOpKind,
+        hostedReviewCreation
       }),
     [
       commitMessage,
@@ -927,6 +1079,9 @@ function SourceControlInner(): React.JSX.Element {
       isCommitting,
       isRemoteOperationActive,
       inFlightRemoteOpKind,
+      hostedReviewCreation,
+      isHostedReviewStateLoading,
+      hostedReview?.state,
       remoteStatus,
       unresolvedConflicts.length
     ]
@@ -948,6 +1103,12 @@ function SourceControlInner(): React.JSX.Element {
         case 'commit_sync':
           void runCompoundCommitAction('sync')
           return
+        case 'create_pr':
+          openCreatePullRequestDialog(false)
+          return
+        case 'push_create_pr':
+          openCreatePullRequestDialog(true)
+          return
         case 'push':
         case 'pull':
         case 'sync':
@@ -964,7 +1125,7 @@ function SourceControlInner(): React.JSX.Element {
         }
       }
     },
-    [handleCommit, runCompoundCommitAction, runRemoteAction]
+    [handleCommit, openCreatePullRequestDialog, runCompoundCommitAction, runRemoteAction]
   )
 
   const handleOpenDiff = useCallback(
@@ -1220,6 +1381,7 @@ function SourceControlInner(): React.JSX.Element {
       case 'pull':
       case 'sync':
       case 'publish':
+      case 'create_pr':
         handleActionInvoke(primaryAction.kind)
         return
       default: {
@@ -1411,13 +1573,41 @@ function SourceControlInner(): React.JSX.Element {
   // first, so the editor-tab fallback then leaves the global null and a
   // future DiffViewer mount can't accidentally consume a stale id.
   const handleOpenComment = useCallback(
-    (filePath: string, commentId?: string) => {
+    (comment: DiffComment) => {
       if (!activeWorktreeId || !worktreePath) {
         return
       }
+      const filePath = comment.filePath
+      const commentId = comment.id
       // Defensively clear any dangling prior scroll request before routing
       // this click; only the diff branches below will re-stamp it.
       setScrollToDiffCommentId(null)
+      if (getDiffCommentSource(comment) === 'markdown') {
+        const absPath = joinPath(worktreePath, filePath)
+        const language = detectLanguage(filePath)
+        setEditorViewMode(absPath, 'edit')
+        setMarkdownViewMode(absPath, 'source')
+        openFile({
+          filePath: absPath,
+          relativePath: filePath,
+          worktreeId: activeWorktreeId,
+          language,
+          mode: 'edit'
+        })
+        setPendingEditorReveal(null)
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            setPendingEditorReveal({
+              filePath: absPath,
+              line: comment.lineNumber,
+              column: 1,
+              matchLength: 0
+            })
+            setScrollToDiffCommentId(commentId)
+          })
+        })
+        return
+      }
       const matches = entries.filter((e) => e.path === filePath)
       const uncommitted =
         matches.find((e) => e.area === 'unstaged') ??
@@ -1469,6 +1659,8 @@ function SourceControlInner(): React.JSX.Element {
       openFile,
       setEditorViewMode,
       setScrollToDiffCommentId,
+      setMarkdownViewMode,
+      setPendingEditorReveal,
       worktreePath
     ]
   )
@@ -1746,6 +1938,17 @@ function SourceControlInner(): React.JSX.Element {
 
   return (
     <>
+      <CreatePullRequestDialog
+        open={createPrDialogOpen}
+        repoId={activeRepo.id}
+        repoPath={activeRepo.path}
+        branch={branchName}
+        eligibility={hostedReviewCreation}
+        pushBeforeCreate={createPrPushFirst}
+        onOpenChange={setCreatePrDialogOpen}
+        onPushBeforeCreate={pushBeforeCreatePullRequest}
+        onCreated={handlePullRequestCreated}
+      />
       <div ref={sourceControlRef} className="relative flex h-full flex-col overflow-hidden">
         <div className="flex items-center px-3 pt-2 border-b border-border">
           {(['all', 'uncommitted'] as const).map((value) => (
@@ -1846,7 +2049,7 @@ function SourceControlInner(): React.JSX.Element {
                     groupId={activeGroupId ?? activeWorktreeId}
                     onFocusTerminal={focusTerminalTabSurface}
                     prompt={diffCommentsPrompt}
-                    launchSource="diff_notes_send"
+                    launchSource="notes_send"
                   />
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -1878,7 +2081,7 @@ function SourceControlInner(): React.JSX.Element {
               <DiffCommentsInlineList
                 comments={diffCommentsForActive}
                 onDelete={(id) => void deleteDiffComment(activeWorktreeId, id)}
-                onOpen={(filePath, commentId) => handleOpenComment(filePath, commentId)}
+                onOpen={(comment) => handleOpenComment(comment)}
               />
             )}
           </div>
@@ -2524,7 +2727,14 @@ export function CommitArea({
                     onDropdownAction(entry.kind)
                   }}
                 >
-                  {entry.label}
+                  <span className="flex min-w-0 flex-col">
+                    <span>{entry.label}</span>
+                    {entry.hint ? (
+                      <span className="truncate text-[10px] text-muted-foreground">
+                        {entry.hint}
+                      </span>
+                    ) : null}
+                  </span>
                 </DropdownMenuItem>
               )
             )}
@@ -2727,7 +2937,7 @@ function DiffCommentsInlineList({
   // Why: clicking the note row navigates the user to that file's diff (or
   // editor as a fallback) and, when a `commentId` is supplied, scrolls the
   // diff to that specific note via the scrollToDiffCommentId UI slice.
-  onOpen: (filePath: string, commentId?: string) => void
+  onOpen: (comment: DiffComment) => void
 }): React.JSX.Element {
   // Why: group by filePath so the inline list mirrors the structure in the
   // Notes tab — a compact section per file with line-number prefixes.
@@ -2781,7 +2991,12 @@ function DiffCommentsInlineList({
           <button
             type="button"
             className="block w-full truncate text-left text-[10px] font-medium text-muted-foreground hover:text-foreground"
-            onClick={() => onOpen(filePath)}
+            onClick={() => {
+              const first = list[0]
+              if (first) {
+                onOpen(first)
+              }
+            }}
             title={`Open ${filePath}`}
           >
             {filePath}
@@ -2801,12 +3016,15 @@ function DiffCommentsInlineList({
                   // for buttons and lets bubbled key events from the children
                   // fire the row's open handler.
                   className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded text-left"
-                  onClick={() => onOpen(c.filePath, c.id)}
-                  title={`Open ${c.filePath} (line ${c.lineNumber})`}
-                  aria-label={`Open note on line ${c.lineNumber}`}
+                  onClick={() => onOpen(c)}
+                  title={`Open ${c.filePath} (${getDiffCommentLineLabel(c).toLowerCase()})`}
+                  aria-label={`Open note on ${getDiffCommentLineLabel(c).toLowerCase()}`}
                 >
                   <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] leading-none tabular-nums text-muted-foreground">
-                    L{c.lineNumber}
+                    {getDiffCommentLineLabel(c, true)}
+                  </span>
+                  <span className="shrink-0 rounded bg-muted/70 px-1 py-0.5 text-[10px] leading-none text-muted-foreground">
+                    {getDiffCommentSource(c) === 'markdown' ? 'MD' : 'Diff'}
                   </span>
                   <span className="block min-w-0 flex-1 whitespace-pre-wrap break-words text-[11px] leading-snug text-foreground">
                     {c.body}

@@ -9,6 +9,7 @@ import type {
   TerminalTab,
   Worktree
 } from '../../../../shared/types'
+import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -83,6 +84,22 @@ const mockApi = {
     getDaily: vi.fn().mockResolvedValue([]),
     getBreakdown: vi.fn().mockResolvedValue([]),
     getRecentSessions: vi.fn().mockResolvedValue([])
+  },
+  openCodeUsage: {
+    getScanState: vi.fn().mockResolvedValue({
+      enabled: false,
+      isScanning: false,
+      lastScanStartedAt: null,
+      lastScanCompletedAt: null,
+      lastScanError: null,
+      hasAnyOpenCodeData: false
+    }),
+    setEnabled: vi.fn().mockResolvedValue({}),
+    refresh: vi.fn().mockResolvedValue({}),
+    getSummary: vi.fn().mockResolvedValue(null),
+    getDaily: vi.fn().mockResolvedValue([]),
+    getBreakdown: vi.fn().mockResolvedValue([]),
+    getRecentSessions: vi.fn().mockResolvedValue([])
   }
 }
 
@@ -105,6 +122,7 @@ import { createMemorySlice } from './memory'
 import { createWorkspaceSpaceSlice } from './workspace-space'
 import { createClaudeUsageSlice } from './claude-usage'
 import { createCodexUsageSlice } from './codex-usage'
+import { createOpenCodeUsageSlice } from './opencode-usage'
 import { createBrowserSlice } from './browser'
 import { createRateLimitSlice } from './rate-limits'
 import { createSshSlice } from './ssh'
@@ -113,6 +131,7 @@ import { createDiffCommentsSlice } from './diffComments'
 import { createDetectedAgentsSlice } from './detected-agents'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 import { createDictationSlice } from './dictation'
+import { createWorkspaceCleanupSlice } from './workspace-cleanup'
 
 function createTestStore() {
   return create<AppState>()((...a) => ({
@@ -132,6 +151,7 @@ function createTestStore() {
     ...createWorkspaceSpaceSlice(...a),
     ...createClaudeUsageSlice(...a),
     ...createCodexUsageSlice(...a),
+    ...createOpenCodeUsageSlice(...a),
     ...createBrowserSlice(...a),
     ...createRateLimitSlice(...a),
     ...createSshSlice(...a),
@@ -139,7 +159,8 @@ function createTestStore() {
     ...createDiffCommentsSlice(...a),
     ...createDetectedAgentsSlice(...a),
     ...createWorktreeNavHistorySlice(...a),
-    ...createDictationSlice(...a)
+    ...createDictationSlice(...a),
+    ...createWorkspaceCleanupSlice(...a)
   }))
 }
 
@@ -1305,12 +1326,15 @@ describe('reconnectPersistedTerminals', () => {
     // sees the tab as active (green dot) even before the terminal mounts.
     // connectPanePty reads ptyIdsByLeafId for per-leaf daemon sessions.
     expect(s.tabsByWorktree[wt1][0].ptyId).toBe('daemon-session-B')
-    // ptyIdsByLeafId preserved from hydration for connectPanePty to consume
+    // ptyIdsByLeafId preserved from hydration for connectPanePty to consume,
+    // but legacy pane:* leaves are reminted to durable UUID leaves at hydration.
     const layout = s.terminalLayoutsByTabId['tab1']
-    expect(layout.ptyIdsByLeafId).toEqual({
-      'pane:1': 'daemon-session-A',
-      'pane:3': 'daemon-session-B'
-    })
+    const bindings = layout.ptyIdsByLeafId ?? {}
+    expect(Object.keys(bindings)).toHaveLength(2)
+    expect(Object.keys(bindings).every(isTerminalLeafId)).toBe(true)
+    expect(Object.keys(bindings)).not.toContain('pane:1')
+    expect(Object.keys(bindings)).not.toContain('pane:3')
+    expect(Object.values(bindings).sort()).toEqual(['daemon-session-A', 'daemon-session-B'])
     expect(s.workspaceSessionReady).toBe(true)
   })
 })

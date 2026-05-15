@@ -28,6 +28,7 @@ const runtimeEnvironmentCallMock = vi.fn()
 const runtimeEnvironmentTransportCallMock = vi.fn()
 const setActiveWorktreeMock = vi.fn()
 const createBrowserTabMock = vi.fn()
+const setPendingEditorRevealMock = vi.fn()
 
 const deps = { worktreeId: 'wt-1', worktreePath: '/tmp' }
 const storeState = {
@@ -36,7 +37,8 @@ const storeState = {
     | undefined,
   setActiveWorktree: setActiveWorktreeMock,
   createBrowserTab: createBrowserTabMock,
-  openFile: openFileMock
+  openFile: openFileMock,
+  setPendingEditorReveal: setPendingEditorRevealMock
 }
 
 vi.mock('@/store', () => ({
@@ -65,6 +67,23 @@ function setPlatform(userAgent: string): void {
   vi.stubGlobal('navigator', { userAgent })
 }
 
+function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+  return { promise, resolve }
+}
+
+async function flushAsyncWork(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+async function flushDoubleRaf(): Promise<void> {
+  await flushAsyncWork()
+  await flushAsyncWork()
+}
+
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   vi.clearAllMocks()
@@ -76,6 +95,7 @@ beforeEach(() => {
   storeState.settings = undefined
   registerHttpLinkStoreAccessor(() => storeState)
   vi.stubGlobal('window', {
+    dispatchEvent: vi.fn(),
     api: {
       shell: {
         openUrl: openUrlMock,
@@ -89,6 +109,9 @@ beforeEach(() => {
       },
       runtimeEnvironments: { call: runtimeEnvironmentTransportCallMock }
     }
+  })
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback): number => {
+    return setTimeout(() => callback(0), 0) as unknown as number
   })
 })
 
@@ -191,6 +214,7 @@ describe('handleOscLink', () => {
 
     // Why: .html should not open Monaco — it should render in the browser tab.
     expect(openFileMock).not.toHaveBeenCalled()
+    expect(setPendingEditorRevealMock).not.toHaveBeenCalled()
     expect(createBrowserTabMock).toHaveBeenCalledWith(
       'wt-1',
       'file:///tmp/report.html',
@@ -205,11 +229,47 @@ describe('handleOscLink', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(openFileMock).not.toHaveBeenCalled()
+    expect(setPendingEditorRevealMock).not.toHaveBeenCalled()
     expect(createBrowserTabMock).toHaveBeenCalledWith(
       'wt-1',
       'file:///tmp/legacy.HTM',
       expect.objectContaining({ title: 'legacy.HTM' })
     )
+  })
+
+  it('schedules Monaco reveal with default column 1 for :line links', async () => {
+    setPlatform('Macintosh')
+
+    openDetectedFilePath('/tmp/src/main.ts', 42, null, deps)
+    await flushAsyncWork()
+    await flushDoubleRaf()
+
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/tmp/src/main.ts' })
+    )
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
+      filePath: '/tmp/src/main.ts',
+      line: 42,
+      column: 1,
+      matchLength: 0
+    })
+  })
+
+  it('preserves explicit column for :line:column links', async () => {
+    setPlatform('Macintosh')
+
+    openDetectedFilePath('/tmp/src/main.ts', 42, 7, deps)
+    await flushAsyncWork()
+    await flushDoubleRaf()
+
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
+      filePath: '/tmp/src/main.ts',
+      line: 42,
+      column: 7,
+      matchLength: 0
+    })
   })
 
   it('advertises the browser-open behavior in the html hover hint', () => {
@@ -385,6 +445,39 @@ describe('handleOscLink', () => {
 
     expect(openFilePathMock).not.toHaveBeenCalled()
     expect(openFileMock).not.toHaveBeenCalled()
+  })
+
+  it('ignores stale async completion so latest click wins for open and reveal', async () => {
+    setPlatform('Macintosh')
+    const firstStat = createDeferred<{ isDirectory: boolean }>()
+    const secondStat = createDeferred<{ isDirectory: boolean }>()
+    statMock
+      .mockImplementationOnce(() => firstStat.promise)
+      .mockImplementationOnce(() => secondStat.promise)
+
+    openDetectedFilePath('/tmp/src/first.ts', 10, 2, deps)
+    openDetectedFilePath('/tmp/src/second.ts', 20, 3, deps)
+
+    secondStat.resolve({ isDirectory: false })
+    await flushAsyncWork()
+    await flushDoubleRaf()
+
+    firstStat.resolve({ isDirectory: false })
+    await flushAsyncWork()
+    await flushDoubleRaf()
+
+    expect(openFileMock).toHaveBeenCalledTimes(1)
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/tmp/src/second.ts' })
+    )
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
+      filePath: '/tmp/src/second.ts',
+      line: 20,
+      column: 3,
+      matchLength: 0
+    })
+    expect(setPendingEditorRevealMock).toHaveBeenCalledTimes(2)
   })
 })
 

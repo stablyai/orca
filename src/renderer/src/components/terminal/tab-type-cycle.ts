@@ -1,4 +1,4 @@
-export type TabCycleType = 'terminal' | 'editor' | 'browser' | 'notes'
+export type TabCycleType = 'terminal' | 'editor' | 'browser'
 
 export type TypeCyclableTab = {
   type: TabCycleType

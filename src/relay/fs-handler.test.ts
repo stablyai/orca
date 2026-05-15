@@ -20,9 +20,19 @@ vi.mock('@parcel/watcher', () => ({
 function createMockDispatcher() {
   const requestHandlers = new Map<
     string,
-    (params: Record<string, unknown>, context?: { isStale: () => boolean }) => Promise<unknown>
+    (
+      params: Record<string, unknown>,
+      context?: { clientId: number; isStale: () => boolean }
+    ) => Promise<unknown>
   >()
-  const notificationHandlers = new Map<string, (params: Record<string, unknown>) => void>()
+  const notificationHandlers = new Map<
+    string,
+    (
+      params: Record<string, unknown>,
+      context?: { clientId: number; isStale: () => boolean }
+    ) => void
+  >()
+  const detachListeners = new Set<(clientId: number) => void>()
   const notifications: { method: string; params?: Record<string, unknown> }[] = []
 
   return {
@@ -31,17 +41,29 @@ function createMockDispatcher() {
         method: string,
         handler: (
           params: Record<string, unknown>,
-          context?: { isStale: () => boolean }
+          context?: { clientId: number; isStale: () => boolean }
         ) => Promise<unknown>
       ) => {
         requestHandlers.set(method, handler)
       }
     ),
-    onNotification: vi.fn((method: string, handler: (params: Record<string, unknown>) => void) => {
-      notificationHandlers.set(method, handler)
-    }),
+    onNotification: vi.fn(
+      (
+        method: string,
+        handler: (
+          params: Record<string, unknown>,
+          context?: { clientId: number; isStale: () => boolean }
+        ) => void
+      ) => {
+        notificationHandlers.set(method, handler)
+      }
+    ),
     notify: vi.fn((method: string, params?: Record<string, unknown>) => {
       notifications.push({ method, params })
+    }),
+    onClientDetached: vi.fn((listener: (clientId: number) => void) => {
+      detachListeners.add(listener)
+      return () => detachListeners.delete(listener)
     }),
     _requestHandlers: requestHandlers,
     _notificationHandlers: notificationHandlers,
@@ -49,20 +71,32 @@ function createMockDispatcher() {
     async callRequest(
       method: string,
       params: Record<string, unknown> = {},
-      context?: { isStale: () => boolean }
+      context?: { clientId?: number; isStale: () => boolean }
     ) {
       const handler = requestHandlers.get(method)
       if (!handler) {
         throw new Error(`No handler for ${method}`)
       }
-      return handler(params, context)
+      return handler(params, {
+        clientId: context?.clientId ?? 1,
+        isStale: context?.isStale ?? (() => false)
+      })
     },
-    callNotification(method: string, params: Record<string, unknown> = {}) {
+    callNotification(
+      method: string,
+      params: Record<string, unknown> = {},
+      context?: { clientId: number; isStale: () => boolean }
+    ) {
       const handler = notificationHandlers.get(method)
       if (!handler) {
         throw new Error(`No handler for ${method}`)
       }
-      handler(params)
+      handler(params, context ?? { clientId: 1, isStale: () => false })
+    },
+    detachClient(clientId: number) {
+      for (const listener of detachListeners) {
+        listener(clientId)
+      }
     }
   }
 }
@@ -415,5 +449,113 @@ describe('FsHandler', () => {
 
     expect(firstUnsubscribe).toHaveBeenCalled()
     expect(replacementUnsubscribe).not.toHaveBeenCalled()
+  })
+
+  it('removes stale watches for any root before enforcing the watch cap', async () => {
+    const staleUnsubscribe = vi.fn()
+    mockSubscribe
+      .mockResolvedValueOnce({ unsubscribe: staleUnsubscribe })
+      .mockResolvedValue({ unsubscribe: vi.fn() })
+
+    let stale = false
+    await dispatcher.callRequest(
+      'fs.watch',
+      { rootPath: path.join(tmpDir, 'stale-root') },
+      {
+        isStale: () => stale
+      }
+    )
+    for (let index = 0; index < 19; index += 1) {
+      await dispatcher.callRequest('fs.watch', {
+        rootPath: path.join(tmpDir, `watched-${index}`)
+      })
+    }
+
+    stale = true
+
+    await expect(
+      dispatcher.callRequest('fs.watch', { rootPath: path.join(tmpDir, 'new-root') })
+    ).resolves.toBeUndefined()
+    expect(staleUnsubscribe).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a shared watch alive until every client unwatches it', async () => {
+    const unsubscribe = vi.fn()
+    mockSubscribe.mockResolvedValue({ unsubscribe })
+
+    await dispatcher.callRequest('fs.watch', { rootPath: tmpDir }, { isStale: () => false })
+    await dispatcher.callRequest(
+      'fs.watch',
+      { rootPath: tmpDir },
+      {
+        clientId: 2,
+        isStale: () => false
+      }
+    )
+
+    dispatcher.callNotification(
+      'fs.unwatch',
+      { rootPath: tmpDir },
+      {
+        clientId: 1,
+        isStale: () => false
+      }
+    )
+    expect(unsubscribe).not.toHaveBeenCalled()
+
+    dispatcher.callNotification(
+      'fs.unwatch',
+      { rootPath: tmpDir },
+      {
+        clientId: 2,
+        isStale: () => false
+      }
+    )
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+  })
+
+  it('allows a shared watch attach even when the root watch cap is full', async () => {
+    mockSubscribe.mockResolvedValue({ unsubscribe: vi.fn() })
+
+    for (let index = 0; index < 20; index += 1) {
+      const dir = path.join(tmpDir, `watched-${index}`)
+      await fs.mkdir(dir)
+      await dispatcher.callRequest(
+        'fs.watch',
+        { rootPath: dir },
+        {
+          clientId: index + 1,
+          isStale: () => false
+        }
+      )
+    }
+
+    await expect(
+      dispatcher.callRequest(
+        'fs.watch',
+        { rootPath: path.join(tmpDir, 'watched-0') },
+        {
+          clientId: 99,
+          isStale: () => false
+        }
+      )
+    ).resolves.toBeUndefined()
+  })
+
+  it('releases a client watch when the dispatcher detaches that client', async () => {
+    const unsubscribe = vi.fn()
+    mockSubscribe.mockResolvedValue({ unsubscribe })
+
+    await dispatcher.callRequest(
+      'fs.watch',
+      { rootPath: tmpDir },
+      {
+        clientId: 7,
+        isStale: () => false
+      }
+    )
+    dispatcher.detachClient(7)
+
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
   })
 })

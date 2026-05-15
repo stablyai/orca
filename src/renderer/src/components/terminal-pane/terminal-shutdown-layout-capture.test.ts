@@ -1,6 +1,8 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLayoutSnapshot } from '../../../../shared/types'
 
+const LEAF_ID = '11111111-1111-4111-8111-111111111111' as const
+
 const mocks = vi.hoisted(() => ({
   flushTerminalOutput: vi.fn()
 }))
@@ -40,8 +42,11 @@ beforeEach(() => {
   mocks.flushTerminalOutput.mockReset()
 })
 
-function mockRootForPane(paneId: number): HTMLDivElement {
-  const pane = new MockHTMLElement({ classList: ['pane'], dataset: { paneId: String(paneId) } })
+function mockRootForPane(paneId: number, leafId: string = LEAF_ID): HTMLDivElement {
+  const pane = new MockHTMLElement({
+    classList: ['pane'],
+    dataset: { paneId: String(paneId), leafId }
+  })
   return new MockHTMLElement({ firstElementChild: pane }) as unknown as HTMLDivElement
 }
 
@@ -55,6 +60,8 @@ describe('captureTerminalShutdownLayout', () => {
     }
     const pane = {
       id: 1,
+      leafId: LEAF_ID,
+      stablePaneId: LEAF_ID,
       terminal,
       serializeAddon: {
         serialize: vi.fn(() => {
@@ -75,7 +82,7 @@ describe('captureTerminalShutdownLayout', () => {
 
     const layout = captureTerminalShutdownLayout({
       manager: manager as never,
-      container: mockRootForPane(1),
+      container: mockRootForPane(1, LEAF_ID),
       expandedPaneId: null,
       paneTransports: new Map([[1, { getPtyId: vi.fn(() => 'pty-1') }]]),
       paneTitlesByPaneId: { 1: 'build logs' },
@@ -84,12 +91,12 @@ describe('captureTerminalShutdownLayout', () => {
 
     expect(order).toEqual(['flush', 'serialize'])
     expect(layout).toMatchObject<TerminalLayoutSnapshot>({
-      root: { type: 'leaf', leafId: 'pane:1' },
-      activeLeafId: 'pane:1',
+      root: { type: 'leaf', leafId: LEAF_ID },
+      activeLeafId: LEAF_ID,
       expandedLeafId: null,
-      buffersByLeafId: { 'pane:1': 'snapshot:queued-before-quit' },
-      ptyIdsByLeafId: { 'pane:1': 'pty-1' },
-      titlesByLeafId: { 'pane:1': 'build logs' }
+      buffersByLeafId: { [LEAF_ID]: 'snapshot:queued-before-quit' },
+      ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' },
+      titlesByLeafId: { [LEAF_ID]: 'build logs' }
     })
   })
 
@@ -97,6 +104,8 @@ describe('captureTerminalShutdownLayout', () => {
     const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
     const pane = {
       id: 1,
+      leafId: LEAF_ID,
+      stablePaneId: LEAF_ID,
       terminal: { options: { scrollback: 50_000 } },
       serializeAddon: {
         serialize: vi.fn(() => 'x'.repeat(512 * 1024))
@@ -117,7 +126,7 @@ describe('captureTerminalShutdownLayout', () => {
         root: null,
         activeLeafId: null,
         expandedLeafId: null,
-        buffersByLeafId: { 'pane:1': 'previous-local-scrollback' }
+        buffersByLeafId: { [LEAF_ID]: 'previous-local-scrollback' }
       },
       captureBuffers: false
     })
@@ -125,7 +134,7 @@ describe('captureTerminalShutdownLayout', () => {
     expect(mocks.flushTerminalOutput).not.toHaveBeenCalled()
     expect(pane.serializeAddon.serialize).not.toHaveBeenCalled()
     expect(layout.buffersByLeafId).toBeUndefined()
-    expect(layout.ptyIdsByLeafId).toEqual({ 'pane:1': 'pty-1' })
-    expect(layout.titlesByLeafId).toEqual({ 'pane:1': 'local shell' })
+    expect(layout.ptyIdsByLeafId).toEqual({ [LEAF_ID]: 'pty-1' })
+    expect(layout.titlesByLeafId).toEqual({ [LEAF_ID]: 'local shell' })
   })
 })

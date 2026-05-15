@@ -16,7 +16,7 @@ name: Cut Release
 #   5. Write package.json, commit (detached), tag, push tag.
 #   6. If ref was the tip of origin/main, fast-forward main to include the
 #      version-bump commit so developers see the right version locally.
-#   7. Invoke release.yml to build and publish artifacts.
+#   7. Build and publish artifacts from the tag.
 
 on:
   workflow_dispatch:
@@ -61,7 +61,7 @@ jobs:
     timeout-minutes: 15
     outputs:
       tag: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
-      should_release: ${{ steps.window.outputs.allowed == 'true' && steps.existing.outputs.already_ran != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+      should_release: ${{ steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '' }}
     steps:
       - name: Checkout ref
         uses: actions/checkout@v4
@@ -174,9 +174,21 @@ jobs:
           echo "Already ran this slot: ${{ steps.existing.outputs.already_ran }}"
           echo "Reason: ${{ steps.existing.outputs.reason }}"
 
+      - name: Publish complete release-cut RC drafts from prior runs
+        id: publish_drafts
+        # Why: this must run even when the current slot already cut a tag; a
+        # later cron retry may be the first chance to unstick a complete RC draft.
+        if: steps.window.outputs.allowed == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node config/scripts/publish-complete-draft-releases.mjs
+
       - name: Compute next version
         id: version
-        if: steps.window.outputs.allowed == 'true' && steps.existing.outputs.already_ran != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+        # Why: if an RC run only had complete drafts to publish, stop there
+        # instead of immediately cutting another RC after the recovered one.
+        # Stable dispatches should still cut the requested stable release.
+        if: steps.window.outputs.allowed == 'true' && steps.existing.outputs.already_ran != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && !((github.event_name == 'schedule' || inputs.kind == 'rc') && steps.publish_drafts.outputs.published_count != '0' && steps.publish_drafts.outputs.skipped_count == '0')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KIND: ${{ github.event_name == 'schedule' && 'rc' || inputs.kind }}
@@ -238,20 +250,48 @@ jobs:
             ' "$(strip_pre "$1")" "$2"
           }
 
-          next_rc_in_series() {
-            # Given a base version, find the highest existing -rc.N for it
-            # and return base-rc.(N+1). If none exists, base-rc.0.
+          highest_rc_for_base() {
             local base="$1"
-            local highest
-            highest="$(git tag --list "v${base}-rc.*" \
+            git tag --list "v${base}-rc.*" \
                 | sed -E "s/^v${base//./\\.}-rc\.//" \
                 | sort -n \
-                | tail -n 1 || true)"
-            if [[ -z "$highest" ]]; then
-              echo "${base}-rc.0"
+                | tail -n 1 || true
+          }
+
+          release_draft_state() {
+            # Prints: true, false, or missing.
+            local tag="$1"
+            local state_file="$RUNNER_TEMP/release-state-${tag//[^A-Za-z0-9_.-]/_}"
+            if gh release view "$tag" \
+                --repo "$GITHUB_REPOSITORY" \
+                --json isDraft \
+                --jq '.isDraft' >"$state_file" 2>/dev/null; then
+              cat "$state_file"
             else
-              echo "${base}-rc.$((highest + 1))"
+              echo "missing"
             fi
+          }
+
+          recover_unpublished_tag() {
+            local tag="$1"
+            local reason="$2"
+            local release_state
+            release_state="$(release_draft_state "$tag")"
+            case "$release_state" in
+              missing|true)
+                echo "::warning::Tag $tag already exists but has no published release ($reason) - recovering by re-dispatching the release build against the existing tag."
+                echo "recovered_tag=$tag" >>"$GITHUB_OUTPUT"
+                echo "recovered=true" >>"$GITHUB_OUTPUT"
+                exit 0
+                ;;
+              false)
+                return 1
+                ;;
+              *)
+                echo "::error::Unexpected release state for $tag: $release_state" >&2
+                exit 1
+                ;;
+            esac
           }
 
           # Fresh repo fallback so the math below never divides by zero.
@@ -270,7 +310,18 @@ jobs:
               # that class of bug; minor/major RCs are cut by running
               # that stable kind first.
               base="$(bump "$latest_stable" patch)"
-              new="$(next_rc_in_series "$base")"
+              highest_rc="$(highest_rc_for_base "$base")"
+              if [[ -z "$highest_rc" ]]; then
+                new="${base}-rc.0"
+              else
+                existing_rc_tag="v${base}-rc.${highest_rc}"
+                # Why: a failed or GitHub-stuck run can leave the highest RC
+                # tag attached to a draft/missing release. Resume that tag so
+                # retries finish the intended release instead of piling up
+                # vX.Y.Z-rc.N+1 drafts.
+                recover_unpublished_tag "$existing_rc_tag" "latest RC in series" || true
+                new="${base}-rc.$((highest_rc + 1))"
+              fi
               ;;
             patch|minor|major)
               new="$(bump "$latest_stable" "$KIND")"
@@ -289,7 +340,7 @@ jobs:
           # Orphan-tag recovery.
           #
           # Why: if a previous cut pushed the tag but was cancelled (or the
-          # dependent release.yml job otherwise failed to start) before the
+          # dependent release build jobs otherwise failed to start) before the
           # GitHub Release was published, the tag now exists on the remote
           # but "latest stable" still points at the prior version. Every
           # subsequent patch cut then recomputes the same version and dies
@@ -301,7 +352,7 @@ jobs:
           # Recovery policy: if the tag exists AND no GitHub release has
           # been published for it (draft-or-absent both count as "not
           # shipped"), treat this as a resumable state: emit the existing
-          # tag as the job output so the downstream release.yml job runs
+          # tag as the job output so the downstream release build jobs run
           # against it and finishes what the earlier attempt started. The
           # bump/commit/push steps are skipped in that case — there is
           # nothing to bump; the tag is already on the remote.
@@ -310,32 +361,10 @@ jobs:
           # already exist — that's a real conflict (someone tagged manually
           # over a shipped version) and needs human attention.
           if git rev-parse "v$new" >/dev/null 2>&1; then
-            # Why: use the REST API, not `gh release view`. `gh api` returns
-            # `true`/`false` for a real release, while a 404 means the tag is
-            # orphaned and can be safely re-dispatched. Capture failures
-            # explicitly so the 404 payload never leaks into the state check.
-            release_state="missing"
-            if gh api \
-                "repos/$GITHUB_REPOSITORY/releases/tags/v$new" \
-                --jq '.draft' >"$RUNNER_TEMP/release-state" 2>/dev/null; then
-              release_state="$(cat "$RUNNER_TEMP/release-state")"
-            fi
-            case "$release_state" in
-              missing|true)
-                echo "::warning::Tag v$new already exists but no published release is attached — recovering by re-dispatching release.yml against the existing tag."
-                echo "recovered_tag=v$new" >>"$GITHUB_OUTPUT"
-                echo "recovered=true" >>"$GITHUB_OUTPUT"
-                exit 0
-                ;;
-              false)
-                echo "::error::Tag v$new already exists and has a published release. Refusing to re-cut over a shipped version." >&2
-                exit 1
-                ;;
-              *)
-                echo "::error::Unexpected release state for v$new: $release_state" >&2
-                exit 1
-                ;;
-            esac
+            recover_unpublished_tag "v$new" "tag collision" || {
+              echo "::error::Tag v$new already exists and has a published release. Refusing to re-cut over a shipped version." >&2
+              exit 1
+            }
           fi
 
           echo "version=$new" >>"$GITHUB_OUTPUT"
@@ -680,6 +709,9 @@ jobs:
       - name: Build app
         run: pnpm build:release
         env:
+          # Why: Vite's web build crossed Node's default old-space ceiling on
+          # the macOS release runner, leaving v1.4.2-rc.8 as an incomplete draft.
+          NODE_OPTIONS: --max-old-space-size=4096
           ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
 

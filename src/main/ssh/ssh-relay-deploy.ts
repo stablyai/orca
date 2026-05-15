@@ -185,7 +185,7 @@ async function uploadRelay(
   const localRelayDir = getLocalRelayPath(platform)
   if (!localRelayDir || !existsSync(localRelayDir)) {
     throw new Error(
-      `Relay package for ${platform} not found at ${localRelayDir}. ` +
+      `Relay package for ${platform} not found. Searched: ${getLocalRelayCandidates(platform).join(', ')}. ` +
         `This may be a packaging issue — try reinstalling Orca.`
     )
   }
@@ -221,7 +221,10 @@ async function uploadRelay(
   }
 }
 
-const RELAY_NATIVE_DEPS = ['node-pty', '@parcel/watcher'] as const
+const RELAY_NATIVE_DEPS = {
+  'node-pty': '1.1.0',
+  '@parcel/watcher': '2.5.6'
+} as const
 
 async function hasRequiredNativeDeps(conn: SshConnection, remoteDir: string): Promise<boolean> {
   const nodePath = await resolveRemoteNodePath(conn)
@@ -298,7 +301,7 @@ async function installNativeDeps(
     version: '1.0.0',
     private: true,
     type: 'commonjs',
-    dependencies: Object.fromEntries(RELAY_NATIVE_DEPS.map((name) => [name, '*']))
+    dependencies: RELAY_NATIVE_DEPS
   })}\n`
   const sftpPkg = await conn.sftp()
   try {
@@ -316,10 +319,12 @@ async function installNativeDeps(
   }
 
   try {
-    const installArgs = RELAY_NATIVE_DEPS.map((dep) => shellEscape(dep)).join(' ')
+    const installArgs = Object.entries(RELAY_NATIVE_DEPS)
+      .map(([dep, version]) => shellEscape(`${dep}@${version}`))
+      .join(' ')
     await execCommand(
       conn,
-      `export PATH=${escapedBinDir}:$PATH && cd ${escapedDir} && npm install ${installArgs} 2>&1`
+      `export PATH=${escapedBinDir}:$PATH && cd ${escapedDir} && npm install --omit=dev --no-audit --no-fund ${installArgs} 2>&1`
     )
   } catch (err) {
     // Don't write .install-complete on hard fail; reconnect retries on a
@@ -364,26 +369,34 @@ async function installNativeDeps(
 }
 
 function getLocalRelayPath(platform: RelayPlatform): string | null {
-  if (process.env.ORCA_RELAY_PATH) {
-    const override = join(process.env.ORCA_RELAY_PATH, platform)
-    if (existsSync(override)) {
-      return override
+  for (const candidate of getLocalRelayCandidates(platform)) {
+    if (existsSync(candidate)) {
+      return candidate
     }
   }
-
-  // Production: bundled alongside the app
-  const prodPath = join(app.getAppPath(), 'resources', 'relay', platform)
-  if (existsSync(prodPath)) {
-    return prodPath
-  }
-
-  // Development: built by `pnpm build:relay` into out/relay/{platform}/
-  const devPath = join(app.getAppPath(), 'out', 'relay', platform)
-  if (existsSync(devPath)) {
-    return devPath
-  }
-
   return null
+}
+
+export function getLocalRelayCandidates(platform: RelayPlatform): string[] {
+  const candidates: string[] = []
+  if (process.env.ORCA_RELAY_PATH) {
+    candidates.push(join(process.env.ORCA_RELAY_PATH, platform))
+  }
+
+  // Why: electron-builder copies extraResources next to the app bundle, while
+  // app.getAppPath() points at app.asar in packaged builds.
+  if (process.resourcesPath) {
+    candidates.push(join(process.resourcesPath, 'relay', platform))
+    candidates.push(join(process.resourcesPath, 'app.asar.unpacked', 'out', 'relay', platform))
+  }
+
+  const appPath = app.getAppPath()
+  candidates.push(
+    join(appPath, 'resources', 'relay', platform),
+    join(appPath, 'out', 'relay', platform)
+  )
+
+  return [...new Set(candidates)]
 }
 
 async function launchRelay(
@@ -400,7 +413,8 @@ async function launchRelay(
   const nodePath = await resolveRemoteNodePath(conn)
   // Why: graceTimeSeconds originates from user-editable SshTarget config.
   // Clamping to integer prevents shell injection if the type ever loosened.
-  const graceTime = Math.max(60, Math.min(3600, Math.floor(graceTimeSeconds ?? 300)))
+  const requestedGraceTime = Math.floor(graceTimeSeconds ?? 300)
+  const graceTime = requestedGraceTime === 0 ? 0 : Math.max(60, Math.min(3600, requestedGraceTime))
   const escapedDir = shellEscape(remoteDir)
   const escapedNode = shellEscape(nodePath)
   // Why: remoteRelayDir is shared by every Orca target for the same remote

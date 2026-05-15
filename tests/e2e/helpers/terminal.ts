@@ -1,5 +1,21 @@
+/* eslint-disable max-lines -- Terminal E2E helpers share one PaneManager-backed path for PTY IO, split actions, and stable pane identity snapshots. */
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
+
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+
+export type PaneIdentitySnapshot = {
+  tabId: string
+  activeLeafId: string | null
+  panes: {
+    numericPaneId: number
+    leafId: string
+    stablePaneId: string
+    datasetLeafId: string | null
+    ptyId: string | null
+  }[]
+  ptyIdsByLeafId: Record<string, string>
+}
 
 // Why: worktree restoration can render the terminal surface before the legacy
 // global activeTabId settles. Prefer the active worktree's saved terminal tab
@@ -173,6 +189,117 @@ export async function discoverActivePtyId(page: Page): Promise<string> {
   }
 
   return foundPtyId
+}
+
+export async function readPaneIdentitySnapshot(page: Page): Promise<PaneIdentitySnapshot | null> {
+  const tabId = await resolveActiveTabId(page)
+  if (!tabId) {
+    return null
+  }
+
+  return page.evaluate((tabId) => {
+    const manager = window.__paneManagers?.get(tabId)
+    const store = window.__store
+    if (!manager || !store) {
+      return null
+    }
+
+    const activePane = manager.getActivePane?.() ?? null
+    return {
+      tabId,
+      activeLeafId: activePane?.leafId ?? null,
+      panes: manager.getPanes().map((pane) => ({
+        numericPaneId: pane.id,
+        leafId: pane.leafId,
+        stablePaneId: pane.stablePaneId,
+        datasetLeafId: pane.container.dataset.leafId ?? null,
+        ptyId: pane.container.dataset.ptyId ?? null
+      })),
+      ptyIdsByLeafId: store.getState().terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}
+    }
+  }, tabId)
+}
+
+export async function waitForPaneIdentitySnapshot(
+  page: Page,
+  paneCount: number
+): Promise<PaneIdentitySnapshot> {
+  await expect
+    .poll(
+      async () => {
+        const snapshot = await readPaneIdentitySnapshot(page)
+        return Boolean(
+          snapshot &&
+          snapshot.panes.length === paneCount &&
+          snapshot.panes.every(
+            (pane) =>
+              UUID_RE.test(pane.leafId) &&
+              pane.stablePaneId === pane.leafId &&
+              pane.datasetLeafId === pane.leafId &&
+              pane.ptyId !== null &&
+              snapshot.ptyIdsByLeafId[pane.leafId] === pane.ptyId
+          )
+        )
+      },
+      {
+        timeout: 15_000,
+        message: 'Split terminal panes did not settle with UUID leaf-keyed PTY bindings'
+      }
+    )
+    .toBe(true)
+
+  const snapshot = await readPaneIdentitySnapshot(page)
+  if (!snapshot) {
+    throw new Error('Pane identity snapshot disappeared after settling')
+  }
+  return snapshot
+}
+
+export async function readTerminalPaneDomLeafOrder(page: Page): Promise<string[]> {
+  const snapshot = await readPaneIdentitySnapshot(page)
+  if (!snapshot) {
+    return []
+  }
+
+  return page.evaluate((tabId) => {
+    const manager = window.__paneManagers?.get(tabId)
+    if (!manager) {
+      return []
+    }
+    const paneElements = new Set(manager.getPanes().map((pane) => pane.container))
+    return Array.from(document.querySelectorAll<HTMLElement>('.pane[data-leaf-id]'))
+      .filter((element) => paneElements.has(element))
+      .map((element) => element.dataset.leafId ?? '')
+      .filter((leafId) => leafId.length > 0)
+  }, snapshot.tabId)
+}
+
+export async function moveTerminalPaneByLeafId(
+  page: Page,
+  sourceLeafId: string,
+  targetLeafId: string,
+  zone: 'top' | 'bottom' | 'left' | 'right'
+): Promise<void> {
+  const snapshot = await readPaneIdentitySnapshot(page)
+  if (!snapshot) {
+    throw new Error('moveTerminalPaneByLeafId: no active terminal tab')
+  }
+
+  await page.evaluate(
+    ({ tabId, sourceLeafId, targetLeafId, zone }) => {
+      const manager = window.__paneManagers?.get(tabId)
+      if (!manager) {
+        throw new Error('moveTerminalPaneByLeafId: active pane manager not ready')
+      }
+      const sourcePaneId = manager.getNumericIdForLeaf(sourceLeafId)
+      const targetPaneId = manager.getNumericIdForLeaf(targetLeafId)
+      if (sourcePaneId == null || targetPaneId == null) {
+        throw new Error('moveTerminalPaneByLeafId: source or target leaf is not mounted')
+      }
+      manager.movePane(sourcePaneId, targetPaneId, zone)
+    },
+    { tabId: snapshot.tabId, sourceLeafId, targetLeafId, zone }
+  )
 }
 
 export async function sendToTerminal(page: Page, ptyId: string, text: string): Promise<void> {

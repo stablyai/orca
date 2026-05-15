@@ -201,6 +201,8 @@ export function createRemoteRuntimePtyTransport(
           worktree: worktreeId,
           command,
           env,
+          tabId,
+          leafId,
           focus: false
         })
         handle = created.terminal.handle

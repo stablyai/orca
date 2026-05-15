@@ -78,9 +78,9 @@ export function installMode2031Handlers(deps: Mode2031HandlerDeps): IDisposable[
         // scrollback (`SerializeAddon.serialize()`) never contain `?2031`:
         // SerializeAddon's _serializeModes whitelists only ?1h/?66h/?2004h/
         // [4h/?6h/?45h/?1004h/?7l/mouse modes/?25l, and buildRehydrateSequences
-        // emits only ?2004h/?1h/?1049h. If xterm ever adds ?2031 to that
-        // whitelist, this guard would start suppressing legitimate
-        // subscribes during snapshot reattach — revisit then.
+        // emits only ?1049h/?2004h/?1h/mouse reporting modes. If xterm ever
+        // adds ?2031 to that whitelist, this guard would start suppressing
+        // legitimate subscribes during snapshot reattach — revisit then.
         if (deps.isReplaying()) {
           return false
         }

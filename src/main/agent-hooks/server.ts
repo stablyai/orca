@@ -36,8 +36,11 @@ import {
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import {
   type AgentStatusIpcPayload,
+  type AgentStatusState,
   normalizeAgentStatusPayload
 } from '../../shared/agent-status-types'
+import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
+import type { LegacyPaneKeyAliasEntry } from '../../shared/types'
 
 export type { AgentHookSource }
 
@@ -52,6 +55,20 @@ export type { AgentHookSource }
 type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   receivedAt: number
   stateStartedAt: number
+}
+
+export type AgentHookStatusChangeEntry = {
+  state: AgentStatusState
+  receivedAt: number
+  observedInCurrentRuntime: boolean
+}
+
+type StatusChangeListener = (statuses: AgentHookStatusChangeEntry[]) => void
+type PaneKeyAliasPersistenceListener = (entries: LegacyPaneKeyAliasEntry[]) => void
+type PaneKeyAliasEntry = {
+  stablePaneKey: string
+  ptyId: string | null
+  updatedAt: number
 }
 
 // Why: name of the on-disk cache that survives Orca restart. Lives next to
@@ -86,26 +103,18 @@ type LastStatusFile = {
   entries: Record<string, EnrichedAgentHookEventPayload>
 }
 
-// Why: paneKey is `${tabId}:${paneId}` — exactly one ':' with non-empty
-// segments on either side. Used both at write time (defensive) and at
-// hydrate time (drop on mismatch).
+// Why: paneKey is `${tabId}:${leafUuid}` — validate the durable leaf suffix
+// at write/hydrate time so legacy numeric rows fail closed.
 export function isValidPaneKey(value: unknown): value is string {
-  if (typeof value !== 'string' || value.length === 0) {
-    return false
-  }
-  const colon = value.indexOf(':')
-  if (colon <= 0 || colon === value.length - 1) {
-    return false
-  }
-  // Why: exactly one colon. Anything weirder is corruption.
-  return !value.includes(':', colon + 1)
+  return typeof value === 'string' && parsePaneKey(value) !== null
 }
 
 function sanitizeHydratedEntry(
   paneKey: string,
   rawEntry: unknown
 ): EnrichedAgentHookEventPayload | null {
-  if (!isValidPaneKey(paneKey)) {
+  const parsedPaneKey = parsePaneKey(paneKey)
+  if (!parsedPaneKey) {
     return null
   }
   if (typeof rawEntry !== 'object' || rawEntry === null) {
@@ -119,10 +128,10 @@ function sanitizeHydratedEntry(
   if (tabId !== undefined && (typeof tabId !== 'string' || tabId.length === 0)) {
     return null
   }
-  // Why: paneKey is `${tabId}:${paneId}`; a stored entry whose tabId field
+  // Why: paneKey is `${tabId}:${leafUuid}`; a stored entry whose tabId field
   // diverges from the key's tab segment is corruption (renamer bug, manual
   // edit, future shape drift). Drop instead of hydrating an inconsistent row.
-  if (typeof tabId === 'string' && tabId !== paneKey.slice(0, paneKey.indexOf(':'))) {
+  if (typeof tabId === 'string' && tabId !== parsedPaneKey.tabId) {
     return null
   }
   const worktreeId = record.worktreeId
@@ -199,6 +208,7 @@ export class AgentHookServer {
   // caller's knowledge of whether this is a packaged build.
   private env = 'production'
   private onAgentStatus: ((payload: EnrichedAgentHookEventPayload) => void) | null = null
+  private statusChangeListeners = new Set<StatusChangeListener>()
   // Why: directory that holds the on-disk endpoint file. Set via start()'s
   // `userDataPath` option so the class has no direct Electron dependency
   // (keeps it mockable in the vitest node environment).
@@ -209,6 +219,11 @@ export class AgentHookServer {
   // by paneKey). Held on the instance instead of as module-level Maps so
   // tests can spin up multiple servers without state cross-contamination.
   private state: HookListenerState = createHookListenerState()
+  // Why: hydrated last-status rows are useful UI continuity, but they are not
+  // evidence of live agent work in this main-process runtime.
+  private runtimeObservedStatusPaneKeys = new Set<string>()
+  private legacyPaneKeyAliases = new Map<string, PaneKeyAliasEntry>()
+  private paneKeyAliasPersistenceListener: PaneKeyAliasPersistenceListener | null = null
   // Why: full path to the on-disk last-status cache. Set in start() from
   // userDataPath. Null when the server runs without a userDataPath (e.g.
   // tests that skip the userDataPath option) — in that case, persistence is
@@ -243,6 +258,13 @@ export class AgentHookServer {
     }
   }
 
+  subscribeStatusChanges(listener: StatusChangeListener): () => void {
+    this.statusChangeListeners.add(listener)
+    return () => {
+      this.statusChangeListeners.delete(listener)
+    }
+  }
+
   /** Snapshot of the current cached statuses, in the IPC-shaped form the
    *  renderer consumes. Used by the `agentStatus:getSnapshot` IPC after
    *  workspace tabs have hydrated, so the dashboard catches up on any
@@ -251,6 +273,31 @@ export class AgentHookServer {
     return Array.from(this.state.lastStatusByPaneKey.values(), (entry) =>
       toAgentStatusIpcPayload(entry as EnrichedAgentHookEventPayload)
     )
+  }
+
+  getStatusChangeSnapshot(): AgentHookStatusChangeEntry[] {
+    return Array.from(this.state.lastStatusByPaneKey.entries(), ([paneKey, entry]) => {
+      const enriched = entry as EnrichedAgentHookEventPayload
+      return {
+        state: enriched.payload.state,
+        receivedAt: enriched.receivedAt,
+        observedInCurrentRuntime: this.runtimeObservedStatusPaneKeys.has(paneKey)
+      }
+    })
+  }
+
+  private notifyStatusChangeListeners(): void {
+    if (this.statusChangeListeners.size === 0) {
+      return
+    }
+    const snapshot = this.getStatusChangeSnapshot()
+    for (const listener of this.statusChangeListeners) {
+      try {
+        listener(snapshot)
+      } catch (err) {
+        console.error('[agent-hooks] status-change listener threw', err)
+      }
+    }
   }
 
   private attachStatusTiming(payload: AgentHookEventPayload): EnrichedAgentHookEventPayload {
@@ -265,6 +312,121 @@ export class AgentHookServer {
       receivedAt: now,
       stateStartedAt
     }
+  }
+
+  setPaneKeyAliasPersistenceListener(listener: PaneKeyAliasPersistenceListener | null): void {
+    this.paneKeyAliasPersistenceListener = listener
+  }
+
+  private getPersistedPaneKeyAliases(): LegacyPaneKeyAliasEntry[] {
+    return Array.from(this.legacyPaneKeyAliases.entries()).flatMap(([legacyPaneKey, entry]) =>
+      entry.ptyId
+        ? [
+            {
+              ptyId: entry.ptyId,
+              legacyPaneKey,
+              stablePaneKey: entry.stablePaneKey,
+              updatedAt: entry.updatedAt
+            }
+          ]
+        : []
+    )
+  }
+
+  private notifyPaneKeyAliasPersistenceListener(): void {
+    this.paneKeyAliasPersistenceListener?.(this.getPersistedPaneKeyAliases())
+  }
+
+  registerPaneKeyAlias(
+    legacyPaneKey: string,
+    stablePaneKey: string,
+    ptyId?: string,
+    updatedAt = Date.now(),
+    options?: { overwriteExisting?: boolean }
+  ): void {
+    const legacy = parseLegacyNumericPaneKey(legacyPaneKey)
+    const stable = parsePaneKey(stablePaneKey)
+    if (!legacy || !stable || legacy.tabId !== stable.tabId) {
+      return
+    }
+    const existing = this.legacyPaneKeyAliases.get(legacy.paneKey)
+    if (existing && options?.overwriteExisting === false) {
+      return
+    }
+    const normalizedPtyId =
+      typeof ptyId === 'string' && ptyId.trim().length > 0 ? ptyId.trim() : existing?.ptyId
+    const normalizedUpdatedAt =
+      Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : (existing?.updatedAt ?? Date.now())
+    if (
+      existing &&
+      existing.stablePaneKey === stablePaneKey &&
+      existing.ptyId === (normalizedPtyId ?? null) &&
+      existing.updatedAt === normalizedUpdatedAt
+    ) {
+      return
+    }
+    this.legacyPaneKeyAliases.set(legacy.paneKey, {
+      stablePaneKey,
+      ptyId: normalizedPtyId ?? null,
+      updatedAt: normalizedUpdatedAt
+    })
+    if (normalizedPtyId) {
+      this.notifyPaneKeyAliasPersistenceListener()
+    }
+  }
+
+  clearPaneKeyAliasesForPty(
+    ptyId: string,
+    options?: { shouldClearStablePaneKey?: (paneKey: string) => boolean }
+  ): void {
+    let aliasChanged = false
+    let statusChanged = false
+    for (const [legacyPaneKey, entry] of this.legacyPaneKeyAliases) {
+      if (entry.ptyId === ptyId) {
+        this.legacyPaneKeyAliases.delete(legacyPaneKey)
+        clearPaneCacheState(this.state, legacyPaneKey)
+        const shouldClearStablePaneKey =
+          options?.shouldClearStablePaneKey?.(entry.stablePaneKey) ?? true
+        if (shouldClearStablePaneKey && this.state.lastStatusByPaneKey.has(entry.stablePaneKey)) {
+          statusChanged = true
+        }
+        if (shouldClearStablePaneKey) {
+          // Why: after hydrate, legacy rows are stored under the stable key. If
+          // this PTY is later proven dead before ptyPaneKey is rebuilt, alias
+          // cleanup is the only path that can evict that retained status.
+          clearPaneCacheState(this.state, entry.stablePaneKey)
+          this.runtimeObservedStatusPaneKeys.delete(entry.stablePaneKey)
+        }
+        aliasChanged = true
+      }
+    }
+    if (aliasChanged) {
+      this.notifyPaneKeyAliasPersistenceListener()
+    }
+    if (statusChanged) {
+      this.scheduleStatusPersist()
+      this.notifyStatusChangeListeners()
+    }
+  }
+
+  private resolvePaneKeyAlias(paneKey: string): string {
+    return this.legacyPaneKeyAliases.get(paneKey)?.stablePaneKey ?? paneKey
+  }
+
+  private normalizeHookBodyPaneKeyAlias(body: unknown): unknown {
+    if (typeof body !== 'object' || body === null) {
+      return body
+    }
+    const record = body as Record<string, unknown>
+    const rawPaneKey = typeof record.paneKey === 'string' ? record.paneKey.trim() : ''
+    const stablePaneKey = this.legacyPaneKeyAliases.get(rawPaneKey)?.stablePaneKey
+    if (!stablePaneKey) {
+      return body
+    }
+    // Why: pre-migration live shells keep posting their immutable numeric
+    // ORCA_PANE_KEY. The reattach path proves the UUID leaf once, then this
+    // bridge lets hook caches and renderer state use only the stable key.
+    return { ...record, paneKey: stablePaneKey }
   }
 
   /** Ingest a payload that arrived over the relay JSON-RPC channel rather
@@ -303,12 +465,16 @@ export class AgentHookServer {
     // Why: match the listener's HTTP path — `normalizeHookPayload` trims and
     // length-caps paneKey before caching, so the cache key here must follow
     // the same rule or remote-vs-local events for the same pane would diverge.
-    const paneKey = envelope.paneKey.trim()
+    const paneKey = this.resolvePaneKeyAlias(envelope.paneKey.trim())
+    const parsedPaneKey = parsePaneKey(paneKey)
     if (paneKey.length === 0) {
       track('agent_hook_unattributed', { reason: 'empty_pane_key' })
       return
     }
     if (paneKey.length > MAX_PANE_KEY_LEN) {
+      return
+    }
+    if (!parsedPaneKey) {
       return
     }
     if (envelope.tabId !== undefined && typeof envelope.tabId !== 'string') {
@@ -324,6 +490,9 @@ export class AgentHookServer {
       envelope.tabId !== undefined && envelope.tabId.trim().length > 0
         ? envelope.tabId.trim()
         : undefined
+    if (tabId !== undefined && tabId !== parsedPaneKey.tabId) {
+      return
+    }
     const worktreeId =
       envelope.worktreeId !== undefined && envelope.worktreeId.trim().length > 0
         ? envelope.worktreeId.trim()
@@ -354,8 +523,10 @@ export class AgentHookServer {
       payload: normalizedPayload
     }
     const enriched = this.attachStatusTiming(event)
+    this.runtimeObservedStatusPaneKeys.add(paneKey)
     this.state.lastStatusByPaneKey.set(paneKey, enriched)
     this.scheduleStatusPersist()
+    this.notifyStatusChangeListeners()
     this.onAgentStatus?.(enriched)
   }
 
@@ -413,11 +584,18 @@ export class AgentHookServer {
         }
 
         trackEmptyPaneKeyHook(body)
-        const normalized = normalizeHookPayload(this.state, source, body, this.env)
+        const normalized = normalizeHookPayload(
+          this.state,
+          source,
+          this.normalizeHookBodyPaneKeyAlias(body),
+          this.env
+        )
         if (normalized) {
           const enriched = this.attachStatusTiming(normalized)
+          this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
           this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
           this.scheduleStatusPersist()
+          this.notifyStatusChangeListeners()
           this.onAgentStatus?.(enriched)
         }
 
@@ -477,7 +655,10 @@ export class AgentHookServer {
     this.endpointFileWritten = false
     this.lastStatusFilePath = null
     this.lastWrittenJson = null
+    this.runtimeObservedStatusPaneKeys.clear()
+    this.legacyPaneKeyAliases.clear()
     clearAllListenerCaches(this.state)
+    this.notifyStatusChangeListeners()
   }
 
   /** Why: invoked from the renderer-driven agentStatus:drop IPC when a user
@@ -488,22 +669,39 @@ export class AgentHookServer {
    *  lands. clearPaneState (which wipes all three caches) is the right shape
    *  only for PTY-teardown. */
   dropStatusEntry(paneKey: string): void {
-    if (!this.state.lastStatusByPaneKey.has(paneKey)) {
+    const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
+    if (!this.state.lastStatusByPaneKey.has(resolvedPaneKey)) {
       return
     }
-    this.state.lastStatusByPaneKey.delete(paneKey)
+    this.state.lastStatusByPaneKey.delete(resolvedPaneKey)
+    this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
     this.scheduleStatusPersist()
+    this.notifyStatusChangeListeners()
   }
 
   clearPaneState(paneKey: string): void {
+    const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
     // Why: only schedule a write when we actually evicted a status entry —
     // dropping prompt/tool caches for a pane that never produced a hook
     // event does not change the on-disk file, and skipping the write avoids
     // re-stat'ing on every dead-pane teardown.
-    const hadStatus = this.state.lastStatusByPaneKey.has(paneKey)
-    clearPaneCacheState(this.state, paneKey)
+    const hadStatus = this.state.lastStatusByPaneKey.has(resolvedPaneKey)
+    clearPaneCacheState(this.state, resolvedPaneKey)
+    let clearedAlias = false
+    for (const [legacyPaneKey, stablePaneKey] of this.legacyPaneKeyAliases) {
+      if (stablePaneKey.stablePaneKey === resolvedPaneKey) {
+        this.legacyPaneKeyAliases.delete(legacyPaneKey)
+        clearPaneCacheState(this.state, legacyPaneKey)
+        clearedAlias = true
+      }
+    }
+    if (clearedAlias) {
+      this.notifyPaneKeyAliasPersistenceListener()
+    }
     if (hadStatus) {
+      this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
       this.scheduleStatusPersist()
+      this.notifyStatusChangeListeners()
     }
   }
 
@@ -600,9 +798,14 @@ export class AgentHookServer {
     // tick.
     const ttlCutoff = Date.now() - HYDRATE_MAX_AGE_MS
     for (const [paneKey, rawEntry] of Object.entries(entries)) {
-      const entry = sanitizeHydratedEntry(paneKey, rawEntry)
+      const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
+      const rawResolvedEntry =
+        resolvedPaneKey === paneKey || typeof rawEntry !== 'object' || rawEntry === null
+          ? rawEntry
+          : { ...(rawEntry as Record<string, unknown>), paneKey: resolvedPaneKey }
+      const entry = sanitizeHydratedEntry(resolvedPaneKey, rawResolvedEntry)
       if (entry && entry.receivedAt >= ttlCutoff) {
-        this.state.lastStatusByPaneKey.set(paneKey, entry)
+        this.state.lastStatusByPaneKey.set(resolvedPaneKey, entry)
         hydrated += 1
       } else {
         dropped += 1

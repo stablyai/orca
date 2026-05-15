@@ -13,7 +13,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
-  FolderOpen,
   Copy,
   Bell,
   BellOff,
@@ -33,8 +32,8 @@ import type { Worktree } from '../../../../shared/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
-import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { getWorkspaceStatus, getWorkspaceStatusVisualMeta } from './workspace-status'
+import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
 
 type Props = {
   worktree: Worktree
@@ -117,18 +116,6 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
     return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
   }, [])
-
-  const handleOpenInFinder = useCallback(() => {
-    if (
-      isLocalPathOpenBlocked(useAppStore.getState().settings, {
-        connectionId: repo?.connectionId ?? null
-      })
-    ) {
-      showLocalPathOpenBlockedToast()
-      return
-    }
-    window.api.shell.openPath(worktree.path)
-  }, [repo?.connectionId, worktree.path])
 
   const handleCopyPath = useCallback(() => {
     window.api.ui.writeClipboardText(worktree.path)
@@ -282,10 +269,11 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
         <DropdownMenuContent className={cn('w-52', contentClassName)} sideOffset={0} align="start">
           {!isMultiContext && (
             <>
-              <DropdownMenuItem onSelect={handleOpenInFinder} disabled={isDeleting}>
-                <FolderOpen className="size-3.5" />
-                Open in Finder
-              </DropdownMenuItem>
+              <WorktreeOpenInSubMenu
+                worktreePath={worktree.path}
+                connectionId={repo?.connectionId ?? null}
+                disabled={isDeleting}
+              />
               <DropdownMenuItem onSelect={handleCopyPath} disabled={isDeleting}>
                 <Copy className="size-3.5" />
                 Copy Path

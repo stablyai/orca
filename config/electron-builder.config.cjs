@@ -7,6 +7,13 @@ const featureWallResources = {
   from: 'resources/onboarding/feature-wall',
   to: 'onboarding/feature-wall'
 }
+// Why: SSH relay deploy resolves bundles from process.resourcesPath in packaged
+// apps. Keeping relay assets as extraResources makes them real directories
+// instead of paths hidden inside app.asar.
+const relayExtraResource = {
+  from: 'out/relay',
+  to: 'relay'
+}
 
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
@@ -85,6 +92,7 @@ module.exports = {
   win: {
     executableName: 'Orca',
     extraResources: [
+      relayExtraResource,
       {
         from: 'resources/win32/bin/orca.cmd',
         to: 'bin/orca.cmd'
@@ -138,6 +146,7 @@ module.exports = {
     hardenedRuntime: isMacRelease,
     notarize: isMacRelease,
     extraResources: [
+      relayExtraResource,
       {
         from: 'resources/darwin/bin/orca',
         to: 'bin/orca'
@@ -174,6 +183,7 @@ module.exports = {
     // The Linux installer should not claim those system package/file names.
     executableName: 'orca-ide',
     extraResources: [
+      relayExtraResource,
       {
         from: 'resources/linux/bin/orca',
         to: 'bin/orca'

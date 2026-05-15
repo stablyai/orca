@@ -13,6 +13,7 @@ import { Store, initDataPath } from './persistence'
 import { StatsCollector, initStatsPath } from './stats/collector'
 import { ClaudeUsageStore, initClaudeUsagePath } from './claude-usage/store'
 import { CodexUsageStore, initCodexUsagePath } from './codex-usage/store'
+import { OpenCodeUsageStore, initOpenCodeUsagePath } from './opencode-usage/store'
 import { killAllPty } from './ipc/pty'
 import { initDaemonPtyProvider, disconnectDaemon } from './daemon/daemon-init'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
@@ -49,11 +50,13 @@ import { ClaudeAccountService } from './claude-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
 import { StarNagService } from './star-nag/service'
 import { agentHookServer } from './agent-hooks/server'
+import { setMigrationUnsupportedPtyListener } from './agent-hooks/migration-unsupported-pty-state'
 import { claudeHookService } from './claude/hook-service'
 import { codexHookService } from './codex/hook-service'
 import { geminiHookService } from './gemini/hook-service'
 import { cursorHookService } from './cursor/hook-service'
 import { droidHookService } from './droid/hook-service'
+import { grokHookService } from './grok/hook-service'
 import {
   getPtyIdForPaneKey,
   registerPaneKeyTeardownListener,
@@ -65,6 +68,7 @@ import { browserManager } from './browser/browser-manager'
 import { setUnreadDockBadgeCount } from './dock/unread-badge'
 import { registerFeatureWallFirstAgentTour } from './feature-wall/first-agent-tour'
 import { AutomationService } from './automations/service'
+import { AgentAwakeService } from './agent-awake-service'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
@@ -75,6 +79,7 @@ let store: Store | null = null
 let stats: StatsCollector | null = null
 let claudeUsage: ClaudeUsageStore | null = null
 let codexUsage: CodexUsageStore | null = null
+let openCodeUsage: OpenCodeUsageStore | null = null
 let codexAccounts: CodexAccountService | null = null
 let codexRuntimeHome: CodexRuntimeHomeService | null = null
 let claudeAccounts: ClaudeAccountService | null = null
@@ -83,6 +88,8 @@ let runtime: OrcaRuntimeService | null = null
 let rateLimits: RateLimitService | null = null
 let runtimeRpc: OrcaRuntimeRpcServer | null = null
 let starNag: StarNagService | null = null
+let agentAwakeService: AgentAwakeService | null = null
+let unsubscribeAgentAwakeStatusChanges: (() => void) | null = null
 let disposeFeatureWallFirstAgentTour: (() => void) | null = null
 let watcherShutdownPromise: Promise<void> | null = null
 let watcherShutdownDone = false
@@ -185,6 +192,7 @@ if (hasSingleInstanceLock) {
   initStatsPath()
   initClaudeUsagePath()
   initCodexUsagePath()
+  initOpenCodeUsagePath()
   enableMainProcessGpuFeatures()
 }
 
@@ -203,6 +211,9 @@ function openMainWindow(): BrowserWindow {
   }
   if (!codexUsage) {
     throw new Error('Codex usage store must be initialized before opening the main window')
+  }
+  if (!openCodeUsage) {
+    throw new Error('OpenCode usage store must be initialized before opening the main window')
   }
   if (!rateLimits) {
     throw new Error('Rate limit service must be initialized before opening the main window')
@@ -267,6 +278,7 @@ function openMainWindow(): BrowserWindow {
     stats,
     claudeUsage,
     codexUsage,
+    openCodeUsage,
     codexAccounts,
     claudeAccounts,
     rateLimits,
@@ -278,7 +290,8 @@ function openMainWindow(): BrowserWindow {
           ? codexRuntimeHome!.prepareForCodexLaunch()
           : null,
       prepareForClaudeLaunch: () => claudeRuntimeAuth!.prepareForClaudeLaunch()
-    }
+    },
+    agentAwakeService ?? undefined
   )
   automations.setWebContents(window.webContents)
   automations.start()
@@ -305,6 +318,7 @@ function openMainWindow(): BrowserWindow {
     // replay-loop through lastStatusByPaneKey runs only on deliberate
     // window recreations instead of stacking on top of stale listeners.
     agentHookServer.setListener(null)
+    setMigrationUnsupportedPtyListener(null)
     // Why: any running synthesized-title spinner intervals would fire into a
     // destroyed webContents; stop them all here instead of deferring to
     // per-pane teardown, which may never run for restored-but-never-torn-down
@@ -343,6 +357,18 @@ function openMainWindow(): BrowserWindow {
       }
     }
   )
+  setMigrationUnsupportedPtyListener((event) => {
+    if (mainWindow?.isDestroyed()) {
+      return
+    }
+    if (event.type === 'set') {
+      mainWindow?.webContents.send('agentStatus:migrationUnsupported', event.entry)
+    } else {
+      mainWindow?.webContents.send('agentStatus:migrationUnsupportedClear', {
+        ptyId: event.ptyId
+      })
+    }
+  })
   return window
 }
 
@@ -618,6 +644,15 @@ app.whenReady().then(async () => {
   }
 
   store = new Store()
+  agentAwakeService = new AgentAwakeService()
+  agentAwakeService.setEnabled(store.getSettings().keepComputerAwakeWhileAgentsRun)
+  // Why: disk-hydrated status rows are UI continuity only. The service starts
+  // from an empty snapshot; only hook events observed in this runtime can keep
+  // the local computer awake.
+  agentAwakeService.setStatuses([])
+  unsubscribeAgentAwakeStatusChanges = agentHookServer.subscribeStatusChanges((statuses) => {
+    agentAwakeService?.setStatuses(statuses)
+  })
   // Why: telemetry must initialize before any IPC handler / renderer can
   // call `track()`. The client is a no-op in dev/contributor builds
   // (`IS_OFFICIAL_BUILD === false`) and a no-op while `TELEMETRY_ENABLED`
@@ -636,6 +671,7 @@ app.whenReady().then(async () => {
   stats = new StatsCollector()
   claudeUsage = new ClaudeUsageStore(store)
   codexUsage = new CodexUsageStore(store)
+  openCodeUsage = new OpenCodeUsageStore(store)
   rateLimits = new RateLimitService()
   codexRuntimeHome = new CodexRuntimeHomeService(store)
   codexAccounts = new CodexAccountService(store, rateLimits, codexRuntimeHome)
@@ -685,7 +721,8 @@ app.whenReady().then(async () => {
     ['codex', () => codexHookService.install()],
     ['gemini', () => geminiHookService.install()],
     ['cursor', () => cursorHookService.install()],
-    ['droid', () => droidHookService.install()]
+    ['droid', () => droidHookService.install()],
+    ['grok', () => grokHookService.install()]
   ])
 
   registerAppMenu({
@@ -860,6 +897,10 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', () => {
   isQuitting = true
+  unsubscribeAgentAwakeStatusChanges?.()
+  unsubscribeAgentAwakeStatusChanges = null
+  agentAwakeService?.dispose()
+  agentAwakeService = null
   disposeFeatureWallFirstAgentTour?.()
   disposeFeatureWallFirstAgentTour = null
   // Why: PTY cleanup is deferred to will-quit so the renderer has a chance to

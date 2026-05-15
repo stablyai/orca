@@ -22,6 +22,7 @@ import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import { computeLineStats } from './diff-line-stats'
 import type { DiffComment, GitDiffResult } from '../../../../shared/types'
+import { isDiffComment } from '@/lib/diff-comment-compat'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -88,7 +89,7 @@ export function DiffSectionItem({
     (s): DiffComment[] | undefined => findWorktreeById(s.worktreesByRepo, worktreeId)?.diffComments
   )
   const diffComments = useMemo(
-    () => (allDiffComments ?? []).filter((c) => c.filePath === section.path),
+    () => (allDiffComments ?? []).filter((c) => c.filePath === section.path && isDiffComment(c)),
     [allDiffComments, section.path]
   )
   const language = detectLanguage(section.path)
@@ -105,7 +106,11 @@ export function DiffSectionItem({
   const [modifiedEditor, setModifiedEditor] = useState<monacoEditor.ICodeEditor | null>(null)
   const diffEditorRef = useRef<monacoEditor.IStandaloneDiffEditor | null>(null)
   const lineNumberOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
-  const [popover, setPopover] = useState<{ lineNumber: number; top: number } | null>(null)
+  const [popover, setPopover] = useState<{
+    lineNumber: number
+    startLine?: number
+    top: number
+  } | null>(null)
 
   const disposeDiffModels = useCallback(() => {
     window.setTimeout(() => {
@@ -143,7 +148,8 @@ export function DiffSectionItem({
     filePath: section.path,
     worktreeId,
     comments: diffComments,
-    onAddCommentClick: ({ lineNumber, top }) => setPopover({ lineNumber, top }),
+    onAddCommentClick: ({ lineNumber, startLine, top }) =>
+      setPopover({ lineNumber, startLine, top }),
     onDeleteComment: (id) => void deleteDiffComment(worktreeId, id),
     onUpdateComment: (id, body) => updateDiffComment(worktreeId, id, body),
     pendingScrollCommentId: pendingScrollForThisSection,
@@ -195,6 +201,8 @@ export function DiffSectionItem({
     const result = await addDiffComment({
       worktreeId,
       filePath: section.path,
+      source: 'diff',
+      startLine: popover.startLine,
       lineNumber: popover.lineNumber,
       body,
       side: 'modified'
@@ -364,6 +372,7 @@ export function DiffSectionItem({
             <DiffCommentPopover
               key={popover.lineNumber}
               lineNumber={popover.lineNumber}
+              startLine={popover.startLine}
               top={popover.top}
               onCancel={() => setPopover(null)}
               onSubmit={handleSubmitComment}

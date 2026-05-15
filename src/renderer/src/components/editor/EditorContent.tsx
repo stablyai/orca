@@ -84,6 +84,7 @@ export function EditorContent({
   isChangesMode,
   sideBySide,
   showMarkdownTableOfContents = false,
+  markdownReviewToolsEnabled = true,
   onCloseMarkdownTableOfContents = () => {},
   pendingEditorReveal,
   handleContentChange,
@@ -106,6 +107,7 @@ export function EditorContent({
   isChangesMode: boolean
   sideBySide: boolean
   showMarkdownTableOfContents?: boolean
+  markdownReviewToolsEnabled?: boolean
   onCloseMarkdownTableOfContents?: () => void
   pendingEditorReveal: {
     filePath?: string
@@ -158,6 +160,8 @@ export function EditorContent({
       language={monacoLanguage}
       onContentChange={handleContentChange}
       onSave={isMarkdown ? md.mdSave : handleSave}
+      worktreeId={activeFile.worktreeId}
+      markdownAnnotationsEnabled={markdownReviewToolsEnabled && isMarkdown && mdViewMode !== 'rich'}
       revealLine={
         pendingEditorReveal?.filePath === activeFile.filePath ? pendingEditorReveal.line : undefined
       }
@@ -279,6 +283,7 @@ export function EditorContent({
               scrollCacheKey={`${editorViewStateKey}:preview`}
               showTableOfContents={showMarkdownTableOfContents}
               onCloseTableOfContents={onCloseMarkdownTableOfContents}
+              markdownAnnotationsEnabled={markdownReviewToolsEnabled && mdViewMode !== 'rich'}
               {...md.previewProps}
             />
           </div>
@@ -368,6 +373,7 @@ export function EditorContent({
           initialAnchor={activeFile.markdownPreviewAnchor ?? null}
           showTableOfContents={showMarkdownTableOfContents}
           onCloseTableOfContents={onCloseMarkdownTableOfContents}
+          markdownAnnotationsEnabled={markdownReviewToolsEnabled && mdViewMode !== 'rich'}
           {...md.previewProps}
         />
       </div>
@@ -511,6 +517,7 @@ export function EditorContent({
             scrollCacheKey={`${diffViewStateKey}:preview`}
             showTableOfContents={showMarkdownTableOfContents}
             onCloseTableOfContents={onCloseMarkdownTableOfContents}
+            markdownAnnotationsEnabled={markdownReviewToolsEnabled}
             {...md.previewProps}
           />
         </div>

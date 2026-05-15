@@ -15,7 +15,14 @@ export type MarkdownLinkTarget =
       line?: number
       column?: number
     }
-  | { kind: 'file'; uri: string; absolutePath: string; relativePath?: string }
+  | {
+      kind: 'file'
+      uri: string
+      absolutePath: string
+      relativePath?: string
+      line?: number
+      column?: number
+    }
 
 // Why: renderer runs with sandbox + contextIsolation, so process.platform is
 // unavailable. navigator.userAgent is the portable fallback (AGENTS.md).
@@ -210,8 +217,12 @@ export function resolveMarkdownLinkTarget(
   // approximation; for trailing-colon paths there's no clean URL form,
   // so we reconstruct from the stripped absolute path.
   const cleanUri = line === undefined ? resolved.toString() : toFileUrl(pathForClassification)
-  if (line === undefined) {
-    return { kind: 'file', uri: cleanUri, absolutePath: pathForClassification, relativePath }
+  return {
+    kind: 'file',
+    uri: cleanUri,
+    absolutePath: pathForClassification,
+    relativePath,
+    line,
+    column
   }
-  return { kind: 'file', uri: cleanUri, absolutePath: pathForClassification, relativePath }
 }

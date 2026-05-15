@@ -46,4 +46,90 @@ describe('hosted review RPC methods', () => {
       result: { provider: 'github', number: 12 }
     })
   })
+
+  it('dispatches creation eligibility requests to the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getHostedReviewCreationEligibility: vi.fn().mockResolvedValue({
+        provider: 'github',
+        review: null,
+        canCreate: true,
+        blockedReason: null,
+        nextAction: null,
+        defaultBaseRef: 'main',
+        head: 'feature/create-pr',
+        title: 'Create PR'
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: HOSTED_REVIEW_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('hostedReview.getCreationEligibility', {
+        repo: 'repo-1',
+        branch: 'feature/create-pr',
+        base: 'origin/main',
+        hasUncommittedChanges: false,
+        hasUpstream: true,
+        ahead: 0,
+        behind: 0,
+        linkedGitHubPR: null
+      })
+    )
+
+    expect(runtime.getHostedReviewCreationEligibility).toHaveBeenCalledWith({
+      repoSelector: 'repo-1',
+      branch: 'feature/create-pr',
+      base: 'origin/main',
+      hasUncommittedChanges: false,
+      hasUpstream: true,
+      ahead: 0,
+      behind: 0,
+      linkedGitHubPR: null,
+      linkedGitLabMR: null,
+      linkedBitbucketPR: null,
+      linkedGiteaPR: null
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { provider: 'github', canCreate: true }
+    })
+  })
+
+  it('dispatches create requests to the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createHostedReview: vi.fn().mockResolvedValue({
+        ok: true,
+        number: 51,
+        url: 'https://github.com/acme/orca/pull/51'
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: HOSTED_REVIEW_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('hostedReview.create', {
+        repo: 'repo-1',
+        provider: 'github',
+        base: 'main',
+        head: 'feature/create-pr',
+        title: 'Create PR',
+        body: 'Body',
+        draft: true
+      })
+    )
+
+    expect(runtime.createHostedReview).toHaveBeenCalledWith({
+      repoSelector: 'repo-1',
+      provider: 'github',
+      base: 'main',
+      head: 'feature/create-pr',
+      title: 'Create PR',
+      body: 'Body',
+      draft: true
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { ok: true, number: 51 }
+    })
+  })
 })

@@ -11,6 +11,7 @@ import {
 import { registerFilesystemWatcherHandlers } from './filesystem-watcher'
 import { registerClaudeUsageHandlers } from './claude-usage'
 import { registerCodexUsageHandlers } from './codex-usage'
+import { registerOpenCodeUsageHandlers } from './opencode-usage'
 import { registerGitHubHandlers } from './github'
 import { registerGitLabHandlers } from './gitlab'
 import { registerHostedReviewHandlers } from './hosted-review'
@@ -22,7 +23,6 @@ import { registerMemoryHandlers } from './memory'
 import { registerRateLimitHandlers } from './rate-limits'
 import { registerRuntimeHandlers } from './runtime'
 import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
-import { registerNotesHandlers } from './notes'
 import { registerNotificationHandlers } from './notifications'
 import { registerNotebookHandlers } from './notebook'
 import { registerOnboardingHandlers } from './onboarding'
@@ -51,10 +51,12 @@ import {
 } from '../window/attach-main-window-services'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
+import type { OpenCodeUsageStore } from '../opencode-usage/store'
 import type { RateLimitService } from '../rate-limits/service'
 import type { CodexAccountService } from '../codex-accounts/service'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { AutomationService } from '../automations/service'
+import type { AgentAwakeService } from '../agent-awake-service'
 
 let registered = false
 
@@ -64,12 +66,14 @@ export function registerCoreHandlers(
   stats: StatsCollector,
   claudeUsage: ClaudeUsageStore,
   codexUsage: CodexUsageStore,
+  openCodeUsage: OpenCodeUsageStore,
   codexAccounts: CodexAccountService,
   claudeAccounts: ClaudeAccountService,
   rateLimits: RateLimitService,
   mainWindowWebContentsId: number | null = null,
   automations?: AutomationService,
-  commitMessageAgentEnv?: CommitMessageAgentEnvironmentResolvers
+  commitMessageAgentEnv?: CommitMessageAgentEnvironmentResolvers,
+  agentAwakeService?: AgentAwakeService
 ): void {
   // Why: on macOS the app can stay alive after all windows close, then
   // openMainWindow() is called again on 'activate'. ipcMain.handle() throws
@@ -87,6 +91,7 @@ export function registerCoreHandlers(
   registerPreflightHandlers()
   registerClaudeUsageHandlers(claudeUsage)
   registerCodexUsageHandlers(codexUsage)
+  registerOpenCodeUsageHandlers(openCodeUsage)
   registerCodexAccountHandlers(codexAccounts)
   registerAgentHookHandlers()
   registerAgentTrustHandlers()
@@ -105,7 +110,7 @@ export function registerCoreHandlers(
   registerOnboardingHandlers(store)
   registerDeveloperPermissionHandlers()
   registerComputerUsePermissionHandlers()
-  registerSettingsHandlers(store)
+  registerSettingsHandlers(store, agentAwakeService)
   if (automations) {
     registerAutomationHandlers(store, automations)
   }
@@ -130,7 +135,6 @@ export function registerCoreHandlers(
   registerFilesystemWatcherHandlers()
   registerRuntimeHandlers(runtime)
   registerRuntimeEnvironmentHandlers()
-  registerNotesHandlers(runtime)
   registerClipboardHandlers()
   registerUpdaterHandlers(store)
   registerSpeechHandlers(store)

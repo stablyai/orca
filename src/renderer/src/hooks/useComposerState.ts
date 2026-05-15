@@ -46,13 +46,21 @@ import {
   renderIssueCommandTemplate,
   type LinkedWorkItemSummary
 } from '@/lib/new-workspace'
+import {
+  getFullComposerCreateDisabled,
+  getQuickComposerCreateDisabled
+} from '@/lib/new-workspace-create-gates'
 import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { normalizeSparseDirectoryLines, sparseDirectoriesMatch } from '@/lib/sparse-paths'
 import { joinPath } from '@/lib/path'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
-import { checkRuntimeHooks, readRuntimeIssueCommand } from '@/runtime/runtime-hooks-client'
+import {
+  checkRuntimeHooks,
+  readRuntimeIssueCommand,
+  type HookCheckResult
+} from '@/runtime/runtime-hooks-client'
 
 export type UseComposerStateOptions = {
   initialRepoId?: string
@@ -80,6 +88,11 @@ export type UseComposerStateOptions = {
    *  `sidebar`, keyboard shortcut → `shortcut`). Omitted callers default
    *  to `unknown` at the IPC boundary. */
   telemetrySource?: WorkspaceCreateTelemetrySource
+  /** Quick-create launches a blank/draft agent session and does not run
+   *  issueCommand automation, so it can skip the issue-command probe that the
+   *  full composer needs for linked-item prompt previews. */
+  enableIssueAutomation?: boolean
+  createGateMode?: 'full' | 'quick'
 }
 
 export type ComposerCardProps = {
@@ -143,7 +156,7 @@ export type ComposerCardProps = {
   baseBranchLinkedPrNumber: number | null
   /** Absolute path of the selected repo, used by Start-from picker for SWR. */
   selectedRepoPath: string | null
-  /** True when the selected repo is a remote SSH repo; disables the PR tab in v1. */
+  /** True when the selected repo is a remote SSH repo. */
   selectedRepoIsRemote: boolean
   /** Transient inline hint shown next to the Start-from trigger after a repo
    *  switch resets a prior selection (e.g. "was PR #8778"). Null when none. */
@@ -198,7 +211,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     onCreated,
     repoIdOverride,
     onRepoIdOverrideChange,
-    telemetrySource
+    telemetrySource,
+    enableIssueAutomation = true,
+    createGateMode = 'full'
   } = options
 
   // Why: each `useAppStore(s => s.someAction)` registers its own equality
@@ -256,6 +271,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const [internalRepoId, setInternalRepoId] = useState<string>(resolvedInitialRepoId)
   const repoId = repoIdOverride ?? internalRepoId
+  const repoIdRef = useRef(repoId)
+  repoIdRef.current = repoId
   const setRepoId = useCallback(
     (value: string) => {
       if (onRepoIdOverrideChange) {
@@ -286,7 +303,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     if (persistDraft && newWorkspaceDraft?.linkedIssue) {
       return newWorkspaceDraft.linkedIssue
     }
-    if (initialLinkedWorkItem?.type === 'issue') {
+    if (initialLinkedWorkItem?.type === 'issue' && !initialLinkedWorkItem.linearIdentifier) {
       return String(initialLinkedWorkItem.number)
     }
     return ''
@@ -414,26 +431,43 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   selectedRepoPathRef.current = selectedRepoPath
   const settingsRef = useRef(settings)
   settingsRef.current = settings
+  const hookCheckRef = useRef<{
+    key: string
+    promise: Promise<HookCheckResult>
+  } | null>(null)
+  const loadHookCheckForRepo = useCallback((targetRepoId: string): Promise<HookCheckResult> => {
+    const key = `${settingsRef.current?.activeRuntimeEnvironmentId ?? 'local'}:${targetRepoId}`
+    const existing = hookCheckRef.current
+    if (existing?.key === key) {
+      return existing.promise
+    }
+    const promise = checkRuntimeHooks(settingsRef.current, targetRepoId)
+    hookCheckRef.current = { key, promise }
+    return promise
+  }, [])
+  const commitHookCheckIfCurrent = useCallback(
+    (targetRepoId: string, hooks: OrcaHooks | null): boolean => {
+      if (repoIdRef.current !== targetRepoId) {
+        return false
+      }
+      setYamlHooks(hooks)
+      setCheckedHooksRepoId(targetRepoId)
+      return true
+    },
+    []
+  )
   useEffect(() => {
     if (!selectedRepo || !selectedRepoPath) {
       setSelectedRepoSlug(null)
       return
     }
     let cancelled = false
-    const target = getActiveRuntimeTarget(settings)
-    const request =
-      target.kind === 'environment'
-        ? callRuntimeRpc<{ owner: string; repo: string } | null>(
-            target,
-            'github.repoSlug',
-            { repo: selectedRepo.id },
-            { timeoutMs: 30_000 }
-          )
-        : (window.api.gh.repoSlug({ repoPath: selectedRepoPath }) as Promise<{
-            owner: string
-            repo: string
-          } | null>)
-    void request
+    void (
+      window.api.gh.repoSlug({ repoPath: selectedRepoPath, repoId }) as Promise<{
+        owner: string
+        repo: string
+      } | null>
+    )
       .then((result) => {
         if (cancelled) {
           return
@@ -448,7 +482,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return () => {
       cancelled = true
     }
-  }, [selectedRepo, selectedRepoPath, settings])
+  }, [repoId, selectedRepo, selectedRepoPath])
   const sparsePresetsForRepo = sparsePresetsByRepo[repoId]
   const sparsePresets = sparsePresetsForRepo ?? EMPTY_SPARSE_PRESETS
   const normalizedSparseDirectories = useMemo(
@@ -523,14 +557,17 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [selectedRepo, yamlHooks]
   )
   const setupPolicy: SetupRunPolicy = selectedRepo?.hookSettings?.setupRunPolicy ?? 'run-by-default'
-  const hasIssueAutomationConfig = issueCommandTemplate.length > 0
+  const hasIssueAutomationConfig = enableIssueAutomation && issueCommandTemplate.length > 0
   const canOfferIssueAutomation = parsedLinkedIssueNumber !== null && hasIssueAutomationConfig
   // Why: the "no prompt + linked item" path below rehydrates the issueCommand
   // template into the main startup prompt. When that happens we suppress the
   // separate split pane that would otherwise run the same command twice.
-  const willApplyIssueCommandAsPrompt = !agentPrompt.trim() && Boolean(linkedWorkItem)
+  const willApplyIssueCommandAsPrompt =
+    enableIssueAutomation && !agentPrompt.trim() && Boolean(linkedWorkItem)
   const shouldWaitForIssueAutomationCheck =
-    (parsedLinkedIssueNumber !== null || willApplyIssueCommandAsPrompt) && !hasLoadedIssueCommand
+    enableIssueAutomation &&
+    (parsedLinkedIssueNumber !== null || willApplyIssueCommandAsPrompt) &&
+    !hasLoadedIssueCommand
   const shouldRunIssueAutomation = canOfferIssueAutomation && !willApplyIssueCommandAsPrompt
   const requiresExplicitSetupChoice = Boolean(setupConfig) && setupPolicy === 'ask'
   const resolvedSetupDecision =
@@ -569,7 +606,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // the common "paste a link and hit enter" flow produce a useful agent task
   // instead of a bare URL bullet.
   const shouldApplyLinkedOnlyTemplate =
-    !agentPrompt.trim() && Boolean(linkedWorkItem) && hasLoadedIssueCommand
+    enableIssueAutomation && !agentPrompt.trim() && Boolean(linkedWorkItem) && hasLoadedIssueCommand
   const linkedOnlyTemplatePrompt = useMemo(() => {
     if (!shouldApplyLinkedOnlyTemplate || !linkedWorkItem) {
       return ''
@@ -720,19 +757,24 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setYamlHooks(null)
     setCheckedHooksRepoId(null)
 
-    void checkRuntimeHooks(settings, repoId)
+    void loadHookCheckForRepo(repoId)
       .then((result) => {
         if (!cancelled) {
-          setYamlHooks(result.hooks)
-          setCheckedHooksRepoId(repoId)
+          commitHookCheckIfCurrent(repoId, result.hooks)
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setYamlHooks(null)
-          setCheckedHooksRepoId(repoId)
+          commitHookCheckIfCurrent(repoId, null)
         }
       })
+
+    if (!enableIssueAutomation) {
+      setHasLoadedIssueCommand(true)
+      return () => {
+        cancelled = true
+      }
+    }
 
     void readRuntimeIssueCommand(settings, repoId)
       .then((result) => {
@@ -751,17 +793,17 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return () => {
       cancelled = true
     }
-  }, [repoId, settings])
+  }, [commitHookCheckIfCurrent, enableIssueAutomation, loadHookCheckForRepo, repoId, settings])
 
   // Why: warm the Start-from picker's PR cache on composer mount and whenever
   // the selected repo changes so opening the picker paints instantly from
-  // cache. Local repos only — remote SSH repos disable the PR tab in v1.
+  // cache.
   useEffect(() => {
-    if (!selectedRepo?.path || selectedRepo.connectionId) {
+    if (!selectedRepo?.path) {
       return
     }
     prefetchWorkItems(selectedRepo.id, selectedRepo.path, PER_REPO_FETCH_LIMIT, 'is:pr is:open')
-  }, [prefetchWorkItems, selectedRepo?.connectionId, selectedRepo?.id, selectedRepo?.path])
+  }, [prefetchWorkItems, selectedRepo?.id, selectedRepo?.path])
 
   // Reset setup decision when config / policy changes.
   useEffect(() => {
@@ -795,17 +837,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setLinkItemsLoading(true)
 
     const lookupRepoId = selectedRepo.id
-    const target = getActiveRuntimeTarget(settings)
-    const request =
-      target.kind === 'environment'
-        ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.listWorkItems>>>(
-            target,
-            'github.listWorkItems',
-            { repo: selectedRepo.id, limit: 100 },
-            { timeoutMs: 30_000 }
-          )
-        : window.api.gh.listWorkItems({ repoPath: selectedRepo.path, limit: 100 })
-    void request
+    void window.api.gh
+      .listWorkItems({ repoPath: selectedRepo.path, repoId: selectedRepo.id, limit: 100 })
       .then((envelope) => {
         if (!cancelled) {
           // Why: IPC payload omits repoId — stamp it here from the repo we
@@ -852,7 +885,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return () => {
       cancelled = true
     }
-  }, [linkPopoverOpen, selectedRepo, settings])
+  }, [linkPopoverOpen, selectedRepo])
 
   useEffect(() => {
     if (!linkPopoverOpen || !selectedRepo || normalizedLinkQuery.directNumber === null) {
@@ -868,20 +901,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     // resolving direct lookups against the selected repo instead of requiring a
     // text match in the recent-items list.
     const lookupRepoId = selectedRepo.id
-    const target = getActiveRuntimeTarget(settings)
-    const request =
-      target.kind === 'environment'
-        ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.workItem>>>(
-            target,
-            'github.workItem',
-            { repo: selectedRepo.id, number: normalizedLinkQuery.directNumber },
-            { timeoutMs: 30_000 }
-          )
-        : window.api.gh.workItem({
-            repoPath: selectedRepo.path,
-            number: normalizedLinkQuery.directNumber
-          })
-    void request
+    void window.api.gh
+      .workItem({
+        repoPath: selectedRepo.path,
+        repoId: selectedRepo.id,
+        number: normalizedLinkQuery.directNumber
+      })
       .then((item) => {
         if (!cancelled) {
           setLinkDirectItem(
@@ -903,7 +928,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return () => {
       cancelled = true
     }
-  }, [linkPopoverOpen, normalizedLinkQuery.directNumber, selectedRepo, settings])
+  }, [linkPopoverOpen, normalizedLinkQuery.directNumber, selectedRepo])
 
   const applyLinkedWorkItem = useCallback(
     (item: GitHubWorkItem): void => {
@@ -1551,6 +1576,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             : await ensureHooksConfirmed(useAppStore.getState(), repoId, 'issueCommand')
       }
 
+      const linkedLinearIssue = linkedWorkItem?.linearIdentifier
       const result = await createWorktree(
         repoId,
         workspaceName,
@@ -1567,7 +1593,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         parsedLinkedIssueNumber ?? undefined,
         effectiveLinkedPR ?? undefined,
         pushTarget,
-        tuiAgent
+        tuiAgent,
+        linkedLinearIssue
       )
       const worktree = result.worktree
 
@@ -1652,6 +1679,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     effectiveLinkedPR,
     linkedGitLabIssue,
     linkedGitLabMR,
+    linkedWorkItem?.linearIdentifier,
     linkedWorkItem?.title,
     linkedWorkItem?.url,
     normalizedSparseDirectories,
@@ -1695,7 +1723,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         !repoId ||
         !workspaceName ||
         !selectedRepo ||
-        shouldWaitForSetupCheck ||
         (requiresExplicitSetupChoice && !setupDecision) ||
         sparseError !== null
       ) {
@@ -1705,12 +1732,39 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setCreateError(null)
       setCreating(true)
       try {
+        let submitSetupConfig = setupConfig
+        let submitResolvedSetupDecision = resolvedSetupDecision
+        if (checkedHooksRepoId !== repoId) {
+          let hookCheck: HookCheckResult
+          try {
+            hookCheck = await loadHookCheckForRepo(repoId)
+          } catch {
+            hookCheck = { hasHooks: false, hooks: null, mayNeedUpdate: false }
+          }
+          if (!commitHookCheckIfCurrent(repoId, hookCheck.hooks)) {
+            return
+          }
+          submitSetupConfig = getSetupConfig(selectedRepo, hookCheck.hooks)
+          submitResolvedSetupDecision =
+            setupDecision ??
+            (!submitSetupConfig || setupPolicy === 'ask'
+              ? null
+              : setupPolicy === 'run-by-default'
+                ? 'run'
+                : 'skip')
+        }
+        if (submitSetupConfig && setupPolicy === 'ask' && !setupDecision) {
+          setAdvancedOpen(true)
+          return
+        }
+
         const trustDecision = await ensureHooksConfirmed(useAppStore.getState(), repoId, 'setup')
         const effectiveSetupDecision: SetupDecision =
           trustDecision === 'skip'
             ? 'skip'
-            : ((resolvedSetupDecision ?? 'inherit') as SetupDecision)
+            : ((submitResolvedSetupDecision ?? 'inherit') as SetupDecision)
 
+        const linkedLinearIssue = linkedWorkItem?.linearIdentifier
         const result = await createWorktree(
           repoId,
           workspaceName,
@@ -1727,7 +1781,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           parsedLinkedIssueNumber ?? undefined,
           effectiveLinkedPR ?? undefined,
           pushTarget,
-          agent ?? undefined
+          agent ?? undefined,
+          linkedLinearIssue
         )
         const worktree = result.worktree
 
@@ -1878,18 +1933,28 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       sparseError,
       effectivePresetId,
       telemetrySource,
-      shouldWaitForSetupCheck
+      checkedHooksRepoId,
+      commitHookCheckIfCurrent,
+      loadHookCheckForRepo,
+      setupConfig,
+      setupPolicy
     ]
   )
 
+  const createGateInput = {
+    repoId,
+    workspaceSeedName,
+    creating,
+    shouldWaitForSetupCheck,
+    shouldWaitForIssueAutomationCheck,
+    requiresExplicitSetupChoice,
+    hasSetupDecision: Boolean(setupDecision),
+    sparseError
+  }
   const createDisabled =
-    !repoId ||
-    !workspaceSeedName ||
-    creating ||
-    shouldWaitForSetupCheck ||
-    shouldWaitForIssueAutomationCheck ||
-    (requiresExplicitSetupChoice && !setupDecision) ||
-    sparseError !== null
+    createGateMode === 'quick'
+      ? getQuickComposerCreateDisabled(createGateInput)
+      : getFullComposerCreateDisabled(createGateInput)
 
   const cardProps: ComposerCardProps = {
     eligibleRepos,

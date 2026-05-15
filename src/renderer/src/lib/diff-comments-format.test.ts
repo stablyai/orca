@@ -23,6 +23,32 @@ describe('formatDiffComment', () => {
     )
   })
 
+  it('keeps explicit diff comments without ranges in the legacy format', () => {
+    const out = formatDiffComment(makeComment({ source: 'diff' }))
+    expect(out).toBe(
+      ['File: src/app.ts', 'Line: 10', 'User comment: "Needs validation"'].join('\n')
+    )
+  })
+
+  it('formats persisted ranges when startLine is present', () => {
+    const out = formatDiffComment(makeComment({ source: 'diff', startLine: 7 }))
+    expect(out).toBe(
+      ['File: src/app.ts', 'Lines: 7-10', 'User comment: "Needs validation"'].join('\n')
+    )
+  })
+
+  it('adds markdown source metadata for markdown notes', () => {
+    const out = formatDiffComment(makeComment({ source: 'markdown', startLine: 8 }))
+    expect(out).toBe(
+      [
+        'File: src/app.ts',
+        'Source: markdown',
+        'Lines: 8-10',
+        'User comment: "Needs validation"'
+      ].join('\n')
+    )
+  })
+
   it('escapes embedded quotes in the body', () => {
     const out = formatDiffComment(makeComment({ body: 'why "this" path?' }))
     expect(out).toContain('User comment: "why \\"this\\" path?"')

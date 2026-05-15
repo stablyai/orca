@@ -1,4 +1,9 @@
+/* oxlint-disable max-lines -- Why: GitHub client fixtures cover local and SSH repo identity paths in one suite so mocked CLI behavior stays consistent. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+type RateLimitGuardResult =
+  | { blocked: false }
+  | { blocked: true; remaining: number; limit: number; resetAt: number }
 
 const {
   execFileAsyncMock,
@@ -6,7 +11,12 @@ const {
   getOwnerRepoMock,
   getIssueOwnerRepoMock,
   getOwnerRepoForRemoteMock,
+  getRemoteUrlForRepoMock,
   gitExecFileAsyncMock,
+  rateLimitGuardMock,
+  noteRateLimitSpendMock,
+  ghRepoExecOptionsMock,
+  githubRepoContextMock,
   acquireMock,
   releaseMock
 } = vi.hoisted(() => ({
@@ -15,7 +25,17 @@ const {
   getOwnerRepoMock: vi.fn(),
   getIssueOwnerRepoMock: vi.fn(),
   getOwnerRepoForRemoteMock: vi.fn(),
+  getRemoteUrlForRepoMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
+  rateLimitGuardMock: vi.fn<() => RateLimitGuardResult>(() => ({ blocked: false })),
+  noteRateLimitSpendMock: vi.fn(),
+  ghRepoExecOptionsMock: vi.fn((context) =>
+    context.connectionId ? {} : { cwd: context.repoPath }
+  ),
+  githubRepoContextMock: vi.fn((repoPath, connectionId) => ({
+    repoPath,
+    connectionId: connectionId ?? null
+  })),
   acquireMock: vi.fn(),
   releaseMock: vi.fn()
 }))
@@ -26,7 +46,14 @@ vi.mock('./gh-utils', () => ({
   getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: getIssueOwnerRepoMock,
   getOwnerRepoForRemote: getOwnerRepoForRemoteMock,
+  getRemoteUrlForRepo: getRemoteUrlForRepoMock,
   gitExecFileAsync: gitExecFileAsyncMock,
+  ghRepoExecOptions: ghRepoExecOptionsMock,
+  githubRepoContext: githubRepoContextMock,
+  classifyGhError: (stderr: string) =>
+    stderr.toLowerCase().includes('not found') || stderr.includes('HTTP 404')
+      ? { type: 'not_found', message: stderr }
+      : { type: 'unknown', message: stderr },
   parseGitHubOwnerRepo: (remoteUrl: string) => {
     const match = remoteUrl.trim().match(/github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/)
     return match ? { owner: match[1], repo: match[2] } : null
@@ -40,7 +67,18 @@ vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-import { getPRForBranch, getPullRequestPushTarget, _resetOwnerRepoCache } from './client'
+vi.mock('./rate-limit', () => ({
+  rateLimitGuard: rateLimitGuardMock,
+  noteRateLimitSpend: noteRateLimitSpendMock
+}))
+
+import {
+  getPRComments,
+  getPRForBranch,
+  getPullRequestPushTarget,
+  resolveReviewThread,
+  _resetOwnerRepoCache
+} from './client'
 
 describe('getPRForBranch', () => {
   beforeEach(() => {
@@ -49,7 +87,13 @@ describe('getPRForBranch', () => {
     getOwnerRepoMock.mockReset()
     getIssueOwnerRepoMock.mockReset()
     getOwnerRepoForRemoteMock.mockReset()
+    getRemoteUrlForRepoMock.mockReset()
     gitExecFileAsyncMock.mockReset()
+    rateLimitGuardMock.mockReset()
+    rateLimitGuardMock.mockReturnValue({ blocked: false })
+    noteRateLimitSpendMock.mockReset()
+    ghRepoExecOptionsMock.mockClear()
+    githubRepoContextMock.mockClear()
     acquireMock.mockReset()
     releaseMock.mockReset()
     acquireMock.mockResolvedValue(undefined)
@@ -79,7 +123,7 @@ describe('getPRForBranch', () => {
 
     const pr = await getPRForBranch('/repo-root', 'refs/heads/feature/test')
 
-    expect(getOwnerRepoMock).toHaveBeenCalledWith('/repo-root')
+    expect(getOwnerRepoMock).toHaveBeenCalledWith('/repo-root', undefined)
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'pr',
@@ -100,6 +144,44 @@ describe('getPRForBranch', () => {
     expect(pr?.number).toBe(42)
     expect(pr?.state).toBe('open')
     expect(pr?.mergeable).toBe('MERGEABLE')
+  })
+
+  it('falls back to REST branch lookup when gh pr list is GraphQL rate limited', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('GraphQL: API rate limit already exceeded'))
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 43,
+            title: 'REST branch lookup',
+            state: 'open',
+            html_url: 'https://github.com/acme/widgets/pull/43',
+            updated_at: '2026-03-28T00:00:00Z',
+            draft: false,
+            mergeable: true,
+            head: { ref: 'feature/test', sha: 'rest-head-oid' },
+            base: { ref: 'main', sha: 'rest-base-oid' }
+          }
+        ])
+      })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test')
+
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=1'],
+      { cwd: '/repo-root' }
+    )
+    expect(pr).toMatchObject({
+      number: 43,
+      title: 'REST branch lookup',
+      state: 'open',
+      url: 'https://github.com/acme/widgets/pull/43',
+      checksStatus: 'neutral',
+      mergeable: 'MERGEABLE',
+      headSha: 'rest-head-oid'
+    })
   })
 
   it('falls back to gh pr view when the remote cannot be resolved to GitHub', async () => {
@@ -270,6 +352,39 @@ describe('getPRForBranch', () => {
     expect(pr).toBeNull()
   })
 
+  it('falls back to REST number lookup when linked PR GraphQL lookup is rate limited', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+      .mockRejectedValueOnce(new Error('GraphQL: API rate limit already exceeded'))
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 99,
+          title: 'REST linked PR lookup',
+          state: 'closed',
+          merged_at: '2026-03-28T00:00:00Z',
+          html_url: 'https://github.com/acme/widgets/pull/99',
+          updated_at: '2026-03-28T00:00:00Z',
+          draft: false,
+          mergeable_state: 'clean',
+          head: { ref: 'someone/fix', sha: 'linked-head-oid' },
+          base: { ref: 'main', sha: 'linked-base-oid' }
+        })
+      })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test', 99)
+
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(3, ['api', 'repos/acme/widgets/pulls/99'], {
+      cwd: '/repo-root'
+    })
+    expect(pr).toMatchObject({
+      number: 99,
+      state: 'merged',
+      mergeable: 'MERGEABLE',
+      headSha: 'linked-head-oid'
+    })
+  })
+
   it('resolves fork PR push target using the origin URL protocol', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
@@ -327,5 +442,69 @@ describe('getPRForBranch', () => {
       branchName: 'fix-sidebar'
     })
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('GitHub GraphQL rate-limit guard', () => {
+  beforeEach(() => {
+    execFileAsyncMock.mockReset()
+    ghExecFileAsyncMock.mockReset()
+    getOwnerRepoMock.mockReset()
+    getIssueOwnerRepoMock.mockReset()
+    getOwnerRepoForRemoteMock.mockReset()
+    getRemoteUrlForRepoMock.mockReset()
+    gitExecFileAsyncMock.mockReset()
+    rateLimitGuardMock.mockReset()
+    rateLimitGuardMock.mockReturnValue({ blocked: false })
+    noteRateLimitSpendMock.mockReset()
+    acquireMock.mockReset()
+    releaseMock.mockReset()
+    acquireMock.mockResolvedValue(undefined)
+    _resetOwnerRepoCache()
+  })
+
+  it('skips PR review-thread GraphQL fetch while preserving REST comments', async () => {
+    rateLimitGuardMock.mockReturnValue({
+      blocked: true,
+      remaining: 4,
+      limit: 5000,
+      resetAt: 1_800_000_000
+    })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            id: 10,
+            user: { login: 'octo', avatar_url: 'https://avatar', type: 'User' },
+            body: 'top-level',
+            created_at: '2026-04-01T00:00:00Z',
+            html_url: 'https://github.com/acme/widgets/pull/7#issuecomment-10'
+          }
+        ])
+      })
+      .mockResolvedValueOnce({ stdout: '[]' })
+
+    const comments = await getPRComments('/repo-root', 7)
+
+    expect(comments).toHaveLength(1)
+    expect(comments[0].body).toBe('top-level')
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(ghExecFileAsyncMock.mock.calls.some((call) => call[0][1] === 'graphql')).toBe(false)
+    expect(noteRateLimitSpendMock).not.toHaveBeenCalled()
+  })
+
+  it('blocks review-thread resolve mutations before spawning gh when GraphQL is low', async () => {
+    rateLimitGuardMock.mockReturnValue({
+      blocked: true,
+      remaining: 4,
+      limit: 5000,
+      resetAt: 1_800_000_000
+    })
+
+    await expect(resolveReviewThread('/repo-root', 'thread-1', true)).resolves.toBe(false)
+
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(noteRateLimitSpendMock).not.toHaveBeenCalled()
   })
 })

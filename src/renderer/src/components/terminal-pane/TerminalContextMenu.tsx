@@ -5,6 +5,7 @@ import {
   Maximize2,
   Minimize2,
   PanelBottomClose,
+  PanelsTopLeft,
   PanelRightClose,
   Pencil,
   SquareTerminal,
@@ -36,6 +37,8 @@ type TerminalContextMenuProps = {
   onPaste: () => void
   onSplitRight: () => void
   onSplitDown: () => void
+  canEqualizePaneSizes: boolean
+  onEqualizePaneSizes: () => void
   onClosePane: () => void
   onClearScreen: () => void
   quickCommands: TerminalQuickCommand[]
@@ -56,6 +59,8 @@ export default function TerminalContextMenu({
   onPaste,
   onSplitRight,
   onSplitDown,
+  canEqualizePaneSizes,
+  onEqualizePaneSizes,
   onClosePane,
   onClearScreen,
   quickCommands,
@@ -154,6 +159,12 @@ export default function TerminalContextMenu({
               Ctrl+Shift+D is taken by split-right (#586). */}
           <DropdownMenuShortcut>{isMac ? `${mod}${shift}D` : `Alt+${shift}D`}</DropdownMenuShortcut>
         </DropdownMenuItem>
+        {canEqualizePaneSizes && (
+          <DropdownMenuItem onSelect={onEqualizePaneSizes}>
+            <PanelsTopLeft />
+            Equalize Pane Sizes
+          </DropdownMenuItem>
+        )}
         {canExpandPane && (
           <DropdownMenuItem onSelect={onToggleExpand}>
             {menuPaneIsExpanded ? <Minimize2 /> : <Maximize2 />}

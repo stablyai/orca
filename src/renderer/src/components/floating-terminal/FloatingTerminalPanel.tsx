@@ -1,10 +1,7 @@
-/* eslint-disable max-lines -- Why: the floating surface owns both terminal chrome and local notes tabs until the shared floating shell is extracted. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Maximize2, Minimize2, Minus } from 'lucide-react'
 import TabBar from '@/components/tab-bar/TabBar'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
@@ -13,16 +10,12 @@ import {
   isOrchestrationSetupDismissed,
   notifyOrchestrationSetupStateChanged
 } from '@/lib/orchestration-setup-state'
-import { notifyProjectNotesSelectionChanged } from '@/lib/open-project-notes-tab'
-import { requestProjectNotesTabClose } from '@/lib/project-notes-close-request'
-import { linkRuntimeProjectNote, showRuntimeProjectNote } from '@/runtime/runtime-notes-client'
 import { useAppStore } from '@/store'
-import { createBrowserUuid } from '@/lib/browser-uuid'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { TerminalTab } from '../../../../shared/types'
 import { FloatingTerminalOrchestrationDialog } from './FloatingTerminalOrchestrationDialog'
-import ProjectNotesTabContent from '@/components/notes/ProjectNotesTabContent'
 import { FloatingTerminalResizeHandles } from './FloatingTerminalResizeHandles'
+import { FloatingTerminalWindowControls } from './FloatingTerminalWindowControls'
 export { FloatingTerminalToggleButton } from './FloatingTerminalToggleButton'
 import {
   clampFloatingTerminalBounds,
@@ -31,11 +24,17 @@ import {
   type FloatingTerminalPanelBounds
 } from './floating-terminal-panel-bounds'
 const EMPTY_TERMINAL_TABS: TerminalTab[] = []
-type FloatingNotesTab = { id: string; label: string; noteId: string | null; isDirty: boolean }
 
 type FloatingTerminalPanelProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
+}
+
+const FLOATING_TERMINAL_NO_DRAG_SELECTOR =
+  'button,input,textarea,select,[role="menuitem"],[data-testid="sortable-tab"],[data-floating-terminal-no-drag]'
+
+function isFloatingTerminalDragTarget(target: EventTarget): boolean {
+  return !(target instanceof HTMLElement && target.closest(FLOATING_TERMINAL_NO_DRAG_SELECTOR))
 }
 
 export function FloatingTerminalPanel({
@@ -54,7 +53,6 @@ export function FloatingTerminalPanel({
   const setTabPaneExpanded = useAppStore((s) => s.setTabPaneExpanded)
   const tabBarOrder = useAppStore((s) => s.tabBarOrderByWorktree[FLOATING_TERMINAL_WORKTREE_ID])
   const floatingTerminalCwd = useAppStore((s) => s.settings?.floatingTerminalCwd ?? '~')
-  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
 
   const [cwd, setCwd] = useState<string | null>(null)
   const [bounds, setBounds] = useState(() => getDefaultFloatingTerminalBounds())
@@ -63,9 +61,6 @@ export function FloatingTerminalPanel({
   const [showOrchestrationSetup, setShowOrchestrationSetup] = useState(
     () => !hasOrchestrationSetupMarker() && !isOrchestrationSetupDismissed()
   )
-  const [notesTabs, setNotesTabs] = useState<FloatingNotesTab[]>([])
-  const [activeNotesTabId, setActiveNotesTabId] = useState<string | null>(null)
-  const [activeSurface, setActiveSurface] = useState<'terminal' | 'notes'>('terminal')
   const restoreBoundsRef = useRef<FloatingTerminalPanelBounds | null>(null)
   const normalizedInitialBoundsRef = useRef(false)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -156,7 +151,6 @@ export function FloatingTerminalPanel({
   const createFloatingTab = useCallback(() => {
     const tab = createTab(FLOATING_TERMINAL_WORKTREE_ID, undefined, undefined, { activate: false })
     setActiveTabForWorktree(FLOATING_TERMINAL_WORKTREE_ID, tab.id)
-    setActiveSurface('terminal')
     const state = useAppStore.getState()
     const currentTabs = state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
     const stored = state.tabBarOrderByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
@@ -175,7 +169,6 @@ export function FloatingTerminalPanel({
   const closeFloatingTab = useCallback(
     (tabId: string) => {
       closeTab(tabId)
-      setActiveSurface('terminal')
     },
     [closeTab]
   )
@@ -204,73 +197,6 @@ export function FloatingTerminalPanel({
     [closeTab, tabs]
   )
 
-  const openFloatingNotesTab = useCallback(
-    async (noteId?: string) => {
-      if (!activeWorktreeId) {
-        return
-      }
-      const state = useAppStore.getState()
-      const worktree = Object.values(state.worktreesByRepo)
-        .flat()
-        .find((candidate) => candidate.id === activeWorktreeId)
-      const projectId =
-        state.repos.find((candidate) => candidate.id === worktree?.repoId)?.id ?? worktree?.repoId
-      const settings = state.settings
-      let label = 'Project Notes'
-      if (noteId && projectId) {
-        try {
-          const result = await showRuntimeProjectNote(settings, {
-            projectId,
-            worktreeId: activeWorktreeId,
-            note: noteId
-          })
-          label = result.note.title
-        } catch {
-          label = 'Project Notes'
-        }
-        if (projectId) {
-          await linkRuntimeProjectNote(settings, {
-            projectId,
-            worktreeId: activeWorktreeId,
-            note: noteId,
-            kind: 'active'
-          })
-          notifyProjectNotesSelectionChanged()
-        }
-      }
-      const id = `floating-project-notes:${createBrowserUuid()}`
-      setNotesTabs((current) => [...current, { id, label, noteId: noteId ?? null, isDirty: false }])
-      setActiveNotesTabId(id)
-      setActiveSurface('notes')
-    },
-    [activeWorktreeId]
-  )
-
-  const closeFloatingNotesTab = useCallback((tabId: string) => {
-    requestProjectNotesTabClose(tabId, () => {
-      setNotesTabs((current) => current.filter((tab) => tab.id !== tabId))
-      setActiveNotesTabId((current) => (current === tabId ? null : current))
-      setActiveSurface('terminal')
-    })
-  }, [])
-
-  useEffect(() => {
-    if (!open || activeSurface !== 'notes' || !activeNotesTabId) {
-      return
-    }
-    const isMac = navigator.userAgent.includes('Mac')
-    const onKeyDown = (event: KeyboardEvent): void => {
-      const mod = isMac ? event.metaKey : event.ctrlKey
-      if (!mod || event.shiftKey || event.repeat || event.key.toLowerCase() !== 'w') {
-        return
-      }
-      event.preventDefault()
-      closeFloatingNotesTab(activeNotesTabId)
-    }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [activeNotesTabId, activeSurface, closeFloatingNotesTab, open])
-
   const toggleMaximized = useCallback(() => {
     setMaximized((current) => {
       if (current) {
@@ -292,12 +218,7 @@ export function FloatingTerminalPanel({
       return
     }
     const target = event.target
-    if (
-      target instanceof HTMLElement &&
-      target.closest(
-        'button,input,textarea,select,[role="menuitem"],[data-testid="sortable-tab"],[data-floating-terminal-no-drag]'
-      )
-    ) {
+    if (!isFloatingTerminalDragTarget(target)) {
       return
     }
     dragRef.current = {
@@ -328,6 +249,14 @@ export function FloatingTerminalPanel({
     if (dragRef.current?.pointerId === event.pointerId) {
       dragRef.current = null
     }
+  }
+
+  const handleTitlebarDoubleClick = (event: React.MouseEvent<HTMLDivElement>): void => {
+    if (event.button !== 0 || !isFloatingTerminalDragTarget(event.target)) {
+      return
+    }
+    event.preventDefault()
+    toggleMaximized()
   }
 
   const dismissOrchestrationSetup = useCallback(() => {
@@ -361,11 +290,12 @@ export function FloatingTerminalPanel({
     >
       <div className="flex min-h-0 flex-1 flex-col">
         <div
-          className="flex h-9 shrink-0 items-center border-b border-border bg-[var(--bg-titlebar,var(--card))]"
+          className="flex h-9 shrink-0 cursor-grab items-center border-b border-border bg-[var(--bg-titlebar,var(--card))] active:cursor-grabbing"
           onPointerDown={handleDragStart}
           onPointerMove={handleDragMove}
           onPointerUp={handleDragEnd}
           onPointerCancel={handleDragEnd}
+          onDoubleClick={handleTitlebarDoubleClick}
         >
           <div className="flex h-full min-w-0 flex-1">
             <TabBar
@@ -373,114 +303,51 @@ export function FloatingTerminalPanel({
               activeTabId={activeTab?.id ?? null}
               worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
               expandedPaneByTabId={expandedPaneByTabId}
-              onActivate={(tabId) => {
-                setActiveSurface('terminal')
-                setActiveTabForWorktree(FLOATING_TERMINAL_WORKTREE_ID, tabId)
-              }}
+              onActivate={(tabId) => setActiveTabForWorktree(FLOATING_TERMINAL_WORKTREE_ID, tabId)}
               onClose={closeFloatingTab}
               onCloseOthers={closeOthers}
               onCloseToRight={closeToRight}
               onNewTerminalTab={createFloatingTab}
               onNewBrowserTab={() => {}}
-              onNewNotesTab={activeWorktreeId ? openFloatingNotesTab : undefined}
-              notesWorktreeId={activeWorktreeId}
               terminalOnly
               onSetCustomTitle={setTabCustomTitle}
               onSetTabColor={setTabColor}
               onTogglePaneExpand={(tabId) =>
                 setTabPaneExpanded(tabId, expandedPaneByTabId[tabId] !== true)
               }
-              notesTabs={activeWorktreeId ? notesTabs : []}
-              activeNotesTabId={activeSurface === 'notes' ? activeNotesTabId : null}
-              onActivateNotesTab={(tabId) => {
-                setActiveNotesTabId(tabId)
-                setActiveSurface('notes')
-              }}
-              onCloseNotesTab={closeFloatingNotesTab}
-              activeTabType={activeSurface}
+              activeTabType="terminal"
               tabBarOrder={tabBarOrder}
             />
           </div>
-          <div className="flex items-center gap-1 px-2" data-floating-terminal-no-drag>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={
-                    maximized ? 'Restore floating terminal' : 'Maximize floating terminal'
-                  }
-                  aria-pressed={maximized}
-                  onClick={toggleMaximized}
-                >
-                  {maximized ? (
-                    <Minimize2 className="size-3.5" />
-                  ) : (
-                    <Maximize2 className="size-3.5" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>
-                {maximized ? 'Restore' : 'Maximize'}
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label="Minimize floating terminal"
-                  onClick={() => onOpenChange(false)}
-                >
-                  <Minus className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>
-                Minimize
-              </TooltipContent>
-            </Tooltip>
-          </div>
+          <FloatingTerminalWindowControls
+            maximized={maximized}
+            onToggleMaximized={toggleMaximized}
+            onMinimize={() => onOpenChange(false)}
+          />
         </div>
 
         <div className="relative min-h-0 flex-1 overflow-hidden bg-background">
-          {activeSurface === 'notes' && activeWorktreeId && activeNotesTabId ? (
-            <ProjectNotesTabContent
-              key={activeNotesTabId}
-              worktreeId={activeWorktreeId}
-              tabId={activeNotesTabId}
-              noteId={notesTabs.find((tab) => tab.id === activeNotesTabId)?.noteId ?? null}
-              forceNew={notesTabs.find((tab) => tab.id === activeNotesTabId)?.noteId === null}
-              onDirtyChange={(dirty) => {
-                setNotesTabs((current) =>
-                  current.map((tab) =>
-                    tab.id === activeNotesTabId ? { ...tab, isDirty: dirty } : tab
-                  )
-                )
-              }}
-            />
-          ) : cwd ? (
-            tabs.map((tab) => (
-              <div
-                key={`${tab.id}-${tab.generation ?? 0}`}
-                className={
-                  tab.id === activeTab?.id ? 'absolute inset-0' : 'absolute inset-0 hidden'
-                }
-                aria-hidden={tab.id !== activeTab?.id}
-              >
-                <TerminalPane
-                  tabId={tab.id}
-                  worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
-                  cwd={cwd}
-                  isActive={tab.id === activeTab?.id}
-                  isVisible={tab.id === activeTab?.id}
-                  onPtyExit={() => closeTab(tab.id)}
-                  onCloseTab={() => closeTab(tab.id)}
-                />
-              </div>
-            ))
-          ) : null}
+          {cwd
+            ? tabs.map((tab) => (
+                <div
+                  key={`${tab.id}-${tab.generation ?? 0}`}
+                  className={
+                    tab.id === activeTab?.id ? 'absolute inset-0' : 'absolute inset-0 hidden'
+                  }
+                  aria-hidden={tab.id !== activeTab?.id}
+                >
+                  <TerminalPane
+                    tabId={tab.id}
+                    worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
+                    cwd={cwd}
+                    isActive={tab.id === activeTab?.id}
+                    isVisible={tab.id === activeTab?.id}
+                    onPtyExit={() => closeTab(tab.id)}
+                    onCloseTab={() => closeTab(tab.id)}
+                  />
+                </div>
+              ))
+            : null}
         </div>
       </div>
       {showOrchestrationSetup ? (

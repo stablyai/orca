@@ -1,6 +1,10 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../shared/runtime-types'
+import type {
+  RuntimeStatus,
+  RuntimeSyncWindowGraph,
+  RuntimeTerminalDriverState
+} from '../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 
@@ -48,6 +52,15 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
         ptyId,
         ...override
       }))
+    }
+  )
+
+  ipcMain.removeHandler('runtime:getTerminalDrivers')
+  ipcMain.handle(
+    'runtime:getTerminalDrivers',
+    (): { ptyId: string; driver: RuntimeTerminalDriverState }[] => {
+      const drivers = runtime.getAllTerminalDrivers()
+      return Array.from(drivers.entries()).map(([ptyId, driver]) => ({ ptyId, driver }))
     }
   )
 

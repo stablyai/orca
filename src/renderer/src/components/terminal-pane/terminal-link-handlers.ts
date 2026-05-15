@@ -87,6 +87,8 @@ function getTerminalFileContext(
   }
 }
 
+let latestOpenDetectedFilePathRequestId = 0
+
 export function openDetectedFilePath(
   filePath: string,
   line: number | null,
@@ -94,6 +96,7 @@ export function openDetectedFilePath(
   deps: Pick<LinkHandlerDeps, 'worktreeId' | 'worktreePath' | 'runtimeEnvironmentId'>
 ): void {
   const { runtimeEnvironmentId, worktreeId, worktreePath } = deps
+  const requestId = ++latestOpenDetectedFilePathRequestId
 
   void (async () => {
     let statResult
@@ -106,6 +109,10 @@ export function openDetectedFilePath(
       }
       statResult = await statRuntimePath(fileContext, filePath)
     } catch {
+      return
+    }
+
+    if (requestId !== latestOpenDetectedFilePathRequestId) {
       return
     }
 
@@ -158,11 +165,22 @@ export function openDetectedFilePath(
     })
 
     if (line !== null) {
+      const targetColumn = column ?? 1
+      store.setPendingEditorReveal(null)
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
+          if (requestId !== latestOpenDetectedFilePathRequestId) {
+            return
+          }
+          store.setPendingEditorReveal({
+            filePath,
+            line,
+            column: targetColumn,
+            matchLength: 0
+          })
           window.dispatchEvent(
             new CustomEvent('orca:editor-reveal-location', {
-              detail: { filePath, line, column }
+              detail: { filePath, line, column: targetColumn }
             })
           )
         })

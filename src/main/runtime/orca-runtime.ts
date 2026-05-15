@@ -9,7 +9,7 @@ import {
 import type { AgentStatus } from '../../shared/agent-detection'
 import { gitExecFileAsync, wslAwareSpawn } from '../git/runner'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
-import { createHash, randomUUID } from 'crypto'
+import { randomUUID } from 'crypto'
 import { basename, isAbsolute, join } from 'path'
 import { mkdir, readdir, rm, stat } from 'fs/promises'
 import { OrchestrationDb } from './orchestration/db'
@@ -27,12 +27,14 @@ import type {
   WorktreeRemoteBranchConflictEvent,
   WorktreeStartupLaunch,
   LinearIssueUpdate,
+  LinearWorkspaceSelection,
   TuiAgent
 } from '../../shared/types'
 import { splitWorktreeId } from '../../shared/worktree-id'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { buildSetupRunnerCommand } from '../../shared/setup-runner-command'
 import { FIRST_PANE_ID } from '../../shared/pane-key'
+import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
@@ -72,6 +74,7 @@ import type {
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot,
+  RuntimeTerminalDriverState,
   RuntimeSyncWindowGraph,
   RuntimeWorktreeListResult
 } from '../../shared/runtime-types'
@@ -79,7 +82,7 @@ import { RuntimeBrowserCommands } from './orca-runtime-browser'
 import { RuntimeFileCommands } from './orca-runtime-files'
 import { RuntimeGitCommands } from './orca-runtime-git'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { BrowserWindow, ipcMain } from 'electron'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import {
   getPRForBranch,
@@ -110,12 +113,23 @@ import type {
   GitHubPRFile,
   GitHubPRReviewCommentInput
 } from '../../shared/types'
-import type { HostedReviewInfo } from '../../shared/hosted-review'
+import type {
+  CreateHostedReviewInput,
+  CreateHostedReviewResult,
+  HostedReviewCreationEligibility,
+  HostedReviewCreationEligibilityArgs,
+  HostedReviewInfo
+} from '../../shared/hosted-review'
 import { getHostedReviewForBranch as getHostedReviewForBranchFromRepo } from '../source-control/hosted-review'
+import {
+  createHostedReview as createHostedReviewFromRepo,
+  getHostedReviewCreationEligibility as getHostedReviewCreationEligibilityFromRepo
+} from '../source-control/hosted-review-creation'
 import {
   connect as connectLinear,
   disconnect as disconnectLinear,
   getStatus as getLinearStatus,
+  selectWorkspace as selectLinearWorkspace,
   testConnection as testLinearConnection
 } from '../linear/client'
 import {
@@ -237,26 +251,6 @@ import type { CodexAccountService } from '../codex-accounts/service'
 import type { RateLimitService } from '../rate-limits/service'
 import type { ClaudeRateLimitAccountsState, CodexRateLimitAccountsState } from '../../shared/types'
 import type { RateLimitState } from '../../shared/rate-limit-types'
-import { NotesMarkdownStore } from '../notes/notes-markdown-store'
-import type {
-  NoteAppendArgs,
-  NoteCreateArgs,
-  NoteDeleteArgs,
-  NoteDeleteResult,
-  NoteLinkArgs,
-  NoteLink,
-  NoteLinkKind,
-  NoteListArgs,
-  NoteListResult,
-  NoteMutationResult,
-  NoteRenameArgs,
-  NoteSaveArgs,
-  NoteSearchArgs,
-  NoteShowArgs,
-  NoteShowResult,
-  NotesPanelOpenState,
-  NotesPanelStateArgs
-} from '../../shared/notes-types'
 import type { VoiceSettings } from '../../shared/speech-types'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 
@@ -398,7 +392,13 @@ type RuntimeNotifier = {
   createTerminal(worktreeId: string, opts: { command?: string; title?: string }): void
   revealTerminalSession?(
     worktreeId: string,
-    opts: { ptyId: string; title?: string | null; activate?: boolean; tabId?: string }
+    opts: {
+      ptyId: string
+      title?: string | null
+      activate?: boolean
+      tabId?: string
+      leafId?: string
+    }
   ):
     | Promise<{ tabId: string; title?: string | null }>
     | { tabId: string; title?: string | null }
@@ -498,10 +498,7 @@ export type MobileNotificationEvent = {
 //   - `mobile{clientId}`: a mobile client is the active driver; desktop
 //      input/resize are dropped server-side and the lock banner is mounted.
 //      `clientId` is the most recent mobile actor for this PTY.
-export type DriverState =
-  | { kind: 'idle' }
-  | { kind: 'desktop' }
-  | { kind: 'mobile'; clientId: string }
+export type DriverState = RuntimeTerminalDriverState
 
 // Why: per-PTY layout target — what the PTY *should* be at right now.
 // `desktop` ⇒ runs at the desktop renderer's pane geometry; mobile passive
@@ -781,7 +778,6 @@ export class OrcaRuntimeService {
   private optimisticReconcileTokens = new Map<string, string>()
   private readonly getLocalProviderFn: (() => IPtyProvider) | null
   private accountServices: RuntimeAccountServices | null = null
-  private _notesStore: NotesMarkdownStore | null = null
   private mobileDictation: {
     id: string
     owner: string
@@ -834,17 +830,6 @@ export class OrcaRuntimeService {
 
   setOrchestrationDb(db: OrchestrationDb): void {
     this._orchestrationDb = db
-  }
-
-  getNotesStore(): NotesMarkdownStore {
-    if (!this._notesStore) {
-      this._notesStore = new NotesMarkdownStore()
-    }
-    return this._notesStore
-  }
-
-  setNotesStore(store: NotesMarkdownStore): void {
-    this._notesStore = store
   }
 
   getRuntimeId(): string {
@@ -946,7 +931,7 @@ export class OrcaRuntimeService {
           lastOutputAt: existing?.ptyId === leaf.ptyId ? existing.lastOutputAt : null,
           preview: existing?.ptyId === leaf.ptyId ? existing.preview : '',
           tabId: leaf.tabId,
-          paneKey: `${leaf.tabId}:${leaf.paneRuntimeId}`
+          paneKey: this.makeRuntimePaneKey(leaf)
         })
       }
 
@@ -1289,7 +1274,7 @@ export class OrcaRuntimeService {
         lastOutputAt: pty?.lastOutputAt ?? at,
         preview: pty?.preview ?? leaf.preview,
         tabId: leaf.tabId,
-        paneKey: `${leaf.tabId}:${leaf.paneRuntimeId}`
+        paneKey: this.makeRuntimePaneKey(leaf)
       })
       leaf.connected = true
       leaf.writable = this.graphStatus === 'ready'
@@ -2151,6 +2136,10 @@ export class OrcaRuntimeService {
       result.set(ptyId, { mode: override.mode, cols: override.cols, rows: override.rows })
     }
     return result
+  }
+
+  getAllTerminalDrivers(): Map<string, DriverState> {
+    return new Map(this.currentDriver)
   }
 
   onClientDisconnected(clientId: string): void {
@@ -4478,6 +4467,50 @@ export class OrcaRuntimeService {
     return review
   }
 
+  async getHostedReviewCreationEligibility(
+    args: Omit<HostedReviewCreationEligibilityArgs, 'repoPath'> & { repoSelector: string }
+  ): Promise<HostedReviewCreationEligibility> {
+    const repo = await this.resolveRepoSelector(args.repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'hosted_review')
+    return getHostedReviewCreationEligibilityFromRepo({
+      repoPath: repo.path,
+      branch: args.branch,
+      base: args.base ?? null,
+      hasUncommittedChanges: args.hasUncommittedChanges,
+      hasUpstream: args.hasUpstream,
+      ahead: args.ahead,
+      behind: args.behind,
+      linkedGitHubPR: args.linkedGitHubPR ?? null,
+      linkedGitLabMR: args.linkedGitLabMR ?? null,
+      linkedBitbucketPR: args.linkedBitbucketPR ?? null,
+      linkedGiteaPR: args.linkedGiteaPR ?? null
+    })
+  }
+
+  async createHostedReview(
+    args: CreateHostedReviewInput & { repoSelector: string }
+  ): Promise<CreateHostedReviewResult> {
+    const repo = await this.resolveRepoSelector(args.repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'hosted_review')
+    const result = await createHostedReviewFromRepo(repo.path, {
+      provider: args.provider,
+      base: args.base,
+      head: args.head,
+      title: args.title,
+      body: args.body,
+      draft: args.draft
+    })
+    if (result.ok && this.stats && !this.stats.hasCountedPR(result.url)) {
+      this.stats.record({
+        type: 'pr_created',
+        at: Date.now(),
+        repoId: repo.id,
+        meta: { prNumber: result.number, prUrl: result.url }
+      })
+    }
+    return result
+  }
+
   async getRepoIssue(
     repoSelector: string,
     number: number
@@ -4910,205 +4943,6 @@ export class OrcaRuntimeService {
     }
   }
 
-  async listNotes(args: { worktreeSelector: string; limit?: number }): Promise<NoteListResult> {
-    const scope = await this.resolveNotesScope(args.worktreeSelector)
-    return await this.getNotesStore().list(this.getNotesScope(scope.projectId), {
-      projectId: scope.projectId,
-      worktreeId: scope.worktreeId,
-      limit: args.limit
-    })
-  }
-
-  async showNote(args: { worktreeSelector: string; note: string }): Promise<NoteShowResult> {
-    const scope = await this.resolveNotesScope(args.worktreeSelector)
-    return await this.getNotesStore().show(this.getNotesScope(scope.projectId), {
-      projectId: scope.projectId,
-      worktreeId: scope.worktreeId,
-      note: args.note
-    })
-  }
-
-  async createNote(args: {
-    worktreeSelector: string
-    title: string
-    bodyMarkdown?: string
-    makeActive?: boolean
-    createdBySessionId?: string | null
-  }): Promise<NoteMutationResult> {
-    const scope = await this.resolveNotesScope(args.worktreeSelector)
-    return await this.getNotesStore().create(this.getNotesScope(scope.projectId), {
-      projectId: scope.projectId,
-      worktreeId: scope.worktreeId,
-      title: args.title,
-      bodyMarkdown: args.bodyMarkdown,
-      makeActive: args.makeActive,
-      createdBySessionId: args.createdBySessionId
-    })
-  }
-
-  async saveNote(args: {
-    worktreeSelector: string
-    note: string
-    title?: string
-    bodyMarkdown: string
-    revision?: number
-    makeActive?: boolean
-    updatedBySessionId?: string | null
-  }): Promise<NoteMutationResult> {
-    const scope = await this.resolveNotesScope(args.worktreeSelector)
-    return await this.getNotesStore().save(this.getNotesScope(scope.projectId), {
-      projectId: scope.projectId,
-      worktreeId: scope.worktreeId,
-      note: args.note,
-      title: args.title,
-      bodyMarkdown: args.bodyMarkdown,
-      revision: args.revision,
-      makeActive: args.makeActive,
-      updatedBySessionId: args.updatedBySessionId
-    })
-  }
-
-  async renameNote(args: {
-    worktreeSelector: string
-    note: string
-    title: string
-    updatedBySessionId?: string | null
-  }): Promise<NoteMutationResult> {
-    const scope = await this.resolveNotesScope(args.worktreeSelector)
-    return await this.getNotesStore().rename(this.getNotesScope(scope.projectId), {
-      projectId: scope.projectId,
-      worktreeId: scope.worktreeId,
-      note: args.note,
-      title: args.title,
-      updatedBySessionId: args.updatedBySessionId
-    })
-  }
-
-  async deleteNote(args: { worktreeSelector: string; note: string }): Promise<NoteDeleteResult> {
-    const scope = await this.resolveNotesScope(args.worktreeSelector)
-    return await this.getNotesStore().delete(this.getNotesScope(scope.projectId), {
-      projectId: scope.projectId,
-      worktreeId: scope.worktreeId,
-      note: args.note
-    })
-  }
-
-  async appendNote(args: {
-    worktreeSelector: string
-    note: string
-    bodyMarkdown: string
-    makeActive?: boolean
-    updatedBySessionId?: string | null
-  }): Promise<NoteMutationResult> {
-    const scope = await this.resolveNotesScope(args.worktreeSelector)
-    return await this.getNotesStore().append(this.getNotesScope(scope.projectId), {
-      projectId: scope.projectId,
-      worktreeId: scope.worktreeId,
-      note: args.note,
-      bodyMarkdown: args.bodyMarkdown,
-      makeActive: args.makeActive,
-      updatedBySessionId: args.updatedBySessionId
-    })
-  }
-
-  async searchNotes(args: {
-    worktreeSelector: string
-    query: string
-    limit?: number
-  }): Promise<NoteListResult> {
-    const scope = await this.resolveNotesScope(args.worktreeSelector)
-    return await this.getNotesStore().search(this.getNotesScope(scope.projectId), {
-      projectId: scope.projectId,
-      worktreeId: scope.worktreeId,
-      query: args.query,
-      limit: args.limit
-    })
-  }
-
-  async linkNote(args: {
-    worktreeSelector: string
-    note: string
-    kind: NoteLinkKind
-  }): Promise<NoteLink> {
-    const scope = await this.resolveNotesScope(args.worktreeSelector)
-    return await this.getNotesStore().setLink(this.getNotesScope(scope.projectId), {
-      projectId: scope.projectId,
-      worktreeId: scope.worktreeId,
-      note: args.note,
-      kind: args.kind
-    })
-  }
-
-  async resolveNotesPanelOpenStateForWorktree(args: {
-    worktreeSelector: string
-  }): Promise<NotesPanelOpenState> {
-    const scope = await this.resolveNotesScope(args.worktreeSelector)
-    return await this.getNotesStore().resolvePanelOpenState(this.getNotesScope(scope.projectId), {
-      projectId: scope.projectId,
-      worktreeId: scope.worktreeId
-    })
-  }
-
-  async listProjectNotes(args: NoteListArgs): Promise<NoteListResult> {
-    this.assertKnownNotesProject(args.projectId)
-    return await this.getNotesStore().list(this.getNotesScope(args.projectId), args)
-  }
-
-  async showProjectNote(args: NoteShowArgs): Promise<NoteShowResult> {
-    this.assertKnownNotesProject(args.projectId)
-    return await this.getNotesStore().show(this.getNotesScope(args.projectId), args)
-  }
-
-  async createProjectNote(args: NoteCreateArgs): Promise<NoteMutationResult> {
-    this.assertKnownNotesProject(args.projectId)
-    return await this.getNotesStore().create(this.getNotesScope(args.projectId), args)
-  }
-
-  async saveProjectNote(args: NoteSaveArgs): Promise<NoteMutationResult> {
-    this.assertKnownNotesProject(args.projectId)
-    return await this.getNotesStore().save(this.getNotesScope(args.projectId), args)
-  }
-
-  async renameProjectNote(args: NoteRenameArgs): Promise<NoteMutationResult> {
-    this.assertKnownNotesProject(args.projectId)
-    return await this.getNotesStore().rename(this.getNotesScope(args.projectId), args)
-  }
-
-  async deleteProjectNote(args: NoteDeleteArgs): Promise<NoteDeleteResult> {
-    this.assertKnownNotesProject(args.projectId)
-    return await this.getNotesStore().delete(this.getNotesScope(args.projectId), args)
-  }
-
-  async appendProjectNote(args: NoteAppendArgs): Promise<NoteMutationResult> {
-    this.assertKnownNotesProject(args.projectId)
-    return await this.getNotesStore().append(this.getNotesScope(args.projectId), args)
-  }
-
-  async searchProjectNotes(args: NoteSearchArgs): Promise<NoteListResult> {
-    this.assertKnownNotesProject(args.projectId)
-    return await this.getNotesStore().search(this.getNotesScope(args.projectId), args)
-  }
-
-  async linkProjectNote(args: NoteLinkArgs) {
-    this.assertKnownNotesProject(args.projectId)
-    return await this.getNotesStore().setLink(this.getNotesScope(args.projectId), args)
-  }
-
-  async unlinkNotesWorktree(projectId: string, worktreeId: string): Promise<void> {
-    this.assertKnownNotesProject(projectId)
-    await this.getNotesStore().unlinkWorktree(this.getNotesScope(projectId), worktreeId)
-  }
-
-  async resolveNotesPanelOpenState(args: NotesPanelStateArgs): Promise<NotesPanelOpenState> {
-    if (args.projectId) {
-      this.assertKnownNotesProject(args.projectId)
-    }
-    return await this.getNotesStore().resolvePanelOpenState(
-      args.projectId ? this.getNotesScope(args.projectId) : null,
-      args
-    )
-  }
-
   async listManagedWorktrees(
     repoSelector?: string,
     limit = DEFAULT_WORKTREE_LIST_LIMIT
@@ -5163,6 +4997,7 @@ export class OrcaRuntimeService {
     baseBranch?: string
     linkedIssue?: number | null
     linkedPR?: number | null
+    linkedLinearIssue?: string
     comment?: string
     displayName?: string
     sparseCheckout?: { directories: string[]; presetId?: string }
@@ -5320,6 +5155,9 @@ export class OrcaRuntimeService {
         : {}),
       ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
       ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {}),
+      ...(args.linkedLinearIssue !== undefined
+        ? { linkedLinearIssue: args.linkedLinearIssue }
+        : {}),
       ...(args.createdWithAgent ? { createdWithAgent: args.createdWithAgent } : {}),
       ...(args.comment !== undefined ? { comment: args.comment } : {})
     })
@@ -6028,7 +5866,6 @@ export class OrcaRuntimeService {
         // remains locked — other worktrees cannot check it out.
         await gitExecFileAsync(['worktree', 'prune'], { cwd: repo.path }).catch(() => {})
         this.clearOptimisticReconcileToken(worktree.id)
-        await this.getNotesStore().unlinkWorktree(this.getNotesScope(repo.id), worktree.id)
         this.store.removeWorktreeMeta(worktree.id)
         this.invalidateResolvedWorktreeCache()
         invalidateAuthorizedRootsCache()
@@ -6041,7 +5878,6 @@ export class OrcaRuntimeService {
     }
 
     this.clearOptimisticReconcileToken(worktree.id)
-    await this.getNotesStore().unlinkWorktree(this.getNotesScope(repo.id), worktree.id)
     this.store.removeWorktreeMeta(worktree.id)
     this.invalidateResolvedWorktreeCache()
     invalidateAuthorizedRootsCache()
@@ -6071,7 +5907,14 @@ export class OrcaRuntimeService {
 
   async createTerminal(
     worktreeSelector?: string,
-    opts: { command?: string; env?: Record<string, string>; title?: string; focus?: boolean } = {}
+    opts: {
+      command?: string
+      env?: Record<string, string>
+      title?: string
+      focus?: boolean
+      tabId?: string
+      leafId?: string
+    } = {}
   ): Promise<RuntimeTerminalCreate> {
     if (opts.focus !== true) {
       if (!worktreeSelector) {
@@ -6085,13 +5928,20 @@ export class OrcaRuntimeService {
       const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
       // Why: mint tabId in main before spawn so paneKey is known at PTY env
       // build time. Hook-based agent status (Claude/Codex/Cursor/Gemini) keys
-      // off `${tabId}:${paneId}` — without these vars set on the PTY, the
+      // off `${tabId}:${leafId}` — without these vars set on the PTY, the
       // hook payload arrives with an empty paneKey and the renderer cannot
-      // attribute the event. paneId is hard-coded to 1 because this path
-      // never splits and the renderer's nextPaneId starts at 1 for a fresh
-      // tab. See docs/cli-terminal-hook-pane-key.md.
-      const tabId = randomUUID()
-      const paneKey = `${tabId}:${FIRST_PANE_ID}`
+      // attribute the event. Use a stable UUID leaf because hooks reject the
+      // legacy numeric pane keys after the pane-id migration.
+      const hintedTabId = opts.tabId?.trim()
+      const canAdoptPaneIdentity =
+        hintedTabId !== undefined &&
+        hintedTabId.length > 0 &&
+        !hintedTabId.includes(':') &&
+        opts.leafId !== undefined &&
+        isTerminalLeafId(opts.leafId)
+      const tabId = canAdoptPaneIdentity ? (hintedTabId as string) : randomUUID()
+      const leafId = canAdoptPaneIdentity ? (opts.leafId as string) : randomUUID()
+      const paneKey = makePaneKey(tabId, leafId)
       const env = {
         ...opts.env,
         ORCA_PANE_KEY: paneKey,
@@ -6128,7 +5978,8 @@ export class OrcaRuntimeService {
             ptyId: result.id,
             title: opts.title ?? null,
             activate: false,
-            tabId
+            tabId,
+            leafId
           })
           surface = 'visible'
         } catch (err) {
@@ -6242,7 +6093,7 @@ export class OrcaRuntimeService {
     })
 
     if (opts.activate !== false) {
-      this.notifier?.focusTerminal(reply.tabId, worktreeId, 'pane:1')
+      this.notifier?.focusTerminal(reply.tabId, worktreeId, null)
     }
     return await this.waitForMobileTerminalSurface(worktreeId, reply.tabId)
   }
@@ -6258,7 +6109,7 @@ export class OrcaRuntimeService {
       throw new Error('terminal_handle_stale')
     }
     const parentTabId = livePty.pty.tabId ?? `pty:${livePty.pty.ptyId}`
-    const leafId = `pane:${FIRST_PANE_ID}`
+    const leafId = parsePaneKey(livePty.pty.paneKey ?? '')?.leafId ?? randomUUID()
     const tab: RuntimeMobileSessionTerminalTab = {
       type: 'terminal',
       id: `${parentTabId}::${leafId}`,
@@ -6474,10 +6325,12 @@ export class OrcaRuntimeService {
       if (!pty.pty.connected) {
         throw new Error('terminal_exited')
       }
+      const parsedPaneKey = parsePaneKey(pty.pty.paneKey ?? '')
       const revealed = await this.notifier?.revealTerminalSession?.(pty.pty.worktreeId, {
         ptyId: pty.pty.ptyId,
         title: pty.pty.title ?? pty.pty.lastOscTitle,
-        ...(pty.pty.tabId !== null ? { tabId: pty.pty.tabId } : {})
+        ...(pty.pty.tabId !== null ? { tabId: pty.pty.tabId } : {}),
+        ...(parsedPaneKey ? { leafId: parsedPaneKey.leafId } : {})
       })
       return {
         handle,
@@ -6486,7 +6339,7 @@ export class OrcaRuntimeService {
       }
     }
     const { leaf } = this.getLiveLeafForHandle(handle)
-    this.notifier?.focusTerminal(leaf.tabId, leaf.worktreeId)
+    this.notifier?.focusTerminal(leaf.tabId, leaf.worktreeId, leaf.leafId)
     return { handle, tabId: leaf.tabId, worktreeId: leaf.worktreeId }
   }
 
@@ -6613,6 +6466,23 @@ export class OrcaRuntimeService {
     return { stopped }
   }
 
+  async hasTerminalsForWorktree(worktreeSelector: string): Promise<boolean> {
+    const graphEpoch = this.captureReadyGraphEpoch()
+    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    this.assertStableReadyGraph(graphEpoch)
+    for (const leaf of this.leaves.values()) {
+      if (leaf.worktreeId === worktree.id && leaf.ptyId) {
+        return true
+      }
+    }
+    for (const pty of this.ptysById.values()) {
+      if (pty.worktreeId === worktree.id && pty.connected) {
+        return true
+      }
+    }
+    return false
+  }
+
   markRendererReloading(windowId: number): void {
     if (windowId !== this.authoritativeWindowId) {
       return
@@ -6722,42 +6592,6 @@ export class OrcaRuntimeService {
       throw new Error('selector_ambiguous')
     }
     throw new Error('selector_not_found')
-  }
-
-  private async resolveNotesScope(worktreeSelector: string): Promise<{
-    projectId: string
-    worktreeId: string
-  }> {
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
-    return {
-      projectId: worktree.repoId,
-      worktreeId: worktree.id
-    }
-  }
-
-  private assertKnownNotesProject(projectId: string): void {
-    if (!this.store?.getRepo(projectId)) {
-      throw new Error('repo_not_found')
-    }
-  }
-
-  private getNotesScope(projectId: string): {
-    projectId: string
-    rootPath: string
-  } {
-    const repo = this.store?.getRepo(projectId)
-    if (!repo) {
-      throw new Error('repo_not_found')
-    }
-    const identity = `${repo.connectionId ?? 'local'}:${repo.path}`
-    const notesRoot = createHash('sha256').update(identity).digest('hex').slice(0, 24)
-    return {
-      projectId,
-      // Why: notes are Orca workspace memory, not repo source files. Keeping
-      // them in userData prevents accidental git commits while still sharing
-      // one notes folder across every Orca worktree for the same repo.
-      rootPath: join(app.getPath('userData'), 'project-notes', notesRoot)
-    }
   }
 
   private async resolveRepoSelector(selector: string): Promise<Repo> {
@@ -6924,6 +6758,14 @@ export class OrcaRuntimeService {
       pty.preview = state.preview
     }
     return pty
+  }
+
+  private makeRuntimePaneKey(
+    leaf: Pick<RuntimeSyncedLeaf, 'tabId' | 'leafId' | 'paneRuntimeId'>
+  ): string {
+    return isTerminalLeafId(leaf.leafId)
+      ? makePaneKey(leaf.tabId, leaf.leafId)
+      : `${leaf.tabId}:${leaf.paneRuntimeId}`
   }
 
   private getOrCreatePtyWorktreeRecord(ptyId: string): RuntimePtyWorktreeRecord | null {
@@ -7758,65 +7600,89 @@ export class OrcaRuntimeService {
     return connectLinear(apiKey)
   }
 
-  linearDisconnect(): { ok: true } {
-    disconnectLinear()
+  linearDisconnect(workspaceId?: string): { ok: true } {
+    disconnectLinear(workspaceId)
     return { ok: true }
+  }
+
+  linearSelectWorkspace(workspaceId: LinearWorkspaceSelection): ReturnType<typeof getLinearStatus> {
+    return selectLinearWorkspace(workspaceId)
   }
 
   linearStatus(): ReturnType<typeof getLinearStatus> {
     return getLinearStatus()
   }
 
-  linearTestConnection(): ReturnType<typeof testLinearConnection> {
-    return testLinearConnection()
+  linearTestConnection(workspaceId?: string): ReturnType<typeof testLinearConnection> {
+    return testLinearConnection(workspaceId)
   }
 
-  linearSearchIssues(query: string, limit = 20): ReturnType<typeof searchLinearIssues> {
-    return searchLinearIssues(query, Math.min(Math.max(1, limit), 50))
+  linearSearchIssues(
+    query: string,
+    limit = 20,
+    workspaceId?: LinearWorkspaceSelection
+  ): ReturnType<typeof searchLinearIssues> {
+    return searchLinearIssues(query, Math.min(Math.max(1, limit), 50), workspaceId)
   }
 
-  linearListIssues(filter?: LinearListFilter, limit = 20): ReturnType<typeof listLinearIssues> {
-    return listLinearIssues(filter, Math.min(Math.max(1, limit), 50))
+  linearListIssues(
+    filter?: LinearListFilter,
+    limit = 20,
+    workspaceId?: LinearWorkspaceSelection
+  ): ReturnType<typeof listLinearIssues> {
+    return listLinearIssues(filter, Math.min(Math.max(1, limit), 50), workspaceId)
   }
 
   linearCreateIssue(
     teamId: string,
     title: string,
-    description?: string
+    description?: string,
+    workspaceId?: string
   ): ReturnType<typeof createLinearIssue> {
-    return createLinearIssue(teamId, title, description)
+    return createLinearIssue(teamId, title, description, workspaceId)
   }
 
-  linearGetIssue(id: string): ReturnType<typeof getLinearIssue> {
-    return getLinearIssue(id)
+  linearGetIssue(id: string, workspaceId?: string): ReturnType<typeof getLinearIssue> {
+    return getLinearIssue(id, workspaceId)
   }
 
-  linearUpdateIssue(id: string, updates: LinearIssueUpdate): ReturnType<typeof updateLinearIssue> {
-    return updateLinearIssue(id, updates)
+  linearUpdateIssue(
+    id: string,
+    updates: LinearIssueUpdate,
+    workspaceId?: string
+  ): ReturnType<typeof updateLinearIssue> {
+    return updateLinearIssue(id, updates, workspaceId)
   }
 
-  linearAddIssueComment(issueId: string, body: string): ReturnType<typeof addLinearIssueComment> {
-    return addLinearIssueComment(issueId, body)
+  linearAddIssueComment(
+    issueId: string,
+    body: string,
+    workspaceId?: string
+  ): ReturnType<typeof addLinearIssueComment> {
+    return addLinearIssueComment(issueId, body, workspaceId)
   }
 
-  linearIssueComments(issueId: string): ReturnType<typeof getLinearIssueComments> {
-    return getLinearIssueComments(issueId)
+  linearIssueComments(
+    issueId: string,
+    workspaceId?: string
+  ): ReturnType<typeof getLinearIssueComments> {
+    return getLinearIssueComments(issueId, workspaceId)
   }
 
-  linearListTeams(): ReturnType<typeof listLinearTeams> {
-    return listLinearTeams()
+  linearListTeams(workspaceId?: LinearWorkspaceSelection): ReturnType<typeof listLinearTeams> {
+    return listLinearTeams(workspaceId)
   }
 
-  linearTeamStates(teamId: string): ReturnType<typeof getLinearTeamStates> {
-    return getLinearTeamStates(teamId)
+  linearTeamStates(teamId: string, workspaceId?: string): ReturnType<typeof getLinearTeamStates> {
+    return getLinearTeamStates(teamId, workspaceId)
   }
 
-  linearTeamLabels(teamId: string): ReturnType<typeof getLinearTeamLabels> {
-    return getLinearTeamLabels(teamId)
+  linearTeamLabels(teamId: string, workspaceId?: string): ReturnType<typeof getLinearTeamLabels> {
+    return getLinearTeamLabels(teamId, workspaceId)
   }
 
-  linearTeamMembers(teamId: string): ReturnType<typeof getLinearTeamMembers> {
-    return getLinearTeamMembers(teamId)
+  linearTeamMembers(teamId: string, workspaceId?: string): ReturnType<typeof getLinearTeamMembers> {
+    return getLinearTeamMembers(teamId, workspaceId)
   }
 
   // ── Browser automation ──

@@ -49,6 +49,9 @@ export type LinkedWorkItemSummary = {
   number: number
   title: string
   url: string
+  /** Linear identifier (for example ENG-123) when this linked item came from
+   *  Linear rather than GitHub. */
+  linearIdentifier?: string
 }
 
 // Why: when a repo has no `orca.yaml` issueCommand and no per-user override,

@@ -1,13 +1,14 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
-import { gitExecFileAsync, ghExecFileAsync } from '../git/runner'
+import { gitExecFileAsync, ghExecFileAsync, extractExecError } from '../git/runner'
 import type { ClassifiedError, GitHubOwnerRepo, IssueSourcePreference } from '../../shared/types'
+import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 
 // Why: legacy generic execFile wrapper — only used by callers that don't need
 // WSL-aware routing (e.g. non-repo-scoped gh commands). Repo-scoped callers
 // should use ghExecFileAsync or gitExecFileAsync from the runner instead.
 export const execFileAsync = promisify(execFile)
-export { ghExecFileAsync, gitExecFileAsync }
+export { ghExecFileAsync, gitExecFileAsync, extractExecError }
 
 // Concurrency limiter - max 4 parallel gh processes
 const MAX_CONCURRENT = 4
@@ -112,6 +113,30 @@ export function classifyListIssuesError(stderr: string): ClassifiedError {
 // short local name `OwnerRepo`.
 export type OwnerRepo = GitHubOwnerRepo
 
+export type GitHubRemoteIdentity = GitHubOwnerRepo & { host: string }
+
+export type GitHubRepoContext = {
+  repoPath: string
+  connectionId?: string | null
+}
+
+export function githubRepoContext(
+  repoPath: string,
+  connectionId?: string | null
+): GitHubRepoContext {
+  return { repoPath, connectionId: connectionId ?? null }
+}
+
+export function ghRepoExecOptions(context: GitHubRepoContext): {
+  cwd?: string
+  encoding?: BufferEncoding
+} {
+  // Why: SSH repo paths are meaningful only on the remote host. All GitHub
+  // calls in this layer pass explicit --repo/API targets, so local gh should
+  // not receive a remote-only cwd.
+  return context.connectionId ? {} : { cwd: context.repoPath }
+}
+
 const ownerRepoCache = new Map<string, OwnerRepo | null>()
 
 /** @internal — exposed for tests only */
@@ -120,26 +145,57 @@ export function _resetOwnerRepoCache(): void {
 }
 
 export function parseGitHubOwnerRepo(remoteUrl: string): OwnerRepo | null {
-  const match = remoteUrl.trim().match(/github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/)
-  if (!match) {
+  const identity = parseGitHubRemoteIdentity(remoteUrl)
+  if (!identity || identity.host.toLowerCase() !== 'github.com') {
     return null
   }
-  return { owner: match[1], repo: match[2] }
+  return { owner: identity.owner, repo: identity.repo }
+}
+
+export function parseGitHubRemoteIdentity(remoteUrl: string): GitHubRemoteIdentity | null {
+  const trimmed = remoteUrl.trim()
+  const httpsMatch = trimmed.match(/^https?:\/\/([^/]+)\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/i)
+  if (httpsMatch) {
+    return { host: httpsMatch[1], owner: httpsMatch[2], repo: httpsMatch[3] }
+  }
+  const sshMatch = trimmed.match(/^git@([^:]+):([^/]+)\/([^/]+?)(?:\.git)?$/i)
+  if (sshMatch) {
+    return { host: sshMatch[1], owner: sshMatch[2], repo: sshMatch[3] }
+  }
+  return null
+}
+
+export async function getRemoteUrlForRepo(
+  context: GitHubRepoContext,
+  remoteName: string
+): Promise<string | null> {
+  if (context.connectionId) {
+    const provider = getSshGitProvider(context.connectionId)
+    if (!provider) {
+      return null
+    }
+    const { stdout } = await provider.exec(['remote', 'get-url', remoteName], context.repoPath)
+    return stdout
+  }
+  const { stdout } = await gitExecFileAsync(['remote', 'get-url', remoteName], {
+    cwd: context.repoPath
+  })
+  return stdout
 }
 
 export async function getOwnerRepoForRemote(
   repoPath: string,
-  remoteName: string
+  remoteName: string,
+  connectionId?: string | null
 ): Promise<OwnerRepo | null> {
-  const cacheKey = `${repoPath}\0${remoteName}`
+  const context = githubRepoContext(repoPath, connectionId)
+  const cacheKey = `${context.connectionId ?? 'local'}\0${context.repoPath}\0${remoteName}`
   if (ownerRepoCache.has(cacheKey)) {
     return ownerRepoCache.get(cacheKey)!
   }
   try {
-    const { stdout } = await gitExecFileAsync(['remote', 'get-url', remoteName], {
-      cwd: repoPath
-    })
-    const result = parseGitHubOwnerRepo(stdout)
+    const remoteUrl = await getRemoteUrlForRepo(context, remoteName)
+    const result = remoteUrl ? parseGitHubOwnerRepo(remoteUrl) : null
     if (result) {
       ownerRepoCache.set(cacheKey, result)
       return result
@@ -151,16 +207,22 @@ export async function getOwnerRepoForRemote(
   return null
 }
 
-export async function getOwnerRepo(repoPath: string): Promise<OwnerRepo | null> {
-  return getOwnerRepoForRemote(repoPath, 'origin')
+export async function getOwnerRepo(
+  repoPath: string,
+  connectionId?: string | null
+): Promise<OwnerRepo | null> {
+  return getOwnerRepoForRemote(repoPath, 'origin', connectionId)
 }
 
-export async function getIssueOwnerRepo(repoPath: string): Promise<OwnerRepo | null> {
-  const upstream = await getOwnerRepoForRemote(repoPath, 'upstream')
+export async function getIssueOwnerRepo(
+  repoPath: string,
+  connectionId?: string | null
+): Promise<OwnerRepo | null> {
+  const upstream = await getOwnerRepoForRemote(repoPath, 'upstream', connectionId)
   if (upstream) {
     return upstream
   }
-  return getOwnerRepoForRemote(repoPath, 'origin')
+  return getOwnerRepoForRemote(repoPath, 'origin', connectionId)
 }
 
 export type ResolvedIssueSource = {
@@ -181,10 +243,11 @@ export type ResolvedIssueSource = {
  */
 export async function resolveIssueSource(
   repoPath: string,
-  preference: IssueSourcePreference | undefined
+  preference: IssueSourcePreference | undefined,
+  connectionId?: string | null
 ): Promise<ResolvedIssueSource> {
   if (preference === 'upstream') {
-    const upstream = await getOwnerRepoForRemote(repoPath, 'upstream')
+    const upstream = await getOwnerRepoForRemote(repoPath, 'upstream', connectionId)
     if (upstream) {
       return { source: upstream, fellBack: false }
     }
@@ -194,12 +257,15 @@ export async function resolveIssueSource(
     // UI toast "using origin" would be misleading. Do NOT auto-reset the
     // preference: the user may be mid-way through a workflow and expect
     // their choice to re-engage if `upstream` is re-added.
-    const origin = await getOwnerRepoForRemote(repoPath, 'origin')
+    const origin = await getOwnerRepoForRemote(repoPath, 'origin', connectionId)
     return { source: origin, fellBack: origin !== null }
   }
   if (preference === 'origin') {
-    return { source: await getOwnerRepoForRemote(repoPath, 'origin'), fellBack: false }
+    return {
+      source: await getOwnerRepoForRemote(repoPath, 'origin', connectionId),
+      fellBack: false
+    }
   }
   // 'auto' or undefined
-  return { source: await getIssueOwnerRepo(repoPath), fellBack: false }
+  return { source: await getIssueOwnerRepo(repoPath, connectionId), fellBack: false }
 }

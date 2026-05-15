@@ -200,6 +200,11 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('Droid working')).toBe('working')
   })
 
+  it('does not treat Factory Droid native needs-input titles as completion', () => {
+    expect(detectAgentStatusFromTitle('Factory Droid needs input')).toBeNull()
+    expect(detectAgentStatusFromTitle('Factory Droid needs your input')).toBeNull()
+  })
+
   // --- Case insensitivity ---
   it('is case-insensitive for agent names', () => {
     expect(detectAgentStatusFromTitle('CLAUDE')).toBe('idle')
@@ -372,6 +377,7 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('✦ Gemini CLI')).toBe('Gemini CLI')
     expect(getAgentLabel('⠂ Claude Code')).toBe('Claude Code')
     expect(getAgentLabel('⠋ Codex is thinking')).toBe('Codex')
+    expect(getAgentLabel('Grok running')).toBe('Grok')
     expect(getAgentLabel('⠋ Droid')).toBe('Droid')
     expect(getAgentLabel('Droid ready')).toBe('Droid')
   })
@@ -486,6 +492,15 @@ describe('createAgentStatusTracker', () => {
     tracker.handleTitle('⠋ π - my-project')
     tracker.handleTitle('π - my-project')
     expect(onBecameIdle).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not fire when Factory Droid reports needs input during a working turn', () => {
+    const onBecameIdle = vi.fn()
+    const tracker = createAgentStatusTracker(onBecameIdle)
+
+    tracker.handleTitle('⠋ Droid')
+    tracker.handleTitle('Factory Droid needs input')
+    expect(onBecameIdle).not.toHaveBeenCalled()
   })
 
   // --- Multiple cycles ---

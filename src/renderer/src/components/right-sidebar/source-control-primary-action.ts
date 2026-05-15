@@ -1,6 +1,7 @@
 // Why: split from the combined primary+dropdown module because the primary and dropdown are independent derivations with different priority ladders; together they exceed the max-lines budget and tangle unrelated concerns.
 
-import type { GitUpstreamStatus } from '../../../../shared/types'
+import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
+import type { GitUpstreamStatus, PRState } from '../../../../shared/types'
 
 // Why: this module owns the pure state-machine logic for the Source Control
 // primary action (split button). Keeping the logic outside the React component
@@ -14,7 +15,14 @@ import type { GitUpstreamStatus } from '../../../../shared/types'
 // `handlePrimaryClick` switch exhaustively over only the kinds the
 // primary can actually emit, and it kills the compound-commit branch in
 // the isRemoteOperationActive tooltip below at compile time.
-export type PrimaryActionKind = 'commit' | 'stage' | 'push' | 'pull' | 'sync' | 'publish'
+export type PrimaryActionKind =
+  | 'commit'
+  | 'stage'
+  | 'push'
+  | 'pull'
+  | 'sync'
+  | 'publish'
+  | 'create_pr'
 
 // Why: the in-flight remote op tracker stores which action the user actually
 // triggered, so the primary button can mirror that label/spinner instead of
@@ -39,11 +47,14 @@ export type PrimaryActionInputs = {
   isCommitting: boolean
   isRemoteOperationActive: boolean
   upstreamStatus: GitUpstreamStatus | undefined
+  prState?: PRState | null
+  isPRStateLoading?: boolean
   // Why: which remote op is currently running, when one is. null when no
   // remote op is in flight. Used by the in-flight branch below to mirror
   // the user-triggered action on the primary button instead of leaving a
   // stale label that no longer matches what the slice is doing.
   inFlightRemoteOpKind?: RemoteOpKind | null
+  hostedReviewCreation?: HostedReviewCreationEligibility | null
 }
 
 const PRIMARY_LABEL_BY_KIND: Record<Exclude<PrimaryActionKind, 'commit'>, string> = {
@@ -51,7 +62,8 @@ const PRIMARY_LABEL_BY_KIND: Record<Exclude<PrimaryActionKind, 'commit'>, string
   push: 'Push',
   pull: 'Pull',
   sync: 'Sync',
-  publish: 'Publish Branch'
+  publish: 'Publish Branch',
+  create_pr: 'Create PR'
 }
 
 function describePushCount(ahead: number): string {
@@ -93,7 +105,10 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
     isCommitting,
     isRemoteOperationActive,
     upstreamStatus,
-    inFlightRemoteOpKind
+    prState,
+    isPRStateLoading,
+    inFlightRemoteOpKind,
+    hostedReviewCreation
   } = inputs
 
   // 1. Commit in flight — lock the primary no matter what else is true.
@@ -214,6 +229,24 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
   }
 
   if (!upstreamStatus.hasUpstream) {
+    if (isPRStateLoading) {
+      return {
+        kind: 'commit',
+        label: 'Commit',
+        title: 'Checking PR status…',
+        disabled: true
+      }
+    }
+
+    if (prState === 'merged') {
+      return {
+        kind: 'commit',
+        label: 'Commit',
+        title: 'Nothing to commit. PR is already merged.',
+        disabled: true
+      }
+    }
+
     return {
       kind: 'publish',
       label: 'Publish Branch',
@@ -243,6 +276,15 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
       kind: 'push',
       label: 'Push',
       title: describePushCount(upstreamStatus.ahead),
+      disabled: false
+    }
+  }
+
+  if (hostedReviewCreation?.canCreate) {
+    return {
+      kind: 'create_pr',
+      label: 'Create PR',
+      title: 'Create a pull request for this branch',
       disabled: false
     }
   }

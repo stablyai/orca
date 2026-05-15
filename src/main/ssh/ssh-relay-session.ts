@@ -41,6 +41,7 @@ import {
   getSshFilesystemProvider
 } from '../providers/ssh-filesystem-dispatch'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
+import { notifyRemoteWorkspaceHandlers } from '../ipc/remote-workspace-events'
 import { PortScanner } from './ssh-port-scanner'
 import type { SshPortForwardManager } from './ssh-port-forward'
 import type { SshConnection } from './ssh-connection'
@@ -449,6 +450,7 @@ export class SshRelaySession {
 
     this.wireUpPtyEvents(ptyProvider)
     this.wireUpAgentHookEvents(mux)
+    this.wireUpRemoteWorkspaceEvents(mux)
     return true
   }
 
@@ -491,6 +493,12 @@ export class SshRelaySession {
         }`
       )
     }
+  }
+
+  private wireUpRemoteWorkspaceEvents(mux: SshChannelMultiplexer): void {
+    mux.onNotification((method, params) => {
+      notifyRemoteWorkspaceHandlers(this.targetId, method, params)
+    })
   }
 
   // Why: route the relay's `agent.hook` JSON-RPC notification into Orca's
