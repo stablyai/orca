@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from '@/runtime/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
 const mockSpawn = vi.fn()
 const mockRuntimeEnvironmentCall = vi.fn()
+const mockRuntimeEnvironmentTransportCall = vi.fn()
 const mockRuntimeEnvironmentSubscribe = vi.fn()
 const mockCreateTab = vi.fn()
 const mockSetTabCustomTitle = vi.fn()
@@ -49,7 +55,15 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 
 describe('launchAgentBackgroundSession', () => {
   beforeEach(() => {
+    clearRuntimeCompatibilityCacheForTests()
     vi.clearAllMocks()
+    mockRuntimeEnvironmentTransportCall.mockImplementation(
+      (args: RuntimeEnvironmentCallRequest) => {
+        return (
+          createCompatibleRuntimeStatusResponseIfNeeded(args) ?? mockRuntimeEnvironmentCall(args)
+        )
+      }
+    )
     state.settings = { agentCmdOverrides: {}, activeRuntimeEnvironmentId: null }
     mockCreateTab.mockReturnValue({ id: 'tab-1', title: 'Terminal 1' })
     mockSpawn.mockResolvedValue({ id: 'pty-1' })
@@ -72,7 +86,7 @@ describe('launchAgentBackgroundSession', () => {
           call: vi.fn()
         },
         runtimeEnvironments: {
-          call: mockRuntimeEnvironmentCall,
+          call: mockRuntimeEnvironmentTransportCall,
           subscribe: mockRuntimeEnvironmentSubscribe
         }
       }

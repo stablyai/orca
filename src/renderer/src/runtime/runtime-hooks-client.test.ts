@@ -4,20 +4,31 @@ import {
   readRuntimeIssueCommand,
   writeRuntimeIssueCommand
 } from './runtime-hooks-client'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from './runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 
 const runtimeEnvironmentCall = vi.fn()
+const runtimeEnvironmentTransportCall = vi.fn()
 const hooksCheck = vi.fn()
 const hooksReadIssueCommand = vi.fn()
 const hooksWriteIssueCommand = vi.fn()
 
 beforeEach(() => {
+  clearRuntimeCompatibilityCacheForTests()
   runtimeEnvironmentCall.mockReset()
+  runtimeEnvironmentTransportCall.mockReset()
   hooksCheck.mockReset()
   hooksReadIssueCommand.mockReset()
   hooksWriteIssueCommand.mockReset()
+  runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+    return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
+  })
   vi.stubGlobal('window', {
     api: {
-      runtimeEnvironments: { call: runtimeEnvironmentCall },
+      runtimeEnvironments: { call: runtimeEnvironmentTransportCall },
       hooks: {
         check: hooksCheck,
         readIssueCommand: hooksReadIssueCommand,

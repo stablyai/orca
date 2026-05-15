@@ -12,6 +12,11 @@ import {
 } from './terminal-link-handlers'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 import { getConnectionId } from '@/lib/connection-context'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from '@/runtime/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
 const openUrlMock = vi.fn()
 const openFileUriMock = vi.fn()
@@ -20,6 +25,7 @@ const openFileMock = vi.fn()
 const authorizeExternalPathMock = vi.fn()
 const statMock = vi.fn().mockResolvedValue({ isDirectory: false })
 const runtimeEnvironmentCallMock = vi.fn()
+const runtimeEnvironmentTransportCallMock = vi.fn()
 const setActiveWorktreeMock = vi.fn()
 const createBrowserTabMock = vi.fn()
 
@@ -60,7 +66,12 @@ function setPlatform(userAgent: string): void {
 }
 
 beforeEach(() => {
+  clearRuntimeCompatibilityCacheForTests()
   vi.clearAllMocks()
+  runtimeEnvironmentTransportCallMock.mockReset()
+  runtimeEnvironmentTransportCallMock.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+    return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCallMock(args)
+  })
   vi.mocked(getConnectionId).mockReturnValue(null)
   storeState.settings = undefined
   registerHttpLinkStoreAccessor(() => storeState)
@@ -76,7 +87,7 @@ beforeEach(() => {
         authorizeExternalPath: authorizeExternalPathMock,
         stat: statMock
       },
-      runtimeEnvironments: { call: runtimeEnvironmentCallMock }
+      runtimeEnvironments: { call: runtimeEnvironmentTransportCallMock }
     }
   })
 })
@@ -270,11 +281,13 @@ describe('handleOscLink', () => {
 
     expect(authorizeExternalPathMock).not.toHaveBeenCalled()
     expect(statMock).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'files.stat',
-      params: { worktree: 'wt-1', relativePath: 'src/main.ts' },
-      timeoutMs: 15_000
+    await vi.waitFor(() => {
+      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'files.stat',
+        params: { worktree: 'wt-1', relativePath: 'src/main.ts' },
+        timeoutMs: 15_000
+      })
     })
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -300,11 +313,13 @@ describe('handleOscLink', () => {
     })
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'files.stat',
-      params: { worktree: 'wt-1', relativePath: 'src/main.ts' },
-      timeoutMs: 15_000
+    await vi.waitFor(() => {
+      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'files.stat',
+        params: { worktree: 'wt-1', relativePath: 'src/main.ts' },
+        timeoutMs: 15_000
+      })
     })
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({

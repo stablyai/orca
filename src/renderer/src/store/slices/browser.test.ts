@@ -3,6 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import { createBrowserSlice } from './browser'
 import type { AppState } from '../types'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from '../../runtime/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
+
+const runtimeEnvironmentCall = vi.fn()
+const runtimeEnvironmentTransportCall = vi.fn()
 
 const mockApi = {
   browser: {
@@ -16,7 +24,7 @@ const mockApi = {
     notifyActiveTabChanged: vi.fn().mockResolvedValue(undefined)
   },
   runtimeEnvironments: {
-    call: vi.fn()
+    call: runtimeEnvironmentTransportCall
   }
 }
 
@@ -51,12 +59,18 @@ function settingsWithRuntime(id: string): AppState['settings'] {
 describe('createBrowserSlice runtime guard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockApi.runtimeEnvironments.call.mockResolvedValue({ id: 'rpc-1', ok: true, result: {} })
+    clearRuntimeCompatibilityCacheForTests()
+    runtimeEnvironmentCall.mockReset()
+    runtimeEnvironmentTransportCall.mockReset()
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
+    })
+    runtimeEnvironmentCall.mockResolvedValue({ id: 'rpc-1', ok: true, result: {} })
   })
 
   it('fetches browser profiles from the active runtime environment', async () => {
     const store = createTestStore()
-    mockApi.runtimeEnvironments.call.mockResolvedValueOnce({
+    runtimeEnvironmentCall.mockResolvedValueOnce({
       id: 'rpc-1',
       ok: true,
       result: {
@@ -80,7 +94,7 @@ describe('createBrowserSlice runtime guard', () => {
     await store.getState().fetchBrowserSessionProfiles()
 
     expect(mockApi.browser.sessionListProfiles).not.toHaveBeenCalled()
-    expect(mockApi.runtimeEnvironments.call).toHaveBeenCalledWith({
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'browser.profileList',
       params: undefined,
@@ -168,7 +182,7 @@ describe('createBrowserSlice runtime guard', () => {
     expect(mockApi.browser.notifyActiveTabChanged).not.toHaveBeenCalled()
   })
 
-  it('closes the mapped remote tab when closing a browser page in the active runtime', () => {
+  it('closes the mapped remote tab when closing a browser page in the active runtime', async () => {
     const store = createTestStore()
     store.setState({
       settings: settingsWithRuntime('env-1'),
@@ -215,16 +229,18 @@ describe('createBrowserSlice runtime guard', () => {
 
     store.getState().closeBrowserPage('page-1')
 
-    expect(mockApi.runtimeEnvironments.call).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'browser.tabClose',
-      params: { worktree: 'id:wt-1', page: 'remote-page-1' },
-      timeoutMs: 15_000
+    await vi.waitFor(() => {
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'browser.tabClose',
+        params: { worktree: 'id:wt-1', page: 'remote-page-1' },
+        timeoutMs: 15_000
+      })
     })
     expect(store.getState().remoteBrowserPageHandlesByPageId['page-1']).toBeUndefined()
   })
 
-  it('closes mapped remote tabs when closing a browser workspace in the active runtime', () => {
+  it('closes mapped remote tabs when closing a browser workspace in the active runtime', async () => {
     const store = createTestStore()
     store.setState({
       settings: settingsWithRuntime('env-1'),
@@ -273,16 +289,18 @@ describe('createBrowserSlice runtime guard', () => {
 
     store.getState().closeBrowserTab('workspace-1')
 
-    expect(mockApi.runtimeEnvironments.call).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'browser.tabClose',
-      params: { worktree: 'id:wt-1', page: 'remote-page-1' },
-      timeoutMs: 15_000
+    await vi.waitFor(() => {
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'browser.tabClose',
+        params: { worktree: 'id:wt-1', page: 'remote-page-1' },
+        timeoutMs: 15_000
+      })
     })
     expect(store.getState().remoteBrowserPageHandlesByPageId['page-1']).toBeUndefined()
   })
 
-  it('closes mapped remote pages in their owning environment after switching local', () => {
+  it('closes mapped remote pages in their owning environment after switching local', async () => {
     const store = createTestStore()
     store.setState({
       browserTabsByWorktree: {
@@ -328,15 +346,17 @@ describe('createBrowserSlice runtime guard', () => {
 
     store.getState().closeBrowserPage('page-1')
 
-    expect(mockApi.runtimeEnvironments.call).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'browser.tabClose',
-      params: { worktree: 'id:wt-1', page: 'remote-page-1' },
-      timeoutMs: 15_000
+    await vi.waitFor(() => {
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'browser.tabClose',
+        params: { worktree: 'id:wt-1', page: 'remote-page-1' },
+        timeoutMs: 15_000
+      })
     })
   })
 
-  it('closes mapped remote tabs in their owning environment after switching environments', () => {
+  it('closes mapped remote tabs in their owning environment after switching environments', async () => {
     const store = createTestStore()
     store.setState({
       settings: settingsWithRuntime('env-2'),
@@ -383,11 +403,13 @@ describe('createBrowserSlice runtime guard', () => {
 
     store.getState().closeBrowserTab('workspace-1')
 
-    expect(mockApi.runtimeEnvironments.call).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'browser.tabClose',
-      params: { worktree: 'id:wt-1', page: 'remote-page-1' },
-      timeoutMs: 15_000
+    await vi.waitFor(() => {
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'browser.tabClose',
+        params: { worktree: 'id:wt-1', page: 'remote-page-1' },
+        timeoutMs: 15_000
+      })
     })
   })
 })

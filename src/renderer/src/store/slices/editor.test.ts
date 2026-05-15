@@ -4,6 +4,11 @@ import { createStore, type StoreApi } from 'zustand/vanilla'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { createEditorSlice } from './editor'
 import type { AppState } from '../types'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from '../../runtime/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -109,15 +114,22 @@ describe('createEditorSlice openDiff', () => {
 
 describe('createEditorSlice untitled cleanup routing', () => {
   const runtimeEnvironmentCallMock = vi.fn()
+  const runtimeEnvironmentTransportCallMock = vi.fn()
   const localDeletePathMock = vi.fn()
 
   beforeEach(() => {
+    clearRuntimeCompatibilityCacheForTests()
     runtimeEnvironmentCallMock.mockReset()
+    runtimeEnvironmentTransportCallMock.mockReset()
     localDeletePathMock.mockReset()
     runtimeEnvironmentCallMock.mockResolvedValue({ ok: true, result: { deleted: true } })
+    runtimeEnvironmentTransportCallMock.mockImplementation(
+      (args: RuntimeEnvironmentCallRequest) =>
+        createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCallMock(args)
+    )
     vi.stubGlobal('window', {
       api: {
-        runtimeEnvironments: { call: runtimeEnvironmentCallMock },
+        runtimeEnvironments: { call: runtimeEnvironmentTransportCallMock },
         fs: { deletePath: localDeletePathMock }
       }
     })
@@ -165,7 +177,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
     } as Partial<AppState>)
   }
 
-  it('closeFile deletes untouched remote untitled files through runtime file RPC', () => {
+  it('closeFile deletes untouched remote untitled files through runtime file RPC', async () => {
     const store = createEditorStore()
     seedRemoteWorktree(store)
     store.getState().openFile({
@@ -179,16 +191,18 @@ describe('createEditorSlice untitled cleanup routing', () => {
 
     store.getState().closeFile('/remote/wt/untitled.md')
 
-    expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'files.delete',
-      params: { worktree: 'wt-1', relativePath: 'untitled.md', recursive: undefined },
-      timeoutMs: 15_000
+    await vi.waitFor(() => {
+      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'files.delete',
+        params: { worktree: 'wt-1', relativePath: 'untitled.md', recursive: undefined },
+        timeoutMs: 15_000
+      })
     })
     expect(localDeletePathMock).not.toHaveBeenCalled()
   })
 
-  it('closeAllFiles deletes untouched remote untitled files through runtime file RPC', () => {
+  it('closeAllFiles deletes untouched remote untitled files through runtime file RPC', async () => {
     const store = createEditorStore()
     seedRemoteWorktree(store)
     store.getState().openFile({
@@ -202,16 +216,18 @@ describe('createEditorSlice untitled cleanup routing', () => {
 
     store.getState().closeAllFiles()
 
-    expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'files.delete',
-      params: { worktree: 'wt-1', relativePath: 'untitled.md', recursive: undefined },
-      timeoutMs: 15_000
+    await vi.waitFor(() => {
+      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'files.delete',
+        params: { worktree: 'wt-1', relativePath: 'untitled.md', recursive: undefined },
+        timeoutMs: 15_000
+      })
     })
     expect(localDeletePathMock).not.toHaveBeenCalled()
   })
 
-  it('closeFile uses relative remote delete when worktree metadata is missing', () => {
+  it('closeFile uses relative remote delete when worktree metadata is missing', async () => {
     const store = createEditorStore()
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
@@ -229,16 +245,18 @@ describe('createEditorSlice untitled cleanup routing', () => {
 
     store.getState().closeFile('/remote/wt/untitled.md')
 
-    expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'files.delete',
-      params: { worktree: 'wt-1', relativePath: 'untitled.md', recursive: undefined },
-      timeoutMs: 15_000
+    await vi.waitFor(() => {
+      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'files.delete',
+        params: { worktree: 'wt-1', relativePath: 'untitled.md', recursive: undefined },
+        timeoutMs: 15_000
+      })
     })
     expect(localDeletePathMock).not.toHaveBeenCalled()
   })
 
-  it('closeFile deletes untouched remote untitled files in their owning runtime after switching local', () => {
+  it('closeFile deletes untouched remote untitled files in their owning runtime after switching local', async () => {
     const store = createEditorStore()
     seedRemoteWorktree(store)
     store.getState().openFile({
@@ -253,16 +271,18 @@ describe('createEditorSlice untitled cleanup routing', () => {
 
     store.getState().closeFile('/remote/wt/untitled.md')
 
-    expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'files.delete',
-      params: { worktree: 'wt-1', relativePath: 'untitled.md', recursive: undefined },
-      timeoutMs: 15_000
+    await vi.waitFor(() => {
+      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'files.delete',
+        params: { worktree: 'wt-1', relativePath: 'untitled.md', recursive: undefined },
+        timeoutMs: 15_000
+      })
     })
     expect(localDeletePathMock).not.toHaveBeenCalled()
   })
 
-  it('closeFile deletes untouched remote untitled files in their owning runtime after switching environments', () => {
+  it('closeFile deletes untouched remote untitled files in their owning runtime after switching environments', async () => {
     const store = createEditorStore()
     seedRemoteWorktree(store)
     store.getState().openFile({
@@ -277,11 +297,13 @@ describe('createEditorSlice untitled cleanup routing', () => {
 
     store.getState().closeFile('/remote/wt/untitled.md')
 
-    expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'files.delete',
-      params: { worktree: 'wt-1', relativePath: 'untitled.md', recursive: undefined },
-      timeoutMs: 15_000
+    await vi.waitFor(() => {
+      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'files.delete',
+        params: { worktree: 'wt-1', relativePath: 'untitled.md', recursive: undefined },
+        timeoutMs: 15_000
+      })
     })
     expect(localDeletePathMock).not.toHaveBeenCalled()
   })
@@ -1228,8 +1250,10 @@ describe('createEditorSlice activateMarkdownLink', () => {
   const pathExistsMock = vi.fn()
   const authorizeExternalPathMock = vi.fn()
   const runtimeEnvironmentCallMock = vi.fn()
+  const runtimeEnvironmentTransportCallMock = vi.fn()
 
   beforeEach(() => {
+    clearRuntimeCompatibilityCacheForTests()
     toastErrorMock.mockReset()
     openUrlMock.mockReset()
     openFileUriMock.mockReset()
@@ -1237,12 +1261,18 @@ describe('createEditorSlice activateMarkdownLink', () => {
     pathExistsMock.mockResolvedValue(true)
     authorizeExternalPathMock.mockReset()
     runtimeEnvironmentCallMock.mockReset()
+    runtimeEnvironmentTransportCallMock.mockReset()
     runtimeEnvironmentCallMock.mockResolvedValue({
       id: 'rpc-1',
       ok: true,
       result: { size: 1, isDirectory: false, mtime: 1 },
       _meta: { runtimeId: 'runtime-source' }
     })
+    runtimeEnvironmentTransportCallMock.mockImplementation(
+      (args: RuntimeEnvironmentCallRequest) =>
+        createCompatibleRuntimeStatusResponseIfNeeded(args, 'runtime-source') ??
+        runtimeEnvironmentCallMock(args)
+    )
     openHttpLinkMock.mockReset()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(globalThis as any).window = (globalThis as any).window ?? {}
@@ -1264,7 +1294,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
         })
       },
       runtimeEnvironments: {
-        call: runtimeEnvironmentCallMock
+        call: runtimeEnvironmentTransportCallMock
       }
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

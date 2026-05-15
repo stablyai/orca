@@ -9,6 +9,11 @@ import { requestEditorFileSave, requestEditorSaveQuiesce } from './editor-autosa
 import { attachEditorAutosaveController } from './editor-autosave-controller'
 import { registerPendingEditorFlush } from './editor-pending-flush'
 import { __clearSelfWriteRegistryForTests, hasRecentSelfWrite } from './editor-self-write-registry'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from '@/runtime/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
 type WindowStub = {
   addEventListener: Window['addEventListener']
@@ -113,11 +118,17 @@ describe('attachEditorAutosaveController', () => {
   })
 
   it('saves remote files through the owning runtime environment', async () => {
+    clearRuntimeCompatibilityCacheForTests()
     const writeFile = vi.fn().mockResolvedValue(undefined)
     const runtimeCall = vi.fn().mockResolvedValue({
       ok: true,
       result: {},
       _meta: { runtimeId: 'runtime-env-1' }
+    })
+    const runtimeTransportCall = vi.fn((args: RuntimeEnvironmentCallRequest) => {
+      return (
+        createCompatibleRuntimeStatusResponseIfNeeded(args, 'runtime-env-1') ?? runtimeCall(args)
+      )
     })
     const eventTarget = new EventTarget()
     vi.stubGlobal('window', {
@@ -128,7 +139,7 @@ describe('attachEditorAutosaveController', () => {
       clearTimeout: globalThis.clearTimeout.bind(globalThis),
       api: {
         fs: { writeFile },
-        runtimeEnvironments: { call: runtimeCall }
+        runtimeEnvironments: { call: runtimeTransportCall }
       }
     } satisfies WindowStub)
 

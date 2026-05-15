@@ -6,6 +6,11 @@ import {
   getRuntimeGitStatus,
   pushRuntimeGit
 } from './runtime-git-client'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from './runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 
 const gitStatus = vi.fn()
 const gitDiff = vi.fn()
@@ -13,16 +18,22 @@ const gitBulkStage = vi.fn()
 const gitCommit = vi.fn()
 const gitPush = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
+const runtimeEnvironmentTransportCall = vi.fn()
 const runtimeCall = vi.fn()
 
 beforeEach(() => {
+  clearRuntimeCompatibilityCacheForTests()
   gitStatus.mockReset()
   gitDiff.mockReset()
   gitBulkStage.mockReset()
   gitCommit.mockReset()
   gitPush.mockReset()
   runtimeEnvironmentCall.mockReset()
+  runtimeEnvironmentTransportCall.mockReset()
   runtimeCall.mockReset()
+  runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+    return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
+  })
   vi.stubGlobal('window', {
     api: {
       git: {
@@ -33,7 +44,7 @@ beforeEach(() => {
         push: gitPush
       },
       runtime: { call: runtimeCall },
-      runtimeEnvironments: { call: runtimeEnvironmentCall }
+      runtimeEnvironments: { call: runtimeEnvironmentTransportCall }
     }
   })
 })

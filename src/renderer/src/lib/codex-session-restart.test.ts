@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { markLiveCodexSessionsForRestart } from './codex-session-restart'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from '@/runtime/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
 const ACCOUNT_A = 'account-a@example.com'
 const ACCOUNT_B = 'account-b@example.com'
@@ -8,8 +13,16 @@ const ACCOUNT_C = 'account-c@example.com'
 
 describe('markLiveCodexSessionsForRestart', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
+  const runtimeEnvironmentCall = vi.fn()
+  const runtimeEnvironmentTransportCall = vi.fn()
 
   beforeEach(() => {
+    clearRuntimeCompatibilityCacheForTests()
+    runtimeEnvironmentCall.mockReset()
+    runtimeEnvironmentTransportCall.mockReset()
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
+    })
     useAppStore.setState({
       tabsByWorktree: {
         wt1: [
@@ -44,7 +57,7 @@ describe('markLiveCodexSessionsForRestart', () => {
         },
         runtimeEnvironments: {
           ...originalWindow?.api?.runtimeEnvironments,
-          call: vi.fn()
+          call: runtimeEnvironmentTransportCall
         }
       }
     } as unknown as typeof window
@@ -170,7 +183,7 @@ describe('markLiveCodexSessionsForRestart', () => {
         'tab-1': ['remote:term-1']
       }
     })
-    vi.mocked(window.api.runtimeEnvironments.call).mockResolvedValue({
+    runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',
       ok: true,
       result: {
@@ -185,7 +198,7 @@ describe('markLiveCodexSessionsForRestart', () => {
     })
 
     expect(window.api.pty.getForegroundProcess).not.toHaveBeenCalled()
-    expect(window.api.runtimeEnvironments.call).toHaveBeenCalledWith({
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'terminal.inspectProcess',
       params: { terminal: 'term-1' },

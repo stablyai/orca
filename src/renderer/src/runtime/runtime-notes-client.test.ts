@@ -9,6 +9,11 @@ import {
   saveRuntimeProjectNote,
   showRuntimeProjectNote
 } from './runtime-notes-client'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from './runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 
 const notesList = vi.fn()
 const notesShow = vi.fn()
@@ -22,8 +27,10 @@ const notesLink = vi.fn()
 const notesPanelState = vi.fn()
 const runtimeCall = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
+const runtimeEnvironmentTransportCall = vi.fn()
 
 beforeEach(() => {
+  clearRuntimeCompatibilityCacheForTests()
   notesList.mockReset()
   notesShow.mockReset()
   notesCreate.mockReset()
@@ -36,6 +43,10 @@ beforeEach(() => {
   notesPanelState.mockReset()
   runtimeCall.mockReset()
   runtimeEnvironmentCall.mockReset()
+  runtimeEnvironmentTransportCall.mockReset()
+  runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+    return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
+  })
   vi.stubGlobal('window', {
     api: {
       notes: {
@@ -51,7 +62,7 @@ beforeEach(() => {
         panelState: notesPanelState
       },
       runtime: { call: runtimeCall },
-      runtimeEnvironments: { call: runtimeEnvironmentCall }
+      runtimeEnvironments: { call: runtimeEnvironmentTransportCall }
     }
   })
 })

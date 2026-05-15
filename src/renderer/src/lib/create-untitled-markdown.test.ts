@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createUntitledMarkdownFile } from './create-untitled-markdown'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from '@/runtime/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
 describe('createUntitledMarkdownFile', () => {
   afterEach(() => {
@@ -90,6 +95,7 @@ describe('createUntitledMarkdownFile', () => {
   })
 
   it('creates untitled files through the selected runtime environment', async () => {
+    clearRuntimeCompatibilityCacheForTests()
     const stat = vi.fn()
     const createFile = vi.fn()
     const runtimeEnvironmentCall = vi
@@ -106,12 +112,15 @@ describe('createUntitledMarkdownFile', () => {
         result: { ok: true },
         _meta: { runtimeId: 'remote-runtime' }
       })
+    const runtimeEnvironmentTransportCall = vi.fn((args: RuntimeEnvironmentCallRequest) => {
+      return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
+    })
 
     vi.stubGlobal('window', {
       api: {
         shell: { pathExists: vi.fn() },
         fs: { createFile, stat },
-        runtimeEnvironments: { call: runtimeEnvironmentCall }
+        runtimeEnvironments: { call: runtimeEnvironmentTransportCall }
       }
     })
 

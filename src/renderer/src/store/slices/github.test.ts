@@ -6,6 +6,14 @@ import { create } from 'zustand'
 import { createGitHubSlice } from './github'
 import type { AppState } from '../types'
 import type { PRInfo } from '../../../../shared/types'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from '../../runtime/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
+
+const runtimeEnvironmentCall = vi.fn()
+const runtimeEnvironmentTransportCall = vi.fn()
 
 const mockApi = {
   gh: {
@@ -16,7 +24,7 @@ const mockApi = {
     getProjectViewTable: vi.fn()
   },
   runtimeEnvironments: {
-    call: vi.fn()
+    call: runtimeEnvironmentTransportCall
   },
   cache: {
     getGitHub: vi.fn().mockResolvedValue(null),
@@ -26,6 +34,15 @@ const mockApi = {
 
 // @ts-expect-error test window mock
 globalThis.window = { api: mockApi }
+
+function resetRemoteRuntimeMocks() {
+  clearRuntimeCompatibilityCacheForTests()
+  runtimeEnvironmentCall.mockReset()
+  runtimeEnvironmentTransportCall.mockReset()
+  runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+    return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
+  })
+}
 
 function createTestStore() {
   return create<AppState>()(
@@ -53,6 +70,7 @@ function makePR(overrides: Partial<PRInfo> = {}): PRInfo {
 describe('createGitHubSlice.fetchPRChecks', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    resetRemoteRuntimeMocks()
     mockApi.gh.prChecks.mockResolvedValue([])
   })
 
@@ -234,6 +252,7 @@ describe('createGitHubSlice.fetchPRChecks', () => {
 describe('createGitHubSlice.fetchPRForBranch', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    resetRemoteRuntimeMocks()
     mockApi.gh.prForBranch.mockResolvedValue(null)
   })
 
@@ -269,7 +288,8 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
 describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockApi.runtimeEnvironments.call.mockResolvedValue({
+    resetRemoteRuntimeMocks()
+    runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',
       ok: true,
       result: { items: [], sources: { issues: null, prs: null, upstreamCandidate: null } },
@@ -367,7 +387,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         }
       ]
     } as Partial<AppState>)
-    mockApi.runtimeEnvironments.call.mockResolvedValueOnce({
+    runtimeEnvironmentCall.mockResolvedValueOnce({
       id: 'rpc-1',
       ok: true,
       result: {
@@ -380,7 +400,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     await store.getState().fetchWorkItems('repo-id', '/server/repo', 24, '')
 
     expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
-    expect(mockApi.runtimeEnvironments.call).toHaveBeenCalledWith({
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'github.listWorkItems',
       params: { repo: 'repo-id', limit: 24, query: undefined },
@@ -397,7 +417,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' }
     } as Partial<AppState>)
-    mockApi.runtimeEnvironments.call.mockResolvedValueOnce({
+    runtimeEnvironmentCall.mockResolvedValueOnce({
       id: 'rpc-1',
       ok: true,
       result: {
@@ -438,7 +458,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
 
     expect(result.ok).toBe(true)
     expect(mockApi.gh.getProjectViewTable).not.toHaveBeenCalled()
-    expect(mockApi.runtimeEnvironments.call).toHaveBeenCalledWith({
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'github.project.viewTable',
       params: {

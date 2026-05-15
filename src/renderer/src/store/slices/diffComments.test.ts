@@ -2,6 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
 import type { DiffComment, Worktree } from '../../../../shared/types'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from '../../runtime/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 
 // Mock sonner (imported transitively by other slices)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -20,6 +25,7 @@ const runtimeEnvironmentCall = vi.fn().mockResolvedValue({
   result: { ok: true },
   _meta: { runtimeId: 'remote-runtime' }
 })
+const runtimeEnvironmentTransportCall = vi.fn()
 const mockApi = {
   worktrees: {
     list: vi.fn().mockResolvedValue([]),
@@ -27,7 +33,7 @@ const mockApi = {
     remove: vi.fn().mockResolvedValue(undefined),
     updateMeta
   },
-  runtimeEnvironments: { call: runtimeEnvironmentCall },
+  runtimeEnvironments: { call: runtimeEnvironmentTransportCall },
   repos: {
     list: vi.fn().mockResolvedValue([]),
     add: vi.fn().mockResolvedValue({}),
@@ -168,6 +174,11 @@ function seed(store: ReturnType<typeof createTestStore>, comments: DiffComment[]
 describe('updateDiffComment', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    clearRuntimeCompatibilityCacheForTests()
+    runtimeEnvironmentTransportCall.mockReset()
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
+    })
     updateMeta.mockResolvedValue({})
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',

@@ -6,8 +6,14 @@ import {
   linearStatus,
   linearUpdateIssue
 } from './runtime-linear-client'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from './runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 
 const runtimeEnvironmentCall = vi.fn()
+const runtimeEnvironmentTransportCall = vi.fn()
 const linearStatusLocal = vi.fn()
 const linearSearchIssuesLocal = vi.fn()
 const linearCreateIssueLocal = vi.fn()
@@ -15,15 +21,20 @@ const linearUpdateIssueLocal = vi.fn()
 const linearListTeamsLocal = vi.fn()
 
 beforeEach(() => {
+  clearRuntimeCompatibilityCacheForTests()
   runtimeEnvironmentCall.mockReset()
+  runtimeEnvironmentTransportCall.mockReset()
   linearStatusLocal.mockReset()
   linearSearchIssuesLocal.mockReset()
   linearCreateIssueLocal.mockReset()
   linearUpdateIssueLocal.mockReset()
   linearListTeamsLocal.mockReset()
+  runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+    return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
+  })
   vi.stubGlobal('window', {
     api: {
-      runtimeEnvironments: { call: runtimeEnvironmentCall },
+      runtimeEnvironments: { call: runtimeEnvironmentTransportCall },
       linear: {
         status: linearStatusLocal,
         searchIssues: linearSearchIssuesLocal,

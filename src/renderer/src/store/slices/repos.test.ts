@@ -1,6 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import type { Repo } from '../../../../shared/types'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from '../../runtime/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 
 const localRepo: Repo = {
   id: 'local-repo',
@@ -26,8 +31,10 @@ const reposUpdate = vi.fn()
 const reposReorder = vi.fn()
 const ptyKill = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
+const runtimeEnvironmentTransportCall = vi.fn()
 
 beforeEach(() => {
+  clearRuntimeCompatibilityCacheForTests()
   reposList.mockReset()
   reposAdd.mockReset()
   reposPickFolder.mockReset()
@@ -36,6 +43,10 @@ beforeEach(() => {
   reposReorder.mockReset()
   ptyKill.mockReset()
   runtimeEnvironmentCall.mockReset()
+  runtimeEnvironmentTransportCall.mockReset()
+  runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+    return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
+  })
   vi.stubGlobal('window', {
     api: {
       repos: {
@@ -47,7 +58,7 @@ beforeEach(() => {
         reorder: reposReorder
       },
       pty: { kill: ptyKill },
-      runtimeEnvironments: { call: runtimeEnvironmentCall }
+      runtimeEnvironments: { call: runtimeEnvironmentTransportCall }
     }
   })
 })
