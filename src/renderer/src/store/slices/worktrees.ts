@@ -827,6 +827,34 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }
   },
 
+  updateWorktreesMeta: async (updatesByWorktreeId) => {
+    if (updatesByWorktreeId.size === 0) {
+      return
+    }
+
+    set((s) => {
+      let nextWorktrees = s.worktreesByRepo
+      for (const [worktreeId, updates] of updatesByWorktreeId) {
+        nextWorktrees = applyWorktreeUpdates(nextWorktrees, worktreeId, updates)
+      }
+      return nextWorktrees === s.worktreesByRepo
+        ? {}
+        : { worktreesByRepo: nextWorktrees, sortEpoch: s.sortEpoch + 1 }
+    })
+
+    const settings = get().settings
+    await Promise.all(
+      Array.from(updatesByWorktreeId, async ([worktreeId, updates]) => {
+        try {
+          await persistWorktreeMeta(settings, worktreeId, updates)
+        } catch (err) {
+          console.error('Failed to update worktree meta:', err)
+          void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+        }
+      })
+    )
+  },
+
   markWorktreeUnread: (worktreeId) => {
     // Why: BEL must fire regardless of focus (ghostty semantics — "show
     // until interact"). Interaction with a pane inside the worktree

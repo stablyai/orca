@@ -1175,6 +1175,34 @@ describe('worktree remote runtime mutations', () => {
       force: true
     })
   })
+
+  it('applies batch metadata updates in one store transition', async () => {
+    const store = createTestStore()
+    const first = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    const second = makeWorktree({ id: 'repo1::/path/wt2', repoId: 'repo1', path: '/path/wt2' })
+    const subscriber = vi.fn()
+    store.setState({
+      worktreesByRepo: { repo1: [first, second] },
+      sortEpoch: 7
+    } as Partial<AppState>)
+
+    const unsubscribe = store.subscribe(subscriber)
+    await store.getState().updateWorktreesMeta(
+      new Map([
+        [first.id, { workspaceStatus: 'in-review' }],
+        [second.id, { workspaceStatus: 'completed' }]
+      ])
+    )
+    unsubscribe()
+
+    expect(store.getState().worktreesByRepo.repo1.map((w) => w.workspaceStatus)).toEqual([
+      'in-review',
+      'completed'
+    ])
+    expect(store.getState().sortEpoch).toBe(8)
+    expect(subscriber).toHaveBeenCalledTimes(1)
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledTimes(2)
+  })
 })
 
 // Why: ghostty "show until interact" model — BEL must raise the sidebar dot
