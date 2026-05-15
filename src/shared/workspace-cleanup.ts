@@ -6,6 +6,11 @@ export type WorkspaceCleanupTier = 'ready' | 'review' | 'protected'
 
 export type WorkspaceCleanupReason = 'archived' | 'idle-clean'
 
+export type WorkspaceCleanupInactivityInput = {
+  isArchived: boolean
+  lastActivityAt: number
+}
+
 export type WorkspaceCleanupBlocker =
   | 'main-worktree'
   | 'folder-repo'
@@ -144,6 +149,30 @@ export function createWorkspaceCleanupFingerprint(args: {
     args.gitClean === null ? 'unknown' : args.gitClean ? 'clean' : 'dirty',
     lastActivityBucket
   ].join('|')
+}
+
+export function getWorkspaceCleanupInactivityReasons(
+  workspace: WorkspaceCleanupInactivityInput,
+  scannedAt: number
+): WorkspaceCleanupReason[] {
+  const reasons: WorkspaceCleanupReason[] = []
+  if (
+    workspace.isArchived &&
+    scannedAt - workspace.lastActivityAt >= WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS
+  ) {
+    reasons.push('archived')
+  }
+  if (scannedAt - workspace.lastActivityAt >= WORKSPACE_CLEANUP_IDLE_MS) {
+    reasons.push('idle-clean')
+  }
+  return reasons
+}
+
+export function isWorkspaceOldForCleanup(
+  workspace: WorkspaceCleanupInactivityInput,
+  scannedAt: number
+): boolean {
+  return getWorkspaceCleanupInactivityReasons(workspace, scannedAt).length > 0
 }
 
 export function shouldHideWorkspaceCleanupCandidate(

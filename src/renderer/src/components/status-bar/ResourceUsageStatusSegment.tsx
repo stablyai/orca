@@ -33,12 +33,14 @@ import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { useAppStore } from '../../store'
-import { useWorktreeMap } from '../../store/selectors'
+import { useAllWorktrees, useWorktreeMap } from '../../store/selectors'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 import { runSleepWorktree } from '../sidebar/sleep-worktree-flow'
 import { useDaemonActions, DaemonActionDialog } from '../shared/useDaemonActions'
 import type { AppMemory, UsageValues, Worktree } from '../../../../shared/types'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
+import { isFolderRepo } from '../../../../shared/repo-kind'
+import { isWorkspaceOldForCleanup } from '../../../../shared/workspace-cleanup'
 import {
   mergeSnapshotAndSessions,
   UNATTRIBUTED_REPO_ID,
@@ -657,6 +659,7 @@ export function ResourceUsageStatusSegment({
   const setActiveView = useAppStore((s) => s.setActiveView)
   const openModal = useAppStore((s) => s.openModal)
   const repos = useAppStore((s) => s.repos)
+  const allWorktrees = useAllWorktrees()
 
   const [open, setOpen] = useState(false)
   const [sortOption, setSortOption] = useState<SortOption>('memory')
@@ -758,6 +761,23 @@ export function ResourceUsageStatusSegment({
     }
     return map
   }, [repos])
+
+  const repoById = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
+
+  const oldWorkspaceCount = useMemo(() => {
+    const now = Date.now()
+    let count = 0
+    for (const worktree of allWorktrees) {
+      const repo = repoById.get(worktree.repoId)
+      if (!repo || isFolderRepo(repo) || worktree.isMainWorktree) {
+        continue
+      }
+      if (isWorkspaceOldForCleanup(worktree, now)) {
+        count += 1
+      }
+    }
+    return count
+  }, [allWorktrees, repoById])
 
   // Why: skip the merge entirely when the popover is closed. The merged
   // tree is only ever displayed inside <PopoverContent>; computing it on
@@ -1284,7 +1304,7 @@ export function ResourceUsageStatusSegment({
           >
             <span className="inline-flex min-w-0 items-center gap-1.5">
               <ArchiveX className="size-3.5 shrink-0" />
-              <span className="truncate">Clean up old workspaces</span>
+              <span className="truncate">Clean up old workspaces ({oldWorkspaceCount})</span>
             </span>
             <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
           </button>

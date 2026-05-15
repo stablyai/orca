@@ -12,11 +12,11 @@ import type { GitStatusResult, GitWorktreeInfo, Repo, Worktree } from '../../sha
 import { mergeWorktree } from './worktree-logic'
 import { splitWorktreeId } from '../../shared/worktree-id'
 import {
-  WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS,
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
-  WORKSPACE_CLEANUP_IDLE_MS,
   applyWorkspaceCleanupPolicy,
   createWorkspaceCleanupFingerprint,
+  getWorkspaceCleanupInactivityReasons,
+  isWorkspaceOldForCleanup,
   type WorkspaceCleanupBlocker,
   type WorkspaceCleanupCandidate,
   type WorkspaceCleanupDismissArgs,
@@ -492,24 +492,14 @@ function isWorkspaceInactiveForCleanup(
   workspace: Pick<Worktree, 'isArchived' | 'lastActivityAt'>,
   scannedAt: number
 ): boolean {
-  return getInactivityReasons(workspace, scannedAt).length > 0
+  return isWorkspaceOldForCleanup(workspace, scannedAt)
 }
 
 function getInactivityReasons(
   workspace: Pick<Worktree, 'isArchived' | 'lastActivityAt'>,
   scannedAt: number
 ): WorkspaceCleanupReason[] {
-  const reasons: WorkspaceCleanupReason[] = []
-  if (
-    workspace.isArchived &&
-    scannedAt - workspace.lastActivityAt >= WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS
-  ) {
-    reasons.push('archived')
-  }
-  if (scannedAt - workspace.lastActivityAt >= WORKSPACE_CLEANUP_IDLE_MS) {
-    reasons.push('idle-clean')
-  }
-  return reasons
+  return getWorkspaceCleanupInactivityReasons(workspace, scannedAt)
 }
 
 async function mapWithConcurrency<T, R>(

@@ -29,7 +29,6 @@ import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { runSleepWorktrees } from '@/components/sidebar/sleep-worktree-flow'
 import {
-  WORKSPACE_CLEANUP_IDLE_MS,
   canSelectWorkspaceCleanupCandidate,
   type WorkspaceCleanupBlocker,
   type WorkspaceCleanupCandidate,
@@ -105,40 +104,33 @@ function formatScanNoticeMessage(errors: { repoId: string; message: string }[]):
     : `${errors.length} repositories could not be checked. Refresh to try again.`
 }
 
-function isOldWorkspaceCandidate(candidate: WorkspaceCleanupCandidate, scannedAt: number): boolean {
+function isOldWorkspaceCandidate(candidate: WorkspaceCleanupCandidate): boolean {
   if (candidate.blockers.includes('main-worktree') || candidate.blockers.includes('folder-repo')) {
     return false
   }
-  return (
-    candidate.reasons.includes('archived') ||
-    scannedAt - candidate.lastActivityAt >= WORKSPACE_CLEANUP_IDLE_MS
-  )
+  return candidate.reasons.includes('archived') || candidate.reasons.includes('idle-clean')
 }
 
 function compareCleanupCandidates(
   a: WorkspaceCleanupCandidate,
-  b: WorkspaceCleanupCandidate,
-  scannedAt: number
+  b: WorkspaceCleanupCandidate
 ): number {
-  const priorityA = getCleanupCandidatePriority(a, scannedAt)
-  const priorityB = getCleanupCandidatePriority(b, scannedAt)
+  const priorityA = getCleanupCandidatePriority(a)
+  const priorityB = getCleanupCandidatePriority(b)
   if (priorityA !== priorityB) {
     return priorityA - priorityB
   }
   return a.lastActivityAt - b.lastActivityAt
 }
 
-function getCleanupCandidatePriority(
-  candidate: WorkspaceCleanupCandidate,
-  scannedAt: number
-): number {
+function getCleanupCandidatePriority(candidate: WorkspaceCleanupCandidate): number {
   if (candidate.tier === 'ready') {
     return 0
   }
   if (candidate.reasons.length > 0) {
     return 1
   }
-  if (isOldWorkspaceCandidate(candidate, scannedAt)) {
+  if (isOldWorkspaceCandidate(candidate)) {
     return 2
   }
   return 3
@@ -197,12 +189,11 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   }, [open, scan, scan?.scannedAt, candidates])
 
   const visibleCandidates = useMemo(() => {
-    const scannedAt = scan?.scannedAt ?? Date.now()
     const rows = showKept
       ? candidates
       : candidates.filter((candidate) => !candidate.blockers.includes('dismissed'))
-    return [...rows].sort((a, b) => compareCleanupCandidates(a, b, scannedAt))
-  }, [candidates, scan?.scannedAt, showKept])
+    return [...rows].sort(compareCleanupCandidates)
+  }, [candidates, showKept])
   const groups = useMemo(
     () => ({
       ready: visibleCandidates.filter((candidate) => candidate.tier === 'ready'),
@@ -229,13 +220,10 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     [scan?.errors]
   )
   const readyCount = groups.ready.length
-  const oldCandidateCount = useMemo(() => {
-    const scannedAt = scan?.scannedAt ?? Date.now()
-    return candidates.filter((candidate) => isOldWorkspaceCandidate(candidate, scannedAt)).length
-  }, [candidates, scan?.scannedAt])
-  const oldCandidateCountLabel = scanNoticeMessage
-    ? `${oldCandidateCount}+`
-    : String(oldCandidateCount)
+  const oldCandidateCount = useMemo(
+    () => candidates.filter(isOldWorkspaceCandidate).length,
+    [candidates]
+  )
   const initialLoading = loading && !scan
 
   useEffect(() => {
@@ -389,42 +377,13 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
             ) : (
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/25 px-5 py-2.5">
                 <div className="min-w-0 text-xs leading-5 text-muted-foreground">
-                  {selectedCount > 0 ? (
+                  {oldCandidateCount > 0 ? (
                     <>
-                      <span className="font-medium text-foreground">
-                        {selectedCount} safe to remove
-                      </span>{' '}
-                      selected.
-                      {oldCandidateCount > selectedCount ? (
-                        <>
-                          {' '}
-                          {oldCandidateCountLabel} old workspace
-                          {oldCandidateCount === 1 ? '' : 's'} found.
-                        </>
-                      ) : null}
-                    </>
-                  ) : readyCount > 0 ? (
-                    <>
-                      <span className="font-medium text-foreground">
-                        {readyCount} safe to remove
-                      </span>{' '}
-                      found.
-                      {oldCandidateCount > readyCount ? (
-                        <>
-                          {' '}
-                          {oldCandidateCountLabel} old workspace
-                          {oldCandidateCount === 1 ? '' : 's'} found.
-                        </>
-                      ) : null}
-                    </>
-                  ) : oldCandidateCount > 0 ? (
-                    <>
-                      <span className="font-medium text-foreground">{oldCandidateCountLabel}</span>{' '}
-                      old workspace{oldCandidateCount === 1 ? '' : 's'} need review. None are safe
-                      to remove automatically.
+                      <span className="font-medium text-foreground">{oldCandidateCount}</span> old
+                      workspace{oldCandidateCount === 1 ? '' : 's'} found. {selectedCount} selected.
                     </>
                   ) : (
-                    'No workspaces selected.'
+                    'No old workspaces found.'
                   )}
                 </div>
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
