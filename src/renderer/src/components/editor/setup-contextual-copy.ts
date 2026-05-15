@@ -1,6 +1,10 @@
 import type { editor } from 'monaco-editor'
 import { formatCopiedSelectionWithContext, getContextualCopyLineRange } from './selection-copy'
-import { setPrimarySelectionText } from '@/lib/primary-selection'
+import {
+  PRIMARY_SELECTION_MAX_LENGTH,
+  isPrimarySelectionEnabled,
+  setPrimarySelectionText
+} from '@/lib/primary-selection'
 
 export function setupContextualCopy({
   editorInstance,
@@ -183,11 +187,32 @@ export function setupContextualCopy({
 
   const updatePrimarySelectionBuffer = (): void => {
     const model = editorInstance.getModel()
-    const selection = editorInstance.getSelection()
-    if (!model || !selection || selection.isEmpty()) {
+    const selections = editorInstance.getSelections()
+    if (!isPrimarySelectionEnabled() || !model || !selections?.length) {
       return
     }
-    setPrimarySelectionText(model.getValueInRange(selection))
+
+    const sortedSelections = selections.slice().sort((a, b) => {
+      if (a.startLineNumber !== b.startLineNumber) {
+        return a.startLineNumber - b.startLineNumber
+      }
+      return a.startColumn - b.startColumn
+    })
+
+    let totalLength = 0
+    for (const selection of sortedSelections) {
+      if (selection.isEmpty()) {
+        return
+      }
+      totalLength += model.getValueLengthInRange(selection)
+      if (totalLength > PRIMARY_SELECTION_MAX_LENGTH) {
+        return
+      }
+    }
+
+    setPrimarySelectionText(
+      sortedSelections.map((selection) => model.getValueInRange(selection)).join(model.getEOL())
+    )
   }
 
   const copySelectionWithContext = async (): Promise<boolean> => {
@@ -221,8 +246,10 @@ export function setupContextualCopy({
     void copySelectionWithContext()
   })
 
-  editorInstance.onDidChangeCursorSelection(() => {
-    updatePrimarySelectionBuffer()
+  editorInstance.onDidChangeCursorSelection((event) => {
+    if (event.source !== 'restoreState') {
+      updatePrimarySelectionBuffer()
+    }
     if (getSelectionKey() !== lastCopiedSelectionKey) {
       lastCopiedSelectionKey = null
     }

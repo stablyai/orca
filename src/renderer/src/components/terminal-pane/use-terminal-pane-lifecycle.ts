@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: terminal pane lifecycle wiring is intentionally co-located so PTY attach, theme sync, and runtime graph publication remain consistent for live terminals. */
 import { useEffect, useRef } from 'react'
-import type { IDisposable } from '@xterm/xterm'
+import type { IDisposable, Terminal } from '@xterm/xterm'
 import { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store'
 import {
@@ -44,7 +44,11 @@ import { isPaneReplaying, type ReplayingPanesRef } from './replay-guard'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import { registerRuntimeTerminalTab, scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { e2eConfig } from '@/lib/e2e-config'
-import { setPrimarySelectionText } from '@/lib/primary-selection'
+import {
+  PRIMARY_SELECTION_MAX_LENGTH,
+  isPrimarySelectionEnabled,
+  setPrimarySelectionText
+} from '@/lib/primary-selection'
 import {
   SPLIT_TERMINAL_PANE_EVENT,
   CLOSE_TERMINAL_PANE_EVENT,
@@ -132,6 +136,21 @@ type UseTerminalPaneLifecycleDeps = {
   // imperative managerRef.getPanes().length is not reactive, so without this
   // dispatcher structural changes wouldn't trigger dependent effects.
   setPaneCount: React.Dispatch<React.SetStateAction<number>>
+}
+
+function terminalSelectionExceedsPrimaryLimit(terminal: Terminal): boolean {
+  const range = terminal.getSelectionPosition()
+  if (!range) {
+    return false
+  }
+  const startY = Math.min(range.start.y, range.end.y)
+  const endY = Math.max(range.start.y, range.end.y)
+  const rowSpan = endY - startY
+  const cellEstimate =
+    rowSpan === 0
+      ? Math.abs(range.end.x - range.start.x)
+      : rowSpan * terminal.cols + Math.abs(range.end.x - range.start.x)
+  return cellEstimate > PRIMARY_SELECTION_MAX_LENGTH
 }
 
 type SplitStartupPayload = { command: string; env?: Record<string, string> }
@@ -475,12 +494,30 @@ export function useTerminalPaneLifecycle({
         // Why: skip empty selections so clicking to deselect doesn't clobber
         // whatever the user last copied elsewhere.
         const selectionDisposable = pane.terminal.onSelectionChange(() => {
+          const shouldWritePrimarySelection = isPrimarySelectionEnabled()
+          const shouldWriteClipboard = settingsRef.current?.terminalClipboardOnSelect === true
+          if (!shouldWritePrimarySelection && !shouldWriteClipboard) {
+            return
+          }
+          if (!pane.terminal.hasSelection()) {
+            return
+          }
+          if (
+            shouldWritePrimarySelection &&
+            !shouldWriteClipboard &&
+            terminalSelectionExceedsPrimaryLimit(pane.terminal)
+          ) {
+            return
+          }
+
           const selection = pane.terminal.getSelection()
           if (!selection) {
             return
           }
-          setPrimarySelectionText(selection)
-          if (!settingsRef.current?.terminalClipboardOnSelect) {
+          if (shouldWritePrimarySelection) {
+            setPrimarySelectionText(selection)
+          }
+          if (!shouldWriteClipboard) {
             return
           }
           void window.api.ui.writeClipboardText(selection).catch(() => {
