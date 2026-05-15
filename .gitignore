@@ -87,3 +87,6 @@ playwright-report/
 /.claude/skills/
 /.agents/skills/
 /skills-lock.json
+
+# Agent hook runtime endpoints (machine-local secrets)
+/agent-hooks/

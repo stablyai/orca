@@ -985,7 +985,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             onCheckedChange={() => toggleStatusBarItem('resource-usage')}
           >
             <Activity className="size-3.5" />
-            Resource Usage
+            Resource Manager
           </DropdownMenuCheckboxItem>
         </DropdownMenuContent>
       </DropdownMenu>

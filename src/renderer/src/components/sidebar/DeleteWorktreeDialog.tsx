@@ -35,6 +35,10 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
           : [],
     [modalData.worktreeIds, worktreeId]
   )
+  const onDeleted =
+    typeof modalData.onDeleted === 'function'
+      ? (modalData.onDeleted as (worktreeIds: string[]) => void)
+      : null
   const worktree = useMemo(
     () => (worktreeId ? (allWorktrees().find((item) => item.id === worktreeId) ?? null) : null),
     [allWorktrees, worktreeId]
@@ -146,7 +150,9 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
               toast.error('Force delete failed', {
                 description: result.error
               })
+              return
             }
+            onDeleted?.([worktreeId])
           })
           .catch((err: unknown) => {
             toast.error('Failed to delete worktree', {
@@ -154,15 +160,23 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
             })
           })
       } else {
-        for (const target of worktrees) {
-          runWorktreeDeleteWithToast(target.id, target.displayName)
-        }
+        void Promise.all(
+          worktrees.map((target) => runWorktreeDeleteWithToast(target.id, target.displayName))
+        ).then((results) => {
+          const deletedIds = worktrees
+            .filter((_, index) => results[index])
+            .map((target) => target.id)
+          if (deletedIds.length > 0) {
+            onDeleted?.(deletedIds)
+          }
+        })
       }
       closeModal()
     },
     [
       closeModal,
       dontAskAgain,
+      onDeleted,
       persistDontAskAgainPreference,
       removeWorktree,
       worktreeIds.length,

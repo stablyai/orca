@@ -49,6 +49,7 @@ import { TelemetryFirstLaunchSurface } from './components/TelemetryFirstLaunchSu
 import { ZoomOverlay } from './components/ZoomOverlay'
 import { shouldShowOnboarding } from './components/onboarding/should-show-onboarding'
 import { SshPassphraseDialog } from './components/settings/SshPassphraseDialog'
+import DeleteWorktreeDialog from './components/sidebar/DeleteWorktreeDialog'
 import {
   FloatingTerminalPanel,
   FloatingTerminalToggleButton
@@ -159,6 +160,7 @@ const TaskPage = lazy(() => import('./components/TaskPage'))
 const AutomationsPage = lazy(() => import('./components/automations/AutomationsPage'))
 const ActivityPrototypePage = lazy(() => import('./components/activity/ActivityPrototypePage'))
 const Settings = lazy(() => import('./components/settings/Settings'))
+const WorkspaceSpacePage = lazy(() => import('./components/workspace-space/WorkspaceSpacePage'))
 const QuickOpen = lazy(() => import('./components/QuickOpen'))
 const WorktreeJumpPalette = lazy(() => import('./components/WorktreeJumpPalette'))
 const NewWorkspaceComposerModal = lazy(() => import('./components/NewWorkspaceComposerModal'))
@@ -802,10 +804,10 @@ function App(): React.JSX.Element {
     activeWorktreeId !== null &&
     !hasTabBar &&
     effectiveActiveTabExpanded
-  // Why: Activity is a full-page navigation surface — same treatment as
-  // Settings — so the worktree sidebar is removed for that view, letting the
-  // thread list + agent terminal span edge-to-edge.
-  const showSidebar = activeView !== 'settings' && activeView !== 'activity'
+  // Why: Activity and Space are full-page navigation surfaces — same
+  // treatment as Settings — so the worktree sidebar is removed for those views.
+  const showSidebar =
+    activeView !== 'settings' && activeView !== 'activity' && activeView !== 'space'
   // Why: only the terminal workspace replaces the full-width titlebar with
   // split-column chrome. Full-page navigation views keep the draggable app
   // titlebar so their page-level controls can live in that window strip.
@@ -816,7 +818,8 @@ function App(): React.JSX.Element {
     activeView !== 'settings' &&
     activeView !== 'tasks' &&
     activeView !== 'activity' &&
-    activeView !== 'automations'
+    activeView !== 'automations' &&
+    activeView !== 'space'
 
   const handleToggleExpand = (): void => {
     if (!effectiveActiveTabId) {
@@ -903,7 +906,12 @@ function App(): React.JSX.Element {
 
       // Why: full-page navigation surfaces should not reveal the right sidebar;
       // they are designed as distraction-free content areas.
-      if (activeView === 'tasks' || activeView === 'activity' || activeView === 'automations') {
+      if (
+        activeView === 'tasks' ||
+        activeView === 'activity' ||
+        activeView === 'automations' ||
+        activeView === 'space'
+      ) {
         return
       }
 
@@ -1137,7 +1145,10 @@ function App(): React.JSX.Element {
 
   useEffect(() => {
     if (
-      (activeView === 'tasks' || activeView === 'activity' || activeView === 'automations') &&
+      (activeView === 'tasks' ||
+        activeView === 'activity' ||
+        activeView === 'automations' ||
+        activeView === 'space') &&
       rightSidebarOpen
     ) {
       // Why: hide the right sidebar immediately when entering full-page
@@ -1307,6 +1318,7 @@ function App(): React.JSX.Element {
                     {activeView === 'tasks' ? <TaskPage /> : null}
                     {activeView === 'automations' ? <AutomationsPage /> : null}
                     {activeView === 'activity' ? <ActivityPrototypePage /> : null}
+                    {activeView === 'space' ? <WorkspaceSpacePage /> : null}
                     {activeView === 'terminal' && !activeWorktreeId ? <Landing /> : null}
                   </Suspense>
                 </div>
@@ -1370,6 +1382,7 @@ function App(): React.JSX.Element {
       <TelemetryFirstLaunchSurface />
       <ZoomOverlay />
       <SshPassphraseDialog />
+      <DeleteWorktreeDialog />
       {onboarding && shouldShowOnboarding(onboarding) ? (
         <Suspense fallback={null}>
           <OnboardingFlow onboarding={onboarding} onOnboardingChange={setOnboarding} />

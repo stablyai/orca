@@ -52,6 +52,8 @@ const INSTALLED_CLI_STATUS: CliInstallStatus = {
 
 const GRANTED_COMPUTER_USE_STATUS: ComputerUsePermissionStatusResult = {
   platform: 'darwin',
+  helperAppPath: '/Applications/Orca Computer Use.app',
+  helperUnavailableReason: null,
   permissions: [
     { id: 'accessibility', status: 'granted' },
     { id: 'screenshots', status: 'granted' }
@@ -157,6 +159,8 @@ describe('onboarding feature setup runner', () => {
       getComputerUsePermissionStatus: vi.fn(
         async (): Promise<ComputerUsePermissionStatusResult> => ({
           platform: 'darwin',
+          helperAppPath: '/Applications/Orca Computer Use.app',
+          helperUnavailableReason: null,
           permissions: [
             { id: 'accessibility', status: 'not-granted' },
             { id: 'screenshots', status: 'granted' }

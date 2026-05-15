@@ -38,6 +38,7 @@ import type {
   RuntimeMobileMarkdownResponse
 } from '../shared/mobile-markdown-document'
 import type { RateLimitState } from '../shared/rate-limit-types'
+import type { WorkspaceSpaceAnalysis } from '../shared/workspace-space-types'
 import type { GhAuthDiagnostic } from '../shared/github-auth-types'
 import type {
   AddIssueCommentBySlugArgs,
@@ -487,6 +488,10 @@ const api = {
       ipcRenderer.on('worktree:remoteBranchConflict', listener)
       return () => ipcRenderer.removeListener('worktree:remoteBranchConflict', listener)
     }
+  },
+
+  workspaceSpace: {
+    analyze: (): Promise<WorkspaceSpaceAnalysis> => ipcRenderer.invoke('workspaceSpace:analyze')
   },
 
   pty: {

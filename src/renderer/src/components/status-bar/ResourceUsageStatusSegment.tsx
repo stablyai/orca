@@ -47,6 +47,7 @@ import {
   type UnifiedSessionRow,
   type UnifiedWorktreeRow
 } from './mergeSnapshotAndSessions'
+import { WorkspaceSpaceCompactPanel } from './WorkspaceSpaceCompactPanel'
 
 const POLL_MS = 2_000
 const SESSIONS_POLL_MS = 10_000
@@ -654,6 +655,7 @@ export function ResourceUsageStatusSegment({
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
   const setActiveView = useAppStore((s) => s.setActiveView)
+  const openSpacePage = useAppStore((s) => s.openSpacePage)
   const repos = useAppStore((s) => s.repos)
 
   const [open, setOpen] = useState(false)
@@ -985,6 +987,11 @@ export function ResourceUsageStatusSegment({
     }
   }, [killConfirm, refreshSessions])
 
+  const openSpaceResults = useCallback((): void => {
+    setOpen(false)
+    openSpacePage()
+  }, [openSpacePage])
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <Tooltip delayDuration={150}>
@@ -993,7 +1000,7 @@ export function ResourceUsageStatusSegment({
             <button
               type="button"
               className="inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
-              aria-label="Resource usage"
+              aria-label="Resource manager"
             >
               <MemoryStick className="size-3 text-muted-foreground" />
               {!iconOnly && (
@@ -1023,7 +1030,7 @@ export function ResourceUsageStatusSegment({
           </PopoverTrigger>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6}>
-          Resource usage — {memBadgeLabel} · {sessions.length} session
+          Resource Manager — {memBadgeLabel} · {sessions.length} session
           {sessions.length === 1 ? '' : 's'}
         </TooltipContent>
       </Tooltip>
@@ -1032,7 +1039,7 @@ export function ResourceUsageStatusSegment({
         side="top"
         align="end"
         sideOffset={8}
-        className="w-[26rem] p-0"
+        className="w-[26rem] max-w-[calc(100vw-2rem)] p-0"
         onOpenAutoFocus={(event) => event.preventDefault()}
         // Why: clicking a terminal row activates a tab, which causes xterm
         // to programmatically focus the terminal DOM node. Radix would
@@ -1041,13 +1048,10 @@ export function ResourceUsageStatusSegment({
         // outside-click (onPointerDownOutside default) and Escape.
         onFocusOutside={(event) => event.preventDefault()}
       >
-        {/* Why: header strip — title on the left, daemon-control icons on
-            the right. The tab switcher was removed because a single unified
-            list now covers what the two tabs used to show. */}
         <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-foreground">
-            <MemoryStick className="size-3 text-muted-foreground" />
-            <span>Resource Usage</span>
+          <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-foreground">
+            <MemoryStick className="size-3 shrink-0 text-muted-foreground" />
+            <span className="truncate">Resource Manager</span>
           </div>
 
           <div className="flex items-center gap-0.5">
@@ -1280,6 +1284,8 @@ export function ResourceUsageStatusSegment({
             </button>
           </div>
         )}
+
+        <WorkspaceSpaceCompactPanel onOpenFullPage={openSpaceResults} />
       </PopoverContent>
       {/* Why: Radix Dialog must not be a descendant of PopoverContent — when
           the popover unmounts (e.g. clicking outside, focus moving to the

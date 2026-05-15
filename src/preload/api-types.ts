@@ -165,6 +165,7 @@ import type {
 } from '../shared/claude-usage-types'
 import type { RateLimitState } from '../shared/rate-limit-types'
 import type { SpeechModelManifest, SpeechModelState } from '../shared/speech-types'
+import type { WorkspaceSpaceAnalysis } from '../shared/workspace-space-types'
 import type { GhAuthDiagnostic } from '../shared/github-auth-types'
 import type {
   SshConnectionState,
@@ -525,6 +526,9 @@ export type PreloadApi = {
     onRemoteBranchConflict: (
       callback: (data: WorktreeRemoteBranchConflictEvent) => void
     ) => () => void
+  }
+  workspaceSpace: {
+    analyze: () => Promise<WorkspaceSpaceAnalysis>
   }
   pty: {
     spawn: (opts: {

@@ -9,6 +9,8 @@ export type ComputerUsePermissionState = {
 
 export type ComputerUsePermissionStatusResult = {
   platform: NodeJS.Platform
+  helperAppPath: string | null
+  helperUnavailableReason: string | null
   permissions: ComputerUsePermissionState[]
 }
 

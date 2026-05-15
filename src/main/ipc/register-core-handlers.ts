@@ -27,6 +27,7 @@ import { registerComputerUsePermissionHandlers } from './computer-use-permission
 import { setTrustedBrowserRendererWebContentsId, setAgentBrowserBridgeRef } from './browser'
 import { registerSessionHandlers } from './session'
 import { registerSettingsHandlers } from './settings'
+import { registerWorkspaceSpaceHandlers } from './workspace-space'
 import { registerAutomationHandlers } from './automations'
 import { registerTelemetryHandlers } from './telemetry'
 import { registerBrowserHandlers } from './browser'
@@ -115,6 +116,7 @@ export function registerCoreHandlers(
   registerPetHandlers()
   registerSessionHandlers(store)
   registerUIHandlers(store)
+  registerWorkspaceSpaceHandlers(store)
   registerFilesystemHandlers(store)
   registerFilesystemWatcherHandlers()
   registerRuntimeHandlers(runtime)

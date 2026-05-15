@@ -41,7 +41,8 @@ const {
   registerHostedReviewHandlersMock,
   registerExportHandlersMock,
   registerOnboardingHandlersMock,
-  registerSpeechHandlersMock
+  registerSpeechHandlersMock,
+  registerWorkspaceSpaceHandlersMock
 } = vi.hoisted(() => ({
   registerCliHandlersMock: vi.fn(),
   registerPreflightHandlersMock: vi.fn(),
@@ -81,7 +82,8 @@ const {
   registerHostedReviewHandlersMock: vi.fn(),
   registerExportHandlersMock: vi.fn(),
   registerOnboardingHandlersMock: vi.fn(),
-  registerSpeechHandlersMock: vi.fn()
+  registerSpeechHandlersMock: vi.fn(),
+  registerWorkspaceSpaceHandlersMock: vi.fn()
 }))
 
 vi.mock('./onboarding', () => ({
@@ -150,6 +152,10 @@ vi.mock('./computer-use-permissions', () => ({
 
 vi.mock('./settings', () => ({
   registerSettingsHandlers: registerSettingsHandlersMock
+}))
+
+vi.mock('./workspace-space', () => ({
+  registerWorkspaceSpaceHandlers: registerWorkspaceSpaceHandlersMock
 }))
 
 vi.mock('./telemetry', () => ({
@@ -273,6 +279,7 @@ describe('registerCoreHandlers', () => {
     registerHostedReviewHandlersMock.mockReset()
     registerExportHandlersMock.mockReset()
     registerSpeechHandlersMock.mockReset()
+    registerWorkspaceSpaceHandlersMock.mockReset()
   })
 
   it('passes the store through to handler registrars that need it', () => {
@@ -315,6 +322,7 @@ describe('registerCoreHandlers', () => {
     expect(registerDeveloperPermissionHandlersMock).toHaveBeenCalled()
     expect(registerComputerUsePermissionHandlersMock).toHaveBeenCalled()
     expect(registerSettingsHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerWorkspaceSpaceHandlersMock).toHaveBeenCalledWith(store)
     expect(registerTelemetryHandlersMock).toHaveBeenCalledWith(store)
     expect(registerSessionHandlersMock).toHaveBeenCalledWith(store)
     expect(registerUIHandlersMock).toHaveBeenCalledWith(store)

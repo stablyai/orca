@@ -194,11 +194,12 @@ export type UISlice = {
   acknowledgedAgentsByPaneKey: Record<string, number>
   acknowledgeAgents: (paneKeys: string[]) => void
   unacknowledgeAgents: (paneKeys: string[]) => void
-  activeView: 'terminal' | 'settings' | 'tasks' | 'activity' | 'automations'
-  previousViewBeforeTasks: 'terminal' | 'settings' | 'activity' | 'automations'
-  previousViewBeforeSettings: 'terminal' | 'tasks' | 'activity' | 'automations'
-  previousViewBeforeActivity: 'terminal' | 'settings' | 'tasks' | 'automations'
-  previousViewBeforeAutomations: 'terminal' | 'settings' | 'tasks' | 'activity'
+  activeView: 'terminal' | 'settings' | 'tasks' | 'activity' | 'automations' | 'space'
+  previousViewBeforeTasks: 'terminal' | 'settings' | 'activity' | 'automations' | 'space'
+  previousViewBeforeSettings: 'terminal' | 'tasks' | 'activity' | 'automations' | 'space'
+  previousViewBeforeActivity: 'terminal' | 'settings' | 'tasks' | 'automations' | 'space'
+  previousViewBeforeAutomations: 'terminal' | 'settings' | 'tasks' | 'activity' | 'space'
+  previousViewBeforeSpace: 'terminal' | 'settings' | 'tasks' | 'activity' | 'automations'
   setActiveView: (view: UISlice['activeView']) => void
   taskPageData: {
     preselectedRepoId?: string
@@ -238,6 +239,8 @@ export type UISlice = {
   setSelectedAutomationId: (id: string | null) => void
   openAutomationsPage: () => void
   closeAutomationsPage: () => void
+  openSpacePage: () => void
+  closeSpacePage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
   openSettingsPage: () => void
@@ -423,6 +426,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   previousViewBeforeSettings: 'terminal',
   previousViewBeforeActivity: 'terminal',
   previousViewBeforeAutomations: 'terminal',
+  previousViewBeforeSpace: 'terminal',
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
   taskResumeState: undefined,
@@ -535,6 +539,16 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   closeAutomationsPage: () =>
     set((state) => ({
       activeView: state.previousViewBeforeAutomations
+    })),
+  openSpacePage: () =>
+    set((state) => ({
+      activeView: 'space',
+      previousViewBeforeSpace:
+        state.activeView === 'space' ? state.previousViewBeforeSpace : state.activeView
+    })),
+  closeSpacePage: () =>
+    set((state) => ({
+      activeView: state.previousViewBeforeSpace
     })),
   setNewWorkspaceDraft: (draft) => set({ newWorkspaceDraft: draft }),
   clearNewWorkspaceDraft: () => set({ newWorkspaceDraft: null }),

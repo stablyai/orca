@@ -446,3 +446,33 @@ describe('createUISlice feature tour nudge', () => {
     expect(store.getState().featureTourNudgeVisible).toBe(false)
   })
 })
+
+describe('createUISlice space navigation', () => {
+  it('returns to the tasks page after opening Space from an in-progress draft', () => {
+    const store = createUIStore()
+
+    store.getState().openTaskPage({ preselectedRepoId: 'repo-1' })
+    store.getState().openSpacePage()
+
+    expect(store.getState().activeView).toBe('space')
+    expect(store.getState().previousViewBeforeSpace).toBe('tasks')
+
+    store.getState().closeSpacePage()
+
+    expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('keeps the original return target when Space is reopened while already visible', () => {
+    const store = createUIStore()
+
+    store.getState().openTaskPage()
+    store.getState().openSpacePage()
+    store.getState().openSpacePage()
+
+    expect(store.getState().previousViewBeforeSpace).toBe('tasks')
+
+    store.getState().closeSpacePage()
+
+    expect(store.getState().activeView).toBe('tasks')
+  })
+})

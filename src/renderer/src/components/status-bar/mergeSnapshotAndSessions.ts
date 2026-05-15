@@ -4,7 +4,7 @@
    in ResourceUsageStatusSegment.tsx. Splitting would scatter logic that has
    exactly one consumer. See docs/resource-usage-merge-spec.md. */
 /**
- * Resource Usage popover merge helper.
+ * Resource Manager popover merge helper.
  *
  * Produces a single grouped list (repo → worktree → session) by unifying:
  *
