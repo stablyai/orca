@@ -22,6 +22,26 @@ export function isWindowsBatchScript(commandPath: string): boolean {
   return process.platform === 'win32' && /\.(cmd|bat)$/i.test(commandPath)
 }
 
+export const WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR = 'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
+
+export class UnsafeWindowsBatchArgumentsError extends Error {
+  constructor() {
+    super(WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR)
+    this.name = 'UnsafeWindowsBatchArgumentsError'
+  }
+}
+
+function hasUnsafeWindowsBatchSyntax(value: string): boolean {
+  return /[&|<>^"%!\r\n]/.test(value)
+}
+
+function quoteWindowsBatchToken(value: string): string {
+  if (hasUnsafeWindowsBatchSyntax(value)) {
+    throw new UnsafeWindowsBatchArgumentsError()
+  }
+  return `"${value}"`
+}
+
 /** Check whether an error is a Windows permission error (EACCES or EPERM). */
 export function isPermissionError(error: unknown): boolean {
   return (
@@ -103,18 +123,17 @@ export function grantDirAcl(dirPath: string, options?: { recursive?: boolean }):
  * Why /d: disables per-machine/user AutoRun registry commands so a background
  * spawn cannot inherit surprising side effects from the user's shell config.
  *
- * SAFETY: when the .cmd/.bat branch is taken, cmd.exe re-parses the combined
- * command line, so callers MUST only pass trusted/literal args. An arg
- * containing `&`, `|`, `^`, `<`, `>`, or unbalanced `"` can escape the
- * intended command and execute arbitrary cmd.exe syntax. Do not feed
- * user-supplied strings through this helper without first validating them.
+ * SAFETY: when the .cmd/.bat branch is taken, cmd.exe re-parses the command
+ * line. Args with cmd metacharacters are rejected instead of escaped because
+ * the agent prompt may contain arbitrary staged diff text.
  */
 export function getSpawnArgsForWindows(
   command: string,
   args: string[]
 ): { spawnCmd: string; spawnArgs: string[] } {
   if (isWindowsBatchScript(command)) {
-    return { spawnCmd: getCmdExePath(), spawnArgs: ['/d', '/c', command, ...args] }
+    const commandLine = [command, ...args].map(quoteWindowsBatchToken).join(' ')
+    return { spawnCmd: getCmdExePath(), spawnArgs: ['/d', '/s', '/c', commandLine] }
   }
   return { spawnCmd: command, spawnArgs: args }
 }

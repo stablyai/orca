@@ -138,6 +138,7 @@ import {
 import {
   clearProjectItemFieldValue,
   getProjectViewTable,
+  getWorkItemDetailsBySlug,
   listAccessibleProjects,
   listProjectViews,
   resolveProjectRef,
@@ -159,6 +160,7 @@ import type {
   ListIssueTypesBySlugArgs,
   ListLabelsBySlugArgs,
   ListProjectViewsArgs,
+  ProjectWorkItemDetailsBySlugArgs,
   ResolveProjectRefArgs,
   AddIssueCommentBySlugArgs,
   DeleteIssueCommentBySlugArgs,
@@ -4460,6 +4462,7 @@ export class OrcaRuntimeService {
     linkedGitHubPR?: number | null
     linkedGitLabMR?: number | null
     linkedBitbucketPR?: number | null
+    linkedGiteaPR?: number | null
   }): Promise<HostedReviewInfo | null> {
     const repo = await this.resolveRepoSelector(args.repoSelector)
     this.assertHostIntegrationRepoIsLocal(repo, 'hosted_review')
@@ -4468,7 +4471,8 @@ export class OrcaRuntimeService {
       branch: args.branch,
       linkedGitHubPR: args.linkedGitHubPR ?? null,
       linkedGitLabMR: args.linkedGitLabMR ?? null,
-      linkedBitbucketPR: args.linkedBitbucketPR ?? null
+      linkedBitbucketPR: args.linkedBitbucketPR ?? null,
+      linkedGiteaPR: args.linkedGiteaPR ?? null
     })
     if (review?.provider === 'github' && this.stats && !this.stats.hasCountedPR(review.url)) {
       this.stats.record({
@@ -4658,6 +4662,12 @@ export class OrcaRuntimeService {
     args: GetProjectViewTableArgs
   ): Promise<Awaited<ReturnType<typeof getProjectViewTable>>> {
     return getProjectViewTable(args)
+  }
+
+  async getGitHubProjectWorkItemDetailsBySlug(
+    args: ProjectWorkItemDetailsBySlugArgs
+  ): Promise<Awaited<ReturnType<typeof getWorkItemDetailsBySlug>>> {
+    return getWorkItemDetailsBySlug(args)
   }
 
   async updateGitHubProjectItemField(

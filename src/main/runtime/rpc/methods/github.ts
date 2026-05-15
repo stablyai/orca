@@ -142,6 +142,11 @@ const ProjectViewTable = z.object({
   queryOverride: OptionalString
 })
 
+const ProjectWorkItemDetailsBySlug = SlugRepo.extend({
+  number: z.number().int().positive(),
+  type: z.enum(['issue', 'pr'])
+})
+
 const ProjectRef = z.object({
   input: requiredString('Missing project reference')
 })
@@ -398,6 +403,11 @@ export const GITHUB_METHODS: RpcMethod[] = [
     name: 'github.project.viewTable',
     params: ProjectViewTable,
     handler: async (params, { runtime }) => runtime.getGitHubProjectViewTable(params)
+  }),
+  defineMethod({
+    name: 'github.project.workItemDetailsBySlug',
+    params: ProjectWorkItemDetailsBySlug,
+    handler: async (params, { runtime }) => runtime.getGitHubProjectWorkItemDetailsBySlug(params)
   }),
   defineMethod({
     name: 'github.project.updateItemField',

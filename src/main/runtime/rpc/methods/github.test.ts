@@ -467,6 +467,37 @@ describe('github RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: { ok: true, data: { rows: [] } } })
   })
 
+  it('fetches GitHub project work item details by slug on the runtime server', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getGitHubProjectWorkItemDetailsBySlug: vi.fn().mockResolvedValue({
+        ok: true,
+        item: { number: 9, title: 'Bug' }
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('github.project.workItemDetailsBySlug', {
+        owner: 'acme',
+        repo: 'orca',
+        number: 9,
+        type: 'issue'
+      })
+    )
+
+    expect(runtime.getGitHubProjectWorkItemDetailsBySlug).toHaveBeenCalledWith({
+      owner: 'acme',
+      repo: 'orca',
+      number: 9,
+      type: 'issue'
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { ok: true, item: { number: 9, title: 'Bug' } }
+    })
+  })
+
   it('updates GitHub project item fields on the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

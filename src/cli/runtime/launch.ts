@@ -1,4 +1,4 @@
-import { spawn as spawnProcess } from 'child_process'
+import { spawn as spawnProcess, type SpawnOptions } from 'child_process'
 import { dirname, resolve } from 'path'
 import { RuntimeClientError } from './types'
 
@@ -15,9 +15,10 @@ export function launchOrcaApp(): void {
 
   const overrideExecutable = process.env.ORCA_APP_EXECUTABLE
   if (typeof overrideExecutable === 'string' && overrideExecutable.trim().length > 0) {
-    spawnProcess(overrideExecutable, [], {
+    spawnProcess(overrideExecutable, getExecutableAppArgs(), {
       detached: true,
       stdio: 'ignore',
+      ...getExecutableSpawnOptions(overrideExecutable),
       env: stripElectronRunAsNode(process.env)
     }).unref()
     return
@@ -63,7 +64,7 @@ export function serveOrcaApp(
   } = {}
 ): Promise<number> {
   const executable = resolveForegroundOrcaExecutable()
-  const childArgs = ['--serve']
+  const childArgs = [...getExecutableAppArgs(), '--serve']
   if (args.json) {
     childArgs.push('--serve-json')
   }
@@ -83,6 +84,7 @@ export function serveOrcaApp(
   const child = spawnProcess(executable, childArgs, {
     cwd: resolveAppRoot(),
     stdio: 'inherit',
+    ...getExecutableSpawnOptions(executable),
     env: stripElectronRunAsNode(process.env)
   })
 
@@ -117,6 +119,14 @@ export function serveOrcaApp(
       reject(new RuntimeClientError('runtime_serve_failed', `Orca serve exited via ${signal}`))
     })
   })
+}
+
+function getExecutableAppArgs(): string[] {
+  return process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT === '1' ? [resolveAppRoot()] : []
+}
+
+function getExecutableSpawnOptions(executable: string): Pick<SpawnOptions, 'shell'> {
+  return process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(executable) ? { shell: true } : {}
 }
 
 function resolveAppRoot(): string {

@@ -1,3 +1,7 @@
+/* eslint-disable max-lines -- Why: this provider mirrors IGitProvider one
+   method per RPC call (~16 methods). Splitting it would only add
+   indirection — every method is a 1:1 forwarder to a relay RPC plus a
+   small amount of param plumbing. */
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type { IGitProvider } from './types'
 import hostedGitInfo from 'hosted-git-info'
@@ -10,6 +14,9 @@ import type {
   GitUpstreamStatus,
   GitWorktreeInfo
 } from '../../shared/types'
+import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
+import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import type { RemoteCommitMessageExecResult } from '../text-generation/commit-message-text-generation'
 
 export class SshGitProvider implements IGitProvider {
   private connectionId: string
@@ -36,6 +43,54 @@ export class SshGitProvider implements IGitProvider {
       worktreePath,
       message
     })) as { success: boolean; error?: string }
+  }
+
+  async getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null> {
+    const branchPromise = this.exec(['branch', '--show-current'], worktreePath).catch(() => ({
+      stdout: ''
+    }))
+    const [branchResult, summaryResult] = await Promise.all([
+      branchPromise,
+      this.exec(['diff', '--cached', '--name-status'], worktreePath)
+    ])
+    const stagedSummary = summaryResult.stdout.trim()
+    if (!stagedSummary) {
+      return null
+    }
+    const { stdout: stagedPatch } = await this.exec(
+      ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
+      worktreePath
+    )
+    return {
+      branch: branchResult.stdout.trim() || null,
+      stagedSummary,
+      stagedPatch
+    }
+  }
+
+  async executeCommitMessagePlan(
+    plan: CommitMessagePlan,
+    cwd: string,
+    timeoutMs: number
+  ): Promise<RemoteCommitMessageExecResult> {
+    return (await this.mux.request('agent.execNonInteractive', {
+      binary: plan.binary,
+      args: plan.args,
+      cwd,
+      stdin: plan.stdinPayload,
+      timeoutMs
+    })) as RemoteCommitMessageExecResult
+  }
+
+  async cancelGenerateCommitMessage(worktreePath: string): Promise<void> {
+    // Why: best-effort — the relay returns `{canceled: false}` when there is
+    // nothing in flight. Callers should not block UI updates on this.
+    try {
+      await this.mux.request('agent.cancelExec', { cwd: worktreePath })
+    } catch {
+      // Swallow: cancellation is a fire-and-forget user intent. The pending
+      // generateCommitMessage promise will still resolve with the kill result.
+    }
   }
 
   async getDiff(

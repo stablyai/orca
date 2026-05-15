@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: preflight tests share expensive process/preload mocks across
+   install, auth, agent detection, and refresh branches. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -6,14 +8,16 @@ const {
   execFileAsyncMock,
   hydrateShellPathMock,
   mergePathSegmentsMock,
-  getBitbucketAuthStatusMock
+  getBitbucketAuthStatusMock,
+  getGiteaAuthStatusMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   execFileMock: vi.fn(),
   execFileAsyncMock: vi.fn(),
   hydrateShellPathMock: vi.fn(),
   mergePathSegmentsMock: vi.fn(),
-  getBitbucketAuthStatusMock: vi.fn()
+  getBitbucketAuthStatusMock: vi.fn(),
+  getGiteaAuthStatusMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -41,6 +45,10 @@ vi.mock('../bitbucket/client', () => ({
   getBitbucketAuthStatus: getBitbucketAuthStatusMock
 }))
 
+vi.mock('../gitea/client', () => ({
+  getGiteaAuthStatus: getGiteaAuthStatusMock
+}))
+
 import {
   _resetPreflightCache,
   detectInstalledAgents,
@@ -52,6 +60,14 @@ type HandlerMap = Record<string, (_event?: unknown, args?: { force?: boolean }) 
 
 describe('preflight', () => {
   const handlers: HandlerMap = {}
+  const defaultBitbucketStatus = { configured: false, authenticated: false, account: null }
+  const defaultGiteaStatus = {
+    configured: false,
+    authenticated: false,
+    account: null,
+    baseUrl: null,
+    tokenConfigured: false
+  }
 
   beforeEach(() => {
     handleMock.mockReset()
@@ -59,11 +75,9 @@ describe('preflight', () => {
     hydrateShellPathMock.mockReset()
     mergePathSegmentsMock.mockReset()
     getBitbucketAuthStatusMock.mockReset()
-    getBitbucketAuthStatusMock.mockResolvedValue({
-      configured: false,
-      authenticated: false,
-      account: null
-    })
+    getGiteaAuthStatusMock.mockReset()
+    getBitbucketAuthStatusMock.mockResolvedValue(defaultBitbucketStatus)
+    getGiteaAuthStatusMock.mockResolvedValue(defaultGiteaStatus)
     _resetPreflightCache()
 
     for (const key of Object.keys(handlers)) {
@@ -92,7 +106,8 @@ describe('preflight', () => {
       git: { installed: true },
       gh: { installed: true, authenticated: true },
       glab: { installed: true, authenticated: true },
-      bitbucket: { configured: false, authenticated: false, account: null }
+      bitbucket: defaultBitbucketStatus,
+      gitea: defaultGiteaStatus
     })
     expect(execFileAsyncMock).toHaveBeenNthCalledWith(4, 'gh', ['auth', 'status'], {
       encoding: 'utf-8'
@@ -193,7 +208,8 @@ describe('preflight', () => {
       git: { installed: true },
       gh: { installed: true, authenticated: true },
       glab: { installed: true, authenticated: true },
-      bitbucket: { configured: false, authenticated: false, account: null }
+      bitbucket: defaultBitbucketStatus,
+      gitea: defaultGiteaStatus
     })
   })
 
@@ -219,13 +235,15 @@ describe('preflight', () => {
       git: { installed: true },
       gh: { installed: true, authenticated: false },
       glab: { installed: true, authenticated: true },
-      bitbucket: { configured: false, authenticated: false, account: null }
+      bitbucket: defaultBitbucketStatus,
+      gitea: defaultGiteaStatus
     })
     expect(refreshedStatus).toEqual({
       git: { installed: true },
       gh: { installed: true, authenticated: true },
       glab: { installed: true, authenticated: true },
-      bitbucket: { configured: false, authenticated: false, account: null }
+      bitbucket: defaultBitbucketStatus,
+      gitea: defaultGiteaStatus
     })
   })
 

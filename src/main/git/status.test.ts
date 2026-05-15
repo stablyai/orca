@@ -33,6 +33,7 @@ import {
   discardChanges,
   getBranchCompare,
   getDiff,
+  getStagedCommitContext,
   getStatus,
   isWithinWorktree
 } from './status'
@@ -403,6 +404,39 @@ describe('getStatus', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(result.upstreamStatus).toEqual({ hasUpstream: false, ahead: 0, behind: 0 })
+  })
+})
+
+describe('getStagedCommitContext', () => {
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+  })
+
+  it('uses explicit large buffers before prompt truncation', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature/ai\n' })
+      .mockResolvedValueOnce({ stdout: 'M\tREADME.md\n' })
+      .mockResolvedValueOnce({ stdout: 'diff --git a/README.md b/README.md\n+hello\n' })
+
+    const result = await getStagedCommitContext('/repo')
+
+    expect(result).toEqual({
+      branch: 'feature/ai',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: 'diff --git a/README.md b/README.md\n+hello\n'
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['diff', '--cached', '--name-status'], {
+      cwd: '/repo',
+      maxBuffer: 10 * 1024 * 1024
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
+      3,
+      ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
+      {
+        cwd: '/repo',
+        maxBuffer: 10 * 1024 * 1024
+      }
+    )
   })
 })
 

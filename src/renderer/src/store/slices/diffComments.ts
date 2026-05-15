@@ -3,6 +3,7 @@ import type { AppState } from '../types'
 import type { DiffComment, Worktree } from '../../../../shared/types'
 import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export type DiffCommentsSlice = {
   getDiffComments: (worktreeId: string | null | undefined) => DiffComment[]
@@ -12,7 +13,7 @@ export type DiffCommentsSlice = {
 }
 
 function generateId(): string {
-  return globalThis.crypto.randomUUID()
+  return createBrowserUuid()
 }
 
 // Why: return a stable reference when no comments exist so selectors don't

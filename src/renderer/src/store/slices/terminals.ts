@@ -30,6 +30,7 @@ import {
 import { normalizeTerminalLayoutSnapshot } from '@/components/terminal-pane/terminal-layout-leaf-ids'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 function getNextTerminalOrdinal(tabs: TerminalTab[]): number {
   const usedOrdinals = new Set<number>()
@@ -378,7 +379,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           `[createTab] tabId hint ${hintedId} already exists; minting a fresh id (hook attribution will degrade for this terminal)`
         )
       }
-      const id = hintedId !== undefined && !idCollides ? hintedId : globalThis.crypto.randomUUID()
+      const id = hintedId !== undefined && !idCollides ? hintedId : createBrowserUuid()
       const shouldActivate = options?.activate !== false
       const nextOrdinal = getNextTerminalOrdinal(existing)
       const defaultTitle = `Terminal ${nextOrdinal}`

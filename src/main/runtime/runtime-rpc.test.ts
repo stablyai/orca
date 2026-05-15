@@ -255,7 +255,8 @@ describe('OrcaRuntimeRpcServer', () => {
       runtime,
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      webClientRoot: userDataPath
     })
 
     await server.start()
@@ -274,6 +275,63 @@ describe('OrcaRuntimeRpcServer', () => {
     await server.stop()
   })
 
+  it('includes a web client URL when the web bundle is served by the runtime', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0,
+      webClientRoot: userDataPath
+    })
+
+    await server.start()
+
+    try {
+      const offer = server.createPairingOffer({ address: '100.64.1.20', name: 'Web test' })
+      expect(offer.available).toBe(true)
+      if (offer.available) {
+        expect(offer.webClientUrl).toBeTruthy()
+        const url = new URL(offer.webClientUrl!)
+        expect(url.protocol).toBe('http:')
+        expect(url.hostname).toBe('100.64.1.20')
+        expect(url.pathname).toBe('/web-index.html')
+        expect(url.search).toBe('')
+        expect(url.hash).toBe(`#pairing=${encodeURIComponent(offer.pairingUrl)}`)
+      }
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('preserves proxy path prefixes in web client URLs', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0,
+      webClientRoot: userDataPath
+    })
+
+    await server.start()
+
+    try {
+      const offer = server.createPairingOffer({
+        address: 'wss://runtime.example.com/orca',
+        name: 'Proxy test'
+      })
+      expect(offer.available).toBe(true)
+      if (offer.available) {
+        expect(offer.webClientUrl).toContain('https://runtime.example.com/orca/web-index.html')
+      }
+    } finally {
+      await server.stop()
+    }
+  })
+
   it('formats pairing-address overrides for IPv6 and host-port tunnel endpoints', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
@@ -281,7 +339,8 @@ describe('OrcaRuntimeRpcServer', () => {
       runtime,
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      webClientRoot: userDataPath
     })
 
     await server.start()
@@ -323,7 +382,8 @@ describe('OrcaRuntimeRpcServer', () => {
       runtime,
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      webClientRoot: userDataPath
     })
 
     await server.start()
@@ -340,6 +400,7 @@ describe('OrcaRuntimeRpcServer', () => {
       }
 
       expect(server.getDeviceRegistry()?.getDevice(offer.deviceId)?.scope).toBe('mobile')
+      expect(offer.webClientUrl).toBeNull()
       const parsed = parsePairingCode(offer.pairingUrl)
       expect(parsed?.endpoint).toBe(offer.endpoint)
       expect(parsed?.endpoint).toContain('100.64.1.20')

@@ -1404,6 +1404,10 @@ export type GlobalSettings = {
    *  landed won't have the key; `getDefaultSettings()` hydrates the empty
    *  default via the persistence merge. */
   githubProjects?: GitHubProjectSettings
+  /** AI-generated commit messages: agent + model + per-model thinking +
+   *  user-customizable prompt suffix. Optional so existing profiles do not
+   *  require a migration step before this feature lands. */
+  commitMessageAi?: CommitMessageAiSettings
   /** GitLab project preferences — pinned + recent project paths.
    *  Optional for backward compatibility with profiles saved before
    *  GitLab support; the persistence merge fills the empty default. */
@@ -1441,6 +1445,22 @@ export type GlobalSettings = {
    *  effectively present at runtime — the renderer should still fall back to
    *  defaults when reading optional sub-fields. */
   voice?: VoiceSettings
+}
+
+export type CommitMessageAiSettings = {
+  enabled: boolean
+  /** A TuiAgent id, the literal `'custom'` for a user-supplied command, or null. */
+  agentId: TuiAgent | 'custom' | null
+  /** Per-agent: switching agents preserves the previously-picked model. */
+  selectedModelByAgent: Partial<Record<TuiAgent, string>>
+  /** Per-model: thinking effort depends on the model, not the agent. Keyed by model id. */
+  selectedThinkingByModel: Record<string, string>
+  /** Optional user-provided suffix appended to the base prompt (style overrides, etc.). */
+  customPrompt: string
+  /** Command template used when `agentId === 'custom'`. Tokenized POSIX-style;
+   *  `{prompt}` is substituted with the diff prompt (argv delivery). When the
+   *  template has no `{prompt}`, the prompt is piped via stdin. */
+  customAgentCommand: string
 }
 
 export type GhosttyImportPreview = {

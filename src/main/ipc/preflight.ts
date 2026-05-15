@@ -6,6 +6,7 @@ import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import type { PathSource, ShellHydrationFailureReason } from '../../shared/types'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
 import { getBitbucketAuthStatus } from '../bitbucket/client'
+import { getGiteaAuthStatus } from '../gitea/client'
 import { getActiveMultiplexer } from './ssh'
 
 const execFileAsync = promisify(execFile)
@@ -19,6 +20,13 @@ export type PreflightStatus = {
   // gate on `glab?.authenticated`.
   glab?: { installed: boolean; authenticated: boolean }
   bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
+  gitea?: {
+    configured: boolean
+    authenticated: boolean
+    account: string | null
+    baseUrl: string | null
+    tokenConfigured: boolean
+  }
 }
 
 // Why: cache the result so repeated Landing mounts don't re-spawn processes.
@@ -106,6 +114,17 @@ export async function refreshShellPathAndDetectAgents(): Promise<RefreshAgentsRe
   }
 }
 
+export async function detectRemoteAgents(args: { connectionId: string }): Promise<string[]> {
+  const mux = getActiveMultiplexer(args.connectionId)
+  if (!mux || mux.isDisposed()) {
+    throw new Error(`No active SSH connection for "${args.connectionId}"`)
+  }
+  const result = (await mux.request('preflight.detectAgents', {
+    commands: KNOWN_AGENT_COMMANDS
+  })) as { agents: string[] }
+  return result.agents
+}
+
 async function isGhAuthenticated(): Promise<boolean> {
   try {
     await execFileAsync('gh', ['auth', 'status'], {
@@ -150,17 +169,19 @@ export async function runPreflightCheck(force = false): Promise<PreflightStatus>
     isCommandAvailable('glab')
   ])
 
-  const [ghAuthenticated, glabAuthenticated, bitbucket] = await Promise.all([
+  const [ghAuthenticated, glabAuthenticated, bitbucket, gitea] = await Promise.all([
     ghInstalled ? isGhAuthenticated() : Promise.resolve(false),
     glabInstalled ? isGlabAuthenticated() : Promise.resolve(false),
-    getBitbucketAuthStatus()
+    getBitbucketAuthStatus(),
+    getGiteaAuthStatus()
   ])
 
   cached = {
     git: { installed: gitInstalled },
     gh: { installed: ghInstalled, authenticated: ghAuthenticated },
     glab: { installed: glabInstalled, authenticated: glabAuthenticated },
-    bitbucket
+    bitbucket,
+    gitea
   }
 
   return cached
@@ -189,14 +210,7 @@ export function registerPreflightHandlers(): void {
   ipcMain.handle(
     'preflight:detectRemoteAgents',
     async (_event, args: { connectionId: string }): Promise<string[]> => {
-      const mux = getActiveMultiplexer(args.connectionId)
-      if (!mux || mux.isDisposed()) {
-        throw new Error(`No active SSH connection for "${args.connectionId}"`)
-      }
-      const result = (await mux.request('preflight.detectAgents', {
-        commands: KNOWN_AGENT_COMMANDS
-      })) as { agents: string[] }
-      return result.agents
+      return detectRemoteAgents(args)
     }
   )
 }

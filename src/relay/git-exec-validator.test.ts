@@ -23,6 +23,8 @@ describe('validateGitExecArgs', () => {
       [['symbolic-ref', 'HEAD']],
       [['symbolic-ref', '--short', 'HEAD']],
       [['merge-base', 'main', 'HEAD']],
+      [['diff', '--cached', '--name-status']],
+      [['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff']],
       [['ls-files', '--error-unmatch', 'foo.txt']],
       [['config', '--get', 'user.name']],
       [['config', '--get-all', 'remote.origin.url']],
@@ -187,6 +189,21 @@ describe('validateGitExecArgs', () => {
 
     it('catches --delete=value compound syntax', () => {
       expectBlocked(['symbolic-ref', '--delete=HEAD'], 'git symbolic-ref write operations')
+    })
+  })
+
+  describe('git diff', () => {
+    it('rejects unstaged diff reads', () => {
+      expectBlocked(['diff', '--name-status'], 'restricted to staged changes')
+    })
+
+    it('rejects arbitrary refs and pathspecs', () => {
+      expectBlocked(['diff', '--cached', 'HEAD~1'], 'git diff flag not allowed')
+      expectBlocked(['diff', '--cached', '--', 'src/file.ts'], 'git diff flag not allowed')
+    })
+
+    it('rejects no-index reads', () => {
+      expectBlocked(['diff', '--cached', '--no-index', '/etc/passwd'], 'git diff flag not allowed')
     })
   })
 })

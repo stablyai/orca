@@ -1071,6 +1071,13 @@ const api = {
       gh: { installed: boolean; authenticated: boolean }
       glab?: { installed: boolean; authenticated: boolean }
       bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
+      gitea?: {
+        configured: boolean
+        authenticated: boolean
+        account: string | null
+        baseUrl: string | null
+        tokenConfigured: boolean
+      }
       linear: { connected: boolean }
     }> => ipcRenderer.invoke('preflight:check', args),
     detectAgents: (): Promise<string[]> => ipcRenderer.invoke('preflight:detectAgents'),
@@ -1803,6 +1810,14 @@ const api = {
       message: string
       connectionId?: string
     }): Promise<{ success: boolean; error?: string }> => ipcRenderer.invoke('git:commit', args),
+    generateCommitMessage: (args: {
+      worktreePath: string
+      connectionId?: string
+    }): Promise<unknown> => ipcRenderer.invoke('git:generateCommitMessage', args),
+    cancelGenerateCommitMessage: (args: {
+      worktreePath: string
+      connectionId?: string
+    }): Promise<void> => ipcRenderer.invoke('git:cancelGenerateCommitMessage', args),
     stage: (args: {
       worktreePath: string
       filePath: string
@@ -2606,6 +2621,20 @@ const api = {
           deviceId: string
         }
     > => ipcRenderer.invoke('mobile:getPairingQR', args),
+
+    getRuntimePairingUrl: (args?: {
+      address?: string
+      rotate?: boolean
+    }): Promise<
+      | { available: false }
+      | {
+          available: true
+          pairingUrl: string
+          webClientUrl: string | null
+          endpoint: string
+          deviceId: string
+        }
+    > => ipcRenderer.invoke('mobile:getRuntimePairingUrl', args),
 
     listDevices: (): Promise<{
       devices: { deviceId: string; name: string; pairedAt: number; lastSeenAt: number }[]

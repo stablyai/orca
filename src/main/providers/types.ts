@@ -11,6 +11,7 @@ import type {
   SearchOptions,
   SearchResult
 } from '../../shared/types'
+import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 
 // ─── PTY Provider ───────────────────────────────────────────────────
@@ -143,6 +144,7 @@ export type IFilesystemProvider = {
 export type IGitProvider = {
   getStatus(worktreePath: string): Promise<GitStatusResult>
   commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>
+  getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null>
   getDiff(
     worktreePath: string,
     filePath: string,

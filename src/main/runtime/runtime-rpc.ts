@@ -35,6 +35,7 @@ type OrcaRuntimeRpcServerOptions = {
   platform?: NodeJS.Platform
   enableWebSocket?: boolean
   wsPort?: number
+  webClientRoot?: string
   // Why: test-only overrides for the two time-bound constants below.
   // Production callers must not pass these — defaults are set by the design
   // doc (§3.1) and changing them in production would weaken the admission
@@ -96,6 +97,24 @@ function parsePairingAddressOverride(address: string): { host: string; port: str
 function formatWebSocketUrl(url: URL): string {
   const formatted = url.toString()
   return url.pathname === '/' && !url.search && !url.hash ? formatted.replace(/\/$/, '') : formatted
+}
+
+function createWebClientUrl(endpoint: string, pairingUrl: string): string {
+  const url = new URL(endpoint)
+  url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:'
+  url.pathname = webClientPathForEndpoint(url.pathname)
+  url.search = ''
+  // Why: pairing URLs include full runtime credentials. Keeping them in the
+  // fragment avoids proxy logs and Referer headers while the web app loads.
+  url.hash = `pairing=${encodeURIComponent(pairingUrl)}`
+  return url.toString()
+}
+
+function webClientPathForEndpoint(pathname: string): string {
+  if (!pathname || pathname === '/') {
+    return '/web-index.html'
+  }
+  return `${pathname.replace(/\/$/, '')}/web-index.html`
 }
 
 const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
@@ -165,6 +184,7 @@ export class OrcaRuntimeRpcServer {
   private readonly platform: NodeJS.Platform
   private readonly enableWebSocket: boolean
   private readonly wsPort: number
+  private readonly webClientRoot: string | undefined
   private readonly authToken = randomBytes(24).toString('hex')
   private readonly keepaliveIntervalMs: number
   private readonly longPollCap: number
@@ -197,6 +217,7 @@ export class OrcaRuntimeRpcServer {
     platform = process.platform,
     enableWebSocket = false,
     wsPort = DEFAULT_WS_PORT,
+    webClientRoot,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
     longPollCap = LONG_POLL_CAP
   }: OrcaRuntimeRpcServerOptions) {
@@ -207,6 +228,7 @@ export class OrcaRuntimeRpcServer {
     this.platform = platform
     this.enableWebSocket = enableWebSocket
     this.wsPort = wsPort
+    this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.longPollCap = longPollCap
   }
@@ -248,7 +270,13 @@ export class OrcaRuntimeRpcServer {
     scope?: DeviceScope
   }):
     | { available: false }
-    | { available: true; pairingUrl: string; endpoint: string; deviceId: string } {
+    | {
+        available: true
+        pairingUrl: string
+        endpoint: string
+        deviceId: string
+        webClientUrl: string | null
+      } {
     const rawEndpoint = this.getWebSocketEndpoint()
     const publicKeyB64 = this.getE2EEPublicKey()
     if (!rawEndpoint || !this.deviceRegistry || !publicKeyB64) {
@@ -267,7 +295,14 @@ export class OrcaRuntimeRpcServer {
       deviceToken: device.token,
       publicKeyB64
     })
-    return { available: true, pairingUrl, endpoint, deviceId: device.deviceId }
+    return {
+      available: true,
+      pairingUrl,
+      endpoint,
+      deviceId: device.deviceId,
+      webClientUrl:
+        this.webClientRoot && scope === 'runtime' ? createWebClientUrl(endpoint, pairingUrl) : null
+    }
   }
 
   private registerBinaryStreamHandler(
@@ -384,7 +419,8 @@ export class OrcaRuntimeRpcServer {
 
         const wsTransport = new WebSocketTransport({
           host: '0.0.0.0',
-          port: this.wsPort
+          port: this.wsPort,
+          staticRoot: this.webClientRoot
         })
         this.wsTransport = wsTransport
 

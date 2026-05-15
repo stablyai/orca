@@ -1,5 +1,5 @@
-/* eslint-disable max-lines -- Why: this pane co-locates GitHub, GitLab,
-   and Linear integration cards so the preflight-check + status-badge +
+/* eslint-disable max-lines -- Why: this pane co-locates source-host and
+   Linear integration cards so the preflight-check + status-badge +
    install/auth-prompt scaffolding lives in one place rather than fanning
    out across per-integration files that would each repeat the same
    pattern. Splitting buys nothing while the surface stays this narrow. */
@@ -54,6 +54,11 @@ export const INTEGRATIONS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     keywords: ['bitbucket', 'integration', 'pull request', 'api token']
   },
   {
+    title: 'Gitea Integration',
+    description: 'Gitea authentication via API token environment variables.',
+    keywords: ['gitea', 'self-hosted', 'integration', 'pull request', 'api token']
+  },
+  {
     title: 'Linear Integration',
     description: 'Connect Linear to browse and link issues.',
     keywords: ['linear', 'integration', 'api key', 'connect', 'disconnect']
@@ -65,6 +70,25 @@ type GhStatus = 'checking' | 'connected' | 'not-installed' | 'not-authenticated'
 // modes (probe in-flight / installed-but-unauth / missing entirely).
 type GlabStatus = GhStatus
 type BitbucketStatus = 'checking' | 'connected' | 'not-configured' | 'not-authenticated'
+type GiteaStatus = 'checking' | 'configured' | 'not-configured' | 'not-authenticated'
+
+type GiteaPreflightStatus = {
+  configured: boolean
+  authenticated: boolean
+  account: string | null
+  baseUrl: string | null
+  tokenConfigured: boolean
+}
+
+function giteaStatusFromPreflight(status: GiteaPreflightStatus | undefined): GiteaStatus {
+  if (!status?.configured) {
+    return 'not-configured'
+  }
+  if (status.tokenConfigured && !status.authenticated) {
+    return 'not-authenticated'
+  }
+  return 'configured'
+}
 
 export function IntegrationsPane(): React.JSX.Element {
   const linearStatus = useAppStore((s) => s.linearStatus)
@@ -77,6 +101,9 @@ export function IntegrationsPane(): React.JSX.Element {
   const [glabStatus, setGlabStatus] = useState<GlabStatus>('checking')
   const [bitbucketStatus, setBitbucketStatus] = useState<BitbucketStatus>('checking')
   const [bitbucketAccount, setBitbucketAccount] = useState<string | null>(null)
+  const [giteaStatus, setGiteaStatus] = useState<GiteaStatus>('checking')
+  const [giteaAccount, setGiteaAccount] = useState<string | null>(null)
+  const [giteaBaseUrl, setGiteaBaseUrl] = useState<string | null>(null)
   const [linearDialogOpen, setLinearDialogOpen] = useState(false)
   const [linearApiKeyDraft, setLinearApiKeyDraft] = useState('')
   const [linearConnectState, setLinearConnectState] = useState<'idle' | 'connecting' | 'error'>(
@@ -118,6 +145,10 @@ export function IntegrationsPane(): React.JSX.Element {
       } else {
         setBitbucketStatus('connected')
       }
+      const gitea = status.gitea
+      setGiteaAccount(gitea?.account ?? null)
+      setGiteaBaseUrl(gitea?.baseUrl ?? null)
+      setGiteaStatus(giteaStatusFromPreflight(gitea))
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot mount check
   }, [])
@@ -207,6 +238,16 @@ export function IntegrationsPane(): React.JSX.Element {
       } else {
         setBitbucketStatus('connected')
       }
+    })
+  }
+
+  const handleRefreshGitea = (): void => {
+    setGiteaStatus('checking')
+    void window.api.preflight.check({ force: true }).then((status) => {
+      const gitea = status.gitea
+      setGiteaAccount(gitea?.account ?? null)
+      setGiteaBaseUrl(gitea?.baseUrl ?? null)
+      setGiteaStatus(giteaStatusFromPreflight(gitea))
     })
   }
 
@@ -440,6 +481,90 @@ export function IntegrationsPane(): React.JSX.Element {
                     Learn more
                   </Button>
                   <Button variant="ghost" size="sm" onClick={handleRefreshBitbucket}>
+                    Re-check
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Gitea */}
+      <div className="rounded-md border border-border/50 bg-muted/30 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <GitPullRequestArrow className="size-5 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <p className="text-sm font-medium">Gitea</p>
+            <p className="text-xs text-muted-foreground">
+              {giteaStatus === 'configured'
+                ? giteaAccount
+                  ? `${giteaAccount} · Pull requests and commit statuses`
+                  : giteaBaseUrl
+                    ? `${giteaBaseUrl} · Pull requests and commit statuses`
+                    : 'Pull requests and commit statuses for detected repositories'
+                : 'Pull requests and commit statuses via the Gitea REST API.'}
+            </p>
+          </div>
+          {giteaStatus === 'checking' ? (
+            <LoaderCircle className="size-4 shrink-0 animate-spin text-muted-foreground" />
+          ) : giteaStatus === 'configured' ? (
+            <span className="shrink-0 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+              {giteaAccount ? 'Connected' : 'Configured'}
+            </span>
+          ) : (
+            <span className="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+              {giteaStatus === 'not-configured' ? 'Optional setup' : 'Auth failed'}
+            </span>
+          )}
+        </div>
+
+        {giteaStatus !== 'checking' && giteaStatus !== 'configured' && (
+          <div className="mt-3 rounded-md border border-border/30 bg-background/50 px-3 py-2.5 space-y-2">
+            {giteaStatus === 'not-configured' ? (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  Public repositories are detected from their git remote. Set{' '}
+                  <span className="font-mono text-[11px]">ORCA_GITEA_TOKEN</span> for private
+                  repositories, and set{' '}
+                  <span className="font-mono text-[11px]">ORCA_GITEA_API_BASE_URL</span> only when
+                  Orca cannot derive the API URL from the remote.
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      window.api.shell.openUrl('https://docs.gitea.com/next/development/api-usage')
+                    }
+                  >
+                    <ExternalLink className="size-3.5 mr-1.5" />
+                    Learn more
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={handleRefreshGitea}>
+                    Re-check
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  Gitea credentials are configured but could not authenticate. Check the token, API
+                  base URL, and repository permissions, then restart Orca if environment variables
+                  changed.
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      window.api.shell.openUrl('https://docs.gitea.com/next/development/api-usage')
+                    }
+                  >
+                    <ExternalLink className="size-3.5 mr-1.5" />
+                    Learn more
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={handleRefreshGitea}>
                     Re-check
                   </Button>
                 </div>

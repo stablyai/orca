@@ -11,6 +11,7 @@ import { VisuallyHidden } from 'radix-ui'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   useTeamStates,
   useTeamLabels,
@@ -447,7 +448,7 @@ function CommentFooter({
       if (typed.ok) {
         setBody('')
         onCommentAdded({
-          id: typed.id ?? crypto.randomUUID(),
+          id: typed.id ?? createBrowserUuid(),
           body: trimmed,
           createdAt: new Date().toISOString()
         })

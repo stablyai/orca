@@ -54,6 +54,82 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(commitResult)
   })
 
+  it('getStagedCommitContext reads branch, staged summary, and staged patch remotely', async () => {
+    mux.request.mockImplementation(async (method, payload) => {
+      expect(method).toBe('git.exec')
+      if (payload.args[1] === '--show-current') {
+        return { stdout: 'feature/ai-commit\n' }
+      }
+      if (payload.args[2] === '--name-status') {
+        return { stdout: 'M\tREADME.md\n' }
+      }
+      if (payload.args[2] === '--patch') {
+        return { stdout: 'diff --git a/README.md b/README.md\n+hello' }
+      }
+      throw new Error(`unexpected args: ${payload.args.join(' ')}`)
+    })
+
+    const result = await provider.getStagedCommitContext('/home/user/repo')
+
+    expect(result).toEqual({
+      branch: 'feature/ai-commit',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: 'diff --git a/README.md b/README.md\n+hello'
+    })
+    expect(mux.request).toHaveBeenCalledWith('git.exec', {
+      args: ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
+      cwd: '/home/user/repo'
+    })
+  })
+
+  it('getStagedCommitContext returns null when nothing is staged', async () => {
+    mux.request.mockImplementation(async (_method, payload) => {
+      if (payload.args[1] === '--show-current') {
+        return { stdout: 'main\n' }
+      }
+      return { stdout: '' }
+    })
+
+    await expect(provider.getStagedCommitContext('/home/user/repo')).resolves.toBeNull()
+    expect(mux.request).toHaveBeenCalledTimes(2)
+  })
+
+  it('executeCommitMessagePlan delegates the prepared plan to the relay', async () => {
+    const execResult = {
+      stdout: 'Update docs',
+      stderr: '',
+      exitCode: 0,
+      timedOut: false
+    }
+    mux.request.mockResolvedValue(execResult)
+
+    const result = await provider.executeCommitMessagePlan(
+      {
+        binary: 'codex',
+        args: ['exec', 'PROMPT'],
+        stdinPayload: null,
+        label: 'Codex'
+      },
+      '/home/user/repo',
+      60_000
+    )
+
+    expect(mux.request).toHaveBeenCalledWith('agent.execNonInteractive', {
+      binary: 'codex',
+      args: ['exec', 'PROMPT'],
+      cwd: '/home/user/repo',
+      stdin: null,
+      timeoutMs: 60_000
+    })
+    expect(result).toEqual(execResult)
+  })
+
+  it('cancelGenerateCommitMessage sends best-effort relay cancellation', async () => {
+    await provider.cancelGenerateCommitMessage('/home/user/repo')
+
+    expect(mux.request).toHaveBeenCalledWith('agent.cancelExec', { cwd: '/home/user/repo' })
+  })
+
   it('getDiff sends git.diff request', async () => {
     const diffResult = { kind: 'text', originalContent: '', modifiedContent: 'hello' }
     mux.request.mockResolvedValue(diffResult)

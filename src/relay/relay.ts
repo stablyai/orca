@@ -5,6 +5,10 @@
    topological order. Splitting by line count would scatter ordered side-
    effects across modules and obscure the lifecycle. */
 
+/* eslint-disable max-lines -- Why: the relay entrypoint owns process startup,
+   daemon reconnect, and handler registration. Splitting the orchestration
+   would hide the startup order, which is the important invariant here. */
+
 // Orca Relay — lightweight daemon deployed to remote hosts.
 // Communicates over stdin/stdout using the framed JSON-RPC protocol.
 // The Electron app (client) deploys this script via SCP and launches
@@ -28,6 +32,7 @@ import { FsHandler } from './fs-handler'
 import { GitHandler } from './git-handler'
 import { PreflightHandler } from './preflight-handler'
 import { PortScanHandler } from './port-scan-handler'
+import { AgentExecHandler } from './agent-exec-handler'
 import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
 import { PluginOverlayManager } from './plugin-overlay'
 import {
@@ -231,6 +236,9 @@ async function main(): Promise<void> {
 
   const _portScanHandler = new PortScanHandler(dispatcher)
   void _portScanHandler
+
+  const _agentExecHandler = new AgentExecHandler(dispatcher)
+  void _agentExecHandler
 
   // ── Agent-hook server ─────────────────────────────────────────────
   // Why: hosts a loopback HTTP receiver inside the relay process so agent

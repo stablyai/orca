@@ -4,11 +4,11 @@ to the env injection code makes the attribution behavior auditable as one unit
 instead of scattering generated shell fragments across files. */
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
+import { ORCA_GIT_COMMIT_TRAILER } from '../../shared/orca-attribution'
 
 const ATTRIBUTION_ROOT_DIR = 'orca-terminal-attribution'
 const ATTRIBUTION_SHIM_VERSION = '6'
 const ORCA_PRODUCT_URL = 'https://github.com/stablyai/orca'
-const ORCA_GIT_COMMIT_TRAILER = 'Co-authored-by: Orca <help@stably.ai>'
 const ORCA_GH_FOOTER = `Made with [Orca](${ORCA_PRODUCT_URL}) 🐋`
 const SHELL_DOLLAR = '$'
 const POWERSHELL_TICK = '`'

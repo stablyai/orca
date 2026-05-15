@@ -38,6 +38,7 @@ export type HostedReviewSlice = {
       linkedGitHubPR?: number | null
       linkedGitLabMR?: number | null
       linkedBitbucketPR?: number | null
+      linkedGiteaPR?: number | null
     }
   ) => Promise<HostedReviewInfo | null>
 }
@@ -61,7 +62,8 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       cached?.data === null &&
       ((options?.linkedGitHubPR ?? null) !== null ||
         (options?.linkedGitLabMR ?? null) !== null ||
-        (options?.linkedBitbucketPR ?? null) !== null)
+        (options?.linkedBitbucketPR ?? null) !== null ||
+        (options?.linkedGiteaPR ?? null) !== null)
     if (!options?.force && !linkedRefetch && isFresh(cached)) {
       return cached.data
     }
@@ -80,7 +82,8 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
           branch,
           linkedGitHubPR: options?.linkedGitHubPR ?? null,
           linkedGitLabMR: options?.linkedGitLabMR ?? null,
-          linkedBitbucketPR: options?.linkedBitbucketPR ?? null
+          linkedBitbucketPR: options?.linkedBitbucketPR ?? null,
+          linkedGiteaPR: options?.linkedGiteaPR ?? null
         }
         const review =
           target.kind === 'environment'

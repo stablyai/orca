@@ -1,12 +1,13 @@
 import { useAppStore } from '@/store'
 import { NOTES_ACTIVE_CHANGED_EVENT } from '@/lib/notes-events'
 import { linkRuntimeProjectNote, showRuntimeProjectNote } from '@/runtime/runtime-notes-client'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export function getProjectNotesEntityId(projectId: string, noteId?: string): string {
   if (noteId) {
     return `notes:${projectId}:note:${noteId}`
   }
-  return `notes:${projectId}:new:${globalThis.crypto.randomUUID()}`
+  return `notes:${projectId}:new:${createBrowserUuid()}`
 }
 
 export function getProjectNoteIdFromEntityId(entityId: string): string | null {

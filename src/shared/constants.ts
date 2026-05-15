@@ -265,6 +265,18 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
       lastViewByProject: {},
       activeProject: null
     },
+    // Why: opt-in feature — `enabled: false` keeps the Generate button hidden
+    // for existing users until they discover and turn it on in Settings. The
+    // per-agent / per-model maps stay empty until the user activates the
+    // toggle, at which point the pane fills them with the spec defaults.
+    commitMessageAi: {
+      enabled: false,
+      agentId: null,
+      selectedModelByAgent: {},
+      selectedThinkingByModel: {},
+      customPrompt: '',
+      customAgentCommand: ''
+    },
     voice: getDefaultVoiceSettings()
   }
 }

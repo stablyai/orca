@@ -18,7 +18,8 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Runs in the foreground and prints the runtime endpoint. Stop it with Ctrl+C.',
       'Use --pairing-address when clients should connect through a LAN, Tailscale, SSH-forward, or public tunnel address.',
-      'Use --mobile-pairing to print a mobile-scoped pairing QR/link instead of the default runtime-environment pairing link.'
+      'Use --mobile-pairing to print a mobile-scoped pairing QR/link instead of the default runtime-environment pairing link.',
+      'When the web client bundle is available, the server also prints a browser URL with the pairing data embedded.'
     ],
     examples: [
       'orca serve',

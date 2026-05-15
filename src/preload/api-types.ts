@@ -315,6 +315,13 @@ export type PreflightStatus = {
    *  include it. Consumers gate on `glab?.installed` / `authenticated`. */
   glab?: { installed: boolean; authenticated: boolean }
   bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
+  gitea?: {
+    configured: boolean
+    authenticated: boolean
+    account: string | null
+    baseUrl: string | null
+    tokenConfigured: boolean
+  }
 }
 
 export type RefreshAgentsResult = {
@@ -1210,6 +1217,17 @@ export type PreloadApi = {
       message: string
       connectionId?: string
     }) => Promise<{ success: boolean; error?: string }>
+    generateCommitMessage: (args: {
+      worktreePath: string
+      connectionId?: string
+    }) => Promise<
+      | { success: true; message: string; agentLabel?: string }
+      | { success: false; error: string; canceled?: boolean }
+    >
+    cancelGenerateCommitMessage: (args: {
+      worktreePath: string
+      connectionId?: string
+    }) => Promise<void>
     stage: (args: {
       worktreePath: string
       filePath: string
@@ -1564,6 +1582,16 @@ export type PreloadApi = {
           available: true
           qrDataUrl: string
           pairingUrl: string
+          endpoint: string
+          deviceId: string
+        }
+    >
+    getRuntimePairingUrl: (args?: { address?: string; rotate?: boolean }) => Promise<
+      | { available: false }
+      | {
+          available: true
+          pairingUrl: string
+          webClientUrl: string | null
           endpoint: string
           deviceId: string
         }
