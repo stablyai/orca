@@ -32,7 +32,6 @@ import {
   canSelectWorkspaceCleanupCandidate,
   type WorkspaceCleanupBlocker,
   type WorkspaceCleanupCandidate,
-  type WorkspaceCleanupReason,
   type WorkspaceCleanupTier
 } from '../../../../shared/workspace-cleanup'
 
@@ -40,11 +39,6 @@ const TIER_LABELS: Record<WorkspaceCleanupTier, string> = {
   ready: 'Suggested cleanup',
   review: 'Needs a closer look',
   protected: 'Not suggested for cleanup'
-}
-
-const REASON_LABELS: Record<WorkspaceCleanupReason, string> = {
-  archived: 'Archived',
-  'idle-clean': 'No recent activity'
 }
 
 const BLOCKER_LABELS: Record<WorkspaceCleanupBlocker, string> = {
@@ -625,7 +619,6 @@ function CandidateRow({
   const selectable = canSelectWorkspaceCleanupCandidate(candidate)
   const hasLiveSurfaces =
     candidate.localContext.terminalTabCount > 0 || candidate.localContext.browserTabCount > 0
-  const primaryReason = candidate.reasons[0] ? REASON_LABELS[candidate.reasons[0]] : 'Old workspace'
   const blockers = candidate.blockers.map((blocker) => BLOCKER_LABELS[blocker])
   const contextDetails = formatContextDetails(candidate)
   const branchSafetyDetails = formatBranchSafetyDetails(candidate)
@@ -657,7 +650,9 @@ function CandidateRow({
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <span className="min-w-0 truncate text-sm font-medium">{candidate.displayName}</span>
-            <span className="text-xs font-medium text-foreground">{primaryReason}</span>
+            {candidate.reasons.includes('archived') ? (
+              <span className="text-xs font-medium text-foreground">Archived</span>
+            ) : null}
             <span className="text-xs text-muted-foreground">
               Last active {formatRelativeTime(candidate.lastActivityAt)}
             </span>
