@@ -61,6 +61,7 @@ vi.mock('../ipc/worktrees', () => ({
 }))
 
 vi.mock('../ipc/pty', () => ({
+  getLocalPtyProvider: vi.fn(),
   registerPtyHandlers: registerPtyHandlersMock
 }))
 
