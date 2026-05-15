@@ -37,6 +37,7 @@ import type {
   OnboardingChecklistState,
   OnboardingOutcome,
   OnboardingState,
+  LegacyPaneKeyAliasEntry,
   TerminalPaneLayoutNode,
   TerminalLayoutSnapshot,
   TerminalTab,
@@ -57,7 +58,12 @@ import {
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
-import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
+import {
+  isTerminalLeafId,
+  makePaneKey,
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../shared/stable-pane-id'
 import {
   setMigrationUnsupportedPty,
   setMigrationUnsupportedPtyPersistenceListener
@@ -413,37 +419,57 @@ function findWorktreeIdForTab(session: WorkspaceSessionState, tabId: string): st
   return undefined
 }
 
+type PaneIdentityMigrationEntries = {
+  migrationUnsupportedEntries: MigrationUnsupportedPtyEntry[]
+  legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[]
+}
+
 function collectMigrationUnsupportedPtyEntries(args: {
   session: WorkspaceSessionState
   tabId: string
   inputLayout: TerminalLayoutSnapshot
   normalizedLayout: TerminalLayoutSnapshot
   leafIdByInputLeafId: Map<string, string>
-  sourceForPtyId: (ptyId: string) => 'local' | 'ssh'
-}): MigrationUnsupportedPtyEntry[] {
+}): PaneIdentityMigrationEntries {
   const worktreeId = findWorktreeIdForTab(args.session, args.tabId)
   const tab = worktreeId
     ? args.session.tabsByWorktree?.[worktreeId]?.find((entry) => entry.id === args.tabId)
     : undefined
-  const registerLegacyAlias = (inputLeafId: string, leafId: string): void => {
+  const legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[] = []
+  const registeredLegacyPaneKeys = new Set<string>()
+  const hasLeafPtyBindings = Object.keys(args.inputLayout.ptyIdsByLeafId ?? {}).length > 0
+  const fallbackPtyId =
+    !hasLeafPtyBindings && typeof tab?.ptyId === 'string' ? tab.ptyId : undefined
+  const registerLegacyAlias = (inputLeafId: string, leafId: string, ptyId?: string): boolean => {
     if (!isTerminalLeafId(leafId)) {
-      return
+      return false
     }
     let paneKey: string
     try {
       paneKey = makePaneKey(args.tabId, leafId)
     } catch {
-      return
+      return false
     }
     const numeric = /^(?:pane:)?(\d+)$/.exec(inputLeafId)?.[1]
     if (!numeric) {
-      return
+      return false
     }
     // Why: persisted PaneManager ids are 1-based. A zero-based alias in split
     // layouts would make tab:1 ambiguous and can route the first pane to the second.
-    agentHookServer.registerPaneKeyAlias(`${args.tabId}:${numeric}`, paneKey)
+    const legacyPaneKey = `${args.tabId}:${numeric}`
+    agentHookServer.registerPaneKeyAlias(legacyPaneKey, paneKey, ptyId)
+    registeredLegacyPaneKeys.add(legacyPaneKey)
+    if (ptyId) {
+      legacyPaneKeyAliasEntries.push({
+        ptyId,
+        legacyPaneKey,
+        stablePaneKey: paneKey,
+        updatedAt: Date.now()
+      })
+      return true
+    }
+    return false
   }
-  let registeredAlias = false
   const inputLeafIds = new Set([
     ...collectLayoutLeafIdsInOrder(args.inputLayout.root),
     ...Object.keys(args.inputLayout.ptyIdsByLeafId ?? {})
@@ -454,27 +480,74 @@ function collectMigrationUnsupportedPtyEntries(args: {
     }
     const leafId = args.leafIdByInputLeafId.get(inputLeafId)
     if (leafId) {
-      registerLegacyAlias(inputLeafId, leafId)
-      registeredAlias = true
+      registerLegacyAlias(
+        inputLeafId,
+        leafId,
+        args.inputLayout.ptyIdsByLeafId?.[inputLeafId] ?? fallbackPtyId
+      )
     }
   }
-  if (
-    !registeredAlias &&
-    tab?.ptyId &&
-    Object.keys(args.inputLayout.ptyIdsByLeafId ?? {}).length === 0
-  ) {
+  if (tab?.ptyId && !hasLeafPtyBindings) {
     const fallbackLeafId =
       args.normalizedLayout.activeLeafId ?? firstLayoutLeafId(args.normalizedLayout.root)
     if (fallbackLeafId && isTerminalLeafId(fallbackLeafId)) {
       const paneKey = makePaneKey(args.tabId, fallbackLeafId)
-      agentHookServer.registerPaneKeyAlias(`${args.tabId}:0`, paneKey)
-      agentHookServer.registerPaneKeyAlias(`${args.tabId}:1`, paneKey)
+      for (const legacyPaneKey of [`${args.tabId}:0`, `${args.tabId}:1`]) {
+        if (registeredLegacyPaneKeys.has(legacyPaneKey)) {
+          continue
+        }
+        agentHookServer.registerPaneKeyAlias(legacyPaneKey, paneKey, tab.ptyId)
+        legacyPaneKeyAliasEntries.push({
+          ptyId: tab.ptyId,
+          legacyPaneKey,
+          stablePaneKey: paneKey,
+          updatedAt: Date.now()
+        })
+      }
     }
   }
   // Why: legacy numeric pane keys are now bridged by aliases instead of
   // persisted as restart-required rows. Existing saved rows are pruned during
   // normalizePersistedPaneIdentityState.
-  return []
+  return { migrationUnsupportedEntries: [], legacyPaneKeyAliasEntries }
+}
+
+function legacyMigrationUnsupportedRowsToAliasEntries(
+  entries: MigrationUnsupportedPtyEntry[]
+): LegacyPaneKeyAliasEntry[] {
+  const normalizedEntries = normalizeMigrationUnsupportedPtyEntries(entries).filter(
+    (entry) => entry.tabId && entry.paneKey && parsePaneKey(entry.paneKey)
+  )
+  const entriesByTabId = new Map<string, MigrationUnsupportedPtyEntry[]>()
+  for (const entry of normalizedEntries) {
+    const tabId = entry.tabId
+    if (!tabId) {
+      continue
+    }
+    entriesByTabId.set(tabId, [...(entriesByTabId.get(tabId) ?? []), entry])
+  }
+  const aliasEntries: LegacyPaneKeyAliasEntry[] = []
+  for (const [tabId, tabEntries] of entriesByTabId) {
+    if (tabEntries.length !== 1) {
+      continue
+    }
+    const [entry] = tabEntries
+    if (!entry.paneKey) {
+      continue
+    }
+    // Why: pre-stable dev/RC migration rows did not store the old numeric
+    // key. Only synthesize the single-pane aliases when the row is unambiguous
+    // for its tab; split rows need layout-derived aliases instead of a guess.
+    for (const legacyPaneKey of [`${tabId}:0`, `${tabId}:1`]) {
+      aliasEntries.push({
+        ptyId: entry.ptyId,
+        legacyPaneKey,
+        stablePaneKey: entry.paneKey,
+        updatedAt: entry.updatedAt
+      })
+    }
+  }
+  return aliasEntries
 }
 
 function normalizeTerminalLayoutSnapshotForPersistence(
@@ -600,19 +673,20 @@ function normalizeTerminalLayoutSnapshotForPersistence(
 
 function normalizeWorkspaceSessionPaneIdentities(
   session: WorkspaceSessionState,
-  priorLayoutsByTabId: Record<string, TerminalLayoutSnapshot> = {},
-  sourceForPtyId: (ptyId: string) => 'local' | 'ssh' = () => 'local'
+  priorLayoutsByTabId: Record<string, TerminalLayoutSnapshot> = {}
 ): {
   session: WorkspaceSessionState
   changed: boolean
   leafIdByInputLeafIdByTabId: Map<string, Map<string, string>>
   leafIdByPtyIdByTabId: Map<string, Map<string, string>>
   migrationUnsupportedEntries: MigrationUnsupportedPtyEntry[]
+  legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[]
 } {
   let changed = false
   const leafIdByInputLeafIdByTabId = new Map<string, Map<string, string>>()
   const leafIdByPtyIdByTabId = new Map<string, Map<string, string>>()
   const migrationUnsupportedEntries: MigrationUnsupportedPtyEntry[] = []
+  const legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[] = []
   const terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot> = {}
   for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId ?? {})) {
     const normalized = normalizeTerminalLayoutSnapshotForPersistence(
@@ -621,16 +695,15 @@ function normalizeWorkspaceSessionPaneIdentities(
     )
     terminalLayoutsByTabId[tabId] = normalized.snapshot
     leafIdByInputLeafIdByTabId.set(tabId, normalized.leafIdByInputLeafId)
-    migrationUnsupportedEntries.push(
-      ...collectMigrationUnsupportedPtyEntries({
-        session,
-        tabId,
-        inputLayout: layout,
-        normalizedLayout: normalized.snapshot,
-        leafIdByInputLeafId: normalized.leafIdByInputLeafId,
-        sourceForPtyId
-      })
-    )
+    const migrationEntries = collectMigrationUnsupportedPtyEntries({
+      session,
+      tabId,
+      inputLayout: layout,
+      normalizedLayout: normalized.snapshot,
+      leafIdByInputLeafId: normalized.leafIdByInputLeafId
+    })
+    migrationUnsupportedEntries.push(...migrationEntries.migrationUnsupportedEntries)
+    legacyPaneKeyAliasEntries.push(...migrationEntries.legacyPaneKeyAliasEntries)
     const leafIdByPtyId = new Map<string, string>()
     const duplicatePtyIds = new Set<string>()
     for (const [leafId, ptyId] of Object.entries(normalized.snapshot.ptyIdsByLeafId ?? {})) {
@@ -652,7 +725,8 @@ function normalizeWorkspaceSessionPaneIdentities(
     changed,
     leafIdByInputLeafIdByTabId,
     leafIdByPtyIdByTabId,
-    migrationUnsupportedEntries
+    migrationUnsupportedEntries,
+    legacyPaneKeyAliasEntries
   }
 }
 
@@ -690,28 +764,39 @@ function normalizePersistedPaneIdentityState(state: PersistedState): {
   state: PersistedState
   changed: boolean
   migrationUnsupportedEntries: MigrationUnsupportedPtyEntry[]
+  legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[]
 } {
-  const sshPtyIds = new Set((state.sshRemotePtyLeases ?? []).map((lease) => lease.ptyId))
-  const normalizedSession = normalizeWorkspaceSessionPaneIdentities(
-    state.workspaceSession,
-    {},
-    (ptyId) => (sshPtyIds.has(ptyId) ? 'ssh' : 'local')
-  )
+  const normalizedSession = normalizeWorkspaceSessionPaneIdentities(state.workspaceSession, {})
   const remappedLeases = remapSshRemotePtyLeaseLeafIds(
     state.sshRemotePtyLeases ?? [],
     normalizedSession.leafIdByInputLeafIdByTabId,
     normalizedSession.leafIdByPtyIdByTabId
   )
   const mergedMigrationUnsupportedEntries: MigrationUnsupportedPtyEntry[] = []
+  const mergedLegacyPaneKeyAliasEntries = mergeLegacyPaneKeyAliasEntries([
+    ...normalizeLegacyPaneKeyAliasEntries(state.legacyPaneKeyAliasEntries),
+    ...legacyMigrationUnsupportedRowsToAliasEntries(state.migrationUnsupportedPtyEntries ?? []),
+    ...normalizedSession.legacyPaneKeyAliasEntries
+  ])
   const migrationUnsupportedChanged = !migrationUnsupportedEntriesEqual(
     state.migrationUnsupportedPtyEntries ?? [],
     mergedMigrationUnsupportedEntries
   )
-  if (!normalizedSession.changed && !remappedLeases.changed && !migrationUnsupportedChanged) {
+  const legacyAliasesChanged = !legacyPaneKeyAliasEntriesEqual(
+    state.legacyPaneKeyAliasEntries ?? [],
+    mergedLegacyPaneKeyAliasEntries
+  )
+  if (
+    !normalizedSession.changed &&
+    !remappedLeases.changed &&
+    !migrationUnsupportedChanged &&
+    !legacyAliasesChanged
+  ) {
     return {
       state,
       changed: false,
-      migrationUnsupportedEntries: mergedMigrationUnsupportedEntries
+      migrationUnsupportedEntries: mergedMigrationUnsupportedEntries,
+      legacyPaneKeyAliasEntries: mergedLegacyPaneKeyAliasEntries
     }
   }
   return {
@@ -719,10 +804,12 @@ function normalizePersistedPaneIdentityState(state: PersistedState): {
       ...state,
       workspaceSession: normalizedSession.session,
       sshRemotePtyLeases: remappedLeases.leases,
-      migrationUnsupportedPtyEntries: mergedMigrationUnsupportedEntries
+      migrationUnsupportedPtyEntries: mergedMigrationUnsupportedEntries,
+      legacyPaneKeyAliasEntries: mergedLegacyPaneKeyAliasEntries
     },
     changed: true,
-    migrationUnsupportedEntries: mergedMigrationUnsupportedEntries
+    migrationUnsupportedEntries: mergedMigrationUnsupportedEntries,
+    legacyPaneKeyAliasEntries: mergedLegacyPaneKeyAliasEntries
   }
 }
 
@@ -746,6 +833,57 @@ function normalizeMigrationUnsupportedPtyEntries(value: unknown): MigrationUnsup
       (candidate.source === 'local' || candidate.source === 'ssh') &&
       Number.isFinite(candidate.updatedAt)
     )
+  })
+}
+
+function normalizeLegacyPaneKeyAliasEntries(value: unknown): LegacyPaneKeyAliasEntry[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value.filter((entry): entry is LegacyPaneKeyAliasEntry => {
+    if (!entry || typeof entry !== 'object') {
+      return false
+    }
+    const candidate = entry as Partial<LegacyPaneKeyAliasEntry>
+    if (
+      typeof candidate.ptyId !== 'string' ||
+      candidate.ptyId.trim().length === 0 ||
+      typeof candidate.legacyPaneKey !== 'string' ||
+      typeof candidate.stablePaneKey !== 'string' ||
+      !Number.isFinite(candidate.updatedAt)
+    ) {
+      return false
+    }
+    const legacy = parseLegacyNumericPaneKey(candidate.legacyPaneKey)
+    const stable = parsePaneKey(candidate.stablePaneKey)
+    return Boolean(legacy && stable && legacy.tabId === stable.tabId)
+  })
+}
+
+function mergeLegacyPaneKeyAliasEntries(
+  entries: LegacyPaneKeyAliasEntry[]
+): LegacyPaneKeyAliasEntry[] {
+  const byLegacyPaneKey = new Map<string, LegacyPaneKeyAliasEntry>()
+  for (const entry of normalizeLegacyPaneKeyAliasEntries(entries)) {
+    const existing = byLegacyPaneKey.get(entry.legacyPaneKey)
+    if (!existing || existing.updatedAt <= entry.updatedAt) {
+      byLegacyPaneKey.set(entry.legacyPaneKey, entry)
+    }
+  }
+  return [...byLegacyPaneKey.values()]
+}
+
+function legacyPaneKeyAliasEntriesEqual(
+  left: LegacyPaneKeyAliasEntry[],
+  right: LegacyPaneKeyAliasEntry[]
+): boolean {
+  if (left.length !== right.length) {
+    return false
+  }
+  const rightByLegacyPaneKey = new Map(right.map((entry) => [entry.legacyPaneKey, entry]))
+  return left.every((entry) => {
+    const other = rightByLegacyPaneKey.get(entry.legacyPaneKey)
+    return other ? JSON.stringify(entry) === JSON.stringify(other) : false
   })
 }
 
@@ -803,8 +941,21 @@ export class Store {
     for (const entry of normalized.migrationUnsupportedEntries) {
       setMigrationUnsupportedPty(entry)
     }
+    for (const entry of normalized.legacyPaneKeyAliasEntries) {
+      agentHookServer.registerPaneKeyAlias(
+        entry.legacyPaneKey,
+        entry.stablePaneKey,
+        entry.ptyId,
+        entry.updatedAt,
+        { overwriteExisting: false }
+      )
+    }
     setMigrationUnsupportedPtyPersistenceListener((entries) => {
       this.state.migrationUnsupportedPtyEntries = entries
+      this.scheduleSave()
+    })
+    agentHookServer.setPaneKeyAliasPersistenceListener((entries) => {
+      this.state.legacyPaneKeyAliasEntries = entries
       this.scheduleSave()
     })
     if (normalized.changed) {
@@ -1082,6 +1233,9 @@ export class Store {
             .filter((lease): lease is SshRemotePtyLease => lease !== null),
           migrationUnsupportedPtyEntries: normalizeMigrationUnsupportedPtyEntries(
             parsed.migrationUnsupportedPtyEntries
+          ),
+          legacyPaneKeyAliasEntries: normalizeLegacyPaneKeyAliasEntries(
+            parsed.legacyPaneKeyAliasEntries
           ),
           automations: Array.isArray(parsed.automations) ? parsed.automations : [],
           automationRuns: Array.isArray(parsed.automationRuns) ? parsed.automationRuns : [],
@@ -1852,14 +2006,21 @@ export class Store {
     // the durable binding and re-open the orphan window. Merge in any
     // existing bindings whenever the incoming snapshot's binding is empty.
     const prior = this.state.workspaceSession
-    const sshPtyIds = new Set((this.state.sshRemotePtyLeases ?? []).map((lease) => lease.ptyId))
     const normalized = normalizeWorkspaceSessionPaneIdentities(
       session,
-      prior?.terminalLayoutsByTabId,
-      (ptyId) => (sshPtyIds.has(ptyId) ? 'ssh' : 'local')
+      prior?.terminalLayoutsByTabId
     )
     for (const entry of normalized.migrationUnsupportedEntries) {
       setMigrationUnsupportedPty(entry)
+    }
+    for (const entry of normalized.legacyPaneKeyAliasEntries) {
+      agentHookServer.registerPaneKeyAlias(
+        entry.legacyPaneKey,
+        entry.stablePaneKey,
+        entry.ptyId,
+        entry.updatedAt,
+        { overwriteExisting: false }
+      )
     }
     session = normalized.session
     const remappedLeases = remapSshRemotePtyLeaseLeafIds(

@@ -40,6 +40,7 @@ import {
   normalizeAgentStatusPayload
 } from '../../shared/agent-status-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
+import type { LegacyPaneKeyAliasEntry } from '../../shared/types'
 
 export type { AgentHookSource }
 
@@ -63,6 +64,12 @@ export type AgentHookStatusChangeEntry = {
 }
 
 type StatusChangeListener = (statuses: AgentHookStatusChangeEntry[]) => void
+type PaneKeyAliasPersistenceListener = (entries: LegacyPaneKeyAliasEntry[]) => void
+type PaneKeyAliasEntry = {
+  stablePaneKey: string
+  ptyId: string | null
+  updatedAt: number
+}
 
 // Why: name of the on-disk cache that survives Orca restart. Lives next to
 // the endpoint file in userData/agent-hooks/ so all hook-server-owned cross-
@@ -215,7 +222,8 @@ export class AgentHookServer {
   // Why: hydrated last-status rows are useful UI continuity, but they are not
   // evidence of live agent work in this main-process runtime.
   private runtimeObservedStatusPaneKeys = new Set<string>()
-  private legacyPaneKeyAliases = new Map<string, string>()
+  private legacyPaneKeyAliases = new Map<string, PaneKeyAliasEntry>()
+  private paneKeyAliasPersistenceListener: PaneKeyAliasPersistenceListener | null = null
   // Why: full path to the on-disk last-status cache. Set in start() from
   // userDataPath. Null when the server runs without a userDataPath (e.g.
   // tests that skip the userDataPath option) — in that case, persistence is
@@ -306,17 +314,103 @@ export class AgentHookServer {
     }
   }
 
-  registerPaneKeyAlias(legacyPaneKey: string, stablePaneKey: string): void {
+  setPaneKeyAliasPersistenceListener(listener: PaneKeyAliasPersistenceListener | null): void {
+    this.paneKeyAliasPersistenceListener = listener
+  }
+
+  private getPersistedPaneKeyAliases(): LegacyPaneKeyAliasEntry[] {
+    return Array.from(this.legacyPaneKeyAliases.entries()).flatMap(([legacyPaneKey, entry]) =>
+      entry.ptyId
+        ? [
+            {
+              ptyId: entry.ptyId,
+              legacyPaneKey,
+              stablePaneKey: entry.stablePaneKey,
+              updatedAt: entry.updatedAt
+            }
+          ]
+        : []
+    )
+  }
+
+  private notifyPaneKeyAliasPersistenceListener(): void {
+    this.paneKeyAliasPersistenceListener?.(this.getPersistedPaneKeyAliases())
+  }
+
+  registerPaneKeyAlias(
+    legacyPaneKey: string,
+    stablePaneKey: string,
+    ptyId?: string,
+    updatedAt = Date.now(),
+    options?: { overwriteExisting?: boolean }
+  ): void {
     const legacy = parseLegacyNumericPaneKey(legacyPaneKey)
     const stable = parsePaneKey(stablePaneKey)
     if (!legacy || !stable || legacy.tabId !== stable.tabId) {
       return
     }
-    this.legacyPaneKeyAliases.set(legacy.paneKey, stablePaneKey)
+    const existing = this.legacyPaneKeyAliases.get(legacy.paneKey)
+    if (existing && options?.overwriteExisting === false) {
+      return
+    }
+    const normalizedPtyId =
+      typeof ptyId === 'string' && ptyId.trim().length > 0 ? ptyId.trim() : existing?.ptyId
+    const normalizedUpdatedAt =
+      Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : (existing?.updatedAt ?? Date.now())
+    if (
+      existing &&
+      existing.stablePaneKey === stablePaneKey &&
+      existing.ptyId === (normalizedPtyId ?? null) &&
+      existing.updatedAt === normalizedUpdatedAt
+    ) {
+      return
+    }
+    this.legacyPaneKeyAliases.set(legacy.paneKey, {
+      stablePaneKey,
+      ptyId: normalizedPtyId ?? null,
+      updatedAt: normalizedUpdatedAt
+    })
+    if (normalizedPtyId) {
+      this.notifyPaneKeyAliasPersistenceListener()
+    }
+  }
+
+  clearPaneKeyAliasesForPty(
+    ptyId: string,
+    options?: { shouldClearStablePaneKey?: (paneKey: string) => boolean }
+  ): void {
+    let aliasChanged = false
+    let statusChanged = false
+    for (const [legacyPaneKey, entry] of this.legacyPaneKeyAliases) {
+      if (entry.ptyId === ptyId) {
+        this.legacyPaneKeyAliases.delete(legacyPaneKey)
+        clearPaneCacheState(this.state, legacyPaneKey)
+        const shouldClearStablePaneKey =
+          options?.shouldClearStablePaneKey?.(entry.stablePaneKey) ?? true
+        if (shouldClearStablePaneKey && this.state.lastStatusByPaneKey.has(entry.stablePaneKey)) {
+          statusChanged = true
+        }
+        if (shouldClearStablePaneKey) {
+          // Why: after hydrate, legacy rows are stored under the stable key. If
+          // this PTY is later proven dead before ptyPaneKey is rebuilt, alias
+          // cleanup is the only path that can evict that retained status.
+          clearPaneCacheState(this.state, entry.stablePaneKey)
+          this.runtimeObservedStatusPaneKeys.delete(entry.stablePaneKey)
+        }
+        aliasChanged = true
+      }
+    }
+    if (aliasChanged) {
+      this.notifyPaneKeyAliasPersistenceListener()
+    }
+    if (statusChanged) {
+      this.scheduleStatusPersist()
+      this.notifyStatusChangeListeners()
+    }
   }
 
   private resolvePaneKeyAlias(paneKey: string): string {
-    return this.legacyPaneKeyAliases.get(paneKey) ?? paneKey
+    return this.legacyPaneKeyAliases.get(paneKey)?.stablePaneKey ?? paneKey
   }
 
   private normalizeHookBodyPaneKeyAlias(body: unknown): unknown {
@@ -325,7 +419,7 @@ export class AgentHookServer {
     }
     const record = body as Record<string, unknown>
     const rawPaneKey = typeof record.paneKey === 'string' ? record.paneKey.trim() : ''
-    const stablePaneKey = this.legacyPaneKeyAliases.get(rawPaneKey)
+    const stablePaneKey = this.legacyPaneKeyAliases.get(rawPaneKey)?.stablePaneKey
     if (!stablePaneKey) {
       return body
     }
@@ -593,11 +687,16 @@ export class AgentHookServer {
     // re-stat'ing on every dead-pane teardown.
     const hadStatus = this.state.lastStatusByPaneKey.has(resolvedPaneKey)
     clearPaneCacheState(this.state, resolvedPaneKey)
+    let clearedAlias = false
     for (const [legacyPaneKey, stablePaneKey] of this.legacyPaneKeyAliases) {
-      if (stablePaneKey === resolvedPaneKey) {
+      if (stablePaneKey.stablePaneKey === resolvedPaneKey) {
         this.legacyPaneKeyAliases.delete(legacyPaneKey)
         clearPaneCacheState(this.state, legacyPaneKey)
+        clearedAlias = true
       }
+    }
+    if (clearedAlias) {
+      this.notifyPaneKeyAliasPersistenceListener()
     }
     if (hadStatus) {
       this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)

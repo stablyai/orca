@@ -444,19 +444,31 @@ export function clearProviderPtyState(id: string): void {
   openCodeHookService.clearPty(id)
   piTitlebarExtensionService.clearPty(id)
   ptySizes.delete(id)
+  const paneKey = ptyPaneKey.get(id)
+  const stillOwnsPaneKey = paneKey ? paneKeyPtyId.get(paneKey) === id : false
   // Why: drop the memory-collector registration so a dead PTY does not keep
   // trying to resolve its (now-dead) pid on every snapshot. Safe no-op for
   // PTYs that were never registered (SSH-owned).
   unregisterPty(id)
   clearMigrationUnsupportedPty(id)
+  agentHookServer.clearPaneKeyAliasesForPty(id, {
+    shouldClearStablePaneKey: (stablePaneKey) => {
+      // Why: when this PTY never rebuilt ptyPaneKey after restart, alias
+      // ownership is our only proof. Once a newer PTY owns the same stable
+      // paneKey, alias teardown must not erase that newer status.
+      const stablePaneOwner = paneKeyPtyId.get(stablePaneKey)
+      if (stablePaneOwner && stablePaneOwner !== id) {
+        return false
+      }
+      return !paneKey || (stillOwnsPaneKey && stablePaneKey === paneKey)
+    }
+  })
   rendererSerializerByPtyId.delete(id)
   // Why: the hook server's per-paneKey caches (lastPrompt / lastTool) would
   // otherwise accumulate entries for dead panes over the process lifetime.
   // Use the spawn-time paneKey mapping since the server has no other way to
   // correlate a ptyId back to its paneKey.
-  const paneKey = ptyPaneKey.get(id)
   if (paneKey) {
-    const stillOwnsPaneKey = paneKeyPtyId.get(paneKey) === id
     if (stillOwnsPaneKey) {
       agentHookServer.clearPaneState(paneKey)
       paneKeyPtyId.delete(paneKey)
@@ -1431,7 +1443,8 @@ export function registerPtyHandlers(
       if (legacySpawnPaneKey && migrationUnsupportedPaneKey) {
         agentHookServer.registerPaneKeyAlias(
           legacySpawnPaneKey.paneKey,
-          migrationUnsupportedPaneKey
+          migrationUnsupportedPaneKey,
+          result.id
         )
         clearMigrationUnsupportedPtysForPaneKey(migrationUnsupportedPaneKey)
       } else if (validatedPaneKey) {

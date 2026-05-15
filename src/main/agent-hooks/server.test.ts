@@ -2213,6 +2213,70 @@ describe('Last-status persistence', () => {
     }
   })
 
+  it('clears hydrated stable statuses when their persisted legacy alias PTY is cleared', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          'tab-1:0': {
+            paneKey: 'tab-1:0',
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            connectionId: null,
+            receivedAt: recentTs(),
+            stateStartedAt: recentTs(-1000),
+            payload: { state: 'working', prompt: 'legacy cached', agentType: 'claude' }
+          }
+        }
+      }),
+      'utf8'
+    )
+    const server = new AgentHookServer()
+    const statusListener = vi.fn()
+    server.registerPaneKeyAlias('tab-1:0', PANE, 'pty-1')
+    server.subscribeStatusChanges(statusListener)
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      expect(server.getStatusSnapshot()).toHaveLength(1)
+
+      server.clearPaneKeyAliasesForPty('pty-1')
+
+      expect(server.getStatusSnapshot()).toEqual([])
+      expect(statusListener).toHaveBeenCalledWith([])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('does not clear a stable status when alias cleanup no longer owns that pane', () => {
+    const server = new AgentHookServer()
+    server.registerPaneKeyAlias('tab-1:0', PANE, 'old-pty')
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+
+    server.clearPaneKeyAliasesForPty('old-pty', { shouldClearStablePaneKey: () => false })
+
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({
+        paneKey: PANE,
+        state: 'working',
+        agentType: 'claude'
+      })
+    ])
+  })
+
   it('drops a hydrate entry whose tabId disagrees with the paneKey prefix', async () => {
     mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
     writeFileSync(
