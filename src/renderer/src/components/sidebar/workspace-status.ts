@@ -41,6 +41,7 @@ export {
 }
 
 export const WORKSPACE_STATUS_DRAG_TYPE = 'application/x-orca-worktree-id'
+export const WORKSPACE_STATUS_DRAG_IDS_TYPE = 'application/x-orca-worktree-ids'
 
 type WorkspaceStatusColorOption = {
   id: string
@@ -212,10 +213,21 @@ export function getWorkspaceStatusVisualMeta(status: WorkspaceStatus | Workspace
   }
 }
 
-export function writeWorkspaceDragData(dataTransfer: DataTransfer, worktreeId: string): void {
+export function writeWorkspaceDragData(
+  dataTransfer: DataTransfer,
+  worktreeIdOrIds: string | readonly string[]
+): void {
+  const worktreeIds = Array.isArray(worktreeIdOrIds) ? worktreeIdOrIds : [worktreeIdOrIds]
+  const [firstWorktreeId] = worktreeIds
+  if (!firstWorktreeId) {
+    return
+  }
   dataTransfer.effectAllowed = 'move'
-  dataTransfer.setData(WORKSPACE_STATUS_DRAG_TYPE, worktreeId)
-  dataTransfer.setData('text/plain', worktreeId)
+  // Why: keep the original single-id payload for older drop targets while
+  // board-to-board drags can move the whole selected batch.
+  dataTransfer.setData(WORKSPACE_STATUS_DRAG_TYPE, firstWorktreeId)
+  dataTransfer.setData(WORKSPACE_STATUS_DRAG_IDS_TYPE, JSON.stringify(worktreeIds))
+  dataTransfer.setData('text/plain', firstWorktreeId)
 }
 
 export function readWorkspaceDragData(dataTransfer: DataTransfer): string | null {
@@ -226,7 +238,27 @@ export function readWorkspaceDragData(dataTransfer: DataTransfer): string | null
   return dataTransfer.getData('text/plain') || null
 }
 
+export function readWorkspaceDragDataIds(dataTransfer: DataTransfer): string[] {
+  const rawIds = dataTransfer.getData(WORKSPACE_STATUS_DRAG_IDS_TYPE)
+  if (rawIds) {
+    try {
+      const parsed: unknown = JSON.parse(rawIds)
+      if (Array.isArray(parsed)) {
+        return parsed.filter((id): id is string => typeof id === 'string' && id.length > 0)
+      }
+    } catch {
+      // Fall back to the legacy single-card payload below.
+    }
+  }
+  const singleId = readWorkspaceDragData(dataTransfer)
+  return singleId ? [singleId] : []
+}
+
 export function hasWorkspaceDragData(dataTransfer: DataTransfer): boolean {
   const types = Array.from(dataTransfer.types)
-  return types.includes(WORKSPACE_STATUS_DRAG_TYPE) || types.includes('text/plain')
+  return (
+    types.includes(WORKSPACE_STATUS_DRAG_IDS_TYPE) ||
+    types.includes(WORKSPACE_STATUS_DRAG_TYPE) ||
+    types.includes('text/plain')
+  )
 }
