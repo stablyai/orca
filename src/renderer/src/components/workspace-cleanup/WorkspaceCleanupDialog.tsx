@@ -409,8 +409,8 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                 Checking old workspaces
               </div>
             ) : (
-              <>
-                <div className="border-b border-border bg-muted/25 px-5 py-2.5 text-xs leading-5 text-muted-foreground">
+              <div className="bg-muted/25 px-5 py-2.5">
+                <div className="text-xs leading-5 text-muted-foreground">
                   {oldCandidateCount > 0 ? (
                     <>
                       <span className="font-medium text-foreground">{oldCandidateCount}</span> old
@@ -421,8 +421,8 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                   )}
                 </div>
                 {oldCandidateCount > 0 || hiddenByKeepCount > 0 ? (
-                  <div className="flex flex-wrap items-center justify-between gap-3 bg-background px-5 py-2">
-                    <div className="min-w-0 text-xs text-muted-foreground">
+                  <div className="mt-1.5 flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0 text-xs leading-8 text-muted-foreground">
                       <span className="font-medium text-foreground">{selectedCount}</span> selected
                     </div>
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -442,7 +442,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                       ) : null}
                       <Button
                         variant="outline"
-                        size="xs"
+                        size="sm"
                         onClick={keepSelected}
                         disabled={selectedCount === 0}
                       >
@@ -460,7 +460,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                     </div>
                   </div>
                 ) : null}
-              </>
+              </div>
             )}
 
             {error ? (
@@ -475,7 +475,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
             ) : null}
 
             <ScrollArea className="min-h-0 flex-1">
-              <div className="space-y-4 p-5">
+              <div className="space-y-3 px-5 pb-5 pt-2">
                 {initialLoading ? <SkeletonRows /> : null}
                 {!loading && scan && candidates.length === 0 && !scanNoticeMessage ? (
                   <EmptyState title="No old workspaces to clean up." />
