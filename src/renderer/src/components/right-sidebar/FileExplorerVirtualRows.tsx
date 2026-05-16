@@ -28,6 +28,8 @@ type FileExplorerVirtualRowsProps = {
   onStartNew: (type: 'file' | 'folder', parentPath: string, depth: number) => void
   onStartRename: (node: TreeNode) => void
   onDuplicate: (node: TreeNode) => void
+  onAddFolderAsProject: (node: TreeNode) => void
+  canAddFolderAsProject: (node: TreeNode) => boolean
   onRequestDelete: (node: TreeNode) => void
   onMoveDrop: (sourcePath: string, destDir: string) => void
   onDragTargetChange: (dir: string | null) => void
@@ -62,6 +64,8 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     onStartNew,
     onStartRename,
     onDuplicate,
+    onAddFolderAsProject,
+    canAddFolderAsProject,
     onRequestDelete,
     onMoveDrop,
     onDragTargetChange,
@@ -149,6 +153,8 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               onStartNew={onStartNew}
               onStartRename={onStartRename}
               onDuplicate={onDuplicate}
+              onAddFolderAsProject={() => onAddFolderAsProject(n)}
+              canAddAsProject={canAddFolderAsProject(n)}
               onRequestDelete={() => onRequestDelete(n)}
               onMoveDrop={onMoveDrop}
               onDragTargetChange={onDragTargetChange}

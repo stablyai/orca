@@ -10,6 +10,7 @@ import WorktreeMetaDialog from './WorktreeMetaDialog'
 import NonGitFolderDialog from './NonGitFolderDialog'
 import RemoveFolderDialog from './RemoveFolderDialog'
 import AddRepoDialog from './AddRepoDialog'
+import AddProjectFromFolderDialog from './AddProjectFromFolderDialog'
 import OrcaYamlTrustDialog from './OrcaYamlTrustDialog'
 
 const MIN_WIDTH = 220
@@ -66,6 +67,7 @@ function Sidebar(): React.JSX.Element {
       <NonGitFolderDialog />
       <RemoveFolderDialog />
       <AddRepoDialog />
+      <AddProjectFromFolderDialog />
       <OrcaYamlTrustDialog />
     </TooltipProvider>
   )

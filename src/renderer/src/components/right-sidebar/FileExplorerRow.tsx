@@ -206,6 +206,8 @@ type FileExplorerRowProps = {
   onStartNew: (type: 'file' | 'folder', dir: string, depth: number) => void
   onStartRename: (node: TreeNode) => void
   onDuplicate: (node: TreeNode) => void
+  onAddFolderAsProject: () => void
+  canAddAsProject: boolean
   onRequestDelete: () => void
   onMoveDrop: (sourcePath: string, destDir: string) => void
   onDragTargetChange: (dir: string | null) => void
@@ -232,6 +234,8 @@ export function FileExplorerRow({
   onStartNew,
   onStartRename,
   onDuplicate,
+  onAddFolderAsProject,
+  canAddAsProject,
   onRequestDelete,
   onMoveDrop,
   onDragTargetChange,
@@ -356,6 +360,12 @@ export function FileExplorerRow({
           <ContextMenuItem onSelect={() => onDuplicate(node)}>
             <Files />
             Duplicate
+          </ContextMenuItem>
+        )}
+        {canAddAsProject && (
+          <ContextMenuItem onSelect={onAddFolderAsProject}>
+            <FolderPlus />
+            Add as Project...
           </ContextMenuItem>
         )}
         {!node.isDirectory && activeWorktreeId && detectLanguage(node.path) === 'markdown' && (

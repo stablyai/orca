@@ -24,6 +24,11 @@ import { useFileExplorerImport } from './useFileExplorerImport'
 import { useFileExplorerManualRefresh } from './useFileExplorerManualRefresh'
 import { useFileExplorerTree } from './useFileExplorerTree'
 import { useFileExplorerWatch } from './useFileExplorerWatch'
+import {
+  buildAddProjectFromFolderModalData,
+  canShowAddAsProjectAction
+} from './file-explorer-add-project-action'
+import type { TreeNode } from './file-explorer-types'
 
 function FileExplorerInner(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -40,6 +45,7 @@ function FileExplorerInner(): React.JSX.Element {
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
   const openFiles = useAppStore((s) => s.openFiles)
   const closeFile = useAppStore((s) => s.closeFile)
+  const openModal = useAppStore((s) => s.openModal)
 
   const worktreePath = activeWorktree?.path ?? null
   const repoName = activeRepo?.displayName ?? (worktreePath ? basename(worktreePath) : '')
@@ -274,6 +280,19 @@ function FileExplorerInner(): React.JSX.Element {
 
   const handleDuplicate = useFileDuplicate({ activeWorktreeId, worktreePath, refreshDir })
 
+  const handleAddFolderAsProject = useCallback(
+    (node: TreeNode) => {
+      if (!activeRepo || !canShowAddAsProjectAction(node, activeRepo)) {
+        return
+      }
+      openModal(
+        'confirm-add-project-from-folder',
+        buildAddProjectFromFolderModalData(node, activeRepo)
+      )
+    },
+    [activeRepo, openModal]
+  )
+
   if (!worktreePath) {
     return (
       <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground px-4 text-center">
@@ -367,6 +386,8 @@ function FileExplorerInner(): React.JSX.Element {
               onStartNew={startNew}
               onStartRename={startRename}
               onDuplicate={handleDuplicate}
+              onAddFolderAsProject={handleAddFolderAsProject}
+              canAddFolderAsProject={(node) => canShowAddAsProjectAction(node, activeRepo)}
               onRequestDelete={requestDelete}
               onMoveDrop={handleMoveDrop}
               onDragTargetChange={setDropTargetDir}
