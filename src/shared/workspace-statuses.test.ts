@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT,
+  WORKSPACE_BOARD_COLUMN_WIDTH_MAX,
+  WORKSPACE_BOARD_COLUMN_WIDTH_MIN,
+  clampWorkspaceBoardColumnWidth,
   cloneDefaultWorkspaceStatuses,
   normalizePersistedWorkspaceStatuses,
   normalizeWorkspaceStatuses
@@ -183,5 +187,12 @@ describe('workspace status visuals', () => {
       color: 'blue',
       icon: 'circle-dot'
     })
+  })
+
+  it('clamps workspace board column widths to resizable bounds', () => {
+    expect(clampWorkspaceBoardColumnWidth(undefined)).toBe(WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT)
+    expect(clampWorkspaceBoardColumnWidth(100)).toBe(WORKSPACE_BOARD_COLUMN_WIDTH_MIN)
+    expect(clampWorkspaceBoardColumnWidth(321.6)).toBe(322)
+    expect(clampWorkspaceBoardColumnWidth(900)).toBe(WORKSPACE_BOARD_COLUMN_WIDTH_MAX)
   })
 })

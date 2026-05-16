@@ -77,6 +77,7 @@ import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-command
 import { normalizeVisibleTaskProviders } from '../shared/task-providers'
 import {
   DEFAULT_WORKSPACE_STATUS_ID,
+  clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
   normalizeWorkspaceBoardCompact,
   normalizePersistedWorkspaceStatuses,
@@ -2046,7 +2047,10 @@ export class Store {
       sortBy: normalizeSortBy(this.state.ui?.sortBy),
       workspaceStatuses: normalizeWorkspaceStatuses(this.state.ui?.workspaceStatuses),
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(this.state.ui?.workspaceBoardOpacity),
-      workspaceBoardCompact: normalizeWorkspaceBoardCompact(this.state.ui?.workspaceBoardCompact)
+      workspaceBoardCompact: normalizeWorkspaceBoardCompact(this.state.ui?.workspaceBoardCompact),
+      workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
+        this.state.ui?.workspaceBoardColumnWidth
+      )
     }
   }
 
@@ -2069,6 +2073,9 @@ export class Store {
       ),
       workspaceBoardCompact: normalizeWorkspaceBoardCompact(
         updates.workspaceBoardCompact ?? this.state.ui?.workspaceBoardCompact
+      ),
+      workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
+        updates.workspaceBoardColumnWidth ?? this.state.ui?.workspaceBoardColumnWidth
       )
     }
     this.scheduleSave()

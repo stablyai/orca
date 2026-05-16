@@ -358,6 +358,7 @@ export function getDefaultUIState(): PersistedUIState {
     workspaceStatuses: cloneDefaultWorkspaceStatuses(),
     workspaceBoardOpacity: 1,
     workspaceBoardCompact: false,
+    workspaceBoardColumnWidth: 280,
     _workspaceStatusesDefaultOrderMigrated: true,
     _workspaceStatusesDefaultVisualsMigrated: true,
     statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],

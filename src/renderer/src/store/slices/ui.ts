@@ -31,6 +31,8 @@ import {
   DEFAULT_WORKTREE_CARD_PROPERTIES
 } from '../../../../shared/constants'
 import {
+  WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT,
+  clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
   cloneDefaultWorkspaceStatuses,
   normalizeWorkspaceBoardCompact,
@@ -372,6 +374,8 @@ export type UISlice = {
   setWorkspaceBoardOpacity: (opacity: number) => void
   workspaceBoardCompact: boolean
   setWorkspaceBoardCompact: (compact: boolean) => void
+  workspaceBoardColumnWidth: number
+  setWorkspaceBoardColumnWidth: (width: number) => void
   statusBarItems: StatusBarItem[]
   toggleStatusBarItem: (item: StatusBarItem) => void
   statusBarVisible: boolean
@@ -779,6 +783,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ workspaceBoardCompact: normalized })
   },
 
+  workspaceBoardColumnWidth: WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT,
+  setWorkspaceBoardColumnWidth: (width) => {
+    const clamped = clampWorkspaceBoardColumnWidth(width)
+    window.api.ui.set({ workspaceBoardColumnWidth: clamped }).catch(console.error)
+    set({ workspaceBoardColumnWidth: clamped })
+  },
+
   statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
   toggleStatusBarItem: (item) =>
     set((s) => {
@@ -922,6 +933,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
         workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
         workspaceBoardCompact: normalizeWorkspaceBoardCompact(ui.workspaceBoardCompact),
+        workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(ui.workspaceBoardColumnWidth),
         statusBarItems: migrateStatusBarItems(ui.statusBarItems),
         statusBarVisible: ui.statusBarVisible ?? true,
         // Why: absent → true so existing users see the pet the first time
