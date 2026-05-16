@@ -76,6 +76,12 @@ import { SettingsSidebar } from './SettingsSidebar'
 import { SettingsSection } from './SettingsSection'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
+import {
+  deriveNeededRepoIds,
+  deriveNeededSectionIds,
+  getInitialMountedSectionIds,
+  getRuntimeTargetIdentity
+} from './settings-load-performance'
 
 type SettingsNavTarget =
   | 'general'
@@ -230,20 +236,13 @@ function Settings(): React.JSX.Element {
   const ghostty = useGhosttyImport(updateSettings, settings)
   const [wslAvailable, setWslAvailable] = useState(false)
   const [pwshAvailable, setPwshAvailable] = useState(false)
-  useEffect(() => {
-    if (!isWindows) {
-      setWslAvailable(false)
-      setPwshAvailable(false)
-      return
-    }
-
-    void window.api.wsl.isAvailable().then(setWslAvailable)
-    void window.api.pwsh.isAvailable().then(setPwshAvailable)
-  }, [isWindows])
   const [fontSuggestions, setFontSuggestions] = useState<string[]>(
     Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...getFallbackTerminalFonts()]))
   )
   const [activeSectionId, setActiveSectionId] = useState('general')
+  const [mountedSectionIds, setMountedSectionIds] = useState<Set<string>>(
+    getInitialMountedSectionIds
+  )
   const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
   const [hasUnsavedCommitPromptChanges, setHasUnsavedCommitPromptChanges] = useState(false)
   const [commitPromptDiscardSignal, setCommitPromptDiscardSignal] = useState(0)
@@ -255,8 +254,11 @@ function Settings(): React.JSX.Element {
   const contentScrollRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const terminalFontsLoadedRef = useRef(false)
+  const terminalCapabilitiesLoadedRef = useRef(false)
   const pendingNavSectionRef = useRef<string | null>(null)
   const pendingScrollTargetRef = useRef<string | null>(null)
+  const repoHooksRequestSeqRef = useRef(0)
+  const repoHooksRuntimeIdentityRef = useRef<string>('local')
 
   const confirmDiscardCommitPromptChanges = useCallback((): boolean => {
     if (!hasUnsavedCommitPromptChanges) {
@@ -282,6 +284,8 @@ function Settings(): React.JSX.Element {
   useEffect(() => {
     fetchSettings()
   }, [fetchSettings])
+
+  const runtimeTargetIdentity = getRuntimeTargetIdentity(settings)
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
@@ -361,35 +365,6 @@ function Settings(): React.JSX.Element {
     clearSettingsTarget()
   }, [clearSettingsTarget, settings, settingsNavigationTarget])
 
-  useEffect(() => {
-    if (terminalFontsLoadedRef.current) {
-      return
-    }
-
-    let stale = false
-
-    const loadFontSuggestions = async (): Promise<void> => {
-      try {
-        const fonts = await window.api.settings.listFonts()
-        if (stale || fonts.length === 0) {
-          return
-        }
-        terminalFontsLoadedRef.current = true
-        setFontSuggestions((prev) =>
-          Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...fonts, ...prev])).slice(0, 320)
-        )
-      } catch {
-        // Fall back to curated cross-platform suggestions.
-      }
-    }
-
-    void loadFontSuggestions()
-
-    return () => {
-      stale = true
-    }
-  }, [])
-
   // Why: only recompute scrollback mode when the byte value actually changes,
   // not on every unrelated settings mutation.
   if (settings?.terminalScrollbackBytes !== prevScrollbackBytes) {
@@ -403,45 +378,6 @@ function Settings(): React.JSX.Element {
       )
     }
   }
-
-  useEffect(() => {
-    let stale = false
-
-    const checkHooks = async (): Promise<void> => {
-      const results = await Promise.all(
-        repos.map(async (repo) => {
-          if (isFolderRepo(repo)) {
-            return [repo.id, { hasHooks: false, hooks: null, mayNeedUpdate: false }] as const
-          }
-          try {
-            const result = await checkRuntimeHooks(settings, repo.id)
-            return [repo.id, result] as const
-          } catch {
-            return [repo.id, { hasHooks: false, hooks: null, mayNeedUpdate: false }] as const
-          }
-        })
-      )
-
-      if (!stale) {
-        setRepoHooksMap(
-          Object.fromEntries(results) as Record<
-            string,
-            { hasHooks: boolean; hooks: OrcaHooks | null; mayNeedUpdate: boolean }
-          >
-        )
-      }
-    }
-
-    if (repos.length > 0) {
-      void checkHooks()
-    } else {
-      setRepoHooksMap({})
-    }
-
-    return () => {
-      stale = true
-    }
-  }, [repos, settings])
 
   const applyTheme = useCallback((theme: 'system' | 'dark' | 'light') => {
     applyDocumentTheme(theme)
@@ -653,13 +589,191 @@ function Settings(): React.JSX.Element {
       ),
     [hasUnsavedCommitPromptChanges, navSections, settingsSearchQuery]
   )
+  const visibleSectionIds = useMemo(
+    () => new Set(visibleNavSections.map((section) => section.id)),
+    [visibleNavSections]
+  )
+  const neededSectionIds = useMemo(
+    () =>
+      deriveNeededSectionIds({
+        navSectionIds: navSections.map((section) => section.id),
+        mountedSectionIds,
+        activeSectionId,
+        pendingSectionId: pendingNavSectionRef.current,
+        query: settingsSearchQuery,
+        visibleSectionIds
+      }),
+    [activeSectionId, mountedSectionIds, navSections, settingsSearchQuery, visibleSectionIds]
+  )
+
+  useEffect(() => {
+    setMountedSectionIds((previous) => {
+      let changed = false
+      const next = new Set(previous)
+      for (const id of neededSectionIds) {
+        if (!next.has(id)) {
+          next.add(id)
+          changed = true
+        }
+      }
+      return changed ? next : previous
+    })
+  }, [neededSectionIds])
+
+  useEffect(() => {
+    if (!neededSectionIds.has('appearance') && !neededSectionIds.has('terminal')) {
+      return
+    }
+    if (terminalFontsLoadedRef.current) {
+      return
+    }
+
+    let stale = false
+    const loadFontSuggestions = async (): Promise<void> => {
+      try {
+        const fonts = await window.api.settings.listFonts()
+        if (stale || fonts.length === 0) {
+          return
+        }
+        terminalFontsLoadedRef.current = true
+        setFontSuggestions((prev) =>
+          Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...fonts, ...prev])).slice(0, 320)
+        )
+      } catch {
+        // Fall back to curated cross-platform suggestions.
+      }
+    }
+    void loadFontSuggestions()
+    return () => {
+      stale = true
+    }
+  }, [neededSectionIds])
+
+  useEffect(() => {
+    if (!isWindows) {
+      setWslAvailable(false)
+      setPwshAvailable(false)
+      terminalCapabilitiesLoadedRef.current = true
+      return
+    }
+    if (!neededSectionIds.has('terminal') || terminalCapabilitiesLoadedRef.current) {
+      return
+    }
+
+    let stale = false
+    terminalCapabilitiesLoadedRef.current = true
+    void window.api.wsl.isAvailable().then((available) => {
+      if (!stale) {
+        setWslAvailable(available)
+      }
+    })
+    void window.api.pwsh.isAvailable().then((available) => {
+      if (!stale) {
+        setPwshAvailable(available)
+      }
+    })
+    return () => {
+      stale = true
+    }
+  }, [isWindows, neededSectionIds])
+
+  const neededRepoIds = useMemo(
+    () => deriveNeededRepoIds(repos, neededSectionIds),
+    [neededSectionIds, repos]
+  )
+
+  useEffect(() => {
+    const repoIdSet = new Set(repos.map((repo) => repo.id))
+    setRepoHooksMap((previous) => {
+      const next = Object.fromEntries(
+        Object.entries(previous).filter(([repoId]) => repoIdSet.has(repoId))
+      ) as Record<string, { hasHooks: boolean; hooks: OrcaHooks | null; mayNeedUpdate: boolean }>
+      return Object.keys(next).length === Object.keys(previous).length ? previous : next
+    })
+  }, [repos])
+
+  useEffect(() => {
+    if (repoHooksRuntimeIdentityRef.current !== runtimeTargetIdentity) {
+      repoHooksRuntimeIdentityRef.current = runtimeTargetIdentity
+      repoHooksRequestSeqRef.current += 1
+      setRepoHooksMap({})
+    }
+  }, [runtimeTargetIdentity])
+
+  useEffect(() => {
+    if (neededRepoIds.length === 0) {
+      return
+    }
+
+    let stale = false
+    const requestSeq = ++repoHooksRequestSeqRef.current
+    const repoById = new Map(repos.map((repo) => [repo.id, repo] as const))
+
+    void Promise.all(
+      neededRepoIds.map(async (repoId) => {
+        const repo = repoById.get(repoId)
+        if (!repo) {
+          return
+        }
+        if (isFolderRepo(repo)) {
+          setRepoHooksMap((previous) => {
+            if (previous[repoId]) {
+              return previous
+            }
+            return {
+              ...previous,
+              [repoId]: { hasHooks: false, hooks: null, mayNeedUpdate: false }
+            }
+          })
+          return
+        }
+        try {
+          const result = await checkRuntimeHooks(
+            runtimeTargetIdentity === 'local'
+              ? { activeRuntimeEnvironmentId: null }
+              : { activeRuntimeEnvironmentId: runtimeTargetIdentity },
+            repoId
+          )
+          if (stale || requestSeq !== repoHooksRequestSeqRef.current) {
+            return
+          }
+          setRepoHooksMap((previous) => {
+            if (!repos.some((entry) => entry.id === repoId)) {
+              return previous
+            }
+            return { ...previous, [repoId]: result }
+          })
+        } catch {
+          // Keep last known value on transient failures.
+          if (stale || requestSeq !== repoHooksRequestSeqRef.current) {
+            return
+          }
+          setRepoHooksMap((previous) => {
+            if (!repos.some((entry) => entry.id === repoId)) {
+              return previous
+            }
+            if (previous[repoId]) {
+              return previous
+            }
+            return {
+              ...previous,
+              [repoId]: { hasHooks: false, hooks: null, mayNeedUpdate: false }
+            }
+          })
+        }
+      })
+    )
+
+    return () => {
+      stale = true
+    }
+  }, [neededRepoIds, repos, runtimeTargetIdentity])
 
   useEffect(() => {
     const scrollTargetId = pendingScrollTargetRef.current
     const pendingNavSectionId = pendingNavSectionRef.current
-    const visibleIds = new Set(visibleNavSections.map((section) => section.id))
 
-    if (scrollTargetId && pendingNavSectionId && visibleIds.has(pendingNavSectionId)) {
+    if (scrollTargetId && pendingNavSectionId && visibleSectionIds.has(pendingNavSectionId)) {
       scrollSectionIntoView(scrollTargetId, contentScrollRef.current)
       flashSectionHighlight(scrollTargetId)
       setActiveSectionId(pendingNavSectionId)
@@ -673,7 +787,7 @@ function Settings(): React.JSX.Element {
       return
     }
 
-    if (!visibleIds.has(activeSectionId) && visibleNavSections.length > 0) {
+    if (!visibleSectionIds.has(activeSectionId) && visibleNavSections.length > 0) {
       setActiveSectionId(getFallbackVisibleSection(visibleNavSections)?.id ?? activeSectionId)
     }
   }, [
@@ -681,6 +795,7 @@ function Settings(): React.JSX.Element {
     pendingNavRequestTick,
     setSettingsSearchQuery,
     settingsSearchQuery,
+    visibleSectionIds,
     visibleNavSections
   ])
 
@@ -807,6 +922,7 @@ function Settings(): React.JSX.Element {
       const repo = repos.find((entry) => entry.id === section.id.replace('repo-', ''))
       return { ...section, badgeColor: repo?.badgeColor, isRemote: !!repo?.connectionId }
     })
+  const isSectionMounted = (sectionId: string): boolean => neededSectionIds.has(sectionId)
 
   return (
     <div className="settings-view-shell flex min-h-0 flex-1 overflow-hidden bg-background">
@@ -837,7 +953,9 @@ function Settings(): React.JSX.Element {
                   description="Workspace, editor, and updates."
                   searchEntries={GENERAL_PANE_SEARCH_ENTRIES}
                 >
-                  <GeneralPane settings={settings} updateSettings={updateSettings} />
+                  {isSectionMounted('general') ? (
+                    <GeneralPane settings={settings} updateSettings={updateSettings} />
+                  ) : null}
                 </SettingsSection>
 
                 <SettingsSection
@@ -846,7 +964,7 @@ function Settings(): React.JSX.Element {
                   description="GitHub, Linear, and other service connections."
                   searchEntries={INTEGRATIONS_PANE_SEARCH_ENTRIES}
                 >
-                  <IntegrationsPane />
+                  {isSectionMounted('integrations') ? <IntegrationsPane /> : null}
                 </SettingsSection>
 
                 <SettingsSection
@@ -855,7 +973,9 @@ function Settings(): React.JSX.Element {
                   description="Manage AI agents, set a default, and customize commands."
                   searchEntries={AGENTS_PANE_SEARCH_ENTRIES}
                 >
-                  <AgentsPane settings={settings} updateSettings={updateSettings} />
+                  {isSectionMounted('agents') ? (
+                    <AgentsPane settings={settings} updateSettings={updateSettings} />
+                  ) : null}
                 </SettingsSection>
 
                 <SettingsSection
@@ -864,7 +984,9 @@ function Settings(): React.JSX.Element {
                   description="Sign in and switch between Claude, Codex, Gemini, and OpenCode Go accounts."
                   searchEntries={ACCOUNTS_PANE_SEARCH_ENTRIES}
                 >
-                  <AccountsPane settings={settings} updateSettings={updateSettings} />
+                  {isSectionMounted('accounts') ? (
+                    <AccountsPane settings={settings} updateSettings={updateSettings} />
+                  ) : null}
                 </SettingsSection>
 
                 <SettingsSection
@@ -877,17 +999,21 @@ function Settings(): React.JSX.Element {
                   ]}
                   forceVisible={hasUnsavedCommitPromptChanges}
                 >
-                  <GitPane
-                    settings={settings}
-                    updateSettings={updateSettings}
-                    displayedGitUsername={displayedGitUsername}
-                  />
-                  <CommitMessageAiPane
-                    settings={settings}
-                    updateSettings={updateSettings}
-                    onCustomPromptDirtyChange={setHasUnsavedCommitPromptChanges}
-                    customPromptDiscardSignal={commitPromptDiscardSignal}
-                  />
+                  {isSectionMounted('git') ? (
+                    <>
+                      <GitPane
+                        settings={settings}
+                        updateSettings={updateSettings}
+                        displayedGitUsername={displayedGitUsername}
+                      />
+                      <CommitMessageAiPane
+                        settings={settings}
+                        updateSettings={updateSettings}
+                        onCustomPromptDirtyChange={setHasUnsavedCommitPromptChanges}
+                        customPromptDiscardSignal={commitPromptDiscardSignal}
+                      />
+                    </>
+                  ) : null}
                 </SettingsSection>
 
                 <SettingsSection
@@ -896,7 +1022,9 @@ function Settings(): React.JSX.Element {
                   description="Choose which task providers appear in the Tasks page and sidebar."
                   searchEntries={TASKS_PANE_SEARCH_ENTRIES}
                 >
-                  <TasksPane settings={settings} updateSettings={updateSettings} />
+                  {isSectionMounted('tasks') ? (
+                    <TasksPane settings={settings} updateSettings={updateSettings} />
+                  ) : null}
                 </SettingsSection>
 
                 <SettingsSection
@@ -905,12 +1033,14 @@ function Settings(): React.JSX.Element {
                   description="Theme and UI scaling."
                   searchEntries={APPEARANCE_PANE_SEARCH_ENTRIES}
                 >
-                  <AppearancePane
-                    settings={settings}
-                    updateSettings={updateSettings}
-                    applyTheme={applyTheme}
-                    fontSuggestions={fontSuggestions}
-                  />
+                  {isSectionMounted('appearance') ? (
+                    <AppearancePane
+                      settings={settings}
+                      updateSettings={updateSettings}
+                      applyTheme={applyTheme}
+                      fontSuggestions={fontSuggestions}
+                    />
+                  ) : null}
                 </SettingsSection>
 
                 <SettingsSection
@@ -930,19 +1060,21 @@ function Settings(): React.JSX.Element {
                     </Button>
                   }
                 >
-                  <TerminalPane
-                    settings={settings}
-                    updateSettings={updateSettings}
-                    systemPrefersDark={systemPrefersDark}
-                    terminalFontSuggestions={fontSuggestions.filter(
-                      (font) => font !== DEFAULT_APP_FONT_FAMILY
-                    )}
-                    scrollbackMode={scrollbackMode}
-                    setScrollbackMode={setScrollbackMode}
-                    ghostty={ghostty}
-                    wslAvailable={wslAvailable}
-                    pwshAvailable={pwshAvailable}
-                  />
+                  {isSectionMounted('terminal') ? (
+                    <TerminalPane
+                      settings={settings}
+                      updateSettings={updateSettings}
+                      systemPrefersDark={systemPrefersDark}
+                      terminalFontSuggestions={fontSuggestions.filter(
+                        (font) => font !== DEFAULT_APP_FONT_FAMILY
+                      )}
+                      scrollbackMode={scrollbackMode}
+                      setScrollbackMode={setScrollbackMode}
+                      ghostty={ghostty}
+                      wslAvailable={wslAvailable}
+                      pwshAvailable={pwshAvailable}
+                    />
+                  ) : null}
                 </SettingsSection>
 
                 {showDesktopOnlySettings ? (
@@ -953,11 +1085,13 @@ function Settings(): React.JSX.Element {
                       description="Home page, link routing, and session cookies."
                       searchEntries={BROWSER_PANE_SEARCH_ENTRIES}
                     >
-                      <BrowserPane
-                        settings={settings}
-                        updateSettings={updateSettings}
-                        onOpenComputerUse={openComputerUseFromBrowser}
-                      />
+                      {isSectionMounted('browser') ? (
+                        <BrowserPane
+                          settings={settings}
+                          updateSettings={updateSettings}
+                          onOpenComputerUse={openComputerUseFromBrowser}
+                        />
+                      ) : null}
                     </SettingsSection>
 
                     <SettingsSection
@@ -966,7 +1100,9 @@ function Settings(): React.JSX.Element {
                       description="Native desktop notifications for agent activity and terminal events."
                       searchEntries={NOTIFICATIONS_PANE_SEARCH_ENTRIES}
                     >
-                      <NotificationsPane settings={settings} updateSettings={updateSettings} />
+                      {isSectionMounted('notifications') ? (
+                        <NotificationsPane settings={settings} updateSettings={updateSettings} />
+                      ) : null}
                     </SettingsSection>
                   </>
                 ) : null}
@@ -977,7 +1113,7 @@ function Settings(): React.JSX.Element {
                   description="Coordinate multiple coding agents through Orca."
                   searchEntries={ORCHESTRATION_PANE_SEARCH_ENTRIES}
                 >
-                  <OrchestrationPane />
+                  {isSectionMounted('orchestration') ? <OrchestrationPane /> : null}
                 </SettingsSection>
 
                 <SettingsSection
@@ -991,12 +1127,14 @@ function Settings(): React.JSX.Element {
                   }
                   searchEntries={[runtimeEnvironmentsSearchEntry]}
                 >
-                  <RuntimeEnvironmentsPane
-                    settings={settings}
-                    switchRuntimeEnvironment={switchRuntimeEnvironment}
-                    canGeneratePairingUrl={!isWebClient}
-                    allowLocalRuntime={!isWebClient}
-                  />
+                  {isSectionMounted('servers') ? (
+                    <RuntimeEnvironmentsPane
+                      settings={settings}
+                      switchRuntimeEnvironment={switchRuntimeEnvironment}
+                      canGeneratePairingUrl={!isWebClient}
+                      allowLocalRuntime={!isWebClient}
+                    />
+                  ) : null}
                 </SettingsSection>
 
                 {showDesktopOnlySettings ? (
@@ -1008,7 +1146,9 @@ function Settings(): React.JSX.Element {
                       description="Control terminals and agents from your phone."
                       searchEntries={MOBILE_SETTINGS_PANE_SEARCH_ENTRIES}
                     >
-                      <MobileSettingsPane settings={settings} updateSettings={updateSettings} />
+                      {isSectionMounted('mobile') ? (
+                        <MobileSettingsPane settings={settings} updateSettings={updateSettings} />
+                      ) : null}
                     </SettingsSection>
 
                     <SettingsSection
@@ -1041,7 +1181,7 @@ function Settings(): React.JSX.Element {
                       description="Enable agents to control any app on your computer."
                       searchEntries={COMPUTER_USE_PANE_SEARCH_ENTRIES}
                     >
-                      <ComputerUsePane />
+                      {isSectionMounted('computer-use') ? <ComputerUsePane /> : null}
                     </SettingsSection>
 
                     <SettingsSection
@@ -1051,7 +1191,9 @@ function Settings(): React.JSX.Element {
                       description="Local speech-to-text dictation with on-device models."
                       searchEntries={VOICE_PANE_SEARCH_ENTRIES}
                     >
-                      <VoicePane settings={settings} updateSettings={updateSettings} />
+                      {isSectionMounted('voice') ? (
+                        <VoicePane settings={settings} updateSettings={updateSettings} />
+                      ) : null}
                     </SettingsSection>
                   </>
                 ) : null}
@@ -1063,7 +1205,9 @@ function Settings(): React.JSX.Element {
                     description="macOS privacy access for terminal-launched developer tools."
                     searchEntries={DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES}
                   >
-                    <DeveloperPermissionsPane />
+                    {isSectionMounted('developer-permissions') ? (
+                      <DeveloperPermissionsPane />
+                    ) : null}
                   </SettingsSection>
                 ) : null}
 
@@ -1073,7 +1217,7 @@ function Settings(): React.JSX.Element {
                   description="Anonymous usage data and telemetry controls."
                   searchEntries={PRIVACY_PANE_SEARCH_ENTRIES}
                 >
-                  <PrivacyPane settings={settings} />
+                  {isSectionMounted('privacy') ? <PrivacyPane settings={settings} /> : null}
                 </SettingsSection>
 
                 <SettingsSection
@@ -1082,7 +1226,7 @@ function Settings(): React.JSX.Element {
                   description="Keyboard shortcuts for common actions."
                   searchEntries={SHORTCUTS_PANE_SEARCH_ENTRIES}
                 >
-                  <ShortcutsPane />
+                  {isSectionMounted('shortcuts') ? <ShortcutsPane /> : null}
                 </SettingsSection>
 
                 <SettingsSection
@@ -1091,7 +1235,7 @@ function Settings(): React.JSX.Element {
                   description="How much Orca has helped you."
                   searchEntries={STATS_PANE_SEARCH_ENTRIES}
                 >
-                  <StatsPane />
+                  {isSectionMounted('stats') ? <StatsPane /> : null}
                 </SettingsSection>
 
                 {showDesktopOnlySettings ? (
@@ -1101,7 +1245,7 @@ function Settings(): React.JSX.Element {
                     description="Manage remote SSH connections. Connect to remote servers to browse files, run terminals, and use git."
                     searchEntries={SSH_PANE_SEARCH_ENTRIES}
                   >
-                    <SshPane />
+                    {isSectionMounted('ssh') ? <SshPane /> : null}
                   </SettingsSection>
                 ) : null}
 
@@ -1111,11 +1255,13 @@ function Settings(): React.JSX.Element {
                   description="New features that are still taking shape. Give them a try."
                   searchEntries={EXPERIMENTAL_PANE_SEARCH_ENTRIES}
                 >
-                  <ExperimentalPane
-                    settings={settings}
-                    updateSettings={updateSettings}
-                    hiddenExperimentalUnlocked={hiddenExperimentalUnlocked}
-                  />
+                  {isSectionMounted('experimental') ? (
+                    <ExperimentalPane
+                      settings={settings}
+                      updateSettings={updateSettings}
+                      hiddenExperimentalUnlocked={hiddenExperimentalUnlocked}
+                    />
+                  ) : null}
                 </SettingsSection>
 
                 {repos.map((repo) => {
@@ -1130,14 +1276,16 @@ function Settings(): React.JSX.Element {
                       description={repo.path}
                       searchEntries={getRepositoryPaneSearchEntries(repo)}
                     >
-                      <RepositoryPane
-                        repo={repo}
-                        yamlHooks={repoHooksState?.hooks ?? null}
-                        hasHooksFile={repoHooksState?.hasHooks ?? false}
-                        mayNeedUpdate={repoHooksState?.mayNeedUpdate ?? false}
-                        updateRepo={updateRepo}
-                        removeRepo={removeRepo}
-                      />
+                      {isSectionMounted(repoSectionId) ? (
+                        <RepositoryPane
+                          repo={repo}
+                          yamlHooks={repoHooksState?.hooks ?? null}
+                          hasHooksFile={repoHooksState?.hasHooks ?? false}
+                          mayNeedUpdate={repoHooksState?.mayNeedUpdate ?? false}
+                          updateRepo={updateRepo}
+                          removeRepo={removeRepo}
+                        />
+                      ) : null}
                     </SettingsSection>
                   )
                 })}
