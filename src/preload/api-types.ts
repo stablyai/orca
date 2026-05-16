@@ -160,6 +160,7 @@ import type {
   MigrationUnsupportedPtyEntry
 } from '../shared/agent-status-types'
 import type {
+  RuntimeBrowserDriverState,
   RuntimeStatus,
   RuntimeSyncWindowGraph,
   RuntimeTerminalDriverState
@@ -1700,7 +1701,14 @@ export type PreloadApi = {
         driver: RuntimeTerminalDriverState
       }[]
     >
+    getBrowserDrivers: () => Promise<
+      {
+        browserPageId: string
+        driver: RuntimeBrowserDriverState
+      }[]
+    >
     restoreTerminalFit: (ptyId: string) => Promise<{ restored: boolean }>
+    reclaimBrowserForDesktop: (browserPageId: string) => Promise<{ reclaimed: boolean }>
     onTerminalFitOverrideChanged: (
       callback: (event: {
         ptyId: string
@@ -1711,6 +1719,9 @@ export type PreloadApi = {
     ) => () => void
     onTerminalDriverChanged: (
       callback: (event: { ptyId: string; driver: RuntimeTerminalDriverState }) => void
+    ) => () => void
+    onBrowserDriverChanged: (
+      callback: (event: { browserPageId: string; driver: RuntimeBrowserDriverState }) => void
     ) => () => void
   }
   runtimeEnvironments: {

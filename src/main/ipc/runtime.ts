@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
+  RuntimeBrowserDriverState,
   RuntimeStatus,
   RuntimeSyncWindowGraph,
   RuntimeTerminalDriverState
@@ -64,6 +65,18 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
     }
   )
 
+  ipcMain.removeHandler('runtime:getBrowserDrivers')
+  ipcMain.handle(
+    'runtime:getBrowserDrivers',
+    (): { browserPageId: string; driver: RuntimeBrowserDriverState }[] => {
+      const drivers = runtime.getAllBrowserDrivers()
+      return Array.from(drivers.entries()).map(([browserPageId, driver]) => ({
+        browserPageId,
+        driver
+      }))
+    }
+  )
+
   // Why: the desktop "Restore" button sets the display mode to 'desktop' and
   // applies it, which restores the PTY to its original dimensions and emits
   // a 'resized' event to any active mobile subscriber. This uses the same
@@ -89,4 +102,16 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       return { restored: false }
     }
   })
+
+  ipcMain.removeHandler('runtime:reclaimBrowserForDesktop')
+  ipcMain.handle(
+    'runtime:reclaimBrowserForDesktop',
+    (_event, args: { browserPageId: string }): { reclaimed: boolean } => {
+      try {
+        return { reclaimed: runtime.reclaimBrowserForDesktop(args.browserPageId) }
+      } catch {
+        return { reclaimed: false }
+      }
+    }
+  )
 }

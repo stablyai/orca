@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: screencast setup, CDP lifecycle, metadata normalization, and stream teardown stay together so frame behavior cannot drift across files. */
 import { Buffer } from 'node:buffer'
 import type { WebContents } from 'electron'
 import {
@@ -20,13 +21,19 @@ export type BrowserScreencastOptions = {
   viewportWidth?: number
   viewportHeight?: number
   deviceScaleFactor?: number
+  mobile?: boolean
   everyNthFrame: number
   minFrameIntervalMs: number
   onFrame: (bytes: Uint8Array<ArrayBufferLike>) => void
+  onEvent?: (event: BrowserScreencastEvent) => void
   onError?: (message: string) => void
 }
 
 export type BrowserScreencastSession = { stop: () => void; done: Promise<void> }
+
+type BrowserScreencastEvent =
+  | { type: 'dialog'; dialogType: string; message: string }
+  | { type: 'dialogClosed' }
 
 function finiteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
@@ -39,10 +46,51 @@ function readFrameMetadata(raw: unknown): BrowserScreencastFrameMetadata {
     pageScaleFactor: finiteNumber(metadata.pageScaleFactor),
     deviceWidth: finiteNumber(metadata.deviceWidth),
     deviceHeight: finiteNumber(metadata.deviceHeight),
+    imageWidth: finiteNumber(metadata.imageWidth),
+    imageHeight: finiteNumber(metadata.imageHeight),
     scrollOffsetX: finiteNumber(metadata.scrollOffsetX),
     scrollOffsetY: finiteNumber(metadata.scrollOffsetY),
     timestamp: finiteNumber(metadata.timestamp)
   }
+}
+
+function enrichFrameMetadata(
+  metadata: BrowserScreencastFrameMetadata,
+  image: Uint8Array,
+  options: BrowserScreencastOptions
+): BrowserScreencastFrameMetadata {
+  const viewportWidth = positiveInteger(options.viewportWidth)
+  const viewportHeight = positiveInteger(options.viewportHeight)
+  if (
+    metadata.deviceWidth &&
+    metadata.deviceHeight &&
+    metadata.imageWidth &&
+    metadata.imageHeight
+  ) {
+    return metadata
+  }
+  const imageSize =
+    metadata.imageWidth && metadata.imageHeight
+      ? { width: metadata.imageWidth, height: metadata.imageHeight }
+      : readBrowserScreencastImageSize(image, options.format)
+  const enriched: BrowserScreencastFrameMetadata = { ...metadata }
+  const deviceWidth = enriched.deviceWidth ?? viewportWidth ?? imageSize?.width
+  const deviceHeight = enriched.deviceHeight ?? viewportHeight ?? imageSize?.height
+  const imageWidth = enriched.imageWidth ?? imageSize?.width
+  const imageHeight = enriched.imageHeight ?? imageSize?.height
+  if (deviceWidth !== undefined) {
+    enriched.deviceWidth = deviceWidth
+  }
+  if (deviceHeight !== undefined) {
+    enriched.deviceHeight = deviceHeight
+  }
+  if (imageWidth !== undefined) {
+    enriched.imageWidth = imageWidth
+  }
+  if (imageHeight !== undefined) {
+    enriched.imageHeight = imageHeight
+  }
+  return enriched
 }
 
 function positiveInteger(value: number | undefined): number | null {
@@ -130,7 +178,24 @@ export async function startBrowserScreencast(
   }
 
   const handleMessage = (_event: unknown, method: string, params: unknown): void => {
-    if (closed || method !== 'Page.screencastFrame') {
+    if (closed) {
+      return
+    }
+    if (method === 'Page.javascriptDialogOpening') {
+      const payload =
+        params && typeof params === 'object' ? (params as Record<string, unknown>) : {}
+      options.onEvent?.({
+        type: 'dialog',
+        dialogType: typeof payload.type === 'string' ? payload.type : 'alert',
+        message: typeof payload.message === 'string' ? payload.message : 'Browser dialog'
+      })
+      return
+    }
+    if (method === 'Page.javascriptDialogClosed') {
+      options.onEvent?.({ type: 'dialogClosed' })
+      return
+    }
+    if (method !== 'Page.screencastFrame') {
       return
     }
     const payload = params && typeof params === 'object' ? (params as Record<string, unknown>) : {}
@@ -150,13 +215,16 @@ export async function startBrowserScreencast(
         return
       }
       lastFrameSentAt = now
+      const image = new Uint8Array(Buffer.from(data, 'base64'))
       options.onFrame(
         encodeBrowserScreencastFrame({
           opcode: BrowserScreencastOpcode.Frame,
           seq: seq++,
           format: options.format,
-          metadata: readFrameMetadata(payload.metadata),
-          image: new Uint8Array(Buffer.from(data, 'base64'))
+          // Why: Chromium sometimes omits device dimensions on static/mobile
+          // pages; carrying viewport/image dimensions prevents client stretch.
+          metadata: enrichFrameMetadata(readFrameMetadata(payload.metadata), image, options),
+          image
         })
       )
     } finally {
@@ -191,7 +259,7 @@ export async function startBrowserScreencast(
       const imageSize = readBrowserScreencastImageSize(image, options.format)
       const viewportWidth = positiveInteger(options.viewportWidth)
       const viewportHeight = positiveInteger(options.viewportHeight)
-      const metadata =
+      const baseMetadata =
         viewportWidth && viewportHeight
           ? { deviceWidth: viewportWidth, deviceHeight: viewportHeight }
           : imageSize
@@ -205,7 +273,10 @@ export async function startBrowserScreencast(
           format: options.format,
           // Why: static pages may only produce this fallback capture. Without
           // dimensions, mobile clients stretch it to the phone aspect ratio.
-          metadata,
+          metadata: {
+            ...baseMetadata,
+            ...(imageSize ? { imageWidth: imageSize.width, imageHeight: imageSize.height } : {})
+          },
           image
         })
       )
@@ -229,7 +300,7 @@ export async function startBrowserScreencast(
         width: viewportWidth,
         height: viewportHeight,
         deviceScaleFactor,
-        mobile: false
+        mobile: options.mobile === true
       })
       deviceMetricsOverridden = true
     } else {

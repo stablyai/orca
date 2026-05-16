@@ -88,13 +88,14 @@ type BrowserScreencastParams = {
   viewportWidth?: number
   viewportHeight?: number
   deviceScaleFactor?: number
+  mobile?: boolean
   everyNthFrame?: number
   minFrameIntervalMs?: number
 } & BrowserCommandTargetParams
 
 type BrowserScreencastStartResult = {
   subscriptionId: string
-  ready: BrowserScreencastResult
+  ready: Extract<BrowserScreencastResult, { type: 'ready' }>
   session: BrowserScreencastSession
 }
 
@@ -426,7 +427,10 @@ export class RuntimeBrowserCommands {
 
   async browserScreencast(
     params: BrowserScreencastParams,
-    stream: { sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => void }
+    stream: {
+      sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => void
+      emit?: (event: BrowserScreencastResult) => void
+    }
   ): Promise<BrowserScreencastStartResult> {
     const target = await this.resolveBrowserCommandTarget(params)
     const { browserPageId, webContents: guest } = this.resolveBrowserPageWebContents(
@@ -453,9 +457,12 @@ export class RuntimeBrowserCommands {
         viewportWidth: clampOptionalInteger(params.viewportWidth, 320, 3840),
         viewportHeight: clampOptionalInteger(params.viewportHeight, 240, 2160),
         deviceScaleFactor: clampOptionalNumber(params.deviceScaleFactor, 1, 4),
+        mobile: params.mobile === true,
         everyNthFrame: clampInteger(params.everyNthFrame, 1, 10, 2),
         minFrameIntervalMs: clampInteger(params.minFrameIntervalMs, 0, 1000, 0),
-        onFrame: stream.sendBinary
+        onFrame: stream.sendBinary,
+        onEvent: stream.emit,
+        onError: (message) => stream.emit?.({ type: 'error', message })
       })
     } catch (error) {
       this.activeScreencastPageIds.delete(browserPageId)

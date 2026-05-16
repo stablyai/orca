@@ -78,6 +78,7 @@ import type {
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot,
+  RuntimeBrowserDriverState,
   RuntimeTerminalDriverState,
   RuntimeSyncWindowGraph,
   RuntimeWorktreeListResult,
@@ -461,6 +462,7 @@ type RuntimeNotifier = {
   // and so a future write coordinator can use the same signal as scheduling
   // input. See docs/mobile-presence-lock.md.
   terminalDriverChanged(ptyId: string, driver: DriverState): void
+  browserDriverChanged?(browserPageId: string, driver: RuntimeBrowserDriverState): void
 }
 
 type TerminalHandleRecord = {
@@ -688,6 +690,10 @@ export class OrcaRuntimeService {
     string,
     { cancel: () => void; done: Promise<void> }
   >()
+  private activeBrowserScreencastsByPage = new Map<
+    string,
+    { cancel: () => void; done: Promise<void> }
+  >()
   // Why: mobile clients subscribe to desktop notifications via
   // notifications.subscribe. This set enables fan-out — each connected
   // mobile client gets its own listener, and dispatchMobileNotification
@@ -760,6 +766,7 @@ export class OrcaRuntimeService {
   // `applyMobileDisplayMode` to pick the active phone-fit viewport. See
   // docs/mobile-presence-lock.md.
   private currentDriver = new Map<string, DriverState>()
+  private currentBrowserDriver = new Map<string, RuntimeBrowserDriverState>()
 
   // Why: resubscribe-grace window. When the last mobile subscriber for a
   // PTY unsubscribes, we hold the driver=mobile{clientId} state and the
@@ -2290,6 +2297,38 @@ export class OrcaRuntimeService {
 
   getAllTerminalDrivers(): Map<string, DriverState> {
     return new Map(this.currentDriver)
+  }
+
+  getAllBrowserDrivers(): Map<string, RuntimeBrowserDriverState> {
+    return new Map(this.currentBrowserDriver)
+  }
+
+  private getBrowserDriver(browserPageId: string): RuntimeBrowserDriverState {
+    return this.currentBrowserDriver.get(browserPageId) ?? { kind: 'idle' }
+  }
+
+  private setBrowserDriver(browserPageId: string, next: RuntimeBrowserDriverState): void {
+    const prev = this.getBrowserDriver(browserPageId)
+    if (prev.kind === next.kind) {
+      if (prev.kind === 'mobile' && next.kind === 'mobile' && prev.clientId === next.clientId) {
+        return
+      }
+      if (prev.kind !== 'mobile' && next.kind !== 'mobile') {
+        return
+      }
+    }
+    if (next.kind === 'idle') {
+      this.currentBrowserDriver.delete(browserPageId)
+    } else {
+      this.currentBrowserDriver.set(browserPageId, next)
+    }
+    this.notifier?.browserDriverChanged?.(browserPageId, next)
+  }
+
+  reclaimBrowserForDesktop(browserPageId: string): boolean {
+    this.setBrowserDriver(browserPageId, { kind: 'desktop' })
+    this.activeBrowserScreencastsByPage.get(browserPageId)?.cancel()
+    return true
   }
 
   onClientDisconnected(clientId: string): void {
@@ -8620,6 +8659,7 @@ export class OrcaRuntimeService {
 
     let screencast: Awaited<ReturnType<RuntimeBrowserCommands['browserScreencast']>> | null = null
     let registeredSubscriptionId: string | null = null
+    let activeBrowserPageId: string | null = null
     let ended = false
     let cancelledBeforeStart = false
     let resolveActiveDone!: () => void
@@ -8651,13 +8691,20 @@ export class OrcaRuntimeService {
     options.signal?.addEventListener('abort', cancel, { once: true })
     try {
       screencast = await this.browserCommands.browserScreencast(params, {
-        sendBinary: options.sendBinary
+        sendBinary: options.sendBinary,
+        emit: options.emit
       })
       if (cancelledBeforeStart || options.signal?.aborted) {
         end(false)
         await screencast.session.done
         return
       }
+      activeBrowserPageId = screencast.ready.browserPageId
+      this.activeBrowserScreencastsByPage.set(activeBrowserPageId, {
+        cancel,
+        done: activeDone
+      })
+      this.setBrowserDriver(activeBrowserPageId, { kind: 'mobile', clientId: connectionKey })
 
       // Why: browser screencast frames are connection-scoped media. Registering
       // cleanup ties Page.stopScreencast to the exact remote socket so hidden
@@ -8683,6 +8730,16 @@ export class OrcaRuntimeService {
       const active = this.activeBrowserScreencastsByConnection.get(connectionKey)
       if (active?.done === activeDone) {
         this.activeBrowserScreencastsByConnection.delete(connectionKey)
+      }
+      if (activeBrowserPageId) {
+        const activePageStream = this.activeBrowserScreencastsByPage.get(activeBrowserPageId)
+        if (activePageStream?.done === activeDone) {
+          this.activeBrowserScreencastsByPage.delete(activeBrowserPageId)
+        }
+        const driver = this.getBrowserDriver(activeBrowserPageId)
+        if (driver.kind === 'mobile' && driver.clientId === connectionKey) {
+          this.setBrowserDriver(activeBrowserPageId, { kind: 'idle' })
+        }
       }
       resolveActiveDone()
     }

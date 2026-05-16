@@ -6,6 +6,8 @@ const METADATA_KEYS = [
   'pageScaleFactor',
   'deviceWidth',
   'deviceHeight',
+  'imageWidth',
+  'imageHeight',
   'scrollOffsetX',
   'scrollOffsetY',
   'timestamp'
@@ -22,6 +24,8 @@ export type BrowserScreencastFrameMetadata = {
   pageScaleFactor?: number
   deviceWidth?: number
   deviceHeight?: number
+  imageWidth?: number
+  imageHeight?: number
   scrollOffsetX?: number
   scrollOffsetY?: number
   timestamp?: number

@@ -20,7 +20,10 @@ import type {
 } from '../../../shared/remote-workspace-types'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { SshConnectionState } from '../../../shared/ssh-types'
-import type { RuntimeTerminalDriverState } from '../../../shared/runtime-types'
+import type {
+  RuntimeBrowserDriverState,
+  RuntimeTerminalDriverState
+} from '../../../shared/runtime-types'
 import { importRemoteWorkspaceSession } from '../../../shared/remote-workspace-session-projection'
 import { zoomLevelToPercent, ZOOM_MIN, ZOOM_MAX } from '@/components/settings/SettingsConstants'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
@@ -40,6 +43,10 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { focusRuntimeTerminalSurface } from '@/runtime/sync-runtime-graph'
 import { setFitOverride, hydrateOverrides } from '@/lib/pane-manager/mobile-fit-overrides'
 import { setDriverForPty, hydrateDrivers } from '@/lib/pane-manager/mobile-driver-state'
+import {
+  hydrateBrowserDrivers,
+  setDriverForBrowserPage
+} from '@/lib/pane-manager/browser-mobile-driver-state'
 import { destroyPersistentWebview } from '@/components/browser-pane/webview-registry'
 import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { detectLanguage } from '@/lib/language-detect'
@@ -1697,6 +1704,13 @@ export function useIpcEvents(): void {
             driver: RuntimeTerminalDriverState
           }
         }
+      | {
+          kind: 'browser-driver'
+          event: {
+            browserPageId: string
+            driver: RuntimeBrowserDriverState
+          }
+        }
     const pendingMobileStateEvents: PendingMobileStateEvent[] = []
 
     const applyPendingMobileStateEvents = (): void => {
@@ -1704,8 +1718,10 @@ export function useIpcEvents(): void {
         if (pending.kind === 'fit') {
           const { ptyId, mode, cols, rows } = pending.event
           setFitOverride(ptyId, mode, cols, rows)
-        } else {
+        } else if (pending.kind === 'driver') {
           setDriverForPty(pending.event.ptyId, pending.event.driver)
+        } else {
+          setDriverForBrowserPage(pending.event.browserPageId, pending.event.driver)
         }
       }
       pendingMobileStateEvents.length = 0
@@ -1741,17 +1757,32 @@ export function useIpcEvents(): void {
       })
     )
 
+    unsubs.push(
+      window.api.runtime.onBrowserDriverChanged((event) => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
+        if (!mobileStateHydrated) {
+          pendingMobileStateEvents.push({ kind: 'browser-driver', event })
+          return
+        }
+        setDriverForBrowserPage(event.browserPageId, event.driver)
+      })
+    )
+
     // Why: hydrate mobile-owned terminal state on renderer reload. Subscribe
     // first and buffer live events during the snapshot round trip; otherwise an
     // older snapshot could overwrite a newer live lock and hide the overlay.
     if (!isRuntimeEnvironmentActive()) {
       void Promise.all([
         window.api.runtime.getTerminalFitOverrides(),
-        window.api.runtime.getTerminalDrivers()
+        window.api.runtime.getTerminalDrivers(),
+        window.api.runtime.getBrowserDrivers()
       ])
-        .then(([overrides, drivers]) => {
+        .then(([overrides, drivers, browserDrivers]) => {
           hydrateOverrides(overrides)
           hydrateDrivers(drivers)
+          hydrateBrowserDrivers(browserDrivers)
           mobileStateHydrated = true
           applyPendingMobileStateEvents()
         })

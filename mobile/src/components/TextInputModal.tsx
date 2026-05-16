@@ -19,6 +19,7 @@ type Props = {
   placeholder?: string
   submitLabel?: string
   selectTextOnFocus?: boolean
+  allowEmpty?: boolean
   keyboardType?: KeyboardTypeOptions
   onSubmit: (value: string) => void
   onCancel: () => void
@@ -32,6 +33,7 @@ export function TextInputModal({
   placeholder,
   submitLabel = 'Save',
   selectTextOnFocus = false,
+  allowEmpty = false,
   keyboardType,
   onSubmit,
   onCancel
@@ -43,10 +45,13 @@ export function TextInputModal({
   }, [visible, defaultValue])
 
   function handleSubmit() {
-    if (value.trim()) {
-      onSubmit(value.trim())
+    const trimmed = value.trim()
+    if (trimmed || allowEmpty) {
+      onSubmit(trimmed)
     }
   }
+
+  const canSubmit = allowEmpty || value.trim().length > 0
 
   return (
     <BottomDrawer visible={visible} onClose={onCancel}>
@@ -82,9 +87,9 @@ export function TextInputModal({
           style={({ pressed }) => [
             styles.submitButton,
             pressed && styles.buttonPressed,
-            !value.trim() && styles.submitButtonDisabled
+            !canSubmit && styles.submitButtonDisabled
           ]}
-          disabled={!value.trim()}
+          disabled={!canSubmit}
           onPress={handleSubmit}
         >
           <Text style={styles.submitText}>{submitLabel}</Text>

@@ -69,6 +69,7 @@ export const Screencast = BrowserTarget.extend({
   viewportWidth: OptionalFiniteNumber,
   viewportHeight: OptionalFiniteNumber,
   deviceScaleFactor: OptionalFiniteNumber,
+  mobile: OptionalBoolean,
   everyNthFrame: OptionalFiniteNumber,
   minFrameIntervalMs: OptionalFiniteNumber
 })

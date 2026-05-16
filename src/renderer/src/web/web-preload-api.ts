@@ -210,9 +210,12 @@ function createRuntimeApi(): NonNullable<Partial<PreloadApi>['runtime']> {
     call: ({ method, params }) => callRuntimeEnvelope(method, params),
     getTerminalFitOverrides: () => Promise.resolve([]),
     getTerminalDrivers: () => Promise.resolve([]),
+    getBrowserDrivers: () => Promise.resolve([]),
     restoreTerminalFit: () => Promise.resolve({ restored: false }),
+    reclaimBrowserForDesktop: () => Promise.resolve({ reclaimed: false }),
     onTerminalFitOverrideChanged: () => noopUnsubscribe,
-    onTerminalDriverChanged: () => noopUnsubscribe
+    onTerminalDriverChanged: () => noopUnsubscribe,
+    onBrowserDriverChanged: () => noopUnsubscribe
   }
 }
 

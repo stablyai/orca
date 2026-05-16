@@ -28,6 +28,8 @@ export type RuntimeTerminalDriverState =
   | { kind: 'desktop' }
   | { kind: 'mobile'; clientId: string }
 
+export type RuntimeBrowserDriverState = RuntimeTerminalDriverState
+
 export type RuntimeStatus = {
   runtimeId: string
   rendererGraphEpoch: number
@@ -445,7 +447,27 @@ export type BrowserScreencastEndResult = {
   subscriptionId: string
 }
 
-export type BrowserScreencastResult = BrowserScreencastReadyResult | BrowserScreencastEndResult
+export type BrowserScreencastDialogResult = {
+  type: 'dialog'
+  dialogType: string
+  message: string
+}
+
+export type BrowserScreencastDialogClosedResult = {
+  type: 'dialogClosed'
+}
+
+export type BrowserScreencastErrorResult = {
+  type: 'error'
+  message: string
+}
+
+export type BrowserScreencastResult =
+  | BrowserScreencastReadyResult
+  | BrowserScreencastEndResult
+  | BrowserScreencastDialogResult
+  | BrowserScreencastDialogClosedResult
+  | BrowserScreencastErrorResult
 
 export type BrowserEvalResult = {
   result: string

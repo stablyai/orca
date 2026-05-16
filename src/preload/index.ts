@@ -38,6 +38,7 @@ import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult } from '../shared/skills'
 import type {
+  RuntimeBrowserDriverState,
   RuntimeStatus,
   RuntimeSyncWindowGraph,
   RuntimeTerminalDriverState
@@ -2627,8 +2628,16 @@ const api = {
         driver: RuntimeTerminalDriverState
       }[]
     > => ipcRenderer.invoke('runtime:getTerminalDrivers'),
+    getBrowserDrivers: (): Promise<
+      {
+        browserPageId: string
+        driver: RuntimeBrowserDriverState
+      }[]
+    > => ipcRenderer.invoke('runtime:getBrowserDrivers'),
     restoreTerminalFit: (ptyId: string): Promise<{ restored: boolean }> =>
       ipcRenderer.invoke('runtime:restoreTerminalFit', { ptyId }),
+    reclaimBrowserForDesktop: (browserPageId: string): Promise<{ reclaimed: boolean }> =>
+      ipcRenderer.invoke('runtime:reclaimBrowserForDesktop', { browserPageId }),
     onTerminalFitOverrideChanged: (
       callback: (event: {
         ptyId: string
@@ -2656,6 +2665,19 @@ const api = {
       ) => callback(data)
       ipcRenderer.on('runtime:terminalDriverChanged', listener)
       return () => ipcRenderer.removeListener('runtime:terminalDriverChanged', listener)
+    },
+    onBrowserDriverChanged: (
+      callback: (event: { browserPageId: string; driver: RuntimeBrowserDriverState }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          browserPageId: string
+          driver: RuntimeBrowserDriverState
+        }
+      ) => callback(data)
+      ipcRenderer.on('runtime:browserDriverChanged', listener)
+      return () => ipcRenderer.removeListener('runtime:browserDriverChanged', listener)
     }
   },
 
