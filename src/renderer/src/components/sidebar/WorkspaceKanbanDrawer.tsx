@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useAllWorktrees, useRepoMap } from '@/store/selectors'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
@@ -14,21 +14,27 @@ import {
 import { useWorkspaceStatusDocumentDrop } from './use-workspace-status-drop'
 import { useWorkspaceKanbanAreaSelection } from './use-workspace-kanban-area-selection'
 import { useWorkspaceKanbanSelection } from './use-workspace-kanban-selection'
-import type { WorkspaceStatus, Worktree } from '../../../../shared/types'
+import {
+  isWorkspaceBoardKeepOpenTarget,
+  useWorkspaceKanbanOutsideDismiss
+} from './use-workspace-kanban-outside-dismiss'
+import { useVisibleWorkspaceKanbanWorktreeIds } from './use-visible-workspace-kanban-worktree-ids'
+import { groupWorkspaceKanbanWorktrees } from './workspace-kanban-worktree-groups'
+import type { WorkspaceStatus } from '../../../../shared/types'
 import { makeWorkspaceStatusId } from '../../../../shared/workspace-statuses'
 
 type WorkspaceKanbanDrawerProps = {
   open: boolean
+  preserveOpenForMenu: boolean
   onOpenChange: (open: boolean) => void
-}
-
-function sortBoardWorktrees(a: Worktree, b: Worktree): number {
-  return b.lastActivityAt - a.lastActivityAt || a.displayName.localeCompare(b.displayName)
+  onMenuOpenChange: (open: boolean) => void
 }
 
 export default function WorkspaceKanbanDrawer({
   open,
-  onOpenChange
+  preserveOpenForMenu,
+  onOpenChange,
+  onMenuOpenChange
 }: WorkspaceKanbanDrawerProps): React.JSX.Element {
   const allWorktrees = useAllWorktrees()
   const repoMap = useRepoMap()
@@ -48,21 +54,19 @@ export default function WorkspaceKanbanDrawer({
   const [dragOverStatus, setDragOverStatus] = useState<WorkspaceStatus | null>(null)
   const [pinDragOver, setPinDragOver] = useState(false)
 
+  const visibleWorktreeIdSet = useVisibleWorkspaceKanbanWorktreeIds({
+    allWorktrees,
+    activeWorktreeId,
+    repoMap
+  })
+
   const worktreesByStatus = useMemo(() => {
-    const grouped = new Map<WorkspaceStatus, Worktree[]>(
-      workspaceStatuses.map((status) => [status.id, []])
-    )
-    for (const worktree of allWorktrees) {
-      if (worktree.isArchived) {
-        continue
-      }
-      grouped.get(getWorkspaceStatus(worktree, workspaceStatuses))!.push(worktree)
-    }
-    for (const items of grouped.values()) {
-      items.sort((a, b) => Number(b.isPinned) - Number(a.isPinned) || sortBoardWorktrees(a, b))
-    }
-    return grouped
-  }, [allWorktrees, workspaceStatuses])
+    return groupWorkspaceKanbanWorktrees({
+      worktrees: allWorktrees,
+      visibleWorktreeIds: visibleWorktreeIdSet,
+      workspaceStatuses
+    })
+  }, [allWorktrees, visibleWorktreeIdSet, workspaceStatuses])
   const worktreeById = useMemo(
     () => new Map(allWorktrees.map((worktree) => [worktree.id, worktree])),
     [allWorktrees]
@@ -297,28 +301,7 @@ export default function WorkspaceKanbanDrawer({
     }
   )
 
-  useEffect(() => {
-    if (!open) {
-      return
-    }
-
-    const handlePointerDown = (event: PointerEvent): void => {
-      const content = boardRef.current?.closest<HTMLElement>('[data-slot="sheet-content"]')
-      if (!content) {
-        return
-      }
-      if (event.target instanceof Node && content.contains(event.target)) {
-        return
-      }
-      const rect = content.getBoundingClientRect()
-      if (event.clientX > rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom) {
-        onOpenChange(false)
-      }
-    }
-
-    document.addEventListener('pointerdown', handlePointerDown, true)
-    return () => document.removeEventListener('pointerdown', handlePointerDown, true)
-  }, [onOpenChange, open])
+  useWorkspaceKanbanOutsideDismiss({ open, boardRef, preserveOpenForMenu, onOpenChange })
 
   const opacityPercent = Math.round(workspaceBoardOpacity * 100)
   const drawerLeft = sidebarOpen ? sidebarWidth : 0
@@ -350,7 +333,13 @@ export default function WorkspaceKanbanDrawer({
         onInteractOutside={(event) => {
           const originalEvent = event.detail.originalEvent
           const target = originalEvent.target
-          if (target instanceof Element && target.closest('[data-workspace-board-trigger]')) {
+          if (preserveOpenForMenu) {
+            // Why: the first outside click should close a board dropdown, not
+            // also dismiss the board that owns the dropdown.
+            event.preventDefault()
+            return
+          }
+          if (isWorkspaceBoardKeepOpenTarget(target)) {
             event.preventDefault()
             return
           }
@@ -373,6 +362,7 @@ export default function WorkspaceKanbanDrawer({
           onMoveStatus={handleMoveStatus}
           onRemoveStatus={handleRemoveStatus}
           onAddStatus={handleAddStatus}
+          onFilterMenuOpenChange={onMenuOpenChange}
         />
         <div
           ref={boardRef}

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Activity, Check, FolderPlus, GitBranch, ListFilter, Server } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
@@ -22,7 +22,19 @@ import RepoDotLabel from '@/components/repo/RepoDotLabel'
 import { searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
 
-const SidebarFilter = React.memo(function SidebarFilter() {
+type SidebarFilterProps = {
+  preserveWorkspaceBoardOpen?: boolean
+  tooltipSide?: 'top' | 'right' | 'bottom' | 'left'
+  contentSide?: 'top' | 'right' | 'bottom' | 'left'
+  onMenuOpenChange?: (open: boolean) => void
+}
+
+const SidebarFilter = React.memo(function SidebarFilter({
+  preserveWorkspaceBoardOpen = false,
+  tooltipSide = 'bottom',
+  contentSide = 'right',
+  onMenuOpenChange
+}: SidebarFilterProps) {
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
   const setShowActiveOnly = useAppStore((s) => s.setShowActiveOnly)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
@@ -36,12 +48,22 @@ const SidebarFilter = React.memo(function SidebarFilter() {
   const [query, setQuery] = useState('')
   const [commandValue, setCommandValue] = useState('')
 
-  const handleOpenChange = useCallback((next: boolean) => {
-    setOpen(next)
-    if (!next) {
-      setQuery('')
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      setOpen(next)
+      onMenuOpenChange?.(next)
+      if (!next) {
+        setQuery('')
+      }
+    },
+    [onMenuOpenChange]
+  )
+
+  useEffect(() => {
+    return () => {
+      onMenuOpenChange?.(false)
     }
-  }, [])
+  }, [onMenuOpenChange])
 
   const handleToggleRepo = useCallback(
     (repoId: string) => {
@@ -90,7 +112,7 @@ const SidebarFilter = React.memo(function SidebarFilter() {
   const clearRepos = useCallback(() => setFilterRepoIds([]), [setFilterRepoIds])
 
   return (
-    <DropdownMenu open={open} onOpenChange={handleOpenChange}>
+    <DropdownMenu modal={false} open={open} onOpenChange={handleOpenChange}>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
@@ -102,6 +124,7 @@ const SidebarFilter = React.memo(function SidebarFilter() {
                 hasAnyFilter ? `Edit filters (${activeFilterCount} active)` : 'Filter workspaces'
               }
               className="relative text-muted-foreground"
+              data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
             >
               <ListFilter className="size-3.5" strokeWidth={2.25} />
               {hasAnyFilter && (
@@ -117,11 +140,17 @@ const SidebarFilter = React.memo(function SidebarFilter() {
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={6}>
+        <TooltipContent side={tooltipSide} sideOffset={6}>
           {hasAnyFilter ? 'Edit filters' : 'Filter workspaces'}
         </TooltipContent>
       </Tooltip>
-      <DropdownMenuContent side="right" align="start" sideOffset={8} className="w-72">
+      <DropdownMenuContent
+        side={contentSide}
+        align="start"
+        sideOffset={8}
+        className="w-72"
+        data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
+      >
         <DropdownMenuCheckboxItem
           checked={showActiveOnly}
           onCheckedChange={(checked) => setShowActiveOnly(Boolean(checked))}
