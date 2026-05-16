@@ -68,7 +68,7 @@ import {
 } from './ipc/pty'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { browserManager } from './browser/browser-manager'
-import { setIdleDockBadgeLabel, setUnreadDockBadgeCount } from './dock/unread-badge'
+import { setUnreadDockBadgeCount } from './dock/unread-badge'
 import { registerFeatureWallFirstAgentTour } from './feature-wall/first-agent-tour'
 import { AutomationService } from './automations/service'
 import { AgentAwakeService } from './agent-awake-service'
@@ -723,7 +723,6 @@ app.whenReady().then(async () => {
   if (process.platform === 'darwin' && is.dev) {
     const dockIcon = nativeImage.createFromPath(devIcon)
     app.dock?.setIcon(dockIcon)
-    setIdleDockBadgeLabel(devInstanceIdentity.dockBadgeLabel)
   }
 
   store = new Store()
