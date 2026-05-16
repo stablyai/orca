@@ -8059,7 +8059,7 @@ export class OrcaRuntimeService {
       return
     }
 
-    const unread = this._orchestrationDb.getUnreadMessages(handle)
+    const unread = this._orchestrationDb.getUndeliveredUnreadMessages(handle)
     if (unread.length === 0) {
       return
     }

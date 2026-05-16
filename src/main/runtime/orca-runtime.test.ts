@@ -1478,6 +1478,49 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('does not replay an already-delivered message on a later idle transition', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new OrchestrationDb(':memory:')
+      const write = vi.fn().mockReturnValue(true)
+      runtime.setOrchestrationDb(db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      db.insertMessage({ from: 'term_sender', to: terminal.handle, subject: 'hello' })
+
+      runtime.deliverPendingMessagesForHandle(terminal.handle)
+      await vi.advanceTimersByTimeAsync(500)
+
+      const firstInjections = write.mock.calls.filter(
+        (c) => typeof c[1] === 'string' && c[1].includes('Subject: hello')
+      ).length
+      expect(firstInjections).toBe(1)
+
+      // Second idle transition: the row is still unread (no check caller has
+      // consumed it), but it has been delivered. Push-on-idle must skip it to
+      // avoid the replay bug.
+      runtime.deliverPendingMessagesForHandle(terminal.handle)
+      await vi.advanceTimersByTimeAsync(500)
+
+      const totalInjections = write.mock.calls.filter(
+        (c) => typeof c[1] === 'string' && c[1].includes('Subject: hello')
+      ).length
+      expect(totalInjections).toBe(1)
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('adopts preallocated ORCA_TERMINAL_HANDLE as a valid runtime handle', async () => {
     const runtime = new OrcaRuntimeService(store)
     const handle = runtime.preAllocateHandleForPty('pty-1')
