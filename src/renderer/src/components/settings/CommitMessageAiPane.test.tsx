@@ -70,7 +70,7 @@ describe('CommitMessageAiPane', () => {
     expect(markup).toContain('Use Conventional Commits.')
   })
 
-  it('keeps the agent selector wide enough for GitHub Copilot', () => {
+  it('keeps the agent and model selectors aligned for long labels', () => {
     const markup = renderPane(
       buildSettings({
         commitMessageAi: {
@@ -84,7 +84,8 @@ describe('CommitMessageAiPane', () => {
       })
     )
 
-    expect(markup).toContain('w-[220px]')
+    expect(markup.match(/w-\[260px\]/g)).toHaveLength(2)
+    expect(markup.match(/shrink-0/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
   })
 
   it('renders custom command settings for custom agents', () => {

@@ -240,6 +240,12 @@ function finalizeModelDiscoveryOutput(
   }
   const models = spec.modelDiscovery?.parse(stdout) ?? []
   if (models.length === 0) {
+    if (spec.models.length > 0) {
+      console.warn('[commit-message] Model discovery returned no models; using static fallback:', {
+        label: spec.label
+      })
+      return toModelDiscoveryCapability(spec, spec.models, spec.defaultModelId)
+    }
     return { success: false, error: `${spec.label} returned no available models.` }
   }
   const defaultModelId = models.some((model) => model.id === spec.defaultModelId)

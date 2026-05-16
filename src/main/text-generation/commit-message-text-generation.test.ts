@@ -280,6 +280,30 @@ describe('discoverCommitMessageModelsLocal', () => {
       expect.objectContaining({ windowsHide: true })
     )
   })
+
+  it('falls back to static models when dynamic discovery returns no parseable models', async () => {
+    const listeners = new Map<string, (value: unknown) => void>()
+    const child = {
+      pid: 123,
+      kill: vi.fn(),
+      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
+      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+      stdin: { end: vi.fn() },
+      on: vi.fn((event, callback) => listeners.set(event, callback))
+    }
+    spawnMock.mockReturnValue(child as never)
+
+    const pending = discoverCommitMessageModelsLocal('pi', undefined)
+
+    listeners.get('stdout:data')?.(Buffer.from('provider model\n'))
+    listeners.get('close')?.(0)
+
+    await expect(pending).resolves.toMatchObject({
+      success: true,
+      defaultModelId: 'github-copilot/gpt-5.4-mini',
+      models: [{ id: 'github-copilot/gpt-5.4-mini' }]
+    })
+  })
 })
 
 describe('generateCommitMessageFromContext', () => {

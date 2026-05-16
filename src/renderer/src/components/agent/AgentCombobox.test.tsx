@@ -15,7 +15,7 @@ describe('AgentCombobox', () => {
     )
 
     expect(markup).toContain('GitHub Copilot')
-    expect(markup).toContain('!min-w-[220px]')
+    expect(markup).toContain('!min-w-[260px]')
     expect(markup).toContain('flex-1')
   })
 })

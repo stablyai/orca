@@ -42,7 +42,7 @@ type AgentComboboxProps = {
 }
 
 const BLANK_VALUE = '__none__'
-const TRIGGER_MIN_WIDTH_CLASS = '!min-w-[220px]'
+const TRIGGER_MIN_WIDTH_CLASS = '!min-w-[260px]'
 
 type ItemRenderArgs = {
   key: string
