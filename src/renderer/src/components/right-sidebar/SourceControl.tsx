@@ -1987,7 +1987,8 @@ function SourceControlInner(): React.JSX.Element {
           worktreePath,
           result.summary,
           result.entries,
-          item.subject
+          item.subject,
+          item.message
         )
       } catch (error) {
         toast.error(error instanceof Error ? error.message : 'Failed to load commit diff')

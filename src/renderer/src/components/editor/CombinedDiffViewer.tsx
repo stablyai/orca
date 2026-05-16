@@ -112,6 +112,18 @@ function getInitialCombinedDiffSideBySide(diffDefaultView: string | undefined): 
   return combinedDiffSideBySidePreference ?? diffDefaultView === 'side-by-side'
 }
 
+function commitMessageBody(message: string | undefined, subject: string | undefined): string {
+  const normalized = (message ?? '').replace(/\r\n/g, '\n').trim()
+  if (!normalized) {
+    return ''
+  }
+  const [firstLine = '', ...bodyLines] = normalized.split('\n')
+  if (subject && firstLine.trim() === subject.trim()) {
+    return bodyLines.join('\n').trim()
+  }
+  return normalized
+}
+
 export default function CombinedDiffViewer({
   file,
   viewStateKey
@@ -840,39 +852,76 @@ export default function CombinedDiffViewer({
     }
   }, [clearDiffComments, diffCommentCount, file.worktreeId, isClearingNotes])
 
+  const commitBody = commitMessageBody(commitCompare?.message, commitCompare?.subject)
+  const commitHeader =
+    isCommitMode && commitCompare ? (
+      <div className="border-b border-border bg-background px-4 py-3">
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0">
+            {commitCompare.subject && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    className="truncate text-sm font-semibold text-foreground"
+                    title={commitCompare.subject}
+                  >
+                    {commitCompare.subject}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6} className="max-w-96">
+                  {commitCompare.subject}
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {commitBody && (
+              <div className="mt-1 max-h-24 overflow-auto whitespace-pre-wrap text-xs leading-5 text-muted-foreground scrollbar-sleek">
+                {commitBody}
+              </div>
+            )}
+          </div>
+          <span className="shrink-0 font-mono text-[11px] leading-5 text-muted-foreground">
+            {commitCompare.compareRef}
+          </span>
+        </div>
+      </div>
+    ) : null
+
   if (sections.length === 0 && (file.skippedConflicts?.length ?? 0) > 0) {
     return (
-      <div className="flex h-full items-center justify-center px-6 text-center">
-        <div className="max-w-md space-y-3">
-          <div className="text-sm font-medium text-foreground">
-            Conflicted files are reviewed separately
-          </div>
-          <div className="text-xs text-muted-foreground">
-            This diff view excludes unresolved conflicts because the normal two-way diff pipeline is
-            not conflict-safe.
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {file.skippedConflicts!.map((entry) => entry.path).join(', ')}
-          </div>
-          <div className="flex justify-center">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                openConflictReview(
-                  file.worktreeId,
-                  file.filePath,
-                  file.skippedConflicts!.map((entry) => ({
-                    path: entry.path,
-                    conflictKind: entry.conflictKind
-                  })),
-                  'combined-diff-exclusion'
-                )
-              }
-            >
-              Review conflicts
-            </Button>
+      <div className="flex h-full min-h-0 flex-col">
+        {commitHeader}
+        <div className="flex flex-1 items-center justify-center px-6 text-center">
+          <div className="max-w-md space-y-3">
+            <div className="text-sm font-medium text-foreground">
+              Conflicted files are reviewed separately
+            </div>
+            <div className="text-xs text-muted-foreground">
+              This diff view excludes unresolved conflicts because the normal two-way diff pipeline
+              is not conflict-safe.
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {file.skippedConflicts!.map((entry) => entry.path).join(', ')}
+            </div>
+            <div className="flex justify-center">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  openConflictReview(
+                    file.worktreeId,
+                    file.filePath,
+                    file.skippedConflicts!.map((entry) => ({
+                      path: entry.path,
+                      conflictKind: entry.conflictKind
+                    })),
+                    'combined-diff-exclusion'
+                  )
+                }
+              >
+                Review conflicts
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -881,8 +930,11 @@ export default function CombinedDiffViewer({
 
   if (sections.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-        No changes to display
+      <div className="flex h-full min-h-0 flex-col">
+        {commitHeader}
+        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+          No changes to display
+        </div>
       </div>
     )
   }
@@ -1012,6 +1064,7 @@ export default function CombinedDiffViewer({
           </div>
         </div>
 
+        {commitHeader}
         <div ref={scrollContainerRef} className="flex-1 overflow-auto scrollbar-editor">
           {skippedConflictNotice}
           <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>

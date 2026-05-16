@@ -6,9 +6,10 @@ import {
   type GitHistoryItemViewModel
 } from '../../../../shared/git-history-graph'
 
-const SWIMLANE_HEIGHT = 22
+const SWIMLANE_HEIGHT = 34
 const SWIMLANE_WIDTH = 11
 const SWIMLANE_CURVE_RADIUS = 5
+const SWIMLANE_NODE_Y = SWIMLANE_HEIGHT / 2
 const CIRCLE_RADIUS = 3.5
 const CIRCLE_STROKE_WIDTH = 1.5
 
@@ -66,7 +67,7 @@ export function GitHistoryGraphSvg({
             color={color}
             d={[
               `M ${SWIMLANE_WIDTH * (index + 1)} 0`,
-              `A ${SWIMLANE_WIDTH} ${SWIMLANE_WIDTH} 0 0 1 ${SWIMLANE_WIDTH * index} ${SWIMLANE_WIDTH}`,
+              `A ${SWIMLANE_WIDTH} ${SWIMLANE_WIDTH} 0 0 1 ${SWIMLANE_WIDTH * index} ${SWIMLANE_NODE_Y}`,
               `H ${SWIMLANE_WIDTH * (circleIndex + 1)}`
             ].join(' ')}
           />
@@ -153,7 +154,7 @@ export function GitHistoryGraphSvg({
   }
 
   const cx = SWIMLANE_WIDTH * (circleIndex + 1)
-  const cy = SWIMLANE_WIDTH
+  const cy = SWIMLANE_NODE_Y
   const width = SWIMLANE_WIDTH * (Math.max(inputSwimlanes.length, outputSwimlanes.length, 1) + 1)
   const isBoundaryNode =
     viewModel.kind === 'incoming-changes' || viewModel.kind === 'outgoing-changes'
