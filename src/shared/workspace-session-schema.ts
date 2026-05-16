@@ -15,6 +15,7 @@ import type {
   TerminalPaneLayoutNode,
   WorkspaceSessionState
 } from './types'
+import { isValidTerminalTabId } from './terminal-tab-id'
 import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
 
 // ─── Terminal pane layout (recursive) ───────────────────────────────
@@ -23,7 +24,7 @@ const terminalPaneSplitDirectionSchema = z.enum(['vertical', 'horizontal'])
 const terminalTabIdSchema = z
   .string()
   .min(1)
-  .refine((value) => !value.includes(':'), 'terminal tab id must not contain ":"')
+  .refine(isValidTerminalTabId, 'terminal tab id must not contain ":"')
 
 // Why: z.lazy + type annotation keeps the recursive inference working without
 // forcing zod to resolve the whole tree at definition time.

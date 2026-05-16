@@ -9,6 +9,7 @@ import type {
   WorkspaceSessionState
 } from '../../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../../../shared/worktree-id'
 import type { AgentStartedTelemetry } from '../../lib/worktree-activation'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
@@ -1588,6 +1589,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           .map(([worktreeId, tabs]) => [
             worktreeId,
             [...tabs]
+              .filter((tab) => {
+                // Why: old web-client mirrors could persist host surface ids
+                // with "::"; makePaneKey reserves ":" as its separator.
+                return isValidTerminalTabId(tab.id)
+              })
               .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
               .map((tab, index) => ({
                 ...clearTransientTerminalState(tab, index),
