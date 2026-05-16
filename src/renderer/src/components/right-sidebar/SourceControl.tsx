@@ -132,6 +132,10 @@ import type {
   HostedReviewInfo
 } from '../../../../shared/hosted-review'
 import { STATUS_COLORS, STATUS_LABELS } from './status-display'
+import {
+  isCustomAgentId,
+  resolveCommitMessageAgentChoice
+} from '../../../../shared/commit-message-agent-spec'
 
 type SourceControlScope = 'all' | 'uncommitted'
 type SourceControlViewMode = 'list' | 'tree'
@@ -485,6 +489,10 @@ function SourceControlInner(): React.JSX.Element {
   const [createPrDialogOpen, setCreatePrDialogOpen] = useState(false)
   const [createPrPushFirst, setCreatePrPushFirst] = useState(false)
   const commitMessageAi = useAppStore((s) => s.settings?.commitMessageAi)
+  const effectiveCommitMessageAgentId = useMemo(
+    () => resolveCommitMessageAgentChoice(commitMessageAi?.agentId, settings?.defaultTuiAgent),
+    [commitMessageAi?.agentId, settings?.defaultTuiAgent]
+  )
   const filterInputRef = useRef<HTMLInputElement>(null)
   const commitMessage = readCommitDraftForWorktree(commitDrafts, activeWorktreeId)
   const commitError = commitErrors[activeWorktreeId ?? ''] ?? null
@@ -982,11 +990,11 @@ function SourceControlInner(): React.JSX.Element {
     if (generateInFlightRef.current[activeWorktreeId]) {
       return
     }
-    if (!commitMessageAi?.enabled || !commitMessageAi.agentId) {
+    if (!commitMessageAi?.enabled || !effectiveCommitMessageAgentId) {
       return
     }
 
-    if (commitMessageAi.agentId === 'custom') {
+    if (isCustomAgentId(effectiveCommitMessageAgentId)) {
       const command = commitMessageAi.customAgentCommand?.trim() ?? ''
       if (!command) {
         setGenerateErrors((prev) => ({
@@ -1045,7 +1053,7 @@ function SourceControlInner(): React.JSX.Element {
       setGenerateInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
       generateInFlightRef.current[activeWorktreeId] = false
     }
-  }, [activeWorktreeId, commitMessageAi, worktreePath])
+  }, [activeWorktreeId, commitMessageAi, effectiveCommitMessageAgentId, worktreePath])
 
   const handleCancelGenerate = useCallback((): void => {
     if (!activeWorktreeId || !worktreePath) {
@@ -2488,11 +2496,11 @@ function SourceControlInner(): React.JSX.Element {
               aiEnabled={commitMessageAi?.enabled === true}
               aiAgentConfigured={
                 commitMessageAi?.enabled === true &&
-                commitMessageAi.agentId !== null &&
+                effectiveCommitMessageAgentId !== null &&
                 // Why: 'custom' is configured only once the user types a command.
                 // Without this guard, Generate would spawn an empty command and
                 // fail with a confusing error.
-                (commitMessageAi.agentId !== 'custom' ||
+                (!isCustomAgentId(effectiveCommitMessageAgentId) ||
                   (commitMessageAi.customAgentCommand ?? '').trim().length > 0)
               }
               isGenerating={isGenerating}
@@ -3048,16 +3056,23 @@ export function CommitArea({
             // swap to a Square ("stop") with a destructive tint so the user
             // sees that clicking will abort the run. Group/group-hover toggles
             // keep this stateless on the React side.
-            <button
-              type="button"
-              onClick={() => onCancelGenerate()}
-              title="Stop generating"
-              aria-label="Stop generating commit message"
-              className="group absolute right-1.5 top-1.5 inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-destructive/40"
-            >
-              <RefreshCw className="size-3.5 animate-spin group-hover:hidden group-focus-visible:hidden" />
-              <Square className="hidden size-3.5 fill-current group-hover:block group-focus-visible:block" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => onCancelGenerate()}
+                  title="Stop generating"
+                  aria-label="Stop generating commit message"
+                  className="group absolute right-1.5 top-1.5 inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-destructive/40"
+                >
+                  <RefreshCw className="size-3.5 animate-spin group-hover:hidden group-focus-visible:hidden" />
+                  <Square className="hidden size-3.5 fill-current group-hover:block group-focus-visible:block" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="left" sideOffset={6}>
+                Generating commit message. Click to stop.
+              </TooltipContent>
+            </Tooltip>
           ) : (
             <button
               type="button"

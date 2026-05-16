@@ -9,4 +9,12 @@ describe('getDefaultSettings', () => {
   it('enables separate light terminal theme by default', () => {
     expect(getDefaultSettings('/tmp').terminalUseSeparateLightTheme).toBe(true)
   })
+
+  it('enables AI commit messages by default without pinning a separate agent', () => {
+    expect(getDefaultSettings('/tmp').commitMessageAi).toMatchObject({
+      enabled: true,
+      agentId: null,
+      selectedModelByAgent: {}
+    })
+  })
 })

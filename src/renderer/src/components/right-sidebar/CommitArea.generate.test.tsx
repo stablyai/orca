@@ -184,6 +184,7 @@ describe('CommitArea AI generation', () => {
 
     const button = findNativeButtonByAriaLabel(element, 'Stop generating commit message')
     expect(button.props.title).toBe('Stop generating')
+    expect(hasText(element, 'Generating commit message. Click to stop.')).toBe(true)
     ;(button.props.onClick as () => void)()
     expect(onCancelGenerate).toHaveBeenCalledTimes(1)
   })

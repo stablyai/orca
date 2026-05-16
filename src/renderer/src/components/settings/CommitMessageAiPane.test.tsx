@@ -87,6 +87,28 @@ describe('CommitMessageAiPane', () => {
     expect(markup).toContain('ollama run llama3.1 {prompt}')
   })
 
+  it('shows an unconfigured state when the default agent is unsupported', () => {
+    const markup = renderPane(
+      buildSettings({
+        defaultTuiAgent: 'gemini',
+        commitMessageAi: {
+          enabled: true,
+          agentId: null,
+          selectedModelByAgent: {},
+          selectedThinkingByModel: {},
+          customPrompt: '',
+          customAgentCommand: ''
+        }
+      })
+    )
+
+    expect(markup).toContain('Not configured')
+    expect(markup).toContain('Your default agent is Gemini')
+    expect(markup).toContain('Choose Claude, Codex, or Custom')
+    expect(markup).not.toContain('Which model the selected agent uses')
+    expect(markup).not.toContain('Thinking effort')
+  })
+
   it('keeps custom command discoverable in settings search metadata', () => {
     const customCommandEntry = COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES.find(
       (entry) => entry.title === 'Custom command'

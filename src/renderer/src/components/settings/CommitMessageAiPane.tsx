@@ -7,11 +7,10 @@ import { Terminal } from 'lucide-react'
 import type { CommitMessageAiSettings, GlobalSettings, TuiAgent } from '../../../../shared/types'
 import {
   CUSTOM_AGENT_ID,
-  DEFAULT_COMMIT_MESSAGE_AGENT_ID,
   getCommitMessageAgentCapability,
   isCustomAgentId,
   listCommitMessageAgentCapabilities,
-  type CommitMessageAgentChoice,
+  resolveCommitMessageAgentChoice,
   type CommitMessageAgentCapability,
   type CommitMessageModelCapability
 } from '../../../../shared/commit-message-agent-spec'
@@ -39,6 +38,8 @@ const EMPTY_SETTINGS: CommitMessageAiSettings = {
   customPrompt: '',
   customAgentCommand: ''
 }
+
+const UNCONFIGURED_AGENT_SELECT_VALUE = ''
 
 function readSettings(settings: GlobalSettings): CommitMessageAiSettings {
   return settings.commitMessageAi ?? EMPTY_SETTINGS
@@ -119,9 +120,24 @@ export function CommitMessageAiPane({
   )
 
   const agentCapabilities = useMemo(listCommitMessageAgentCapabilities, [])
-  const activeAgentId: CommitMessageAgentChoice = config.agentId ?? DEFAULT_COMMIT_MESSAGE_AGENT_ID
-  const isCustom = isCustomAgentId(activeAgentId)
-  const activeCapability = isCustom ? undefined : getCommitMessageAgentCapability(activeAgentId)
+  const resolvedAgentId = resolveCommitMessageAgentChoice(config.agentId, settings.defaultTuiAgent)
+  const activeAgentSelectValue = resolvedAgentId ?? UNCONFIGURED_AGENT_SELECT_VALUE
+  const unsupportedDefaultAgent =
+    resolvedAgentId === null &&
+    !config.agentId &&
+    settings.defaultTuiAgent &&
+    settings.defaultTuiAgent !== 'blank'
+      ? settings.defaultTuiAgent
+      : null
+  const unsupportedDefaultAgentLabel = unsupportedDefaultAgent
+    ? (AGENT_CATALOG.find((a) => a.id === unsupportedDefaultAgent)?.label ??
+      unsupportedDefaultAgent)
+    : null
+  const isCustom = isCustomAgentId(resolvedAgentId)
+  const activeCapability =
+    resolvedAgentId && !isCustomAgentId(resolvedAgentId)
+      ? getCommitMessageAgentCapability(resolvedAgentId)
+      : undefined
   const activeModel = activeCapability ? resolveSelectedModel(config, activeCapability) : null
   const activeThinking = activeModel ? resolveSelectedThinking(config, activeModel) : undefined
 
@@ -136,11 +152,15 @@ export function CommitMessageAiPane({
       return
     }
     // Why: when the user enables the feature for the first time, hydrate the
-    // agent / model / thinking choices from provider capabilities so the
-    // Generate button works immediately without forcing them to pick first.
-    // If the user previously persisted 'custom', we keep that and let them
-    // re-edit the command — no implicit reset to a preset.
-    const seedAgentId: TuiAgent | 'custom' = config.agentId ?? DEFAULT_COMMIT_MESSAGE_AGENT_ID
+    // agent / model / thinking choices from their default agent when possible
+    // so Generate works without maintaining a second agent preference. If the
+    // user previously persisted 'custom', keep it and let them re-edit the
+    // command — no implicit reset to a preset.
+    const seedAgentId = resolveCommitMessageAgentChoice(config.agentId, settings.defaultTuiAgent)
+    if (!seedAgentId) {
+      writeConfig({ enabled: true, agentId: null })
+      return
+    }
     const seedCapability = isCustomAgentId(seedAgentId)
       ? undefined
       : getCommitMessageAgentCapability(seedAgentId)
@@ -164,6 +184,9 @@ export function CommitMessageAiPane({
   }
 
   const onAgentChange = (newAgentId: string): void => {
+    if (newAgentId === UNCONFIGURED_AGENT_SELECT_VALUE) {
+      return
+    }
     if (isCustomAgentId(newAgentId)) {
       writeConfig({ agentId: CUSTOM_AGENT_ID })
       return
@@ -317,30 +340,38 @@ export function CommitMessageAiPane({
             worktrees, or the SSH host for remote ones.
           </p>
         </div>
-        <Select value={activeAgentId} onValueChange={onAgentChange}>
-          <SelectTrigger size="sm" className="h-8 text-xs w-[180px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {agentCapabilities.map((capability) => {
-              const id = capability.id
-              return (
-                <SelectItem key={id} value={id} className="cursor-pointer">
-                  <span className="flex items-center gap-2">
-                    <AgentIcon agent={id} size={14} />
-                    <span>{agentLabel(id, capability)}</span>
-                  </span>
-                </SelectItem>
-              )
-            })}
-            <SelectItem value={CUSTOM_AGENT_ID} className="cursor-pointer">
-              <span className="flex items-center gap-2">
-                <Terminal className="size-3.5" />
-                <span>Custom</span>
-              </span>
-            </SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex flex-col items-end gap-1">
+          <Select value={activeAgentSelectValue} onValueChange={onAgentChange}>
+            <SelectTrigger size="sm" className="h-8 text-xs w-[180px]">
+              <SelectValue placeholder="Not configured" />
+            </SelectTrigger>
+            <SelectContent>
+              {agentCapabilities.map((capability) => {
+                const id = capability.id
+                return (
+                  <SelectItem key={id} value={id} className="cursor-pointer">
+                    <span className="flex items-center gap-2">
+                      <AgentIcon agent={id} size={14} />
+                      <span>{agentLabel(id, capability)}</span>
+                    </span>
+                  </SelectItem>
+                )
+              })}
+              <SelectItem value={CUSTOM_AGENT_ID} className="cursor-pointer">
+                <span className="flex items-center gap-2">
+                  <Terminal className="size-3.5" />
+                  <span>Custom</span>
+                </span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          {unsupportedDefaultAgentLabel ? (
+            <p className="max-w-[260px] text-right text-[11px] text-muted-foreground">
+              Your default agent is {unsupportedDefaultAgentLabel}, which does not support commit
+              message generation yet. Choose Claude, Codex, or Custom.
+            </p>
+          ) : null}
+        </div>
       </SearchableSetting>
     )
   }
@@ -413,8 +444,8 @@ export function CommitMessageAiPane({
         <div className="space-y-0.5">
           <Label>Model</Label>
           <p className="text-xs text-muted-foreground">
-            Smaller models default to lower latency and cost. Pick a larger one if the diffs you
-            review tend to need more reasoning.
+            Defaults to the strongest available model for the selected agent. Pick a smaller one if
+            you prefer lower latency or cost.
           </p>
         </div>
         <Select value={activeModel.id} onValueChange={onModelChange}>
