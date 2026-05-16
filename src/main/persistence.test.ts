@@ -32,6 +32,17 @@ const LEGACY_DEFAULT_WORKSPACE_STATUSES = [
   { id: 'in-review', label: 'In review', color: 'violet', icon: 'git-pull-request' },
   { id: 'completed', label: 'Completed', color: 'emerald', icon: 'circle-check' }
 ]
+const WORKFLOW_DEFAULT_WORKSPACE_STATUSES = [
+  { id: 'completed', label: 'Done', color: 'conductor-done', icon: 'conductor-done' },
+  { id: 'in-review', label: 'In review', color: 'conductor-review', icon: 'conductor-review' },
+  {
+    id: 'in-progress',
+    label: 'In progress',
+    color: 'conductor-progress',
+    icon: 'conductor-progress'
+  },
+  { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' }
+]
 
 vi.mock('electron', () => ({
   app: {
@@ -971,32 +982,37 @@ describe('Store', () => {
     const store = await createStore()
     const ui = store.getUI()
     expect(ui.workspaceStatuses?.map((status) => status.id)).toEqual([
-      'todo',
-      'in-progress',
+      'completed',
       'in-review',
-      'completed'
+      'in-progress',
+      'todo'
     ])
+    expect(ui.workspaceStatuses?.[0]?.label).toBe('Done')
     expect(ui._workspaceStatusesDefaultOrderMigrated).toBe(true)
+    expect(ui._workspaceStatusesDefaultWorkflowMigrated).toBe(true)
 
     store.flush()
     const persisted = readDataFile() as {
       ui?: {
         workspaceStatuses?: typeof REORDERED_DEFAULT_WORKSPACE_STATUSES
         _workspaceStatusesDefaultOrderMigrated?: boolean
+        _workspaceStatusesDefaultWorkflowMigrated?: boolean
         _workspaceStatusesDefaultVisualsMigrated?: boolean
       }
     }
     expect(persisted.ui?._workspaceStatusesDefaultOrderMigrated).toBe(true)
+    expect(persisted.ui?._workspaceStatusesDefaultWorkflowMigrated).toBe(true)
     expect(persisted.ui?._workspaceStatusesDefaultVisualsMigrated).toBe(true)
     expect(persisted.ui?.workspaceStatuses?.map((status) => status.id)).toEqual([
-      'todo',
-      'in-progress',
+      'completed',
       'in-review',
-      'completed'
+      'in-progress',
+      'todo'
     ])
+    expect(persisted.ui?.workspaceStatuses?.[0]?.label).toBe('Done')
   })
 
-  it('migrates legacy default workspace status visuals once on load', async () => {
+  it('migrates legacy default workspace status visuals and workflow once on load', async () => {
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -1011,25 +1027,18 @@ describe('Store', () => {
     })
 
     const store = await createStore()
-    expect(store.getUI().workspaceStatuses).toEqual([
-      { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' },
-      {
-        id: 'in-progress',
-        label: 'In progress',
-        color: 'conductor-progress',
-        icon: 'conductor-progress'
-      },
-      { id: 'in-review', label: 'In review', color: 'conductor-review', icon: 'conductor-review' },
-      { id: 'completed', label: 'Completed', color: 'conductor-done', icon: 'conductor-done' }
-    ])
+    expect(store.getUI().workspaceStatuses).toEqual(WORKFLOW_DEFAULT_WORKSPACE_STATUSES)
+    expect(store.getUI()._workspaceStatusesDefaultWorkflowMigrated).toBe(true)
     expect(store.getUI()._workspaceStatusesDefaultVisualsMigrated).toBe(true)
 
     store.flush()
     const persisted = readDataFile() as {
       ui?: {
+        _workspaceStatusesDefaultWorkflowMigrated?: boolean
         _workspaceStatusesDefaultVisualsMigrated?: boolean
       }
     }
+    expect(persisted.ui?._workspaceStatusesDefaultWorkflowMigrated).toBe(true)
     expect(persisted.ui?._workspaceStatusesDefaultVisualsMigrated).toBe(true)
   })
 
@@ -1042,6 +1051,7 @@ describe('Store', () => {
       ui: {
         workspaceStatuses: LEGACY_DEFAULT_WORKSPACE_STATUSES,
         _workspaceStatusesDefaultOrderMigrated: true,
+        _workspaceStatusesDefaultWorkflowMigrated: true,
         _workspaceStatusesDefaultVisualsMigrated: true
       },
       githubCache: { pr: {}, issue: {} },
@@ -1063,7 +1073,8 @@ describe('Store', () => {
       settings: {},
       ui: {
         workspaceStatuses: REORDERED_DEFAULT_WORKSPACE_STATUSES,
-        _workspaceStatusesDefaultOrderMigrated: true
+        _workspaceStatusesDefaultOrderMigrated: true,
+        _workspaceStatusesDefaultWorkflowMigrated: true
       },
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
