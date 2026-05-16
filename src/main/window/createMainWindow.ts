@@ -460,12 +460,20 @@ export function createMainWindow(
   const resetMarkdownEditorFocus = (): void => {
     markdownEditorFocused = false
   }
-  mainWindow.webContents.on('render-process-gone', resetMarkdownEditorFocus)
+  let rendererProcessGone = false
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    rendererProcessGone = true
+    resetMarkdownEditorFocus()
+    console.error('[window] Renderer process gone; close confirmation will be bypassed', details)
+  })
   mainWindow.webContents.on('destroyed', resetMarkdownEditorFocus)
   mainWindow.webContents.on('did-start-navigation', (_e, _url, _isInPlace, isMainFrame) => {
     if (isMainFrame) {
       resetMarkdownEditorFocus()
     }
+  })
+  mainWindow.webContents.on('did-finish-load', () => {
+    rendererProcessGone = false
   })
 
   mainWindow.webContents.on('before-input-event', (event, input) => {
@@ -616,6 +624,18 @@ export function createMainWindow(
       // teardown events can't clobber the user's saved window size — which
       // would otherwise make the post-update relaunch come up at minWidth ×
       // minHeight (issue surfaced in v1.3.26-rc2).
+      windowClosing = true
+      if (boundsTimer) {
+        clearTimeout(boundsTimer)
+        boundsTimer = null
+      }
+      return
+    }
+    const isRendererCrashed = mainWindow.webContents.isCrashed?.() ?? false
+    if (rendererProcessGone || isRendererCrashed) {
+      // Why: after a native renderer crash the renderer cannot answer
+      // window:close-requested. Let Cmd+Q / OS close complete instead of
+      // trapping the user in a blank, unquittable window.
       windowClosing = true
       if (boundsTimer) {
         clearTimeout(boundsTimer)

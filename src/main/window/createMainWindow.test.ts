@@ -567,6 +567,217 @@ describe('createMainWindow', () => {
     expect(onQuitAborted).toHaveBeenCalledTimes(1)
   })
 
+  it('allows close after the renderer process is gone', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isCrashed: vi.fn(() => false)
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null, { getIsQuitting: () => true })
+
+    windowHandlers['render-process-gone']?.(
+      {} as never,
+      {
+        reason: 'crashed',
+        exitCode: 5
+      } as never
+    )
+    const preventDefault = vi.fn()
+    windowHandlers.close({ preventDefault } as never)
+
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(webContents.send).not.toHaveBeenCalledWith('window:close-requested', {
+      isQuitting: true
+    })
+
+    consoleError.mockRestore()
+  })
+
+  it('does not persist pending bounds after bypassing close for a gone renderer', () => {
+    vi.useFakeTimers()
+
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isCrashed: vi.fn(() => false)
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => false),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      getBounds: vi.fn(() => ({ x: 10, y: 20, width: 1000, height: 700 })),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    const updateUI = vi.fn()
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow({
+      getUI: () => ({}),
+      getSettings: () => ({ windowBackgroundBlur: false }),
+      updateUI
+    } as never)
+
+    windowHandlers.resize()
+    windowHandlers['render-process-gone']?.(
+      {} as never,
+      {
+        reason: 'crashed',
+        exitCode: 5
+      } as never
+    )
+    const preventDefault = vi.fn()
+    windowHandlers.close({ preventDefault } as never)
+    vi.advanceTimersByTime(500)
+
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(updateUI).not.toHaveBeenCalled()
+
+    consoleError.mockRestore()
+  })
+
+  it('resumes close confirmation after a renderer process reloads', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isCrashed: vi.fn(() => false)
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null, { getIsQuitting: () => true })
+
+    windowHandlers['render-process-gone']?.(
+      {} as never,
+      {
+        reason: 'crashed',
+        exitCode: 5
+      } as never
+    )
+    windowHandlers['did-finish-load']?.()
+    const preventDefault = vi.fn()
+    windowHandlers.close({ preventDefault } as never)
+
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(webContents.send).toHaveBeenCalledWith('window:close-requested', {
+      isQuitting: true
+    })
+
+    consoleError.mockRestore()
+  })
+
+  it('allows close when Electron reports a crashed webContents', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isCrashed: vi.fn(() => true)
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(null, { getIsQuitting: () => true })
+
+    const preventDefault = vi.fn()
+    windowHandlers.close({ preventDefault } as never)
+
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(webContents.send).not.toHaveBeenCalledWith('window:close-requested', {
+      isQuitting: true
+    })
+  })
+
   it('ignores traffic light sync IPC on non-macOS', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
