@@ -31,6 +31,7 @@
     "typecheck:tsc": "tsc --noEmit -p config/tsconfig.node.json --composite false && tsc --noEmit -p config/tsconfig.cli.json --composite false && tsc --noEmit -p config/tsconfig.web.json --composite false",
     "start": "electron-vite preview",
     "dev": "node config/scripts/run-electron-vite-dev.mjs",
+    "dev-stable-name": "node config/scripts/run-electron-vite-dev.mjs --stable-name",
     "dev:web": "vite --config vite.web.config.ts --host 127.0.0.1",
     "build:relay": "node config/scripts/build-relay.mjs",
     "build:computer-macos": "node config/scripts/build-computer-macos.mjs",

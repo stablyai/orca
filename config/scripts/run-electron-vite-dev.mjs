@@ -22,6 +22,16 @@ delete process.env.ELECTRON_RUN_AS_NODE
 
 const require = createRequire(import.meta.url)
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
+const STABLE_NAME_FLAG = '--stable-name'
+const rawForwardedArgs = process.argv.slice(2)
+// Why: keep an escape hatch for tools that key off Electron's stock app name.
+// The flag is runner-only and must not leak into Chromium/electron-vite.
+const useStableElectronName =
+  process.env.ORCA_DEV_STABLE_NAME === '1' || rawForwardedArgs.includes(STABLE_NAME_FLAG)
+const forwardedRaw = rawForwardedArgs.filter((arg) => arg !== STABLE_NAME_FLAG)
+if (useStableElectronName) {
+  process.env.ORCA_DEV_STABLE_NAME = '1'
+}
 
 function readGitValue(args) {
   try {
@@ -253,7 +263,7 @@ if (process.env.ORCA_SKIP_DEV_CLI_PREPARE !== '1') {
 }
 
 seedDevInstanceIdentityEnv()
-if (process.env.ORCA_SKIP_DEV_ELECTRON_APP_PREPARE !== '1') {
+if (!useStableElectronName && process.env.ORCA_SKIP_DEV_ELECTRON_APP_PREPARE !== '1') {
   prepareMacDevElectronApp()
 }
 
@@ -267,7 +277,6 @@ const electronViteCli =
 // without manual port juggling. Pick a best-effort deterministic port per
 // worktree; falls back to a probe sweep if the deterministic pick or its
 // neighbors are busy (multiple worktrees may share a machine).
-const forwardedRaw = process.argv.slice(2)
 function isPortFree(port) {
   return new Promise((resolve) => {
     const srv = net.createServer()
