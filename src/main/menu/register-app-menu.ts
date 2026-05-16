@@ -11,6 +11,7 @@ export type AppearanceMenuKey = keyof AppearanceMenuState
 type RegisterAppMenuOptions = {
   onOpenSettings: () => void
   onOpenFeatureTour: (window?: Electron.BaseWindow | null) => void
+  onOpenCrashReport: (window?: Electron.BaseWindow | null) => void
   onCheckForUpdates: (options: { includePrerelease: boolean }) => void
   onZoomIn: () => void
   onZoomOut: () => void
@@ -25,6 +26,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   const {
     onOpenSettings,
     onOpenFeatureTour,
+    onOpenCrashReport,
     onCheckForUpdates,
     onZoomIn,
     onZoomOut,
@@ -78,6 +80,11 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   const featureTourItem: Electron.MenuItemConstructorOptions = {
     label: 'Feature tour',
     click: (_menuItem, window) => onOpenFeatureTour(window)
+  }
+
+  const crashReportItem: Electron.MenuItemConstructorOptions = {
+    label: 'Report Crash...',
+    click: (_menuItem, window) => onOpenCrashReport(window)
   }
 
   const exportPdfItem: Electron.MenuItemConstructorOptions = {
@@ -264,6 +271,8 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   const helpMenu: Electron.MenuItemConstructorOptions = {
     label: 'Help',
     submenu: [
+      crashReportItem,
+      { type: 'separator' },
       featureTourItem,
       ...(isMac
         ? []

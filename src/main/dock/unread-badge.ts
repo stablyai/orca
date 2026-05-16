@@ -1,14 +1,32 @@
 import { app } from 'electron'
 
+let idleDockBadgeLabel = ''
+let unreadCount = 0
+
+function applyDockBadge(): void {
+  if (process.platform !== 'darwin') {
+    return
+  }
+
+  const label =
+    unreadCount === 0 ? idleDockBadgeLabel : unreadCount > 99 ? '99+' : String(unreadCount)
+
+  app.dock?.setBadge(label)
+}
+
+export function setIdleDockBadgeLabel(label: string | null | undefined): void {
+  idleDockBadgeLabel = label ?? ''
+  applyDockBadge()
+}
+
 export function setUnreadDockBadgeCount(count: number): void {
   if (process.platform !== 'darwin') {
     return
   }
 
-  const normalizedCount = Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0
-  const label = normalizedCount === 0 ? '' : normalizedCount > 99 ? '99+' : String(normalizedCount)
+  unreadCount = Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0
 
-  // Why: unread counts belong on the native Dock tile on macOS.
-  // Windows/Linux are skipped until we define the right platform behavior.
-  app.dock?.setBadge(label)
+  // Why: unread counts own the native badge while active; otherwise dev builds
+  // keep their worktree badge visible so parallel `pn dev` windows stay distinct.
+  applyDockBadge()
 }

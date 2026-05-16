@@ -1,6 +1,6 @@
 // src/renderer/src/components/terminal-pane/keyboard-handlers.test.ts
 import { describe, it, expect } from 'vitest'
-import { matchSearchNavigate } from './keyboard-handlers'
+import { matchFileSearchShortcut, matchSearchNavigate } from './keyboard-handlers'
 
 function makeKeyEvent(
   overrides: Partial<{
@@ -9,14 +9,16 @@ function makeKeyEvent(
     ctrlKey: boolean
     shiftKey: boolean
     altKey: boolean
+    repeat: boolean
   }>
-): Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey'> {
+): Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'repeat'> {
   return {
     key: 'g',
     metaKey: false,
     ctrlKey: false,
     shiftKey: false,
     altKey: false,
+    repeat: false,
     ...overrides
   }
 }
@@ -70,5 +72,37 @@ describe('matchSearchNavigate', () => {
   it('returns null for Ctrl+G on macOS (wrong modifier)', () => {
     const e = makeKeyEvent({ ctrlKey: true })
     expect(matchSearchNavigate(e, true, true, searchState)).toBeNull()
+  })
+})
+
+describe('matchFileSearchShortcut', () => {
+  it('matches Cmd+Shift+F on macOS', () => {
+    expect(
+      matchFileSearchShortcut(makeKeyEvent({ key: 'F', metaKey: true, shiftKey: true }), true)
+    ).toBe(true)
+  })
+
+  it('matches Ctrl+Shift+F on Linux/Windows', () => {
+    expect(
+      matchFileSearchShortcut(makeKeyEvent({ key: 'F', ctrlKey: true, shiftKey: true }), false)
+    ).toBe(true)
+  })
+
+  it('rejects repeats, alt, and the wrong platform modifier', () => {
+    expect(
+      matchFileSearchShortcut(
+        makeKeyEvent({ key: 'F', metaKey: true, shiftKey: true, repeat: true }),
+        true
+      )
+    ).toBe(false)
+    expect(
+      matchFileSearchShortcut(
+        makeKeyEvent({ key: 'F', metaKey: true, shiftKey: true, altKey: true }),
+        true
+      )
+    ).toBe(false)
+    expect(
+      matchFileSearchShortcut(makeKeyEvent({ key: 'F', ctrlKey: true, shiftKey: true }), true)
+    ).toBe(false)
   })
 })

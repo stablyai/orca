@@ -6,10 +6,13 @@ export type DiffSection = {
   status: string
   area?: GitStatusEntry['area']
   oldPath?: string
+  added?: number
+  removed?: number
   originalContent: string
   modifiedContent: string
   collapsed: boolean
   loading: boolean
+  error?: string
   dirty: boolean
   diffResult: GitDiffResult | null
 }

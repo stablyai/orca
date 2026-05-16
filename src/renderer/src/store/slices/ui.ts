@@ -303,6 +303,7 @@ export type UISlice = {
       | 'general'
       | 'browser'
       | 'appearance'
+      | 'input'
       | 'tasks'
       | 'terminal'
       | 'computer-use'
@@ -350,7 +351,7 @@ export type UISlice = {
   ) => void
   markOrcaHookRepoAlwaysTrusted: (repoId: string) => void
   clearOrcaHookTrustForRepo: (repoId: string) => void
-  groupBy: 'none' | 'repo' | 'pr-status'
+  groupBy: 'flat' | 'none' | 'repo' | 'pr-status'
   setGroupBy: (g: UISlice['groupBy']) => void
   showWorkspaceLineage: boolean
   setShowWorkspaceLineage: (v: boolean) => void

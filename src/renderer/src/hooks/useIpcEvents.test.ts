@@ -491,6 +491,7 @@ describe('useIpcEvents updater integration', () => {
     const setTabCustomTitle = vi.fn()
     const queueTabStartupCommand = vi.fn()
     const replyTerminalCreate = vi.fn()
+    const dispatchEvent = vi.fn()
     const storeState = {
       setUpdateStatus: vi.fn(),
       createTab,
@@ -541,6 +542,18 @@ describe('useIpcEvents updater integration', () => {
           }) => void)
         | null
     } = { current: null }
+    const requestTerminalCreateListenerRef: {
+      current:
+        | ((data: {
+            requestId: string
+            worktreeId?: string
+            afterTabId?: string
+            command?: string
+            title?: string
+            activate?: boolean
+          }) => void)
+        | null
+    } = { current: null }
 
     vi.resetModules()
     vi.unstubAllGlobals()
@@ -586,6 +599,7 @@ describe('useIpcEvents updater integration', () => {
     }))
 
     vi.stubGlobal('window', {
+      dispatchEvent,
       api: {
         repos: { onChanged: () => () => {} },
         worktrees: {
@@ -620,7 +634,19 @@ describe('useIpcEvents updater integration', () => {
             createTerminalListenerRef.current = listener
             return () => {}
           },
-          onRequestTerminalCreate: () => () => {},
+          onRequestTerminalCreate: (
+            listener: (data: {
+              requestId: string
+              worktreeId?: string
+              afterTabId?: string
+              command?: string
+              title?: string
+              activate?: boolean
+            }) => void
+          ) => {
+            requestTerminalCreateListenerRef.current = listener
+            return () => {}
+          },
           replyTerminalCreate,
           onSplitTerminal: () => () => {},
           onRenameTerminal: () => () => {},
@@ -710,6 +736,46 @@ describe('useIpcEvents updater integration', () => {
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
     expect(setTabCustomTitle).toHaveBeenCalledWith('tab-new', 'Runner')
     expect(queueTabStartupCommand).toHaveBeenCalledWith('tab-new', { command: 'opencode' })
+
+    if (typeof requestTerminalCreateListenerRef.current !== 'function') {
+      throw new Error('Expected request-terminal-create listener to be registered')
+    }
+
+    createTab.mockClear()
+    setActiveView.mockClear()
+    setActiveWorktree.mockClear()
+    setActiveTabType.mockClear()
+    setActiveTab.mockClear()
+    revealWorktreeInSidebar.mockClear()
+    setTabCustomTitle.mockClear()
+    queueTabStartupCommand.mockClear()
+    requestTerminalCreateListenerRef.current({
+      requestId: 'req-renderer-backed',
+      worktreeId: 'wt-2',
+      title: 'Codex',
+      command: 'codex',
+      activate: false
+    })
+
+    expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, { activate: false })
+    expect(setActiveView).not.toHaveBeenCalled()
+    expect(setActiveWorktree).not.toHaveBeenCalled()
+    expect(setActiveTabType).not.toHaveBeenCalled()
+    expect(setActiveTab).not.toHaveBeenCalled()
+    expect(revealWorktreeInSidebar).not.toHaveBeenCalled()
+    expect(dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'orca-background-mount-terminal-worktree',
+        detail: { worktreeId: 'wt-2' }
+      })
+    )
+    expect(setTabCustomTitle).toHaveBeenCalledWith('tab-new', 'Codex')
+    expect(queueTabStartupCommand).toHaveBeenCalledWith('tab-new', { command: 'codex' })
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-renderer-backed',
+      tabId: 'tab-new',
+      title: 'Codex'
+    })
 
     createTab.mockClear()
     createTerminalListenerRef.current({

@@ -79,6 +79,7 @@ import {
   DEFAULT_WORKSPACE_STATUS_ID,
   clampWorkspaceBoardOpacity,
   normalizeWorkspaceBoardCompact,
+  normalizePersistedWorkspaceStatuses,
   normalizeWorkspaceStatuses
 } from '../shared/workspace-statuses'
 
@@ -157,7 +158,7 @@ function backupPath(dataFile: string, index: number): string {
 }
 
 function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupBy'] {
-  if (groupBy === 'none' || groupBy === 'repo' || groupBy === 'pr-status') {
+  if (groupBy === 'flat' || groupBy === 'none' || groupBy === 'repo' || groupBy === 'pr-status') {
     return groupBy
   }
   if (groupBy === 'workspace-status') {
@@ -997,6 +998,7 @@ export class Store {
   private pendingWrite: Promise<void> | null = null
   private writeGeneration = 0
   private gitUsernameCache = new Map<string, string>()
+  private loadNeedsSave = false
 
   constructor() {
     const loaded = this.load()
@@ -1022,9 +1024,11 @@ export class Store {
       this.state.legacyPaneKeyAliasEntries = entries
       this.scheduleSave()
     })
-    if (normalized.changed) {
+    if (normalized.changed || this.loadNeedsSave) {
       // Why: upgraded sessions may contain legacy pane:1 leaves. Rewrite them at
       // the main persistence boundary so older renderer writes cannot revive them.
+      // Other one-shot load migrations also set loadNeedsSave to persist their
+      // guard flags before the next restart.
       this.scheduleSave()
     }
   }
@@ -1216,6 +1220,25 @@ export class Store {
             const rawSort = parsed.ui?.sortBy
             const sort = normalizeSortBy(rawSort)
             const migrate = !parsed.ui?._sortBySmartMigrated && rawSort === 'recent'
+            const workspaceStatusesDefaultOrderMigrated =
+              parsed.ui?._workspaceStatusesDefaultOrderMigrated === true
+            // Why: visual migration has its own guard so later user choices
+            // of valid legacy color/icon IDs are preserved by runtime writes.
+            const workspaceStatusesDefaultVisualsMigrated =
+              parsed.ui?._workspaceStatusesDefaultVisualsMigrated === true
+            const workspaceStatuses = normalizePersistedWorkspaceStatuses(
+              parsed.ui?.workspaceStatuses,
+              {
+                repairReorderedDefaultStatuses: !workspaceStatusesDefaultOrderMigrated,
+                migrateLegacyDefaultStatusVisuals: !workspaceStatusesDefaultVisualsMigrated
+              }
+            )
+            if (
+              !workspaceStatusesDefaultOrderMigrated ||
+              !workspaceStatusesDefaultVisualsMigrated
+            ) {
+              this.loadNeedsSave = true
+            }
             // Why: the 'inline-agents' card property was added after the
             // feature shipped behind an experimental toggle. Now that the
             // feature is default-on for everyone, every existing user needs
@@ -1263,6 +1286,9 @@ export class Store {
               ...defaults.ui,
               ...parsed.ui,
               sortBy: migrate ? ('smart' as const) : sort,
+              workspaceStatuses,
+              _workspaceStatusesDefaultOrderMigrated: true,
+              _workspaceStatusesDefaultVisualsMigrated: true,
               _sortBySmartMigrated: true,
               ...(migratedCardProps !== undefined
                 ? { worktreeCardProperties: migratedCardProps }
@@ -2034,9 +2060,10 @@ export class Store {
       sortBy: updates.sortBy
         ? normalizeSortBy(updates.sortBy)
         : normalizeSortBy(this.state.ui?.sortBy),
-      workspaceStatuses: normalizeWorkspaceStatuses(
-        updates.workspaceStatuses ?? this.state.ui?.workspaceStatuses
-      ),
+      workspaceStatuses:
+        updates.workspaceStatuses !== undefined
+          ? normalizeWorkspaceStatuses(updates.workspaceStatuses)
+          : normalizeWorkspaceStatuses(this.state.ui?.workspaceStatuses),
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(
         updates.workspaceBoardOpacity ?? this.state.ui?.workspaceBoardOpacity
       ),

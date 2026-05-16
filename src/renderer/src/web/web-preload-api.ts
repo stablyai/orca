@@ -61,6 +61,16 @@ export function installWebPreloadApi(): void {
 function createWebPreloadApi(): Partial<PreloadApi> {
   return {
     app: {
+      getIdentity: () =>
+        Promise.resolve({
+          name: 'Orca',
+          isDev: false,
+          devLabel: null,
+          devBranch: null,
+          devWorktreeName: null,
+          devRepoRoot: null,
+          dockBadgeLabel: null
+        }),
       getFeatureWallAssetBaseUrl: () => Promise.resolve('/'),
       relaunch: () => Promise.resolve(window.location.reload()),
       getKeyboardInputSourceId: () => Promise.resolve(null),
@@ -84,6 +94,12 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       onChanged: () => noopUnsubscribe
     } satisfies Partial<WebSettingsApi> as unknown as WebSettingsApi,
     ui: createWebUiApi(),
+    crashReports: {
+      getLatestPending: () => Promise.resolve(null),
+      dismiss: () => Promise.resolve(null),
+      copyLatestDiagnostics: () => Promise.resolve({ ok: false, error: 'Unavailable on web.' }),
+      submit: () => Promise.resolve({ ok: false, status: null, error: 'Unavailable on web.' })
+    },
     session: {
       get: () => Promise.resolve(readJson(SESSION_STORAGE_KEY, getDefaultWorkspaceSession())),
       set: async (session) => {
@@ -468,6 +484,10 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.status', { worktree: worktree.id, includeIgnored })
     },
+    history: async ({ worktreePath, limit, baseRef }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.history', { worktree: worktree.id, limit, baseRef })
+    },
     conflictOperation: async ({ worktreePath }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.conflictOperation', { worktree: worktree.id })
@@ -484,6 +504,10 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     branchCompare: async ({ worktreePath, baseRef }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.branchCompare', { worktree: worktree.id, baseRef })
+    },
+    commitCompare: async ({ worktreePath, commitId }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.commitCompare', { worktree: worktree.id, commitId })
     },
     upstreamStatus: async ({ worktreePath }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
@@ -507,6 +531,16 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         worktree: file.worktree.id,
         filePath: file.relativePath,
         compare,
+        oldPath
+      })
+    },
+    commitDiff: async ({ worktreePath, filePath, commitOid, parentOid, oldPath }) => {
+      const file = await resolveRuntimeFilePath(filePath, worktreePath)
+      return callRuntimeResult('git.commitDiff', {
+        worktree: file.worktree.id,
+        filePath: file.relativePath,
+        commitOid,
+        parentOid,
         oldPath
       })
     },
@@ -683,8 +717,12 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       writeJson(UI_STORAGE_KEY, next)
     },
     readClipboardText: () => navigator.clipboard?.readText?.() ?? Promise.resolve(''),
+    readSelectionClipboardText: () =>
+      Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     saveClipboardImageAsTempFile: () => Promise.resolve(null),
     writeClipboardText: (text) => navigator.clipboard?.writeText?.(text) ?? Promise.resolve(),
+    writeSelectionClipboardText: () =>
+      Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     writeClipboardImage: () => Promise.resolve(),
     getZoomLevel: () => zoomLevel,
     setZoomLevel: (level) => {
@@ -693,6 +731,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     isMaximized: () => Promise.resolve(false),
     onOpenSettings: () => noopUnsubscribe,
     onOpenFeatureTour: () => noopUnsubscribe,
+    onOpenCrashReport: () => noopUnsubscribe,
     onShowFeatureTourNudge: () => noopUnsubscribe,
     onToggleLeftSidebar: () => noopUnsubscribe,
     onToggleRightSidebar: () => noopUnsubscribe,
@@ -758,7 +797,21 @@ function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
     git: { installed: false },
     gh: { installed: false, authenticated: false },
     glab: { installed: false, authenticated: false },
-    bitbucket: { configured: false, authenticated: false, account: null }
+    bitbucket: { configured: false, authenticated: false, account: null },
+    azureDevOps: {
+      configured: false,
+      authenticated: false,
+      account: null,
+      baseUrl: null,
+      tokenConfigured: false
+    },
+    gitea: {
+      configured: false,
+      authenticated: false,
+      account: null,
+      baseUrl: null,
+      tokenConfigured: false
+    }
   }
   const fallbackRefreshAgents: RefreshAgentsResult = {
     agents: [],

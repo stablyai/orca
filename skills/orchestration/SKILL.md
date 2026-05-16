@@ -157,7 +157,7 @@ orca terminal close [--terminal <handle>] [--json]
 
 Why: `--terminal` is optional for most commands. When omitted, Orca auto-resolves to the active terminal in the current worktree.
 
-Why: `--command "claude"` launches Claude Code in the new terminal. After creating a `--command` terminal, use `terminal wait --for tui-idle` to wait for the agent to boot before dispatching.
+Why: `--command "claude"` launches Claude Code in the new terminal. In local Orca sessions, `--command "codex"` launches Codex through Orca's visible terminal path automatically so Codex does not start as a headless/background PTY. After creating a `--command` terminal, use `terminal wait --for tui-idle` to wait for the agent to boot before dispatching.
 
 Why: `--for tui-idle` detects the working→idle OSC title transition for recognized agent CLIs (Claude Code, Gemini, Codex, etc.). Always pass `--timeout-ms` — real coding tasks routinely take 15-60 minutes.
 

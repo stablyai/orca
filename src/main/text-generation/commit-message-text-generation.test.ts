@@ -6,9 +6,9 @@ import type * as ChildProcess from 'child_process'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import {
-  applyOrcaAttribution,
   generateCommitMessageFromContext,
-  resolveCommitMessageSettings
+  resolveCommitMessageSettings,
+  trimGeneratedCommitMessage
 } from './commit-message-text-generation'
 
 vi.mock('child_process', async (importOriginal) => {
@@ -54,10 +54,25 @@ describe('resolveCommitMessageSettings', () => {
       ok: true,
       params: {
         agentId: 'codex',
-        model: 'gpt-5.4-mini',
+        model: 'gpt-5.5',
         thinkingLevel: 'low',
-        customPrompt: 'Use Conventional Commits.',
-        attributionEnabled: true
+        customPrompt: 'Use Conventional Commits.'
+      }
+    })
+  })
+
+  it("uses the user's default agent when the AI setting has no explicit agent", () => {
+    const settings = getDefaultSettings('/tmp')
+    settings.defaultTuiAgent = 'codex'
+
+    const result = resolveCommitMessageSettings(settings)
+
+    expect(result).toMatchObject({
+      ok: true,
+      params: {
+        agentId: 'codex',
+        model: 'gpt-5.5',
+        thinkingLevel: 'low'
       }
     })
   })
@@ -67,8 +82,8 @@ describe('resolveCommitMessageSettings', () => {
     settings.commitMessageAi = {
       enabled: true,
       agentId: 'codex',
-      selectedModelByAgent: { codex: 'gpt-5.5' },
-      selectedThinkingByModel: { 'gpt-5.5': 'turbo' },
+      selectedModelByAgent: { codex: 'gpt-5.4-mini' },
+      selectedThinkingByModel: { 'gpt-5.4-mini': 'turbo' },
       customPrompt: '',
       customAgentCommand: ''
     }
@@ -79,7 +94,7 @@ describe('resolveCommitMessageSettings', () => {
       ok: true,
       params: {
         agentId: 'codex',
-        model: 'gpt-5.5',
+        model: 'gpt-5.4-mini',
         thinkingLevel: 'low'
       }
     })
@@ -239,8 +254,7 @@ describe('generateCommitMessageFromContext', () => {
       {
         agentId: 'custom',
         model: '',
-        customAgentCommand: 'agent',
-        attributionEnabled: true
+        customAgentCommand: 'agent'
       },
       {
         kind: 'remote',
@@ -257,8 +271,7 @@ describe('generateCommitMessageFromContext', () => {
 
     expect(result).toEqual({
       success: true,
-      message:
-        'Update README\n\n- Explain the generated commit-message flow\n\nCo-authored-by: Orca <help@stably.ai>',
+      message: 'Update README\n\n- Explain the generated commit-message flow',
       agentLabel: 'agent'
     })
   })
@@ -464,10 +477,10 @@ describe('generateCommitMessageFromContext', () => {
   })
 })
 
-describe('applyOrcaAttribution', () => {
-  it('does not duplicate the Orca trailer', () => {
-    const message = applyOrcaAttribution('Update docs', true)
+describe('trimGeneratedCommitMessage', () => {
+  it('removes trailing whitespace from generated messages', () => {
+    const message = trimGeneratedCommitMessage('Update docs\n\n')
 
-    expect(applyOrcaAttribution(message, true)).toBe(message)
+    expect(message).toBe('Update docs')
   })
 })

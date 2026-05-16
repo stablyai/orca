@@ -7,15 +7,69 @@ const WORKSPACE_STATUS_DROP_TARGET = '[data-workspace-status-drop-target]'
 const WORKSPACE_PIN_DROP_TARGET = '[data-workspace-pin-drop-target]'
 
 type MoveWorktreeToStatus = (worktreeId: string, status: WorkspaceStatus) => void
+type MoveWorktreesToStatus = (worktreeIds: readonly string[], status: WorkspaceStatus) => void
 type PinWorktree = (worktreeId: string) => void
+type PinWorktrees = (worktreeIds: readonly string[]) => void
+
+type WorkspaceStatusDocumentDropOptions = {
+  onMoveWorktreesToStatus?: MoveWorktreesToStatus
+  onPinWorktrees?: PinWorktrees
+}
+
+export function commitWorkspaceStatusDocumentDrop(params: {
+  worktreeIds: readonly string[]
+  status: WorkspaceStatus | null
+  isPinDrop: boolean
+  onMoveWorktreeToStatus: MoveWorktreeToStatus
+  onMoveWorktreesToStatus?: MoveWorktreesToStatus
+  onPinWorktree: PinWorktree
+  onPinWorktrees?: PinWorktrees
+}): void {
+  const {
+    worktreeIds,
+    status,
+    isPinDrop,
+    onMoveWorktreeToStatus,
+    onMoveWorktreesToStatus,
+    onPinWorktree,
+    onPinWorktrees
+  } = params
+
+  if (isPinDrop) {
+    if (onPinWorktrees) {
+      onPinWorktrees(worktreeIds)
+      return
+    }
+    for (const worktreeId of worktreeIds) {
+      onPinWorktree(worktreeId)
+    }
+    return
+  }
+
+  if (!status) {
+    return
+  }
+
+  if (onMoveWorktreesToStatus) {
+    onMoveWorktreesToStatus(worktreeIds, status)
+    return
+  }
+
+  for (const worktreeId of worktreeIds) {
+    onMoveWorktreeToStatus(worktreeId, status)
+  }
+}
 
 export function useWorkspaceStatusDocumentDrop<T extends HTMLElement>(
   containerRef: React.RefObject<T | null>,
   onMoveWorktreeToStatus: MoveWorktreeToStatus,
   onPinWorktree: PinWorktree,
   onDragFinish: () => void,
-  enabled = true
+  enabled = true,
+  options?: WorkspaceStatusDocumentDropOptions
 ): void {
+  const { onMoveWorktreesToStatus, onPinWorktrees } = options ?? {}
+
   useEffect(() => {
     if (!enabled) {
       return
@@ -56,19 +110,15 @@ export function useWorkspaceStatusDocumentDrop<T extends HTMLElement>(
       // them, so board drops commit from this scoped capture listener.
       event.preventDefault()
       event.stopPropagation()
-      if (dropTarget === pinTarget) {
-        for (const worktreeId of worktreeIds) {
-          onPinWorktree(worktreeId)
-        }
-        return
-      }
-
-      const status = dropTarget.dataset.workspaceStatus
-      if (status) {
-        for (const worktreeId of worktreeIds) {
-          onMoveWorktreeToStatus(worktreeId, status)
-        }
-      }
+      commitWorkspaceStatusDocumentDrop({
+        worktreeIds,
+        status: dropTarget.dataset.workspaceStatus ?? null,
+        isPinDrop: dropTarget === pinTarget,
+        onMoveWorktreeToStatus,
+        onMoveWorktreesToStatus,
+        onPinWorktree,
+        onPinWorktrees
+      })
     }
 
     const handleDragFinish = (): void => {
@@ -81,5 +131,13 @@ export function useWorkspaceStatusDocumentDrop<T extends HTMLElement>(
       document.removeEventListener('drop', handleDrop, true)
       document.removeEventListener('dragend', handleDragFinish, true)
     }
-  }, [containerRef, enabled, onDragFinish, onMoveWorktreeToStatus, onPinWorktree])
+  }, [
+    containerRef,
+    enabled,
+    onDragFinish,
+    onMoveWorktreeToStatus,
+    onMoveWorktreesToStatus,
+    onPinWorktree,
+    onPinWorktrees
+  ])
 }

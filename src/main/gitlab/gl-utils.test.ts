@@ -61,6 +61,21 @@ describe('gitlab project ref parsing', () => {
     ).toEqual({ host: 'gitlab.example.com', path: 'team/api' })
   })
 
+  it('parses GitLab remotes with non-standard ports without treating the port as a path segment', () => {
+    expect(
+      parseGitLabProjectRef('ssh://git@gitlab.example.com:2222/team/api.git', [
+        'gitlab.com',
+        'gitlab.example.com'
+      ])
+    ).toEqual({ host: 'gitlab.example.com', path: 'team/api' })
+    expect(
+      parseGitLabProjectRef('https://gitlab.example.com:8443/team/api.git', [
+        'gitlab.com',
+        'gitlab.example.com'
+      ])
+    ).toEqual({ host: 'gitlab.example.com', path: 'team/api' })
+  })
+
   it('rejects single-segment paths (host root or user-only)', () => {
     expect(parseGitLabProjectRef('git@gitlab.com:foo.git')).toBeNull()
     expect(parseGitLabProjectRef('https://gitlab.com/foo.git')).toBeNull()
@@ -68,6 +83,13 @@ describe('gitlab project ref parsing', () => {
 
   it('handles missing .git suffix', () => {
     expect(parseGitLabProjectRef('https://gitlab.com/acme/widgets')).toEqual({
+      host: 'gitlab.com',
+      path: 'acme/widgets'
+    })
+  })
+
+  it('preserves git protocol remote support', () => {
+    expect(parseGitLabProjectRef('git://gitlab.com/acme/widgets.git')).toEqual({
       host: 'gitlab.com',
       path: 'acme/widgets'
     })

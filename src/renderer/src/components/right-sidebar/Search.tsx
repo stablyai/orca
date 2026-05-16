@@ -33,8 +33,10 @@ export default function Search(): React.JSX.Element {
   const fileSearchResults = searchState?.results ?? null
   const fileSearchLoading = searchState?.loading ?? false
   const fileSearchCollapsedFiles = searchState?.collapsedFiles ?? EMPTY_COLLAPSED_FILES
+  const fileSearchSeedRequestId = searchState?.seedRequestId
 
   const updateFileSearchState = useAppStore((s) => s.updateFileSearchState)
+  const consumeFileSearchSeedRequest = useAppStore((s) => s.consumeFileSearchSeedRequest)
   const toggleFileSearchCollapsedFile = useAppStore((s) => s.toggleFileSearchCollapsedFile)
   const clearFileSearch = useAppStore((s) => s.clearFileSearch)
 
@@ -44,6 +46,7 @@ export default function Search(): React.JSX.Element {
   const resultsScrollRef = useRef<HTMLDivElement>(null)
   const revealRafRef = useRef<number | null>(null)
   const revealInnerRafRef = useRef<number | null>(null)
+  const seededInputSelectionRafRef = useRef<number | null>(null)
   const includeInputRef = useRef<HTMLInputElement>(null)
   const excludeInputRef = useRef<HTMLInputElement>(null)
 
@@ -85,6 +88,24 @@ export default function Search(): React.JSX.Element {
 
   const worktreePath = activeWorktree?.path ?? null
 
+  const cancelSeededInputSelectionFrame = useCallback(() => {
+    if (seededInputSelectionRafRef.current !== null) {
+      cancelAnimationFrame(seededInputSelectionRafRef.current)
+      seededInputSelectionRafRef.current = null
+    }
+  }, [])
+
+  const scheduleSeededInputSelection = useCallback(() => {
+    cancelSeededInputSelectionFrame()
+    // Why: match VS Code's seeded file search behavior; typing should replace
+    // the selected query after the sidebar finishes opening/loading.
+    seededInputSelectionRafRef.current = requestAnimationFrame(() => {
+      seededInputSelectionRafRef.current = null
+      inputRef.current?.focus()
+      inputRef.current?.select()
+    })
+  }, [cancelSeededInputSelectionFrame])
+
   // Focus input on mount
   useEffect(() => {
     inputRef.current?.focus()
@@ -94,10 +115,11 @@ export default function Search(): React.JSX.Element {
   useEffect(() => {
     return () => {
       cancelPendingSearch()
+      cancelSeededInputSelectionFrame()
       cancelRevealFrame(revealRafRef)
       cancelRevealFrame(revealInnerRafRef)
     }
-  }, [cancelPendingSearch])
+  }, [cancelPendingSearch, cancelSeededInputSelectionFrame])
 
   useEffect(() => {
     if (!worktreePath) {
@@ -214,6 +236,27 @@ export default function Search(): React.JSX.Element {
     },
     [worktreePath, updateActiveSearchState, activeWorktreeId]
   )
+
+  useEffect(() => {
+    if (!activeWorktreeId || fileSearchSeedRequestId === undefined) {
+      return
+    }
+
+    // Why: Cmd/Ctrl+Shift+F can seed the query before this lazy panel mounts.
+    // The one-shot request lets the mounted panel run the real runtime search.
+    if (fileSearchQuery.trim()) {
+      executeSearch(fileSearchQuery)
+      scheduleSeededInputSelection()
+    }
+    consumeFileSearchSeedRequest(activeWorktreeId, fileSearchSeedRequestId)
+  }, [
+    activeWorktreeId,
+    consumeFileSearchSeedRequest,
+    executeSearch,
+    fileSearchQuery,
+    fileSearchSeedRequestId,
+    scheduleSeededInputSelection
+  ])
 
   const handleClearSearch = useCallback(() => {
     cancelPendingSearch()

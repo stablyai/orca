@@ -694,6 +694,40 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(pushRuntimeGit).not.toHaveBeenCalled()
   })
 
+  it('rejects WebSocket requests whose request token differs from the authenticated channel token', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getStatus: vi.fn().mockResolvedValue({ graphStatus: 'ok' })
+    } as unknown as OrcaRuntimeService
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
+    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+    const channelDevice = server['deviceRegistry']!.addDevice('phone', 'mobile')
+    const requestDevice = server['deviceRegistry']!.addDevice('cli', 'runtime')
+    const replies: Record<string, unknown>[] = []
+
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_mismatch',
+        method: 'status.get',
+        deviceToken: requestDevice.token
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {},
+      undefined,
+      undefined,
+      channelDevice.token
+    )
+
+    expect(replies).toContainEqual(
+      expect.objectContaining({
+        id: 'req_mismatch',
+        ok: false,
+        error: expect.objectContaining({ code: 'unauthorized' })
+      })
+    )
+  })
+
   it('allows runtime-scoped WebSocket tokens to use the full RPC surface', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const pushRuntimeGit = vi.fn().mockResolvedValue({ ok: true })

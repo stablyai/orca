@@ -209,7 +209,10 @@ export default function SkillsPage(): React.JSX.Element {
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <BookOpen className="size-4 text-muted-foreground" />
           <div className="min-w-0">
-            <h1 className="truncate text-sm font-semibold">Skills</h1>
+            <div className="flex min-w-0 items-center gap-2">
+              <h1 className="truncate text-sm font-semibold">Skills</h1>
+              <Badge variant="secondary">Beta</Badge>
+            </div>
             <p className="truncate text-xs text-muted-foreground">
               {pluralize(skills.length, 'skill')} from {pluralize(activeSourceCount, 'source')}
             </p>

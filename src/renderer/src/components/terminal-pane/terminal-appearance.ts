@@ -10,6 +10,7 @@ import {
 } from '@/lib/terminal-theme'
 import { buildFontFamily } from './layout-serialization'
 import { captureScrollState, restoreScrollState, safeFit } from '@/lib/pane-manager/pane-tree-ops'
+import { resolveTerminalCursorInactiveStyle } from '@/lib/pane-manager/pane-terminal-options'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import type { PtyTransport } from './pty-transport'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
@@ -199,7 +200,9 @@ export function applyTerminalAppearance(
     // bleeding in from a prior opacity setting that has since been reset.
     pane.terminal.options.allowTransparency =
       settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
-    pane.terminal.options.cursorStyle = settings.terminalCursorStyle
+    const cursorStyle = settings.terminalCursorStyle ?? 'bar'
+    pane.terminal.options.cursorStyle = cursorStyle
+    pane.terminal.options.cursorInactiveStyle = resolveTerminalCursorInactiveStyle(cursorStyle)
     pane.terminal.options.cursorBlink = settings.terminalCursorBlink
     const paneSize = paneFontSizes.get(pane.id)
     pane.terminal.options.fontSize = paneSize ?? settings.terminalFontSize

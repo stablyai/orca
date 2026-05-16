@@ -18,6 +18,25 @@ export async function runSleepWorktree(worktreeId: string): Promise<void> {
   await runSleepWorktrees([worktreeId])
 }
 
+function suppressActiveSleepPtyExitActivity(worktreeId: string): string[] {
+  const { ptyIdsByTabId, suppressPtyExit, tabsByWorktree } = useAppStore.getState()
+  const ptyIds: string[] = []
+  for (const tab of tabsByWorktree[worktreeId] ?? []) {
+    for (const ptyId of ptyIdsByTabId[tab.id] ?? []) {
+      ptyIds.push(ptyId)
+      suppressPtyExit(ptyId)
+    }
+  }
+  return ptyIds
+}
+
+function releaseActiveSleepPtyExitSuppressions(ptyIds: readonly string[]): void {
+  const { consumeSuppressedPtyExit } = useAppStore.getState()
+  for (const ptyId of ptyIds) {
+    consumeSuppressedPtyExit(ptyId)
+  }
+}
+
 export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise<void> {
   if (worktreeIds.length === 0) {
     return
@@ -28,7 +47,13 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
     shutdownWorktreeBrowsers,
     shutdownWorktreeTerminals
   } = useAppStore.getState()
+  let preSuppressedActivePtyIds: string[] = []
   if (activeWorktreeId && worktreeIds.includes(activeWorktreeId)) {
+    // Why: clearing the active workspace unmounts its TerminalPanes before
+    // shutdownWorktreeTerminals can mark exits as intentional. Pre-suppress
+    // those PTYs so the unmount does not stamp lastActivityAt and reorder the
+    // slept card to the top.
+    preSuppressedActivePtyIds = suppressActiveSleepPtyExitActivity(activeWorktreeId)
     setActiveWorktree(null)
   }
   const errors: string[] = []
@@ -40,6 +65,14 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
       // ordering on both paths. Without the browser thunk here, sleep leaks
       // browserPagesByWorkspace entries and live webviews for the slept worktree.
       await shutdownWorktreeBrowsers(worktreeId)
+    } catch (err) {
+      if (worktreeId === activeWorktreeId) {
+        releaseActiveSleepPtyExitSuppressions(preSuppressedActivePtyIds)
+      }
+      errors.push(err instanceof Error ? err.message : String(err))
+      continue
+    }
+    try {
       // Why: sleep is reversible — the tab record stays in tabsByWorktree, the
       // layout stays in terminalLayoutsByTabId, only the live PTY processes are
       // released. keepIdentifiers preserves tab.ptyId / ptyIdsByLeafId /

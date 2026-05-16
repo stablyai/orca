@@ -7,6 +7,8 @@ const {
   getPRForBranchMock,
   getBitbucketRepoSlugMock,
   getBitbucketPullRequestForBranchMock,
+  getAzureDevOpsRepoSlugMock,
+  getAzureDevOpsPullRequestForBranchMock,
   getGiteaRepoSlugMock,
   getGiteaPullRequestForBranchMock
 } = vi.hoisted(() => ({
@@ -16,6 +18,8 @@ const {
   getPRForBranchMock: vi.fn(),
   getBitbucketRepoSlugMock: vi.fn(),
   getBitbucketPullRequestForBranchMock: vi.fn(),
+  getAzureDevOpsRepoSlugMock: vi.fn(),
+  getAzureDevOpsPullRequestForBranchMock: vi.fn(),
   getGiteaRepoSlugMock: vi.fn(),
   getGiteaPullRequestForBranchMock: vi.fn()
 }))
@@ -37,6 +41,12 @@ vi.mock('../bitbucket/client', () => ({
   getBitbucketPullRequest: vi.fn()
 }))
 
+vi.mock('../azure-devops/client', () => ({
+  getAzureDevOpsRepoSlug: getAzureDevOpsRepoSlugMock,
+  getAzureDevOpsPullRequestForBranch: getAzureDevOpsPullRequestForBranchMock,
+  getAzureDevOpsPullRequest: vi.fn()
+}))
+
 vi.mock('../gitea/client', () => ({
   getGiteaRepoSlug: getGiteaRepoSlugMock,
   getGiteaPullRequestForBranch: getGiteaPullRequestForBranchMock,
@@ -53,6 +63,8 @@ describe('getHostedReviewForBranch', () => {
     getPRForBranchMock.mockReset()
     getBitbucketRepoSlugMock.mockReset()
     getBitbucketPullRequestForBranchMock.mockReset()
+    getAzureDevOpsRepoSlugMock.mockReset()
+    getAzureDevOpsPullRequestForBranchMock.mockReset()
     getGiteaRepoSlugMock.mockReset()
     getGiteaPullRequestForBranchMock.mockReset()
   })
@@ -154,6 +166,7 @@ describe('getHostedReviewForBranch', () => {
     getProjectSlugMock.mockResolvedValue(null)
     getRepoSlugMock.mockResolvedValue(null)
     getBitbucketRepoSlugMock.mockResolvedValue(null)
+    getAzureDevOpsRepoSlugMock.mockResolvedValue(null)
     getGiteaRepoSlugMock.mockResolvedValue({
       host: 'git.example.com',
       owner: 'team',
@@ -188,5 +201,51 @@ describe('getHostedReviewForBranch', () => {
       headSha: 'def456'
     })
     expect(getGiteaPullRequestForBranchMock).toHaveBeenCalledWith('/repo', 'feature/gitea', 14)
+  })
+
+  it('falls through to Azure DevOps before Gitea when origin is an Azure Repos remote', async () => {
+    getProjectSlugMock.mockResolvedValue(null)
+    getRepoSlugMock.mockResolvedValue(null)
+    getBitbucketRepoSlugMock.mockResolvedValue(null)
+    getAzureDevOpsRepoSlugMock.mockResolvedValue({
+      host: 'dev.azure.com',
+      organization: 'team',
+      project: 'Project',
+      repository: 'orca'
+    })
+    getAzureDevOpsPullRequestForBranchMock.mockResolvedValue({
+      number: 21,
+      title: 'Azure branch',
+      state: 'open',
+      url: 'https://dev.azure.com/team/Project/_git/orca/pullrequest/21',
+      status: 'success',
+      updatedAt: '2026-05-16T00:00:00.000Z',
+      mergeable: 'MERGEABLE',
+      headSha: 'abc123'
+    })
+
+    await expect(
+      getHostedReviewForBranch({
+        repoPath: '/repo',
+        branch: 'feature/azure',
+        linkedAzureDevOpsPR: 21
+      })
+    ).resolves.toEqual({
+      provider: 'azure-devops',
+      number: 21,
+      title: 'Azure branch',
+      state: 'open',
+      url: 'https://dev.azure.com/team/Project/_git/orca/pullrequest/21',
+      status: 'success',
+      updatedAt: '2026-05-16T00:00:00.000Z',
+      mergeable: 'MERGEABLE',
+      headSha: 'abc123'
+    })
+    expect(getAzureDevOpsPullRequestForBranchMock).toHaveBeenCalledWith(
+      '/repo',
+      'feature/azure',
+      21
+    )
+    expect(getGiteaRepoSlugMock).not.toHaveBeenCalled()
   })
 })

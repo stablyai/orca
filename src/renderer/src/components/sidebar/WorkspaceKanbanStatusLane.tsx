@@ -79,7 +79,7 @@ export default function WorkspaceKanbanStatusLane({
                   isActive={activeWorktreeId === worktree.id}
                   isSelected={isSelected}
                   selectedWorktrees={
-                    isSelected && selectedWorktrees.length > 0 ? selectedWorktrees : [worktree]
+                    isSelected && selectedWorktrees.length > 0 ? selectedWorktrees : undefined
                   }
                   compact={compact}
                   onActivate={onActivate}

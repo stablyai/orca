@@ -5,6 +5,7 @@
 import { grantDirAcl } from './win32-utils'
 import { existsSync } from 'fs'
 import { join } from 'path'
+import os from 'node:os'
 import { app, BrowserWindow, nativeImage, nativeTheme } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
 import * as QRCode from 'qrcode'
@@ -39,6 +40,7 @@ import {
   patchPackagedProcessPath
 } from './startup/configure-process'
 import { startFirstWindowStartupServices } from './startup/first-window-startup-services'
+import { getDevInstanceIdentity } from './startup/dev-instance-identity'
 import { hydrateShellPath, mergePathSegments } from './startup/hydrate-shell-path'
 import { acquireSingleInstanceLock } from './startup/single-instance-lock'
 import { RateLimitService } from './rate-limits/service'
@@ -66,10 +68,16 @@ import {
 } from './ipc/pty'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { browserManager } from './browser/browser-manager'
-import { setUnreadDockBadgeCount } from './dock/unread-badge'
+import { setIdleDockBadgeLabel, setUnreadDockBadgeCount } from './dock/unread-badge'
 import { registerFeatureWallFirstAgentTour } from './feature-wall/first-agent-tour'
 import { AutomationService } from './automations/service'
 import { AgentAwakeService } from './agent-awake-service'
+import {
+  getCrashBreadcrumbSnapshot,
+  recordCrashBreadcrumb
+} from './crash-reporting/crash-breadcrumb-store'
+import { CrashReportStore } from './crash-reporting/crash-report-store'
+import { isCrashReportReason } from '../shared/crash-reporting'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
@@ -90,12 +98,14 @@ let rateLimits: RateLimitService | null = null
 let runtimeRpc: OrcaRuntimeRpcServer | null = null
 let starNag: StarNagService | null = null
 let agentAwakeService: AgentAwakeService | null = null
+let crashReports: CrashReportStore | null = null
 let unsubscribeAgentAwakeStatusChanges: (() => void) | null = null
 let disposeFeatureWallFirstAgentTour: (() => void) | null = null
 let watcherShutdownPromise: Promise<void> | null = null
 let watcherShutdownDone = false
 let automations: AutomationService | null = null
 const isServeMode = process.argv.includes('--serve')
+const devInstanceIdentity = getDevInstanceIdentity(is.dev)
 
 installUncaughtPipeErrorGuard()
 // Why: propagate the Orca app version into `process.env` so PTY-env
@@ -194,6 +204,11 @@ if (hasSingleInstanceLock) {
   initClaudeUsagePath()
   initCodexUsagePath()
   initOpenCodeUsagePath()
+  crashReports = CrashReportStore.fromUserData()
+  recordCrashBreadcrumb('app_started', {
+    packaged: app.isPackaged,
+    platform: process.platform
+  })
   enableMainProcessGpuFeatures()
 }
 
@@ -255,14 +270,22 @@ function openMainWindow(): BrowserWindow {
     onQuitAborted: () => {
       isQuitting = false
     },
-    deferLoad: true
+    onRendererProcessGone: (details) => {
+      recordProcessGoneCrash('renderer', 'renderer', details.reason, details.exitCode ?? null, {
+        processType: 'renderer'
+      })
+    },
+    deferLoad: true,
+    title: devInstanceIdentity.name
   })
+  recordCrashBreadcrumb('main_window_created')
 
   // Why: telemetry-plan.md§First-launch experience anchors default-on
   // `app_opened` to the first main-window load. Existing users in the
   // pending-banner cohort resolve through telemetry/client.ts; this load
   // path only fires once consent is already enabled.
   const onFirstWindowLoad = (): void => {
+    recordCrashBreadcrumb('main_window_loaded')
     if (!store) {
       return
     }
@@ -293,7 +316,8 @@ function openMainWindow(): BrowserWindow {
           : null,
       prepareForClaudeLaunch: () => claudeRuntimeAuth!.prepareForClaudeLaunch()
     },
-    agentAwakeService ?? undefined
+    agentAwakeService ?? undefined,
+    crashReports ?? undefined
   )
   automations.setWebContents(window.webContents)
   automations.start()
@@ -345,6 +369,10 @@ function openMainWindow(): BrowserWindow {
         receivedAt,
         stateStartedAt
       })
+      recordCrashBreadcrumb('agent_state_changed', {
+        agentType: payload.agentType ?? 'unknown',
+        state: payload.state
+      })
       // Why: cursor-agent's OSC title stays "Cursor Agent" for the whole turn,
       // and opencode's stays bare "OpenCode" — neither carries a working/idle
       // signal the title heuristic can read. Synthesize an OSC title update
@@ -379,6 +407,52 @@ function sendOpenFeatureTour(targetWindow?: BrowserWindow | null): void {
   const webContents =
     targetWindow && !targetWindow.isDestroyed() ? targetWindow.webContents : mainWindow?.webContents
   webContents?.send('ui:openFeatureTour')
+}
+
+function sendOpenCrashReport(targetWindow?: BrowserWindow | null): void {
+  const webContents =
+    targetWindow && !targetWindow.isDestroyed() ? targetWindow.webContents : mainWindow?.webContents
+  webContents?.send('ui:openCrashReport')
+}
+
+const recentCrashKeys = new Map<string, number>()
+
+function recordProcessGoneCrash(
+  source: 'renderer' | 'child',
+  processType: string,
+  reason: string,
+  exitCode: number | null,
+  details: Record<string, unknown>
+): void {
+  if (!crashReports || !isCrashReportReason(reason)) {
+    return
+  }
+  const key = `${processType}:${reason}:${exitCode ?? 'null'}`
+  const now = Date.now()
+  if (now - (recentCrashKeys.get(key) ?? 0) < 2_000) {
+    return
+  }
+  recentCrashKeys.set(key, now)
+  void crashReports
+    .record({
+      source,
+      processType,
+      reason,
+      exitCode,
+      appVersion: app.getVersion(),
+      platform: process.platform,
+      osRelease: os.release(),
+      arch: process.arch,
+      electronVersion: process.versions.electron,
+      chromeVersion: process.versions.chrome,
+      details,
+      // Why: breadcrumbs stay memory-only during normal operation. Persist a
+      // snapshot only after Electron reports a crash-like process exit.
+      breadcrumbs: getCrashBreadcrumbSnapshot()
+    })
+    .catch((error) => {
+      console.error('[crash-reporting] Failed to persist crash report:', error)
+    })
 }
 
 function shutdownWatchersOnce(): Promise<void> {
@@ -643,12 +717,13 @@ function driveSyntheticTitleFromHook(
 }
 
 app.whenReady().then(async () => {
-  electronApp.setAppUserModelId('com.stablyai.orca')
-  app.setName('Orca')
+  electronApp.setAppUserModelId(devInstanceIdentity.appUserModelId)
+  app.setName(devInstanceIdentity.name)
 
   if (process.platform === 'darwin' && is.dev) {
     const dockIcon = nativeImage.createFromPath(devIcon)
     app.dock?.setIcon(dockIcon)
+    setIdleDockBadgeLabel(devInstanceIdentity.dockBadgeLabel)
   }
 
   store = new Store()
@@ -710,6 +785,13 @@ app.whenReady().then(async () => {
   })
   automations = new AutomationService(store, { claudeUsage, codexUsage })
   runtime.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
+  runtime.setCommitMessageAgentEnvironmentResolvers({
+    prepareForCodexLaunch: () =>
+      store!.getSettings().activeCodexManagedAccountId
+        ? codexRuntimeHome!.prepareForCodexLaunch()
+        : null,
+    prepareForClaudeLaunch: () => claudeRuntimeAuth!.prepareForClaudeLaunch()
+  })
   disposeFeatureWallFirstAgentTour = registerFeatureWallFirstAgentTour({
     stats,
     getWindow: () => mainWindow
@@ -734,12 +816,27 @@ app.whenReady().then(async () => {
     ['hermes', () => hermesHookService.install()]
   ])
 
+  app.on('child-process-gone', (_event, details) => {
+    recordProcessGoneCrash('child', details.type, details.reason, details.exitCode ?? null, {
+      name: details.name,
+      serviceName: details.serviceName,
+      type: details.type
+    })
+  })
+
   registerAppMenu({
     onCheckForUpdates: (options) => checkForUpdatesFromMenu(options),
     onOpenSettings: () => {
+      recordCrashBreadcrumb('settings_opened')
       mainWindow?.webContents.send('ui:openSettings')
     },
+    onOpenCrashReport: (targetWindow) => {
+      recordCrashBreadcrumb('crash_report_opened')
+      const targetBrowserWindow = targetWindow instanceof BrowserWindow ? targetWindow : null
+      sendOpenCrashReport(targetBrowserWindow)
+    },
     onOpenFeatureTour: (targetWindow) => {
+      recordCrashBreadcrumb('feature_tour_opened')
       // Why: menu clicks provide the BrowserWindow that invoked the item. Use it
       // first so hidden/headless E2E windows and future multi-window flows route
       // the tour to the correct renderer instead of relying on global focus.

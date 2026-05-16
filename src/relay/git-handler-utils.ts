@@ -100,7 +100,52 @@ export function parseUnmergedEntry(
 /**
  * Parse `git diff --name-status` output into structured change entries.
  */
-export function parseBranchDiff(stdout: string): Record<string, unknown>[] {
+export type BranchDiffLineStats = {
+  added?: number
+  removed?: number
+}
+
+function parseNumstatCount(value: string): number | undefined {
+  if (value === '-') {
+    return undefined
+  }
+  const count = Number.parseInt(value, 10)
+  return Number.isFinite(count) ? count : undefined
+}
+
+function normalizeNumstatPath(path: string): string {
+  const bracedRename = /^(.*)\{(.+) => (.+)\}(.*)$/.exec(path)
+  if (bracedRename) {
+    return `${bracedRename[1]}${bracedRename[3]}${bracedRename[4]}`
+  }
+  const renameMarker = ' => '
+  const markerIndex = path.lastIndexOf(renameMarker)
+  return markerIndex === -1 ? path : path.slice(markerIndex + renameMarker.length)
+}
+
+export function parseBranchDiffNumstat(stdout: string): Map<string, BranchDiffLineStats> {
+  const stats = new Map<string, BranchDiffLineStats>()
+  for (const line of stdout.split(/\r?\n/)) {
+    if (!line) {
+      continue
+    }
+    const parts = line.split('\t')
+    const rawPath = parts.slice(2).join('\t')
+    if (!rawPath) {
+      continue
+    }
+    stats.set(normalizeNumstatPath(rawPath), {
+      added: parseNumstatCount(parts[0] ?? ''),
+      removed: parseNumstatCount(parts[1] ?? '')
+    })
+  }
+  return stats
+}
+
+export function parseBranchDiff(
+  stdout: string,
+  statsByPath: Map<string, BranchDiffLineStats> = new Map()
+): Record<string, unknown>[] {
   const entries: Record<string, unknown>[] = []
   for (const line of stdout.split(/\r?\n/)) {
     if (!line) {
@@ -114,12 +159,12 @@ export function parseBranchDiff(stdout: string): Record<string, unknown>[] {
       const oldPath = parts[1]
       const filePath = parts[2]
       if (filePath) {
-        entries.push({ path: filePath, oldPath, status })
+        entries.push({ path: filePath, oldPath, status, ...statsByPath.get(filePath) })
       }
     } else {
       const filePath = parts[1]
       if (filePath) {
-        entries.push({ path: filePath, status })
+        entries.push({ path: filePath, status, ...statsByPath.get(filePath) })
       }
     }
   }

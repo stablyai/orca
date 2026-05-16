@@ -36,6 +36,7 @@ export function deriveCheckStatusFromChecks(checks: PRCheckDetail[]): CheckStatu
 export function syncPRChecksStatus(
   state: AppState,
   repoPath: string,
+  repoId: string | undefined,
   branch: string | undefined,
   checks: PRCheckDetail[]
 ): Partial<AppState> | null {
@@ -44,7 +45,7 @@ export function syncPRChecksStatus(
     return null
   }
 
-  const prCacheKey = `${repoPath}::${normalized}`
+  const prCacheKey = `${repoId ?? repoPath}::${normalized}`
   const prEntry = state.prCache[prCacheKey]
   if (!prEntry?.data) {
     return null

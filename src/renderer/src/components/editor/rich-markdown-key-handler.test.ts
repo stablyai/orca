@@ -119,7 +119,7 @@ describe('rich markdown key handler', () => {
     }
   })
 
-  it('keeps slash-menu filter input out of the document', () => {
+  it('lets slash-menu filter input fall through to document input', () => {
     const editor = createEditor({
       type: 'doc',
       content: [{ type: 'paragraph', content: [{ type: 'text', text: '/' }] }]
@@ -137,10 +137,10 @@ describe('rich markdown key handler', () => {
       })
       const event = keyEvent('h')
 
-      expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(true)
-      expect(event.preventDefault).toHaveBeenCalled()
+      expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(false)
+      expect(event.preventDefault).not.toHaveBeenCalled()
       expect(editor.getText()).toBe('/')
-      expect(ctx.slashMenuRef.current?.query).toBe('h')
+      expect(ctx.slashMenuRef.current?.query).toBe('')
     } finally {
       editor.destroy()
     }

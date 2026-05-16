@@ -1,9 +1,11 @@
+/* eslint-disable max-lines -- Why: model download, checksum, extraction, and cleanup share one state machine so progress/error transitions stay coupled. */
 import { app } from 'electron'
 import { join, resolve, relative } from 'path'
-import { existsSync, mkdirSync, createWriteStream, rmSync } from 'fs'
+import { existsSync, mkdirSync, createWriteStream, createReadStream, rmSync } from 'fs'
 import { readdir, rm } from 'fs/promises'
+import { createHash } from 'crypto'
 import { get as httpsGet } from 'https'
-import { get as httpGet, type IncomingMessage } from 'http'
+import type { IncomingMessage } from 'http'
 import { pipeline } from 'stream/promises'
 import { spawn } from 'child_process'
 import type {
@@ -12,6 +14,7 @@ import type {
   SpeechModelStatus
 } from '../../shared/speech-types'
 import { SPEECH_MODEL_CATALOG, getCatalogModel } from './model-catalog'
+import { resolveTarExecutable } from './tar-executable'
 
 type DownloadHandle = {
   abort: () => void
@@ -132,6 +135,13 @@ export class ModelManager {
         return
       }
 
+      await this.verifyArchiveSha256(archivePath, manifest.archiveSha256)
+
+      if (aborted) {
+        this.cleanup(modelId, archivePath)
+        return
+      }
+
       this.updateState(modelId, 'extracting')
       await this.extractArchive(archivePath, this.modelsDir, modelId, () => aborted)
 
@@ -212,25 +222,71 @@ export class ModelManager {
     dest: string,
     expectedSize: number,
     modelId: string,
-    isAborted: () => boolean
+    isAborted: () => boolean,
+    redirectCount = 0
   ): Promise<void> {
     return new Promise((resolve, reject) => {
-      const getter = url.startsWith('https') ? httpsGet : httpGet
+      let parsedUrl: URL
+      try {
+        parsedUrl = new URL(url)
+      } catch {
+        reject(new Error('Invalid download URL'))
+        return
+      }
 
-      const request = getter(url, (response: IncomingMessage) => {
-        if (response.statusCode === 301 || response.statusCode === 302) {
+      if (parsedUrl.protocol !== 'https:') {
+        reject(new Error('Model downloads must use HTTPS'))
+        return
+      }
+
+      const request = httpsGet(parsedUrl, (response: IncomingMessage) => {
+        if (
+          response.statusCode === 301 ||
+          response.statusCode === 302 ||
+          response.statusCode === 303 ||
+          response.statusCode === 307 ||
+          response.statusCode === 308
+        ) {
           const redirectUrl = response.headers.location
           if (!redirectUrl) {
+            response.resume()
             reject(new Error('Redirect without location'))
             return
           }
-          this.downloadFile(redirectUrl, dest, expectedSize, modelId, isAborted)
+          if (redirectCount >= 5) {
+            response.resume()
+            reject(new Error('Too many redirects'))
+            return
+          }
+          let resolvedRedirect: URL
+          try {
+            resolvedRedirect = new URL(redirectUrl, parsedUrl)
+          } catch {
+            response.resume()
+            reject(new Error('Invalid redirect URL'))
+            return
+          }
+          if (resolvedRedirect.protocol !== 'https:') {
+            response.resume()
+            reject(new Error('Model download redirect must use HTTPS'))
+            return
+          }
+          response.resume()
+          this.downloadFile(
+            resolvedRedirect.toString(),
+            dest,
+            expectedSize,
+            modelId,
+            isAborted,
+            redirectCount + 1
+          )
             .then(resolve)
             .catch(reject)
           return
         }
 
         if (response.statusCode !== 200) {
+          response.resume()
           reject(new Error(`HTTP ${response.statusCode}`))
           return
         }
@@ -266,6 +322,26 @@ export class ModelManager {
     })
   }
 
+  private verifyArchiveSha256(archivePath: string, expectedSha256: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const hash = createHash('sha256')
+      const stream = createReadStream(archivePath)
+
+      stream.on('data', (chunk) => hash.update(chunk))
+      stream.on('error', reject)
+      stream.on('end', () => {
+        const actualSha256 = hash.digest('hex')
+        if (actualSha256 !== expectedSha256.toLowerCase()) {
+          // Why: these archives feed native model parsers; filename checks do
+          // not protect against compromised or redirected release assets.
+          reject(new Error('Downloaded model archive failed integrity verification'))
+          return
+        }
+        resolve()
+      })
+    })
+  }
+
   private extractArchive(
     archivePath: string,
     destDir: string,
@@ -280,9 +356,15 @@ export class ModelManager {
       // (1MB default maxBuffer). bzip2 decompression is slow (~1-5 min for
       // 170MB archives) and exec can silently kill the process if stderr
       // exceeds the buffer. spawn streams output without buffering.
-      const child = spawn('tar', ['-xjf', archivePath, '-C', modelDir, '--strip-components=1'], {
-        stdio: ['ignore', 'ignore', 'pipe']
-      })
+      const tarExecutable = resolveTarExecutable()
+      const child = spawn(
+        tarExecutable,
+        ['-xjf', archivePath, '-C', modelDir, '--strip-components=1'],
+        {
+          stdio: ['ignore', 'ignore', 'pipe'],
+          windowsHide: true
+        }
+      )
 
       let stderr = ''
       child.stderr?.on('data', (chunk: Buffer) => {

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { SheetClose, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { WorkspaceStatusDefinition } from '../../../../shared/types'
+import SidebarFilter from './SidebarFilter'
 import WorkspaceKanbanSettingsMenu from './WorkspaceKanbanSettingsMenu'
 
 type WorkspaceKanbanDrawerHeaderProps = {
@@ -19,6 +20,7 @@ type WorkspaceKanbanDrawerHeaderProps = {
   onMoveStatus: (statusId: string, direction: -1 | 1) => void
   onRemoveStatus: (statusId: string) => void
   onAddStatus: () => void
+  onFilterMenuOpenChange: (open: boolean) => void
 }
 
 export default function WorkspaceKanbanDrawerHeader({
@@ -33,13 +35,14 @@ export default function WorkspaceKanbanDrawerHeader({
   onChangeStatusIcon,
   onMoveStatus,
   onRemoveStatus,
-  onAddStatus
+  onAddStatus,
+  onFilterMenuOpenChange
 }: WorkspaceKanbanDrawerHeaderProps): React.JSX.Element {
   const BoardModeIcon = compact ? Rows3 : LayoutList
 
   return (
     <>
-      <SheetHeader className="border-b border-sidebar-border px-4 py-3 pr-24">
+      <SheetHeader className="border-b border-sidebar-border px-4 py-3 pr-32">
         <SheetTitle className="flex items-center gap-2 text-sm">
           <span>Workspace board</span>
           {selectedCount > 1 ? (
@@ -54,6 +57,12 @@ export default function WorkspaceKanbanDrawerHeader({
       </SheetHeader>
 
       <div className="absolute right-3 top-2.5 flex items-center gap-1">
+        <SidebarFilter
+          preserveWorkspaceBoardOpen
+          tooltipSide="top"
+          contentSide="bottom"
+          onMenuOpenChange={onFilterMenuOpenChange}
+        />
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

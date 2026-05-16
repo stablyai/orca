@@ -1387,6 +1387,44 @@ describe('createMainWindow', () => {
     assertInterceptsAfterReset()
   })
 
+  it('notifies the caller when the renderer process is gone', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+    const onRendererProcessGone = vi.fn()
+
+    createMainWindow(null, { onRendererProcessGone })
+
+    const details = { reason: 'crashed', exitCode: 5 } as Electron.RenderProcessGoneDetails
+    windowHandlers['render-process-gone']?.({} as never, details)
+
+    expect(onRendererProcessGone).toHaveBeenCalledWith(details)
+  })
+
   it('ignores duplicate ready-to-show events after startup maximize has already run', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {

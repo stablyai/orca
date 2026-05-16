@@ -1,5 +1,5 @@
 import { createServer } from 'http'
-import { execFileSync, spawnSync } from 'child_process'
+import { execFile, execFileSync, spawnSync } from 'child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -180,12 +180,17 @@ describe('HermesHookService', () => {
           '    platform="cli",',
           ')'
         ].join('\n')
-        try {
-          execFileSync('python3', ['-c', script], {
+        // Why: the Python hook POSTs back into this process. A synchronous
+        // child process blocks the HTTP server from replying, deadlocking the test.
+        execFile(
+          'python3',
+          ['-c', script],
+          {
             env: {
               ...process.env,
               ORCA_AGENT_HOOK_PORT: String(address.port),
               ORCA_AGENT_HOOK_TOKEN: 'token-1',
+              ORCA_AGENT_HOOK_ENDPOINT: '',
               ORCA_PANE_KEY: PANE_KEY,
               ORCA_TAB_ID: 'tab-1',
               ORCA_WORKTREE_ID: 'wt-1',
@@ -193,12 +198,16 @@ describe('HermesHookService', () => {
               ORCA_AGENT_HOOK_VERSION: '1'
             },
             encoding: 'utf-8'
-          })
-        } catch (error) {
-          clearTimeout(timeout)
-          server.close()
-          reject(error)
-        }
+          },
+          (error) => {
+            if (!error) {
+              return
+            }
+            clearTimeout(timeout)
+            server.close()
+            reject(error)
+          }
+        )
       })
     })
 

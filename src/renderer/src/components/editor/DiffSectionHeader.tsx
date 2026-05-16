@@ -8,7 +8,8 @@ export function DiffSectionHeader({
   added,
   removed,
   onToggle,
-  onOpenInEditor
+  onOpenSection,
+  openSectionTitle
 }: {
   path: string
   dirty: boolean
@@ -16,7 +17,8 @@ export function DiffSectionHeader({
   added: number
   removed: number
   onToggle: () => void
-  onOpenInEditor: (event: MouseEvent) => void
+  onOpenSection: (event: MouseEvent) => void
+  openSectionTitle: string
 }): ReactElement {
   return (
     <div
@@ -67,8 +69,8 @@ export function DiffSectionHeader({
       <div className="flex items-center gap-1 shrink-0 ml-2">
         <button
           className="p-0.5 rounded text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-          onClick={onOpenInEditor}
-          title="Open in editor"
+          onClick={onOpenSection}
+          title={openSectionTitle}
         >
           <ExternalLink className="size-3.5" />
         </button>

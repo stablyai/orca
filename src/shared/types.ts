@@ -1271,6 +1271,10 @@ export type GlobalSettings = {
   editorMinimapEnabled: boolean
   /** Whether local markdown review note controls and the review panel are shown. */
   markdownReviewToolsEnabled: boolean
+  /** Why: mirrors X11 primary-selection muscle memory without mutating the
+   *  normal system clipboard; Linux enables it by default, other platforms
+   *  leave middle-click semantics unchanged unless the user opts in. */
+  primarySelectionMiddleClickPaste?: boolean
   terminalFontSize: number
   terminalFontFamily: string
   terminalFontWeight: number
@@ -1680,7 +1684,7 @@ export type PersistedUIState = {
   lastActiveWorktreeId: string | null
   sidebarWidth: number
   rightSidebarWidth: number
-  groupBy: 'none' | 'repo' | 'pr-status'
+  groupBy: 'flat' | 'none' | 'repo' | 'pr-status'
   showWorkspaceLineage?: boolean
   sortBy: 'name' | 'smart' | 'recent' | 'repo'
   showActiveOnly: boolean
@@ -1698,6 +1702,13 @@ export type PersistedUIState = {
   workspaceStatuses?: WorkspaceStatusDefinition[]
   workspaceBoardOpacity?: number
   workspaceBoardCompact?: boolean
+  /** One-shot migration flag for a short-lived build that persisted the
+   *  default workspace statuses in reverse workflow order. Once stamped,
+   *  user-authored status ordering is never inferred from IDs/labels again. */
+  _workspaceStatusesDefaultOrderMigrated?: boolean
+  /** One-shot migration flag for the old default blue/violet/emerald status
+   *  visuals. Once stamped, valid user-authored colors/icons are preserved. */
+  _workspaceStatusesDefaultVisualsMigrated?: boolean
   statusBarItems: StatusBarItem[]
   statusBarVisible: boolean
   dismissedUpdateVersion: string | null
@@ -1991,6 +2002,8 @@ export type GitBranchChangeEntry = {
   path: string
   status: GitBranchChangeStatus
   oldPath?: string
+  added?: number
+  removed?: number
 }
 
 export type GitBranchCompareSummary = {
@@ -2007,6 +2020,21 @@ export type GitBranchCompareSummary = {
 
 export type GitBranchCompareResult = {
   summary: GitBranchCompareSummary
+  entries: GitBranchChangeEntry[]
+}
+
+export type GitCommitCompareSummary = {
+  commitOid: string
+  parentOid: string | null
+  compareRef: string
+  baseRef: string
+  changedFiles: number
+  status: 'ready' | 'invalid-commit' | 'error'
+  errorMessage?: string
+}
+
+export type GitCommitCompareResult = {
+  summary: GitCommitCompareSummary
   entries: GitBranchChangeEntry[]
 }
 

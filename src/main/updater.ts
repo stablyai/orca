@@ -1,11 +1,10 @@
 /* eslint-disable max-lines */
-import path from 'node:path'
 import { app, BrowserWindow, powerMonitor } from 'electron'
-import { autoUpdater } from 'electron-updater'
 import type { NsisUpdater } from 'electron-updater'
 import { is } from '@electron-toolkit/utils'
 import type { UpdateStatus } from '../shared/types'
 import { killAllPty } from './ipc/pty'
+import { loadElectronAutoUpdater, type ElectronAutoUpdater } from './electron-updater-loader'
 import {
   beginMacUpdateDownload,
   deferMacQuitUntilInstallerReady,
@@ -81,6 +80,14 @@ let downloadInFlight = false
 /** Guards against the macOS `activate` handler re-opening the old version
  *  while Squirrel's ShipIt is replacing the .app bundle. */
 let quittingForUpdate = false
+let autoUpdater: ElectronAutoUpdater | null = null
+
+function getAutoUpdater(): ElectronAutoUpdater {
+  if (!autoUpdater) {
+    autoUpdater = loadElectronAutoUpdater()
+  }
+  return autoUpdater
+}
 
 function clearAvailableUpdateContext(): void {
   availableVersion = null
@@ -226,7 +233,7 @@ function performQuitAndInstall(): void {
     win.removeAllListeners('close')
   }
 
-  autoUpdater.quitAndInstall(false, true)
+  getAutoUpdater().quitAndInstall(false, true)
 }
 
 async function sendCheckFailureStatus(
@@ -419,6 +426,7 @@ function markMissingManifestPrereleaseFallbackPromiseHandled(message: string): v
 }
 
 async function pinDefaultReleaseFeed(): Promise<void> {
+  const autoUpdater = getAutoUpdater()
   // Why: the /releases/latest/download/ redirect can move between the update
   // check and the later manual download click. Pinning to the concrete tag
   // keeps the manifest and ZIP asset on the same release.
@@ -497,6 +505,7 @@ function retryPrereleaseFallbackAfterMissingManifest(
   console.info(
     `[updater] prerelease manifest missing for ${primaryTag}; retrying once against ${url}`
   )
+  const autoUpdater = getAutoUpdater()
   autoUpdater.setFeedURL({ provider: 'generic', url })
   userInitiatedCheck = Boolean(userInitiated)
   backgroundCheckLaunchPending = !userInitiated
@@ -537,6 +546,7 @@ function runBackgroundUpdateCheck(
   backgroundCheckLaunchPending = true
   // Don't send 'checking' here — the 'checking-for-update' event handler does it,
   // and sending it from both places causes duplicate notifications (issue #35).
+  const autoUpdater = getAutoUpdater()
   const launch = (): Promise<unknown> => autoUpdater.checkForUpdates()
   const run = pinDefaultReleaseFeed().then(launch)
   void Promise.resolve(run).catch((err) => {
@@ -557,7 +567,7 @@ function enableIncludePrerelease(): void {
   // accept a prerelease manifest for users who intentionally Shift-clicked.
   // We keep using the manifest-probed generic feed instead of the native
   // GitHub provider because cancelled RC releases can appear without assets.
-  autoUpdater.allowPrerelease = true
+  getAutoUpdater().allowPrerelease = true
   includePrereleaseActive = true
 }
 
@@ -581,6 +591,7 @@ export function checkForUpdatesFromMenu(options?: { includePrerelease?: boolean 
   // Don't send 'checking' here — the 'checking-for-update' event handler does it,
   // and sending it from both places causes duplicate notifications (issue #35).
 
+  const autoUpdater = getAutoUpdater()
   const launch = (): Promise<unknown> => autoUpdater.checkForUpdates()
   const run = pinDefaultReleaseFeed().then(launch)
   void Promise.resolve(run).catch((err) => {
@@ -708,14 +719,10 @@ export function setupAutoUpdater(
     return
   }
   if (is.dev) {
-    // Why: dev-app-update.yml lives at config/dev-app-update.yml (not repo root)
-    // so the root directory stays short. electron-updater only reads it when
-    // the dev-mode early-return below is temporarily disabled to exercise the
-    // update flow locally — point it at the new path up-front so that works.
-    autoUpdater.updateConfigPath = path.join(app.getAppPath(), 'config', 'dev-app-update.yml')
     return
   }
 
+  const autoUpdater = getAutoUpdater()
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
 
@@ -769,6 +776,7 @@ export function setupAutoUpdater(
   autoUpdaterInitialized = true
 
   registerAutoUpdaterHandlers({
+    autoUpdater,
     clearAvailableUpdateContext,
     consumeMissingManifestPrereleaseFallbackResult,
     getMissingManifestPrereleaseFallbackUserInitiated,
@@ -849,8 +857,10 @@ export function downloadUpdate(): void {
   }
   downloadInFlight = true
   beginMacUpdateDownload()
-  autoUpdater.downloadUpdate().catch((err) => {
-    downloadInFlight = false
-    sendErrorStatus(String(err?.message ?? err))
-  })
+  getAutoUpdater()
+    .downloadUpdate()
+    .catch((err) => {
+      downloadInFlight = false
+      sendErrorStatus(String(err?.message ?? err))
+    })
 }

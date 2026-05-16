@@ -5,6 +5,7 @@ const {
   getRepoSlugMock,
   getProjectSlugMock,
   getBitbucketRepoSlugMock,
+  getAzureDevOpsRepoSlugMock,
   getGiteaRepoSlugMock,
   getHostedReviewForBranchMock,
   ghExecFileAsyncMock,
@@ -15,6 +16,7 @@ const {
   getRepoSlugMock: vi.fn(),
   getProjectSlugMock: vi.fn(),
   getBitbucketRepoSlugMock: vi.fn(),
+  getAzureDevOpsRepoSlugMock: vi.fn(),
   getGiteaRepoSlugMock: vi.fn(),
   getHostedReviewForBranchMock: vi.fn(),
   ghExecFileAsyncMock: vi.fn(),
@@ -33,6 +35,10 @@ vi.mock('../gitlab/client', () => ({
 
 vi.mock('../bitbucket/client', () => ({
   getBitbucketRepoSlug: getBitbucketRepoSlugMock
+}))
+
+vi.mock('../azure-devops/client', () => ({
+  getAzureDevOpsRepoSlug: getAzureDevOpsRepoSlugMock
 }))
 
 vi.mock('../gitea/client', () => ({
@@ -56,22 +62,36 @@ vi.mock('./hosted-review', () => ({
 
 import { createHostedReview, getHostedReviewCreationEligibility } from './hosted-review-creation'
 
+function resetMocks(): void {
+  for (const mock of [
+    createGitHubPullRequestMock,
+    getRepoSlugMock,
+    getProjectSlugMock,
+    getBitbucketRepoSlugMock,
+    getAzureDevOpsRepoSlugMock,
+    getGiteaRepoSlugMock,
+    getHostedReviewForBranchMock,
+    ghExecFileAsyncMock,
+    gitExecFileAsyncMock,
+    getUpstreamStatusMock
+  ]) {
+    mock.mockReset()
+  }
+}
+
+function mockGitHubProvider(): void {
+  getProjectSlugMock.mockResolvedValue(null)
+  getRepoSlugMock.mockResolvedValue({ owner: 'acme', repo: 'orca' })
+  getBitbucketRepoSlugMock.mockResolvedValue(null)
+  getAzureDevOpsRepoSlugMock.mockResolvedValue(null)
+  getGiteaRepoSlugMock.mockResolvedValue(null)
+}
+
 describe('createHostedReview', () => {
   beforeEach(() => {
-    createGitHubPullRequestMock.mockReset()
-    getRepoSlugMock.mockReset()
-    getProjectSlugMock.mockReset()
-    getBitbucketRepoSlugMock.mockReset()
-    getGiteaRepoSlugMock.mockReset()
-    getHostedReviewForBranchMock.mockReset()
-    ghExecFileAsyncMock.mockReset()
-    gitExecFileAsyncMock.mockReset()
-    getUpstreamStatusMock.mockReset()
+    resetMocks()
 
-    getProjectSlugMock.mockResolvedValue(null)
-    getRepoSlugMock.mockResolvedValue({ owner: 'acme', repo: 'orca' })
-    getBitbucketRepoSlugMock.mockResolvedValue(null)
-    getGiteaRepoSlugMock.mockResolvedValue(null)
+    mockGitHubProvider()
     getHostedReviewForBranchMock.mockResolvedValue(null)
     ghExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
     getUpstreamStatusMock.mockResolvedValue({
@@ -198,20 +218,9 @@ describe('createHostedReview', () => {
 
 describe('getHostedReviewCreationEligibility', () => {
   beforeEach(() => {
-    createGitHubPullRequestMock.mockReset()
-    getRepoSlugMock.mockReset()
-    getProjectSlugMock.mockReset()
-    getBitbucketRepoSlugMock.mockReset()
-    getGiteaRepoSlugMock.mockReset()
-    getHostedReviewForBranchMock.mockReset()
-    ghExecFileAsyncMock.mockReset()
-    gitExecFileAsyncMock.mockReset()
-    getUpstreamStatusMock.mockReset()
+    resetMocks()
 
-    getProjectSlugMock.mockResolvedValue(null)
-    getRepoSlugMock.mockResolvedValue({ owner: 'acme', repo: 'orca' })
-    getBitbucketRepoSlugMock.mockResolvedValue(null)
-    getGiteaRepoSlugMock.mockResolvedValue(null)
+    mockGitHubProvider()
     getHostedReviewForBranchMock.mockResolvedValue(null)
     ghExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
     gitExecFileAsyncMock.mockResolvedValue({ stdout: 'Feature title\n', stderr: '' })
@@ -313,8 +322,7 @@ describe('getHostedReviewCreationEligibility', () => {
     ).resolves.toMatchObject({
       provider: 'gitlab',
       canCreate: false,
-      blockedReason: 'unsupported_provider',
-      nextAction: null
+      blockedReason: 'unsupported_provider'
     })
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })

@@ -9,11 +9,13 @@ import type {
   GitStatusResult,
   GitDiffResult,
   GitBranchCompareResult,
+  GitCommitCompareResult,
   GitConflictOperation,
   GitPushTarget,
   GitUpstreamStatus,
   GitWorktreeInfo
 } from '../../shared/types'
+import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
 import type { RemoteCommitMessageExecResult } from '../text-generation/commit-message-text-generation'
@@ -40,6 +42,16 @@ export class SshGitProvider implements IGitProvider {
       worktreePath,
       ...includeIgnoredArgs
     })) as GitStatusResult
+  }
+
+  async getHistory(
+    worktreePath: string,
+    options: GitHistoryOptions = {}
+  ): Promise<GitHistoryResult> {
+    return (await this.mux.request('git.history', {
+      worktreePath,
+      ...options
+    })) as GitHistoryResult
   }
 
   async commit(
@@ -151,6 +163,13 @@ export class SshGitProvider implements IGitProvider {
     })) as GitBranchCompareResult
   }
 
+  async getCommitCompare(worktreePath: string, commitId: string): Promise<GitCommitCompareResult> {
+    return (await this.mux.request('git.commitCompare', {
+      worktreePath,
+      commitId
+    })) as GitCommitCompareResult
+  }
+
   async getUpstreamStatus(worktreePath: string): Promise<GitUpstreamStatus> {
     return (await this.mux.request('git.upstreamStatus', {
       worktreePath
@@ -183,6 +202,16 @@ export class SshGitProvider implements IGitProvider {
       baseRef,
       ...options
     })) as GitDiffResult[]
+  }
+
+  async getCommitDiff(
+    worktreePath: string,
+    args: { commitOid: string; parentOid?: string | null; filePath: string; oldPath?: string }
+  ): Promise<GitDiffResult> {
+    return (await this.mux.request('git.commitDiff', {
+      worktreePath,
+      ...args
+    })) as GitDiffResult
   }
 
   async listWorktrees(

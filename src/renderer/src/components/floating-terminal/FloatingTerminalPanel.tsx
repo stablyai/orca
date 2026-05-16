@@ -16,6 +16,7 @@ import type { TerminalTab } from '../../../../shared/types'
 import { FloatingTerminalOrchestrationDialog } from './FloatingTerminalOrchestrationDialog'
 import { FloatingTerminalResizeHandles } from './FloatingTerminalResizeHandles'
 import { FloatingTerminalWindowControls } from './FloatingTerminalWindowControls'
+import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 export { FloatingTerminalToggleButton } from './FloatingTerminalToggleButton'
 import {
   clampFloatingTerminalBounds,
@@ -63,6 +64,7 @@ export function FloatingTerminalPanel({
   )
   const restoreBoundsRef = useRef<FloatingTerminalPanelBounds | null>(null)
   const normalizedInitialBoundsRef = useRef(false)
+  const previousOpenRef = useRef(false)
   const panelRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{
     pointerId: number
@@ -95,7 +97,11 @@ export function FloatingTerminalPanel({
   }, [floatingTerminalCwd])
 
   useEffect(() => {
-    if (!open || tabs.length > 0) {
+    const opened = open && !previousOpenRef.current
+    previousOpenRef.current = open
+    // Why: zero terminal tabs only means "bootstrap" when the panel is newly
+    // opened. Later zero-tab states are intentional closes or PTY exits.
+    if (!opened || tabs.length > 0) {
       return
     }
     const tab = createTab(FLOATING_TERMINAL_WORKTREE_ID, undefined, undefined, { activate: false })
@@ -168,33 +174,53 @@ export function FloatingTerminalPanel({
 
   const closeFloatingTab = useCallback(
     (tabId: string) => {
+      const state = useAppStore.getState()
+      const currentTabs = state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
+      const isClosingLastTab = currentTabs.length === 1 && currentTabs[0]?.id === tabId
       closeTab(tabId)
+      if (isClosingLastTab) {
+        onOpenChange(false)
+      }
     },
-    [closeTab]
+    [closeTab, onOpenChange]
   )
 
   const closeOthers = useCallback(
     (tabId: string) => {
-      for (const tab of tabs) {
+      // Why: bulk close mutates Zustand immediately, so read the live tab list
+      // instead of closing over the render snapshot.
+      const state = useAppStore.getState()
+      const currentTabs = state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
+      for (const tab of currentTabs) {
         if (tab.id !== tabId) {
           closeTab(tab.id)
         }
       }
     },
-    [closeTab, tabs]
+    [closeTab]
   )
 
   const closeToRight = useCallback(
     (tabId: string) => {
-      const index = tabs.findIndex((tab) => tab.id === tabId)
+      // Why: see closeOthers; context menu actions can run after the rendered
+      // tab snapshot is stale.
+      const state = useAppStore.getState()
+      const currentTabs = state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
+      const terminalIds = currentTabs.map((tab) => tab.id)
+      const visibleIds = reconcileTabOrder(
+        state.tabBarOrderByWorktree[FLOATING_TERMINAL_WORKTREE_ID],
+        terminalIds,
+        []
+      )
+      const index = visibleIds.findIndex((id) => id === tabId)
       if (index === -1) {
         return
       }
-      for (const tab of tabs.slice(index + 1)) {
-        closeTab(tab.id)
+      for (const id of visibleIds.slice(index + 1)) {
+        closeTab(id)
       }
     },
-    [closeTab, tabs]
+    [closeTab]
   )
 
   const toggleMaximized = useCallback(() => {
@@ -343,7 +369,7 @@ export function FloatingTerminalPanel({
                     isActive={tab.id === activeTab?.id}
                     isVisible={tab.id === activeTab?.id}
                     onPtyExit={() => closeTab(tab.id)}
-                    onCloseTab={() => closeTab(tab.id)}
+                    onCloseTab={() => closeFloatingTab(tab.id)}
                   />
                 </div>
               ))

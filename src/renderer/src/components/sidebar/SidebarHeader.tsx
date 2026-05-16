@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { Kanban, Plus, SlidersHorizontal } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
@@ -20,6 +20,7 @@ import SidebarFilter from './SidebarFilter'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 
 const GROUP_BY_OPTIONS = [
+  { id: 'flat', label: 'None' },
   { id: 'none', label: 'Status' },
   { id: 'pr-status', label: 'PR' },
   { id: 'repo', label: 'Repo' }
@@ -33,7 +34,7 @@ const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
   { id: 'pr', label: 'Linked PR' },
   { id: 'comment', label: 'Comment' },
   // Why: toggles the inline "Agent activity" list rendered below each
-  // workspace card body (see WorktreeCard → WorktreeCardAgents). Off hides
+  // workspace card body (see WorktreeCard -> WorktreeCardAgents). Off hides
   // the list; there is no alternate surface.
   { id: 'inline-agents', label: 'Agent activity' }
 ]
@@ -51,24 +52,10 @@ const SORT_OPTIONS = [
 
 const isMac = navigator.userAgent.includes('Mac')
 const newWorktreeShortcutLabel = isMac ? '⌘N' : 'Ctrl+N'
-const WORKSPACE_BOARD_HOVER_OPEN_DELAY_MS = 50
-// Why: gives the pointer room to travel from the header into the board before
-// the temporary hover preview collapses.
-const WORKSPACE_BOARD_HOVER_CLOSE_DELAY_MS = 220
-type WorkspaceBoardOpenMode = 'closed' | 'hover' | 'persistent'
 
 const SidebarHeader = React.memo(function SidebarHeader() {
-  const [workspaceBoardOpenMode, setWorkspaceBoardOpenMode] =
-    useState<WorkspaceBoardOpenMode>('closed')
-  const workspaceBoardOpen = workspaceBoardOpenMode !== 'closed'
-  const workspaceBoardPersistentOpen = workspaceBoardOpenMode === 'persistent'
-  // Why: hover-open and manual-open have different close semantics; keeping
-  // the mode explicit prevents a button click from closing a hover preview.
-  const workspaceBoardOpenModeRef = useRef<WorkspaceBoardOpenMode>('closed')
-  const workspaceBoardHoverSuppressedRef = useRef(false)
-  const workspaceHeaderHoveredRef = useRef(false)
-  const workspaceBoardHoverOpenTimerRef = useRef<number | null>(null)
-  const workspaceBoardHoverCloseTimerRef = useRef<number | null>(null)
+  const [workspaceBoardOpen, setWorkspaceBoardOpen] = useState(false)
+  const [workspaceBoardMenuOpen, setWorkspaceBoardMenuOpen] = useState(false)
   const openModal = useAppStore((s) => s.openModal)
   const repos = useAppStore((s) => s.repos)
   const canCreateWorktree = repos.some((repo) => isGitRepoKind(repo))
@@ -82,154 +69,42 @@ const SidebarHeader = React.memo(function SidebarHeader() {
   const showWorkspaceLineage = useAppStore((s) => s.showWorkspaceLineage)
   const setShowWorkspaceLineage = useAppStore((s) => s.setShowWorkspaceLineage)
 
-  const clearWorkspaceBoardHoverClose = useCallback(() => {
-    if (workspaceBoardHoverCloseTimerRef.current === null) {
-      return
+  const handleWorkspaceBoardOpenChange = useCallback((open: boolean) => {
+    setWorkspaceBoardOpen(open)
+    if (!open) {
+      setWorkspaceBoardMenuOpen(false)
     }
-    window.clearTimeout(workspaceBoardHoverCloseTimerRef.current)
-    workspaceBoardHoverCloseTimerRef.current = null
   }, [])
-
-  const clearWorkspaceBoardHoverOpen = useCallback(() => {
-    if (workspaceBoardHoverOpenTimerRef.current === null) {
-      return
-    }
-    window.clearTimeout(workspaceBoardHoverOpenTimerRef.current)
-    workspaceBoardHoverOpenTimerRef.current = null
-  }, [])
-
-  useEffect(
-    () => () => {
-      clearWorkspaceBoardHoverOpen()
-      clearWorkspaceBoardHoverClose()
-    },
-    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen]
-  )
-
-  const setWorkspaceBoardMode = useCallback((mode: WorkspaceBoardOpenMode) => {
-    workspaceBoardOpenModeRef.current = mode
-    setWorkspaceBoardOpenMode(mode)
-  }, [])
-
-  const handleWorkspaceBoardOpenChange = useCallback(
-    (open: boolean) => {
-      clearWorkspaceBoardHoverOpen()
-      clearWorkspaceBoardHoverClose()
-      if (open) {
-        workspaceBoardHoverSuppressedRef.current = false
-        setWorkspaceBoardMode('persistent')
-        return
-      }
-      setWorkspaceBoardMode('closed')
-      workspaceBoardHoverSuppressedRef.current = workspaceHeaderHoveredRef.current
-    },
-    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen, setWorkspaceBoardMode]
-  )
-
-  const handleWorkspaceHeaderPointerEnter = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (event.pointerType !== 'mouse') {
-        return
-      }
-      workspaceHeaderHoveredRef.current = true
-      clearWorkspaceBoardHoverClose()
-      if (
-        workspaceBoardOpenModeRef.current !== 'closed' ||
-        workspaceBoardHoverSuppressedRef.current
-      ) {
-        return
-      }
-      clearWorkspaceBoardHoverOpen()
-      workspaceBoardHoverOpenTimerRef.current = window.setTimeout(() => {
-        workspaceBoardHoverOpenTimerRef.current = null
-        if (
-          workspaceBoardHoverSuppressedRef.current ||
-          workspaceBoardOpenModeRef.current !== 'closed'
-        ) {
-          return
-        }
-        setWorkspaceBoardMode('hover')
-      }, WORKSPACE_BOARD_HOVER_OPEN_DELAY_MS)
-    },
-    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen, setWorkspaceBoardMode]
-  )
-
-  const handleWorkspaceHeaderPointerLeave = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (event.pointerType === 'mouse') {
-        const rect = event.currentTarget.getBoundingClientRect()
-        if (
-          event.clientX >= rect.left &&
-          event.clientX <= rect.right &&
-          event.clientY >= rect.top &&
-          event.clientY <= rect.bottom
-        ) {
-          return
-        }
-      }
-      workspaceHeaderHoveredRef.current = false
-      workspaceBoardHoverSuppressedRef.current = false
-      clearWorkspaceBoardHoverOpen()
-      if (event.pointerType !== 'mouse' || workspaceBoardOpenModeRef.current === 'persistent') {
-        return
-      }
-      clearWorkspaceBoardHoverClose()
-      workspaceBoardHoverCloseTimerRef.current = window.setTimeout(() => {
-        workspaceBoardHoverCloseTimerRef.current = null
-        if (workspaceBoardOpenModeRef.current === 'persistent') {
-          return
-        }
-        setWorkspaceBoardMode('closed')
-      }, WORKSPACE_BOARD_HOVER_CLOSE_DELAY_MS)
-    },
-    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen, setWorkspaceBoardMode]
-  )
-
-  const handleWorkspaceBoardPointerEnter = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (event.pointerType !== 'mouse') {
-        return
-      }
-      clearWorkspaceBoardHoverOpen()
-      clearWorkspaceBoardHoverClose()
-      workspaceBoardHoverSuppressedRef.current = false
-      setWorkspaceBoardMode('persistent')
-    },
-    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen, setWorkspaceBoardMode]
-  )
-
-  const handleWorkspaceBoardButtonPointerDown = useCallback(
-    (event: React.PointerEvent<HTMLButtonElement>) => {
-      if (event.button !== 0) {
-        return
-      }
-      clearWorkspaceBoardHoverOpen()
-      clearWorkspaceBoardHoverClose()
-    },
-    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen]
-  )
 
   const handleWorkspaceBoardToggle = useCallback(() => {
-    clearWorkspaceBoardHoverOpen()
-    clearWorkspaceBoardHoverClose()
+    setWorkspaceBoardOpen((open) => !open)
+  }, [])
 
-    if (workspaceBoardOpenModeRef.current === 'persistent') {
-      workspaceBoardHoverSuppressedRef.current = workspaceHeaderHoveredRef.current
-      setWorkspaceBoardMode('closed')
+  useEffect(() => {
+    if (!workspaceBoardOpen) {
       return
     }
 
-    workspaceBoardHoverSuppressedRef.current = false
-    setWorkspaceBoardMode('persistent')
-  }, [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen, setWorkspaceBoardMode])
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') {
+        return
+      }
+      if (workspaceBoardMenuOpen) {
+        return
+      }
+      event.preventDefault()
+      setWorkspaceBoardOpen(false)
+    }
+
+    // Why: the workspace board is a non-modal companion panel, so focus may
+    // be outside the sheet when Escape should still dismiss it.
+    document.addEventListener('keydown', handleKeyDown, true)
+    return () => document.removeEventListener('keydown', handleKeyDown, true)
+  }, [workspaceBoardMenuOpen, workspaceBoardOpen])
 
   return (
     <>
-      <div
-        className="flex h-8 items-center justify-between px-2 gap-2"
-        onPointerEnter={handleWorkspaceHeaderPointerEnter}
-        onPointerLeave={handleWorkspaceHeaderPointerLeave}
-      >
+      <div className="mt-2 flex h-8 items-center justify-between px-2 gap-2">
         <div className="flex min-w-0 items-center gap-1">
           <span className="px-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80 select-none">
             Workspaces
@@ -241,26 +116,21 @@ const SidebarHeader = React.memo(function SidebarHeader() {
                 size="icon-xs"
                 className="text-muted-foreground"
                 aria-label="Workspace board"
-                aria-pressed={workspaceBoardPersistentOpen}
+                aria-pressed={workspaceBoardOpen}
                 data-workspace-board-trigger=""
-                onPointerDown={handleWorkspaceBoardButtonPointerDown}
                 onClick={handleWorkspaceBoardToggle}
               >
                 <Kanban className="size-3.5" strokeWidth={2.25} />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {workspaceBoardPersistentOpen
-                ? 'Close workspace board'
-                : workspaceBoardOpen
-                  ? 'Keep workspace board open'
-                  : 'Workspace board'}
+              {workspaceBoardOpen ? 'Close workspace board' : 'Workspace board'}
             </TooltipContent>
           </Tooltip>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <SidebarFilter />
-          <DropdownMenu>
+          <SidebarFilter preserveWorkspaceBoardOpen onMenuOpenChange={setWorkspaceBoardMenuOpen} />
+          <DropdownMenu modal={false} onOpenChange={setWorkspaceBoardMenuOpen}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <DropdownMenuTrigger asChild>
@@ -269,6 +139,7 @@ const SidebarHeader = React.memo(function SidebarHeader() {
                     size="icon-xs"
                     className="text-muted-foreground"
                     aria-label="View options"
+                    data-workspace-board-preserve-open=""
                   >
                     <SlidersHorizontal className="size-3.5" strokeWidth={2.25} />
                   </Button>
@@ -278,7 +149,13 @@ const SidebarHeader = React.memo(function SidebarHeader() {
                 View options
               </TooltipContent>
             </Tooltip>
-            <DropdownMenuContent side="right" align="start" sideOffset={8} className="w-56 pb-2">
+            <DropdownMenuContent
+              side="right"
+              align="start"
+              sideOffset={8}
+              className="w-56 pb-2"
+              data-workspace-board-preserve-open=""
+            >
               <DropdownMenuLabel>Group by</DropdownMenuLabel>
               <div className="px-2 pt-0.5 pb-1">
                 <ToggleGroup
@@ -388,8 +265,9 @@ const SidebarHeader = React.memo(function SidebarHeader() {
       </div>
       <WorkspaceKanbanDrawer
         open={workspaceBoardOpen}
+        preserveOpenForMenu={workspaceBoardMenuOpen}
         onOpenChange={handleWorkspaceBoardOpenChange}
-        onPointerEnter={handleWorkspaceBoardPointerEnter}
+        onMenuOpenChange={setWorkspaceBoardMenuOpen}
       />
     </>
   )

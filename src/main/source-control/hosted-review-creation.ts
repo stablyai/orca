@@ -12,6 +12,7 @@ import {
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef
 } from '../../shared/hosted-review-refs'
+import { getAzureDevOpsRepoSlug } from '../azure-devops/client'
 import { getBitbucketRepoSlug } from '../bitbucket/client'
 import { getGiteaRepoSlug } from '../gitea/client'
 import { createGitHubPullRequest, getRepoSlug } from '../github/client'
@@ -43,6 +44,9 @@ async function detectHostedReviewProvider(repoPath: string): Promise<HostedRevie
   }
   if (await getBitbucketRepoSlug(repoPath)) {
     return 'bitbucket'
+  }
+  if (await getAzureDevOpsRepoSlug(repoPath)) {
+    return 'azure-devops'
   }
   if (await getGiteaRepoSlug(repoPath)) {
     return 'gitea'
@@ -234,6 +238,7 @@ export async function getHostedReviewCreationEligibility(
     linkedGitHubPR: args.linkedGitHubPR ?? null,
     linkedGitLabMR: args.linkedGitLabMR ?? null,
     linkedBitbucketPR: args.linkedBitbucketPR ?? null,
+    linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
     linkedGiteaPR: args.linkedGiteaPR ?? null
   })
 

@@ -56,11 +56,16 @@ import {
 } from './components/floating-terminal/FloatingTerminalPanel'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { DictationController } from './components/dictation/DictationController'
+import { CrashReportDialog } from './components/crash-report/CrashReportDialog'
 import RecentTabSwitcher from './components/tab-bar/RecentTabSwitcher'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
 import { useEditorExternalWatch } from './hooks/useEditorExternalWatch'
 import { useAutoAckViewedAgent } from './hooks/useAutoAckViewedAgent'
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
+import {
+  resolvePrimarySelectionMiddleClickPaste,
+  usePrimarySelectionPaste
+} from './hooks/usePrimarySelectionPaste'
 import {
   getRuntimeMobileSessionSyncKey,
   runtimeMobileSessionSyncKeysEqual,
@@ -81,10 +86,12 @@ import {
 } from './lib/startup-ui-hydration'
 import { applyDocumentTheme } from './lib/document-theme'
 import { isEditableTarget } from './lib/editable-target'
+import { getSelectedTextForFileSearch } from './lib/file-search-selection'
 import {
   canGoBackWorktreeHistory,
   canGoForwardWorktreeHistory
 } from '@/store/slices/worktree-nav-history'
+import type { VirtualizedScrollAnchor } from './hooks/useVirtualizedScrollAnchor'
 import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
 import type { OnboardingState } from '../../shared/types'
 
@@ -215,8 +222,8 @@ function App(): React.JSX.Element {
 
   // Why: Zustand actions are referentially stable, but each individual
   // useAppStore(s => s.someAction) still registers a subscription that React
-  // must check on every store mutation. Consolidating 19 action refs into one
-  // useShallow subscription means one equality check instead of 19.
+  // must check on every store mutation. Consolidating action refs into one
+  // useShallow subscription means one equality check instead of many.
   const actions = useAppStore(
     useShallow((s) => ({
       toggleSidebar: s.toggleSidebar,
@@ -241,6 +248,7 @@ function App(): React.JSX.Element {
       toggleRightSidebar: s.toggleRightSidebar,
       setRightSidebarOpen: s.setRightSidebarOpen,
       setRightSidebarTab: s.setRightSidebarTab,
+      seedFileSearchQuery: s.seedFileSearchQuery,
       setActiveView: s.setActiveView,
       updateSettings: s.updateSettings,
       pruneLastVisitedTimestamps: s.pruneLastVisitedTimestamps,
@@ -251,6 +259,11 @@ function App(): React.JSX.Element {
   const activeView = useAppStore((s) => s.activeView)
   const activeModal = useAppStore((s) => s.activeModal)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  // Why: App swaps the sidebar between workspace and landing layouts when the
+  // active workspace is slept/deleted. Keep virtualized scroll memory above
+  // that remount so the left workspace list doesn't restart at scrollTop 0.
+  const worktreeSidebarScrollOffsetRef = useRef(0)
+  const worktreeSidebarScrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const activeTabId = useAppStore((s) => s.activeTabId)
   const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
@@ -334,6 +347,10 @@ function App(): React.JSX.Element {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
+  const primarySelectionMiddleClickPaste = resolvePrimarySelectionMiddleClickPaste(
+    settings?.primarySelectionMiddleClickPaste
+  )
+  usePrimarySelectionPaste(primarySelectionMiddleClickPaste)
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
   const petVisible = useAppStore((s) => s.petVisible)
   const canGoBackWorktree = useAppStore(canGoBackWorktreeHistory)
@@ -921,6 +938,31 @@ function App(): React.JSX.Element {
       // browser guest has focus. The renderer keeps matching handlers for
       // local-focus cases and to preserve the same guards in one place.
 
+      const isSearchShortcut = e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f'
+      const canRevealRightSidebar =
+        activeView !== 'tasks' &&
+        activeView !== 'activity' &&
+        activeView !== 'automations' &&
+        activeView !== 'space' &&
+        activeView !== 'skills'
+
+      const openSearchSidebar = (query: string | null): void => {
+        if (query && activeWorktreeId) {
+          actions.seedFileSearchQuery(activeWorktreeId, query)
+        }
+        actions.setRightSidebarTab('search')
+        actions.setRightSidebarOpen(true)
+      }
+
+      if (mod && isSearchShortcut && canRevealRightSidebar) {
+        const selectedText = getSelectedTextForFileSearch()
+        if (selectedText) {
+          e.preventDefault()
+          openSearchSidebar(selectedText)
+          return
+        }
+      }
+
       // Why: keep this guard. TipTap's Cmd+B bold binding depends on the
       // window-level handler *not* toggling the sidebar when focus lives in an
       // editable surface. The main-process before-input-event already carves out
@@ -975,13 +1017,7 @@ function App(): React.JSX.Element {
 
       // Why: full-page navigation surfaces should not reveal the right sidebar;
       // they are designed as distraction-free content areas.
-      if (
-        activeView === 'tasks' ||
-        activeView === 'activity' ||
-        activeView === 'automations' ||
-        activeView === 'space' ||
-        activeView === 'skills'
-      ) {
+      if (!canRevealRightSidebar) {
         return
       }
 
@@ -1001,10 +1037,9 @@ function App(): React.JSX.Element {
       }
 
       // Cmd/Ctrl+Shift+F — toggle right sidebar / search tab
-      if (e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f') {
+      if (isSearchShortcut) {
         e.preventDefault()
-        actions.setRightSidebarTab('search')
-        actions.setRightSidebarOpen(true)
+        openSearchSidebar(null)
         return
       }
 
@@ -1122,7 +1157,7 @@ function App(): React.JSX.Element {
               <ContextMenu>
                 <ContextMenuTrigger asChild>
                   <div className="titlebar-app-name" aria-label="Orca">
-                    Orca
+                    <span className="titlebar-app-name-main">Orca</span>
                   </div>
                 </ContextMenuTrigger>
                 <ContextMenuContent>
@@ -1341,11 +1376,17 @@ function App(): React.JSX.Element {
                           the sidebar falls back to its content height, so the
                           worktree list loses its scroll viewport and the fixed
                           bottom toolbar (including Add Project) gets pushed offscreen. */}
-                      <Sidebar />
+                      <Sidebar
+                        worktreeScrollOffsetRef={worktreeSidebarScrollOffsetRef}
+                        worktreeScrollAnchorRef={worktreeSidebarScrollAnchorRef}
+                      />
                     </div>
                   </div>
                 ) : (
-                  <Sidebar />
+                  <Sidebar
+                    worktreeScrollOffsetRef={worktreeSidebarScrollOffsetRef}
+                    worktreeScrollAnchorRef={worktreeSidebarScrollAnchorRef}
+                  />
                 )
               ) : null}
               <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
@@ -1457,6 +1498,7 @@ function App(): React.JSX.Element {
       <ZoomOverlay />
       <SshPassphraseDialog />
       <DeleteWorktreeDialog />
+      <CrashReportDialog />
       {onboarding && shouldShowOnboarding(onboarding) ? (
         <Suspense fallback={null}>
           <OnboardingFlow onboarding={onboarding} onOnboardingChange={setOnboarding} />

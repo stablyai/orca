@@ -459,12 +459,14 @@ export class OrcaRuntimeRpcServer {
               }
             })
             channel.onMessage((plaintext, encryptedReply, encryptedBinaryReply) => {
+              const authenticatedDeviceToken = this.e2eeChannels.get(ws)?.deviceToken ?? null
               void this.handleWebSocketMessage(
                 plaintext,
                 encryptedReply,
                 encryptedBinaryReply,
                 wsTransport,
-                ws
+                ws,
+                authenticatedDeviceToken
               )
             })
             channel.onBinaryMessage((bytes) => this.handleWebSocketBinaryMessage(bytes, ws))
@@ -632,7 +634,8 @@ export class OrcaRuntimeRpcServer {
     reply: (response: string) => void,
     sendBinary: (response: Uint8Array<ArrayBufferLike>) => void,
     wsTransport?: WebSocketTransport,
-    ws?: WebSocket
+    ws?: WebSocket,
+    authenticatedDeviceToken?: string | null
   ): Promise<void> {
     let request: RpcRequest
     try {
@@ -651,10 +654,17 @@ export class OrcaRuntimeRpcServer {
       return
     }
 
-    const token =
+    const requestToken =
       typeof (request as Record<string, unknown>).deviceToken === 'string'
         ? ((request as Record<string, unknown>).deviceToken as string)
         : null
+    if (authenticatedDeviceToken && requestToken && requestToken !== authenticatedDeviceToken) {
+      reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Device token mismatch')))
+      return
+    }
+    // Why: E2EE already authenticated the WebSocket channel. Use that bound
+    // identity for authorization instead of trusting a repeated request field.
+    const token = authenticatedDeviceToken ?? requestToken
     if (!token) {
       reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Missing device token')))
       return

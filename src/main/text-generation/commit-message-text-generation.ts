@@ -15,16 +15,15 @@ import {
 } from '../../shared/commit-message-prompt'
 import {
   CUSTOM_AGENT_ID,
-  DEFAULT_COMMIT_MESSAGE_AGENT_ID,
   getCommitMessageAgentSpec,
   getCommitMessageModel,
-  isCustomAgentId
+  isCustomAgentId,
+  resolveCommitMessageAgentChoice
 } from '../../shared/commit-message-agent-spec'
 import {
   planCommitMessageGeneration,
   type CommitMessagePlan
 } from '../../shared/commit-message-plan'
-import { ORCA_GIT_COMMIT_TRAILER } from '../../shared/orca-attribution'
 import { resolveCliCommand } from '../codex-cli/command'
 import {
   getSpawnArgsForWindows,
@@ -42,8 +41,6 @@ export type GenerateCommitMessageParams = {
   customPrompt?: string
   customAgentCommand?: string
   agentCommandOverride?: string
-  /** When true, append `Co-authored-by: Orca ...` after the cleaned message. */
-  attributionEnabled?: boolean
 }
 
 export type GenerateCommitMessageResult =
@@ -80,33 +77,29 @@ type InternalCommitMessageGenerationResult =
   | { success: true; commitMessage: GeneratedCommitMessage; agentLabel?: string }
   | { success: false; error: string; canceled?: boolean }
 
-/** Appends the Orca trailer if the message does not already include it. */
-export function applyOrcaAttribution(message: string, enabled: boolean): string {
-  if (!enabled) {
-    // Why: trim trailing whitespace even on the no-attribution path so a
-    // stray "\n" from the agent's output never reaches the textarea as a
-    // visible blank line.
-    return message.replace(/\s+$/, '')
-  }
-  const stripped = message.replace(/\s+$/, '')
-  if (stripped.includes(ORCA_GIT_COMMIT_TRAILER)) {
-    return stripped
-  }
-  // Why: a blank line separates the trailer block from the body so `git
-  // interpret-trailers` and most parsers treat it as a real trailer instead
-  // of a paragraph continuation.
-  return `${stripped}\n\n${ORCA_GIT_COMMIT_TRAILER}`
+export function trimGeneratedCommitMessage(message: string): string {
+  return message.replace(/\s+$/, '')
 }
 
 export function resolveCommitMessageSettings(
   settings: GlobalSettings
 ): ResolveCommitMessageSettingsResult {
   const config = settings.commitMessageAi
-  if (!config?.enabled || !config.agentId) {
-    return { ok: false, error: 'Enable AI commit messages and choose an agent in Settings -> Git.' }
+  if (!config?.enabled) {
+    return { ok: false, error: 'Enable AI commit messages in Settings -> Git.' }
   }
 
-  if (isCustomAgentId(config.agentId)) {
+  const agentChoice = resolveCommitMessageAgentChoice(config.agentId, settings.defaultTuiAgent)
+  if (!agentChoice) {
+    return {
+      ok: false,
+      error:
+        `Default agent "${settings.defaultTuiAgent}" does not support AI commit messages. ` +
+        'Choose Claude or Codex in Settings -> Git -> AI Commit Messages.'
+    }
+  }
+
+  if (isCustomAgentId(agentChoice)) {
     const customAgentCommand = config.customAgentCommand.trim()
     if (!customAgentCommand) {
       return {
@@ -120,13 +113,12 @@ export function resolveCommitMessageSettings(
         agentId: CUSTOM_AGENT_ID,
         model: '',
         customPrompt: config.customPrompt,
-        customAgentCommand,
-        attributionEnabled: settings.enableGitHubAttribution === true
+        customAgentCommand
       }
     }
   }
 
-  const agentId = config.agentId ?? DEFAULT_COMMIT_MESSAGE_AGENT_ID
+  const agentId = agentChoice
   const spec = getCommitMessageAgentSpec(agentId)
   if (!spec) {
     return { ok: false, error: `Agent "${agentId}" does not support AI commit messages.` }
@@ -153,8 +145,7 @@ export function resolveCommitMessageSettings(
       model: model.id,
       thinkingLevel,
       customPrompt: config.customPrompt,
-      ...(agentCommandOverride ? { agentCommandOverride } : {}),
-      attributionEnabled: settings.enableGitHubAttribution === true
+      ...(agentCommandOverride ? { agentCommandOverride } : {})
     }
   }
 }
@@ -418,15 +409,14 @@ async function runRemotePlan(
 }
 
 function formatCommitMessageGenerationResult(
-  result: InternalCommitMessageGenerationResult,
-  attributionEnabled: boolean
+  result: InternalCommitMessageGenerationResult
 ): GenerateCommitMessageResult {
   if (!result.success) {
     return result
   }
   return {
     success: true,
-    message: applyOrcaAttribution(result.commitMessage.message, attributionEnabled),
+    message: trimGeneratedCommitMessage(result.commitMessage.message),
     agentLabel: result.agentLabel
   }
 }
@@ -446,5 +436,5 @@ export async function generateCommitMessageFromContext(
     target.kind === 'remote'
       ? await runRemotePlan(planned.plan, target)
       : await runLocalPlan(planned.plan, target.cwd, target.env)
-  return formatCommitMessageGenerationResult(internalResult, params.attributionEnabled === true)
+  return formatCommitMessageGenerationResult(internalResult)
 }

@@ -5,6 +5,7 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
+import type { AppIdentity } from '../shared/app-identity'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type {
@@ -32,6 +33,7 @@ import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
 } from '../shared/types'
+import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult } from '../shared/skills'
 import type {
@@ -324,6 +326,7 @@ document.addEventListener(
 // Custom APIs for renderer
 const api = {
   app: {
+    getIdentity: (): Promise<AppIdentity> => ipcRenderer.invoke('app:getIdentity'),
     getFeatureWallAssetBaseUrl: (): Promise<string> =>
       ipcRenderer.invoke('app:getFeatureWallAssetBaseUrl'),
     relaunch: (): Promise<void> => ipcRenderer.invoke('app:relaunch'),
@@ -694,6 +697,20 @@ const api = {
       githubEmail: string | null
     }): Promise<{ ok: true } | { ok: false; status: number | null; error: string }> =>
       ipcRenderer.invoke('feedback:submit', args)
+  },
+
+  crashReports: {
+    getLatestPending: () => ipcRenderer.invoke('crashReports:getLatestPending'),
+    dismiss: (args: { reportId: string }) => ipcRenderer.invoke('crashReports:dismiss', args),
+    copyLatestDiagnostics: (args?: { reportId?: string; notes?: string }) =>
+      ipcRenderer.invoke('crashReports:copyLatestDiagnostics', args),
+    submit: (args: {
+      reportId?: string
+      notes?: string
+      submitAnonymously?: boolean
+      githubLogin: string | null
+      githubEmail: string | null
+    }) => ipcRenderer.invoke('crashReports:submit', args)
   },
 
   export: {
@@ -1144,6 +1161,13 @@ const api = {
       gh: { installed: boolean; authenticated: boolean }
       glab?: { installed: boolean; authenticated: boolean }
       bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
+      azureDevOps?: {
+        configured: boolean
+        authenticated: boolean
+        account: string | null
+        baseUrl: string | null
+        tokenConfigured: boolean
+      }
       gitea?: {
         configured: boolean
         authenticated: boolean
@@ -1878,6 +1902,9 @@ const api = {
       connectionId?: string
       includeIgnored?: boolean
     }): Promise<unknown> => ipcRenderer.invoke('git:status', args),
+    history: (
+      args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
+    ): Promise<GitHistoryResult> => ipcRenderer.invoke('git:history', args),
     conflictOperation: (args: { worktreePath: string; connectionId?: string }): Promise<unknown> =>
       ipcRenderer.invoke('git:conflictOperation', args),
     diff: (args: {
@@ -1892,6 +1919,11 @@ const api = {
       baseRef: string
       connectionId?: string
     }): Promise<unknown> => ipcRenderer.invoke('git:branchCompare', args),
+    commitCompare: (args: {
+      worktreePath: string
+      commitId: string
+      connectionId?: string
+    }): Promise<unknown> => ipcRenderer.invoke('git:commitCompare', args),
     upstreamStatus: (args: {
       worktreePath: string
       connectionId?: string
@@ -1913,6 +1945,14 @@ const api = {
       oldPath?: string
       connectionId?: string
     }): Promise<unknown> => ipcRenderer.invoke('git:branchDiff', args),
+    commitDiff: (args: {
+      worktreePath: string
+      commitOid: string
+      parentOid?: string | null
+      filePath: string
+      oldPath?: string
+      connectionId?: string
+    }): Promise<unknown> => ipcRenderer.invoke('git:commitDiff', args),
     commit: (args: {
       worktreePath: string
       message: string
@@ -1976,6 +2016,11 @@ const api = {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:openFeatureTour', listener)
       return () => ipcRenderer.removeListener('ui:openFeatureTour', listener)
+    },
+    onOpenCrashReport: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:openCrashReport', listener)
+      return () => ipcRenderer.removeListener('ui:openCrashReport', listener)
     },
     onShowFeatureTourNudge: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
@@ -2203,6 +2248,7 @@ const api = {
         afterTabId?: string
         command?: string
         title?: string
+        activate?: boolean
       }) => void
     ): (() => void) => {
       const listener = (
@@ -2213,6 +2259,7 @@ const api = {
           afterTabId?: string
           command?: string
           title?: string
+          activate?: boolean
         }
       ) => callback(data)
       ipcRenderer.on('terminal:requestTabCreate', listener)
@@ -2330,10 +2377,14 @@ const api = {
       return () => ipcRenderer.removeListener('terminal:zoom', listener)
     },
     readClipboardText: (): Promise<string> => ipcRenderer.invoke('clipboard:readText'),
+    readSelectionClipboardText: (): Promise<string> =>
+      ipcRenderer.invoke('clipboard:readSelectionText'),
     saveClipboardImageAsTempFile: (): Promise<string | null> =>
       ipcRenderer.invoke('clipboard:saveImageAsTempFile'),
     writeClipboardText: (text: string): Promise<void> =>
       ipcRenderer.invoke('clipboard:writeText', text),
+    writeSelectionClipboardText: (text: string): Promise<void> =>
+      ipcRenderer.invoke('clipboard:writeSelectionText', text),
     writeClipboardImage: (dataUrl: string): Promise<void> =>
       ipcRenderer.invoke('clipboard:writeImage', dataUrl),
     onFileDrop: (callback: (data: NativeFileDropPayload) => void): (() => void) =>

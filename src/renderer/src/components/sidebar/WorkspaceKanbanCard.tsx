@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import { Pin } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Badge } from '@/components/ui/badge'
@@ -19,7 +19,7 @@ type WorkspaceKanbanCardProps = {
   repo: Repo | undefined
   isActive: boolean
   isSelected: boolean
-  selectedWorktrees: readonly Worktree[]
+  selectedWorktrees?: readonly Worktree[]
   compact: boolean
   onActivate: () => void
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
@@ -29,7 +29,7 @@ type WorkspaceKanbanCardProps = {
   ) => readonly Worktree[]
 }
 
-export default function WorkspaceKanbanCard({
+function WorkspaceKanbanCard({
   worktree,
   repo,
   isActive,
@@ -55,8 +55,16 @@ export default function WorkspaceKanbanCard({
     )
   }
 
+  const contextWorktrees =
+    isSelected && selectedWorktrees && selectedWorktrees.length > 0 ? selectedWorktrees : undefined
+
   return (
-    <div className="relative" data-workspace-board-card-mode="detailed">
+    <div
+      className="relative rounded-lg data-[workspace-board-card-area-selected=true]:ring-1 data-[workspace-board-card-area-selected=true]:ring-sidebar-ring/40"
+      data-workspace-board-card-id={worktree.id}
+      data-workspace-board-card-mode="detailed"
+      data-workspace-board-card-selected={isSelected ? 'true' : 'false'}
+    >
       {worktree.isPinned ? (
         <Badge
           variant="outline"
@@ -71,7 +79,7 @@ export default function WorkspaceKanbanCard({
         repo={repo}
         isActive={isActive}
         isMultiSelected={isSelected}
-        selectedWorktrees={selectedWorktrees}
+        selectedWorktrees={contextWorktrees}
         hideCiCheck={worktree.isPinned}
         onActivate={onActivate}
         onSelectionGesture={onSelectionGesture}
@@ -80,6 +88,8 @@ export default function WorkspaceKanbanCard({
     </div>
   )
 }
+
+export default React.memo(WorkspaceKanbanCard)
 
 function WorkspaceKanbanCompactCard({
   worktree,
@@ -94,6 +104,13 @@ function WorkspaceKanbanCompactCard({
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const isDeleting = deleteState?.isDeleting ?? false
   const status = useWorktreeActivityStatus(worktree.id)
+  const contextWorktrees = useMemo(
+    () =>
+      isSelected && selectedWorktrees && selectedWorktrees.length > 0
+        ? selectedWorktrees
+        : [worktree],
+    [isSelected, selectedWorktrees, worktree]
+  )
 
   const handleActivate = useCallback(() => {
     if (isDeleting) {
@@ -123,18 +140,18 @@ function WorkspaceKanbanCompactCard({
         return
       }
       const dragIds =
-        isSelected && selectedWorktrees.length > 1
-          ? selectedWorktrees.map((item) => item.id)
+        isSelected && contextWorktrees.length > 1
+          ? contextWorktrees.map((item) => item.id)
           : worktree.id
       writeWorkspaceDragData(event.dataTransfer, dragIds)
     },
-    [isDeleting, isSelected, selectedWorktrees, worktree.id]
+    [contextWorktrees, isDeleting, isSelected, worktree.id]
   )
 
   return (
     <WorktreeContextMenu
       worktree={worktree}
-      selectedWorktrees={selectedWorktrees}
+      selectedWorktrees={contextWorktrees}
       onContextMenuSelect={(event) => onContextMenuSelect(event, worktree)}
     >
       <HoverCard openDelay={450} closeDelay={100}>
@@ -152,9 +169,12 @@ function WorkspaceKanbanCompactCard({
                   ? 'border-sidebar-ring/50 bg-sidebar-accent/75 text-foreground ring-1 ring-sidebar-ring/30'
                   : 'border-transparent text-foreground hover:bg-sidebar-accent/60 focus-visible:border-sidebar-ring',
               isActive && isSelected && 'ring-1 ring-sidebar-ring/35',
+              'data-[workspace-board-card-area-selected=true]:border-sidebar-ring/50 data-[workspace-board-card-area-selected=true]:bg-sidebar-accent/75 data-[workspace-board-card-area-selected=true]:ring-1 data-[workspace-board-card-area-selected=true]:ring-sidebar-ring/30',
               isDeleting && 'cursor-not-allowed opacity-50 grayscale'
             )}
             data-workspace-board-card-mode="compact"
+            data-workspace-board-card-id={worktree.id}
+            data-workspace-board-card-selected={isSelected ? 'true' : 'false'}
             aria-label={`Open ${worktree.displayName}`}
             aria-busy={isDeleting}
           >

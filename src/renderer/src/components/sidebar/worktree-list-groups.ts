@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: sidebar row construction keeps every grouping mode in one pure module so reveal, virtualized rendering, and tests share the same flat row contract. */
-import { CircleCheckBig, CircleDot, CircleX, Folder, GitPullRequest, Pin } from 'lucide-react'
+import { CircleX, Folder, Pin } from 'lucide-react'
 import type React from 'react'
 import type {
   Repo,
@@ -14,12 +14,19 @@ import {
   getWorkspaceStatusGroupKey,
   getWorkspaceStatusVisualMeta
 } from './workspace-status'
+import {
+  ConductorDoneIcon,
+  ConductorProgressIcon,
+  ConductorReviewIcon
+} from './workspace-status-icons'
 import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
 import type { SortBy } from './smart-sort'
 
 export { branchName }
 
-export type WorktreeGroupBy = 'none' | 'repo' | 'pr-status'
+// Why: `none` is the legacy persisted value for Status grouping. The actual
+// ungrouped sidebar mode is `flat`.
+export type WorktreeGroupBy = 'flat' | 'none' | 'repo' | 'pr-status'
 export type RepoGroupOrdering = 'manual' | 'visible-worktree-order'
 
 export function getRepoGroupOrdering(groupBy: WorktreeGroupBy, sortBy: SortBy): RepoGroupOrdering {
@@ -67,18 +74,18 @@ export const PR_GROUP_META: Record<
 > = {
   done: {
     label: 'Done',
-    icon: CircleCheckBig,
-    tone: 'text-emerald-700 dark:text-emerald-200'
+    icon: ConductorDoneIcon,
+    tone: 'text-[#c7a594]'
   },
   'in-review': {
     label: 'In review',
-    icon: GitPullRequest,
-    tone: 'text-sky-700 dark:text-sky-200'
+    icon: ConductorReviewIcon,
+    tone: 'text-[#16a34a]'
   },
   'in-progress': {
     label: 'In progress',
-    icon: CircleDot,
-    tone: 'text-amber-700 dark:text-amber-200'
+    icon: ConductorProgressIcon,
+    tone: 'text-[#d4a300]'
   },
   closed: {
     label: 'Closed',
@@ -369,6 +376,15 @@ export function buildRows(
   )
   const unpinned = pinnedIds.size > 0 ? worktrees.filter((w) => !pinnedIds.has(w.id)) : worktrees
 
+  if (groupBy === 'flat') {
+    appendWorktreeRows(result, unpinned, repoMap, lineageById, worktreeMap, {
+      nestLineage,
+      showLineageContext: nestLineage,
+      collapsedGroups
+    })
+    return result
+  }
+
   const grouped = new Map<string, { label: string; items: Worktree[]; repo?: Repo }>()
   for (const w of unpinned) {
     let key: string
@@ -501,6 +517,9 @@ export function getGroupKeyForWorktree(
   prCache: Record<string, unknown> | null,
   workspaceStatuses: readonly WorkspaceStatusDefinition[] = cloneDefaultWorkspaceStatuses()
 ): string | null {
+  if (groupBy === 'flat') {
+    return null
+  }
   if (groupBy === 'none') {
     return getWorkspaceStatusGroupKey(getWorkspaceStatus(worktree, workspaceStatuses))
   }

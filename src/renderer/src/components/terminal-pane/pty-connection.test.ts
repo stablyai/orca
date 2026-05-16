@@ -724,13 +724,22 @@ describe('connectPanePty', () => {
     expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'fresh-pty')
   })
 
-  it('shows a terminal error instead of fresh-spawning when a non-deferred SSH reattach reports expired via onError', async () => {
+  it('spawns a fresh PTY when a non-deferred SSH reattach reports expired via onError', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
-    transport.connect.mockImplementation(async (opts: { callbacks?: ConnectCallbacks }) => {
-      opts.callbacks?.onError?.('SSH_SESSION_EXPIRED: restored-session')
-      return undefined
-    })
+    transport.connect.mockImplementation(
+      async (opts: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
+        if (opts.sessionId) {
+          opts.callbacks?.onError?.('SSH_SESSION_EXPIRED: restored-session')
+          return undefined
+        }
+        const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+          | ((ptyId: string) => void)
+          | undefined
+        onPtySpawn?.('fresh-ssh-pty')
+        return 'fresh-ssh-pty'
+      }
+    )
     transportFactoryQueue.push(transport)
     mockStoreState = {
       ...mockStoreState,
@@ -748,13 +757,12 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks(10)
 
-    expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(
-      2,
-      'Previous SSH session expired. Start a new terminal to continue.'
-    )
-    expect(transport.connect).toHaveBeenCalledTimes(1)
+    expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
+    expect(transport.connect).toHaveBeenCalledTimes(2)
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, null)
     expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'restored-session')
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'fresh-ssh-pty')
+    expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'fresh-ssh-pty')
   })
 
   it('resets focus reporting after daemon snapshot replay without applying the full mode reset', async () => {
@@ -1359,12 +1367,19 @@ describe('connectPanePty', () => {
     expect(mockStoreState.removeDeferredSshReconnectTarget).not.toHaveBeenCalled()
   })
 
-  it('shows a terminal error instead of fresh-spawning when an SSH session expired', async () => {
+  it('spawns a fresh PTY when a deferred SSH session expired', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     transport.connect.mockImplementation(async (opts) => {
-      opts.callbacks?.onError?.('SSH_SESSION_EXPIRED: expired-session')
-      return undefined
+      if (opts.sessionId) {
+        opts.callbacks?.onError?.('SSH_SESSION_EXPIRED: expired-session')
+        return undefined
+      }
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+        | ((ptyId: string) => void)
+        | undefined
+      onPtySpawn?.('fresh-ssh-pty')
+      return 'fresh-ssh-pty'
     })
     transportFactoryQueue.push(transport)
 
@@ -1378,20 +1393,18 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const manager = createManager(1)
-    const deps = createDeps({
-      restoredLeafId: LEAF_1,
-      restoredPtyIdByLeafId: { [LEAF_1]: 'leaf-session' }
-    })
+    const deps = createDeps()
 
     connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks(20)
 
-    expect(deps.onPtyErrorRef.current).toHaveBeenCalledWith(
-      1,
-      'Previous SSH session expired. Start a new terminal to continue.'
-    )
+    expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
     expect(toastInfo).not.toHaveBeenCalled()
-    expect(transport.connect).toHaveBeenCalledTimes(1)
+    expect(transport.connect).toHaveBeenCalledTimes(2)
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, null)
+    expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'expired-session')
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'fresh-ssh-pty')
+    expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'fresh-ssh-pty')
   })
 
   // Why: the working→idle transition fires an 'agent-task-complete' OS

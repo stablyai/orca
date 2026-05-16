@@ -91,10 +91,11 @@ class AudioEngine (context: Context) {
         audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
         requestAudioFocus()
 
-        // Route audio to external device if connected, otherwise route to speaker
-        updateAudioRouting()
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            // Route audio to external device if connected, otherwise route to speaker.
+            // AudioDeviceInfo/getDevices are API 23+, while the module supports API 21.
+            updateAudioRouting()
+
             // Listen for changes in audio routing
             val callback = object:android.media.AudioDeviceCallback(){
                 override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
@@ -110,6 +111,8 @@ class AudioEngine (context: Context) {
             }
             audioDeviceCallback = callback
             audioManager.registerAudioDeviceCallback(callback, null)
+        } else {
+            updateLegacyAudioRouting()
         }
 
         val bufferSize = AudioTrack.getMinBufferSize(
@@ -136,6 +139,7 @@ class AudioEngine (context: Context) {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.M)
     private fun updateAudioRouting() {
         val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
         var isExternalDeviceConnected = false
@@ -175,6 +179,15 @@ class AudioEngine (context: Context) {
             @Suppress("DEPRECATION")
             audioManager.isSpeakerphoneOn = !isExternalDeviceConnected
         }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun updateLegacyAudioRouting() {
+        val isExternalDeviceConnected =
+            audioManager.isWiredHeadsetOn ||
+                audioManager.isBluetoothScoOn ||
+                audioManager.isBluetoothA2dpOn
+        audioManager.isSpeakerphoneOn = !isExternalDeviceConnected
     }
 
     @SuppressLint("NewApi")

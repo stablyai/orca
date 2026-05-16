@@ -64,6 +64,26 @@ describe('buildRows with pinned worktrees', () => {
     expect(rows[1]).toMatchObject({ type: 'item', worktree: { id: 'wt-pinned' } })
   })
 
+  it('renders a flat list without status headers in groupBy flat', () => {
+    const rows = buildRows('flat', [unpinned1, unpinned2], repoMap, null, new Set())
+
+    expect(rows).toMatchObject([
+      { type: 'item', worktree: { id: 'wt-1' } },
+      { type: 'item', worktree: { id: 'wt-2' } }
+    ])
+  })
+
+  it('keeps pinned worktrees above the flat list', () => {
+    const rows = buildRows('flat', [unpinned1, pinned, unpinned2], repoMap, null, new Set())
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: 'pinned', count: 1 },
+      { type: 'item', worktree: { id: 'wt-pinned' } },
+      { type: 'item', worktree: { id: 'wt-1' } },
+      { type: 'item', worktree: { id: 'wt-2' } }
+    ])
+  })
+
   it('emits status headers for unpinned worktrees in groupBy none', () => {
     const rows = buildRows('none', [unpinned1, pinned, unpinned2], repoMap, null, new Set())
     expect(rows[2]).toMatchObject({
@@ -310,6 +330,7 @@ describe('getRepoGroupOrdering', () => {
     ['repo', 'smart', 'visible-worktree-order'],
     ['repo', 'name', 'manual'],
     ['repo', 'repo', 'manual'],
+    ['flat', 'recent', 'manual'],
     ['none', 'recent', 'manual'],
     ['pr-status', 'recent', 'manual']
   ] as const)('uses %s/%s -> %s', (groupBy, sortBy, expected) => {

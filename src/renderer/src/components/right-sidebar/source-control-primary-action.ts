@@ -42,6 +42,7 @@ export type PrimaryAction = {
 export type PrimaryActionInputs = {
   stagedCount: number
   hasUnstagedChanges: boolean
+  hasPartiallyStagedChanges: boolean
   hasMessage: boolean
   hasUnresolvedConflicts: boolean
   isCommitting: boolean
@@ -58,7 +59,7 @@ export type PrimaryActionInputs = {
 }
 
 const PRIMARY_LABEL_BY_KIND: Record<Exclude<PrimaryActionKind, 'commit'>, string> = {
-  stage: 'Stage Files',
+  stage: 'Stage All',
   push: 'Push',
   pull: 'Pull',
   sync: 'Sync',
@@ -85,11 +86,13 @@ function describeSyncCounts(ahead: number, behind: number): string {
  *   1. In-flight commit locks the primary to a disabled "Commit".
  *   2. In-flight remote operation keeps the current label but disables it.
  *   3. Unresolved conflicts block the commit path entirely.
- *   4. Has staged files + message → plain "Commit" (compound flows live in
- *      the dropdown; after the commit lands, step 6 rotates the primary to
+ *   4. Has partially staged files → "Stage All" to avoid hook-time partial
+ *      stash conflicts.
+ *   5. Has staged files + message → plain "Commit" (compound flows live in
+ *      the dropdown; after the commit lands, step 7 rotates the primary to
  *      the appropriate single remote action).
- *   5. Has staged files + no message → disabled "Commit" with a reason.
- *   6. Clean tree → adaptive remote action (or disabled "Commit" no-op).
+ *   6. Has staged files + no message → disabled "Commit" with a reason.
+ *   7. Clean tree → adaptive remote action (or disabled "Commit" no-op).
  *
  * An undefined upstream status means fetchUpstreamStatus has not resolved
  * yet for this worktree. We return a disabled Commit so the button has a
@@ -100,6 +103,7 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
   const {
     stagedCount,
     hasUnstagedChanges,
+    hasPartiallyStagedChanges,
     hasMessage,
     hasUnresolvedConflicts,
     isCommitting,
@@ -180,10 +184,22 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
 
   const hasStaged = stagedCount > 0
 
-  // 4. Has staged files + message → plain Commit. The primary button never
+  // 4. A path with both staged and unstaged edits can make lint-staged's
+  // partial-stash restore fail after formatters rewrite the staged copy. Push
+  // the user through Stage All first so the index matches the worktree.
+  if (hasStaged && hasPartiallyStagedChanges) {
+    return {
+      kind: 'stage',
+      label: 'Stage All',
+      title: 'Stage all changes before committing partially staged files',
+      disabled: false
+    }
+  }
+
+  // 5. Has staged files + message → plain Commit. The primary button never
   //    compounds ("Commit & Push" etc.) — after the commit lands, the primary
   //    naturally rotates to the appropriate remote action (Push / Sync /
-  //    Publish Branch) via step 6 below. Users who want the one-click
+  //    Publish Branch) via step 7 below. Users who want the one-click
   //    compound flow can still reach it from the dropdown.
   if (hasStaged && hasMessage) {
     return {
@@ -194,7 +210,7 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
     }
   }
 
-  // 5. Has staged files but no message — user just needs to type something.
+  // 6. Has staged files but no message — user just needs to type something.
   if (hasStaged && !hasMessage) {
     return {
       kind: 'commit',
@@ -204,7 +220,7 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
     }
   }
 
-  // 5b. Nothing staged but local changes exist — surface staging as the
+  // 6b. Nothing staged but local changes exist — surface staging as the
   //     primary so dirty trees don't invite a remote op (pull/sync would fail
   //     with uncommitted changes; push/publish skips the actual user need).
   //     Sits before the upstream-status checks so it works regardless of
@@ -212,13 +228,13 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
   if (!hasStaged && hasUnstagedChanges) {
     return {
       kind: 'stage',
-      label: 'Stage Files',
+      label: 'Stage All',
       title: 'Stage all changes',
       disabled: false
     }
   }
 
-  // 6. Clean tree + no staged files → adaptive remote action.
+  // 7. Clean tree + no staged files → adaptive remote action.
   if (!upstreamStatus) {
     return {
       kind: 'commit',

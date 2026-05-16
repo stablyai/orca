@@ -143,7 +143,8 @@ export function EditorContent({
   const isCombinedDiff =
     activeFile.mode === 'diff' &&
     (activeFile.diffSource === 'combined-uncommitted' ||
-      activeFile.diffSource === 'combined-branch')
+      activeFile.diffSource === 'combined-branch' ||
+      activeFile.diffSource === 'combined-commit')
 
   const renderMonacoEditor = (fc: FileContent): React.JSX.Element => (
     // Why: Without a key, React reuses the same MonacoEditor instance when
