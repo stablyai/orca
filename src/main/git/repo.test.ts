@@ -4,7 +4,13 @@ import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import path from 'path'
 
-import { getDefaultBaseRef, getRemoteCount, searchBaseRefs } from './repo'
+import {
+  getDefaultBaseRef,
+  getRemoteCount,
+  parseAndFilterSearchRefDetails,
+  searchBaseRefDetails,
+  searchBaseRefs
+} from './repo'
 
 // Why: these tests exercise real git state (not mocked gitExecFileAsync)
 // because the change under test is in the `for-each-ref` glob argument
@@ -100,6 +106,45 @@ describe('searchBaseRefs (widened glob)', () => {
     const results = await searchBaseRefs(tmpDir, 'local')
 
     expect(results).toContain('local-only')
+  })
+
+  it('returns the local branch name for a remote ref with slashes', async () => {
+    const sha = getHeadSha(tmpDir)
+    git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
+    createRemoteRef(tmpDir, 'origin/feature/something', sha)
+
+    const results = await searchBaseRefDetails(tmpDir, 'origin/feature/something')
+
+    expect(results).toContainEqual({
+      refName: 'origin/feature/something',
+      localBranchName: 'feature/something'
+    })
+  })
+
+  it('keeps local branch names unchanged in detailed search results', async () => {
+    git(tmpDir, ['branch', 'feature/something'])
+
+    const results = await searchBaseRefDetails(tmpDir, 'feature/something')
+
+    expect(results).toContainEqual({
+      refName: 'feature/something',
+      localBranchName: 'feature/something'
+    })
+  })
+
+  it('uses the longest configured remote name when deriving local branch names', () => {
+    const results = parseAndFilterSearchRefDetails(
+      'refs/remotes/foo/bar/feature/something\u0000foo/bar/feature/something\n',
+      10,
+      ['foo', 'foo/bar']
+    )
+
+    expect(results).toEqual([
+      {
+        refName: 'foo/bar/feature/something',
+        localBranchName: 'feature/something'
+      }
+    ])
   })
 
   it('returns [] for a repo with no matching refs', async () => {

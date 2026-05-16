@@ -108,7 +108,7 @@ export type ComposerCardProps = {
   onNameValueChange: (value: string) => void
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
   onSmartGitLabItemSelect: (item: GitLabWorkItem) => void
-  onSmartBranchSelect: (refName: string) => void
+  onSmartBranchSelect: (refName: string, localBranchName: string) => void
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   /** GitLab parallel of onBaseBranchPrSelect. */
   onBaseBranchMrSelect?: (baseBranch: string, item: GitLabWorkItem) => void
@@ -338,6 +338,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [baseBranch, setBaseBranch] = useState<string | undefined>(
     persistDraft ? newWorkspaceDraft?.baseBranch : initialBaseBranch
   )
+  const [branchNameOverride, setBranchNameOverride] = useState<string | undefined>(undefined)
   const [pushTarget, setPushTarget] = useState<GitPushTarget | undefined>(undefined)
   // Why: when a repo switch wipes a prior Start-from selection, surface the
   // reset inline (e.g. "was PR #8778") so the change is recoverable visually
@@ -399,6 +400,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const lastAutoNameRef = useRef<string>(
     persistDraft ? (newWorkspaceDraft?.name ?? initialName) : initialName
   )
+  const branchAutoNameRef = useRef<string>('')
   // Why: tracks the note value we auto-prefilled from a Start-from PR pick, so
   // a subsequent PR change can replace it without clobbering user-typed text.
   const lastAutoNoteRef = useRef<string>('')
@@ -955,6 +957,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setName(suggestedName)
         lastAutoNameRef.current = suggestedName
       }
+      setBranchNameOverride(undefined)
     },
     [name]
   )
@@ -993,6 +996,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setName(suggestedName)
         lastAutoNameRef.current = suggestedName
       }
+      setBranchNameOverride(undefined)
     },
     [name]
   )
@@ -1037,10 +1041,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       } else if (name !== lastAutoNameRef.current) {
         lastAutoNameRef.current = ''
       }
+      if (branchNameOverride && nextName !== branchAutoNameRef.current) {
+        setBranchNameOverride(undefined)
+        branchAutoNameRef.current = ''
+      }
       setName(nextName)
       setCreateError(null)
     },
-    [name]
+    [branchNameOverride, name]
   )
 
   const addComposerAttachments = useCallback((paths: string[]): void => {
@@ -1298,6 +1306,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       // makes the field fall back to the new repo's effective base ref.
       setBaseBranch(undefined)
       setPushTarget(undefined)
+      setBranchNameOverride(undefined)
       setStartFromResetHint(hint)
     },
     [baseBranch, linkedWorkItem, repoId, setRepoId]
@@ -1318,6 +1327,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const handleBaseBranchChange = useCallback((next: string | undefined): void => {
     setBaseBranch(next)
     setPushTarget(undefined)
+    setBranchNameOverride(undefined)
+    branchAutoNameRef.current = ''
     setStartFromResetHint(null)
   }, [])
 
@@ -1325,6 +1336,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     (nextBaseBranch: string, item: GitHubWorkItem, nextPushTarget?: GitPushTarget): void => {
       setBaseBranch(nextBaseBranch)
       setPushTarget(nextPushTarget)
+      setBranchNameOverride(undefined)
+      branchAutoNameRef.current = ''
       setStartFromResetHint(null)
       // Why: per spec, a PR selection in the Start-from picker is also a
       // linkedWorkItem assignment. Reuse applyLinkedWorkItem so auto-name and
@@ -1352,6 +1365,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const handleBaseBranchMrSelect = useCallback(
     (nextBaseBranch: string, item: GitLabWorkItem): void => {
       setBaseBranch(nextBaseBranch)
+      setBranchNameOverride(undefined)
+      branchAutoNameRef.current = ''
       setStartFromResetHint(null)
       applyLinkedGitLabWorkItem(item)
       if (item.type === 'mr') {
@@ -1369,6 +1384,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const handleSmartGitHubItemSelect = useCallback(
     (item: GitHubWorkItem): void => {
       setStartFromResetHint(null)
+      setBranchNameOverride(undefined)
+      branchAutoNameRef.current = ''
       const repoForItem = eligibleRepos.find((repo) => repo.id === item.repoId) ?? selectedRepo
       if (item.type !== 'pr' || !repoForItem) {
         setPushTarget(undefined)
@@ -1428,6 +1445,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     (item: GitLabWorkItem): void => {
       applyLinkedGitLabWorkItem(item)
       setStartFromResetHint(null)
+      setBranchNameOverride(undefined)
+      branchAutoNameRef.current = ''
       const repoForItem = eligibleRepos.find((repo) => repo.id === item.repoId) ?? selectedRepo
       if (item.type !== 'mr' || !repoForItem) {
         return
@@ -1452,13 +1471,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   )
 
   const handleSmartBranchSelect = useCallback(
-    (refName: string): void => {
+    (refName: string, localBranchName: string): void => {
       setBaseBranch(refName)
       setPushTarget(undefined)
       setStartFromResetHint(null)
       if (!name.trim() || name === lastAutoNameRef.current) {
-        setName(refName)
-        lastAutoNameRef.current = refName
+        setName(localBranchName)
+        lastAutoNameRef.current = localBranchName
+        branchAutoNameRef.current = localBranchName
+        setBranchNameOverride(localBranchName)
+      } else {
+        setBranchNameOverride(undefined)
+        branchAutoNameRef.current = ''
       }
     },
     [name]
@@ -1481,6 +1505,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setName(suggestedName)
         lastAutoNameRef.current = suggestedName
       }
+      setBranchNameOverride(undefined)
+      branchAutoNameRef.current = ''
       // Why: match the GitHub issue/PR flow — paste only the URL as a draft
       // into the agent's input (no auto-submit). The launch path already
       // drafts `linkedWorkItem.url` when the note is empty; auto-filling the
@@ -1496,6 +1522,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setLinkedWorkItem(null)
     setBaseBranch(undefined)
     setPushTarget(undefined)
+    setBranchNameOverride(undefined)
+    branchAutoNameRef.current = ''
     setStartFromResetHint(null)
     if (name === lastAutoNameRef.current) {
       setName('')
@@ -1582,6 +1610,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
 
       const linkedLinearIssue = linkedWorkItem?.linearIdentifier
+      const effectiveBranchNameOverride =
+        branchNameOverride && workspaceName === branchAutoNameRef.current
+          ? branchNameOverride
+          : undefined
       const result = await createWorktree(
         repoId,
         workspaceName,
@@ -1599,7 +1631,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         effectiveLinkedPR ?? undefined,
         pushTarget,
         tuiAgent,
-        linkedLinearIssue
+        linkedLinearIssue,
+        effectiveBranchNameOverride
       )
       const worktree = result.worktree
 
@@ -1677,6 +1710,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
   }, [
     baseBranch,
+    branchNameOverride,
     clearNewWorkspaceDraft,
     createWorktree,
     applyWorktreeMeta,
@@ -1770,6 +1804,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             : ((submitResolvedSetupDecision ?? 'inherit') as SetupDecision)
 
         const linkedLinearIssue = linkedWorkItem?.linearIdentifier
+        const effectiveBranchNameOverride =
+          branchNameOverride && workspaceName === branchAutoNameRef.current
+            ? branchNameOverride
+            : undefined
         const result = await createWorktree(
           repoId,
           workspaceName,
@@ -1787,7 +1825,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           effectiveLinkedPR ?? undefined,
           pushTarget,
           agent ?? undefined,
-          linkedLinearIssue
+          linkedLinearIssue,
+          effectiveBranchNameOverride
         )
         const worktree = result.worktree
 
@@ -1911,6 +1950,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [
       applyWorktreeMeta,
       baseBranch,
+      branchNameOverride,
       clearNewWorkspaceDraft,
       createWorktree,
       fallbackCreatureName,

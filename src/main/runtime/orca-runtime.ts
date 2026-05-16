@@ -15,6 +15,7 @@ import { mkdir, readdir, rm, stat } from 'fs/promises'
 import { OrchestrationDb } from './orchestration/db'
 import { formatMessagesForInjection } from './orchestration/formatter'
 import type {
+  BaseRefSearchResult,
   CreateWorktreeResult,
   GitPushTarget,
   GitWorktreeInfo,
@@ -194,10 +195,10 @@ import {
   getBranchConflictKind,
   isGitRepo,
   getRepoName,
-  searchBaseRefs,
+  searchBaseRefDetails,
   getRemoteCount,
   normalizeRefSearchQuery,
-  parseAndFilterSearchRefs,
+  parseAndFilterSearchRefDetails,
   parseRemoteCount,
   resolveDefaultBaseRefViaExec,
   buildSearchBaseRefsArgv,
@@ -477,6 +478,23 @@ function omitUndefinedProperties<T extends Record<string, unknown>>(value: T): P
   return Object.fromEntries(
     Object.entries(value).filter(([, entry]) => entry !== undefined)
   ) as Partial<T>
+}
+
+async function resolveCreateBranchName(
+  repoPath: string,
+  branchNameOverride: string | undefined,
+  sanitizedName: string,
+  settings: { branchPrefix: string; branchPrefixCustom?: string },
+  username: string | null
+): Promise<string> {
+  if (!branchNameOverride) {
+    return computeBranchName(sanitizedName, settings, username)
+  }
+  if (branchNameOverride.startsWith('-')) {
+    throw new Error('Branch name must not start with "-"')
+  }
+  await gitExecFileAsync(['check-ref-format', '--branch', branchNameOverride], { cwd: repoPath })
+  return branchNameOverride
 }
 
 type ResolvedWorktree = Worktree & {
@@ -4372,12 +4390,13 @@ export class OrcaRuntimeService {
         truncated: false
       }
     }
-    const refs = repo.connectionId
+    const refDetails = repo.connectionId
       ? await this.searchRemoteRepoRefs(repo, query, limit + 1)
-      : await searchBaseRefs(repo.path, query, limit + 1)
+      : await searchBaseRefDetails(repo.path, query, limit + 1)
     return {
-      refs: refs.slice(0, limit),
-      truncated: refs.length > limit
+      refs: refDetails.slice(0, limit).map((entry) => entry.refName),
+      refDetails: refDetails.slice(0, limit),
+      truncated: refDetails.length > limit
     }
   }
 
@@ -4433,7 +4452,11 @@ export class OrcaRuntimeService {
     return { defaultBaseRef, remoteCount }
   }
 
-  private async searchRemoteRepoRefs(repo: Repo, query: string, limit: number): Promise<string[]> {
+  private async searchRemoteRepoRefs(
+    repo: Repo,
+    query: string,
+    limit: number
+  ): Promise<BaseRefSearchResult[]> {
     const provider = repo.connectionId ? getSshGitProvider(repo.connectionId) : null
     if (!provider) {
       return []
@@ -4443,8 +4466,15 @@ export class OrcaRuntimeService {
       return []
     }
     try {
-      const result = await provider.exec(buildSearchBaseRefsArgv(normalizedQuery), repo.path)
-      return parseAndFilterSearchRefs(result.stdout, limit)
+      const [result, remotesResult] = await Promise.all([
+        provider.exec(buildSearchBaseRefsArgv(normalizedQuery), repo.path),
+        provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
+      ])
+      const remotes = remotesResult.stdout
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+      return parseAndFilterSearchRefDetails(result.stdout, limit, remotes)
     } catch (err) {
       console.warn('[runtime:repo.searchRefs] SSH for-each-ref failed', {
         path: repo.path,
@@ -5117,6 +5147,7 @@ export class OrcaRuntimeService {
     repoSelector: string
     name: string
     baseBranch?: string
+    branchNameOverride?: string
     linkedIssue?: number | null
     linkedPR?: number | null
     linkedLinearIssue?: string
@@ -5153,7 +5184,13 @@ export class OrcaRuntimeService {
     const requestedDisplayName = args.displayName?.trim() || undefined
     const sanitizedName = sanitizeWorktreeName(args.name)
     const username = getGitUsername(repo.path)
-    const branchName = computeBranchName(sanitizedName, settings, username)
+    const branchName = await resolveCreateBranchName(
+      repo.path,
+      args.branchNameOverride,
+      sanitizedName,
+      settings,
+      username
+    )
 
     const branchConflictKind = await getBranchConflictKind(repo.path, branchName)
     if (branchConflictKind) {

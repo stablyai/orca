@@ -297,6 +297,19 @@ function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
           limit
         })
       ).refs,
+    searchBaseRefDetails: async ({ repoId, query, limit }) => {
+      const result = await callRuntimeResult<{
+        refs: string[]
+        refDetails?: { refName: string; localBranchName: string }[]
+      }>('repo.searchRefs', {
+        repo: repoId,
+        query,
+        limit
+      })
+      return (
+        result.refDetails ?? result.refs.map((refName) => ({ refName, localBranchName: refName }))
+      )
+    },
     onChanged: () => noopUnsubscribe
   }
 }

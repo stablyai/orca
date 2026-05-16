@@ -10,6 +10,7 @@ import type {
 import type { AppIdentity } from '../shared/app-identity'
 import type {
   BaseRefDefaultResult,
+  BaseRefSearchResult,
   BrowserCookieImportResult,
   BrowserLoadError,
   BrowserSessionProfile,
@@ -573,6 +574,11 @@ export type PreloadApi = {
     getGitUsername: (args: { repoId: string }) => Promise<string>
     getBaseRefDefault: (args: { repoId: string }) => Promise<BaseRefDefaultResult>
     searchBaseRefs: (args: { repoId: string; query: string; limit?: number }) => Promise<string[]>
+    searchBaseRefDetails: (args: {
+      repoId: string
+      query: string
+      limit?: number
+    }) => Promise<BaseRefSearchResult[]>
     onChanged: (callback: () => void) => () => void
   }
   sparsePresets: {

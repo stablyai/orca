@@ -407,6 +407,12 @@ const api = {
     searchBaseRefs: (args: { repoId: string; query: string; limit?: number }): Promise<string[]> =>
       ipcRenderer.invoke('repos:searchBaseRefs', args),
 
+    searchBaseRefDetails: (args: {
+      repoId: string
+      query: string
+      limit?: number
+    }): Promise<unknown[]> => ipcRenderer.invoke('repos:searchBaseRefDetails', args),
+
     onChanged: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('repos:changed', listener)

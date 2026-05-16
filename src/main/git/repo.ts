@@ -4,6 +4,7 @@ import { existsSync, statSync } from 'fs'
 import { join, basename } from 'path'
 import hostedGitInfo from 'hosted-git-info'
 import { gitExecFileSync, gitExecFileAsync } from './runner'
+import type { BaseRefSearchResult } from '../../shared/types'
 
 /**
  * Ordered probe list used to resolve a repo's default base ref when no
@@ -463,6 +464,14 @@ export async function getDefaultRemote(path: string): Promise<string> {
 }
 
 export async function searchBaseRefs(path: string, query: string, limit = 25): Promise<string[]> {
+  return (await searchBaseRefDetails(path, query, limit)).map((entry) => entry.refName)
+}
+
+export async function searchBaseRefDetails(
+  path: string,
+  query: string,
+  limit = 25
+): Promise<BaseRefSearchResult[]> {
   const normalizedQuery = normalizeRefSearchQuery(query)
   if (!normalizedQuery) {
     return []
@@ -471,17 +480,30 @@ export async function searchBaseRefs(path: string, query: string, limit = 25): P
   try {
     // Why: argv (including the two-remote-glob rationale) lives in
     // buildSearchBaseRefsArgv so the SSH sibling cannot drift.
-    const { stdout } = await gitExecFileAsync(buildSearchBaseRefsArgv(normalizedQuery), {
-      cwd: path
-    })
+    const [{ stdout }, remotes] = await Promise.all([
+      gitExecFileAsync(buildSearchBaseRefsArgv(normalizedQuery), { cwd: path }),
+      listRemoteNames(path)
+    ])
 
-    return parseAndFilterSearchRefs(stdout, limit)
+    return parseAndFilterSearchRefDetails(stdout, limit, remotes)
   } catch (err) {
     // Why: surface the failure for diagnostics; callers treat `[]` as "no
     // matches", but silently swallowing the error makes a missing result
     // set impossible to debug. Mirrors the SSH sibling in
     // src/main/ipc/repos.ts.
     console.warn('[searchBaseRefs] for-each-ref failed', { path, err })
+    return []
+  }
+}
+
+async function listRemoteNames(path: string): Promise<string[]> {
+  try {
+    const { stdout } = await gitExecFileAsync(['remote'], { cwd: path })
+    return stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+  } catch {
     return []
   }
 }
@@ -498,7 +520,16 @@ export async function searchBaseRefs(path: string, query: string, limit = 25): P
  * lived in a single location; two copies double the regression surface.
  */
 export function parseAndFilterSearchRefs(stdout: string, limit: number): string[] {
+  return parseAndFilterSearchRefDetails(stdout, limit).map((entry) => entry.refName)
+}
+
+export function parseAndFilterSearchRefDetails(
+  stdout: string,
+  limit: number,
+  remotes: string[] = []
+): BaseRefSearchResult[] {
   const seen = new Set<string>()
+  const sortedRemotes = [...remotes].sort((a, b) => b.length - a.length)
   return (
     stdout
       .split('\n')
@@ -531,12 +562,28 @@ export function parseAndFilterSearchRefs(stdout: string, limit: number): string[
         seen.add(short)
         return true
       })
-      .map(({ short }) => short)
+      .map(({ full, short }) => ({
+        refName: short,
+        localBranchName: resolveLocalBranchName(full, short, sortedRemotes)
+      }))
       // Why: `Math.max(0, limit)` — treat pathological `limit <= 0` as
       // "zero results" rather than "at least 1". More honest than silently
       // returning a single ref when the caller explicitly asked for none.
       .slice(0, Math.max(0, limit))
   )
+}
+
+function resolveLocalBranchName(fullRef: string, shortRef: string, remotes: string[]): string {
+  const remoteRefPrefix = 'refs/remotes/'
+  if (!fullRef.startsWith(remoteRefPrefix)) {
+    return shortRef
+  }
+  const remoteAndBranch = fullRef.slice(remoteRefPrefix.length)
+  const remote = remotes.find((candidate) => remoteAndBranch.startsWith(`${candidate}/`))
+  if (remote) {
+    return remoteAndBranch.slice(remote.length + 1)
+  }
+  return remoteAndBranch.split('/').slice(1).join('/') || shortRef
 }
 
 export function normalizeRefSearchQuery(query: string): string {

@@ -97,6 +97,11 @@ export type BaseRefDefaultResult = {
   remoteCount: number
 }
 
+export type BaseRefSearchResult = {
+  refName: string
+  localBranchName: string
+}
+
 // ─── Worktree (git-level) ────────────────────────────────────────────
 export type GitWorktreeInfo = {
   path: string
@@ -1017,6 +1022,10 @@ export type CreateWorktreeArgs = {
    *  Linear artifact whose title should remain readable in the sidebar. */
   displayName?: string
   baseBranch?: string
+  /** Optional git branch to create, separate from the filesystem-safe worktree
+   *  name. Used when creating from an existing branch whose local branch name
+   *  legitimately contains `/` while the worktree directory must not. */
+  branchNameOverride?: string
   setupDecision?: SetupDecision
   sparseCheckout?: CreateSparseCheckoutRequest
   linkedIssue?: number
