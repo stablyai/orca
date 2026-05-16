@@ -319,4 +319,13 @@ describe('WorktreeList header styles', () => {
 
     expect(source).not.toContain('leading-none capitalize')
   })
+
+  it('shows a pointer cursor over the disclosure chevron path', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('./WorktreeList.tsx', import.meta.url)),
+      'utf8'
+    )
+
+    expect(source).toContain('[&_path]:cursor-pointer')
+  })
 })

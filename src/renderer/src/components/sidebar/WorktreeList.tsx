@@ -625,10 +625,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     </div>
                   </div>
 
-                  <div className="flex size-4 shrink-0 items-center justify-center text-muted-foreground/60 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex size-4 shrink-0 cursor-pointer items-center justify-center text-muted-foreground/60 opacity-0 transition-opacity group-hover:opacity-100">
                     <ChevronDown
                       className={cn(
-                        'size-3.5 transition-transform',
+                        'size-3.5 cursor-pointer transition-transform [&_path]:cursor-pointer',
                         collapsedGroups.has(row.key) && '-rotate-90'
                       )}
                     />
