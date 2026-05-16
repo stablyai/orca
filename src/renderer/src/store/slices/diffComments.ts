@@ -10,6 +10,8 @@ export type DiffCommentsSlice = {
   addDiffComment: (input: Omit<DiffComment, 'id' | 'createdAt'>) => Promise<DiffComment | null>
   updateDiffComment: (worktreeId: string, commentId: string, body: string) => Promise<boolean>
   deleteDiffComment: (worktreeId: string, commentId: string) => Promise<void>
+  clearDiffComments: (worktreeId: string) => Promise<boolean>
+  clearDiffCommentsForFile: (worktreeId: string, filePath: string) => Promise<boolean>
 }
 
 function generateId(): string {
@@ -314,6 +316,41 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     } catch (err) {
       console.error('Failed to persist diff comments:', err)
       rollback(set, worktreeId, result.previous, result.next)
+    }
+  },
+
+  clearDiffComments: async (worktreeId) => {
+    const result = mutateComments(set, worktreeId, (existing) =>
+      existing.length === 0 ? null : []
+    )
+    if (!result) {
+      return true
+    }
+    try {
+      await enqueuePersist(worktreeId, get)
+      return true
+    } catch (err) {
+      console.error('Failed to persist diff comments:', err)
+      rollback(set, worktreeId, result.previous, result.next)
+      return false
+    }
+  },
+
+  clearDiffCommentsForFile: async (worktreeId, filePath) => {
+    const result = mutateComments(set, worktreeId, (existing) => {
+      const next = existing.filter((c) => c.filePath !== filePath)
+      return next.length === existing.length ? null : next
+    })
+    if (!result) {
+      return true
+    }
+    try {
+      await enqueuePersist(worktreeId, get)
+      return true
+    } catch (err) {
+      console.error('Failed to persist diff comments:', err)
+      rollback(set, worktreeId, result.previous, result.next)
+      return false
     }
   }
 })

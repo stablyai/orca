@@ -25,10 +25,12 @@ import {
   MessageSquare,
   Send,
   Trash,
+  Trash2,
   TriangleAlert,
   CircleCheck,
   Search,
-  X
+  X,
+  MoreHorizontal
 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById, useWorktreeMap } from '@/store/selectors'
@@ -181,6 +183,10 @@ type PendingDiscardConfirmation =
   | { kind: 'entry'; entry: GitStatusEntry }
   | { kind: 'area'; area: DiscardAllArea; paths: readonly string[] }
 
+type PendingDiffCommentsClear =
+  | { kind: 'all'; worktreeId: string }
+  | { kind: 'file'; worktreeId: string; filePath: string }
+
 export function readCommitDraftForWorktree(
   drafts: CommitDraftsByWorktree,
   worktreeId: string | null | undefined
@@ -283,6 +289,8 @@ function SourceControlInner(): React.JSX.Element {
   const openAllDiffs = useAppStore((s) => s.openAllDiffs)
   const openBranchAllDiffs = useAppStore((s) => s.openBranchAllDiffs)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
+  const clearDiffComments = useAppStore((s) => s.clearDiffComments)
+  const clearDiffCommentsForFile = useAppStore((s) => s.clearDiffCommentsForFile)
   const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
   const setRightSidebarOpen = useAppStore((s) => s.setRightSidebarOpen)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
@@ -309,6 +317,9 @@ function SourceControlInner(): React.JSX.Element {
   )
   const [diffCommentsExpanded, setDiffCommentsExpanded] = useState(false)
   const [diffCommentsCopied, setDiffCommentsCopied] = useState(false)
+  const [pendingDiffCommentsClear, setPendingDiffCommentsClear] =
+    useState<PendingDiffCommentsClear | null>(null)
+  const [isClearingDiffComments, setIsClearingDiffComments] = useState(false)
 
   const handleCopyDiffComments = useCallback(async (): Promise<void> => {
     if (diffCommentsForActive.length === 0) {
@@ -332,6 +343,72 @@ function SourceControlInner(): React.JSX.Element {
     const handle = window.setTimeout(() => setDiffCommentsCopied(false), 1500)
     return () => window.clearTimeout(handle)
   }, [diffCommentsCopied])
+
+  const pendingDiffCommentsClearCount = useMemo(() => {
+    if (!pendingDiffCommentsClear || pendingDiffCommentsClear.worktreeId !== activeWorktreeId) {
+      return 0
+    }
+    if (pendingDiffCommentsClear.kind === 'all') {
+      return diffCommentsForActive.length
+    }
+    return diffCommentsForActive.filter((c) => c.filePath === pendingDiffCommentsClear.filePath)
+      .length
+  }, [activeWorktreeId, diffCommentsForActive, pendingDiffCommentsClear])
+
+  const pendingDiffCommentsClearDescription = pendingDiffCommentsClear
+    ? pendingDiffCommentsClear.kind === 'all'
+      ? `Clear ${pendingDiffCommentsClearCount} ${pendingDiffCommentsClearCount === 1 ? 'note' : 'notes'} from this worktree?`
+      : `Clear ${pendingDiffCommentsClearCount} ${pendingDiffCommentsClearCount === 1 ? 'note' : 'notes'} from ${pendingDiffCommentsClear.filePath}?`
+    : ''
+
+  useEffect(() => {
+    if (!pendingDiffCommentsClear || isClearingDiffComments) {
+      return
+    }
+    if (
+      pendingDiffCommentsClear.worktreeId !== activeWorktreeId ||
+      pendingDiffCommentsClearCount === 0
+    ) {
+      setPendingDiffCommentsClear(null)
+    }
+  }, [
+    activeWorktreeId,
+    isClearingDiffComments,
+    pendingDiffCommentsClear,
+    pendingDiffCommentsClearCount
+  ])
+
+  const handleConfirmDiffCommentsClear = useCallback(async (): Promise<void> => {
+    const pending = pendingDiffCommentsClear
+    if (!pending || isClearingDiffComments || pending.worktreeId !== activeWorktreeId) {
+      return
+    }
+    if (pendingDiffCommentsClearCount === 0) {
+      setPendingDiffCommentsClear(null)
+      return
+    }
+    setIsClearingDiffComments(true)
+    try {
+      const ok =
+        pending.kind === 'all'
+          ? await clearDiffComments(pending.worktreeId)
+          : await clearDiffCommentsForFile(pending.worktreeId, pending.filePath)
+      if (ok) {
+        setPendingDiffCommentsClear(null)
+      } else {
+        toast.error('Failed to clear notes.')
+      }
+    } finally {
+      setIsClearingDiffComments(false)
+    }
+  }, [
+    activeWorktreeId,
+    clearDiffComments,
+    clearDiffCommentsForFile,
+    isClearingDiffComments,
+    pendingDiffCommentsClear,
+    pendingDiffCommentsClearCount
+  ])
 
   const [scope, setScope] = useState<SourceControlScope>('all')
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
@@ -687,6 +764,8 @@ function SourceControlInner(): React.JSX.Element {
     setCollapsedSections(new Set())
     setBaseRefDialogOpen(false)
     setPendingDiscard(null)
+    setPendingDiffCommentsClear(null)
+    setIsClearingDiffComments(false)
     // Why: do NOT reset defaultBaseRef here. It is repo-scoped, not
     // worktree-scoped, and is resolved by the effect above on activeRepo
     // change. Resetting it to a hard-coded 'origin/main' on every worktree
@@ -2084,12 +2163,54 @@ function SourceControlInner(): React.JSX.Element {
                   </Tooltip>
                 </TooltipProvider>
               )}
+              <DropdownMenu>
+                <TooltipProvider delayDuration={400}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                          aria-label="More note actions"
+                        >
+                          <MoreHorizontal className="size-3.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      More note actions
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <DropdownMenuContent align="end" className="min-w-[180px]">
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    disabled={diffCommentCount === 0}
+                    onSelect={() => {
+                      if (!activeWorktreeId || diffCommentCount === 0) {
+                        return
+                      }
+                      setPendingDiffCommentsClear({ kind: 'all', worktreeId: activeWorktreeId })
+                    }}
+                  >
+                    <Trash2 className="size-3.5" />
+                    Clear all notes...
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             {diffCommentsExpanded && (
               <DiffCommentsInlineList
                 comments={diffCommentsForActive}
                 onDelete={(id) => void deleteDiffComment(activeWorktreeId, id)}
                 onOpen={(comment) => handleOpenComment(comment)}
+                onClearFile={(filePath) =>
+                  setPendingDiffCommentsClear({
+                    kind: 'file',
+                    worktreeId: activeWorktreeId,
+                    filePath
+                  })
+                }
               />
             )}
           </div>
@@ -2442,6 +2563,43 @@ function SourceControlInner(): React.JSX.Element {
           />
         )}
       </div>
+
+      <Dialog
+        open={pendingDiffCommentsClear !== null}
+        onOpenChange={(open) => {
+          if (!open && !isClearingDiffComments) {
+            setPendingDiffCommentsClear(null)
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm">Clear Notes</DialogTitle>
+            <DialogDescription className="text-xs">
+              {pendingDiffCommentsClearDescription}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPendingDiffCommentsClear(null)}
+              disabled={isClearingDiffComments}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void handleConfirmDiffCommentsClear()}
+              disabled={isClearingDiffComments || pendingDiffCommentsClearCount === 0}
+            >
+              <Trash2 className="size-4" />
+              Clear Notes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={pendingDiscard !== null}
@@ -2938,10 +3096,12 @@ function SectionHeader({
 function DiffCommentsInlineList({
   comments,
   onDelete,
+  onClearFile,
   onOpen
 }: {
   comments: DiffComment[]
   onDelete: (commentId: string) => void
+  onClearFile: (filePath: string) => void
   // Why: clicking the note row navigates the user to that file's diff (or
   // editor as a fallback) and, when a `commentId` is supplied, scrolls the
   // diff to that specific note via the scrollToDiffCommentId UI slice.
@@ -2996,19 +3156,30 @@ function DiffCommentsInlineList({
     <div className="bg-muted/20">
       {groups.map(([filePath, list]) => (
         <div key={filePath} className="px-3 py-1.5">
-          <button
-            type="button"
-            className="block w-full truncate text-left text-[10px] font-medium text-muted-foreground hover:text-foreground"
-            onClick={() => {
-              const first = list[0]
-              if (first) {
-                onOpen(first)
-              }
-            }}
-            title={`Open ${filePath}`}
-          >
-            {filePath}
-          </button>
+          <div className="group/file flex items-center gap-1">
+            <button
+              type="button"
+              className="block min-w-0 flex-1 truncate text-left text-[10px] font-medium text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                const first = list[0]
+                if (first) {
+                  onOpen(first)
+                }
+              }}
+              title={`Open ${filePath}`}
+            >
+              {filePath}
+            </button>
+            <button
+              type="button"
+              className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover/file:opacity-100"
+              onClick={() => onClearFile(filePath)}
+              title={`Clear notes for ${filePath}`}
+              aria-label={`Clear notes for ${filePath}`}
+            >
+              <Trash2 className="size-3" />
+            </button>
+          </div>
           <ul className="mt-1 space-y-1">
             {list.map((c) => (
               <li

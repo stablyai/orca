@@ -1011,23 +1011,26 @@
   align-items: center;
   justify-content: center;
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--foreground) 22%, var(--border));
   border-radius: 4px;
-  background: var(--background);
-  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, var(--editor-surface));
+  color: color-mix(in srgb, var(--foreground) 78%, var(--muted-foreground));
   cursor: pointer;
   z-index: 5;
-  opacity: 0.7;
+  opacity: 1;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 12%, transparent);
   transition:
-    opacity 100ms ease,
     color 100ms ease,
-    background-color 100ms ease;
+    background-color 100ms ease,
+    border-color 100ms ease,
+    box-shadow 100ms ease;
 }
 
 .orca-diff-comment-add-btn:hover {
-  opacity: 1;
   color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 52%, var(--border));
   background: color-mix(in srgb, var(--primary) 12%, var(--background));
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--foreground) 16%, transparent);
 }
 
 .orca-diff-comment-add-btn:focus-visible {
@@ -1045,10 +1048,9 @@
 
 .orca-diff-comment-inline {
   width: 100%;
-  /* Why: match the popover's horizontal inset so the saved card lines up with
-     the new-comment popover that preceded it. Both anchor at `left: 56px` and
-     cap at 420px wide. */
-  padding: 4px 24px 6px 56px;
+  /* Why: Monaco's view-zone node already starts after the diff gutter. Avoid
+     adding a second left inset so saved notes sit flush with the code column. */
+  padding: 4px 24px 6px 0;
   box-sizing: border-box;
 }
 
