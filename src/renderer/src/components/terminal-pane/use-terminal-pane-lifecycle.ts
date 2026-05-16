@@ -238,6 +238,7 @@ export function useTerminalPaneLifecycle({
   // Why: read settingsRef at fire time so toggling "copy on select" takes
   // effect without recreating panes.
   const selectionDisposablesRef = useRef(new Map<number, IDisposable>())
+  const selectionCaptureTimersRef = useRef(new Map<number, number>())
   const mode2031DisposablesRef = useRef(new Map<number, IDisposable[]>())
   const osc52DisposablesRef = useRef(new Map<number, IDisposable>())
   const osc7DisposablesRef = useRef(new Map<number, IDisposable>())
@@ -302,6 +303,7 @@ export function useTerminalPaneLifecycle({
     const panePtyBindings = panePtyBindingsRef.current
     const linkDisposables = linkProviderDisposablesRef.current
     const selectionDisposables = selectionDisposablesRef.current
+    const selectionCaptureTimers = selectionCaptureTimersRef.current
     const mouseHideDisposables = mouseHideDisposablesRef.current
     const worktreePath =
       useAppStore
@@ -510,14 +512,34 @@ export function useTerminalPaneLifecycle({
             return
           }
 
-          const selection = pane.terminal.getSelection()
-          if (!selection) {
+          if (shouldWritePrimarySelection) {
+            const existingTimer = selectionCaptureTimersRef.current.get(pane.id)
+            if (existingTimer !== undefined) {
+              window.clearTimeout(existingTimer)
+            }
+            // Why: xterm fires selection changes while dragging; defer the
+            // primary-selection clipboard write to avoid clipboard churn.
+            const timer = window.setTimeout(() => {
+              selectionCaptureTimersRef.current.delete(pane.id)
+              if (!isPrimarySelectionEnabled() || !pane.terminal.hasSelection()) {
+                return
+              }
+              if (terminalSelectionExceedsPrimaryLimit(pane.terminal)) {
+                return
+              }
+              const selection = pane.terminal.getSelection()
+              if (selection) {
+                setPrimarySelectionText(selection)
+              }
+            }, 100)
+            selectionCaptureTimersRef.current.set(pane.id, timer)
+          }
+
+          if (!shouldWriteClipboard) {
             return
           }
-          if (shouldWritePrimarySelection) {
-            setPrimarySelectionText(selection)
-          }
-          if (!shouldWriteClipboard) {
+          const selection = pane.terminal.getSelection()
+          if (!selection) {
             return
           }
           void window.api.ui.writeClipboardText(selection).catch(() => {
@@ -595,6 +617,11 @@ export function useTerminalPaneLifecycle({
         if (selectionDisposable) {
           selectionDisposable.dispose()
           selectionDisposablesRef.current.delete(paneId)
+        }
+        const selectionCaptureTimer = selectionCaptureTimersRef.current.get(paneId)
+        if (selectionCaptureTimer !== undefined) {
+          window.clearTimeout(selectionCaptureTimer)
+          selectionCaptureTimersRef.current.delete(paneId)
         }
         const mode2031Disposables = mode2031DisposablesRef.current.get(paneId)
         if (mode2031Disposables) {
@@ -952,6 +979,10 @@ export function useTerminalPaneLifecycle({
         disposable.dispose()
       }
       selectionDisposables.clear()
+      for (const timer of selectionCaptureTimers.values()) {
+        window.clearTimeout(timer)
+      }
+      selectionCaptureTimers.clear()
       for (const disposable of mouseHideDisposables.values()) {
         disposable.dispose()
       }

@@ -683,8 +683,12 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       writeJson(UI_STORAGE_KEY, next)
     },
     readClipboardText: () => navigator.clipboard?.readText?.() ?? Promise.resolve(''),
+    readSelectionClipboardText: () =>
+      Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     saveClipboardImageAsTempFile: () => Promise.resolve(null),
     writeClipboardText: (text) => navigator.clipboard?.writeText?.(text) ?? Promise.resolve(),
+    writeSelectionClipboardText: () =>
+      Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     writeClipboardImage: () => Promise.resolve(),
     getZoomLevel: () => zoomLevel,
     setZoomLevel: (level) => {
@@ -816,9 +820,7 @@ function createCliApi(): NonNullable<Partial<PreloadApi>['cli']> {
 }
 
 function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
-  const status = (
-    agent: 'claude' | 'codex' | 'gemini' | 'cursor' | 'droid' | 'grok' | 'hermes'
-  ) =>
+  const status = (agent: 'claude' | 'codex' | 'gemini' | 'cursor' | 'droid' | 'grok' | 'hermes') =>
     Promise.resolve({
       agent,
       state: 'not_installed',

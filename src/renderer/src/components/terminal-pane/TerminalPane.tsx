@@ -48,7 +48,7 @@ import {
   getRemoteRuntimePtyEnvironmentId,
   getRemoteRuntimeTerminalHandle
 } from '@/runtime/runtime-terminal-stream'
-import { getPrimarySelectionText, isPrimarySelectionEnabled } from '@/lib/primary-selection'
+import { isPrimarySelectionEnabled, readPrimarySelectionText } from '@/lib/primary-selection'
 
 // Why: registry lives in a leaf module so the store slice can import it
 // without re-entering the `slice → TerminalPane → store → slice` cycle
@@ -1113,13 +1113,14 @@ export default function TerminalPane({
       if (!clickedPane) {
         return
       }
-      const text = getPrimarySelectionText()
       event.preventDefault()
       event.stopPropagation()
-      if (text) {
-        clickedPane.terminal.paste(text)
-      }
       clickedPane.terminal.focus()
+      void readPrimarySelectionText().then((text) => {
+        if (text) {
+          clickedPane.terminal.paste(text)
+        }
+      })
     },
     [getPrimarySelectionMiddleClickPane]
   )

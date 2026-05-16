@@ -8,7 +8,7 @@ export const INPUT_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Middle-click Paste from Selection',
     description:
-      'Selecting text stores it in a private primary buffer. Middle-click pastes it into editable fields without changing the clipboard.',
+      'On Linux, selected text uses the system selection clipboard. Other platforms use a private buffer when enabled.',
     keywords: [
       'input',
       'editing',
@@ -36,7 +36,7 @@ export function InputPane({ settings, updateSettings }: InputPaneProps): React.J
     <section className="space-y-4">
       <SearchableSetting
         title="Middle-click Paste from Selection"
-        description="Selecting text stores it in a private primary buffer. Middle-click pastes it into editable fields without changing the clipboard."
+        description="On Linux, selected text uses the system selection clipboard. Other platforms use a private buffer when enabled."
         keywords={[
           'input',
           'editing',
@@ -54,8 +54,8 @@ export function InputPane({ settings, updateSettings }: InputPaneProps): React.J
         <div className="space-y-0.5">
           <Label>Middle-click Paste from Selection</Label>
           <p className="text-xs text-muted-foreground">
-            Store selected text in a private primary buffer and paste it with middle-click without
-            changing the clipboard.
+            On Linux, use the system selection clipboard. On other platforms, use a private buffer
+            when this is enabled.
           </p>
         </div>
         <button

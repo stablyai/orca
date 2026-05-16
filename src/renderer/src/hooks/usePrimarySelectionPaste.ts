@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { isLinuxUserAgent } from '@/components/terminal-pane/pane-helpers'
 import {
-  getPrimarySelectionText,
+  readPrimarySelectionText,
   setPrimarySelectionEnabled,
   setPrimarySelectionText
 } from '@/lib/primary-selection'
@@ -82,14 +82,17 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
         rememberPendingTarget(event)
       }
       const onMouseUp = (event: MouseEvent): void => {
-        if (event.button === 1 && findEditablePrimarySelectionPasteTarget(event.target)) {
-          suppressEvent(event)
+        if (event.button === 1) {
+          // Why: prevent Chromium's native Linux primary paste when disabled
+          // without blocking terminal apps from receiving middle-click events.
+          event.preventDefault()
         }
         pendingMiddleTarget = null
       }
       const onAuxClick = (event: MouseEvent): void => {
-        if (event.button === 1 && findEditablePrimarySelectionPasteTarget(event.target)) {
-          suppressEvent(event)
+        if (event.button === 1) {
+          // Why: match the mouseup preventer for browsers that surface auxclick.
+          event.preventDefault()
         }
       }
 
@@ -135,15 +138,16 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
 
       const target = pendingMiddleTarget
       pendingMiddleTarget = null
-      const text = getPrimarySelectionText()
       suppressEvent(event)
-      if (!text) {
-        return
-      }
-
-      pastePrimarySelectionTextIntoTarget(target, text, {
+      const point = {
         clientX: event.clientX,
         clientY: event.clientY
+      }
+      void readPrimarySelectionText().then((text) => {
+        if (!text) {
+          return
+        }
+        pastePrimarySelectionTextIntoTarget(target, text, point)
       })
     }
 

@@ -29,6 +29,7 @@ export function setupContextualCopy({
   copyToastTimeoutRef: React.MutableRefObject<number | null>
 }): void {
   let copyHintInterval: number | null = null
+  let primarySelectionTimer: number | null = null
   let copyHintWidgetPosition: editor.IContentWidgetPosition | null = null
   let lastCopiedSelectionKey: string | null = null
   const copyHintNode = document.createElement('div')
@@ -215,6 +216,18 @@ export function setupContextualCopy({
     )
   }
 
+  const schedulePrimarySelectionBufferUpdate = (): void => {
+    if (primarySelectionTimer !== null) {
+      window.clearTimeout(primarySelectionTimer)
+    }
+    // Why: Monaco emits intermediate selection changes during drag; match the
+    // editor selection clipboard debounce so we don't churn the clipboard.
+    primarySelectionTimer = window.setTimeout(() => {
+      primarySelectionTimer = null
+      updatePrimarySelectionBuffer()
+    }, 100)
+  }
+
   const copySelectionWithContext = async (): Promise<boolean> => {
     const copiedText = getContextualCopyText()
     if (!copiedText) {
@@ -248,7 +261,7 @@ export function setupContextualCopy({
 
   editorInstance.onDidChangeCursorSelection((event) => {
     if (event.source !== 'restoreState') {
-      updatePrimarySelectionBuffer()
+      schedulePrimarySelectionBufferUpdate()
     }
     if (getSelectionKey() !== lastCopiedSelectionKey) {
       lastCopiedSelectionKey = null
@@ -285,6 +298,10 @@ export function setupContextualCopy({
   editorDomNode.addEventListener('mouseup', updateCopyHint, true)
   editorDomNode.addEventListener('keyup', updateCopyHint, true)
   editorInstance.onDidDispose(() => {
+    if (primarySelectionTimer !== null) {
+      window.clearTimeout(primarySelectionTimer)
+      primarySelectionTimer = null
+    }
     editorDomNode.removeEventListener('keydown', handleKeyDown, true)
     editorDomNode.removeEventListener('mouseup', updateCopyHint, true)
     editorDomNode.removeEventListener('keyup', updateCopyHint, true)
