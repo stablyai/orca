@@ -15,6 +15,9 @@ import RepoDotLabel from '@/components/repo/RepoDotLabel'
 import { searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
 
+const menuItemClassName =
+  'rounded-[7px] px-2 py-1 text-[12px] leading-5 font-medium transition-colors hover:bg-black/8 hover:text-accent-foreground focus-visible:bg-black/8 focus-visible:text-accent-foreground focus-visible:outline-none dark:hover:bg-white/14 dark:focus-visible:bg-white/14'
+
 const SidebarFilter = React.memo(function SidebarFilter() {
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
   const setShowActiveOnly = useAppStore((s) => s.setShowActiveOnly)
@@ -115,17 +118,20 @@ const SidebarFilter = React.memo(function SidebarFilter() {
           {hasAnyFilter ? 'Edit filters' : 'Filter workspaces'}
         </TooltipContent>
       </Tooltip>
-      <PopoverContent align="end" className="w-72 p-0">
-        <div className="flex items-center justify-between gap-2 px-3 py-2">
-          <span className="text-xs font-medium text-foreground">Filters</span>
+      <PopoverContent
+        align="end"
+        className="w-72 rounded-[11px] border-black/14 bg-[rgba(255,255,255,0.82)] p-1 text-black shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl dark:border-white/14 dark:bg-[rgba(0,0,0,0.72)] dark:text-white dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)]"
+      >
+        <div className="flex items-center justify-between gap-2 px-2 py-1">
+          <span className="text-[11px] font-semibold text-muted-foreground">Filters</span>
           <div className="flex items-center gap-2">
             {hasAnyFilter ? (
               <button
                 type="button"
                 onClick={clearAll}
-                className="inline-flex h-6 items-center rounded-md bg-accent/70 px-2 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                className="inline-flex h-6 items-center rounded-[7px] px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-black/8 hover:text-accent-foreground focus-visible:bg-black/8 focus-visible:text-accent-foreground focus-visible:outline-none dark:hover:bg-white/14 dark:focus-visible:bg-white/14"
               >
-                Reset filters
+                Reset
               </button>
             ) : null}
             <Tooltip>
@@ -148,7 +154,9 @@ const SidebarFilter = React.memo(function SidebarFilter() {
           </div>
         </div>
 
-        <div className="border-t border-border/60">
+        <div className="my-1 h-px bg-border/70" />
+
+        <div>
           <ToggleRow
             icon={<Activity className="size-3.5" />}
             label="Active only"
@@ -164,8 +172,9 @@ const SidebarFilter = React.memo(function SidebarFilter() {
         </div>
 
         {canFilterRepos && (
-          <div className="border-t border-border/60">
-            <div className="flex items-center justify-between px-3 pt-2 pb-1">
+          <div>
+            <div className="my-1 h-px bg-border/70" />
+            <div className="flex items-center justify-between px-2 py-1">
               <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                 Repositories
                 {hasRepoFilter && (
@@ -178,7 +187,7 @@ const SidebarFilter = React.memo(function SidebarFilter() {
                 <button
                   type="button"
                   onClick={selectAllRepos}
-                  className="hover:text-foreground disabled:opacity-40"
+                  className="rounded-[5px] px-1 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-40"
                   disabled={allSelected}
                 >
                   All
@@ -187,7 +196,7 @@ const SidebarFilter = React.memo(function SidebarFilter() {
                 <button
                   type="button"
                   onClick={clearRepos}
-                  className="hover:text-foreground disabled:opacity-40"
+                  className="rounded-[5px] px-1 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-40"
                   disabled={!hasRepoFilter}
                 >
                   None
@@ -207,10 +216,10 @@ const SidebarFilter = React.memo(function SidebarFilter() {
                 value={query}
                 onValueChange={setQuery}
                 className="h-8 py-2 text-xs"
-                wrapperClassName="px-3"
+                wrapperClassName="mx-1 rounded-[7px] border border-border/70 px-2"
                 iconClassName="h-3.5 w-3.5"
               />
-              <CommandList className="max-h-64">
+              <CommandList className="max-h-64 py-1">
                 <CommandEmpty className="py-4 text-[11px]">No repos match</CommandEmpty>
                 {filteredRepos.map((r) => {
                   const checked = selectedRepoIdSet.has(r.id)
@@ -219,7 +228,7 @@ const SidebarFilter = React.memo(function SidebarFilter() {
                       key={r.id}
                       value={r.id}
                       onSelect={() => handleToggleRepo(r.id)}
-                      className="items-center gap-2 px-3 py-1.5 text-xs"
+                      className="mx-1 items-center gap-2 rounded-[7px] px-2 py-1 text-[12px] leading-5 font-medium data-[selected=true]:bg-black/8 dark:data-[selected=true]:bg-white/14"
                     >
                       <Check
                         className={cn(
@@ -251,11 +260,15 @@ const SidebarFilter = React.memo(function SidebarFilter() {
         {/* Why: per design, "Add project" stays visible regardless of repo
             count so users can recover from the 0/1-repo state where the
             repo section is hidden. */}
-        <div className="border-t border-border/60">
+        <div className="my-1 h-px bg-border/70" />
+        <div>
           <button
             type="button"
             onClick={() => addRepo()}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            className={cn(
+              'flex w-full items-center gap-2 text-left text-muted-foreground',
+              menuItemClassName
+            )}
           >
             <FolderPlus className="size-3.5" />
             Add project
@@ -283,7 +296,8 @@ function ToggleRow({ icon, label, checked, onClick }: ToggleRowProps) {
       onClick={onClick}
       aria-pressed={checked}
       className={cn(
-        'flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground',
+        'flex w-full items-center gap-2 text-left',
+        menuItemClassName,
         checked ? 'text-foreground' : 'text-muted-foreground'
       )}
     >
