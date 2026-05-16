@@ -102,6 +102,7 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
   return {
     commitMessage: 'feat: add commit area',
     commitError: null as string | null,
+    remoteActionError: null as string | null,
     isCommitting: inputs.isCommitting,
     aiEnabled: false,
     aiAgentConfigured: false,

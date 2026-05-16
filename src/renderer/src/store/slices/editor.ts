@@ -470,12 +470,24 @@ function extractPublishFailureDetail(message: string): string | null {
   return null
 }
 
-function resolveRemoteOperationErrorMessage(
+export function resolveRemoteOperationErrorMessage(
   error: unknown,
-  options?: { publish?: boolean; isPush?: boolean; isSync?: boolean }
+  options?: { publish?: boolean; isPush?: boolean; isSync?: boolean; isFetch?: boolean }
 ): string {
   if (!(error instanceof Error)) {
     return REMOTE_OPERATION_FAILED_MESSAGE
+  }
+
+  if (/unmerged files|needs merge|you have not concluded your merge/i.test(error.message)) {
+    return options?.isSync
+      ? 'Sync blocked — resolve existing merge conflicts first.'
+      : 'Pull blocked — resolve existing merge conflicts first.'
+  }
+
+  if (/automatic merge failed|CONFLICT \(|fix conflicts/i.test(error.message)) {
+    return options?.isSync
+      ? 'Sync stopped with merge conflicts. Resolve them in Source Control, then commit the merge.'
+      : 'Pull stopped with merge conflicts. Resolve them in Source Control, then commit the merge.'
   }
 
   // Why: under sync, the inner push runs *after* a successful pull, so a
@@ -537,6 +549,13 @@ function resolveRemoteOperationErrorMessage(
       return `Push failed. ${detail}. Check your remote access and try again.`
     }
     return 'Push failed. Check your connection and try again.'
+  }
+
+  if (options?.isFetch) {
+    const detail =
+      extractPublishFailureDetail(error.message) ??
+      truncateDetail(stripCredentialsFromMessage(error.message))
+    return `Fetch failed. ${detail}`
   }
 
   return error.message
@@ -2126,7 +2145,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     try {
       await fetchRuntimeGit({ settings: get().settings, worktreeId, worktreePath, connectionId })
     } catch (error) {
-      toast.error(resolveRemoteOperationErrorMessage(error))
+      toast.error(resolveRemoteOperationErrorMessage(error, { isFetch: true }))
       throw error
     } finally {
       get().endRemoteOperation()

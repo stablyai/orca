@@ -125,6 +125,7 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
   return {
     commitMessage: 'feat: add commit area',
     commitError: null as string | null,
+    remoteActionError: null as string | null,
     isCommitting: inputs.isCommitting,
     aiEnabled: false,
     aiAgentConfigured: false,
@@ -280,6 +281,14 @@ describe('CommitArea', () => {
   it('shows an inline error message when the commit fails', () => {
     const element = CommitArea({ ...baseProps(), commitError: 'pre-commit hook failed' })
     expect(hasText(element, 'pre-commit hook failed')).toBe(true)
+  })
+
+  it('shows an inline error message when a remote action fails', () => {
+    const element = CommitArea({
+      ...baseProps(),
+      remoteActionError: 'Fetch failed. network timeout'
+    })
+    expect(hasText(element, 'Fetch failed. network timeout')).toBe(true)
   })
 
   it('keeps the primary button labelled Commit when the tree is staged, even with commits to push', () => {
