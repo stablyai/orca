@@ -224,6 +224,33 @@ const SidebarHeader = React.memo(function SidebarHeader() {
     setWorkspaceBoardMode('persistent')
   }, [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen, setWorkspaceBoardMode])
 
+  useEffect(() => {
+    if (!workspaceBoardOpen) {
+      return
+    }
+
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') {
+        return
+      }
+      clearWorkspaceBoardHoverOpen()
+      clearWorkspaceBoardHoverClose()
+      workspaceBoardHoverSuppressedRef.current = workspaceHeaderHoveredRef.current
+      event.preventDefault()
+      setWorkspaceBoardMode('closed')
+    }
+
+    // Why: the workspace board is a non-modal companion panel, so focus may
+    // be outside the sheet when Escape should still dismiss it.
+    document.addEventListener('keydown', handleKeyDown, true)
+    return () => document.removeEventListener('keydown', handleKeyDown, true)
+  }, [
+    clearWorkspaceBoardHoverClose,
+    clearWorkspaceBoardHoverOpen,
+    setWorkspaceBoardMode,
+    workspaceBoardOpen
+  ])
+
   return (
     <>
       <div

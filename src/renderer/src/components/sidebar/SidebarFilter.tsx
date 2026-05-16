@@ -123,7 +123,6 @@ const SidebarFilter = React.memo(function SidebarFilter() {
         sideOffset={8}
         className="w-72 rounded-[11px] border-black/14 bg-[rgba(255,255,255,0.82)] p-1 text-black shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl dark:border-white/14 dark:bg-[rgba(0,0,0,0.72)] dark:text-white dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)]"
       >
-        <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground">Filters</div>
         <div className="space-y-0">
           <ToggleRow
             label="Active only"
