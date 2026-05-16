@@ -1342,6 +1342,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
   const openFileUriMock = vi.fn()
   const pathExistsMock = vi.fn()
   const authorizeExternalPathMock = vi.fn()
+  const fsStatMock = vi.fn()
   const runtimeEnvironmentCallMock = vi.fn()
   const runtimeEnvironmentTransportCallMock = vi.fn()
 
@@ -1353,6 +1354,14 @@ describe('createEditorSlice activateMarkdownLink', () => {
     pathExistsMock.mockReset()
     pathExistsMock.mockResolvedValue(true)
     authorizeExternalPathMock.mockReset()
+    fsStatMock.mockReset()
+    fsStatMock.mockImplementation(async ({ filePath }: { filePath: string }) => {
+      const exists = await pathExistsMock(filePath)
+      if (!exists) {
+        throw new Error('File not found')
+      }
+      return { size: 1, isDirectory: false, mtime: 1 }
+    })
     runtimeEnvironmentCallMock.mockReset()
     runtimeEnvironmentTransportCallMock.mockReset()
     runtimeEnvironmentCallMock.mockResolvedValue({
@@ -1378,13 +1387,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
       },
       fs: {
         authorizeExternalPath: authorizeExternalPathMock,
-        stat: vi.fn(async ({ filePath }: { filePath: string }) => {
-          const exists = await pathExistsMock(filePath)
-          if (!exists) {
-            throw new Error('File not found')
-          }
-          return { size: 1, isDirectory: false, mtime: 1 }
-        })
+        stat: fsStatMock
       },
       runtimeEnvironments: {
         call: runtimeEnvironmentTransportCallMock
@@ -1461,6 +1464,78 @@ describe('createEditorSlice activateMarkdownLink', () => {
         isPreview: true
       })
     ])
+  })
+
+  it('stats SSH markdown links through the source worktree connection before opening', async () => {
+    const store = createEditorStore()
+    pathExistsMock.mockResolvedValue(true)
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/repo',
+          displayName: 'Repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          {
+            id: 'wt-1',
+            repoId: 'repo1',
+            path: '/repo',
+            branch: 'refs/heads/main',
+            head: 'abc',
+            isBare: false,
+            isMainWorktree: true,
+            displayName: 'main',
+            comment: '',
+            linkedIssue: null,
+            linkedPR: null,
+            linkedLinearIssue: null,
+            isArchived: false,
+            isUnread: false,
+            isPinned: false,
+            sortOrder: 0,
+            lastActivityAt: 0
+          }
+        ]
+      }
+    } as Partial<AppState>)
+
+    await store.getState().activateMarkdownLink('./guide.md', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(fsStatMock).toHaveBeenCalledWith({
+      filePath: '/repo/docs/guide.md',
+      connectionId: 'ssh-1'
+    })
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/repo/docs/guide.md',
+        mode: 'edit',
+        isPreview: true
+      })
+    ])
+  })
+
+  it('does not open linked markdown directories as files', async () => {
+    const store = createEditorStore()
+    fsStatMock.mockResolvedValueOnce({ size: 1, isDirectory: true, mtime: 1 })
+
+    await store.getState().activateMarkdownLink('./guide.md', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(store.getState().openFiles).toEqual([])
+    expect(toastErrorMock).toHaveBeenCalledWith('Cannot open directory: docs/guide.md')
   })
 
   it('can open a file without adopting the currently active runtime owner', () => {
@@ -1609,6 +1684,57 @@ describe('createEditorSlice activateMarkdownLink', () => {
       })
     ])
     expect(openFileUriMock).not.toHaveBeenCalled()
+  })
+
+  it('blocks external file URLs from SSH markdown sources', async () => {
+    const store = createEditorStore()
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/repo',
+          displayName: 'Repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          {
+            id: 'wt-1',
+            repoId: 'repo1',
+            path: '/repo',
+            branch: 'refs/heads/main',
+            head: 'abc',
+            isBare: false,
+            isMainWorktree: true,
+            displayName: 'main',
+            comment: '',
+            linkedIssue: null,
+            linkedPR: null,
+            linkedLinearIssue: null,
+            isArchived: false,
+            isUnread: false,
+            isPinned: false,
+            sortOrder: 0,
+            lastActivityAt: 0
+          }
+        ]
+      }
+    } as Partial<AppState>)
+
+    await store.getState().activateMarkdownLink('file:///tmp/image.png', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(store.getState().openFiles).toEqual([])
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Opening remote paths in the local OS is not available.'
+    )
   })
 
   it('activates same-file line anchors via setActiveFile without opening a new tab', async () => {

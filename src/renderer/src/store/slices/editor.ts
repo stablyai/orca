@@ -5,6 +5,7 @@ import { joinPath } from '@/lib/path'
 import { toast } from 'sonner'
 import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal-links'
 import { openHttpLink } from '@/lib/http-link-routing'
+import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { detectLanguage } from '@/lib/language-detect'
 import type {
   GitBranchChangeEntry,
@@ -32,7 +33,7 @@ import {
 import {
   deleteRuntimePath,
   deleteRuntimeRelativePath,
-  runtimePathExists
+  statRuntimePath
 } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
@@ -565,6 +566,13 @@ function deleteUntouchedUntitledFile(state: AppState, file: OpenFile): void {
       return undefined
     })
     .catch(() => {})
+}
+
+function getWorktreeConnectionId(state: AppState, worktreeId: string): string | undefined {
+  const worktree = findWorktreeById(state.worktreesByRepo ?? {}, worktreeId)
+  const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
+  const repo = (state.repos ?? []).find((candidate) => candidate.id === repoId)
+  return repo?.connectionId ?? undefined
 }
 
 export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (set, get) => ({
@@ -2298,11 +2306,23 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   setPendingEditorReveal: (reveal) => set({ pendingEditorReveal: reveal }),
 
   activateMarkdownLink: async (rawHref, ctx) => {
+    const initialState = get()
     const sourceRuntimeEnvironmentId =
       ctx.runtimeEnvironmentId ??
-      get().openFiles.find((file) => file.filePath === ctx.sourceFilePath)?.runtimeEnvironmentId ??
+      initialState.openFiles.find((file) => file.filePath === ctx.sourceFilePath)
+        ?.runtimeEnvironmentId ??
       null
-    const sourceSettings = settingsForRuntimeOwner(get().settings, sourceRuntimeEnvironmentId)
+    const sourceSettings = settingsForRuntimeOwner(
+      initialState.settings,
+      sourceRuntimeEnvironmentId
+    )
+    const sourceConnectionId = getWorktreeConnectionId(initialState, ctx.worktreeId)
+    const fileContext = {
+      settings: sourceSettings,
+      worktreeId: ctx.worktreeId,
+      worktreePath: ctx.worktreeRoot,
+      connectionId: sourceConnectionId
+    }
     const target = resolveMarkdownLinkTarget(rawHref, ctx.sourceFilePath, ctx.worktreeRoot)
     if (!target) {
       return
@@ -2317,17 +2337,28 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     if (target.kind === 'file') {
       const { line, column } = target
       if (target.relativePath === undefined) {
-        if (sourceSettings?.activeRuntimeEnvironmentId?.trim()) {
+        if (isLocalPathOpenBlocked(sourceSettings, { connectionId: sourceConnectionId })) {
           // Why: a file:// link outside the worktree is a client-local escape
-          // hatch. Remote runtime editors must not authorize/open client paths
-          // as though the server could read them.
-          toast.error('External local file links are not available for remote runtime files yet.')
+          // hatch. Remote runtime/SSH editors must not treat server paths as client paths.
+          showLocalPathOpenBlockedToast()
           return
         }
         // Why: terminal file links already authorize clicked external paths
         // before opening them in Orca. Markdown file:// links need the same
         // user-gesture authorization so /tmp screenshots can use ImageViewer.
         await window.api.fs.authorizeExternalPath({ targetPath: target.absolutePath })
+      } else {
+        let stats: { isDirectory: boolean }
+        try {
+          stats = await statRuntimePath(fileContext, target.absolutePath)
+        } catch {
+          toast.error(`File not found: ${target.relativePath}`)
+          return
+        }
+        if (stats.isDirectory) {
+          toast.error(`Cannot open directory: ${target.relativePath}`)
+          return
+        }
       }
 
       get().openFile(
@@ -2353,16 +2384,15 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
     // target.kind === 'markdown'
     const { absolutePath, relativePath, line, column } = target
-    const exists = await runtimePathExists(
-      {
-        settings: sourceSettings,
-        worktreeId: ctx.worktreeId,
-        worktreePath: ctx.worktreeRoot
-      },
-      absolutePath
-    )
-    if (!exists) {
+    let stats: { isDirectory: boolean }
+    try {
+      stats = await statRuntimePath(fileContext, absolutePath)
+    } catch {
       toast.error(`File not found: ${relativePath}`)
+      return
+    }
+    if (stats.isDirectory) {
+      toast.error(`Cannot open directory: ${relativePath}`)
       return
     }
 
