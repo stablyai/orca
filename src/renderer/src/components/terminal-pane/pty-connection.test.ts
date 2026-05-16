@@ -333,6 +333,26 @@ describe('connectPanePty', () => {
         .cancelAnimationFrame
     }
     delete (globalThis as unknown as { window?: unknown }).window
+    delete (globalThis as Record<string, unknown>).__ptyConnectDiag
+  })
+
+  it('does not retain PTY connect diagnostics unless e2e debug state is enabled', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      ptyIdsByTabId: { 'tab-1': [] }
+    }
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+    await flushAsyncTicks()
+
+    expect((globalThis as Record<string, unknown>).__ptyConnectDiag).toBeUndefined()
+    expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('[pty-connect]'))
+    logSpy.mockRestore()
   })
 
   it('does not send startup command via sendInput for local connections', async () => {

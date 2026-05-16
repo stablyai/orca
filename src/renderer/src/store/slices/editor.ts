@@ -1960,12 +1960,17 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     }),
   remoteStatusesByWorktree: {},
   setUpstreamStatus: (worktreeId, status) =>
-    set((s) => ({
-      remoteStatusesByWorktree: {
-        ...s.remoteStatusesByWorktree,
-        [worktreeId]: status
+    set((s) => {
+      if (areUpstreamStatusesEqual(s.remoteStatusesByWorktree[worktreeId], status)) {
+        return s
       }
-    })),
+      return {
+        remoteStatusesByWorktree: {
+          ...s.remoteStatusesByWorktree,
+          [worktreeId]: status
+        }
+      }
+    }),
   isRemoteOperationActive: false,
   remoteOperationDepth: 0,
   inFlightRemoteOpKind: null,
@@ -2523,6 +2528,19 @@ function areTrackedConflictMapsEqual(
   const prevKeys = Object.keys(prev)
   const nextKeys = Object.keys(next)
   return prevKeys.length === nextKeys.length && prevKeys.every((key) => prev[key] === next[key])
+}
+
+function areUpstreamStatusesEqual(
+  prev: GitUpstreamStatus | undefined,
+  next: GitUpstreamStatus
+): boolean {
+  return (
+    prev !== undefined &&
+    prev.hasUpstream === next.hasUpstream &&
+    prev.upstreamName === next.upstreamName &&
+    prev.ahead === next.ahead &&
+    prev.behind === next.behind
+  )
 }
 
 function reconcileOpenFilesForStatus(

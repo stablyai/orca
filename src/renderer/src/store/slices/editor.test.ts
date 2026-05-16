@@ -866,6 +866,24 @@ describe('createEditorSlice remote branch actions', () => {
     })
   })
 
+  it('does not notify subscribers when upstream status is unchanged', () => {
+    const store = createEditorStore()
+    const status = {
+      hasUpstream: true,
+      upstreamName: 'origin/main',
+      ahead: 2,
+      behind: 1
+    }
+
+    store.getState().setUpstreamStatus('wt-1', status)
+    const listener = vi.fn()
+    const unsubscribe = store.subscribe(listener)
+    store.getState().setUpstreamStatus('wt-1', { ...status })
+    unsubscribe()
+
+    expect(listener).not.toHaveBeenCalled()
+  })
+
   it('runs pull and refreshes status + upstream on success', async () => {
     const store = createEditorStore()
     store.getState().setGitStatus('wt-1', {

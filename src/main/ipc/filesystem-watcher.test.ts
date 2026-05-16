@@ -194,4 +194,37 @@ describe('registerFilesystemWatcherHandlers', () => {
     )
     expect(unwatchMock).toHaveBeenCalledTimes(1)
   })
+
+  it('registers one destroyed listener for many SSH worktree watches', async () => {
+    const destroyedCallbacks: (() => void)[] = []
+    const sender = {
+      isDestroyed: () => false,
+      send: vi.fn(),
+      once: vi.fn((event: string, callback: () => void) => {
+        if (event === 'destroyed') {
+          destroyedCallbacks.push(callback)
+        }
+      }),
+      id: 99
+    }
+    const unwatchMock = vi.fn()
+    const watchMock = vi.fn().mockResolvedValue(unwatchMock)
+    getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
+
+    for (let i = 0; i < 12; i += 1) {
+      await handlers['fs:watchWorktree'](
+        { sender },
+        { worktreePath: `/home/me/repo-${i}`, connectionId: 'conn-1' }
+      )
+    }
+
+    // Why: WebContents warns after 10 listeners. The cleanup work still covers
+    // every remote watch by scanning the shared remote watcher registry.
+    expect(sender.once).toHaveBeenCalledTimes(1)
+    expect(destroyedCallbacks).toHaveLength(1)
+
+    destroyedCallbacks[0]()
+
+    expect(unwatchMock).toHaveBeenCalledTimes(12)
+  })
 })
