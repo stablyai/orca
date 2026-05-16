@@ -65,6 +65,63 @@ describe('createEditorSlice right sidebar state', () => {
   })
 })
 
+describe('createEditorSlice file search seed state', () => {
+  it('seeds file search with a one-shot request id', () => {
+    const store = createEditorStore()
+
+    store.getState().seedFileSearchQuery('wt-1', 'selectedText')
+
+    expect(store.getState().fileSearchStateByWorktree['wt-1']).toMatchObject({
+      query: 'selectedText',
+      results: null,
+      loading: false,
+      seedRequestId: 1
+    })
+  })
+
+  it('preserves search options while replacing stale results and collapsed files', () => {
+    const store = createEditorStore()
+    store.getState().updateFileSearchState('wt-1', {
+      query: 'old',
+      caseSensitive: true,
+      wholeWord: true,
+      useRegex: true,
+      includePattern: '*.ts',
+      excludePattern: 'dist/**',
+      results: { files: [], totalMatches: 1, truncated: false },
+      loading: true,
+      collapsedFiles: new Set(['/repo/file.ts'])
+    })
+
+    store.getState().seedFileSearchQuery('wt-1', 'next')
+
+    const state = store.getState().fileSearchStateByWorktree['wt-1']
+    expect(state).toMatchObject({
+      query: 'next',
+      caseSensitive: true,
+      wholeWord: true,
+      useRegex: true,
+      includePattern: '*.ts',
+      excludePattern: 'dist/**',
+      results: null,
+      loading: false,
+      seedRequestId: 1
+    })
+    expect(state.collapsedFiles.size).toBe(0)
+  })
+
+  it('consumes only the matching seed request id', () => {
+    const store = createEditorStore()
+    store.getState().seedFileSearchQuery('wt-1', 'selectedText')
+
+    store.getState().consumeFileSearchSeedRequest('wt-1', 2)
+    expect(store.getState().fileSearchStateByWorktree['wt-1']?.seedRequestId).toBe(1)
+
+    store.getState().consumeFileSearchSeedRequest('wt-1', 1)
+    expect(store.getState().fileSearchStateByWorktree['wt-1']?.seedRequestId).toBeUndefined()
+  })
+})
+
 describe('createEditorSlice openDiff', () => {
   it('keeps staged and unstaged diffs in separate tabs', () => {
     const store = createEditorStore()

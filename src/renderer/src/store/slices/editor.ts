@@ -382,12 +382,15 @@ export type EditorSlice = {
       results: SearchResult | null
       loading: boolean
       collapsedFiles: Set<string>
+      seedRequestId?: number
     }
   >
   updateFileSearchState: (
     worktreeId: string,
     updates: Partial<EditorSlice['fileSearchStateByWorktree'][string]>
   ) => void
+  seedFileSearchQuery: (worktreeId: string, query: string) => void
+  consumeFileSearchSeedRequest: (worktreeId: string, seedRequestId: number) => void
   toggleFileSearchCollapsedFile: (worktreeId: string, filePath: string) => void
   clearFileSearch: (worktreeId: string) => void
 
@@ -2206,6 +2209,48 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         fileSearchStateByWorktree: {
           ...s.fileSearchStateByWorktree,
           [worktreeId]: { ...current, ...updates }
+        }
+      }
+    }),
+  seedFileSearchQuery: (worktreeId, query) =>
+    set((s) => {
+      const current = s.fileSearchStateByWorktree[worktreeId] || {
+        query: '',
+        caseSensitive: false,
+        wholeWord: false,
+        useRegex: false,
+        includePattern: '',
+        excludePattern: '',
+        results: null,
+        loading: false,
+        collapsedFiles: new Set()
+      }
+      return {
+        fileSearchStateByWorktree: {
+          ...s.fileSearchStateByWorktree,
+          [worktreeId]: {
+            ...current,
+            query,
+            results: null,
+            loading: false,
+            collapsedFiles: new Set(),
+            seedRequestId: (current.seedRequestId ?? 0) + 1
+          }
+        }
+      }
+    }),
+  consumeFileSearchSeedRequest: (worktreeId, seedRequestId) =>
+    set((s) => {
+      const current = s.fileSearchStateByWorktree[worktreeId]
+      if (!current || current.seedRequestId !== seedRequestId) {
+        return s
+      }
+      const next = { ...current }
+      delete next.seedRequestId
+      return {
+        fileSearchStateByWorktree: {
+          ...s.fileSearchStateByWorktree,
+          [worktreeId]: next
         }
       }
     }),

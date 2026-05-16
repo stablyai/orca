@@ -9,6 +9,7 @@ import { useAppStore } from '@/store'
 import { scrollTopCache, cursorPositionCache, setWithLRU } from '@/lib/scroll-cache'
 import '@/lib/monaco-setup'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
+import { registerFileSearchSelectedTextProvider } from '@/lib/file-search-selection'
 
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MAX_REVEAL_CONTENT_WAIT_FRAMES, performReveal } from './monaco-reveal'
@@ -75,6 +76,7 @@ export default function MonacoEditor({
   const revealHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const revealRafRef = useRef<number | null>(null)
   const revealInnerRafRef = useRef<number | null>(null)
+  const unregisterFileSearchSelectionRef = useRef<(() => void) | null>(null)
   const { setupCopy, toastNode } = useContextualCopySetup()
   // Why: The scroll throttle timer must be accessible from useLayoutEffect cleanup
   // so we can cancel any pending write before synchronously snapshotting the final
@@ -285,6 +287,20 @@ export default function MonacoEditor({
       }
 
       setupCopy(editorInstance, monaco, filePath, propsRef)
+      unregisterFileSearchSelectionRef.current?.()
+      unregisterFileSearchSelectionRef.current = registerFileSearchSelectedTextProvider(() => {
+        if (!editorInstance.hasTextFocus()) {
+          return null
+        }
+        const model = editorInstance.getModel()
+        const selection = editorInstance.getSelection()
+        if (!model || !selection || selection.isEmpty()) {
+          return null
+        }
+        // Why: Monaco selections live in its text model, not the DOM selection
+        // API that app-level keyboard shortcuts can read.
+        return model.getValueInRange(selection)
+      })
 
       // Add Cmd+S save keybinding
       editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
@@ -491,6 +507,8 @@ export default function MonacoEditor({
       }
       cancelScheduledReveal()
       clearTransientRevealHighlight()
+      unregisterFileSearchSelectionRef.current?.()
+      unregisterFileSearchSelectionRef.current = null
     }
   }, [cancelScheduledReveal, clearTransientRevealHighlight, viewStateKey])
 
