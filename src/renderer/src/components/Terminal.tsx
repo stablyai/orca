@@ -66,6 +66,7 @@ import {
   type ActivityTerminalPortalTarget
 } from './activity/activity-terminal-portal'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
@@ -86,6 +87,9 @@ function Terminal(): React.JSX.Element | null {
   const closeTab = useAppStore((s) => s.closeTab)
   const setActiveTab = useAppStore((s) => s.setActiveTab)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
+  const activeRuntimeEnvironmentId = useAppStore(
+    (s) => s.settings?.activeRuntimeEnvironmentId ?? null
+  )
   const setTabCustomTitle = useAppStore((s) => s.setTabCustomTitle)
   const setTabColor = useAppStore((s) => s.setTabColor)
   const consumeSuppressedPtyExit = useAppStore((s) => s.consumeSuppressedPtyExit)
@@ -563,6 +567,11 @@ function Terminal(): React.JSX.Element | null {
     if (!activeWorktreeId) {
       return
     }
+    // Why: in the paired web client, host session-tabs are authoritative.
+    // Creating a local fallback races the host's initial terminal and duplicates tabs.
+    if (isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+      return
+    }
 
     // Why: this fallback exists to give a newly activated/restored worktree a
     // focusable surface when the reconciled tab model has nothing renderable.
@@ -577,7 +586,13 @@ function Terminal(): React.JSX.Element | null {
     // activity and reshuffle the sidebar. Explicit "New Tab" actions
     // (handleNewTab below) still bump normally.
     createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
-  }, [workspaceSessionReady, activeWorktreeId, createTab, reconcileWorktreeTabModel])
+  }, [
+    workspaceSessionReady,
+    activeWorktreeId,
+    activeRuntimeEnvironmentId,
+    createTab,
+    reconcileWorktreeTabModel
+  ])
 
   const handleNewTab = useCallback(
     (shellOverride?: string) => {

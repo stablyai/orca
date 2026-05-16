@@ -1,7 +1,8 @@
 /* eslint-disable max-lines -- Why: runtime graph sync and mobile session-tab publication share the same injected renderer state and terminal registry. Keeping them together prevents a second store/registry reader from drifting. */
 import {
   collectLeafIdsInOrder,
-  serializePaneTree
+  serializePaneTree,
+  normalizeTerminalLayoutSnapshot
 } from '@/components/terminal-pane/layout-serialization'
 import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/terminal-lifecycle-diagnostics'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -17,6 +18,7 @@ import type {
   RuntimeSyncWindowGraph
 } from '../../../shared/runtime-types'
 import { isTerminalLeafId } from '../../../shared/stable-pane-id'
+import type { TerminalLayoutSnapshot, TerminalPaneLayoutNode } from '../../../shared/types'
 import { getActiveTabNavOrder } from '../components/tab-bar/group-tab-order'
 
 type RegisteredTerminalTab = {
@@ -558,6 +560,22 @@ function mobileTerminalSurfaceId(parentTabId: string, leafId: string): string {
   return `${parentTabId}::${leafId}`
 }
 
+function fallbackLayoutForLeafIds(leafIds: readonly string[]): TerminalPaneLayoutNode | null {
+  const leaves = leafIds.filter(isTerminalLeafId)
+  if (leaves.length === 0) {
+    return null
+  }
+  return leaves.slice(1).reduce<TerminalPaneLayoutNode>(
+    (root, leafId) => ({
+      type: 'split',
+      direction: 'horizontal',
+      first: root,
+      second: { type: 'leaf', leafId }
+    }),
+    { type: 'leaf', leafId: leaves[0]! }
+  )
+}
+
 function getRuntimeLeafIdsForTerminal(tabId: string, state: AppState): string[] {
   const registered = registeredTabs.get(tabId)
   const manager = registered?.getManager()
@@ -584,6 +602,7 @@ function buildMobileTerminalSurfaceTabs(
   worktreeId: string,
   unifiedTabId?: string
 ): RuntimeMobileSessionSnapshotTab[] {
+  const registered = registeredTabs.get(terminal.id)
   const isDesktopTabActive = unifiedTabId
     ? state.groupsByWorktree[worktreeId]?.some(
         (group) =>
@@ -591,7 +610,7 @@ function buildMobileTerminalSurfaceTabs(
           group.activeTabId === unifiedTabId
       ) === true
     : state.activeTabId === terminal.id
-  const manager = registeredTabs.get(terminal.id)?.getManager()
+  const manager = registered?.getManager()
   const liveActivePaneId = manager?.getActivePane()?.id ?? null
   const leafIds = getRuntimeLeafIdsForTerminal(terminal.id, state)
   const activeLeafId =
@@ -599,6 +618,18 @@ function buildMobileTerminalSurfaceTabs(
       ? (manager?.getLeafId(liveActivePaneId) ?? null)
       : (state.terminalLayoutsByTabId[terminal.id]?.activeLeafId ?? leafIds[0] ?? null)
   const paneTitles = state.runtimePaneTitlesByTabId[terminal.id] ?? {}
+  const savedLayout = state.terminalLayoutsByTabId[terminal.id]
+  const container = registered?.getContainer()
+  const firstChild = container?.firstElementChild
+  const liveLayoutRoot = serializePaneTree(
+    typeof HTMLElement !== 'undefined' && firstChild instanceof HTMLElement ? firstChild : null
+  )
+  const parentLayout = normalizeTerminalLayoutSnapshot({
+    root: liveLayoutRoot ?? savedLayout?.root ?? fallbackLayoutForLeafIds(leafIds),
+    activeLeafId,
+    expandedLeafId: savedLayout?.expandedLeafId ?? null,
+    ...(savedLayout?.titlesByLeafId ? { titlesByLeafId: savedLayout.titlesByLeafId } : {})
+  } satisfies TerminalLayoutSnapshot).snapshot
   return leafIds.map((leafId) => {
     const numericPaneId = manager?.getNumericIdForLeaf(leafId) ?? null
     const legacyPaneId = numericPaneId === null ? /^pane:(\d+)$/.exec(leafId)?.[1] : null
@@ -614,6 +645,7 @@ function buildMobileTerminalSurfaceTabs(
       title: paneTitle ?? terminal.customTitle ?? terminal.title ?? 'Terminal',
       parentTabId: terminal.id,
       leafId,
+      parentLayout,
       isActive: isDesktopTabActive && leafId === activeLeafId
     }
   })

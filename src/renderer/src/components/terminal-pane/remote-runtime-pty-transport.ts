@@ -34,6 +34,7 @@ export function createRemoteRuntimePtyTransport(
     worktreeId,
     tabId,
     leafId,
+    activate,
     onPtyExit,
     onPtySpawn,
     onTitleChange,
@@ -203,7 +204,8 @@ export function createRemoteRuntimePtyTransport(
           env,
           tabId,
           leafId,
-          focus: false
+          focus: false,
+          activate: activate === true
         })
         handle = created.terminal.handle
         if (destroyed) {

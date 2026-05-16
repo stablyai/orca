@@ -6,6 +6,7 @@ import type {
   BrowserSessionProfileSource,
   GitWorktreeInfo,
   Repo,
+  TerminalLayoutSnapshot,
   Worktree,
   WorktreeLineage,
   WorktreeLineageWarning
@@ -100,6 +101,7 @@ export type RuntimeMobileSessionTerminalTab = {
   title: string
   parentTabId: string
   leafId: string
+  parentLayout?: TerminalLayoutSnapshot
   isActive: boolean
 }
 

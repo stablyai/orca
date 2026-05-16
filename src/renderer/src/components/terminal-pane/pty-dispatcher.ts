@@ -291,6 +291,8 @@ export type IpcPtyTransportOptions = {
    *  these from the calling pane's (tabId, leafId). */
   tabId?: string
   leafId?: string
+  /** Whether renderer-backed runtime reveal should focus the created tab. */
+  activate?: boolean
   /** Why: mirrors PtySpawnOptions.shellOverride — see types.ts for rationale. */
   shellOverride?: string
   /** Telemetry metadata for the `agent_started` event. Forwarded verbatim

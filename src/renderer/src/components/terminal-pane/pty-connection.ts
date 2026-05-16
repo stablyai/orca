@@ -501,6 +501,7 @@ export function connectPanePty(
     // and the main-side guard short-circuits.
     tabId: deps.tabId,
     leafId: pane.leafId,
+    activate: deps.isActiveRef.current && deps.isVisibleRef.current,
     ...(shellOverride ? { shellOverride } : {}),
     ...(paneStartup?.telemetry ? { telemetry: paneStartup.telemetry } : {}),
     onPtyExit: onExit,

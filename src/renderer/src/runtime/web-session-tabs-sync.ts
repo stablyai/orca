@@ -9,7 +9,13 @@ import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTerminalClientTab
 } from '../../../shared/runtime-types'
-import type { Tab, TabGroup, TerminalLayoutSnapshot, TerminalTab } from '../../../shared/types'
+import type {
+  Tab,
+  TabGroup,
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode,
+  TerminalTab
+} from '../../../shared/types'
 import { getRemoteRuntimePtyEnvironmentId, toRemoteRuntimePtyId } from './runtime-terminal-stream'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
@@ -19,6 +25,14 @@ const HOST_TERMINAL_SURFACE_SEPARATOR = '::'
 type SessionTabsStreamEvent =
   | (RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' })
   | { type: 'end' }
+
+type ReadyTerminalSurface = RuntimeMobileSessionTerminalClientTab & { status: 'ready' }
+
+type MirroredTerminalTab = {
+  tab: TerminalTab
+  ptyIds: string[]
+  layout: TerminalLayoutSnapshot
+}
 
 export type WebSessionTabsSyncState = Pick<
   AppState,
@@ -42,17 +56,9 @@ function isWebClient(): boolean {
   return Boolean((window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__)
 }
 
-function emptyRemoteTerminalLayout(): TerminalLayoutSnapshot {
-  return {
-    root: null,
-    activeLeafId: null,
-    expandedLeafId: null
-  }
-}
-
 function isReadyTerminalTab(
   tab: RuntimeMobileSessionTabsResult['tabs'][number]
-): tab is RuntimeMobileSessionTerminalClientTab & { status: 'ready' } {
+): tab is ReadyTerminalSurface {
   return tab.type === 'terminal' && tab.status === 'ready' && tab.terminal.trim().length > 0
 }
 
@@ -64,7 +70,10 @@ function isRuntimeTerminalTabForEnvironment(tab: TerminalTab, environmentId: str
 }
 
 function isMirroredTerminalSurfaceId(tabId: string): boolean {
-  return tabId.startsWith(WEB_TERMINAL_SURFACE_TAB_PREFIX) || tabId.includes(HOST_TERMINAL_SURFACE_SEPARATOR)
+  return (
+    tabId.startsWith(WEB_TERMINAL_SURFACE_TAB_PREFIX) ||
+    tabId.includes(HOST_TERMINAL_SURFACE_SEPARATOR)
+  )
 }
 
 function toWebTerminalSurfaceTabId(hostSurfaceId: string): string {
@@ -74,20 +83,97 @@ function toWebTerminalSurfaceTabId(hostSurfaceId: string): string {
   return `${WEB_TERMINAL_SURFACE_TAB_PREFIX}${encodeURIComponent(hostSurfaceId)}`
 }
 
+function fallbackLayoutForLeafIds(leafIds: readonly string[]): TerminalPaneLayoutNode | null {
+  if (leafIds.length === 0) {
+    return null
+  }
+  return leafIds.slice(1).reduce<TerminalPaneLayoutNode>(
+    (root, leafId) => ({
+      type: 'split',
+      direction: 'horizontal',
+      first: root,
+      second: { type: 'leaf', leafId }
+    }),
+    { type: 'leaf', leafId: leafIds[0]! }
+  )
+}
+
+function collectLayoutLeafIds(
+  node: TerminalPaneLayoutNode | null | undefined,
+  leafIds = new Set<string>()
+): Set<string> {
+  if (!node) {
+    return leafIds
+  }
+  if (node.type === 'leaf') {
+    leafIds.add(node.leafId)
+    return leafIds
+  }
+  collectLayoutLeafIds(node.first, leafIds)
+  collectLayoutLeafIds(node.second, leafIds)
+  return leafIds
+}
+
+function chooseRemoteTerminalLayout(
+  surfaces: readonly ReadyTerminalSurface[],
+  ptyIdsByLeafId: Record<string, string>
+): TerminalLayoutSnapshot {
+  const leafIds = surfaces.map((surface) => surface.leafId)
+  const knownLeafIds = new Set(leafIds)
+  const parentLayout = surfaces.find((surface) => surface.parentLayout)?.parentLayout
+  const parentLayoutLeafIds = collectLayoutLeafIds(parentLayout?.root)
+  const canReuseParentLayout =
+    parentLayout?.root &&
+    leafIds.every((leafId) => parentLayoutLeafIds.has(leafId)) &&
+    [...parentLayoutLeafIds].every((leafId) => knownLeafIds.has(leafId))
+  const activeLeafId =
+    (parentLayout?.activeLeafId && knownLeafIds.has(parentLayout.activeLeafId)
+      ? parentLayout.activeLeafId
+      : null) ??
+    surfaces.find((surface) => surface.isActive)?.leafId ??
+    leafIds[0] ??
+    null
+  const expandedLeafId =
+    parentLayout?.expandedLeafId && knownLeafIds.has(parentLayout.expandedLeafId)
+      ? parentLayout.expandedLeafId
+      : null
+  const titlesByLeafId = Object.fromEntries(
+    surfaces
+      .map((surface) => [surface.leafId, surface.title.trim()] as const)
+      .filter((entry): entry is readonly [string, string] => entry[1].length > 0)
+  )
+  return {
+    root: canReuseParentLayout ? parentLayout.root : fallbackLayoutForLeafIds(leafIds),
+    activeLeafId,
+    expandedLeafId,
+    ptyIdsByLeafId,
+    ...((parentLayout?.titlesByLeafId || Object.keys(titlesByLeafId).length > 0) && {
+      titlesByLeafId: {
+        ...parentLayout?.titlesByLeafId,
+        ...titlesByLeafId
+      }
+    })
+  }
+}
+
 function shouldReplaceTerminalTab(
   tab: TerminalTab,
   environmentId: string,
   nextRemotePtyIds: ReadonlySet<string>
 ): boolean {
+  if (isMirroredTerminalSurfaceId(tab.id) && nextRemotePtyIds.size > 0) {
+    return true
+  }
+  if (tab.pendingActivationSpawn && tab.ptyId === null && nextRemotePtyIds.size > 0) {
+    return true
+  }
   if (!isRuntimeTerminalTabForEnvironment(tab, environmentId)) {
     return false
   }
   // Why: web-created remote tabs use local UUIDs until the host publishes the
   // corresponding session surface. Only retire them once their PTY is present
   // in the host snapshot, while always pruning prior mirrored surface IDs.
-  return (
-    isMirroredTerminalSurfaceId(tab.id) || (tab.ptyId !== null && nextRemotePtyIds.has(tab.ptyId))
-  )
+  return tab.ptyId !== null && nextRemotePtyIds.has(tab.ptyId)
 }
 
 function buildMirroredTerminalTabs(
@@ -96,22 +182,45 @@ function buildMirroredTerminalTabs(
   existingById: ReadonlyMap<string, TerminalTab>,
   sortOffset: number,
   now: number
-): TerminalTab[] {
-  return snapshot.tabs.filter(isReadyTerminalTab).map((tab, index) => {
-    const ptyId = toRemoteRuntimePtyId(tab.terminal, environmentId)
-    const localTabId = toWebTerminalSurfaceTabId(tab.id)
-    const existing = existingById.get(localTabId) ?? existingById.get(tab.id)
-    const title = tab.title.trim() || 'Terminal'
+): MirroredTerminalTab[] {
+  const groups = new Map<string, ReadyTerminalSurface[]>()
+  for (const tab of snapshot.tabs.filter(isReadyTerminalTab)) {
+    const group = groups.get(tab.parentTabId) ?? []
+    group.push(tab)
+    groups.set(tab.parentTabId, group)
+  }
+
+  return [...groups.entries()].map(([parentTabId, surfaces], index) => {
+    const localTabId = toWebTerminalSurfaceTabId(parentTabId)
+    const activeSurface = surfaces.find((surface) => surface.isActive) ?? surfaces[0]!
+    const ptyIdsByLeafId = Object.fromEntries(
+      surfaces.map((surface) => [
+        surface.leafId,
+        toRemoteRuntimePtyId(surface.terminal, environmentId)
+      ])
+    )
+    const ptyIds = surfaces.map((surface) => ptyIdsByLeafId[surface.leafId]!)
+    const title = activeSurface.title.trim() || surfaces[0]?.title.trim() || 'Terminal'
+    const existing =
+      existingById.get(localTabId) ??
+      existingById.get(parentTabId) ??
+      surfaces
+        .map((surface) => existingById.get(toWebTerminalSurfaceTabId(surface.id)))
+        .find((tab): tab is TerminalTab => Boolean(tab))
     return {
-      id: localTabId,
-      ptyId,
-      worktreeId: snapshot.worktree,
-      title,
-      defaultTitle: existing?.defaultTitle ?? title,
-      customTitle: existing?.customTitle ?? null,
-      color: existing?.color ?? null,
-      sortOrder: sortOffset + index,
-      createdAt: existing?.createdAt ?? now + index
+      tab: {
+        id: localTabId,
+        ptyId: ptyIdsByLeafId[activeSurface.leafId] ?? ptyIds[0] ?? null,
+        worktreeId: snapshot.worktree,
+        title,
+        defaultTitle: existing?.defaultTitle ?? title,
+        customTitle: existing?.customTitle ?? null,
+        color: existing?.color ?? null,
+        sortOrder: sortOffset + index,
+        createdAt: existing?.createdAt ?? now + index
+      },
+      ptyIds,
+      layout: chooseRemoteTerminalLayout(surfaces, ptyIdsByLeafId)
     }
   })
 }
@@ -152,6 +261,58 @@ function sameStringArray(a: readonly string[], b: readonly string[]): boolean {
     return false
   }
   return a.every((value, index) => value === b[index])
+}
+
+function sameStringRecord(
+  a: Readonly<Record<string, string>> | undefined,
+  b: Readonly<Record<string, string>> | undefined
+): boolean {
+  const left = a ?? {}
+  const right = b ?? {}
+  const leftKeys = Object.keys(left)
+  const rightKeys = Object.keys(right)
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every(
+      (key) => Object.prototype.hasOwnProperty.call(right, key) && left[key] === right[key]
+    )
+  )
+}
+
+function terminalLayoutNodeEqual(
+  a: TerminalPaneLayoutNode | null | undefined,
+  b: TerminalPaneLayoutNode | null | undefined
+): boolean {
+  if (!a || !b) {
+    return !a && !b
+  }
+  if (a.type !== b.type) {
+    return false
+  }
+  if (a.type === 'leaf') {
+    return b.type === 'leaf' && a.leafId === b.leafId
+  }
+  return (
+    b.type === 'split' &&
+    a.direction === b.direction &&
+    a.ratio === b.ratio &&
+    terminalLayoutNodeEqual(a.first, b.first) &&
+    terminalLayoutNodeEqual(a.second, b.second)
+  )
+}
+
+function terminalLayoutEqual(
+  a: TerminalLayoutSnapshot | undefined,
+  b: TerminalLayoutSnapshot
+): boolean {
+  return (
+    terminalLayoutNodeEqual(a?.root, b.root) &&
+    (a?.activeLeafId ?? null) === b.activeLeafId &&
+    (a?.expandedLeafId ?? null) === b.expandedLeafId &&
+    sameStringRecord(a?.ptyIdsByLeafId, b.ptyIdsByLeafId) &&
+    sameStringRecord(a?.buffersByLeafId, b.buffersByLeafId) &&
+    sameStringRecord(a?.titlesByLeafId, b.titlesByLeafId)
+  )
 }
 
 function sanitizeRecentTabIds(recent: string[] | undefined, tabOrder: string[]): string[] {
@@ -295,11 +456,12 @@ export function applyWebSessionTabsSnapshot(
     retainedTerminalTabs.length,
     now
   )
+  const mirroredTerminalTabEntries = mirroredTerminalTabs.map((entry) => entry.tab)
   const nextTerminalTabs =
-    retainedTerminalTabs.length + mirroredTerminalTabs.length > 0
-      ? [...retainedTerminalTabs, ...mirroredTerminalTabs]
+    retainedTerminalTabs.length + mirroredTerminalTabEntries.length > 0
+      ? [...retainedTerminalTabs, ...mirroredTerminalTabEntries]
       : null
-  const mirroredTerminalIds = new Set(mirroredTerminalTabs.map((tab) => tab.id))
+  const mirroredTerminalIds = new Set(mirroredTerminalTabEntries.map((tab) => tab.id))
   const removedTerminalIds = new Set(
     currentTerminalTabs
       .filter((tab) => !retainedTerminalTabs.some((retained) => retained.id === tab.id))
@@ -317,7 +479,7 @@ export function applyWebSessionTabsSnapshot(
     }
     return !mirroredTerminalIds.has(tab.entityId) && !mirroredTerminalIds.has(tab.id)
   })
-  const mirroredUnifiedTabs = mirroredTerminalTabs.map((tab) =>
+  const mirroredUnifiedTabs = mirroredTerminalTabEntries.map((tab) =>
     buildTerminalUnifiedTab(tab, targetGroupId)
   )
   const nextUnifiedTabs =
@@ -329,8 +491,12 @@ export function applyWebSessionTabsSnapshot(
     readyTerminalTabs.find((tab) => tab.id === snapshot.activeTabId)?.id ??
     readyTerminalTabs.find((tab) => tab.isActive)?.id ??
     null
+  const activeHostTerminalParentId =
+    readyTerminalTabs.find((tab) => tab.id === activeHostTerminalId)?.parentTabId ??
+    readyTerminalTabs.find((tab) => tab.isActive)?.parentTabId ??
+    null
   const activeMirroredTerminalId = activeHostTerminalId
-    ? toWebTerminalSurfaceTabId(activeHostTerminalId)
+    ? toWebTerminalSurfaceTabId(activeHostTerminalParentId ?? activeHostTerminalId)
     : null
   const currentActiveTerminalStillExists =
     state.activeTabIdByWorktree[worktreeId] &&
@@ -340,9 +506,9 @@ export function applyWebSessionTabsSnapshot(
   const nextActiveTerminalId =
     snapshot.activeTabType === 'terminal'
       ? (activeMirroredTerminalId ??
-        mirroredTerminalTabs[0]?.id ??
+        mirroredTerminalTabEntries[0]?.id ??
         currentActiveTerminalStillExists)
-      : (currentActiveTerminalStillExists ?? mirroredTerminalTabs[0]?.id ?? null)
+      : (currentActiveTerminalStillExists ?? mirroredTerminalTabEntries[0]?.id ?? null)
 
   const currentGroups = state.groupsByWorktree[worktreeId] ?? []
   const nextGroups = (() => {
@@ -370,7 +536,7 @@ export function applyWebSessionTabsSnapshot(
     }
     const targetOrder = [
       ...target.tabOrder.filter((tabId) => validUnifiedTabIds.has(tabId)),
-      ...mirroredTerminalTabs.map((tab) => tab.id)
+      ...mirroredTerminalTabEntries.map((tab) => tab.id)
     ]
     const targetActiveTabId =
       nextActiveTerminalId && targetOrder.includes(nextActiveTerminalId)
@@ -401,7 +567,7 @@ export function applyWebSessionTabsSnapshot(
     ])
     return [
       ...current.filter((tabId) => validTabBarIds.has(tabId) && !mirroredTerminalIds.has(tabId)),
-      ...mirroredTerminalTabs.map((tab) => tab.id)
+      ...mirroredTerminalTabEntries.map((tab) => tab.id)
     ]
   })()
 
@@ -413,12 +579,12 @@ export function applyWebSessionTabsSnapshot(
       delete nextPtyIdsByTabId[removedId]
     }
   }
-  for (const tab of mirroredTerminalTabs) {
+  for (const { tab, ptyIds } of mirroredTerminalTabs) {
     const current = nextPtyIdsByTabId[tab.id] ?? []
-    if (!sameStringArray(current, [tab.ptyId!])) {
+    if (!sameStringArray(current, ptyIds)) {
       nextPtyIdsByTabId =
         nextPtyIdsByTabId === state.ptyIdsByTabId ? { ...state.ptyIdsByTabId } : nextPtyIdsByTabId
-      nextPtyIdsByTabId[tab.id] = [tab.ptyId!]
+      nextPtyIdsByTabId[tab.id] = ptyIds
     }
   }
 
@@ -432,13 +598,13 @@ export function applyWebSessionTabsSnapshot(
       delete nextTerminalLayoutsByTabId[removedId]
     }
   }
-  for (const tab of mirroredTerminalTabs) {
-    if (!nextTerminalLayoutsByTabId[tab.id]) {
+  for (const { tab, layout } of mirroredTerminalTabs) {
+    if (!terminalLayoutEqual(nextTerminalLayoutsByTabId[tab.id], layout)) {
       nextTerminalLayoutsByTabId =
         nextTerminalLayoutsByTabId === state.terminalLayoutsByTabId
           ? { ...state.terminalLayoutsByTabId }
           : nextTerminalLayoutsByTabId
-      nextTerminalLayoutsByTabId[tab.id] = emptyRemoteTerminalLayout()
+      nextTerminalLayoutsByTabId[tab.id] = layout
     }
   }
 
