@@ -11,6 +11,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     sizeBytes: 180_000_000,
     downloadUrl:
       'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2',
+    archiveSha256: '5793d0fd397c5778d2cf2126994d58e9d56b1be7c04d13c7a15bb1b4eafb16bf',
     archiveFormat: 'tar.bz2',
     files: ['encoder.int8.onnx', 'decoder.int8.onnx', 'joiner.int8.onnx', 'tokens.txt'],
     sampleRate: 16000,
@@ -28,6 +29,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     sizeBytes: 170_000_000,
     downloadUrl:
       'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8.tar.bz2',
+    archiveSha256: '157c157bc51155e03e37d2466522a3a737dd9c72bb25f36eb18912964161e1ad',
     archiveFormat: 'tar.bz2',
     files: ['encoder.int8.onnx', 'decoder.int8.onnx', 'joiner.int8.onnx', 'tokens.txt'],
     sampleRate: 16000,
@@ -43,6 +45,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     sizeBytes: 130_000_000,
     downloadUrl:
       'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2',
+    archiveSha256: '27ffbd9ee24ad186d99acc2f6354d7992b27bcab490812510665fa8f9389c5f8',
     archiveFormat: 'tar.bz2',
     files: [
       'encoder-epoch-99-avg-1.onnx',
@@ -64,6 +67,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     sizeBytes: 115_000_000,
     downloadUrl:
       'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-paraformer-bilingual-zh-en.tar.bz2',
+    archiveSha256: '5462a1fce42693deae572af1e8c4687124b12aa85fe61ff4d3168bb5280e205f',
     archiveFormat: 'tar.bz2',
     files: ['encoder.int8.onnx', 'decoder.int8.onnx', 'tokens.txt'],
     sampleRate: 16000,
@@ -78,6 +82,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     sizeBytes: 128_000_000,
     downloadUrl:
       'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-20M-2023-02-17.tar.bz2',
+    archiveSha256: '9c559283e8498d3fe95913c79ca1cb454bb26281ac2b102b41306c7d752765d9',
     archiveFormat: 'tar.bz2',
     files: [
       'encoder-epoch-99-avg-1.onnx',
@@ -98,6 +103,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     sizeBytes: 74_000_000,
     downloadUrl:
       'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23.tar.bz2',
+    archiveSha256: '2cbd71b640d9c37d3784f29367333a4577b0398b62e9deeed418170b081cba8b',
     archiveFormat: 'tar.bz2',
     files: [
       'encoder-epoch-99-avg-1.onnx',
@@ -118,6 +124,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     sizeBytes: 116_000_000,
     downloadUrl:
       'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-tiny.tar.bz2',
+    archiveSha256: 'c46116994e539aa165266d96b325252728429c12535eb9d8b6a2b10f129e66b1',
     archiveFormat: 'tar.bz2',
     files: ['tiny-encoder.onnx', 'tiny-decoder.onnx', 'tiny-tokens.txt'],
     sampleRate: 16000,

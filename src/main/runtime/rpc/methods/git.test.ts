@@ -88,7 +88,8 @@ describe('git RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       stageRuntimeGitPath: vi.fn().mockResolvedValue({ ok: true }),
       bulkUnstageRuntimeGitPaths: vi.fn().mockResolvedValue({ ok: true }),
-      discardRuntimeGitPath: vi.fn().mockResolvedValue({ ok: true })
+      discardRuntimeGitPath: vi.fn().mockResolvedValue({ ok: true }),
+      bulkDiscardRuntimeGitPaths: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
 
@@ -101,16 +102,42 @@ describe('git RPC methods', () => {
     await dispatcher.dispatch(
       makeRequest('git.discard', { worktree: 'id:wt-1', filePath: 'src/a.ts' })
     )
+    await dispatcher.dispatch(
+      makeRequest('git.bulkDiscard', { worktree: 'id:wt-1', filePaths: ['src/a.ts', 'b.ts'] })
+    )
 
     expect(runtime.stageRuntimeGitPath).toHaveBeenCalledWith('id:wt-1', 'src/a.ts')
     expect(runtime.bulkUnstageRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['src/a.ts', 'b.ts'])
     expect(runtime.discardRuntimeGitPath).toHaveBeenCalledWith('id:wt-1', 'src/a.ts')
+    expect(runtime.bulkDiscardRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['src/a.ts', 'b.ts'])
+  })
+
+  it('rejects empty bulk mutation paths before calling the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      bulkDiscardRuntimeGitPaths: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.bulkDiscard', { worktree: 'id:wt-1', filePaths: [''] })
+    )
+
+    expect(response.ok).toBe(false)
+    expect(response).toMatchObject({
+      error: expect.objectContaining({ code: 'invalid_argument' })
+    })
+    expect(runtime.bulkDiscardRuntimeGitPaths).not.toHaveBeenCalled()
   })
 
   it('routes remote operations to the runtime', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       commitRuntimeGit: vi.fn().mockResolvedValue({ success: true }),
+      generateRuntimeCommitMessage: vi
+        .fn()
+        .mockResolvedValue({ success: true, message: 'feat: test' }),
+      cancelRuntimeGenerateCommitMessage: vi.fn().mockResolvedValue({ ok: true }),
       pushRuntimeGit: vi.fn().mockResolvedValue({ ok: true }),
       getRuntimeGitRemoteFileUrl: vi.fn().mockResolvedValue('https://example.com/file#L3')
     } as unknown as OrcaRuntimeService
@@ -118,6 +145,10 @@ describe('git RPC methods', () => {
 
     await dispatcher.dispatch(
       makeRequest('git.commit', { worktree: 'id:wt-1', message: 'feat: test' })
+    )
+    await dispatcher.dispatch(makeRequest('git.generateCommitMessage', { worktree: 'id:wt-1' }))
+    await dispatcher.dispatch(
+      makeRequest('git.cancelGenerateCommitMessage', { worktree: 'id:wt-1' })
     )
     await dispatcher.dispatch(
       makeRequest('git.push', {
@@ -135,8 +166,66 @@ describe('git RPC methods', () => {
     )
 
     expect(runtime.commitRuntimeGit).toHaveBeenCalledWith('id:wt-1', 'feat: test')
+    expect(runtime.generateRuntimeCommitMessage).toHaveBeenCalledWith('id:wt-1')
+    expect(runtime.cancelRuntimeGenerateCommitMessage).toHaveBeenCalledWith('id:wt-1')
     expect(runtime.pushRuntimeGit).toHaveBeenCalledWith('id:wt-1', true, { remote: 'origin' })
     expect(response).toMatchObject({ ok: true, result: 'https://example.com/file#L3' })
+  })
+
+  it('forwards commit-message settings to the runtime', async () => {
+    const commitMessageAi = {
+      enabled: true,
+      agentId: 'codex',
+      selectedModelByAgent: { codex: 'gpt-5.3-codex-spark' },
+      selectedThinkingByModel: { 'gpt-5.3-codex-spark': 'medium' },
+      customPrompt: '',
+      customAgentCommand: ''
+    }
+    const agentCmdOverrides = { codex: 'codex --profile work' }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      generateRuntimeCommitMessage: vi.fn().mockResolvedValue({ success: true, message: 'test' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('git.generateCommitMessage', {
+        worktree: 'id:wt-1',
+        commitMessageAi,
+        agentCmdOverrides,
+        enableGitHubAttribution: true
+      })
+    )
+
+    expect(runtime.generateRuntimeCommitMessage).toHaveBeenCalledWith('id:wt-1', {
+      commitMessageAi,
+      agentCmdOverrides,
+      enableGitHubAttribution: true
+    })
+  })
+
+  it('rejects malformed commit-message settings before calling the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      generateRuntimeCommitMessage: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.generateCommitMessage', {
+        worktree: 'id:wt-1',
+        commitMessageAi: {
+          enabled: true,
+          agentId: 'codex'
+        }
+      })
+    )
+
+    expect(response.ok).toBe(false)
+    expect(response).toMatchObject({
+      error: expect.objectContaining({ code: 'invalid_argument' })
+    })
+    expect(runtime.generateRuntimeCommitMessage).not.toHaveBeenCalled()
   })
 
   it('rejects branch diff revisions that are not full object ids', async () => {

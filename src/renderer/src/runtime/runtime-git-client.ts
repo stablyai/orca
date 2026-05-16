@@ -12,11 +12,39 @@ import type {
 } from '../../../shared/types'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 
+export type RuntimeGenerateCommitMessageResult =
+  | { success: true; message: string; agentLabel?: string }
+  | { success: false; error: string; canceled?: boolean }
+
+type RuntimeGitSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> &
+  Partial<Pick<GlobalSettings, 'commitMessageAi' | 'agentCmdOverrides' | 'enableGitHubAttribution'>>
+
 export type RuntimeGitContext = {
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  settings: RuntimeGitSettings | null | undefined
   worktreeId: string | null | undefined
   worktreePath: string
   connectionId?: string
+}
+
+function getRuntimeCommitMessageSettings(
+  settings: RuntimeGitSettings | null | undefined
+): Partial<
+  Pick<GlobalSettings, 'commitMessageAi' | 'agentCmdOverrides' | 'enableGitHubAttribution'>
+> {
+  if (!settings) {
+    return {}
+  }
+  return {
+    ...(settings.commitMessageAi !== undefined
+      ? { commitMessageAi: settings.commitMessageAi }
+      : {}),
+    ...(settings.agentCmdOverrides !== undefined
+      ? { agentCmdOverrides: settings.agentCmdOverrides }
+      : {}),
+    ...(settings.enableGitHubAttribution !== undefined
+      ? { enableGitHubAttribution: settings.enableGitHubAttribution }
+      : {})
+  }
 }
 
 export function getRuntimeGitScope(
@@ -218,6 +246,46 @@ export async function commitRuntimeGit(
   )
 }
 
+export async function generateRuntimeCommitMessage(
+  context: RuntimeGitContext
+): Promise<RuntimeGenerateCommitMessageResult> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.generateCommitMessage({
+      worktreePath: context.worktreePath,
+      connectionId: context.connectionId
+    }) as Promise<RuntimeGenerateCommitMessageResult>
+  }
+  return callRuntimeRpc<RuntimeGenerateCommitMessageResult>(
+    target,
+    'git.generateCommitMessage',
+    {
+      worktree: context.worktreeId,
+      ...getRuntimeCommitMessageSettings(context.settings)
+    },
+    { timeoutMs: 75_000 }
+  )
+}
+
+export async function cancelRuntimeGenerateCommitMessage(
+  context: RuntimeGitContext
+): Promise<void> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    await window.api.git.cancelGenerateCommitMessage({
+      worktreePath: context.worktreePath,
+      connectionId: context.connectionId
+    })
+    return
+  }
+  await callRuntimeRpc(
+    target,
+    'git.cancelGenerateCommitMessage',
+    { worktree: context.worktreeId },
+    { timeoutMs: 5_000 }
+  )
+}
+
 export async function stageRuntimeGitPath(
   context: RuntimeGitContext,
   filePath: string
@@ -297,6 +365,27 @@ export async function bulkUnstageRuntimeGitPaths(
   await callRuntimeRpc(
     target,
     'git.bulkUnstage',
+    { worktree: context.worktreeId, filePaths },
+    { timeoutMs: 15_000 }
+  )
+}
+
+export async function bulkDiscardRuntimeGitPaths(
+  context: RuntimeGitContext,
+  filePaths: string[]
+): Promise<void> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    await window.api.git.bulkDiscard({
+      worktreePath: context.worktreePath,
+      filePaths,
+      connectionId: context.connectionId
+    })
+    return
+  }
+  await callRuntimeRpc(
+    target,
+    'git.bulkDiscard',
     { worktree: context.worktreeId, filePaths },
     { timeoutMs: 15_000 }
   )

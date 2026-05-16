@@ -710,6 +710,13 @@ app.whenReady().then(async () => {
   })
   automations = new AutomationService(store, { claudeUsage, codexUsage })
   runtime.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
+  runtime.setCommitMessageAgentEnvironmentResolvers({
+    prepareForCodexLaunch: () =>
+      store!.getSettings().activeCodexManagedAccountId
+        ? codexRuntimeHome!.prepareForCodexLaunch()
+        : null,
+    prepareForClaudeLaunch: () => claudeRuntimeAuth!.prepareForClaudeLaunch()
+  })
   disposeFeatureWallFirstAgentTour = registerFeatureWallFirstAgentTour({
     stats,
     getWindow: () => mainWindow

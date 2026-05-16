@@ -722,6 +722,11 @@ export function ResourceUsageStatusSegment({
   // Why: Space scans can finish after the user backs out of the full page or
   // closes this popover; the status-bar trigger becomes the handoff point.
   useEffect(() => {
+    if (runtimeEnvironmentActive) {
+      setSpaceScanReady(false)
+      previousSpaceScanningRef.current = false
+      return
+    }
     const scannedAt = workspaceSpaceScannedAt
     const wasScanning = previousSpaceScanningRef.current
     const scanCompleted =
@@ -739,7 +744,14 @@ export function ResourceUsageStatusSegment({
     }
 
     previousSpaceScanningRef.current = workspaceSpaceScanning
-  }, [activeView, open, spaceScanReady, workspaceSpaceScannedAt, workspaceSpaceScanning])
+  }, [
+    activeView,
+    open,
+    runtimeEnvironmentActive,
+    spaceScanReady,
+    workspaceSpaceScannedAt,
+    workspaceSpaceScanning
+  ])
 
   // Poll memory + sessions when popover is open. Sessions also poll in the
   // background at a slower rate so the badge count stays reasonably fresh
@@ -977,9 +989,12 @@ export function ResourceUsageStatusSegment({
   }, [])
 
   const handleOpenWorkspaceCleanup = useCallback((): void => {
+    if (runtimeEnvironmentActive) {
+      return
+    }
     setOpen(false)
     queueMicrotask(() => openModal('workspace-cleanup'))
-  }, [openModal])
+  }, [openModal, runtimeEnvironmentActive])
 
   const handleKillSession = useCallback(
     (session: UnifiedSessionRow): void => {
@@ -1073,10 +1088,12 @@ export function ResourceUsageStatusSegment({
               type="button"
               className="relative inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
               aria-label={
-                spaceScanReady ? 'Resource manager, Space scan ready' : 'Resource manager'
+                spaceScanReady && !runtimeEnvironmentActive
+                  ? 'Resource manager, Space scan ready'
+                  : 'Resource manager'
               }
             >
-              {spaceScanReady ? (
+              {spaceScanReady && !runtimeEnvironmentActive ? (
                 <span
                   className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-primary"
                   aria-hidden="true"
@@ -1115,7 +1132,9 @@ export function ResourceUsageStatusSegment({
               Resource Manager — {memBadgeLabel} · {sessions.length} session
               {sessions.length === 1 ? '' : 's'}
             </div>
-            {spaceScanReady ? <div className="text-primary">Space scan ready</div> : null}
+            {spaceScanReady && !runtimeEnvironmentActive ? (
+              <div className="text-primary">Space scan ready</div>
+            ) : null}
           </div>
         </TooltipContent>
       </Tooltip>
@@ -1362,30 +1381,36 @@ export function ResourceUsageStatusSegment({
           </div>
         </div>
 
-        <div className="border-t border-border/50 px-3 py-2 shrink-0">
-          <button
-            type="button"
-            onClick={handleOpenWorkspaceCleanup}
-            className="inline-flex w-full items-center justify-between gap-2 rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
-          >
-            <span className="inline-flex min-w-0 items-center gap-1.5">
-              <ArchiveX className="size-3.5 shrink-0" />
-              <span className="truncate">Clean up old workspaces ({oldWorkspaceCount})</span>
-            </span>
-            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-          </button>
-          {orphanCount > 0 ? (
-            <button
-              type="button"
-              onClick={() => void handleKillOrphans()}
-              className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
-            >
-              Kill {orphanCount} orphan terminal{orphanCount === 1 ? '' : 's'}
-            </button>
-          ) : null}
-        </div>
+        {!runtimeEnvironmentActive || orphanCount > 0 ? (
+          <div className="border-t border-border/50 px-3 py-2 shrink-0">
+            {!runtimeEnvironmentActive ? (
+              <button
+                type="button"
+                onClick={handleOpenWorkspaceCleanup}
+                className="inline-flex w-full items-center justify-between gap-2 rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
+              >
+                <span className="inline-flex min-w-0 items-center gap-1.5">
+                  <ArchiveX className="size-3.5 shrink-0" />
+                  <span className="truncate">Clean up old workspaces ({oldWorkspaceCount})</span>
+                </span>
+                <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+              </button>
+            ) : null}
+            {orphanCount > 0 ? (
+              <button
+                type="button"
+                onClick={() => void handleKillOrphans()}
+                className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
+              >
+                Kill {orphanCount} orphan terminal{orphanCount === 1 ? '' : 's'}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
-        <WorkspaceSpaceCompactPanel onOpenFullPage={openSpaceResults} />
+        {!runtimeEnvironmentActive ? (
+          <WorkspaceSpaceCompactPanel onOpenFullPage={openSpaceResults} />
+        ) : null}
       </PopoverContent>
       {/* Why: Radix Dialog must not be a descendant of PopoverContent — when
           the popover unmounts (e.g. clicking outside, focus moving to the

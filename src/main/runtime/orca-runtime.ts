@@ -256,6 +256,7 @@ import type { ClaudeRateLimitAccountsState, CodexRateLimitAccountsState } from '
 import type { RateLimitState } from '../../shared/rate-limit-types'
 import type { VoiceSettings } from '../../shared/speech-types'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
+import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 
 type RuntimeAccountServices = {
   claudeAccounts: ClaudeAccountService
@@ -848,6 +849,7 @@ export class OrcaRuntimeService {
   private optimisticReconcileTokens = new Map<string, string>()
   private readonly getLocalProviderFn: (() => IPtyProvider) | null
   private accountServices: RuntimeAccountServices | null = null
+  private commitMessageAgentEnv: CommitMessageAgentEnvironmentResolvers | null = null
   private mobileDictation: {
     id: string
     owner: string
@@ -1191,7 +1193,9 @@ export class OrcaRuntimeService {
   )
 
   private readonly gitCommands = new RuntimeGitCommands({
-    resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector)
+    resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
+    getRuntimeSettings: () => this.requireStore().getSettings() as GlobalSettings,
+    getCommitMessageAgentEnvironment: () => this.commitMessageAgentEnv ?? undefined
   })
 
   getRuntimeGitStatus: RuntimeGitCommands['getRuntimeGitStatus'] =
@@ -1218,6 +1222,10 @@ export class OrcaRuntimeService {
   commitRuntimeGit: RuntimeGitCommands['commitRuntimeGit'] = this.gitCommands.commitRuntimeGit.bind(
     this.gitCommands
   )
+  generateRuntimeCommitMessage: RuntimeGitCommands['generateRuntimeCommitMessage'] =
+    this.gitCommands.generateRuntimeCommitMessage.bind(this.gitCommands)
+  cancelRuntimeGenerateCommitMessage: RuntimeGitCommands['cancelRuntimeGenerateCommitMessage'] =
+    this.gitCommands.cancelRuntimeGenerateCommitMessage.bind(this.gitCommands)
   stageRuntimeGitPath: RuntimeGitCommands['stageRuntimeGitPath'] =
     this.gitCommands.stageRuntimeGitPath.bind(this.gitCommands)
   unstageRuntimeGitPath: RuntimeGitCommands['unstageRuntimeGitPath'] =
@@ -1226,6 +1234,8 @@ export class OrcaRuntimeService {
     this.gitCommands.bulkStageRuntimeGitPaths.bind(this.gitCommands)
   bulkUnstageRuntimeGitPaths: RuntimeGitCommands['bulkUnstageRuntimeGitPaths'] =
     this.gitCommands.bulkUnstageRuntimeGitPaths.bind(this.gitCommands)
+  bulkDiscardRuntimeGitPaths: RuntimeGitCommands['bulkDiscardRuntimeGitPaths'] =
+    this.gitCommands.bulkDiscardRuntimeGitPaths.bind(this.gitCommands)
   discardRuntimeGitPath: RuntimeGitCommands['discardRuntimeGitPath'] =
     this.gitCommands.discardRuntimeGitPath.bind(this.gitCommands)
   getRuntimeGitRemoteFileUrl: RuntimeGitCommands['getRuntimeGitRemoteFileUrl'] =
@@ -1815,6 +1825,12 @@ export class OrcaRuntimeService {
 
   setAccountServices(services: RuntimeAccountServices): void {
     this.accountServices = services
+  }
+
+  setCommitMessageAgentEnvironmentResolvers(
+    resolvers: CommitMessageAgentEnvironmentResolvers
+  ): void {
+    this.commitMessageAgentEnv = resolvers
   }
 
   async startMobileDictation(params: {

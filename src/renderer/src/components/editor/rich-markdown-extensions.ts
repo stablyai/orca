@@ -85,14 +85,23 @@ export function createRichMarkdownExtensions({
               | RuntimeFileOperationArgs
               | undefined
             if (src && fp) {
-              // Why: when IPC resolution fails (e.g. unsupported format),
-              // the ternary falls back to the raw src so the browser can
-              // attempt its own loading rather than leaving a broken image.
               void loadLocalImageSrc(src, fp, undefined, runtimeContext).then((resolved) => {
-                img.src = resolved ? resolved : src
+                if (currentSrc !== src) {
+                  return
+                }
+                if (resolved) {
+                  img.src = resolved
+                  return
+                }
+                // Why: local image paths must stay behind IPC/runtime
+                // authorization; a failed load should render missing, not
+                // hand the raw path back to Chromium.
+                img.removeAttribute('src')
               })
             } else if (src) {
               img.src = src
+            } else {
+              img.removeAttribute('src')
             }
           }
 

@@ -4,10 +4,8 @@ import { registerPreflightHandlers } from './preflight'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { StatsCollector } from '../stats/collector'
-import {
-  registerFilesystemHandlers,
-  type CommitMessageAgentEnvironmentResolvers
-} from './filesystem'
+import { registerFilesystemHandlers } from './filesystem'
+import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import { registerFilesystemWatcherHandlers } from './filesystem-watcher'
 import { registerClaudeUsageHandlers } from './claude-usage'
 import { registerCodexUsageHandlers } from './codex-usage'

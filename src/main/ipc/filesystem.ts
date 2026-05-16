@@ -66,8 +66,10 @@ import { listMarkdownDocuments, markdownDocumentsFromRelativePaths } from './mar
 import { checkRgAvailable } from './rg-availability'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
-import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
-import { applyClaudeEnvPatch } from '../claude-accounts/environment'
+import {
+  prepareLocalCommitMessageAgentEnv,
+  type CommitMessageAgentEnvironmentResolvers
+} from '../text-generation/commit-message-agent-environment'
 
 // Why: Monaco has large-file optimizations like VS Code; blocking at 5MB makes
 // ordinary JSON/log files inaccessible before the editor can degrade features.
@@ -91,56 +93,6 @@ const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
   '.pdf': 'application/pdf'
-}
-
-export type CommitMessageAgentEnvironmentResolvers = {
-  prepareForCodexLaunch?: () => string | null
-  prepareForClaudeLaunch?: () => Promise<ClaudeRuntimeAuthPreparation>
-}
-
-function cloneProcessEnv(): Record<string, string> {
-  const env: Record<string, string> = {}
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined) {
-      env[key] = value
-    }
-  }
-  return env
-}
-
-async function prepareLocalCommitMessageAgentEnv(
-  agentId: string,
-  resolvers: CommitMessageAgentEnvironmentResolvers | undefined
-): Promise<{ ok: true; env?: NodeJS.ProcessEnv } | { ok: false; error: string }> {
-  if (!resolvers) {
-    return { ok: true }
-  }
-
-  try {
-    if (agentId === 'codex' && resolvers.prepareForCodexLaunch) {
-      const codexHomePath = resolvers.prepareForCodexLaunch()
-      return {
-        ok: true,
-        env: codexHomePath ? { ...cloneProcessEnv(), CODEX_HOME: codexHomePath } : undefined
-      }
-    }
-
-    if (agentId === 'claude' && resolvers.prepareForClaudeLaunch) {
-      const preparation = await resolvers.prepareForClaudeLaunch()
-      const env = applyClaudeEnvPatch(cloneProcessEnv(), preparation.envPatch, {
-        stripAuthEnv: preparation.stripAuthEnv
-      })
-      return { ok: true, env }
-    }
-  } catch (error) {
-    console.error('[filesystem] Failed to prepare commit message agent environment:', error)
-    return {
-      ok: false,
-      error: 'Failed to prepare the selected agent account for commit message generation.'
-    }
-  }
-
-  return { ok: true }
 }
 
 /**

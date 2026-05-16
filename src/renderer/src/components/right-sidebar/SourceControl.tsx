@@ -107,10 +107,13 @@ import {
 } from '@/components/editor/editor-autosave'
 import { getConnectionId } from '@/lib/connection-context'
 import {
+  bulkDiscardRuntimeGitPaths,
   bulkStageRuntimeGitPaths,
   bulkUnstageRuntimeGitPaths,
+  cancelRuntimeGenerateCommitMessage,
   commitRuntimeGit,
   discardRuntimeGitPath,
+  generateRuntimeCommitMessage,
   getRuntimeGitBranchCompare,
   stageRuntimeGitPath,
   unstageRuntimeGitPath
@@ -1003,12 +1006,12 @@ function SourceControlInner(): React.JSX.Element {
     setGenerateInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
     setGenerateErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
     try {
-      const result = (await window.api.git.generateCommitMessage({
+      const result = await generateRuntimeCommitMessage({
+        settings: useAppStore.getState().settings,
+        worktreeId: activeWorktreeId,
         worktreePath,
         connectionId
-      })) as
-        | { success: true; message: string; agentLabel?: string }
-        | { success: false; error: string; canceled?: boolean }
+      })
 
       if (!result.success) {
         // Why: cancellation is a deliberate user action, not a failure to
@@ -1058,7 +1061,12 @@ function SourceControlInner(): React.JSX.Element {
     // Why: fire-and-forget — the in-flight generateCommitMessage promise
     // resolves with `{canceled: true}` once the kill propagates, which is
     // where the spinner is cleared. Awaiting here would just delay UI feedback.
-    void window.api.git.cancelGenerateCommitMessage({ worktreePath, connectionId })
+    void cancelRuntimeGenerateCommitMessage({
+      settings: useAppStore.getState().settings,
+      worktreeId: activeWorktreeId,
+      worktreePath,
+      connectionId
+    })
   }, [activeWorktreeId, worktreePath])
 
   // Why: a single dispatcher for every remote-only action the split button or
@@ -2025,7 +2033,15 @@ function SourceControlInner(): React.JSX.Element {
         )
       )
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-      await window.api.git.bulkDiscard({ worktreePath, filePaths, connectionId })
+      await bulkDiscardRuntimeGitPaths(
+        {
+          settings: useAppStore.getState().settings,
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId
+        },
+        filePaths
+      )
       for (const relativePath of filePaths) {
         notifyEditorExternalFileChange({
           worktreeId: activeWorktreeId,
