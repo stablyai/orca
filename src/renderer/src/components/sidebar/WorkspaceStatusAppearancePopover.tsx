@@ -54,21 +54,20 @@ export default function WorkspaceStatusAppearancePopover({
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
         <div className="px-1 py-1 text-[11px] font-semibold text-muted-foreground">Color</div>
-        <div className="grid grid-cols-4 gap-1">
+        <div className="grid grid-cols-8 gap-1">
           {WORKSPACE_STATUS_COLOR_OPTIONS.map((color) => (
             <Tooltip key={color.id}>
               <TooltipTrigger asChild>
                 <button
                   type="button"
                   className={cn(
-                    'flex h-8 items-center gap-1.5 rounded-md border border-transparent px-2 text-[11px] text-foreground outline-none transition-colors hover:bg-accent focus-visible:ring-1 focus-visible:ring-ring',
+                    'flex size-8 items-center justify-center rounded-md border border-transparent outline-none transition-colors hover:bg-accent focus-visible:ring-1 focus-visible:ring-ring',
                     status.color === color.id && 'border-ring bg-accent'
                   )}
                   onClick={() => onChangeColor(status.id, color.id)}
                   aria-label={`Set ${status.label} color to ${color.label}`}
                 >
-                  <span className={cn('size-3 rounded-full', color.swatch)} />
-                  <span className="min-w-0 truncate">{color.label}</span>
+                  <span className={cn('size-3.5 rounded-full', color.swatch)} />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
