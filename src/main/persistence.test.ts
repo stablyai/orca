@@ -469,6 +469,98 @@ describe('Store', () => {
     expect(second.title).toBe('Nightly run 2')
   })
 
+  it('snapshots automation run workspace names for deleted-workspace history', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    store.setWorktreeMeta('wt1', { displayName: 'Nightly workspace' })
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+
+    const run = store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
+    store.removeWorktreeMeta('wt1')
+
+    expect(run.workspaceDisplayName).toBe('Nightly workspace')
+    expect(store.listAutomationRuns(automation.id)[0].workspaceDisplayName).toBe(
+      'Nightly workspace'
+    )
+  })
+
+  it('backfills automation run workspace names before workspace deletion', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
+
+    const updatedCount = store.snapshotAutomationRunWorkspaceDisplayName('wt1', 'Deleted workspace')
+
+    expect(updatedCount).toBe(1)
+    expect(store.listAutomationRuns(automation.id)[0].workspaceDisplayName).toBe(
+      'Deleted workspace'
+    )
+  })
+
+  it('persists automation run output snapshots across later status updates', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    const run = store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
+
+    store.updateAutomationRun({
+      runId: run.id,
+      status: 'completed',
+      workspaceId: 'wt1',
+      outputSnapshot: {
+        format: 'plain_text',
+        content: 'Run finished',
+        capturedAt: 1,
+        truncated: false
+      },
+      error: null
+    })
+    store.updateAutomationRun({
+      runId: run.id,
+      status: 'completed',
+      workspaceId: 'wt1',
+      terminalSessionId: 'tab-1',
+      usage: null,
+      error: null
+    })
+
+    expect(store.listAutomationRuns(automation.id)[0].outputSnapshot).toMatchObject({
+      content: 'Run finished',
+      truncated: false
+    })
+  })
+
   // ── 3. Corrupt JSON → falls back to defaults ────────────────────────
 
   it('falls back to defaults when data file contains invalid JSON', async () => {

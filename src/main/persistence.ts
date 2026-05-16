@@ -20,6 +20,7 @@ import type {
   Automation,
   AutomationCreateInput,
   AutomationDispatchResult,
+  AutomationRunOutputSnapshot,
   AutomationRun,
   AutomationRunTrigger,
   AutomationUpdateInput
@@ -72,7 +73,7 @@ import {
 import { agentHookServer } from './agent-hooks/server'
 import { pruneLocalTerminalScrollbackBuffers } from '../shared/workspace-session-terminal-buffers'
 import { pruneWorkspaceSessionBrowserHistory } from '../shared/workspace-session-browser-history'
-import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
+import { getRepoIdFromWorktreeId, getWorktreePathBasenameFromId } from '../shared/worktree-id'
 import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
 import { normalizeVisibleTaskProviders } from '../shared/task-providers'
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
@@ -179,6 +180,32 @@ function normalizeSortBy(sortBy: unknown): 'name' | 'smart' | 'recent' | 'repo' 
     return sortBy
   }
   return getDefaultUIState().sortBy
+}
+
+function normalizeAutomationRunWorkspaceDisplayName(value: string | null): string | null {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed : null
+}
+
+function normalizeAutomationRunOutputSnapshot(
+  value: AutomationRunOutputSnapshot | null | undefined
+): AutomationRunOutputSnapshot | null {
+  if (!value || value.format !== 'plain_text') {
+    return null
+  }
+  const content = typeof value.content === 'string' ? value.content : ''
+  if (!content.trim()) {
+    return null
+  }
+  return {
+    format: 'plain_text',
+    content,
+    capturedAt:
+      typeof value.capturedAt === 'number' && Number.isFinite(value.capturedAt)
+        ? value.capturedAt
+        : Date.now(),
+    truncated: value.truncated === true
+  }
 }
 
 // Why: old persisted targets predate configHost. Default to label-based lookup
@@ -1907,9 +1934,11 @@ export class Store {
       status: 'pending',
       trigger,
       workspaceId: automation.workspaceId,
+      workspaceDisplayName: this.getAutomationRunWorkspaceDisplayName(automation.workspaceId),
       sessionKind: 'terminal',
       chatSessionId: null,
       terminalSessionId: null,
+      outputSnapshot: null,
       usage: null,
       error: null,
       startedAt: null,
@@ -1928,11 +1957,22 @@ export class Store {
     }
     const now = Date.now()
     const current = this.state.automationRuns[index]
+    const workspaceId = result.workspaceId ?? current.workspaceId
+    const workspaceDisplayName = Object.hasOwn(result, 'workspaceDisplayName')
+      ? normalizeAutomationRunWorkspaceDisplayName(result.workspaceDisplayName ?? null)
+      : null
     const updated: AutomationRun = {
       ...current,
       status: result.status,
-      workspaceId: result.workspaceId ?? current.workspaceId,
+      workspaceId,
+      workspaceDisplayName:
+        workspaceDisplayName ??
+        normalizeAutomationRunWorkspaceDisplayName(current.workspaceDisplayName ?? null) ??
+        this.getAutomationRunWorkspaceDisplayName(workspaceId),
       terminalSessionId: result.terminalSessionId ?? current.terminalSessionId,
+      outputSnapshot: Object.hasOwn(result, 'outputSnapshot')
+        ? normalizeAutomationRunOutputSnapshot(result.outputSnapshot)
+        : normalizeAutomationRunOutputSnapshot(current.outputSnapshot),
       usage: Object.hasOwn(result, 'usage') ? (result.usage ?? null) : (current.usage ?? null),
       error: result.error ?? null,
       startedAt: current.startedAt ?? now,
@@ -1946,6 +1986,37 @@ export class Store {
     }
     this.flush()
     return updated
+  }
+
+  snapshotAutomationRunWorkspaceDisplayName(workspaceId: string, displayName: string): number {
+    const normalizedDisplayName = normalizeAutomationRunWorkspaceDisplayName(displayName)
+    if (!normalizedDisplayName) {
+      return 0
+    }
+    let updatedCount = 0
+    this.state.automationRuns = (this.state.automationRuns ?? []).map((run) => {
+      if (run.workspaceId !== workspaceId || run.workspaceDisplayName === normalizedDisplayName) {
+        return run
+      }
+      updatedCount += 1
+      return { ...run, workspaceDisplayName: normalizedDisplayName }
+    })
+    if (updatedCount > 0) {
+      this.flush()
+    }
+    return updatedCount
+  }
+
+  private getAutomationRunWorkspaceDisplayName(
+    workspaceId: string | null | undefined
+  ): string | null {
+    if (!workspaceId) {
+      return null
+    }
+    return normalizeAutomationRunWorkspaceDisplayName(
+      this.state.worktreeMeta[workspaceId]?.displayName ??
+        getWorktreePathBasenameFromId(workspaceId)
+    )
   }
 
   advanceAutomationNextRun(id: string, now = Date.now()): Automation {
