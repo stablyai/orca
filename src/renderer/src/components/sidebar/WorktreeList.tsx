@@ -79,8 +79,6 @@ const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
   // fight virtual row measurement/remounts and produce visible jumps.
   overflowAnchor: 'none'
 }
-const WORKTREE_REMOVE_LAYOUT_ANIMATION_MS = 180
-const WORKTREE_REMOVE_LAYOUT_ANIMATION_EASING = 'cubic-bezier(0.16, 1, 0.3, 1)'
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -223,28 +221,6 @@ function getVirtualRowTransform(start: number): string {
   return `translateY(${start}px)`
 }
 
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  )
-}
-
-function getVisibleWorktreeIdSet(worktrees: readonly Worktree[]): Set<string> {
-  return new Set(worktrees.map((worktree) => worktree.id))
-}
-
-function haveOrderedRowKeysChanged(
-  previousKeys: readonly string[],
-  nextRows: readonly RenderRow[]
-): boolean {
-  if (previousKeys.length !== nextRows.length) {
-    return true
-  }
-  return nextRows.some((row, index) => getRenderRowKey(row) !== previousKeys[index])
-}
-
 const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewport({
   rows,
   activeWorktreeId,
@@ -294,11 +270,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     () => buildRenderableRows(rows, showWorkspaceLineage),
     [rows, showWorkspaceLineage]
   )
-  const previousRenderRowCountRef = useRef(renderRows.length)
-  const previousRenderRowKeysRef = useRef(renderRows.map(getRenderRowKey))
-  const previousVisibleWorktreeIdsRef = useRef(getVisibleWorktreeIdSet(worktrees))
-  const previousVirtualRowTopByKeyRef = useRef(new Map<string, number>())
-  const activeVirtualRowAnimationsRef = useRef(new Map<string, Animation>())
   const activeWorktreeRowIndex = useMemo(
     () => renderRows.findIndex((row) => renderRowContainsWorktree(row, activeWorktreeId)),
     [renderRows, activeWorktreeId]
@@ -432,105 +403,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     totalSize,
     virtualizer
   })
-
-  useEffect(() => {
-    const activeAnimations = activeVirtualRowAnimationsRef.current
-    return () => {
-      activeAnimations.forEach((animation) => animation.cancel())
-      activeAnimations.clear()
-    }
-  }, [])
-
-  useLayoutEffect(() => {
-    const previousCount = previousRenderRowCountRef.current
-    const previousRowKeys = previousRenderRowKeysRef.current
-    const previousVisibleWorktreeIds = previousVisibleWorktreeIdsRef.current
-    const rowCountDecreased = renderRows.length < previousCount
-    const rowKeysChanged = haveOrderedRowKeysChanged(previousRowKeys, renderRows)
-    const removedVisibleWorktree = Array.from(previousVisibleWorktreeIds).some(
-      (worktreeId) => !worktreeMap.has(worktreeId)
-    )
-    const shouldAnimateRemovedWorktreeRows = rowCountDecreased && removedVisibleWorktree
-    const previousTopByKey = previousVirtualRowTopByKeyRef.current
-    const nextTopByKey = new Map<string, number>()
-    const activeRowKeys = new Set<string>()
-    const scrollElement = scrollRef.current
-    const scrollTop = scrollElement?.scrollTop ?? 0
-    const viewportTop = scrollElement?.getBoundingClientRect().top ?? 0
-
-    if (rowKeysChanged && !shouldAnimateRemovedWorktreeRows) {
-      activeVirtualRowAnimationsRef.current.forEach((animation) => animation.cancel())
-      activeVirtualRowAnimationsRef.current.clear()
-    }
-
-    const elementByRowKey = new Map<string, HTMLElement>()
-    scrollElement
-      ?.querySelectorAll<HTMLElement>('[data-worktree-virtual-row-key]')
-      .forEach((element) => {
-        const rowKey = element.dataset.worktreeVirtualRowKey
-        if (rowKey) {
-          elementByRowKey.set(rowKey, element)
-        }
-      })
-
-    for (const item of virtualItems) {
-      const rowKey = String(item.key)
-      const currentTop = viewportTop + item.start - scrollTop
-      nextTopByKey.set(rowKey, currentTop)
-      activeRowKeys.add(rowKey)
-
-      if (!shouldAnimateRemovedWorktreeRows || prefersReducedMotion()) {
-        continue
-      }
-
-      const element = elementByRowKey.get(rowKey)
-      const previousTop = previousTopByKey.get(rowKey)
-      if (!element || previousTop === undefined || typeof element.animate !== 'function') {
-        continue
-      }
-
-      const delta = previousTop - currentTop
-      if (Math.abs(delta) < 1) {
-        continue
-      }
-
-      const runningAnimation = activeVirtualRowAnimationsRef.current.get(rowKey)
-      const fromTransform = runningAnimation
-        ? window.getComputedStyle(element).transform
-        : getVirtualRowTransform(item.start + delta)
-      runningAnimation?.cancel()
-
-      // Why: only real worktree removals should FLIP. Collapse/expand also
-      // changes virtual rows, but TanStack reindexes those rows immediately
-      // and any lingering transform animation can fight the final layout.
-      const animation = element.animate(
-        [{ transform: fromTransform }, { transform: getVirtualRowTransform(item.start) }],
-        {
-          duration: WORKTREE_REMOVE_LAYOUT_ANIMATION_MS,
-          easing: WORKTREE_REMOVE_LAYOUT_ANIMATION_EASING
-        }
-      )
-      activeVirtualRowAnimationsRef.current.set(rowKey, animation)
-      void animation.finished
-        .catch(() => undefined)
-        .finally(() => {
-          if (activeVirtualRowAnimationsRef.current.get(rowKey) === animation) {
-            activeVirtualRowAnimationsRef.current.delete(rowKey)
-          }
-        })
-    }
-
-    activeVirtualRowAnimationsRef.current.forEach((animation, rowKey) => {
-      if (!activeRowKeys.has(rowKey)) {
-        animation.cancel()
-        activeVirtualRowAnimationsRef.current.delete(rowKey)
-      }
-    })
-    previousRenderRowCountRef.current = renderRows.length
-    previousRenderRowKeysRef.current = renderRows.map(getRenderRowKey)
-    previousVisibleWorktreeIdsRef.current = getVisibleWorktreeIdSet(worktrees)
-    previousVirtualRowTopByKeyRef.current = nextTopByKey
-  }, [renderRows, virtualItems, worktreeMap, worktrees])
 
   useLayoutEffect(() => {
     virtualizer.elementsCache.forEach((element) => {
