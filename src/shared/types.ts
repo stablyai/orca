@@ -1584,6 +1584,7 @@ export type NotificationDispatchRequest = {
   worktreeId?: string
   repoLabel?: string
   worktreeLabel?: string
+  hasMultipleActiveRepos?: boolean
   terminalTitle?: string
   isActiveWorktree?: boolean
   agentType?: AgentType

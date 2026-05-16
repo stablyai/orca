@@ -29,7 +29,14 @@ type StoreState = {
   unreadTerminalTabs?: Record<string, true>
   worktreesByRepo: Record<
     string,
-    { id: string; repoId: string; path: string; displayName?: string; branch?: string }[]
+    {
+      id: string
+      repoId: string
+      path: string
+      displayName?: string
+      branch?: string
+      workspaceStatus?: string
+    }[]
   >
   repos: { id: string; connectionId?: string | null; displayName?: string }[]
   sshConnectionStates: Map<string, { status: string }>
@@ -1455,6 +1462,10 @@ describe('connectPanePty', () => {
       lastAssistantMessage: 'Implemented the formatter.',
       interrupted: false
     }
+    mockStoreState.worktreesByRepo.repo2 = [
+      { id: 'wt-2', repoId: 'repo2', path: '/tmp/wt-2', displayName: 'feat/other' }
+    ]
+    mockStoreState.repos.push({ id: 'repo2', connectionId: null, displayName: 'docs' })
 
     const pane = createPane(1)
     const manager = createManager(1)
@@ -1490,6 +1501,7 @@ describe('connectPanePty', () => {
         worktreeId: 'wt-1',
         repoLabel: 'orca',
         worktreeLabel: 'feat/notis',
+        hasMultipleActiveRepos: true,
         terminalTitle: '* Claude done',
         agentType: 'codex',
         agentState: 'done',
@@ -1554,6 +1566,62 @@ describe('connectPanePty', () => {
         agentLastAssistantMessage: 'Delayed status arrived.'
       })
     )
+  })
+
+  it('does not use stale agent status from an earlier turn in task-complete notifications', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { useNotificationDispatch } = await vi.importActual<typeof UseNotificationDispatchModule>(
+      './use-notification-dispatch'
+    )
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000_000)
+    const dispatchNotification = useNotificationDispatch('wt-1')
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState.agentStatusByPaneKey[paneKey] = {
+      state: 'done',
+      prompt: 'Previous task that must not leak',
+      updatedAt: Date.now() - 15_000,
+      stateStartedAt: Date.now() - 20_000,
+      agentType: 'codex',
+      paneKey,
+      terminalTitle: '* Codex done',
+      stateHistory: [],
+      lastAssistantMessage: 'Old response'
+    }
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({ dispatchNotification })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
+      | ((title: string) => void)
+      | undefined
+    if (!idleHandler) {
+      throw new Error('Expected onAgentBecameIdle to be registered')
+    }
+
+    idleHandler('* Codex done')
+    vi.advanceTimersByTime(250)
+    await flushAsyncTicks()
+
+    const dispatchArgs = (window.api.notifications.dispatch as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as Record<string, unknown> | undefined
+    if (!dispatchArgs) {
+      throw new Error('Expected notification dispatch')
+    }
+    expect(dispatchArgs).toMatchObject({
+      source: 'agent-task-complete',
+      worktreeId: 'wt-1',
+      terminalTitle: '* Codex done'
+    })
+    expect('agentPrompt' in dispatchArgs).toBe(false)
+    expect('agentLastAssistantMessage' in dispatchArgs).toBe(false)
+    expect('agentType' in dispatchArgs).toBe(false)
   })
 
   it('does not attach agent fields to terminal-bell notifications', async () => {

@@ -199,7 +199,7 @@ describe('registerNotificationHandlers', () => {
     expect(notificationShowMock).toHaveBeenCalledTimes(1)
   })
 
-  it('formats agent-task-complete with prompt context when a status snapshot is present', () => {
+  it('formats agent-task-complete with the agent response when a status snapshot is present', () => {
     registerNotificationHandlers({
       getSettings: () => ({
         notifications: {
@@ -223,14 +223,85 @@ describe('registerNotificationHandlers', () => {
           terminalTitle: '* Claude done',
           agentType: 'codex',
           agentState: 'done',
-          agentPrompt: 'Fix rich notification text'
+          agentPrompt: 'Fix rich notification text',
+          agentLastAssistantMessage: 'Updated the notification body.'
         }
       )
     ).toEqual({ delivered: true })
 
     expect(notificationCtorMock).toHaveBeenCalledWith({
-      title: 'Codex finished in feat/notis',
-      body: 'Prompt: Fix rich notification text'
+      title: 'feat/notis - Codex finished',
+      body: 'Updated the notification body.'
+    })
+  })
+
+  it('includes the repo name when multiple repos are active', () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: false,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    expect(
+      handler(
+        {},
+        {
+          source: 'agent-task-complete',
+          worktreeId: 'repo::wt1',
+          worktreeLabel: 'feat/notis',
+          repoLabel: 'orca',
+          hasMultipleActiveRepos: true,
+          agentType: 'codex',
+          agentState: 'done',
+          agentLastAssistantMessage: 'Updated the notification body.'
+        }
+      )
+    ).toEqual({ delivered: true })
+
+    expect(notificationCtorMock).toHaveBeenCalledWith({
+      title: 'orca / feat/notis - Codex finished',
+      body: 'Updated the notification body.'
+    })
+  })
+
+  it('keeps a readable body when no assistant response was captured', () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: false,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    expect(
+      handler(
+        {},
+        {
+          source: 'agent-task-complete',
+          worktreeId: 'repo::wt1',
+          worktreeLabel: 'main',
+          repoLabel: 'jinjing-work',
+          hasMultipleActiveRepos: true,
+          agentType: 'claude',
+          agentState: 'done',
+          agentPrompt: 'Do not show this request text'
+        }
+      )
+    ).toEqual({ delivered: true })
+
+    expect(notificationCtorMock).toHaveBeenCalledWith({
+      title: 'jinjing-work / main - Claude finished',
+      body: 'Claude finished.'
     })
   })
 
@@ -277,12 +348,12 @@ describe('registerNotificationHandlers', () => {
     ).toEqual({ delivered: true })
 
     expect(notificationCtorMock).toHaveBeenNthCalledWith(1, {
-      title: 'Claude needs input in feat/notis',
-      body: 'Latest reply: Please approve the command.'
+      title: 'feat/notis - Claude needs input',
+      body: 'Please approve the command.'
     })
     expect(notificationCtorMock).toHaveBeenNthCalledWith(2, {
-      title: 'Claude stopped in feat/notis',
-      body: 'Latest reply: Stopped by user.'
+      title: 'feat/notis - Claude stopped',
+      body: 'Stopped by user.'
     })
   })
 
@@ -321,11 +392,11 @@ describe('registerNotificationHandlers', () => {
       throw new Error('Expected notification options')
     }
     expect(options).toMatchObject({
-      title: 'builder agent finished in feat/notis'
+      title: 'feat/notis - builder agent finished'
     })
-    expect(options.body).toMatch(/^Latest reply: Line one x+/)
+    expect(options.body).toMatch(/^Line one x+/)
     expect(options.body).not.toContain('\n')
-    expect(options.body.length).toBeLessThanOrEqual('Latest reply: '.length + 180)
+    expect(options.body.length).toBeLessThanOrEqual(180)
   })
 
   it('uses tool context before falling back when no prompt or assistant preview exists', () => {
@@ -357,7 +428,7 @@ describe('registerNotificationHandlers', () => {
     ).toEqual({ delivered: true })
 
     expect(notificationCtorMock).toHaveBeenCalledWith({
-      title: 'Agent finished in feat/notis',
+      title: 'feat/notis - Agent finished',
       body: 'Using Bash: pnpm test'
     })
   })
@@ -389,15 +460,16 @@ describe('registerNotificationHandlers', () => {
           worktreeLabel: 'feat/notis',
           agentType: 'hermes',
           agentState: 'done',
-          agentPrompt: 'Summarize the diff'
+          agentPrompt: 'Summarize the diff',
+          agentLastAssistantMessage: 'The diff updates notification formatting.'
         }
       )
     ).toEqual({ delivered: false, reason: 'not-supported' })
 
     expect(dispatchMobileNotification).toHaveBeenCalledWith({
       source: 'agent-task-complete',
-      title: 'Hermes finished in feat/notis',
-      body: 'Prompt: Summarize the diff',
+      title: 'feat/notis - Hermes finished',
+      body: 'The diff updates notification formatting.',
       worktreeId: 'repo::wt1'
     })
     expect(notificationCtorMock).not.toHaveBeenCalled()

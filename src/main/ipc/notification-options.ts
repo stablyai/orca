@@ -52,22 +52,33 @@ function buildAgentTaskCompleteNotificationOptions(
   }
 
   const agentLabel = formatNotificationAgentLabel(args.agentType)
+  const worktreeContext = formatNotificationWorktreeContext(args)
+  const statusText =
+    args.agentState === 'blocked' || args.agentState === 'waiting'
+      ? 'needs input'
+      : args.agentState === 'done' && args.agentInterrupted
+        ? 'stopped'
+        : 'finished'
+
+  return {
+    title: `${worktreeContext} - ${agentLabel} ${statusText}`,
+    body: buildAgentTaskCompleteRichBody(args) ?? `${agentLabel} ${statusText}.`
+  }
+}
+
+function formatNotificationWorktreeContext(args: NotificationDispatchRequest): string {
   const worktreeLabel = normalizeNotificationText(
     args.worktreeLabel,
     NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH
   )
-  const worktreeContext = worktreeLabel || 'workspace'
-  const title =
-    args.agentState === 'blocked' || args.agentState === 'waiting'
-      ? `${agentLabel} needs input in ${worktreeContext}`
-      : args.agentState === 'done' && args.agentInterrupted
-        ? `${agentLabel} stopped in ${worktreeContext}`
-        : `${agentLabel} finished in ${worktreeContext}`
-
-  return {
-    title,
-    body: buildAgentTaskCompleteRichBody(args) ?? buildAgentTaskCompleteFallbackBody(args)
+  const repoLabel = normalizeNotificationText(args.repoLabel, NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH)
+  if (args.hasMultipleActiveRepos && repoLabel && worktreeLabel) {
+    return normalizeNotificationText(
+      `${repoLabel} / ${worktreeLabel}`,
+      NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH
+    )
   }
+  return worktreeLabel || repoLabel || 'workspace'
 }
 
 function hasAgentNotificationSnapshot(args: NotificationDispatchRequest): boolean {
@@ -83,17 +94,12 @@ function hasAgentNotificationSnapshot(args: NotificationDispatchRequest): boolea
 }
 
 function buildAgentTaskCompleteRichBody(args: NotificationDispatchRequest): string | null {
-  const prompt = normalizeNotificationText(args.agentPrompt, NOTIFICATION_BODY_PREVIEW_MAX_LENGTH)
-  if (prompt) {
-    return `Prompt: ${prompt}`
-  }
-
   const assistantMessage = normalizeNotificationText(
     args.agentLastAssistantMessage,
     NOTIFICATION_BODY_PREVIEW_MAX_LENGTH
   )
   if (assistantMessage) {
-    return `Latest reply: ${assistantMessage}`
+    return assistantMessage
   }
 
   const toolName = normalizeNotificationText(args.agentToolName, 60)
