@@ -9,6 +9,8 @@ import type { AppState } from '../store/types'
 function makeState(overrides: Partial<AppState> = {}): AppState {
   return {
     tabsByWorktree: {},
+    terminalLayoutsByTabId: {} as AppState['terminalLayoutsByTabId'],
+    runtimePaneTitlesByTabId: {} as AppState['runtimePaneTitlesByTabId'],
     groupsByWorktree: {},
     activeGroupIdByWorktree: {},
     unifiedTabsByWorktree: {},

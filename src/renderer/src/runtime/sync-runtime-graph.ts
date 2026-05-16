@@ -51,6 +51,8 @@ const registeredTabs = new Map<string, RegisteredTerminalTab>()
 const tabRegisteredAt = new Map<string, number>()
 const NO_TRANSPORT_GRACE_MS = 10_000
 let syncScheduled = false
+let syncInFlight = false
+let syncPendingAfterFlight = false
 let syncEnabled = false
 let getStoreState: (() => AppState) | null = null
 let mobileSessionSnapshotVersion = 0
@@ -106,11 +108,35 @@ export function scheduleRuntimeGraphSync(): void {
   if (!syncEnabled || syncScheduled) {
     return
   }
+  if (syncInFlight) {
+    syncPendingAfterFlight = true
+    return
+  }
   syncScheduled = true
   queueMicrotask(() => {
     syncScheduled = false
-    void syncRuntimeGraph()
+    void runRuntimeGraphSync()
   })
+}
+
+async function runRuntimeGraphSync(): Promise<void> {
+  if (syncInFlight) {
+    syncPendingAfterFlight = true
+    return
+  }
+  syncInFlight = true
+  try {
+    await syncRuntimeGraph()
+  } finally {
+    syncInFlight = false
+    if (syncPendingAfterFlight) {
+      syncPendingAfterFlight = false
+      // Why: syncWindowGraph crosses IPC and can be slower than title/layout
+      // churn. Collapse all updates that arrived during one in-flight sync
+      // into a single trailing graph instead of stacking concurrent IPC calls.
+      scheduleRuntimeGraphSync()
+    }
+  }
 }
 
 export type RuntimeMobileSessionSyncKey = {
