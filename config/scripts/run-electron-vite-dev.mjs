@@ -69,8 +69,8 @@ function createDockBadgeLabel(displayValue, identitySeed) {
 }
 
 function createDockTitle(branch, label, badgeLabel) {
-  const title = `Orca Dev: ${branch || label || 'dev'}`
-  return badgeLabel ? `${title} [${badgeLabel}]` : title
+  const title = `Orca Dev${badgeLabel ? ` [${badgeLabel}]` : ''}`
+  return `${title}: ${branch || label || 'dev'}`
 }
 
 function seedDevInstanceIdentityEnv() {

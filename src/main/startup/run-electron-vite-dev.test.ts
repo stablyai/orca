@@ -157,7 +157,7 @@ describe('run-electron-vite-dev', () => {
     expect(envSnapshot.worktreeName).toBe('payment-ui')
     expect(envSnapshot.repoRoot).toBe(resolve('.'))
     expect(envSnapshot.badgeLabel).toMatch(/^PU[A-Z0-9]{2}$/)
-    expect(envSnapshot.dockTitle).toMatch(/^Orca Dev: feature\/billing-shell \[PU[A-Z0-9]{2}\]$/)
+    expect(envSnapshot.dockTitle).toMatch(/^Orca Dev \[PU[A-Z0-9]{2}\]: feature\/billing-shell$/)
     expect(envSnapshot.electronOverrideDistPath).toBeNull()
     expect(envSnapshot.electronExecPath).toBeNull()
 

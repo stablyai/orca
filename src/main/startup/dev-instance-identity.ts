@@ -101,7 +101,7 @@ export function getDevInstanceIdentity(
     createDevDockBadgeLabel(worktreeName ?? branch ?? devLabel, identitySeed)
   const dockTitle =
     cleanEnvValue(env.ORCA_DEV_DOCK_TITLE) ??
-    `${BASE_APP_NAME} Dev: ${branch ?? devLabel ?? 'dev'}${dockBadgeLabel ? ` [${dockBadgeLabel}]` : ''}`
+    `${BASE_APP_NAME} Dev${dockBadgeLabel ? ` [${dockBadgeLabel}]` : ''}: ${branch ?? devLabel ?? 'dev'}`
   const name = dockTitle
 
   return {

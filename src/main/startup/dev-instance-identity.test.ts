@@ -27,7 +27,7 @@ describe('dev-instance-identity', () => {
       devWorktreeName: 'dev-indicator',
       devRepoRoot: '/repo/worktrees/dev-indicator'
     })
-    expect(identity.name).toMatch(/^Orca Dev: nwparker\/dev-indicator \[DI[A-Z0-9]{2}\]$/)
+    expect(identity.name).toMatch(/^Orca Dev \[DI[A-Z0-9]{2}\]: nwparker\/dev-indicator$/)
     expect(identity.windowTitle).toBe(identity.name)
     expect(identity.dockTitle).toBe(identity.name)
     expect(identity.dockBadgeLabel).toMatch(/^DI[A-Z0-9]{2}$/)
@@ -42,7 +42,7 @@ describe('dev-instance-identity', () => {
     })
 
     expect(identity.devLabel).toBe('payment-ui @ feature/billing-shell')
-    expect(identity.name).toMatch(/^Orca Dev: feature\/billing-shell \[PU[A-Z0-9]{2}\]$/)
+    expect(identity.name).toMatch(/^Orca Dev \[PU[A-Z0-9]{2}\]: feature\/billing-shell$/)
     expect(identity.dockBadgeLabel).toMatch(/^PU[A-Z0-9]{2}$/)
   })
 
@@ -54,7 +54,7 @@ describe('dev-instance-identity', () => {
     })
 
     expect(identity.devLabel).toBe('manual label')
-    expect(identity.name).toMatch(/^Orca Dev: feature\/other \[DI[A-Z0-9]{2}\]$/)
+    expect(identity.name).toMatch(/^Orca Dev \[DI[A-Z0-9]{2}\]: feature\/other$/)
     expect(identity.dockBadgeLabel).toMatch(/^DI[A-Z0-9]{2}$/)
   })
 
