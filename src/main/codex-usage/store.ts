@@ -113,7 +113,16 @@ export function normalizePersistedState(state: CodexUsagePersistedState): CodexU
     // Reusing an older cache would silently serve wrong model/session rows
     // until the next forced rescan, so schema changes must invalidate stale
     // persisted analytics instead of best-effort patching partial data.
-    return getDefaultState()
+    // Preserve scanState.enabled so existing users keep tracking on across
+    // schema bumps; the next refresh will repopulate the analytics.
+    const defaults = getDefaultState()
+    return {
+      ...defaults,
+      scanState: {
+        ...defaults.scanState,
+        enabled: state.scanState?.enabled ?? defaults.scanState.enabled
+      }
+    }
   }
   return {
     ...state,

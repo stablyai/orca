@@ -721,20 +721,41 @@ export function buildActivityEvents(args: {
 
   const sorted = events.sort((a, b) => b.timestamp - a.timestamp)
   const perPaneCount = new Map<string, number>()
+  const includedEventIds = new Set<string>()
   const capped: ActivityEvent[] = []
+  // Why: reserve each pane's most-recent event before applying the global 80
+  // cap so a pane never disappears from the left list when many panes are
+  // active. The validator's scenario (>16 panes × ≥5 events) could push a
+  // pane's events past the 80-event window, hiding the pane entirely.
   for (const event of sorted) {
+    const paneKey = event.entry.paneKey
+    if (perPaneCount.has(paneKey)) {
+      continue
+    }
+    if (capped.length >= 80) {
+      break
+    }
+    perPaneCount.set(paneKey, 1)
+    includedEventIds.add(event.id)
+    capped.push(event)
+  }
+  for (const event of sorted) {
+    if (includedEventIds.has(event.id)) {
+      continue
+    }
+    if (capped.length >= 80) {
+      break
+    }
     const paneKey = event.entry.paneKey
     const count = perPaneCount.get(paneKey) ?? 0
     if (count >= EVENTS_PER_PANE_CAP) {
       continue
     }
     perPaneCount.set(paneKey, count + 1)
+    includedEventIds.add(event.id)
     capped.push(event)
-    if (capped.length >= 80) {
-      break
-    }
   }
-  return { events: capped, liveAgentByPaneKey }
+  return { events: capped.sort((a, b) => b.timestamp - a.timestamp), liveAgentByPaneKey }
 }
 
 export function buildAgentPaneThreads(args: {

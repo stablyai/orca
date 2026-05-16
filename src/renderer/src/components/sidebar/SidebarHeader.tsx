@@ -92,6 +92,19 @@ const SidebarHeader = React.memo(function SidebarHeader() {
       if (workspaceBoardMenuOpen) {
         return
       }
+      // Why: Escape must dismiss any nested overlay (Radix dropdown, popover,
+      // tooltip, dialog, context menu) ahead of collapsing this non-modal
+      // companion panel. Radix portals open popper content into a wrapper
+      // element, and dialogs/menus expose `data-state="open"` on their
+      // content node, so the presence of either signals the user's intent
+      // is to dismiss that overlay rather than the workspace board.
+      if (
+        document.querySelector(
+          '[data-radix-popper-content-wrapper], [role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [role="menu"][data-state="open"], [role="listbox"][data-state="open"]'
+        )
+      ) {
+        return
+      }
       event.preventDefault()
       setWorkspaceBoardOpen(false)
     }

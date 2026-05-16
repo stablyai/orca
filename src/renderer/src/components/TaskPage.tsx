@@ -1115,6 +1115,9 @@ export default function TaskPage(): React.JSX.Element {
   // Why: team IDs belong to one Linear workspace. Switching workspaces while a
   // saved subset exists must not leave the task list filtered by stale team IDs.
   useEffect(() => {
+    if (availableTeams.length === 0) {
+      return
+    }
     setLinearTeamSelection(reconcileLinearTeamSelection(availableTeams, defaultLinearTeamSelection))
   }, [availableTeams, defaultLinearTeamSelection])
 
@@ -1706,7 +1709,13 @@ export default function TaskPage(): React.JSX.Element {
 
   useEffect(() => {
     // Why: when a modal is open, let it own Esc dismissal.
-    if (dialogWorkItem || newIssueOpen || newLinearIssueOpen || activeModal !== 'none') {
+    if (
+      dialogWorkItem ||
+      selectedLinearIssue ||
+      newIssueOpen ||
+      newLinearIssueOpen ||
+      activeModal !== 'none'
+    ) {
       return
     }
 
@@ -1740,7 +1749,14 @@ export default function TaskPage(): React.JSX.Element {
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [activeModal, closeTaskPage, dialogWorkItem, newIssueOpen, newLinearIssueOpen])
+  }, [
+    activeModal,
+    closeTaskPage,
+    dialogWorkItem,
+    newIssueOpen,
+    newLinearIssueOpen,
+    selectedLinearIssue
+  ])
 
   // Why: check Linear connection status on mount so the UI can show the
   // correct connected/disconnected state without requiring a settings visit.

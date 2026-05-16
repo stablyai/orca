@@ -183,6 +183,54 @@ function makeThreads(result: ReturnType<typeof buildActivityEvents>) {
 }
 
 describe('buildActivityEvents', () => {
+  it('keeps every pane visible before applying the global activity cap', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree()
+    const tabs: TerminalTab[] = []
+    const entries: Record<string, AgentStatusEntry> = {}
+
+    for (let paneIndex = 0; paneIndex < 18; paneIndex += 1) {
+      const tabId = `tab-${paneIndex}`
+      const paneKey = makePaneKey(
+        tabId,
+        `00000000-0000-4000-8000-${String(paneIndex + 1).padStart(12, '0')}`
+      )
+      tabs.push(makeTabWithIds(tabId, worktree.id, `Agent ${paneIndex}`))
+      // Why: later pane indexes are older, so the pre-fix global 80-event cap
+      // would drop the final panes entirely when every pane had five events.
+      const newestTimestamp = 100_000 - paneIndex * 1_000
+      entries[paneKey] = {
+        state: 'done',
+        prompt: `Prompt ${paneIndex} current`,
+        updatedAt: newestTimestamp,
+        stateStartedAt: newestTimestamp,
+        paneKey,
+        terminalTitle: `Agent ${paneIndex}`,
+        stateHistory: [1, 2, 3, 4].map((offset) => ({
+          state: 'done',
+          prompt: `Prompt ${paneIndex} history ${offset}`,
+          startedAt: newestTimestamp - offset
+        })),
+        agentType: 'claude'
+      }
+    }
+
+    const { events, liveAgentByPaneKey } = buildActivityEvents({
+      agentStatusByPaneKey: entries,
+      retainedAgentsByPaneKey: {},
+      tabsByWorktree: { [worktree.id]: tabs },
+      worktreeMap: new Map([[worktree.id, worktree]]),
+      repoMap: new Map([[repo.id, repo]]),
+      acknowledgedAgentsByPaneKey: {},
+      now: 100_000
+    })
+    const threads = buildAgentPaneThreads({ events, liveAgentByPaneKey })
+
+    expect(events).toHaveLength(80)
+    expect(threads).toHaveLength(18)
+    expect(new Set(threads.map((thread) => thread.paneKey)).size).toBe(18)
+  })
+
   it('keeps a prior done event after the same pane starts working again', () => {
     const result = makeActivityResult({
       entries: {

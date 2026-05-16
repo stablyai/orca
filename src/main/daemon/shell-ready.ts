@@ -126,11 +126,39 @@ function ensureShellReadyWrappers(): void {
   const bashDir = join(root, 'bash')
 
   const zshEnv = `# Orca daemon zsh shell-ready wrapper
-export ORCA_ORIG_ZDOTDIR="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
-case "\${ORCA_ORIG_ZDOTDIR%/}" in
+_orca_spawn_orig_zdotdir="\${ORCA_ORIG_ZDOTDIR:-}"
+# Why: clearing ZDOTDIR lets user .zshenv use the canonical XDG idiom
+# \`export ZDOTDIR="\${ZDOTDIR:-$XDG_CONFIG_HOME/zsh}"\` to compute its
+# preferred dir; pre-setting it (even to HOME) defeats that default.
+unset ZDOTDIR
+# Why: function isolates user .zshenv \`return\` so it doesn't abort our wrapper.
+# Trade-off: top-level \`setopt LOCAL_OPTIONS\`/\`LOCAL_TRAPS\`, \`TRAPEXIT\`, and
+# bare \`local\`/\`typeset\` in user .zshenv become function-scoped; use \`typeset -g\`
+# or \`export\` to escape.
+__orca_source_user_zshenv() {
+  # Why: honor an externally-set ZDOTDIR (login manager, /etc/zshenv, parent
+  # shell) so users whose real .zshenv lives at $ZDOTDIR (not $HOME) still
+  # get PATH/aliases/exports loaded. Falls back to $HOME when no spawn-env
+  # ZDOTDIR was inherited.
+  local _orca_user_zdotdir="\${_orca_spawn_orig_zdotdir:-$HOME}"
+  [[ -f "$_orca_user_zdotdir/.zshenv" ]] && source "$_orca_user_zdotdir/.zshenv"
+}
+__orca_source_user_zshenv
+unfunction __orca_source_user_zshenv
+# Why: prefer the ZDOTDIR user .zshenv resolved (XDG case); else preserve
+# the spawn-env value (an inherited resolution from a parent Orca PTY);
+# else HOME.
+export ORCA_ORIG_ZDOTDIR="\${ZDOTDIR:-\${_orca_spawn_orig_zdotdir:-$HOME}}"
+unset _orca_spawn_orig_zdotdir
+# Why: strip trailing slashes (matches Node-side normalizer) before the
+# self-loop check, so a wrapper-shaped ZDOTDIR with one or more trailing
+# slashes still gets normalized away from .zprofile/.zshrc/.zlogin.
+while [[ "\${ORCA_ORIG_ZDOTDIR}" == */ ]]; do
+  ORCA_ORIG_ZDOTDIR="\${ORCA_ORIG_ZDOTDIR%/}"
+done
+case "\${ORCA_ORIG_ZDOTDIR}" in
   */shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;
 esac
-[[ -f "$ORCA_ORIG_ZDOTDIR/.zshenv" ]] && source "$ORCA_ORIG_ZDOTDIR/.zshenv"
 export ZDOTDIR=${quotePosixSingle(zshDir)}
 `
   const zshProfile = `# Orca daemon zsh shell-ready wrapper

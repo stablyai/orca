@@ -273,6 +273,7 @@ function App(): React.JSX.Element {
   const floatingTerminalTriggerLocation = useAppStore(
     (s) => s.settings?.floatingTerminalTriggerLocation ?? 'floating-button'
   )
+  const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   // Why: the floating terminal is a transient overlay; hotkey minimize should
   // return keyboard focus to the surface the user was working in before it.
   const floatingTerminalReturnFocusRef = useRef<HTMLElement | null>(null)
@@ -1452,7 +1453,7 @@ function App(): React.JSX.Element {
               open={floatingTerminalOpen}
               onOpenChange={setFloatingTerminalOpenWithFocus}
             />
-            {floatingTerminalTriggerLocation === 'floating-button' ? (
+            {floatingTerminalTriggerLocation === 'floating-button' || !statusBarVisible ? (
               <FloatingTerminalToggleButton
                 open={floatingTerminalOpen}
                 onToggle={() => setFloatingTerminalOpenWithFocus((open) => !open)}

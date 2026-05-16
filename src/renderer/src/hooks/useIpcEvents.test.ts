@@ -818,13 +818,16 @@ describe('useIpcEvents updater integration', () => {
     storeState.ptyIdsByTabId = { 'tab-existing': ['pty-bg'] }
     createTab.mockClear()
     setActiveTab.mockClear()
+    setTabCustomTitle.mockClear()
     createTerminalListenerRef.current({
       worktreeId: 'wt-2',
-      ptyId: 'pty-bg'
+      ptyId: 'pty-bg',
+      title: 'Runtime title'
     })
 
     expect(createTab).not.toHaveBeenCalled()
     expect(setActiveTab).toHaveBeenCalledWith('tab-existing')
+    expect(setTabCustomTitle).not.toHaveBeenCalled()
 
     createTerminalListenerRef.current({
       requestId: 'req-reveal',

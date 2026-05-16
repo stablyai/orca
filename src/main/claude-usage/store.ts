@@ -307,7 +307,16 @@ export class ClaudeUsageStore {
       if (parsed.schemaVersion !== SCHEMA_VERSION) {
         // Why: scanner semantics affect persisted totals, so old Claude caches
         // must be rebuilt after parser/source changes instead of reused briefly.
-        return getDefaultState()
+        // Preserve scanState.enabled so existing users keep tracking on across
+        // schema bumps; the next refresh will repopulate the analytics.
+        const defaults = getDefaultState()
+        return {
+          ...defaults,
+          scanState: {
+            ...defaults.scanState,
+            enabled: parsed.scanState?.enabled ?? defaults.scanState.enabled
+          }
+        }
       }
       return {
         ...getDefaultState(),

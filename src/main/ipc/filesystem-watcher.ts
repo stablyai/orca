@@ -440,6 +440,11 @@ type RemoteWatcherState = {
   listeners: Map<number, WebContents>
 }
 
+type RemoteWatcherInstallToken = {
+  cancelled: boolean
+  listeners: Map<number, WebContents>
+}
+
 // Key: `${connectionId}:${worktreePath}`, Value: shared remote watch state.
 const remoteWatchers = new Map<string, RemoteWatcherState>()
 const loggedUnavailableRemoteWatchers = new Set<string>()
@@ -448,7 +453,12 @@ const pendingRemoteWatcherRetries = new Map<string, ReturnType<typeof setTimeout
 // arrives while a watch is still resolving can mark the install cancelled.
 // Without this, the awaited unwatch handle would be installed after the
 // renderer thinks the watch is gone, leaking a native watcher.
-const inFlightRemoteInstalls = new Map<string, { cancelled: boolean }>()
+const inFlightRemoteInstalls = new Map<string, RemoteWatcherInstallToken>()
+// Why: dedupe concurrent installRemoteWatcher calls for the same key so
+// overlapping fs:watchWorktree IPCs share one native watcher and one listener
+// map, instead of each call independently invoking provider.watch() and
+// overwriting the per-key state on resolution.
+const pendingRemoteInstallPromises = new Map<string, Promise<RemoteWatcherInstallResult>>()
 const REMOTE_WATCH_RETRY_MS = 1_000
 const REMOTE_WATCH_RETRY_TIMEOUT_MS = 60_000
 
@@ -498,8 +508,50 @@ async function installRemoteWatcher(
     addRemoteWatchListener(key, sender)
     return 'installed'
   }
-  const cancelToken = { cancelled: false }
+  // Why: a second concurrent fs:watchWorktree for the same key must share the
+  // first call's provider.watch() instead of starting its own. Without this,
+  // both calls would create distinct native watchers and the second's resolve
+  // would overwrite the per-key state, dropping the first's unwatch handle
+  // and erasing its sender from the listener map.
+  const pendingInstall = pendingRemoteInstallPromises.get(key)
+  if (pendingInstall) {
+    const inFlight = inFlightRemoteInstalls.get(key)
+    if (inFlight && !sender.isDestroyed()) {
+      inFlight.listeners.set(sender.id, sender)
+    }
+    const result = await pendingInstall
+    if (
+      result === 'installed' &&
+      remoteWatchers.has(key) &&
+      !sender.isDestroyed() &&
+      (!inFlight || inFlight.listeners.has(sender.id))
+    ) {
+      addRemoteWatchListener(key, sender)
+    }
+    return result
+  }
+  const cancelToken: RemoteWatcherInstallToken = {
+    cancelled: false,
+    listeners: sender.isDestroyed() ? new Map() : new Map([[sender.id, sender]])
+  }
   inFlightRemoteInstalls.set(key, cancelToken)
+  const installPromise = doInstallRemoteWatcher(provider, key, worktreePath, cancelToken)
+  pendingRemoteInstallPromises.set(key, installPromise)
+  try {
+    return await installPromise
+  } finally {
+    if (pendingRemoteInstallPromises.get(key) === installPromise) {
+      pendingRemoteInstallPromises.delete(key)
+    }
+  }
+}
+
+async function doInstallRemoteWatcher(
+  provider: NonNullable<ReturnType<typeof getSshFilesystemProvider>>,
+  key: string,
+  worktreePath: string,
+  cancelToken: RemoteWatcherInstallToken
+): Promise<RemoteWatcherInstallResult> {
   let unwatch: () => void
   try {
     unwatch = await provider.watch(worktreePath, (events) => {
@@ -522,7 +574,10 @@ async function installRemoteWatcher(
       inFlightRemoteInstalls.delete(key)
     }
   }
-  if (cancelToken.cancelled || sender.isDestroyed()) {
+  const liveListeners = new Map(
+    Array.from(cancelToken.listeners.entries()).filter(([, listener]) => !listener.isDestroyed())
+  )
+  if (cancelToken.cancelled || liveListeners.size === 0) {
     try {
       unwatch()
     } catch (err) {
@@ -530,8 +585,10 @@ async function installRemoteWatcher(
     }
     return 'cancelled'
   }
-  remoteWatchers.set(key, { unwatch, listeners: new Map() })
-  addRemoteWatchListener(key, sender)
+  remoteWatchers.set(key, { unwatch, listeners: liveListeners })
+  for (const listener of liveListeners.values()) {
+    registerSenderCleanup(listener)
+  }
   loggedUnavailableRemoteWatchers.delete(key)
   return 'installed'
 }
@@ -630,7 +687,8 @@ export function registerFilesystemWatcherHandlers(): void {
         // of leaving the renderer with a watcher it asked to stop.
         const inFlight = inFlightRemoteInstalls.get(key)
         if (inFlight) {
-          inFlight.cancelled = true
+          inFlight.listeners.delete(_event.sender.id)
+          inFlight.cancelled = inFlight.listeners.size === 0
         }
         loggedUnavailableRemoteWatchers.delete(key)
         releaseRemoteWatchListener(key, _event?.sender?.id ?? 0)

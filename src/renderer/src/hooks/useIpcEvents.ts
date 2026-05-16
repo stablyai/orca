@@ -578,21 +578,25 @@ export function useIpcEvents(): void {
               // logic; see docs/cmd-j-empty-query-ordering.md.
               store.markWorktreeVisited(worktreeId)
             }
-            const tab = ptyId
-              ? ((store.tabsByWorktree[worktreeId] ?? []).find(
+            const existingTab = ptyId
+              ? (store.tabsByWorktree[worktreeId] ?? []).find(
                   (candidate) =>
                     candidate.ptyId === ptyId ||
                     (store.ptyIdsByTabId[candidate.id] ?? []).includes(ptyId)
-                ) ??
-                store.createTab(worktreeId, undefined, undefined, {
-                  initialPtyId: ptyId,
-                  activate: shouldActivate,
-                  // Why: tabId hint comes from CLI-spawned PTYs whose env
-                  // already has the pane key baked in. Adopting the tab under
-                  // the same id keeps hook-event attribution working.
-                  ...(tabId !== undefined ? { id: tabId } : {})
-                }))
-              : store.createTab(worktreeId)
+                )
+              : undefined
+            const tab =
+              existingTab ??
+              (ptyId
+                ? store.createTab(worktreeId, undefined, undefined, {
+                    initialPtyId: ptyId,
+                    activate: shouldActivate,
+                    // Why: tabId hint comes from CLI-spawned PTYs whose env
+                    // already has the pane key baked in. Adopting the tab under
+                    // the same id keeps hook-event attribution working.
+                    ...(tabId !== undefined ? { id: tabId } : {})
+                  })
+                : store.createTab(worktreeId))
             // Why: when an existing tab already owns this ptyId, we reuse it instead of
             // minting a new one — but the PTY env already carries a paneKey from main.
             // If the existing tab id doesn't match the hint, hook attribution degrades
@@ -607,7 +611,11 @@ export function useIpcEvents(): void {
               store.setActiveTab(tab.id)
               store.revealWorktreeInSidebar(worktreeId)
             }
-            if (title) {
+            // Why: only stamp the runtime-supplied title on freshly created tabs.
+            // Existing tabs may have a user customTitle (set via UI rename) that
+            // the runtime's stored title would otherwise silently overwrite on
+            // every focus.
+            if (title && !existingTab) {
               store.setTabCustomTitle(tab.id, title)
             }
             if (leafId && ptyId) {

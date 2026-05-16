@@ -78,6 +78,13 @@ export class AutomationService {
     if (!isFinalRunStatus(run.status)) {
       return run
     }
+    // Why: the renderer's mark-completed effect can re-fire for the same run
+    // before refresh() flips its status snapshot off 'dispatched'. Re-running
+    // collectRunUsage advances the attribution window and can rewrite an
+    // already-collected 'known' usage to 'unavailable'/'ambiguous_session'.
+    if (run.usage) {
+      return run
+    }
     const usage = await this.collectRunUsage(run)
     return this.store.updateAutomationRun({
       runId: run.id,
