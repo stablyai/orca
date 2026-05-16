@@ -11,6 +11,7 @@ import {
 import { homedir } from 'os'
 import { dirname, join } from 'path'
 import { randomUUID } from 'crypto'
+import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 
 export type HookCommandConfig = {
@@ -86,6 +87,13 @@ export function wrapPosixHookCommand(scriptPath: string): string {
   // arbitrary path.
   const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
   return `if [ -x ${quoted} ]; then /bin/sh ${quoted}; fi`
+}
+
+export function buildWindowsAgentHookPostCommand(source: AgentHookSource): string {
+  // Why: Windows PowerShell 5.1 defaults redirected stdin/request bodies to the
+  // active code page. Hook payloads are UTF-8 JSON, so force UTF-8 on both read
+  // and POST or CJK prompts arrive in Orca as literal question marks.
+  return `powershell -NoProfile -ExecutionPolicy Bypass -Command "$utf8=[System.Text.UTF8Encoding]::new($false); [Console]::InputEncoding=$utf8; [Console]::OutputEncoding=$utf8; $inputData=[Console]::In.ReadToEnd(); if ([string]::IsNullOrWhiteSpace($inputData)) { exit 0 }; try { $body=@{ paneKey=$env:ORCA_PANE_KEY; tabId=$env:ORCA_TAB_ID; worktreeId=$env:ORCA_WORKTREE_ID; env=$env:ORCA_AGENT_HOOK_ENV; version=$env:ORCA_AGENT_HOOK_VERSION; payload=($inputData | ConvertFrom-Json) } | ConvertTo-Json -Depth 100 -Compress; $bodyBytes=$utf8.GetBytes($body); Invoke-WebRequest -UseBasicParsing -Method Post -Uri ('http://127.0.0.1:' + $env:ORCA_AGENT_HOOK_PORT + '/hook/${source}') -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Orca-Agent-Hook-Token'=$env:ORCA_AGENT_HOOK_TOKEN } -Body $bodyBytes | Out-Null } catch {}"`
 }
 
 export function removeManagedCommands(
