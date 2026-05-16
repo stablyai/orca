@@ -6,15 +6,17 @@ import type {
   PersistedState,
   PersistedUIState,
   RepoHookSettings,
-  StatusBarItem,
   WorkspaceSessionState,
   WorktreeCardProperty
 } from './types'
+import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
 import { getDefaultTerminalQuickCommands } from './terminal-quick-commands'
 import type { VoiceSettings } from './speech-types'
 import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
 import { TASK_PROVIDERS } from './task-providers'
+
+export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 
 export const SCHEMA_VERSION = 1
 export const DEFAULT_APP_FONT_FAMILY = 'Geist'
@@ -93,15 +95,6 @@ export const DEFAULT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
   // Workspaces view options hides the inline list entirely — there is no
   // alternative agent-activity surface in the sidebar.
   'inline-agents'
-]
-
-export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = [
-  'claude',
-  'codex',
-  'gemini',
-  'opencode-go',
-  'ssh',
-  'resource-usage'
 ]
 
 /** Synthetic worktree id used by the memory collector to bucket PTYs that
@@ -358,7 +351,9 @@ export function getDefaultUIState(): PersistedUIState {
     workspaceStatuses: cloneDefaultWorkspaceStatuses(),
     workspaceBoardOpacity: 1,
     workspaceBoardCompact: false,
+    workspaceBoardColumnWidth: 308,
     _workspaceStatusesDefaultOrderMigrated: true,
+    _workspaceStatusesDefaultWorkflowMigrated: true,
     _workspaceStatusesDefaultVisualsMigrated: true,
     statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
     statusBarVisible: true,

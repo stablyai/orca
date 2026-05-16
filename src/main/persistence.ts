@@ -77,6 +77,7 @@ import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-command
 import { normalizeVisibleTaskProviders } from '../shared/task-providers'
 import {
   DEFAULT_WORKSPACE_STATUS_ID,
+  clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
   normalizeWorkspaceBoardCompact,
   normalizePersistedWorkspaceStatuses,
@@ -1222,6 +1223,11 @@ export class Store {
             const migrate = !parsed.ui?._sortBySmartMigrated && rawSort === 'recent'
             const workspaceStatusesDefaultOrderMigrated =
               parsed.ui?._workspaceStatusesDefaultOrderMigrated === true
+            // Why: the default workflow changed to Done -> Review -> Progress -> Todo.
+            // Only exact legacy default payloads are migrated; users who
+            // customized status labels, colors, icons, or order keep theirs.
+            const workspaceStatusesDefaultWorkflowMigrated =
+              parsed.ui?._workspaceStatusesDefaultWorkflowMigrated === true
             // Why: visual migration has its own guard so later user choices
             // of valid legacy color/icon IDs are preserved by runtime writes.
             const workspaceStatusesDefaultVisualsMigrated =
@@ -1229,12 +1235,14 @@ export class Store {
             const workspaceStatuses = normalizePersistedWorkspaceStatuses(
               parsed.ui?.workspaceStatuses,
               {
+                migrateDefaultWorkflowStatuses: !workspaceStatusesDefaultWorkflowMigrated,
                 repairReorderedDefaultStatuses: !workspaceStatusesDefaultOrderMigrated,
                 migrateLegacyDefaultStatusVisuals: !workspaceStatusesDefaultVisualsMigrated
               }
             )
             if (
               !workspaceStatusesDefaultOrderMigrated ||
+              !workspaceStatusesDefaultWorkflowMigrated ||
               !workspaceStatusesDefaultVisualsMigrated
             ) {
               this.loadNeedsSave = true
@@ -1288,6 +1296,7 @@ export class Store {
               sortBy: migrate ? ('smart' as const) : sort,
               workspaceStatuses,
               _workspaceStatusesDefaultOrderMigrated: true,
+              _workspaceStatusesDefaultWorkflowMigrated: true,
               _workspaceStatusesDefaultVisualsMigrated: true,
               _sortBySmartMigrated: true,
               ...(migratedCardProps !== undefined
@@ -2046,7 +2055,10 @@ export class Store {
       sortBy: normalizeSortBy(this.state.ui?.sortBy),
       workspaceStatuses: normalizeWorkspaceStatuses(this.state.ui?.workspaceStatuses),
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(this.state.ui?.workspaceBoardOpacity),
-      workspaceBoardCompact: normalizeWorkspaceBoardCompact(this.state.ui?.workspaceBoardCompact)
+      workspaceBoardCompact: normalizeWorkspaceBoardCompact(this.state.ui?.workspaceBoardCompact),
+      workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
+        this.state.ui?.workspaceBoardColumnWidth
+      )
     }
   }
 
@@ -2069,6 +2081,9 @@ export class Store {
       ),
       workspaceBoardCompact: normalizeWorkspaceBoardCompact(
         updates.workspaceBoardCompact ?? this.state.ui?.workspaceBoardCompact
+      ),
+      workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
+        updates.workspaceBoardColumnWidth ?? this.state.ui?.workspaceBoardColumnWidth
       )
     }
     this.scheduleSave()

@@ -1023,6 +1023,7 @@ export type CreateWorktreeArgs = {
   linkedPR?: number
   linkedLinearIssue?: string
   pushTarget?: GitPushTarget
+  workspaceStatus?: WorkspaceStatus
   /** Agent selected in the create surface. Omitted for blank-shell creates. */
   createdWithAgent?: TuiAgent
   /** Telemetry-only: which UI surface initiated this create. Threaded from
@@ -1702,10 +1703,15 @@ export type PersistedUIState = {
   workspaceStatuses?: WorkspaceStatusDefinition[]
   workspaceBoardOpacity?: number
   workspaceBoardCompact?: boolean
+  workspaceBoardColumnWidth?: number
   /** One-shot migration flag for a short-lived build that persisted the
    *  default workspace statuses in reverse workflow order. Once stamped,
    *  user-authored status ordering is never inferred from IDs/labels again. */
   _workspaceStatusesDefaultOrderMigrated?: boolean
+  /** One-shot migration flag for the default status workflow order/label:
+   *  Done -> In review -> In progress -> Todo. Exact legacy default payloads
+   *  migrate; customized statuses are preserved. */
+  _workspaceStatusesDefaultWorkflowMigrated?: boolean
   /** One-shot migration flag for the old default blue/violet/emerald status
    *  visuals. Once stamped, valid user-authored colors/icons are preserved. */
   _workspaceStatusesDefaultVisualsMigrated?: boolean

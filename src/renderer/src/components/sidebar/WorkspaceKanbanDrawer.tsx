@@ -13,6 +13,8 @@ import {
 } from './workspace-status'
 import { useWorkspaceStatusDocumentDrop } from './use-workspace-status-drop'
 import { useWorkspaceKanbanAreaSelection } from './use-workspace-kanban-area-selection'
+import { useWorkspaceKanbanColumnResize } from './use-workspace-kanban-column-resize'
+import { useWorkspaceKanbanCreateWorktree } from './use-workspace-kanban-create-worktree'
 import { useWorkspaceKanbanSelection } from './use-workspace-kanban-selection'
 import {
   isWorkspaceBoardKeepOpenTarget,
@@ -47,12 +49,15 @@ export default function WorkspaceKanbanDrawer({
   const setWorkspaceBoardOpacity = useAppStore((s) => s.setWorkspaceBoardOpacity)
   const workspaceBoardCompact = useAppStore((s) => s.workspaceBoardCompact)
   const setWorkspaceBoardCompact = useAppStore((s) => s.setWorkspaceBoardCompact)
+  const workspaceBoardColumnWidth = useAppStore((s) => s.workspaceBoardColumnWidth)
+  const setWorkspaceBoardColumnWidth = useAppStore((s) => s.setWorkspaceBoardColumnWidth)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const boardRef = useRef<HTMLDivElement>(null)
   const areaSelectionOverlayRef = useRef<HTMLDivElement>(null)
   const [dragOverStatus, setDragOverStatus] = useState<WorkspaceStatus | null>(null)
   const [pinDragOver, setPinDragOver] = useState(false)
+  const { canCreateWorktree, createWorktreeForStatus } = useWorkspaceKanbanCreateWorktree()
 
   const visibleWorktreeIdSet = useVisibleWorkspaceKanbanWorktreeIds({
     allWorktrees,
@@ -92,6 +97,8 @@ export default function WorkspaceKanbanDrawer({
     selectionAnchorId,
     updateSelectionForArea
   })
+  const { columnWidth, isResizingColumn, onColumnResizeStart, onColumnResizeKeyDown } =
+    useWorkspaceKanbanColumnResize(workspaceBoardColumnWidth, setWorkspaceBoardColumnWidth)
 
   const moveWorktreeToStatus = useCallback(
     (worktreeId: string, status: WorkspaceStatus) => {
@@ -305,6 +312,9 @@ export default function WorkspaceKanbanDrawer({
 
   const opacityPercent = Math.round(workspaceBoardOpacity * 100)
   const drawerLeft = sidebarOpen ? sidebarWidth : 0
+  const drawerLeftCss = sidebarOpen
+    ? `var(--workspace-sidebar-live-width, ${sidebarWidth}px)`
+    : '0px'
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
@@ -312,15 +322,15 @@ export default function WorkspaceKanbanDrawer({
         side="left"
         showCloseButton={false}
         className="workspace-kanban-sheet-content bg-sidebar p-0 sm:max-w-none"
-        overlayStyle={{ top: 36, left: drawerLeft, pointerEvents: 'none' }}
+        overlayStyle={{ top: 36, left: drawerLeftCss, pointerEvents: 'none' }}
         style={
           {
             // Why: the board is a companion to the workspace sidebar, so it
             // expands from the sidebar edge instead of covering the sidebar.
-            left: drawerLeft,
+            left: drawerLeftCss,
             top: 36,
             height: 'calc(100% - 36px)',
-            width: `min(calc(100vw - ${drawerLeft}px), 1180px)`,
+            width: `min(calc(100vw - ${drawerLeftCss}), 1180px)`,
             opacity: workspaceBoardOpacity
           } as React.CSSProperties
         }
@@ -343,7 +353,11 @@ export default function WorkspaceKanbanDrawer({
             event.preventDefault()
             return
           }
-          if (originalEvent instanceof PointerEvent && originalEvent.clientX < drawerLeft) {
+          const liveDrawerLeft =
+            boardRef.current
+              ?.closest<HTMLElement>('[data-slot="sheet-content"]')
+              ?.getBoundingClientRect().left ?? drawerLeft
+          if (originalEvent instanceof PointerEvent && originalEvent.clientX < liveDrawerLeft) {
             // Why: keep the workspace sidebar interactive while the companion board stays open.
             event.preventDefault()
           }
@@ -380,7 +394,7 @@ export default function WorkspaceKanbanDrawer({
             <div
               className="grid h-full min-h-0 min-w-full grid-rows-[minmax(0,1fr)] gap-3"
               style={{
-                gridTemplateColumns: `repeat(${workspaceStatuses.length}, minmax(240px, 1fr))`
+                gridTemplateColumns: `repeat(${workspaceStatuses.length}, minmax(${columnWidth}px, ${columnWidth}px))`
               }}
             >
               {workspaceStatuses.map((status) => {
@@ -394,7 +408,10 @@ export default function WorkspaceKanbanDrawer({
                     repoMap={repoMap}
                     activeWorktreeId={activeWorktreeId}
                     compact={workspaceBoardCompact}
+                    columnWidth={columnWidth}
+                    isResizingColumn={isResizingColumn}
                     isDragTarget={dragOverStatus === status.id}
+                    canCreateWorktree={canCreateWorktree}
                     selectedWorktreeIds={selectedWorktreeIds}
                     selectedWorktrees={selectedWorktrees}
                     onDragOver={handleDragOver}
@@ -403,6 +420,9 @@ export default function WorkspaceKanbanDrawer({
                     onActivate={handleWorktreeActivate}
                     onSelectionGesture={updateSelectionForGesture}
                     onContextMenuSelect={selectForContextMenu}
+                    onCreateWorktree={createWorktreeForStatus}
+                    onColumnResizeStart={onColumnResizeStart}
+                    onColumnResizeKeyDown={onColumnResizeKeyDown}
                   />
                 )
               })}

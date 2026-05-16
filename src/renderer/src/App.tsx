@@ -1123,7 +1123,14 @@ function App(): React.JSX.Element {
     // `titlebar-left`. Measuring only the inner control cluster left the
     // back/forward arrows hanging over the first tab when the sidebar was
     // collapsed (Cmd+B), producing a half-occluded, non-scrollable tab strip.
-    <div ref={titlebarLeftControlsRef} className="flex h-full w-full shrink-0 items-center">
+    // Why: collapsed workspace mode floats inside a w-0 sidebar wrapper; w-max
+    // prevents Windows Chromium from shrinking the app name down to one glyph.
+    <div
+      ref={titlebarLeftControlsRef}
+      className={`flex h-full shrink-0 items-center${
+        workspaceActive && !sidebarOpen ? ' w-max' : ' w-full'
+      }`}
+    >
       <div className="flex h-full items-center">
         {isMac && !isFullScreen ? (
           <div className="titlebar-traffic-light-pad" />
@@ -1152,7 +1159,7 @@ function App(): React.JSX.Element {
         ) : (
           <div className="pl-2" />
         )}
-        {showSidebar && (
+        {showSidebar && !isWindows && (
           <>
             {settings?.showTitlebarAppName !== false && (
               <ContextMenu>
@@ -1360,8 +1367,14 @@ function App(): React.JSX.Element {
                       // (see TabGroupSplitLayout), occluding that seam. Add a
                       // `border-r` in the floating state so the vertical line
                       // between the traffic-light/nav cluster and the tab strip
-                      // stays visible in both states.
-                      className={`titlebar-left${sidebarOpen ? '' : ' absolute top-0 left-0 z-10 border-r border-border'}`}
+                      // stays visible in both states. w-max keeps the floating
+                      // header sized to its own controls instead of the w-0
+                      // sidebar wrapper.
+                      className={`titlebar-left${
+                        sidebarOpen
+                          ? ''
+                          : ' absolute top-0 left-0 z-10 w-max border-r border-border'
+                      }`}
                       style={{
                         // Why: the Sidebar resize hook updates the sidebar DOM width
                         // directly during drag and only persists to Zustand on

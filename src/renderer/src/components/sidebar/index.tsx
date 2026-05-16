@@ -31,6 +31,10 @@ function Sidebar({
   const repos = useAppStore((s) => s.repos)
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
 
+  const setLiveSidebarWidth = React.useCallback((width: number) => {
+    document.documentElement.style.setProperty('--workspace-sidebar-live-width', `${width}px`)
+  }, [])
+
   // Fetch worktrees when repos are added/removed
   const repoCount = repos.length
   useEffect(() => {
@@ -45,8 +49,13 @@ function Sidebar({
     minWidth: MIN_WIDTH,
     maxWidth: MAX_WIDTH,
     deltaSign: 1,
-    setWidth: setSidebarWidth
+    setWidth: setSidebarWidth,
+    onDraftWidthChange: setLiveSidebarWidth
   })
+
+  useEffect(() => {
+    setLiveSidebarWidth(sidebarWidth)
+  }, [setLiveSidebarWidth, sidebarWidth])
 
   return (
     <TooltipProvider delayDuration={400}>
@@ -68,6 +77,7 @@ function Sidebar({
 
         {/* Resize handle */}
         <div
+          data-sidebar-resize-handle=""
           className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-ring/20 active:bg-ring/30 transition-colors z-10"
           onMouseDown={onResizeStart}
         />

@@ -108,22 +108,16 @@ describe('buildRows with pinned worktrees', () => {
     }
   })
 
-  it('keeps an empty pinned drop section above statuses in groupBy none', () => {
+  it('omits empty pinned sections in groupBy none', () => {
     const rows = buildRows('none', [unpinned1, unpinned2], repoMap, null, new Set())
     expect(rows[0]).toMatchObject({
-      type: 'header',
-      key: 'pinned',
-      label: 'Pinned',
-      count: 0
-    })
-    expect(rows[1]).toMatchObject({
       type: 'header',
       key: 'workspace-status:in-progress',
       label: 'In progress',
       count: 2
     })
-    expect(rows[2]).toMatchObject({ type: 'item', worktree: { id: 'wt-1' } })
-    expect(rows[3]).toMatchObject({ type: 'item', worktree: { id: 'wt-2' } })
+    expect(rows[1]).toMatchObject({ type: 'item', worktree: { id: 'wt-1' } })
+    expect(rows[2]).toMatchObject({ type: 'item', worktree: { id: 'wt-2' } })
   })
 
   it('collapses pinned group when in collapsedGroups', () => {
@@ -190,10 +184,7 @@ describe('buildRows with pinned worktrees', () => {
       rows
         .filter((r) => r.type === 'header')
         .map((r) => ({ key: r.key, label: r.label, count: r.count }))
-    ).toEqual([
-      { key: 'pinned', label: 'Pinned', count: 0 },
-      { key: 'workspace-status:in-review', label: 'In review', count: 1 }
-    ])
+    ).toEqual([{ key: 'workspace-status:in-review', label: 'In review', count: 1 }])
   })
 
   it('uses customized workspace status labels and order', () => {
@@ -219,7 +210,6 @@ describe('buildRows with pinned worktrees', () => {
         .filter((r) => r.type === 'header')
         .map((r) => ({ key: r.key, label: r.label, count: r.count }))
     ).toEqual([
-      { key: 'pinned', label: 'Pinned', count: 0 },
       { key: 'workspace-status:blocked', label: 'Blocked', count: 1 },
       { key: 'workspace-status:in-progress', label: 'Doing', count: 1 }
     ])

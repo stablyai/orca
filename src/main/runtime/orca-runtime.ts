@@ -5129,6 +5129,7 @@ export class OrcaRuntimeService {
     linkedLinearIssue?: string
     comment?: string
     displayName?: string
+    workspaceStatus?: string
     sparseCheckout?: { directories: string[]; presetId?: string }
     pushTarget?: GitPushTarget
     runHooks?: boolean
@@ -5296,7 +5297,8 @@ export class OrcaRuntimeService {
         ? { linkedLinearIssue: args.linkedLinearIssue }
         : {}),
       ...(args.createdWithAgent ? { createdWithAgent: args.createdWithAgent } : {}),
-      ...(args.comment !== undefined ? { comment: args.comment } : {})
+      ...(args.comment !== undefined ? { comment: args.comment } : {}),
+      ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {})
     })
     const worktree = mergeWorktree(repo.id, created, meta)
     let lineage: WorktreeLineage | null = null

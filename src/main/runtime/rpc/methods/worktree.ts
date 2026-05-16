@@ -42,6 +42,7 @@ const WorktreeCreate = z
     linkedLinearIssue: z.string().optional(),
     comment: OptionalString,
     displayName: OptionalString,
+    workspaceStatus: OptionalString,
     sparseCheckout: z
       .object({
         directories: z.array(z.string()),
@@ -111,6 +112,7 @@ const WorktreeSet = WorktreeSelector.extend({
   sparseBaseRef: OptionalString,
   sparsePresetId: OptionalString,
   baseRef: OptionalString,
+  workspaceStatus: OptionalString,
   pushTarget: z
     .object({
       remoteName: z.string(),
@@ -194,6 +196,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         linkedLinearIssue: params.linkedLinearIssue,
         comment: params.comment,
         displayName: params.displayName,
+        workspaceStatus: params.workspaceStatus,
         sparseCheckout: params.sparseCheckout,
         pushTarget: params.pushTarget,
         runHooks: params.runHooks === true,
@@ -230,6 +233,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         sparseBaseRef: params.sparseBaseRef,
         sparsePresetId: params.sparsePresetId,
         baseRef: params.baseRef,
+        workspaceStatus: params.workspaceStatus,
         pushTarget: params.pushTarget,
         diffComments: params.diffComments,
         lineage:

@@ -29,8 +29,10 @@ import type {
   SparsePreset,
   TuiAgent,
   WorktreeMeta,
+  WorkspaceStatus,
   WorkspaceCreateTelemetrySource
 } from '../../../shared/types'
+import { isWorkspaceStatusId } from '../../../shared/workspace-statuses'
 import {
   ADD_ATTACHMENT_SHORTCUT,
   CLIENT_PLATFORM,
@@ -72,6 +74,7 @@ export type UseComposerStateOptions = {
   initialName?: string
   initialPrompt?: string
   initialLinkedWorkItem?: LinkedWorkItemSummary | null
+  initialWorkspaceStatus?: WorkspaceStatus
   /** Seed the Start-from selection when the composer opens. Used by the
    *  Create-from → Quick fallback path so a PR pick that needs a setup
    *  decision still lands with the resolved PR head as the base branch. */
@@ -211,6 +214,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     initialName = '',
     initialPrompt = '',
     initialLinkedWorkItem = null,
+    initialWorkspaceStatus,
     initialBaseBranch,
     persistDraft,
     onCreated,
@@ -262,8 +266,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const newWorkspaceDraft = useAppStore((s) => s.newWorkspaceDraft)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const sparsePresetsByRepo = useAppStore((s) => s.sparsePresetsByRepo)
+  const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
   const draftRepoId = persistDraft ? (newWorkspaceDraft?.repoId ?? null) : null
+  const resolvedInitialWorkspaceStatus = useMemo(
+    () =>
+      initialWorkspaceStatus && isWorkspaceStatusId(initialWorkspaceStatus, workspaceStatuses)
+        ? initialWorkspaceStatus
+        : undefined,
+    [initialWorkspaceStatus, workspaceStatuses]
+  )
 
   const resolvedInitialRepoId =
     draftRepoId && eligibleRepos.some((repo) => repo.id === draftRepoId)
@@ -1599,7 +1611,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         effectiveLinkedPR ?? undefined,
         pushTarget,
         tuiAgent,
-        linkedLinearIssue
+        linkedLinearIssue,
+        resolvedInitialWorkspaceStatus
       )
       const worktree = result.worktree
 
@@ -1696,6 +1709,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     repoId,
     requiresExplicitSetupChoice,
     resolvedSetupDecision,
+    resolvedInitialWorkspaceStatus,
     selectedRepo,
     settings?.agentCmdOverrides,
     settings?.rightSidebarOpenByDefault,
@@ -1787,7 +1801,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           effectiveLinkedPR ?? undefined,
           pushTarget,
           agent ?? undefined,
-          linkedLinearIssue
+          linkedLinearIssue,
+          resolvedInitialWorkspaceStatus
         )
         const worktree = result.worktree
 
@@ -1927,6 +1942,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       repoId,
       requiresExplicitSetupChoice,
       resolvedSetupDecision,
+      resolvedInitialWorkspaceStatus,
       selectedRepo,
       settings?.agentCmdOverrides,
       settings?.rightSidebarOpenByDefault,
