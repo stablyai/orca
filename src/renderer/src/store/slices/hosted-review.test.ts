@@ -80,6 +80,7 @@ describe('hosted review slice', () => {
       linkedGitHubPR: null,
       linkedGitLabMR: 5,
       linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
       linkedGiteaPR: null
     })
   })
@@ -107,6 +108,7 @@ describe('hosted review slice', () => {
         linkedGitHubPR: 12,
         linkedGitLabMR: null,
         linkedBitbucketPR: null,
+        linkedAzureDevOpsPR: null,
         linkedGiteaPR: null
       },
       { timeoutMs: 30_000 }
@@ -128,6 +130,7 @@ describe('hosted review slice', () => {
       linkedGitHubPR: null,
       linkedGitLabMR: 33,
       linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
       linkedGiteaPR: null
     })
   })

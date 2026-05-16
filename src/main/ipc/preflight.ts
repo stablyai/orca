@@ -5,6 +5,7 @@ import path from 'path'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import type { PathSource, ShellHydrationFailureReason } from '../../shared/types'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
+import { getAzureDevOpsAuthStatus } from '../azure-devops/client'
 import { getBitbucketAuthStatus } from '../bitbucket/client'
 import { getGiteaAuthStatus } from '../gitea/client'
 import { getActiveMultiplexer } from './ssh'
@@ -20,6 +21,13 @@ export type PreflightStatus = {
   // gate on `glab?.authenticated`.
   glab?: { installed: boolean; authenticated: boolean }
   bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
+  azureDevOps?: {
+    configured: boolean
+    authenticated: boolean
+    account: string | null
+    baseUrl: string | null
+    tokenConfigured: boolean
+  }
   gitea?: {
     configured: boolean
     authenticated: boolean
@@ -169,10 +177,11 @@ export async function runPreflightCheck(force = false): Promise<PreflightStatus>
     isCommandAvailable('glab')
   ])
 
-  const [ghAuthenticated, glabAuthenticated, bitbucket, gitea] = await Promise.all([
+  const [ghAuthenticated, glabAuthenticated, bitbucket, azureDevOps, gitea] = await Promise.all([
     ghInstalled ? isGhAuthenticated() : Promise.resolve(false),
     glabInstalled ? isGlabAuthenticated() : Promise.resolve(false),
     getBitbucketAuthStatus(),
+    getAzureDevOpsAuthStatus(),
     getGiteaAuthStatus()
   ])
 
@@ -181,6 +190,7 @@ export async function runPreflightCheck(force = false): Promise<PreflightStatus>
     gh: { installed: ghInstalled, authenticated: ghAuthenticated },
     glab: { installed: glabInstalled, authenticated: glabAuthenticated },
     bitbucket,
+    azureDevOps,
     gitea
   }
 

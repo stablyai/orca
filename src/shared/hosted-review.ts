@@ -1,6 +1,12 @@
 import type { CheckStatus, PRConflictSummary, PRMergeableState } from './types'
 
-export type HostedReviewProvider = 'github' | 'gitlab' | 'bitbucket' | 'gitea' | 'unsupported'
+export type HostedReviewProvider =
+  | 'github'
+  | 'gitlab'
+  | 'bitbucket'
+  | 'azure-devops'
+  | 'gitea'
+  | 'unsupported'
 
 export type HostedReviewState = 'open' | 'closed' | 'merged' | 'draft'
 
@@ -24,6 +30,7 @@ export type HostedReviewForBranchArgs = {
   linkedGitHubPR?: number | null
   linkedGitLabMR?: number | null
   linkedBitbucketPR?: number | null
+  linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
 }
 
@@ -111,6 +118,7 @@ export type HostedReviewCreationEligibilityArgs = {
   linkedGitHubPR?: number | null
   linkedGitLabMR?: number | null
   linkedBitbucketPR?: number | null
+  linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
 }
 

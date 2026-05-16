@@ -16,6 +16,7 @@ type LinkedReviewHints = {
   linkedGitHubPR?: number | null
   linkedGitLabMR?: number | null
   linkedBitbucketPR?: number | null
+  linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
 }
 
@@ -43,6 +44,7 @@ function linkedReviewHintKey(options?: LinkedReviewHints): string {
     ['github', options?.linkedGitHubPR ?? null],
     ['gitlab', options?.linkedGitLabMR ?? null],
     ['bitbucket', options?.linkedBitbucketPR ?? null],
+    ['azure-devops', options?.linkedAzureDevOpsPR ?? null],
     ['gitea', options?.linkedGiteaPR ?? null]
   ] as const
   return hints
@@ -89,6 +91,7 @@ export type HostedReviewSlice = {
       linkedGitHubPR?: number | null
       linkedGitLabMR?: number | null
       linkedBitbucketPR?: number | null
+      linkedAzureDevOpsPR?: number | null
       linkedGiteaPR?: number | null
     }
   ) => Promise<HostedReviewInfo | null>
@@ -101,6 +104,7 @@ type RefreshHostedReviewCardArgs = {
   linkedGitHubPR?: number | null
   linkedGitLabMR?: number | null
   linkedBitbucketPR?: number | null
+  linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
 }
 
@@ -114,6 +118,7 @@ export function refreshHostedReviewCard(
     linkedGitHubPR: args.linkedGitHubPR ?? null,
     linkedGitLabMR: args.linkedGitLabMR ?? null,
     linkedBitbucketPR: args.linkedBitbucketPR ?? null,
+    linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
     linkedGiteaPR: args.linkedGiteaPR ?? null
   })
 }
@@ -195,6 +200,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
             linkedGitHubPR: options?.linkedGitHubPR ?? null,
             linkedGitLabMR: options?.linkedGitLabMR ?? null,
             linkedBitbucketPR: options?.linkedBitbucketPR ?? null,
+            linkedAzureDevOpsPR: options?.linkedAzureDevOpsPR ?? null,
             linkedGiteaPR: options?.linkedGiteaPR ?? null
           }
           const review =
