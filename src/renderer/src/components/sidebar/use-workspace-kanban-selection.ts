@@ -4,6 +4,7 @@ import {
   areWorktreeSelectionsEqual,
   getWorktreeSelectionIntent,
   pruneWorktreeSelection,
+  updateWorktreeAreaSelection,
   updateWorktreeSelection
 } from './worktree-multi-selection'
 
@@ -66,10 +67,36 @@ export function useWorkspaceKanbanSelection(open: boolean, boardWorktrees: reado
     [selectedWorktreeIds, selectedWorktrees]
   )
 
+  const updateSelectionForArea = useCallback(
+    (
+      areaIds: readonly string[],
+      additive: boolean,
+      baseSelectedIds: ReadonlySet<string> = selectedWorktreeIds,
+      baseAnchorId: string | null = selectionAnchorId
+    ): void => {
+      const result = updateWorktreeAreaSelection({
+        visibleIds: boardWorktreeIds,
+        previousSelectedIds: baseSelectedIds,
+        previousAnchorId: baseAnchorId,
+        areaIds,
+        additive
+      })
+      setSelectedWorktreeIds((previous) =>
+        areWorktreeSelectionsEqual(previous, result.selectedIds) ? previous : result.selectedIds
+      )
+      setSelectionAnchorId((previous) =>
+        previous === result.anchorId ? previous : result.anchorId
+      )
+    },
+    [boardWorktreeIds, selectedWorktreeIds, selectionAnchorId]
+  )
+
   return {
     selectedWorktreeIds,
     selectedWorktrees,
+    selectionAnchorId,
     updateSelectionForGesture,
+    updateSelectionForArea,
     selectForContextMenu
   }
 }

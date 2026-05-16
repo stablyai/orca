@@ -45,7 +45,7 @@ import {
   getWorkspaceStatus,
   getWorkspaceStatusFromGroupKey,
   hasWorkspaceDragData,
-  readWorkspaceDragData
+  readWorkspaceDragDataIds
 } from './workspace-status'
 import { useWorkspaceStatusDocumentDrop } from './use-workspace-status-drop'
 import {
@@ -143,7 +143,9 @@ type VirtualizedWorktreeViewportProps = {
   prCache: Record<string, unknown> | null
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   onMoveWorktreeToStatus: (worktreeId: string, status: WorkspaceStatus) => void
+  onMoveWorktreesToStatus: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
   onPinWorktree: (worktreeId: string) => void
+  onPinWorktrees: (worktreeIds: readonly string[]) => void
   // Why: broad grouping changes still remount the viewport, while add/delete
   // stays mounted for row-key anchoring and layout animation. These refs bridge
   // both paths so the virtualizer never falls back to scrollTop 0.
@@ -256,7 +258,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   prCache,
   workspaceStatuses,
   onMoveWorktreeToStatus,
+  onMoveWorktreesToStatus,
   onPinWorktree,
+  onPinWorktrees,
   scrollOffsetRef,
   scrollAnchorRef
 }: VirtualizedWorktreeViewportProps) {
@@ -684,15 +688,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 
   const handleWorkspaceStatusDrop = useCallback(
     (event: React.DragEvent, status: WorkspaceStatus) => {
-      const worktreeId = readWorkspaceDragData(event.dataTransfer)
-      if (!worktreeId) {
+      const worktreeIds = readWorkspaceDragDataIds(event.dataTransfer)
+      if (worktreeIds.length === 0) {
         return
       }
       event.preventDefault()
       setDragOverStatus(null)
-      onMoveWorktreeToStatus(worktreeId, status)
+      onMoveWorktreesToStatus(worktreeIds, status)
     },
-    [onMoveWorktreeToStatus]
+    [onMoveWorktreesToStatus]
   )
 
   useWorkspaceStatusDocumentDrop(
@@ -700,7 +704,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     onMoveWorktreeToStatus,
     onPinWorktree,
     handleWorkspaceStatusDragFinish,
-    hasWorkspaceDropTargets
+    hasWorkspaceDropTargets,
+    {
+      onMoveWorktreesToStatus,
+      onPinWorktrees
+    }
   )
 
   return (
@@ -1148,6 +1156,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const openModal = useAppStore((s) => s.openModal)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
+  const updateWorktreesMeta = useAppStore((s) => s.updateWorktreesMeta)
   const activeView = useAppStore((s) => s.activeView)
   const activeModal = useAppStore((s) => s.activeModal)
   const pendingRevealWorktreeId = useAppStore((s) => s.pendingRevealWorktreeId)
@@ -1614,6 +1623,23 @@ const WorktreeList = React.memo(function WorktreeList({
     [updateWorktreeMeta, worktreeMap, workspaceStatuses]
   )
 
+  const moveWorktreesToStatus = useCallback(
+    (worktreeIds: readonly string[], status: WorkspaceStatus) => {
+      const updates = new Map<string, { workspaceStatus: WorkspaceStatus }>()
+      for (const worktreeId of worktreeIds) {
+        const current = worktreeMap.get(worktreeId)
+        if (!current || getWorkspaceStatus(current, workspaceStatuses) === status) {
+          continue
+        }
+        updates.set(worktreeId, { workspaceStatus: status })
+      }
+      if (updates.size > 0) {
+        void updateWorktreesMeta(updates)
+      }
+    },
+    [updateWorktreesMeta, worktreeMap, workspaceStatuses]
+  )
+
   const pinWorktree = useCallback(
     (worktreeId: string) => {
       const current = worktreeMap.get(worktreeId)
@@ -1623,6 +1649,23 @@ const WorktreeList = React.memo(function WorktreeList({
       void updateWorktreeMeta(worktreeId, { isPinned: true })
     },
     [updateWorktreeMeta, worktreeMap]
+  )
+
+  const pinWorktrees = useCallback(
+    (worktreeIds: readonly string[]) => {
+      const updates = new Map<string, { isPinned: true }>()
+      for (const worktreeId of worktreeIds) {
+        const current = worktreeMap.get(worktreeId)
+        if (!current || current.isPinned) {
+          continue
+        }
+        updates.set(worktreeId, { isPinned: true })
+      }
+      if (updates.size > 0) {
+        void updateWorktreesMeta(updates)
+      }
+    },
+    [updateWorktreesMeta, worktreeMap]
   )
 
   // Why: hideDefaultBranchWorkspace is counted as a filter here so the
@@ -1702,7 +1745,9 @@ const WorktreeList = React.memo(function WorktreeList({
       prCache={prCache}
       workspaceStatuses={workspaceStatuses}
       onMoveWorktreeToStatus={moveWorktreeToStatus}
+      onMoveWorktreesToStatus={moveWorktreesToStatus}
       onPinWorktree={pinWorktree}
+      onPinWorktrees={pinWorktrees}
       scrollOffsetRef={scrollOffsetRef}
       scrollAnchorRef={scrollAnchorRef}
     />
