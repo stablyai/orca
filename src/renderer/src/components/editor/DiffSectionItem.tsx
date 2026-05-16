@@ -19,7 +19,10 @@ import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
-import { getDiffCommentPopoverTop } from '../diff-comments/diff-comment-popover-position'
+import {
+  getDiffCommentPopoverLeft,
+  getDiffCommentPopoverTop
+} from '../diff-comments/diff-comment-popover-position'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import { computeLineStats } from './diff-line-stats'
 import { DiffSectionHeader } from './DiffSectionHeader'
@@ -96,11 +99,13 @@ export function DiffSectionItem({
 
   const [modifiedEditor, setModifiedEditor] = useState<monacoEditor.ICodeEditor | null>(null)
   const diffEditorRef = useRef<monacoEditor.IStandaloneDiffEditor | null>(null)
+  const sectionBodyRef = useRef<HTMLDivElement | null>(null)
   const lineNumberOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
   const [popover, setPopover] = useState<{
     lineNumber: number
     startLine?: number
     top: number
+    left?: number
   } | null>(null)
 
   const disposeDiffModels = useCallback(() => {
@@ -140,7 +145,14 @@ export function DiffSectionItem({
     worktreeId,
     comments: diffComments,
     onAddCommentClick: ({ lineNumber, startLine, top }) =>
-      setPopover({ lineNumber, startLine, top }),
+      setPopover({
+        lineNumber,
+        startLine,
+        top,
+        left: modifiedEditor
+          ? (getDiffCommentPopoverLeft(modifiedEditor, sectionBodyRef.current) ?? undefined)
+          : undefined
+      }),
     onDeleteComment: (id) => void deleteDiffComment(worktreeId, id),
     onUpdateComment: (id, body) => updateDiffComment(worktreeId, id, body),
     pendingScrollCommentId: pendingScrollForThisSection,
@@ -161,13 +173,16 @@ export function DiffSectionItem({
         setPopover(null)
         return
       }
-      setPopover((prev) => (prev ? { ...prev, top } : prev))
+      const left = getDiffCommentPopoverLeft(modifiedEditor, sectionBodyRef.current)
+      setPopover((prev) => (prev ? { ...prev, top, left: left == null ? prev.left : left } : prev))
     }
     const scrollSub = modifiedEditor.onDidScrollChange(update)
     const contentSub = modifiedEditor.onDidContentSizeChange(update)
+    const layoutSub = modifiedEditor.onDidLayoutChange(update)
     return () => {
       scrollSub.dispose()
       contentSub.dispose()
+      layoutSub.dispose()
     }
     // Why: depend on popover.lineNumber (not the whole popover object) so the
     // effect doesn't re-subscribe on every top update it dispatches. The guard
@@ -303,6 +318,7 @@ export function DiffSectionItem({
 
       {!section.collapsed && (
         <div
+          ref={sectionBodyRef}
           className={cn('relative', useIntrinsicImageHeight && 'overflow-visible')}
           style={sectionBodyHeight === undefined ? undefined : { height: sectionBodyHeight }}
         >
@@ -315,6 +331,7 @@ export function DiffSectionItem({
               lineNumber={popover.lineNumber}
               startLine={popover.startLine}
               top={popover.top}
+              left={popover.left}
               onCancel={() => setPopover(null)}
               onSubmit={handleSubmitComment}
             />

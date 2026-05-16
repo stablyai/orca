@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { editor as monacoEditor } from 'monaco-editor'
-import { getDiffCommentPopoverTop } from './diff-comment-popover-position'
+import {
+  getDiffCommentPopoverLeft,
+  getDiffCommentPopoverTop
+} from './diff-comment-popover-position'
 
 function makeEditor({
   lineCount = 10,
@@ -16,6 +19,12 @@ function makeEditor({
     getScrollTop: () => scrollTop,
     getTopForLineNumber: topForLine
   }
+}
+
+function makeElementWithLeft(left: number): HTMLElement {
+  return {
+    getBoundingClientRect: () => ({ left }) as DOMRect
+  } as HTMLElement
 }
 
 describe('getDiffCommentPopoverTop', () => {
@@ -43,5 +52,28 @@ describe('getDiffCommentPopoverTop', () => {
   it('returns null for out-of-range line numbers', () => {
     expect(getDiffCommentPopoverTop(makeEditor({ lineCount: 2 }), 3, 20)).toBeNull()
     expect(getDiffCommentPopoverTop(makeEditor({ lineCount: 2 }), 0, 20)).toBeNull()
+  })
+})
+
+describe('getDiffCommentPopoverLeft', () => {
+  it('aligns the popover to the editor content column inside its overlay parent', () => {
+    const editor = {
+      getDomNode: () => makeElementWithLeft(230),
+      getLayoutInfo: () => ({ contentLeft: 72 }) as monacoEditor.EditorLayoutInfo
+    }
+
+    expect(getDiffCommentPopoverLeft(editor, makeElementWithLeft(100))).toBe(202)
+  })
+
+  it('returns null when the editor DOM node or overlay parent is unavailable', () => {
+    const editor = {
+      getDomNode: () => null,
+      getLayoutInfo: () => ({ contentLeft: 72 }) as monacoEditor.EditorLayoutInfo
+    }
+
+    expect(getDiffCommentPopoverLeft(editor, makeElementWithLeft(100))).toBeNull()
+    expect(
+      getDiffCommentPopoverLeft({ ...editor, getDomNode: () => makeElementWithLeft(230) }, null)
+    ).toBeNull()
   })
 })
