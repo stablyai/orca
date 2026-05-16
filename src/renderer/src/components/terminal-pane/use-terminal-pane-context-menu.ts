@@ -4,6 +4,7 @@ import type { PtyTransport } from './pty-transport'
 import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
 import type { TerminalQuickCommand } from '../../../../shared/types'
 import { sendTerminalQuickCommandToPane } from './terminal-quick-command-dispatch'
+import { splitWebRuntimeTerminal } from '@/runtime/web-runtime-session'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -128,12 +129,15 @@ export function useTerminalPaneContextMenu({
     if (!pane) {
       return
     }
+    const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
+    if (splitWebRuntimeTerminal(ptyId, direction)) {
+      return
+    }
     const cached = paneCwdRef.current.get(pane.id)
     if (cached?.confirmed && cached.cwd) {
       managerRef.current?.splitPane(pane.id, direction, { cwd: cached.cwd })
       return
     }
-    const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
     const paneId = pane.id
     void (async () => {
       const cwd = await resolveSplitCwd({

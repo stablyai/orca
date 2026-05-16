@@ -66,7 +66,10 @@ import {
   type ActivityTerminalPortalTarget
 } from './activity/activity-terminal-portal'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
-import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
+import {
+  createWebRuntimeSessionTerminal,
+  isWebRuntimeSessionActive
+} from '@/runtime/web-runtime-session'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
@@ -599,6 +602,14 @@ function Terminal(): React.JSX.Element | null {
       if (!activeWorktreeId) {
         return
       }
+      if (!shellOverride && isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+        void createWebRuntimeSessionTerminal({
+          worktreeId: activeWorktreeId,
+          environmentId: activeRuntimeEnvironmentId,
+          activate: true
+        })
+        return
+      }
       const newTab = createTab(activeWorktreeId, undefined, shellOverride)
       setActiveTabType('terminal')
       // Why: persist the tab bar order with the new terminal at the end of the
@@ -633,7 +644,7 @@ function Terminal(): React.JSX.Element | null {
       // the new xterm. Matches the "+" menu path in TabBar.tsx.
       focusTerminalTabSurface(newTab.id)
     },
-    [activeWorktreeId, createTab, setActiveTabType, setTabBarOrder]
+    [activeRuntimeEnvironmentId, activeWorktreeId, createTab, setActiveTabType, setTabBarOrder]
   )
 
   const handleNewBrowserTab = useCallback(() => {

@@ -19,6 +19,7 @@ import { extractIpcErrorMessage } from '../../lib/ipc-error'
 import { destroyWorkspaceWebviews } from '../../store/slices/browser-webview-cleanup'
 import { requestEditorFileClose } from '../editor/editor-autosave'
 import { focusTerminalTabSurface } from '../../lib/focus-terminal-tab-surface'
+import { createWebRuntimeSessionTerminal } from '../../runtime/web-runtime-session'
 
 export type GroupEditorItem = OpenFile & { tabId: string }
 export type GroupBrowserItem = BrowserTabState & { tabId: string }
@@ -492,10 +493,20 @@ export function useTabGroupWorkspaceModel({
         }
       },
       newTerminalTab: () => {
-        const terminal = createTab(worktreeId, groupId)
-        setActiveTab(terminal.id)
-        setActiveTabType('terminal')
-        focusTerminalTabSurface(terminal.id)
+        void (async () => {
+          if (
+            await createWebRuntimeSessionTerminal({
+              worktreeId,
+              activate: true
+            })
+          ) {
+            return
+          }
+          const terminal = createTab(worktreeId, groupId)
+          setActiveTab(terminal.id)
+          setActiveTabType('terminal')
+          focusTerminalTabSurface(terminal.id)
+        })()
       },
       newTerminalWithShell: (shellOverride: string) => {
         const terminal = createTab(worktreeId, groupId, shellOverride)

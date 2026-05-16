@@ -17,6 +17,7 @@ import type {
   TerminalTab
 } from '../../../shared/types'
 import { getRemoteRuntimePtyEnvironmentId, toRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { createWebRuntimeSessionTerminal } from './web-runtime-session'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 const WEB_TERMINAL_SURFACE_TAB_PREFIX = 'web-terminal-'
@@ -719,6 +720,7 @@ export function useWebSessionTabsSync(): void {
     }
 
     let disposed = false
+    let requestedInitialTerminal = false
     let unsubscribe: (() => void) | null = null
     void window.api.runtimeEnvironments
       .subscribe(
@@ -741,6 +743,14 @@ export function useWebSessionTabsSync(): void {
             useAppStore.setState((state) =>
               applyWebSessionTabsSnapshot(state, event, environmentId)
             )
+            if (event.type === 'snapshot' && event.tabs.length === 0 && !requestedInitialTerminal) {
+              requestedInitialTerminal = true
+              void createWebRuntimeSessionTerminal({
+                worktreeId: activeWorktreeId,
+                environmentId,
+                activate: true
+              })
+            }
           },
           onError: (error) => {
             console.warn('[web-session-tabs-sync] subscription error:', error.message)
