@@ -199,6 +199,210 @@ describe('registerNotificationHandlers', () => {
     expect(notificationShowMock).toHaveBeenCalledTimes(1)
   })
 
+  it('formats agent-task-complete with prompt context when a status snapshot is present', () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: false,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    expect(
+      handler(
+        {},
+        {
+          source: 'agent-task-complete',
+          worktreeId: 'repo::wt1',
+          worktreeLabel: 'feat/notis',
+          repoLabel: 'orca',
+          terminalTitle: '* Claude done',
+          agentType: 'codex',
+          agentState: 'done',
+          agentPrompt: 'Fix rich notification text'
+        }
+      )
+    ).toEqual({ delivered: true })
+
+    expect(notificationCtorMock).toHaveBeenCalledWith({
+      title: 'Codex finished in feat/notis',
+      body: 'Prompt: Fix rich notification text'
+    })
+  })
+
+  it('formats blocked and interrupted agent snapshots distinctly', () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: false,
+          suppressWhenFocused: false
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    expect(
+      handler(
+        {},
+        {
+          source: 'agent-task-complete',
+          worktreeId: 'repo::wt1',
+          worktreeLabel: 'feat/notis',
+          agentType: 'claude',
+          agentState: 'blocked',
+          agentLastAssistantMessage: 'Please approve the command.'
+        }
+      )
+    ).toEqual({ delivered: true })
+    vi.advanceTimersByTime(5001)
+    expect(
+      handler(
+        {},
+        {
+          source: 'agent-task-complete',
+          worktreeId: 'repo::wt1',
+          worktreeLabel: 'feat/notis',
+          agentType: 'claude',
+          agentState: 'done',
+          agentInterrupted: true,
+          agentLastAssistantMessage: 'Stopped by user.'
+        }
+      )
+    ).toEqual({ delivered: true })
+
+    expect(notificationCtorMock).toHaveBeenNthCalledWith(1, {
+      title: 'Claude needs input in feat/notis',
+      body: 'Latest reply: Please approve the command.'
+    })
+    expect(notificationCtorMock).toHaveBeenNthCalledWith(2, {
+      title: 'Claude stopped in feat/notis',
+      body: 'Latest reply: Stopped by user.'
+    })
+  })
+
+  it('normalizes custom agent labels and re-bounds multiline assistant previews', () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: false,
+          suppressWhenFocused: false
+        }
+      })
+    } as never)
+
+    const longAssistantMessage = `Line one\n\n${'x'.repeat(400)}`
+    const handler = getDispatchHandler()
+    expect(
+      handler(
+        {},
+        {
+          source: 'agent-task-complete',
+          worktreeId: 'repo::wt1',
+          worktreeLabel: 'feat/notis',
+          agentType: 'builder\nagent',
+          agentState: 'done',
+          agentLastAssistantMessage: longAssistantMessage
+        }
+      )
+    ).toEqual({ delivered: true })
+
+    const options = (
+      notificationCtorMock.mock.calls as unknown as [{ title: string; body: string }][]
+    )[0]?.[0]
+    if (!options) {
+      throw new Error('Expected notification options')
+    }
+    expect(options).toMatchObject({
+      title: 'builder agent finished in feat/notis'
+    })
+    expect(options.body).toMatch(/^Latest reply: Line one x+/)
+    expect(options.body).not.toContain('\n')
+    expect(options.body.length).toBeLessThanOrEqual('Latest reply: '.length + 180)
+  })
+
+  it('uses tool context before falling back when no prompt or assistant preview exists', () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: false,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    expect(
+      handler(
+        {},
+        {
+          source: 'agent-task-complete',
+          worktreeId: 'repo::wt1',
+          worktreeLabel: 'feat/notis',
+          agentType: 'unknown',
+          agentState: 'working',
+          agentToolName: 'Bash',
+          agentToolInput: 'pnpm test'
+        }
+      )
+    ).toEqual({ delivered: true })
+
+    expect(notificationCtorMock).toHaveBeenCalledWith({
+      title: 'Agent finished in feat/notis',
+      body: 'Using Bash: pnpm test'
+    })
+  })
+
+  it('uses rich formatter output for mobile notifications before desktop guards', () => {
+    notificationIsSupportedMock.mockReturnValue(false)
+    const dispatchMobileNotification = vi.fn()
+    registerNotificationHandlers(
+      {
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: false,
+            suppressWhenFocused: true
+          }
+        })
+      } as never,
+      { dispatchMobileNotification } as never
+    )
+
+    const handler = getDispatchHandler()
+    expect(
+      handler(
+        {},
+        {
+          source: 'agent-task-complete',
+          worktreeId: 'repo::wt1',
+          worktreeLabel: 'feat/notis',
+          agentType: 'hermes',
+          agentState: 'done',
+          agentPrompt: 'Summarize the diff'
+        }
+      )
+    ).toEqual({ delivered: false, reason: 'not-supported' })
+
+    expect(dispatchMobileNotification).toHaveBeenCalledWith({
+      source: 'agent-task-complete',
+      title: 'Hermes finished in feat/notis',
+      body: 'Prompt: Summarize the diff',
+      worktreeId: 'repo::wt1'
+    })
+    expect(notificationCtorMock).not.toHaveBeenCalled()
+  })
+
   it('silences the native notification when a custom sound is configured', () => {
     registerNotificationHandlers({
       getSettings: () => ({

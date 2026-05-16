@@ -316,7 +316,11 @@ export function connectPanePty(
     // events to fire. Dispatch is gated per-source in main; the main-process
     // dedupe also collapses concurrent BEL + task-complete for the same
     // worktree into a single notification.
-    deps.dispatchNotification({ source: 'agent-task-complete', terminalTitle: title })
+    deps.dispatchNotification({
+      source: 'agent-task-complete',
+      terminalTitle: title,
+      paneKey: cacheKey
+    })
   }
   const onAgentBecameWorking = (): void => {
     // Why: a new API call refreshes the prompt-cache TTL, so clear any running

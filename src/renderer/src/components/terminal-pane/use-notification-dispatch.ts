@@ -3,6 +3,12 @@ import { useAppStore } from '@/store'
 import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { playDesktopNotificationSound } from '@/lib/desktop-notification-sound'
 
+type TerminalNotificationEvent = {
+  source: 'terminal-bell' | 'agent-task-complete'
+  terminalTitle?: string
+  paneKey?: string
+}
+
 /**
  * Returns a stable dispatch function for terminal notifications.
  * Reads repo/worktree labels from the store at dispatch time rather
@@ -12,9 +18,9 @@ import { playDesktopNotificationSound } from '@/lib/desktop-notification-sound'
  */
 export function useNotificationDispatch(
   worktreeId: string
-): (event: { source: 'terminal-bell' | 'agent-task-complete'; terminalTitle?: string }) => void {
+): (event: TerminalNotificationEvent) => void {
   return useCallback(
-    (event: { source: 'terminal-bell' | 'agent-task-complete'; terminalTitle?: string }) => {
+    (event: TerminalNotificationEvent) => {
       const state = useAppStore.getState()
 
       // Why: shutdownWorktreeTerminals clears ptyIdsByTabId synchronously
@@ -38,6 +44,21 @@ export function useNotificationDispatch(
       const worktree = getWorktreeMapFromState(state).get(worktreeId)
       const repo = worktree ? getRepoMapFromState(state).get(worktree.repoId) : null
       const customSoundPath = state.settings?.notifications?.customSoundPath ?? null
+      const agentStatus =
+        event.source === 'agent-task-complete' && event.paneKey
+          ? state.agentStatusByPaneKey[event.paneKey]
+          : undefined
+      const agentSnapshot = agentStatus
+        ? {
+            agentType: agentStatus.agentType,
+            agentState: agentStatus.state,
+            agentPrompt: agentStatus.prompt,
+            agentToolName: agentStatus.toolName,
+            agentToolInput: agentStatus.toolInput,
+            agentLastAssistantMessage: agentStatus.lastAssistantMessage,
+            agentInterrupted: agentStatus.interrupted
+          }
+        : {}
 
       void window.api.notifications
         .dispatch({
@@ -46,7 +67,8 @@ export function useNotificationDispatch(
           repoLabel: repo?.displayName,
           worktreeLabel: worktree?.displayName || worktree?.branch || worktreeId,
           terminalTitle: event.terminalTitle,
-          isActiveWorktree: state.activeWorktreeId === worktreeId
+          isActiveWorktree: state.activeWorktreeId === worktreeId,
+          ...agentSnapshot
         })
         .then((result) => {
           if (result.delivered) {

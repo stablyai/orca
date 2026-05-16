@@ -3,7 +3,11 @@ import type { SshRemotePtyLease, SshTarget } from './ssh-types'
 import type { Automation, AutomationRun } from './automations-types'
 import type { WorkspaceSource } from './telemetry-events'
 import type { GitHubProjectSettings } from './github-project-types'
-import type { MigrationUnsupportedPtyEntry } from './agent-status-types'
+import type {
+  AgentStatusState,
+  AgentType,
+  MigrationUnsupportedPtyEntry
+} from './agent-status-types'
 import type { VoiceSettings } from './speech-types'
 import type { WorkspaceCleanupUIState } from './workspace-cleanup'
 import type { GitLabProjectSettings } from './gitlab-types'
@@ -1582,6 +1586,13 @@ export type NotificationDispatchRequest = {
   worktreeLabel?: string
   terminalTitle?: string
   isActiveWorktree?: boolean
+  agentType?: AgentType
+  agentState?: AgentStatusState
+  agentPrompt?: string
+  agentToolName?: string
+  agentToolInput?: string
+  agentLastAssistantMessage?: string
+  agentInterrupted?: boolean
 }
 
 export type NotificationDispatchResult = {
