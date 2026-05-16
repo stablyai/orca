@@ -120,6 +120,8 @@ export const REPO_COLORS = [
   '#ec4899' // pink
 ] as const
 
+export const DEFAULT_REPO_BADGE_COLOR = REPO_COLORS[0]
+
 export function getDefaultNotificationSettings(): NotificationSettings {
   return {
     enabled: true,
@@ -211,6 +213,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalScrollbackBytes: 10_000_000,
     openLinksInApp: true,
     rightSidebarOpenByDefault: true,
+    showGitIgnoredFiles: true,
     showTitlebarAppName: true,
     showTasksButton: true,
     ctrlTabOrderMode: 'mru',
@@ -353,6 +356,8 @@ export function getDefaultUIState(): PersistedUIState {
     workspaceStatuses: cloneDefaultWorkspaceStatuses(),
     workspaceBoardOpacity: 1,
     workspaceBoardCompact: false,
+    _workspaceStatusesDefaultOrderMigrated: true,
+    _workspaceStatusesDefaultVisualsMigrated: true,
     statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
     statusBarVisible: true,
     dismissedUpdateVersion: null,

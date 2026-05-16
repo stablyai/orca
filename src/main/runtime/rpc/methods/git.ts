@@ -8,6 +8,10 @@ const WorktreeSelector = z.object({
     .pipe(z.string().min(1, 'Missing worktree selector'))
 })
 
+const GitStatusParams = WorktreeSelector.extend({
+  includeIgnored: z.boolean().optional()
+})
+
 const GitFilePath = WorktreeSelector.extend({
   filePath: z
     .unknown()
@@ -73,8 +77,11 @@ const GitRemoteFileUrl = WorktreeSelector.extend({
 export const GIT_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'git.status',
-    params: WorktreeSelector,
-    handler: async (params, { runtime }) => runtime.getRuntimeGitStatus(params.worktree)
+    params: GitStatusParams,
+    handler: async (params, { runtime }) =>
+      params.includeIgnored === undefined
+        ? runtime.getRuntimeGitStatus(params.worktree)
+        : runtime.getRuntimeGitStatus(params.worktree, { includeIgnored: params.includeIgnored })
   }),
   defineMethod({
     name: 'git.conflictOperation',

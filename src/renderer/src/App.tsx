@@ -81,6 +81,7 @@ import {
 } from './lib/startup-ui-hydration'
 import { applyDocumentTheme } from './lib/document-theme'
 import { isEditableTarget } from './lib/editable-target'
+import { getSelectedTextForFileSearch } from './lib/file-search-selection'
 import {
   canGoBackWorktreeHistory,
   canGoForwardWorktreeHistory
@@ -215,8 +216,8 @@ function App(): React.JSX.Element {
 
   // Why: Zustand actions are referentially stable, but each individual
   // useAppStore(s => s.someAction) still registers a subscription that React
-  // must check on every store mutation. Consolidating 19 action refs into one
-  // useShallow subscription means one equality check instead of 19.
+  // must check on every store mutation. Consolidating action refs into one
+  // useShallow subscription means one equality check instead of many.
   const actions = useAppStore(
     useShallow((s) => ({
       toggleSidebar: s.toggleSidebar,
@@ -241,6 +242,7 @@ function App(): React.JSX.Element {
       toggleRightSidebar: s.toggleRightSidebar,
       setRightSidebarOpen: s.setRightSidebarOpen,
       setRightSidebarTab: s.setRightSidebarTab,
+      seedFileSearchQuery: s.seedFileSearchQuery,
       setActiveView: s.setActiveView,
       updateSettings: s.updateSettings,
       pruneLastVisitedTimestamps: s.pruneLastVisitedTimestamps,
@@ -921,6 +923,31 @@ function App(): React.JSX.Element {
       // browser guest has focus. The renderer keeps matching handlers for
       // local-focus cases and to preserve the same guards in one place.
 
+      const isSearchShortcut = e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f'
+      const canRevealRightSidebar =
+        activeView !== 'tasks' &&
+        activeView !== 'activity' &&
+        activeView !== 'automations' &&
+        activeView !== 'space' &&
+        activeView !== 'skills'
+
+      const openSearchSidebar = (query: string | null): void => {
+        if (query && activeWorktreeId) {
+          actions.seedFileSearchQuery(activeWorktreeId, query)
+        }
+        actions.setRightSidebarTab('search')
+        actions.setRightSidebarOpen(true)
+      }
+
+      if (mod && isSearchShortcut && canRevealRightSidebar) {
+        const selectedText = getSelectedTextForFileSearch()
+        if (selectedText) {
+          e.preventDefault()
+          openSearchSidebar(selectedText)
+          return
+        }
+      }
+
       // Why: keep this guard. TipTap's Cmd+B bold binding depends on the
       // window-level handler *not* toggling the sidebar when focus lives in an
       // editable surface. The main-process before-input-event already carves out
@@ -975,13 +1002,7 @@ function App(): React.JSX.Element {
 
       // Why: full-page navigation surfaces should not reveal the right sidebar;
       // they are designed as distraction-free content areas.
-      if (
-        activeView === 'tasks' ||
-        activeView === 'activity' ||
-        activeView === 'automations' ||
-        activeView === 'space' ||
-        activeView === 'skills'
-      ) {
+      if (!canRevealRightSidebar) {
         return
       }
 
@@ -1001,10 +1022,9 @@ function App(): React.JSX.Element {
       }
 
       // Cmd/Ctrl+Shift+F — toggle right sidebar / search tab
-      if (e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f') {
+      if (isSearchShortcut) {
         e.preventDefault()
-        actions.setRightSidebarTab('search')
-        actions.setRightSidebarOpen(true)
+        openSearchSidebar(null)
         return
       }
 

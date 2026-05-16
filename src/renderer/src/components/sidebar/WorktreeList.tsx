@@ -698,7 +698,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     // First header sits directly under SidebarHeader, which already
                     // supplies its own spacing — only offset secondary group headers.
                     vItem.index !== firstHeaderIndex && 'mt-2',
-                    row.repo ? 'overflow-hidden' : row.tone
+                    row.repo && 'overflow-hidden'
                   )}
                   onDragOver={
                     isPinnedHeader
@@ -736,10 +736,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       }
                       className={cn(
                         'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
-                        row.repo && 'text-muted-foreground'
+                        row.repo ? 'text-muted-foreground' : row.tone
                       )}
                     >
-                      <row.icon className="size-3.5" />
+                      <row.icon className={row.repo ? 'size-3.5' : 'size-3'} />
                     </div>
                   ) : null}
 

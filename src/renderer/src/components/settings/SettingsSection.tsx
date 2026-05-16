@@ -11,6 +11,7 @@ type SettingsSectionProps = {
   className?: string
   badge?: string
   badgeAccessory?: React.ReactNode
+  forceVisible?: boolean
   /** Rendered in the section header's upper-right corner — intended for
    *  section-scoped actions (e.g. "Import from Ghostty") that would otherwise
    *  crowd the settings list as their own row. */
@@ -26,10 +27,11 @@ export function SettingsSection({
   className,
   badge,
   badgeAccessory,
+  forceVisible = false,
   headerAction
 }: SettingsSectionProps): React.JSX.Element | null {
   const query = useAppStore((state) => state.settingsSearchQuery)
-  if (!matchesSettingsSearch(query, searchEntries)) {
+  if (!forceVisible && !matchesSettingsSearch(query, searchEntries)) {
     return null
   }
 

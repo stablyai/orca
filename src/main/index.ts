@@ -43,7 +43,7 @@ import { hydrateShellPath, mergePathSegments } from './startup/hydrate-shell-pat
 import { acquireSingleInstanceLock } from './startup/single-instance-lock'
 import { RateLimitService } from './rate-limits/service'
 import { attachMainWindowServices } from './window/attach-main-window-services'
-import { createMainWindow } from './window/createMainWindow'
+import { createMainWindow, loadMainWindow } from './window/createMainWindow'
 import { CodexAccountService } from './codex-accounts/service'
 import { CodexRuntimeHomeService } from './codex-accounts/runtime-home-service'
 import { ClaudeAccountService } from './claude-accounts/service'
@@ -254,7 +254,8 @@ function openMainWindow(): BrowserWindow {
     getIsQuitting: () => isQuitting,
     onQuitAborted: () => {
       isQuitting = false
-    }
+    },
+    deferLoad: true
   })
 
   // Why: telemetry-plan.md§First-launch experience anchors default-on
@@ -370,6 +371,7 @@ function openMainWindow(): BrowserWindow {
       })
     }
   })
+  loadMainWindow(window)
   return window
 }
 

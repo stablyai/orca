@@ -15,6 +15,23 @@ const TEST_LEAF_1 = '11111111-1111-4111-8111-111111111111'
 const TEST_LEAF_2 = '22222222-2222-4222-8222-222222222222'
 const TEST_LEAF_LIVE = '33333333-3333-4333-8333-333333333333'
 const TEST_LEAF_EXPIRED = '44444444-4444-4444-8444-444444444444'
+const REORDERED_DEFAULT_WORKSPACE_STATUSES = [
+  { id: 'completed', label: 'Completed', color: 'conductor-done', icon: 'conductor-done' },
+  { id: 'in-review', label: 'In review', color: 'conductor-review', icon: 'conductor-review' },
+  {
+    id: 'in-progress',
+    label: 'In progress',
+    color: 'conductor-progress',
+    icon: 'conductor-progress'
+  },
+  { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' }
+]
+const LEGACY_DEFAULT_WORKSPACE_STATUSES = [
+  { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' },
+  { id: 'in-progress', label: 'In progress', color: 'blue', icon: 'circle-dot' },
+  { id: 'in-review', label: 'In review', color: 'violet', icon: 'git-pull-request' },
+  { id: 'completed', label: 'Completed', color: 'emerald', icon: 'circle-check' }
+]
 
 vi.mock('electron', () => ({
   app: {
@@ -922,6 +939,127 @@ describe('Store', () => {
 
     const store = await createStore()
     expect(store.getUI().sortBy).toBe('recent')
+  })
+
+  it('repairs the known-bad reordered default workspace statuses once on load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: { workspaceStatuses: REORDERED_DEFAULT_WORKSPACE_STATUSES },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    const ui = store.getUI()
+    expect(ui.workspaceStatuses?.map((status) => status.id)).toEqual([
+      'todo',
+      'in-progress',
+      'in-review',
+      'completed'
+    ])
+    expect(ui._workspaceStatusesDefaultOrderMigrated).toBe(true)
+
+    store.flush()
+    const persisted = readDataFile() as {
+      ui?: {
+        workspaceStatuses?: typeof REORDERED_DEFAULT_WORKSPACE_STATUSES
+        _workspaceStatusesDefaultOrderMigrated?: boolean
+        _workspaceStatusesDefaultVisualsMigrated?: boolean
+      }
+    }
+    expect(persisted.ui?._workspaceStatusesDefaultOrderMigrated).toBe(true)
+    expect(persisted.ui?._workspaceStatusesDefaultVisualsMigrated).toBe(true)
+    expect(persisted.ui?.workspaceStatuses?.map((status) => status.id)).toEqual([
+      'todo',
+      'in-progress',
+      'in-review',
+      'completed'
+    ])
+  })
+
+  it('migrates legacy default workspace status visuals once on load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {
+        workspaceStatuses: LEGACY_DEFAULT_WORKSPACE_STATUSES,
+        _workspaceStatusesDefaultOrderMigrated: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().workspaceStatuses).toEqual([
+      { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' },
+      {
+        id: 'in-progress',
+        label: 'In progress',
+        color: 'conductor-progress',
+        icon: 'conductor-progress'
+      },
+      { id: 'in-review', label: 'In review', color: 'conductor-review', icon: 'conductor-review' },
+      { id: 'completed', label: 'Completed', color: 'conductor-done', icon: 'conductor-done' }
+    ])
+    expect(store.getUI()._workspaceStatusesDefaultVisualsMigrated).toBe(true)
+
+    store.flush()
+    const persisted = readDataFile() as {
+      ui?: {
+        _workspaceStatusesDefaultVisualsMigrated?: boolean
+      }
+    }
+    expect(persisted.ui?._workspaceStatusesDefaultVisualsMigrated).toBe(true)
+  })
+
+  it('preserves legacy-looking workspace status visuals after the load migration', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {
+        workspaceStatuses: LEGACY_DEFAULT_WORKSPACE_STATUSES,
+        _workspaceStatusesDefaultOrderMigrated: true,
+        _workspaceStatusesDefaultVisualsMigrated: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    const inProgress = store
+      .getUI()
+      .workspaceStatuses?.find((status) => status.id === 'in-progress')
+    expect(inProgress).toMatchObject({ color: 'blue', icon: 'circle-dot' })
+  })
+
+  it('preserves intentionally reordered default workspace statuses after the load migration', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {
+        workspaceStatuses: REORDERED_DEFAULT_WORKSPACE_STATUSES,
+        _workspaceStatusesDefaultOrderMigrated: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().workspaceStatuses?.map((status) => status.id)).toEqual([
+      'completed',
+      'in-review',
+      'in-progress',
+      'todo'
+    ])
   })
 
   // ── terminalMacOptionAsAlt migration (issue #903) ───────────────────

@@ -219,7 +219,7 @@ import {
   shouldRunSetupForCreate,
   writeIssueCommand
 } from '../hooks'
-import { REPO_COLORS, getDefaultVoiceSettings } from '../../shared/constants'
+import { DEFAULT_REPO_BADGE_COLOR, getDefaultVoiceSettings } from '../../shared/constants'
 import { listRepoWorktrees } from '../repo-worktrees'
 import { createWorktreeSymlinks } from '../ipc/worktree-symlinks'
 import {
@@ -462,6 +462,7 @@ type TerminalWaiter = {
   reject: (error: Error) => void
   timeout: NodeJS.Timeout | null
   pollInterval: NodeJS.Timeout | null
+  abortCleanup: (() => void) | null
 }
 
 type MessageWaiter = {
@@ -3752,6 +3753,7 @@ export class OrcaRuntimeService {
     options?: {
       condition?: RuntimeTerminalWaitCondition
       timeoutMs?: number
+      signal?: AbortSignal
     }
   ): Promise<RuntimeTerminalWait> {
     const condition = options?.condition ?? 'exit'
@@ -3776,7 +3778,12 @@ export class OrcaRuntimeService {
           resolve,
           reject,
           timeout: null,
-          pollInterval: null
+          pollInterval: null,
+          abortCleanup: null
+        }
+        if (!this.bindTerminalWaiterAbort(waiter, options?.signal)) {
+          reject(new Error('request_aborted'))
+          return
         }
         if (effectiveTimeoutMs > 0) {
           waiter.timeout = setTimeout(() => {
@@ -3833,7 +3840,13 @@ export class OrcaRuntimeService {
         resolve,
         reject,
         timeout: null,
-        pollInterval: null
+        pollInterval: null,
+        abortCleanup: null
+      }
+
+      if (!this.bindTerminalWaiterAbort(waiter, options?.signal)) {
+        reject(new Error('request_aborted'))
+        return
       }
 
       if (effectiveTimeoutMs > 0) {
@@ -4046,7 +4059,7 @@ export class OrcaRuntimeService {
       id: randomUUID(),
       path,
       displayName: getRepoName(path),
-      badgeColor: REPO_COLORS[this.store.getRepos().length % REPO_COLORS.length],
+      badgeColor: DEFAULT_REPO_BADGE_COLOR,
       addedAt: Date.now(),
       kind
     }
@@ -4154,7 +4167,7 @@ export class OrcaRuntimeService {
       id: randomUUID(),
       path: targetPath,
       displayName: trimmedName,
-      badgeColor: REPO_COLORS[this.store.getRepos().length % REPO_COLORS.length],
+      badgeColor: DEFAULT_REPO_BADGE_COLOR,
       addedAt: Date.now(),
       kind: repoKind
     }
@@ -4221,7 +4234,7 @@ export class OrcaRuntimeService {
       id: randomUUID(),
       path: clonePath,
       displayName: getRepoName(clonePath),
-      badgeColor: REPO_COLORS[this.store.getRepos().length % REPO_COLORS.length],
+      badgeColor: DEFAULT_REPO_BADGE_COLOR,
       addedAt: Date.now(),
       kind: 'git'
     }
@@ -6085,11 +6098,13 @@ export class OrcaRuntimeService {
       env?: Record<string, string>
       title?: string
       focus?: boolean
+      rendererBacked?: boolean
+      activate?: boolean
       tabId?: string
       leafId?: string
     } = {}
   ): Promise<RuntimeTerminalCreate> {
-    if (opts.focus !== true) {
+    if (opts.focus !== true && opts.rendererBacked !== true) {
       if (!worktreeSelector) {
         throw new Error('MISSING_WORKTREE')
       }
@@ -6200,7 +6215,8 @@ export class OrcaRuntimeService {
         requestId,
         worktreeId,
         command: opts.command,
-        title: opts.title
+        title: opts.title,
+        activate: opts.focus === true || opts.activate === true
       })
     })
 
@@ -8122,6 +8138,25 @@ export class OrcaRuntimeService {
     waiter.resolve(result)
   }
 
+  private bindTerminalWaiterAbort(
+    waiter: TerminalWaiter,
+    signal: AbortSignal | undefined
+  ): boolean {
+    if (!signal) {
+      return true
+    }
+    if (signal.aborted) {
+      return false
+    }
+    const onAbort = (): void => {
+      this.removeWaiter(waiter)
+      waiter.reject(new Error('request_aborted'))
+    }
+    waiter.abortCleanup = () => signal.removeEventListener('abort', onAbort)
+    signal.addEventListener('abort', onAbort, { once: true })
+    return true
+  }
+
   private rejectWaitersForHandle(handle: string, code: string): void {
     const waiters = this.waitersByHandle.get(handle)
     if (!waiters || waiters.size === 0) {
@@ -8145,6 +8180,10 @@ export class OrcaRuntimeService {
     }
     if (waiter.pollInterval) {
       clearInterval(waiter.pollInterval)
+    }
+    if (waiter.abortCleanup) {
+      waiter.abortCleanup()
+      waiter.abortCleanup = null
     }
     const waiters = this.waitersByHandle.get(waiter.handle)
     if (!waiters) {

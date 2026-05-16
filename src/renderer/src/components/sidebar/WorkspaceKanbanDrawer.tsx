@@ -19,7 +19,6 @@ import { makeWorkspaceStatusId } from '../../../../shared/workspace-statuses'
 type WorkspaceKanbanDrawerProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onPointerEnter?: React.PointerEventHandler<HTMLDivElement>
 }
 
 function sortBoardWorktrees(a: Worktree, b: Worktree): number {
@@ -28,8 +27,7 @@ function sortBoardWorktrees(a: Worktree, b: Worktree): number {
 
 export default function WorkspaceKanbanDrawer({
   open,
-  onOpenChange,
-  onPointerEnter
+  onOpenChange
 }: WorkspaceKanbanDrawerProps): React.JSX.Element {
   const allWorktrees = useAllWorktrees()
   const repoMap = useRepoMap()
@@ -307,7 +305,6 @@ export default function WorkspaceKanbanDrawer({
           } as React.CSSProperties
         }
         data-workspace-board-compact={workspaceBoardCompact ? 'true' : 'false'}
-        onPointerEnter={onPointerEnter}
         onOpenAutoFocus={(event) => {
           // Why: Radix focuses the first toolbar button on open, which opens
           // its tooltip without hover and makes the drawer feel noisy.

@@ -22,6 +22,7 @@ import {
 } from '../../../../shared/commit-message-host-key'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
 import { getConnectionId } from '@/lib/connection-context'
+import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { useAppStore } from '../../store'
@@ -31,7 +32,9 @@ import { matchesSettingsSearch } from './settings-search'
 
 type CommitMessageAiPaneProps = {
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void
+  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
+  onCustomPromptDirtyChange?: (dirty: boolean) => void
+  customPromptDiscardSignal?: number
 }
 
 const EMPTY_SETTINGS: CommitMessageAiSettings = {
@@ -177,7 +180,9 @@ function selectModelForHost(
 
 export function CommitMessageAiPane({
   settings,
-  updateSettings
+  updateSettings,
+  onCustomPromptDirtyChange,
+  customPromptDiscardSignal
 }: CommitMessageAiPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const activeWorktree = useActiveWorktree()
@@ -189,6 +194,38 @@ export function CommitMessageAiPane({
   const [modelDiscoveryByAgent, setModelDiscoveryByAgent] = useState<
     Partial<Record<TuiAgent, ModelDiscoveryState>>
   >({})
+  const persistedCustomPrompt = config.customPrompt
+  const [customPromptDraft, setCustomPromptDraft] = useState(persistedCustomPrompt)
+  const [isSavingCustomPrompt, setIsSavingCustomPrompt] = useState(false)
+  const persistedCustomPromptRef = useRef(persistedCustomPrompt)
+  const isCustomPromptDirty = customPromptDraft !== persistedCustomPrompt
+
+  useEffect(() => {
+    persistedCustomPromptRef.current = persistedCustomPrompt
+  }, [persistedCustomPrompt])
+
+  useEffect(() => {
+    if (!isCustomPromptDirty) {
+      setCustomPromptDraft(persistedCustomPrompt)
+    }
+  }, [isCustomPromptDirty, persistedCustomPrompt])
+
+  useEffect(() => {
+    setCustomPromptDraft(persistedCustomPromptRef.current)
+    // Why: parent navigation guards use this signal after the user confirms
+    // they want to leave without saving the prompt draft.
+  }, [customPromptDiscardSignal])
+
+  useEffect(() => {
+    onCustomPromptDirtyChange?.(isCustomPromptDirty)
+  }, [isCustomPromptDirty, onCustomPromptDirtyChange])
+
+  useEffect(
+    () => () => {
+      onCustomPromptDirtyChange?.(false)
+    },
+    [onCustomPromptDirtyChange]
+  )
 
   const baseAgentCapabilities = useMemo(listCommitMessageAgentCapabilities, [])
   const agentCapabilities = useMemo(
@@ -454,8 +491,20 @@ export function CommitMessageAiPane({
     })
   }
 
-  const onCustomPromptChange = (value: string): void => {
-    writeConfig({ customPrompt: value })
+  const onSaveCustomPrompt = async (): Promise<void> => {
+    if (!isCustomPromptDirty || isSavingCustomPrompt) {
+      return
+    }
+    setIsSavingCustomPrompt(true)
+    try {
+      await updateSettings({ commitMessageAi: { ...config, customPrompt: customPromptDraft } })
+    } finally {
+      setIsSavingCustomPrompt(false)
+    }
+  }
+
+  const onDiscardCustomPrompt = (): void => {
+    setCustomPromptDraft(persistedCustomPrompt)
   }
 
   const sections: React.ReactNode[] = []
@@ -702,13 +751,14 @@ export function CommitMessageAiPane({
   }
 
   if (
-    config.enabled &&
-    matchesSettingsSearch(searchQuery, {
-      title: 'Custom prompt',
-      description:
-        'Optional instructions appended to the base prompt (e.g. Conventional Commits style).',
-      keywords: ['prompt', 'conventional commits', 'gitmoji', 'style']
-    })
+    (config.enabled || isCustomPromptDirty) &&
+    (isCustomPromptDirty ||
+      matchesSettingsSearch(searchQuery, {
+        title: 'Custom prompt',
+        description:
+          'Optional instructions appended to the base prompt (e.g. Conventional Commits style).',
+        keywords: ['prompt', 'conventional commits', 'gitmoji', 'style']
+      }))
   ) {
     sections.push(
       <SearchableSetting
@@ -716,6 +766,7 @@ export function CommitMessageAiPane({
         title="Custom prompt"
         description="Optional instructions appended to the base prompt (e.g. Conventional Commits style)."
         keywords={['prompt', 'conventional commits', 'gitmoji', 'style']}
+        forceVisible={isCustomPromptDirty}
         className="space-y-2 px-1 py-2"
       >
         <div className="space-y-0.5">
@@ -728,11 +779,38 @@ export function CommitMessageAiPane({
         <textarea
           id="commit-message-ai-custom-prompt"
           rows={4}
-          value={config.customPrompt}
-          onChange={(e) => onCustomPromptChange(e.target.value)}
+          value={customPromptDraft}
+          onChange={(e) => setCustomPromptDraft(e.target.value)}
           placeholder="Use Conventional Commits format (feat:, fix:, ...). Reference the ticket key when present."
           className="w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
         />
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[11px] text-muted-foreground">
+            {isCustomPromptDirty ? 'Unsaved changes' : 'Saved'}
+          </p>
+          <div className="flex items-center gap-2">
+            {isCustomPromptDirty ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                onClick={onDiscardCustomPrompt}
+                disabled={isSavingCustomPrompt}
+              >
+                Discard
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="secondary"
+              size="xs"
+              onClick={() => void onSaveCustomPrompt()}
+              disabled={!isCustomPromptDirty || isSavingCustomPrompt}
+            >
+              {isSavingCustomPrompt ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
+        </div>
       </SearchableSetting>
     )
   }

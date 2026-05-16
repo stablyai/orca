@@ -3,6 +3,7 @@ import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-
 import {
   filterWorkspaceSpaceRows,
   getSelectedDeletableWorkspaceIds,
+  getVisibleDeletableWorkspaceIds,
   sortWorkspaceSpaceRows
 } from './workspace-space-presentation'
 
@@ -75,5 +76,18 @@ describe('workspace space presentation helpers', () => {
     expect(getSelectedDeletableWorkspaceIds(rows, new Set(['ok', 'main', 'failed']))).toEqual([
       'ok'
     ])
+  })
+
+  it('excludes rows that are already deleting from delete actions', () => {
+    const rows = [
+      row({ worktreeId: 'idle', canDelete: true, status: 'ok' }),
+      row({ worktreeId: 'deleting', canDelete: true, status: 'ok' })
+    ]
+    const isDeleting = (worktreeId: string): boolean => worktreeId === 'deleting'
+
+    expect(getVisibleDeletableWorkspaceIds(rows, isDeleting)).toEqual(['idle'])
+    expect(
+      getSelectedDeletableWorkspaceIds(rows, new Set(['idle', 'deleting']), isDeleting)
+    ).toEqual(['idle'])
   })
 })

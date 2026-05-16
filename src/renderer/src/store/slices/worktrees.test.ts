@@ -76,6 +76,7 @@ function createTestStore() {
         editorViewMode: {},
         expandedDirs: {},
         gitStatusByWorktree: {},
+        gitIgnoredPathsByWorktree: {},
         gitConflictOperationByWorktree: {},
         trackedConflictPathsByWorktree: {},
         gitBranchChangesByWorktree: {},
@@ -901,6 +902,10 @@ describe('removeWorktree state cleanup', () => {
         'repo1::/path/wt1': [{ path: 'a.ts' }],
         'repo1::/path/wt2': [{ path: 'b.ts' }]
       },
+      gitIgnoredPathsByWorktree: {
+        'repo1::/path/wt1': ['dist/'],
+        'repo1::/path/wt2': ['coverage/']
+      },
       gitConflictOperationByWorktree: {
         'repo1::/path/wt1': 'merge',
         'repo1::/path/wt2': 'unknown'
@@ -927,6 +932,9 @@ describe('removeWorktree state cleanup', () => {
 
     expect(store.getState().gitStatusByWorktree).toEqual({
       'repo1::/path/wt2': [{ path: 'b.ts' }]
+    })
+    expect(store.getState().gitIgnoredPathsByWorktree).toEqual({
+      'repo1::/path/wt2': ['coverage/']
     })
     expect(store.getState().gitConflictOperationByWorktree).toEqual({
       'repo1::/path/wt2': 'unknown'
@@ -1385,6 +1393,11 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
         'repoA::/a/wt1': [{ id: 'tab-A', worktreeId: 'repoA::/a/wt1' }],
         'repoA::/a/zombie': [{ id: 'tab-zombie', worktreeId: 'repoA::/a/zombie' }],
         'repoB::/b/wt1': [{ id: 'tab-B', worktreeId: 'repoB::/b/wt1' }]
+      },
+      gitIgnoredPathsByWorktree: {
+        'repoA::/a/wt1': ['dist/'],
+        'repoA::/a/zombie': ['coverage/'],
+        'repoB::/b/wt1': ['build/']
       }
     } as unknown as Partial<AppState>)
 
@@ -1395,6 +1408,10 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     expect(store.getState().tabsByWorktree).toEqual({
       'repoA::/a/wt1': [{ id: 'tab-A', worktreeId: 'repoA::/a/wt1' }],
       'repoB::/b/wt1': [{ id: 'tab-B', worktreeId: 'repoB::/b/wt1' }]
+    })
+    expect(store.getState().gitIgnoredPathsByWorktree).toEqual({
+      'repoA::/a/wt1': ['dist/'],
+      'repoB::/b/wt1': ['build/']
     })
 
     // Second call must not re-run the purge even if new stale ids appear.
@@ -1455,6 +1472,10 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
         }
       ],
       editorDrafts: { 'file-1': 'draft', 'file-99': 'other' },
+      gitIgnoredPathsByWorktree: {
+        'repoA::/a/wt1': ['dist/'],
+        'repoA::/a/wt2': ['coverage/']
+      },
       activeWorktreeId: 'repoA::/a/wt1',
       worktreeLineageById: {
         'repoA::/a/wt1': makeLineage({ worktreeId: 'repoA::/a/wt1' }),
@@ -1479,6 +1500,7 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
     expect(s.runtimePaneTitlesByTabId).toEqual({ 'tab-3': 'bash' })
     expect(s.openFiles).toEqual([])
     expect(s.editorDrafts).toEqual({ 'file-99': 'other' })
+    expect(s.gitIgnoredPathsByWorktree).toEqual({ 'repoA::/a/wt2': ['coverage/'] })
     expect(s.activeWorktreeId).toBeNull()
     expect(s.activeFileId).toBeNull()
     expect(s.activeTabId).toBeNull()

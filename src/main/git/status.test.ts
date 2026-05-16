@@ -405,6 +405,52 @@ describe('getStatus', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(result.upstreamStatus).toEqual({ hasUpstream: false, ahead: 0, behind: 0 })
   })
+
+  it('omits --ignored and ignoredPaths when includeIgnored is not requested', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
+
+    const result = await getStatus('/repo')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        '-c',
+        'core.quotePath=false',
+        'status',
+        '--porcelain=v2',
+        '--branch',
+        '--untracked-files=all'
+      ],
+      { cwd: '/repo' }
+    )
+    expect('ignoredPaths' in result).toBe(false)
+  })
+
+  it('parses ! porcelain v2 records into ignoredPaths when includeIgnored is true', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: '! dist/\n! .env\n! coverage/\n'
+    })
+
+    const result = await getStatus('/repo', { includeIgnored: true })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        '-c',
+        'core.quotePath=false',
+        'status',
+        '--porcelain=v2',
+        '--branch',
+        '--untracked-files=all',
+        '--ignored=matching'
+      ],
+      { cwd: '/repo' }
+    )
+    expect(result.ignoredPaths).toEqual(['dist/', '.env', 'coverage/'])
+    expect(result.entries).toEqual([])
+  })
 })
 
 describe('getStagedCommitContext', () => {

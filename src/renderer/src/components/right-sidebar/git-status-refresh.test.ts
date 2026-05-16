@@ -40,7 +40,11 @@ describe('refreshGitStatusForWorktree', () => {
       deps
     })
 
-    expect(gitStatus).toHaveBeenCalledWith({ worktreePath: '/repo', connectionId: 'ssh-1' })
+    expect(gitStatus).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: 'ssh-1',
+      includeIgnored: true
+    })
     expect(deps.setGitStatus).toHaveBeenCalledWith('wt-1', status)
     expect(deps.updateWorktreeGitIdentity).toHaveBeenCalledWith('wt-1', {
       head: 'abc123',
@@ -75,5 +79,28 @@ describe('refreshGitStatusForWorktree', () => {
     })
     expect(deps.setUpstreamStatus).not.toHaveBeenCalled()
     expect(deps.fetchUpstreamStatus).toHaveBeenCalledWith('wt-2', '/repo', 'ssh-2')
+  })
+
+  it('omits ignored-file status when the setting is disabled', async () => {
+    const status: GitStatusResult = {
+      entries: [],
+      conflictOperation: 'unknown'
+    }
+    const gitStatus = vi.fn().mockResolvedValue(status)
+    vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
+    const deps = makeDeps()
+
+    await refreshGitStatusForWorktree({
+      settings: { activeRuntimeEnvironmentId: null, showGitIgnoredFiles: false },
+      worktreeId: 'wt-3',
+      worktreePath: '/repo',
+      deps
+    })
+
+    expect(gitStatus).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(deps.setGitStatus).toHaveBeenCalledWith('wt-3', status)
   })
 })

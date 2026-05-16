@@ -624,6 +624,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         // request keys indefinitely in a long-lived renderer session.
         const nextGitStatusByWorktree = { ...s.gitStatusByWorktree }
         delete nextGitStatusByWorktree[worktreeId]
+        const nextGitIgnoredPathsByWorktree = { ...s.gitIgnoredPathsByWorktree }
+        delete nextGitIgnoredPathsByWorktree[worktreeId]
         const nextGitConflictOperationByWorktree = { ...s.gitConflictOperationByWorktree }
         delete nextGitConflictOperationByWorktree[worktreeId]
         const nextTrackedConflictPathsByWorktree = { ...s.trackedConflictPathsByWorktree }
@@ -717,6 +719,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           editorViewMode: nextEditorViewMode,
           expandedDirs: nextExpandedDirs,
           gitStatusByWorktree: nextGitStatusByWorktree,
+          gitIgnoredPathsByWorktree: nextGitIgnoredPathsByWorktree,
           gitConflictOperationByWorktree: nextGitConflictOperationByWorktree,
           trackedConflictPathsByWorktree: nextTrackedConflictPathsByWorktree,
           gitBranchChangesByWorktree: nextGitBranchChangesByWorktree,
@@ -1359,6 +1362,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         activeGroupIdByWorktree: omitByWorktree(s.activeGroupIdByWorktree),
         // Git status caches
         gitStatusByWorktree: omitByWorktree(s.gitStatusByWorktree),
+        gitIgnoredPathsByWorktree: omitByWorktree(s.gitIgnoredPathsByWorktree),
         gitConflictOperationByWorktree: omitByWorktree(s.gitConflictOperationByWorktree),
         trackedConflictPathsByWorktree: omitByWorktree(s.trackedConflictPathsByWorktree),
         gitBranchChangesByWorktree: omitByWorktree(s.gitBranchChangesByWorktree),

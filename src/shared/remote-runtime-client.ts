@@ -15,7 +15,11 @@ import {
   publicKeyFromBase64,
   publicKeyToBase64
 } from './e2ee-crypto'
-import { RuntimeRpcEnvelopeSchema, type RuntimeRpcResponse } from './runtime-rpc-envelope'
+import {
+  isKeepaliveFrame,
+  RuntimeRpcEnvelopeSchema,
+  type RuntimeRpcResponse
+} from './runtime-rpc-envelope'
 
 type HandshakeState = 'awaiting_ready' | 'awaiting_authenticated' | 'ready'
 
@@ -264,6 +268,10 @@ export async function sendRemoteRuntimeRequest<TResult>(
             'Remote Orca runtime returned an invalid response frame.'
           )
         })
+        return
+      }
+      if (isKeepaliveFrame(raw)) {
+        timeout.refresh()
         return
       }
       const parsed = RuntimeRpcEnvelopeSchema.safeParse(raw)

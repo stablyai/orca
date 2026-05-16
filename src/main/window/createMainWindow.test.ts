@@ -51,7 +51,7 @@ vi.mock('../browser/browser-manager', () => ({
   }
 }))
 
-import { createMainWindow } from './createMainWindow'
+import { createMainWindow, loadMainWindow } from './createMainWindow'
 import { ipcMain } from 'electron'
 
 describe('createMainWindow', () => {
@@ -67,6 +67,46 @@ describe('createMainWindow', () => {
     vi.mocked(ipcMain.handle).mockReset()
     vi.mocked(ipcMain.removeHandler).mockReset()
     vi.useRealTimers()
+  })
+
+  it('can defer renderer loading until startup IPC handlers are registered', () => {
+    const webContents = {
+      on: vi.fn(),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    const win = createMainWindow(null, { deferLoad: true })
+
+    expect(browserWindowInstance.loadFile).not.toHaveBeenCalled()
+    expect(browserWindowInstance.loadURL).not.toHaveBeenCalled()
+
+    loadMainWindow(win)
+
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(1)
+    expect(browserWindowInstance.loadURL).not.toHaveBeenCalled()
   })
 
   it('enables renderer sandboxing and opens external links safely', () => {

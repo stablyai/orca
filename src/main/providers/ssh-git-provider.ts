@@ -31,8 +31,15 @@ export class SshGitProvider implements IGitProvider {
     return this.connectionId
   }
 
-  async getStatus(worktreePath: string): Promise<GitStatusResult> {
-    return (await this.mux.request('git.status', { worktreePath })) as GitStatusResult
+  async getStatus(
+    worktreePath: string,
+    options?: { includeIgnored?: boolean }
+  ): Promise<GitStatusResult> {
+    const includeIgnoredArgs = options?.includeIgnored ? { includeIgnored: true } : {}
+    return (await this.mux.request('git.status', {
+      worktreePath,
+      ...includeIgnoredArgs
+    })) as GitStatusResult
   }
 
   async commit(

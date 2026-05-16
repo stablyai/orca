@@ -68,6 +68,17 @@ type CreateMainWindowOptions = {
    *  latch must be cleared or later window closes will be misclassified as
    *  quit attempts. */
   onQuitAborted?: () => void
+  /** Why: main-process startup must register IPC handlers before the renderer
+   *  begins booting, or eager renderer calls can race into missing channels. */
+  deferLoad?: boolean
+}
+
+export function loadMainWindow(mainWindow: BrowserWindow): void {
+  if (is.dev && process.env.ELECTRON_RENDERER_URL) {
+    void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
+  } else {
+    void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  }
 }
 
 export function createMainWindow(
@@ -773,10 +784,8 @@ export function createMainWindow(
     app.removeListener('before-quit', freezeBoundsOnQuit)
   })
 
-  if (is.dev && process.env.ELECTRON_RENDERER_URL) {
-    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
-  } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  if (!opts?.deferLoad) {
+    loadMainWindow(mainWindow)
   }
 
   return mainWindow

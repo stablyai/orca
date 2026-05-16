@@ -1151,6 +1151,152 @@ describe('OrcaRuntimeRpcServer', () => {
       }
     })
 
+    it('emits keepalive frames while terminal.wait blocks and returns its structured timeout', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 30
+      })
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'tab-1',
+            worktreeId: 'repo-1::/tmp/worktree-a',
+            title: 'Terminal 1',
+            activeLeafId: 'pane:1',
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId: 'tab-1',
+            worktreeId: 'repo-1::/tmp/worktree-a',
+            leafId: 'pane:1',
+            paneRuntimeId: 1,
+            ptyId: 'pty-1'
+          }
+        ]
+      })
+      runtime.onPtyData('pty-1', 'Starting MCP servers...\n', 123)
+      await server.start()
+
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        const listResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
+          id: 'req_list',
+          authToken: metadata!.authToken,
+          method: 'terminal.list'
+        })
+        const handle = (
+          listResponse.result as {
+            terminals: { handle: string }[]
+          }
+        ).terminals[0]!.handle
+
+        const session = openFramedSession(metadata!.transports[0]!.endpoint, {
+          id: 'req_terminal_wait',
+          authToken: metadata!.authToken,
+          method: 'terminal.wait',
+          params: {
+            terminal: handle,
+            for: 'tui-idle',
+            timeoutMs: 150
+          }
+        })
+        await session.done
+
+        const keepalives = session.frames.filter((f) => f._keepalive === true)
+        const terminalFrames = session.frames.filter((f) => f.ok !== undefined)
+        expect(keepalives.length).toBeGreaterThanOrEqual(2)
+        expect(terminalFrames).toHaveLength(1)
+        expect(terminalFrames[0]).toMatchObject({
+          id: 'req_terminal_wait',
+          ok: false,
+          error: { code: 'timeout' }
+        })
+      } finally {
+        await server.stop()
+      }
+    })
+
+    it('releases terminal.wait long-poll slot when the client closes mid-wait', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 1000,
+        longPollCap: 1
+      })
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'tab-1',
+            worktreeId: 'repo-1::/tmp/worktree-a',
+            title: 'Terminal 1',
+            activeLeafId: 'pane:1',
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId: 'tab-1',
+            worktreeId: 'repo-1::/tmp/worktree-a',
+            leafId: 'pane:1',
+            paneRuntimeId: 1,
+            ptyId: 'pty-1'
+          }
+        ]
+      })
+      await server.start()
+
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        const listResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
+          id: 'req_list',
+          authToken: metadata!.authToken,
+          method: 'terminal.list'
+        })
+        const handle = (
+          listResponse.result as {
+            terminals: { handle: string }[]
+          }
+        ).terminals[0]!.handle
+        const endpoint = metadata!.transports[0]!.endpoint
+
+        const session = openFramedSession(endpoint, {
+          id: 'req_terminal_wait',
+          authToken: metadata!.authToken,
+          method: 'terminal.wait',
+          params: { terminal: handle, for: 'exit', timeoutMs: 10_000 }
+        })
+        await waitFor(() => server['activeLongPolls'] === 1)
+
+        session.socket.destroy()
+        await session.done
+        await waitFor(() => server['activeLongPolls'] === 0)
+
+        const admitted = openFramedSession(endpoint, {
+          id: 'req_terminal_wait_2',
+          authToken: metadata!.authToken,
+          method: 'terminal.wait',
+          params: { terminal: handle, for: 'tui-idle', timeoutMs: 50 }
+        })
+        await admitted.done
+        expect(admitted.frames.find((f) => f.ok !== undefined)).toMatchObject({
+          id: 'req_terminal_wait_2',
+          ok: false,
+          error: { code: 'timeout' }
+        })
+      } finally {
+        await server.stop()
+      }
+    })
+
     it('releases long-poll slot when client closes mid-wait', async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
       const runtime = new OrcaRuntimeService()

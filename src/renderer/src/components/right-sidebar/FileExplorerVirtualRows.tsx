@@ -4,7 +4,7 @@ import { dirname, normalizeRelativePath } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import type { GitFileStatus } from '../../../../shared/types'
 import { FileExplorerRow, InlineInputRow, type InlineInput } from './FileExplorerRow'
-import { STATUS_COLORS } from './status-display'
+import { shouldShowIgnoredDecoration, STATUS_COLORS } from './status-display'
 import type { DirCache, TreeNode } from './file-explorer-types'
 import { countVisibleFileExplorerSelections } from './file-explorer-selection'
 
@@ -17,6 +17,7 @@ type FileExplorerVirtualRowsProps = {
   dismissInlineInput: () => void
   folderStatusByRelativePath: Map<string, GitFileStatus | null>
   statusByRelativePath: Map<string, GitFileStatus>
+  ignoredByRelativePath: Set<string>
   expanded: Set<string>
   dirCache: Record<string, DirCache>
   selectedPaths: Set<string>
@@ -52,6 +53,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     dismissInlineInput,
     folderStatusByRelativePath,
     statusByRelativePath,
+    ignoredByRelativePath,
     expanded,
     dirCache,
     selectedPaths,
@@ -121,6 +123,11 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
         const nodeStatus = n.isDirectory
           ? (folderStatusByRelativePath.get(normalizedRelativePath) ?? null)
           : (statusByRelativePath.get(normalizedRelativePath) ?? null)
+        const isIgnored = shouldShowIgnoredDecoration(
+          nodeStatus,
+          ignoredByRelativePath,
+          normalizedRelativePath
+        )
 
         const rowParentDir = n.isDirectory ? n.path : dirname(n.path)
         const sourceParentDir = dragSourcePath ? dirname(dragSourcePath) : null
@@ -145,6 +152,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               isFlashing={flashingPath === n.path}
               nodeStatus={nodeStatus}
               statusColor={nodeStatus ? STATUS_COLORS[nodeStatus] : null}
+              isIgnored={isIgnored}
               deleteShortcutLabel={deleteShortcutLabel}
               targetDir={n.isDirectory ? n.path : dirname(n.path)}
               targetDepth={n.isDirectory ? n.depth + 1 : n.depth}

@@ -313,6 +313,7 @@ export type EditorSlice = {
 
   // Git status cache
   gitStatusByWorktree: Record<string, GitStatusEntry[]>
+  gitIgnoredPathsByWorktree: Record<string, string[]>
   gitConflictOperationByWorktree: Record<string, GitConflictOperation>
   trackedConflictPathsByWorktree: Record<string, Record<string, GitConflictKind>>
   trackConflictPath: (worktreeId: string, path: string, conflictKind: GitConflictKind) => void
@@ -381,12 +382,15 @@ export type EditorSlice = {
       results: SearchResult | null
       loading: boolean
       collapsedFiles: Set<string>
+      seedRequestId?: number
     }
   >
   updateFileSearchState: (
     worktreeId: string,
     updates: Partial<EditorSlice['fileSearchStateByWorktree'][string]>
   ) => void
+  seedFileSearchQuery: (worktreeId: string, query: string) => void
+  consumeFileSearchSeedRequest: (worktreeId: string, seedRequestId: number) => void
   toggleFileSearchCollapsedFile: (worktreeId: string, filePath: string) => void
   clearFileSearch: (worktreeId: string) => void
 
@@ -1824,6 +1828,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   // Git status
   gitStatusByWorktree: {},
+  gitIgnoredPathsByWorktree: {},
   gitConflictOperationByWorktree: {},
   trackedConflictPathsByWorktree: {},
   trackConflictPath: (worktreeId, path, conflictKind) =>
@@ -1912,7 +1917,20 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const openFilesUnchanged = nextOpenFiles === s.openFiles
       const operationUnchanged = prevOperation === status.conflictOperation
 
-      if (statusUnchanged && trackedUnchanged && openFilesUnchanged && operationUnchanged) {
+      const prevIgnored = s.gitIgnoredPathsByWorktree[worktreeId]
+      const nextIgnored = status.ignoredPaths ?? []
+      const ignoredUnchanged =
+        prevIgnored !== undefined &&
+        prevIgnored.length === nextIgnored.length &&
+        prevIgnored.every((p, i) => p === nextIgnored[i])
+
+      if (
+        statusUnchanged &&
+        trackedUnchanged &&
+        openFilesUnchanged &&
+        operationUnchanged &&
+        ignoredUnchanged
+      ) {
         return s
       }
 
@@ -1921,6 +1939,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         gitStatusByWorktree: statusUnchanged
           ? s.gitStatusByWorktree
           : { ...s.gitStatusByWorktree, [worktreeId]: nextEntries },
+        gitIgnoredPathsByWorktree: ignoredUnchanged
+          ? s.gitIgnoredPathsByWorktree
+          : { ...s.gitIgnoredPathsByWorktree, [worktreeId]: nextIgnored },
         gitConflictOperationByWorktree: operationUnchanged
           ? s.gitConflictOperationByWorktree
           : { ...s.gitConflictOperationByWorktree, [worktreeId]: status.conflictOperation },
@@ -2188,6 +2209,48 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         fileSearchStateByWorktree: {
           ...s.fileSearchStateByWorktree,
           [worktreeId]: { ...current, ...updates }
+        }
+      }
+    }),
+  seedFileSearchQuery: (worktreeId, query) =>
+    set((s) => {
+      const current = s.fileSearchStateByWorktree[worktreeId] || {
+        query: '',
+        caseSensitive: false,
+        wholeWord: false,
+        useRegex: false,
+        includePattern: '',
+        excludePattern: '',
+        results: null,
+        loading: false,
+        collapsedFiles: new Set()
+      }
+      return {
+        fileSearchStateByWorktree: {
+          ...s.fileSearchStateByWorktree,
+          [worktreeId]: {
+            ...current,
+            query,
+            results: null,
+            loading: false,
+            collapsedFiles: new Set(),
+            seedRequestId: (current.seedRequestId ?? 0) + 1
+          }
+        }
+      }
+    }),
+  consumeFileSearchSeedRequest: (worktreeId, seedRequestId) =>
+    set((s) => {
+      const current = s.fileSearchStateByWorktree[worktreeId]
+      if (!current || current.seedRequestId !== seedRequestId) {
+        return s
+      }
+      const next = { ...current }
+      delete next.seedRequestId
+      return {
+        fileSearchStateByWorktree: {
+          ...s.fileSearchStateByWorktree,
+          [worktreeId]: next
         }
       }
     }),

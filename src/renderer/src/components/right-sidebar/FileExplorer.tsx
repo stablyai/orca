@@ -10,7 +10,7 @@ import { FileExplorerToolbar } from './FileExplorerToolbar'
 import { FileExplorerTreeStatus } from './FileExplorerTreeStatus'
 import { FileExplorerVirtualRows } from './FileExplorerVirtualRows'
 import { splitPathSegments } from './path-tree'
-import { buildFolderStatusMap, buildStatusMap } from './status-display'
+import { buildFolderStatusMap, buildIgnoredSet, buildStatusMap } from './status-display'
 import { useFileDeletion } from './useFileDeletion'
 import { useFileExplorerAutoReveal } from './useFileExplorerAutoReveal'
 import { useFileExplorerHandlers } from './useFileExplorerHandlers'
@@ -39,6 +39,7 @@ function FileExplorerInner(): React.JSX.Element {
   const pinFile = useAppStore((s) => s.pinFile)
   const activeFileId = useAppStore((s) => s.activeFileId)
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
+  const showGitIgnoredFiles = useAppStore((s) => s.settings?.showGitIgnoredFiles ?? true)
   const openFiles = useAppStore((s) => s.openFiles)
   const closeFile = useAppStore((s) => s.closeFile)
 
@@ -95,8 +96,15 @@ function FileExplorerInner(): React.JSX.Element {
     () => (activeWorktreeId ? (gitStatusByWorktree[activeWorktreeId] ?? []) : []),
     [activeWorktreeId, gitStatusByWorktree]
   )
+  const ignoredPaths = useAppStore((s) =>
+    activeWorktreeId ? (s.gitIgnoredPathsByWorktree[activeWorktreeId] ?? null) : null
+  )
   const statusByRelativePath = useMemo(() => buildStatusMap(entries), [entries])
   const folderStatusByRelativePath = useMemo(() => buildFolderStatusMap(entries), [entries])
+  const ignoredByRelativePath = useMemo(
+    () => (showGitIgnoredFiles ? buildIgnoredSet(ignoredPaths ?? undefined) : new Set<string>()),
+    [ignoredPaths, showGitIgnoredFiles]
+  )
 
   const { deleteShortcutLabel, requestDelete } = useFileDeletion({
     activeWorktreeId,
@@ -370,6 +378,7 @@ function FileExplorerInner(): React.JSX.Element {
               dismissInlineInput={dismissInlineInput}
               folderStatusByRelativePath={folderStatusByRelativePath}
               statusByRelativePath={statusByRelativePath}
+              ignoredByRelativePath={ignoredByRelativePath}
               expanded={expanded}
               dirCache={dirCache}
               selectedPaths={selectedPaths}

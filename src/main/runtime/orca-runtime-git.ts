@@ -38,16 +38,23 @@ export type RuntimeGitCommandHost = {
 export class RuntimeGitCommands {
   constructor(private readonly host: RuntimeGitCommandHost) {}
 
-  async getRuntimeGitStatus(worktreeSelector: string): Promise<GitStatusResult> {
+  async getRuntimeGitStatus(
+    worktreeSelector: string,
+    options?: { includeIgnored?: boolean }
+  ): Promise<GitStatusResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
         throw new Error('remote_git_unavailable')
       }
-      return provider.getStatus(target.worktree.path)
+      return options
+        ? provider.getStatus(target.worktree.path, options)
+        : provider.getStatus(target.worktree.path)
     }
-    return getGitStatus(target.worktree.path)
+    return options
+      ? getGitStatus(target.worktree.path, options)
+      : getGitStatus(target.worktree.path)
   }
 
   async getRuntimeGitConflictOperation(worktreeSelector: string): Promise<GitConflictOperation> {

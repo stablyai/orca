@@ -1177,11 +1177,13 @@ function SourceControlInner(): React.JSX.Element {
         await Promise.all([
           fetchHostedReviewForBranch(activeRepo.path, branchName, {
             force: true,
+            repoId: activeRepo.id,
             linkedGitHubPR: result.number,
             linkedGitLabMR
           }),
           fetchPRForBranch(activeRepo.path, branchName, {
             force: true,
+            repoId: activeRepo.id,
             linkedPRNumber: result.number
           })
         ])

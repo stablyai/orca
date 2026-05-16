@@ -1,16 +1,14 @@
-import type React from 'react'
+import React from 'react'
 import {
   Ban,
   Circle,
   CircleAlert,
-  CircleCheckBig,
   CircleDashed,
   CircleDot,
   CircleEllipsis,
   CirclePause,
   CirclePlay,
   Flag,
-  GitPullRequest,
   Timer
 } from 'lucide-react'
 import type { WorkspaceStatus, WorkspaceStatusDefinition } from '../../../../shared/types'
@@ -26,6 +24,11 @@ import {
   getWorkspaceStatusGroupKey,
   isWorkspaceStatusId
 } from '../../../../shared/workspace-statuses'
+import {
+  ConductorDoneIcon,
+  ConductorProgressIcon,
+  ConductorReviewIcon
+} from './workspace-status-icons'
 
 export {
   DEFAULT_WORKSPACE_STATUS_COLOR_ID,
@@ -122,22 +125,50 @@ export const WORKSPACE_STATUS_COLOR_OPTIONS: WorkspaceStatusColorOption[] = [
     swatch: 'bg-zinc-500',
     border: 'border-t-zinc-500/70',
     laneTint: 'bg-zinc-500/[0.04]'
+  },
+  {
+    id: 'conductor-done',
+    label: 'Conductor Done',
+    tone: 'text-[#c7a594]',
+    swatch: 'bg-[#c7a594]',
+    border: 'border-t-[#c7a594]/70',
+    laneTint: 'bg-[#c7a594]/[0.04]'
+  },
+  {
+    id: 'conductor-review',
+    label: 'Conductor Review',
+    tone: 'text-[#16a34a]',
+    swatch: 'bg-[#16a34a]',
+    border: 'border-t-[#16a34a]/70',
+    laneTint: 'bg-[#16a34a]/[0.04]'
+  },
+  {
+    id: 'conductor-progress',
+    label: 'Conductor Progress',
+    tone: 'text-[#d4a300]',
+    swatch: 'bg-[#d4a300]',
+    border: 'border-t-[#d4a300]/70',
+    laneTint: 'bg-[#d4a300]/[0.04]'
   }
 ]
 
 export const WORKSPACE_STATUS_ICON_OPTIONS: WorkspaceStatusIconOption[] = [
   { id: 'circle', label: 'Circle', icon: Circle },
   { id: 'circle-dot', label: 'Dot', icon: CircleDot },
+  { id: 'circle-progress', label: 'Progress', icon: ConductorProgressIcon },
   { id: 'circle-dashed', label: 'Dashed', icon: CircleDashed },
   { id: 'circle-ellipsis', label: 'Waiting', icon: CircleEllipsis },
-  { id: 'git-pull-request', label: 'Review', icon: GitPullRequest },
+  { id: 'git-pull-request', label: 'Review', icon: ConductorReviewIcon },
   { id: 'timer', label: 'Timer', icon: Timer },
   { id: 'flag', label: 'Flag', icon: Flag },
   { id: 'circle-alert', label: 'Alert', icon: CircleAlert },
   { id: 'circle-pause', label: 'Paused', icon: CirclePause },
   { id: 'circle-play', label: 'Play', icon: CirclePlay },
-  { id: 'circle-check', label: 'Done', icon: CircleCheckBig },
-  { id: 'ban', label: 'Blocked', icon: Ban }
+  { id: 'circle-check', label: 'Done', icon: ConductorDoneIcon },
+  { id: 'ban', label: 'Blocked', icon: Ban },
+  { id: 'conductor-done', label: 'Done', icon: ConductorDoneIcon },
+  { id: 'conductor-review', label: 'In review', icon: ConductorReviewIcon },
+  { id: 'conductor-progress', label: 'In progress', icon: ConductorProgressIcon }
 ]
 
 const FALLBACK_COLOR_OPTION: WorkspaceStatusColorOption = WORKSPACE_STATUS_COLOR_OPTIONS[0] ?? {
@@ -167,16 +198,16 @@ const DEFAULT_STATUS_VISUALS: Record<
     icon: 'circle'
   },
   'in-progress': {
-    color: 'blue',
-    icon: 'circle-dot'
+    color: 'conductor-progress',
+    icon: 'conductor-progress'
   },
   'in-review': {
-    color: 'violet',
-    icon: 'git-pull-request'
+    color: 'conductor-review',
+    icon: 'conductor-review'
   },
   completed: {
-    color: 'emerald',
-    icon: 'circle-check'
+    color: 'conductor-done',
+    icon: 'conductor-done'
   }
 }
 

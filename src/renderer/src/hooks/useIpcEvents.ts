@@ -5,7 +5,11 @@ import { getWorktreeMapFromState, getRepoMapFromState } from '@/store/selectors'
 import { applyUIZoom } from '@/lib/ui-zoom'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { runSleepWorktree } from '@/components/sidebar/sleep-worktree-flow'
-import { SPLIT_TERMINAL_PANE_EVENT, CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
+import {
+  BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
+  SPLIT_TERMINAL_PANE_EVENT,
+  CLOSE_TERMINAL_PANE_EVENT
+} from '@/constants/terminal'
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-font-zoom'
@@ -657,12 +661,28 @@ export function useIpcEvents(): void {
             })
             return
           }
-          store.setActiveView('terminal')
-          store.setActiveWorktree(worktreeId)
-          // Why: CLI-driven terminal-create request is user-initiated; stamp
-          // focus recency for Cmd+J. See docs/cmd-j-empty-query-ordering.md.
-          store.markWorktreeVisited(worktreeId)
-          const tab = store.createTab(worktreeId)
+          const shouldActivate = data.activate !== false
+          if (shouldActivate) {
+            store.setActiveView('terminal')
+            store.setActiveWorktree(worktreeId)
+            // Why: CLI-driven focused terminal-create requests are user-initiated
+            // worktree switches; unfocused renderer-backed creates must not reorder Cmd+J.
+            store.markWorktreeVisited(worktreeId)
+          } else {
+            // Why: renderer-backed Codex startup must mount a TerminalPane so the
+            // PTY is born in the renderer, but it must not switch the active UI.
+            window.dispatchEvent(
+              new CustomEvent(BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT, {
+                detail: { worktreeId }
+              })
+            )
+          }
+          const tab = store.createTab(
+            worktreeId,
+            undefined,
+            undefined,
+            shouldActivate ? undefined : { activate: false }
+          )
           if (data.afterTabId) {
             const createdUnifiedTab = useAppStore
               .getState()
@@ -688,9 +708,11 @@ export function useIpcEvents(): void {
               useAppStore.getState().reorderUnifiedTabs(createdUnifiedTab.groupId, order)
             }
           }
-          store.setActiveTabType('terminal')
-          store.setActiveTab(tab.id)
-          store.revealWorktreeInSidebar(worktreeId)
+          if (shouldActivate) {
+            store.setActiveTabType('terminal')
+            store.setActiveTab(tab.id)
+            store.revealWorktreeInSidebar(worktreeId)
+          }
           if (data.title) {
             store.setTabCustomTitle(tab.id, data.title)
           }

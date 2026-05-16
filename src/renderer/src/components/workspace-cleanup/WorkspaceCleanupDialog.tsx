@@ -100,7 +100,7 @@ function formatScanNoticeMessage(
   if (visibleErrors.length === 1) {
     const error = visibleErrors[0]
     const repoName = formatScanErrorRepoName(error, repoNameById)
-    return `Could not check ${repoName}: ${formatScanErrorReason(error.message)}. Some old workspaces may be missing. Refresh to try again.`
+    return `Could not check ${repoName}: ${formatScanErrorReason(error.message)}. Some inactive workspaces may be missing. Refresh to try again.`
   }
   const repoNames = visibleErrors
     .slice(0, 3)
@@ -108,7 +108,7 @@ function formatScanNoticeMessage(
     .join(', ')
   const moreCount = visibleErrors.length - 3
   const suffix = moreCount > 0 ? `, +${moreCount} more` : ''
-  return `Could not check ${visibleErrors.length} repositories (${repoNames}${suffix}). Some old workspaces may be missing. Refresh to try again.`
+  return `Could not check ${visibleErrors.length} repositories (${repoNames}${suffix}). Some inactive workspaces may be missing. Refresh to try again.`
 }
 
 function formatScanErrorRepoName(
@@ -412,9 +412,9 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
             <DialogHeader className="border-b border-border px-5 py-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <DialogTitle className="text-base">Clean Up Old Workspaces</DialogTitle>
+                  <DialogTitle className="text-base">Delete Inactive Workspaces</DialogTitle>
                   <DialogDescription className="mt-1 text-xs">
-                    Review old workspaces before deleting their local files and Orca state.
+                    Review inactive workspaces before deleting their local files and Orca state.
                   </DialogDescription>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
@@ -450,7 +450,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
             {initialLoading ? (
               <div className="flex items-center gap-2 border-b border-border bg-muted/25 px-5 py-3 text-xs text-muted-foreground">
                 <Loader2 className="size-3.5 animate-spin" />
-                Checking old workspaces
+                Checking inactive workspaces
               </div>
             ) : oldCandidateCount > 0 || hiddenByKeepCount > 0 ? (
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/25 px-4 py-2.5">
@@ -551,10 +551,10 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                   <div>
                     {initialLoading ? <SkeletonRows /> : null}
                     {!loading && scan && candidates.length === 0 && !scanNoticeMessage ? (
-                      <EmptyState title="No old workspaces to clean up." />
+                      <EmptyState title="No inactive workspaces to delete." />
                     ) : null}
                     {!loading && scan && candidates.length === 0 && scanNoticeMessage ? (
-                      <EmptyState title="No old workspaces found in checked repositories." />
+                      <EmptyState title="No inactive workspaces found in checked repositories." />
                     ) : null}
                     {!loading && scan && candidates.length > 0 && visibleCandidates.length === 0 ? (
                       <EmptyState

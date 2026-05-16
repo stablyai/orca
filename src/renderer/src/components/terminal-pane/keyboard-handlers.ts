@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: terminal keyboard routing keeps shortcut
+ * precedence in one ordered handler so shell input, pane commands, search, and
+ * split actions do not race across separate window listeners. */
 import { useEffect } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
@@ -5,6 +8,7 @@ import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
 import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
 import { keyboardEventBelongsToScope } from './terminal-keyboard-scope'
+import { normalizeSelectedTextForFileSearch } from '@/lib/file-search-selection'
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -64,6 +68,17 @@ export function matchSearchNavigate(
   return e.shiftKey ? 'previous' : 'next'
 }
 
+export function matchFileSearchShortcut(
+  e: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'repeat'>,
+  isMac: boolean
+): boolean {
+  if (e.repeat || e.altKey) {
+    return false
+  }
+  const mod = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey
+  return mod && e.shiftKey && e.key.toLowerCase() === 'f'
+}
+
 type KeyboardHandlersDeps = {
   isActive: boolean
   keyboardScopeRef: React.RefObject<HTMLElement | null>
@@ -79,6 +94,7 @@ type KeyboardHandlersDeps = {
   persistLayoutSnapshot: () => void
   toggleExpandPane: (paneId: number) => void
   setSearchOpen: React.Dispatch<React.SetStateAction<boolean>>
+  onSearchSelectedText: (text: string) => void
   onRequestClosePane: (paneId: number) => void
   searchOpenRef: React.RefObject<boolean>
   searchStateRef: React.RefObject<SearchState>
@@ -99,6 +115,7 @@ export function useTerminalKeyboardShortcuts({
   persistLayoutSnapshot,
   toggleExpandPane,
   setSearchOpen,
+  onSearchSelectedText,
   onRequestClosePane,
   searchOpenRef,
   searchStateRef,
@@ -135,6 +152,17 @@ export function useTerminalKeyboardShortcuts({
       const keyboardScope = keyboardScopeRef.current
       if (keyboardScope && !keyboardEventBelongsToScope(e, keyboardScope)) {
         return
+      }
+
+      if (matchFileSearchShortcut(e, isMac)) {
+        const pane = manager.getActivePane() ?? manager.getPanes()[0]
+        const selectedText = normalizeSelectedTextForFileSearch(pane?.terminal.getSelection())
+        if (selectedText) {
+          e.preventDefault()
+          e.stopImmediatePropagation()
+          onSearchSelectedText(selectedText)
+          return
+        }
       }
 
       // Cmd+G / Cmd+Shift+G navigates terminal search matches even when focus
@@ -352,6 +380,7 @@ export function useTerminalKeyboardShortcuts({
     persistLayoutSnapshot,
     toggleExpandPane,
     setSearchOpen,
+    onSearchSelectedText,
     onRequestClosePane,
     searchOpenRef,
     searchStateRef,

@@ -9,6 +9,7 @@ import { useAppStore } from '@/store'
 import { scrollTopCache, cursorPositionCache, setWithLRU } from '@/lib/scroll-cache'
 import '@/lib/monaco-setup'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
+import { registerFileSearchSelectedTextProvider } from '@/lib/file-search-selection'
 
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MAX_REVEAL_CONTENT_WAIT_FRAMES, performReveal } from './monaco-reveal'
@@ -33,6 +34,7 @@ import type { DiffComment } from '../../../../shared/types'
 import { isMarkdownComment } from '@/lib/diff-comment-compat'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
+import { getDiffCommentPopoverLeft } from '../diff-comments/diff-comment-popover-position'
 
 type MonacoEditorProps = {
   filePath: string
@@ -66,6 +68,7 @@ export default function MonacoEditor({
   markdownAnnotationsEnabled = false
 }: MonacoEditorProps): React.JSX.Element {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
+  const editorContainerRef = useRef<HTMLDivElement | null>(null)
   const [mountedEditor, setMountedEditor] = useState<editor.IStandaloneCodeEditor | null>(null)
   const modelKeyRef = useRef<string | null>(null)
   const languageRef = useRef(language)
@@ -75,6 +78,7 @@ export default function MonacoEditor({
   const revealHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const revealRafRef = useRef<number | null>(null)
   const revealInnerRafRef = useRef<number | null>(null)
+  const unregisterFileSearchSelectionRef = useRef<(() => void) | null>(null)
   const { setupCopy, toastNode } = useContextualCopySetup()
   // Why: The scroll throttle timer must be accessible from useLayoutEffect cleanup
   // so we can cancel any pending write before synchronously snapshotting the final
@@ -133,6 +137,7 @@ export default function MonacoEditor({
     lineNumber: number
     startLine?: number
     top: number
+    left?: number
   } | null>(null)
   const isDark =
     settings?.theme === 'dark' ||
@@ -172,7 +177,14 @@ export default function MonacoEditor({
     worktreeId: worktreeId ?? '',
     comments: shouldShowMarkdownAnnotations ? markdownComments : [],
     onAddCommentClick: ({ lineNumber, startLine, top }) =>
-      setCommentPopover({ lineNumber, startLine, top }),
+      setCommentPopover({
+        lineNumber,
+        startLine,
+        top,
+        left: mountedEditor
+          ? (getDiffCommentPopoverLeft(mountedEditor, editorContainerRef.current) ?? undefined)
+          : undefined
+      }),
     onDeleteComment: (id) => {
       if (worktreeId) {
         void deleteDiffComment(worktreeId, id)
@@ -285,6 +297,20 @@ export default function MonacoEditor({
       }
 
       setupCopy(editorInstance, monaco, filePath, propsRef)
+      unregisterFileSearchSelectionRef.current?.()
+      unregisterFileSearchSelectionRef.current = registerFileSearchSelectedTextProvider(() => {
+        if (!editorInstance.hasTextFocus()) {
+          return null
+        }
+        const model = editorInstance.getModel()
+        const selection = editorInstance.getSelection()
+        if (!model || !selection || selection.isEmpty()) {
+          return null
+        }
+        // Why: Monaco selections live in its text model, not the DOM selection
+        // API that app-level keyboard shortcuts can read.
+        return model.getValueInRange(selection)
+      })
 
       // Add Cmd+S save keybinding
       editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
@@ -391,13 +417,18 @@ export default function MonacoEditor({
     const update = (): void => {
       const top =
         mountedEditor.getTopForLineNumber(commentPopover.lineNumber) - mountedEditor.getScrollTop()
-      setCommentPopover((prev) => (prev ? { ...prev, top } : prev))
+      const left = getDiffCommentPopoverLeft(mountedEditor, editorContainerRef.current)
+      setCommentPopover((prev) =>
+        prev ? { ...prev, top, left: left == null ? prev.left : left } : prev
+      )
     }
     const scrollSub = mountedEditor.onDidScrollChange(update)
     const contentSub = mountedEditor.onDidContentSizeChange(update)
+    const layoutSub = mountedEditor.onDidLayoutChange(update)
     return () => {
       scrollSub.dispose()
       contentSub.dispose()
+      layoutSub.dispose()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- match DiffViewer: don't resubscribe on top updates.
   }, [mountedEditor, commentPopover?.lineNumber])
@@ -491,6 +522,8 @@ export default function MonacoEditor({
       }
       cancelScheduledReveal()
       clearTransientRevealHighlight()
+      unregisterFileSearchSelectionRef.current?.()
+      unregisterFileSearchSelectionRef.current = null
     }
   }, [cancelScheduledReveal, clearTransientRevealHighlight, viewStateKey])
 
@@ -538,13 +571,14 @@ export default function MonacoEditor({
   }, [queueReveal, revealLine, revealColumn, revealMatchLength, setPendingEditorReveal])
 
   return (
-    <div className="relative h-full">
+    <div ref={editorContainerRef} className="relative h-full">
       {commentPopover && shouldShowMarkdownAnnotations && (
         <DiffCommentPopover
           key={commentPopover.lineNumber}
           lineNumber={commentPopover.lineNumber}
           startLine={commentPopover.startLine}
           top={commentPopover.top}
+          left={commentPopover.left}
           onCancel={() => setCommentPopover(null)}
           onSubmit={handleSubmitMarkdownComment}
         />

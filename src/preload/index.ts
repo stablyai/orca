@@ -1873,8 +1873,11 @@ const api = {
   },
 
   git: {
-    status: (args: { worktreePath: string; connectionId?: string }): Promise<unknown> =>
-      ipcRenderer.invoke('git:status', args),
+    status: (args: {
+      worktreePath: string
+      connectionId?: string
+      includeIgnored?: boolean
+    }): Promise<unknown> => ipcRenderer.invoke('git:status', args),
     conflictOperation: (args: { worktreePath: string; connectionId?: string }): Promise<unknown> =>
       ipcRenderer.invoke('git:conflictOperation', args),
     diff: (args: {
@@ -2205,6 +2208,7 @@ const api = {
         afterTabId?: string
         command?: string
         title?: string
+        activate?: boolean
       }) => void
     ): (() => void) => {
       const listener = (
@@ -2215,6 +2219,7 @@ const api = {
           afterTabId?: string
           command?: string
           title?: string
+          activate?: boolean
         }
       ) => callback(data)
       ipcRenderer.on('terminal:requestTabCreate', listener)

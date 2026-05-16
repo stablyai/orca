@@ -114,6 +114,7 @@
   --git-decoration-renamed: #007acc;
   --git-decoration-untracked: #007100;
   --git-decoration-copied: #007acc;
+  --git-decoration-ignored: #8c8c8c;
 }
 
 /* ── Dark Mode ───────────────────────────────────────── */
@@ -158,6 +159,7 @@
   --git-decoration-renamed: #73c991;
   --git-decoration-untracked: #73c991;
   --git-decoration-copied: #73c991;
+  --git-decoration-ignored: #6e6e6e;
 }
 
 /* ── Base Layer ──────────────────────────────────────── */

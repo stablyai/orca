@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import { createHostedReviewSlice } from './hosted-review'
+import { createHostedReviewSlice, refreshHostedReviewCard } from './hosted-review'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 
 const runtimeRpc = vi.hoisted(() => ({
@@ -103,5 +103,24 @@ describe('hosted review slice', () => {
       },
       { timeoutMs: 30_000 }
     )
+  })
+
+  it('forces card refresh with repo-scoped identity and linked review ids', async () => {
+    const fetchHostedReviewForBranch = vi.fn().mockResolvedValue(null)
+    await refreshHostedReviewCard(fetchHostedReviewForBranch, {
+      repoPath: '/repo',
+      repoId: 'repo-id',
+      branch: 'feature/test',
+      linkedGitHubPR: null,
+      linkedGitLabMR: 33
+    })
+    expect(fetchHostedReviewForBranch).toHaveBeenCalledWith('/repo', 'feature/test', {
+      force: true,
+      repoId: 'repo-id',
+      linkedGitHubPR: null,
+      linkedGitLabMR: 33,
+      linkedBitbucketPR: null,
+      linkedGiteaPR: null
+    })
   })
 })

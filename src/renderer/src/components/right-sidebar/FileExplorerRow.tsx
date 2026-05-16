@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef } from 'react'
 import {
   ChevronRight,
+  CircleSlash,
   Copy,
   ExternalLink,
   Eye,
@@ -198,6 +199,7 @@ type FileExplorerRowProps = {
   isFlashing: boolean
   nodeStatus: GitFileStatus | null
   statusColor: string | null
+  isIgnored: boolean
   deleteShortcutLabel: string
   targetDir: string
   targetDepth: number
@@ -226,6 +228,7 @@ export function FileExplorerRow({
   isFlashing,
   nodeStatus,
   statusColor,
+  isIgnored,
   deleteShortcutLabel,
   targetDir,
   targetDepth,
@@ -311,8 +314,18 @@ export function FileExplorerRow({
             </>
           )}
           <span
-            className={cn('truncate', isSelected && !nodeStatus && 'text-accent-foreground')}
-            style={nodeStatus ? { color: statusColor ?? undefined } : undefined}
+            className={cn(
+              'truncate',
+              isSelected && !nodeStatus && !isIgnored && 'text-accent-foreground',
+              isIgnored && 'italic'
+            )}
+            style={
+              nodeStatus
+                ? { color: statusColor ?? undefined }
+                : isIgnored
+                  ? { color: 'var(--git-decoration-ignored)' }
+                  : undefined
+            }
             onDoubleClick={(e) => {
               // Why: the row itself swallows double-click for "pin preview" /
               // directory toggle. Scope rename to the filename text only so
@@ -324,14 +337,20 @@ export function FileExplorerRow({
           >
             {node.name}
           </span>
-          {nodeStatus && (
+          {nodeStatus ? (
             <span
               className="ml-auto shrink-0 text-[10px] font-semibold tracking-wide mr-2"
               style={{ color: statusColor ?? undefined }}
             >
               {STATUS_LABELS[nodeStatus]}
             </span>
-          )}
+          ) : isIgnored ? (
+            <CircleSlash
+              aria-label="Ignored by .gitignore"
+              className="ml-auto size-3 shrink-0 mr-2"
+              style={{ color: 'var(--git-decoration-ignored)' }}
+            />
+          ) : null}
         </button>
       </ContextMenuTrigger>
       <ContextMenuContent

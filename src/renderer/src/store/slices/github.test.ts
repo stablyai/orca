@@ -81,8 +81,9 @@ describe('createGitHubSlice.fetchPRChecks', () => {
   it('updates the matching PR cache entry with derived check status', async () => {
     const store = createTestStore()
     const repoPath = '/repo'
+    const repoId = 'repo-id'
     const branch = 'feature/test'
-    const prCacheKey = `${repoPath}::${branch}`
+    const prCacheKey = `${repoId}::${branch}`
 
     store.setState({
       prCache: {
@@ -98,7 +99,7 @@ describe('createGitHubSlice.fetchPRChecks', () => {
       { name: 'lint', status: 'completed', conclusion: 'success', url: null }
     ])
 
-    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, { force: true })
+    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, { force: true, repoId })
 
     expect(store.getState().prCache[prCacheKey]?.data?.checksStatus).toBe('success')
   })
@@ -106,8 +107,9 @@ describe('createGitHubSlice.fetchPRChecks', () => {
   it('marks the PR cache entry as failure when any check fails', async () => {
     const store = createTestStore()
     const repoPath = '/repo'
+    const repoId = 'repo-id'
     const branch = 'feature/test'
-    const prCacheKey = `${repoPath}::${branch}`
+    const prCacheKey = `${repoId}::${branch}`
 
     store.setState({
       prCache: {
@@ -123,7 +125,7 @@ describe('createGitHubSlice.fetchPRChecks', () => {
       { name: 'integration', status: 'completed', conclusion: 'failure', url: null }
     ])
 
-    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, { force: true })
+    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, { force: true, repoId })
 
     expect(store.getState().prCache[prCacheKey]?.data?.checksStatus).toBe('failure')
   })
@@ -131,8 +133,9 @@ describe('createGitHubSlice.fetchPRChecks', () => {
   it('normalizes refs/heads branch names before updating PR cache status', async () => {
     const store = createTestStore()
     const repoPath = '/repo'
+    const repoId = 'repo-id'
     const branch = 'feature/test'
-    const prCacheKey = `${repoPath}::${branch}`
+    const prCacheKey = `${repoId}::${branch}`
 
     store.setState({
       prCache: {
@@ -149,7 +152,7 @@ describe('createGitHubSlice.fetchPRChecks', () => {
 
     await store
       .getState()
-      .fetchPRChecks(repoPath, 12, `refs/heads/${branch}`, undefined, { force: true })
+      .fetchPRChecks(repoPath, 12, `refs/heads/${branch}`, undefined, { force: true, repoId })
 
     expect(store.getState().prCache[prCacheKey]?.data?.checksStatus).toBe('success')
   })
@@ -159,8 +162,9 @@ describe('createGitHubSlice.fetchPRChecks', () => {
 
     const store = createTestStore()
     const repoPath = '/repo'
+    const repoId = 'repo-id'
     const branch = 'feature/test'
-    const prCacheKey = `${repoPath}::${branch}`
+    const prCacheKey = `${repoId}::${branch}`
 
     store.setState({
       prCache: {
@@ -175,7 +179,7 @@ describe('createGitHubSlice.fetchPRChecks', () => {
       { name: 'build', status: 'completed', conclusion: 'success', url: null }
     ])
 
-    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, { force: true })
+    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, { force: true, repoId })
     await vi.advanceTimersByTimeAsync(1000)
 
     expect(mockApi.cache.setGitHub).toHaveBeenCalledWith({
@@ -191,9 +195,10 @@ describe('createGitHubSlice.fetchPRChecks', () => {
 
     const store = createTestStore()
     const repoPath = '/repo'
+    const repoId = 'repo-id'
     const branch = 'feature/test'
-    const prCacheKey = `${repoPath}::${branch}`
-    const checksCacheKey = `${repoPath}::pr-checks::12`
+    const prCacheKey = `${repoId}::${branch}`
+    const checksCacheKey = `${repoId}::pr-checks::12`
 
     store.setState({
       prCache: {
@@ -210,7 +215,7 @@ describe('createGitHubSlice.fetchPRChecks', () => {
       }
     })
 
-    await store.getState().fetchPRChecks(repoPath, 12, branch)
+    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, { repoId })
     await vi.advanceTimersByTimeAsync(1000)
 
     expect(mockApi.gh.prChecks).not.toHaveBeenCalled()
@@ -226,8 +231,9 @@ describe('createGitHubSlice.fetchPRChecks', () => {
   it('passes the cached PR head SHA to the checks IPC request', async () => {
     const store = createTestStore()
     const repoPath = '/repo'
+    const repoId = 'repo-id'
     const branch = 'feature/test'
-    const prCacheKey = `${repoPath}::${branch}`
+    const prCacheKey = `${repoId}::${branch}`
 
     store.setState({
       prCache: {
@@ -238,14 +244,42 @@ describe('createGitHubSlice.fetchPRChecks', () => {
       }
     })
 
-    await store.getState().fetchPRChecks(repoPath, 12, branch, 'abc123head', { force: true })
+    await store
+      .getState()
+      .fetchPRChecks(repoPath, 12, branch, 'abc123head', { force: true, repoId })
 
     expect(mockApi.gh.prChecks).toHaveBeenCalledWith({
       repoPath,
+      repoId,
       prNumber: 12,
       headSha: 'abc123head',
       noCache: true
     })
+  })
+
+  it('updates repo-scoped PR cache entry instead of repoPath fallback key', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+    const branch = 'feature/test'
+    const repoScopedKey = `${repoId}::${branch}`
+    const pathScopedKey = `${repoPath}::${branch}`
+
+    store.setState({
+      prCache: {
+        [repoScopedKey]: { data: makePR({ checksStatus: 'pending' }), fetchedAt: 1 },
+        [pathScopedKey]: { data: makePR({ checksStatus: 'pending' }), fetchedAt: 1 }
+      }
+    })
+
+    mockApi.gh.prChecks.mockResolvedValue([
+      { name: 'build', status: 'completed', conclusion: 'success', url: null }
+    ])
+
+    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, { force: true, repoId })
+
+    expect(store.getState().prCache[repoScopedKey]?.data?.checksStatus).toBe('success')
+    expect(store.getState().prCache[pathScopedKey]?.data?.checksStatus).toBe('pending')
   })
 })
 
