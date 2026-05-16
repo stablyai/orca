@@ -5,7 +5,6 @@ describe('dev-instance-identity', () => {
   it('keeps packaged identity stable', () => {
     expect(getDevInstanceIdentity(false, {})).toMatchObject({
       name: 'Orca',
-      windowTitle: 'Orca',
       isDev: false,
       devLabel: null,
       dockBadgeLabel: null,
@@ -28,8 +27,6 @@ describe('dev-instance-identity', () => {
       devRepoRoot: '/repo/worktrees/dev-indicator'
     })
     expect(identity.name).toMatch(/^Orca Dev \[DI[A-Z0-9]{2}\]: nwparker\/dev-indicator$/)
-    expect(identity.windowTitle).toBe(identity.name)
-    expect(identity.dockTitle).toBe(identity.name)
     expect(identity.dockBadgeLabel).toMatch(/^DI[A-Z0-9]{2}$/)
     expect(identity.appUserModelId).toMatch(/^com\.stablyai\.orca\.dev\.[a-f0-9]{10}$/)
   })

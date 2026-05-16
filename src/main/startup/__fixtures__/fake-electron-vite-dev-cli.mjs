@@ -29,7 +29,6 @@ if (envFile) {
         repoRoot: process.env.ORCA_DEV_REPO_ROOT ?? null,
         badgeLabel: process.env.ORCA_DEV_DOCK_BADGE_LABEL ?? null,
         dockTitle: process.env.ORCA_DEV_DOCK_TITLE ?? null,
-        electronOverrideDistPath: process.env.ELECTRON_OVERRIDE_DIST_PATH ?? null,
         electronExecPath: process.env.ELECTRON_EXEC_PATH ?? null
       },
       null,

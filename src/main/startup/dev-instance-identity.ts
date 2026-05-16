@@ -8,7 +8,6 @@ const MAX_LABEL_LENGTH = 80
 
 export type DevInstanceIdentity = AppIdentity & {
   appUserModelId: string
-  windowTitle: string
 }
 
 function cleanEnvValue(value: string | undefined): string | null {
@@ -77,14 +76,12 @@ export function getDevInstanceIdentity(
   if (!isDev) {
     return {
       name: BASE_APP_NAME,
-      windowTitle: BASE_APP_NAME,
       isDev: false,
       devLabel: null,
       devBranch: null,
       devWorktreeName: null,
       devRepoRoot: null,
       dockBadgeLabel: null,
-      dockTitle: null,
       appUserModelId: BASE_APP_USER_MODEL_ID
     }
   }
@@ -102,18 +99,15 @@ export function getDevInstanceIdentity(
   const dockTitle =
     cleanEnvValue(env.ORCA_DEV_DOCK_TITLE) ??
     `${BASE_APP_NAME} Dev${dockBadgeLabel ? ` [${dockBadgeLabel}]` : ''}: ${branch ?? devLabel ?? 'dev'}`
-  const name = dockTitle
 
   return {
-    name,
-    windowTitle: name,
+    name: dockTitle,
     isDev: true,
     devLabel,
     devBranch: branch,
     devWorktreeName: worktreeName,
     devRepoRoot: repoRoot,
     dockBadgeLabel,
-    dockTitle,
     appUserModelId: createDevAppUserModelId(repoRoot ?? devLabel)
   }
 }

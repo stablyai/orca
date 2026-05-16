@@ -6,5 +6,4 @@ export type AppIdentity = {
   devWorktreeName: string | null
   devRepoRoot: string | null
   dockBadgeLabel: string | null
-  dockTitle: string | null
 }

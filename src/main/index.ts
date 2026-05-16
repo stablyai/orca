@@ -258,7 +258,7 @@ function openMainWindow(): BrowserWindow {
       isQuitting = false
     },
     deferLoad: true,
-    title: devInstanceIdentity.windowTitle
+    title: devInstanceIdentity.name
   })
 
   // Why: telemetry-plan.md§First-launch experience anchors default-on

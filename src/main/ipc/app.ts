@@ -85,8 +85,7 @@ export function registerAppHandlers(): void {
       devBranch: identity.devBranch,
       devWorktreeName: identity.devWorktreeName,
       devRepoRoot: identity.devRepoRoot,
-      dockBadgeLabel: identity.dockBadgeLabel,
-      dockTitle: identity.dockTitle
+      dockBadgeLabel: identity.dockBadgeLabel
     }
   })
 

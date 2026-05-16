@@ -173,8 +173,7 @@ function prepareMacDevElectronApp() {
   if (existsSync(markerPath) && existsSync(appPath)) {
     try {
       if (readFileSync(markerPath, 'utf8') === expectedMarker) {
-        process.env.ELECTRON_OVERRIDE_DIST_PATH ||= distDir
-        process.env.ELECTRON_EXEC_PATH ||= path.join(appPath, 'Contents', 'MacOS', 'Electron')
+        process.env.ELECTRON_EXEC_PATH = path.join(appPath, 'Contents', 'MacOS', 'Electron')
         return
       }
     } catch {}
@@ -193,8 +192,7 @@ function prepareMacDevElectronApp() {
   // and Electron's framework bundle is ambiguous to codesign when deep-signing
   // an already-built distribution. Avoid blocking `pn dev` on local signing.
   writeFileSync(markerPath, expectedMarker, 'utf8')
-  process.env.ELECTRON_OVERRIDE_DIST_PATH ||= distDir
-  process.env.ELECTRON_EXEC_PATH ||= path.join(appPath, 'Contents', 'MacOS', 'Electron')
+  process.env.ELECTRON_EXEC_PATH = path.join(appPath, 'Contents', 'MacOS', 'Electron')
 }
 
 function getDevUserDataPath() {

@@ -69,8 +69,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
           devBranch: null,
           devWorktreeName: null,
           devRepoRoot: null,
-          dockBadgeLabel: null,
-          dockTitle: null
+          dockBadgeLabel: null
         }),
       getFeatureWallAssetBaseUrl: () => Promise.resolve('/'),
       relaunch: () => Promise.resolve(window.location.reload()),

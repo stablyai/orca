@@ -148,7 +148,6 @@ describe('run-electron-vite-dev', () => {
       repoRoot: string
       badgeLabel: string
       dockTitle: string
-      electronOverrideDistPath: string | null
       electronExecPath: string | null
     }
     expect(envSnapshot.args).toContain('--remote-debugging-port=9444')
@@ -158,7 +157,6 @@ describe('run-electron-vite-dev', () => {
     expect(envSnapshot.repoRoot).toBe(resolve('.'))
     expect(envSnapshot.badgeLabel).toMatch(/^PU[A-Z0-9]{2}$/)
     expect(envSnapshot.dockTitle).toMatch(/^Orca Dev \[PU[A-Z0-9]{2}\]: feature\/billing-shell$/)
-    expect(envSnapshot.electronOverrideDistPath).toBeNull()
     expect(envSnapshot.electronExecPath).toBeNull()
 
     wrapper.kill('SIGINT')
