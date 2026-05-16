@@ -67,6 +67,7 @@ import { openHttpLink } from '@/lib/http-link-routing'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { markdownPreviewUrlTransform } from './markdown-preview-url-transform'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { statRuntimePath } from '@/runtime/runtime-file-client'
 import { buildMarkdownTableOfContents } from './markdown-table-of-contents'
 import { MarkdownTableOfContentsPanel } from './MarkdownTableOfContentsPanel'
 import { getDiffCommentLineLabel, isMarkdownComment } from '@/lib/diff-comment-compat'
@@ -752,7 +753,7 @@ export default function MarkdownPreview({
           )
         }
 
-        const handleClick = (event: React.MouseEvent<HTMLAnchorElement>): void => {
+        const handleClick = async (event: React.MouseEvent<HTMLAnchorElement>): Promise<void> => {
           if (!href) {
             return
           }
@@ -885,6 +886,27 @@ export default function MarkdownPreview({
 
           const relativePath = absolutePath.slice(targetWorktree.path.length + 1)
           const language = detectLanguage(absolutePath)
+          try {
+            const stats = await statRuntimePath(
+              {
+                settings: settingsForRuntimeOwner(
+                  useAppStore.getState().settings,
+                  sourceRuntimeEnvironmentId
+                ),
+                worktreeId: targetWorktree.id,
+                worktreePath: targetWorktree.path,
+                connectionId: getConnectionId(targetWorktree.id) ?? undefined
+              },
+              absolutePath
+            )
+            if (stats.isDirectory) {
+              toast.error(`Cannot open directory: ${relativePath}`)
+              return
+            }
+          } catch {
+            toast.error(`File not found: ${relativePath}`)
+            return
+          }
 
           // Why: line targets like #L10 and path.ts:10 should reveal in Monaco,
           // not open a preview tab or a literal path with the suffix included.

@@ -413,7 +413,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
           <DropdownMenuSub>
             <DropdownMenuSubTrigger disabled={deletingContext}>
               <Kanban className="size-3.5" />
-              {isMultiContext ? 'Move Selected to Status' : 'Move to Status'}
+              {isMultiContext ? 'Move Statuses To' : 'Move to Status'}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="w-44">
               <DropdownMenuRadioGroup value={contextWorkspaceStatus}>

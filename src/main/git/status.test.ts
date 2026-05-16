@@ -535,6 +535,10 @@ describe('getBranchCompare', () => {
       .mockResolvedValueOnce({
         stdout: 'M\tfile-a.ts\nR100\told-name.ts\tnew-name.ts\nC100\told-copy.ts\tnew-copy.ts\n'
       })
+      .mockResolvedValueOnce({
+        stdout:
+          '10\t2\tfile-a.ts\n1\t1\told-name.ts => new-name.ts\n3\t0\told-copy.ts => new-copy.ts\n'
+      })
       .mockResolvedValueOnce({ stdout: '7\n' })
 
     const result = await getBranchCompare('/repo', 'origin/main')
@@ -550,9 +554,9 @@ describe('getBranchCompare', () => {
       status: 'ready'
     })
     expect(result.entries).toEqual([
-      { path: 'file-a.ts', status: 'modified' },
-      { path: 'new-name.ts', oldPath: 'old-name.ts', status: 'renamed' },
-      { path: 'new-copy.ts', oldPath: 'old-copy.ts', status: 'copied' }
+      { path: 'file-a.ts', status: 'modified', added: 10, removed: 2 },
+      { path: 'new-name.ts', oldPath: 'old-name.ts', status: 'renamed', added: 1, removed: 1 },
+      { path: 'new-copy.ts', oldPath: 'old-copy.ts', status: 'copied', added: 3, removed: 0 }
     ])
   })
 
@@ -602,6 +606,7 @@ describe('getBranchCompare', () => {
       .mockResolvedValueOnce({ stdout: 'base-oid\n' })
       .mockResolvedValueOnce({ stdout: 'merge-base-oid\n' })
       .mockResolvedValueOnce({ stdout: 'M\tdocs/日本語/sample.md\n' })
+      .mockResolvedValueOnce({ stdout: '2\t1\tdocs/日本語/sample.md\n' })
       .mockResolvedValueOnce({ stdout: '1\n' })
 
     const result = await getBranchCompare('/repo', 'origin/main')
@@ -620,6 +625,8 @@ describe('getBranchCompare', () => {
       ],
       expect.objectContaining({ cwd: '/repo' })
     )
-    expect(result.entries).toEqual([{ path: 'docs/日本語/sample.md', status: 'modified' }])
+    expect(result.entries).toEqual([
+      { path: 'docs/日本語/sample.md', status: 'modified', added: 2, removed: 1 }
+    ])
   })
 })

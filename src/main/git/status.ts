@@ -7,6 +7,7 @@ import type {
   GitBranchChangeStatus,
   GitBranchCompareResult,
   GitBranchCompareSummary,
+  GitCommitCompareResult,
   GitConflictKind,
   GitConflictOperation,
   GitDiffResult,
@@ -510,6 +511,94 @@ export async function getBranchDiff(
   }
 }
 
+export async function getCommitCompare(
+  worktreePath: string,
+  commitId: string
+): Promise<GitCommitCompareResult> {
+  let commitOid = ''
+  try {
+    commitOid = await resolveRefOid(worktreePath, `${commitId}^{commit}`)
+  } catch {
+    return {
+      summary: {
+        commitOid: '',
+        parentOid: null,
+        compareRef: commitId,
+        baseRef: 'parent',
+        changedFiles: 0,
+        status: 'invalid-commit',
+        errorMessage: `Commit ${commitId} could not be resolved in this repository.`
+      },
+      entries: []
+    }
+  }
+
+  const summary = {
+    commitOid,
+    parentOid: null as string | null,
+    compareRef: commitOid.slice(0, 7),
+    baseRef: 'empty tree',
+    changedFiles: 0,
+    status: 'ready' as const
+  }
+
+  try {
+    const { stdout } = await gitExecFileAsync(['rev-list', '--parents', '-n', '1', commitOid], {
+      cwd: worktreePath
+    })
+    const [, firstParent] = stdout.trim().split(/\s+/)
+    summary.parentOid = firstParent ?? null
+    summary.baseRef = firstParent ? firstParent.slice(0, 7) : 'empty tree'
+
+    const entries = await loadCommitChanges(worktreePath, summary.parentOid, commitOid)
+    summary.changedFiles = entries.length
+    return { summary, entries }
+  } catch (error) {
+    return {
+      summary: {
+        ...summary,
+        status: 'error',
+        errorMessage: error instanceof Error ? error.message : 'Failed to load commit diff'
+      },
+      entries: []
+    }
+  }
+}
+
+export async function getCommitDiff(
+  worktreePath: string,
+  args: {
+    commitOid: string
+    parentOid?: string | null
+    filePath: string
+    oldPath?: string
+  }
+): Promise<GitDiffResult> {
+  try {
+    const leftPath = args.oldPath ?? args.filePath
+    const leftBlob = args.parentOid
+      ? await readGitBlobAtOidPath(worktreePath, args.parentOid, leftPath)
+      : { content: '', isBinary: false }
+    const rightBlob = await readGitBlobAtOidPath(worktreePath, args.commitOid, args.filePath)
+
+    return buildDiffResult(
+      leftBlob.content,
+      rightBlob.content,
+      leftBlob.isBinary,
+      rightBlob.isBinary,
+      args.filePath
+    )
+  } catch {
+    return {
+      kind: 'text',
+      originalContent: '',
+      modifiedContent: '',
+      originalIsBinary: false,
+      modifiedIsBinary: false
+    }
+  }
+}
+
 async function loadBranchChanges(
   worktreePath: string,
   mergeBase: string,
@@ -517,10 +606,20 @@ async function loadBranchChanges(
 ): Promise<GitBranchChangeEntry[]> {
   // Why: see core.quotePath=false rationale in getStatus — same reason here so
   // branch-diff entries render with their real UTF-8 paths.
-  const { stdout } = await gitExecFileAsync(
-    ['-c', 'core.quotePath=false', 'diff', '--name-status', '-M', '-C', mergeBase, headOid],
-    { cwd: worktreePath, maxBuffer: MAX_GIT_SHOW_BYTES }
-  )
+  const gitOptions = { cwd: worktreePath, maxBuffer: MAX_GIT_SHOW_BYTES }
+  // Why: both diffs walk the same range and are independent, so start them
+  // together instead of serializing two potentially large git operations.
+  const [{ stdout }, { stdout: numstat }] = await Promise.all([
+    gitExecFileAsync(
+      ['-c', 'core.quotePath=false', 'diff', '--name-status', '-M', '-C', mergeBase, headOid],
+      gitOptions
+    ),
+    gitExecFileAsync(
+      ['-c', 'core.quotePath=false', 'diff', '--numstat', '-M', '-C', mergeBase, headOid],
+      gitOptions
+    )
+  ])
+  const statsByPath = parseBranchChangeNumstat(numstat)
 
   const entries: GitBranchChangeEntry[] = []
   // [Fix]: Split by /\r?\n/ instead of '\n' to handle Git CRLF output on Windows,
@@ -531,10 +630,106 @@ async function loadBranchChanges(
     }
     const entry = parseBranchChangeLine(line)
     if (entry) {
-      entries.push(entry)
+      entries.push({ ...entry, ...statsByPath.get(entry.path) })
     }
   }
   return entries
+}
+
+async function loadCommitChanges(
+  worktreePath: string,
+  parentOid: string | null,
+  commitOid: string
+): Promise<GitBranchChangeEntry[]> {
+  // Why: root commits have no parent tree; diff-tree --root asks git to
+  // compare against the repository's empty tree without hardcoding hash format.
+  const args = parentOid
+    ? ['-c', 'core.quotePath=false', 'diff', '--name-status', '-M', '-C', parentOid, commitOid]
+    : [
+        '-c',
+        'core.quotePath=false',
+        'diff-tree',
+        '--root',
+        '--no-commit-id',
+        '--name-status',
+        '-r',
+        '-M',
+        '-C',
+        commitOid
+      ]
+  const numstatArgs = parentOid
+    ? ['-c', 'core.quotePath=false', 'diff', '--numstat', '-M', '-C', parentOid, commitOid]
+    : [
+        '-c',
+        'core.quotePath=false',
+        'diff-tree',
+        '--root',
+        '--no-commit-id',
+        '--numstat',
+        '-r',
+        '-M',
+        '-C',
+        commitOid
+      ]
+  const gitOptions = { cwd: worktreePath, maxBuffer: MAX_GIT_SHOW_BYTES }
+  // Why: commit diff rows need metadata and line counts, but those git queries
+  // do not depend on each other.
+  const [{ stdout }, { stdout: numstat }] = await Promise.all([
+    gitExecFileAsync(args, gitOptions),
+    gitExecFileAsync(numstatArgs, gitOptions)
+  ])
+  const statsByPath = parseBranchChangeNumstat(numstat)
+
+  const entries: GitBranchChangeEntry[] = []
+  for (const line of stdout.split(/\r?\n/)) {
+    if (!line) {
+      continue
+    }
+    const entry = parseBranchChangeLine(line)
+    if (entry) {
+      entries.push({ ...entry, ...statsByPath.get(entry.path) })
+    }
+  }
+  return entries
+}
+
+function parseBranchChangeCount(value: string): number | undefined {
+  if (value === '-') {
+    return undefined
+  }
+  const count = Number.parseInt(value, 10)
+  return Number.isFinite(count) ? count : undefined
+}
+
+function normalizeBranchNumstatPath(path: string): string {
+  const bracedRename = /^(.*)\{(.+) => (.+)\}(.*)$/.exec(path)
+  if (bracedRename) {
+    return `${bracedRename[1]}${bracedRename[3]}${bracedRename[4]}`
+  }
+  const renameMarker = ' => '
+  const markerIndex = path.lastIndexOf(renameMarker)
+  return markerIndex === -1 ? path : path.slice(markerIndex + renameMarker.length)
+}
+
+function parseBranchChangeNumstat(
+  stdout: string
+): Map<string, Pick<GitBranchChangeEntry, 'added' | 'removed'>> {
+  const stats = new Map<string, Pick<GitBranchChangeEntry, 'added' | 'removed'>>()
+  for (const line of stdout.split(/\r?\n/)) {
+    if (!line) {
+      continue
+    }
+    const parts = line.split('\t')
+    const rawPath = parts.slice(2).join('\t')
+    if (!rawPath) {
+      continue
+    }
+    stats.set(normalizeBranchNumstatPath(rawPath), {
+      added: parseBranchChangeCount(parts[0] ?? ''),
+      removed: parseBranchChangeCount(parts[1] ?? '')
+    })
+  }
+  return stats
 }
 
 function parseBranchChangeLine(line: string): GitBranchChangeEntry | null {

@@ -36,11 +36,13 @@ export function getEditorPanelRenderModel({
     activeFile.mode === 'diff' &&
     activeFile.diffSource !== undefined &&
     activeFile.diffSource !== 'combined-uncommitted' &&
-    activeFile.diffSource !== 'combined-branch'
+    activeFile.diffSource !== 'combined-branch' &&
+    activeFile.diffSource !== 'combined-commit'
   const isCombinedDiff =
     activeFile.mode === 'diff' &&
     (activeFile.diffSource === 'combined-uncommitted' ||
-      activeFile.diffSource === 'combined-branch')
+      activeFile.diffSource === 'combined-branch' ||
+      activeFile.diffSource === 'combined-commit')
   const resolvedLanguage =
     activeFile.mode === 'diff'
       ? detectLanguage(activeFile.relativePath)
@@ -48,7 +50,8 @@ export function getEditorPanelRenderModel({
   const worktreeEntries = gitStatusByWorktree[activeFile.worktreeId] ?? []
   const branchEntries = gitBranchChangesByWorktree[activeFile.worktreeId] ?? []
   const matchingWorktreeEntry =
-    activeFile.mode === 'diff' && activeFile.diffSource !== 'branch'
+    activeFile.mode === 'diff' &&
+    (activeFile.diffSource === 'staged' || activeFile.diffSource === 'unstaged')
       ? (worktreeEntries.find(
           (entry) =>
             entry.path === activeFile.relativePath &&

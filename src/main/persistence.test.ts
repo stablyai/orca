@@ -191,6 +191,7 @@ describe('Store', () => {
     expect(settings.editorAutoSaveDelayMs).toBe(1000)
     expect(settings.terminalFontSize).toBe(14)
     expect(settings.terminalFontWeight).toBe(500)
+    expect(settings.terminalUseSeparateLightTheme).toBe(true)
     expect(settings.rightSidebarOpenByDefault).toBe(true)
     expect(settings.showTasksButton).toBe(true)
     expect(settings.visibleTaskProviders).toEqual(['github', 'gitlab', 'linear'])
@@ -589,6 +590,21 @@ describe('Store', () => {
 
     const store = await createStore()
     expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
+  })
+
+  it('preserves terminalUseSeparateLightTheme when persisted as false', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { terminalUseSeparateLightTheme: false },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().terminalUseSeparateLightTheme).toBe(false)
   })
 
   // ── 5. addRepo and getRepo ──────────────────────────────────────────

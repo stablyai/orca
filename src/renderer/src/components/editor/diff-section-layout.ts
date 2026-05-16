@@ -3,6 +3,7 @@ import type { GitDiffResult } from '../../../../shared/types'
 const DIFF_LINE_HEIGHT = 19
 const DIFF_SECTION_PADDING_HEIGHT = 19
 const MIN_DIFF_SECTION_BODY_HEIGHT = 60
+const DIFF_SECTION_HEADER_HEIGHT = 28
 
 type DiffSectionBodyHeightInput = {
   measuredContentHeight: number | undefined
@@ -34,5 +35,27 @@ export function getDiffSectionBodyHeight({
     Math.max(originalContent.split('\n').length, modifiedContent.split('\n').length) *
       DIFF_LINE_HEIGHT +
       DIFF_SECTION_PADDING_HEIGHT
+  )
+}
+
+export function getDiffSectionEstimatedHeight({
+  collapsed,
+  measuredContentHeight,
+  originalContent,
+  modifiedContent,
+  useIntrinsicImageHeight
+}: DiffSectionBodyHeightInput & { collapsed: boolean }): number {
+  if (collapsed) {
+    return DIFF_SECTION_HEADER_HEIGHT
+  }
+
+  return (
+    DIFF_SECTION_HEADER_HEIGHT +
+    (getDiffSectionBodyHeight({
+      measuredContentHeight,
+      originalContent,
+      modifiedContent,
+      useIntrinsicImageHeight
+    }) ?? MIN_DIFF_SECTION_BODY_HEIGHT)
   )
 }

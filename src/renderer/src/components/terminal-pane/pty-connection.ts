@@ -59,10 +59,6 @@ function isSshSessionExpiredError(err: unknown): boolean {
   return (err instanceof Error ? err.message : String(err)).includes(SSH_SESSION_EXPIRED_ERROR)
 }
 
-function formatSshSessionExpiredMessage(): string {
-  return 'Previous SSH session expired. Start a new terminal to continue.'
-}
-
 function isRemoteRuntimePtyId(ptyId: string | null | undefined): boolean {
   return typeof ptyId === 'string' && ptyId.startsWith(REMOTE_PTY_ID_PREFIX)
 }
@@ -739,11 +735,14 @@ export function connectPanePty(
         return
       }
       if (connectResult?.sessionExpired) {
-        reportError(formatSshSessionExpiredMessage())
         deps.syncPanePtyLayoutBinding(pane.id, null)
         if (staleSessionId) {
           deps.clearTabPtyId(deps.tabId, staleSessionId)
         }
+        // Why: SSH sleep/reconnect can invalidate the relay-held PTY while
+        // leaving the tab mounted. Replace the dead lease in-place instead of
+        // stranding the pane behind a stale expired-session overlay.
+        startFreshSpawn()
         return
       }
       bindPanePtyId(pane.id, ptyId, deps.tabId)
@@ -1023,13 +1022,16 @@ export function connectPanePty(
                     : 'undefined'
                 )
                 if (!result && expiredReattachError) {
-                  reportError(formatSshSessionExpiredMessage())
+                  if (disposed) {
+                    return
+                  }
                   deps.syncPanePtyLayoutBinding(pane.id, null)
                   deps.clearTabPtyId(deps.tabId, pendingSessionId)
                   const gen = await preSignalPromise
                   if (typeof gen === 'number') {
                     void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
                   }
+                  startFreshSpawn()
                   return
                 }
                 handleReattachResult(result, pendingSessionId)
@@ -1050,9 +1052,9 @@ export function connectPanePty(
                   return
                 }
                 if (isSshSessionExpiredError(err)) {
-                  reportError(formatSshSessionExpiredMessage())
                   deps.syncPanePtyLayoutBinding(pane.id, null)
                   deps.clearTabPtyId(deps.tabId, pendingSessionId)
+                  startFreshSpawn()
                   return
                 }
                 startFreshSpawn()
@@ -1144,13 +1146,16 @@ export function connectPanePty(
       void Promise.resolve(reattachPromise)
         .then(async (result) => {
           if (!result && expiredReattachError) {
-            reportError(formatSshSessionExpiredMessage())
+            if (disposed) {
+              return
+            }
             deps.syncPanePtyLayoutBinding(pane.id, null)
             deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
             const gen = await preSignalPromise
             if (typeof gen === 'number') {
               void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
             }
+            startFreshSpawn()
             return
           }
           handleReattachResult(result, deferredReattachSessionId)
@@ -1178,7 +1183,7 @@ export function connectPanePty(
           deps.syncPanePtyLayoutBinding(pane.id, null)
           deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
           if (connectionId && isSshSessionExpiredError(err)) {
-            reportError(formatSshSessionExpiredMessage())
+            startFreshSpawn()
             return
           }
           reportError(message)

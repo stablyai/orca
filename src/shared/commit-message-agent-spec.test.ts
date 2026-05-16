@@ -32,9 +32,9 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     ])
   })
 
-  it('uses the smallest model as the default for each agent', () => {
-    expect(COMMIT_MESSAGE_AGENT_SPECS.claude?.defaultModelId).toBe('claude-haiku-4-5')
-    expect(COMMIT_MESSAGE_AGENT_SPECS.codex?.defaultModelId).toBe('gpt-5.4-mini')
+  it('uses the strongest available defaults for core agents', () => {
+    expect(COMMIT_MESSAGE_AGENT_SPECS.claude?.defaultModelId).toBe('claude-opus-4-7')
+    expect(COMMIT_MESSAGE_AGENT_SPECS.codex?.defaultModelId).toBe('gpt-5.5')
     expect(COMMIT_MESSAGE_AGENT_SPECS.pi?.defaultModelId).toBe('github-copilot/gpt-5.4-mini')
   })
 
@@ -146,7 +146,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
       id: 'codex',
       label: 'Codex',
       modelSource: 'dynamic',
-      defaultModelId: 'gpt-5.4-mini'
+      defaultModelId: 'gpt-5.5'
     })
     expect(codex).not.toHaveProperty('binary')
     expect(codex).not.toHaveProperty('buildArgs')

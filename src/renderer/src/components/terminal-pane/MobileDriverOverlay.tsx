@@ -141,6 +141,8 @@ function LoudOverlay({
       actionRef.current?.focus()
     }
   }, [])
+  // Why: terminal output is still useful status while mobile owns input, so the
+  // lock UI must not add a pane-wide scrim or blur over the live stream.
   return (
     <div
       ref={rootRef}
@@ -149,7 +151,7 @@ function LoudOverlay({
       aria-labelledby={titleId}
       aria-describedby={bodyId}
       className={cn(
-        'pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-background/80 p-6 backdrop-blur-sm',
+        'pointer-events-none absolute inset-0 z-50 flex items-center justify-center p-6',
         rootClassName
       )}
     >

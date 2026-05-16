@@ -47,7 +47,8 @@ export function getMarkdownViewModes(target: MarkdownPreviewTarget): readonly Ma
     if (
       target.mode === 'diff' &&
       target.diffSource !== 'combined-uncommitted' &&
-      target.diffSource !== 'combined-branch'
+      target.diffSource !== 'combined-branch' &&
+      target.diffSource !== 'combined-commit'
     ) {
       return MARKDOWN_DIFF_VIEW_MODES
     }

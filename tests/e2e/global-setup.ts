@@ -38,7 +38,6 @@ export default function globalSetup(): void {
     })
     console.log('[e2e] Build complete.')
   }
-
   if (process.env.ORCA_E2E_SSH_LOCALHOST === '1') {
     // Why: the localhost SSH spec deploys Orca's relay from out/relay. The
     // normal Electron E2E build does not produce that bundle, so build it only

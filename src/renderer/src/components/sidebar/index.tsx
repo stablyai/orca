@@ -11,11 +11,20 @@ import NonGitFolderDialog from './NonGitFolderDialog'
 import RemoveFolderDialog from './RemoveFolderDialog'
 import AddRepoDialog from './AddRepoDialog'
 import OrcaYamlTrustDialog from './OrcaYamlTrustDialog'
+import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
 
-function Sidebar(): React.JSX.Element {
+type SidebarProps = {
+  worktreeScrollOffsetRef: React.MutableRefObject<number>
+  worktreeScrollAnchorRef: React.MutableRefObject<VirtualizedScrollAnchor>
+}
+
+function Sidebar({
+  worktreeScrollOffsetRef,
+  worktreeScrollAnchorRef
+}: SidebarProps): React.JSX.Element {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth)
@@ -49,7 +58,10 @@ function Sidebar(): React.JSX.Element {
         <SidebarNav />
         <SidebarHeader />
 
-        <WorktreeList />
+        <WorktreeList
+          scrollOffsetRef={worktreeScrollOffsetRef}
+          scrollAnchorRef={worktreeScrollAnchorRef}
+        />
 
         {/* Fixed bottom toolbar */}
         <SidebarToolbar />

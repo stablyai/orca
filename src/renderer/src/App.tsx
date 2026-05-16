@@ -56,11 +56,16 @@ import {
 } from './components/floating-terminal/FloatingTerminalPanel'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { DictationController } from './components/dictation/DictationController'
+import { CrashReportDialog } from './components/crash-report/CrashReportDialog'
 import RecentTabSwitcher from './components/tab-bar/RecentTabSwitcher'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
 import { useEditorExternalWatch } from './hooks/useEditorExternalWatch'
 import { useAutoAckViewedAgent } from './hooks/useAutoAckViewedAgent'
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
+import {
+  resolvePrimarySelectionMiddleClickPaste,
+  usePrimarySelectionPaste
+} from './hooks/usePrimarySelectionPaste'
 import {
   getRuntimeMobileSessionSyncKey,
   runtimeMobileSessionSyncKeysEqual,
@@ -86,6 +91,7 @@ import {
   canGoBackWorktreeHistory,
   canGoForwardWorktreeHistory
 } from '@/store/slices/worktree-nav-history'
+import type { VirtualizedScrollAnchor } from './hooks/useVirtualizedScrollAnchor'
 import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
 import type { OnboardingState } from '../../shared/types'
 
@@ -253,6 +259,11 @@ function App(): React.JSX.Element {
   const activeView = useAppStore((s) => s.activeView)
   const activeModal = useAppStore((s) => s.activeModal)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  // Why: App swaps the sidebar between workspace and landing layouts when the
+  // active workspace is slept/deleted. Keep virtualized scroll memory above
+  // that remount so the left workspace list doesn't restart at scrollTop 0.
+  const worktreeSidebarScrollOffsetRef = useRef(0)
+  const worktreeSidebarScrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const activeTabId = useAppStore((s) => s.activeTabId)
   const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
@@ -336,6 +347,10 @@ function App(): React.JSX.Element {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
+  const primarySelectionMiddleClickPaste = resolvePrimarySelectionMiddleClickPaste(
+    settings?.primarySelectionMiddleClickPaste
+  )
+  usePrimarySelectionPaste(primarySelectionMiddleClickPaste)
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
   const petVisible = useAppStore((s) => s.petVisible)
   const canGoBackWorktree = useAppStore(canGoBackWorktreeHistory)
@@ -1142,7 +1157,7 @@ function App(): React.JSX.Element {
               <ContextMenu>
                 <ContextMenuTrigger asChild>
                   <div className="titlebar-app-name" aria-label="Orca">
-                    Orca
+                    <span className="titlebar-app-name-main">Orca</span>
                   </div>
                 </ContextMenuTrigger>
                 <ContextMenuContent>
@@ -1361,11 +1376,17 @@ function App(): React.JSX.Element {
                           the sidebar falls back to its content height, so the
                           worktree list loses its scroll viewport and the fixed
                           bottom toolbar (including Add Project) gets pushed offscreen. */}
-                      <Sidebar />
+                      <Sidebar
+                        worktreeScrollOffsetRef={worktreeSidebarScrollOffsetRef}
+                        worktreeScrollAnchorRef={worktreeSidebarScrollAnchorRef}
+                      />
                     </div>
                   </div>
                 ) : (
-                  <Sidebar />
+                  <Sidebar
+                    worktreeScrollOffsetRef={worktreeSidebarScrollOffsetRef}
+                    worktreeScrollAnchorRef={worktreeSidebarScrollAnchorRef}
+                  />
                 )
               ) : null}
               <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
@@ -1477,6 +1498,7 @@ function App(): React.JSX.Element {
       <ZoomOverlay />
       <SshPassphraseDialog />
       <DeleteWorktreeDialog />
+      <CrashReportDialog />
       {onboarding && shouldShowOnboarding(onboarding) ? (
         <Suspense fallback={null}>
           <OnboardingFlow onboarding={onboarding} onOnboardingChange={setOnboarding} />

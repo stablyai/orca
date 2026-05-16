@@ -48,6 +48,7 @@ const {
     autoUpdaterMock.downloadUpdate.mockReset()
     autoUpdaterMock.quitAndInstall.mockReset()
     autoUpdaterMock.setFeedURL.mockClear()
+    autoUpdaterMock.updateConfigPath = undefined
     autoUpdaterMock.allowPrerelease = false
     delete (autoUpdaterMock as Record<string, unknown>).verifyUpdateCodeSignature
   }
@@ -61,6 +62,7 @@ const {
     downloadUpdate: vi.fn(),
     quitAndInstall: vi.fn(),
     setFeedURL: vi.fn(),
+    updateConfigPath: undefined as string | undefined,
     emit,
     reset
   }
@@ -96,6 +98,10 @@ vi.mock('electron', () => ({
 
 vi.mock('electron-updater', () => ({
   autoUpdater: autoUpdaterMock
+}))
+
+vi.mock('./electron-updater-loader', () => ({
+  loadElectronAutoUpdater: () => autoUpdaterMock
 }))
 
 vi.mock('@electron-toolkit/utils', () => ({
@@ -149,6 +155,22 @@ describe('updater', () => {
     fetchNewerReleaseTagsMock.mockReset().mockResolvedValue([])
     vi.unstubAllGlobals()
     vi.useRealTimers()
+  })
+
+  it('does not load or configure electron-updater during dev setup', async () => {
+    isMock.dev = true
+    const mainWindow = { webContents: { send: vi.fn() } }
+
+    const { setupAutoUpdater } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never)
+
+    // Why: E2E launches use dev mode and Electron's direct script runner, whose
+    // default app version makes electron-updater throw during module load.
+    expect(autoUpdaterMock.updateConfigPath).toBeUndefined()
+    expect(autoUpdaterMock.setFeedURL).not.toHaveBeenCalled()
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+    expect(powerMonitorOnMock).not.toHaveBeenCalled()
   })
 
   it('deduplicates identical check errors from the event and rejected promise', async () => {

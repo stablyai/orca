@@ -96,6 +96,10 @@ vi.mock('electron-updater', () => ({
   autoUpdater: autoUpdaterMock
 }))
 
+vi.mock('./electron-updater-loader', () => ({
+  loadElectronAutoUpdater: () => autoUpdaterMock
+}))
+
 vi.mock('@electron-toolkit/utils', () => ({
   is: isMock
 }))

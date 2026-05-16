@@ -1271,6 +1271,10 @@ export type GlobalSettings = {
   editorMinimapEnabled: boolean
   /** Whether local markdown review note controls and the review panel are shown. */
   markdownReviewToolsEnabled: boolean
+  /** Why: mirrors X11 primary-selection muscle memory without mutating the
+   *  normal system clipboard; Linux enables it by default, other platforms
+   *  leave middle-click semantics unchanged unless the user opts in. */
+  primarySelectionMiddleClickPaste?: boolean
   terminalFontSize: number
   terminalFontFamily: string
   terminalFontWeight: number
@@ -2013,6 +2017,8 @@ export type GitBranchChangeEntry = {
   path: string
   status: GitBranchChangeStatus
   oldPath?: string
+  added?: number
+  removed?: number
 }
 
 export type GitBranchCompareSummary = {
@@ -2029,6 +2035,21 @@ export type GitBranchCompareSummary = {
 
 export type GitBranchCompareResult = {
   summary: GitBranchCompareSummary
+  entries: GitBranchChangeEntry[]
+}
+
+export type GitCommitCompareSummary = {
+  commitOid: string
+  parentOid: string | null
+  compareRef: string
+  baseRef: string
+  changedFiles: number
+  status: 'ready' | 'invalid-commit' | 'error'
+  errorMessage?: string
+}
+
+export type GitCommitCompareResult = {
+  summary: GitCommitCompareSummary
   entries: GitBranchChangeEntry[]
 }
 

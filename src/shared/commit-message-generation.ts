@@ -45,7 +45,7 @@ export function buildCommitMessagePrompt(
     '- Optional body: blank line, then short wrapped bullet points or prose explaining WHY.',
     '- Capture the primary user-visible or developer-visible change.',
     '- Use only the staged changes below as context.',
-    '- Do not include "Co-authored-by" trailers - Orca appends them after generation when configured.',
+    '- Do not include "Co-authored-by" or other git trailers.',
     '',
     `Branch: ${context.branch ?? '(detached)'}`,
     '',

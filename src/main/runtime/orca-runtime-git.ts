@@ -1,15 +1,21 @@
+/* eslint-disable max-lines -- Why: runtime git dispatch stays in one boundary so local, SSH, and runtime-environment behavior remains comparable. */
 import type {
   GitBranchCompareResult,
+  GitCommitCompareResult,
   GitConflictOperation,
   GitDiffResult,
   GitPushTarget,
   GitStatusResult,
   GitUpstreamStatus,
   GitWorktreeInfo,
+  GlobalSettings,
   Worktree
 } from '../../shared/types'
+import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
+import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import { getRemoteFileUrl } from '../git/repo'
 import {
+  bulkDiscardChanges,
   bulkStageFiles,
   bulkUnstageFiles,
   commitChanges,
@@ -17,22 +23,49 @@ import {
   discardChanges,
   getBranchCompare,
   getBranchDiff,
+  getCommitCompare,
+  getCommitDiff,
   getDiff,
+  getStagedCommitContext,
   getStatus as getGitStatus,
   stageFile,
   unstageFile
 } from '../git/status'
+import { getHistory as getGitHistory } from '../git/history'
 import { getUpstreamStatus } from '../git/upstream'
 import { gitFetch, gitPull, gitPush } from '../git/remote'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import {
+  cancelGenerateCommitMessageLocal,
+  generateCommitMessageFromContext,
+  resolveCommitMessageSettings,
+  type GenerateCommitMessageResult
+} from '../text-generation/commit-message-text-generation'
+import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
+import { prepareLocalCommitMessageAgentEnv } from '../text-generation/commit-message-agent-environment'
 import { normalizeRuntimeRelativePath } from './runtime-relative-paths'
 
 export type ResolvedRuntimeGitWorktree = Worktree & { git: GitWorktreeInfo }
+type RuntimeCommitMessageSettingsOverride = Partial<
+  Pick<GlobalSettings, 'commitMessageAi' | 'agentCmdOverrides' | 'enableGitHubAttribution'>
+>
+
+function normalizeRuntimeGitRelativePath(filePath: string): string {
+  const relativePath = normalizeRuntimeRelativePath(filePath)
+  if (relativePath === '') {
+    // Why: git mutation APIs treat an empty pathspec as the worktree root;
+    // runtime RPC must never let malformed file paths discard whole worktrees.
+    throw new Error('invalid_relative_path')
+  }
+  return relativePath
+}
 
 export type RuntimeGitCommandHost = {
   resolveRuntimeGitTarget(
     selector: string
   ): Promise<{ worktree: ResolvedRuntimeGitWorktree; connectionId?: string }>
+  getRuntimeSettings(): GlobalSettings
+  getCommitMessageAgentEnvironment?(): CommitMessageAgentEnvironmentResolvers | undefined
 }
 
 export class RuntimeGitCommands {
@@ -57,6 +90,21 @@ export class RuntimeGitCommands {
       : getGitStatus(target.worktree.path)
   }
 
+  async getRuntimeGitHistory(
+    worktreeSelector: string,
+    options: GitHistoryOptions = {}
+  ): Promise<GitHistoryResult> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error('remote_git_unavailable')
+      }
+      return provider.getHistory(target.worktree.path, options)
+    }
+    return getGitHistory(target.worktree.path, options)
+  }
+
   async getRuntimeGitConflictOperation(worktreeSelector: string): Promise<GitConflictOperation> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
@@ -76,7 +124,7 @@ export class RuntimeGitCommands {
     compareAgainstHead?: boolean
   ): Promise<GitDiffResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const relativePath = normalizeRuntimeRelativePath(filePath)
+    const relativePath = normalizeRuntimeGitRelativePath(filePath)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -100,6 +148,21 @@ export class RuntimeGitCommands {
       return provider.getBranchCompare(target.worktree.path, baseRef)
     }
     return getBranchCompare(target.worktree.path, baseRef)
+  }
+
+  async getRuntimeGitCommitCompare(
+    worktreeSelector: string,
+    commitId: string
+  ): Promise<GitCommitCompareResult> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error('remote_git_unavailable')
+      }
+      return provider.getCommitCompare(target.worktree.path, commitId)
+    }
+    return getCommitCompare(target.worktree.path, commitId)
   }
 
   async getRuntimeGitUpstreamStatus(worktreeSelector: string): Promise<GitUpstreamStatus> {
@@ -167,8 +230,8 @@ export class RuntimeGitCommands {
     oldPath?: string
   ): Promise<GitDiffResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const relativePath = normalizeRuntimeRelativePath(filePath)
-    const oldRelativePath = oldPath ? normalizeRuntimeRelativePath(oldPath) : undefined
+    const relativePath = normalizeRuntimeGitRelativePath(filePath)
+    const oldRelativePath = oldPath ? normalizeRuntimeGitRelativePath(oldPath) : undefined
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -197,6 +260,33 @@ export class RuntimeGitCommands {
     })
   }
 
+  async getRuntimeGitCommitDiff(
+    worktreeSelector: string,
+    args: { commitOid: string; parentOid?: string | null; filePath: string; oldPath?: string }
+  ): Promise<GitDiffResult> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const relativePath = normalizeRuntimeRelativePath(args.filePath)
+    const oldRelativePath = args.oldPath ? normalizeRuntimeRelativePath(args.oldPath) : undefined
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error('remote_git_unavailable')
+      }
+      return provider.getCommitDiff(target.worktree.path, {
+        commitOid: args.commitOid,
+        parentOid: args.parentOid,
+        filePath: relativePath,
+        oldPath: oldRelativePath
+      })
+    }
+    return getCommitDiff(target.worktree.path, {
+      commitOid: args.commitOid,
+      parentOid: args.parentOid,
+      filePath: relativePath,
+      oldPath: oldRelativePath
+    })
+  }
+
   async commitRuntimeGit(
     worktreeSelector: string,
     message: string
@@ -215,9 +305,83 @@ export class RuntimeGitCommands {
     return commitChanges(target.worktree.path, message)
   }
 
+  async generateRuntimeCommitMessage(
+    worktreeSelector: string,
+    settingsOverride?: RuntimeCommitMessageSettingsOverride
+  ): Promise<GenerateCommitMessageResult> {
+    const resolvedSettings = resolveCommitMessageSettings({
+      ...this.host.getRuntimeSettings(),
+      ...settingsOverride
+    })
+    if (!resolvedSettings.ok) {
+      return { success: false, error: resolvedSettings.error }
+    }
+
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        return {
+          success: false,
+          error: `No git provider for connection "${target.connectionId}"`
+        }
+      }
+      let context: CommitMessageDraftContext | null
+      try {
+        context = await provider.getStagedCommitContext(target.worktree.path)
+      } catch (error) {
+        console.error('[runtime-git] Failed to read remote staged commit context:', error)
+        return { success: false, error: 'Failed to read staged changes.' }
+      }
+      if (!context) {
+        return { success: false, error: 'No staged changes to summarize.' }
+      }
+      return generateCommitMessageFromContext(context, resolvedSettings.params, {
+        kind: 'remote',
+        cwd: target.worktree.path,
+        execute: (plan, cwd, timeoutMs) => provider.executeCommitMessagePlan(plan, cwd, timeoutMs),
+        missingBinaryLocation: 'remote PATH'
+      })
+    }
+
+    let context: CommitMessageDraftContext | null
+    try {
+      context = await getStagedCommitContext(target.worktree.path)
+    } catch (error) {
+      console.error('[runtime-git] Failed to read staged commit context:', error)
+      return { success: false, error: 'Failed to read staged changes.' }
+    }
+    if (!context) {
+      return { success: false, error: 'No staged changes to summarize.' }
+    }
+    const localEnv = await prepareLocalCommitMessageAgentEnv(
+      resolvedSettings.params.agentId,
+      this.host.getCommitMessageAgentEnvironment?.()
+    )
+    if (!localEnv.ok) {
+      return { success: false, error: localEnv.error }
+    }
+    return generateCommitMessageFromContext(context, resolvedSettings.params, {
+      kind: 'local',
+      cwd: target.worktree.path,
+      ...(localEnv.env ? { env: localEnv.env } : {})
+    })
+  }
+
+  async cancelRuntimeGenerateCommitMessage(worktreeSelector: string): Promise<{ ok: true }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      await provider?.cancelGenerateCommitMessage(target.worktree.path)
+      return { ok: true }
+    }
+    cancelGenerateCommitMessageLocal(target.worktree.path)
+    return { ok: true }
+  }
+
   async stageRuntimeGitPath(worktreeSelector: string, filePath: string): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const relativePath = normalizeRuntimeRelativePath(filePath)
+    const relativePath = normalizeRuntimeGitRelativePath(filePath)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -232,7 +396,7 @@ export class RuntimeGitCommands {
 
   async unstageRuntimeGitPath(worktreeSelector: string, filePath: string): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const relativePath = normalizeRuntimeRelativePath(filePath)
+    const relativePath = normalizeRuntimeGitRelativePath(filePath)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -250,7 +414,7 @@ export class RuntimeGitCommands {
     filePaths: string[]
   ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const relativePaths = filePaths.map((path) => normalizeRuntimeRelativePath(path))
+    const relativePaths = filePaths.map((path) => normalizeRuntimeGitRelativePath(path))
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -268,7 +432,7 @@ export class RuntimeGitCommands {
     filePaths: string[]
   ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const relativePaths = filePaths.map((path) => normalizeRuntimeRelativePath(path))
+    const relativePaths = filePaths.map((path) => normalizeRuntimeGitRelativePath(path))
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -281,9 +445,27 @@ export class RuntimeGitCommands {
     return { ok: true }
   }
 
+  async bulkDiscardRuntimeGitPaths(
+    worktreeSelector: string,
+    filePaths: string[]
+  ): Promise<{ ok: true }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const relativePaths = filePaths.map((path) => normalizeRuntimeGitRelativePath(path))
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error('remote_git_unavailable')
+      }
+      await provider.bulkDiscardChanges(target.worktree.path, relativePaths)
+      return { ok: true }
+    }
+    await bulkDiscardChanges(target.worktree.path, relativePaths)
+    return { ok: true }
+  }
+
   async discardRuntimeGitPath(worktreeSelector: string, filePath: string): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const relativePath = normalizeRuntimeRelativePath(filePath)
+    const relativePath = normalizeRuntimeGitRelativePath(filePath)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -302,7 +484,7 @@ export class RuntimeGitCommands {
     line: number
   ): Promise<string | null> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const normalizedRelativePath = normalizeRuntimeRelativePath(relativePath)
+    const normalizedRelativePath = normalizeRuntimeGitRelativePath(relativePath)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {

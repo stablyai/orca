@@ -303,6 +303,7 @@ export type UISlice = {
       | 'general'
       | 'browser'
       | 'appearance'
+      | 'input'
       | 'tasks'
       | 'terminal'
       | 'computer-use'

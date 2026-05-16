@@ -50,10 +50,16 @@ vi.mock('./gh-utils', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,
   ghRepoExecOptions: ghRepoExecOptionsMock,
   githubRepoContext: githubRepoContextMock,
-  classifyGhError: (stderr: string) =>
-    stderr.toLowerCase().includes('not found') || stderr.includes('HTTP 404')
-      ? { type: 'not_found', message: stderr }
-      : { type: 'unknown', message: stderr },
+  classifyGhError: (stderr: string) => {
+    const lower = stderr.toLowerCase()
+    if (lower.includes('not found') || stderr.includes('HTTP 404')) {
+      return { type: 'not_found', message: stderr }
+    }
+    if (lower.includes('rate limit')) {
+      return { type: 'rate_limited', message: stderr }
+    }
+    return { type: 'unknown', message: stderr }
+  },
   parseGitHubOwnerRepo: (remoteUrl: string) => {
     const match = remoteUrl.trim().match(/github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/)
     return match ? { owner: match[1], repo: match[2] } : null
@@ -144,6 +150,302 @@ describe('getPRForBranch', () => {
     expect(pr?.number).toBe(42)
     expect(pr?.state).toBe('open')
     expect(pr?.mergeable).toBe('MERGEABLE')
+  })
+
+  it('prefers exact linked PR lookup when the repo identity is known', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'linked-head-oid\n', stderr: '' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        number: 99,
+        title: 'Linked PR',
+        state: 'OPEN',
+        url: 'https://github.com/acme/widgets/pull/99',
+        statusCheckRollup: [],
+        updatedAt: '2026-03-28T00:00:00Z',
+        isDraft: false,
+        mergeable: 'MERGEABLE',
+        baseRefName: 'main',
+        headRefName: 'someone/fix',
+        baseRefOid: 'base-oid',
+        headRefOid: 'linked-head-oid'
+      })
+    })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/local-worktree', 99)
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['rev-parse', 'HEAD'], {
+      cwd: '/repo-root'
+    })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        'pr',
+        'view',
+        '99',
+        '--repo',
+        'acme/widgets',
+        '--json',
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
+      ],
+      { cwd: '/repo-root' }
+    )
+    expect(pr).toMatchObject({
+      number: 99,
+      title: 'Linked PR',
+      state: 'open',
+      headSha: 'linked-head-oid'
+    })
+  })
+
+  it('uses branch discovery when exact linked PR metadata resolves to a different PR', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'current-worktree-head\n', stderr: '' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 99,
+          title: 'Stale linked PR',
+          state: 'OPEN',
+          url: 'https://github.com/acme/widgets/pull/99',
+          statusCheckRollup: [],
+          updatedAt: '2026-03-28T00:00:00Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          headRefName: 'someone/other-work',
+          baseRefOid: 'base-oid',
+          headRefOid: 'stale-linked-head'
+        })
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 42,
+            title: 'Branch PR',
+            state: 'OPEN',
+            url: 'https://github.com/acme/widgets/pull/42',
+            statusCheckRollup: [],
+            updatedAt: '2026-03-28T00:00:00Z',
+            isDraft: false,
+            mergeable: 'MERGEABLE',
+            baseRefName: 'main',
+            headRefName: 'feature/test',
+            baseRefOid: 'base-oid',
+            headRefOid: 'current-worktree-head'
+          }
+        ])
+      })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test', 99)
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      [
+        'pr',
+        'list',
+        '--repo',
+        'acme/widgets',
+        '--head',
+        'feature/test',
+        '--state',
+        'all',
+        '--limit',
+        '1',
+        '--json',
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
+      ],
+      { cwd: '/repo-root' }
+    )
+    expect(pr?.number).toBe(42)
+  })
+
+  it('falls back to branch discovery when exact linked PR metadata is stale', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('HTTP 404: Not Found'))
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 42,
+            title: 'Branch PR',
+            state: 'OPEN',
+            url: 'https://github.com/acme/widgets/pull/42',
+            statusCheckRollup: [],
+            updatedAt: '2026-03-28T00:00:00Z',
+            isDraft: false,
+            mergeable: 'MERGEABLE',
+            baseRefName: 'main',
+            headRefName: 'feature/test',
+            baseRefOid: 'base-oid',
+            headRefOid: 'head-oid'
+          }
+        ])
+      })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test', 99)
+
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      [
+        'pr',
+        'view',
+        '99',
+        '--repo',
+        'acme/widgets',
+        '--json',
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
+      ],
+      { cwd: '/repo-root' }
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      [
+        'pr',
+        'list',
+        '--repo',
+        'acme/widgets',
+        '--head',
+        'feature/test',
+        '--state',
+        'all',
+        '--limit',
+        '1',
+        '--json',
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
+      ],
+      { cwd: '/repo-root' }
+    )
+    expect(pr?.number).toBe(42)
+  })
+
+  it('continues to branch discovery when exact linked PR REST fallback also misses', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('GraphQL: could not resolve to PullRequest'))
+      .mockRejectedValueOnce(new Error('HTTP 404: Not Found'))
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 42,
+            title: 'Branch PR after stale linked miss',
+            state: 'OPEN',
+            url: 'https://github.com/acme/widgets/pull/42',
+            statusCheckRollup: [],
+            updatedAt: '2026-03-28T00:00:00Z',
+            isDraft: false,
+            mergeable: 'MERGEABLE',
+            baseRefName: 'main',
+            headRefName: 'feature/test',
+            baseRefOid: 'base-oid',
+            headRefOid: 'head-oid'
+          }
+        ])
+      })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test', 99)
+
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['api', 'repos/acme/widgets/pulls/99'], {
+      cwd: '/repo-root'
+    })
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      3,
+      [
+        'pr',
+        'list',
+        '--repo',
+        'acme/widgets',
+        '--head',
+        'feature/test',
+        '--state',
+        'all',
+        '--limit',
+        '1',
+        '--json',
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
+      ],
+      { cwd: '/repo-root' }
+    )
+    expect(pr?.number).toBe(42)
+  })
+
+  it('continues to branch discovery when exact linked PR REST fallback has an unclassified failure', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('GraphQL: server exploded'))
+      .mockRejectedValueOnce(new Error('HTTP 500: server error'))
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 42,
+            title: 'Branch PR after exact lookup outage',
+            state: 'OPEN',
+            url: 'https://github.com/acme/widgets/pull/42',
+            statusCheckRollup: [],
+            updatedAt: '2026-03-28T00:00:00Z',
+            isDraft: false,
+            mergeable: 'MERGEABLE',
+            baseRefName: 'main',
+            headRefName: 'feature/test',
+            baseRefOid: 'base-oid',
+            headRefOid: 'head-oid'
+          }
+        ])
+      })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test', 99)
+
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['api', 'repos/acme/widgets/pulls/99'], {
+      cwd: '/repo-root'
+    })
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      3,
+      [
+        'pr',
+        'list',
+        '--repo',
+        'acme/widgets',
+        '--head',
+        'feature/test',
+        '--state',
+        'all',
+        '--limit',
+        '1',
+        '--json',
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
+      ],
+      { cwd: '/repo-root' }
+    )
+    expect(pr?.number).toBe(42)
+  })
+
+  it('does not spend branch discovery calls when exact linked PR REST fallback is rate limited', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('GraphQL: API rate limit already exceeded'))
+      .mockRejectedValueOnce(new Error('REST API rate limit already exceeded'))
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test', 99)
+
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      [
+        'pr',
+        'view',
+        '99',
+        '--repo',
+        'acme/widgets',
+        '--json',
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
+      ],
+      { cwd: '/repo-root' }
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['api', 'repos/acme/widgets/pulls/99'], {
+      cwd: '/repo-root'
+    })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(pr).toBeNull()
   })
 
   it('falls back to REST branch lookup when gh pr list is GraphQL rate limited', async () => {
@@ -354,8 +656,8 @@ describe('getPRForBranch', () => {
 
   it('falls back to REST number lookup when linked PR GraphQL lookup is rate limited', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'linked-head-oid\n', stderr: '' })
     ghExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
       .mockRejectedValueOnce(new Error('GraphQL: API rate limit already exceeded'))
       .mockResolvedValueOnce({
         stdout: JSON.stringify({
@@ -374,9 +676,23 @@ describe('getPRForBranch', () => {
 
     const pr = await getPRForBranch('/repo-root', 'feature/test', 99)
 
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(3, ['api', 'repos/acme/widgets/pulls/99'], {
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      [
+        'pr',
+        'view',
+        '99',
+        '--repo',
+        'acme/widgets',
+        '--json',
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
+      ],
+      { cwd: '/repo-root' }
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['api', 'repos/acme/widgets/pulls/99'], {
       cwd: '/repo-root'
     })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(pr).toMatchObject({
       number: 99,
       state: 'merged',

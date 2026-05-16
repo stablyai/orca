@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: default persisted settings live in one schema-shaped object so migrations and tests compare against one source of truth. */
 import type {
   GlobalSettings,
   NotificationSettings,
@@ -59,6 +60,10 @@ function defaultTerminalFontFamily(): string {
   }
   return 'SF Mono' // macOS default
 }
+
+export const getDefaultPrimarySelectionMiddleClickPaste = (
+  platform = typeof process !== 'undefined' ? process.platform : ''
+): boolean => platform === 'linux'
 /**
  * Why: ProseMirror builds an in-memory tree for the entire document, so large
  * markdown files cause noticeable typing lag in the rich editor. Files above
@@ -168,6 +173,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
     editorMinimapEnabled: false,
     markdownReviewToolsEnabled: true,
+    primarySelectionMiddleClickPaste: getDefaultPrimarySelectionMiddleClickPaste(),
     terminalFontSize: 14,
     terminalFontFamily: defaultTerminalFontFamily(),
     terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT,
@@ -184,7 +190,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalCursorBlink: true,
     terminalThemeDark: 'Ghostty Default Style Dark',
     terminalDividerColorDark: '#3f3f46',
-    terminalUseSeparateLightTheme: false,
+    terminalUseSeparateLightTheme: true,
     terminalThemeLight: 'Builtin Tango Light',
     terminalDividerColorLight: '#d4d4d8',
     terminalInactivePaneOpacity: 0.8,
@@ -274,12 +280,12 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
       lastViewByProject: {},
       activeProject: null
     },
-    // Why: opt-in feature — `enabled: false` keeps the Generate button hidden
-    // for existing users until they discover and turn it on in Settings. The
-    // per-agent / per-model maps stay empty until the user activates the
-    // toggle, at which point the pane fills them with the spec defaults.
+    // Why: default-on uses the user's default agent when it supports
+    // non-interactive commit-message generation. Keep agent/model maps empty
+    // so first use follows the default agent's configured default model instead
+    // of freezing a stale choice into new profiles.
     commitMessageAi: {
-      enabled: false,
+      enabled: true,
       agentId: null,
       selectedModelByAgent: {},
       discoveredModelsByAgent: {},

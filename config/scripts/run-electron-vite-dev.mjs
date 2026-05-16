@@ -1,6 +1,14 @@
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import net from 'node:net'
 import { createRequire } from 'node:module'
 import path from 'node:path'
@@ -14,6 +22,188 @@ delete process.env.ELECTRON_RUN_AS_NODE
 
 const require = createRequire(import.meta.url)
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
+const STABLE_NAME_FLAG = '--stable-name'
+const rawForwardedArgs = process.argv.slice(2)
+// Why: keep an escape hatch for tools that key off Electron's stock app name.
+// The flag is runner-only and must not leak into Chromium/electron-vite.
+const useStableElectronName =
+  process.env.ORCA_DEV_STABLE_NAME === '1' || rawForwardedArgs.includes(STABLE_NAME_FLAG)
+const forwardedRaw = rawForwardedArgs.filter((arg) => arg !== STABLE_NAME_FLAG)
+if (useStableElectronName) {
+  process.env.ORCA_DEV_STABLE_NAME = '1'
+}
+
+function readGitValue(args) {
+  try {
+    const value = execFileSync('git', ['-C', repoRoot, ...args], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore']
+    }).trim()
+    return value || null
+  } catch {
+    return null
+  }
+}
+
+function lastBranchSegment(value) {
+  return value.replace(/\\/g, '/').split('/').filter(Boolean).at(-1) ?? value
+}
+
+function formatDevInstanceLabel(branch, worktreeName) {
+  if (branch && worktreeName) {
+    if (branch === worktreeName || lastBranchSegment(branch) === worktreeName) {
+      return worktreeName
+    }
+    return `${worktreeName} @ ${branch}`
+  }
+  return branch || worktreeName || null
+}
+
+function createBadgeSuffix(seed) {
+  const n = parseInt(createHash('sha1').update(seed).digest('hex').slice(0, 8), 16)
+  return (n % 1296).toString(36).toUpperCase().padStart(2, '0')
+}
+
+function createDockBadgeLabel(displayValue, identitySeed) {
+  const source = lastBranchSegment(displayValue || identitySeed || '')
+  const words = source.split(/[^a-zA-Z0-9]+/).filter(Boolean)
+  const prefix =
+    words.length > 1
+      ? words
+          .slice(0, 2)
+          .map((word) => word[0])
+          .join('')
+      : (words[0] ?? 'D').slice(0, 2)
+  const normalizedPrefix = (prefix.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() || 'D').slice(0, 2)
+  return `${normalizedPrefix}${createBadgeSuffix(identitySeed || displayValue || source)}`
+}
+
+function createDockTitle(branch, label, badgeLabel) {
+  const title = `Orca Dev${badgeLabel ? ` [${badgeLabel}]` : ''}`
+  return `${title}: ${branch || label || 'dev'}`
+}
+
+function seedDevInstanceIdentityEnv() {
+  const branch =
+    process.env.ORCA_DEV_BRANCH ||
+    readGitValue(['symbolic-ref', '--quiet', '--short', 'HEAD']) ||
+    readGitValue(['rev-parse', '--short', 'HEAD'])
+  const worktreeName = process.env.ORCA_DEV_WORKTREE_NAME || path.basename(repoRoot)
+  const label = process.env.ORCA_DEV_INSTANCE_LABEL || formatDevInstanceLabel(branch, worktreeName)
+  const identitySeed = process.env.ORCA_DEV_INSTANCE_KEY || repoRoot
+  const badgeLabel =
+    process.env.ORCA_DEV_DOCK_BADGE_LABEL ||
+    createDockBadgeLabel(worktreeName || branch || label, identitySeed)
+  const dockTitle = process.env.ORCA_DEV_DOCK_TITLE || createDockTitle(branch, label, badgeLabel)
+
+  process.env.ORCA_DEV_REPO_ROOT ||= repoRoot
+  process.env.ORCA_DEV_INSTANCE_KEY ||= identitySeed
+  if (branch) {
+    process.env.ORCA_DEV_BRANCH ||= branch
+  }
+  if (worktreeName) {
+    process.env.ORCA_DEV_WORKTREE_NAME ||= worktreeName
+  }
+  if (label) {
+    // Why: parallel `pn dev` runs need a stable origin label for window titles,
+    // Dock badges, and automation sessions without re-running git in Electron.
+    process.env.ORCA_DEV_INSTANCE_LABEL ||= label
+  }
+  if (badgeLabel) {
+    process.env.ORCA_DEV_DOCK_BADGE_LABEL ||= badgeLabel
+  }
+  process.env.ORCA_DEV_DOCK_TITLE ||= dockTitle
+}
+
+function setPlistValue(plistPath, key, value) {
+  execFileSync('/usr/bin/plutil', ['-replace', key, '-string', value, plistPath])
+}
+
+function sanitizeBundleIdPart(value) {
+  return (
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9.-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80) || 'dev'
+  )
+}
+
+function sanitizeMacAppBundleName(value) {
+  return (
+    Array.from(value, (char) => {
+      const code = char.charCodeAt(0)
+      return code < 32 || code === 127 || char === ':' || char === '/' || char === '\\' ? '-' : char
+    })
+      .join('')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 120) || 'Orca Dev'
+  )
+}
+
+function prepareMacDevElectronApp() {
+  if (process.platform !== 'darwin') {
+    return
+  }
+
+  const sourceAppPath = path.join(repoRoot, 'node_modules', 'electron', 'dist', 'Electron.app')
+  const electronPackagePath = path.join(repoRoot, 'node_modules', 'electron', 'package.json')
+  if (!existsSync(sourceAppPath)) {
+    return
+  }
+
+  let electronVersion = null
+  try {
+    electronVersion = JSON.parse(readFileSync(electronPackagePath, 'utf8')).version ?? null
+  } catch {}
+
+  const title = process.env.ORCA_DEV_DOCK_TITLE || 'Orca Dev'
+  const identityKey = process.env.ORCA_DEV_INSTANCE_KEY || repoRoot
+  const bundleLayoutVersion = 'dock-title-app-filename-v1'
+  const hash = createHash('sha1')
+    .update(
+      `${sourceAppPath}\0${electronVersion ?? ''}\0${title}\0${identityKey}\0${bundleLayoutVersion}`
+    )
+    .digest('hex')
+    .slice(0, 12)
+  const distDir = path.join(repoRoot, 'out', 'electron-dev', hash)
+  // Why: macOS Dock hover uses the bundle's filesystem display name for
+  // electron-vite's direct binary launch path, even when Info.plist is patched.
+  const appBundleName = `${sanitizeMacAppBundleName(title)}.app`
+  const appPath = path.join(distDir, appBundleName)
+  const markerPath = path.join(distDir, 'orca-dev-electron-app.json')
+  const bundleId = `com.stablyai.orca.dev.${sanitizeBundleIdPart(hash)}`
+  const expectedMarker = JSON.stringify(
+    { title, appBundleName, bundleId, sourceAppPath, electronVersion, bundleLayoutVersion },
+    null,
+    2
+  )
+
+  if (existsSync(markerPath) && existsSync(appPath)) {
+    try {
+      if (readFileSync(markerPath, 'utf8') === expectedMarker) {
+        process.env.ELECTRON_EXEC_PATH = path.join(appPath, 'Contents', 'MacOS', 'Electron')
+        return
+      }
+    } catch {}
+  }
+
+  rmSync(distDir, { recursive: true, force: true })
+  mkdirSync(distDir, { recursive: true })
+  cpSync(sourceAppPath, appPath, { recursive: true })
+
+  const plistPath = path.join(appPath, 'Contents', 'Info.plist')
+  setPlistValue(plistPath, 'CFBundleName', title)
+  setPlistValue(plistPath, 'CFBundleDisplayName', title)
+  setPlistValue(plistPath, 'CFBundleIdentifier', bundleId)
+
+  // Why no re-sign: dev launches execute the copied Electron binary directly,
+  // and Electron's framework bundle is ambiguous to codesign when deep-signing
+  // an already-built distribution. Avoid blocking `pn dev` on local signing.
+  writeFileSync(markerPath, expectedMarker, 'utf8')
+  process.env.ELECTRON_EXEC_PATH = path.join(appPath, 'Contents', 'MacOS', 'Electron')
+}
 
 function getDevUserDataPath() {
   if (process.env.ORCA_DEV_USER_DATA_PATH) {
@@ -72,6 +262,11 @@ if (process.env.ORCA_SKIP_DEV_CLI_PREPARE !== '1') {
   prepareDevCliWrapper()
 }
 
+seedDevInstanceIdentityEnv()
+if (!useStableElectronName && process.env.ORCA_SKIP_DEV_ELECTRON_APP_PREPARE !== '1') {
+  prepareMacDevElectronApp()
+}
+
 // Why: tests inject a tiny fake CLI here so they can verify Ctrl+C tears down
 // the full child tree without depending on a real electron-vite install.
 const electronViteCli =
@@ -82,7 +277,6 @@ const electronViteCli =
 // without manual port juggling. Pick a best-effort deterministic port per
 // worktree; falls back to a probe sweep if the deterministic pick or its
 // neighbors are busy (multiple worktrees may share a machine).
-const forwardedRaw = process.argv.slice(2)
 function isPortFree(port) {
   return new Promise((resolve) => {
     const srv = net.createServer()
@@ -131,6 +325,12 @@ const userPassedPort = forwardedRaw.some(
 // Why: --help/--version exit immediately; binding a probe socket and printing
 // a debug-port line would be noise.
 const isHelpOrVersion = forwardedRaw.some((a) => a === '--help' || a === '-h' || a === '--version')
+if (!isHelpOrVersion && process.env.ORCA_DEV_INSTANCE_LABEL) {
+  const badge = process.env.ORCA_DEV_DOCK_BADGE_LABEL
+    ? ` [${process.env.ORCA_DEV_DOCK_BADGE_LABEL}]`
+    : ''
+  console.error(`[orca-dev] Instance: ${process.env.ORCA_DEV_INSTANCE_LABEL}${badge}`)
+}
 let forwardedExtras = []
 if (!userPassedPort && !isHelpOrVersion) {
   const envPortRaw = process.env.REMOTE_DEBUGGING_PORT

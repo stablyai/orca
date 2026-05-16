@@ -170,6 +170,16 @@ export function installDevParentWatchdog(isDev: boolean): void {
 }
 
 export function enableMainProcessGpuFeatures(): void {
+  if (process.platform === 'linux' && getMainE2EConfig().userDataDir) {
+    // Why: Ubuntu/Xvfb runners can fail Electron startup with
+    // "GPU process isn't usable" before Playwright sees the first window.
+    // E2E coverage does not depend on GPU compositing, so keep CI on the
+    // software path instead of retrying around a crashed app process.
+    app.disableHardwareAcceleration()
+    app.commandLine.appendSwitch('disable-gpu')
+    return
+  }
+
   const existingFeatures = app.commandLine.getSwitchValue('enable-features')
   const features = [
     // Why: mirror VS Code's conservative Electron GPU-channel startup flags

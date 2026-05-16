@@ -10,6 +10,7 @@ export type SpeechModelManifest = {
   language: string
   sizeBytes: number
   downloadUrl: string
+  archiveSha256: string
   archiveFormat: 'tar.bz2'
   files: string[]
   sampleRate: number

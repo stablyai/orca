@@ -244,7 +244,7 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
         defaultThinkingLevel: 'low'
       }
     ],
-    defaultModelId: 'claude-haiku-4-5'
+    defaultModelId: 'claude-opus-4-7'
   },
   codex: {
     id: 'codex',
@@ -274,7 +274,6 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     },
     // Why: ordered to match the official `codex` model picker — descending
     // by version so the frontier model lands on top and legacy models trail.
-    // Default still resolves by id (`gpt-5.4-mini`), independent of order.
     models: [
       {
         id: 'gpt-5.5',
@@ -317,7 +316,7 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
         defaultThinkingLevel: 'low'
       }
     ],
-    defaultModelId: 'gpt-5.4-mini'
+    defaultModelId: 'gpt-5.5'
   },
   opencode: {
     id: 'opencode',
@@ -615,6 +614,7 @@ export const DEFAULT_COMMIT_MESSAGE_AGENT_ID: TuiAgent = 'claude'
 export const CUSTOM_AGENT_ID = 'custom' as const
 export type CustomAgentId = typeof CUSTOM_AGENT_ID
 export type CommitMessageAgentChoice = TuiAgent | CustomAgentId
+export type DefaultTuiAgentPreference = TuiAgent | 'blank' | null | undefined
 
 export function isCustomAgentId(id: string | null | undefined): id is CustomAgentId {
   return id === CUSTOM_AGENT_ID
@@ -622,6 +622,19 @@ export function isCustomAgentId(id: string | null | undefined): id is CustomAgen
 
 export function getCommitMessageAgentSpec(agentId: TuiAgent): CommitMessageAgentSpec | undefined {
   return COMMIT_MESSAGE_AGENT_SPECS[agentId]
+}
+
+export function resolveCommitMessageAgentChoice(
+  configuredAgentId: CommitMessageAgentChoice | null | undefined,
+  defaultTuiAgent: DefaultTuiAgentPreference
+): CommitMessageAgentChoice | null {
+  if (configuredAgentId) {
+    return configuredAgentId
+  }
+  if (defaultTuiAgent && defaultTuiAgent !== 'blank') {
+    return getCommitMessageAgentSpec(defaultTuiAgent) ? defaultTuiAgent : null
+  }
+  return DEFAULT_COMMIT_MESSAGE_AGENT_ID
 }
 
 export function getCommitMessageModel(

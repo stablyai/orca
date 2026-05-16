@@ -55,6 +55,7 @@ const newWorktreeShortcutLabel = isMac ? '⌘N' : 'Ctrl+N'
 
 const SidebarHeader = React.memo(function SidebarHeader() {
   const [workspaceBoardOpen, setWorkspaceBoardOpen] = useState(false)
+  const [workspaceBoardMenuOpen, setWorkspaceBoardMenuOpen] = useState(false)
   const openModal = useAppStore((s) => s.openModal)
   const repos = useAppStore((s) => s.repos)
   const canCreateWorktree = repos.some((repo) => isGitRepoKind(repo))
@@ -70,6 +71,9 @@ const SidebarHeader = React.memo(function SidebarHeader() {
 
   const handleWorkspaceBoardOpenChange = useCallback((open: boolean) => {
     setWorkspaceBoardOpen(open)
+    if (!open) {
+      setWorkspaceBoardMenuOpen(false)
+    }
   }, [])
 
   const handleWorkspaceBoardToggle = useCallback(() => {
@@ -85,6 +89,9 @@ const SidebarHeader = React.memo(function SidebarHeader() {
       if (event.key !== 'Escape') {
         return
       }
+      if (workspaceBoardMenuOpen) {
+        return
+      }
       event.preventDefault()
       setWorkspaceBoardOpen(false)
     }
@@ -93,7 +100,7 @@ const SidebarHeader = React.memo(function SidebarHeader() {
     // be outside the sheet when Escape should still dismiss it.
     document.addEventListener('keydown', handleKeyDown, true)
     return () => document.removeEventListener('keydown', handleKeyDown, true)
-  }, [workspaceBoardOpen])
+  }, [workspaceBoardMenuOpen, workspaceBoardOpen])
 
   return (
     <>
@@ -122,8 +129,8 @@ const SidebarHeader = React.memo(function SidebarHeader() {
           </Tooltip>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <SidebarFilter />
-          <DropdownMenu>
+          <SidebarFilter preserveWorkspaceBoardOpen onMenuOpenChange={setWorkspaceBoardMenuOpen} />
+          <DropdownMenu modal={false} onOpenChange={setWorkspaceBoardMenuOpen}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <DropdownMenuTrigger asChild>
@@ -132,6 +139,7 @@ const SidebarHeader = React.memo(function SidebarHeader() {
                     size="icon-xs"
                     className="text-muted-foreground"
                     aria-label="View options"
+                    data-workspace-board-preserve-open=""
                   >
                     <SlidersHorizontal className="size-3.5" strokeWidth={2.25} />
                   </Button>
@@ -141,7 +149,13 @@ const SidebarHeader = React.memo(function SidebarHeader() {
                 View options
               </TooltipContent>
             </Tooltip>
-            <DropdownMenuContent side="right" align="start" sideOffset={8} className="w-56 pb-2">
+            <DropdownMenuContent
+              side="right"
+              align="start"
+              sideOffset={8}
+              className="w-56 pb-2"
+              data-workspace-board-preserve-open=""
+            >
               <DropdownMenuLabel>Group by</DropdownMenuLabel>
               <div className="px-2 pt-0.5 pb-1">
                 <ToggleGroup
@@ -251,7 +265,9 @@ const SidebarHeader = React.memo(function SidebarHeader() {
       </div>
       <WorkspaceKanbanDrawer
         open={workspaceBoardOpen}
+        preserveOpenForMenu={workspaceBoardMenuOpen}
         onOpenChange={handleWorkspaceBoardOpenChange}
+        onMenuOpenChange={setWorkspaceBoardMenuOpen}
       />
     </>
   )

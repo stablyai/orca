@@ -6,6 +6,7 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getConnectionId } from '@/lib/connection-context'
 import { getRuntimeGitConflictOperation } from '@/runtime/runtime-git-client'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
+import { createCoalescedPollRunner } from './coalesced-poll-runner'
 
 const POLL_INTERVAL_MS = 3000
 
@@ -164,15 +165,20 @@ export function useGitStatusPolling(): void {
       }
     }
 
-    void pollStale()
+    // Why: remote conflict probes can exceed the 3s interval. Keep one poll in
+    // flight and coalesce skipped ticks into one trailing pass so stale badges
+    // catch up without stacking SSH/RPC work.
+    const pollRunner = createCoalescedPollRunner(pollStale)
+    pollRunner.run()
     const intervalId = setInterval(() => {
       if (document.hasFocus()) {
-        void pollStale()
+        pollRunner.run()
       }
     }, POLL_INTERVAL_MS)
-    const onFocus = (): void => void pollStale()
+    const onFocus = (): void => pollRunner.run()
     window.addEventListener('focus', onFocus)
     return () => {
+      pollRunner.dispose()
       clearInterval(intervalId)
       window.removeEventListener('focus', onFocus)
     }

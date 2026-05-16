@@ -1,10 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useAllWorktrees, useRepoMap } from '@/store/selectors'
-import { cn } from '@/lib/utils'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
-import { Pin } from 'lucide-react'
+import WorkspaceKanbanAreaSelectionOverlay from './WorkspaceKanbanAreaSelectionOverlay'
 import WorkspaceKanbanDrawerHeader from './WorkspaceKanbanDrawerHeader'
+import WorkspaceKanbanPinDropTarget from './WorkspaceKanbanPinDropTarget'
 import WorkspaceKanbanStatusLane from './WorkspaceKanbanStatusLane'
 import {
   getWorkspaceStatus,
@@ -12,22 +12,29 @@ import {
   readWorkspaceDragDataIds
 } from './workspace-status'
 import { useWorkspaceStatusDocumentDrop } from './use-workspace-status-drop'
+import { useWorkspaceKanbanAreaSelection } from './use-workspace-kanban-area-selection'
 import { useWorkspaceKanbanSelection } from './use-workspace-kanban-selection'
-import type { WorkspaceStatus, Worktree } from '../../../../shared/types'
+import {
+  isWorkspaceBoardKeepOpenTarget,
+  useWorkspaceKanbanOutsideDismiss
+} from './use-workspace-kanban-outside-dismiss'
+import { useVisibleWorkspaceKanbanWorktreeIds } from './use-visible-workspace-kanban-worktree-ids'
+import { groupWorkspaceKanbanWorktrees } from './workspace-kanban-worktree-groups'
+import type { WorkspaceStatus } from '../../../../shared/types'
 import { makeWorkspaceStatusId } from '../../../../shared/workspace-statuses'
 
 type WorkspaceKanbanDrawerProps = {
   open: boolean
+  preserveOpenForMenu: boolean
   onOpenChange: (open: boolean) => void
-}
-
-function sortBoardWorktrees(a: Worktree, b: Worktree): number {
-  return b.lastActivityAt - a.lastActivityAt || a.displayName.localeCompare(b.displayName)
+  onMenuOpenChange: (open: boolean) => void
 }
 
 export default function WorkspaceKanbanDrawer({
   open,
-  onOpenChange
+  preserveOpenForMenu,
+  onOpenChange,
+  onMenuOpenChange
 }: WorkspaceKanbanDrawerProps): React.JSX.Element {
   const allWorktrees = useAllWorktrees()
   const repoMap = useRepoMap()
@@ -43,24 +50,27 @@ export default function WorkspaceKanbanDrawer({
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const boardRef = useRef<HTMLDivElement>(null)
+  const areaSelectionOverlayRef = useRef<HTMLDivElement>(null)
   const [dragOverStatus, setDragOverStatus] = useState<WorkspaceStatus | null>(null)
   const [pinDragOver, setPinDragOver] = useState(false)
 
+  const visibleWorktreeIdSet = useVisibleWorkspaceKanbanWorktreeIds({
+    allWorktrees,
+    activeWorktreeId,
+    repoMap
+  })
+
   const worktreesByStatus = useMemo(() => {
-    const grouped = new Map<WorkspaceStatus, Worktree[]>(
-      workspaceStatuses.map((status) => [status.id, []])
-    )
-    for (const worktree of allWorktrees) {
-      if (worktree.isArchived) {
-        continue
-      }
-      grouped.get(getWorkspaceStatus(worktree, workspaceStatuses))!.push(worktree)
-    }
-    for (const items of grouped.values()) {
-      items.sort((a, b) => Number(b.isPinned) - Number(a.isPinned) || sortBoardWorktrees(a, b))
-    }
-    return grouped
-  }, [allWorktrees, workspaceStatuses])
+    return groupWorkspaceKanbanWorktrees({
+      worktrees: allWorktrees,
+      visibleWorktreeIds: visibleWorktreeIdSet,
+      workspaceStatuses
+    })
+  }, [allWorktrees, visibleWorktreeIdSet, workspaceStatuses])
+  const worktreeById = useMemo(
+    () => new Map(allWorktrees.map((worktree) => [worktree.id, worktree])),
+    [allWorktrees]
+  )
 
   const boardWorktrees = useMemo(
     () => workspaceStatuses.flatMap((status) => worktreesByStatus.get(status.id) ?? []),
@@ -69,26 +79,36 @@ export default function WorkspaceKanbanDrawer({
   const {
     selectedWorktreeIds,
     selectedWorktrees,
+    selectionAnchorId,
     updateSelectionForGesture,
+    updateSelectionForArea,
     selectForContextMenu
   } = useWorkspaceKanbanSelection(open, boardWorktrees)
+  const { handleAreaSelectionPointerDown } = useWorkspaceKanbanAreaSelection({
+    open,
+    boardRef,
+    overlayRef: areaSelectionOverlayRef,
+    selectedWorktreeIds,
+    selectionAnchorId,
+    updateSelectionForArea
+  })
 
   const moveWorktreeToStatus = useCallback(
     (worktreeId: string, status: WorkspaceStatus) => {
-      const current = allWorktrees.find((worktree) => worktree.id === worktreeId)
+      const current = worktreeById.get(worktreeId)
       if (!current || getWorkspaceStatus(current, workspaceStatuses) === status) {
         return
       }
       void updateWorktreeMeta(worktreeId, { workspaceStatus: status })
     },
-    [allWorktrees, updateWorktreeMeta, workspaceStatuses]
+    [updateWorktreeMeta, workspaceStatuses, worktreeById]
   )
 
   const moveWorktreesToStatus = useCallback(
     (worktreeIds: readonly string[], status: WorkspaceStatus) => {
       const updates = new Map<string, { workspaceStatus: WorkspaceStatus }>()
       for (const worktreeId of worktreeIds) {
-        const current = allWorktrees.find((worktree) => worktree.id === worktreeId)
+        const current = worktreeById.get(worktreeId)
         if (!current || getWorkspaceStatus(current, workspaceStatuses) === status) {
           continue
         }
@@ -98,18 +118,35 @@ export default function WorkspaceKanbanDrawer({
         void updateWorktreesMeta(updates)
       }
     },
-    [allWorktrees, updateWorktreesMeta, workspaceStatuses]
+    [updateWorktreesMeta, workspaceStatuses, worktreeById]
   )
 
   const pinWorktree = useCallback(
     (worktreeId: string) => {
-      const current = allWorktrees.find((worktree) => worktree.id === worktreeId)
+      const current = worktreeById.get(worktreeId)
       if (!current || current.isPinned) {
         return
       }
       void updateWorktreeMeta(worktreeId, { isPinned: true })
     },
-    [allWorktrees, updateWorktreeMeta]
+    [updateWorktreeMeta, worktreeById]
+  )
+
+  const pinWorktrees = useCallback(
+    (worktreeIds: readonly string[]) => {
+      const updates = new Map<string, { isPinned: true }>()
+      for (const worktreeId of worktreeIds) {
+        const current = worktreeById.get(worktreeId)
+        if (!current || current.isPinned) {
+          continue
+        }
+        updates.set(worktreeId, { isPinned: true })
+      }
+      if (updates.size > 0) {
+        void updateWorktreesMeta(updates)
+      }
+    },
+    [updateWorktreesMeta, worktreeById]
   )
 
   const handleDragOver = useCallback((event: React.DragEvent, status: WorkspaceStatus) => {
@@ -257,31 +294,14 @@ export default function WorkspaceKanbanDrawer({
     moveWorktreeToStatus,
     pinWorktree,
     handleDragFinish,
-    open
+    open,
+    {
+      onMoveWorktreesToStatus: moveWorktreesToStatus,
+      onPinWorktrees: pinWorktrees
+    }
   )
 
-  useEffect(() => {
-    if (!open) {
-      return
-    }
-
-    const handlePointerDown = (event: PointerEvent): void => {
-      const content = boardRef.current?.closest<HTMLElement>('[data-slot="sheet-content"]')
-      if (!content) {
-        return
-      }
-      if (event.target instanceof Node && content.contains(event.target)) {
-        return
-      }
-      const rect = content.getBoundingClientRect()
-      if (event.clientX > rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom) {
-        onOpenChange(false)
-      }
-    }
-
-    document.addEventListener('pointerdown', handlePointerDown, true)
-    return () => document.removeEventListener('pointerdown', handlePointerDown, true)
-  }, [onOpenChange, open])
+  useWorkspaceKanbanOutsideDismiss({ open, boardRef, preserveOpenForMenu, onOpenChange })
 
   const opacityPercent = Math.round(workspaceBoardOpacity * 100)
   const drawerLeft = sidebarOpen ? sidebarWidth : 0
@@ -313,7 +333,13 @@ export default function WorkspaceKanbanDrawer({
         onInteractOutside={(event) => {
           const originalEvent = event.detail.originalEvent
           const target = originalEvent.target
-          if (target instanceof Element && target.closest('[data-workspace-board-trigger]')) {
+          if (preserveOpenForMenu) {
+            // Why: the first outside click should close a board dropdown, not
+            // also dismiss the board that owns the dropdown.
+            event.preventDefault()
+            return
+          }
+          if (isWorkspaceBoardKeepOpenTarget(target)) {
             event.preventDefault()
             return
           }
@@ -336,23 +362,20 @@ export default function WorkspaceKanbanDrawer({
           onMoveStatus={handleMoveStatus}
           onRemoveStatus={handleRemoveStatus}
           onAddStatus={handleAddStatus}
+          onFilterMenuOpenChange={onMenuOpenChange}
         />
-
-        <div ref={boardRef} className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
-          <div
-            data-workspace-pin-drop-target=""
-            className={cn(
-              'mb-3 flex h-8 shrink-0 items-center gap-2 rounded-md border border-dashed border-sidebar-border bg-background/45 px-3 text-[12px] text-muted-foreground transition-colors',
-              pinDragOver && 'border-sidebar-ring bg-sidebar-accent text-foreground'
-            )}
+        <div
+          ref={boardRef}
+          className="relative flex min-h-0 flex-1 flex-col overflow-hidden p-3"
+          data-workspace-board-selection-surface=""
+          onPointerDown={handleAreaSelectionPointerDown}
+        >
+          <WorkspaceKanbanAreaSelectionOverlay ref={areaSelectionOverlayRef} />
+          <WorkspaceKanbanPinDropTarget
+            isDragOver={pinDragOver}
             onDragOver={handlePinDragOver}
             onDragLeave={handlePinDragLeave}
-          >
-            <Pin className="size-3.5" />
-            <span className="font-medium">Pinned</span>
-            <span className="truncate">Drop here to pin without changing status.</span>
-          </div>
-
+          />
           <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden scrollbar-sleek">
             <div
               className="grid h-full min-h-0 min-w-full grid-rows-[minmax(0,1fr)] gap-3"

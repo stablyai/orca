@@ -39,8 +39,8 @@ describe('agent-hook-relay wire shape', () => {
 })
 
 describe('isRemoteAgentHooksEnabled', () => {
-  it('is off when the env var is absent', () => {
-    expect(isRemoteAgentHooksEnabled({})).toBe(false)
+  it('is on when the env var is absent', () => {
+    expect(isRemoteAgentHooksEnabled({})).toBe(true)
   })
 
   it('is off for empty / "0"', () => {

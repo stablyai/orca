@@ -8,6 +8,7 @@ const HostedReviewForBranch = z.object({
   linkedGitHubPR: z.number().int().positive().nullable().optional(),
   linkedGitLabMR: z.number().int().positive().nullable().optional(),
   linkedBitbucketPR: z.number().int().positive().nullable().optional(),
+  linkedAzureDevOpsPR: z.number().int().positive().nullable().optional(),
   linkedGiteaPR: z.number().int().positive().nullable().optional()
 })
 
@@ -22,12 +23,13 @@ const HostedReviewCreationEligibility = z.object({
   linkedGitHubPR: z.number().int().positive().nullable().optional(),
   linkedGitLabMR: z.number().int().positive().nullable().optional(),
   linkedBitbucketPR: z.number().int().positive().nullable().optional(),
+  linkedAzureDevOpsPR: z.number().int().positive().nullable().optional(),
   linkedGiteaPR: z.number().int().positive().nullable().optional()
 })
 
 const HostedReviewCreate = z.object({
   repo: requiredString('Missing repo selector'),
-  provider: z.enum(['github', 'gitlab', 'bitbucket', 'gitea', 'unsupported']),
+  provider: z.enum(['github', 'gitlab', 'bitbucket', 'azure-devops', 'gitea', 'unsupported']),
   base: requiredString('Missing base branch'),
   head: z.string().optional(),
   title: requiredString('Missing title'),
@@ -46,6 +48,7 @@ export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
         linkedGitHubPR: params.linkedGitHubPR ?? null,
         linkedGitLabMR: params.linkedGitLabMR ?? null,
         linkedBitbucketPR: params.linkedBitbucketPR ?? null,
+        linkedAzureDevOpsPR: params.linkedAzureDevOpsPR ?? null,
         linkedGiteaPR: params.linkedGiteaPR ?? null
       })
   }),
@@ -64,6 +67,7 @@ export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
         linkedGitHubPR: params.linkedGitHubPR ?? null,
         linkedGitLabMR: params.linkedGitLabMR ?? null,
         linkedBitbucketPR: params.linkedBitbucketPR ?? null,
+        linkedAzureDevOpsPR: params.linkedAzureDevOpsPR ?? null,
         linkedGiteaPR: params.linkedGiteaPR ?? null
       })
   }),

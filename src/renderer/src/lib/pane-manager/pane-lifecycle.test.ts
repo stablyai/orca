@@ -7,7 +7,10 @@ import {
   resetTerminalWebglSuggestion
 } from './pane-webgl-renderer'
 import { openTerminal } from './pane-lifecycle'
-import { buildDefaultTerminalOptions } from './pane-terminal-options'
+import {
+  buildDefaultTerminalOptions,
+  resolveTerminalCursorInactiveStyle
+} from './pane-terminal-options'
 
 const webglMock = vi.hoisted(() => ({
   contextLossHandler: null as (() => void) | null,
@@ -64,6 +67,16 @@ function createPane(): ManagedPaneInternal {
 describe('buildDefaultTerminalOptions', () => {
   it('leaves macOS Option available for keyboard layout characters', () => {
     expect(buildDefaultTerminalOptions().macOptionIsMeta).toBe(false)
+  })
+
+  it('keeps the default inactive cursor as a single bar', () => {
+    expect(buildDefaultTerminalOptions().cursorInactiveStyle).toBe('bar')
+  })
+
+  it('only uses inactive outline for block cursors', () => {
+    expect(resolveTerminalCursorInactiveStyle('block')).toBe('outline')
+    expect(resolveTerminalCursorInactiveStyle('bar')).toBe('bar')
+    expect(resolveTerminalCursorInactiveStyle('underline')).toBe('underline')
   })
 
   it('advertises kitty keyboard protocol so CLIs enable enhanced key reporting', () => {

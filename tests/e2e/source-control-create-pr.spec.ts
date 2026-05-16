@@ -21,7 +21,7 @@ async function openSourceControl(page: Page): Promise<void> {
     state?.setRightSidebarTab('source-control')
   })
   await expect(page.getByRole('button', { name: /Source Control/ })).toBeVisible()
-  await expect(page.getByLabel('Commit message')).toBeVisible()
+  await expect(page.getByRole('textbox', { name: 'Commit message' })).toBeVisible()
 }
 
 async function forceCreatePREligibleStatus(

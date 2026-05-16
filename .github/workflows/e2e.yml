@@ -9,8 +9,10 @@ on:
         type: string
 
 jobs:
-  e2e:
+  build:
+    name: build e2e app
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
@@ -18,9 +20,77 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
 
-      # Why: electron-vite's globalSetup invokes a full app build, which
-      # compiles native modules via node-gyp. Mirrors the install step in
-      # pr.yml's verify job so E2E doesn't hit missing-toolchain errors.
+      # Why: the E2E build compiles native modules via node-gyp. Mirrors the
+      # install step in pr.yml's verify job so E2E doesn't hit missing-toolchain
+      # errors.
+      - name: Install native build tools
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      # Why: this job runs the same pnpm install path as pr.yml's verify
+      # job, so it needs the same pinned node-gyp override to avoid pnpm's
+      # broken bundled gyp_main.py on Linux.
+      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          npm install -g node-gyp@11.5.0
+          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Why: building once avoids five parallel electron-vite builds inside
+      # Playwright globalSetup, which otherwise contends for CPU/RAM on OSS
+      # runners before the sharded tests even start.
+      - name: Build Electron app for E2E
+        run: npx electron-vite build --mode e2e
+
+      - name: Upload E2E build output
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-build-out
+          path: out/
+          retention-days: 1
+          if-no-files-found: error
+
+  e2e:
+    name: e2e ${{ matrix.shard_name }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: '1/5'
+            shard_name: 1-of-5
+          - shard: '2/5'
+            shard_name: 2-of-5
+          - shard: '3/5'
+            shard_name: 3-of-5
+          - shard: '4/5'
+            shard_name: 4-of-5
+          - shard: '5/5'
+            shard_name: 5-of-5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      # Why: pnpm install rebuilds native modules, and those postinstall
+      # scripts still need the Linux toolchain even though this shard reuses
+      # the prebuilt Electron output.
       - name: Install native build tools
         run: sudo apt-get update && sudo apt-get install -y build-essential python3
 
@@ -55,8 +125,21 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run E2E tests
-        run: xvfb-run --auto-servernum pnpm run test:e2e
+      - name: Download E2E build output
+        uses: actions/download-artifact@v4
+        with:
+          name: e2e-build-out
+          path: out/
+
+      # Why: the Electron suite is wall-clock constrained on OSS runners, but
+      # raising workers on one runner OOMs. Sharding keeps each VM at 4 workers
+      # while splitting the 91-test headless suite across separate runners.
+      # SKIP_BUILD makes Playwright globalSetup reuse the single build job's
+      # artifact instead of starting five concurrent electron-vite builds.
+      # ORCA_E2E_FORWARD_APP_LOGS keeps startup failures visible when Electron
+      # launches but never creates a BrowserWindow.
+      - name: Run E2E tests (${{ matrix.shard_name }})
+        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e --shard=${{ matrix.shard }}
 
       # Why: Playwright retains traces/screenshots only on failure. Uploading
       # them as an artifact makes post-mortem debugging on CI possible without
@@ -65,7 +148,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-traces
+          name: playwright-traces-${{ matrix.shard_name }}
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore

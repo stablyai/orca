@@ -5,10 +5,12 @@ import { joinPath } from '@/lib/path'
 import { toast } from 'sonner'
 import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal-links'
 import { openHttpLink } from '@/lib/http-link-routing'
+import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { detectLanguage } from '@/lib/language-detect'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
+  GitCommitCompareSummary,
   GitConflictKind,
   GitConflictOperation,
   GitConflictResolutionStatus,
@@ -32,7 +34,7 @@ import {
 import {
   deleteRuntimePath,
   deleteRuntimeRelativePath,
-  runtimePathExists
+  statRuntimePath
 } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
@@ -41,8 +43,10 @@ export type DiffSource =
   | 'unstaged'
   | 'staged'
   | 'branch'
+  | 'commit'
   | 'combined-uncommitted'
   | 'combined-branch'
+  | 'combined-commit'
 
 export type BranchCompareSnapshot = Pick<
   GitBranchCompareSummary,
@@ -50,6 +54,24 @@ export type BranchCompareSnapshot = Pick<
 > & {
   compareVersion: string
 }
+
+export type CommitCompareSnapshot = Pick<
+  GitCommitCompareSummary,
+  'commitOid' | 'parentOid' | 'compareRef' | 'baseRef'
+> & {
+  compareVersion: string
+  subject?: string
+}
+
+type BranchCompareLike = Pick<
+  GitBranchCompareSummary,
+  'baseRef' | 'baseOid' | 'compareRef' | 'headOid' | 'mergeBase'
+>
+
+type CommitCompareLike = Pick<
+  GitCommitCompareSummary,
+  'commitOid' | 'parentOid' | 'compareRef' | 'baseRef'
+>
 
 type CombinedDiffAlternate = {
   source: 'combined-uncommitted' | 'combined-branch'
@@ -118,10 +140,12 @@ export type OpenFile = {
   markdownPreviewAnchor?: string
   diffSource?: DiffSource
   branchCompare?: BranchCompareSnapshot
+  commitCompare?: CommitCompareSnapshot
   branchOldPath?: string
   combinedAlternate?: CombinedDiffAlternate
   combinedAreaFilter?: string // filter combined diff to a specific area (e.g. 'staged', 'unstaged', 'untracked')
   branchEntriesSnapshot?: GitBranchChangeEntry[]
+  commitEntriesSnapshot?: GitBranchChangeEntry[]
   /** Why: snapshot uncommitted entries at tab-open time so a subsequent commit
    *  does not yank entries out from under the combined diff, which would rebuild
    *  all sections and lose loaded content + scroll position. */
@@ -279,7 +303,14 @@ export type EditorSlice = {
     worktreeId: string,
     worktreePath: string,
     entry: GitBranchChangeEntry,
-    compare: GitBranchCompareSummary,
+    compare: BranchCompareLike,
+    language: string
+  ) => void
+  openCommitDiff: (
+    worktreeId: string,
+    worktreePath: string,
+    entry: GitBranchChangeEntry,
+    compare: CommitCompareLike,
     language: string
   ) => void
   openAllDiffs: (
@@ -305,6 +336,13 @@ export type EditorSlice = {
     worktreePath: string,
     compare: GitBranchCompareSummary,
     alternate?: CombinedDiffAlternate
+  ) => void
+  openCommitAllDiffs: (
+    worktreeId: string,
+    worktreePath: string,
+    compare: GitCommitCompareSummary,
+    entries: GitBranchChangeEntry[],
+    subject?: string
   ) => void
 
   // Cursor line tracking per file
@@ -470,12 +508,24 @@ function extractPublishFailureDetail(message: string): string | null {
   return null
 }
 
-function resolveRemoteOperationErrorMessage(
+export function resolveRemoteOperationErrorMessage(
   error: unknown,
-  options?: { publish?: boolean; isPush?: boolean; isSync?: boolean }
+  options?: { publish?: boolean; isPush?: boolean; isSync?: boolean; isFetch?: boolean }
 ): string {
   if (!(error instanceof Error)) {
     return REMOTE_OPERATION_FAILED_MESSAGE
+  }
+
+  if (/unmerged files|needs merge|you have not concluded your merge/i.test(error.message)) {
+    return options?.isSync
+      ? 'Sync blocked — resolve existing merge conflicts first.'
+      : 'Pull blocked — resolve existing merge conflicts first.'
+  }
+
+  if (/automatic merge failed|CONFLICT \(|fix conflicts/i.test(error.message)) {
+    return options?.isSync
+      ? 'Sync stopped with merge conflicts. Resolve them in Source Control, then commit the merge.'
+      : 'Pull stopped with merge conflicts. Resolve them in Source Control, then commit the merge.'
   }
 
   // Why: under sync, the inner push runs *after* a successful pull, so a
@@ -539,6 +589,13 @@ function resolveRemoteOperationErrorMessage(
     return 'Push failed. Check your connection and try again.'
   }
 
+  if (options?.isFetch) {
+    const detail =
+      extractPublishFailureDetail(error.message) ??
+      truncateDetail(stripCredentialsFromMessage(error.message))
+    return `Fetch failed. ${detail}`
+  }
+
   return error.message
 }
 
@@ -565,6 +622,13 @@ function deleteUntouchedUntitledFile(state: AppState, file: OpenFile): void {
       return undefined
     })
     .catch(() => {})
+}
+
+function getWorktreeConnectionId(state: AppState, worktreeId: string): string | undefined {
+  const worktree = findWorktreeById(state.worktreesByRepo ?? {}, worktreeId)
+  const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
+  const repo = (state.repos ?? []).find((candidate) => candidate.id === repoId)
+  return repo?.connectionId ?? undefined
 }
 
 export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (set, get) => ({
@@ -718,6 +782,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           existing.mode !== file.mode ||
           existing.diffSource !== file.diffSource ||
           existing.branchCompare?.compareVersion !== file.branchCompare?.compareVersion ||
+          existing.commitCompare?.compareVersion !== file.commitCompare?.compareVersion ||
           existing.conflict?.kind !== file.conflict?.kind ||
           existing.conflict?.conflictKind !== file.conflict?.conflictKind ||
           existing.conflict?.conflictStatus !== file.conflict?.conflictStatus ||
@@ -742,9 +807,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   mode: file.mode,
                   diffSource: file.diffSource,
                   branchCompare: file.branchCompare,
+                  commitCompare: file.commitCompare,
                   branchOldPath: file.branchOldPath,
                   combinedAlternate: file.combinedAlternate,
                   combinedAreaFilter: file.combinedAreaFilter,
+                  commitEntriesSnapshot: file.commitEntriesSnapshot,
                   conflict: file.conflict,
                   skippedConflicts: file.skippedConflicts,
                   conflictReview: file.conflictReview,
@@ -1547,6 +1614,59 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     void openWorkspaceEditorItem(get(), id, worktreeId, entry.path, 'diff')
   },
 
+  openCommitDiff: (worktreeId, worktreePath, entry, compare, language) => {
+    const commitCompare = toCommitCompareSnapshot(compare)
+    const id = `${worktreeId}::diff::commit::${commitCompare.compareVersion}::${entry.path}`
+    set((s) => {
+      const existing = s.openFiles.find((f) => f.id === id)
+      if (existing) {
+        return {
+          openFiles: s.openFiles.map((f) =>
+            f.id === id
+              ? {
+                  ...f,
+                  mode: 'diff' as const,
+                  diffSource: 'commit' as const,
+                  commitCompare,
+                  branchOldPath: entry.oldPath,
+                  conflict: undefined,
+                  skippedConflicts: undefined,
+                  conflictReview: undefined
+                }
+              : f
+          ),
+          activeFileId: id,
+          activeTabType: 'editor',
+          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+        }
+      }
+      const newFile: OpenFile = {
+        id,
+        filePath: joinPath(worktreePath, entry.path),
+        relativePath: entry.path,
+        worktreeId,
+        language,
+        isDirty: false,
+        mode: 'diff',
+        diffSource: 'commit',
+        commitCompare,
+        branchOldPath: entry.oldPath,
+        conflict: undefined,
+        skippedConflicts: undefined,
+        conflictReview: undefined
+      }
+      return {
+        openFiles: [...s.openFiles, newFile],
+        activeFileId: id,
+        activeTabType: 'editor',
+        activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+        activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+      }
+    })
+    void openWorkspaceEditorItem(get(), id, worktreeId, entry.path, 'diff')
+  },
+
   openAllDiffs: (worktreeId, worktreePath, alternate, areaFilter) => {
     const id = areaFilter
       ? `${worktreeId}::all-diffs::uncommitted::${areaFilter}`
@@ -1817,6 +1937,62 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       `Branch Changes (${compare.baseRef})`,
       'diff'
     )
+  },
+
+  openCommitAllDiffs: (worktreeId, worktreePath, compare, entries, subject) => {
+    const commitCompare = toCommitCompareSnapshot(compare, subject)
+    const id = `${worktreeId}::all-diffs::commit::${commitCompare.commitOid}`
+    const label = subject
+      ? `Commit ${commitCompare.compareRef}: ${subject}`
+      : `Commit ${commitCompare.compareRef}`
+    set((s) => {
+      const existing = s.openFiles.find((f) => f.id === id)
+      if (existing) {
+        return {
+          openFiles: s.openFiles.map((f) =>
+            f.id === id
+              ? {
+                  ...f,
+                  relativePath: label,
+                  commitCompare,
+                  commitEntriesSnapshot: entries,
+                  conflict: undefined,
+                  skippedConflicts: undefined,
+                  conflictReview: undefined
+                }
+              : f
+          ),
+          activeFileId: id,
+          activeTabType: 'editor',
+          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+        }
+      }
+
+      const newFile: OpenFile = {
+        id,
+        filePath: worktreePath,
+        relativePath: label,
+        worktreeId,
+        language: 'plaintext',
+        isDirty: false,
+        mode: 'diff',
+        diffSource: 'combined-commit',
+        commitCompare,
+        commitEntriesSnapshot: entries,
+        conflict: undefined,
+        skippedConflicts: undefined,
+        conflictReview: undefined
+      }
+      return {
+        openFiles: [...s.openFiles, newFile],
+        activeFileId: id,
+        activeTabType: 'editor',
+        activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+        activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+      }
+    })
+    void openWorkspaceEditorItem(get(), id, worktreeId, label, 'diff')
   },
 
   // Cursor line tracking
@@ -2126,7 +2302,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     try {
       await fetchRuntimeGit({ settings: get().settings, worktreeId, worktreePath, connectionId })
     } catch (error) {
-      toast.error(resolveRemoteOperationErrorMessage(error))
+      toast.error(resolveRemoteOperationErrorMessage(error, { isFetch: true }))
       throw error
     } finally {
       get().endRemoteOperation()
@@ -2298,11 +2474,23 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   setPendingEditorReveal: (reveal) => set({ pendingEditorReveal: reveal }),
 
   activateMarkdownLink: async (rawHref, ctx) => {
+    const initialState = get()
     const sourceRuntimeEnvironmentId =
       ctx.runtimeEnvironmentId ??
-      get().openFiles.find((file) => file.filePath === ctx.sourceFilePath)?.runtimeEnvironmentId ??
+      initialState.openFiles.find((file) => file.filePath === ctx.sourceFilePath)
+        ?.runtimeEnvironmentId ??
       null
-    const sourceSettings = settingsForRuntimeOwner(get().settings, sourceRuntimeEnvironmentId)
+    const sourceSettings = settingsForRuntimeOwner(
+      initialState.settings,
+      sourceRuntimeEnvironmentId
+    )
+    const sourceConnectionId = getWorktreeConnectionId(initialState, ctx.worktreeId)
+    const fileContext = {
+      settings: sourceSettings,
+      worktreeId: ctx.worktreeId,
+      worktreePath: ctx.worktreeRoot,
+      connectionId: sourceConnectionId
+    }
     const target = resolveMarkdownLinkTarget(rawHref, ctx.sourceFilePath, ctx.worktreeRoot)
     if (!target) {
       return
@@ -2317,17 +2505,28 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     if (target.kind === 'file') {
       const { line, column } = target
       if (target.relativePath === undefined) {
-        if (sourceSettings?.activeRuntimeEnvironmentId?.trim()) {
+        if (isLocalPathOpenBlocked(sourceSettings, { connectionId: sourceConnectionId })) {
           // Why: a file:// link outside the worktree is a client-local escape
-          // hatch. Remote runtime editors must not authorize/open client paths
-          // as though the server could read them.
-          toast.error('External local file links are not available for remote runtime files yet.')
+          // hatch. Remote runtime/SSH editors must not treat server paths as client paths.
+          showLocalPathOpenBlockedToast()
           return
         }
         // Why: terminal file links already authorize clicked external paths
         // before opening them in Orca. Markdown file:// links need the same
         // user-gesture authorization so /tmp screenshots can use ImageViewer.
         await window.api.fs.authorizeExternalPath({ targetPath: target.absolutePath })
+      } else {
+        let stats: { isDirectory: boolean }
+        try {
+          stats = await statRuntimePath(fileContext, target.absolutePath)
+        } catch {
+          toast.error(`File not found: ${target.relativePath}`)
+          return
+        }
+        if (stats.isDirectory) {
+          toast.error(`Cannot open directory: ${target.relativePath}`)
+          return
+        }
       }
 
       get().openFile(
@@ -2353,16 +2552,15 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
     // target.kind === 'markdown'
     const { absolutePath, relativePath, line, column } = target
-    const exists = await runtimePathExists(
-      {
-        settings: sourceSettings,
-        worktreeId: ctx.worktreeId,
-        worktreePath: ctx.worktreeRoot
-      },
-      absolutePath
-    )
-    if (!exists) {
+    let stats: { isDirectory: boolean }
+    try {
+      stats = await statRuntimePath(fileContext, absolutePath)
+    } catch {
       toast.error(`File not found: ${relativePath}`)
+      return
+    }
+    if (stats.isDirectory) {
+      toast.error(`Cannot open directory: ${relativePath}`)
       return
     }
 
@@ -2521,7 +2719,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 })
 
 function getCompareVersion(
-  compare: Pick<GitBranchCompareSummary, 'baseOid' | 'headOid' | 'mergeBase'>
+  compare: Pick<BranchCompareLike, 'baseOid' | 'headOid' | 'mergeBase'>
 ): string {
   return [
     compare.baseOid ?? 'no-base',
@@ -2530,7 +2728,7 @@ function getCompareVersion(
   ].join(':')
 }
 
-function toBranchCompareSnapshot(compare: GitBranchCompareSummary): BranchCompareSnapshot {
+function toBranchCompareSnapshot(compare: BranchCompareLike): BranchCompareSnapshot {
   return {
     baseRef: compare.baseRef,
     baseOid: compare.baseOid,
@@ -2538,6 +2736,22 @@ function toBranchCompareSnapshot(compare: GitBranchCompareSummary): BranchCompar
     headOid: compare.headOid,
     mergeBase: compare.mergeBase,
     compareVersion: getCompareVersion(compare)
+  }
+}
+
+function toCommitCompareSnapshot(
+  compare: CommitCompareLike,
+  subject?: string
+): CommitCompareSnapshot {
+  return {
+    commitOid: compare.commitOid,
+    parentOid: compare.parentOid,
+    compareRef: compare.compareRef,
+    baseRef: compare.baseRef,
+    compareVersion: `${compare.parentOid ?? 'empty-tree'}:${compare.commitOid}`,
+    subject:
+      subject ??
+      ('subject' in compare && typeof compare.subject === 'string' ? compare.subject : undefined)
   }
 }
 

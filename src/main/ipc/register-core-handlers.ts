@@ -4,10 +4,8 @@ import { registerPreflightHandlers } from './preflight'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { StatsCollector } from '../stats/collector'
-import {
-  registerFilesystemHandlers,
-  type CommitMessageAgentEnvironmentResolvers
-} from './filesystem'
+import { registerFilesystemHandlers } from './filesystem'
+import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import { registerFilesystemWatcherHandlers } from './filesystem-watcher'
 import { registerClaudeUsageHandlers } from './claude-usage'
 import { registerCodexUsageHandlers } from './codex-usage'
@@ -17,6 +15,7 @@ import { registerGitLabHandlers } from './gitlab'
 import { registerHostedReviewHandlers } from './hosted-review'
 import { registerLinearHandlers } from './linear'
 import { registerFeedbackHandlers } from './feedback'
+import { registerCrashReportingHandlers } from './crash-reporting'
 import { registerExportHandlers } from './export'
 import { registerStatsHandlers } from './stats'
 import { registerMemoryHandlers } from './memory'
@@ -46,10 +45,8 @@ import { registerAgentHookHandlers } from './agent-hooks'
 import { registerAgentTrustHandlers } from './agent-trust'
 import { registerClaudeAccountHandlers } from './claude-accounts'
 import { warmSystemFontFamilies } from '../system-fonts'
-import {
-  registerClipboardHandlers,
-  registerUpdaterHandlers
-} from '../window/attach-main-window-services'
+import { registerUpdaterHandlers } from '../window/attach-main-window-services'
+import { registerClipboardHandlers } from '../window/clipboard-ipc-handlers'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type { OpenCodeUsageStore } from '../opencode-usage/store'
@@ -58,6 +55,7 @@ import type { CodexAccountService } from '../codex-accounts/service'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { AutomationService } from '../automations/service'
 import type { AgentAwakeService } from '../agent-awake-service'
+import type { CrashReportStore } from '../crash-reporting/crash-report-store'
 
 let registered = false
 
@@ -74,7 +72,8 @@ export function registerCoreHandlers(
   mainWindowWebContentsId: number | null = null,
   automations?: AutomationService,
   commitMessageAgentEnv?: CommitMessageAgentEnvironmentResolvers,
-  agentAwakeService?: AgentAwakeService
+  agentAwakeService?: AgentAwakeService,
+  crashReports?: CrashReportStore
 ): void {
   // Why: on macOS the app can stay alive after all windows close, then
   // openMainWindow() is called again on 'activate'. ipcMain.handle() throws
@@ -103,6 +102,9 @@ export function registerCoreHandlers(
   registerHostedReviewHandlers(store, stats)
   registerLinearHandlers()
   registerFeedbackHandlers()
+  if (crashReports) {
+    registerCrashReportingHandlers(crashReports)
+  }
   registerExportHandlers()
   registerStatsHandlers(stats)
   registerMemoryHandlers(store)

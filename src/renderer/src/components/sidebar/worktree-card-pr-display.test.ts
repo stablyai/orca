@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import type { PRInfo } from '../../../../shared/types'
+import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { getWorktreeCardPrDisplay } from './worktree-card-pr-display'
 
-const pr: PRInfo = {
+const pr: HostedReviewInfo = {
+  provider: 'github',
   number: 123,
   title: 'Ready PR',
   state: 'open',
   url: 'https://github.com/stablyai/orca/pull/123',
-  checksStatus: 'success',
+  status: 'success',
   updatedAt: '2026-05-13T00:00:00.000Z',
   mergeable: 'MERGEABLE'
 }
@@ -19,6 +20,7 @@ describe('getWorktreeCardPrDisplay', () => {
 
   it('falls back to linkedPR while PR details load', () => {
     expect(getWorktreeCardPrDisplay(undefined, 456)).toEqual({
+      provider: 'github',
       number: 456,
       title: 'Loading PR...'
     })
@@ -26,6 +28,7 @@ describe('getWorktreeCardPrDisplay', () => {
 
   it('keeps linkedPR visible when PR details are unavailable', () => {
     expect(getWorktreeCardPrDisplay(null, 456)).toEqual({
+      provider: 'github',
       number: 456,
       title: 'PR details unavailable'
     })

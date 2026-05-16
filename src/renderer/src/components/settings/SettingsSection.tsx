@@ -1,13 +1,14 @@
 import type React from 'react'
 import { useAppStore } from '../../store'
-import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
+import type { SettingsSearchEntry } from './settings-search'
+import { matchesSettingsSearch } from './settings-search'
 
 type SettingsSectionProps = {
   id: string
   title: string
   description: string
-  searchEntries: SettingsSearchEntry[]
-  children: React.ReactNode
+  searchEntries?: SettingsSearchEntry[]
+  children?: React.ReactNode
   className?: string
   badge?: string
   badgeAccessory?: React.ReactNode
@@ -31,7 +32,7 @@ export function SettingsSection({
   headerAction
 }: SettingsSectionProps): React.JSX.Element | null {
   const query = useAppStore((state) => state.settingsSearchQuery)
-  if (!forceVisible && !matchesSettingsSearch(query, searchEntries)) {
+  if (!forceVisible && searchEntries && !matchesSettingsSearch(query, searchEntries)) {
     return null
   }
 
