@@ -49,6 +49,12 @@ function createPresetOpenInApplication(label: string, command: string): OpenInAp
   }
 }
 
+export function shouldCommitOpenInApplicationsDraft(applications: OpenInApplication[]): boolean {
+  return applications.every((application) => {
+    return application.label.trim() !== '' && application.command.trim() !== ''
+  })
+}
+
 export { GENERAL_PANE_SEARCH_ENTRIES }
 
 type GeneralPaneProps = {
@@ -149,7 +155,15 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
   }, [settings.openInApplications])
 
   const commitOpenInApplications = (applications: OpenInApplication[]): void => {
+    if (!shouldCommitOpenInApplicationsDraft(applications)) {
+      return
+    }
     updateSettings({ openInApplications: applications })
+  }
+
+  const applyOpenInApplicationsDraft = (applications: OpenInApplication[]): void => {
+    setOpenInApplicationsDraft(applications)
+    commitOpenInApplications(applications)
   }
 
   const handleBrowseWorkspace = async () => {
@@ -353,12 +367,10 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
               variant="outline"
               size="sm"
               onClick={() =>
-                updateSettings({
-                  openInApplications: [
-                    ...openInApplicationsDraft,
-                    createPresetOpenInApplication('Cursor', 'cursor')
-                  ]
-                })
+                applyOpenInApplicationsDraft([
+                  ...openInApplicationsDraft,
+                  createPresetOpenInApplication('Cursor', 'cursor')
+                ])
               }
             >
               Add Cursor
@@ -367,12 +379,10 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
               variant="outline"
               size="sm"
               onClick={() =>
-                updateSettings({
-                  openInApplications: [
-                    ...openInApplicationsDraft,
-                    createPresetOpenInApplication('Zed', 'zed')
-                  ]
-                })
+                applyOpenInApplicationsDraft([
+                  ...openInApplicationsDraft,
+                  createPresetOpenInApplication('Zed', 'zed')
+                ])
               }
             >
               Add Zed
@@ -417,7 +427,7 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
                   onClick={() => {
                     const next = openInApplicationsDraft.filter((entry) => entry.id !== app.id)
                     setOpenInApplicationsDraft(next)
-                    updateSettings({ openInApplications: next })
+                    commitOpenInApplications(next)
                   }}
                 >
                   Remove
