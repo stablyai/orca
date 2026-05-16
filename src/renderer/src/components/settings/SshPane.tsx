@@ -209,9 +209,9 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
   const handleTerminateSessions = async (targetId: string): Promise<void> => {
     try {
       await terminateSessionsWithReconnect(targetId)
-      toast.success('Remote sessions terminated')
+      toast.success('Remote terminals ended')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to terminate sessions')
+      toast.error(err instanceof Error ? err.message : 'Failed to end remote terminals')
     }
   }
 
@@ -341,7 +341,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
           <DialogHeader>
             <DialogTitle className="text-sm">Remove SSH Target</DialogTitle>
             <DialogDescription className="text-xs">
-              This will remove the target and terminate any active remote sessions.
+              This will remove the target and end any active remote terminals.
             </DialogDescription>
           </DialogHeader>
 
@@ -370,7 +370,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
         </DialogContent>
       </Dialog>
 
-      {/* Terminate confirmation dialog */}
+      {/* End remote terminals confirmation dialog */}
       <Dialog
         open={!!pendingTerminate}
         onOpenChange={(open) => {
@@ -381,9 +381,10 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       >
         <DialogContent className="max-w-sm sm:max-w-sm" showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle className="text-sm">Terminate Remote Sessions</DialogTitle>
+            <DialogTitle className="text-sm">End Remote Terminals?</DialogTitle>
             <DialogDescription className="text-xs">
-              This will kill active remote terminals for this SSH target.
+              This will stop active terminal sessions on this SSH target. Reconnecting will not
+              restore them.
             </DialogDescription>
           </DialogHeader>
 
@@ -406,7 +407,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
                 }
               }}
             >
-              Terminate
+              End Terminals
             </Button>
           </DialogFooter>
         </DialogContent>
