@@ -4,6 +4,7 @@ restore-on-remount caching, and scroll preservation. Splitting those pieces
 across smaller files would make the lifecycle edges harder to reason about and
 more error-prone than keeping the whole viewer flow together. */
 import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { joinPath } from '@/lib/path'
@@ -40,6 +41,7 @@ import { Check, Copy, MessageSquare, Send, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { DiffSectionItem } from './DiffSectionItem'
 import { getCombinedUncommittedEntries } from './combined-diff-entries'
+import { getDiffSectionEstimatedHeight, isIntrinsicHeightImageDiff } from './diff-section-layout'
 import type { DiffSection } from './diff-section-types'
 
 type CachedCombinedDiffViewState = {
@@ -53,6 +55,7 @@ type CachedCombinedDiffViewState = {
 
 const combinedDiffViewStateCache = new Map<string, CachedCombinedDiffViewState>()
 const combinedDiffScrollTopCache = new Map<string, number>()
+const COMBINED_DIFF_OVERSCAN = 5
 
 export default function CombinedDiffViewer({
   file,
@@ -314,6 +317,40 @@ export default function CombinedDiffViewer({
 
   const modifiedEditorsRef = useRef<Map<number, monacoEditor.IStandaloneCodeEditor>>(new Map())
 
+  const virtualizer = useVirtualizer({
+    count: sections.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: (index) => {
+      const section = sections[index]
+      if (!section) {
+        return 88
+      }
+
+      return getDiffSectionEstimatedHeight({
+        collapsed: section.collapsed,
+        measuredContentHeight: sectionHeights[index],
+        originalContent: section.originalContent,
+        modifiedContent: section.modifiedContent,
+        useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult)
+      })
+    },
+    overscan: COMBINED_DIFF_OVERSCAN,
+    getItemKey: (index) => {
+      const section = sections[index]
+      if (!section) {
+        return `${index}:${generation}`
+      }
+      return `${section.key}:${section.collapsed ? 'collapsed' : 'expanded'}:${generation}`
+    }
+  })
+
+  useLayoutEffect(() => {
+    // Why: inline vs side-by-side can change Monaco content heights across
+    // every loaded row. Re-measure on this explicit mode change, not on every
+    // section load.
+    virtualizer.measure()
+  }, [sideBySide, virtualizer])
+
   const toggleSection = useCallback((index: number) => {
     setSections((prev) => prev.map((s, i) => (i === index ? { ...s, collapsed: !s.collapsed } : s)))
   }, [])
@@ -348,7 +385,21 @@ export default function CombinedDiffViewer({
           content
         )
         setSections((prev) =>
-          prev.map((s, i) => (i === index ? { ...s, modifiedContent: content, dirty: false } : s))
+          prev.map((s, i) => {
+            if (i !== index) {
+              return s
+            }
+
+            return {
+              ...s,
+              modifiedContent: content,
+              dirty: false,
+              diffResult:
+                s.diffResult?.kind === 'text'
+                  ? { ...s.diffResult, modifiedContent: content }
+                  : s.diffResult
+            }
+          })
         )
       } catch (err) {
         console.error('Save failed:', err)
@@ -687,26 +738,45 @@ export default function CombinedDiffViewer({
 
         <div ref={scrollContainerRef} className="flex-1 overflow-auto scrollbar-editor">
           {skippedConflictNotice}
-          {sections.map((section, index) => (
-            <DiffSectionItem
-              key={`${section.key}:${generation}`}
-              section={section}
-              index={index}
-              isBranchMode={isBranchMode}
-              sideBySide={sideBySide}
-              isDark={isDark}
-              settings={settings}
-              sectionHeight={sectionHeights[index]}
-              worktreeId={file.worktreeId}
-              worktreeRoot={file.filePath}
-              loadSection={loadSection}
-              toggleSection={toggleSection}
-              setSectionHeights={setSectionHeights}
-              setSections={setSections}
-              modifiedEditorsRef={modifiedEditorsRef}
-              handleSectionSaveRef={handleSectionSaveRef}
-            />
-          ))}
+          <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
+            {virtualizer.getVirtualItems().map((virtualItem) => {
+              const section = sections[virtualItem.index]
+              if (!section) {
+                return null
+              }
+
+              return (
+                <div
+                  key={virtualItem.key}
+                  data-index={virtualItem.index}
+                  ref={virtualizer.measureElement}
+                  className="absolute left-0 top-0 w-full"
+                  // Why: `top` preserves sticky file headers inside each row;
+                  // transform-based virtualization creates a containing block
+                  // that makes long-section headers feel jumpy while scrolling.
+                  style={{ top: `${virtualItem.start}px` }}
+                >
+                  <DiffSectionItem
+                    section={section}
+                    index={virtualItem.index}
+                    isBranchMode={isBranchMode}
+                    sideBySide={sideBySide}
+                    isDark={isDark}
+                    settings={settings}
+                    sectionHeight={sectionHeights[virtualItem.index]}
+                    worktreeId={file.worktreeId}
+                    worktreeRoot={file.filePath}
+                    loadSection={loadSection}
+                    toggleSection={toggleSection}
+                    setSectionHeights={setSectionHeights}
+                    setSections={setSections}
+                    modifiedEditorsRef={modifiedEditorsRef}
+                    handleSectionSaveRef={handleSectionSaveRef}
+                  />
+                </div>
+              )
+            })}
+          </div>
         </div>
       </div>
       <Dialog

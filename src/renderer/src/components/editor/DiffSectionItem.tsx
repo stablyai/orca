@@ -8,7 +8,6 @@ import {
   useState,
   type MutableRefObject
 } from 'react'
-import { LazySection } from './LazySection'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { monaco } from '@/lib/monaco-setup'
@@ -284,6 +283,9 @@ export function DiffSectionItem({
       lineNumberOptionsSubRef.current?.dispose()
       lineNumberOptionsSubRef.current = null
       diffEditorRef.current = null
+      if (modifiedEditorsRef.current.get(index) === modified) {
+        modifiedEditorsRef.current.delete(index)
+      }
       setModifiedEditor(null)
       setPopover(null)
     })
@@ -298,14 +300,36 @@ export function DiffSectionItem({
     )
     modified.onDidChangeModelContent(() => {
       const current = modified.getValue()
-      setSections((prev) =>
-        prev.map((s, i) => (i === index ? { ...s, dirty: current !== s.modifiedContent } : s))
-      )
+      setSections((prev) => {
+        let changed = false
+        const next = prev.map((s, i) => {
+          if (i !== index) {
+            return s
+          }
+
+          const savedModifiedContent =
+            s.diffResult?.kind === 'text' ? s.diffResult.modifiedContent : s.modifiedContent
+          const dirty = current !== savedModifiedContent
+          if (s.modifiedContent === current && s.dirty === dirty) {
+            return s
+          }
+
+          changed = true
+          // Why: virtualized rows unmount when scrolled away, so the draft must
+          // live in section state instead of only in Monaco's mounted model.
+          return { ...s, modifiedContent: current, dirty }
+        })
+        return changed ? next : prev
+      })
     })
   }
 
+  useEffect(() => {
+    loadSection(index)
+  }, [index, loadSection])
+
   return (
-    <LazySection key={section.key} index={index} onVisible={loadSection}>
+    <div className="border-b border-border">
       <DiffSectionHeader
         path={section.path}
         dirty={section.dirty}
@@ -399,6 +423,6 @@ export function DiffSectionItem({
           )}
         </div>
       )}
-    </LazySection>
+    </div>
   )
 }
