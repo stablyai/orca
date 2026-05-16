@@ -339,12 +339,19 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     modelDiscovery: { binary: 'opencode', args: ['models'], parse: parseLineModels },
     models: [
       {
+        // Why: OpenCode's hosted GPT models can require workspace billing even
+        // when `opencode models` lists them. This free model is available in
+        // discovery and works as a usable out-of-the-box default.
+        id: 'opencode/deepseek-v4-flash-free',
+        label: 'OpenCode DeepSeek V4 Flash Free'
+      },
+      {
         id: 'opencode/gpt-5.4-mini',
         label: 'OpenCode GPT 5.4 Mini',
         ...withOpenAiThinking('gpt-5.4-mini')
       }
     ],
-    defaultModelId: 'opencode/gpt-5.4-mini'
+    defaultModelId: 'opencode/deepseek-v4-flash-free'
   },
   pi: {
     id: 'pi',
