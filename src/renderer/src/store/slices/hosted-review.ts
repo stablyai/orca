@@ -57,6 +57,30 @@ export type HostedReviewSlice = {
   ) => Promise<HostedReviewInfo | null>
 }
 
+type RefreshHostedReviewCardArgs = {
+  repoPath: string
+  repoId: string
+  branch: string
+  linkedGitHubPR?: number | null
+  linkedGitLabMR?: number | null
+  linkedBitbucketPR?: number | null
+  linkedGiteaPR?: number | null
+}
+
+export function refreshHostedReviewCard(
+  fetchHostedReviewForBranch: HostedReviewSlice['fetchHostedReviewForBranch'],
+  args: RefreshHostedReviewCardArgs
+): Promise<HostedReviewInfo | null> {
+  return fetchHostedReviewForBranch(args.repoPath, args.branch, {
+    force: true,
+    repoId: args.repoId,
+    linkedGitHubPR: args.linkedGitHubPR ?? null,
+    linkedGitLabMR: args.linkedGitLabMR ?? null,
+    linkedBitbucketPR: args.linkedBitbucketPR ?? null,
+    linkedGiteaPR: args.linkedGiteaPR ?? null
+  })
+}
+
 export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedReviewSlice> = (
   set,
   get
