@@ -428,7 +428,12 @@ export async function fetchCodexRateLimits(
 ): Promise<ProviderRateLimits> {
   // Path A: try RPC first
   try {
-    return await fetchViaRpc(options)
+    const rpcResult = await fetchViaRpc(options)
+    if (rpcResult.status === 'ok' || rpcResult.status === 'unavailable') {
+      return rpcResult
+    }
+    // Why: app-server can fail independently of the interactive CLI. Keep the
+    // status-bar useful by trying the older /status PTY reader on RPC errors.
   } catch {
     // RPC failed — fall through to PTY
   }
