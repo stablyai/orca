@@ -38,6 +38,7 @@ function FileExplorerInner(): React.JSX.Element {
   const pinFile = useAppStore((s) => s.pinFile)
   const activeFileId = useAppStore((s) => s.activeFileId)
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
+  const showGitIgnoredFiles = useAppStore((s) => s.settings?.showGitIgnoredFiles ?? true)
   const openFiles = useAppStore((s) => s.openFiles)
   const closeFile = useAppStore((s) => s.closeFile)
 
@@ -92,8 +93,8 @@ function FileExplorerInner(): React.JSX.Element {
   const statusByRelativePath = useMemo(() => buildStatusMap(entries), [entries])
   const folderStatusByRelativePath = useMemo(() => buildFolderStatusMap(entries), [entries])
   const ignoredByRelativePath = useMemo(
-    () => buildIgnoredSet(ignoredPaths ?? undefined),
-    [ignoredPaths]
+    () => (showGitIgnoredFiles ? buildIgnoredSet(ignoredPaths ?? undefined) : new Set<string>()),
+    [ignoredPaths, showGitIgnoredFiles]
   )
 
   const { deleteShortcutLabel, requestDelete } = useFileDeletion({

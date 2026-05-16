@@ -682,6 +682,24 @@ describe('createEditorSlice editor drafts', () => {
 })
 
 describe('createEditorSlice conflict status reconciliation', () => {
+  it('clears ignored path cache when status refresh omits ignored paths', () => {
+    const store = createEditorStore()
+
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [],
+      ignoredPaths: ['dist/', '.env']
+    })
+    expect(store.getState().gitIgnoredPathsByWorktree['wt-1']).toEqual(['dist/', '.env'])
+
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: []
+    })
+
+    expect(store.getState().gitIgnoredPathsByWorktree['wt-1']).toEqual([])
+  })
+
   it('tracks unresolved conflicts when opened through the conflict-safe entry point', () => {
     const store = createEditorStore()
 

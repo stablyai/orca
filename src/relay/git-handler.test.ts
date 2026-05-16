@@ -92,6 +92,30 @@ describe('GitHandler', () => {
       expect(untracked!.area).toBe('untracked')
     })
 
+    it('returns ignored paths only when requested', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, '.gitignore'), 'dist/\n.env\n')
+      gitCommit(tmpDir, 'initial')
+      mkdirSync(path.join(tmpDir, 'dist'), { recursive: true })
+      writeFileSync(path.join(tmpDir, 'dist', 'bundle.js'), 'compiled')
+      writeFileSync(path.join(tmpDir, '.env'), 'TOKEN=secret')
+
+      const defaultResult = (await dispatcher.callRequest('git.status', {
+        worktreePath: tmpDir
+      })) as {
+        ignoredPaths?: string[]
+      }
+      const ignoredResult = (await dispatcher.callRequest('git.status', {
+        worktreePath: tmpDir,
+        includeIgnored: true
+      })) as {
+        ignoredPaths?: string[]
+      }
+
+      expect('ignoredPaths' in defaultResult).toBe(false)
+      expect(ignoredResult.ignoredPaths).toEqual(expect.arrayContaining(['dist/', '.env']))
+    })
+
     it('detects modified files', async () => {
       gitInit(tmpDir)
       writeFileSync(path.join(tmpDir, 'file.txt'), 'original')

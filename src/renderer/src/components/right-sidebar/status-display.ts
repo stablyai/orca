@@ -116,6 +116,14 @@ export function isPathIgnored(ignored: Set<string>, relativePath: string): boole
   }
 }
 
+export function shouldShowIgnoredDecoration(
+  nodeStatus: GitFileStatus | null,
+  ignored: Set<string>,
+  relativePath: string
+): boolean {
+  return !nodeStatus && isPathIgnored(ignored, relativePath)
+}
+
 export function buildIgnoredSet(ignoredPaths: readonly string[] | undefined): Set<string> {
   const set = new Set<string>()
   if (!ignoredPaths) {

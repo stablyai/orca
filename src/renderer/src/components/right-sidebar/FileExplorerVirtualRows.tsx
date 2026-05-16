@@ -4,7 +4,7 @@ import { dirname, normalizeRelativePath } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import type { GitFileStatus } from '../../../../shared/types'
 import { FileExplorerRow, InlineInputRow, type InlineInput } from './FileExplorerRow'
-import { isPathIgnored, STATUS_COLORS } from './status-display'
+import { shouldShowIgnoredDecoration, STATUS_COLORS } from './status-display'
 import type { DirCache, TreeNode } from './file-explorer-types'
 
 type FileExplorerVirtualRowsProps = {
@@ -118,7 +118,11 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
         const nodeStatus = n.isDirectory
           ? (folderStatusByRelativePath.get(normalizedRelativePath) ?? null)
           : (statusByRelativePath.get(normalizedRelativePath) ?? null)
-        const isIgnored = !nodeStatus && isPathIgnored(ignoredByRelativePath, normalizedRelativePath)
+        const isIgnored = shouldShowIgnoredDecoration(
+          nodeStatus,
+          ignoredByRelativePath,
+          normalizedRelativePath
+        )
 
         const rowParentDir = n.isDirectory ? n.path : dirname(n.path)
         const sourceParentDir = dragSourcePath ? dirname(dragSourcePath) : null

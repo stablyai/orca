@@ -1900,12 +1900,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const operationUnchanged = prevOperation === status.conflictOperation
 
       const prevIgnored = s.gitIgnoredPathsByWorktree[worktreeId]
-      const nextIgnored = status.ignoredPaths
+      const nextIgnored = status.ignoredPaths ?? []
       const ignoredUnchanged =
-        nextIgnored === undefined ||
-        (prevIgnored !== undefined &&
-          prevIgnored.length === nextIgnored.length &&
-          prevIgnored.every((p, i) => p === nextIgnored[i]))
+        prevIgnored !== undefined &&
+        prevIgnored.length === nextIgnored.length &&
+        prevIgnored.every((p, i) => p === nextIgnored[i])
 
       if (
         statusUnchanged &&
@@ -1924,7 +1923,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           : { ...s.gitStatusByWorktree, [worktreeId]: nextEntries },
         gitIgnoredPathsByWorktree: ignoredUnchanged
           ? s.gitIgnoredPathsByWorktree
-          : { ...s.gitIgnoredPathsByWorktree, [worktreeId]: nextIgnored ?? [] },
+          : { ...s.gitIgnoredPathsByWorktree, [worktreeId]: nextIgnored },
         gitConflictOperationByWorktree: operationUnchanged
           ? s.gitConflictOperationByWorktree
           : { ...s.gitConflictOperationByWorktree, [worktreeId]: status.conflictOperation },

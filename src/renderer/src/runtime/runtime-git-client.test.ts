@@ -64,6 +64,37 @@ describe('runtime git client', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
+  it('forwards includeIgnored to local git status only when enabled', async () => {
+    gitStatus.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+
+    await getRuntimeGitStatus(
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      { includeIgnored: true }
+    )
+    await getRuntimeGitStatus(
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      { includeIgnored: false }
+    )
+
+    expect(gitStatus).toHaveBeenNthCalledWith(1, {
+      worktreePath: '/repo',
+      connectionId: undefined,
+      includeIgnored: true
+    })
+    expect(gitStatus).toHaveBeenNthCalledWith(2, {
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+  })
+
   it('routes status and diffs through the active runtime environment', async () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',
@@ -101,6 +132,31 @@ describe('runtime git client', () => {
         staged: false,
         compareAgainstHead: true
       },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('forwards includeIgnored through the active runtime environment', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { entries: [], conflictOperation: 'unknown', ignoredPaths: ['dist/'] },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    await getRuntimeGitStatus(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      { includeIgnored: true }
+    )
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'git.status',
+      params: { worktree: 'wt-1', includeIgnored: true },
       timeoutMs: 15_000
     })
   })

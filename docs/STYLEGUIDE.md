@@ -57,6 +57,7 @@ For diff status, file-tree decorations, and the changes view, use the git decora
 | `--git-decoration-renamed`     | Renamed                        |
 | `--git-decoration-untracked`   | Untracked                      |
 | `--git-decoration-copied`      | Copied                         |
+| `--git-decoration-ignored`     | Ignored by git                 |
 
 Use these *only* for git status. Don't reuse them for unrelated state colors — that breaks the convention.
 

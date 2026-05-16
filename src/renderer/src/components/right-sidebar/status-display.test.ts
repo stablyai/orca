@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildIgnoredSet, isPathIgnored } from './status-display'
+import { buildIgnoredSet, isPathIgnored, shouldShowIgnoredDecoration } from './status-display'
 
 describe('buildIgnoredSet', () => {
   it('returns an empty set when ignoredPaths is undefined', () => {
@@ -33,5 +33,15 @@ describe('isPathIgnored', () => {
   it('does not match sibling paths that share a prefix', () => {
     const ignored = new Set(['dist'])
     expect(isPathIgnored(ignored, 'distance.ts')).toBe(false)
+  })
+})
+
+describe('shouldShowIgnoredDecoration', () => {
+  it('shows ignored decoration only when no real git status exists', () => {
+    const ignored = new Set(['dist'])
+
+    expect(shouldShowIgnoredDecoration(null, ignored, 'dist/index.js')).toBe(true)
+    expect(shouldShowIgnoredDecoration('modified', ignored, 'dist/index.js')).toBe(false)
+    expect(shouldShowIgnoredDecoration('untracked', ignored, 'dist/index.js')).toBe(false)
   })
 })
