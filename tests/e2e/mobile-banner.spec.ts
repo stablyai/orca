@@ -3,12 +3,11 @@ import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForSessionReady, waitForActiveWorktree } from './helpers/store'
 import { waitForActivePanePtyId, waitForActiveTerminalManager } from './helpers/terminal'
 
-// Why: regression coverage for the mobile-presence-lock UX (PR #1532,
-// docs/mobile-presence-lock.md). The original bug was that the prior banner
-// mounted but was visually unobtrusive enough that users missed it. Strong DOM
-// assertions guard the "doesn't mount / doesn't dismiss" regression class;
-// screenshots ride in the playwright-traces artifact upload so reviewers can
-// eyeball the rendering on a failed run.
+// Why: regression coverage for the mobile-presence-lock UX (PR #1532). Strong
+// DOM assertions guard the "doesn't mount / doesn't dismiss" regression class;
+// visual assertions keep the notice from reintroducing a full-pane scrim/blur
+// over the live terminal stream. Screenshots ride in the playwright-traces
+// artifact upload so reviewers can eyeball the rendering on a failed run.
 //
 // Drives the renderer by sending the same IPC events main fires in production
 // (runtime:terminalFitOverrideChanged, runtime:terminalDriverChanged — wired in
@@ -40,7 +39,7 @@ test('mobile subscribe mounts overlay; collapse → chip; Take back dismisses', 
   await expect(overlay).toBeVisible({ timeout: 15_000 })
   await expect(overlay).toContainText(/mobile is driving this terminal/i)
   await expect(overlay).toContainText(/your keyboard is paused/i)
-  await expectExpandedOverlayCoversPane(orcaPage, ptyId)
+  await expectExpandedOverlayLeavesPaneReadable(orcaPage, ptyId)
 
   const takeBack = overlay.getByRole('button', { name: /take back/i })
   const collapse = overlay.getByRole('button', { name: /^collapse$/i })
@@ -62,7 +61,7 @@ test('mobile subscribe mounts overlay; collapse → chip; Take back dismisses', 
 
   await overlay.getByRole('button', { name: /mobile driving/i }).click()
   await expect(overlay).toContainText(/your keyboard is paused/i)
-  await expectExpandedOverlayCoversPane(orcaPage, ptyId)
+  await expectExpandedOverlayLeavesPaneReadable(orcaPage, ptyId)
 
   await collapse.click()
   await expect(overlay).not.toContainText(/your keyboard is paused/i)
@@ -102,7 +101,7 @@ test('held phone-fit state mounts restore overlay without collapse', async ({
   await expect(overlay.getByRole('button', { name: /restore desktop size/i })).toBeVisible()
   await expect(overlay.getByRole('button', { name: /^collapse$/i })).toHaveCount(0)
   await expect(overlay.getByRole('button', { name: /take back/i })).toHaveCount(0)
-  await expectExpandedOverlayCoversPane(orcaPage, ptyId)
+  await expectExpandedOverlayLeavesPaneReadable(orcaPage, ptyId)
 
   await captureAttachment(orcaPage, testInfo, 'overlay-held-fit.png')
 
@@ -213,7 +212,7 @@ async function expectRestoreTerminalFitCalls(
     .toEqual(expected)
 }
 
-async function expectExpandedOverlayCoversPane(page: Page, ptyId: string): Promise<void> {
+async function expectExpandedOverlayLeavesPaneReadable(page: Page, ptyId: string): Promise<void> {
   await expect
     .poll(
       () =>
@@ -225,16 +224,29 @@ async function expectExpandedOverlayCoversPane(page: Page, ptyId: string): Promi
           if (!pane || !overlay) {
             return false
           }
+          const style = getComputedStyle(overlay)
+          const hasTransparentBackground =
+            style.backgroundColor === 'rgba(0, 0, 0, 0)' || style.backgroundColor === 'transparent'
+          const webkitBackdropFilter = (
+            style as CSSStyleDeclaration & { webkitBackdropFilter?: string }
+          ).webkitBackdropFilter
+          const hasNoBackdropFilter =
+            (style.backdropFilter === 'none' || style.backdropFilter === '') &&
+            (webkitBackdropFilter === undefined ||
+              webkitBackdropFilter === '' ||
+              webkitBackdropFilter === 'none')
           const paneBox = pane.getBoundingClientRect()
           const overlayBox = overlay.getBoundingClientRect()
           return (
+            hasTransparentBackground &&
+            hasNoBackdropFilter &&
             Math.abs(overlayBox.left - paneBox.left) <= 2 &&
             Math.abs(overlayBox.top - paneBox.top) <= 2 &&
             overlayBox.width >= paneBox.width - 2 &&
             overlayBox.height >= paneBox.height - 2
           )
         }, ptyId),
-      { message: 'expanded overlay should cover the terminal pane' }
+      { message: 'expanded overlay should not dim or blur the terminal pane' }
     )
     .toBe(true)
 }
