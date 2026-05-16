@@ -116,6 +116,58 @@ export function updateFileExplorerSelection(
   }
 }
 
+export function updateFileExplorerSelectionPaths(
+  current: FileExplorerSelectionState,
+  updatePath: (path: string) => string | null
+): FileExplorerSelectionState {
+  const updatedPathByPath = new Map<string, string | null>()
+  const getUpdatedPath = (path: string | null): string | null => {
+    if (path === null) {
+      return null
+    }
+    if (!updatedPathByPath.has(path)) {
+      updatedPathByPath.set(path, updatePath(path))
+    }
+    return updatedPathByPath.get(path) ?? null
+  }
+
+  let changed = false
+  const selectedPaths = new Set<string>()
+  for (const path of current.selectedPaths) {
+    const nextPath = getUpdatedPath(path)
+    if (nextPath !== path) {
+      changed = true
+    }
+    if (nextPath !== null) {
+      selectedPaths.add(nextPath)
+    }
+  }
+
+  const updatedActivePath = getUpdatedPath(current.activePath)
+  const activePath =
+    updatedActivePath && selectedPaths.has(updatedActivePath)
+      ? updatedActivePath
+      : (selectedPaths.values().next().value ?? null)
+  const updatedAnchorPath = getUpdatedPath(current.anchorPath)
+  const anchorPath =
+    updatedAnchorPath && selectedPaths.has(updatedAnchorPath) ? updatedAnchorPath : activePath
+
+  if (
+    !changed &&
+    activePath === current.activePath &&
+    anchorPath === current.anchorPath &&
+    selectedPaths.size === current.selectedPaths.size
+  ) {
+    return current
+  }
+
+  return {
+    activePath,
+    anchorPath,
+    selectedPaths
+  }
+}
+
 export function getFileExplorerActionNodes(
   flatRows: readonly TreeNode[],
   selectedPaths: Set<string>,

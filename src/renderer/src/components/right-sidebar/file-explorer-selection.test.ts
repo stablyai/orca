@@ -6,7 +6,8 @@ import {
   formatFileExplorerPathsForClipboard,
   getFileExplorerActionNodes,
   getFileExplorerSelectionMode,
-  updateFileExplorerSelection
+  updateFileExplorerSelection,
+  updateFileExplorerSelectionPaths
 } from './file-explorer-selection'
 
 function node(path: string, relativePath = path): TreeNode {
@@ -91,6 +92,22 @@ describe('file explorer selection', () => {
     const actionNodes = getFileExplorerActionNodes(rows, new Set(['/repo/a.ts']), rows[1])
 
     expect(actionNodes.map((entry) => entry.path)).toEqual(['/repo/b.ts'])
+  })
+
+  it('applies legacy path cleanup across the selected set', () => {
+    const current = updateFileExplorerSelection(
+      createSingleFileExplorerSelection('/repo/a.ts'),
+      ['/repo/a.ts', '/repo/b.ts', '/repo/c.ts'],
+      '/repo/c.ts',
+      'range'
+    )
+    const next = updateFileExplorerSelectionPaths(current, (path) =>
+      path === '/repo/b.ts' ? null : path
+    )
+
+    expect(Array.from(next.selectedPaths)).toEqual(['/repo/a.ts', '/repo/c.ts'])
+    expect(next.activePath).toBe('/repo/c.ts')
+    expect(next.anchorPath).toBe('/repo/a.ts')
   })
 
   it('does not scan rows for empty or single selection counts', () => {

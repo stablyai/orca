@@ -7,7 +7,8 @@ import {
   formatFileExplorerPathsForClipboard,
   getFileExplorerActionNodes,
   getFileExplorerSelectionMode,
-  updateFileExplorerSelection
+  updateFileExplorerSelection,
+  updateFileExplorerSelectionPaths
 } from './file-explorer-selection'
 
 type UseFileExplorerSelectionResult = {
@@ -38,10 +39,12 @@ export function useFileExplorerSelection(
 
   const setSingleSelectedPath = useCallback((value: React.SetStateAction<string | null>) => {
     setSelectionState((prev) => {
-      const nextPath = typeof value === 'function' ? value(prev.activePath) : value
-      if (typeof value === 'function' && nextPath === prev.activePath) {
-        return prev
+      if (typeof value === 'function') {
+        // Why: legacy watcher cleanup still speaks in single-path updater terms;
+        // apply it across the whole selected set so stale multi-selections converge.
+        return updateFileExplorerSelectionPaths(prev, value)
       }
+      const nextPath = value
       return createSingleFileExplorerSelection(nextPath)
     })
   }, [])
