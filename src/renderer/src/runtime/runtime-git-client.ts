@@ -167,6 +167,23 @@ export async function getRuntimeGitConflictOperation(
   )
 }
 
+export async function abortRuntimeGitMerge(context: RuntimeGitContext): Promise<void> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    await window.api.git.abortMerge({
+      worktreePath: context.worktreePath,
+      connectionId: context.connectionId
+    })
+    return
+  }
+  await callRuntimeRpc(
+    target,
+    'git.abortMerge',
+    { worktree: context.worktreeId },
+    { timeoutMs: 30_000 }
+  )
+}
+
 export async function getRuntimeGitDiff(
   context: RuntimeGitContext,
   args: { filePath: string; staged: boolean; compareAgainstHead?: boolean }

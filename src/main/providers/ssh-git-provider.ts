@@ -281,6 +281,10 @@ export class SshGitProvider implements IGitProvider {
     })) as GitConflictOperation
   }
 
+  async abortMerge(worktreePath: string): Promise<void> {
+    await this.mux.request('git.abortMerge', { worktreePath })
+  }
+
   async getBranchCompare(worktreePath: string, baseRef: string): Promise<GitBranchCompareResult> {
     return (await this.mux.request('git.branchCompare', {
       worktreePath,

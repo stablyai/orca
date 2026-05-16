@@ -459,6 +459,10 @@ export async function detectConflictOperation(worktreePath: string): Promise<Git
   return 'unknown'
 }
 
+export async function abortMerge(worktreePath: string): Promise<void> {
+  await gitExecFileAsync(['merge', '--abort'], { cwd: worktreePath })
+}
+
 export async function resolveGitDir(worktreePath: string): Promise<string> {
   const dotGitPath = path.join(worktreePath, '.git')
 

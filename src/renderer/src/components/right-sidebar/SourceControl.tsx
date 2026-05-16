@@ -101,6 +101,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { BaseRefPicker } from '@/components/settings/BaseRefPicker'
+import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { formatDiffComment, formatDiffComments } from '@/lib/diff-comments-format'
 import { getDiffCommentLineLabel, getDiffCommentSource } from '@/lib/diff-comment-compat'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
@@ -115,6 +116,7 @@ import {
 } from '@/components/editor/editor-autosave'
 import { getConnectionId } from '@/lib/connection-context'
 import {
+  abortRuntimeGitMerge,
   bulkDiscardRuntimeGitPaths,
   bulkStageRuntimeGitPaths,
   bulkUnstageRuntimeGitPaths,
@@ -160,7 +162,7 @@ import {
 import { hasExpandedCommitFailureDetails, summarizeCommitFailure } from './commit-failure-summary'
 
 export type SourceControlScope = 'all' | 'uncommitted'
-type RemoteActionError = { kind: RemoteOpKind; message: string }
+type SourceControlActionError = { kind: RemoteOpKind | 'abort_merge'; message: string }
 
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
@@ -1119,7 +1121,7 @@ function SourceControlInner(): React.JSX.Element {
   const [commitDrafts, setCommitDrafts] = useState<CommitDraftsByWorktree>({})
   const [commitErrors, setCommitErrors] = useState<Record<string, string | null>>({})
   const [remoteActionErrors, setRemoteActionErrors] = useState<
-    Record<string, RemoteActionError | null>
+    Record<string, SourceControlActionError | null>
   >({})
   // Why: keep commit-in-flight state per-worktree. A single boolean would be
   // cleared when the user switched worktrees, letting them double-click Commit
@@ -1128,6 +1130,11 @@ function SourceControlInner(): React.JSX.Element {
   const [commitInFlightByWorktree, setCommitInFlightByWorktree] = useState<Record<string, boolean>>(
     {}
   )
+  const [abortMergeInFlightByWorktree, setAbortMergeInFlightByWorktree] = useState<
+    Record<string, boolean>
+  >({})
+  const isAbortingMerge = abortMergeInFlightByWorktree[activeWorktreeId ?? ''] ?? false
+  const confirmAction = useConfirmationDialog()
   const isCommitting = commitInFlightByWorktree[activeWorktreeId ?? ''] ?? false
   // Why: parallel state to commit. Same per-worktree shape so navigating between
   // worktrees mid-generation never silently cancels the in-flight request.
@@ -1677,6 +1684,7 @@ function SourceControlInner(): React.JSX.Element {
     setCommitErrors((prev) => pruneRecord(prev))
     setRemoteActionErrors((prev) => pruneRecord(prev))
     setCommitInFlightByWorktree((prev) => pruneRecord(prev))
+    setAbortMergeInFlightByWorktree((prev) => pruneRecord(prev))
     setGenerateInFlightByWorktree((prev) => pruneRecord(prev))
     setGenerateErrors((prev) => pruneRecord(prev))
     setGitHistoryByWorktree((prev) => pruneRecord(prev))
@@ -2012,6 +2020,53 @@ function SourceControlInner(): React.JSX.Element {
       worktreePath
     ]
   )
+
+  const handleAbortMerge = useCallback(async (): Promise<void> => {
+    if (!activeWorktreeId || !worktreePath || conflictOperation !== 'merge' || isAbortingMerge) {
+      return
+    }
+
+    const confirmed = await confirmAction({
+      title: 'Abort merge?',
+      description:
+        'This cancels the merge in progress and can discard conflict resolutions made during this merge.',
+      confirmLabel: 'Abort merge',
+      confirmVariant: 'destructive'
+    })
+    if (!confirmed) {
+      return
+    }
+
+    const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+    setAbortMergeInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
+    setRemoteActionErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
+    try {
+      await abortRuntimeGitMerge({
+        settings: useAppStore.getState().settings,
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        connectionId
+      })
+      await refreshActiveGitStatusAfterMutation()
+      void refreshGitHistoryRef.current()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to abort merge'
+      toast.error('Abort merge failed', { description: message })
+      setRemoteActionErrors((prev) => ({
+        ...prev,
+        [activeWorktreeId]: { kind: 'abort_merge', message }
+      }))
+    } finally {
+      setAbortMergeInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
+    }
+  }, [
+    activeWorktreeId,
+    confirmAction,
+    conflictOperation,
+    isAbortingMerge,
+    refreshActiveGitStatusAfterMutation,
+    worktreePath
+  ])
 
   // Why: compound actions must commit first and only run the follow-up remote
   // op when the commit succeeds. handleCommit's return value carries that
@@ -2557,7 +2612,7 @@ function SourceControlInner(): React.JSX.Element {
       hasMessage: commitMessage.trim().length > 0,
       hasUnresolvedConflicts: unresolvedConflicts.length > 0,
       isCommitting,
-      isRemoteOperationActive,
+      isRemoteOperationActive: isRemoteOperationActive || isAbortingMerge,
       upstreamStatus: remoteStatus,
       prState: hostedReview?.state ?? null,
       isPRStateLoading: isHostedReviewStateLoading,
@@ -2575,6 +2630,7 @@ function SourceControlInner(): React.JSX.Element {
     hasUnstagedChanges,
     hasPartiallyStagedChanges,
     isCommitting,
+    isAbortingMerge,
     isRemoteOperationActive,
     inFlightRemoteOpKind,
     hostedReviewCreation,
@@ -2596,7 +2652,8 @@ function SourceControlInner(): React.JSX.Element {
         hasMessage: commitMessage.trim().length > 0,
         hasUnresolvedConflicts: unresolvedConflicts.length > 0,
         isCommitting,
-        isRemoteOperationActive,
+        isRemoteOperationActive: isRemoteOperationActive || isAbortingMerge,
+        conflictOperation,
         upstreamStatus: remoteStatus,
         prState: hostedReview?.state ?? null,
         isPRStateLoading: isHostedReviewStateLoading,
@@ -2613,6 +2670,8 @@ function SourceControlInner(): React.JSX.Element {
       hasUnstagedChanges,
       hasPartiallyStagedChanges,
       isCommitting,
+      conflictOperation,
+      isAbortingMerge,
       isRemoteOperationActive,
       inFlightRemoteOpKind,
       hostedReviewCreation,
@@ -2647,6 +2706,9 @@ function SourceControlInner(): React.JSX.Element {
         case 'commit_sync':
           void runCompoundCommitAction('sync')
           return
+        case 'abort_merge':
+          void handleAbortMerge()
+          return
         case 'create_pr':
           void handleCreatePullRequest()
           return
@@ -2673,6 +2735,7 @@ function SourceControlInner(): React.JSX.Element {
     [
       handleCommit,
       handleCreatePullRequest,
+      handleAbortMerge,
       isCreatingPr,
       prGenerating,
       runCompoundCommitAction,
@@ -4042,7 +4105,7 @@ function SourceControlInner(): React.JSX.Element {
                 generateError={generateError}
                 stagedCount={grouped.staged.length}
                 hasUnresolvedConflicts={unresolvedConflicts.length > 0}
-                isRemoteOperationActive={isRemoteOperationActive}
+                isRemoteOperationActive={isRemoteOperationActive || isAbortingMerge}
                 inFlightRemoteOpKind={inFlightRemoteOpKind}
                 primaryAction={primaryAction}
                 dropdownItems={dropdownItems}
@@ -4763,6 +4826,7 @@ function PullRequestComposer({
                     key={entry.kind}
                     disabled={entry.disabled}
                     title={entry.title}
+                    variant={entry.variant}
                     onSelect={(event) => {
                       if (entry.disabled) {
                         event.preventDefault()
@@ -5205,6 +5269,7 @@ export function CommitArea({
                       <DropdownMenuItem
                         disabled={entry.disabled}
                         title={entry.title}
+                        variant={entry.variant}
                         className="w-full"
                         onSelect={(event) => {
                           if (entry.disabled) {

@@ -31,6 +31,7 @@ import {
 } from '../../shared/text-search'
 import {
   getStatus,
+  abortMerge,
   detectConflictOperation,
   getDiff,
   commitChanges,
@@ -564,6 +565,21 @@ export function registerFilesystemHandlers(
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       return detectConflictOperation(worktreePath)
+    }
+  )
+
+  ipcMain.handle(
+    'git:abortMerge',
+    async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No git provider for connection "${args.connectionId}"`)
+        }
+        return provider.abortMerge(args.worktreePath)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      await abortMerge(worktreePath)
     }
   )
 

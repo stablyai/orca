@@ -214,6 +214,46 @@ describe('resolveDropdownItems', () => {
     }
   })
 
+  it('shows a destructive Abort merge item only while a merge is in progress', () => {
+    const mergeItems = resolveDropdownItems(
+      inputs({
+        conflictOperation: 'merge',
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
+      })
+    )
+    const mergeByKind = Object.fromEntries(
+      mergeItems.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+
+    expect(mergeByKind.abort_merge).toMatchObject({
+      label: 'Abort merge',
+      title: 'Abort the merge in progress',
+      disabled: false,
+      variant: 'destructive'
+    })
+
+    for (const conflictOperation of ['unknown', 'rebase', 'cherry-pick'] as const) {
+      const items = resolveDropdownItems(inputs({ conflictOperation }))
+      expect(items.some((entry) => entry.kind === 'abort_merge')).toBe(false)
+    }
+  })
+
+  it('disables Abort merge while another action is busy', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        conflictOperation: 'merge',
+        isRemoteOperationActive: true,
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
+      })
+    )
+    const abortMerge = items.find((entry) => entry.kind === 'abort_merge')
+
+    expect(abortMerge).toMatchObject({
+      disabled: true,
+      title: 'Operation in progress…'
+    })
+  })
+
   it('locks every item while a pull request operation is running', () => {
     const items = resolveDropdownItems(
       inputs({
