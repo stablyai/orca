@@ -184,7 +184,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalCursorBlink: true,
     terminalThemeDark: 'Ghostty Default Style Dark',
     terminalDividerColorDark: '#3f3f46',
-    terminalUseSeparateLightTheme: false,
+    terminalUseSeparateLightTheme: true,
     terminalThemeLight: 'Builtin Tango Light',
     terminalDividerColorLight: '#d4d4d8',
     terminalInactivePaneOpacity: 0.8,
