@@ -506,7 +506,7 @@ export function CommitMessageAiPane({
     matchesSettingsSearch(searchQuery, {
       title: 'Agent',
       description: 'Which agent to invoke when generating a commit message.',
-      keywords: ['agent', 'claude', 'codex', 'opencode', 'gemini', 'cursor', 'droid']
+      keywords: ['agent', 'claude', 'codex', 'opencode', 'gemini', 'cursor']
     })
   ) {
     sections.push(
@@ -514,7 +514,7 @@ export function CommitMessageAiPane({
         key="agent"
         title="Agent"
         description="Which agent to invoke when generating a commit message."
-        keywords={['agent', 'claude', 'codex', 'opencode', 'gemini', 'cursor', 'droid']}
+        keywords={['agent', 'claude', 'codex', 'opencode', 'gemini', 'cursor']}
         className="flex items-center justify-between gap-4 px-1 py-2"
       >
         <div className="space-y-0.5">

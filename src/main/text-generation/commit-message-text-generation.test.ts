@@ -68,10 +68,10 @@ describe('resolveCommitMessageSettings', () => {
     const settings = getDefaultSettings('/tmp')
     settings.commitMessageAi = {
       enabled: true,
-      agentId: 'droid',
-      selectedModelByAgent: { droid: 'gpt-5.2' },
+      agentId: 'cursor',
+      selectedModelByAgent: { cursor: 'gpt-5.2' },
       discoveredModelsByAgent: {
-        droid: [
+        cursor: [
           {
             id: 'gpt-5.2',
             label: 'GPT 5.2',
@@ -90,7 +90,7 @@ describe('resolveCommitMessageSettings', () => {
     expect(result).toMatchObject({
       ok: true,
       params: {
-        agentId: 'droid',
+        agentId: 'cursor',
         model: 'gpt-5.2',
         thinkingLevel: 'xhigh'
       }
@@ -174,8 +174,8 @@ describe('resolveCommitMessageSettings', () => {
     const settings = getDefaultSettings('/tmp')
     settings.commitMessageAi = {
       enabled: true,
-      agentId: 'droid',
-      selectedModelByAgent: { droid: 'gpt-5.2' },
+      agentId: 'cursor',
+      selectedModelByAgent: { cursor: 'gpt-5.2' },
       selectedThinkingByModel: { 'gpt-5.2': 'xhigh' },
       customPrompt: '',
       customAgentCommand: ''
@@ -186,9 +186,8 @@ describe('resolveCommitMessageSettings', () => {
     expect(result).toMatchObject({
       ok: true,
       params: {
-        agentId: 'droid',
-        model: 'claude-opus-4-5-20251101',
-        thinkingLevel: 'off'
+        agentId: 'cursor',
+        model: 'auto'
       }
     })
   })

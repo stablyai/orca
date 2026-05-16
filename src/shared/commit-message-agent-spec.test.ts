@@ -12,7 +12,6 @@ import {
   listCommitMessageAgentIds,
   parseCodexModels,
   parseCursorModels,
-  parseDroidModels,
   parseLineModels,
   parsePiModels
 } from './commit-message-agent-spec'
@@ -26,7 +25,6 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
       'codex',
       'copilot',
       'cursor',
-      'droid',
       'gemini',
       'kimi',
       'opencode',
@@ -228,44 +226,6 @@ describe('model discovery parsers', () => {
           { id: 'xhigh', label: 'Extra High' }
         ],
         defaultThinkingLevel: 'low'
-      }
-    ])
-  })
-
-  it('parses Droid help models and reasoning levels', () => {
-    const output = `
-Available Models:
-  gpt-5.2                      GPT-5.2
-  claude-opus-4-5-20251101     Claude Opus 4.5 (default)
-
-Model details:
-  - GPT-5.2: supports reasoning: Yes; supported: [off, low, medium, high, xhigh]; default: low
-  - Claude Opus 4.5: supports reasoning: Yes; supported: [off, low, medium, high]; default: off
-`
-
-    expect(parseDroidModels(output)).toEqual([
-      {
-        id: 'gpt-5.2',
-        label: 'GPT-5.2',
-        thinkingLevels: [
-          { id: 'off', label: 'Off' },
-          { id: 'low', label: 'Low' },
-          { id: 'medium', label: 'Medium' },
-          { id: 'high', label: 'High' },
-          { id: 'xhigh', label: 'Extra High' }
-        ],
-        defaultThinkingLevel: 'low'
-      },
-      {
-        id: 'claude-opus-4-5-20251101',
-        label: 'Claude Opus 4.5',
-        thinkingLevels: [
-          { id: 'off', label: 'Off' },
-          { id: 'low', label: 'Low' },
-          { id: 'medium', label: 'Medium' },
-          { id: 'high', label: 'High' }
-        ],
-        defaultThinkingLevel: 'off'
       }
     ])
   })

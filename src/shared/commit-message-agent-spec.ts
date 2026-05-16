@@ -77,11 +77,6 @@ const CLAUDE_THINKING_LEVELS: ThinkingLevel[] = [
   { id: 'max', label: 'Max' }
 ]
 
-const OFF_BASIC_THINKING_LEVELS: ThinkingLevel[] = [
-  { id: 'off', label: 'Off' },
-  ...BASIC_THINKING_LEVELS
-]
-
 function labelFromModelId(id: string): string {
   return id
     .split(/[/-]/)
@@ -114,22 +109,6 @@ function withOpenAiThinking(
   return /(?:gpt-5|codex)/i.test(id)
     ? { thinkingLevels: OPENAI_THINKING_LEVELS, defaultThinkingLevel: 'low' }
     : {}
-}
-
-function withDroidThinking(
-  supported: string[],
-  defaultThinking: string
-): Pick<CommitMessageModel, 'thinkingLevels' | 'defaultThinkingLevel'> {
-  const levels = supported.map((id) => ({
-    id,
-    label:
-      id === 'none'
-        ? 'None'
-        : id === 'xhigh'
-          ? 'Extra High'
-          : id.charAt(0).toUpperCase() + id.slice(1)
-  }))
-  return levels.length > 0 ? { thinkingLevels: levels, defaultThinkingLevel: defaultThinking } : {}
 }
 
 export function parseCodexModels(stdout: string): CommitMessageModel[] {
@@ -222,37 +201,6 @@ export function parseCursorModels(stdout: string): CommitMessageModel[] {
         label: match[2].replace(/\s+\((?:default|current)\)$/i, ''),
         ...withOpenAiThinking(match[1])
       }))
-  )
-}
-
-export function parseDroidModels(stdout: string): CommitMessageModel[] {
-  const modelLines = stdout
-    .split(/\r?\n/)
-    .map((line) => /^\s{2}([a-z0-9_.:-]+)\s{2,}(.+)$/.exec(line))
-    .filter((match): match is RegExpExecArray => Boolean(match))
-    .map((match) => ({
-      id: match[1],
-      label: match[2].replace(/\s+\(default\)$/i, '')
-    }))
-
-  const details = new Map<
-    string,
-    Pick<CommitMessageModel, 'thinkingLevels' | 'defaultThinkingLevel'>
-  >()
-  for (const match of stdout.matchAll(
-    /-\s+(.+?): supports reasoning: Yes; supported: \[([^\]]+)\]; default: ([^\n]+)/g
-  )) {
-    const label = match[1].trim()
-    const supported = match[2].split(',').map((part) => part.trim())
-    const defaultThinking = match[3].trim()
-    details.set(label, withDroidThinking(supported, defaultThinking))
-  }
-
-  return uniqueModels(
-    modelLines.map((model) => ({
-      ...model,
-      ...details.get(model.label)
-    }))
   )
 }
 
@@ -509,29 +457,6 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     modelDiscovery: { binary: 'cursor-agent', args: ['--list-models'], parse: parseCursorModels },
     models: [{ id: 'auto', label: 'Auto' }],
     defaultModelId: 'auto'
-  },
-  droid: {
-    id: 'droid',
-    label: 'Droid',
-    binary: 'droid',
-    promptDelivery: 'stdin',
-    buildArgs: ({ model, thinkingLevel }) => [
-      'exec',
-      '--model',
-      model,
-      ...(thinkingLevel ? ['--reasoning-effort', thinkingLevel] : [])
-    ],
-    modelSource: 'dynamic',
-    modelDiscovery: { binary: 'droid', args: ['exec', '--help'], parse: parseDroidModels },
-    models: [
-      {
-        id: 'claude-opus-4-5-20251101',
-        label: 'Claude Opus 4.5',
-        thinkingLevels: OFF_BASIC_THINKING_LEVELS,
-        defaultThinkingLevel: 'off'
-      }
-    ],
-    defaultModelId: 'claude-opus-4-5-20251101'
   },
   kimi: {
     id: 'kimi',
