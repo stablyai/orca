@@ -672,6 +672,9 @@ export default function RichMarkdownEditor({
     selectedCommandIndexRef.current = selectedCommandIndex
   }, [selectedCommandIndex])
   useEffect(() => {
+    setSelectedCommandIndex(0)
+  }, [slashMenu?.query])
+  useEffect(() => {
     if (filteredSlashCommands.length === 0) {
       setSelectedCommandIndex(0)
       return
