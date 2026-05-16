@@ -216,7 +216,7 @@ describe('discoverCommitMessageModelsLocal', () => {
 
     expect(result).toMatchObject({
       success: true,
-      defaultModelId: 'gemini-3-pro-preview'
+      defaultModelId: 'auto-gemini-3'
     })
     expect(spawnMock).not.toHaveBeenCalled()
   })

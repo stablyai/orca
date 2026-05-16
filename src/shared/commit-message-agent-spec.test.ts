@@ -38,6 +38,38 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     expect(COMMIT_MESSAGE_AGENT_SPECS.pi?.defaultModelId).toBe('github-copilot/gpt-5.4-mini')
   })
 
+  it('tracks the Gemini picker aliases that work in headless mode', () => {
+    expect(COMMIT_MESSAGE_AGENT_SPECS.gemini?.defaultModelId).toBe('auto-gemini-3')
+    expect(COMMIT_MESSAGE_AGENT_SPECS.gemini?.models.map((m) => m.id)).toEqual([
+      'auto-gemini-3',
+      'auto-gemini-2.5',
+      'gemini-3.1-pro-preview',
+      'gemini-3-pro-preview',
+      'gemini-3-flash-preview',
+      'gemini-3.1-flash-lite-preview',
+      'gemini-2.5-pro',
+      'gemini-2.5-flash',
+      'gemini-2.5-flash-lite'
+    ])
+  })
+
+  it('uses the provider-qualified Kimi model id accepted by the CLI', () => {
+    expect(COMMIT_MESSAGE_AGENT_SPECS.kimi?.models.map((m) => m.id)).toEqual([
+      'default',
+      'kimi-code/kimi-for-coding'
+    ])
+  })
+
+  it('only lists Copilot models available to the installed CLI account', () => {
+    expect(COMMIT_MESSAGE_AGENT_SPECS.copilot?.defaultModelId).toBe('gpt-5.4')
+    expect(COMMIT_MESSAGE_AGENT_SPECS.copilot?.models.map((m) => m.id)).toEqual([
+      'auto',
+      'gpt-5.4',
+      'gpt-5.4-mini',
+      'gpt-4.1'
+    ])
+  })
+
   it('defaults the agent picker to Claude', () => {
     expect(DEFAULT_COMMIT_MESSAGE_AGENT_ID).toBe('claude')
   })

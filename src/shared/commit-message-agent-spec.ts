@@ -403,12 +403,20 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
       model
     ],
     modelSource: 'static',
+    // Why: Gemini's picker labels Gemini 3 aliases without "preview", but the
+    // headless --model flag currently accepts the preview IDs and auto aliases.
     models: [
+      { id: 'auto-gemini-3', label: 'Auto (Gemini 3)' },
+      { id: 'auto-gemini-2.5', label: 'Auto (Gemini 2.5)' },
+      { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro Preview' },
       { id: 'gemini-3-pro-preview', label: 'Gemini 3 Pro Preview' },
+      { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash Preview' },
+      { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite Preview' },
       { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' }
+      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+      { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' }
     ],
-    defaultModelId: 'gemini-3-pro-preview'
+    defaultModelId: 'auto-gemini-3'
   },
   amp: {
     id: 'amp',
@@ -484,8 +492,10 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     models: [
       { id: 'default', label: 'Config default' },
       {
-        id: 'kimi-k2-thinking',
-        label: 'Kimi K2 Thinking',
+        // Why: Kimi resolves its managed model by provider/model; bare model
+        // names are rejected by the CLI with "LLM not set".
+        id: 'kimi-code/kimi-for-coding',
+        label: 'Kimi K2.6',
         thinkingLevels: [
           { id: 'on', label: 'On' },
           { id: 'off', label: 'Off' }
@@ -513,12 +523,7 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     ],
     modelSource: 'static',
     models: [
-      {
-        id: 'gpt-5.4-mini',
-        label: 'GPT-5.4 Mini',
-        thinkingLevels: OPENAI_THINKING_LEVELS,
-        defaultThinkingLevel: 'low'
-      },
+      { id: 'auto', label: 'Auto' },
       {
         id: 'gpt-5.4',
         label: 'GPT-5.4',
@@ -526,13 +531,17 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
         defaultThinkingLevel: 'low'
       },
       {
-        id: 'gpt-5.5',
-        label: 'GPT-5.5',
+        id: 'gpt-5.4-mini',
+        label: 'GPT-5.4 Mini',
         thinkingLevels: OPENAI_THINKING_LEVELS,
         defaultThinkingLevel: 'low'
+      },
+      {
+        id: 'gpt-4.1',
+        label: 'GPT-4.1'
       }
     ],
-    defaultModelId: 'gpt-5.4-mini'
+    defaultModelId: 'gpt-5.4'
   }
 }
 
