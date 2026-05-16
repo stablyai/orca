@@ -181,11 +181,10 @@ function emitPinnedGroup(
   worktreeMap: Map<string, Worktree>,
   collapsedGroups: Set<string>,
   result: Row[],
-  showLineageContext: boolean,
-  force = false
+  showLineageContext: boolean
 ): Set<string> {
   const pinned = worktrees.filter((w) => w.isPinned)
-  if (pinned.length === 0 && !force) {
+  if (pinned.length === 0) {
     return new Set()
   }
 
@@ -371,8 +370,7 @@ export function buildRows(
     worktreeMap,
     collapsedGroups,
     result,
-    nestLineage,
-    groupBy === 'none'
+    nestLineage
   )
   const unpinned = pinnedIds.size > 0 ? worktrees.filter((w) => !pinnedIds.has(w.id)) : worktrees
 
