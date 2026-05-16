@@ -8,6 +8,7 @@ function inputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInpu
   return {
     stagedCount: 0,
     hasUnstagedChanges: false,
+    hasPartiallyStagedChanges: false,
     hasMessage: false,
     hasUnresolvedConflicts: false,
     isCommitting: false,
@@ -52,6 +53,25 @@ describe('resolveDropdownItems', () => {
     expect(byKind.commit.disabled).toBe(true)
     expect(byKind.commit_push.disabled).toBe(true)
     expect(byKind.commit_sync.disabled).toBe(true)
+  })
+
+  it('disables commit actions when staged files also have unstaged changes', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        stagedCount: 1,
+        hasUnstagedChanges: true,
+        hasPartiallyStagedChanges: true,
+        hasMessage: true,
+        upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 }
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.commit.disabled).toBe(true)
+    expect(byKind.commit_push.disabled).toBe(true)
+    expect(byKind.commit_sync.disabled).toBe(true)
+    expect(byKind.commit.title).toBe('Stage all changes before committing partially staged files')
   })
 
   it('disables push actions but keeps Fetch enabled when branch has no upstream', () => {

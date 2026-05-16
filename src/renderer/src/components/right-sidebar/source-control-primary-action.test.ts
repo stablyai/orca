@@ -8,6 +8,7 @@ function inputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInpu
   return {
     stagedCount: 0,
     hasUnstagedChanges: false,
+    hasPartiallyStagedChanges: false,
     hasMessage: false,
     hasUnresolvedConflicts: false,
     isCommitting: false,
@@ -244,11 +245,11 @@ describe('resolvePrimaryAction', () => {
   })
 
   // Why: dirty trees (no staged, has unstaged/untracked) must surface a
-  // 'Stage Files' primary regardless of upstream state. Pulling/syncing on
+  // 'Stage All' primary regardless of upstream state. Pulling/syncing on
   // a dirty tree fails ("Please commit or stash them"), and pushing skips
   // the immediate user need (prepare a commit), so the staging rung
   // intercepts before any remote rung fires.
-  it('returns Stage Files on a dirty tree that is behind upstream', () => {
+  it('returns Stage All on a dirty tree that is behind upstream', () => {
     const result = resolvePrimaryAction(
       inputs({
         hasUnstagedChanges: true,
@@ -257,13 +258,13 @@ describe('resolvePrimaryAction', () => {
     )
     expect(result).toEqual({
       kind: 'stage',
-      label: 'Stage Files',
+      label: 'Stage All',
       title: 'Stage all changes',
       disabled: false
     })
   })
 
-  it('returns Stage Files on a dirty tree that is ahead of upstream', () => {
+  it('returns Stage All on a dirty tree that is ahead of upstream', () => {
     const result = resolvePrimaryAction(
       inputs({
         hasUnstagedChanges: true,
@@ -271,11 +272,11 @@ describe('resolvePrimaryAction', () => {
       })
     )
     expect(result.kind).toBe('stage')
-    expect(result.label).toBe('Stage Files')
+    expect(result.label).toBe('Stage All')
     expect(result.disabled).toBe(false)
   })
 
-  it('returns Stage Files on a dirty tree with no upstream branch', () => {
+  it('returns Stage All on a dirty tree with no upstream branch', () => {
     const result = resolvePrimaryAction(
       inputs({
         hasUnstagedChanges: true,
@@ -285,7 +286,7 @@ describe('resolvePrimaryAction', () => {
     expect(result.kind).toBe('stage')
   })
 
-  it('returns Stage Files on a dirty tree while upstream status is still loading', () => {
+  it('returns Stage All on a dirty tree while upstream status is still loading', () => {
     const result = resolvePrimaryAction(
       inputs({ hasUnstagedChanges: true, upstreamStatus: undefined })
     )
@@ -293,11 +294,27 @@ describe('resolvePrimaryAction', () => {
     expect(result.disabled).toBe(false)
   })
 
-  it('still resolves to Commit when both staged and unstaged exist (staged wins)', () => {
+  it('returns Stage All when a staged file also has unstaged changes', () => {
     const result = resolvePrimaryAction(
       inputs({
         stagedCount: 1,
         hasUnstagedChanges: true,
+        hasPartiallyStagedChanges: true,
+        hasMessage: true,
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
+      })
+    )
+    expect(result.kind).toBe('stage')
+    expect(result.label).toBe('Stage All')
+    expect(result.disabled).toBe(false)
+  })
+
+  it('still resolves to Commit when staged and unrelated unstaged files exist', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        stagedCount: 1,
+        hasUnstagedChanges: true,
+        hasPartiallyStagedChanges: false,
         hasMessage: true,
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
       })
@@ -315,13 +332,13 @@ describe('resolvePrimaryAction', () => {
     expect(result.title).toBe('Enter a commit message to commit')
   })
 
-  it('returns Stage Files when unstaged changes exist on an in-sync branch', () => {
+  it('returns Stage All when unstaged changes exist on an in-sync branch', () => {
     const result = resolvePrimaryAction(
       inputs({ hasUnstagedChanges: true, upstreamStatus: upstreamInSync })
     )
     expect(result).toEqual({
       kind: 'stage',
-      label: 'Stage Files',
+      label: 'Stage All',
       title: 'Stage all changes',
       disabled: false
     })

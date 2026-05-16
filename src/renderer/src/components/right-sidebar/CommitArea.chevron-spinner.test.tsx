@@ -70,6 +70,7 @@ function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActio
   return {
     stagedCount: 1,
     hasUnstagedChanges: false,
+    hasPartiallyStagedChanges: false,
     hasMessage: true,
     hasUnresolvedConflicts: false,
     isCommitting: false,
