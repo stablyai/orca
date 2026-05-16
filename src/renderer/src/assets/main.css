@@ -785,6 +785,18 @@
   padding: 0 4px;
 }
 
+.worktree-sidebar-layout-animate [data-worktree-virtual-row] {
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .worktree-sidebar-layout-animate [data-worktree-virtual-row] {
+    transition: none;
+    will-change: auto;
+  }
+}
+
 .worktree-item {
   display: flex;
   flex-direction: column;
