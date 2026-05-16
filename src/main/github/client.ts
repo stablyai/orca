@@ -1323,7 +1323,7 @@ async function getPRByNumber(
     return JSON.parse(stdout) as PullRequestLookupData
   } catch (err) {
     // Why: deleted or manually edited linked PR metadata should fall back to
-    // branch discovery; quota/auth failures get one cheaper REST exact lookup.
+    // branch discovery; quota/auth/network failures get one cheaper REST exact lookup.
     if (isNotFoundGhError(err)) {
       return null
     }
@@ -1333,14 +1333,43 @@ async function getPRByNumber(
       if (isNotFoundGhError(restErr)) {
         return null
       }
+      if (!shouldStopAfterExactLookupError(restErr)) {
+        return null
+      }
       throw restErr
     }
+  }
+}
+
+async function exactPRMatchesWorktreeHead(
+  repoPath: string,
+  branchName: string,
+  data: PullRequestLookupData,
+  connectionId?: string | null
+): Promise<boolean> {
+  if (!branchName || data.headRefName === branchName) {
+    return true
+  }
+  if (connectionId || !data.headRefOid) {
+    return false
+  }
+  try {
+    const { stdout } = await gitExecFileAsync(['rev-parse', 'HEAD'], { cwd: repoPath })
+    return stdout.trim() === data.headRefOid
+  } catch {
+    return false
   }
 }
 
 function isNotFoundGhError(err: unknown): boolean {
   const stderr = err instanceof Error ? err.message : String(err)
   return classifyGhError(stderr).type === 'not_found'
+}
+
+function shouldStopAfterExactLookupError(err: unknown): boolean {
+  const stderr = err instanceof Error ? err.message : String(err)
+  const type = classifyGhError(stderr).type
+  return type === 'rate_limited' || type === 'permission_denied' || type === 'network_error'
 }
 
 /**
@@ -1367,9 +1396,16 @@ export async function getPRForBranch(
   try {
     const ownerRepo = await getOwnerRepo(repoPath, connectionId)
     let data: PullRequestLookupData | null = null
+    let exactLinkedData: PullRequestLookupData | null = null
 
     if (ownerRepo && typeof linkedPRNumber === 'number') {
       data = await getPRByNumber(ownerRepo, linkedPRNumber, ghOptions)
+      if (data && !(await exactPRMatchesWorktreeHead(repoPath, branchName, data, connectionId))) {
+        // Why: linked PR metadata is user-editable. If the stored number still
+        // resolves but no longer matches this worktree, let branch lookup correct it.
+        exactLinkedData = data
+        data = null
+      }
     }
 
     // During a rebase the worktree is in detached HEAD and branch is empty.
@@ -1426,6 +1462,10 @@ export async function getPRForBranch(
         // error every poll cycle.
         data = null
       }
+    }
+
+    if (!data && exactLinkedData) {
+      data = exactLinkedData
     }
 
     if (!data) {
