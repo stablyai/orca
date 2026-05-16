@@ -7,6 +7,8 @@ export type AgentPromptInjectionMode =
   | 'flag-interactive'
   | 'stdin-after-start'
 
+export type DraftPasteReadySignal = 'render-quiet-after-bracketed-paste' | 'codex-composer-prompt'
+
 export type TuiAgentConfig = {
   detectCmd: string
   launchCmd: string
@@ -32,12 +34,19 @@ export type TuiAgentConfig = {
    * passes the text via this env var instead of pasting after ready. */
   draftPromptEnvVar?: string
   /** Why: agents that gate first-launch behind a "Do you trust this
-   * folder?" menu (Cursor-Agent, GitHub Copilot CLI) consume the bracketed
-   * paste as menu input. Pre-write the same trust artifact the agent writes
-   * after the user accepts so the menu never fires. The actual file/path
-   * written lives in src/main/agent-trust-presets.ts; this flag just routes
-   * the workspace path through the matching preset before the agent spawns. */
-  preflightTrust?: 'cursor' | 'copilot'
+   * folder?" menu (Cursor-Agent, GitHub Copilot CLI, Codex) consume the
+   * bracketed paste as menu input. Pre-write the same trust artifact the
+   * agent writes after the user accepts so the menu never fires. The actual
+   * file/path written lives in src/main/agent-trust-presets.ts; this flag
+   * just routes the workspace path through the matching preset before the
+   * agent spawns. */
+  preflightTrust?: 'cursor' | 'copilot' | 'codex'
+  /** Why: most TUIs need both bracketed-paste enablement and a quiet render
+   * window before pasted bytes reliably land in the composer. Codex can use
+   * a stronger signal from its own renderer: chat_composer.rs writes the
+   * `›` prompt only when the composer row exists, so Orca can paste as soon
+   * as that prompt appears after bracketed paste is enabled. */
+  draftPasteReadySignal?: DraftPasteReadySignal
 }
 
 // Why: the new-workspace handoff depends on three pieces of per-agent
@@ -62,7 +71,14 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     detectCmd: 'codex',
     launchCmd: 'codex',
     expectedProcess: 'codex',
-    promptInjectionMode: 'argv'
+    promptInjectionMode: 'argv',
+    // Why: Codex's positional prompt auto-submits the first turn, so Orca
+    // must still paste a draft. The Codex TUI enables bracketed paste before
+    // the first render, then chat_composer.rs emits `›` when the composer row
+    // is visible. Waiting for that prompt skips the generic quiet timer while
+    // avoiding startup/onboarding screens that ignore paste.
+    preflightTrust: 'codex',
+    draftPasteReadySignal: 'codex-composer-prompt'
   },
   autohand: {
     detectCmd: 'autohand',

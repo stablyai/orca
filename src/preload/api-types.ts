@@ -1118,7 +1118,10 @@ export type PreloadApi = {
     hermesStatus: () => Promise<AgentHookInstallStatus>
   }
   agentTrust: {
-    markTrusted: (args: { preset: 'cursor' | 'copilot'; workspacePath: string }) => Promise<void>
+    markTrusted: (args: {
+      preset: 'cursor' | 'copilot' | 'codex'
+      workspacePath: string
+    }) => Promise<void>
   }
   preflight: PreflightApi
   notifications: {

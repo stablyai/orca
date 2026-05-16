@@ -1149,8 +1149,10 @@ const api = {
   },
 
   agentTrust: {
-    markTrusted: (args: { preset: 'cursor' | 'copilot'; workspacePath: string }): Promise<void> =>
-      ipcRenderer.invoke('agentTrust:markTrusted', args)
+    markTrusted: (args: {
+      preset: 'cursor' | 'copilot' | 'codex'
+      workspacePath: string
+    }): Promise<void> => ipcRenderer.invoke('agentTrust:markTrusted', args)
   },
 
   preflight: {
