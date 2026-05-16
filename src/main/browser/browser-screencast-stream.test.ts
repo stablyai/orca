@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: one fixture-backed file covers screencast frame, viewport, dialog, and cleanup behavior together. */
 import { Buffer } from 'node:buffer'
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
@@ -216,6 +217,74 @@ describe('startBrowserScreencast', () => {
     }
   })
 
+  it('enriches live frame metadata with viewport and image dimensions', async () => {
+    const webContents = createMockWebContents()
+    const onFrame = vi.fn()
+    const image = jpegWithSize(900, 500)
+
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 1440,
+      maxHeight: 1200,
+      viewportWidth: 390,
+      viewportHeight: 720,
+      everyNthFrame: 2,
+      minFrameIntervalMs: 0,
+      onFrame
+    })
+
+    webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
+      data: image.toString('base64'),
+      sessionId: 42,
+      metadata: {}
+    })
+
+    await vi.waitFor(() => expect(onFrame).toHaveBeenCalledTimes(1))
+    const frame = decodeBrowserScreencastFrame(onFrame.mock.calls[0][0])
+    expect(frame?.metadata).toMatchObject({
+      deviceWidth: 390,
+      deviceHeight: 720,
+      imageWidth: 900,
+      imageHeight: 500
+    })
+
+    session.stop()
+    await session.done
+  })
+
+  it('forwards browser JavaScript dialog events to the stream client', async () => {
+    const webContents = createMockWebContents()
+    const onEvent = vi.fn()
+
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 1440,
+      maxHeight: 1200,
+      everyNthFrame: 2,
+      minFrameIntervalMs: 0,
+      onFrame: vi.fn(),
+      onEvent
+    })
+
+    webContents.debugger.emit('message', {}, 'Page.javascriptDialogOpening', {
+      type: 'confirm',
+      message: 'Continue?'
+    })
+    webContents.debugger.emit('message', {}, 'Page.javascriptDialogClosed', {})
+
+    expect(onEvent).toHaveBeenNthCalledWith(1, {
+      type: 'dialog',
+      dialogType: 'confirm',
+      message: 'Continue?'
+    })
+    expect(onEvent).toHaveBeenNthCalledWith(2, { type: 'dialogClosed' })
+
+    session.stop()
+    await session.done
+  })
+
   it('applies the client viewport before the screencast starts', async () => {
     const webContents = createMockWebContents()
 
@@ -243,6 +312,36 @@ describe('startBrowserScreencast', () => {
     const methods = webContents.debugger.sendCommand.mock.calls.map((call) => call[0])
     expect(methods.indexOf('Emulation.setDeviceMetricsOverride')).toBeLessThan(
       methods.indexOf('Page.startScreencast')
+    )
+
+    session.stop()
+    await session.done
+  })
+
+  it('applies mobile device metrics when requested', async () => {
+    const webContents = createMockWebContents()
+
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 3840,
+      maxHeight: 2160,
+      viewportWidth: 390,
+      viewportHeight: 720,
+      mobile: true,
+      everyNthFrame: 2,
+      minFrameIntervalMs: 0,
+      onFrame: vi.fn()
+    })
+
+    expect(webContents.debugger.sendCommand).toHaveBeenCalledWith(
+      'Emulation.setDeviceMetricsOverride',
+      {
+        width: 390,
+        height: 720,
+        deviceScaleFactor: 1,
+        mobile: true
+      }
     )
 
     session.stop()
