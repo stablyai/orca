@@ -37,6 +37,7 @@ import {
 } from './web-runtime-environment'
 import { parseWebPairingInput } from './web-pairing'
 import { WebRuntimeClient } from './web-runtime-client'
+import { RuntimeRpcCallQueuePool } from '../../../shared/runtime-rpc-call-queue'
 
 const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
 const UI_STORAGE_KEY = 'orca.web.ui.v1'
@@ -48,6 +49,7 @@ let activeEnvironment: StoredWebRuntimeEnvironment | null = readStoredWebRuntime
 let activeClient: WebRuntimeClient | null = null
 let activeClientEnvironmentId: string | null = null
 let cachedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null = null
+const runtimeCallQueuePool = new RuntimeRpcCallQueuePool()
 
 type WebSettingsApi = NonNullable<PreloadApi['settings']>
 
@@ -720,7 +722,7 @@ function createGitHubApi(): NonNullable<Partial<PreloadApi>['gh']> {
 function createRuntimeNamespaceApi(prefix: string): never {
   return createFallbackProxy([prefix], (path, args) => {
     const method = `${prefix}.${path.at(-1) ?? ''}`
-    return callRuntimeResult(method, args[0])
+    return callRuntimeResult(method, mapRuntimeNamespaceArg(prefix, args[0]))
   }) as never
 }
 
@@ -1103,7 +1105,9 @@ async function callRuntimeEnvelope<TResult = unknown>(
   timeoutMs?: number
 ): Promise<RuntimeRpcResponse<TResult>> {
   const environment = requireActiveEnvironment()
-  const response = await getClientForEnvironment(environment).call(method, params, { timeoutMs })
+  const response = await runtimeCallQueuePool.enqueue(environment.id, method, () =>
+    getClientForEnvironment(environment).call(method, params, { timeoutMs })
+  )
   updateEnvironmentFromResponse(environment, response)
   return response as RuntimeRpcResponse<TResult>
 }
@@ -1115,7 +1119,9 @@ async function callEnvironmentEnvelope<TResult = unknown>(
   timeoutMs?: number
 ): Promise<RuntimeRpcResponse<TResult>> {
   const environment = resolveEnvironment(selector)
-  const response = await getClientForEnvironment(environment).call(method, params, { timeoutMs })
+  const response = await runtimeCallQueuePool.enqueue(environment.id, method, () =>
+    getClientForEnvironment(environment).call(method, params, { timeoutMs })
+  )
   updateEnvironmentFromResponse(environment, response)
   return response as RuntimeRpcResponse<TResult>
 }
@@ -1323,6 +1329,13 @@ function mapRepoPathArg(args: unknown): unknown {
     ...record,
     repo: record.repoPath
   }
+}
+
+function mapRuntimeNamespaceArg(prefix: string, args: unknown): unknown {
+  if (prefix !== 'hostedReview') {
+    return args
+  }
+  return mapRepoPathArg(args)
 }
 
 function createEmptyMemorySnapshot(): MemorySnapshot {

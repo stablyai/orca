@@ -5563,7 +5563,7 @@ export class OrcaRuntimeService {
         // Why: automation startup must not depend on a renderer TerminalPane
         // mounting. Runtime-spawned PTYs run immediately and the UI adopts the
         // session later, matching `orca terminal create` background semantics.
-        await this.createTerminal(`path:${worktree.path}`, {
+        await this.createTerminal(`id:${worktree.id}`, {
           command: args.startup.command,
           env: args.startup.env
         })
@@ -5581,7 +5581,7 @@ export class OrcaRuntimeService {
         // Why: reveal-on-adopt can create the startup tab before renderer
         // activation handles setup. Spawn setup in runtime too so startup+setup
         // cannot be skipped by the renderer's "terminal already exists" guard.
-        await this.createTerminal(`path:${worktree.path}`, {
+        await this.createTerminal(`id:${worktree.id}`, {
           title: 'Setup',
           command: buildSetupRunnerCommand(
             setup.runnerScriptPath,
@@ -5611,10 +5611,10 @@ export class OrcaRuntimeService {
     } else if (this.ptyController?.spawn) {
       try {
         if (!didSpawnStartup) {
-          await this.createTerminal(`path:${worktree.path}`)
+          await this.createTerminal(`id:${worktree.id}`)
         }
         if (setup && !didSpawnSetup) {
-          await this.createTerminal(`path:${worktree.path}`, {
+          await this.createTerminal(`id:${worktree.id}`, {
             title: 'Setup',
             command: buildSetupRunnerCommand(
               setup.runnerScriptPath,
