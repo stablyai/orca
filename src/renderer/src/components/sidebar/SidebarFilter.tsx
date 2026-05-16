@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import { Activity, Check, GitBranch, ListFilter, FolderPlus, Server, X } from 'lucide-react'
+import { Check, FolderPlus, ListFilter, Server } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import {
@@ -16,7 +16,7 @@ import { searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
 
 const menuItemClassName =
-  'rounded-[7px] px-2 py-1 text-[12px] leading-5 font-medium transition-colors hover:bg-black/8 hover:text-accent-foreground focus-visible:bg-black/8 focus-visible:text-accent-foreground focus-visible:outline-none dark:hover:bg-white/14 dark:focus-visible:bg-white/14'
+  'relative flex cursor-default items-center gap-2 rounded-[7px] px-2 py-1 text-[12px] leading-5 font-medium outline-hidden select-none hover:bg-black/8 hover:text-accent-foreground focus-visible:bg-black/8 focus-visible:text-accent-foreground dark:hover:bg-white/14 dark:focus-visible:bg-white/14'
 
 const SidebarFilter = React.memo(function SidebarFilter() {
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
@@ -84,7 +84,6 @@ const SidebarFilter = React.memo(function SidebarFilter() {
   }, [repos, setFilterRepoIds])
 
   const clearRepos = useCallback(() => setFilterRepoIds([]), [setFilterRepoIds])
-  const closeFilters = useCallback(() => handleOpenChange(false), [handleOpenChange])
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -119,52 +118,18 @@ const SidebarFilter = React.memo(function SidebarFilter() {
         </TooltipContent>
       </Tooltip>
       <PopoverContent
-        align="end"
+        side="right"
+        align="start"
+        sideOffset={8}
         className="w-72 rounded-[11px] border-black/14 bg-[rgba(255,255,255,0.82)] p-1 text-black shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl dark:border-white/14 dark:bg-[rgba(0,0,0,0.72)] dark:text-white dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)]"
       >
-        <div className="flex items-center justify-between gap-2 px-2 py-1">
-          <span className="text-[11px] font-semibold text-muted-foreground">Filters</span>
-          <div className="flex items-center gap-2">
-            {hasAnyFilter ? (
-              <button
-                type="button"
-                onClick={clearAll}
-                className="inline-flex h-6 items-center rounded-[7px] px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-black/8 hover:text-accent-foreground focus-visible:bg-black/8 focus-visible:text-accent-foreground focus-visible:outline-none dark:hover:bg-white/14 dark:focus-visible:bg-white/14"
-              >
-                Reset
-              </button>
-            ) : null}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label="Close filters"
-                  className="text-muted-foreground"
-                  onClick={closeFilters}
-                >
-                  <X className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>
-                Close filters
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        </div>
-
-        <div className="my-1 h-px bg-border/70" />
-
-        <div>
+        <div className="space-y-0">
           <ToggleRow
-            icon={<Activity className="size-3.5" />}
             label="Active only"
             checked={showActiveOnly}
             onClick={() => setShowActiveOnly(!showActiveOnly)}
           />
           <ToggleRow
-            icon={<GitBranch className="size-3.5" />}
             label="Hide default branch"
             checked={hideDefaultBranchWorkspace}
             onClick={() => setHideDefaultBranchWorkspace(!hideDefaultBranchWorkspace)}
@@ -175,10 +140,10 @@ const SidebarFilter = React.memo(function SidebarFilter() {
           <div>
             <div className="my-1 h-px bg-border/70" />
             <div className="flex items-center justify-between px-2 py-1">
-              <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              <span className="text-[11px] font-semibold text-muted-foreground">
                 Repositories
                 {hasRepoFilter && (
-                  <span className="ml-1.5 text-foreground normal-case tracking-normal">
+                  <span className="ml-1.5 font-medium text-foreground">
                     {selectedCount} selected
                   </span>
                 )}
@@ -257,6 +222,19 @@ const SidebarFilter = React.memo(function SidebarFilter() {
           </div>
         )}
 
+        {hasAnyFilter && (
+          <>
+            <div className="my-1 h-px bg-border/70" />
+            <button
+              type="button"
+              onClick={clearAll}
+              className={cn('w-full text-left text-muted-foreground', menuItemClassName)}
+            >
+              Reset filters
+            </button>
+          </>
+        )}
+
         {/* Why: per design, "Add project" stays visible regardless of repo
             count so users can recover from the 0/1-repo state where the
             repo section is hidden. */}
@@ -280,13 +258,12 @@ const SidebarFilter = React.memo(function SidebarFilter() {
 })
 
 type ToggleRowProps = {
-  icon: React.ReactNode
   label: string
   checked: boolean
   onClick: () => void
 }
 
-function ToggleRow({ icon, label, checked, onClick }: ToggleRowProps) {
+function ToggleRow({ label, checked, onClick }: ToggleRowProps) {
   // Why: the popover is not a true menu, so we use a plain button with
   // aria-pressed rather than role="menuitemcheckbox". The visible checkmark
   // carries the state for sighted users.
@@ -296,19 +273,15 @@ function ToggleRow({ icon, label, checked, onClick }: ToggleRowProps) {
       onClick={onClick}
       aria-pressed={checked}
       className={cn(
-        'flex w-full items-center gap-2 text-left',
         menuItemClassName,
+        'w-full pl-7 text-left',
         checked ? 'text-foreground' : 'text-muted-foreground'
       )}
     >
-      <Check
-        className={cn(
-          'size-3 shrink-0 text-muted-foreground',
-          checked ? 'opacity-100' : 'opacity-0'
-        )}
-      />
-      <span className="text-muted-foreground">{icon}</span>
-      <span className={cn(checked && 'text-foreground')}>{label}</span>
+      <span className="pointer-events-none absolute left-2 flex size-3.5 items-center justify-center">
+        <Check className={cn('size-4', checked ? 'opacity-100' : 'opacity-0')} />
+      </span>
+      {label}
     </button>
   )
 }

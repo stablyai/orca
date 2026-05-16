@@ -593,19 +593,6 @@
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
 }
 
-.rich-markdown-slash-query {
-  display: flex;
-  min-height: 32px;
-  align-items: center;
-  gap: 1px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 64%, transparent);
-  padding: 5px 12px;
-  color: var(--popover-foreground);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 20px;
-}
-
 .rich-markdown-slash-section {
   padding: 9px 12px 4px;
   color: var(--muted-foreground);

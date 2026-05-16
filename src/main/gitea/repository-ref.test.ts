@@ -46,6 +46,16 @@ describe('Gitea repository ref parsing', () => {
     })
   })
 
+  it('preserves a scp-like SSH subpath when deriving the API base URL', () => {
+    expect(parseGiteaRepoRef('git@gitea.example.test:code/team/project.git')).toEqual({
+      host: 'gitea.example.test',
+      owner: 'team',
+      repo: 'project',
+      apiBaseUrl: 'https://gitea.example.test/code/api/v1',
+      webBaseUrl: 'https://gitea.example.test/code'
+    })
+  })
+
   it('parses ssh:// remotes without carrying the SSH port into web/API URLs', () => {
     expect(parseGiteaRepoRef('ssh://git@gitea.example.test:2222/team/project.git')).toEqual({
       host: 'gitea.example.test',

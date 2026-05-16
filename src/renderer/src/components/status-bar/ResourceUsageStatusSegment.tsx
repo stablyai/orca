@@ -7,7 +7,6 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
-  ArchiveX,
   ChevronDown,
   ChevronRight,
   LoaderCircle,
@@ -1387,13 +1386,15 @@ export function ResourceUsageStatusSegment({
               <button
                 type="button"
                 onClick={handleOpenWorkspaceCleanup}
-                className="inline-flex w-full items-center justify-between gap-2 rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
+                className="relative inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
               >
-                <span className="inline-flex min-w-0 items-center gap-1.5">
-                  <ArchiveX className="size-3.5 shrink-0" />
-                  <span className="truncate">Clean up old workspaces ({oldWorkspaceCount})</span>
+                <span className="min-w-0 truncate px-4 text-center">
+                  delete inactive workspaces ({oldWorkspaceCount})
                 </span>
-                <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                <ChevronRight
+                  className="absolute right-2.5 size-3.5 text-muted-foreground"
+                  aria-hidden
+                />
               </button>
             ) : null}
             {orphanCount > 0 ? (

@@ -922,6 +922,265 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('forces the visible terminal path for interactive Codex startup commands', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_create', {
+        terminal: {
+          handle: 'term_1',
+          worktreeId: 'repo-1::/tmp/repo/feature',
+          title: 'Codex'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'terminal',
+        'create',
+        '--worktree',
+        'path:/tmp/repo/feature',
+        '--title',
+        'Codex',
+        '--command',
+        'codex',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('terminal.create', {
+      worktree: 'path:/tmp/repo/feature',
+      command: 'codex',
+      title: 'Codex',
+      focus: false,
+      rendererBacked: true,
+      activate: false
+    })
+  })
+
+  it('keeps explicit focus semantics when forcing Codex through the renderer path', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_create', {
+        terminal: {
+          handle: 'term_1',
+          worktreeId: 'repo-1::/tmp/repo/feature',
+          title: 'Codex'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'terminal',
+        'create',
+        '--worktree',
+        'path:/tmp/repo/feature',
+        '--title',
+        'Codex',
+        '--command',
+        'codex',
+        '--focus',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('terminal.create', {
+      worktree: 'path:/tmp/repo/feature',
+      command: 'codex',
+      title: 'Codex',
+      focus: true,
+      rendererBacked: true,
+      activate: true
+    })
+  })
+
+  it('does not force the visible terminal path for explicit Codex exec commands', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_create', {
+        terminal: {
+          handle: 'term_1',
+          worktreeId: 'repo-1::/tmp/repo/feature',
+          title: 'Codex exec'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'terminal',
+        'create',
+        '--worktree',
+        'path:/tmp/repo/feature',
+        '--title',
+        'Codex exec',
+        '--command',
+        'codex exec summarize',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('terminal.create', {
+      worktree: 'path:/tmp/repo/feature',
+      command: 'codex exec summarize',
+      title: 'Codex exec',
+      focus: false
+    })
+  })
+
+  it('does not force the visible terminal path for Codex exec commands after global options', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_create', {
+        terminal: {
+          handle: 'term_1',
+          worktreeId: 'repo-1::/tmp/repo/feature',
+          title: 'Codex exec'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'terminal',
+        'create',
+        '--worktree',
+        'path:/tmp/repo/feature',
+        '--title',
+        'Codex exec',
+        '--command',
+        'codex -m gpt-5 --sandbox workspace-write exec summarize',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('terminal.create', {
+      worktree: 'path:/tmp/repo/feature',
+      command: 'codex -m gpt-5 --sandbox workspace-write exec summarize',
+      title: 'Codex exec',
+      focus: false
+    })
+  })
+
+  it('does not force the visible terminal path for Codex review commands after long options', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_create', {
+        terminal: {
+          handle: 'term_1',
+          worktreeId: 'repo-1::/tmp/repo/feature',
+          title: 'Codex review'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'terminal',
+        'create',
+        '--worktree',
+        'path:/tmp/repo/feature',
+        '--title',
+        'Codex review',
+        '--command',
+        'codex --model=gpt-5 --sandbox=workspace-write review',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('terminal.create', {
+      worktree: 'path:/tmp/repo/feature',
+      command: 'codex --model=gpt-5 --sandbox=workspace-write review',
+      title: 'Codex review',
+      focus: false
+    })
+  })
+
+  it('does not force the visible terminal path for Codex help commands', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_create', {
+        terminal: {
+          handle: 'term_1',
+          worktreeId: 'repo-1::/tmp/repo/feature',
+          title: 'Codex help'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'terminal',
+        'create',
+        '--worktree',
+        'path:/tmp/repo/feature',
+        '--title',
+        'Codex help',
+        '--command',
+        'codex --help',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('terminal.create', {
+      worktree: 'path:/tmp/repo/feature',
+      command: 'codex --help',
+      title: 'Codex help',
+      focus: false
+    })
+  })
+
+  it('forces the visible terminal path for Codex prompts after global options', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_create', {
+        terminal: {
+          handle: 'term_1',
+          worktreeId: 'repo-1::/tmp/repo/feature',
+          title: 'Codex prompt'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'terminal',
+        'create',
+        '--worktree',
+        'path:/tmp/repo/feature',
+        '--title',
+        'Codex prompt',
+        '--command',
+        'codex -m gpt-5 "fix the flaky test"',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('terminal.create', {
+      worktree: 'path:/tmp/repo/feature',
+      command: 'codex -m gpt-5 "fix the flaky test"',
+      title: 'Codex prompt',
+      focus: false,
+      rendererBacked: true,
+      activate: false
+    })
+  })
+
   it('uses the resolved enclosing worktree for other worktree consumers', async () => {
     queueFixtures(
       callMock,
@@ -1117,6 +1376,44 @@ describe('orca cli worktree awareness', () => {
       worktree: 'id:repo-1::/srv/orca/feature',
       command: undefined,
       title: undefined,
+      focus: false
+    })
+  })
+
+  it('does not force remote Codex terminal creates through a local renderer path', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_create', {
+        terminal: {
+          handle: 'term_1',
+          worktreeId: 'repo-1::/srv/orca/feature',
+          title: 'Codex'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'terminal',
+        'create',
+        '--worktree',
+        'id:repo-1::/srv/orca/feature',
+        '--command',
+        'codex',
+        '--title',
+        'Codex',
+        '--pairing-code',
+        'remote-runtime',
+        '--json'
+      ],
+      '/tmp/client/repo/src'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('terminal.create', {
+      worktree: 'id:repo-1::/srv/orca/feature',
+      command: 'codex',
+      title: 'Codex',
       focus: false
     })
   })

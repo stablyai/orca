@@ -30,10 +30,6 @@ export function RichMarkdownSlashMenu({
       role="listbox"
       aria-label="Slash commands"
     >
-      <div className="rich-markdown-slash-query" aria-hidden="true">
-        <span className="text-muted-foreground">/</span>
-        <span>{slashMenu.query}</span>
-      </div>
       {filteredCommands.map((command, index) => {
         const showGroup = command.group !== currentGroup
         currentGroup = command.group

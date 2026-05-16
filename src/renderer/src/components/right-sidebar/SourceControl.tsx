@@ -32,6 +32,7 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { resolveRemoteOperationErrorMessage } from '@/store/slices/editor'
 import { useActiveWorktree, useRepoById, useWorktreeMap } from '@/store/selectors'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import { detectLanguage } from '@/lib/language-detect'
@@ -135,9 +136,14 @@ import type {
   HostedReviewInfo
 } from '../../../../shared/hosted-review'
 import { STATUS_COLORS, STATUS_LABELS } from './status-display'
+import {
+  isCustomAgentId,
+  resolveCommitMessageAgentChoice
+} from '../../../../shared/commit-message-agent-spec'
 
 type SourceControlScope = 'all' | 'uncommitted'
 type SourceControlViewMode = 'list' | 'tree'
+type RemoteActionError = { kind: RemoteOpKind; message: string }
 
 // Why: directional signifiers ahead of each primary action label. Commit
 // (✓) is affirmative; Push (↑) points in the direction data flows; Sync
@@ -264,6 +270,15 @@ function hostedReviewStateClass(review: HostedReviewInfo): string {
     return 'text-muted-foreground/60'
   }
   return 'text-muted-foreground/50'
+}
+
+function resolveRemoteActionError(kind: RemoteOpKind, error: unknown): string {
+  return resolveRemoteOperationErrorMessage(error, {
+    publish: kind === 'publish',
+    isPush: kind === 'push',
+    isSync: kind === 'sync',
+    isFetch: kind === 'fetch'
+  })
 }
 
 function HostedReviewIcon({
@@ -466,6 +481,9 @@ function SourceControlInner(): React.JSX.Element {
   // so switching worktrees restores each draft instead of wiping it.
   const [commitDrafts, setCommitDrafts] = useState<CommitDraftsByWorktree>({})
   const [commitErrors, setCommitErrors] = useState<Record<string, string | null>>({})
+  const [remoteActionErrors, setRemoteActionErrors] = useState<
+    Record<string, RemoteActionError | null>
+  >({})
   // Why: keep commit-in-flight state per-worktree. A single boolean would be
   // cleared when the user switched worktrees, letting them double-click Commit
   // on worktree A after briefly navigating to B and back while A's original
@@ -488,9 +506,14 @@ function SourceControlInner(): React.JSX.Element {
   const [createPrDialogOpen, setCreatePrDialogOpen] = useState(false)
   const [createPrPushFirst, setCreatePrPushFirst] = useState(false)
   const commitMessageAi = useAppStore((s) => s.settings?.commitMessageAi)
+  const effectiveCommitMessageAgentId = useMemo(
+    () => resolveCommitMessageAgentChoice(commitMessageAi?.agentId, settings?.defaultTuiAgent),
+    [commitMessageAi?.agentId, settings?.defaultTuiAgent]
+  )
   const filterInputRef = useRef<HTMLInputElement>(null)
   const commitMessage = readCommitDraftForWorktree(commitDrafts, activeWorktreeId)
   const commitError = commitErrors[activeWorktreeId ?? ''] ?? null
+  const remoteActionError = remoteActionErrors[activeWorktreeId ?? ''] ?? null
 
   const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
   const worktreePath = activeWorktree?.path ?? null
@@ -834,6 +857,7 @@ function SourceControlInner(): React.JSX.Element {
     }
     setCommitDrafts((prev) => pruneRecord(prev))
     setCommitErrors((prev) => pruneRecord(prev))
+    setRemoteActionErrors((prev) => pruneRecord(prev))
     setCommitInFlightByWorktree((prev) => pruneRecord(prev))
     setGenerateInFlightByWorktree((prev) => pruneRecord(prev))
     setGenerateErrors((prev) => pruneRecord(prev))
@@ -985,11 +1009,11 @@ function SourceControlInner(): React.JSX.Element {
     if (generateInFlightRef.current[activeWorktreeId]) {
       return
     }
-    if (!commitMessageAi?.enabled || !commitMessageAi.agentId) {
+    if (!commitMessageAi?.enabled || !effectiveCommitMessageAgentId) {
       return
     }
 
-    if (commitMessageAi.agentId === 'custom') {
+    if (isCustomAgentId(effectiveCommitMessageAgentId)) {
       const command = commitMessageAi.customAgentCommand?.trim() ?? ''
       if (!command) {
         setGenerateErrors((prev) => ({
@@ -1048,7 +1072,7 @@ function SourceControlInner(): React.JSX.Element {
       setGenerateInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: false }))
       generateInFlightRef.current[activeWorktreeId] = false
     }
-  }, [activeWorktreeId, commitMessageAi, worktreePath])
+  }, [activeWorktreeId, commitMessageAi, effectiveCommitMessageAgentId, worktreePath])
 
   const handleCancelGenerate = useCallback((): void => {
     if (!activeWorktreeId || !worktreePath) {
@@ -1079,6 +1103,7 @@ function SourceControlInner(): React.JSX.Element {
         return
       }
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+      setRemoteActionErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
       try {
         if (kind === 'publish') {
           await pushBranch(
@@ -1109,9 +1134,19 @@ function SourceControlInner(): React.JSX.Element {
           return
         }
         await syncBranch(activeWorktreeId, worktreePath, connectionId, activeWorktree?.pushTarget)
-      } catch {
+        setRemoteActionErrors((prev) => ({ ...prev, [activeWorktreeId]: null }))
+      } catch (error) {
         // Why: remote action failures are surfaced by editor-slice actions to keep
         // one consistent toast path and avoid duplicate notifications in the UI.
+        // Keep the latest failure inline too: dropdown-only actions like Fetch can
+        // otherwise look like nothing happened once the menu closes.
+        setRemoteActionErrors((prev) => ({
+          ...prev,
+          [activeWorktreeId]: {
+            kind,
+            message: resolveRemoteActionError(kind, error)
+          }
+        }))
       }
     },
     [
@@ -1216,12 +1251,20 @@ function SourceControlInner(): React.JSX.Element {
   )
 
   const hasUnstagedChanges = grouped.unstaged.length > 0 || grouped.untracked.length > 0
+  const hasPartiallyStagedChanges = useMemo(() => {
+    if (grouped.staged.length === 0 || grouped.unstaged.length === 0) {
+      return false
+    }
+    const unstagedPaths = new Set(grouped.unstaged.map((entry) => entry.path))
+    return grouped.staged.some((entry) => unstagedPaths.has(entry.path))
+  }, [grouped.staged, grouped.unstaged])
 
   const primaryAction: PrimaryAction = useMemo(
     () =>
       resolvePrimaryAction({
         stagedCount: grouped.staged.length,
         hasUnstagedChanges,
+        hasPartiallyStagedChanges,
         hasMessage: commitMessage.trim().length > 0,
         hasUnresolvedConflicts: unresolvedConflicts.length > 0,
         isCommitting,
@@ -1236,6 +1279,7 @@ function SourceControlInner(): React.JSX.Element {
       commitMessage,
       grouped.staged.length,
       hasUnstagedChanges,
+      hasPartiallyStagedChanges,
       isCommitting,
       isRemoteOperationActive,
       inFlightRemoteOpKind,
@@ -1252,6 +1296,7 @@ function SourceControlInner(): React.JSX.Element {
       resolveDropdownItems({
         stagedCount: grouped.staged.length,
         hasUnstagedChanges,
+        hasPartiallyStagedChanges,
         hasMessage: commitMessage.trim().length > 0,
         hasUnresolvedConflicts: unresolvedConflicts.length > 0,
         isCommitting,
@@ -1266,6 +1311,7 @@ function SourceControlInner(): React.JSX.Element {
       commitMessage,
       grouped.staged.length,
       hasUnstagedChanges,
+      hasPartiallyStagedChanges,
       isCommitting,
       isRemoteOperationActive,
       inFlightRemoteOpKind,
@@ -2500,15 +2546,16 @@ function SourceControlInner(): React.JSX.Element {
             <CommitArea
               commitMessage={commitMessage}
               commitError={commitError}
+              remoteActionError={remoteActionError?.message ?? null}
               isCommitting={isCommitting}
               aiEnabled={commitMessageAi?.enabled === true}
               aiAgentConfigured={
                 commitMessageAi?.enabled === true &&
-                commitMessageAi.agentId !== null &&
+                effectiveCommitMessageAgentId !== null &&
                 // Why: 'custom' is configured only once the user types a command.
                 // Without this guard, Generate would spawn an empty command and
                 // fail with a confusing error.
-                (commitMessageAi.agentId !== 'custom' ||
+                (!isCustomAgentId(effectiveCommitMessageAgentId) ||
                   (commitMessageAi.customAgentCommand ?? '').trim().length > 0)
               }
               isGenerating={isGenerating}
@@ -2937,6 +2984,7 @@ export default SourceControl
 type CommitAreaProps = {
   commitMessage: string
   commitError: string | null
+  remoteActionError: string | null
   isCommitting: boolean
   aiEnabled: boolean
   aiAgentConfigured: boolean
@@ -2958,6 +3006,7 @@ type CommitAreaProps = {
 export function CommitArea({
   commitMessage,
   commitError,
+  remoteActionError,
   isCommitting,
   aiEnabled,
   aiAgentConfigured,
@@ -3010,6 +3059,13 @@ export function CommitArea({
   const PrimaryIcon = PRIMARY_ICONS[primaryAction.kind]
 
   const hasMessage = commitMessage.trim().length > 0
+  const describedBy = [
+    commitError ? 'commit-area-error' : null,
+    remoteActionError ? 'commit-area-remote-error' : null,
+    generateError ? 'commit-area-generate-error' : null
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   // Why: only render the Generate button when the user has opted into the
   // feature. Mounting a perma-disabled button would leak space and add noise
@@ -3044,13 +3100,7 @@ export function CommitArea({
           onChange={(e) => onCommitMessageChange(e.target.value)}
           placeholder="Message"
           aria-label="Commit message"
-          aria-describedby={
-            commitError
-              ? 'commit-area-error'
-              : generateError
-                ? 'commit-area-generate-error'
-                : undefined
-          }
+          aria-describedby={describedBy || undefined}
           // Why: reserve right padding so typed text does not slide under the
           // absolute-positioned Generate icon in the top-right corner.
           className={`mt-0.5 w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring ${
@@ -3064,16 +3114,23 @@ export function CommitArea({
             // swap to a Square ("stop") with a destructive tint so the user
             // sees that clicking will abort the run. Group/group-hover toggles
             // keep this stateless on the React side.
-            <button
-              type="button"
-              onClick={() => onCancelGenerate()}
-              title="Stop generating"
-              aria-label="Stop generating commit message"
-              className="group absolute right-1.5 top-1.5 inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-destructive/40"
-            >
-              <RefreshCw className="size-3.5 animate-spin group-hover:hidden group-focus-visible:hidden" />
-              <Square className="hidden size-3.5 fill-current group-hover:block group-focus-visible:block" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => onCancelGenerate()}
+                  title="Stop generating"
+                  aria-label="Stop generating commit message"
+                  className="group absolute right-1.5 top-1.5 inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-destructive/40"
+                >
+                  <RefreshCw className="size-3.5 animate-spin group-hover:hidden group-focus-visible:hidden" />
+                  <Square className="hidden size-3.5 fill-current group-hover:block group-focus-visible:block" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="left" sideOffset={6}>
+                Generating commit message. Click to stop.
+              </TooltipContent>
+            </Tooltip>
           ) : (
             <button
               type="button"
@@ -3180,6 +3237,16 @@ export function CommitArea({
           className="mt-1 text-[11px] text-destructive"
         >
           {commitError}
+        </p>
+      )}
+      {remoteActionError && (
+        <p
+          id="commit-area-remote-error"
+          role="alert"
+          aria-live="polite"
+          className="mt-1 text-[11px] text-destructive"
+        >
+          {remoteActionError}
         </p>
       )}
       {generateError && (

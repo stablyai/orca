@@ -319,6 +319,8 @@ const TerminalCreateParams = z.object({
   env: z.record(z.string(), z.string()).optional(),
   title: OptionalString,
   focus: z.unknown().optional(),
+  rendererBacked: z.unknown().optional(),
+  activate: z.unknown().optional(),
   tabId: OptionalString,
   leafId: OptionalString
 })
@@ -546,6 +548,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         env: params.env,
         title: params.title,
         focus: params.focus === true,
+        rendererBacked: params.rendererBacked === true,
+        activate: params.activate === true,
         tabId: params.tabId,
         leafId: params.leafId
       })

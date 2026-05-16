@@ -990,6 +990,21 @@ describe('createEditorSlice remote branch actions', () => {
     )
   })
 
+  it('surfaces an explicit toast when pull stops on merge conflicts', async () => {
+    const store = createEditorStore()
+    gitPullMock.mockRejectedValueOnce(
+      new Error(
+        'Auto-merging src/app.ts\nCONFLICT (content): Merge conflict in src/app.ts\nAutomatic merge failed; fix conflicts and then commit the result.'
+      )
+    )
+
+    await expect(store.getState().pullBranch('wt-1', '/repo')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Pull stopped with merge conflicts. Resolve them in Source Control, then commit the merge.'
+    )
+  })
+
   it('runs publish branch through push with publish=true', async () => {
     // Why: pushBranch no longer awaits a post-op git status / upstream
     // refresh. The 3s git-status poll and the upstream-status effect in the
@@ -1160,7 +1175,7 @@ describe('createEditorSlice remote branch actions', () => {
 
     await expect(store.getState().fetchBranch('wt-1', '/repo')).rejects.toThrow('network timeout')
 
-    expect(toastErrorMock).toHaveBeenCalledWith('network timeout')
+    expect(toastErrorMock).toHaveBeenCalledWith('Fetch failed. network timeout')
     expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
@@ -1331,6 +1346,24 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).toHaveBeenCalledTimes(1)
     expect(toastErrorMock).toHaveBeenCalledWith(
       'Pull blocked — commit or stash your local changes first.'
+    )
+    expect(gitPushMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('surfaces a sync-labeled toast when syncBranch stops on merge conflicts', async () => {
+    const store = createEditorStore()
+    gitPullMock.mockRejectedValueOnce(
+      new Error(
+        'Auto-merging src/app.ts\nCONFLICT (content): Merge conflict in src/app.ts\nAutomatic merge failed; fix conflicts and then commit the result.'
+      )
+    )
+
+    await expect(store.getState().syncBranch('wt-1', '/repo')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Sync stopped with merge conflicts. Resolve them in Source Control, then commit the merge.'
     )
     expect(gitPushMock).not.toHaveBeenCalled()
     expect(store.getState().isRemoteOperationActive).toBe(false)

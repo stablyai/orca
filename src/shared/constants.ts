@@ -184,7 +184,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalCursorBlink: true,
     terminalThemeDark: 'Ghostty Default Style Dark',
     terminalDividerColorDark: '#3f3f46',
-    terminalUseSeparateLightTheme: false,
+    terminalUseSeparateLightTheme: true,
     terminalThemeLight: 'Builtin Tango Light',
     terminalDividerColorLight: '#d4d4d8',
     terminalInactivePaneOpacity: 0.8,
@@ -274,12 +274,12 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
       lastViewByProject: {},
       activeProject: null
     },
-    // Why: opt-in feature — `enabled: false` keeps the Generate button hidden
-    // for existing users until they discover and turn it on in Settings. The
-    // per-agent / per-model maps stay empty until the user activates the
-    // toggle, at which point the pane fills them with the spec defaults.
+    // Why: default-on uses the user's default agent when it supports
+    // non-interactive commit-message generation. Keep agent/model maps empty
+    // so first use follows the default agent's configured default model instead
+    // of freezing a stale choice into new profiles.
     commitMessageAi: {
-      enabled: false,
+      enabled: true,
       agentId: null,
       selectedModelByAgent: {},
       selectedThinkingByModel: {},

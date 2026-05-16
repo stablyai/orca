@@ -1492,6 +1492,7 @@ export type PreloadApi = {
         afterTabId?: string
         command?: string
         title?: string
+        activate?: boolean
       }) => void
     ) => () => void
     replyTerminalCreate: (reply: {

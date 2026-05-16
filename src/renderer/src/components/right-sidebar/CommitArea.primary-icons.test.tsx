@@ -58,6 +58,7 @@ function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActio
   return {
     stagedCount: 1,
     hasUnstagedChanges: false,
+    hasPartiallyStagedChanges: false,
     hasMessage: true,
     hasUnresolvedConflicts: false,
     isCommitting: false,
@@ -72,6 +73,7 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
   return {
     commitMessage: 'feat: add commit area',
     commitError: null as string | null,
+    remoteActionError: null as string | null,
     isCommitting: inputs.isCommitting,
     aiEnabled: false,
     aiAgentConfigured: false,
@@ -137,9 +139,9 @@ describe('CommitArea primary action icons', () => {
     expect(primaryHasIcon(element, CloudUpload)).toBe(true)
   })
 
-  // Why: a dirty tree with nothing staged surfaces 'Stage Files' as the
+  // Why: a dirty tree with nothing staged surfaces 'Stage All' as the
   // primary, anchored by a Plus icon to read as an additive bulk action.
-  it('renders a plus icon on a Stage Files primary', () => {
+  it('renders a plus icon on a Stage All primary', () => {
     const props = baseProps({
       stagedCount: 0,
       hasUnstagedChanges: true,

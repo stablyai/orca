@@ -37,6 +37,7 @@ import {
 import { IssueSection, ReviewSection, CommentSection } from './WorktreeCardMeta'
 import { writeWorkspaceDragData } from './workspace-status'
 import { useWorktreeActivityStatus } from './use-worktree-activity-status'
+import { getWorktreeCardPrDisplay } from './worktree-card-pr-display'
 
 type WorktreeCardProps = {
   worktree: Worktree
@@ -174,6 +175,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
   const hostedReview: HostedReviewInfo | null | undefined =
     hostedReviewEntry !== undefined ? hostedReviewEntry.data : undefined
+  const prDisplay = getWorktreeCardPrDisplay(hostedReview, worktree.linkedPR)
   const issue: IssueInfo | null | undefined = worktree.linkedIssue
     ? issueEntry !== undefined
       ? issueEntry.data
@@ -574,18 +576,14 @@ const WorktreeCard = React.memo(function WorktreeCard({
              Layout coupling: spacing here is used to derive size estimates in
              WorktreeList's estimateSize. Update that function if changing spacing. */}
         {((cardProps.includes('issue') && issueDisplay) ||
-          (cardProps.includes('pr') && hostedReview) ||
+          (cardProps.includes('pr') && prDisplay) ||
           (cardProps.includes('comment') && worktree.comment)) && (
           <div className="flex flex-col gap-[3px] mt-0.5">
             {cardProps.includes('issue') && issueDisplay && (
               <IssueSection issue={issueDisplay} onClick={handleEditIssue} />
             )}
-            {cardProps.includes('pr') && hostedReview && (
-              <ReviewSection
-                review={hostedReview}
-                onEdit={handleEditPr}
-                onRemove={handleRemovePr}
-              />
+            {cardProps.includes('pr') && prDisplay && (
+              <ReviewSection review={prDisplay} onEdit={handleEditPr} onRemove={handleRemovePr} />
             )}
             {cardProps.includes('comment') && worktree.comment && (
               <CommentSection comment={worktree.comment} onDoubleClick={handleEditComment} />

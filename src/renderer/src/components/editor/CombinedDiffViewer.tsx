@@ -4,6 +4,7 @@ restore-on-remount caching, and scroll preservation. Splitting those pieces
 across smaller files would make the lifecycle edges harder to reason about and
 more error-prone than keeping the whole viewer flow together. */
 import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { joinPath } from '@/lib/path'
@@ -13,12 +14,34 @@ import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { writeRuntimeFile } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { getRuntimeGitBranchDiff, getRuntimeGitDiff } from '@/runtime/runtime-git-client'
+import { formatDiffComments } from '@/lib/diff-comments-format'
 import '@/lib/monaco-setup'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import type { OpenFile } from '@/store/slices/editor'
-import type { GitBranchChangeEntry, GitDiffResult } from '../../../../shared/types'
+import type { DiffComment, GitBranchChangeEntry, GitDiffResult } from '../../../../shared/types'
+import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
+import { Check, Copy, MessageSquare, Send, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { DiffSectionItem } from './DiffSectionItem'
 import { getCombinedUncommittedEntries } from './combined-diff-entries'
+import { getDiffSectionEstimatedHeight, isIntrinsicHeightImageDiff } from './diff-section-layout'
 import type { DiffSection } from './diff-section-types'
 
 type CachedCombinedDiffViewState = {
@@ -32,6 +55,7 @@ type CachedCombinedDiffViewState = {
 
 const combinedDiffViewStateCache = new Map<string, CachedCombinedDiffViewState>()
 const combinedDiffScrollTopCache = new Map<string, number>()
+const COMBINED_DIFF_OVERSCAN = 5
 
 export default function CombinedDiffViewer({
   file,
@@ -47,13 +71,32 @@ export default function CombinedDiffViewer({
   const openAllDiffs = useAppStore((s) => s.openAllDiffs)
   const openConflictReview = useAppStore((s) => s.openConflictReview)
   const openBranchAllDiffs = useAppStore((s) => s.openBranchAllDiffs)
+  const clearDiffComments = useAppStore((s) => s.clearDiffComments)
+  const diffCommentsForWorktree = useAppStore((s) => s.getDiffComments(file.worktreeId))
+  const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[file.worktreeId])
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
 
+  const diffCommentCount = diffCommentsForWorktree.length
+  const diffCommentsPrompt = React.useMemo(
+    () => formatDiffComments(diffCommentsForWorktree),
+    [diffCommentsForWorktree]
+  )
+  const previewDiffComments = React.useMemo(
+    () =>
+      [...diffCommentsForWorktree]
+        .sort((a, b) => a.filePath.localeCompare(b.filePath) || a.lineNumber - b.lineNumber)
+        .slice(0, 4),
+    [diffCommentsForWorktree]
+  )
+
   const [sections, setSections] = useState<DiffSection[]>([])
   const [sideBySide, setSideBySide] = useState(settings?.diffDefaultView === 'side-by-side')
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
+  const [clearNotesDialogOpen, setClearNotesDialogOpen] = useState(false)
+  const [isClearingNotes, setIsClearingNotes] = useState(false)
+  const [notesCopied, setNotesCopied] = useState(false)
   // Why: `generation` is a state counter used as a React key to force remounting
   // DiffSectionItem components when the entry list changes. A separate ref
   // (`generationRef`) is kept in sync for stale-async-result detection inside
@@ -274,6 +317,40 @@ export default function CombinedDiffViewer({
 
   const modifiedEditorsRef = useRef<Map<number, monacoEditor.IStandaloneCodeEditor>>(new Map())
 
+  const virtualizer = useVirtualizer({
+    count: sections.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: (index) => {
+      const section = sections[index]
+      if (!section) {
+        return 88
+      }
+
+      return getDiffSectionEstimatedHeight({
+        collapsed: section.collapsed,
+        measuredContentHeight: sectionHeights[index],
+        originalContent: section.originalContent,
+        modifiedContent: section.modifiedContent,
+        useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult)
+      })
+    },
+    overscan: COMBINED_DIFF_OVERSCAN,
+    getItemKey: (index) => {
+      const section = sections[index]
+      if (!section) {
+        return `${index}:${generation}`
+      }
+      return `${section.key}:${section.collapsed ? 'collapsed' : 'expanded'}:${generation}`
+    }
+  })
+
+  useLayoutEffect(() => {
+    // Why: inline vs side-by-side can change Monaco content heights across
+    // every loaded row. Re-measure on this explicit mode change, not on every
+    // section load.
+    virtualizer.measure()
+  }, [sideBySide, virtualizer])
+
   const toggleSection = useCallback((index: number) => {
     setSections((prev) => prev.map((s, i) => (i === index ? { ...s, collapsed: !s.collapsed } : s)))
   }, [])
@@ -308,7 +385,21 @@ export default function CombinedDiffViewer({
           content
         )
         setSections((prev) =>
-          prev.map((s, i) => (i === index ? { ...s, modifiedContent: content, dirty: false } : s))
+          prev.map((s, i) => {
+            if (i !== index) {
+              return s
+            }
+
+            return {
+              ...s,
+              modifiedContent: content,
+              dirty: false,
+              diffResult:
+                s.diffResult?.kind === 'text'
+                  ? { ...s.diffResult, modifiedContent: content }
+                  : s.diffResult
+            }
+          })
         )
       } catch (err) {
         console.error('Save failed:', err)
@@ -425,6 +516,50 @@ export default function CombinedDiffViewer({
     }
   }, [branchSummary, file, openAllDiffs, openBranchAllDiffs])
 
+  useEffect(() => {
+    if (diffCommentCount === 0 && !isClearingNotes) {
+      setClearNotesDialogOpen(false)
+    }
+  }, [diffCommentCount, isClearingNotes])
+
+  useEffect(() => {
+    if (!notesCopied) {
+      return
+    }
+    const handle = window.setTimeout(() => setNotesCopied(false), 1500)
+    return () => window.clearTimeout(handle)
+  }, [notesCopied])
+
+  const handleCopyNotes = useCallback(async (): Promise<void> => {
+    if (diffCommentCount === 0) {
+      return
+    }
+    try {
+      await window.api.ui.writeClipboardText(diffCommentsPrompt)
+      setNotesCopied(true)
+    } catch {
+      // Why: clipboard writes can fail while the app is not focused; this
+      // mirrors the sidebar notes action and keeps the popover non-blocking.
+    }
+  }, [diffCommentCount, diffCommentsPrompt])
+
+  const handleConfirmClearNotes = useCallback(async (): Promise<void> => {
+    if (diffCommentCount === 0 || isClearingNotes) {
+      return
+    }
+    setIsClearingNotes(true)
+    try {
+      const ok = await clearDiffComments(file.worktreeId)
+      if (ok) {
+        setClearNotesDialogOpen(false)
+      } else {
+        toast.error('Failed to clear notes.')
+      }
+    } finally {
+      setIsClearingNotes(false)
+    }
+  }, [clearDiffComments, diffCommentCount, file.worktreeId, isClearingNotes])
+
   if (sections.length === 0 && (file.skippedConflicts?.length ?? 0) > 0) {
     return (
       <div className="flex h-full items-center justify-center px-6 text-center">
@@ -505,66 +640,257 @@ export default function CombinedDiffViewer({
     ) : null
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border bg-background/50 shrink-0">
-        <span className="text-xs text-muted-foreground">
-          {sections.length} changed files
-          {isBranchMode && branchCompare ? ` vs ${branchCompare.baseRef}` : ''}
-        </span>
-        <div className="flex items-center gap-2">
-          {file.combinedAlternate && (
+    <>
+      <div className="flex flex-col flex-1 min-h-0">
+        <div className="flex items-center justify-between gap-3 px-3 py-1.5 border-b border-border bg-background/50 shrink-0">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-xs text-muted-foreground">
+              {sections.length} changed files
+              {isBranchMode && branchCompare ? ` vs ${branchCompare.baseRef}` : ''}
+            </span>
+            {diffCommentCount > 0 && (
+              <div className="ml-2 flex shrink-0 items-center overflow-hidden rounded-md border border-border/60 bg-muted/20">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="inline-flex h-7 items-center gap-1 px-2 text-[11px] leading-none text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      aria-label={`Show ${diffCommentCount} AI ${diffCommentCount === 1 ? 'note' : 'notes'}`}
+                    >
+                      <MessageSquare className="size-3" />
+                      AI notes
+                      <span className="tabular-nums">{diffCommentCount}</span>
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" side="bottom" sideOffset={6} className="w-80 p-0">
+                    <DiffNotesPreviewPopover
+                      comments={previewDiffComments}
+                      totalCount={diffCommentCount}
+                      copied={notesCopied}
+                      onCopy={() => void handleCopyNotes()}
+                      onClear={() => setClearNotesDialogOpen(true)}
+                    />
+                  </PopoverContent>
+                </Popover>
+                <DropdownMenu>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          className="h-7 rounded-none border-l border-border/60 text-muted-foreground hover:text-foreground"
+                          aria-label="Send AI notes to a new agent"
+                        >
+                          <Send className="size-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Send notes to AI
+                    </TooltipContent>
+                  </Tooltip>
+                  <DropdownMenuContent align="end" className="min-w-[180px]">
+                    <QuickLaunchAgentMenuItems
+                      worktreeId={file.worktreeId}
+                      groupId={activeGroupId ?? file.worktreeId}
+                      onFocusTerminal={focusTerminalTabSurface}
+                      prompt={diffCommentsPrompt}
+                      launchSource="notes_send"
+                    />
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {file.combinedAlternate && (
+              <button
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                onClick={openAlternateDiff}
+              >
+                {file.combinedAlternate.source === 'combined-branch'
+                  ? 'Open Branch Diff'
+                  : 'Open Uncommitted Diff'}
+              </button>
+            )}
             <button
               className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              onClick={openAlternateDiff}
+              onClick={() => setSections((prev) => prev.map((s) => ({ ...s, collapsed: true })))}
             >
-              {file.combinedAlternate.source === 'combined-branch'
-                ? 'Open Branch Diff'
-                : 'Open Uncommitted Diff'}
+              Collapse All
             </button>
-          )}
-          <button
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            onClick={() => setSections((prev) => prev.map((s) => ({ ...s, collapsed: true })))}
-          >
-            Collapse All
-          </button>
-          <button
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            onClick={() => setSections((prev) => prev.map((s) => ({ ...s, collapsed: false })))}
-          >
-            Expand All
-          </button>
-          <button
-            className="px-2 py-0.5 text-xs rounded border border-border text-muted-foreground hover:text-foreground transition-colors"
-            onClick={() => setSideBySide((prev) => !prev)}
-          >
-            {sideBySide ? 'Inline' : 'Side by Side'}
-          </button>
+            <button
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setSections((prev) => prev.map((s) => ({ ...s, collapsed: false })))}
+            >
+              Expand All
+            </button>
+            <button
+              className="px-2 py-0.5 text-xs rounded border border-border text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setSideBySide((prev) => !prev)}
+            >
+              {sideBySide ? 'Inline' : 'Side by Side'}
+            </button>
+          </div>
+        </div>
+
+        <div ref={scrollContainerRef} className="flex-1 overflow-auto scrollbar-editor">
+          {skippedConflictNotice}
+          <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
+            {virtualizer.getVirtualItems().map((virtualItem) => {
+              const section = sections[virtualItem.index]
+              if (!section) {
+                return null
+              }
+
+              return (
+                <div
+                  key={virtualItem.key}
+                  data-index={virtualItem.index}
+                  ref={virtualizer.measureElement}
+                  className="absolute left-0 top-0 w-full"
+                  // Why: `top` preserves sticky file headers inside each row;
+                  // transform-based virtualization creates a containing block
+                  // that makes long-section headers feel jumpy while scrolling.
+                  style={{ top: `${virtualItem.start}px` }}
+                >
+                  <DiffSectionItem
+                    section={section}
+                    index={virtualItem.index}
+                    isBranchMode={isBranchMode}
+                    sideBySide={sideBySide}
+                    isDark={isDark}
+                    settings={settings}
+                    sectionHeight={sectionHeights[virtualItem.index]}
+                    worktreeId={file.worktreeId}
+                    worktreeRoot={file.filePath}
+                    loadSection={loadSection}
+                    toggleSection={toggleSection}
+                    setSectionHeights={setSectionHeights}
+                    setSections={setSections}
+                    modifiedEditorsRef={modifiedEditorsRef}
+                    handleSectionSaveRef={handleSectionSaveRef}
+                  />
+                </div>
+              )
+            })}
+          </div>
         </div>
       </div>
+      <Dialog
+        open={clearNotesDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && !isClearingNotes) {
+            setClearNotesDialogOpen(false)
+          } else if (open) {
+            setClearNotesDialogOpen(true)
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm">Clear Notes</DialogTitle>
+            <DialogDescription className="text-xs">
+              Clear {diffCommentCount} {diffCommentCount === 1 ? 'note' : 'notes'} from this
+              worktree?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setClearNotesDialogOpen(false)}
+              disabled={isClearingNotes}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void handleConfirmClearNotes()}
+              disabled={isClearingNotes || diffCommentCount === 0}
+            >
+              <Trash2 className="size-4" />
+              Clear Notes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
 
-      <div ref={scrollContainerRef} className="flex-1 overflow-auto scrollbar-editor">
-        {skippedConflictNotice}
-        {sections.map((section, index) => (
-          <DiffSectionItem
-            key={`${section.key}:${generation}`}
-            section={section}
-            index={index}
-            isBranchMode={isBranchMode}
-            sideBySide={sideBySide}
-            isDark={isDark}
-            settings={settings}
-            sectionHeight={sectionHeights[index]}
-            worktreeId={file.worktreeId}
-            worktreeRoot={file.filePath}
-            loadSection={loadSection}
-            toggleSection={toggleSection}
-            setSectionHeights={setSectionHeights}
-            setSections={setSections}
-            modifiedEditorsRef={modifiedEditorsRef}
-            handleSectionSaveRef={handleSectionSaveRef}
-          />
+function DiffNotesPreviewPopover({
+  comments,
+  totalCount,
+  copied,
+  onCopy,
+  onClear
+}: {
+  comments: DiffComment[]
+  totalCount: number
+  copied: boolean
+  onCopy: () => void
+  onClear: () => void
+}): React.JSX.Element {
+  const remainingCount = Math.max(0, totalCount - comments.length)
+
+  return (
+    <div className="text-xs">
+      <div className="flex items-center justify-between gap-2 border-b border-border/60 px-3 py-2">
+        <div className="flex min-w-0 items-center gap-1.5 font-medium text-foreground">
+          <MessageSquare className="size-3.5 shrink-0 text-muted-foreground" />
+          <span>AI notes</span>
+          <span className="text-[11px] font-normal tabular-nums text-muted-foreground">
+            {totalCount}
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="h-6 text-muted-foreground hover:text-foreground"
+            onClick={onCopy}
+            disabled={totalCount === 0}
+          >
+            {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+            Copy
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="h-6 text-muted-foreground hover:text-destructive"
+            onClick={onClear}
+            disabled={totalCount === 0}
+          >
+            <Trash2 className="size-3" />
+            Clear
+          </Button>
+        </div>
+      </div>
+      <div className="max-h-72 overflow-y-auto p-2">
+        {comments.map((comment) => (
+          <div key={comment.id} className="rounded-md px-2 py-1.5 hover:bg-accent/50">
+            <div className="flex items-center gap-1.5 text-[11px] leading-none text-muted-foreground">
+              <span className="min-w-0 flex-1 truncate font-mono">{comment.filePath}</span>
+              <span className="shrink-0 tabular-nums">
+                {getDiffCommentLineLabel(comment, true)}
+              </span>
+            </div>
+            <div className="mt-1 max-h-10 overflow-hidden whitespace-pre-wrap break-words text-[12px] leading-snug text-foreground">
+              {comment.body}
+            </div>
+          </div>
         ))}
+        {remainingCount > 0 && (
+          <div className="px-2 py-1 text-[11px] text-muted-foreground">
+            {remainingCount} more {remainingCount === 1 ? 'note' : 'notes'} in Source Control
+          </div>
+        )}
       </div>
     </div>
   )

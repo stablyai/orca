@@ -57,6 +57,7 @@ function formatSyncLabel(base: string, ahead: number, behind: number): string {
 export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry[] {
   const {
     stagedCount,
+    hasPartiallyStagedChanges,
     hasMessage,
     hasUnresolvedConflicts,
     isCommitting,
@@ -93,6 +94,9 @@ export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry
     }
     if (!hasStaged) {
       return 'Stage at least one file to commit'
+    }
+    if (hasPartiallyStagedChanges) {
+      return 'Stage all changes before committing partially staged files'
     }
     if (!hasMessage) {
       return 'Enter a commit message to commit'

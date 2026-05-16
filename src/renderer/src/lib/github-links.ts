@@ -1,5 +1,4 @@
-const GH_ITEM_PATH_RE = /^\/[^/]+\/[^/]+\/(?:issues|pull)\/(\d+)(?:\/)?$/i
-const GH_ITEM_PATH_FULL_RE = /^\/([^/]+)\/([^/]+)\/(?:issues|pull)\/(\d+)(?:\/)?$/i
+const GH_ITEM_PATH_RE = /^\/([^/]+)\/([^/]+)\/(issues|pull)\/(\d+)(?:\/.*)?$/i
 
 export type RepoSlug = {
   owner: string
@@ -9,6 +8,10 @@ export type RepoSlug = {
 export type GitHubLinkQuery = {
   query: string
   directNumber: number | null
+}
+
+function matchGitHubItemPath(url: URL): RegExpExecArray | null {
+  return GH_ITEM_PATH_RE.exec(url.pathname.replace(/\/+$/, ''))
 }
 
 /**
@@ -37,12 +40,12 @@ export function parseGitHubIssueOrPRNumber(input: string): number | null {
     return null
   }
 
-  const match = GH_ITEM_PATH_RE.exec(url.pathname)
+  const match = matchGitHubItemPath(url)
   if (!match) {
     return null
   }
 
-  return Number.parseInt(match[1], 10)
+  return Number.parseInt(match[4], 10)
 }
 
 /**
@@ -70,15 +73,15 @@ export function parseGitHubIssueOrPRLink(input: string): {
     return null
   }
 
-  const match = GH_ITEM_PATH_FULL_RE.exec(url.pathname)
+  const match = matchGitHubItemPath(url)
   if (!match) {
     return null
   }
 
   return {
     slug: { owner: match[1], repo: match[2] },
-    type: url.pathname.toLowerCase().includes('/pull/') ? 'pr' : 'issue',
-    number: Number.parseInt(match[3], 10)
+    type: match[3].toLowerCase() === 'pull' ? 'pr' : 'issue',
+    number: Number.parseInt(match[4], 10)
   }
 }
 

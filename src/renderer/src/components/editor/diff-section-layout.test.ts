@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { getDiffSectionBodyHeight, isIntrinsicHeightImageDiff } from './diff-section-layout'
+import {
+  getDiffSectionBodyHeight,
+  getDiffSectionEstimatedHeight,
+  isIntrinsicHeightImageDiff
+} from './diff-section-layout'
 import type { GitDiffResult } from '../../../../shared/types'
 
 describe('diff section layout', () => {
@@ -80,5 +84,29 @@ describe('diff section layout', () => {
 
     expect(isIntrinsicHeightImageDiff(pngDiff)).toBe(true)
     expect(isIntrinsicHeightImageDiff(pdfDiff)).toBe(false)
+  })
+
+  it('estimates virtualized expanded section height from diff line count', () => {
+    expect(
+      getDiffSectionEstimatedHeight({
+        collapsed: false,
+        measuredContentHeight: undefined,
+        originalContent: 'one',
+        modifiedContent: 'one\ntwo\nthree',
+        useIntrinsicImageHeight: false
+      })
+    ).toBe(104)
+  })
+
+  it('estimates collapsed virtualized sections as header-only rows', () => {
+    expect(
+      getDiffSectionEstimatedHeight({
+        collapsed: true,
+        measuredContentHeight: 500,
+        originalContent: 'one',
+        modifiedContent: 'one\ntwo\nthree',
+        useIntrinsicImageHeight: false
+      })
+    ).toBe(28)
   })
 })
