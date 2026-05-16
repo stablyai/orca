@@ -14,6 +14,7 @@ const WT = 'repo::/worktree'
 const ENV = 'web-env-1'
 const NOW = 1_700_000_000_000
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+const HOST_SURFACE_ID = `host-tab-1::${LEAF_ID}`
 
 function makeState(overrides: Partial<WebSessionTabsSyncState> = {}): WebSessionTabsSyncState {
   return {
@@ -58,10 +59,10 @@ describe('applyWebSessionTabsSnapshot', () => {
       makeSnapshot([
         {
           type: 'terminal',
-          id: 'host-tab-1::pane:1',
+          id: HOST_SURFACE_ID,
           title: 'host shell',
           parentTabId: 'host-tab-1',
-          leafId: 'pane:1',
+          leafId: LEAF_ID,
           isActive: true,
           status: 'ready',
           terminal: 'terminal-1'
@@ -117,10 +118,10 @@ describe('applyWebSessionTabsSnapshot', () => {
       makeSnapshot([
         {
           type: 'terminal',
-          id: 'host-tab-1::pane:1',
+          id: HOST_SURFACE_ID,
           title: 'host shell',
           parentTabId: 'host-tab-1',
-          leafId: 'pane:1',
+          leafId: LEAF_ID,
           isActive: true,
           status: 'ready',
           terminal: 'terminal-1'
@@ -144,10 +145,10 @@ describe('applyWebSessionTabsSnapshot', () => {
       makeSnapshot([
         {
           type: 'terminal',
-          id: 'host-tab-1::pane:1',
+          id: HOST_SURFACE_ID,
           title: 'pending shell',
           parentTabId: 'host-tab-1',
-          leafId: 'pane:1',
+          leafId: LEAF_ID,
           isActive: true,
           status: 'pending-handle',
           terminal: null

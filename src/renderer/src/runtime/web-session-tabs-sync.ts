@@ -14,7 +14,7 @@ import { getRemoteRuntimePtyEnvironmentId, toRemoteRuntimePtyId } from './runtim
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 const WEB_TERMINAL_SURFACE_TAB_PREFIX = 'web-terminal-'
-const HOST_TERMINAL_SURFACE_SEPARATOR = '::pane:'
+const HOST_TERMINAL_SURFACE_SEPARATOR = '::'
 
 type SessionTabsStreamEvent =
   | (RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' })
@@ -68,7 +68,7 @@ function isMirroredTerminalSurfaceId(tabId: string): boolean {
 }
 
 function toWebTerminalSurfaceTabId(hostSurfaceId: string): string {
-  // Why: host session surface ids use `tab::pane:leaf`, but renderer pane keys
+  // Why: host session surface ids use `tab::leaf`, but renderer pane keys
   // reserve `:` as the tab/leaf delimiter. Keep host identity while making a
   // local tab id that can safely flow through makePaneKey().
   return `${WEB_TERMINAL_SURFACE_TAB_PREFIX}${encodeURIComponent(hostSurfaceId)}`
