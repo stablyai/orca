@@ -265,7 +265,7 @@ type ToggleRowProps = {
 
 function ToggleRow({ label, checked, onClick }: ToggleRowProps) {
   // Why: the popover is not a true menu, so we use a plain button with
-  // aria-pressed rather than role="menuitemcheckbox". The visible checkmark
+  // aria-pressed rather than role="menuitemcheckbox". The checkbox square
   // carries the state for sighted users.
   return (
     <button
@@ -274,14 +274,20 @@ function ToggleRow({ label, checked, onClick }: ToggleRowProps) {
       aria-pressed={checked}
       className={cn(
         menuItemClassName,
-        'w-full pl-7 text-left',
+        'w-full text-left',
         checked ? 'text-foreground' : 'text-muted-foreground'
       )}
     >
-      <span className="pointer-events-none absolute left-2 flex size-3.5 items-center justify-center">
-        <Check className={cn('size-4', checked ? 'opacity-100' : 'opacity-0')} />
+      <span
+        aria-hidden
+        className={cn(
+          'flex size-3.5 shrink-0 items-center justify-center rounded-[3px] border border-border/80 bg-background/40 text-primary-foreground',
+          checked && 'border-primary bg-primary'
+        )}
+      >
+        {checked && <Check className="size-3" strokeWidth={2.5} />}
       </span>
-      {label}
+      <span className="min-w-0 truncate">{label}</span>
     </button>
   )
 }
