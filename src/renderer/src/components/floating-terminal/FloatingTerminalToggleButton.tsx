@@ -23,7 +23,7 @@ export function FloatingTerminalToggleButton({
             type="button"
             variant="outline"
             size="icon-sm"
-            className="bg-card/95 shadow-xs"
+            className="border-border bg-secondary text-secondary-foreground shadow-xs hover:bg-accent hover:text-accent-foreground"
             data-floating-terminal-toggle
             aria-label={open ? 'Minimize floating terminal' : 'Show floating terminal'}
             aria-pressed={open}

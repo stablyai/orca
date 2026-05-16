@@ -27,18 +27,23 @@ export function getRuntimeGitScope(
   return target.kind === 'environment' ? `runtime:${target.environmentId}` : connectionId
 }
 
-export async function getRuntimeGitStatus(context: RuntimeGitContext): Promise<GitStatusResult> {
+export async function getRuntimeGitStatus(
+  context: RuntimeGitContext,
+  options?: { includeIgnored?: boolean }
+): Promise<GitStatusResult> {
   const target = getActiveRuntimeTarget(context.settings)
+  const includeIgnoredArgs = options?.includeIgnored ? { includeIgnored: true } : {}
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.status({
       worktreePath: context.worktreePath,
-      connectionId: context.connectionId
+      connectionId: context.connectionId,
+      ...includeIgnoredArgs
     })
   }
   return callRuntimeRpc<GitStatusResult>(
     target,
     'git.status',
-    { worktree: context.worktreeId },
+    { worktree: context.worktreeId, ...includeIgnoredArgs },
     { timeoutMs: 15_000 }
   )
 }

@@ -309,7 +309,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
 
     await store.getState().fetchWorkItems('repo-id', '/repo', 24, '')
 
-    const result = store.getState().getWorkItemsSourcesAndError('/repo', 24, '')
+    const result = store.getState().getWorkItemsSourcesAndError('repo-id', 24, '')
     expect(result.sources).toEqual({
       issues: { owner: 'up', repo: 'r' },
       prs: { owner: 'fork', repo: 'r' }
@@ -333,7 +333,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
 
     await store.getState().fetchWorkItems('repo-id', '/repo', 24, '')
 
-    const result = store.getState().getWorkItemsSourcesAndError('/repo', 24, '')
+    const result = store.getState().getWorkItemsSourcesAndError('repo-id', 24, '')
     expect(result.error).toMatchObject({
       type: 'permission_denied',
       message: 'no access',
@@ -369,11 +369,11 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     await forcedFetch
 
     expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(2)
-    const after = store.getState().getWorkItemsSourcesAndError('/repo', 24, '')
+    const after = store.getState().getWorkItemsSourcesAndError('repo-id', 24, '')
     expect(after.error).toBeNull()
   })
 
-  it('routes work item fetches through the active runtime environment', async () => {
+  it('routes work item fetches through repo-scoped IPC even when a runtime is active', async () => {
     const store = createTestStore()
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' },
@@ -387,26 +387,21 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         }
       ]
     } as Partial<AppState>)
-    runtimeEnvironmentCall.mockResolvedValueOnce({
-      id: 'rpc-1',
-      ok: true,
-      result: {
-        items: [{ type: 'issue', number: 7, title: 'Server issue', url: 'https://example.test/7' }],
-        sources: { issues: { owner: 'up', repo: 'r' }, prs: { owner: 'up', repo: 'r' } }
-      },
-      _meta: { runtimeId: 'remote-runtime' }
+    mockApi.gh.listWorkItems.mockResolvedValueOnce({
+      items: [{ type: 'issue', number: 7, title: 'Server issue', url: 'https://example.test/7' }],
+      sources: { issues: { owner: 'up', repo: 'r' }, prs: { owner: 'up', repo: 'r' } }
     })
 
     await store.getState().fetchWorkItems('repo-id', '/server/repo', 24, '')
 
-    expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'github.listWorkItems',
-      params: { repo: 'repo-id', limit: 24, query: undefined },
-      timeoutMs: 30_000
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.gh.listWorkItems).toHaveBeenCalledWith({
+      repoPath: '/server/repo',
+      repoId: 'repo-id',
+      limit: 24,
+      query: undefined
     })
-    expect(store.getState().workItemsCache['/server/repo::24::'].data?.[0]).toMatchObject({
+    expect(store.getState().workItemsCache['repo-id::24::'].data?.[0]).toMatchObject({
       repoId: 'repo-id',
       number: 7
     })

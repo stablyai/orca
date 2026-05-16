@@ -94,8 +94,10 @@ export function IntegrationsPane(): React.JSX.Element {
   const linearStatus = useAppStore((s) => s.linearStatus)
   const connectLinear = useAppStore((s) => s.connectLinear)
   const disconnectLinear = useAppStore((s) => s.disconnectLinear)
+  const disconnectLinearWorkspace = useAppStore((s) => s.disconnectLinearWorkspace)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const testLinearConnection = useAppStore((s) => s.testLinearConnection)
+  const linearWorkspaces = linearStatus.workspaces ?? []
 
   const [ghStatus, setGhStatus] = useState<GhStatus>('checking')
   const [glabStatus, setGlabStatus] = useState<GlabStatus>('checking')
@@ -110,10 +112,10 @@ export function IntegrationsPane(): React.JSX.Element {
     'idle'
   )
   const [linearConnectError, setLinearConnectError] = useState<string | null>(null)
-  const [linearTestState, setLinearTestState] = useState<'idle' | 'testing' | 'ok' | 'error'>(
-    'idle'
-  )
-  const [linearTestError, setLinearTestError] = useState<string | null>(null)
+  const [linearTestingWorkspaceId, setLinearTestingWorkspaceId] = useState<string | null>(null)
+  const [linearTestResultByWorkspace, setLinearTestResultByWorkspace] = useState<
+    Record<string, { state: 'ok' | 'error'; error?: string }>
+  >({})
 
   useEffect(() => {
     void checkLinearConnection()
@@ -165,6 +167,7 @@ export function IntegrationsPane(): React.JSX.Element {
         setLinearApiKeyDraft('')
         setLinearConnectState('idle')
         setLinearDialogOpen(false)
+        setLinearTestResultByWorkspace({})
       } else {
         setLinearConnectState('error')
         setLinearConnectError(result.error)
@@ -175,28 +178,37 @@ export function IntegrationsPane(): React.JSX.Element {
     }
   }
 
-  const handleLinearDisconnect = async (): Promise<void> => {
-    await disconnectLinear()
+  const handleLinearDisconnect = async (workspaceId?: string): Promise<void> => {
+    await (workspaceId ? disconnectLinearWorkspace(workspaceId) : disconnectLinear())
     setLinearConnectState('idle')
     setLinearConnectError(null)
-    setLinearTestState('idle')
-    setLinearTestError(null)
+    setLinearTestResultByWorkspace({})
   }
 
   // Why: explicit user-triggered verification. This is the *only* path in
   // settings that decrypts the stored API key, so the macOS Keychain prompt
   // (if the app signature has changed since the item was stored) only
   // appears when the user clicks Test — not just for opening Settings.
-  const handleLinearTest = async (): Promise<void> => {
-    setLinearTestState('testing')
-    setLinearTestError(null)
-    const result = await testLinearConnection()
+  const handleLinearTest = async (workspaceId: string): Promise<void> => {
+    setLinearTestingWorkspaceId(workspaceId)
+    setLinearTestResultByWorkspace((prev) => {
+      const next = { ...prev }
+      delete next[workspaceId]
+      return next
+    })
+    const result = await testLinearConnection(workspaceId)
     if (result.ok) {
-      setLinearTestState('ok')
+      setLinearTestResultByWorkspace((prev) => ({
+        ...prev,
+        [workspaceId]: { state: 'ok' }
+      }))
     } else {
-      setLinearTestState('error')
-      setLinearTestError(result.error)
+      setLinearTestResultByWorkspace((prev) => ({
+        ...prev,
+        [workspaceId]: { state: 'error', error: result.error }
+      }))
     }
+    setLinearTestingWorkspaceId(null)
   }
 
   const handleRefreshGlab = (): void => {
@@ -582,21 +594,15 @@ export function IntegrationsPane(): React.JSX.Element {
             <p className="text-sm font-medium">Linear</p>
             <p className="text-xs text-muted-foreground">
               {linearStatus.connected
-                ? linearStatus.viewer
-                  ? `${linearStatus.viewer.organizationName} · ${linearStatus.viewer.displayName}${linearStatus.viewer.email ? ` · ${linearStatus.viewer.email}` : ''}`
-                  : 'API key saved. Test to verify.'
+                ? `${linearWorkspaces.length} workspace${linearWorkspaces.length === 1 ? '' : 's'} connected`
                 : 'Browse and link issues to workspaces.'}
             </p>
           </div>
           {linearStatus.connected ? (
             <div className="flex shrink-0 items-center gap-1.5">
-              <button
-                onClick={handleLinearDisconnect}
-                aria-label="Disconnect Linear"
-                className="rounded-md p-1 text-muted-foreground/50 transition-colors hover:text-destructive"
-              >
-                <Unlink className="size-3.5" />
-              </button>
+              <Button variant="outline" size="sm" onClick={() => setLinearDialogOpen(true)}>
+                Add workspace
+              </Button>
               <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
                 Connected
               </span>
@@ -612,39 +618,64 @@ export function IntegrationsPane(): React.JSX.Element {
         </div>
 
         {linearStatus.connected && (
-          <div className="mt-2.5 flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void handleLinearTest()}
-              disabled={linearTestState === 'testing'}
-            >
-              {linearTestState === 'testing' ? (
-                <>
-                  <LoaderCircle className="size-3.5 mr-1.5 animate-spin" />
-                  Testing…
-                </>
-              ) : (
-                'Test connection'
-              )}
-            </Button>
-            {linearTestState === 'ok' && (
-              <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-                <CheckCircle2 className="size-3.5" />
-                Verified
-              </span>
-            )}
-            {linearTestState === 'error' && linearTestError && (
-              <span className="flex items-center gap-1 text-xs text-destructive">
-                <AlertCircle className="size-3.5" />
-                {linearTestError}
-              </span>
-            )}
-            {linearTestState === 'idle' && (
-              <span className="text-[11px] text-muted-foreground/70">
-                Verifies your API key against Linear.
-              </span>
-            )}
+          <div className="mt-3 space-y-2">
+            {linearWorkspaces.map((workspace) => {
+              const testResult = linearTestResultByWorkspace[workspace.id]
+              const testing = linearTestingWorkspaceId === workspace.id
+              return (
+                <div
+                  key={workspace.id}
+                  className="flex items-center gap-3 rounded-md border border-border/50 bg-background/60 px-3 py-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {workspace.organizationName}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {workspace.displayName}
+                      {workspace.email ? ` · ${workspace.email}` : ''}
+                    </p>
+                  </div>
+                  {testResult?.state === 'ok' ? (
+                    <span className="flex shrink-0 items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 className="size-3.5" />
+                      Verified
+                    </span>
+                  ) : null}
+                  {testResult?.state === 'error' ? (
+                    <span className="flex min-w-0 max-w-[220px] shrink items-center gap-1 truncate text-xs text-destructive">
+                      <AlertCircle className="size-3.5 shrink-0" />
+                      <span className="truncate">{testResult.error}</span>
+                    </span>
+                  ) : null}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void handleLinearTest(workspace.id)}
+                    disabled={testing}
+                  >
+                    {testing ? (
+                      <>
+                        <LoaderCircle className="size-3.5 mr-1.5 animate-spin" />
+                        Testing…
+                      </>
+                    ) : (
+                      'Test'
+                    )}
+                  </Button>
+                  <button
+                    onClick={() => void handleLinearDisconnect(workspace.id)}
+                    aria-label={`Disconnect ${workspace.organizationName}`}
+                    className="rounded-md p-1 text-muted-foreground/50 transition-colors hover:text-destructive"
+                  >
+                    <Unlink className="size-3.5" />
+                  </button>
+                </div>
+              )
+            })}
+            <p className="text-[11px] text-muted-foreground/70">
+              Each workspace uses its own locally stored API key.
+            </p>
           </div>
         )}
       </div>
@@ -672,10 +703,10 @@ export function IntegrationsPane(): React.JSX.Element {
           }}
         >
           <DialogHeader className="gap-3">
-            <DialogTitle className="leading-tight">Connect Linear</DialogTitle>
+            <DialogTitle className="leading-tight">Connect Linear workspace</DialogTitle>
             <DialogDescription>
               Paste a <strong className="font-semibold text-foreground">Personal API key</strong> to
-              browse your assigned issues.
+              add a workspace to Orca.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">

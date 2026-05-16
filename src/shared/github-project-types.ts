@@ -338,7 +338,8 @@ export type GetProjectViewTableArgs = {
   viewName?: string
   /** Ephemeral GitHub-search-syntax query that replaces the view's filter for
    *  this fetch only. The view's stored filter on GitHub is not modified.
-   *  Empty string and undefined both mean "use the view's filter as-is". */
+   *  `undefined` uses the view's saved filter; `''` explicitly clears it for
+   *  this fetch and gets a distinct renderer cache key. */
   queryOverride?: string
 }
 

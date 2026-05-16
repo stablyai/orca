@@ -1,9 +1,17 @@
+/* eslint-disable max-lines -- Why: Linear credential storage and client
+   selection share one module so keychain-safe status reads and token mutation
+   stay in one consistency boundary. */
 import { safeStorage } from 'electron'
 import { LinearClient, AuthenticationLinearError } from '@linear/sdk'
-import { readFileSync, writeFileSync, unlinkSync, mkdirSync, existsSync } from 'fs'
-import { join } from 'path'
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
-import type { LinearViewer, LinearConnectionStatus } from '../../shared/types'
+import { join } from 'path'
+import type {
+  LinearConnectionStatus,
+  LinearViewer,
+  LinearWorkspace,
+  LinearWorkspaceSelection
+} from '../../shared/types'
 
 // ── Concurrency limiter — max 4 parallel Linear API calls ────────────
 const MAX_CONCURRENT = 4
@@ -31,28 +39,73 @@ export function release(): void {
   }
 }
 
-// ── Token + viewer storage ───────────────────────────────────────────
-// Why: the token is encrypted via safeStorage (OS keychain). The viewer
-// metadata is kept in a separate *plaintext* file so settings/status
-// checks can answer "are you connected, and as whom?" without ever
-// decrypting the token. Decrypting triggers a macOS Keychain permission
-// dialog after every app signature change (e.g. every update), so we only
-// touch the encrypted token when the user actually makes a Linear API
-// call or explicitly tests the connection.
-function getTokenPath(): string {
-  return join(homedir(), '.orca', 'linear-token.enc')
+// ── Token + workspace storage ────────────────────────────────────────
+// Why: tokens remain encrypted via safeStorage, while workspace metadata stays
+// plaintext so status checks can render connected accounts without decrypting
+// and triggering OS keychain prompts after app updates.
+const LEGACY_WORKSPACE_ID = 'legacy'
+
+type LinearWorkspaceFile = {
+  version: 1
+  activeWorkspaceId: string | null
+  selectedWorkspaceId: LinearWorkspaceSelection | null
+  workspaces: LinearWorkspace[]
 }
 
-function getViewerPath(): string {
-  return join(homedir(), '.orca', 'linear-viewer.json')
+export type LinearClientForWorkspace = {
+  workspace: LinearWorkspace
+  client: LinearClient
 }
 
-let cachedToken: string | null = null
-let cachedViewer: LinearViewer | null = null
-let viewerLoadedFromDisk = false
+let cachedTokens = new Map<string, string>()
+let cachedLegacyViewer: LinearViewer | null = null
+let legacyViewerLoadedFromDisk = false
+let cachedWorkspaceFile: LinearWorkspaceFile | null = null
+let workspaceFileLoadedFromDisk = false
 
-function readViewerFromDisk(): LinearViewer | null {
-  const path = getViewerPath()
+function getOrcaDir(): string {
+  return join(homedir(), '.orca')
+}
+
+function getLegacyTokenPath(): string {
+  return join(getOrcaDir(), 'linear-token.enc')
+}
+
+function getLegacyViewerPath(): string {
+  return join(getOrcaDir(), 'linear-viewer.json')
+}
+
+function getWorkspaceFilePath(): string {
+  return join(getOrcaDir(), 'linear-workspaces.json')
+}
+
+function getWorkspaceTokenDir(): string {
+  return join(getOrcaDir(), 'linear-tokens')
+}
+
+function getWorkspaceTokenPath(workspaceId: string): string {
+  if (workspaceId === LEGACY_WORKSPACE_ID) {
+    return getLegacyTokenPath()
+  }
+  return join(getWorkspaceTokenDir(), `${Buffer.from(workspaceId).toString('base64url')}.enc`)
+}
+
+function ensureOrcaDir(): void {
+  const dir = getOrcaDir()
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true })
+  }
+}
+
+function ensureWorkspaceTokenDir(): void {
+  const dir = getWorkspaceTokenDir()
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true })
+  }
+}
+
+function readLegacyViewerFromDisk(): LinearViewer | null {
+  const path = getLegacyViewerPath()
   if (!existsSync(path)) {
     return null
   }
@@ -65,111 +118,404 @@ function readViewerFromDisk(): LinearViewer | null {
     return {
       displayName: parsed.displayName,
       email: typeof parsed.email === 'string' ? parsed.email : null,
-      organizationName: parsed.organizationName
+      organizationId: typeof parsed.organizationId === 'string' ? parsed.organizationId : undefined,
+      organizationName: parsed.organizationName,
+      organizationUrlKey:
+        typeof parsed.organizationUrlKey === 'string' ? parsed.organizationUrlKey : undefined
     }
   } catch {
     return null
   }
 }
 
-function writeViewerToDisk(viewer: LinearViewer): void {
-  const dir = join(homedir(), '.orca')
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
+function getLegacyViewer(): LinearViewer | null {
+  if (!legacyViewerLoadedFromDisk) {
+    cachedLegacyViewer = readLegacyViewerFromDisk()
+    legacyViewerLoadedFromDisk = true
   }
-  writeFileSync(getViewerPath(), JSON.stringify(viewer), { encoding: 'utf-8', mode: 0o600 })
+  return cachedLegacyViewer
 }
 
-function clearViewerOnDisk(): void {
+function normalizeWorkspace(input: unknown): LinearWorkspace | null {
+  if (!input || typeof input !== 'object') {
+    return null
+  }
+  const record = input as Record<string, unknown>
+  if (typeof record.id !== 'string' || typeof record.organizationName !== 'string') {
+    return null
+  }
+  if (typeof record.displayName !== 'string') {
+    return null
+  }
+
+  const organizationId =
+    typeof record.organizationId === 'string' && record.organizationId
+      ? record.organizationId
+      : record.id
+
+  return {
+    id: record.id,
+    organizationId,
+    organizationName: record.organizationName,
+    organizationUrlKey:
+      typeof record.organizationUrlKey === 'string' ? record.organizationUrlKey : undefined,
+    displayName: record.displayName,
+    email: typeof record.email === 'string' ? record.email : null
+  }
+}
+
+function emptyWorkspaceFile(): LinearWorkspaceFile {
+  return {
+    version: 1,
+    activeWorkspaceId: null,
+    selectedWorkspaceId: null,
+    workspaces: []
+  }
+}
+
+function readWorkspaceFileFromDisk(): LinearWorkspaceFile {
+  const path = getWorkspaceFilePath()
+  if (!existsSync(path)) {
+    return emptyWorkspaceFile()
+  }
   try {
-    unlinkSync(getViewerPath())
+    const raw = readFileSync(path, { encoding: 'utf-8' })
+    const parsed = JSON.parse(raw) as Partial<LinearWorkspaceFile>
+    const workspaces = Array.isArray(parsed.workspaces)
+      ? parsed.workspaces
+          .map((workspace) => normalizeWorkspace(workspace))
+          .filter((workspace): workspace is LinearWorkspace => workspace !== null)
+          .filter((workspace) => hasStoredToken(workspace.id))
+      : []
+    const activeWorkspaceId =
+      typeof parsed.activeWorkspaceId === 'string' &&
+      workspaces.some((workspace) => workspace.id === parsed.activeWorkspaceId)
+        ? parsed.activeWorkspaceId
+        : (workspaces[0]?.id ?? null)
+    const selectedWorkspaceId =
+      parsed.selectedWorkspaceId === 'all' ||
+      (typeof parsed.selectedWorkspaceId === 'string' &&
+        workspaces.some((workspace) => workspace.id === parsed.selectedWorkspaceId))
+        ? parsed.selectedWorkspaceId
+        : activeWorkspaceId
+
+    return {
+      version: 1,
+      activeWorkspaceId,
+      selectedWorkspaceId,
+      workspaces
+    }
+  } catch {
+    return emptyWorkspaceFile()
+  }
+}
+
+function getWorkspaceFile(): LinearWorkspaceFile {
+  if (!workspaceFileLoadedFromDisk || !cachedWorkspaceFile) {
+    cachedWorkspaceFile = readWorkspaceFileFromDisk()
+    workspaceFileLoadedFromDisk = true
+  }
+  return cachedWorkspaceFile
+}
+
+function writeWorkspaceFile(file: LinearWorkspaceFile): void {
+  ensureOrcaDir()
+  const persistedWorkspaces = file.workspaces.filter(
+    (workspace) => workspace.id !== LEGACY_WORKSPACE_ID
+  )
+  const selectableIds = new Set(persistedWorkspaces.map((workspace) => workspace.id))
+  if (hasStoredToken(LEGACY_WORKSPACE_ID)) {
+    selectableIds.add(LEGACY_WORKSPACE_ID)
+  }
+  const activeWorkspaceId =
+    file.activeWorkspaceId && selectableIds.has(file.activeWorkspaceId)
+      ? file.activeWorkspaceId
+      : (persistedWorkspaces[0]?.id ??
+        (selectableIds.has(LEGACY_WORKSPACE_ID) ? LEGACY_WORKSPACE_ID : null))
+  const selectedWorkspaceId =
+    file.selectedWorkspaceId === 'all'
+      ? 'all'
+      : file.selectedWorkspaceId && selectableIds.has(file.selectedWorkspaceId)
+        ? file.selectedWorkspaceId
+        : activeWorkspaceId
+
+  cachedWorkspaceFile = {
+    version: 1,
+    activeWorkspaceId,
+    selectedWorkspaceId,
+    workspaces: persistedWorkspaces
+  }
+  workspaceFileLoadedFromDisk = true
+  writeFileSync(getWorkspaceFilePath(), JSON.stringify(cachedWorkspaceFile, null, 2), {
+    encoding: 'utf-8',
+    mode: 0o600
+  })
+}
+
+function getLegacyWorkspace(): LinearWorkspace | null {
+  if (!hasStoredToken(LEGACY_WORKSPACE_ID)) {
+    return null
+  }
+  const viewer = getLegacyViewer()
+  return {
+    id: LEGACY_WORKSPACE_ID,
+    organizationId: viewer?.organizationId ?? LEGACY_WORKSPACE_ID,
+    organizationName: viewer?.organizationName ?? 'Saved Linear workspace',
+    organizationUrlKey: viewer?.organizationUrlKey,
+    displayName: viewer?.displayName ?? 'Linear API key',
+    email: viewer?.email ?? null,
+    isLegacy: true
+  }
+}
+
+function getWorkspaceState(): LinearWorkspaceFile {
+  const file = getWorkspaceFile()
+  const legacyWorkspace = getLegacyWorkspace()
+  const workspaces = [
+    ...(legacyWorkspace ? [legacyWorkspace] : []),
+    ...file.workspaces.filter((workspace) => hasStoredToken(workspace.id))
+  ]
+  const activeWorkspaceId =
+    file.activeWorkspaceId &&
+    workspaces.some((workspace) => workspace.id === file.activeWorkspaceId)
+      ? file.activeWorkspaceId
+      : (workspaces[0]?.id ?? null)
+  const selectedWorkspaceId =
+    file.selectedWorkspaceId === 'all'
+      ? 'all'
+      : file.selectedWorkspaceId &&
+          workspaces.some((workspace) => workspace.id === file.selectedWorkspaceId)
+        ? file.selectedWorkspaceId
+        : activeWorkspaceId
+
+  return {
+    version: 1,
+    activeWorkspaceId,
+    selectedWorkspaceId,
+    workspaces
+  }
+}
+
+function clearLegacyViewerOnDisk(): void {
+  try {
+    unlinkSync(getLegacyViewerPath())
   } catch {
     // File may not exist — safe to ignore.
   }
 }
 
-export function saveToken(apiKey: string): void {
-  const dir = join(homedir(), '.orca')
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
-  }
-  const tokenPath = getTokenPath()
-  // Why: safeStorage uses the OS keychain (macOS Keychain, Windows DPAPI,
-  // Linux libsecret) to encrypt. If the keychain is unavailable (e.g. headless
-  // Linux without a keyring), fall back to plaintext with a warning — the user
-  // explicitly chose to store a personal API key on this machine.
+function writeEncryptedToken(path: string, apiKey: string): void {
   if (safeStorage.isEncryptionAvailable()) {
     const encrypted = safeStorage.encryptString(apiKey)
-    writeFileSync(tokenPath, encrypted, { mode: 0o600 })
-  } else {
-    console.warn('[linear] safeStorage encryption unavailable — storing token in plaintext')
-    writeFileSync(tokenPath, apiKey, { encoding: 'utf-8', mode: 0o600 })
+    writeFileSync(path, encrypted, { mode: 0o600 })
+    return
   }
-  cachedToken = apiKey
+
+  console.warn('[linear] safeStorage encryption unavailable — storing token in plaintext')
+  writeFileSync(path, apiKey, { encoding: 'utf-8', mode: 0o600 })
 }
 
-// Why: force=true is used when the caller wants a token and accepts the
-// keychain prompt (explicit "Test connection" or an actual API call). The
-// default call path is fine with returning null if we haven't decrypted yet
-// this session, so status checks don't trigger Keychain.
-export function loadToken(options: { force?: boolean } = {}): string | null {
-  if (cachedToken !== null) {
-    return cachedToken
+function saveWorkspaceToken(workspaceId: string, apiKey: string): void {
+  ensureOrcaDir()
+  if (workspaceId !== LEGACY_WORKSPACE_ID) {
+    ensureWorkspaceTokenDir()
+  }
+  const tokenPath = getWorkspaceTokenPath(workspaceId)
+  writeEncryptedToken(tokenPath, apiKey)
+  cachedTokens.set(workspaceId, apiKey)
+}
+
+// Backward-compatible export for the legacy single-workspace storage path.
+export function saveToken(apiKey: string): void {
+  saveWorkspaceToken(LEGACY_WORKSPACE_ID, apiKey)
+}
+
+export function loadToken(options: { force?: boolean; workspaceId?: string } = {}): string | null {
+  const workspaceId = options.workspaceId ?? resolveWorkspaceId()
+  if (!workspaceId) {
+    return null
+  }
+  const cached = cachedTokens.get(workspaceId)
+  if (cached !== undefined) {
+    return cached
   }
   if (!options.force) {
     return null
   }
-  const tokenPath = getTokenPath()
+  const tokenPath = getWorkspaceTokenPath(workspaceId)
   if (!existsSync(tokenPath)) {
     return null
   }
   try {
     const raw = readFileSync(tokenPath)
-    cachedToken = safeStorage.isEncryptionAvailable()
+    const token = safeStorage.isEncryptionAvailable()
       ? safeStorage.decryptString(raw)
       : raw.toString('utf-8')
-    return cachedToken
+    cachedTokens.set(workspaceId, token)
+    return token
   } catch {
     return null
   }
 }
 
-export function hasStoredToken(): boolean {
-  if (cachedToken !== null) {
+export function hasStoredToken(workspaceId?: string): boolean {
+  if (!workspaceId) {
+    return getWorkspaceState().workspaces.length > 0
+  }
+  if (cachedTokens.has(workspaceId)) {
     return true
   }
-  return existsSync(getTokenPath())
+  return existsSync(getWorkspaceTokenPath(workspaceId))
 }
 
-export function clearToken(): void {
-  cachedToken = null
-  cachedViewer = null
-  viewerLoadedFromDisk = false
-  const tokenPath = getTokenPath()
+function clearTokenFile(workspaceId: string): void {
+  cachedTokens.delete(workspaceId)
   try {
-    unlinkSync(tokenPath)
+    unlinkSync(getWorkspaceTokenPath(workspaceId))
   } catch {
     // File may not exist — safe to ignore.
   }
-  clearViewerOnDisk()
+}
+
+export function clearToken(workspaceId?: string): void {
+  if (!workspaceId) {
+    const state = getWorkspaceState()
+    for (const workspace of state.workspaces) {
+      clearTokenFile(workspace.id)
+    }
+    cachedTokens = new Map()
+    cachedLegacyViewer = null
+    legacyViewerLoadedFromDisk = false
+    cachedWorkspaceFile = emptyWorkspaceFile()
+    workspaceFileLoadedFromDisk = true
+    clearLegacyViewerOnDisk()
+    writeWorkspaceFile(emptyWorkspaceFile())
+    return
+  }
+
+  clearTokenFile(workspaceId)
+  if (workspaceId === LEGACY_WORKSPACE_ID) {
+    cachedLegacyViewer = null
+    legacyViewerLoadedFromDisk = false
+    clearLegacyViewerOnDisk()
+    return
+  }
+
+  const file = getWorkspaceFile()
+  const workspaces = file.workspaces.filter((workspace) => workspace.id !== workspaceId)
+  const activeWorkspaceId =
+    file.activeWorkspaceId === workspaceId ? (workspaces[0]?.id ?? null) : file.activeWorkspaceId
+  const selectedWorkspaceId =
+    file.selectedWorkspaceId === workspaceId ? activeWorkspaceId : file.selectedWorkspaceId
+  writeWorkspaceFile({
+    version: 1,
+    activeWorkspaceId,
+    selectedWorkspaceId,
+    workspaces
+  })
+}
+
+function workspaceFromLinearData(
+  me: { displayName: string; email?: string | null },
+  org: { id: string; name: string; urlKey?: string | null }
+): LinearWorkspace {
+  return {
+    id: org.id,
+    organizationId: org.id,
+    organizationName: org.name,
+    organizationUrlKey: org.urlKey ?? undefined,
+    displayName: me.displayName,
+    email: me.email ?? null
+  }
+}
+
+function upsertWorkspace(workspace: LinearWorkspace, options: { select?: boolean } = {}): void {
+  const file = getWorkspaceFile()
+  const withoutCurrent = file.workspaces.filter((entry) => entry.id !== workspace.id)
+  const workspaces = [...withoutCurrent, workspace].sort((a, b) =>
+    a.organizationName.localeCompare(b.organizationName)
+  )
+  const selectedWorkspaceId = options.select
+    ? workspace.id
+    : file.selectedWorkspaceId && file.selectedWorkspaceId !== LEGACY_WORKSPACE_ID
+      ? file.selectedWorkspaceId
+      : workspace.id
+  writeWorkspaceFile({
+    version: 1,
+    activeWorkspaceId: workspace.id,
+    selectedWorkspaceId,
+    workspaces
+  })
+}
+
+function replaceLegacyWorkspace(workspace: LinearWorkspace, token: string): void {
+  saveWorkspaceToken(workspace.id, token)
+  clearTokenFile(LEGACY_WORKSPACE_ID)
+  clearLegacyViewerOnDisk()
+  cachedLegacyViewer = null
+  legacyViewerLoadedFromDisk = true
+  upsertWorkspace(workspace, { select: true })
+}
+
+function resolveWorkspaceId(workspaceId?: string | null): string | null {
+  if (workspaceId && workspaceId !== 'all') {
+    return workspaceId
+  }
+  const state = getWorkspaceState()
+  if (
+    state.selectedWorkspaceId &&
+    state.selectedWorkspaceId !== 'all' &&
+    state.workspaces.some((workspace) => workspace.id === state.selectedWorkspaceId)
+  ) {
+    return state.selectedWorkspaceId
+  }
+  if (
+    state.activeWorkspaceId &&
+    state.workspaces.some((workspace) => workspace.id === state.activeWorkspaceId)
+  ) {
+    return state.activeWorkspaceId
+  }
+  return state.workspaces[0]?.id ?? null
 }
 
 // ── Client factory ───────────────────────────────────────────────────
-// Why: this is called by the issues/teams modules when the user actually
-// performs a Linear action — at that point decrypting the token (and
-// surfacing a Keychain prompt if needed) is expected.
-export function getClient(): LinearClient | null {
-  const token = loadToken({ force: true })
+// Why: issues/teams modules call this for real Linear actions — at that point
+// decrypting the token and surfacing a keychain prompt is expected.
+export function getClient(workspaceId?: string | null): LinearClient | null {
+  const token = loadToken({
+    force: true,
+    workspaceId: resolveWorkspaceId(workspaceId) ?? undefined
+  })
   if (!token) {
     return null
   }
   return new LinearClient({ apiKey: token })
 }
 
+export function getClients(
+  workspaceId?: LinearWorkspaceSelection | null
+): LinearClientForWorkspace[] {
+  const state = getWorkspaceState()
+  const selectedWorkspaces =
+    workspaceId === 'all'
+      ? state.workspaces
+      : state.workspaces.filter((workspace) => workspace.id === resolveWorkspaceId(workspaceId))
+
+  const clients: LinearClientForWorkspace[] = []
+  for (const workspace of selectedWorkspaces) {
+    const token = loadToken({ force: true, workspaceId: workspace.id })
+    if (!token) {
+      continue
+    }
+    clients.push({ workspace, client: new LinearClient({ apiKey: token }) })
+  }
+  return clients
+}
+
 // ── Auth error detection ─────────────────────────────────────────────
 // Why: 401 errors must trigger token clearing and a re-auth prompt in the
-// renderer (design §Error Propagation). All other errors are swallowed
-// with console.warn to match GitHub client's graceful degradation.
+// renderer. All other errors are swallowed with console.warn to match GitHub
+// client's graceful degradation.
 export function isAuthError(error: unknown): boolean {
   return error instanceof AuthenticationLinearError
 }
@@ -177,58 +523,89 @@ export function isAuthError(error: unknown): boolean {
 // ── Connect / disconnect / status ────────────────────────────────────
 export async function connect(
   apiKey: string
-): Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }> {
+): Promise<
+  { ok: true; viewer: LinearViewer; workspace: LinearWorkspace } | { ok: false; error: string }
+> {
   try {
     const client = new LinearClient({ apiKey })
     const me = await client.viewer
     const org = await me.organization
+    const workspace = workspaceFromLinearData(me, org)
 
-    const viewer: LinearViewer = {
-      displayName: me.displayName,
-      email: me.email ?? null,
-      organizationName: org.name
+    saveWorkspaceToken(workspace.id, apiKey)
+    const legacyWorkspace = getLegacyWorkspace()
+    if (
+      legacyWorkspace &&
+      legacyWorkspace.organizationName === workspace.organizationName &&
+      legacyWorkspace.email === workspace.email
+    ) {
+      clearTokenFile(LEGACY_WORKSPACE_ID)
+      clearLegacyViewerOnDisk()
+      cachedLegacyViewer = null
+      legacyViewerLoadedFromDisk = true
     }
-
-    saveToken(apiKey)
-    writeViewerToDisk(viewer)
-    cachedViewer = viewer
-    viewerLoadedFromDisk = true
-    return { ok: true, viewer }
+    upsertWorkspace(workspace, { select: true })
+    return { ok: true, viewer: workspace, workspace }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to validate API key'
     return { ok: false, error: message }
   }
 }
 
-export function disconnect(): void {
-  clearToken()
+export function disconnect(workspaceId?: string): void {
+  clearToken(workspaceId)
 }
 
-// Why: getStatus must NEVER decrypt the token. It returns the cached
-// viewer (written at connect time) so the settings/landing UIs can show
-// "Connected as X" without triggering a Keychain permission dialog after
-// every app update. The encrypted token is only touched lazily on real
-// Linear API calls or when the user clicks "Test connection".
+export function selectWorkspace(workspaceId: LinearWorkspaceSelection): LinearConnectionStatus {
+  const state = getWorkspaceState()
+  if (
+    workspaceId !== 'all' &&
+    !state.workspaces.some((workspace) => workspace.id === workspaceId)
+  ) {
+    return getStatus()
+  }
+
+  const file = getWorkspaceFile()
+  writeWorkspaceFile({
+    version: 1,
+    activeWorkspaceId: workspaceId === 'all' ? file.activeWorkspaceId : workspaceId,
+    selectedWorkspaceId: workspaceId,
+    workspaces: file.workspaces
+  })
+  return getStatus()
+}
+
 export function getStatus(): LinearConnectionStatus {
-  if (!hasStoredToken()) {
-    return { connected: false, viewer: null }
-  }
+  const state = getWorkspaceState()
+  const selectedWorkspace =
+    state.selectedWorkspaceId && state.selectedWorkspaceId !== 'all'
+      ? state.workspaces.find((workspace) => workspace.id === state.selectedWorkspaceId)
+      : null
+  const activeWorkspace =
+    selectedWorkspace ??
+    state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId) ??
+    state.workspaces[0] ??
+    null
 
-  if (!cachedViewer && !viewerLoadedFromDisk) {
-    cachedViewer = readViewerFromDisk()
-    viewerLoadedFromDisk = true
+  return {
+    connected: state.workspaces.length > 0,
+    viewer: activeWorkspace,
+    workspaces: state.workspaces,
+    activeWorkspaceId: state.activeWorkspaceId,
+    selectedWorkspaceId: state.selectedWorkspaceId
   }
-
-  return { connected: true, viewer: cachedViewer }
 }
 
-// Why: explicit user-initiated check. Decrypts the token, pings the
-// Linear API to re-validate, and refreshes the cached viewer file. If the
-// token is rejected (401) it clears state just like a live API error.
-export async function testConnection(): Promise<
-  { ok: true; viewer: LinearViewer } | { ok: false; error: string }
+export async function testConnection(
+  workspaceId?: string
+): Promise<
+  { ok: true; viewer: LinearViewer; workspace: LinearWorkspace } | { ok: false; error: string }
 > {
-  const token = loadToken({ force: true })
+  const resolvedWorkspaceId = resolveWorkspaceId(workspaceId)
+  if (!resolvedWorkspaceId) {
+    return { ok: false, error: 'No API key stored.' }
+  }
+  const token = loadToken({ force: true, workspaceId: resolvedWorkspaceId })
   if (!token) {
     return { ok: false, error: 'No API key stored.' }
   }
@@ -237,31 +614,26 @@ export async function testConnection(): Promise<
     const client = new LinearClient({ apiKey: token })
     const me = await client.viewer
     const org = await me.organization
-    const viewer: LinearViewer = {
-      displayName: me.displayName,
-      email: me.email ?? null,
-      organizationName: org.name
+    const workspace = workspaceFromLinearData(me, org)
+    if (resolvedWorkspaceId === LEGACY_WORKSPACE_ID) {
+      replaceLegacyWorkspace(workspace, token)
+    } else {
+      saveWorkspaceToken(workspace.id, token)
+      upsertWorkspace(workspace, { select: true })
     }
-    writeViewerToDisk(viewer)
-    cachedViewer = viewer
-    viewerLoadedFromDisk = true
-    return { ok: true, viewer }
+    return { ok: true, viewer: workspace, workspace }
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken()
+      clearToken(resolvedWorkspaceId)
     }
     const message = error instanceof Error ? error.message : 'Test failed'
     return { ok: false, error: message }
   }
 }
 
-// Why: called at main-process startup. This used to eagerly decrypt the
-// token (which triggered a Keychain prompt on every launch after an app
-// update). We now only warm the plaintext viewer cache — the token stays
-// encrypted on disk until actually needed.
+// Why: called at main-process startup. We warm plaintext metadata only; tokens
+// stay encrypted on disk until a user performs an actual Linear action.
 export function initLinearToken(): void {
-  if (!viewerLoadedFromDisk) {
-    cachedViewer = readViewerFromDisk()
-    viewerLoadedFromDisk = true
-  }
+  getWorkspaceFile()
+  getLegacyViewer()
 }

@@ -1,23 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertCircle, CheckCircle2, FileCode2, LoaderCircle, Plus, RefreshCw } from 'lucide-react'
+import { AlertCircle, FileCode2, LoaderCircle, Plus, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type { Repo, Worktree } from '../../../../shared/types'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 import {
+  canInspectLocalMcpConfigRoot,
+  getMcpConfigCandidateParentDir,
+  getMcpConfigParentDirs,
   inspectMcpConfigContent,
   MCP_CONFIG_CANDIDATES,
   MCP_STARTER_CONFIG,
-  type McpConfigInspection
+  selectExistingMcpConfigCandidates,
+  type McpConfigDirectoryEntry
 } from '../../../../shared/mcp-config'
 import { useAppStore } from '../../store'
 import { joinPath } from '../../lib/path'
 import { extractIpcErrorMessage } from '../../lib/ipc-error'
 import { Button } from '../ui/button'
-
-type LoadedInspection = McpConfigInspection & {
-  absolutePath: string
-  readError?: string
-}
+import { isWindowsUserAgent } from '../terminal-pane/pane-helpers'
+import { McpConfigFileRow, type LoadedMcpConfigInspection } from './McpConfigFileRow'
 
 type McpConfigSectionProps = {
   repo: Repo
@@ -30,48 +31,8 @@ function isMissingFileError(error: unknown): boolean {
   return /ENOENT|no such file|not found/i.test(message)
 }
 
-function isNoFilesystemProviderMessage(message: string | undefined): boolean {
-  return message ? /no filesystem provider/i.test(message) : false
-}
-
-function countServers(configs: LoadedInspection[]): number {
+function countServers(configs: LoadedMcpConfigInspection[]): number {
   return configs.reduce((sum, config) => sum + config.servers.length, 0)
-}
-
-function statusLabel(config: LoadedInspection): string {
-  if (config.readError) {
-    return 'Unreadable'
-  }
-  if (config.status === 'missing') {
-    return 'Not found'
-  }
-  if (config.status === 'invalid') {
-    return 'Invalid JSON'
-  }
-  if (config.servers.length === 0) {
-    return 'No servers'
-  }
-  return `${config.servers.length} server${config.servers.length === 1 ? '' : 's'}`
-}
-
-function statusClassName(config: LoadedInspection): string {
-  if (config.readError || config.status === 'invalid') {
-    return 'border-destructive/30 bg-destructive/10 text-destructive'
-  }
-  if (config.status === 'valid' && config.servers.length > 0) {
-    return 'border-border/60 bg-background text-foreground'
-  }
-  return 'border-border/60 bg-muted/60 text-muted-foreground'
-}
-
-function serverDetailLabel(server: LoadedInspection['servers'][number]): string {
-  if (server.transport === 'http') {
-    return server.url ?? 'HTTP server'
-  }
-  if (server.transport === 'stdio') {
-    return server.command ?? 'stdio server'
-  }
-  return server.issue ?? 'Invalid server'
 }
 
 export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Element {
@@ -81,11 +42,18 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
   const ensureWorktreeRootGroup = useAppStore((state) => state.ensureWorktreeRootGroup)
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const worktreesForRepo = useAppStore((state) => state.worktreesByRepo[repo.id] ?? EMPTY_WORKTREES)
-  const [configs, setConfigs] = useState<LoadedInspection[]>([])
+  const sshConnectionStatus = useAppStore((state) =>
+    repo.connectionId ? state.sshConnectionStates.get(repo.connectionId)?.status : null
+  )
+  const [configs, setConfigs] = useState<LoadedMcpConfigInspection[]>([])
   const [loading, setLoading] = useState(true)
   const [createConfirm, setCreateConfirm] = useState(false)
+  const [inspectionUnavailableMessage, setInspectionUnavailableMessage] = useState<string | null>(
+    null
+  )
 
   const connectionId = repo.connectionId ?? undefined
+  const isWindows = isWindowsUserAgent()
   const targetWorktree = useMemo(() => {
     if (activeWorktreeId && getRepoIdFromWorktreeId(activeWorktreeId) === repo.id) {
       return (
@@ -104,21 +72,15 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
   const targetWorktreeId = targetWorktree.id
   const targetRootPath = targetWorktree.path
   const detectedCount = useMemo(() => configs.filter((config) => config.exists).length, [configs])
-  const remoteFilesystemUnavailable = useMemo(
-    () =>
-      Boolean(connectionId) &&
-      configs.length > 0 &&
-      configs.every((config) => isNoFilesystemProviderMessage(config.readError)),
-    [configs, connectionId]
-  )
+  const inspectionUnavailable = inspectionUnavailableMessage !== null
   const visibleConfigs = useMemo(
     () =>
-      remoteFilesystemUnavailable
+      inspectionUnavailable
         ? []
         : configs.filter(
             (config) => config.exists || config.status === 'invalid' || config.readError
           ),
-    [configs, remoteFilesystemUnavailable]
+    [configs, inspectionUnavailable]
   )
   const missingConfigs = useMemo(
     () =>
@@ -127,44 +89,133 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
       ),
     [configs]
   )
+  const missingInspections = useMemo(
+    () =>
+      MCP_CONFIG_CANDIDATES.map(
+        (candidate): LoadedMcpConfigInspection => ({
+          ...inspectMcpConfigContent(candidate, null),
+          absolutePath: joinPath(targetRootPath, candidate.relativePath)
+        })
+      ),
+    [targetRootPath]
+  )
   const serverCount = useMemo(() => countServers(configs), [configs])
-  const canCreateStarter = detectedCount === 0 && !remoteFilesystemUnavailable
+  const canCreateStarter = detectedCount === 0 && !inspectionUnavailable
 
   const loadConfigs = useCallback(async (): Promise<void> => {
     setLoading(true)
-    const next = await Promise.all(
-      MCP_CONFIG_CANDIDATES.map(async (candidate): Promise<LoadedInspection> => {
-        const absolutePath = joinPath(targetRootPath, candidate.relativePath)
-        try {
-          const result = await window.api.fs.readFile({ filePath: absolutePath, connectionId })
-          const inspection = inspectMcpConfigContent(
-            candidate,
-            result.isBinary ? '' : result.content
+    setInspectionUnavailableMessage(null)
+
+    try {
+      if (connectionId && sshConnectionStatus !== 'connected') {
+        setConfigs(missingInspections)
+        setInspectionUnavailableMessage('Connect this SSH repo to inspect or add MCP configs.')
+        return
+      }
+
+      if (!connectionId && !canInspectLocalMcpConfigRoot(targetRootPath, isWindows)) {
+        setConfigs(missingInspections)
+        setInspectionUnavailableMessage('This workspace path is not available from this host.')
+        return
+      }
+
+      if (!connectionId && !(await window.api.shell.pathExists(targetRootPath))) {
+        setConfigs(missingInspections)
+        setInspectionUnavailableMessage('This workspace path is not available on disk.')
+        return
+      }
+
+      const entriesByRelativeDir = new Map<string, readonly McpConfigDirectoryEntry[]>()
+      const rootEntries = await window.api.fs.readDir({ dirPath: targetRootPath, connectionId })
+      entriesByRelativeDir.set('', rootEntries)
+
+      const rootDirectoryNames = new Set(
+        rootEntries.filter((entry) => entry.isDirectory).map((entry) => entry.name)
+      )
+      const unreadableParentDirMessages = new Map<string, string>()
+      await Promise.all(
+        getMcpConfigParentDirs().map(async (relativeDir) => {
+          if (!rootDirectoryNames.has(relativeDir)) {
+            return
+          }
+          try {
+            const entries = await window.api.fs.readDir({
+              dirPath: joinPath(targetRootPath, relativeDir),
+              connectionId
+            })
+            entriesByRelativeDir.set(relativeDir, entries)
+          } catch (error) {
+            unreadableParentDirMessages.set(
+              relativeDir,
+              extractIpcErrorMessage(error, `Unable to inspect ${relativeDir}.`)
+            )
+          }
+        })
+      )
+
+      const existingRelativePaths = new Set(
+        selectExistingMcpConfigCandidates(entriesByRelativeDir).map(
+          (candidate) => candidate.relativePath
+        )
+      )
+
+      const next = await Promise.all(
+        MCP_CONFIG_CANDIDATES.map(async (candidate): Promise<LoadedMcpConfigInspection> => {
+          const absolutePath = joinPath(targetRootPath, candidate.relativePath)
+          const parentDirReadError = unreadableParentDirMessages.get(
+            getMcpConfigCandidateParentDir(candidate)
           )
-          return { ...inspection, absolutePath }
-        } catch (error) {
-          if (isMissingFileError(error)) {
+          if (parentDirReadError) {
+            return {
+              ...inspectMcpConfigContent(candidate, null),
+              exists: false,
+              status: 'invalid',
+              absolutePath,
+              readError: parentDirReadError
+            }
+          }
+
+          if (!existingRelativePaths.has(candidate.relativePath)) {
             return { ...inspectMcpConfigContent(candidate, null), absolutePath }
           }
-          return {
-            ...inspectMcpConfigContent(candidate, null),
-            exists: false,
-            status: 'invalid',
-            absolutePath,
-            readError: extractIpcErrorMessage(error, 'Unable to read config file.')
+
+          try {
+            const result = await window.api.fs.readFile({ filePath: absolutePath, connectionId })
+            const inspection = inspectMcpConfigContent(
+              candidate,
+              result.isBinary ? '' : result.content
+            )
+            return { ...inspection, absolutePath }
+          } catch (error) {
+            if (isMissingFileError(error)) {
+              return { ...inspectMcpConfigContent(candidate, null), absolutePath }
+            }
+            return {
+              ...inspectMcpConfigContent(candidate, null),
+              exists: false,
+              status: 'invalid',
+              absolutePath,
+              readError: extractIpcErrorMessage(error, 'Unable to read config file.')
+            }
           }
-        }
-      })
-    )
-    setConfigs(next)
-    setLoading(false)
-  }, [connectionId, targetRootPath])
+        })
+      )
+      setConfigs(next)
+    } catch (error) {
+      setConfigs(missingInspections)
+      setInspectionUnavailableMessage(
+        extractIpcErrorMessage(error, 'Unable to inspect MCP configs.')
+      )
+    } finally {
+      setLoading(false)
+    }
+  }, [connectionId, isWindows, missingInspections, sshConnectionStatus, targetRootPath])
 
   useEffect(() => {
     void loadConfigs()
   }, [loadConfigs])
 
-  const handleOpen = (config: LoadedInspection): void => {
+  const handleOpen = (config: LoadedMcpConfigInspection): void => {
     setActiveWorktree(targetWorktreeId)
     const targetGroupId = ensureWorktreeRootGroup(targetWorktreeId)
     openFile(
@@ -265,13 +316,13 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
         <div>
           {visibleConfigs.length === 0 ? (
             <div className="flex items-start gap-2 px-3 py-2.5 text-xs text-muted-foreground">
-              {remoteFilesystemUnavailable ? (
+              {inspectionUnavailable ? (
                 <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
               ) : (
                 <FileCode2 className="mt-0.5 size-3.5 shrink-0" />
               )}
-              {remoteFilesystemUnavailable ? (
-                <span>Connect this SSH repo to inspect or add MCP configs.</span>
+              {inspectionUnavailable ? (
+                <span>{inspectionUnavailableMessage}</span>
               ) : (
                 <span>
                   No MCP config found. Add an empty workspace config when you want this repo to
@@ -282,78 +333,16 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
           ) : (
             <div className="divide-y divide-border/50">
               {visibleConfigs.map((config) => (
-                <div key={config.candidate.relativePath} className="space-y-2 px-3 py-2.5">
-                  <div className="flex items-center gap-2">
-                    {config.status === 'valid' && !config.readError ? (
-                      <CheckCircle2 className="size-3.5 shrink-0 text-muted-foreground" />
-                    ) : (
-                      <AlertCircle className="size-3.5 shrink-0 text-destructive" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <p className="truncate text-sm font-medium">{config.candidate.label}</p>
-                        <p className="truncate font-mono text-[11px] text-muted-foreground">
-                          {config.candidate.relativePath}
-                        </p>
-                      </div>
-                    </div>
-                    <span
-                      className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${statusClassName(config)}`}
-                    >
-                      {statusLabel(config)}
-                    </span>
-                    {config.exists ? (
-                      <Button variant="outline" size="xs" onClick={() => handleOpen(config)}>
-                        Open
-                      </Button>
-                    ) : null}
-                  </div>
-
-                  {config.error || config.readError ? (
-                    <p className="pl-5 text-xs text-destructive">
-                      {config.readError ?? config.error}
-                    </p>
-                  ) : null}
-
-                  {config.servers.length > 0 ? (
-                    <div className="grid gap-1.5 pl-5">
-                      {config.servers.map((server) => (
-                        <div
-                          key={server.name}
-                          className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 rounded-md border border-border/40 bg-background/50 px-2.5 py-1.5"
-                        >
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <span className="truncate text-xs font-medium">{server.name}</span>
-                              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
-                                {server.transport}
-                              </span>
-                            </div>
-                            <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-                              {serverDetailLabel(server)}
-                            </p>
-                            {server.env && Object.keys(server.env).length > 0 ? (
-                              <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-                                env:{' '}
-                                {Object.entries(server.env)
-                                  .map(([key, value]) => `${key}=${value}`)
-                                  .join(', ')}
-                              </p>
-                            ) : null}
-                          </div>
-                          <span className="self-start text-[11px] text-muted-foreground">
-                            {server.status}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
+                <McpConfigFileRow
+                  key={config.candidate.relativePath}
+                  config={config}
+                  onOpen={handleOpen}
+                />
               ))}
             </div>
           )}
 
-          {missingConfigs.length > 0 && !remoteFilesystemUnavailable ? (
+          {missingConfigs.length > 0 && !inspectionUnavailable ? (
             <div className="space-y-1.5 border-t border-border/50 px-3 py-2">
               <p className="text-[11px] text-muted-foreground">Checked</p>
               <div className="flex flex-wrap gap-1.5">

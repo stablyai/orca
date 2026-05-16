@@ -470,7 +470,31 @@ describe('registerFilesystemHandlers', () => {
 
     expect(listWorktreesMock).not.toHaveBeenCalled()
     expect(realpathMock).not.toHaveBeenCalledWith(WORKTREE_FEATURE_PATH)
-    expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH)
+    expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, { includeIgnored: false })
+  })
+
+  it('forwards includeIgnored through local and SSH git status IPC', async () => {
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+    getStatusMock.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    const sshProvider = {
+      getStatus: vi.fn().mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    }
+    getSshGitProviderMock.mockReturnValue(sshProvider)
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:status')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      includeIgnored: true
+    })
+    await handlers.get('git:status')!(null, {
+      worktreePath: '/remote/repo',
+      connectionId: 'ssh-1',
+      includeIgnored: true
+    })
+
+    expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, { includeIgnored: true })
+    expect(sshProvider.getStatus).toHaveBeenCalledWith('/remote/repo', { includeIgnored: true })
   })
 
   it('rejects git file paths that escape the selected worktree', async () => {

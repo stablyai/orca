@@ -12,6 +12,8 @@ const {
   getIssueOwnerRepoMock,
   getOwnerRepoForRemoteMock,
   resolveIssueSourceMock,
+  rateLimitGuardMock,
+  noteRateLimitSpendMock,
   acquireMock,
   releaseMock
 } = vi.hoisted(() => ({
@@ -21,6 +23,8 @@ const {
   getIssueOwnerRepoMock: vi.fn(),
   getOwnerRepoForRemoteMock: vi.fn(),
   resolveIssueSourceMock: vi.fn(),
+  rateLimitGuardMock: vi.fn(() => ({ blocked: false })),
+  noteRateLimitSpendMock: vi.fn(),
   acquireMock: vi.fn(),
   releaseMock: vi.fn()
 }))
@@ -41,6 +45,11 @@ vi.mock('./gh-utils', async () => {
   }
 })
 
+vi.mock('./rate-limit', () => ({
+  rateLimitGuard: rateLimitGuardMock,
+  noteRateLimitSpend: noteRateLimitSpendMock
+}))
+
 import { countWorkItems, getWorkItem, listWorkItems, _resetOwnerRepoCache } from './client'
 
 describe('GitHub issue source split', () => {
@@ -51,6 +60,9 @@ describe('GitHub issue source split', () => {
     getIssueOwnerRepoMock.mockReset()
     getOwnerRepoForRemoteMock.mockReset()
     resolveIssueSourceMock.mockReset()
+    rateLimitGuardMock.mockReset()
+    rateLimitGuardMock.mockReturnValue({ blocked: false })
+    noteRateLimitSpendMock.mockReset()
     acquireMock.mockReset()
     releaseMock.mockReset()
     acquireMock.mockResolvedValue(undefined)
@@ -125,6 +137,42 @@ describe('GitHub issue source split', () => {
         'repos/fork/orca/pulls?per_page=10&state=open&sort=updated&direction=desc'
       ],
       { cwd: '/repo-root' }
+    )
+  })
+
+  it('lists SSH repo work items with explicit owner/repo and no local cwd', async () => {
+    resolveIssueSourceMock.mockResolvedValueOnce({
+      source: { owner: 'stablyai', repo: 'orca' },
+      fellBack: false
+    })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
+      stdout: '[]'
+    })
+
+    await listWorkItems('/home/jinwoo/orca', 10, undefined, undefined, 'auto', 'openclaw-2')
+
+    expect(resolveIssueSourceMock).toHaveBeenCalledWith('/home/jinwoo/orca', 'auto', 'openclaw-2')
+    expect(getOwnerRepoMock).toHaveBeenCalledWith('/home/jinwoo/orca', 'openclaw-2')
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      [
+        'api',
+        '--cache',
+        '120s',
+        'repos/stablyai/orca/issues?per_page=10&state=open&sort=updated&direction=desc'
+      ],
+      {}
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      [
+        'api',
+        '--cache',
+        '120s',
+        'repos/fork/orca/pulls?per_page=10&state=open&sort=updated&direction=desc'
+      ],
+      {}
     )
   })
 
@@ -332,7 +380,7 @@ describe('GitHub issue source split', () => {
 
       const result = await listWorkItems('/repo-root', 10, undefined, undefined, 'auto')
 
-      expect(resolveIssueSourceMock).toHaveBeenCalledWith('/repo-root', 'auto')
+      expect(resolveIssueSourceMock).toHaveBeenCalledWith('/repo-root', 'auto', undefined)
       expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
         1,
         [

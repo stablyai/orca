@@ -142,7 +142,12 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // but should still return the cached cold restore data.
     const cachedRestore = this.coldRestoreCache.get(sessionId)
     if (cachedRestore) {
-      return { id: sessionId, pid, coldRestore: cachedRestore }
+      return {
+        id: sessionId,
+        pid,
+        coldRestore: cachedRestore,
+        ...(!result.isNew ? { isReattach: true } : {})
+      }
     }
 
     this.activeSessionIds.add(sessionId)
@@ -197,7 +202,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
     const isReattach = !result.isNew
     if (!isReattach || !result.snapshot) {
-      return { id: sessionId, pid }
+      return { id: sessionId, pid, ...(isReattach ? { isReattach: true } : {}) }
     }
 
     const isAltScreen = result.snapshot.modes.alternateScreen

@@ -12,6 +12,7 @@ import type {
   BrowserWorkspace,
   WorkspaceSessionState
 } from '../../../../shared/types'
+import { GRAB_BUDGET, type BrowserPageAnnotation } from '../../../../shared/browser-grab-types'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import {
@@ -71,6 +72,22 @@ type ClosedBrowserWorkspaceSnapshot = {
   pages: BrowserPage[]
 }
 
+function sanitizeBrowserPageAnnotation(annotation: BrowserPageAnnotation): BrowserPageAnnotation {
+  return {
+    ...annotation,
+    comment:
+      annotation.comment.length > GRAB_BUDGET.annotationCommentMaxLength
+        ? annotation.comment.slice(0, GRAB_BUDGET.annotationCommentMaxLength)
+        : annotation.comment,
+    payload: {
+      ...annotation.payload,
+      // Why: annotations live in persisted renderer state; screenshots are
+      // transient copy payloads and can retain megabytes per note.
+      screenshot: null
+    }
+  }
+}
+
 export type RemoteBrowserPageHandle = {
   environmentId: string
   remotePageId: string
@@ -79,6 +96,7 @@ export type RemoteBrowserPageHandle = {
 export type BrowserSlice = {
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>
   browserPagesByWorkspace: Record<string, BrowserPage[]>
+  browserAnnotationsByPageId: Record<string, BrowserPageAnnotation[]>
   remoteBrowserPageHandlesByPageId: Record<string, RemoteBrowserPageHandle>
   activeBrowserTabId: string | null
   activeBrowserTabIdByWorktree: Record<string, string | null>
@@ -130,6 +148,9 @@ export type BrowserSlice = {
     pageId: string,
     viewportPresetId: BrowserViewportPresetId | null
   ) => void
+  addBrowserPageAnnotation: (annotation: BrowserPageAnnotation) => void
+  deleteBrowserPageAnnotation: (pageId: string, annotationId: string) => void
+  clearBrowserPageAnnotations: (pageId: string) => void
   hydrateBrowserSession: (session: WorkspaceSessionState) => void
   switchBrowserTabProfile: (workspaceId: string, profileId: string | null) => void
   browserSessionProfiles: BrowserSessionProfile[]
@@ -339,6 +360,7 @@ function findPage(
 export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = (set, get) => ({
   browserTabsByWorktree: {},
   browserPagesByWorkspace: {},
+  browserAnnotationsByPageId: {},
   remoteBrowserPageHandlesByPageId: {},
   activeBrowserTabId: null,
   activeBrowserTabIdByWorktree: {},
@@ -480,6 +502,10 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       const closedPages = s.browserPagesByWorkspace[tabId] ?? []
       const nextBrowserPagesByWorkspace = { ...s.browserPagesByWorkspace }
       delete nextBrowserPagesByWorkspace[tabId]
+      const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
+      for (const page of closedPages) {
+        delete nextBrowserAnnotationsByPageId[page.id]
+      }
       remotePagesToClose = closedPages.flatMap((page) => {
         const handle = s.remoteBrowserPageHandlesByPageId[page.id]
         return handle ? [{ worktreeId: page.worktreeId, handle }] : []
@@ -561,7 +587,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         activeTabTypeByWorktree: nextActiveTabTypeByWorktree,
         recentlyClosedBrowserTabsByWorktree: nextRecentlyClosedBrowserTabsByWorktree,
         recentlyClosedBrowserPagesByWorkspace: nextRecentlyClosedBrowserPagesByWorkspace,
-        remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId
+        remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId,
+        browserAnnotationsByPageId: nextBrowserAnnotationsByPageId
       }
     })
 
@@ -822,6 +849,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         ...s.remoteBrowserPageHandlesByPageId
       }
       delete nextRemoteBrowserPageHandlesByPageId[pageId]
+      const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
+      delete nextBrowserAnnotationsByPageId[pageId]
 
       return {
         browserPagesByWorkspace: {
@@ -853,7 +882,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
             ([pendingPageId]) => pendingPageId !== pageId
           )
         ),
-        remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId
+        remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId,
+        browserAnnotationsByPageId: nextBrowserAnnotationsByPageId
       }
     })
 
@@ -1119,18 +1149,28 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       if (!workspace) {
         return s
       }
+      const nextUrl = normalizeUrl(url)
+      // Why: annotations point at DOM coordinates from one loaded document.
+      // A real URL change invalidates those markers and copied context.
+      const shouldClearAnnotations = normalizeUrl(page.url) !== nextUrl
       const nextPages = (s.browserPagesByWorkspace[workspace.id] ?? []).map((entry) =>
         entry.id === pageId
           ? {
               ...entry,
-              url: normalizeUrl(url),
-              title: normalizeBrowserTitle(entry.title, normalizeUrl(url)),
+              url: nextUrl,
+              title: normalizeBrowserTitle(entry.title, nextUrl),
               loading: true,
               loadError: null
             }
           : entry
       )
       const nextWorkspace = mirrorWorkspaceFromActivePage(workspace, nextPages)
+      const nextBrowserAnnotationsByPageId = shouldClearAnnotations
+        ? { ...s.browserAnnotationsByPageId }
+        : s.browserAnnotationsByPageId
+      if (shouldClearAnnotations) {
+        delete nextBrowserAnnotationsByPageId[pageId]
+      }
       return {
         browserPagesByWorkspace: {
           ...s.browserPagesByWorkspace,
@@ -1141,7 +1181,10 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           [workspace.worktreeId]: (s.browserTabsByWorktree[workspace.worktreeId] ?? []).map((tab) =>
             tab.id === workspace.id ? nextWorkspace : tab
           )
-        }
+        },
+        ...(shouldClearAnnotations
+          ? { browserAnnotationsByPageId: nextBrowserAnnotationsByPageId }
+          : {})
       }
     }),
 
@@ -1194,6 +1237,46 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           [workspace.id]: nextPages
         }
       }
+    }),
+
+  addBrowserPageAnnotation: (annotation) =>
+    set((s) => {
+      const existing = s.browserAnnotationsByPageId[annotation.browserPageId] ?? []
+      const next = [...existing, sanitizeBrowserPageAnnotation(annotation)].slice(
+        -GRAB_BUDGET.annotationsMaxPerPage
+      )
+      return {
+        browserAnnotationsByPageId: {
+          ...s.browserAnnotationsByPageId,
+          [annotation.browserPageId]: next
+        }
+      }
+    }),
+
+  deleteBrowserPageAnnotation: (pageId, annotationId) =>
+    set((s) => {
+      const existing = s.browserAnnotationsByPageId[pageId] ?? []
+      const next = existing.filter((annotation) => annotation.id !== annotationId)
+      if (next.length === existing.length) {
+        return s
+      }
+      const nextByPageId = { ...s.browserAnnotationsByPageId }
+      if (next.length > 0) {
+        nextByPageId[pageId] = next
+      } else {
+        delete nextByPageId[pageId]
+      }
+      return { browserAnnotationsByPageId: nextByPageId }
+    }),
+
+  clearBrowserPageAnnotations: (pageId) =>
+    set((s) => {
+      if (!s.browserAnnotationsByPageId[pageId]?.length) {
+        return s
+      }
+      const nextByPageId = { ...s.browserAnnotationsByPageId }
+      delete nextByPageId[pageId]
+      return { browserAnnotationsByPageId: nextByPageId }
     }),
 
   hydrateBrowserSession: (session) => {
@@ -1356,6 +1439,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         activeTabTypeByWorktree: nextActiveTabTypeByWorktree,
         activeTabType,
         remoteBrowserPageHandlesByPageId: {},
+        browserAnnotationsByPageId: {},
         browserUrlHistory: normalizeBrowserHistoryEntries(session.browserUrlHistory ?? [])
       }
     })

@@ -44,6 +44,17 @@ describe('resolveMarkdownLinkTarget', () => {
     expect(r).toMatchObject({ kind: 'markdown', line: 10, column: 5 })
   })
 
+  it('extracts line+col from non-markdown file links', () => {
+    const r = resolveMarkdownLinkTarget('../src/PdfViewer.tsx:142:7', SOURCE, ROOT)
+    expect(r).toMatchObject({
+      kind: 'file',
+      absolutePath: '/repo/src/PdfViewer.tsx',
+      relativePath: 'src/PdfViewer.tsx',
+      line: 142,
+      column: 7
+    })
+  })
+
   it('ignores non-line-col hashes', () => {
     const r = resolveMarkdownLinkTarget('./guide.md#intro', SOURCE, ROOT)
     expect(r).toMatchObject({ kind: 'markdown', line: undefined, column: undefined })

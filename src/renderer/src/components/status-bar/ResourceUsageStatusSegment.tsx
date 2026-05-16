@@ -7,6 +7,7 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
+  ArchiveX,
   ChevronDown,
   ChevronRight,
   LoaderCircle,
@@ -32,12 +33,15 @@ import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { useAppStore } from '../../store'
-import { useWorktreeMap } from '../../store/selectors'
+import { useAllWorktrees, useWorktreeMap } from '../../store/selectors'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 import { runSleepWorktree } from '../sidebar/sleep-worktree-flow'
 import { useDaemonActions, DaemonActionDialog } from '../shared/useDaemonActions'
 import type { AppMemory, UsageValues, Worktree } from '../../../../shared/types'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
+import { isFolderRepo } from '../../../../shared/repo-kind'
+import { isWorkspaceOldForCleanup } from '../../../../shared/workspace-cleanup'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import {
   mergeSnapshotAndSessions,
   UNATTRIBUTED_REPO_ID,
@@ -655,8 +659,10 @@ export function ResourceUsageStatusSegment({
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
   const setActiveView = useAppStore((s) => s.setActiveView)
+  const openModal = useAppStore((s) => s.openModal)
   const openSpacePage = useAppStore((s) => s.openSpacePage)
   const repos = useAppStore((s) => s.repos)
+  const allWorktrees = useAllWorktrees()
   const activeRuntimeEnvironmentId = useAppStore(
     (s) => s.settings?.activeRuntimeEnvironmentId ?? null
   )
@@ -776,6 +782,23 @@ export function ResourceUsageStatusSegment({
     }
     return map
   }, [repos])
+
+  const repoById = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
+
+  const oldWorkspaceCount = useMemo(() => {
+    const now = Date.now()
+    let count = 0
+    for (const worktree of allWorktrees) {
+      const repo = repoById.get(worktree.repoId)
+      if (!repo || isFolderRepo(repo) || worktree.isMainWorktree) {
+        continue
+      }
+      if (isWorkspaceOldForCleanup(worktree, now)) {
+        count += 1
+      }
+    }
+    return count
+  }, [allWorktrees, repoById])
 
   // Why: skip the merge entirely when the popover is closed. The merged
   // tree is only ever displayed inside <PopoverContent>; computing it on
@@ -908,17 +931,10 @@ export function ResourceUsageStatusSegment({
         }
       }
       setActiveView('terminal')
-      // Why: snapshot-derived rows carry a `${tabId}:${paneId}` paneKey from
-      // the main-process pty registry — parse the paneId tail so split-tab
-      // clicks land focus on the *clicked* pane rather than whichever pane
-      // was last active. Daemon-only rows have paneKey=null and degrade to
-      // tab-only activation.
-      const colon = paneKey ? paneKey.indexOf(':') : -1
-      const tail = colon > 0 && paneKey ? paneKey.slice(colon + 1) : ''
-      const parsed = /^\d+$/.test(tail) ? Number.parseInt(tail, 10) : NaN
-      const paneId =
-        Number.isFinite(parsed) && parsed > 0 && paneKey?.slice(0, colon) === tabId ? parsed : null
-      activateTabAndFocusPane(tabId, paneId)
+      // Why: paneKey suffixes are stable UUID leaf ids after replay/reload.
+      // Legacy numeric keys degrade to tab-only activation instead of guessing.
+      const parsed = paneKey ? parsePaneKey(paneKey) : null
+      activateTabAndFocusPane(tabId, parsed?.tabId === tabId ? parsed.leafId : null)
     },
     [tabsByWorktree, setActiveView]
   )
@@ -931,6 +947,11 @@ export function ResourceUsageStatusSegment({
   const handleSleep = useCallback((id: string): void => {
     void runSleepWorktree(id)
   }, [])
+
+  const handleOpenWorkspaceCleanup = useCallback((): void => {
+    setOpen(false)
+    queueMicrotask(() => openModal('workspace-cleanup'))
+  }, [openModal])
 
   const handleKillSession = useCallback(
     (session: UnifiedSessionRow): void => {
@@ -1300,17 +1321,28 @@ export function ResourceUsageStatusSegment({
           </div>
         </div>
 
-        {orphanCount > 0 && (
-          <div className="border-t border-border/50 px-3 py-2 shrink-0">
+        <div className="border-t border-border/50 px-3 py-2 shrink-0">
+          <button
+            type="button"
+            onClick={handleOpenWorkspaceCleanup}
+            className="inline-flex w-full items-center justify-between gap-2 rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
+          >
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <ArchiveX className="size-3.5 shrink-0" />
+              <span className="truncate">Clean up old workspaces ({oldWorkspaceCount})</span>
+            </span>
+            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+          </button>
+          {orphanCount > 0 ? (
             <button
               type="button"
               onClick={() => void handleKillOrphans()}
-              className="inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
+              className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
             >
               Kill {orphanCount} orphan terminal{orphanCount === 1 ? '' : 's'}
             </button>
-          </div>
-        )}
+          ) : null}
+        </div>
 
         <WorkspaceSpaceCompactPanel onOpenFullPage={openSpaceResults} />
       </PopoverContent>

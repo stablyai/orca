@@ -6,6 +6,7 @@ import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { cn } from '@/lib/utils'
+import { AgentAwakeSetting } from './AgentAwakeSetting'
 
 export { AGENTS_PANE_SEARCH_ENTRIES } from './agents-search'
 
@@ -335,6 +336,8 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
           })}
         </div>
       </section>
+
+      <AgentAwakeSetting settings={settings} updateSettings={updateSettings} />
 
       {/* Detected agents */}
       {detectedAgents.length > 0 && (

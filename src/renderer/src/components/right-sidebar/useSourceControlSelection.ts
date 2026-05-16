@@ -1,6 +1,10 @@
 import { useState, useCallback, useEffect, useRef, type RefObject } from 'react'
 import type { GitStatusEntry } from '../../../../shared/types'
 
+function isMacPlatform(): boolean {
+  return typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
+}
+
 export type FlatEntry = {
   key: string
   entry: GitStatusEntry
@@ -92,7 +96,7 @@ export function useSourceControlSelection({
 
   const handleSelect = useCallback((e: React.MouseEvent, key: string, entry: GitStatusEntry) => {
     const isShift = e.shiftKey
-    const isCmdOrCtrl = e.metaKey || e.ctrlKey
+    const isCmdOrCtrl = isMacPlatform() ? e.metaKey : e.ctrlKey
 
     if (isShift) {
       const nextSelected = getSelectionRangeKeys(flatEntriesRef.current, anchorKeyRef.current, key)

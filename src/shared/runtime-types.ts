@@ -1,13 +1,15 @@
 /* eslint-disable max-lines -- Why: shared type definitions for all runtime RPC methods live in one file for discoverability and import simplicity. */
-import type { TerminalPaneLayoutNode } from './types'
 import type {
   BrowserCookieImportResult,
   BrowserSessionProfile,
   BrowserSessionProfileSource,
   GitWorktreeInfo,
   Repo,
-  Worktree
+  Worktree,
+  WorktreeLineage,
+  WorktreeLineageWarning
 } from './types'
+import type { TerminalPaneLayoutNode } from './types'
 import type {
   RuntimeMarkdownReadTabResult,
   RuntimeMarkdownSaveTabResult
@@ -17,6 +19,13 @@ import type { RuntimeCapability } from './protocol-version'
 export type { RuntimeMarkdownReadTabResult, RuntimeMarkdownSaveTabResult }
 
 export type RuntimeGraphStatus = 'ready' | 'reloading' | 'unavailable'
+
+// Why: presence-lock driver state crosses main/preload/renderer IPC. Keep one
+// checked source so future variants cannot drift silently across layers.
+export type RuntimeTerminalDriverState =
+  | { kind: 'idle' }
+  | { kind: 'desktop' }
+  | { kind: 'mobile'; clientId: string }
 
 export type RuntimeStatus = {
   runtimeId: string
@@ -297,6 +306,8 @@ export type RuntimeWorktreePsSummary = {
   repo: string
   path: string
   branch: string
+  parentWorktreeId: string | null
+  childWorktreeIds: string[]
   displayName: string
   linkedIssue: number | null
   linkedPR: { number: number; state: string } | null
@@ -312,7 +323,17 @@ export type RuntimeWorktreePsSummary = {
 export type RuntimeWorktreeStatus = 'active' | 'working' | 'permission' | 'done' | 'inactive'
 
 export type RuntimeWorktreeRecord = Worktree & {
+  parentWorktreeId: string | null
+  childWorktreeIds: string[]
+  lineage: WorktreeLineage | null
   git: GitWorktreeInfo
+}
+
+export type RuntimeWorktreeCreateResult = {
+  worktree: RuntimeWorktreeRecord
+  lineage: WorktreeLineage | null
+  warnings: WorktreeLineageWarning[]
+  warning?: string
 }
 
 export type RuntimeWorktreePsResult = {

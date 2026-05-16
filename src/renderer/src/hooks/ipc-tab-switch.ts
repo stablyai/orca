@@ -57,7 +57,7 @@ function resolveCycleContext(): CycleContext | null {
  * branches so that when the same entity is open in multiple splits, the
  * correct tab instance is focused.
  */
-function applyNextTab(store: AppStoreState, next: TypeCyclableTab): void {
+export function activateCyclableTab(store: AppStoreState, next: TypeCyclableTab): void {
   if (next.type === 'terminal') {
     store.setActiveTab(next.id)
     store.setActiveTabType('terminal')
@@ -67,9 +67,6 @@ function applyNextTab(store: AppStoreState, next: TypeCyclableTab): void {
       store.activateTab?.(next.tabId)
     }
     store.setActiveTabType('browser')
-  } else if (next.type === 'notes') {
-    store.activateTab?.(next.tabId ?? next.id)
-    store.setActiveTabType('notes')
   } else {
     // Why: `setActiveFile` targets the file entity (its implicit activateTab
     // picks the first matching tab in the active group); `activateTab(tabId)`
@@ -105,7 +102,7 @@ export function handleSwitchTab(direction: number): boolean {
   if (!next) {
     return false
   }
-  applyNextTab(store, next)
+  activateCyclableTab(store, next)
   return true
 }
 
@@ -137,7 +134,7 @@ export function handleSwitchTabAcrossAllTypes(direction: number): boolean {
   if (!next) {
     return false
   }
-  applyNextTab(store, next)
+  activateCyclableTab(store, next)
   return true
 }
 

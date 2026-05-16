@@ -6,13 +6,19 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import type { Worktree } from '../../../../shared/types'
-import { parseAutomationRrule } from '../../../../shared/automation-schedules'
+import { formatAutomationSchedule } from '../../../../shared/automation-schedules'
 import {
   formatAutomationDateTime,
   formatAutomationDateTimeWithRelative,
   getAutomationRunStatusLabel,
   getAutomationRunStatusVariant
 } from './automation-page-parts'
+import {
+  formatAutomationCost,
+  formatAutomationTokens,
+  getAutomationUsageStatusLabel,
+  summarizeAutomationRunUsage
+} from './automation-usage-model'
 
 type AutomationDetailProps = {
   automation: Automation | null
@@ -38,15 +44,6 @@ function DetailMetric({ label, value }: { label: string; value: string }): React
   )
 }
 
-function formatTime(hour: number, minute: number): string {
-  const date = new Date()
-  date.setHours(hour, minute, 0, 0)
-  return new Intl.DateTimeFormat(undefined, {
-    hour: 'numeric',
-    minute: '2-digit'
-  }).format(date)
-}
-
 function formatGrace(minutes: number): string {
   if (minutes <= 0) {
     return 'No grace'
@@ -56,24 +53,6 @@ function formatGrace(minutes: number): string {
   }
   const hours = minutes / 60
   return `${hours} ${hours === 1 ? 'hour' : 'hours'}`
-}
-
-function formatSchedule(rrule: string): string {
-  const schedule = parseAutomationRrule(rrule)
-  if (schedule.preset === 'hourly') {
-    return `Hourly at :${String(schedule.minute).padStart(2, '0')}`
-  }
-  const time = formatTime(schedule.hour, schedule.minute)
-  if (schedule.preset === 'daily') {
-    return `Daily at ${time}`
-  }
-  if (schedule.preset === 'weekdays') {
-    return `Weekdays at ${time}`
-  }
-  const day = new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(
-    new Date(2026, 0, 4 + schedule.dayOfWeek)
-  )
-  return `${day}s at ${time}`
 }
 
 function ToolbarIconButton({
@@ -129,6 +108,13 @@ export function AutomationDetail({
       </div>
     )
   }
+  const usageSummary = summarizeAutomationRunUsage(runs)
+  const usageCoverage =
+    usageSummary.knownRuns > 0
+      ? `${usageSummary.knownRuns}/${runs.length} runs`
+      : usageSummary.unavailableRuns > 0
+        ? 'Unavailable'
+        : 'No runs'
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -175,8 +161,7 @@ export function AutomationDetail({
         </div>
       ) : null}
 
-      <div className="grid grid-cols-4 gap-6 rounded-md border border-border/50 bg-muted/30 px-4 py-3 shadow-sm">
-        <DetailMetric label="Run location" value={`${projectName} / ${workspaceName}`} />
+      <div className="grid grid-cols-6 gap-6 rounded-md border border-border/50 bg-muted/30 px-4 py-3 shadow-sm">
         <DetailMetric
           label="Next run"
           value={
@@ -189,6 +174,12 @@ export function AutomationDetail({
           label="Last run"
           value={formatAutomationDateTimeWithRelative(automation.lastRunAt, now)}
         />
+        <DetailMetric
+          label="Est. spend"
+          value={formatAutomationCost(usageSummary.estimatedCostUsd)}
+        />
+        <DetailMetric label="Tokens" value={formatAutomationTokens(usageSummary.totalTokens)} />
+        <DetailMetric label="Usage coverage" value={usageCoverage} />
         <DetailMetric label="Grace" value={formatGrace(automation.missedRunGraceMinutes)} />
       </div>
 
@@ -205,7 +196,7 @@ export function AutomationDetail({
               </span>
             </div>
           </div>
-          <DetailMetric label="Schedule" value={formatSchedule(automation.rrule)} />
+          <DetailMetric label="Schedule" value={formatAutomationSchedule(automation.rrule)} />
           <DetailMetric
             label={automation.workspaceMode === 'new_per_run' ? 'Create from' : 'Workspace'}
             value={
@@ -228,9 +219,11 @@ export function AutomationDetail({
           <div className="text-sm font-medium">Run history</div>
           <div className="text-xs text-muted-foreground">{runs.length} runs</div>
         </div>
-        <div className="grid grid-cols-[minmax(10rem,1fr)_minmax(12rem,1.4fr)_minmax(6rem,auto)] gap-3 border-b border-border/50 px-3 py-1.5 text-[11px] font-medium uppercase text-muted-foreground">
+        <div className="grid grid-cols-[minmax(9rem,1fr)_minmax(11rem,1.2fr)_minmax(5rem,.55fr)_minmax(5rem,.55fr)_minmax(6rem,auto)] gap-3 border-b border-border/50 px-3 py-1.5 text-[11px] font-medium uppercase text-muted-foreground">
           <div>Run</div>
           <div>Workspace</div>
+          <div>Spend</div>
+          <div>Tokens</div>
           <div>Status</div>
         </div>
         <div className="divide-y divide-border/50">
@@ -240,13 +233,16 @@ export function AutomationDetail({
               ? (runWorktree?.displayName ?? 'Missing workspace')
               : 'Not launched'
             const rowClassName =
-              'grid grid-cols-[minmax(10rem,1fr)_minmax(12rem,1.4fr)_minmax(6rem,auto)] items-center gap-3 px-3 py-2 text-left text-sm outline-none transition-colors'
+              'grid grid-cols-[minmax(9rem,1fr)_minmax(11rem,1.2fr)_minmax(5rem,.55fr)_minmax(5rem,.55fr)_minmax(6rem,auto)] items-center gap-3 px-3 py-2 text-left text-sm outline-none transition-colors'
+            const usageLabel = getAutomationUsageStatusLabel(run.usage)
             const rowContent = (
               <>
                 <div className="min-w-0">
                   <div>{formatAutomationDateTime(run.scheduledFor)}</div>
-                  {run.error ? (
-                    <div className="mt-1 truncate text-xs text-muted-foreground">{run.error}</div>
+                  {run.error || run.usage?.status === 'unavailable' ? (
+                    <div className="mt-1 truncate text-xs text-muted-foreground">
+                      {run.error ?? run.usage?.unavailableMessage}
+                    </div>
                   ) : null}
                 </div>
                 <div
@@ -257,6 +253,28 @@ export function AutomationDetail({
                   }
                 >
                   {workspaceLabel}
+                </div>
+                <div
+                  className={
+                    run.usage?.status === 'known'
+                      ? 'text-sm tabular-nums'
+                      : 'text-sm text-muted-foreground'
+                  }
+                  title={usageLabel}
+                >
+                  {formatAutomationCost(run.usage?.estimatedCostUsd)}
+                </div>
+                <div
+                  className={
+                    run.usage?.status === 'known'
+                      ? 'text-sm tabular-nums'
+                      : 'text-sm text-muted-foreground'
+                  }
+                  title={usageLabel}
+                >
+                  {run.usage?.status === 'known'
+                    ? formatAutomationTokens(run.usage.totalTokens)
+                    : 'n/a'}
                 </div>
                 <div className="flex justify-start">
                   <Badge variant={getAutomationRunStatusVariant(run.status)}>

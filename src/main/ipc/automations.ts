@@ -5,9 +5,15 @@ import type {
   Automation,
   AutomationCreateInput,
   AutomationDispatchResult,
+  ExternalAutomationActionInput,
+  ExternalAutomationManager,
   AutomationRun,
   AutomationUpdateInput
 } from '../../shared/automations-types'
+import {
+  listExternalAutomationManagers,
+  runExternalAutomationAction
+} from '../automations/external-manager'
 
 export function registerAutomationHandlers(store: Store, service: AutomationService): void {
   ipcMain.handle('automations:list', (): Automation[] => store.listAutomations())
@@ -15,6 +21,15 @@ export function registerAutomationHandlers(store: Store, service: AutomationServ
     'automations:listRuns',
     (_event, args?: { automationId?: string }): AutomationRun[] =>
       store.listAutomationRuns(args?.automationId)
+  )
+  ipcMain.handle('automations:listExternalManagers', (): Promise<ExternalAutomationManager[]> => {
+    return listExternalAutomationManagers(store)
+  })
+  ipcMain.handle(
+    'automations:runExternalAction',
+    (_event, input: ExternalAutomationActionInput) => {
+      return runExternalAutomationAction(input)
+    }
   )
   ipcMain.handle(
     'automations:create',
@@ -34,7 +49,8 @@ export function registerAutomationHandlers(store: Store, service: AutomationServ
   )
   ipcMain.handle(
     'automations:markDispatchResult',
-    (_event, result: AutomationDispatchResult): AutomationRun => service.markDispatchResult(result)
+    (_event, result: AutomationDispatchResult): Promise<AutomationRun> =>
+      service.markDispatchResult(result)
   )
   ipcMain.handle('automations:rendererReady', (): void => {
     service.setRendererReady()

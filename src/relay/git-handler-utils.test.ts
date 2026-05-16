@@ -28,4 +28,13 @@ describe('parseStatusOutput', () => {
 
     expect(result.upstreamStatus).toEqual({ hasUpstream: false, ahead: 0, behind: 0 })
   })
+
+  it('parses ignored porcelain records separately from actionable entries', () => {
+    const result = parseStatusOutput(['! dist/', '! .env', '? scratch.txt', ''].join('\n'))
+
+    expect(result.ignoredPaths).toEqual(['dist/', '.env'])
+    expect(result.entries).toEqual([
+      { path: 'scratch.txt', status: 'untracked', area: 'untracked' }
+    ])
+  })
 })

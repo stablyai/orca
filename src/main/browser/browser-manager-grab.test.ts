@@ -12,6 +12,7 @@ const {
   guestSetBackgroundThrottlingMock,
   guestSetWindowOpenHandlerMock,
   guestExecuteJavaScriptMock,
+  guestExecuteJavaScriptInIsolatedWorldMock,
   guestIsDestroyedMock,
   guestGetZoomFactorMock,
   guestCapturePageMock,
@@ -25,6 +26,7 @@ const {
   guestSetBackgroundThrottlingMock: vi.fn(),
   guestSetWindowOpenHandlerMock: vi.fn(),
   guestExecuteJavaScriptMock: vi.fn(),
+  guestExecuteJavaScriptInIsolatedWorldMock: vi.fn(),
   guestIsDestroyedMock: vi.fn(() => false),
   guestGetZoomFactorMock: vi.fn(() => 1),
   guestCapturePageMock: vi.fn(),
@@ -53,6 +55,7 @@ function makeGuest(id: number) {
     off: guestOffMock,
     openDevTools: vi.fn(),
     executeJavaScript: guestExecuteJavaScriptMock,
+    executeJavaScriptInIsolatedWorld: guestExecuteJavaScriptInIsolatedWorldMock,
     getZoomFactor: guestGetZoomFactorMock,
     capturePage: guestCapturePageMock,
     getURL: vi.fn(() => 'https://example.com/')
@@ -67,6 +70,7 @@ describe('browserManager grab operations', () => {
     vi.clearAllMocks()
     guestIsDestroyedMock.mockReturnValue(false)
     guestExecuteJavaScriptMock.mockResolvedValue(true)
+    guestExecuteJavaScriptInIsolatedWorldMock.mockResolvedValue(true)
     browserManager.unregisterAll()
 
     guest = makeGuest(101)
@@ -753,11 +757,11 @@ describe('browserManager grab operations', () => {
       })
       expect(guestExecuteJavaScriptMock).toHaveBeenNthCalledWith(
         1,
-        `(function(){ var g = window.__orcaGrab; if (g && g.host) g.host.style.display = 'none'; })()`
+        expect.stringContaining('__orcaGrab')
       )
       expect(guestExecuteJavaScriptMock).toHaveBeenNthCalledWith(
         2,
-        `(function(){ var g = window.__orcaGrab; if (g && g.host) g.host.style.display = ''; })()`
+        expect.stringContaining('__orcaGrab')
       )
       expect(guestExecuteJavaScriptMock).toHaveBeenNthCalledWith(3, 'window.innerWidth')
     })

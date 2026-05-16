@@ -26,8 +26,11 @@ vi.mock('@xterm/addon-webgl', () => ({
 }))
 
 function createPane(): ManagedPaneInternal {
+  const leafId = '11111111-1111-4111-8111-111111111111' as never
   return {
     id: 1,
+    leafId,
+    stablePaneId: leafId,
     terminal: {
       loadAddon: vi.fn(),
       refresh: vi.fn(),
@@ -80,6 +83,10 @@ describe('attachWebgl', () => {
     webglMock.dispose.mockClear()
     vi.mocked(WebglAddon).mockClear()
     resetTerminalWebglSuggestion()
+    vi.stubGlobal('navigator', {
+      platform: 'MacIntel',
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
+    })
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(16)
       return 1
@@ -136,6 +143,32 @@ describe('attachWebgl', () => {
 
     expect(pane.webglAddon).toBeNull()
     expect(pane.terminal.loadAddon).not.toHaveBeenCalled()
+  })
+
+  it('uses DOM rendering for auto GPU acceleration on Linux', () => {
+    vi.stubGlobal('navigator', {
+      platform: 'Linux x86_64',
+      userAgent: 'Mozilla/5.0 (X11; Linux x86_64)'
+    })
+    const pane = createPane()
+
+    attachWebgl(pane)
+
+    expect(pane.webglAddon).toBeNull()
+    expect(pane.terminal.loadAddon).not.toHaveBeenCalled()
+  })
+
+  it('still allows forced WebGL on Linux', () => {
+    vi.stubGlobal('navigator', {
+      platform: 'Linux x86_64',
+      userAgent: 'Mozilla/5.0 (X11; Linux x86_64)'
+    })
+    const pane = createPane()
+    pane.terminalGpuAcceleration = 'on'
+
+    attachWebgl(pane)
+
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
   })
 
   it('uses DOM for later auto panes after WebGL attach fails until the suggestion resets', () => {
@@ -271,8 +304,11 @@ describe('openTerminal — Unicode 11 ordering', () => {
       buffer: { active: { cursorX: 0, cursorY: 0 } }
     } as unknown as ManagedPaneInternal['terminal']
 
+    const leafId = '22222222-2222-4222-8222-222222222222' as never
     const pane: ManagedPaneInternal = {
       id: 1,
+      leafId,
+      stablePaneId: leafId,
       terminal,
       container: fakeContainer,
       xtermContainer: fakeContainer,

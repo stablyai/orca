@@ -1,8 +1,11 @@
 import React, { useMemo } from 'react'
+import type { CtrlTabOrderMode } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
+import { Label } from '../ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 
 type ShortcutItem = {
   action: string
@@ -140,6 +143,16 @@ const SHORTCUT_GROUP_DEFINITIONS: ShortcutGroupDefinition[] = [
     title: 'Tab Navigation',
     items: [
       {
+        action: 'Cycle tabs forward',
+        searchKeywords: ['shortcut', 'tab', 'next', 'switch', 'cycle', 'recent', 'ctrl'],
+        keys: () => ['Ctrl', 'Tab']
+      },
+      {
+        action: 'Cycle tabs backward',
+        searchKeywords: ['shortcut', 'tab', 'previous', 'switch', 'cycle', 'recent', 'ctrl'],
+        keys: ({ shift }) => ['Ctrl', shift, 'Tab']
+      },
+      {
         action: 'Next tab (same type)',
         searchKeywords: ['shortcut', 'tab', 'next', 'switch', 'cycle'],
         keys: ({ mod, shift }) => [mod, shift, ']']
@@ -227,19 +240,31 @@ const SHORTCUT_GROUP_DEFINITIONS: ShortcutGroupDefinition[] = [
   }
 ]
 
+const CTRL_TAB_BEHAVIOR_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'Ctrl+Tab Order',
+    description: 'Choose recent or sequential tab switching.',
+    keywords: ['shortcut', 'tab', 'ctrl', 'control', 'recent', 'mru', 'sequential', 'switch']
+  }
+]
+
 // Why: search is supposed to stay in lockstep with the rendered shortcuts. Deriving
 // both from one definition prevents the registry drift regression this branch introduced.
-export const SHORTCUTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] =
-  SHORTCUT_GROUP_DEFINITIONS.flatMap((group) =>
+export const SHORTCUTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  ...SHORTCUT_GROUP_DEFINITIONS.flatMap((group) =>
     group.items.map((item) => ({
       title: item.action,
       description: `${group.title} shortcut`,
       keywords: item.searchKeywords
     }))
-  )
+  ),
+  ...CTRL_TAB_BEHAVIOR_SEARCH_ENTRIES
+]
 
 export function ShortcutsPane(): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
+  const ctrlTabOrderMode = useAppStore((state) => state.settings?.ctrlTabOrderMode ?? 'mru')
+  const updateSettings = useAppStore((state) => state.updateSettings)
   const isMac = navigator.userAgent.includes('Mac')
   const mod = isMac ? '⌘' : 'Ctrl'
   const shift = isMac ? '⇧' : 'Shift'
@@ -282,10 +307,39 @@ export function ShortcutsPane(): React.JSX.Element {
         <div className="space-y-1">
           <h2 className="text-sm font-semibold">Keyboard Shortcuts</h2>
           <p className="text-xs text-muted-foreground">
-            View common hotkeys used across the application. Shortcuts customization is not
-            currently supported.
+            View common hotkeys used across the application and configure tab switching.
           </p>
         </div>
+
+        {matchesSettingsSearch(searchQuery, CTRL_TAB_BEHAVIOR_SEARCH_ENTRIES) ? (
+          <SearchableSetting
+            title="Ctrl+Tab Order"
+            description="Choose recent or sequential tab switching."
+            keywords={CTRL_TAB_BEHAVIOR_SEARCH_ENTRIES[0].keywords}
+            className="flex items-center justify-between gap-4 px-1 py-2"
+          >
+            <div className="space-y-0.5">
+              <Label>Ctrl+Tab Order</Label>
+              <p className="text-xs text-muted-foreground">
+                Choose whether Ctrl+Tab follows recent use or the tab strip order.
+              </p>
+            </div>
+            <Select
+              value={ctrlTabOrderMode}
+              onValueChange={(value) =>
+                void updateSettings({ ctrlTabOrderMode: value as CtrlTabOrderMode })
+              }
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mru">Most recent</SelectItem>
+                <SelectItem value="sequential">Tab strip order</SelectItem>
+              </SelectContent>
+            </Select>
+          </SearchableSetting>
+        ) : null}
 
         <div className="grid gap-8">
           {groups

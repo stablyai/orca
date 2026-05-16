@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPaneInternal, ScrollState } from './pane-manager-types'
+import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 
 const restoreScrollState = vi.hoisted(() => vi.fn())
 
@@ -22,6 +23,8 @@ const alternateScrollState = {
   bufferType: 'alternate'
 } satisfies ScrollState
 
+const TEST_LEAF_ID = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
+
 function createPane(bufferType: 'normal' | 'alternate'): {
   pane: ManagedPaneInternal
   bufferChangeDisposable: { dispose: ReturnType<typeof vi.fn> }
@@ -31,6 +34,8 @@ function createPane(bufferType: 'normal' | 'alternate'): {
   const bufferChangeDisposable = { dispose: vi.fn() }
   const pane: ManagedPaneInternal = {
     id: 1,
+    leafId: TEST_LEAF_ID,
+    stablePaneId: TEST_LEAF_ID,
     terminal: {
       rows: 24,
       refresh: vi.fn(),

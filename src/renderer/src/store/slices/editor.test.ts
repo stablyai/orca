@@ -682,6 +682,24 @@ describe('createEditorSlice editor drafts', () => {
 })
 
 describe('createEditorSlice conflict status reconciliation', () => {
+  it('clears ignored path cache when status refresh omits ignored paths', () => {
+    const store = createEditorStore()
+
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [],
+      ignoredPaths: ['dist/', '.env']
+    })
+    expect(store.getState().gitIgnoredPathsByWorktree['wt-1']).toEqual(['dist/', '.env'])
+
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: []
+    })
+
+    expect(store.getState().gitIgnoredPathsByWorktree['wt-1']).toEqual([])
+  })
+
   it('tracks unresolved conflicts when opened through the conflict-safe entry point', () => {
     const store = createEditorStore()
 
@@ -864,6 +882,24 @@ describe('createEditorSlice remote branch actions', () => {
       ahead: 2,
       behind: 1
     })
+  })
+
+  it('does not notify subscribers when upstream status is unchanged', () => {
+    const store = createEditorStore()
+    const status = {
+      hasUpstream: true,
+      upstreamName: 'origin/main',
+      ahead: 2,
+      behind: 1
+    }
+
+    store.getState().setUpstreamStatus('wt-1', status)
+    const listener = vi.fn()
+    const unsubscribe = store.subscribe(listener)
+    store.getState().setUpstreamStatus('wt-1', { ...status })
+    unsubscribe()
+
+    expect(listener).not.toHaveBeenCalled()
   })
 
   it('runs pull and refreshes status + upstream on success', async () => {
@@ -1455,6 +1491,30 @@ describe('createEditorSlice activateMarkdownLink', () => {
       })
     ])
     expect(openFileUriMock).not.toHaveBeenCalled()
+  })
+
+  it('reveals line targets for non-markdown file links', async () => {
+    const store = createEditorStore()
+    await store.getState().activateMarkdownLink('../src/PdfViewer.tsx:142:7', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/repo/src/PdfViewer.tsx',
+        relativePath: 'src/PdfViewer.tsx',
+        mode: 'edit',
+        isPreview: true
+      })
+    ])
+    expect(store.getState().pendingEditorReveal).toEqual({
+      filePath: '/repo/src/PdfViewer.tsx',
+      line: 142,
+      column: 7,
+      matchLength: 0
+    })
   })
 
   it('opens explicit file URLs inside the worktree in Orca', async () => {

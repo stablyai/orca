@@ -37,6 +37,7 @@ export type MessageRow = {
 export type TaskRow = {
   id: string
   parent_id: string | null
+  created_by_terminal_handle: string | null
   spec: string
   status: TaskStatus
   deps: string

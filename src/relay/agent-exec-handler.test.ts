@@ -5,7 +5,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ChildProcess from 'child_process'
-import type { MethodHandler } from './dispatcher'
+import type { MethodHandler, RequestContext } from './dispatcher'
 import { AgentExecHandler } from './agent-exec-handler'
 
 vi.mock('child_process', async (importOriginal) => {
@@ -58,6 +58,10 @@ function createHandlers(): Map<string, MethodHandler> {
   return handlers
 }
 
+function requestContext(clientId = 1): RequestContext {
+  return { clientId, isStale: () => false }
+}
+
 describe('AgentExecHandler', () => {
   beforeEach(() => {
     spawnMock.mockReset()
@@ -77,7 +81,7 @@ describe('AgentExecHandler', () => {
         stdin: 'PROMPT',
         timeoutMs: 5_000
       },
-      { isStale: () => false }
+      requestContext()
     )
 
     child.stdout.emit('data', Buffer.from('message'))
@@ -117,7 +121,7 @@ describe('AgentExecHandler', () => {
           PATH: '/managed/bin'
         }
       },
-      { isStale: () => false }
+      requestContext()
     )
 
     child.emit('close', 0)
@@ -159,7 +163,7 @@ describe('AgentExecHandler', () => {
             timeoutMs: 5_000,
             env: { PATH: tempDir }
           },
-          { isStale: () => false }
+          requestContext()
         )
 
         child.emit('close', 0)
@@ -201,7 +205,7 @@ describe('AgentExecHandler', () => {
           stdin: null,
           timeoutMs: 5_000
         },
-        { isStale: () => false }
+        requestContext()
       )
 
       expect(result).toEqual({
@@ -228,11 +232,11 @@ describe('AgentExecHandler', () => {
         stdin: null,
         timeoutMs: 5_000
       },
-      { isStale: () => false }
+      requestContext()
     )
 
     await expect(
-      handlers.get('agent.cancelExec')!({ cwd: '/repo' }, { isStale: () => false })
+      handlers.get('agent.cancelExec')!({ cwd: '/repo' }, requestContext())
     ).resolves.toEqual({ canceled: true })
 
     if (process.platform === 'win32') {
@@ -253,7 +257,7 @@ describe('AgentExecHandler', () => {
     const handlers = createHandlers()
 
     await expect(
-      handlers.get('agent.cancelExec')!({ cwd: '/repo' }, { isStale: () => false })
+      handlers.get('agent.cancelExec')!({ cwd: '/repo' }, requestContext())
     ).resolves.toEqual({ canceled: false })
   })
 })

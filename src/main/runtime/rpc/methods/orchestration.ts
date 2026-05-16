@@ -81,7 +81,8 @@ const InboxParams = z.object({
 const TaskCreateParams = z.object({
   spec: requiredString('Missing --spec'),
   deps: OptionalString,
-  parent: OptionalString
+  parent: OptionalString,
+  callerTerminalHandle: OptionalString
 })
 
 const TaskListParams = z.object({
@@ -328,7 +329,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const task = db.createTask({
         spec: params.spec,
         deps,
-        parentId: params.parent
+        parentId: params.parent,
+        createdByTerminalHandle: params.callerTerminalHandle
       })
       return { task }
     }

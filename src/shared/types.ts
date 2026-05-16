@@ -3,12 +3,16 @@ import type { SshRemotePtyLease, SshTarget } from './ssh-types'
 import type { Automation, AutomationRun } from './automations-types'
 import type { WorkspaceSource } from './telemetry-events'
 import type { GitHubProjectSettings } from './github-project-types'
+import type { MigrationUnsupportedPtyEntry } from './agent-status-types'
 import type { VoiceSettings } from './speech-types'
+import type { WorkspaceCleanupUIState } from './workspace-cleanup'
 import type { GitLabProjectSettings } from './gitlab-types'
+import type { TaskProvider } from './task-providers'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
 export type { WorkspaceSource as WorkspaceCreateTelemetrySource } from './telemetry-events'
+export type { TaskProvider } from './task-providers'
 
 // ─── Shell PATH hydration ────────────────────────────────────────────
 // Why: shared so the main-side `HydrationResult` discriminator and the
@@ -117,6 +121,7 @@ export type WorkspaceStatusDefinition = {
 
 export type Worktree = {
   id: string // `${repoId}::${path}`
+  instanceId?: string
   repoId: string
   displayName: string
   comment: string
@@ -168,6 +173,8 @@ export type GitPushTarget = {
 
 // ─── Worktree metadata (persisted user-authored fields only) ─────────
 export type WorktreeMeta = {
+  /** Immutable per-workspace-instance ID used to reject stale lineage after path reuse. */
+  instanceId?: string
   displayName: string
   comment: string
   linkedIssue: number | null
@@ -198,15 +205,60 @@ export type WorktreeMeta = {
   diffComments?: DiffComment[]
 }
 
+export type WorktreeLineageOrigin = 'orchestration' | 'cli' | 'manual'
+export type WorktreeLineageCaptureConfidence = 'explicit' | 'inferred'
+export type WorktreeLineageCaptureSource =
+  | 'explicit-cli-flag'
+  | 'cwd-context'
+  | 'terminal-context'
+  | 'orchestration-context'
+  | 'manual-action'
+
+export type WorktreeLineageCapture = {
+  source: WorktreeLineageCaptureSource
+  confidence: WorktreeLineageCaptureConfidence
+}
+
+export type WorktreeLineage = {
+  worktreeId: string
+  worktreeInstanceId: string
+  parentWorktreeId: string
+  parentWorktreeInstanceId: string
+  origin: WorktreeLineageOrigin
+  capture: WorktreeLineageCapture
+  orchestrationRunId?: string
+  taskId?: string
+  coordinatorHandle?: string
+  createdByTerminalHandle?: string
+  createdAt: number
+}
+
+export type WorktreeLineageWarningCode =
+  | 'LINEAGE_PARENT_CONTEXT_MISSING'
+  | 'LINEAGE_PARENT_CONTEXT_CONFLICT'
+  | 'LINEAGE_PARENT_INSTANCE_STALE'
+
+export type WorktreeLineageWarning = {
+  code: WorktreeLineageWarningCode
+  message: string
+  details?: Record<string, unknown>
+}
+
 // ─── Diff line comments ──────────────────────────────────────────────
 // Why: users leave review notes on specific lines of the modified side of
 // a diff so they can be handed back to an AI agent (pasted into a terminal
 // or used to bootstrap a new agent session). Stored on WorktreeMeta so the
 // existing persistence layer writes them to orca-data.json automatically.
+export type DiffCommentSource = 'diff' | 'markdown'
+
 export type DiffComment = {
   id: string
   worktreeId: string
   filePath: string
+  /** Undefined means a legacy diff note. */
+  source?: DiffCommentSource
+  /** Inclusive range start. Must be <= lineNumber when present. */
+  startLine?: number
   lineNumber: number
   body: string
   createdAt: number
@@ -229,15 +281,10 @@ export type TabGroupLayoutNode =
     }
 
 // ─── Unified Tab ────────────────────────────────────────────────────
-export type TabContentType =
-  | 'terminal'
-  | 'editor'
-  | 'diff'
-  | 'conflict-review'
-  | 'browser'
-  | 'notes'
+export type TabContentType = 'terminal' | 'editor' | 'diff' | 'conflict-review' | 'browser'
 
-export type WorkspaceVisibleTabType = 'terminal' | 'editor' | 'browser' | 'notes'
+export type WorkspaceVisibleTabType = 'terminal' | 'editor' | 'browser'
+export type CtrlTabOrderMode = 'mru' | 'sequential'
 
 export type Tab = {
   id: string // UUID for terminals, filePath for editors (preserves current convention)
@@ -252,7 +299,6 @@ export type Tab = {
   createdAt: number
   isPreview?: boolean // preview tabs get replaced by next single-click open
   isPinned?: boolean // pinned tabs survive "close others"
-  isDirty?: boolean // unsaved tab-local content, currently used by Project Notes
 }
 
 export type TabGroup = {
@@ -384,7 +430,7 @@ export type BrowserTab = BrowserWorkspace
 export type BrowserSessionProfileScope = 'default' | 'isolated' | 'imported'
 
 export type BrowserSessionProfileSource = {
-  browserFamily: 'chrome' | 'chromium' | 'arc' | 'edge' | 'firefox' | 'safari' | 'manual'
+  browserFamily: 'chrome' | 'chromium' | 'arc' | 'edge' | 'firefox' | 'safari' | 'comet' | 'manual'
   profileName?: string
   importedAt: number
 }
@@ -433,7 +479,7 @@ export type TerminalLayoutSnapshot = {
   ptyIdsByLeafId?: Record<string, string>
   /** Serialized terminal buffers per leaf for scrollback restoration on restart. */
   buffersByLeafId?: Record<string, string>
-  /** User-assigned pane titles, keyed by leafId (e.g. "pane:3").
+  /** User-assigned pane titles, keyed by stable layout leaf UUID.
    *  Persisted alongside buffers via the existing session:set flow. */
   titlesByLeafId?: Record<string, string>
 }
@@ -610,6 +656,8 @@ export type GitHubAssignableUser = {
   avatarUrl: string
 }
 
+export type GitHubPRFileViewedState = 'DISMISSED' | 'VIEWED' | 'UNVIEWED'
+
 export type GitHubWorkItem = {
   id: string
   type: 'issue' | 'pr'
@@ -641,6 +689,8 @@ export type GitHubPRFile = {
   deletions: number
   /** GitHub marks files above its diff size limit as binary-like; we skip content fetches for these. */
   isBinary: boolean
+  /** GitHub's per-viewer review state. DISMISSED means new changes arrived after the file was viewed. */
+  viewerViewedState?: GitHubPRFileViewedState
 }
 
 export type GitHubPRFileContents = {
@@ -669,6 +719,8 @@ export type GitHubWorkItemDetails = {
   /** Only set for PRs. Head/base SHAs used by the Files tab to fetch per-file content. */
   headSha?: string
   baseSha?: string
+  /** GraphQL node ID required by GitHub's file-viewed mutations. Only set for PRs. */
+  pullRequestId?: string
   checks?: PRCheckDetail[]
   files?: GitHubPRFile[]
   participants?: GitHubAssignableUser[]
@@ -680,16 +732,31 @@ export type GitHubWorkItemDetails = {
 export type LinearViewer = {
   displayName: string
   email: string | null
+  organizationId?: string
   organizationName: string
+  organizationUrlKey?: string
 }
+
+export type LinearWorkspace = LinearViewer & {
+  id: string
+  organizationId: string
+  isLegacy?: true
+}
+
+export type LinearWorkspaceSelection = string | 'all'
 
 export type LinearConnectionStatus = {
   connected: boolean
   viewer: LinearViewer | null
+  workspaces?: LinearWorkspace[]
+  activeWorkspaceId?: string | null
+  selectedWorkspaceId?: LinearWorkspaceSelection | null
 }
 
 export type LinearIssue = {
   id: string
+  workspaceId?: string
+  workspaceName?: string
   identifier: string
   title: string
   description?: string
@@ -885,6 +952,8 @@ export type LinearMember = {
 
 export type LinearTeam = {
   id: string
+  workspaceId?: string
+  workspaceName?: string
   name: string
   key: string
 }
@@ -952,6 +1021,7 @@ export type CreateWorktreeArgs = {
   sparseCheckout?: CreateSparseCheckoutRequest
   linkedIssue?: number
   linkedPR?: number
+  linkedLinearIssue?: string
   pushTarget?: GitPushTarget
   /** Agent selected in the create surface. Omitted for blank-shell creates. */
   createdWithAgent?: TuiAgent
@@ -967,7 +1037,14 @@ export type CreateWorktreeArgs = {
 }
 
 export type CreateWorktreeResult = {
-  worktree: Worktree
+  worktree: Worktree & {
+    parentWorktreeId?: string | null
+    childWorktreeIds?: string[]
+    lineage?: WorktreeLineage | null
+    git?: GitWorktreeInfo
+  }
+  lineage?: WorktreeLineage | null
+  warnings?: WorktreeLineageWarning[]
   setup?: WorktreeSetupLaunch
   warning?: string
   initialBaseStatus?: WorktreeBaseStatusEvent
@@ -1125,7 +1202,9 @@ export type TuiAgent =
   | 'qwen-code' // Qwen Code
   | 'rovo' // Rovo Dev
   | 'hermes' // Hermes Agent
+  | 'openclaw' // OpenClaw
   | 'copilot' // GitHub Copilot CLI
+  | 'grok' // xAI Grok CLI
 
 export type TaskViewPresetId = 'all' | 'issues' | 'review' | 'my-issues' | 'my-prs' | 'prs'
 
@@ -1190,12 +1269,14 @@ export type GlobalSettings = {
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number
   editorMinimapEnabled: boolean
+  /** Whether local markdown review note controls and the review panel are shown. */
+  markdownReviewToolsEnabled: boolean
   terminalFontSize: number
   terminalFontFamily: string
   terminalFontWeight: number
   terminalLineHeight: number
   /** Mirrors VS Code's terminal.integrated.gpuAcceleration shape.
-   *  - 'auto': try xterm WebGL and fall back to DOM if the renderer fails.
+   *  - 'auto': use DOM on Linux; otherwise try xterm WebGL and fall back to DOM if the renderer fails.
    *  - 'on': always try xterm WebGL.
    *  - 'off': keep terminal rendering on xterm's DOM renderer. */
   terminalGpuAcceleration: 'auto' | 'on' | 'off'
@@ -1264,12 +1345,16 @@ export type GlobalSettings = {
    *  until the user explicitly wants worktree-scoped in-app browsing. */
   openLinksInApp: boolean
   rightSidebarOpenByDefault: boolean
+  showGitIgnoredFiles?: boolean
   /** Whether to show the Orca app name in the titlebar. */
   showTitlebarAppName: boolean
   /** Why: some users do not use the Tasks feature and prefer to keep the
    *  left sidebar free of its button entirely. Hiding the button here also
    *  removes it from keyboard navigation. */
   showTasksButton: boolean
+  /** Controls how Ctrl+Tab chooses the next visible tab. Optional for
+   *  profiles saved before this setting existed; readers default to MRU. */
+  ctrlTabOrderMode?: CtrlTabOrderMode
   /** Why: Floating Terminal is the default global shell surface so users can
    *  reach a terminal outside repo/worktree context immediately. */
   floatingTerminalEnabled: boolean
@@ -1327,7 +1412,11 @@ export type GlobalSettings = {
   defaultTaskViewPreset: TaskViewPresetId
   /** Why: persists the user's last-used task source so the Tasks page
    *  reopens to the same provider instead of always defaulting to GitHub. */
-  defaultTaskSource: 'github' | 'linear' | 'gitlab'
+  defaultTaskSource: TaskProvider
+  /** Why: users may only work from one hosted task system. Persisting this
+   *  list hides unused providers from Tasks chrome and sidebar shortcuts while
+   *  leaving the chosen default source stable when it is still visible. */
+  visibleTaskProviders: TaskProvider[]
   /** Why: persists the user's repo selection in the cross-repo tasks view.
    *  `null` means sticky-all — every eligible repo is selected, including
    *  repos added in future sessions, so the "All repos" label stays
@@ -1349,6 +1438,8 @@ export type GlobalSettings = {
   geminiCliOAuthEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
+  /** When true, Orca prevents local app suspension while hook-reported agents are working. */
+  keepComputerAwakeWhileAgentsRun: boolean
   /** Why: macOS terminals must choose between letting Option compose layout
    *  characters (@ on German, € on French) or treating Option as Meta/Esc for
    *  readline shortcuts. Mirrors Ghostty's macos-option-as-alt setting — and
@@ -1590,6 +1681,7 @@ export type PersistedUIState = {
   sidebarWidth: number
   rightSidebarWidth: number
   groupBy: 'none' | 'repo' | 'pr-status'
+  showWorkspaceLineage?: boolean
   sortBy: 'name' | 'smart' | 'recent' | 'repo'
   showActiveOnly: boolean
   /** Hide the repo's original checked-out branch from workspace navigation
@@ -1706,6 +1798,7 @@ export type PersistedUIState = {
    *  using their existing settings paths; this only restores transient tabs
    *  and applied searches. */
   taskResumeState?: TaskResumeState
+  workspaceCleanup?: WorkspaceCleanupUIState
 }
 
 export const PET_SIZE_MIN = 60
@@ -1772,6 +1865,13 @@ export type PersistedTrustedOrcaHookRepo = {
 
 export type PersistedTrustedOrcaHooks = Record<string, PersistedTrustedOrcaHookRepo>
 
+export type LegacyPaneKeyAliasEntry = {
+  ptyId: string
+  legacyPaneKey: string
+  stablePaneKey: string
+  updatedAt: number
+}
+
 // ─── Persistence shape ──────────────────────────────────────────────
 export type PersistedState = {
   schemaVersion: number
@@ -1780,6 +1880,7 @@ export type PersistedState = {
    *  presets are managed from the new-workspace composer and repo settings. */
   sparsePresetsByRepo: Record<string, SparsePreset[]>
   worktreeMeta: Record<string, WorktreeMeta>
+  worktreeLineageById: Record<string, WorktreeLineage>
   settings: GlobalSettings
   ui: PersistedUIState
   githubCache: {
@@ -1789,6 +1890,8 @@ export type PersistedState = {
   workspaceSession: WorkspaceSessionState
   sshTargets: SshTarget[]
   sshRemotePtyLeases: SshRemotePtyLease[]
+  migrationUnsupportedPtyEntries: MigrationUnsupportedPtyEntry[]
+  legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[]
   automations: Automation[]
   automationRuns: AutomationRun[]
   onboarding: OnboardingState
@@ -1868,6 +1971,7 @@ export type GitStatusResult = {
   // Why: porcelain v2 status already includes upstream/ahead/behind metadata.
   // Folding it in lets refresh polling avoid a second pair of git subprocesses.
   upstreamStatus?: GitUpstreamStatus
+  ignoredPaths?: string[]
 }
 
 // Why: when hasUpstream is false, ahead/behind are placeholder zeros, not a

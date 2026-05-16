@@ -22,18 +22,22 @@ export async function refreshGitStatusForWorktree({
   connectionId,
   deps
 }: {
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId' | 'showGitIgnoredFiles'> | null
   worktreeId: string
   worktreePath: string
   connectionId?: string
   deps: GitStatusRefreshDeps
 }): Promise<void> {
-  const status = (await getRuntimeGitStatus({
-    settings,
-    worktreeId,
-    worktreePath,
-    connectionId
-  })) as GitStatusResult
+  const includeIgnored = settings?.showGitIgnoredFiles ?? true
+  const status = (await getRuntimeGitStatus(
+    {
+      settings,
+      worktreeId,
+      worktreePath,
+      connectionId
+    },
+    { includeIgnored }
+  )) as GitStatusResult
 
   deps.setGitStatus(worktreeId, status)
   // Why: branch switches can happen inside a terminal. `git status --branch`

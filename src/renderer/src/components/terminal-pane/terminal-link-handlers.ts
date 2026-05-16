@@ -20,6 +20,7 @@ import {
   type RuntimeFileOperationArgs
 } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { resolveTerminalFileUrlTarget } from './terminal-file-url-target'
 
 export type LinkHandlerDeps = {
   worktreeId: string
@@ -87,6 +88,8 @@ function getTerminalFileContext(
   }
 }
 
+let latestOpenDetectedFilePathRequestId = 0
+
 export function openDetectedFilePath(
   filePath: string,
   line: number | null,
@@ -94,6 +97,7 @@ export function openDetectedFilePath(
   deps: Pick<LinkHandlerDeps, 'worktreeId' | 'worktreePath' | 'runtimeEnvironmentId'>
 ): void {
   const { runtimeEnvironmentId, worktreeId, worktreePath } = deps
+  const requestId = ++latestOpenDetectedFilePathRequestId
 
   void (async () => {
     let statResult
@@ -106,6 +110,10 @@ export function openDetectedFilePath(
       }
       statResult = await statRuntimePath(fileContext, filePath)
     } catch {
+      return
+    }
+
+    if (requestId !== latestOpenDetectedFilePathRequestId) {
       return
     }
 
@@ -158,13 +166,19 @@ export function openDetectedFilePath(
     })
 
     if (line !== null) {
+      const targetColumn = column ?? 1
+      store.setPendingEditorReveal(null)
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          window.dispatchEvent(
-            new CustomEvent('orca:editor-reveal-location', {
-              detail: { filePath, line, column }
-            })
-          )
+          if (requestId !== latestOpenDetectedFilePathRequestId) {
+            return
+          }
+          store.setPendingEditorReveal({
+            filePath,
+            line,
+            column: targetColumn,
+            matchLength: 0
+          })
         })
       })
     }
@@ -321,15 +335,10 @@ export function handleOscLink(
     // the same openDetectedFilePath logic used for detected file-path links.
     // Only local files are supported — remote hosts (file://remote/…) are rejected
     // because we cannot open them as local paths.
-    if (parsed.hostname && parsed.hostname !== 'localhost') {
+    const resolved = resolveTerminalFileUrlTarget(parsed)
+    if (!resolved) {
       return
     }
-    let filePath = decodeURIComponent(parsed.pathname)
-    // Why: on Windows, file:///C:/foo yields pathname "/C:/foo". The leading
-    // slash must be stripped to produce a valid Windows path ("C:/foo").
-    if (/^\/[A-Za-z]:/.test(filePath)) {
-      filePath = filePath.slice(1)
-    }
-    openDetectedFilePath(filePath, null, null, deps)
+    openDetectedFilePath(resolved.filePath, resolved.line, resolved.column, deps)
   }
 }

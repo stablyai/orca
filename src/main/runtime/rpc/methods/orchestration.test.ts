@@ -477,6 +477,16 @@ describe('orchestration RPC methods', () => {
       expect(result.task.status).toBe('pending')
     })
 
+    it('records the caller terminal handle when creating a task', async () => {
+      setup()
+      const result = (await call('orchestration.taskCreate', {
+        spec: 'spawn related workspace',
+        callerTerminalHandle: 'term_creator'
+      })) as { task: { id: string } }
+
+      expect(db.getTask(result.task.id)?.created_by_terminal_handle).toBe('term_creator')
+    })
+
     it('rejects invalid deps JSON', async () => {
       setup()
       await expect(

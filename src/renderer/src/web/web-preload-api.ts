@@ -11,7 +11,8 @@ import type {
   Repo,
   SearchResult,
   StatsSummary,
-  Worktree
+  Worktree,
+  WorktreeLineage
 } from '../../../shared/types'
 import {
   getDefaultOnboardingState,
@@ -128,8 +129,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     git: createGitApi(),
     browser: createBrowserApi(),
     gh: createGitHubApi(),
+    hostedReview: createRuntimeNamespaceApi('hostedReview'),
     linear: createRuntimeNamespaceApi('linear'),
-    notes: createNotesApi(),
     hooks: createHooksApi(),
     stats: {
       getSummary: async () =>
@@ -154,6 +155,9 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     computerUsePermissions: createComputerUsePermissionsApi(),
     updater: createUpdaterApi(),
     shell: createShellApi(),
+    skills: {
+      discover: () => Promise.resolve({ skills: [], sources: [], scannedAt: Date.now() })
+    },
     pty: createPtyApi(),
     ssh: createSshApi(),
     wsl: { isAvailable: () => Promise.resolve(false) },
@@ -161,6 +165,9 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     agentStatus: {
       onSet: () => noopUnsubscribe,
       getSnapshot: () => Promise.resolve([]),
+      onMigrationUnsupported: () => noopUnsubscribe,
+      onMigrationUnsupportedClear: () => noopUnsubscribe,
+      getMigrationUnsupportedSnapshot: () => Promise.resolve([]),
       drop: () => {}
     },
     mobile: {
@@ -185,6 +192,7 @@ function createRuntimeApi(): NonNullable<Partial<PreloadApi>['runtime']> {
     getStatus: () => getRemoteRuntimeStatus(),
     call: ({ method, params }) => callRuntimeEnvelope(method, params),
     getTerminalFitOverrides: () => Promise.resolve([]),
+    getTerminalDrivers: () => Promise.resolve([]),
     restoreTerminalFit: () => Promise.resolve({ restored: false }),
     onTerminalFitOverrideChanged: () => noopUnsubscribe,
     onTerminalDriverChanged: () => noopUnsubscribe
@@ -319,6 +327,23 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
           ...updates
         })
       ).worktree,
+    listLineage: async () =>
+      (
+        await callRuntimeResult<{ lineage: Record<string, WorktreeLineage> }>(
+          'worktree.lineageList'
+        )
+      ).lineage,
+    updateLineage: async ({ worktreeId, parentWorktreeId, noParent }) => {
+      cachedWorktrees = null
+      const result = await callRuntimeResult<{
+        worktree: Worktree & { lineage?: WorktreeLineage | null }
+      }>('worktree.set', {
+        worktree: worktreeId,
+        parentWorktree: parentWorktreeId,
+        noParent
+      })
+      return result.worktree.lineage ?? null
+    },
     persistSortOrder: async ({ orderedIds }) => {
       await callRuntimeResult('worktree.persistSortOrder', { orderedIds })
     },
@@ -439,9 +464,9 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
 
 function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
   return {
-    status: async ({ worktreePath }) => {
+    status: async ({ worktreePath, includeIgnored }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      return callRuntimeResult('git.status', { worktree: worktree.id })
+      return callRuntimeResult('git.status', { worktree: worktree.id, includeIgnored })
     },
     conflictOperation: async ({ worktreePath }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
@@ -525,6 +550,7 @@ function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
     unregisterGuest: () => Promise.resolve(),
     openDevTools: () => Promise.resolve(false),
     setViewportOverride: () => Promise.resolve(false),
+    setAnnotationViewportBridge: () => Promise.resolve(false),
     onGuestLoadFailed: () => noopUnsubscribe,
     onPermissionDenied: () => noopUnsubscribe,
     onPopup: () => noopUnsubscribe,
@@ -595,6 +621,7 @@ function createGitHubApi(): NonNullable<Partial<PreloadApi>['gh']> {
     prChecks: direct('github.prChecks'),
     prComments: direct('github.prComments'),
     resolveReviewThread: direct('github.resolveReviewThread'),
+    setPRFileViewed: direct('github.setPRFileViewed'),
     updatePRTitle: direct('github.updatePRTitle'),
     mergePR: direct('github.mergePR'),
     updateIssue: direct('github.updateIssue'),
@@ -633,23 +660,6 @@ function createRuntimeNamespaceApi(prefix: string): never {
     const method = `${prefix}.${path.at(-1) ?? ''}`
     return callRuntimeResult(method, args[0])
   }) as never
-}
-
-function createNotesApi(): NonNullable<Partial<PreloadApi>['notes']> {
-  const noteCall = (method: string) => (args: Record<string, unknown>) =>
-    callRuntimeResult(method, { ...args, worktree: args.worktreeId })
-  return {
-    list: noteCall('note.list'),
-    show: noteCall('note.show'),
-    create: noteCall('note.create'),
-    save: noteCall('note.save'),
-    rename: noteCall('note.rename'),
-    delete: noteCall('note.delete'),
-    append: noteCall('note.append'),
-    search: noteCall('note.search'),
-    link: noteCall('note.link'),
-    panelState: noteCall('note.panelState')
-  } as NonNullable<Partial<PreloadApi>['notes']>
 }
 
 function createHooksApi(): NonNullable<Partial<PreloadApi>['hooks']> {
@@ -708,6 +718,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onSwitchTab: () => noopUnsubscribe,
     onSwitchTabAcrossAllTypes: () => noopUnsubscribe,
     onSwitchTerminalTab: () => noopUnsubscribe,
+    onCtrlTabKeyDown: () => noopUnsubscribe,
+    onCtrlTabKeyUp: () => noopUnsubscribe,
     onToggleStatusBar: () => noopUnsubscribe,
     onDictationKeyDown: () => noopUnsubscribe,
     onExportPdfRequested: () => noopUnsubscribe,
@@ -804,7 +816,7 @@ function createCliApi(): NonNullable<Partial<PreloadApi>['cli']> {
 }
 
 function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
-  const status = (agent: 'claude' | 'codex' | 'gemini' | 'cursor' | 'droid') =>
+  const status = (agent: 'claude' | 'codex' | 'gemini' | 'cursor' | 'droid' | 'grok' | 'hermes') =>
     Promise.resolve({
       agent,
       state: 'not_installed',
@@ -817,7 +829,9 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
     codexStatus: () => status('codex'),
     geminiStatus: () => status('gemini'),
     cursorStatus: () => status('cursor'),
-    droidStatus: () => status('droid')
+    droidStatus: () => status('droid'),
+    grokStatus: () => status('grok'),
+    hermesStatus: () => status('hermes')
   }
 }
 
@@ -908,9 +922,12 @@ function createUpdaterApi(): NonNullable<Partial<PreloadApi>['updater']> {
 }
 
 function createShellApi(): NonNullable<Partial<PreloadApi>['shell']> {
+  const openResult = { ok: true } as const
   return {
     openPath: (path) =>
       Promise.resolve(window.open(path, '_blank', 'noopener,noreferrer') as never),
+    openInFileManager: () => Promise.resolve(openResult),
+    openInExternalEditor: () => Promise.resolve(openResult),
     openUrl: (url) => Promise.resolve(window.open(url, '_blank', 'noopener,noreferrer') as never),
     openFilePath: () => Promise.resolve(),
     openFileUri: (uri) =>

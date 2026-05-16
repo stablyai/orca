@@ -14,11 +14,7 @@ import { getFitOverrideForPty, bindPanePtyId } from '@/lib/pane-manager/mobile-f
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { isPaneReplaying, replayIntoTerminal } from './replay-guard'
 import { terminalOutputPrefersDomRenderer } from '@/lib/pane-manager/terminal-complex-script'
-import {
-  paneLeafId,
-  POST_REPLAY_MODE_RESET,
-  POST_REPLAY_FOCUS_REPORTING_RESET
-} from './layout-serialization'
+import { POST_REPLAY_MODE_RESET, POST_REPLAY_FOCUS_REPORTING_RESET } from './layout-serialization'
 import { warnTerminalLifecycleAnomaly } from './terminal-lifecycle-diagnostics'
 import { registerPtySerializer, registerPtyTitleSource } from './pty-buffer-serializer'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
@@ -28,11 +24,27 @@ import {
   waitForTerminalOutputParsed,
   writeTerminalOutput
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
+import { e2eConfig } from '@/lib/e2e-config'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
 const REMOTE_PTY_ID_PREFIX = 'remote:'
+const PTY_CONNECT_DIAG_LIMIT = 200
+
+function recordPtyConnectDiagnostic(message: string): void {
+  if (!e2eConfig.exposeStore) {
+    return
+  }
+  console.log(`[pty-connect] ${message}`)
+  const target = globalThis as Record<string, unknown>
+  const diag = (target.__ptyConnectDiag ??= [] as string[]) as string[]
+  diag.push(message)
+  if (diag.length > PTY_CONNECT_DIAG_LIMIT) {
+    diag.splice(0, diag.length - PTY_CONNECT_DIAG_LIMIT)
+  }
+}
 
 // Why: when multiple panes/tabs need the same deferred SSH connection,
 // the first one calls ssh.connect() and subsequent ones must wait for it
@@ -153,10 +165,10 @@ export function connectPanePty(
   const paneStartup = deps.startup ?? null
   deps.startup = undefined
 
-  // Why: cache timer state is keyed per-pane (not per-tab) so split-pane tabs
-  // can track each Claude session independently without overwriting each other.
-  const cacheKey = `${deps.tabId}:${pane.id}`
-  const pendingSpawnKey = `${deps.tabId}:${paneLeafId(pane.id)}`
+  // Why: paneKey crosses PTY env, hook IPC, retained rows, and reload/replay.
+  // Use the stable layout leaf UUID, not the renderer-local numeric pane id.
+  const cacheKey = makePaneKey(deps.tabId, pane.leafId)
+  const pendingSpawnKey = cacheKey
   const commandLifecycle = createTerminalCommandLifecycle({
     onCommandFinished: () => {
       const state = useAppStore.getState()
@@ -327,9 +339,8 @@ export function connectPanePty(
   }
   // Why: inject ORCA_PANE_KEY so global Claude/Codex hooks can attribute their
   // callbacks to the correct Orca pane without resolving worktrees from cwd.
-  // The key matches the `${tabId}:${paneId}` composite used for cacheTimerByKey.
-  // ORCA_TAB_ID / ORCA_WORKTREE_ID are exposed separately so the receiver has
-  // routing context without having to split paneKey back into its parts.
+  // The key matches the `${tabId}:${leafId}` composite used for cacheTimerByKey
+  // and agentStatusByPaneKey. Treat it as opaque outside Orca.
   const paneEnv = {
     ...paneStartup?.env,
     ORCA_PANE_KEY: cacheKey,
@@ -368,7 +379,7 @@ export function connectPanePty(
     // pty:spawn returns. Daemon-host-only: SSH path leaves these undefined
     // and the main-side guard short-circuits.
     tabId: deps.tabId,
-    leafId: paneLeafId(pane.id),
+    leafId: pane.leafId,
     ...(shellOverride ? { shellOverride } : {}),
     ...(paneStartup?.telemetry ? { telemetry: paneStartup.telemetry } : {}),
     onPtyExit: onExit,
@@ -714,7 +725,7 @@ export function connectPanePty(
         warnTerminalLifecycleAnomaly('restored PTY reattach returned no PTY id', {
           tabId: deps.tabId,
           worktreeId: deps.worktreeId,
-          leafId: deps.restoredLeafId ?? paneLeafId(pane.id),
+          leafId: deps.restoredLeafId ?? pane.leafId,
           paneId: pane.id,
           ptyId: staleSessionId ?? null
         })
@@ -1090,17 +1101,13 @@ export function connectPanePty(
       isSessionOwnedByWorktree(candidateReattachSessionId, deps.worktreeId)
         ? candidateReattachSessionId
         : null
-    const _diagMsg = `pane=${pane.id} tab=${deps.tabId} restored=${restoredPtyId} existing=${existingPtyId} detached=${detachedLivePtyId} reattach=${deferredReattachSessionId} hasTransport=${hasExistingPaneTransport} pendingKey=${pendingSpawnKey}`
-    console.log(`[pty-connect] ${_diagMsg}`)
-    ;((globalThis as Record<string, unknown>).__ptyConnectDiag ??= [] as string[]) as string[]
-    ;((globalThis as Record<string, unknown>).__ptyConnectDiag as string[]).push(_diagMsg)
+    recordPtyConnectDiagnostic(
+      `pane=${pane.id} tab=${deps.tabId} restored=${restoredPtyId} existing=${existingPtyId} detached=${detachedLivePtyId} reattach=${deferredReattachSessionId} hasTransport=${hasExistingPaneTransport} pendingKey=${pendingSpawnKey}`
+    )
 
     if (deferredReattachSessionId) {
       allowInitialIdleCacheSeed = true
-      console.log(`[pty-connect] pane=${pane.id} → REATTACH ${deferredReattachSessionId}`)
-      ;((globalThis as Record<string, unknown>).__ptyConnectDiag as string[])?.push(
-        `pane=${pane.id} → REATTACH`
-      )
+      recordPtyConnectDiagnostic(`pane=${pane.id} -> REATTACH ${deferredReattachSessionId}`)
 
       // Why: reattach also pre-signals so the cooperation gate suppresses
       // the daemon seed for this paneKey. Reattach paths register their
@@ -1163,7 +1170,7 @@ export function connectPanePty(
           warnTerminalLifecycleAnomaly('restored PTY reattach threw', {
             tabId: deps.tabId,
             worktreeId: deps.worktreeId,
-            leafId: deps.restoredLeafId ?? paneLeafId(pane.id),
+            leafId: deps.restoredLeafId ?? pane.leafId,
             paneId: pane.id,
             ptyId: deferredReattachSessionId,
             reason: message
@@ -1178,10 +1185,7 @@ export function connectPanePty(
           startFreshSpawn()
         })
     } else if (detachedLivePtyId) {
-      console.log(`[pty-connect] pane=${pane.id} → ATTACH detached=${detachedLivePtyId}`)
-      ;((globalThis as Record<string, unknown>).__ptyConnectDiag as string[])?.push(
-        `pane=${pane.id} → ATTACH ${detachedLivePtyId}`
-      )
+      recordPtyConnectDiagnostic(`pane=${pane.id} -> ATTACH detached=${detachedLivePtyId}`)
       allowInitialIdleCacheSeed = false
       // Why: surface synchronous attach failures (e.g., the PTY died between
       // mount and remount, so window.api.pty.resize rejects) through
@@ -1212,14 +1216,9 @@ export function connectPanePty(
       }
     } else {
       allowInitialIdleCacheSeed = false
-      const pendingSpawn = hasExistingPaneTransport
-        ? undefined
-        : pendingSpawnByPaneKey.get(pendingSpawnKey)
+      const pendingSpawn = pendingSpawnByPaneKey.get(pendingSpawnKey)
       if (pendingSpawn) {
-        console.log(`[pty-connect] pane=${pane.id} → PENDING SPAWN (waiting on sibling)`)
-        ;((globalThis as Record<string, unknown>).__ptyConnectDiag as string[])?.push(
-          `pane=${pane.id} → PENDING SPAWN`
-        )
+        recordPtyConnectDiagnostic(`pane=${pane.id} -> PENDING SPAWN`)
         void pendingSpawn
           .then((spawnedPtyId) => {
             if (disposed) {
@@ -1260,10 +1259,7 @@ export function connectPanePty(
             reportError(err instanceof Error ? err.message : String(err))
           })
       } else {
-        console.log(`[pty-connect] pane=${pane.id} → FRESH SPAWN`)
-        ;((globalThis as Record<string, unknown>).__ptyConnectDiag as string[])?.push(
-          `pane=${pane.id} → FRESH SPAWN`
-        )
+        recordPtyConnectDiagnostic(`pane=${pane.id} -> FRESH SPAWN`)
         startFreshSpawn()
       }
     }

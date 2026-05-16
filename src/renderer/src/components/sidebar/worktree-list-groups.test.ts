@@ -1,8 +1,15 @@
+/* eslint-disable max-lines -- Why: row-builder tests keep grouping, pinning, and lineage ordering cases together so expected row contracts stay comparable. */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { buildRows, getPRGroupKey } from './worktree-list-groups'
-import type { Repo, Worktree } from '../../../../shared/types'
+import {
+  buildRows,
+  getLineageGroupKey,
+  getLineageRenderInfo,
+  getPRGroupKey,
+  getRepoGroupOrdering
+} from './worktree-list-groups'
+import type { Repo, Worktree, WorktreeLineage } from '../../../../shared/types'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -209,6 +216,7 @@ describe('buildRows repo grouping order', () => {
     [repoC.id, repoC]
   ])
   const wA: Worktree = { ...worktree, id: 'wt-a', repoId: repoA.id, displayName: 'a' }
+  const wAStale: Worktree = { ...worktree, id: 'wt-a-stale', repoId: repoA.id, displayName: 'a2' }
   const wB: Worktree = { ...worktree, id: 'wt-b', repoId: repoB.id, displayName: 'b' }
   const wC: Worktree = { ...worktree, id: 'wt-c', repoId: repoC.id, displayName: 'c' }
 
@@ -231,6 +239,313 @@ describe('buildRows repo grouping order', () => {
     const headerKeys = rows.filter((r) => r.type === 'header').map((r) => r.key)
     expect(headerKeys).toEqual(['repo:repo-b', 'repo:repo-a', 'repo:repo-c'])
   })
+
+  it('orders repo headers by first encounter when caller uses visible worktree order', () => {
+    // Caller already sorted worktrees by recency: C is freshest, then A, then B.
+    // Even though repoOrder pins B, A, C, dynamic sorts must follow the freshest
+    // worktree out of each repo so a just-active worktree's parent group
+    // bubbles to the top of the sidebar.
+    const repoOrder = new Map([
+      [repoB.id, 0],
+      [repoA.id, 1],
+      [repoC.id, 2]
+    ])
+    const rows = buildRows(
+      'repo',
+      [wC, wA, wB],
+      map,
+      null,
+      new Set(),
+      repoOrder,
+      undefined,
+      'visible-worktree-order'
+    )
+    const headerKeys = rows.filter((r) => r.type === 'header').map((r) => r.key)
+    expect(headerKeys).toEqual(['repo:repo-c', 'repo:repo-a', 'repo:repo-b'])
+  })
+
+  it('orders repo headers by each repo highest-ranked visible child', () => {
+    const repoOrder = new Map([
+      [repoB.id, 0],
+      [repoA.id, 1],
+      [repoC.id, 2]
+    ])
+    const rows = buildRows(
+      'repo',
+      [wA, wB, wAStale, wC],
+      map,
+      null,
+      new Set(),
+      repoOrder,
+      undefined,
+      'visible-worktree-order'
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: 'repo:repo-a' },
+      { type: 'item', worktree: { id: 'wt-a' } },
+      { type: 'item', worktree: { id: 'wt-a-stale' } },
+      { type: 'header', key: 'repo:repo-b' },
+      { type: 'item', worktree: { id: 'wt-b' } },
+      { type: 'header', key: 'repo:repo-c' },
+      { type: 'item', worktree: { id: 'wt-c' } }
+    ])
+  })
+
+  it('keeps repoOrder for manual repo group ordering', () => {
+    const repoOrder = new Map([
+      [repoB.id, 0],
+      [repoA.id, 1],
+      [repoC.id, 2]
+    ])
+    const rows = buildRows('repo', [wC, wA, wB], map, null, new Set(), repoOrder)
+    const headerKeys = rows.filter((r) => r.type === 'header').map((r) => r.key)
+    expect(headerKeys).toEqual(['repo:repo-b', 'repo:repo-a', 'repo:repo-c'])
+  })
+})
+
+describe('getRepoGroupOrdering', () => {
+  it.each([
+    ['repo', 'recent', 'visible-worktree-order'],
+    ['repo', 'smart', 'visible-worktree-order'],
+    ['repo', 'name', 'manual'],
+    ['repo', 'repo', 'manual'],
+    ['none', 'recent', 'manual'],
+    ['pr-status', 'recent', 'manual']
+  ] as const)('uses %s/%s -> %s', (groupBy, sortBy, expected) => {
+    expect(getRepoGroupOrdering(groupBy, sortBy)).toBe(expected)
+  })
+})
+
+describe('buildRows workspace lineage nesting', () => {
+  const parent: Worktree = {
+    ...worktree,
+    id: 'wt-parent',
+    instanceId: 'parent-instance',
+    displayName: 'coordinator'
+  }
+  const child: Worktree = {
+    ...worktree,
+    id: 'wt-child',
+    instanceId: 'child-instance',
+    displayName: 'worker'
+  }
+  const grandchild: Worktree = {
+    ...worktree,
+    id: 'wt-grandchild',
+    instanceId: 'grandchild-instance',
+    displayName: 'nested-worker'
+  }
+  const lineage: WorktreeLineage = {
+    worktreeId: child.id,
+    worktreeInstanceId: 'child-instance',
+    parentWorktreeId: parent.id,
+    parentWorktreeInstanceId: 'parent-instance',
+    origin: 'cli',
+    capture: { source: 'terminal-context', confidence: 'inferred' },
+    createdAt: 1
+  }
+  const grandchildLineage: WorktreeLineage = {
+    worktreeId: grandchild.id,
+    worktreeInstanceId: 'grandchild-instance',
+    parentWorktreeId: child.id,
+    parentWorktreeInstanceId: 'child-instance',
+    origin: 'cli',
+    capture: { source: 'terminal-context', confidence: 'inferred' },
+    createdAt: 1
+  }
+
+  it('keeps lineage flat when nesting is off', () => {
+    const rows = buildRows(
+      'none',
+      [child, parent],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      { [child.id]: lineage },
+      new Map([
+        [parent.id, parent],
+        [child.id, child]
+      ])
+    )
+
+    const items = rows.filter((row) => row.type === 'item')
+    expect(items[0]).toMatchObject({ type: 'item', worktree: { id: child.id } })
+    expect(items[0]).not.toHaveProperty('parentLabel')
+    expect(items[1]).toMatchObject({
+      type: 'item',
+      worktree: { id: parent.id }
+    })
+  })
+
+  it('places children directly under their parent when nesting is on', () => {
+    const rows = buildRows(
+      'none',
+      [child, parent],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      { [child.id]: lineage },
+      new Map([
+        [parent.id, parent],
+        [child.id, child]
+      ]),
+      true
+    )
+
+    const items = rows.filter((row) => row.type === 'item')
+    expect(items[0]).toMatchObject({ type: 'item', worktree: { id: parent.id } })
+    expect(items[1]).toMatchObject({
+      type: 'item',
+      worktree: { id: child.id },
+      depth: 1,
+      parentLabel: 'coordinator'
+    })
+  })
+
+  it('supports nested lineage chains beyond one level', () => {
+    const rows = buildRows(
+      'none',
+      [grandchild, child, parent],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      { [child.id]: lineage, [grandchild.id]: grandchildLineage },
+      new Map([
+        [parent.id, parent],
+        [child.id, child],
+        [grandchild.id, grandchild]
+      ]),
+      true
+    )
+
+    const items = rows.filter((row) => row.type === 'item')
+    expect(items.map((row) => row.worktree.id)).toEqual([parent.id, child.id, grandchild.id])
+    expect(items[0]).toMatchObject({
+      type: 'item',
+      depth: 0,
+      lineageChildCount: 1,
+      lineageCollapsed: false
+    })
+    expect(items[1]).toMatchObject({
+      type: 'item',
+      worktree: { id: child.id },
+      depth: 1,
+      lineageChildCount: 1
+    })
+    expect(items[2]).toMatchObject({
+      type: 'item',
+      worktree: { id: grandchild.id },
+      depth: 2,
+      lineageChildCount: 0
+    })
+  })
+
+  it('collapses descendants under lineage parents', () => {
+    const rows = buildRows(
+      'none',
+      [grandchild, child, parent],
+      repoMap,
+      null,
+      new Set([getLineageGroupKey(parent.id)]),
+      undefined,
+      undefined,
+      undefined,
+      { [child.id]: lineage, [grandchild.id]: grandchildLineage },
+      new Map([
+        [parent.id, parent],
+        [child.id, child],
+        [grandchild.id, grandchild]
+      ]),
+      true
+    )
+
+    const items = rows.filter((row) => row.type === 'item')
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({
+      type: 'item',
+      worktree: { id: parent.id },
+      lineageChildCount: 1,
+      lineageCollapsed: true
+    })
+  })
+
+  it('marks stale instance links as missing without creating a parent group', () => {
+    const staleLineage = { ...lineage, parentWorktreeInstanceId: 'old-parent-instance' }
+    const rows = buildRows(
+      'none',
+      [child],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      { [child.id]: staleLineage },
+      new Map([
+        [parent.id, parent],
+        [child.id, child]
+      ]),
+      true
+    )
+
+    const items = rows.filter((row) => row.type === 'item')
+    expect(items[0]).toMatchObject({
+      type: 'item',
+      worktree: { id: child.id },
+      lineageState: 'missing'
+    })
+  })
+
+  it('marks stale instance links as missing for shared context-menu validation', () => {
+    const staleLineage = { ...lineage, parentWorktreeInstanceId: 'old-parent-instance' }
+    const info = getLineageRenderInfo(
+      child,
+      { [child.id]: staleLineage },
+      new Map([
+        [parent.id, parent],
+        [child.id, child]
+      ])
+    )
+
+    expect(info).toMatchObject({ state: 'missing' })
+  })
+
+  it('keeps pinned children in Pinned with parent context', () => {
+    const pinnedChild = { ...child, isPinned: true }
+    const rows = buildRows(
+      'none',
+      [parent, pinnedChild],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      { [child.id]: lineage },
+      new Map([
+        [parent.id, parent],
+        [child.id, pinnedChild]
+      ]),
+      true
+    )
+
+    expect(rows[0]).toMatchObject({ type: 'header', key: 'pinned' })
+    expect(rows[1]).toMatchObject({
+      type: 'item',
+      worktree: { id: child.id },
+      parentLabel: 'coordinator'
+    })
+  })
 })
 
 describe('WorktreeList header styles', () => {
@@ -241,5 +556,14 @@ describe('WorktreeList header styles', () => {
     )
 
     expect(source).not.toContain('leading-none capitalize')
+  })
+
+  it('shows a pointer cursor over the disclosure chevron path', () => {
+    const source = readFileSync(
+      fileURLToPath(new URL('./WorktreeList.tsx', import.meta.url)),
+      'utf8'
+    )
+
+    expect(source).toContain('[&_path]:cursor-pointer')
   })
 })

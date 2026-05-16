@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: this test file owns the diff-comments
+slice's persistence, runtime routing, rollback, and compatibility behavior. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
@@ -79,6 +81,22 @@ const mockApi = {
     getDaily: vi.fn().mockResolvedValue([]),
     getBreakdown: vi.fn().mockResolvedValue([]),
     getRecentSessions: vi.fn().mockResolvedValue([])
+  },
+  openCodeUsage: {
+    getScanState: vi.fn().mockResolvedValue({
+      enabled: false,
+      isScanning: false,
+      lastScanStartedAt: null,
+      lastScanCompletedAt: null,
+      lastScanError: null,
+      hasAnyOpenCodeData: false
+    }),
+    setEnabled: vi.fn().mockResolvedValue({}),
+    refresh: vi.fn().mockResolvedValue({}),
+    getSummary: vi.fn().mockResolvedValue(null),
+    getDaily: vi.fn().mockResolvedValue([]),
+    getBreakdown: vi.fn().mockResolvedValue([]),
+    getRecentSessions: vi.fn().mockResolvedValue([])
   }
 }
 
@@ -101,6 +119,7 @@ import { createMemorySlice } from './memory'
 import { createWorkspaceSpaceSlice } from './workspace-space'
 import { createClaudeUsageSlice } from './claude-usage'
 import { createCodexUsageSlice } from './codex-usage'
+import { createOpenCodeUsageSlice } from './opencode-usage'
 import { createBrowserSlice } from './browser'
 import { createRateLimitSlice } from './rate-limits'
 import { createSshSlice } from './ssh'
@@ -109,6 +128,7 @@ import { createDiffCommentsSlice } from './diffComments'
 import { createDetectedAgentsSlice } from './detected-agents'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 import { createDictationSlice } from './dictation'
+import { createWorkspaceCleanupSlice } from './workspace-cleanup'
 
 function createTestStore() {
   return create<AppState>()((...a) => ({
@@ -128,6 +148,7 @@ function createTestStore() {
     ...createWorkspaceSpaceSlice(...a),
     ...createClaudeUsageSlice(...a),
     ...createCodexUsageSlice(...a),
+    ...createOpenCodeUsageSlice(...a),
     ...createBrowserSlice(...a),
     ...createRateLimitSlice(...a),
     ...createSshSlice(...a),
@@ -135,12 +156,25 @@ function createTestStore() {
     ...createDiffCommentsSlice(...a),
     ...createDetectedAgentsSlice(...a),
     ...createWorktreeNavHistorySlice(...a),
-    ...createDictationSlice(...a)
+    ...createDictationSlice(...a),
+    ...createWorkspaceCleanupSlice(...a)
   }))
 }
 
 const REPO = 'repo1'
 const WT = 'repo1::/path/wt'
+
+function makeComment(overrides: Partial<DiffComment> & Pick<DiffComment, 'id'>): DiffComment {
+  return {
+    worktreeId: WT,
+    filePath: 'src/foo.ts',
+    lineNumber: 10,
+    body: 'body',
+    createdAt: 1000,
+    side: 'modified',
+    ...overrides
+  }
+}
 
 function makeWorktree(diffComments: DiffComment[]): Worktree {
   return {
@@ -170,6 +204,61 @@ function seed(store: ReturnType<typeof createTestStore>, comments: DiffComment[]
     worktreesByRepo: { [REPO]: [makeWorktree(comments)] }
   })
 }
+
+describe('addDiffComment', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    clearRuntimeCompatibilityCacheForTests()
+    runtimeEnvironmentTransportCall.mockReset()
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
+    })
+    updateMeta.mockResolvedValue({})
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { ok: true },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+  })
+
+  it('persists source and startLine for ranged comments', async () => {
+    const store = createTestStore()
+    seed(store, [])
+
+    const saved = await store.getState().addDiffComment({
+      worktreeId: WT,
+      filePath: 'README.md',
+      source: 'markdown',
+      startLine: 2,
+      lineNumber: 4,
+      body: 'range note',
+      side: 'modified'
+    })
+
+    expect(saved).toEqual(
+      expect.objectContaining({
+        filePath: 'README.md',
+        source: 'markdown',
+        startLine: 2,
+        lineNumber: 4,
+        body: 'range note'
+      })
+    )
+    expect(updateMeta).toHaveBeenCalledWith({
+      worktreeId: WT,
+      updates: {
+        diffComments: [
+          expect.objectContaining({
+            source: 'markdown',
+            startLine: 2,
+            lineNumber: 4
+          })
+        ]
+      }
+    })
+  })
+})
 
 describe('updateDiffComment', () => {
   beforeEach(() => {
@@ -316,6 +405,140 @@ describe('updateDiffComment', () => {
 
     expect(ok).toBe(false)
     expect(store.getState().getDiffComments(WT)[0].body).toBe('old body')
+    errSpy.mockRestore()
+  })
+})
+
+describe('bulk clear diff comments', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    clearRuntimeCompatibilityCacheForTests()
+    runtimeEnvironmentTransportCall.mockReset()
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
+    })
+    updateMeta.mockResolvedValue({})
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { ok: true },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+  })
+
+  it('clears all notes and persists once', async () => {
+    const store = createTestStore()
+    seed(store, [
+      makeComment({ id: 'c1', filePath: 'src/foo.ts' }),
+      makeComment({ id: 'c2', filePath: 'src/bar.ts' })
+    ])
+
+    const ok = await store.getState().clearDiffComments(WT)
+
+    expect(ok).toBe(true)
+    expect(store.getState().getDiffComments(WT)).toEqual([])
+    expect(updateMeta).toHaveBeenCalledTimes(1)
+    expect(updateMeta).toHaveBeenCalledWith({
+      worktreeId: WT,
+      updates: { diffComments: [] }
+    })
+  })
+
+  it('clears notes for one file and persists once', async () => {
+    const store = createTestStore()
+    seed(store, [
+      makeComment({ id: 'c1', filePath: 'src/foo.ts' }),
+      makeComment({ id: 'c2', filePath: 'src/bar.ts' }),
+      makeComment({ id: 'c3', filePath: 'src/foo.ts', lineNumber: 20 })
+    ])
+
+    const ok = await store.getState().clearDiffCommentsForFile(WT, 'src/foo.ts')
+
+    expect(ok).toBe(true)
+    expect(
+      store
+        .getState()
+        .getDiffComments(WT)
+        .map((c) => c.id)
+    ).toEqual(['c2'])
+    expect(updateMeta).toHaveBeenCalledTimes(1)
+    expect(updateMeta).toHaveBeenCalledWith({
+      worktreeId: WT,
+      updates: { diffComments: [expect.objectContaining({ id: 'c2' })] }
+    })
+  })
+
+  it('returns success without persisting when no file notes match', async () => {
+    const store = createTestStore()
+    const comments = [makeComment({ id: 'c1', filePath: 'src/foo.ts' })]
+    seed(store, comments)
+
+    const ok = await store.getState().clearDiffCommentsForFile(WT, 'src/missing.ts')
+
+    expect(ok).toBe(true)
+    expect(store.getState().getDiffComments(WT)).toBe(comments)
+    expect(updateMeta).not.toHaveBeenCalled()
+  })
+
+  it('persists clear through the selected runtime environment', async () => {
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never
+    })
+    seed(store, [makeComment({ id: 'c1' })])
+
+    const ok = await store.getState().clearDiffComments(WT)
+
+    expect(ok).toBe(true)
+    expect(updateMeta).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'worktree.set',
+      params: {
+        worktree: WT,
+        diffComments: []
+      },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('rolls back to the previous note array on persist failure', async () => {
+    const store = createTestStore()
+    const comments = [makeComment({ id: 'c1' }), makeComment({ id: 'c2' })]
+    seed(store, comments)
+    updateMeta.mockRejectedValueOnce(new Error('disk full'))
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const ok = await store.getState().clearDiffComments(WT)
+
+    expect(ok).toBe(false)
+    expect(store.getState().getDiffComments(WT)).toBe(comments)
+    errSpy.mockRestore()
+  })
+
+  it('does not clobber a later comment array identity when rollback runs', async () => {
+    const store = createTestStore()
+    const comments = [makeComment({ id: 'c1' })]
+    const laterComments = [makeComment({ id: 'c2', body: 'later' })]
+    seed(store, comments)
+    let rejectPersist: (err: Error) => void = () => {}
+    updateMeta.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectPersist = reject
+        })
+    )
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const clearPromise = store.getState().clearDiffComments(WT)
+    await Promise.resolve()
+    seed(store, laterComments)
+    rejectPersist(new Error('disk full'))
+
+    const ok = await clearPromise
+
+    expect(ok).toBe(false)
+    expect(store.getState().getDiffComments(WT)).toBe(laterComments)
     errSpy.mockRestore()
   })
 })

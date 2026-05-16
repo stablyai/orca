@@ -3,6 +3,7 @@ import os from 'os'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
+  UUID_RE,
   execInTerminal,
   waitForActivePanePtyId,
   waitForActiveTerminalManager,
@@ -196,8 +197,10 @@ test.describe('Localhost SSH', () => {
       if (!pane) {
         throw new Error('No active terminal pane')
       }
-      return `${tabId}:${pane.id}`
+      return `${tabId}:${pane.leafId}`
     })
+    const paneKeyLeafId = paneKey.slice(paneKey.indexOf(':') + 1)
+    expect(paneKeyLeafId).toMatch(UUID_RE)
 
     const terminalMarker = marker('LOCALHOST_SSH')
     await execInTerminal(orcaPage, ptyId, emitMarkerCommand(terminalMarker))

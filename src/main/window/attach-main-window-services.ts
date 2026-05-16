@@ -10,9 +10,11 @@ import type { CreateWorktreeResult, WorktreeStartupLaunch } from '../../shared/t
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 import { registerRepoHandlers } from '../ipc/repos'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
-import { registerPtyHandlers } from '../ipc/pty'
+import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
+import { getLocalPtyProvider, registerPtyHandlers } from '../ipc/pty'
 import { registerDaemonManagementHandlers } from '../ipc/pty-management'
 import { registerSshHandlers } from '../ipc/ssh'
+import { registerRemoteWorkspaceHandlers } from '../ipc/remote-workspace'
 import { browserManager } from '../browser/browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from '../browser/browser-media-access'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -43,6 +45,7 @@ export function attachMainWindowServices(
 ): void {
   registerRepoHandlers(mainWindow, store)
   registerWorktreeHandlers(mainWindow, store, runtime)
+  registerWorkspaceCleanupHandlers(store, { runtime, getLocalPtyProvider })
   registerPtyHandlers(
     mainWindow,
     runtime,
@@ -75,6 +78,7 @@ export function attachMainWindowServices(
   // git I/O or daemon RPC.
   void hydrateLocalPtyRegistryAtBoot(store)
   registerSshHandlers(store, () => mainWindow, runtime)
+  registerRemoteWorkspaceHandlers(store, () => mainWindow)
   registerFileDropRelay(mainWindow)
   setupAutoUpdater(mainWindow, {
     getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
@@ -266,8 +270,9 @@ function registerRuntimeWindowLifecycle(
           activate: opts.activate !== false,
           // Why: pre-minted tabId from main keeps the renderer's tab id aligned
           // with the paneKey baked into the PTY env at spawn time, so hook
-          // events route to the right slot. See docs/cli-terminal-hook-pane-key.md.
-          ...(opts.tabId !== undefined ? { tabId: opts.tabId } : {})
+          // events route to the right slot.
+          ...(opts.tabId !== undefined ? { tabId: opts.tabId } : {}),
+          ...(opts.leafId !== undefined ? { leafId: opts.leafId } : {})
         })
       }),
     splitTerminal: (tabId, paneRuntimeId, opts) => {

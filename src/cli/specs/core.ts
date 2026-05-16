@@ -91,7 +91,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'create'],
     summary: 'Create a new Orca-managed worktree',
     usage:
-      'orca worktree create --repo <selector> --name <name> [--base-branch <ref>] [--issue <number>] [--comment <text>] [--run-hooks] [--activate] [--json]',
+      'orca worktree create --repo <selector> --name <name> [--base-branch <ref>] [--issue <number>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'repo',
@@ -99,10 +99,14 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'base-branch',
       'issue',
       'comment',
+      'parent-worktree',
+      'no-parent',
       'run-hooks',
       'activate'
     ],
     notes: [
+      'By default, Orca records the new worktree as a child of the caller workspace when it can infer one from the Orca terminal or current directory.',
+      'Pass --parent-worktree to choose a parent explicitly, or --no-parent to force no lineage.',
       'By default this creates the worktree and its first terminal without switching the active Orca workspace.',
       'Repo-defined setup hooks follow the repository setup policy; pass --run-hooks to force them.',
       'Pass --activate when the CLI caller intentionally wants to reveal the new worktree in the app.',
@@ -113,8 +117,16 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'set'],
     summary: 'Update Orca metadata for a worktree',
     usage:
-      'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--comment <text>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'display-name', 'issue', 'comment']
+      'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--comment <text>] [--parent-worktree <selector>|--no-parent] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'worktree',
+      'display-name',
+      'issue',
+      'comment',
+      'parent-worktree',
+      'no-parent'
+    ]
   },
   {
     path: ['worktree', 'rm'],

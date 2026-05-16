@@ -1,8 +1,9 @@
 /* eslint-disable max-lines -- Why: the remote file browser centralizes filter state, path-mode preview state, cache, debounce, request gen, and click/keyboard handling in one component so picker navigation stays coherent. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronRight, Folder, File, ArrowUp, LoaderCircle, Home, Search } from 'lucide-react'
+import { ChevronRight, Folder, ArrowUp, LoaderCircle, Home, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { getFileTypeIcon } from '@/lib/file-type-icons'
 import {
   decideEnterAction,
   decideEscAction,
@@ -667,32 +668,35 @@ export function RemoteFileBrowser({
               }'`}</p>
             </div>
           ) : (
-            displayEntries.map((entry) => (
-              <button
-                key={entry.name}
-                type="button"
-                onClick={() => handleRowClick(entry)}
-                onDoubleClick={() => handleRowDoubleClick(entry)}
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  inputRef.current?.focus()
-                }}
-                className={cn(
-                  'w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors cursor-pointer',
-                  'hover:bg-accent/60'
-                )}
-              >
-                {entry.isDirectory ? (
-                  <Folder className="size-3.5 text-blue-400 shrink-0" />
-                ) : (
-                  <File className="size-3.5 text-muted-foreground/60 shrink-0" />
-                )}
-                <span className="truncate flex-1 min-w-0">{entry.name}</span>
-                {entry.isDirectory && (
-                  <ChevronRight className="size-3.5 text-muted-foreground/60 shrink-0" />
-                )}
-              </button>
-            ))
+            displayEntries.map((entry) => {
+              const FileIcon = getFileTypeIcon(entry.name)
+              return (
+                <button
+                  key={entry.name}
+                  type="button"
+                  onClick={() => handleRowClick(entry)}
+                  onDoubleClick={() => handleRowDoubleClick(entry)}
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    inputRef.current?.focus()
+                  }}
+                  className={cn(
+                    'w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors cursor-pointer',
+                    'hover:bg-accent/60'
+                  )}
+                >
+                  {entry.isDirectory ? (
+                    <Folder className="size-3.5 text-muted-foreground shrink-0" />
+                  ) : (
+                    <FileIcon className="size-3.5 text-muted-foreground/60 shrink-0" />
+                  )}
+                  <span className="truncate flex-1 min-w-0">{entry.name}</span>
+                  {entry.isDirectory && (
+                    <ChevronRight className="size-3.5 text-muted-foreground/60 shrink-0" />
+                  )}
+                </button>
+              )
+            })
           )}
         </div>
       </div>

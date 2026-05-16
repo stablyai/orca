@@ -11,6 +11,8 @@ import { CodexHookService } from '../codex/hook-service'
 import { CursorHookService } from '../cursor/hook-service'
 import { GeminiHookService } from '../gemini/hook-service'
 import { ClaudeHookService } from '../claude/hook-service'
+import { GrokHookService } from '../grok/hook-service'
+import { HermesHookService } from '../hermes/hook-service'
 
 type FakeFs = {
   files: Map<string, string>
@@ -124,6 +126,10 @@ describe('remote hook service installers', () => {
         {
           path: '/home/dev/.orca/agent-hooks/cursor-hook.sh',
           install: (sftp: SFTPWrapper) => new CursorHookService().installRemote(sftp, '/home/dev')
+        },
+        {
+          path: '/home/dev/.orca/agent-hooks/grok-hook.sh',
+          install: (sftp: SFTPWrapper) => new GrokHookService().installRemote(sftp, '/home/dev')
         }
       ]
 
@@ -185,12 +191,14 @@ describe('remote hook service installers', () => {
     expect(fs.files.get('/home/dev/.orca/agent-hooks/codex-hook.sh')).toContain('#!/bin/sh')
   })
 
-  it('installs remote Gemini and Cursor configs using their CLI-specific schemas', async () => {
+  it('installs remote Gemini, Cursor, and Grok configs using their CLI-specific schemas', async () => {
     const gemini = createFakeSftp()
     const cursor = createFakeSftp()
+    const grok = createFakeSftp()
 
     await new GeminiHookService().installRemote(gemini.sftp, '/home/dev')
     await new CursorHookService().installRemote(cursor.sftp, '/home/dev')
+    await new GrokHookService().installRemote(grok.sftp, '/home/dev')
 
     const geminiConfig = JSON.parse(gemini.fs.files.get('/home/dev/.gemini/settings.json')!) as {
       hooks: Record<string, { hooks: { command: string }[] }[]>
@@ -220,5 +228,41 @@ describe('remote hook service installers', () => {
       expect(definition?.command).toContain('/home/dev/.orca/agent-hooks/cursor-hook.sh')
       expect(definition?.hooks).toBeUndefined()
     }
+
+    const grokConfig = JSON.parse(grok.fs.files.get('/home/dev/.grok/hooks/orca-status.json')!) as {
+      hooks: Record<string, { matcher?: string; hooks?: { command: string }[] }[]>
+    }
+    for (const eventName of [
+      'SessionStart',
+      'UserPromptSubmit',
+      'Stop',
+      'SessionEnd',
+      'PreToolUse',
+      'PostToolUse',
+      'PostToolUseFailure',
+      'Notification'
+    ]) {
+      const definition = grokConfig.hooks[eventName]?.[0]
+      const command = definition?.hooks?.[0]?.command
+      expect(command).toContain('/home/dev/.orca/agent-hooks/grok-hook.sh')
+      expect(command).toMatch(/^if \[ -x /)
+    }
+    expect(grokConfig.hooks.PreToolUse?.[0]?.matcher).toBe('*')
+  })
+
+  it('installs remote Hermes plugin files and enables the plugin', async () => {
+    const { sftp, fs } = createFakeSftp()
+
+    const status = await new HermesHookService().installRemote(sftp, '/home/dev')
+
+    expect(status.state).toBe('installed')
+    expect(status.configPath).toBe('/home/dev/.hermes/config.yaml')
+    expect(fs.files.get('/home/dev/.hermes/plugins/orca-status/plugin.yaml')).toContain(
+      'pre_llm_call'
+    )
+    expect(fs.files.get('/home/dev/.hermes/plugins/orca-status/__init__.py')).toContain(
+      '/hook/hermes'
+    )
+    expect(fs.files.get('/home/dev/.hermes/config.yaml')).toContain('orca-status')
   })
 })

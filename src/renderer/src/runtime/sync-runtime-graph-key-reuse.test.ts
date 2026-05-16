@@ -97,6 +97,63 @@ describe('runtime mobile session sync key projection reuse', () => {
     expect(titleTickKey.editorDraftsProjection).toBe(baseKey.editorDraftsProjection)
     expect(runtimeMobileSessionSyncKeysEqual(baseKey, titleTickKey)).toBe(false)
   })
+
+  it('does not rebuild serialized projections when only activeTabId changes', () => {
+    const base = makeState({
+      tabsByWorktree: {
+        'wt-1': [{ id: 'term-1', title: 'Codex working', customTitle: null }]
+      } as unknown as AppState['tabsByWorktree']
+    })
+    const baseKey = getRuntimeMobileSessionSyncKey(base)
+    const activated = makeState({
+      ...base,
+      activeTabId: 'term-1'
+    })
+
+    const stringifySpy = vi.spyOn(JSON, 'stringify')
+    stringifySpy.mockClear()
+    const activatedKey = getRuntimeMobileSessionSyncKey(activated, base, baseKey)
+
+    expect(stringifySpy).not.toHaveBeenCalled()
+    expect(activatedKey.tabsProjection).toBe(baseKey.tabsProjection)
+    expect(activatedKey.openFilesProjection).toBe(baseKey.openFilesProjection)
+    expect(activatedKey.editorDraftsProjection).toBe(baseKey.editorDraftsProjection)
+    expect(runtimeMobileSessionSyncKeysEqual(baseKey, activatedKey)).toBe(false)
+  })
+
+  it('reuses unchanged worktree tab projections when one worktree title changes', () => {
+    const unchangedTitle = vi.fn(() => 'Unchanged agent')
+    const unchangedTab = {
+      id: 'term-unchanged',
+      customTitle: null,
+      get title() {
+        return unchangedTitle()
+      }
+    }
+    const base = makeState({
+      tabsByWorktree: {
+        'wt-1': [{ id: 'term-1', title: 'Codex working', customTitle: null }],
+        'wt-2': [unchangedTab]
+      } as unknown as AppState['tabsByWorktree']
+    })
+    const baseKey = getRuntimeMobileSessionSyncKey(base)
+    expect(unchangedTitle).toHaveBeenCalled()
+    unchangedTitle.mockClear()
+
+    const titleTick = makeState({
+      ...base,
+      tabsByWorktree: {
+        ...base.tabsByWorktree,
+        'wt-1': [{ id: 'term-1', title: 'Codex spinner frame', customTitle: null }]
+      } as unknown as AppState['tabsByWorktree']
+    })
+
+    const titleTickKey = getRuntimeMobileSessionSyncKey(titleTick, base, baseKey)
+
+    expect(unchangedTitle).not.toHaveBeenCalled()
+    expect(titleTickKey.tabsProjection).not.toBe(baseKey.tabsProjection)
+    expect(runtimeMobileSessionSyncKeysEqual(baseKey, titleTickKey)).toBe(false)
+  })
 })
 
 describe('mobile session snapshot reuse', () => {

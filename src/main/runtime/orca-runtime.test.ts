@@ -1,7 +1,10 @@
 /* eslint-disable max-lines -- Why: runtime behavior is stateful and cross-cutting, so these tests stay in one file to preserve the end-to-end invariants around handles, waits, and graph sync. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { WorktreeMeta } from '../../shared/types'
+import { EventEmitter } from 'events'
+import { mkdtemp, rm } from 'fs/promises'
+import type { WorktreeLineage, WorktreeMeta } from '../../shared/types'
 import { addWorktree, listWorktrees, removeWorktree } from '../git/worktree'
+import * as gitRunner from '../git/runner'
 import {
   createSetupRunnerScript,
   getEffectiveHooks,
@@ -18,19 +21,7 @@ import {
   unregisterSshFilesystemProvider
 } from '../providers/ssh-filesystem-dispatch'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
-
-vi.mock('electron', () => ({
-  app: {
-    getPath: vi.fn(() => '/tmp/orca-user-data')
-  },
-  BrowserWindow: {
-    fromId: vi.fn(() => null)
-  },
-  ipcMain: {
-    on: vi.fn(),
-    removeListener: vi.fn()
-  }
-}))
+import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 
 const {
   MOCK_GIT_WORKTREES,
@@ -38,28 +29,52 @@ const {
   removeWorktreeMock,
   computeWorktreePathMock,
   ensurePathWithinWorkspaceMock,
+  sshGitProviders,
+  getSshGitProviderMock,
+  registerSshGitProviderMock,
+  unregisterSshGitProviderMock,
   invalidateAuthorizedRootsCacheMock
-} = vi.hoisted(() => ({
-  MOCK_GIT_WORKTREES: [
-    {
-      path: '/tmp/worktree-a',
-      head: 'abc',
-      branch: 'feature/foo',
-      isBare: false,
-      isMainWorktree: false
-    }
-  ],
-  addWorktreeMock: vi.fn(),
-  removeWorktreeMock: vi.fn(),
-  computeWorktreePathMock: vi.fn(),
-  ensurePathWithinWorkspaceMock: vi.fn(),
-  invalidateAuthorizedRootsCacheMock: vi.fn()
-}))
+} = vi.hoisted(() => {
+  // Why: SSH runtime tests register providers through the public dispatcher API,
+  // so the mock needs the same registry semantics as the real module.
+  const sshGitProviders = new Map<string, unknown>()
+
+  return {
+    MOCK_GIT_WORKTREES: [
+      {
+        path: '/tmp/worktree-a',
+        head: 'abc',
+        branch: 'feature/foo',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ],
+    addWorktreeMock: vi.fn(),
+    removeWorktreeMock: vi.fn(),
+    computeWorktreePathMock: vi.fn(),
+    ensurePathWithinWorkspaceMock: vi.fn(),
+    sshGitProviders,
+    getSshGitProviderMock: vi.fn((connectionId: string) => sshGitProviders.get(connectionId)),
+    registerSshGitProviderMock: vi.fn((connectionId: string, provider: unknown) => {
+      sshGitProviders.set(connectionId, provider)
+    }),
+    unregisterSshGitProviderMock: vi.fn((connectionId: string) => {
+      sshGitProviders.delete(connectionId)
+    }),
+    invalidateAuthorizedRootsCacheMock: vi.fn()
+  }
+})
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
   addWorktree: addWorktreeMock,
   removeWorktree: removeWorktreeMock
+}))
+
+vi.mock('../providers/ssh-git-dispatch', () => ({
+  getSshGitProvider: getSshGitProviderMock,
+  registerSshGitProvider: registerSshGitProviderMock,
+  unregisterSshGitProvider: unregisterSshGitProviderMock
 }))
 
 vi.mock('../hooks', () => ({
@@ -84,7 +99,9 @@ vi.mock('../ipc/worktree-logic', async (importOriginal) => {
 })
 
 vi.mock('../ipc/filesystem-auth', () => ({
-  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
+  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock,
+  isENOENT: (error: unknown) =>
+    Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
 }))
 
 // Why: the CLI create-worktree path calls getDefaultBaseRef to resolve a
@@ -106,6 +123,19 @@ afterEach(() => {
   vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
   vi.mocked(addWorktree).mockReset()
   vi.mocked(removeWorktree).mockReset()
+  sshGitProviders.clear()
+  getSshGitProviderMock.mockReset()
+  getSshGitProviderMock.mockImplementation((connectionId: string) =>
+    sshGitProviders.get(connectionId)
+  )
+  registerSshGitProviderMock.mockReset()
+  registerSshGitProviderMock.mockImplementation((connectionId: string, provider: unknown) => {
+    sshGitProviders.set(connectionId, provider)
+  })
+  unregisterSshGitProviderMock.mockReset()
+  unregisterSshGitProviderMock.mockImplementation((connectionId: string) => {
+    sshGitProviders.delete(connectionId)
+  })
   vi.mocked(createSetupRunnerScript).mockReset()
   vi.mocked(getEffectiveHooks).mockReset()
   vi.mocked(hasHooksFile).mockReset()
@@ -151,9 +181,36 @@ const TEST_REPO_ID = 'repo-1'
 const TEST_REPO_PATH = '/tmp/repo'
 const TEST_WORKTREE_PATH = '/tmp/worktree-a'
 const TEST_WORKTREE_ID = `${TEST_REPO_ID}::${TEST_WORKTREE_PATH}`
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+
+function expectStablePaneKeyEnv(env: Record<string, string>): string {
+  expect(env.ORCA_TAB_ID).toMatch(UUID_RE)
+  const leafId = env.ORCA_PANE_KEY?.slice(`${env.ORCA_TAB_ID}:`.length)
+  expect(leafId).toMatch(UUID_RE)
+  expect(env.ORCA_PANE_KEY).toBe(`${env.ORCA_TAB_ID}:${leafId}`)
+  return env.ORCA_PANE_KEY
+}
 
 function createRuntime(): OrcaRuntimeService {
   return new OrcaRuntimeService(store)
+}
+
+function makeWorktreeMeta(overrides: Partial<WorktreeMeta> = {}): WorktreeMeta {
+  return {
+    displayName: '',
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    linkedGitLabMR: null,
+    linkedGitLabIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0,
+    ...overrides
+  }
 }
 
 function deferred<T>(): {
@@ -815,6 +872,136 @@ describe('OrcaRuntimeService', () => {
     expect(added).toHaveLength(0)
   })
 
+  it('defaults runtime addRepo badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
+    const added: Record<string, unknown>[] = []
+    const colorStore = {
+      ...store,
+      getRepos: () => [...added] as never,
+      addRepo: (repo: Record<string, unknown>) => {
+        added.push(repo)
+      },
+      getRepo: (id: string) => added.find((repo) => repo.id === id) as never
+    }
+    const runtime = new OrcaRuntimeService(colorStore as never)
+
+    const repo = await runtime.addRepo('/tmp/runtime-add-default', 'folder')
+
+    expect(repo.badgeColor).toBe(DEFAULT_REPO_BADGE_COLOR)
+    expect(added).toEqual([expect.objectContaining({ badgeColor: DEFAULT_REPO_BADGE_COLOR })])
+  })
+
+  it('defaults runtime createRepo badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
+    const added: Record<string, unknown>[] = []
+    const colorStore = {
+      ...store,
+      getRepos: () => [...added] as never,
+      addRepo: (repo: Record<string, unknown>) => {
+        added.push(repo)
+      },
+      getRepo: (id: string) => added.find((repo) => repo.id === id) as never
+    }
+    const runtime = new OrcaRuntimeService(colorStore as never)
+    const parentDir = await mkdtemp('/tmp/orca-runtime-create-')
+    try {
+      const result = await runtime.createRepo(parentDir, 'runtime-create-default', 'folder')
+      if ('error' in result) {
+        throw new Error(result.error)
+      }
+
+      expect(result).toHaveProperty('repo.badgeColor', DEFAULT_REPO_BADGE_COLOR)
+      expect(added).toEqual([expect.objectContaining({ badgeColor: DEFAULT_REPO_BADGE_COLOR })])
+    } finally {
+      await rm(parentDir, { recursive: true, force: true })
+    }
+  })
+
+  it('preserves existing badgeColor on runtime createRepo dedupe', async () => {
+    const existing = {
+      id: 'runtime-existing-create',
+      path: '/tmp/runtime-existing-create',
+      displayName: 'runtime-existing-create',
+      badgeColor: '#14b8a6',
+      addedAt: 1,
+      kind: 'folder' as const
+    }
+    const colorStore = {
+      ...store,
+      getRepos: () => [existing]
+    }
+    const runtime = new OrcaRuntimeService(colorStore as never)
+
+    const result = await runtime.createRepo('/tmp', 'runtime-existing-create', 'folder')
+
+    expect(result).toEqual({ repo: existing })
+    expect(result).toHaveProperty('repo.badgeColor', '#14b8a6')
+  })
+
+  it('defaults runtime cloneRepo badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
+    const spawnSpy = vi.spyOn(gitRunner, 'wslAwareSpawn')
+    const added: Record<string, unknown>[] = []
+    const colorStore = {
+      ...store,
+      getRepos: () => [...added] as never,
+      addRepo: (repo: Record<string, unknown>) => {
+        added.push(repo)
+      },
+      getRepo: (id: string) => added.find((repo) => repo.id === id) as never
+    }
+    spawnSpy.mockImplementation(() => {
+      const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
+      proc.stderr = new EventEmitter()
+      queueMicrotask(() => proc.emit('close', 0, null))
+      return proc as never
+    })
+    const runtime = new OrcaRuntimeService(colorStore as never)
+
+    try {
+      const repo = await runtime.cloneRepo('https://example.com/repo-badge-color.git', '/tmp')
+      expect(repo.badgeColor).toBe(DEFAULT_REPO_BADGE_COLOR)
+      expect(added).toEqual([expect.objectContaining({ badgeColor: DEFAULT_REPO_BADGE_COLOR })])
+    } finally {
+      spawnSpy.mockRestore()
+    }
+  })
+
+  it('preserves existing badgeColor on runtime cloneRepo folder->git dedupe upgrade', async () => {
+    const spawnSpy = vi.spyOn(gitRunner, 'wslAwareSpawn')
+    spawnSpy.mockImplementation(() => {
+      const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
+      proc.stderr = new EventEmitter()
+      queueMicrotask(() => proc.emit('close', 0, null))
+      return proc as never
+    })
+    const existing = {
+      id: 'runtime-folder-upgrade',
+      path: '/tmp/repo-badge-color',
+      displayName: 'repo-badge-color',
+      badgeColor: '#ec4899',
+      addedAt: 1,
+      kind: 'folder' as const
+    }
+    const updates: { id: string; updates: Record<string, unknown> }[] = []
+    const upgraded = { ...existing, kind: 'git' as const }
+    const colorStore = {
+      ...store,
+      getRepos: () => [existing],
+      updateRepo: (id: string, repoUpdates: Record<string, unknown>) => {
+        updates.push({ id, updates: repoUpdates })
+        return upgraded as never
+      }
+    }
+    const runtime = new OrcaRuntimeService(colorStore as never)
+
+    try {
+      const repo = await runtime.cloneRepo('https://example.com/repo-badge-color.git', '/tmp')
+      expect(updates).toEqual([{ id: existing.id, updates: { kind: 'git' } }])
+      expect(repo).toEqual(upgraded)
+      expect(repo.badgeColor).toBe('#ec4899')
+    } finally {
+      spawnSpy.mockRestore()
+    }
+  })
+
   it('associates controller PTYs with mixed-case Windows and UNC cwd paths', async () => {
     vi.mocked(listWorktrees).mockResolvedValue([
       {
@@ -965,22 +1152,50 @@ describe('OrcaRuntimeService', () => {
     })
     expect(result.handle).toMatch(/^term_/)
     expect(createTerminal).not.toHaveBeenCalled()
-    // Why: hook-based agent status keys off `${tabId}:${paneId}`, so main must
+    // Why: hook-based agent status keys off `${tabId}:${leafId}`, so main must
     // pre-allocate the tabId and stamp ORCA_PANE_KEY/TAB_ID/WORKTREE_ID into
     // the PTY env before spawn. The same tabId is then handed to the renderer
-    // via `revealTerminalSession` so adoption preserves attribution. See
-    // docs/cli-terminal-hook-pane-key.md.
+    // via `revealTerminalSession` so adoption preserves attribution.
     const spawnCall = spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined
     const spawnedEnv = spawnCall?.env ?? {}
-    expect(spawnedEnv.ORCA_TAB_ID).toMatch(/^[0-9a-f-]+$/)
-    expect(spawnedEnv.ORCA_PANE_KEY).toBe(`${spawnedEnv.ORCA_TAB_ID}:1`)
+    expectStablePaneKeyEnv(spawnedEnv)
+    const spawnedLeafId = spawnedEnv.ORCA_PANE_KEY.slice(`${spawnedEnv.ORCA_TAB_ID}:`.length)
     expect(spawnedEnv.ORCA_WORKTREE_ID).toBe(TEST_WORKTREE_ID)
     expect(revealTerminalSession).toHaveBeenCalledWith(TEST_WORKTREE_ID, {
       ptyId: 'pty-bg',
       title: 'worker',
       activate: false,
-      tabId: spawnedEnv.ORCA_TAB_ID
+      tabId: spawnedEnv.ORCA_TAB_ID,
+      leafId: spawnedLeafId
     })
+  })
+
+  it('adopts renderer pane identity for remote runtime terminal creates', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtime = new OrcaRuntimeService(store)
+    const tabId = 'tab-remote-runtime'
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      focus: false,
+      tabId,
+      leafId,
+      env: {
+        ORCA_PANE_KEY: `${tabId}:${leafId}`,
+        ORCA_TAB_ID: tabId
+      }
+    })
+
+    const spawnedEnv =
+      (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
+    expect(spawnedEnv.ORCA_TAB_ID).toBe(tabId)
+    expect(spawnedEnv.ORCA_PANE_KEY).toBe(`${tabId}:${leafId}`)
   })
 
   it('creates background terminal sessions while the renderer graph is unavailable', async () => {
@@ -1038,13 +1253,14 @@ describe('OrcaRuntimeService', () => {
       })
       const spawnCall = spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined
       const spawnedEnv = spawnCall?.env ?? {}
-      expect(spawnedEnv.ORCA_TAB_ID).toMatch(/^[0-9a-f-]+$/)
-      expect(spawnedEnv.ORCA_PANE_KEY).toBe(`${spawnedEnv.ORCA_TAB_ID}:1`)
+      expectStablePaneKeyEnv(spawnedEnv)
+      const spawnedLeafId = spawnedEnv.ORCA_PANE_KEY.slice(`${spawnedEnv.ORCA_TAB_ID}:`.length)
       expect(revealTerminalSession).toHaveBeenCalledWith(TEST_WORKTREE_ID, {
         ptyId: 'pty-bg',
         title: null,
         activate: false,
-        tabId: spawnedEnv.ORCA_TAB_ID
+        tabId: spawnedEnv.ORCA_TAB_ID,
+        leafId: spawnedLeafId
       })
       expect(warn).toHaveBeenCalledWith(
         expect.stringContaining('[terminal-create] failed to create inactive tab for pty-bg:'),
@@ -1140,7 +1356,8 @@ describe('OrcaRuntimeService', () => {
     expect(revealTerminalSession).toHaveBeenLastCalledWith(TEST_WORKTREE_ID, {
       ptyId: 'pty-bg',
       title: 'worker',
-      tabId: expect.stringMatching(/^[0-9a-f-]+$/)
+      tabId: expect.stringMatching(UUID_RE),
+      leafId: expect.stringMatching(UUID_RE)
     })
   })
 
@@ -1397,6 +1614,49 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('does not replay an already-delivered message on a later idle transition', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new OrchestrationDb(':memory:')
+      const write = vi.fn().mockReturnValue(true)
+      runtime.setOrchestrationDb(db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      db.insertMessage({ from: 'term_sender', to: terminal.handle, subject: 'hello' })
+
+      runtime.deliverPendingMessagesForHandle(terminal.handle)
+      await vi.advanceTimersByTimeAsync(500)
+
+      const firstInjections = write.mock.calls.filter(
+        (c) => typeof c[1] === 'string' && c[1].includes('Subject: hello')
+      ).length
+      expect(firstInjections).toBe(1)
+
+      // Second idle transition: the row is still unread (no check caller has
+      // consumed it), but it has been delivered. Push-on-idle must skip it to
+      // avoid the replay bug.
+      runtime.deliverPendingMessagesForHandle(terminal.handle)
+      await vi.advanceTimersByTimeAsync(500)
+
+      const totalInjections = write.mock.calls.filter(
+        (c) => typeof c[1] === 'string' && c[1].includes('Subject: hello')
+      ).length
+      expect(totalInjections).toBe(1)
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('adopts preallocated ORCA_TERMINAL_HANDLE as a valid runtime handle', async () => {
     const runtime = new OrcaRuntimeService(store)
     const handle = runtime.preAllocateHandleForPty('pty-1')
@@ -1601,6 +1861,89 @@ describe('OrcaRuntimeService', () => {
     if (left?.type === 'terminal' && right?.type === 'terminal') {
       expect(left.terminal).not.toBe(right.terminal)
     }
+  })
+
+  it('closes the matching mobile terminal UUID leaf without closing the whole tab', async () => {
+    const closeTerminal = vi.fn()
+    const kill = vi.fn(() => true)
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn(),
+      write: () => true,
+      kill,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal,
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    const leftLeafId = '11111111-1111-4111-8111-111111111111'
+    const rightLeafId = '22222222-2222-4222-8222-222222222222'
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Terminal 1',
+          activeLeafId: rightLeafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: leftLeafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-left',
+          paneTitle: 'left'
+        },
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: rightLeafId,
+          paneRuntimeId: 2,
+          ptyId: 'pty-right',
+          paneTitle: 'right'
+        }
+      ],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: `tab-1::${rightLeafId}`,
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: `tab-1::${rightLeafId}`,
+              parentTabId: 'tab-1',
+              leafId: rightLeafId,
+              title: 'right',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, `tab-1::${rightLeafId}`)
+
+    expect(kill).toHaveBeenCalledWith('pty-right')
+    expect(closeTerminal).not.toHaveBeenCalled()
   })
 
   it('creates mobile session terminals in a headless runtime server', async () => {
@@ -1846,6 +2189,8 @@ describe('OrcaRuntimeService', () => {
           repo: 'repo',
           path: '/tmp/worktree-a',
           branch: 'feature/foo',
+          parentWorktreeId: null,
+          childWorktreeIds: [],
           displayName: 'foo',
           linkedIssue: 123,
           linkedPR: null,
@@ -2042,6 +2387,955 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.searchRepoRefs('id:repo-1', 'main', -5)).rejects.toThrow('invalid_limit')
   })
 
+  it('resolves SSH worktrees when manually updating lineage', async () => {
+    const remoteRepo = {
+      id: 'remote-repo',
+      path: '/home/user/repo',
+      displayName: 'remote',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-1'
+    }
+    const childId = `${remoteRepo.id}::/home/user/repo-child`
+    const parentId = `${remoteRepo.id}::/home/user/repo-parent`
+    const metaById: Record<string, WorktreeMeta> = {
+      [childId]: makeWorktreeMeta({ instanceId: 'child-instance' }),
+      [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance' })
+    }
+    const setWorktreeLineage = vi.fn((_worktreeId, lineage) => lineage)
+    const listSshWorktrees = vi.fn().mockResolvedValue([
+      {
+        path: '/home/user/repo-child',
+        head: 'abc',
+        branch: 'feature/child',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: '/home/user/repo-parent',
+        head: 'def',
+        branch: 'feature/parent',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    getSshGitProviderMock.mockReturnValue({ listWorktrees: listSshWorktrees })
+    const runtimeStore = {
+      ...store,
+      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
+      getRepos: () => [remoteRepo],
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+        return metaById[worktreeId]
+      },
+      getWorktreeLineage: () => undefined,
+      setWorktreeLineage
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    await runtime.updateManagedWorktreeMeta(`id:${childId}`, {
+      lineage: { parentWorktree: `id:${parentId}` }
+    })
+
+    expect(listSshWorktrees).toHaveBeenCalledWith(remoteRepo.path)
+    expect(setWorktreeLineage).toHaveBeenCalledWith(
+      childId,
+      expect.objectContaining({
+        worktreeId: childId,
+        worktreeInstanceId: 'child-instance',
+        parentWorktreeId: parentId,
+        parentWorktreeInstanceId: 'parent-instance',
+        origin: 'manual'
+      })
+    )
+  })
+
+  it('ignores stale instance-mismatched lineage when validating manual cycle repairs', async () => {
+    const parentPath = '/tmp/worktree-a'
+    const childPath = '/tmp/worktree-b'
+    const parentId = `${TEST_REPO_ID}::${parentPath}`
+    const childId = `${TEST_REPO_ID}::${childPath}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [parentId]: makeWorktreeMeta({ instanceId: 'new-parent-instance' }),
+      [childId]: makeWorktreeMeta({ instanceId: 'child-instance' })
+    }
+    const setWorktreeLineage = vi.fn((_worktreeId, lineage) => lineage)
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+        return metaById[worktreeId]
+      },
+      getWorktreeLineage: (worktreeId: string) =>
+        worktreeId === parentId
+          ? {
+              worktreeId: parentId,
+              worktreeInstanceId: 'old-parent-instance',
+              parentWorktreeId: childId,
+              parentWorktreeInstanceId: 'child-instance',
+              origin: 'manual' as const,
+              capture: { source: 'manual-action' as const, confidence: 'explicit' as const },
+              createdAt: 1
+            }
+          : undefined,
+      setWorktreeLineage
+    }
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: parentPath,
+        head: 'abc',
+        branch: 'feature/a',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: childPath,
+        head: 'def',
+        branch: 'feature/b',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    await runtime.updateManagedWorktreeMeta(`id:${childId}`, {
+      lineage: { parentWorktree: `id:${parentId}` }
+    })
+
+    expect(setWorktreeLineage).toHaveBeenCalledWith(
+      childId,
+      expect.objectContaining({
+        worktreeId: childId,
+        worktreeInstanceId: 'child-instance',
+        parentWorktreeId: parentId,
+        parentWorktreeInstanceId: 'new-parent-instance'
+      })
+    )
+  })
+
+  it('backfills instanceId during runtime selector resolution for upgraded metadata', async () => {
+    const parentPath = '/tmp/worktree-parent'
+    const childPath = '/tmp/worktree-child'
+    const parentId = `${TEST_REPO_ID}::${parentPath}`
+    const childId = `${TEST_REPO_ID}::${childPath}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [parentId]: makeWorktreeMeta(),
+      [childId]: makeWorktreeMeta({ instanceId: 'child-instance' })
+    }
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = {
+          ...metaById[worktreeId],
+          ...meta,
+          instanceId: meta.instanceId ?? metaById[worktreeId]?.instanceId ?? 'backfilled-instance'
+        }
+        return metaById[worktreeId]
+      },
+      getWorktreeLineage: () => undefined,
+      setWorktreeLineage: vi.fn((_worktreeId: string, lineage) => lineage)
+    }
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: parentPath,
+        head: 'abc',
+        branch: 'feature/parent',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: childPath,
+        head: 'def',
+        branch: 'feature/child',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    await runtime.updateManagedWorktreeMeta(`id:${childId}`, {
+      lineage: { parentWorktree: `id:${parentId}` }
+    })
+
+    expect(runtimeStore.setWorktreeLineage).toHaveBeenCalledWith(
+      childId,
+      expect.objectContaining({
+        worktreeInstanceId: 'child-instance',
+        parentWorktreeInstanceId: 'backfilled-instance'
+      })
+    )
+  })
+
+  it('rotates a missing parent instance during runtime selector scans before same-path reuse', async () => {
+    const parentPath = '/tmp/worktree-parent'
+    const childPath = '/tmp/worktree-child'
+    const parentId = `${TEST_REPO_ID}::${parentPath}`
+    const childId = `${TEST_REPO_ID}::${childPath}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [parentId]: makeWorktreeMeta({ instanceId: 'old-parent-instance' }),
+      [childId]: makeWorktreeMeta({ instanceId: 'child-instance' })
+    }
+    const lineageById: Record<string, WorktreeLineage> = {
+      [childId]: {
+        worktreeId: childId,
+        worktreeInstanceId: 'child-instance',
+        parentWorktreeId: parentId,
+        parentWorktreeInstanceId: 'old-parent-instance',
+        origin: 'manual' as const,
+        capture: { source: 'manual-action' as const, confidence: 'explicit' as const },
+        createdAt: 1
+      }
+    }
+    const setWorktreeLineage = vi.fn((_worktreeId: string, lineage) => lineage)
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+        return metaById[worktreeId]
+      },
+      getWorktreeLineage: (worktreeId: string) => lineageById[worktreeId],
+      getAllWorktreeLineage: () => lineageById,
+      removeWorktreeLineage: vi.fn((worktreeId: string) => {
+        delete lineageById[worktreeId]
+      }),
+      setWorktreeLineage
+    }
+    vi.mocked(listWorktrees)
+      .mockResolvedValueOnce([
+        {
+          path: childPath,
+          head: 'def',
+          branch: 'feature/child',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+      .mockResolvedValue([
+        {
+          path: childPath,
+          head: 'def',
+          branch: 'feature/child',
+          isBare: false,
+          isMainWorktree: false
+        },
+        {
+          path: parentPath,
+          head: 'abc',
+          branch: 'feature/parent',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    await runtime.showManagedWorktree(`id:${childId}`)
+    const rotatedParentInstance = metaById[parentId].instanceId
+    expect(rotatedParentInstance).toBeTruthy()
+    expect(rotatedParentInstance).not.toBe('old-parent-instance')
+    await runtime.updateManagedWorktreeMeta(`id:${childId}`, { comment: 'rescanned' })
+    expect(metaById[parentId].instanceId).toBe(rotatedParentInstance)
+
+    await runtime.updateManagedWorktreeMeta(`id:${childId}`, { comment: 'touch' })
+    await runtime.updateManagedWorktreeMeta(`id:${childId}`, {
+      lineage: { parentWorktree: `id:${parentId}` }
+    })
+
+    expect(setWorktreeLineage).toHaveBeenCalledWith(
+      childId,
+      expect.objectContaining({
+        worktreeInstanceId: 'child-instance',
+        parentWorktreeInstanceId: rotatedParentInstance
+      })
+    )
+  })
+
+  it('does not prune lineage when a runtime local worktree scan fails', async () => {
+    const parentPath = '/tmp/worktree-parent'
+    const childPath = '/tmp/worktree-child'
+    const parentId = `${TEST_REPO_ID}::${parentPath}`
+    const childId = `${TEST_REPO_ID}::${childPath}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance' }),
+      [childId]: makeWorktreeMeta({ instanceId: 'child-instance' })
+    }
+    const lineageById: Record<string, WorktreeLineage> = {
+      [childId]: {
+        worktreeId: childId,
+        worktreeInstanceId: 'child-instance',
+        parentWorktreeId: parentId,
+        parentWorktreeInstanceId: 'parent-instance',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 1
+      }
+    }
+    const removeWorktreeLineage = vi.fn((worktreeId: string) => {
+      delete lineageById[worktreeId]
+    })
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: vi.fn((worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+        return metaById[worktreeId]
+      }),
+      getAllWorktreeLineage: () => lineageById,
+      removeWorktreeLineage
+    }
+    vi.mocked(listWorktrees).mockRejectedValueOnce(new Error('git unavailable'))
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    await expect(runtime.showManagedWorktree(`id:${childId}`)).rejects.toThrow('selector_not_found')
+
+    expect(removeWorktreeLineage).not.toHaveBeenCalled()
+    expect(runtimeStore.setWorktreeMeta).not.toHaveBeenCalled()
+    expect(lineageById[childId]).toBeTruthy()
+    expect(metaById[parentId].instanceId).toBe('parent-instance')
+  })
+
+  it('does not prune lineage when an SSH runtime provider is unavailable', async () => {
+    const remoteRepo = {
+      id: 'remote-repo',
+      path: '/home/user/repo',
+      displayName: 'remote',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-1'
+    }
+    const parentId = `${remoteRepo.id}::/home/user/repo-parent`
+    const childId = `${remoteRepo.id}::/home/user/repo-child`
+    const metaById: Record<string, WorktreeMeta> = {
+      [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance' }),
+      [childId]: makeWorktreeMeta({ instanceId: 'child-instance' })
+    }
+    const lineageById: Record<string, WorktreeLineage> = {
+      [childId]: {
+        worktreeId: childId,
+        worktreeInstanceId: 'child-instance',
+        parentWorktreeId: parentId,
+        parentWorktreeInstanceId: 'parent-instance',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 1
+      }
+    }
+    const removeWorktreeLineage = vi.fn((worktreeId: string) => {
+      delete lineageById[worktreeId]
+    })
+    const runtimeStore = {
+      ...store,
+      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
+      getRepos: () => [remoteRepo],
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: vi.fn((worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+        return metaById[worktreeId]
+      }),
+      getAllWorktreeLineage: () => lineageById,
+      removeWorktreeLineage
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    await expect(runtime.showManagedWorktree(`id:${childId}`)).rejects.toThrow('selector_not_found')
+
+    expect(removeWorktreeLineage).not.toHaveBeenCalled()
+    expect(runtimeStore.setWorktreeMeta).not.toHaveBeenCalled()
+    expect(lineageById[childId]).toBeTruthy()
+    expect(metaById[parentId].instanceId).toBe('parent-instance')
+  })
+
+  it('exposes valid parent and child lineage in CLI worktree records', async () => {
+    const parentPath = '/tmp/worktree-parent'
+    const childPath = '/tmp/worktree-child'
+    const parentId = `${TEST_REPO_ID}::${parentPath}`
+    const childId = `${TEST_REPO_ID}::${childPath}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [parentId]: makeWorktreeMeta({
+        instanceId: 'parent-instance',
+        displayName: 'parent'
+      }),
+      [childId]: makeWorktreeMeta({
+        instanceId: 'child-instance',
+        displayName: 'child'
+      })
+    }
+    const lineageById: Record<string, WorktreeLineage> = {
+      [childId]: {
+        worktreeId: childId,
+        worktreeInstanceId: 'child-instance',
+        parentWorktreeId: parentId,
+        parentWorktreeInstanceId: 'parent-instance',
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 1
+      }
+    }
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+        return metaById[worktreeId]
+      },
+      getAllWorktreeLineage: () => lineageById
+    }
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: parentPath,
+        head: 'abc',
+        branch: 'feature/parent',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: childPath,
+        head: 'def',
+        branch: 'feature/child',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const listed = await runtime.listManagedWorktrees('id:repo-1')
+    const parent = listed.worktrees.find((worktree) => worktree.id === parentId)
+    const child = listed.worktrees.find((worktree) => worktree.id === childId)
+
+    expect(parent).toMatchObject({
+      parentWorktreeId: null,
+      childWorktreeIds: [childId],
+      lineage: null
+    })
+    expect(child).toMatchObject({
+      parentWorktreeId: parentId,
+      childWorktreeIds: [],
+      lineage: lineageById[childId]
+    })
+    await expect(runtime.showManagedWorktree(`id:${childId}`)).resolves.toMatchObject({
+      id: childId,
+      parentWorktreeId: parentId,
+      childWorktreeIds: [],
+      lineage: lineageById[childId]
+    })
+  })
+
+  it('keeps valid orchestration lineage when caller terminal context is stale', async () => {
+    const parentPath = '/tmp/worktree-parent'
+    const childPath = '/tmp/workspaces/worker-child'
+    const parentId = `${TEST_REPO_ID}::${parentPath}`
+    const childId = `${TEST_REPO_ID}::${childPath}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [parentId]: makeWorktreeMeta({
+        instanceId: 'parent-instance',
+        displayName: 'coordinator'
+      })
+    }
+    const setWorktreeLineage = vi.fn((worktreeId: string, lineage) => {
+      metaById[worktreeId] = metaById[worktreeId] ?? makeWorktreeMeta()
+      return lineage
+    })
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        const existing = metaById[worktreeId] ?? makeWorktreeMeta({ instanceId: 'child-instance' })
+        metaById[worktreeId] = { ...existing, ...meta }
+        return metaById[worktreeId]
+      },
+      getWorktreeLineage: () => undefined,
+      setWorktreeLineage
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    computeWorktreePathMock.mockReturnValue(childPath)
+    ensurePathWithinWorkspaceMock.mockReturnValue(childPath)
+    vi.mocked(listWorktrees)
+      .mockResolvedValueOnce([
+        {
+          path: parentPath,
+          head: 'abc',
+          branch: 'feature/coordinator',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+      .mockResolvedValueOnce([
+        {
+          path: childPath,
+          head: 'def',
+          branch: 'worker-child',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'worker-child',
+      lineage: {
+        callerTerminalHandle: 'term_stale',
+        orchestrationContext: {
+          parentWorktreeId: parentId,
+          orchestrationRunId: 'run-1',
+          taskId: 'task-1',
+          coordinatorHandle: 'term_coord'
+        }
+      }
+    })
+
+    expect(result.lineage).toMatchObject({
+      worktreeId: childId,
+      parentWorktreeId: parentId,
+      origin: 'orchestration',
+      capture: { source: 'orchestration-context', confidence: 'inferred' },
+      orchestrationRunId: 'run-1',
+      taskId: 'task-1',
+      coordinatorHandle: 'term_coord'
+    })
+    expect(result.lineage).not.toHaveProperty('createdByTerminalHandle')
+    expect(result.warnings).toEqual([])
+    expect(setWorktreeLineage).toHaveBeenCalledWith(childId, expect.any(Object))
+  })
+
+  it('enriches caller-terminal lineage with active orchestration dispatch context', async () => {
+    const workerPath = '/tmp/worktree-worker'
+    const childPath = '/tmp/workspaces/worker-child'
+    const childId = `${TEST_REPO_ID}::${childPath}`
+    const workerId = `${TEST_REPO_ID}::${workerPath}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [TEST_WORKTREE_ID]: makeWorktreeMeta({
+        instanceId: 'parent-instance',
+        displayName: 'coordinator'
+      }),
+      [workerId]: makeWorktreeMeta({
+        instanceId: 'worker-instance',
+        displayName: 'worker'
+      })
+    }
+    const setWorktreeLineage = vi.fn((_worktreeId: string, lineage) => lineage)
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        const existing = metaById[worktreeId] ?? makeWorktreeMeta()
+        metaById[worktreeId] = { ...existing, ...meta }
+        return metaById[worktreeId]
+      },
+      getWorktreeLineage: () => undefined,
+      setWorktreeLineage
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const workerHandle = runtime.preAllocateHandleForPty('pty-worker')
+    const coordinatorHandle = runtime.preAllocateHandleForPty('pty-coordinator')
+    runtime.setOrchestrationDb({
+      getActiveDispatchForTerminal: vi.fn(() => ({
+        task_id: 'task-1'
+      })),
+      getActiveCoordinatorRun: vi.fn(() => ({
+        id: 'run-1',
+        coordinator_handle: coordinatorHandle
+      }))
+    } as never)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-worker',
+          worktreeId: workerId,
+          title: 'Worker',
+          activeLeafId: 'pane:1',
+          layout: null
+        },
+        {
+          tabId: 'tab-coordinator',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Coordinator',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-worker',
+          worktreeId: workerId,
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-worker',
+          paneTitle: null
+        },
+        {
+          tabId: 'tab-coordinator',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'pane:1',
+          paneRuntimeId: 2,
+          ptyId: 'pty-coordinator',
+          paneTitle: null
+        }
+      ]
+    })
+    computeWorktreePathMock.mockReturnValue(childPath)
+    ensurePathWithinWorkspaceMock.mockReturnValue(childPath)
+    vi.mocked(listWorktrees)
+      .mockResolvedValueOnce([
+        ...MOCK_GIT_WORKTREES,
+        {
+          path: workerPath,
+          head: 'fed',
+          branch: 'feature/worker',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+      .mockResolvedValueOnce([
+        {
+          path: childPath,
+          head: 'def',
+          branch: 'worker-child',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'worker-child',
+      lineage: { callerTerminalHandle: workerHandle }
+    })
+
+    expect(result.lineage).toMatchObject({
+      worktreeId: childId,
+      parentWorktreeId: workerId,
+      origin: 'orchestration',
+      capture: { source: 'orchestration-context', confidence: 'inferred' },
+      orchestrationRunId: 'run-1',
+      taskId: 'task-1',
+      coordinatorHandle,
+      createdByTerminalHandle: workerHandle
+    })
+    expect(setWorktreeLineage).toHaveBeenCalledWith(
+      childId,
+      expect.objectContaining({
+        worktreeInstanceId: expect.not.stringMatching(/^old-/),
+        parentWorktreeInstanceId: 'worker-instance'
+      })
+    )
+  })
+
+  it('falls back to cwd lineage when the caller terminal handle is stale', async () => {
+    const parentPath = '/tmp/worktree-parent'
+    const childPath = '/tmp/workspaces/cwd-child'
+    const parentId = `${TEST_REPO_ID}::${parentPath}`
+    const childId = `${TEST_REPO_ID}::${childPath}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance' })
+    }
+    const setWorktreeLineage = vi.fn((_worktreeId: string, lineage) => lineage)
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        const existing = metaById[worktreeId] ?? makeWorktreeMeta()
+        metaById[worktreeId] = { ...existing, ...meta }
+        return metaById[worktreeId]
+      },
+      getWorktreeLineage: () => undefined,
+      setWorktreeLineage
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    computeWorktreePathMock.mockReturnValue(childPath)
+    ensurePathWithinWorkspaceMock.mockReturnValue(childPath)
+    vi.mocked(listWorktrees)
+      .mockResolvedValueOnce([
+        {
+          path: parentPath,
+          head: 'abc',
+          branch: 'feature/parent',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+      .mockResolvedValueOnce([
+        {
+          path: childPath,
+          head: 'def',
+          branch: 'cwd-child',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'cwd-child',
+      lineage: {
+        callerTerminalHandle: 'term_stale',
+        cwdParentWorktree: `id:${parentId}`
+      }
+    })
+
+    expect(result.lineage).toMatchObject({
+      worktreeId: childId,
+      parentWorktreeId: parentId,
+      origin: 'cli',
+      capture: { source: 'cwd-context', confidence: 'inferred' }
+    })
+    expect(result.worktree).toMatchObject({
+      parentWorktreeId: parentId,
+      childWorktreeIds: [],
+      lineage: result.lineage
+    })
+    expect(setWorktreeLineage).toHaveBeenCalledWith(childId, expect.any(Object))
+  })
+
+  it('keeps cwd-inferred lineage best-effort when the cwd parent cannot be resolved', async () => {
+    const childPath = '/tmp/workspaces/no-cwd-parent'
+    computeWorktreePathMock.mockReturnValue(childPath)
+    ensurePathWithinWorkspaceMock.mockReturnValue(childPath)
+    vi.mocked(listWorktrees)
+      .mockResolvedValueOnce(MOCK_GIT_WORKTREES)
+      .mockResolvedValueOnce([
+        {
+          path: childPath,
+          head: 'def',
+          branch: 'no-cwd-parent',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    const runtime = new OrcaRuntimeService(store)
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'no-cwd-parent',
+      lineage: {
+        cwdParentWorktree: 'id:repo-1::/tmp/missing-parent'
+      }
+    })
+
+    expect(result.lineage).toBeNull()
+    expect(result.worktree).toMatchObject({
+      parentWorktreeId: null,
+      childWorktreeIds: [],
+      lineage: null
+    })
+    expect(result.warnings).toEqual([
+      expect.objectContaining({
+        code: 'LINEAGE_PARENT_CONTEXT_MISSING',
+        message:
+          'Worktree created, but Orca could not validate the current directory as a parent workspace.'
+      })
+    ])
+  })
+
+  it('infers orchestration lineage from task-id comments when dispatch is completed', async () => {
+    const workerPath = '/tmp/worktree-worker'
+    const childPath = '/tmp/workspaces/worker-child'
+    const childId = `${TEST_REPO_ID}::${childPath}`
+    const workerId = `${TEST_REPO_ID}::${workerPath}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [workerId]: makeWorktreeMeta({
+        instanceId: 'worker-instance',
+        displayName: 'worker'
+      })
+    }
+    const setWorktreeLineage = vi.fn((_worktreeId: string, lineage) => lineage)
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        const existing = metaById[worktreeId] ?? makeWorktreeMeta()
+        metaById[worktreeId] = { ...existing, ...meta }
+        return metaById[worktreeId]
+      },
+      getWorktreeLineage: () => undefined,
+      setWorktreeLineage
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const workerHandle = runtime.preAllocateHandleForPty('pty-worker')
+    runtime.setOrchestrationDb({
+      getDispatchContext: vi.fn(() => ({
+        task_id: 'task_abc123',
+        assignee_handle: workerHandle,
+        status: 'completed'
+      }))
+    } as never)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-worker',
+          worktreeId: workerId,
+          title: 'Worker',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-worker',
+          worktreeId: workerId,
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-worker',
+          paneTitle: null
+        }
+      ]
+    })
+    computeWorktreePathMock.mockReturnValue(childPath)
+    ensurePathWithinWorkspaceMock.mockReturnValue(childPath)
+    vi.mocked(listWorktrees)
+      .mockResolvedValueOnce([
+        {
+          path: workerPath,
+          head: 'fed',
+          branch: 'feature/worker',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+      .mockResolvedValueOnce([
+        {
+          path: childPath,
+          head: 'def',
+          branch: 'worker-child',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'worker-child',
+      comment: 'Created via orchestration task task_abc123'
+    })
+
+    expect(result.lineage).toMatchObject({
+      worktreeId: childId,
+      parentWorktreeId: workerId,
+      origin: 'orchestration',
+      capture: { source: 'orchestration-context', confidence: 'inferred' },
+      taskId: 'task_abc123'
+    })
+    expect(setWorktreeLineage).toHaveBeenCalledWith(
+      childId,
+      expect.objectContaining({
+        parentWorktreeInstanceId: 'worker-instance'
+      })
+    )
+  })
+
+  it('infers orchestration lineage from task creator when no dispatch context exists', async () => {
+    const parentPath = '/tmp/worktree-parent'
+    const childPath = '/tmp/workspaces/parent-child'
+    const childId = `${TEST_REPO_ID}::${childPath}`
+    const parentId = `${TEST_REPO_ID}::${parentPath}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [parentId]: makeWorktreeMeta({
+        instanceId: 'parent-instance',
+        displayName: 'parent'
+      })
+    }
+    const setWorktreeLineage = vi.fn((_worktreeId: string, lineage) => lineage)
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        const existing = metaById[worktreeId] ?? makeWorktreeMeta()
+        metaById[worktreeId] = { ...existing, ...meta }
+        return metaById[worktreeId]
+      },
+      getWorktreeLineage: () => undefined,
+      setWorktreeLineage
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const parentHandle = runtime.preAllocateHandleForPty('pty-parent')
+    runtime.setOrchestrationDb({
+      getDispatchContext: vi.fn(() => undefined),
+      getTask: vi.fn(() => ({
+        id: 'task_creator123',
+        created_by_terminal_handle: parentHandle
+      }))
+    } as never)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-parent',
+          worktreeId: parentId,
+          title: 'Parent',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-parent',
+          worktreeId: parentId,
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-parent',
+          paneTitle: null
+        }
+      ]
+    })
+    computeWorktreePathMock.mockReturnValue(childPath)
+    ensurePathWithinWorkspaceMock.mockReturnValue(childPath)
+    vi.mocked(listWorktrees)
+      .mockResolvedValueOnce([
+        {
+          path: parentPath,
+          head: 'fed',
+          branch: 'feature/parent',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+      .mockResolvedValueOnce([
+        {
+          path: childPath,
+          head: 'def',
+          branch: 'parent-child',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'parent-child',
+      comment: 'Created via orchestration task task_creator123'
+    })
+
+    expect(result.lineage).toMatchObject({
+      worktreeId: childId,
+      parentWorktreeId: parentId,
+      origin: 'orchestration',
+      capture: { source: 'orchestration-context', confidence: 'inferred' },
+      taskId: 'task_creator123'
+    })
+    expect(setWorktreeLineage).toHaveBeenCalledWith(
+      childId,
+      expect.objectContaining({
+        parentWorktreeInstanceId: 'parent-instance'
+      })
+    )
+  })
+
   it('returns a setup launch payload for CLI-created worktrees when hooks are explicitly enabled', async () => {
     const runtime = new OrcaRuntimeService(store)
     const activateWorktree = vi.fn()
@@ -2172,120 +3466,6 @@ describe('OrcaRuntimeService', () => {
     expect(activateWorktree).toHaveBeenCalledWith('repo-1', expect.any(String), result.setup)
   })
 
-  it('spawns startup and setup in runtime before revealing activated worktrees', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const activateWorktree = vi.fn()
-    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-visible-worktree' })
-    const spawn = vi
-      .fn()
-      .mockResolvedValueOnce({ id: 'pty-visible-startup' })
-      .mockResolvedValueOnce({ id: 'pty-visible-setup' })
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.setNotifier({
-      worktreesChanged: vi.fn(),
-      reposChanged: vi.fn(),
-      activateWorktree,
-      createTerminal: vi.fn(),
-      revealTerminalSession,
-      splitTerminal: vi.fn(),
-      renameTerminal: vi.fn(),
-      focusTerminal: vi.fn(),
-      closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
-      terminalFitOverrideChanged: vi.fn(),
-      terminalDriverChanged: vi.fn()
-    })
-    runtime.attachWindow(1)
-
-    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-startup-setup')
-    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-startup-setup')
-    vi.mocked(getEffectiveHooks).mockReturnValue({
-      scripts: {
-        setup: 'pnpm worktree:setup'
-      }
-    })
-    vi.mocked(createSetupRunnerScript).mockReturnValue({
-      runnerScriptPath: '/tmp/repo/.git/orca/setup-runner.sh',
-      envVars: {
-        ORCA_ROOT_PATH: '/tmp/repo',
-        ORCA_WORKTREE_PATH: '/tmp/workspaces/runtime-startup-setup'
-      }
-    })
-    vi.mocked(listWorktrees).mockResolvedValue([
-      {
-        path: '/tmp/workspaces/runtime-startup-setup',
-        head: 'def',
-        branch: 'runtime-startup-setup',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-
-    const result = await runtime.createManagedWorktree({
-      repoSelector: 'id:repo-1',
-      name: 'runtime-startup-setup',
-      runHooks: true,
-      startup: {
-        command: 'codex --prompt "setup"',
-        env: {
-          ORCA_STARTUP_SETUP: '1'
-        }
-      }
-    })
-
-    expect(spawn).toHaveBeenCalledTimes(2)
-    expect(spawn).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        cwd: '/tmp/workspaces/runtime-startup-setup',
-        command: 'codex --prompt "setup"',
-        env: expect.objectContaining({
-          ORCA_STARTUP_SETUP: '1'
-        }),
-        worktreeId: result.worktree.id
-      })
-    )
-    expect(spawn).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        cwd: '/tmp/workspaces/runtime-startup-setup',
-        command: 'bash /tmp/repo/.git/orca/setup-runner.sh',
-        env: expect.objectContaining({
-          ORCA_ROOT_PATH: '/tmp/repo',
-          ORCA_WORKTREE_PATH: '/tmp/workspaces/runtime-startup-setup'
-        }),
-        worktreeId: result.worktree.id
-      })
-    )
-    expect(revealTerminalSession).toHaveBeenNthCalledWith(
-      1,
-      result.worktree.id,
-      expect.objectContaining({
-        ptyId: 'pty-visible-startup',
-        title: null,
-        activate: false
-      })
-    )
-    expect(revealTerminalSession).toHaveBeenNthCalledWith(
-      2,
-      result.worktree.id,
-      expect.objectContaining({
-        ptyId: 'pty-visible-setup',
-        title: 'Setup',
-        activate: false
-      })
-    )
-    expect(activateWorktree).toHaveBeenCalledWith('repo-1', result.worktree.id, undefined)
-    expect(revealTerminalSession.mock.invocationCallOrder[1]).toBeLessThan(
-      activateWorktree.mock.invocationCallOrder[0]
-    )
-  })
-
   it('follows normal setup policy for CLI-created worktrees without activating them', async () => {
     const runtime = new OrcaRuntimeService(store)
     const activateWorktree = vi.fn()
@@ -2382,12 +3562,12 @@ describe('OrcaRuntimeService', () => {
         command: 'bash /tmp/repo/.git/orca/setup-runner.sh',
         // Why: createTerminal stamps ORCA_PANE_KEY/TAB_ID/WORKTREE_ID into the
         // PTY env on top of the caller-supplied env so hook-based agent status
-        // can attribute hook events to a pane. See docs/cli-terminal-hook-pane-key.md.
+        // can attribute hook events to a stable pane.
         env: expect.objectContaining({
           ORCA_ROOT_PATH: '/tmp/repo',
           ORCA_WORKTREE_PATH: '/tmp/workspaces/runtime-hook-skip',
-          ORCA_TAB_ID: expect.stringMatching(/^[0-9a-f-]+$/),
-          ORCA_PANE_KEY: expect.stringMatching(/^[0-9a-f-]+:1$/),
+          ORCA_TAB_ID: expect.stringMatching(UUID_RE),
+          ORCA_PANE_KEY: expect.any(String),
           ORCA_WORKTREE_ID: result.worktree.id
         }),
         worktreeId: result.worktree.id
@@ -2395,12 +3575,14 @@ describe('OrcaRuntimeService', () => {
     )
     const setupSpawnEnv =
       (spawn.mock.calls[1]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
-    expect(setupSpawnEnv.ORCA_PANE_KEY).toBe(`${setupSpawnEnv.ORCA_TAB_ID}:1`)
+    expectStablePaneKeyEnv(setupSpawnEnv)
+    const setupLeafId = setupSpawnEnv.ORCA_PANE_KEY.slice(`${setupSpawnEnv.ORCA_TAB_ID}:`.length)
     expect(revealTerminalSession).toHaveBeenLastCalledWith(result.worktree.id, {
       ptyId: 'pty-setup',
       title: 'Setup',
       activate: false,
-      tabId: setupSpawnEnv.ORCA_TAB_ID
+      tabId: setupSpawnEnv.ORCA_TAB_ID,
+      leafId: setupLeafId
     })
   })
 
@@ -2459,87 +3641,17 @@ describe('OrcaRuntimeService', () => {
     )
     const initialSpawnEnv =
       (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
-    expect(initialSpawnEnv.ORCA_TAB_ID).toMatch(/^[0-9a-f-]+$/)
-    expect(initialSpawnEnv.ORCA_PANE_KEY).toBe(`${initialSpawnEnv.ORCA_TAB_ID}:1`)
+    expectStablePaneKeyEnv(initialSpawnEnv)
+    const initialLeafId = initialSpawnEnv.ORCA_PANE_KEY.slice(
+      `${initialSpawnEnv.ORCA_TAB_ID}:`.length
+    )
     expect(revealTerminalSession).toHaveBeenCalledWith(result.worktree.id, {
       ptyId: 'pty-created-worktree',
       title: null,
       activate: false,
-      tabId: initialSpawnEnv.ORCA_TAB_ID
+      tabId: initialSpawnEnv.ORCA_TAB_ID,
+      leafId: initialLeafId
     })
-  })
-
-  it('runs startup commands through background PTYs when worktree activation was not requested', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const activateWorktree = vi.fn()
-    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-startup-worktree' })
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-startup-worktree' })
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.setNotifier({
-      worktreesChanged: vi.fn(),
-      reposChanged: vi.fn(),
-      activateWorktree,
-      createTerminal: vi.fn(),
-      revealTerminalSession,
-      splitTerminal: vi.fn(),
-      renameTerminal: vi.fn(),
-      focusTerminal: vi.fn(),
-      closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
-      terminalFitOverrideChanged: vi.fn(),
-      terminalDriverChanged: vi.fn()
-    })
-    runtime.attachWindow(1)
-
-    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-startup-terminal')
-    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-startup-terminal')
-    vi.mocked(getEffectiveHooks).mockReturnValue(null)
-    vi.mocked(listWorktrees).mockResolvedValue([
-      {
-        path: '/tmp/workspaces/runtime-startup-terminal',
-        head: 'def',
-        branch: 'runtime-startup-terminal',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-
-    const result = await runtime.createManagedWorktree({
-      repoSelector: 'id:repo-1',
-      name: 'runtime-startup-terminal',
-      startup: {
-        command: 'codex --prompt "summarize"',
-        env: {
-          ORCA_TEST_MODE: '1'
-        }
-      }
-    })
-
-    expect(activateWorktree).not.toHaveBeenCalled()
-    expect(spawn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        cwd: '/tmp/workspaces/runtime-startup-terminal',
-        command: 'codex --prompt "summarize"',
-        env: expect.objectContaining({
-          ORCA_TEST_MODE: '1'
-        }),
-        worktreeId: result.worktree.id,
-        preAllocatedHandle: expect.stringMatching(/^term_/)
-      })
-    )
-    expect(revealTerminalSession).toHaveBeenCalledWith(
-      result.worktree.id,
-      expect.objectContaining({
-        ptyId: 'pty-startup-worktree',
-        title: null,
-        activate: false
-      })
-    )
   })
 
   it('keeps CLI-created worktrees successful when initial terminal creation fails', async () => {
@@ -2640,70 +3752,6 @@ describe('OrcaRuntimeService', () => {
     })
 
     expect(activateWorktree).toHaveBeenCalledWith('repo-1', expect.any(String), undefined)
-  })
-
-  it('spawns startup commands in runtime before revealing explicitly activated worktrees', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const activateWorktree = vi.fn()
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-visible-startup' })
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.setNotifier({
-      worktreesChanged: vi.fn(),
-      reposChanged: vi.fn(),
-      activateWorktree,
-      createTerminal: vi.fn(),
-      revealTerminalSession: vi.fn(),
-      splitTerminal: vi.fn(),
-      renameTerminal: vi.fn(),
-      focusTerminal: vi.fn(),
-      closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
-      terminalFitOverrideChanged: vi.fn(),
-      terminalDriverChanged: vi.fn()
-    })
-    runtime.attachWindow(1)
-
-    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-visible-startup')
-    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-visible-startup')
-    vi.mocked(getEffectiveHooks).mockReturnValue(null)
-    vi.mocked(listWorktrees).mockResolvedValue([
-      {
-        path: '/tmp/workspaces/runtime-visible-startup',
-        head: 'def',
-        branch: 'runtime-visible-startup',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-
-    const result = await runtime.createManagedWorktree({
-      repoSelector: 'id:repo-1',
-      name: 'runtime-visible-startup',
-      activate: true,
-      startup: {
-        command: 'claude --dangerously-skip-permissions',
-        env: {
-          ORCA_VISIBLE_STARTUP: '1'
-        }
-      }
-    })
-
-    expect(spawn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        cwd: '/tmp/workspaces/runtime-visible-startup',
-        command: 'claude --dangerously-skip-permissions',
-        env: expect.objectContaining({
-          ORCA_VISIBLE_STARTUP: '1'
-        }),
-        worktreeId: result.worktree.id
-      })
-    )
-    expect(activateWorktree).toHaveBeenCalledWith('repo-1', result.worktree.id, undefined)
   })
 
   it('stamps createdAt alongside lastActivityAt so CLI-created worktrees get the Recent-sort grace window', async () => {

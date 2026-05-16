@@ -22,6 +22,10 @@ vi.mock('./ssh-relay-deploy', () => ({
 const { deployAndLaunchRelay } = await import('./ssh-relay-deploy')
 const { SshRelaySession } = await import('./ssh-relay-session')
 
+const SSH_LEAF_ID = '11111111-1111-4111-8111-111111111111'
+const REPLAY_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+const BAD_LEAF_ID = '33333333-3333-4333-8333-333333333333'
+
 type CapturedStatus = {
   paneKey: string
   tabId?: string
@@ -153,7 +157,7 @@ function captureAgentStatuses(events: CapturedStatus[]): void {
 function makeEnvelope(overrides: Partial<AgentHookRelayEnvelope> = {}): AgentHookRelayEnvelope {
   return {
     source: 'codex',
-    paneKey: 'tab-ssh:0',
+    paneKey: `tab-ssh:${SSH_LEAF_ID}`,
     tabId: 'tab-ssh',
     worktreeId: 'wt-ssh',
     connectionId: null,
@@ -217,7 +221,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
       rows: 40,
       cwd: '/home/orca/project',
       env: {
-        ORCA_PANE_KEY: 'tab-ssh:0',
+        ORCA_PANE_KEY: `tab-ssh:${SSH_LEAF_ID}`,
         ORCA_TAB_ID: 'tab-ssh',
         ORCA_WORKTREE_ID: 'wt-ssh'
       }
@@ -228,7 +232,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     expect(relay.ptySpawnRequests[0]).toMatchObject({
       cwd: '/home/orca/project',
       env: {
-        ORCA_PANE_KEY: 'tab-ssh:0',
+        ORCA_PANE_KEY: `tab-ssh:${SSH_LEAF_ID}`,
         ORCA_TAB_ID: 'tab-ssh',
         ORCA_WORKTREE_ID: 'wt-ssh'
       }
@@ -238,7 +242,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
 
     await waitForStatusCount(events, 1)
     expect(events[0]).toEqual({
-      paneKey: 'tab-ssh:0',
+      paneKey: `tab-ssh:${SSH_LEAF_ID}`,
       tabId: 'tab-ssh',
       worktreeId: 'wt-ssh',
       connectionId: 'conn-fake',
@@ -255,7 +259,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     relay = createFakeRelay()
     relay.replayEnvelopes.push(
       makeEnvelope({
-        paneKey: 'tab-replay:0',
+        paneKey: `tab-replay:${REPLAY_LEAF_ID}`,
         tabId: 'tab-replay',
         worktreeId: 'wt-replay',
         payload: {
@@ -278,7 +282,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
 
     await waitForStatusCount(events, 1)
     expect(events[0]).toMatchObject({
-      paneKey: 'tab-replay:0',
+      paneKey: `tab-replay:${REPLAY_LEAF_ID}`,
       tabId: 'tab-replay',
       worktreeId: 'wt-replay',
       connectionId: 'conn-replay',
@@ -305,7 +309,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
 
     relay.notifyAgentHook({
       source: 'codex',
-      paneKey: 'tab-bad:0',
+      paneKey: `tab-bad:${BAD_LEAF_ID}`,
       connectionId: null,
       env: REMOTE_AGENT_HOOK_ENV,
       version: '1',

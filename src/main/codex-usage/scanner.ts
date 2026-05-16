@@ -47,8 +47,11 @@ type CodexUsageParseContext = {
   previousTotals: CodexUsageRawUsage | null
 }
 
+type CodexUsageDeltaResolution =
+  | { kind: 'event'; delta: CodexUsageRawUsage; nextTotals: CodexUsageRawUsage | null }
+  | { kind: 'baseline'; nextTotals: CodexUsageRawUsage }
+
 const DEFAULT_CODEX_SESSIONS_DIR = join(homedir(), '.codex', 'sessions')
-const LEGACY_FALLBACK_MODEL = 'gpt-5'
 const YIELD_EVERY_FILES = 10
 
 function ensureNumber(value: unknown): number {
@@ -169,6 +172,107 @@ function subtractRawUsage(
     ),
     totalTokens: Math.max(current.totalTokens - (previous?.totalTokens ?? 0), 0)
   }
+}
+
+function addRawUsage(left: CodexUsageRawUsage, right: CodexUsageRawUsage): CodexUsageRawUsage {
+  return {
+    inputTokens: left.inputTokens + right.inputTokens,
+    cachedInputTokens: left.cachedInputTokens + right.cachedInputTokens,
+    outputTokens: left.outputTokens + right.outputTokens,
+    reasoningOutputTokens: left.reasoningOutputTokens + right.reasoningOutputTokens,
+    totalTokens: left.totalTokens + right.totalTokens
+  }
+}
+
+function rawUsageEquals(left: CodexUsageRawUsage, right: CodexUsageRawUsage): boolean {
+  return (
+    left.inputTokens === right.inputTokens &&
+    left.cachedInputTokens === right.cachedInputTokens &&
+    left.outputTokens === right.outputTokens &&
+    left.reasoningOutputTokens === right.reasoningOutputTokens
+  )
+}
+
+function rawUsageIsMonotonic(current: CodexUsageRawUsage, previous: CodexUsageRawUsage): boolean {
+  return (
+    current.inputTokens >= previous.inputTokens &&
+    current.cachedInputTokens >= previous.cachedInputTokens &&
+    current.outputTokens >= previous.outputTokens &&
+    current.reasoningOutputTokens >= previous.reasoningOutputTokens
+  )
+}
+
+function rawUsageMagnitude(usage: CodexUsageRawUsage): number {
+  return (
+    usage.inputTokens + usage.cachedInputTokens + usage.outputTokens + usage.reasoningOutputTokens
+  )
+}
+
+function looksLikeStaleRegression(
+  current: CodexUsageRawUsage,
+  previous: CodexUsageRawUsage,
+  last: CodexUsageRawUsage
+): boolean {
+  const previousTotal = rawUsageMagnitude(previous)
+  const currentTotal = rawUsageMagnitude(current)
+  const lastTotal = rawUsageMagnitude(last)
+  if (previousTotal <= 0 || currentTotal <= 0 || lastTotal <= 0) {
+    return false
+  }
+  return currentTotal * 100 >= previousTotal * 98 || currentTotal + lastTotal * 2 >= previousTotal
+}
+
+function resolveCodexUsageDelta(
+  totalUsage: CodexUsageRawUsage | null,
+  lastUsage: CodexUsageRawUsage | null,
+  previousTotals: CodexUsageRawUsage | null
+): CodexUsageDeltaResolution | null {
+  if (totalUsage && lastUsage && previousTotals) {
+    if (rawUsageEquals(totalUsage, previousTotals)) {
+      return null
+    }
+    if (
+      !rawUsageIsMonotonic(totalUsage, previousTotals) &&
+      looksLikeStaleRegression(totalUsage, previousTotals, lastUsage)
+    ) {
+      return null
+    }
+    // Why: Codex totals are mutable snapshots after compaction/resume. The
+    // last_token_usage payload is the billable increment; totals are the baseline.
+    return { kind: 'event', delta: lastUsage, nextTotals: totalUsage }
+  }
+
+  if (totalUsage && lastUsage) {
+    return { kind: 'event', delta: lastUsage, nextTotals: totalUsage }
+  }
+
+  if (totalUsage && previousTotals) {
+    if (rawUsageEquals(totalUsage, previousTotals)) {
+      return null
+    }
+    if (!rawUsageIsMonotonic(totalUsage, previousTotals)) {
+      return { kind: 'baseline', nextTotals: totalUsage }
+    }
+    return {
+      kind: 'event',
+      delta: subtractRawUsage(totalUsage, previousTotals),
+      nextTotals: totalUsage
+    }
+  }
+
+  if (totalUsage) {
+    return { kind: 'event', delta: totalUsage, nextTotals: totalUsage }
+  }
+
+  if (lastUsage && previousTotals) {
+    return { kind: 'event', delta: lastUsage, nextTotals: addRawUsage(previousTotals, lastUsage) }
+  }
+
+  if (lastUsage) {
+    return { kind: 'event', delta: lastUsage, nextTotals: null }
+  }
+
+  return null
 }
 
 function extractString(value: unknown): string | null {
@@ -688,17 +792,21 @@ export function parseCodexUsageRecord(
   const record = info as Record<string, unknown>
   const totalUsage = normalizeRawUsage(record.total_token_usage)
   const lastUsage = normalizeRawUsage(record.last_token_usage)
-  let delta = totalUsage ? subtractRawUsage(totalUsage, context.previousTotals) : lastUsage
-  if (totalUsage) {
-    context.previousTotals = totalUsage
+  const resolvedUsage = resolveCodexUsageDelta(totalUsage, lastUsage, context.previousTotals)
+  if (!resolvedUsage) {
+    return null
   }
-  if (!delta) {
+  if (resolvedUsage.kind === 'baseline') {
+    context.previousTotals = resolvedUsage.nextTotals
     return null
   }
 
-  delta = {
-    ...delta,
-    cachedInputTokens: Math.min(delta.cachedInputTokens, delta.inputTokens)
+  let delta = {
+    ...resolvedUsage.delta,
+    cachedInputTokens: Math.min(
+      resolvedUsage.delta.cachedInputTokens,
+      resolvedUsage.delta.inputTokens
+    )
   }
 
   if (
@@ -711,15 +819,16 @@ export function parseCodexUsageRecord(
     return null
   }
 
+  context.previousTotals = resolvedUsage.nextTotals
+
   const resolvedModel = extractModel(parsed.payload) ?? context.currentModel
-  const model = resolvedModel ?? LEGACY_FALLBACK_MODEL
   const hasInferredPricing = resolvedModel === null
 
   return {
     sessionId: context.sessionId,
     timestamp: parsed.timestamp,
     cwd: context.currentCwd ?? context.sessionCwd,
-    model,
+    model: resolvedModel,
     hasInferredPricing,
     inputTokens: delta.inputTokens,
     cachedInputTokens: delta.cachedInputTokens,

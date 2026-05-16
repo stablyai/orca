@@ -50,10 +50,9 @@ const watchedRoots = new Map<string, WatchedRoot>()
 // repeated "Failed to read changes" / "watchman not found" errors.
 const unwatchableRoots = new Set<string>()
 
-// Why: the `destroyed` listener was previously registered per-root on the
-// same WebContents.  With 11+ worktrees, this exceeded Node's default
-// MaxListeners of 10.  Track which senders already have a single cleanup
-// listener so we register exactly once per sender.
+// Why: watcher cleanup is keyed to the renderer WebContents, not to a specific
+// watched root. One listener per sender avoids MaxListeners warnings when a
+// workspace has many local and SSH-backed worktrees open.
 const senderCleanupRegistered = new Set<number>()
 
 // Why: on Windows, tearing down and recreating @parcel/watcher subscriptions
@@ -311,6 +310,41 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
 
 // ── Subscribe / Unsubscribe ──────────────────────────────────────────
 
+function cleanupLocalWatchersForSender(senderId: number): void {
+  for (const [key, watchedRoot] of watchedRoots) {
+    if (watchedRoot.listeners.has(senderId)) {
+      watchedRoot.listeners.delete(senderId)
+      if (watchedRoot.listeners.size === 0) {
+        // Cancel any pending grace-period teardown for this root.
+        const pending = pendingTeardowns.get(key)
+        if (pending) {
+          clearTimeout(pending)
+          pendingTeardowns.delete(key)
+        }
+        if (watchedRoot.batch.timer) {
+          clearTimeout(watchedRoot.batch.timer)
+        }
+        void watchedRoot.subscription.unsubscribe().catch((err: unknown) => {
+          console.error(`[filesystem-watcher] unsubscribe error for ${key}:`, err)
+        })
+        watchedRoots.delete(key)
+      }
+    }
+  }
+}
+
+function registerSenderCleanup(sender: WebContents): void {
+  if (senderCleanupRegistered.has(sender.id)) {
+    return
+  }
+  senderCleanupRegistered.add(sender.id)
+  sender.once('destroyed', () => {
+    senderCleanupRegistered.delete(sender.id)
+    cleanupLocalWatchersForSender(sender.id)
+    cleanupRemoteWatchersForSender(sender.id)
+  })
+}
+
 async function subscribe(worktreePath: string, sender: WebContents): Promise<void> {
   const rootKey = normalizeRootPath(worktreePath)
 
@@ -364,38 +398,7 @@ async function subscribe(worktreePath: string, sender: WebContents): Promise<voi
   }
 
   root.listeners.set(sender.id, sender)
-
-  // Why: register a single `destroyed` listener per sender (not per-root).
-  // The old code registered one listener per root, so 11+ worktrees would
-  // exceed Node's default MaxListeners of 10 on the same WebContents.  A
-  // single listener that iterates all roots avoids the warning and is
-  // equivalent — `destroyed` fires once when the renderer process exits.
-  if (!senderCleanupRegistered.has(sender.id)) {
-    senderCleanupRegistered.add(sender.id)
-    sender.once('destroyed', () => {
-      senderCleanupRegistered.delete(sender.id)
-      for (const [key, watchedRoot] of watchedRoots) {
-        if (watchedRoot.listeners.has(sender.id)) {
-          watchedRoot.listeners.delete(sender.id)
-          if (watchedRoot.listeners.size === 0) {
-            // Cancel any pending grace-period teardown for this root.
-            const pending = pendingTeardowns.get(key)
-            if (pending) {
-              clearTimeout(pending)
-              pendingTeardowns.delete(key)
-            }
-            if (watchedRoot.batch.timer) {
-              clearTimeout(watchedRoot.batch.timer)
-            }
-            void watchedRoot.subscription.unsubscribe().catch((err: unknown) => {
-              console.error(`[filesystem-watcher] unsubscribe error for ${key}:`, err)
-            })
-            watchedRoots.delete(key)
-          }
-        }
-      }
-    })
-  }
+  registerSenderCleanup(sender)
 }
 
 function unsubscribe(worktreePath: string, senderId: number): void {
@@ -432,8 +435,13 @@ function unsubscribe(worktreePath: string, senderId: number): void {
 }
 
 // ── Remote watcher state ─────────────────────────────────────────────
-// Key: `${connectionId}:${worktreePath}`, Value: unwatch function
-const remoteWatchers = new Map<string, () => void>()
+type RemoteWatcherState = {
+  unwatch: () => void
+  listeners: Map<number, WebContents>
+}
+
+// Key: `${connectionId}:${worktreePath}`, Value: shared remote watch state.
+const remoteWatchers = new Map<string, RemoteWatcherState>()
 const loggedUnavailableRemoteWatchers = new Set<string>()
 const pendingRemoteWatcherRetries = new Map<string, ReturnType<typeof setTimeout>>()
 // Why: track in-flight `provider.watch()` calls so an unwatch/shutdown that
@@ -444,16 +452,32 @@ const inFlightRemoteInstalls = new Map<string, { cancelled: boolean }>()
 const REMOTE_WATCH_RETRY_MS = 1_000
 const REMOTE_WATCH_RETRY_TIMEOUT_MS = 60_000
 
-function replaceRemoteWatcher(key: string, unwatch: () => void): void {
-  const previous = remoteWatchers.get(key)
-  if (previous) {
-    // Why: SSH reconnect swaps in a fresh filesystem provider, but the
-    // renderer keeps watching the same worktree path. Replacing the existing
-    // unwatch callback here ensures a post-reconnect watch request rebinds to
-    // the new provider instead of early-returning forever on stale state.
-    previous()
+function addRemoteWatchListener(key: string, sender: WebContents): void {
+  const state = remoteWatchers.get(key)
+  if (!state) {
+    return
   }
-  remoteWatchers.set(key, unwatch)
+  state.listeners.set(sender.id, sender)
+  registerSenderCleanup(sender)
+}
+
+function releaseRemoteWatchListener(key: string, senderId: number): void {
+  const state = remoteWatchers.get(key)
+  if (!state) {
+    return
+  }
+  state.listeners.delete(senderId)
+  if (state.listeners.size > 0) {
+    return
+  }
+  state.unwatch()
+  remoteWatchers.delete(key)
+}
+
+function cleanupRemoteWatchersForSender(senderId: number): void {
+  for (const key of Array.from(remoteWatchers.keys())) {
+    releaseRemoteWatchListener(key, senderId)
+  }
 }
 
 type RemoteWatcherInstallResult = 'installed' | 'unavailable' | 'cancelled'
@@ -469,13 +493,25 @@ async function installRemoteWatcher(
   }
 
   const key = `${connectionId}:${worktreePath}`
+  const existing = remoteWatchers.get(key)
+  if (existing) {
+    addRemoteWatchListener(key, sender)
+    return 'installed'
+  }
   const cancelToken = { cancelled: false }
   inFlightRemoteInstalls.set(key, cancelToken)
   let unwatch: () => void
   try {
     unwatch = await provider.watch(worktreePath, (events) => {
-      if (!sender.isDestroyed()) {
-        sender.send('fs:changed', {
+      const state = remoteWatchers.get(key)
+      if (!state) {
+        return
+      }
+      for (const listener of state.listeners.values()) {
+        if (listener.isDestroyed()) {
+          continue
+        }
+        listener.send('fs:changed', {
           worktreePath,
           events
         } satisfies FsChangedPayload)
@@ -494,21 +530,9 @@ async function installRemoteWatcher(
     }
     return 'cancelled'
   }
-  replaceRemoteWatcher(key, unwatch)
+  remoteWatchers.set(key, { unwatch, listeners: new Map() })
+  addRemoteWatchListener(key, sender)
   loggedUnavailableRemoteWatchers.delete(key)
-
-  sender.once('destroyed', () => {
-    const unwatchFn = remoteWatchers.get(key)
-    if (unwatchFn) {
-      unwatchFn()
-      remoteWatchers.delete(key)
-    }
-    const retryTimer = pendingRemoteWatcherRetries.get(key)
-    if (retryTimer) {
-      clearTimeout(retryTimer)
-      pendingRemoteWatcherRetries.delete(key)
-    }
-  })
   return 'installed'
 }
 
@@ -609,11 +633,7 @@ export function registerFilesystemWatcherHandlers(): void {
           inFlight.cancelled = true
         }
         loggedUnavailableRemoteWatchers.delete(key)
-        const unwatchFn = remoteWatchers.get(key)
-        if (unwatchFn) {
-          unwatchFn()
-          remoteWatchers.delete(key)
-        }
+        releaseRemoteWatchListener(key, _event?.sender?.id ?? 0)
         return
       }
       const senderId = _event.sender.id
@@ -624,6 +644,8 @@ export function registerFilesystemWatcherHandlers(): void {
 
 /** Tear down all watchers on app shutdown. */
 export async function closeAllWatchers(): Promise<void> {
+  senderCleanupRegistered.clear()
+
   // Cancel any pending grace-period teardowns — we're tearing down everything.
   for (const timer of pendingTeardowns.values()) {
     clearTimeout(timer)
@@ -657,9 +679,9 @@ export async function closeAllWatchers(): Promise<void> {
   // subscriptions. Without cleaning them up here, their unwatch callbacks
   // would never fire, leaving the relay polling for FS changes after the
   // app has shut down.
-  for (const [key, unwatchFn] of remoteWatchers) {
+  for (const [key, state] of remoteWatchers) {
     try {
-      unwatchFn()
+      state.unwatch()
     } catch (err) {
       console.error(`[filesystem-watcher] remote unwatch error for ${key}:`, err)
     }

@@ -1,7 +1,6 @@
 import React, { useState, useCallback } from 'react'
 import { X, Wrench, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
@@ -222,16 +221,12 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             bar + right-side dot combo, which double-encoded state. Size md
             gives the glyph enough presence for the leading slot without
             overpowering the prompt text. */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex shrink-0 items-center justify-center">
-              <AgentStateDot state={asDotState(agent.state)} size={stateDotSize} />
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {agent.entry.interrupted ? 'Interrupted' : agentStateLabel(asDotState(agent.state))}
-          </TooltipContent>
-        </Tooltip>
+        <span
+          className="inline-flex shrink-0 items-center justify-center"
+          title={agent.entry.interrupted ? 'Interrupted' : agentStateLabel(asDotState(agent.state))}
+        >
+          <AgentStateDot state={asDotState(agent.state)} size={stateDotSize} />
+        </span>
         {/* Why: identity (Claude/Codex/Gemini/…) sits inline with the prompt
             so the reader gets "state → who → what they said" left-to-right
             on the top row. The sub-rows (tool step, assistant response) are
@@ -239,16 +234,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             them — keeping the icon only on the prompt row lets the sub-rows
             indent under the prompt text cleanly. */}
         {!hideIdentityIcon && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-flex shrink-0">
-                <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={14} />
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              {formatAgentTypeLabel(agent.agentType)}
-            </TooltipContent>
-          </Tooltip>
+          <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>
+            <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={14} />
+          </span>
         )}
         {/* Why: animate between a 1-line clipped height and the content's
             natural height using Chromium's `interpolate-size: allow-keywords`
@@ -321,27 +309,21 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
                     ? formatTimeAgo(startedAt, now)
                     : null}
               </span>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={handleDismiss}
-                    onMouseDown={stopMouseDown}
-                    onKeyDown={stopKeyDown}
-                    className={cn(
-                      '[grid-area:1/1] inline-flex items-center justify-center text-muted-foreground/70 hover:text-foreground',
-                      'opacity-0 transition-opacity duration-150',
-                      'group-hover:opacity-100 focus-visible:opacity-100'
-                    )}
-                    aria-label="Dismiss agent"
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top" sideOffset={4}>
-                  Dismiss
-                </TooltipContent>
-              </Tooltip>
+              <button
+                type="button"
+                onClick={handleDismiss}
+                onMouseDown={stopMouseDown}
+                onKeyDown={stopKeyDown}
+                className={cn(
+                  '[grid-area:1/1] inline-flex items-center justify-center text-muted-foreground/70 hover:text-foreground',
+                  'opacity-0 transition-opacity duration-150',
+                  'group-hover:opacity-100 focus-visible:opacity-100'
+                )}
+                aria-label="Dismiss agent"
+                title="Dismiss"
+              >
+                <X className="size-3.5" />
+              </button>
             </span>
           )}
           {/* Why: when there is no timestamp yet (fresh agent, never
@@ -350,27 +332,21 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
               reachable. Rare path; most rows have a timestamp the moment
               they start. */}
           {startedAt === null && doneAt === null && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={handleDismiss}
-                  onMouseDown={stopMouseDown}
-                  onKeyDown={stopKeyDown}
-                  className={cn(
-                    'inline-flex shrink-0 items-center justify-center text-muted-foreground/70 hover:text-foreground',
-                    'opacity-0 transition-opacity duration-150',
-                    'group-hover:opacity-100 focus-visible:opacity-100'
-                  )}
-                  aria-label="Dismiss agent"
-                >
-                  <X className="size-3.5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                Dismiss
-              </TooltipContent>
-            </Tooltip>
+            <button
+              type="button"
+              onClick={handleDismiss}
+              onMouseDown={stopMouseDown}
+              onKeyDown={stopKeyDown}
+              className={cn(
+                'inline-flex shrink-0 items-center justify-center text-muted-foreground/70 hover:text-foreground',
+                'opacity-0 transition-opacity duration-150',
+                'group-hover:opacity-100 focus-visible:opacity-100'
+              )}
+              aria-label="Dismiss agent"
+              title="Dismiss"
+            >
+              <X className="size-3.5" />
+            </button>
           )}
           {/* Why: chevron points down when collapsed (content below is
               available) and rotates 180° to point up when expanded

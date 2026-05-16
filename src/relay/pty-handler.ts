@@ -627,6 +627,9 @@ export class PtyHandler {
 
   startGraceTimer(onExpire: () => void): void {
     this.cancelGraceTimer()
+    if (this.graceTimeMs === 0) {
+      return
+    }
     // Why: always wait the full grace period even with zero PTYs.  A detached
     // relay may have no PTYs yet but a --connect client will arrive shortly.
     // Firing immediately would kill the relay before anyone could connect.

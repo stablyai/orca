@@ -14,6 +14,7 @@ import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
 import { getDefaultTerminalQuickCommands } from './terminal-quick-commands'
 import type { VoiceSettings } from './speech-types'
 import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
+import { TASK_PROVIDERS } from './task-providers'
 
 export const SCHEMA_VERSION = 1
 export const DEFAULT_APP_FONT_FAMILY = 'Geist'
@@ -36,6 +37,7 @@ export const SSH_TERMINATE_RECONNECT_REQUIRED = 'SSH_TERMINATE_RECONNECT_REQUIRE
 export const BROWSER_FAMILY_LABELS: Record<string, string> = {
   chrome: 'Google Chrome',
   chromium: 'Chromium',
+  comet: 'Comet',
   arc: 'Arc',
   edge: 'Microsoft Edge',
   brave: 'Brave',
@@ -118,6 +120,8 @@ export const REPO_COLORS = [
   '#ec4899' // pink
 ] as const
 
+export const DEFAULT_REPO_BADGE_COLOR = REPO_COLORS[0]
+
 export function getDefaultNotificationSettings(): NotificationSettings {
   return {
     enabled: true,
@@ -163,12 +167,13 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     editorAutoSave: false,
     editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
     editorMinimapEnabled: false,
+    markdownReviewToolsEnabled: true,
     terminalFontSize: 14,
     terminalFontFamily: defaultTerminalFontFamily(),
     terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT,
     terminalLineHeight: 1,
-    // Why: VS Code defaults terminal GPU acceleration to "auto": prefer
-    // xterm WebGL for performance, but allow renderer failure to choose DOM.
+    // Why: keep the setting on "auto" so explicit user choices stay available,
+    // but renderer policy maps Linux auto to DOM to avoid GPU glyph corruption.
     terminalGpuAcceleration: 'auto',
     // Why 'auto': when the user has picked a known ligature font we want the
     // feature enabled by default, but we never force it if they pick a font
@@ -208,8 +213,10 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalScrollbackBytes: 10_000_000,
     openLinksInApp: true,
     rightSidebarOpenByDefault: true,
+    showGitIgnoredFiles: true,
     showTitlebarAppName: true,
     showTasksButton: true,
+    ctrlTabOrderMode: 'mru',
     floatingTerminalEnabled: true,
     floatingTerminalDefaultedForAllUsers: true,
     floatingTerminalCwd: '~',
@@ -228,12 +235,14 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     skipDeleteAutomationConfirm: false,
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
+    visibleTaskProviders: [...TASK_PROVIDERS],
     defaultRepoSelection: null,
     defaultLinearTeamSelection: null,
     opencodeSessionCookie: '',
     opencodeWorkspaceId: '',
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
+    keepComputerAwakeWhileAgentsRun: false,
     // Why: 'auto' runs a layout-aware probe at boot (see
     // src/renderer/src/lib/keyboard-layout/*) that picks 'true' for US and
     // US-International and 'false' for every other layout. This mirrors
@@ -310,12 +319,15 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
     repos: [],
     sparsePresetsByRepo: {},
     worktreeMeta: {},
+    worktreeLineageById: {},
     settings: getDefaultSettings(homedir),
     ui: getDefaultUIState(),
     githubCache: { pr: {}, issue: {} },
     workspaceSession: getDefaultWorkspaceSession(),
     sshTargets: [],
     sshRemotePtyLeases: [],
+    migrationUnsupportedPtyEntries: [],
+    legacyPaneKeyAliasEntries: [],
     automations: [],
     automationRuns: [],
     onboarding: getDefaultOnboardingState()
@@ -329,6 +341,7 @@ export function getDefaultUIState(): PersistedUIState {
     sidebarWidth: 280,
     rightSidebarWidth: 350,
     groupBy: 'repo',
+    showWorkspaceLineage: false,
     sortBy: 'recent',
     showActiveOnly: false,
     hideDefaultBranchWorkspace: false,
@@ -345,7 +358,8 @@ export function getDefaultUIState(): PersistedUIState {
     dismissedUpdateVersion: null,
     lastUpdateCheckAt: null,
     trustedOrcaHooks: {},
-    acknowledgedAgentsByPaneKey: {}
+    acknowledgedAgentsByPaneKey: {},
+    workspaceCleanup: { dismissals: {} }
   }
 }
 

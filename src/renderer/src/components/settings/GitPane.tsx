@@ -5,6 +5,7 @@ import { useAppStore } from '../../store'
 import { GIT_PANE_SEARCH_ENTRIES } from './git-search'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
+import { GitHubRateLimitPanel } from '../github/github-rate-limit-display'
 
 export { GIT_PANE_SEARCH_ENTRIES }
 
@@ -108,6 +109,21 @@ export function GitPane({
             }`}
           />
         </button>
+      </SearchableSetting>
+    ) : null,
+    matchesSettingsSearch(searchQuery, {
+      title: 'GitHub API Budget',
+      description: 'Current GitHub CLI REST, Search, and GraphQL rate limits.',
+      keywords: ['github', 'gh', 'graphql', 'rate limit', 'api budget']
+    }) ? (
+      <SearchableSetting
+        key="github-api-budget"
+        title="GitHub API Budget"
+        description="Current GitHub CLI REST, Search, and GraphQL rate limits."
+        keywords={['github', 'gh', 'graphql', 'rate limit', 'api budget']}
+        className="space-y-3"
+      >
+        <GitHubRateLimitPanel />
       </SearchableSetting>
     ) : null,
     matchesSettingsSearch(searchQuery, {

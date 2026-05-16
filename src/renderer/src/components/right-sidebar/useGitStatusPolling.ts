@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useAllWorktrees, useRepoById, useRepoMap } from '@/store/selectors'
 import type { GitConflictOperation } from '../../../../shared/types'
@@ -19,12 +19,22 @@ export function useGitStatusPolling(): void {
   const setUpstreamStatus = useAppStore((s) => s.setUpstreamStatus)
   const setConflictOperation = useAppStore((s) => s.setConflictOperation)
   const conflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
+  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const repoMap = useRepoMap()
+  const statusPollInFlightRef = useRef(false)
+  const statusPollRerunRef = useRef(false)
+  const fetchStatusRef = useRef<() => void>(() => {})
 
   const worktreePath = activeWorktree?.path ?? null
   const activeRepoId = activeWorktree?.repoId ?? null
   const activeRepo = useRepoById(activeRepoId)
   const activeRepoSupportsGit = activeRepo ? isGitRepoKind(activeRepo) : false
+  const activeConnectionId = activeRepo?.connectionId ?? null
+  const isConnectionReady = useCallback(
+    (connectionId: string | null | undefined): boolean =>
+      !connectionId || sshConnectionStates.get(connectionId)?.status === 'connected',
+    [sshConnectionStates]
+  )
 
   // Why: build a list of non-active worktrees that still have a known conflict
   // operation (merge/rebase/cherry-pick). These need lightweight polling so
@@ -48,8 +58,11 @@ export function useGitStatusPolling(): void {
     return result
   }, [allWorktrees, conflictOperationByWorktree, activeWorktreeId, repoMap])
 
-  const fetchStatus = useCallback(async () => {
+  const runFetchStatus = useCallback(async () => {
     if (!activeWorktreeId || !worktreePath || !activeRepoSupportsGit) {
+      return
+    }
+    if (!isConnectionReady(activeConnectionId)) {
       return
     }
     try {
@@ -71,13 +84,34 @@ export function useGitStatusPolling(): void {
     }
   }, [
     activeRepoSupportsGit,
+    activeConnectionId,
     activeWorktreeId,
     fetchUpstreamStatus,
+    isConnectionReady,
     worktreePath,
     setGitStatus,
     setUpstreamStatus,
     updateWorktreeGitIdentity
   ])
+
+  const fetchStatus = useCallback(() => {
+    if (statusPollInFlightRef.current) {
+      statusPollRerunRef.current = true
+      return
+    }
+    statusPollInFlightRef.current = true
+    // Why: git status can exceed the 3s poll interval on large repos. Keep at
+    // most one subprocess chain in flight, then run one trailing refresh if a
+    // tick was skipped so the UI catches up without process pileups.
+    void runFetchStatus().finally(() => {
+      statusPollInFlightRef.current = false
+      if (statusPollRerunRef.current) {
+        statusPollRerunRef.current = false
+        fetchStatusRef.current()
+      }
+    })
+  }, [runFetchStatus])
+  fetchStatusRef.current = fetchStatus
 
   useEffect(() => {
     void fetchStatus()
@@ -111,11 +145,17 @@ export function useGitStatusPolling(): void {
     const pollStale = async (): Promise<void> => {
       for (const { id, path } of staleConflictWorktrees) {
         try {
+          const connectionId = getConnectionId(id) ?? undefined
+          // Why: after explicit SSH disconnect the provider is intentionally
+          // gone; keep remote polling quiet until the target reconnects.
+          if (!isConnectionReady(connectionId)) {
+            continue
+          }
           const op = (await getRuntimeGitConflictOperation({
             settings: useAppStore.getState().settings,
             worktreeId: id,
             worktreePath: path,
-            connectionId: getConnectionId(id) ?? undefined
+            connectionId
           })) as GitConflictOperation
           setConflictOperation(id, op)
         } catch {
@@ -136,5 +176,5 @@ export function useGitStatusPolling(): void {
       clearInterval(intervalId)
       window.removeEventListener('focus', onFocus)
     }
-  }, [staleConflictWorktrees, setConflictOperation])
+  }, [staleConflictWorktrees, setConflictOperation, isConnectionReady])
 }

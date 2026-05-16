@@ -112,7 +112,9 @@ function QuickTabBody({
     ...(modalData.initialBaseBranch ? { initialBaseBranch: modalData.initialBaseBranch } : {}),
     persistDraft: false,
     onCreated: onClose,
-    ...(modalData.telemetrySource ? { telemetrySource: modalData.telemetrySource } : {})
+    ...(modalData.telemetrySource ? { telemetrySource: modalData.telemetrySource } : {}),
+    enableIssueAutomation: false,
+    createGateMode: 'quick'
   })
   // Why: the composer's built-in `onOpenAgentSettings` handler navigates to
   // the settings page and closes the modal. For the quick-create flow we want

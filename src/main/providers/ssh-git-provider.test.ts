@@ -41,6 +41,22 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(statusResult)
   })
 
+  it('getStatus forwards includeIgnored only when requested', async () => {
+    const statusResult = { entries: [], conflictOperation: 'unknown', ignoredPaths: ['dist/'] }
+    mux.request.mockResolvedValue(statusResult)
+
+    await provider.getStatus('/home/user/repo', { includeIgnored: true })
+    await provider.getStatus('/home/user/repo', { includeIgnored: false })
+
+    expect(mux.request).toHaveBeenNthCalledWith(1, 'git.status', {
+      worktreePath: '/home/user/repo',
+      includeIgnored: true
+    })
+    expect(mux.request).toHaveBeenNthCalledWith(2, 'git.status', {
+      worktreePath: '/home/user/repo'
+    })
+  })
+
   it('commit sends git.commit request', async () => {
     const commitResult = { success: true }
     mux.request.mockResolvedValue(commitResult)

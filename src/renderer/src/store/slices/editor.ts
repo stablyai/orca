@@ -140,13 +140,7 @@ export type OpenFile = {
   mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview'
 }
 
-export type RightSidebarTab =
-  | 'explorer'
-  | 'search'
-  | 'source-control'
-  | 'checks'
-  | 'ports'
-  | 'notes'
+export type RightSidebarTab = 'explorer' | 'search' | 'source-control' | 'checks' | 'ports'
 export type ActivityBarPosition = 'top' | 'side'
 
 export type MarkdownViewMode = 'source' | 'rich' | 'preview'
@@ -162,6 +156,27 @@ export type EditorViewMode = 'edit' | 'changes'
 export type ClosedEditorTabSnapshot = Omit<OpenFile, 'id' | 'isDirty'>
 
 const MAX_RECENT_CLOSED_EDITOR_TABS = 10
+
+function scheduleEditorLineReveal(
+  get: () => AppState,
+  filePath: string,
+  line: number,
+  column?: number
+): void {
+  // Why: openFile can replace a preview and remount Monaco asynchronously; the
+  // reveal must land after that remount or the old editor can clear it.
+  get().setPendingEditorReveal(null)
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      get().setPendingEditorReveal({
+        filePath,
+        line,
+        column: column ?? 1,
+        matchLength: 0
+      })
+    })
+  })
+}
 
 export type EditorSlice = {
   // Why: #300 originally kept EditorPanel mounted while hidden so unsaved
@@ -298,6 +313,7 @@ export type EditorSlice = {
 
   // Git status cache
   gitStatusByWorktree: Record<string, GitStatusEntry[]>
+  gitIgnoredPathsByWorktree: Record<string, string[]>
   gitConflictOperationByWorktree: Record<string, GitConflictOperation>
   trackedConflictPathsByWorktree: Record<string, Record<string, GitConflictKind>>
   trackConflictPath: (worktreeId: string, path: string, conflictKind: GitConflictKind) => void
@@ -1809,6 +1825,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   // Git status
   gitStatusByWorktree: {},
+  gitIgnoredPathsByWorktree: {},
   gitConflictOperationByWorktree: {},
   trackedConflictPathsByWorktree: {},
   trackConflictPath: (worktreeId, path, conflictKind) =>
@@ -1897,7 +1914,20 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const openFilesUnchanged = nextOpenFiles === s.openFiles
       const operationUnchanged = prevOperation === status.conflictOperation
 
-      if (statusUnchanged && trackedUnchanged && openFilesUnchanged && operationUnchanged) {
+      const prevIgnored = s.gitIgnoredPathsByWorktree[worktreeId]
+      const nextIgnored = status.ignoredPaths ?? []
+      const ignoredUnchanged =
+        prevIgnored !== undefined &&
+        prevIgnored.length === nextIgnored.length &&
+        prevIgnored.every((p, i) => p === nextIgnored[i])
+
+      if (
+        statusUnchanged &&
+        trackedUnchanged &&
+        openFilesUnchanged &&
+        operationUnchanged &&
+        ignoredUnchanged
+      ) {
         return s
       }
 
@@ -1906,6 +1936,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         gitStatusByWorktree: statusUnchanged
           ? s.gitStatusByWorktree
           : { ...s.gitStatusByWorktree, [worktreeId]: nextEntries },
+        gitIgnoredPathsByWorktree: ignoredUnchanged
+          ? s.gitIgnoredPathsByWorktree
+          : { ...s.gitIgnoredPathsByWorktree, [worktreeId]: nextIgnored },
         gitConflictOperationByWorktree: operationUnchanged
           ? s.gitConflictOperationByWorktree
           : { ...s.gitConflictOperationByWorktree, [worktreeId]: status.conflictOperation },
@@ -1945,12 +1978,17 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     }),
   remoteStatusesByWorktree: {},
   setUpstreamStatus: (worktreeId, status) =>
-    set((s) => ({
-      remoteStatusesByWorktree: {
-        ...s.remoteStatusesByWorktree,
-        [worktreeId]: status
+    set((s) => {
+      if (areUpstreamStatusesEqual(s.remoteStatusesByWorktree[worktreeId], status)) {
+        return s
       }
-    })),
+      return {
+        remoteStatusesByWorktree: {
+          ...s.remoteStatusesByWorktree,
+          [worktreeId]: status
+        }
+      }
+    }),
   isRemoteOperationActive: false,
   remoteOperationDepth: 0,
   inFlightRemoteOpKind: null,
@@ -2232,6 +2270,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return
     }
     if (target.kind === 'file') {
+      const { line, column } = target
       if (target.relativePath === undefined) {
         if (sourceSettings?.activeRuntimeEnvironmentId?.trim()) {
           // Why: a file:// link outside the worktree is a client-local escape
@@ -2261,6 +2300,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           recordReplacedPreview: true
         }
       )
+      if (line !== undefined) {
+        scheduleEditorLineReveal(get, target.absolutePath, line, column)
+      }
       return
     }
 
@@ -2317,21 +2359,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     }
 
     if (line !== undefined) {
-      // Why: double-RAF matches search-match-open.ts. openFile may replace a
-      // preview, remounting Monaco asynchronously; the mount's own
-      // setPendingEditorReveal(null) would otherwise clobber a reveal scheduled
-      // in the same tick.
-      get().setPendingEditorReveal(null)
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          get().setPendingEditorReveal({
-            filePath: absolutePath,
-            line,
-            column: column ?? 1,
-            matchLength: 0
-          })
-        })
-      })
+      scheduleEditorLineReveal(get, absolutePath, line, column)
     }
   },
 
@@ -2518,6 +2546,19 @@ function areTrackedConflictMapsEqual(
   const prevKeys = Object.keys(prev)
   const nextKeys = Object.keys(next)
   return prevKeys.length === nextKeys.length && prevKeys.every((key) => prev[key] === next[key])
+}
+
+function areUpstreamStatusesEqual(
+  prev: GitUpstreamStatus | undefined,
+  next: GitUpstreamStatus
+): boolean {
+  return (
+    prev !== undefined &&
+    prev.hasUpstream === next.hasUpstream &&
+    prev.upstreamName === next.upstreamName &&
+    prev.ahead === next.ahead &&
+    prev.behind === next.behind
+  )
 }
 
 function reconcileOpenFilesForStatus(

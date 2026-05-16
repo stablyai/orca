@@ -4,28 +4,33 @@ fixture setup and mock plumbing can be shared. Splitting by line count would
 duplicate the hoisted mocks and the `../git/repo` partial-real/partial-stub
 setup. */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { EventEmitter } from 'events'
 import type * as RepoModule from '../git/repo'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 
-const { handleMock, mockStore, mockGitProvider, mockMultiplexer } = vi.hoisted(() => ({
-  handleMock: vi.fn(),
-  mockStore: {
-    getRepos: vi.fn().mockReturnValue([]),
-    addRepo: vi.fn(),
-    removeRepo: vi.fn(),
-    getRepo: vi.fn(),
-    updateRepo: vi.fn(),
-    getSshTarget: vi.fn()
-  },
-  mockGitProvider: {
-    isGitRepo: vi.fn().mockReturnValue(true),
-    isGitRepoAsync: vi.fn().mockResolvedValue({ isRepo: true, rootPath: null }),
-    exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
-  },
-  mockMultiplexer: {
-    request: vi.fn(),
-    notify: vi.fn()
-  }
-}))
+const { handleMock, mockStore, mockGitProvider, mockMultiplexer, gitSpawnMock } = vi.hoisted(
+  () => ({
+    handleMock: vi.fn(),
+    mockStore: {
+      getRepos: vi.fn().mockReturnValue([]),
+      addRepo: vi.fn(),
+      removeRepo: vi.fn(),
+      getRepo: vi.fn(),
+      updateRepo: vi.fn(),
+      getSshTarget: vi.fn()
+    },
+    mockGitProvider: {
+      isGitRepo: vi.fn().mockReturnValue(true),
+      isGitRepoAsync: vi.fn().mockResolvedValue({ isRepo: true, rootPath: null }),
+      exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
+    },
+    mockMultiplexer: {
+      request: vi.fn(),
+      notify: vi.fn()
+    },
+    gitSpawnMock: vi.fn()
+  })
+)
 
 vi.mock('electron', () => ({
   dialog: { showOpenDialog: vi.fn() },
@@ -52,6 +57,11 @@ vi.mock('../git/repo', async () => {
     searchBaseRefs: vi.fn().mockResolvedValue([])
   }
 })
+
+vi.mock('../git/runner', () => ({
+  gitExecFileAsync: vi.fn(),
+  gitSpawn: gitSpawnMock
+}))
 
 vi.mock('./filesystem-auth', () => ({
   invalidateAuthorizedRootsCache: vi.fn()
@@ -93,8 +103,16 @@ describe('repos:addRemote', () => {
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.addRepo.mockReset()
     mockStore.getSshTarget.mockReset()
+    mockStore.updateRepo.mockReset()
     mockMultiplexer.request.mockReset()
     mockMultiplexer.notify.mockReset()
+    gitSpawnMock.mockReset()
+    gitSpawnMock.mockImplementation(() => {
+      const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
+      proc.stderr = new EventEmitter()
+      queueMicrotask(() => proc.emit('close', 0, null))
+      return proc
+    })
     mockWindow.webContents.send.mockReset()
 
     registerRepoHandlers(mockWindow as never, mockStore as never)
@@ -115,7 +133,8 @@ describe('repos:addRemote', () => {
         path: '/home/user/project',
         connectionId: 'conn-1',
         kind: 'git',
-        displayName: 'project'
+        displayName: 'project',
+        badgeColor: DEFAULT_REPO_BADGE_COLOR
       })
     )
     expect(result).toHaveProperty('repo.id')
@@ -188,7 +207,8 @@ describe('repos:addRemote', () => {
     expect(mockStore.addRepo).toHaveBeenCalledWith(
       expect.objectContaining({
         kind: 'folder',
-        path: '/home/user/documents'
+        path: '/home/user/documents',
+        badgeColor: DEFAULT_REPO_BADGE_COLOR
       })
     )
     expect(result).toHaveProperty('repo.kind', 'folder')
@@ -289,6 +309,104 @@ describe('repos:addRemote', () => {
       })
     )
     expect(result).toHaveProperty('repo.displayName', 'My Home')
+  })
+})
+
+describe('repos:add + repos:clone', () => {
+  const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
+  const mockWindow = {
+    isDestroyed: () => false,
+    webContents: { send: vi.fn() }
+  }
+
+  beforeEach(() => {
+    handlers.clear()
+    handleMock.mockReset()
+    handleMock.mockImplementation((channel: string, handler: (...a: unknown[]) => unknown) => {
+      handlers.set(channel, handler)
+    })
+    mockStore.getRepos.mockReset().mockReturnValue([])
+    mockStore.addRepo.mockReset()
+    mockStore.updateRepo.mockReset()
+    mockWindow.webContents.send.mockReset()
+    gitSpawnMock.mockReset()
+    gitSpawnMock.mockImplementation(() => {
+      const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
+      proc.stderr = new EventEmitter()
+      queueMicrotask(() => proc.emit('close', 0, null))
+      return proc
+    })
+
+    registerRepoHandlers(mockWindow as never, mockStore as never)
+  })
+
+  it('defaults repos:add badgeColor to DEFAULT_REPO_BADGE_COLOR for folder repos', async () => {
+    const result = await handlers.get('repos:add')!(null, { path: '/tmp/from-add', kind: 'folder' })
+
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/tmp/from-add', badgeColor: DEFAULT_REPO_BADGE_COLOR })
+    )
+    expect(result).toHaveProperty('repo.badgeColor', DEFAULT_REPO_BADGE_COLOR)
+  })
+
+  it('returns existing badgeColor unchanged on repos:add dedupe', async () => {
+    const existing = {
+      id: 'repo-add-existing',
+      path: '/tmp/from-add-existing',
+      displayName: 'from-add-existing',
+      kind: 'folder',
+      badgeColor: '#22c55e'
+    }
+    mockStore.getRepos.mockReturnValue([existing])
+
+    const result = await handlers.get('repos:add')!(null, {
+      path: '/tmp/from-add-existing',
+      kind: 'folder'
+    })
+
+    expect(result).toEqual({ repo: existing })
+    expect(result).toHaveProperty('repo.badgeColor', '#22c55e')
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('defaults repos:clone badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
+    const result = await handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination: '/tmp'
+    })
+
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/tmp/orca',
+        badgeColor: DEFAULT_REPO_BADGE_COLOR,
+        kind: 'git'
+      })
+    )
+    expect(result).toHaveProperty('badgeColor', DEFAULT_REPO_BADGE_COLOR)
+  })
+
+  it('preserves existing badgeColor when repos:clone upgrades folder->git after dedupe', async () => {
+    const existing = {
+      id: 'folder-repo',
+      path: '/tmp/orca',
+      displayName: 'orca',
+      badgeColor: '#8b5cf6',
+      addedAt: 1,
+      kind: 'folder'
+    }
+    const upgraded = { ...existing, kind: 'git' as const }
+    mockStore.getRepos.mockReturnValue([existing])
+    mockStore.updateRepo.mockReturnValue(upgraded)
+
+    const result = await handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination: '/tmp'
+    })
+
+    expect(mockStore.updateRepo).toHaveBeenCalledWith(existing.id, { kind: 'git' })
+    expect(result).toEqual(upgraded)
+    expect(result).toHaveProperty('badgeColor', '#8b5cf6')
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 })
 

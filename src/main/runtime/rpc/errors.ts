@@ -43,9 +43,6 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'terminal_gone',
   'no_active_terminal',
   'repo_not_found',
-  'note_not_found',
-  'note_ambiguous',
-  'revision_conflict',
   'timeout',
   'invalid_limit'
 ])
@@ -61,6 +58,20 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     COMPUTER_PASSTHROUGH_CODES.has((error as { code: string }).code)
   ) {
     return errorResponse(id, meta, (error as { code: string }).code, message)
+  }
+  if (
+    error instanceof Error &&
+    'code' in error &&
+    typeof (error as { code: unknown }).code === 'string' &&
+    (error as { code: string }).code.startsWith('LINEAGE_')
+  ) {
+    return errorResponse(
+      id,
+      meta,
+      (error as { code: string }).code,
+      message,
+      (error as { data?: unknown }).data
+    )
   }
   if (RUNTIME_PASSTHROUGH_CODES.has(message)) {
     return errorResponse(id, meta, message, message)

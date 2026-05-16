@@ -70,22 +70,23 @@ export function findTaskPageDialogWorkItem(
   return null
 }
 
-export function findTaskPageLinearDrawerIssue(
+export function findTaskPageLinearIssue(
   linearIssueCache: LinearIssueCache,
   linearSearchCache: LinearSearchCache,
-  drawerLinearIssueId: string | null
+  linearIssueId: string | null
 ): LinearIssue | null {
-  if (!drawerLinearIssueId) {
+  if (!linearIssueId) {
     return null
   }
 
-  const cachedIssue = linearIssueCache[drawerLinearIssueId]?.data
-  if (cachedIssue) {
-    return cachedIssue
+  for (const entry of Object.values(linearIssueCache)) {
+    if (entry?.data?.id === linearIssueId) {
+      return entry.data
+    }
   }
 
   for (const entry of Object.values(linearSearchCache)) {
-    const found = entry?.data?.find((issue) => issue.id === drawerLinearIssueId)
+    const found = entry?.data?.find((issue) => issue.id === linearIssueId)
     if (found) {
       return found
     }
@@ -93,3 +94,5 @@ export function findTaskPageLinearDrawerIssue(
 
   return null
 }
+
+export const findTaskPageLinearDrawerIssue = findTaskPageLinearIssue

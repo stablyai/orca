@@ -2,6 +2,16 @@
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveZoomTarget } from './useIpcEvents'
+import { makePaneKey } from '../../../shared/stable-pane-id'
+
+const FUTURE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
+const STALE_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+const ORPHAN_LEAF_ID = '33333333-3333-4333-8333-333333333333'
+const TAB_1_LEAF_ID = '44444444-4444-4444-8444-444444444444'
+const FUTURE_PANE_KEY = makePaneKey('tab-future', FUTURE_LEAF_ID)
+const STALE_PANE_KEY = makePaneKey('tab-future', STALE_LEAF_ID)
+const ORPHAN_PANE_KEY = makePaneKey('tab-orphan', ORPHAN_LEAF_ID)
+const TAB_1_PANE_KEY = makePaneKey('tab-1', TAB_1_LEAF_ID)
 
 function makeTarget(args: { hasXtermClass?: boolean; editorClosest?: boolean }): {
   classList: { contains: (token: string) => boolean }
@@ -217,6 +227,7 @@ describe('useIpcEvents updater integration', () => {
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
+          getTerminalDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {}
         },
@@ -425,6 +436,7 @@ describe('useIpcEvents updater integration', () => {
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
+          getTerminalDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {}
         },
@@ -657,6 +669,7 @@ describe('useIpcEvents updater integration', () => {
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
+          getTerminalDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {}
         },
@@ -950,6 +963,7 @@ describe('useIpcEvents browser tab close routing', () => {
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
+          getTerminalDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {}
         },
@@ -1156,6 +1170,7 @@ describe('useIpcEvents browser tab close routing', () => {
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
+          getTerminalDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {}
         },
@@ -1357,6 +1372,7 @@ describe('useIpcEvents browser tab close routing', () => {
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
+          getTerminalDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {}
         },
@@ -1567,6 +1583,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
+          getTerminalDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {}
         },
@@ -1665,6 +1682,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       removeSshCredentialRequest: vi.fn(),
       clearTabPtyId: vi.fn(),
       runtimePaneTitlesByTabId: {},
+      terminalLayoutsByTabId: {},
       repos: [],
       worktreesByRepo: {},
       tabsByWorktree: {},
@@ -1678,6 +1696,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     onSet: (cb: (data: AgentStatusSetData) => void) => () => void
     getSnapshot?: () => Promise<AgentStatusSetData[]>
     drop?: (paneKey: string) => void
+    remoteWorkspace?: Record<string, unknown>
   }): Record<string, unknown> {
     return {
       api: {
@@ -1748,6 +1767,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         },
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
+          getTerminalDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {}
         },
@@ -1766,7 +1786,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
           onSet: args.onSet,
           getSnapshot: args.getSnapshot ?? vi.fn(() => Promise.resolve([])),
           drop: args.drop ?? vi.fn()
-        }
+        },
+        remoteWorkspace: args.remoteWorkspace
       }
     }
   }
@@ -1814,7 +1835,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const getSnapshot = vi.fn(() =>
       Promise.resolve([
         {
-          paneKey: 'tab-future:0',
+          paneKey: FUTURE_PANE_KEY,
           state: 'working' as const,
           prompt: 'p',
           agentType: 'claude',
@@ -1869,7 +1890,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
     // Fire an event for an unknown paneKey while not ready — must NOT call setAgentStatus.
     onSetListenerRef.current({
-      paneKey: 'tab-future:0',
+      paneKey: FUTURE_PANE_KEY,
       state: 'working',
       prompt: 'p',
       agentType: 'claude',
@@ -1883,6 +1904,13 @@ describe('useIpcEvents agent status snapshot integration', () => {
     storeState.tabsByWorktree = {
       'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Future Tab' }]
     }
+    storeState.terminalLayoutsByTabId = {
+      'tab-future': {
+        root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+        activeLeafId: FUTURE_LEAF_ID,
+        expandedLeafId: null
+      }
+    }
     if (typeof subscribeListenerRef.current !== 'function') {
       throw new Error('Expected useAppStore.subscribe listener to be registered')
     }
@@ -1891,7 +1919,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
     expect(setAgentStatus).toHaveBeenCalledTimes(1)
     expect(setAgentStatus).toHaveBeenCalledWith(
-      'tab-future:0',
+      FUTURE_PANE_KEY,
       expect.objectContaining({ state: 'working', prompt: 'p', agentType: 'claude' }),
       'Future Tab',
       { updatedAt: 1_700_000_000_000, stateStartedAt: 1_699_999_999_000 }
@@ -1997,12 +2025,109 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(setAgentStatus).not.toHaveBeenCalled()
   })
 
+  it('waits for the remote workspace client id before dropping self notifications', async () => {
+    const hydrateWorkspaceSession = vi.fn()
+    const hydrateTabsSession = vi.fn()
+    const hydrateEditorSession = vi.fn()
+    const hydrateBrowserSession = vi.fn()
+    let resolveClientId!: (id: string) => void
+    const clientId = new Promise<string>((resolve) => {
+      resolveClientId = resolve
+    })
+    const onChangedListenerRef: {
+      current:
+        | ((event: {
+            targetId: string
+            sourceClientId?: string
+            snapshot: Record<string, unknown>
+          }) => void)
+        | null
+    } = { current: null }
+    const storeState: StoreLike = buildStoreState({
+      workspaceSessionReady: true,
+      repos: [{ id: 'repo-1', connectionId: 'conn-1' }],
+      worktreesByRepo: { 'repo-1': [{ id: 'repo-1::/repo', repoId: 'repo-1' }] },
+      hydrateWorkspaceSession,
+      hydrateTabsSession,
+      hydrateEditorSession,
+      hydrateBrowserSession,
+      markRemoteWorkspaceHydrated: vi.fn(),
+      setRemoteWorkspaceSyncStatus: vi.fn(),
+      reconnectPersistedTerminals: vi.fn(() => Promise.resolve())
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: () => () => {},
+        remoteWorkspace: {
+          clientId: () => clientId,
+          onChanged: (cb: typeof onChangedListenerRef.current) => {
+            onChangedListenerRef.current = cb
+            return () => {}
+          }
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+
+    onChangedListenerRef.current?.({
+      targetId: 'conn-1',
+      sourceClientId: 'client-self',
+      snapshot: {
+        revision: 1,
+        updatedAt: Date.now(),
+        session: {
+          activeWorktreePath: '/repo',
+          activeTabId: 'tab-1',
+          tabsByWorktreePath: {
+            '/repo': [
+              {
+                id: 'tab-1',
+                ptyId: null,
+                worktreePath: '/repo',
+                title: 'Remote',
+                customTitle: null,
+                color: null,
+                sortOrder: 1,
+                createdAt: 1
+              }
+            ]
+          },
+          terminalLayoutsByTabId: {}
+        }
+      }
+    })
+    await Promise.resolve()
+    expect(hydrateWorkspaceSession).not.toHaveBeenCalled()
+
+    resolveClientId('client-self')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(hydrateWorkspaceSession).not.toHaveBeenCalled()
+    expect(hydrateTabsSession).not.toHaveBeenCalled()
+    expect(hydrateEditorSession).not.toHaveBeenCalled()
+    expect(hydrateBrowserSession).not.toHaveBeenCalled()
+  })
+
   it('silently discards snapshot entries whose tabs are still unknown', async () => {
     const setAgentStatus = vi.fn()
     const getSnapshot = vi.fn(() =>
       Promise.resolve([
         {
-          paneKey: 'tab-orphan:0',
+          paneKey: ORPHAN_PANE_KEY,
           state: 'done' as const,
           prompt: 'p',
           agentType: 'claude',
@@ -2016,6 +2141,68 @@ describe('useIpcEvents agent status snapshot integration', () => {
       setAgentStatus,
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-other', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Other' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-orphan': {
+          root: { type: 'leaf', leafId: ORPHAN_LEAF_ID },
+          activeLeafId: ORPHAN_LEAF_ID,
+          expandedLeafId: null
+        }
+      },
+      workspaceSessionReady: true
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        getSnapshot,
+        onSet: () => () => {}
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(setAgentStatus).not.toHaveBeenCalled()
+  })
+
+  it('silently discards valid paneKeys whose leaf is not in the current layout', async () => {
+    const setAgentStatus = vi.fn()
+    const getSnapshot = vi.fn(() =>
+      Promise.resolve([
+        {
+          paneKey: STALE_PANE_KEY,
+          state: 'done' as const,
+          prompt: 'p',
+          agentType: 'claude',
+          receivedAt: 1_700_000_000_000,
+          stateStartedAt: 1_699_999_999_000
+        }
+      ])
+    )
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Future Tab' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
       },
       workspaceSessionReady: true
     })
@@ -2059,6 +2246,13 @@ describe('useIpcEvents agent status snapshot integration', () => {
       },
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-1', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Terminal 1' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: TAB_1_LEAF_ID },
+          activeLeafId: TAB_1_LEAF_ID,
+          expandedLeafId: null
+        }
       }
     })
 
@@ -2082,7 +2276,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     await Promise.resolve()
 
     onSetListenerRef.current?.({
-      paneKey: 'tab-1:0',
+      paneKey: TAB_1_PANE_KEY,
       connectionId: 'conn-1',
       state: 'working',
       receivedAt: 1_700_000_000_100,
@@ -2090,7 +2284,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     })
 
     expect(setAgentStatus).toHaveBeenCalledWith(
-      'tab-1:0',
+      TAB_1_PANE_KEY,
       expect.objectContaining({ state: 'working' }),
       'Terminal 1',
       { updatedAt: 1_700_000_000_100, stateStartedAt: 1_699_999_999_100 }
@@ -2111,6 +2305,13 @@ describe('useIpcEvents agent status snapshot integration', () => {
       },
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-1', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Terminal 1' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: TAB_1_LEAF_ID },
+          activeLeafId: TAB_1_LEAF_ID,
+          expandedLeafId: null
+        }
       }
     })
 
@@ -2134,7 +2335,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     await Promise.resolve()
 
     onSetListenerRef.current?.({
-      paneKey: 'tab-1:0',
+      paneKey: TAB_1_PANE_KEY,
       connectionId: 'conn-stale',
       state: 'working',
       receivedAt: 1_700_000_000_100,
@@ -2156,6 +2357,13 @@ describe('useIpcEvents agent status snapshot integration', () => {
       worktreesByRepo: { 'repo-1': [] },
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-1', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Terminal 1' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: TAB_1_LEAF_ID },
+          activeLeafId: TAB_1_LEAF_ID,
+          expandedLeafId: null
+        }
       }
     })
 
@@ -2179,7 +2387,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     await Promise.resolve()
 
     onSetListenerRef.current?.({
-      paneKey: 'tab-1:0',
+      paneKey: TAB_1_PANE_KEY,
       connectionId: 'conn-other',
       state: 'working',
       receivedAt: 1_700_000_000_100,
@@ -2203,6 +2411,13 @@ describe('useIpcEvents agent status snapshot integration', () => {
       },
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-1', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Terminal 1' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: TAB_1_LEAF_ID },
+          activeLeafId: TAB_1_LEAF_ID,
+          expandedLeafId: null
+        }
       }
     })
 
@@ -2226,7 +2441,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     await Promise.resolve()
 
     onSetListenerRef.current?.({
-      paneKey: 'tab-1:0',
+      paneKey: TAB_1_PANE_KEY,
       state: 'working',
       receivedAt: 1_700_000_000_100,
       stateStartedAt: 1_699_999_999_100

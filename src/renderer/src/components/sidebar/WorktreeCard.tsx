@@ -3,16 +3,19 @@ import React, { useEffect, useCallback, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
   AlertTriangle,
   Bell,
+  ChevronDown,
   GitMerge,
   LoaderCircle,
   CircleCheck,
   CircleX,
   Server,
-  ServerOff
+  ServerOff,
+  Workflow
 } from 'lucide-react'
 import StatusIndicator from './StatusIndicator'
 import CacheTimer from './CacheTimer'
@@ -42,9 +45,16 @@ type WorktreeCardProps = {
   isMultiSelected?: boolean
   selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
+  hideCiCheck?: boolean
+  parentLabel?: string
+  lineageState?: 'valid' | 'missing'
+  lineageChildCount?: number
+  lineageCollapsed?: boolean
+  lineageChildren?: React.ReactNode
+  onLineageToggle?: (event: React.MouseEvent<HTMLButtonElement>) => void
   onActivate?: () => void
-  onSelectionGesture?: (event: React.MouseEvent<HTMLDivElement>, worktreeId: string) => boolean
-  onContextMenuSelect?: (event: React.MouseEvent<HTMLDivElement>) => readonly Worktree[]
+  onSelectionGesture?: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
+  onContextMenuSelect?: (event: React.MouseEvent<HTMLElement>) => readonly Worktree[]
 }
 
 function formatSparseDirectoryPreview(directories: string[]): string {
@@ -61,7 +71,14 @@ const WorktreeCard = React.memo(function WorktreeCard({
   onActivate,
   onSelectionGesture,
   onContextMenuSelect,
-  hideRepoBadge
+  hideRepoBadge,
+  hideCiCheck = false,
+  parentLabel,
+  lineageState,
+  lineageChildCount = 0,
+  lineageCollapsed = false,
+  lineageChildren,
+  onLineageToggle
 }: WorktreeCardProps) {
   const openModal = useAppStore((s) => s.openModal)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
@@ -146,8 +163,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const branch = branchDisplayName(worktree.branch)
   const isFolder = repo ? isFolderRepo(repo) : false
   const hostedReviewCacheKey =
-    repo && branch ? getHostedReviewCacheKey(repo.path, branch, settings) : ''
-  const issueCacheKey = repo && worktree.linkedIssue ? `${repo.path}::${worktree.linkedIssue}` : ''
+    repo && branch ? getHostedReviewCacheKey(repo.path, branch, settings, repo.id) : ''
+  const issueCacheKey = repo && worktree.linkedIssue ? `${repo.id}::${worktree.linkedIssue}` : ''
 
   // Subscribe to ONLY the specific cache entry, not entire review/issue caches.
   const hostedReviewEntry = useAppStore((s) =>
@@ -178,25 +195,19 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const status = useWorktreeActivityStatus(worktree.id)
 
   const showPR = cardProps.includes('pr')
-  const showCI = cardProps.includes('ci')
+  const showCI = !hideCiCheck && cardProps.includes('ci')
   const showIssue = cardProps.includes('issue')
 
   // Skip hosted-review fetches when the corresponding card sections are hidden.
   // This preference is purely presentational, so background refreshes would
   // spend rate limit budget on data the user cannot see.
   useEffect(() => {
-    if (
-      repo &&
-      !repo.connectionId &&
-      !isFolder &&
-      !worktree.isBare &&
-      hostedReviewCacheKey &&
-      (showPR || showCI)
-    ) {
+    if (repo && !isFolder && !worktree.isBare && hostedReviewCacheKey && (showPR || showCI)) {
       // Why: pass linkedPR so worktrees created from a PR (whose new local
       // branch differs from the remote head ref) still resolve their PR/MR via
       // a number-based fallback in the main process.
       fetchHostedReviewForBranch(repo.path, branch, {
+        repoId: repo.id,
         linkedGitHubPR: worktree.linkedPR ?? null,
         linkedGitLabMR: worktree.linkedGitLabMR ?? null
       })
@@ -221,11 +232,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
       return
     }
 
-    fetchIssue(repo.path, worktree.linkedIssue)
+    fetchIssue(repo.path, worktree.linkedIssue, { repoId: repo.id })
 
     // Background poll as fallback (activity triggers handle the fast path)
     const interval = setInterval(() => {
-      fetchIssue(repo.path, worktree.linkedIssue!)
+      fetchIssue(repo.path, worktree.linkedIssue!, { repoId: repo.id })
     }, 5 * 60_000) // 5 minutes
 
     return () => clearInterval(interval)
@@ -297,6 +308,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
   )
 
   const unreadTooltip = worktree.isUnread ? 'Mark read' : 'Mark unread'
+  const childWorkspaceLabel = `${lineageChildCount} child ${
+    lineageChildCount === 1 ? 'workspace' : 'workspaces'
+  }`
+  const childWorkspaceShortLabel = `${lineageChildCount} ${
+    lineageChildCount === 1 ? 'child' : 'children'
+  }`
+  const showLineageChildChip = lineageChildCount > 0 && onLineageToggle !== undefined
 
   const handleDragStart = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
@@ -304,9 +322,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
         event.preventDefault()
         return
       }
-      writeWorkspaceDragData(event.dataTransfer, worktree.id)
+      const dragIds =
+        isMultiSelected && selectedWorktrees && selectedWorktrees.length > 1
+          ? selectedWorktrees.map((item) => item.id)
+          : worktree.id
+      writeWorkspaceDragData(event.dataTransfer, dragIds)
     },
-    [isDeleting, worktree.id]
+    [isDeleting, isMultiSelected, selectedWorktrees, worktree.id]
   )
 
   // Why: the 'unread' card property is the user's opt-out. When off, we render
@@ -465,9 +487,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
             )}
           </div>
 
-          {/* CI Checks & PR state on the right */}
-          {cardProps.includes('ci') && hostedReview && hostedReview.status !== 'neutral' && (
-            <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
+            {/* CI Checks & PR state on the right */}
+            {showCI && hostedReview && hostedReview.status !== 'neutral' && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="inline-flex items-center opacity-80 hover:opacity-100 transition-opacity">
@@ -486,8 +508,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
                   <span>CI checks {checksLabel(hostedReview.status).toLowerCase()}</span>
                 </TooltipContent>
               </Tooltip>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Subtitle row: Repo badge + Branch */}
@@ -529,6 +551,23 @@ const WorktreeCard = React.memo(function WorktreeCard({
           )}
 
           <CacheTimer worktreeId={worktree.id} />
+
+          {parentLabel && (
+            <Badge
+              variant="outline"
+              className={cn(
+                'h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 gap-1 leading-none',
+                lineageState === 'missing'
+                  ? 'text-muted-foreground border-border bg-muted/40'
+                  : 'text-muted-foreground border-border bg-accent/50'
+              )}
+            >
+              <Workflow className="size-2.5" />
+              <span className="max-w-[7rem] truncate">
+                {lineageState === 'missing' ? 'Missing parent' : `from ${parentLabel}`}
+              </span>
+            </Badge>
+          )}
         </div>
 
         {/* Meta section: Issue / hosted review / Comment
@@ -569,6 +608,41 @@ const WorktreeCard = React.memo(function WorktreeCard({
              measureElement on each row, so the virtualizer re-measures
              naturally when agents appear/disappear. */}
         {cardProps.includes('inline-agents') && <WorktreeCardAgents worktreeId={worktree.id} />}
+
+        {showLineageChildChip && (
+          <div
+            className="relative mt-1 flex min-w-0 justify-start"
+            style={{ color: 'color-mix(in srgb, var(--muted-foreground) 42%, var(--sidebar))' }}
+          >
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="relative z-10 h-[18px] max-w-[8rem] gap-1 rounded-md border border-sidebar-border bg-sidebar px-1.5 text-[10px] font-medium leading-none text-muted-foreground shadow-none hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-1 focus-visible:ring-sidebar-ring"
+                  aria-label={`${lineageCollapsed ? 'Show' : 'Hide'} ${childWorkspaceLabel}`}
+                  aria-expanded={!lineageCollapsed}
+                  onClick={onLineageToggle}
+                >
+                  <Workflow className="size-2.5" />
+                  <span className="truncate">{childWorkspaceShortLabel}</span>
+                  <ChevronDown
+                    className={cn(
+                      'size-2.5 transition-transform',
+                      lineageCollapsed && '-rotate-90'
+                    )}
+                  />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8}>
+                {lineageCollapsed ? 'Show child workspaces' : 'Hide child workspaces'}
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        )}
+
+        {lineageChildren && <div className="-ml-4 mt-1.5 space-y-1">{lineageChildren}</div>}
       </div>
     </div>
   )

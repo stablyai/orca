@@ -15,10 +15,12 @@ import {
   ArrowRight,
   ArrowUp,
   Braces,
+  Check,
   ChevronDown,
   ChevronRight,
   CircleDashed,
   CircleDot,
+  Copy,
   ExternalLink,
   FileText,
   Folder,
@@ -78,6 +80,7 @@ import type {
   GitHubOwnerRepo,
   GitHubPRFile,
   GitHubPRFileContents,
+  GitHubPRFileViewedState,
   GitHubWorkItem,
   GitHubWorkItemDetails,
   GitHubAssignableUser,
@@ -162,6 +165,7 @@ export type GitHubItemDialogProjectOrigin = {
 type GitHubItemDialogProps = {
   workItem: GitHubWorkItem | null
   repoPath: string | null
+  repoId?: string | null
   /** Called when the user clicks the primary CTA to start work from this item. */
   onUse: (item: GitHubWorkItem) => void
   onClose: () => void
@@ -301,6 +305,26 @@ function getStateTone(item: GitHubWorkItem): string {
   return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
 }
 
+function WorkItemStateBadge({
+  item,
+  className
+}: {
+  item: GitHubWorkItem
+  className?: string
+}): React.JSX.Element {
+  return (
+    <span
+      className={cn(
+        'inline-flex h-5 items-center rounded-full border px-2 text-[11px] font-medium',
+        getStateTone(item),
+        className
+      )}
+    >
+      {getStateLabel(item)}
+    </span>
+  )
+}
+
 function fileStatusTone(status: GitHubPRFile['status']): string {
   switch (status) {
     case 'added':
@@ -330,6 +354,16 @@ function fileStatusLabel(status: GitHubPRFile['status']): string {
     default:
       return 'M'
   }
+}
+
+function isPRFileViewed(file: GitHubPRFile): boolean {
+  return file.viewerViewedState === 'VIEWED'
+}
+
+// Why: GitHub's viewed toggle auto-collapses the file; keying rows by the
+// viewed state resets the row's local expanded/content state without an Effect.
+function getPRFileRowKey(file: GitHubPRFile): string {
+  return `${file.path}:${file.viewerViewedState ?? 'UNVIEWED'}`
 }
 
 function findNearestBraceBlock(
@@ -372,11 +406,14 @@ function findNearestBraceBlock(
 
 type FileRowProps = {
   file: GitHubPRFile
-  repoId?: string
   repoPath: string
+  repoId: string
   prNumber: number
   headSha: string | undefined
   baseSha: string | undefined
+  viewed: boolean
+  viewedPending: boolean
+  onViewedChange: (path: string, viewed: boolean) => Promise<boolean>
 }
 
 type DiffViewMode = 'flat' | 'tree'
@@ -386,23 +423,27 @@ type DiffViewMode = 'flat' | 'tree'
 type DiffTreeNodeProps = {
   node: DiffTreeNode
   depth: number
-  repoId?: string
   repoPath: string
+  repoId: string
   prNumber: number
   headSha: string | undefined
   baseSha: string | undefined
+  pendingViewedPaths: ReadonlySet<string>
   onCommentAdded: (comment: PRComment) => void
+  onViewedChange: (path: string, viewed: boolean) => Promise<boolean>
 }
 
 function PRDiffTreeNode({
   node,
   depth,
-  repoId,
   repoPath,
+  repoId,
   prNumber,
   headSha,
   baseSha,
-  onCommentAdded
+  pendingViewedPaths,
+  onCommentAdded,
+  onViewedChange
 }: DiffTreeNodeProps): React.JSX.Element {
   const [open, setOpen] = useState(true)
 
@@ -410,12 +451,15 @@ function PRDiffTreeNode({
     return (
       <PRFileRow
         file={node.file}
-        repoId={repoId}
         repoPath={repoPath}
+        repoId={repoId}
         prNumber={prNumber}
         headSha={headSha}
         baseSha={baseSha}
+        viewed={isPRFileViewed(node.file)}
+        viewedPending={pendingViewedPaths.has(node.file.path)}
         onCommentAdded={onCommentAdded}
+        onViewedChange={onViewedChange}
         // Why: tree-view file rows are indented by a CSS left-padding proportional
         // to depth so the expand chevron of PRFileRow stays at position 0 while
         // the folder hierarchy is communicated purely through indentation.
@@ -454,15 +498,17 @@ function PRDiffTreeNode({
         <div role="group">
           {node.children.map((child) => (
             <PRDiffTreeNode
-              key={child.kind === 'file' ? child.file.path : child.path}
+              key={child.kind === 'file' ? getPRFileRowKey(child.file) : child.path}
               node={child}
               depth={depth + 1}
-              repoId={repoId}
               repoPath={repoPath}
+              repoId={repoId}
               prNumber={prNumber}
               headSha={headSha}
               baseSha={baseSha}
+              pendingViewedPaths={pendingViewedPaths}
               onCommentAdded={onCommentAdded}
+              onViewedChange={onViewedChange}
             />
           ))}
         </div>
@@ -473,37 +519,43 @@ function PRDiffTreeNode({
 
 type PRDiffTreeViewProps = {
   files: GitHubPRFile[]
-  repoId?: string
   repoPath: string
+  repoId: string
   prNumber: number
   headSha: string | undefined
   baseSha: string | undefined
+  pendingViewedPaths: ReadonlySet<string>
   onCommentAdded: (comment: PRComment) => void
+  onViewedChange: (path: string, viewed: boolean) => Promise<boolean>
 }
 
 function PRDiffTreeView({
   files,
-  repoId,
   repoPath,
+  repoId,
   prNumber,
   headSha,
   baseSha,
-  onCommentAdded
+  pendingViewedPaths,
+  onCommentAdded,
+  onViewedChange
 }: PRDiffTreeViewProps): React.JSX.Element {
   const tree = useMemo(() => buildDiffTree(files), [files])
   return (
     <div role="tree" aria-label="Changed files">
       {tree.map((node) => (
         <PRDiffTreeNode
-          key={node.kind === 'file' ? node.file.path : node.path}
+          key={node.kind === 'file' ? getPRFileRowKey(node.file) : node.path}
           node={node}
           depth={0}
-          repoId={repoId}
           repoPath={repoPath}
+          repoId={repoId}
           prNumber={prNumber}
           headSha={headSha}
           baseSha={baseSha}
+          pendingViewedPaths={pendingViewedPaths}
           onCommentAdded={onCommentAdded}
+          onViewedChange={onViewedChange}
         />
       ))}
     </div>
@@ -545,21 +597,15 @@ function notifyWorkItemDetailsCache(): void {
 }
 
 function getWorkItemDetailsCacheKey(args: {
-  runtimeScope: string
   repoPath: string
+  repoId: string
   issueSourcePreference: string | undefined
   type: 'issue' | 'pr'
   number: number
 }): string {
   // Why: include all axes that change which (repo, item) the IPC resolves to.
   // `\0` separator avoids ambiguity between fields that may contain `:` or `/`.
-  return [
-    args.runtimeScope,
-    args.repoPath,
-    args.issueSourcePreference ?? 'auto',
-    args.type,
-    args.number
-  ].join('\0')
+  return [args.repoId, args.issueSourcePreference ?? 'auto', args.type, args.number].join('\0')
 }
 
 function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCacheEntry): void {
@@ -602,14 +648,16 @@ let workItemDetailsCacheGeneration = 0
 // matches the (repoPath, type, number) tuple regardless of source preference.
 function invalidateWorkItemDetailsCacheByMatch(args: {
   repoPath: string
+  repoId?: string
   type: 'issue' | 'pr'
   number: number
 }): void {
   workItemDetailsCacheGeneration += 1
+  const suffix = `\0${args.type}\0${args.number}`
+  const prefix = `${args.repoId ?? args.repoPath}\0`
   let removed = false
   for (const key of Array.from(workItemDetailsCache.keys())) {
-    const [, repoPath, , type, number] = key.split('\0')
-    if (repoPath === args.repoPath && type === args.type && number === String(args.number)) {
+    if (key.startsWith(prefix) && key.endsWith(suffix)) {
       workItemDetailsCache.delete(key)
       removed = true
     }
@@ -617,6 +665,35 @@ function invalidateWorkItemDetailsCacheByMatch(args: {
   if (removed) {
     notifyWorkItemDetailsCache()
   }
+}
+
+function patchCachedPRFileViewedState(
+  cacheKey: string,
+  path: string,
+  viewerViewedState: GitHubPRFileViewedState
+): GitHubPRFileViewedState | undefined {
+  const prev = workItemDetailsCache.get(cacheKey)
+  const files = prev?.details?.files
+  if (!prev?.details || !files) {
+    return undefined
+  }
+  let previousState: GitHubPRFileViewedState | undefined
+  const nextFiles = files.map((file) => {
+    if (file.path !== path) {
+      return file
+    }
+    previousState = file.viewerViewedState ?? 'UNVIEWED'
+    return { ...file, viewerViewedState }
+  })
+  if (previousState === undefined || previousState === viewerViewedState) {
+    return previousState
+  }
+  touchWorkItemDetailsCache(cacheKey, {
+    ...prev,
+    details: { ...prev.details, files: nextFiles },
+    error: undefined
+  })
+  return previousState
 }
 
 // Why: install once at module load — every dialog instance shares the cache,
@@ -629,6 +706,7 @@ if (typeof window !== 'undefined' && window.api?.gh?.onWorkItemMutated) {
   workItemMutatedUnsub = window.api.gh.onWorkItemMutated((payload) => {
     invalidateWorkItemDetailsCacheByMatch({
       repoPath: payload.repoPath,
+      repoId: payload.repoId,
       type: payload.type,
       number: payload.number
     })
@@ -663,16 +741,15 @@ function touchPRFileContentCache(
 }
 
 function getPRFileContentCacheKey(args: {
-  repoId?: string
   repoPath: string
+  repoId: string
   prNumber: number
   file: GitHubPRFile
   headSha: string
   baseSha: string
 }): string {
   return [
-    args.repoId ?? '',
-    args.repoPath,
+    args.repoId,
     args.prNumber,
     args.file.path,
     args.file.oldPath ?? '',
@@ -683,8 +760,8 @@ function getPRFileContentCacheKey(args: {
 }
 
 function loadPRFileContents(args: {
-  repoId?: string
   repoPath: string
+  repoId: string
   prNumber: number
   file: GitHubPRFile
   headSha: string
@@ -696,33 +773,17 @@ function loadPRFileContents(args: {
     touchPRFileContentCache(cacheKey, cached)
     return Promise.resolve(cached)
   }
-  const target = getRuntimeTargetForRepoId(args.repoId)
-  const request = (
-    target
-      ? callRuntimeRpc<GitHubPRFileContents>(
-          target,
-          'github.prFileContents',
-          {
-            repo: args.repoId,
-            prNumber: args.prNumber,
-            path: args.file.path,
-            oldPath: args.file.oldPath,
-            status: args.file.status,
-            headSha: args.headSha,
-            baseSha: args.baseSha
-          },
-          { timeoutMs: 30_000 }
-        )
-      : window.api.gh.prFileContents({
-          repoPath: args.repoPath,
-          prNumber: args.prNumber,
-          path: args.file.path,
-          oldPath: args.file.oldPath,
-          status: args.file.status,
-          headSha: args.headSha,
-          baseSha: args.baseSha
-        })
-  )
+  const request = window.api.gh
+    .prFileContents({
+      repoPath: args.repoPath,
+      repoId: args.repoId,
+      prNumber: args.prNumber,
+      path: args.file.path,
+      oldPath: args.file.oldPath,
+      status: args.file.status,
+      headSha: args.headSha,
+      baseSha: args.baseSha
+    })
     .then((contents) => {
       touchPRFileContentCache(cacheKey, contents)
       return contents
@@ -735,18 +796,6 @@ function loadPRFileContents(args: {
   return request
 }
 
-function getRuntimeTargetForRepoId(repoId: string | null | undefined) {
-  if (!repoId) {
-    return null
-  }
-  const state = useAppStore.getState()
-  const target = getActiveRuntimeTarget(state.settings)
-  if (target.kind !== 'environment') {
-    return null
-  }
-  return state.repos.some((repo) => repo.id === repoId) ? target : null
-}
-
 function addIssueCommentForRepo(args: {
   repoId?: string
   repoPath: string
@@ -754,17 +803,9 @@ function addIssueCommentForRepo(args: {
   body: string
   type?: 'issue' | 'pr'
 }): Promise<Awaited<ReturnType<typeof window.api.gh.addIssueComment>>> {
-  const target = getRuntimeTargetForRepoId(args.repoId)
-  if (target) {
-    return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.addIssueComment>>>(
-      target,
-      'github.addIssueComment',
-      { repo: args.repoId, number: args.number, body: args.body, type: args.type },
-      { timeoutMs: 30_000 }
-    )
-  }
   return window.api.gh.addIssueComment({
     repoPath: args.repoPath,
+    repoId: args.repoId,
     number: args.number,
     body: args.body,
     type: args.type
@@ -781,25 +822,9 @@ function addPRReviewCommentForRepo(args: {
   startLine?: number
   body: string
 }): Promise<Awaited<ReturnType<typeof window.api.gh.addPRReviewComment>>> {
-  const target = getRuntimeTargetForRepoId(args.repoId)
-  if (target) {
-    return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.addPRReviewComment>>>(
-      target,
-      'github.addPRReviewComment',
-      {
-        repo: args.repoId,
-        prNumber: args.prNumber,
-        commitId: args.commitId,
-        path: args.path,
-        line: args.line,
-        startLine: args.startLine,
-        body: args.body
-      },
-      { timeoutMs: 30_000 }
-    )
-  }
   return window.api.gh.addPRReviewComment({
     repoPath: args.repoPath,
+    repoId: args.repoId,
     prNumber: args.prNumber,
     commitId: args.commitId,
     path: args.path,
@@ -819,25 +844,9 @@ function addPRReviewCommentReplyForRepo(args: {
   path?: string
   line?: number
 }): Promise<Awaited<ReturnType<typeof window.api.gh.addPRReviewCommentReply>>> {
-  const target = getRuntimeTargetForRepoId(args.repoId)
-  if (target) {
-    return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.addPRReviewCommentReply>>>(
-      target,
-      'github.addPRReviewCommentReply',
-      {
-        repo: args.repoId,
-        prNumber: args.prNumber,
-        commentId: args.commentId,
-        body: args.body,
-        threadId: args.threadId,
-        path: args.path,
-        line: args.line
-      },
-      { timeoutMs: 30_000 }
-    )
-  }
   return window.api.gh.addPRReviewCommentReply({
     repoPath: args.repoPath,
+    repoId: args.repoId,
     prNumber: args.prNumber,
     commentId: args.commentId,
     body: args.body,
@@ -847,35 +856,102 @@ function addPRReviewCommentReplyForRepo(args: {
   })
 }
 
+function setPRFileViewedForRepo(args: {
+  repoId?: string
+  repoPath: string
+  prNumber: number
+  pullRequestId: string
+  path: string
+  viewed: boolean
+}): Promise<boolean> {
+  return window.api.gh.setPRFileViewed({
+    repoPath: args.repoPath,
+    repoId: args.repoId,
+    prNumber: args.prNumber,
+    pullRequestId: args.pullRequestId,
+    path: args.path,
+    viewed: args.viewed
+  })
+}
+
 function getWorkItemDetailsForRepo(args: {
   repoId?: string
   repoPath: string
   number: number
   type: 'issue' | 'pr'
 }): Promise<GitHubWorkItemDetails | null> {
-  const target = getRuntimeTargetForRepoId(args.repoId)
-  if (target) {
-    return callRuntimeRpc<GitHubWorkItemDetails | null>(
-      target,
-      'github.workItemDetails',
-      { repo: args.repoId, number: args.number, type: args.type },
-      { timeoutMs: 30_000 }
-    )
-  }
   return window.api.gh.workItemDetails({
     repoPath: args.repoPath,
+    repoId: args.repoId,
     number: args.number,
     type: args.type
   })
 }
 
+function PRViewedCheckbox({
+  checked,
+  pending,
+  filePath,
+  onToggle
+}: {
+  checked: boolean
+  pending: boolean
+  filePath: string
+  onToggle: () => void
+}): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={checked}
+          aria-label={`${checked ? 'Unmark' : 'Mark'} ${filePath} as viewed`}
+          disabled={pending}
+          onClick={(event) => {
+            event.stopPropagation()
+            onToggle()
+          }}
+          className={cn(
+            'flex h-6 shrink-0 items-center gap-1.5 rounded-md px-1.5 text-[11px] text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            checked && 'text-foreground',
+            pending && 'cursor-default opacity-60'
+          )}
+        >
+          <span
+            className={cn(
+              'flex size-4 items-center justify-center rounded-sm border transition-colors',
+              checked
+                ? 'border-foreground bg-foreground text-background'
+                : 'border-muted-foreground/50 bg-background text-transparent'
+            )}
+          >
+            {pending ? (
+              <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
+            ) : checked ? (
+              <Check className="size-3" strokeWidth={3} />
+            ) : null}
+          </span>
+          <span>Viewed</span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={4}>
+        {checked ? 'Unmark viewed' : 'Mark viewed'}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 function PRFileRow({
   file,
-  repoId,
   repoPath,
+  repoId,
   prNumber,
   headSha,
   baseSha,
+  viewed,
+  viewedPending,
+  onViewedChange,
   onCommentAdded,
   indentDepth = 0,
   label
@@ -898,8 +974,8 @@ function PRFileRow({
         setLoading(true)
         setError(null)
         loadPRFileContents({
-          repoId,
           repoPath,
+          repoId,
           prNumber,
           file,
           headSha,
@@ -936,8 +1012,8 @@ function PRFileRow({
         return false
       }
       const result = await addPRReviewCommentForRepo({
-        repoId,
         repoPath,
+        repoId,
         prNumber,
         commitId: headSha,
         path: file.path,
@@ -956,76 +1032,99 @@ function PRFileRow({
     [file.path, headSha, onCommentAdded, prNumber, repoId, repoPath]
   )
 
+  const handleViewedToggle = useCallback(async () => {
+    if (viewedPending) {
+      return
+    }
+    await onViewedChange(file.path, !viewed)
+  }, [file.path, onViewedChange, viewed, viewedPending])
+
   return (
-    <div className="border-b border-border/50" {...(label != null ? { role: 'treeitem' } : {})}>
-      <button
-        type="button"
-        onClick={handleToggle}
-        className="flex w-full items-center gap-2 py-2 pr-3 text-left transition hover:bg-muted/40"
+    <div
+      className={cn('border-b border-border/50', viewed && 'bg-muted/15')}
+      {...(label != null ? { role: 'treeitem' } : {})}
+    >
+      <div
+        className={cn(
+          'flex w-full items-center gap-2 py-2 pr-3 text-left transition hover:bg-muted/40',
+          viewed && 'opacity-60'
+        )}
         style={{ paddingLeft: `${12 + indentDepth * 16}px` }}
       >
-        {expanded ? (
-          <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
-        ) : (
-          <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
-        )}
-        <span
-          className={cn(
-            'inline-flex size-5 shrink-0 items-center justify-center rounded border border-border/60 font-mono text-[10px]',
-            fileStatusTone(file.status)
-          )}
-          aria-label={file.status}
+        <button
+          type="button"
+          onClick={handleToggle}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          {fileStatusLabel(file.status)}
-        </span>
-        <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-foreground">
-          {file.oldPath && file.oldPath !== file.path ? (
-            label ? (
-              // Why: in tree view we only have room for basenames, but still need to
-              // communicate the rename so the user doesn't have to expand or switch
-              // to flat view to discover what was renamed. When basenames match (i.e.
-              // only the directory changed), we include the parent directory so the
-              // display isn't a meaningless "foo.ts → foo.ts".
-              (() => {
-                const oldBase = file.oldPath!.split('/').pop() ?? file.oldPath!
-                if (oldBase === label) {
-                  const oldParts = file.oldPath!.split('/')
-                  const newParts = file.path.split('/')
-                  const oldShort = oldParts.slice(-2).join('/')
-                  const newShort = newParts.slice(-2).join('/')
+          {expanded ? (
+            <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
+          )}
+          <span
+            className={cn(
+              'inline-flex size-5 shrink-0 items-center justify-center rounded border border-border/60 font-mono text-[10px]',
+              fileStatusTone(file.status)
+            )}
+            aria-label={file.status}
+          >
+            {fileStatusLabel(file.status)}
+          </span>
+          <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-foreground">
+            {file.oldPath && file.oldPath !== file.path ? (
+              label ? (
+                // Why: in tree view we only have room for basenames, but still need to
+                // communicate the rename so the user doesn't have to expand or switch
+                // to flat view to discover what was renamed. When basenames match (i.e.
+                // only the directory changed), we include the parent directory so the
+                // display isn't a meaningless "foo.ts → foo.ts".
+                (() => {
+                  const oldBase = file.oldPath!.split('/').pop() ?? file.oldPath!
+                  if (oldBase === label) {
+                    const oldParts = file.oldPath!.split('/')
+                    const newParts = file.path.split('/')
+                    const oldShort = oldParts.slice(-2).join('/')
+                    const newShort = newParts.slice(-2).join('/')
+                    return (
+                      <>
+                        <span className="text-muted-foreground">{oldShort}</span>
+                        <span className="mx-1 text-muted-foreground">→</span>
+                        {newShort}
+                      </>
+                    )
+                  }
                   return (
                     <>
-                      <span className="text-muted-foreground">{oldShort}</span>
+                      <span className="text-muted-foreground">{oldBase}</span>
                       <span className="mx-1 text-muted-foreground">→</span>
-                      {newShort}
+                      {label}
                     </>
                   )
-                }
-                return (
-                  <>
-                    <span className="text-muted-foreground">{oldBase}</span>
-                    <span className="mx-1 text-muted-foreground">→</span>
-                    {label}
-                  </>
-                )
-              })()
+                })()
+              ) : (
+                <>
+                  <span className="text-muted-foreground">{file.oldPath}</span>
+                  <span className="mx-1 text-muted-foreground">→</span>
+                  {file.path}
+                </>
+              )
             ) : (
-              <>
-                <span className="text-muted-foreground">{file.oldPath}</span>
-                <span className="mx-1 text-muted-foreground">→</span>
-                {file.path}
-              </>
-            )
-          ) : (
-            (label ?? file.path)
-          )}
-        </span>
+              (label ?? file.path)
+            )}
+          </span>
+        </button>
         <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
           <span className="text-emerald-500">+{file.additions}</span>
           <span className="mx-1">/</span>
           <span className="text-rose-500">−{file.deletions}</span>
         </span>
-      </button>
+        <PRViewedCheckbox
+          checked={viewed}
+          pending={viewedPending}
+          filePath={file.path}
+          onToggle={handleViewedToggle}
+        />
+      </div>
 
       {expanded && (
         // Why: DiffViewer's inner layout uses flex-1/min-h-0, so this wrapper
@@ -1083,6 +1182,7 @@ function PRFileRow({
 function CommentCodeContext({
   comment,
   repoPath,
+  repoId,
   prNumber,
   files,
   headSha,
@@ -1090,6 +1190,7 @@ function CommentCodeContext({
 }: {
   comment: PRComment
   repoPath: string | null
+  repoId: string
   prNumber: number
   files: GitHubPRFile[]
   headSha: string | undefined
@@ -1113,7 +1214,7 @@ function CommentCodeContext({
       return
     }
     let cancelled = false
-    loadPRFileContents({ repoPath, prNumber, file, headSha, baseSha })
+    loadPRFileContents({ repoPath, repoId, prNumber, file, headSha, baseSha })
       .then((result) => {
         if (!cancelled) {
           setContents(result)
@@ -1127,7 +1228,7 @@ function CommentCodeContext({
     return () => {
       cancelled = true
     }
-  }, [baseSha, file, headSha, line, prNumber, repoPath])
+  }, [baseSha, file, headSha, line, prNumber, repoId, repoPath])
 
   useEffect(() => {
     setContextBefore(0)
@@ -1321,7 +1422,6 @@ function CommentCodeContext({
 
 function ConversationTab({
   item,
-  repoId,
   repoPath,
   body,
   comments,
@@ -1335,7 +1435,6 @@ function ConversationTab({
   onCommentAdded
 }: {
   item: GitHubWorkItem
-  repoId?: string
   repoPath: string | null
   body: string
   comments: PRComment[]
@@ -1348,11 +1447,10 @@ function ConversationTab({
   onUse: (item: GitHubWorkItem) => void
   onCommentAdded: (comment: PRComment) => void
 }): React.JSX.Element {
-  const settings = useAppStore((s) => s.settings)
   const authorLabel = item.author ?? 'unknown'
   const [replyingTo, setReplyingTo] = useState<number | null>(null)
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
-  const repoAssignees = useRepoAssignees(repoPath, repoId, settings)
+  const repoAssignees = useRepoAssignees(repoPath, item.repoId)
   const commentCounts = useMemo(() => getPRCommentAudienceCounts(comments), [comments])
   const visibleComments = useMemo(
     () => filterPRCommentsByAudience(comments, commentFilter),
@@ -1385,8 +1483,8 @@ function ConversationTab({
       const result =
         comment.path && item.type === 'pr'
           ? await addPRReviewCommentReplyForRepo({
-              repoId,
               repoPath,
+              repoId: item.repoId,
               prNumber: item.number,
               commentId: comment.id,
               body: replyBody,
@@ -1395,8 +1493,8 @@ function ConversationTab({
               line: comment.line
             })
           : await addIssueCommentForRepo({
-              repoId,
               repoPath,
+              repoId: item.repoId,
               number: item.number,
               body: `@${comment.author} ${replyBody}`,
               type: item.type
@@ -1411,7 +1509,7 @@ function ConversationTab({
       toast.success('Reply posted.')
       return true
     },
-    [item.number, item.type, onCommentAdded, repoId, repoPath]
+    [item.number, item.repoId, item.type, onCommentAdded, repoPath]
   )
 
   const startWorkspaceButton = (
@@ -1429,11 +1527,13 @@ function ConversationTab({
     item.type === 'pr' ? (
       <div className="flex h-fit flex-col gap-3 xl:sticky xl:top-4">
         {startWorkspaceButton}
-        <aside className="rounded-lg border border-border/50 bg-background/30">
+        <aside className="rounded-lg border border-border/50 bg-card/50 shadow-xs">
           <div className="flex h-10 items-center gap-2 border-b border-border/50 px-3">
             <CircleDashed className="size-3.5 text-muted-foreground" />
             <span className="text-[13px] font-medium text-foreground">Checks</span>
-            <span className="text-[12px] text-muted-foreground">{(checks ?? []).length}</span>
+            <span className="ml-auto rounded-full border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
+              {(checks ?? []).length}
+            </span>
           </div>
           <ChecksTab checks={checks} loading={loading} />
         </aside>
@@ -1444,7 +1544,7 @@ function ConversationTab({
     <div
       key={comment.id}
       className={cn(
-        'rounded-lg border border-border/40 bg-background/30',
+        'rounded-lg border border-border/40 bg-card/50 shadow-xs',
         isReply && 'ml-6',
         comment.isResolved && PR_COMMENT_RESOLVED_CONTAINER_CLASS
       )}
@@ -1521,6 +1621,7 @@ function ConversationTab({
         <CommentCodeContext
           comment={comment}
           repoPath={repoPath}
+          repoId={item.repoId}
           prNumber={item.number}
           files={files}
           headSha={headSha}
@@ -1570,7 +1671,7 @@ function ConversationTab({
       <Accordion key={getPRCommentGroupId(group)} type="single" collapsible>
         <AccordionItem
           value={getPRCommentGroupId(group)}
-          className="rounded-lg border border-border/40 bg-background/20"
+          className="rounded-lg border border-border/40 bg-card/40"
         >
           <AccordionTrigger className="px-3 py-2 text-[13px] text-muted-foreground hover:bg-accent/30">
             <span className="min-w-0 truncate">
@@ -1589,17 +1690,17 @@ function ConversationTab({
   return (
     <div
       className={cn(
-        'grid gap-4 px-4 py-4',
-        item.type === 'pr' && 'xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]'
+        'grid gap-5 px-4 py-4',
+        item.type === 'pr' && 'xl:grid-cols-[minmax(0,1fr)_280px]'
       )}
     >
       <div className="flex min-w-0 flex-col gap-4">
-        <div className="rounded-lg border border-border/50 bg-background/40">
+        <div className="rounded-lg border border-border/50 bg-card/50 shadow-xs">
           <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2 text-[12px] text-muted-foreground">
             <span className="font-medium text-foreground">{authorLabel}</span>
-            <span>· {formatRelativeTime(item.updatedAt)}</span>
+            <span>updated {formatRelativeTime(item.updatedAt)}</span>
           </div>
-          <div className="px-3 py-3 text-[14px] leading-relaxed text-foreground">
+          <div className="px-4 py-4 text-[14px] leading-relaxed text-foreground">
             {body.trim() ? (
               <CommentMarkdown
                 content={body}
@@ -1616,7 +1717,9 @@ function ConversationTab({
           <MessageSquare className="size-4 text-muted-foreground" />
           <span className="text-[13px] font-medium text-foreground">Comments</span>
           {comments.length > 0 && (
-            <span className="text-[12px] text-muted-foreground">{comments.length}</span>
+            <span className="rounded-full border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
+              {comments.length}
+            </span>
           )}
         </div>
 
@@ -1644,15 +1747,17 @@ function ConversationTab({
         )}
 
         {loading && comments.length === 0 ? (
-          <div className="flex items-center justify-center py-6">
+          <div className="flex items-center justify-center rounded-lg border border-dashed border-border/50 py-8">
             <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
           </div>
         ) : comments.length === 0 ? (
-          <p className="text-[13px] text-muted-foreground">No comments yet.</p>
+          <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-center text-[13px] text-muted-foreground">
+            No comments yet.
+          </div>
         ) : visibleComments.length === 0 ? (
-          <p className="text-[13px] text-muted-foreground">
+          <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-center text-[13px] text-muted-foreground">
             {getPRCommentAudienceEmptyLabel(commentFilter)}
-          </p>
+          </div>
         ) : (
           <div className="flex flex-col gap-3">{visibleCommentGroups.map(renderCommentGroup)}</div>
         )}
@@ -1660,8 +1765,8 @@ function ConversationTab({
         {repoPath && (
           <GHCommentComposer
             className="mt-1"
-            repoId={repoId}
             repoPath={repoPath}
+            repoId={item.repoId}
             issueNumber={item.number}
             itemType={item.type}
             mentionOptions={mentionOptions}
@@ -1976,8 +2081,8 @@ function MentionTextarea({
 // to a thrown rejection so the existing `useImmediateMutation` flow
 // (which expects throws on failure) continues to work unchanged.
 async function runIssueUpdate(args: {
-  repoId?: string
   repoPath: string | null
+  repoId?: string | null
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
   number: number
   updates: Parameters<typeof window.api.gh.updateIssue>[0]['updates']
@@ -2007,21 +2112,9 @@ async function runIssueUpdate(args: {
   if (!args.repoPath) {
     throw new Error('No repo context available for this edit.')
   }
-  const target = getRuntimeTargetForRepoId(args.repoId)
-  if (target) {
-    const res = await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updateIssue>>>(
-      target,
-      'github.updateIssue',
-      { repo: args.repoId, number: args.number, updates: args.updates },
-      { timeoutMs: 30_000 }
-    )
-    if (!res.ok) {
-      throw new Error(res.error)
-    }
-    return
-  }
   await window.api.gh.updateIssue({
     repoPath: args.repoPath,
+    repoId: args.repoId ?? undefined,
     number: args.number,
     updates: args.updates
   })
@@ -2030,6 +2123,7 @@ async function runIssueUpdate(args: {
 function GHEditSection({
   item,
   repoPath,
+  repoId,
   projectOrigin,
   localState,
   localLabels,
@@ -2041,6 +2135,7 @@ function GHEditSection({
 }: {
   item: GitHubWorkItem
   repoPath: string | null
+  repoId: string | null
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
   localState: GitHubWorkItem['state']
   localLabels: string[]
@@ -2060,8 +2155,6 @@ function GHEditSection({
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
   const { isPending, run } = useImmediateMutation()
-  const settings = useAppStore((s) => s.settings)
-
   // Why: when the dialog opens from a Project view, mutations route through
   // *BySlug IPCs and we must keep `projectViewCache` in sync alongside
   // `workItemsCache` — `patchWorkItem` only walks the latter, so without this
@@ -2084,17 +2177,15 @@ function GHEditSection({
   const slugRepo = projectOrigin?.repo ?? null
   const repoLabelsByPath = useRepoLabels(
     projectOrigin ? null : repoPath,
-    projectOrigin ? null : item.repoId,
-    settings
+    projectOrigin ? null : repoId
   )
-  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo, settings)
+  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo)
   const repoLabels = projectOrigin ? repoLabelsBySlug : repoLabelsByPath
   const repoAssigneesByPath = useRepoAssignees(
     projectOrigin ? null : repoPath,
-    projectOrigin ? null : item.repoId,
-    settings
+    projectOrigin ? null : repoId
   )
-  const repoAssigneesBySlug = useRepoAssigneesBySlug(slugOwner, slugRepo, assignees, settings)
+  const repoAssigneesBySlug = useRepoAssigneesBySlug(slugOwner, slugRepo, assignees)
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath
 
   // Why: sync local assignees when item changes or when the detail fetch
@@ -2494,16 +2585,16 @@ function GHEditSection({
 
 function GHCommentComposer({
   className,
-  repoId,
   repoPath,
+  repoId,
   issueNumber,
   itemType,
   mentionOptions,
   onCommentAdded
 }: {
   className?: string
-  repoId?: string
   repoPath: string
+  repoId?: string | null
   issueNumber: number
   itemType: 'issue' | 'pr'
   mentionOptions: MentionOption[]
@@ -2530,8 +2621,8 @@ function GHCommentComposer({
     setSubmitting(true)
     try {
       const result = await addIssueCommentForRepo({
-        repoId,
         repoPath,
+        repoId: repoId ?? undefined,
         number: issueNumber,
         body: trimmed,
         type: itemType
@@ -2550,7 +2641,7 @@ function GHCommentComposer({
     } finally {
       setSubmitting(false)
     }
-  }, [autoGrow, body, repoId, repoPath, issueNumber, itemType, onCommentAdded])
+  }, [autoGrow, body, repoPath, repoId, issueNumber, itemType, onCommentAdded])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -2612,10 +2703,10 @@ function GHCommentComposer({
 // doc §1 rule: hide when either side is unknown rather than guessing.
 function WorkItemIssueSourceIndicator({
   url,
-  repoPath
+  repoId
 }: {
   url: string
-  repoPath: string | null
+  repoId: string | null
 }): React.JSX.Element | null {
   // Why: subscribe to a single store-side selector that returns the resolved
   // sources for this repo — either the primary `(repoPath, PER_REPO_FETCH_LIMIT, '')`
@@ -2629,7 +2720,7 @@ function WorkItemIssueSourceIndicator({
   // indicator is small and the cache rewrite rate is bounded by user-initiated
   // refresh/search actions.
   const sources = useAppStore((s) =>
-    s.getWorkItemsAnySourcesForRepo(repoPath ?? '', PER_REPO_FETCH_LIMIT)
+    s.getWorkItemsAnySourcesForRepo(repoId ?? '', PER_REPO_FETCH_LIMIT)
   )
   const issues = useMemo<GitHubOwnerRepo | null>(() => {
     const fromUrl = parseOwnerRepoFromItemUrl(url)
@@ -2660,6 +2751,7 @@ function WorkItemIssueSourceIndicator({
 export default function GitHubItemDialog({
   workItem,
   repoPath,
+  repoId,
   projectOrigin,
   onUse,
   onClose
@@ -2668,9 +2760,11 @@ export default function GitHubItemDialog({
   const [localState, setLocalState] = useState<GitHubWorkItem['state']>(workItem?.state ?? 'open')
   const [localLabels, setLocalLabels] = useState<string[]>(workItem?.labels ?? [])
   const [diffViewMode, setDiffViewMode] = useState<DiffViewMode>('flat')
+  const [linkCopied, setLinkCopied] = useState(false)
   const workItemId = workItem?.id
   const workItemState = workItem?.state
   const workItemLabels = workItem?.labels
+  const effectiveRepoId = repoId ?? workItem?.repoId ?? null
 
   // Why: the cache key has to include the issue source preference so a user
   // toggling between origin/upstream for the same issue number doesn't read
@@ -2678,28 +2772,24 @@ export default function GitHubItemDialog({
   // than threading it as a prop because every existing call site already has
   // the repo registered in the store.
   const issueSourcePreference = useAppStore((s) => {
-    if (!repoPath) {
+    if (!repoPath && !effectiveRepoId) {
       return undefined
     }
-    return s.repos.find((r) => r.path === repoPath)?.issueSourcePreference
+    return s.repos.find((r) => (effectiveRepoId ? r.id === effectiveRepoId : r.path === repoPath))
+      ?.issueSourcePreference
   })
-  const runtimeScope = useAppStore((s) =>
-    s.settings?.activeRuntimeEnvironmentId
-      ? `runtime:${s.settings.activeRuntimeEnvironmentId}`
-      : 'local'
-  )
   const detailsCacheKey = useMemo(() => {
-    if (!workItem || !repoPath) {
+    if (!workItem || !repoPath || !effectiveRepoId) {
       return null
     }
     return getWorkItemDetailsCacheKey({
-      runtimeScope,
       repoPath,
+      repoId: effectiveRepoId,
       issueSourcePreference,
       type: workItem.type,
       number: workItem.number
     })
-  }, [runtimeScope, repoPath, workItem, issueSourcePreference])
+  }, [repoPath, effectiveRepoId, workItem, issueSourcePreference])
 
   // Why: reset lifted edit state when the dialog switches items or when the
   // same item receives an optimistic cache patch from the surrounding table.
@@ -2842,8 +2932,8 @@ export default function GitHubItemDialog({
     const inflight: Promise<GitHubWorkItemDetails | null> =
       cached?.pending ??
       getWorkItemDetailsForRepo({
-        repoId: workItem.repoId,
         repoPath,
+        repoId: effectiveRepoId ?? undefined,
         number: workItem.number,
         type: workItem.type
       })
@@ -2904,13 +2994,42 @@ export default function GitHubItemDialog({
           error: message
         })
       })
-  }, [repoPath, workItem, detailsCacheKey, refetchTick])
+  }, [repoPath, effectiveRepoId, workItem, detailsCacheKey, refetchTick])
 
   const Icon = workItem?.type === 'pr' ? GitPullRequest : CircleDot
   const body = details?.body ?? ''
   const comments = details?.comments ?? []
   const files = details?.files ?? []
   const checks = details?.checks ?? []
+  const viewedFileCount = files.filter(isPRFileViewed).length
+  const [pendingViewedPaths, setPendingViewedPaths] = useState<Set<string>>(() => new Set())
+
+  useEffect(() => {
+    setLinkCopied(false)
+  }, [workItemId])
+
+  useEffect(() => {
+    if (!linkCopied) {
+      return
+    }
+    const handle = window.setTimeout(() => setLinkCopied(false), 1500)
+    return () => window.clearTimeout(handle)
+  }, [linkCopied])
+
+  const handleCopyWorkItemLink = useCallback(async (): Promise<void> => {
+    if (!workItem) {
+      return
+    }
+    try {
+      // Why: Electron's clipboard IPC is reliable even when browser clipboard
+      // APIs lose focus/activation inside nested overlay surfaces.
+      await window.api.ui.writeClipboardText(workItem.url)
+      setLinkCopied(true)
+      toast.success('GitHub link copied')
+    } catch {
+      toast.error('Failed to copy GitHub link')
+    }
+  }, [workItem])
 
   const appendOptimisticComment = useCallback(
     (comment: PRComment) => {
@@ -2946,6 +3065,45 @@ export default function GitHubItemDialog({
     [detailsCacheKey]
   )
 
+  const handlePRFileViewedChange = useCallback(
+    async (path: string, viewed: boolean): Promise<boolean> => {
+      if (!repoPath || !details?.pullRequestId || !workItem || workItem.type !== 'pr') {
+        toast.error('Unable to sync viewed state for this pull request.')
+        return false
+      }
+      setPendingViewedPaths((prev) => new Set(prev).add(path))
+      const nextState: GitHubPRFileViewedState = viewed ? 'VIEWED' : 'UNVIEWED'
+      const previousState = detailsCacheKey
+        ? patchCachedPRFileViewedState(detailsCacheKey, path, nextState)
+        : undefined
+      try {
+        const ok = await setPRFileViewedForRepo({
+          repoId: workItem.repoId,
+          repoPath,
+          prNumber: workItem.number,
+          pullRequestId: details.pullRequestId,
+          path,
+          viewed
+        })
+        if (!ok) {
+          if (detailsCacheKey && previousState) {
+            patchCachedPRFileViewedState(detailsCacheKey, path, previousState)
+          }
+          toast.error('Failed to sync viewed state with GitHub.')
+          return false
+        }
+        return true
+      } finally {
+        setPendingViewedPaths((prev) => {
+          const next = new Set(prev)
+          next.delete(path)
+          return next
+        })
+      }
+    },
+    [details?.pullRequestId, detailsCacheKey, repoPath, workItem]
+  )
+
   return (
     <Sheet open={workItem !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent
@@ -2974,36 +3132,59 @@ export default function GitHubItemDialog({
 
         {workItem && (
           <div className="flex h-full min-h-0 flex-col">
-            <div className="flex-none border-b border-border/60 px-4 py-3">
-              <div className="flex items-start gap-2">
-                <div className="min-w-0 flex-1">
-                  <span className="font-mono text-[12px] text-muted-foreground">
-                    #{workItem.number}
-                  </span>
-                  <h2 className="mt-1 flex items-start gap-2 text-[15px] font-semibold leading-tight text-foreground">
-                    <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0">{workItem.title}</span>
+            <div className="flex-none border-b border-border/60 bg-card/80 px-4 py-3 shadow-xs backdrop-blur supports-[backdrop-filter]:bg-card/70">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/40 text-muted-foreground">
+                  <Icon className="size-4" />
+                </div>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                    <WorkItemStateBadge item={{ ...workItem, state: localState }} />
+                    <span className="font-mono">#{workItem.number}</span>
+                    <span>{workItem.type === 'pr' ? 'Pull request' : 'Issue'}</span>
+                  </div>
+                  <h2 className="text-[15px] font-semibold leading-snug text-foreground">
+                    {workItem.title}
                   </h2>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 pl-6 text-[11px] text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
                     <span>{workItem.author ?? 'unknown'}</span>
-                    <span>· {formatRelativeTime(workItem.updatedAt)}</span>
+                    <span>updated {formatRelativeTime(workItem.updatedAt)}</span>
                     {workItem.branchName && (
-                      <span className="font-mono text-[10px] text-muted-foreground/80">
-                        · {workItem.branchName}
+                      <span className="max-w-full truncate rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                        {workItem.branchName}
                       </span>
                     )}
                   </div>
                   {workItem.type === 'issue' && (
-                    <WorkItemIssueSourceIndicator url={workItem.url} repoPath={repoPath} />
+                    <WorkItemIssueSourceIndicator url={workItem.url} repoId={effectiveRepoId} />
                   )}
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
+                        type="button"
                         variant="ghost"
-                        size="icon"
-                        className="size-7"
+                        size="icon-sm"
+                        onClick={() => void handleCopyWorkItemLink()}
+                        aria-label="Copy GitHub link"
+                      >
+                        {linkCopied ? (
+                          <Check className="size-4 text-emerald-500" />
+                        ) : (
+                          <Copy className="size-4" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      {linkCopied ? 'Copied' : 'Copy GitHub link'}
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
                         onClick={() => window.api.shell.openUrl(workItem.url)}
                         aria-label="Open on GitHub"
                       >
@@ -3018,8 +3199,7 @@ export default function GitHubItemDialog({
                     <TooltipTrigger asChild>
                       <Button
                         variant="ghost"
-                        size="icon"
-                        className="size-7"
+                        size="icon-sm"
                         onClick={onClose}
                         aria-label="Close preview"
                       >
@@ -3038,6 +3218,7 @@ export default function GitHubItemDialog({
               <GHEditSection
                 item={workItem}
                 repoPath={repoPath}
+                repoId={effectiveRepoId}
                 projectOrigin={projectOrigin}
                 localState={localState}
                 localLabels={localLabels}
@@ -3052,6 +3233,7 @@ export default function GitHubItemDialog({
                   if (repoPath) {
                     invalidateWorkItemDetailsCacheByMatch({
                       repoPath,
+                      repoId: effectiveRepoId ?? undefined,
                       type: workItem.type,
                       number: workItem.number
                     })
@@ -3073,7 +3255,7 @@ export default function GitHubItemDialog({
                 >
                   <TabsList
                     variant="line"
-                    className="mx-4 mt-2 justify-start gap-3 border-b border-border/60"
+                    className="mx-4 mt-2 justify-start gap-3 border-b border-border/60 bg-transparent"
                   >
                     <TabsTrigger value="conversation" className="px-2">
                       <MessageSquare className="size-3.5" />
@@ -3096,7 +3278,6 @@ export default function GitHubItemDialog({
                     <TabsContent value="conversation" className="mt-0">
                       <ConversationTab
                         item={workItem}
-                        repoId={workItem.repoId}
                         repoPath={repoPath}
                         body={body}
                         comments={comments}
@@ -3124,74 +3305,84 @@ export default function GitHubItemDialog({
                         ) : (
                           <div>
                             {/* Files-tab toolbar: view-mode toggle */}
-                            <div className="flex items-center justify-end gap-1 border-b border-border/40 px-3 py-1.5">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    id="pr-files-flat-view"
-                                    type="button"
-                                    onClick={() => setDiffViewMode('flat')}
-                                    aria-label="Flat view"
-                                    aria-pressed={diffViewMode === 'flat'}
-                                    className={cn(
-                                      'flex size-6 items-center justify-center rounded transition hover:bg-muted',
-                                      diffViewMode === 'flat'
-                                        ? 'bg-muted text-foreground'
-                                        : 'text-muted-foreground'
-                                    )}
-                                  >
-                                    <AlignJustify className="size-3.5" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom" sideOffset={4}>
-                                  Flat view
-                                </TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    id="pr-files-tree-view"
-                                    type="button"
-                                    onClick={() => setDiffViewMode('tree')}
-                                    aria-label="Tree view"
-                                    aria-pressed={diffViewMode === 'tree'}
-                                    className={cn(
-                                      'flex size-6 items-center justify-center rounded transition hover:bg-muted',
-                                      diffViewMode === 'tree'
-                                        ? 'bg-muted text-foreground'
-                                        : 'text-muted-foreground'
-                                    )}
-                                  >
-                                    <LayoutList className="size-3.5" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom" sideOffset={4}>
-                                  Tree view
-                                </TooltipContent>
-                              </Tooltip>
+                            <div className="flex items-center justify-between gap-3 border-b border-border/40 px-3 py-1.5">
+                              <span className="text-[11px] text-muted-foreground">
+                                {viewedFileCount} / {files.length} files viewed
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      id="pr-files-flat-view"
+                                      type="button"
+                                      onClick={() => setDiffViewMode('flat')}
+                                      aria-label="Flat view"
+                                      aria-pressed={diffViewMode === 'flat'}
+                                      className={cn(
+                                        'flex size-6 items-center justify-center rounded transition hover:bg-muted',
+                                        diffViewMode === 'flat'
+                                          ? 'bg-muted text-foreground'
+                                          : 'text-muted-foreground'
+                                      )}
+                                    >
+                                      <AlignJustify className="size-3.5" />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="bottom" sideOffset={4}>
+                                    Flat view
+                                  </TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      id="pr-files-tree-view"
+                                      type="button"
+                                      onClick={() => setDiffViewMode('tree')}
+                                      aria-label="Tree view"
+                                      aria-pressed={diffViewMode === 'tree'}
+                                      className={cn(
+                                        'flex size-6 items-center justify-center rounded transition hover:bg-muted',
+                                        diffViewMode === 'tree'
+                                          ? 'bg-muted text-foreground'
+                                          : 'text-muted-foreground'
+                                      )}
+                                    >
+                                      <LayoutList className="size-3.5" />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="bottom" sideOffset={4}>
+                                    Tree view
+                                  </TooltipContent>
+                                </Tooltip>
+                              </div>
                             </div>
                             {diffViewMode === 'flat' ? (
                               files.map((file) => (
                                 <PRFileRow
-                                  key={file.path}
+                                  key={getPRFileRowKey(file)}
                                   file={file}
-                                  repoId={workItem.repoId}
                                   repoPath={repoPath ?? ''}
+                                  repoId={effectiveRepoId ?? ''}
                                   prNumber={workItem.number}
                                   headSha={details?.headSha}
                                   baseSha={details?.baseSha}
+                                  viewed={isPRFileViewed(file)}
+                                  viewedPending={pendingViewedPaths.has(file.path)}
                                   onCommentAdded={appendOptimisticComment}
+                                  onViewedChange={handlePRFileViewedChange}
                                 />
                               ))
                             ) : (
                               <PRDiffTreeView
                                 files={files}
-                                repoId={workItem.repoId}
                                 repoPath={repoPath ?? ''}
+                                repoId={effectiveRepoId ?? ''}
                                 prNumber={workItem.number}
                                 headSha={details?.headSha}
                                 baseSha={details?.baseSha}
+                                pendingViewedPaths={pendingViewedPaths}
                                 onCommentAdded={appendOptimisticComment}
+                                onViewedChange={handlePRFileViewedChange}
                               />
                             )}
                           </div>

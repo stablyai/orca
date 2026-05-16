@@ -22,6 +22,7 @@ export function parseStatusChar(char: string): string {
 export function parseStatusOutput(stdout: string): {
   entries: Record<string, unknown>[]
   unmergedLines: string[]
+  ignoredPaths: string[]
   head?: string
   branch?: string
   upstreamStatus: {
@@ -33,6 +34,7 @@ export function parseStatusOutput(stdout: string): {
 } {
   const entries: Record<string, unknown>[] = []
   const unmergedLines: string[] = []
+  const ignoredPaths: string[] = []
   let head: string | undefined
   let branch: string | undefined
   let upstreamName: string | undefined
@@ -108,6 +110,8 @@ export function parseStatusOutput(stdout: string): {
       }
     } else if (line.startsWith('? ')) {
       entries.push({ path: line.slice(2), status: 'untracked', area: 'untracked' })
+    } else if (line.startsWith('! ')) {
+      ignoredPaths.push(line.slice(2))
     } else if (line.startsWith('u ')) {
       unmergedLines.push(line)
     }
@@ -116,6 +120,7 @@ export function parseStatusOutput(stdout: string): {
   return {
     entries,
     unmergedLines,
+    ignoredPaths,
     head,
     branch,
     upstreamStatus: upstreamName

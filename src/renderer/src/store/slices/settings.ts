@@ -8,6 +8,7 @@ import {
   getRemoteRuntimeTerminalHandle
 } from '@/runtime/runtime-terminal-stream'
 import { normalizeTerminalQuickCommands } from '../../../../shared/terminal-quick-commands'
+import { normalizeVisibleTaskProviders } from '../../../../shared/task-providers'
 
 export type SettingsSlice = {
   settings: GlobalSettings | null
@@ -32,6 +33,7 @@ function runtimeScopedStateReset(): Partial<AppState> {
     sparsePresetsLoadStatusByRepo: {},
     sparsePresetsErrorByRepo: {},
     worktreesByRepo: {},
+    worktreeLineageById: {},
     activeWorktreeId: null,
     deleteStateByWorktreeId: {},
     baseStatusByWorktreeId: {},
@@ -76,6 +78,7 @@ function runtimeScopedStateReset(): Partial<AppState> {
     markdownViewMode: {},
     editorViewMode: {},
     editorCursorLine: {},
+    gitIgnoredPathsByWorktree: {},
     activeFileId: null,
     activeFileIdByWorktree: {},
     activeTabTypeByWorktree: {},
@@ -83,6 +86,7 @@ function runtimeScopedStateReset(): Partial<AppState> {
     recentlyClosedEditorTabsByWorktree: {},
     browserTabsByWorktree: {},
     browserPagesByWorkspace: {},
+    browserAnnotationsByPageId: {},
     remoteBrowserPageHandlesByPageId: {},
     activeBrowserTabId: null,
     activeBrowserTabIdByWorktree: {},
@@ -229,6 +233,11 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
           updates.terminalQuickCommands
         )
       }
+      if ('visibleTaskProviders' in updates) {
+        sanitizedUpdates.visibleTaskProviders = normalizeVisibleTaskProviders(
+          updates.visibleTaskProviders
+        )
+      }
       await window.api.settings.set(sanitizedUpdates)
       set((s) => {
         if (!s.settings) {
@@ -297,6 +306,7 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       // while the new environment is loading.
       await get().fetchRepos()
       await get().fetchAllWorktrees()
+      await get().fetchWorktreeLineage()
       await get().fetchBrowserSessionProfiles()
       return true
     } catch (err) {

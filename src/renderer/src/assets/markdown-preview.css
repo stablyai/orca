@@ -210,6 +210,275 @@
   background: color-mix(in srgb, #fb923c 60%, transparent);
 }
 
+.markdown-review-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  margin-bottom: 8px;
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--background) 94%, var(--editor-surface));
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
+.markdown-review-toolbar-button,
+.markdown-review-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 26px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.markdown-review-toolbar-button {
+  gap: 6px;
+  padding: 0 8px;
+}
+
+.markdown-review-icon-button {
+  width: 26px;
+  padding: 0;
+}
+
+.markdown-review-toolbar-button:hover,
+.markdown-review-toolbar-button[aria-expanded='true'],
+.markdown-review-icon-button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--border) 82%, transparent);
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.markdown-review-icon-button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.markdown-review-count {
+  display: inline-flex;
+  min-width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.markdown-review-panel {
+  display: flex;
+  width: 310px;
+  min-width: 260px;
+  max-width: 36%;
+  flex-shrink: 0;
+  flex-direction: column;
+  border-left: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--background) 90%, var(--editor-surface));
+}
+
+.markdown-review-panel-header {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  padding: 0 8px 0 12px;
+}
+
+.markdown-review-panel-title,
+.markdown-review-panel-actions {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.markdown-review-panel-title {
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.markdown-review-panel-actions {
+  flex-shrink: 0;
+  gap: 2px;
+}
+
+.markdown-review-note-list {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.markdown-review-empty {
+  padding: 8px 4px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.markdown-review-note {
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 6px;
+}
+
+.markdown-review-note + .markdown-review-note {
+  margin-top: 8px;
+}
+
+.markdown-review-note.is-active {
+  border-color: color-mix(in srgb, var(--foreground) 28%, transparent);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+
+.markdown-review-note-anchor {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 7px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  padding: 4px 5px 6px;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.markdown-review-note-anchor:hover {
+  background: var(--accent);
+}
+
+.markdown-review-note-line {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.markdown-review-note-excerpt {
+  min-width: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.markdown-review-note .orca-diff-comment-card {
+  max-width: none;
+}
+
+@media (max-width: 900px) {
+  .markdown-review-panel {
+    width: 260px;
+    max-width: 48%;
+  }
+}
+
+@container (max-width: 560px) {
+  .markdown-review-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 32;
+    width: min(310px, 82cqw);
+    min-width: 0;
+    max-width: calc(100cqw - 36px);
+    box-shadow: -10px 0 24px rgb(0 0 0 / 0.14);
+  }
+}
+
+.markdown-annotation-block {
+  position: relative;
+}
+
+.markdown-annotation-block:hover > .markdown-annotation-controls > .markdown-annotation-add,
+.markdown-annotation-block:focus-within > .markdown-annotation-controls > .markdown-annotation-add,
+li:hover > .markdown-annotation-controls > .markdown-annotation-add,
+li:focus-within > .markdown-annotation-controls > .markdown-annotation-add {
+  opacity: 1;
+}
+
+.markdown-annotation-controls {
+  margin-top: 6px;
+}
+
+.markdown-annotation-add {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-radius: 4px;
+  background: var(--background);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 100ms ease,
+    color 100ms ease,
+    background-color 100ms ease;
+}
+
+.markdown-annotation-add:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.markdown-annotation-add:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+  opacity: 1;
+}
+
+.markdown-annotation-composer,
+.markdown-annotation-card {
+  max-width: 520px;
+  margin-top: 6px;
+}
+
+.markdown-annotation-card.is-active > .orca-diff-comment-card {
+  border-color: color-mix(in srgb, var(--foreground) 32%, transparent);
+  background: color-mix(in srgb, var(--foreground) 8%, var(--editor-surface));
+}
+
+.markdown-annotation-composer {
+  border: 1px solid color-mix(in srgb, var(--foreground) 18%, transparent);
+  border-radius: 6px;
+  background: var(--editor-surface);
+  padding: 8px;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
 .markdown-body h1,
 .markdown-body h2,
 .markdown-body h3,

@@ -532,17 +532,18 @@ export function registerFilesystemHandlers(
     'git:status',
     async (
       _event,
-      args: { worktreePath: string; connectionId?: string }
+      args: { worktreePath: string; connectionId?: string; includeIgnored?: boolean }
     ): Promise<GitStatusResult> => {
+      const options = { includeIgnored: args.includeIgnored ?? false }
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
           throw new Error(`No git provider for connection "${args.connectionId}"`)
         }
-        return provider.getStatus(args.worktreePath)
+        return provider.getStatus(args.worktreePath, options)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      return getStatus(worktreePath)
+      return getStatus(worktreePath, options)
     }
   )
 

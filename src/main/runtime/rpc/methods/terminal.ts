@@ -318,7 +318,9 @@ const TerminalCreateParams = z.object({
   command: OptionalString,
   env: z.record(z.string(), z.string()).optional(),
   title: OptionalString,
-  focus: z.unknown().optional()
+  focus: z.unknown().optional(),
+  tabId: OptionalString,
+  leafId: OptionalString
 })
 
 const TerminalSplit = TerminalHandle.extend({
@@ -527,10 +529,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.wait',
     params: TerminalWait,
-    handler: async (params, { runtime }) => ({
+    handler: async (params, { runtime, signal }) => ({
       wait: await runtime.waitForTerminal(params.terminal, {
         condition: params.for,
-        timeoutMs: params.timeoutMs
+        timeoutMs: params.timeoutMs,
+        signal
       })
     })
   }),
@@ -542,7 +545,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         command: params.command,
         env: params.env,
         title: params.title,
-        focus: params.focus === true
+        focus: params.focus === true,
+        tabId: params.tabId,
+        leafId: params.leafId
       })
     })
   }),

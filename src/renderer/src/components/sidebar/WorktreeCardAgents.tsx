@@ -7,6 +7,8 @@ import { useNow } from '@/components/dashboard/useNow'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { cn } from '@/lib/utils'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { dismissStaleAgentRowByKey } from '../terminal-pane/stale-agent-row'
 
 type Props = {
   worktreeId: string
@@ -51,7 +53,6 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
 }: BodyProps) {
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
   const dismissRetainedAgent = useAppStore((s) => s.dismissRetainedAgent)
-  const acknowledgeAgents = useAppStore((s) => s.acknowledgeAgents)
 
   // Why: subscribe to the ack map reference (Object.is equality) and derive
   // per-agent unvisited flags locally. Keeps the inline list's bold/mute
@@ -79,18 +80,21 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
 
   const handleActivateAgentTab = useCallback(
     (tabId: string, paneKey: string) => {
-      acknowledgeAgents([paneKey])
-      const colon = paneKey.indexOf(':')
-      const tail = colon > 0 ? paneKey.slice(colon + 1) : ''
-      const parsed = /^\d+$/.test(tail) ? Number.parseInt(tail, 10) : NaN
-      let paneId: number | null = null
-      if (Number.isFinite(parsed) && parsed > 0) {
-        paneId = parsed
-      } else {
-        // Why: paneKey for sidebar agent rows is always ${tabId}:${paneId}
-        // with a positive integer paneId; anything else (empty, zero,
-        // non-numeric) means upstream row construction drifted.
+      const parsed = parsePaneKey(paneKey)
+      if (!parsed) {
+        // Why: malformed or legacy numeric keys cannot be resolved safely after
+        // pane replay/remount, so drop the stale row instead of guessing.
         console.warn('[WorktreeCardAgents] malformed paneKey, skipping pane focus', paneKey)
+        dismissStaleAgentRowByKey(paneKey)
+        return
+      }
+      if (parsed.tabId !== tabId) {
+        console.warn('[WorktreeCardAgents] paneKey tabId mismatch, dismissing row', {
+          tabId,
+          paneKey
+        })
+        dismissStaleAgentRowByKey(paneKey)
+        return
       }
       // Why: route through activateAndRevealWorktree so cross-repo clicks also
       // set activeRepoId, record a nav-history entry, clear sidebar filters,
@@ -102,10 +106,12 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       activateAndRevealWorktree(worktreeId)
       const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
       if (tabs.some((t) => t.id === tabId)) {
-        activateTabAndFocusPane(tabId, paneId)
+        activateTabAndFocusPane(tabId, parsed.leafId, { ackPaneKeyOnSuccess: paneKey })
+      } else {
+        dismissStaleAgentRowByKey(paneKey)
       }
     },
-    [worktreeId, acknowledgeAgents]
+    [worktreeId]
   )
 
   // Why: own one 30s tick per non-empty inline list. Cards with zero agents

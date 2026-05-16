@@ -12,23 +12,24 @@ import {
   Sparkles,
   Square,
   Undo2,
-  FileEdit,
-  FileMinus,
-  FilePlus,
-  FileQuestion,
-  ArrowRightLeft,
   Check,
   Copy,
+  Folder,
   FolderOpen,
   GitMerge,
   GitPullRequestArrow,
+  List,
+  ListTree,
   MessageSquare,
   Send,
   Trash,
+  Trash2,
   TriangleAlert,
   CircleCheck,
   Search,
-  X
+  X,
+  MoreHorizontal,
+  type LucideIcon
 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById, useWorktreeMap } from '@/store/selectors'
@@ -65,6 +66,15 @@ import {
   runDiscardAllForArea,
   type DiscardAllArea
 } from './discard-all-sequence'
+import { getFileTypeIcon } from '@/lib/file-type-icons'
+import {
+  buildGitStatusSourceControlTree,
+  buildSourceControlTree,
+  collectSourceControlTreeFileEntries,
+  compactSourceControlTree,
+  flattenSourceControlTree,
+  type SourceControlTreeNode
+} from './source-control-tree'
 import {
   getDiscardAreaConfirmationCopy,
   getDiscardEntryConfirmationCopy,
@@ -88,6 +98,7 @@ import {
 } from '@/components/ui/dialog'
 import { BaseRefPicker } from '@/components/settings/BaseRefPicker'
 import { formatDiffComment, formatDiffComments } from '@/lib/diff-comments-format'
+import { getDiffCommentLineLabel, getDiffCommentSource } from '@/lib/diff-comment-compat'
 import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
@@ -106,6 +117,7 @@ import {
 } from '@/runtime/runtime-git-client'
 import { getRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
 import { PullRequestIcon } from './checks-panel-content'
+import { CreatePullRequestDialog } from './CreatePullRequestDialog'
 import type {
   DiffComment,
   GitBranchChangeEntry,
@@ -115,22 +127,14 @@ import type {
   GitStatusEntry,
   GitUpstreamStatus
 } from '../../../../shared/types'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type {
+  HostedReviewCreationEligibility,
+  HostedReviewInfo
+} from '../../../../shared/hosted-review'
 import { STATUS_COLORS, STATUS_LABELS } from './status-display'
 
 type SourceControlScope = 'all' | 'uncommitted'
-
-const STATUS_ICONS: Record<
-  string,
-  React.ComponentType<{ className?: string; style?: React.CSSProperties }>
-> = {
-  modified: FileEdit,
-  added: FilePlus,
-  deleted: FileMinus,
-  renamed: ArrowRightLeft,
-  untracked: FileQuestion,
-  copied: FilePlus
-}
+type SourceControlViewMode = 'list' | 'tree'
 
 // Why: directional signifiers ahead of each primary action label. Commit
 // (✓) is affirmative; Push (↑) points in the direction data flows; Sync
@@ -149,7 +153,8 @@ const PRIMARY_ICONS: Partial<
   stage: Plus,
   push: ArrowUp,
   sync: ArrowDownUp,
-  publish: CloudUpload
+  publish: CloudUpload,
+  create_pr: GitPullRequestArrow
 }
 
 // Why: unstaged ("Changes") is listed first so that conflict files — which
@@ -164,6 +169,13 @@ const SECTION_LABELS: Record<(typeof SECTION_ORDER)[number], string> = {
 }
 
 const BRANCH_REFRESH_INTERVAL_MS = 5000
+// Why: row action buttons host Radix Tooltip triggers. Keeping the overlay
+// measurable prevents transient top-left tooltip placement during hover.
+const SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS =
+  'absolute right-0 top-0 bottom-0 flex shrink-0 items-center gap-1.5 bg-accent pr-3 pl-2 opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto'
+const SOURCE_CONTROL_TREE_INDENT_PX = 12
+const SOURCE_CONTROL_TREE_DIRECTORY_PADDING_PX = 8
+const SOURCE_CONTROL_TREE_FILE_PADDING_PX = 20
 
 // Why: the pure state-machine logic now lives in
 // ./source-control-primary-action.ts. It is imported directly by callers
@@ -174,6 +186,44 @@ type CommitDraftsByWorktree = Record<string, string>
 type PendingDiscardConfirmation =
   | { kind: 'entry'; entry: GitStatusEntry }
   | { kind: 'area'; area: DiscardAllArea; paths: readonly string[] }
+
+type GitStatusSourceControlTreeNode = SourceControlTreeNode<
+  GitStatusEntry,
+  (typeof SECTION_ORDER)[number]
+>
+type SourceControlTreeDirectoryNode = Extract<GitStatusSourceControlTreeNode, { type: 'directory' }>
+type BranchSourceControlTreeNode = SourceControlTreeNode<GitBranchChangeEntry, 'branch'>
+type BranchSourceControlTreeDirectoryNode = Extract<
+  BranchSourceControlTreeNode,
+  { type: 'directory' }
+>
+
+type SourceControlDirectoryActionPaths = {
+  stagePaths: string[]
+  unstagePaths: string[]
+  discardPaths: string[]
+}
+
+function getSourceControlDirectoryActionPaths(
+  node: SourceControlTreeDirectoryNode
+): SourceControlDirectoryActionPaths {
+  const entries = collectSourceControlTreeFileEntries(node)
+  return {
+    stagePaths:
+      node.area === 'unstaged' || node.area === 'untracked'
+        ? getStageAllPaths(entries, node.area)
+        : [],
+    unstagePaths: node.area === 'staged' ? getUnstageAllPaths(entries) : [],
+    discardPaths:
+      node.area === 'unstaged' || node.area === 'untracked'
+        ? getDiscardAllPaths(entries, node.area)
+        : []
+  }
+}
+
+type PendingDiffCommentsClear =
+  | { kind: 'all'; worktreeId: string }
+  | { kind: 'file'; worktreeId: string; filePath: string }
 
 export function readCommitDraftForWorktree(
   drafts: CommitDraftsByWorktree,
@@ -249,6 +299,10 @@ function SourceControlInner(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const hostedReviewCache = useAppStore((s) => s.hostedReviewCache)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
+  const getHostedReviewCreationEligibility = useAppStore(
+    (s) => s.getHostedReviewCreationEligibility
+  )
+  const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const updateRepo = useAppStore((s) => s.updateRepo)
   const setGitStatus = useAppStore((s) => s.setGitStatus)
   const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
@@ -265,13 +319,19 @@ function SourceControlInner(): React.JSX.Element {
   const openDiff = useAppStore((s) => s.openDiff)
   const openFile = useAppStore((s) => s.openFile)
   const setEditorViewMode = useAppStore((s) => s.setEditorViewMode)
+  const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
+  const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
   const openConflictFile = useAppStore((s) => s.openConflictFile)
   const openConflictReview = useAppStore((s) => s.openConflictReview)
   const openBranchDiff = useAppStore((s) => s.openBranchDiff)
   const openAllDiffs = useAppStore((s) => s.openAllDiffs)
   const openBranchAllDiffs = useAppStore((s) => s.openBranchAllDiffs)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
+  const clearDiffComments = useAppStore((s) => s.clearDiffComments)
+  const clearDiffCommentsForFile = useAppStore((s) => s.clearDiffCommentsForFile)
   const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
+  const setRightSidebarOpen = useAppStore((s) => s.setRightSidebarOpen)
+  const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   // Why: pass activeWorktreeId directly (even when null/undefined) so the
   // slice's getDiffComments returns its stable EMPTY_COMMENTS sentinel. An
   // inline `[]` fallback would allocate a new array each store update, break
@@ -295,6 +355,9 @@ function SourceControlInner(): React.JSX.Element {
   )
   const [diffCommentsExpanded, setDiffCommentsExpanded] = useState(false)
   const [diffCommentsCopied, setDiffCommentsCopied] = useState(false)
+  const [pendingDiffCommentsClear, setPendingDiffCommentsClear] =
+    useState<PendingDiffCommentsClear | null>(null)
+  const [isClearingDiffComments, setIsClearingDiffComments] = useState(false)
 
   const handleCopyDiffComments = useCallback(async (): Promise<void> => {
     if (diffCommentsForActive.length === 0) {
@@ -319,8 +382,76 @@ function SourceControlInner(): React.JSX.Element {
     return () => window.clearTimeout(handle)
   }, [diffCommentsCopied])
 
+  const pendingDiffCommentsClearCount = useMemo(() => {
+    if (!pendingDiffCommentsClear || pendingDiffCommentsClear.worktreeId !== activeWorktreeId) {
+      return 0
+    }
+    if (pendingDiffCommentsClear.kind === 'all') {
+      return diffCommentsForActive.length
+    }
+    return diffCommentsForActive.filter((c) => c.filePath === pendingDiffCommentsClear.filePath)
+      .length
+  }, [activeWorktreeId, diffCommentsForActive, pendingDiffCommentsClear])
+
+  const pendingDiffCommentsClearDescription = pendingDiffCommentsClear
+    ? pendingDiffCommentsClear.kind === 'all'
+      ? `Clear ${pendingDiffCommentsClearCount} ${pendingDiffCommentsClearCount === 1 ? 'note' : 'notes'} from this worktree?`
+      : `Clear ${pendingDiffCommentsClearCount} ${pendingDiffCommentsClearCount === 1 ? 'note' : 'notes'} from ${pendingDiffCommentsClear.filePath}?`
+    : ''
+
+  useEffect(() => {
+    if (!pendingDiffCommentsClear || isClearingDiffComments) {
+      return
+    }
+    if (
+      pendingDiffCommentsClear.worktreeId !== activeWorktreeId ||
+      pendingDiffCommentsClearCount === 0
+    ) {
+      setPendingDiffCommentsClear(null)
+    }
+  }, [
+    activeWorktreeId,
+    isClearingDiffComments,
+    pendingDiffCommentsClear,
+    pendingDiffCommentsClearCount
+  ])
+
+  const handleConfirmDiffCommentsClear = useCallback(async (): Promise<void> => {
+    const pending = pendingDiffCommentsClear
+    if (!pending || isClearingDiffComments || pending.worktreeId !== activeWorktreeId) {
+      return
+    }
+    if (pendingDiffCommentsClearCount === 0) {
+      setPendingDiffCommentsClear(null)
+      return
+    }
+    setIsClearingDiffComments(true)
+    try {
+      const ok =
+        pending.kind === 'all'
+          ? await clearDiffComments(pending.worktreeId)
+          : await clearDiffCommentsForFile(pending.worktreeId, pending.filePath)
+      if (ok) {
+        setPendingDiffCommentsClear(null)
+      } else {
+        toast.error('Failed to clear notes.')
+      }
+    } finally {
+      setIsClearingDiffComments(false)
+    }
+  }, [
+    activeWorktreeId,
+    clearDiffComments,
+    clearDiffCommentsForFile,
+    isClearingDiffComments,
+    pendingDiffCommentsClear,
+    pendingDiffCommentsClearCount
+  ])
+
   const [scope, setScope] = useState<SourceControlScope>('all')
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
+  const [sourceControlViewMode, setSourceControlViewMode] = useState<SourceControlViewMode>('list')
+  const [collapsedTreeDirs, setCollapsedTreeDirs] = useState<Set<string>>(new Set())
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
   const [pendingDiscard, setPendingDiscard] = useState<PendingDiscardConfirmation | null>(null)
   // Why: start null rather than 'origin/main' so branch compare doesn't fire
@@ -349,6 +480,10 @@ function SourceControlInner(): React.JSX.Element {
   const [generateErrors, setGenerateErrors] = useState<Record<string, string | null>>({})
   const isGenerating = generateInFlightByWorktree[activeWorktreeId ?? ''] ?? false
   const generateError = generateErrors[activeWorktreeId ?? ''] ?? null
+  const [hostedReviewCreation, setHostedReviewCreation] =
+    useState<HostedReviewCreationEligibility | null>(null)
+  const [createPrDialogOpen, setCreatePrDialogOpen] = useState(false)
+  const [createPrPushFirst, setCreatePrPushFirst] = useState(false)
   const commitMessageAi = useAppStore((s) => s.settings?.commitMessageAi)
   const filterInputRef = useRef<HTMLInputElement>(null)
   const commitMessage = readCommitDraftForWorktree(commitDrafts, activeWorktreeId)
@@ -461,27 +596,42 @@ function SourceControlInner(): React.JSX.Element {
 
   const branchName = activeWorktree?.branch.replace(/^refs\/heads\//, '') ?? 'HEAD'
   const hostedReviewCacheKey =
-    activeRepo && branchName ? getHostedReviewCacheKey(activeRepo.path, branchName, settings) : null
+    activeRepo && branchName
+      ? getHostedReviewCacheKey(activeRepo.path, branchName, settings, activeRepo.id)
+      : null
+  const hostedReviewEntry = hostedReviewCacheKey
+    ? hostedReviewCache[hostedReviewCacheKey]
+    : undefined
   const hostedReview: HostedReviewInfo | null = hostedReviewCacheKey
-    ? (hostedReviewCache[hostedReviewCacheKey]?.data ?? null)
+    ? (hostedReviewEntry?.data ?? null)
     : null
 
   const linkedGitHubPR = activeWorktree?.linkedPR ?? null
   const linkedGitLabMR = activeWorktree?.linkedGitLabMR ?? null
+  // Why: when activeRepo.connectionId is truthy, neither the SourceControl
+  // effect below nor WorktreeCard.tsx fetches hostedReview for this branch,
+  // so hostedReviewEntry would stay undefined forever and would permanently
+  // block Publish Branch on SSH-backed worktrees with a linkedPR/linkedGitLabMR
+  // and no upstream. Skip the loading state for those repos so the publish
+  // gate doesn't latch.
+  const isHostedReviewStateLoading =
+    !activeRepo?.connectionId &&
+    (linkedGitHubPR !== null || linkedGitLabMR !== null) &&
+    hostedReviewEntry === undefined
   useEffect(() => {
     if (!isBranchVisible || !activeRepo || isFolder || !branchName || branchName === 'HEAD') {
       return
     }
-    if (activeRepo.connectionId) {
-      return
-    }
-
     // Why: the Source Control panel renders branch review status directly.
     // When a terminal checkout moves this worktree onto a new branch, we need
     // to fetch that branch's PR/MR immediately instead of waiting for the user
     // to reselect the worktree. The linked ids handle create-from-review
     // worktrees whose local branch differs from the remote head branch.
-    void fetchHostedReviewForBranch(activeRepo.path, branchName, { linkedGitHubPR, linkedGitLabMR })
+    void fetchHostedReviewForBranch(activeRepo.path, branchName, {
+      repoId: activeRepo.id,
+      linkedGitHubPR,
+      linkedGitLabMR
+    })
   }, [
     activeRepo,
     branchName,
@@ -490,6 +640,52 @@ function SourceControlInner(): React.JSX.Element {
     isFolder,
     linkedGitHubPR,
     linkedGitLabMR
+  ])
+
+  useEffect(() => {
+    if (!isBranchVisible || !activeRepo || isFolder || !branchName) {
+      setHostedReviewCreation(null)
+      return
+    }
+    let stale = false
+    void getHostedReviewCreationEligibility({
+      repoPath: activeRepo.path,
+      branch: branchName,
+      base: effectiveBaseRef ?? null,
+      hasUncommittedChanges: hasUncommittedEntries,
+      hasUpstream: remoteStatus?.hasUpstream,
+      ahead: remoteStatus?.ahead,
+      behind: remoteStatus?.behind,
+      linkedGitHubPR,
+      linkedGitLabMR
+    })
+      .then((result) => {
+        if (!stale) {
+          setHostedReviewCreation(result)
+        }
+      })
+      .catch((error) => {
+        console.warn('[SourceControl] hosted review creation eligibility failed', error)
+        if (!stale) {
+          setHostedReviewCreation(null)
+        }
+      })
+    return () => {
+      stale = true
+    }
+  }, [
+    activeRepo,
+    branchName,
+    effectiveBaseRef,
+    getHostedReviewCreationEligibility,
+    hasUncommittedEntries,
+    isBranchVisible,
+    isFolder,
+    linkedGitHubPR,
+    linkedGitLabMR,
+    remoteStatus?.ahead,
+    remoteStatus?.behind,
+    remoteStatus?.hasUpstream
   ])
 
   const grouped = useMemo(() => {
@@ -538,6 +734,58 @@ function SourceControlInner(): React.JSX.Element {
     }
     return arr
   }, [filteredGrouped, collapsedSections])
+
+  const treeRootsByArea = useMemo(
+    () => ({
+      staged: compactSourceControlTree(
+        buildGitStatusSourceControlTree('staged', filteredGrouped.staged)
+      ),
+      unstaged: compactSourceControlTree(
+        buildGitStatusSourceControlTree('unstaged', filteredGrouped.unstaged)
+      ),
+      untracked: compactSourceControlTree(
+        buildGitStatusSourceControlTree('untracked', filteredGrouped.untracked)
+      )
+    }),
+    [filteredGrouped]
+  )
+
+  const visibleTreeRowsByArea = useMemo(
+    () => ({
+      staged: flattenSourceControlTree(treeRootsByArea.staged, collapsedTreeDirs),
+      unstaged: flattenSourceControlTree(treeRootsByArea.unstaged, collapsedTreeDirs),
+      untracked: flattenSourceControlTree(treeRootsByArea.untracked, collapsedTreeDirs)
+    }),
+    [collapsedTreeDirs, treeRootsByArea]
+  )
+
+  const branchTreeRoots = useMemo(
+    () => compactSourceControlTree(buildSourceControlTree('branch', filteredBranchEntries)),
+    [filteredBranchEntries]
+  )
+  const visibleBranchTreeRows = useMemo(
+    () => flattenSourceControlTree(branchTreeRoots, collapsedTreeDirs),
+    [branchTreeRoots, collapsedTreeDirs]
+  )
+
+  const visibleSelectionEntries = useMemo(() => {
+    if (sourceControlViewMode === 'list') {
+      return flatEntries
+    }
+
+    const arr: FlatEntry[] = []
+    for (const area of SECTION_ORDER) {
+      if (collapsedSections.has(area)) {
+        continue
+      }
+      for (const node of visibleTreeRowsByArea[area]) {
+        if (node.type === 'file') {
+          arr.push({ key: node.key, entry: node.entry, area: node.area })
+        }
+      }
+    }
+    return arr
+  }, [collapsedSections, flatEntries, sourceControlViewMode, visibleTreeRowsByArea])
 
   const [isExecutingBulk, setIsExecutingBulk] = useState(false)
   const pendingDiscardCopy = useMemo<DiscardConfirmationCopy | null>(() => {
@@ -606,8 +854,11 @@ function SourceControlInner(): React.JSX.Element {
   useEffect(() => {
     setScope('all')
     setCollapsedSections(new Set())
+    setCollapsedTreeDirs(new Set())
     setBaseRefDialogOpen(false)
     setPendingDiscard(null)
+    setPendingDiffCommentsClear(null)
+    setIsClearingDiffComments(false)
     // Why: do NOT reset defaultBaseRef here. It is repo-scoped, not
     // worktree-scoped, and is resolved by the effect above on activeRepo
     // change. Resetting it to a hard-coded 'origin/main' on every worktree
@@ -617,6 +868,8 @@ function SourceControlInner(): React.JSX.Element {
     // repos and back to re-trigger the resolver.
     setFilterQuery('')
     setIsExecutingBulk(false)
+    setCreatePrDialogOpen(false)
+    setCreatePrPushFirst(false)
     // Why: no reset for commit-in-flight state — it now lives in a per-worktree
     // map, so it cannot leak across worktrees. Resetting here would actually
     // clear in-flight state for the *incoming* worktree if the user is coming
@@ -882,6 +1135,76 @@ function SourceControlInner(): React.JSX.Element {
     [handleCommit, runRemoteAction]
   )
 
+  const openCreatePullRequestDialog = useCallback((pushFirst: boolean): void => {
+    setCreatePrPushFirst(pushFirst)
+    setCreatePrDialogOpen(true)
+  }, [])
+
+  const pushBeforeCreatePullRequest = useCallback(async (): Promise<boolean> => {
+    if (!activeWorktreeId || !worktreePath) {
+      return false
+    }
+    const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+    try {
+      await pushBranch(
+        activeWorktreeId,
+        worktreePath,
+        false,
+        connectionId,
+        activeWorktree?.pushTarget
+      )
+      await refreshActiveGitStatusAfterMutation()
+      return true
+    } catch {
+      return false
+    }
+  }, [
+    activeWorktree?.pushTarget,
+    activeWorktreeId,
+    pushBranch,
+    refreshActiveGitStatusAfterMutation,
+    worktreePath
+  ])
+
+  const handlePullRequestCreated = useCallback(
+    async (result: { number: number; url: string }): Promise<void> => {
+      if (!activeRepo || !branchName) {
+        return
+      }
+      setRightSidebarOpen(true)
+      setRightSidebarTab('checks')
+      try {
+        await Promise.all([
+          fetchHostedReviewForBranch(activeRepo.path, branchName, {
+            force: true,
+            linkedGitHubPR: result.number,
+            linkedGitLabMR
+          }),
+          fetchPRForBranch(activeRepo.path, branchName, {
+            force: true,
+            linkedPRNumber: result.number
+          })
+        ])
+      } catch {
+        toast.warning('Pull request created, but Orca could not refresh it yet.', {
+          action: {
+            label: 'Open on GitHub',
+            onClick: () => window.api.shell.openUrl(result.url)
+          }
+        })
+      }
+    },
+    [
+      activeRepo,
+      branchName,
+      fetchHostedReviewForBranch,
+      fetchPRForBranch,
+      linkedGitLabMR,
+      setRightSidebarOpen,
+      setRightSidebarTab
+    ]
+  )
+
   const hasUnstagedChanges = grouped.unstaged.length > 0 || grouped.untracked.length > 0
 
   const primaryAction: PrimaryAction = useMemo(
@@ -894,7 +1217,10 @@ function SourceControlInner(): React.JSX.Element {
         isCommitting,
         isRemoteOperationActive,
         upstreamStatus: remoteStatus,
-        inFlightRemoteOpKind
+        prState: hostedReview?.state ?? null,
+        isPRStateLoading: isHostedReviewStateLoading,
+        inFlightRemoteOpKind,
+        hostedReviewCreation
       }),
     [
       commitMessage,
@@ -903,6 +1229,9 @@ function SourceControlInner(): React.JSX.Element {
       isCommitting,
       isRemoteOperationActive,
       inFlightRemoteOpKind,
+      hostedReviewCreation,
+      isHostedReviewStateLoading,
+      hostedReview?.state,
       remoteStatus,
       unresolvedConflicts.length
     ]
@@ -918,7 +1247,10 @@ function SourceControlInner(): React.JSX.Element {
         isCommitting,
         isRemoteOperationActive,
         upstreamStatus: remoteStatus,
-        inFlightRemoteOpKind
+        prState: hostedReview?.state ?? null,
+        isPRStateLoading: isHostedReviewStateLoading,
+        inFlightRemoteOpKind,
+        hostedReviewCreation
       }),
     [
       commitMessage,
@@ -927,6 +1259,9 @@ function SourceControlInner(): React.JSX.Element {
       isCommitting,
       isRemoteOperationActive,
       inFlightRemoteOpKind,
+      hostedReviewCreation,
+      isHostedReviewStateLoading,
+      hostedReview?.state,
       remoteStatus,
       unresolvedConflicts.length
     ]
@@ -948,6 +1283,12 @@ function SourceControlInner(): React.JSX.Element {
         case 'commit_sync':
           void runCompoundCommitAction('sync')
           return
+        case 'create_pr':
+          openCreatePullRequestDialog(false)
+          return
+        case 'push_create_pr':
+          openCreatePullRequestDialog(true)
+          return
         case 'push':
         case 'pull':
         case 'sync':
@@ -964,7 +1305,7 @@ function SourceControlInner(): React.JSX.Element {
         }
       }
     },
-    [handleCommit, runCompoundCommitAction, runRemoteAction]
+    [handleCommit, openCreatePullRequestDialog, runCompoundCommitAction, runRemoteAction]
   )
 
   const handleOpenDiff = useCallback(
@@ -1015,15 +1356,15 @@ function SourceControlInner(): React.JSX.Element {
 
   const { selectedKeys, handleSelect, handleContextMenu, clearSelection } =
     useSourceControlSelection({
-      flatEntries,
+      flatEntries: visibleSelectionEntries,
       onOpenDiff: handleOpenDiff,
       containerRef: sourceControlRef
     })
 
-  // clear selection on scope change
+  // clear selection on scope or list/tree presentation change
   useEffect(() => {
     clearSelection()
-  }, [scope, clearSelection])
+  }, [scope, sourceControlViewMode, clearSelection])
 
   // Clear selection on worktree or tab change
   useEffect(() => {
@@ -1031,8 +1372,8 @@ function SourceControlInner(): React.JSX.Element {
   }, [activeWorktreeId, rightSidebarTab, clearSelection])
 
   const flatEntriesByKey = useMemo(
-    () => new Map(flatEntries.map((entry) => [entry.key, entry])),
-    [flatEntries]
+    () => new Map(visibleSelectionEntries.map((entry) => [entry.key, entry])),
+    [visibleSelectionEntries]
   )
 
   const selectedEntries = useMemo(
@@ -1120,6 +1461,70 @@ function SourceControlInner(): React.JSX.Element {
     activeWorktreeId,
     refreshActiveGitStatusAfterMutation
   ])
+
+  const handleStageAllPaths = useCallback(
+    async (paths: readonly string[]) => {
+      if (!worktreePath || isExecutingBulk || paths.length === 0) {
+        return
+      }
+      setIsExecutingBulk(true)
+      try {
+        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+        await bulkStageRuntimeGitPaths(
+          {
+            settings: useAppStore.getState().settings,
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId
+          },
+          [...paths]
+        )
+        await refreshActiveGitStatusAfterMutation()
+        clearSelection()
+      } finally {
+        setIsExecutingBulk(false)
+      }
+    },
+    [
+      activeWorktreeId,
+      clearSelection,
+      isExecutingBulk,
+      refreshActiveGitStatusAfterMutation,
+      worktreePath
+    ]
+  )
+
+  const handleUnstagePaths = useCallback(
+    async (paths: readonly string[]) => {
+      if (!worktreePath || isExecutingBulk || paths.length === 0) {
+        return
+      }
+      setIsExecutingBulk(true)
+      try {
+        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+        await bulkUnstageRuntimeGitPaths(
+          {
+            settings: useAppStore.getState().settings,
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId
+          },
+          [...paths]
+        )
+        await refreshActiveGitStatusAfterMutation()
+        clearSelection()
+      } finally {
+        setIsExecutingBulk(false)
+      }
+    },
+    [
+      activeWorktreeId,
+      clearSelection,
+      isExecutingBulk,
+      refreshActiveGitStatusAfterMutation,
+      worktreePath
+    ]
+  )
 
   // Why: "Stage all" on the Changes section intentionally skips unresolved
   // conflict rows. `git add` on a conflicted file silently clears the `u`
@@ -1220,6 +1625,7 @@ function SourceControlInner(): React.JSX.Element {
       case 'pull':
       case 'sync':
       case 'publish':
+      case 'create_pr':
         handleActionInvoke(primaryAction.kind)
         return
       default: {
@@ -1378,6 +1784,18 @@ function SourceControlInner(): React.JSX.Element {
     })
   }, [])
 
+  const toggleTreeDir = useCallback((key: string) => {
+    setCollapsedTreeDirs((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return next
+    })
+  }, [])
+
   const openCommittedDiff = useCallback(
     (entry: GitBranchChangeEntry) => {
       if (
@@ -1411,13 +1829,41 @@ function SourceControlInner(): React.JSX.Element {
   // first, so the editor-tab fallback then leaves the global null and a
   // future DiffViewer mount can't accidentally consume a stale id.
   const handleOpenComment = useCallback(
-    (filePath: string, commentId?: string) => {
+    (comment: DiffComment) => {
       if (!activeWorktreeId || !worktreePath) {
         return
       }
+      const filePath = comment.filePath
+      const commentId = comment.id
       // Defensively clear any dangling prior scroll request before routing
       // this click; only the diff branches below will re-stamp it.
       setScrollToDiffCommentId(null)
+      if (getDiffCommentSource(comment) === 'markdown') {
+        const absPath = joinPath(worktreePath, filePath)
+        const language = detectLanguage(filePath)
+        setEditorViewMode(absPath, 'edit')
+        setMarkdownViewMode(absPath, 'source')
+        openFile({
+          filePath: absPath,
+          relativePath: filePath,
+          worktreeId: activeWorktreeId,
+          language,
+          mode: 'edit'
+        })
+        setPendingEditorReveal(null)
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            setPendingEditorReveal({
+              filePath: absPath,
+              line: comment.lineNumber,
+              column: 1,
+              matchLength: 0
+            })
+            setScrollToDiffCommentId(commentId)
+          })
+        })
+        return
+      }
       const matches = entries.filter((e) => e.path === filePath)
       const uncommitted =
         matches.find((e) => e.area === 'unstaged') ??
@@ -1469,6 +1915,8 @@ function SourceControlInner(): React.JSX.Element {
       openFile,
       setEditorViewMode,
       setScrollToDiffCommentId,
+      setMarkdownViewMode,
+      setPendingEditorReveal,
       worktreePath
     ]
   )
@@ -1746,6 +2194,17 @@ function SourceControlInner(): React.JSX.Element {
 
   return (
     <>
+      <CreatePullRequestDialog
+        open={createPrDialogOpen}
+        repoId={activeRepo.id}
+        repoPath={activeRepo.path}
+        branch={branchName}
+        eligibility={hostedReviewCreation}
+        pushBeforeCreate={createPrPushFirst}
+        onOpenChange={setCreatePrDialogOpen}
+        onPushBeforeCreate={pushBeforeCreatePullRequest}
+        onCreated={handlePullRequestCreated}
+      />
       <div ref={sourceControlRef} className="relative flex h-full flex-col overflow-hidden">
         <div className="flex items-center px-3 pt-2 border-b border-border">
           {(['all', 'uncommitted'] as const).map((value) => (
@@ -1783,7 +2242,11 @@ function SourceControlInner(): React.JSX.Element {
           <div className="border-b border-border px-3 py-2">
             <CompareSummary
               summary={branchSummary}
+              viewMode={sourceControlViewMode}
               onChangeBaseRef={() => setBaseRefDialogOpen(true)}
+              onToggleViewMode={() =>
+                setSourceControlViewMode((prev) => (prev === 'tree' ? 'list' : 'tree'))
+              }
               onRetry={() => void refreshBranchCompare()}
             />
           </div>
@@ -1846,7 +2309,7 @@ function SourceControlInner(): React.JSX.Element {
                     groupId={activeGroupId ?? activeWorktreeId}
                     onFocusTerminal={focusTerminalTabSurface}
                     prompt={diffCommentsPrompt}
-                    launchSource="diff_notes_send"
+                    launchSource="notes_send"
                   />
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -1873,12 +2336,54 @@ function SourceControlInner(): React.JSX.Element {
                   </Tooltip>
                 </TooltipProvider>
               )}
+              <DropdownMenu>
+                <TooltipProvider delayDuration={400}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                          aria-label="More note actions"
+                        >
+                          <MoreHorizontal className="size-3.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      More note actions
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <DropdownMenuContent align="end" className="min-w-[180px]">
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    disabled={diffCommentCount === 0}
+                    onSelect={() => {
+                      if (!activeWorktreeId || diffCommentCount === 0) {
+                        return
+                      }
+                      setPendingDiffCommentsClear({ kind: 'all', worktreeId: activeWorktreeId })
+                    }}
+                  >
+                    <Trash2 className="size-3.5" />
+                    Clear all notes...
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             {diffCommentsExpanded && (
               <DiffCommentsInlineList
                 comments={diffCommentsForActive}
                 onDelete={(id) => void deleteDiffComment(activeWorktreeId, id)}
-                onOpen={(filePath, commentId) => handleOpenComment(filePath, commentId)}
+                onOpen={(comment) => handleOpenComment(comment)}
+                onClearFile={(filePath) =>
+                  setPendingDiffCommentsClear({
+                    kind: 'file',
+                    worktreeId: activeWorktreeId,
+                    filePath
+                  })
+                }
               />
             )}
           </div>
@@ -2141,27 +2646,72 @@ function SourceControlInner(): React.JSX.Element {
                       }
                     />
                     {!isCollapsed &&
-                      items.map((entry) => {
-                        const key = `${entry.area}::${entry.path}`
-                        return (
-                          <UncommittedEntryRow
-                            key={key}
-                            entryKey={key}
-                            entry={entry}
-                            currentWorktreeId={currentWorktreeId}
-                            worktreePath={worktreePath}
-                            selected={selectedKeySet.has(key)}
-                            onSelect={handleSelect}
-                            onContextMenu={handleContextMenu}
-                            onRevealInExplorer={revealInExplorer}
-                            onOpen={handleOpenDiff}
-                            onStage={handleStage}
-                            onUnstage={handleUnstage}
-                            onDiscard={requestDiscardEntry}
-                            commentCount={diffCommentCountByPath.get(entry.path) ?? 0}
-                          />
-                        )
-                      })}
+                      (sourceControlViewMode === 'tree'
+                        ? visibleTreeRowsByArea[area].map((node) => {
+                            if (node.type === 'directory') {
+                              return (
+                                <SourceControlTreeDirectoryRow
+                                  key={node.key}
+                                  node={node}
+                                  actionPaths={getSourceControlDirectoryActionPaths(node)}
+                                  hideBulkActions={Boolean(normalizedFilter)}
+                                  isExecutingBulk={isExecutingBulk}
+                                  isCollapsed={collapsedTreeDirs.has(node.key)}
+                                  onToggle={() => toggleTreeDir(node.key)}
+                                  onRequestDiscardPaths={(discardArea, paths) =>
+                                    setPendingDiscard({
+                                      kind: 'area',
+                                      area: discardArea,
+                                      paths
+                                    })
+                                  }
+                                  onStagePaths={handleStageAllPaths}
+                                  onUnstagePaths={handleUnstagePaths}
+                                />
+                              )
+                            }
+                            return (
+                              <UncommittedEntryRow
+                                key={node.key}
+                                entryKey={node.key}
+                                entry={node.entry}
+                                currentWorktreeId={currentWorktreeId}
+                                worktreePath={worktreePath}
+                                depth={node.depth}
+                                selected={selectedKeySet.has(node.key)}
+                                onSelect={handleSelect}
+                                onContextMenu={handleContextMenu}
+                                onRevealInExplorer={revealInExplorer}
+                                onOpen={handleOpenDiff}
+                                onStage={handleStage}
+                                onUnstage={handleUnstage}
+                                onDiscard={requestDiscardEntry}
+                                commentCount={diffCommentCountByPath.get(node.entry.path) ?? 0}
+                                showPathHint={false}
+                              />
+                            )
+                          })
+                        : items.map((entry) => {
+                            const key = `${entry.area}::${entry.path}`
+                            return (
+                              <UncommittedEntryRow
+                                key={key}
+                                entryKey={key}
+                                entry={entry}
+                                currentWorktreeId={currentWorktreeId}
+                                worktreePath={worktreePath}
+                                selected={selectedKeySet.has(key)}
+                                onSelect={handleSelect}
+                                onContextMenu={handleContextMenu}
+                                onRevealInExplorer={revealInExplorer}
+                                onOpen={handleOpenDiff}
+                                onStage={handleStage}
+                                onUnstage={handleUnstage}
+                                onDiscard={requestDiscardEntry}
+                                commentCount={diffCommentCountByPath.get(entry.path) ?? 0}
+                              />
+                            )
+                          }))}
                   </div>
                 )
               })}
@@ -2204,17 +2754,43 @@ function SourceControlInner(): React.JSX.Element {
                 }
               />
               {!collapsedSections.has('branch') &&
-                filteredBranchEntries.map((entry) => (
-                  <BranchEntryRow
-                    key={`branch:${entry.path}`}
-                    entry={entry}
-                    currentWorktreeId={currentWorktreeId}
-                    worktreePath={worktreePath}
-                    onRevealInExplorer={revealInExplorer}
-                    onOpen={() => openCommittedDiff(entry)}
-                    commentCount={diffCommentCountByPath.get(entry.path) ?? 0}
-                  />
-                ))}
+                (sourceControlViewMode === 'tree'
+                  ? visibleBranchTreeRows.map((node) => {
+                      if (node.type === 'directory') {
+                        return (
+                          <SourceControlBranchTreeDirectoryRow
+                            key={node.key}
+                            node={node}
+                            isCollapsed={collapsedTreeDirs.has(node.key)}
+                            onToggle={() => toggleTreeDir(node.key)}
+                          />
+                        )
+                      }
+                      return (
+                        <BranchEntryRow
+                          key={node.key}
+                          entry={node.entry}
+                          currentWorktreeId={currentWorktreeId}
+                          worktreePath={worktreePath}
+                          depth={node.depth}
+                          onRevealInExplorer={revealInExplorer}
+                          onOpen={() => openCommittedDiff(node.entry)}
+                          commentCount={diffCommentCountByPath.get(node.entry.path) ?? 0}
+                          showPathHint={false}
+                        />
+                      )
+                    })
+                  : filteredBranchEntries.map((entry) => (
+                      <BranchEntryRow
+                        key={`branch:${entry.path}`}
+                        entry={entry}
+                        currentWorktreeId={currentWorktreeId}
+                        worktreePath={worktreePath}
+                        onRevealInExplorer={revealInExplorer}
+                        onOpen={() => openCommittedDiff(entry)}
+                        commentCount={diffCommentCountByPath.get(entry.path) ?? 0}
+                      />
+                    )))}
             </div>
           )}
         </div>
@@ -2231,6 +2807,43 @@ function SourceControlInner(): React.JSX.Element {
           />
         )}
       </div>
+
+      <Dialog
+        open={pendingDiffCommentsClear !== null}
+        onOpenChange={(open) => {
+          if (!open && !isClearingDiffComments) {
+            setPendingDiffCommentsClear(null)
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm">Clear Notes</DialogTitle>
+            <DialogDescription className="text-xs">
+              {pendingDiffCommentsClearDescription}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPendingDiffCommentsClear(null)}
+              disabled={isClearingDiffComments}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void handleConfirmDiffCommentsClear()}
+              disabled={isClearingDiffComments || pendingDiffCommentsClearCount === 0}
+            >
+              <Trash2 className="size-4" />
+              Clear Notes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={pendingDiscard !== null}
@@ -2524,7 +3137,14 @@ export function CommitArea({
                     onDropdownAction(entry.kind)
                   }}
                 >
-                  {entry.label}
+                  <span className="flex min-w-0 flex-col">
+                    <span>{entry.label}</span>
+                    {entry.hint ? (
+                      <span className="truncate text-[10px] text-muted-foreground">
+                        {entry.hint}
+                      </span>
+                    ) : null}
+                  </span>
                 </DropdownMenuItem>
               )
             )}
@@ -2560,11 +3180,15 @@ export function CommitArea({
 
 function CompareSummary({
   summary,
+  viewMode,
   onChangeBaseRef,
+  onToggleViewMode,
   onRetry
 }: {
   summary: GitBranchCompareSummary | null
+  viewMode: SourceControlViewMode
   onChangeBaseRef: () => void
+  onToggleViewMode: () => void
   onRetry: () => void
 }): React.JSX.Element {
   if (!summary || summary.status === 'loading') {
@@ -2578,18 +3202,23 @@ function CompareSummary({
 
   if (summary.status !== 'ready') {
     return (
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="truncate">{summary.errorMessage ?? 'Branch compare unavailable'}</span>
-        <button
-          className="shrink-0 hover:text-foreground"
-          onClick={onChangeBaseRef}
-          title="Change base ref"
-        >
-          <Settings2 className="size-3.5" />
-        </button>
-        <button className="shrink-0 hover:text-foreground" onClick={onRetry} title="Retry">
-          <RefreshCw className="size-3.5" />
-        </button>
+      <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+        <span className="min-w-0 flex-1 truncate">
+          {summary.errorMessage ?? 'Branch compare unavailable'}
+        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          <CompareSummaryToolbarButton
+            icon={Settings2}
+            label="Change base ref"
+            onClick={onChangeBaseRef}
+          />
+          <CompareSummaryToolbarButton
+            icon={viewMode === 'tree' ? List : ListTree}
+            label={viewMode === 'tree' ? 'Show changes as list' : 'Show changes as tree'}
+            onClick={onToggleViewMode}
+          />
+          <CompareSummaryToolbarButton icon={RefreshCw} label="Retry" onClick={onRetry} />
+        </div>
       </div>
     )
   }
@@ -2601,31 +3230,54 @@ function CompareSummary({
           {summary.commitsAhead} commits ahead
         </span>
       )}
-      <TooltipProvider delayDuration={400}>
-        <div className="ml-auto flex items-center gap-2 shrink-0">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button className="hover:text-foreground p-0.5 rounded" onClick={onChangeBaseRef}>
-                <Settings2 className="size-3.5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
-              Change base ref
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button className="hover:text-foreground p-0.5 rounded" onClick={onRetry}>
-                <RefreshCw className="size-3.5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
-              Refresh branch compare
-            </TooltipContent>
-          </Tooltip>
-        </div>
-      </TooltipProvider>
+      <div className="ml-auto flex shrink-0 items-center gap-2">
+        <CompareSummaryToolbarButton
+          icon={Settings2}
+          label="Change base ref"
+          onClick={onChangeBaseRef}
+        />
+        <CompareSummaryToolbarButton
+          icon={viewMode === 'tree' ? List : ListTree}
+          label={viewMode === 'tree' ? 'Show changes as list' : 'Show changes as tree'}
+          onClick={onToggleViewMode}
+        />
+        <CompareSummaryToolbarButton
+          icon={RefreshCw}
+          label="Refresh branch compare"
+          onClick={onRetry}
+        />
+      </div>
     </div>
+  )
+}
+
+function CompareSummaryToolbarButton({
+  icon: Icon,
+  label,
+  onClick
+}: {
+  icon: LucideIcon
+  label: string
+  onClick: () => void
+}): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="text-muted-foreground hover:text-foreground"
+          aria-label={label}
+          onClick={onClick}
+        >
+          <Icon className="size-3.5" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -2720,14 +3372,16 @@ function SectionHeader({
 function DiffCommentsInlineList({
   comments,
   onDelete,
+  onClearFile,
   onOpen
 }: {
   comments: DiffComment[]
   onDelete: (commentId: string) => void
+  onClearFile: (filePath: string) => void
   // Why: clicking the note row navigates the user to that file's diff (or
   // editor as a fallback) and, when a `commentId` is supplied, scrolls the
   // diff to that specific note via the scrollToDiffCommentId UI slice.
-  onOpen: (filePath: string, commentId?: string) => void
+  onOpen: (comment: DiffComment) => void
 }): React.JSX.Element {
   // Why: group by filePath so the inline list mirrors the structure in the
   // Notes tab — a compact section per file with line-number prefixes.
@@ -2778,14 +3432,30 @@ function DiffCommentsInlineList({
     <div className="bg-muted/20">
       {groups.map(([filePath, list]) => (
         <div key={filePath} className="px-3 py-1.5">
-          <button
-            type="button"
-            className="block w-full truncate text-left text-[10px] font-medium text-muted-foreground hover:text-foreground"
-            onClick={() => onOpen(filePath)}
-            title={`Open ${filePath}`}
-          >
-            {filePath}
-          </button>
+          <div className="group/file flex items-center gap-1">
+            <button
+              type="button"
+              className="block min-w-0 flex-1 truncate text-left text-[10px] font-medium text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                const first = list[0]
+                if (first) {
+                  onOpen(first)
+                }
+              }}
+              title={`Open ${filePath}`}
+            >
+              {filePath}
+            </button>
+            <button
+              type="button"
+              className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover/file:opacity-100"
+              onClick={() => onClearFile(filePath)}
+              title={`Clear notes for ${filePath}`}
+              aria-label={`Clear notes for ${filePath}`}
+            >
+              <Trash2 className="size-3" />
+            </button>
+          </div>
           <ul className="mt-1 space-y-1">
             {list.map((c) => (
               <li
@@ -2801,12 +3471,15 @@ function DiffCommentsInlineList({
                   // for buttons and lets bubbled key events from the children
                   // fire the row's open handler.
                   className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded text-left"
-                  onClick={() => onOpen(c.filePath, c.id)}
-                  title={`Open ${c.filePath} (line ${c.lineNumber})`}
-                  aria-label={`Open note on line ${c.lineNumber}`}
+                  onClick={() => onOpen(c)}
+                  title={`Open ${c.filePath} (${getDiffCommentLineLabel(c).toLowerCase()})`}
+                  aria-label={`Open note on ${getDiffCommentLineLabel(c).toLowerCase()}`}
                 >
                   <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] leading-none tabular-nums text-muted-foreground">
-                    L{c.lineNumber}
+                    {getDiffCommentLineLabel(c, true)}
+                  </span>
+                  <span className="shrink-0 rounded bg-muted/70 px-1 py-0.5 text-[10px] leading-none text-muted-foreground">
+                    {getDiffCommentSource(c) === 'markdown' ? 'MD' : 'Diff'}
                   </span>
                   <span className="block min-w-0 flex-1 whitespace-pre-wrap break-words text-[11px] leading-snug text-foreground">
                     {c.body}
@@ -2918,11 +3591,145 @@ function OperationBanner({
   )
 }
 
+function SourceControlTreeDirectoryRow({
+  node,
+  actionPaths,
+  hideBulkActions,
+  isExecutingBulk,
+  isCollapsed,
+  onToggle,
+  onRequestDiscardPaths,
+  onStagePaths,
+  onUnstagePaths
+}: {
+  node: SourceControlTreeDirectoryNode
+  actionPaths: SourceControlDirectoryActionPaths
+  hideBulkActions: boolean
+  isExecutingBulk: boolean
+  isCollapsed: boolean
+  onToggle: () => void
+  onRequestDiscardPaths: (area: DiscardAllArea, paths: readonly string[]) => void
+  onStagePaths: (paths: readonly string[]) => Promise<void>
+  onUnstagePaths: (paths: readonly string[]) => Promise<void>
+}): React.JSX.Element {
+  // Why: filtered tree nodes only contain visible descendants. Folder-wide
+  // bulk labels would overpromise if they acted on that filtered subset.
+  const canStage = !hideBulkActions && actionPaths.stagePaths.length > 0
+  const canUnstage = !hideBulkActions && actionPaths.unstagePaths.length > 0
+  const canDiscard = !hideBulkActions && actionPaths.discardPaths.length > 0
+
+  return (
+    <div
+      className="group relative flex w-full items-center gap-1 pr-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
+      style={{
+        paddingLeft: `${node.depth * SOURCE_CONTROL_TREE_INDENT_PX + SOURCE_CONTROL_TREE_DIRECTORY_PADDING_PX}px`
+      }}
+    >
+      <button
+        type="button"
+        className="flex min-w-0 flex-1 items-center gap-1 text-left"
+        onClick={onToggle}
+        aria-expanded={!isCollapsed}
+      >
+        <ChevronDown
+          className={cn('size-3 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
+        />
+        {isCollapsed ? (
+          <Folder className="size-3 shrink-0" />
+        ) : (
+          <FolderOpen className="size-3 shrink-0" />
+        )}
+        <span className="min-w-0 flex-1 truncate">{node.name}</span>
+      </button>
+      <span className="w-4 shrink-0 text-center text-[10px] font-bold tabular-nums text-muted-foreground/80">
+        {node.fileCount}
+      </span>
+      {(canDiscard || canStage || canUnstage) && (
+        <div className={SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS}>
+          {canDiscard && (
+            <ActionButton
+              icon={node.area === 'untracked' ? Trash : Undo2}
+              title={node.area === 'untracked' ? 'Delete untracked in folder' : 'Discard folder'}
+              onClick={(event) => {
+                event.stopPropagation()
+                onRequestDiscardPaths(node.area, actionPaths.discardPaths)
+              }}
+              disabled={isExecutingBulk}
+            />
+          )}
+          {canStage && (
+            <ActionButton
+              icon={Plus}
+              title="Stage folder"
+              onClick={(event) => {
+                event.stopPropagation()
+                void onStagePaths(actionPaths.stagePaths)
+              }}
+              disabled={isExecutingBulk}
+            />
+          )}
+          {canUnstage && (
+            <ActionButton
+              icon={Minus}
+              title="Unstage folder"
+              onClick={(event) => {
+                event.stopPropagation()
+                void onUnstagePaths(actionPaths.unstagePaths)
+              }}
+              disabled={isExecutingBulk}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SourceControlBranchTreeDirectoryRow({
+  node,
+  isCollapsed,
+  onToggle
+}: {
+  node: BranchSourceControlTreeDirectoryNode
+  isCollapsed: boolean
+  onToggle: () => void
+}): React.JSX.Element {
+  return (
+    <div
+      className="group relative flex w-full items-center gap-1 pr-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
+      style={{
+        paddingLeft: `${node.depth * SOURCE_CONTROL_TREE_INDENT_PX + SOURCE_CONTROL_TREE_DIRECTORY_PADDING_PX}px`
+      }}
+    >
+      <button
+        type="button"
+        className="flex min-w-0 flex-1 items-center gap-1 text-left"
+        onClick={onToggle}
+        aria-expanded={!isCollapsed}
+      >
+        <ChevronDown
+          className={cn('size-3 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
+        />
+        {isCollapsed ? (
+          <Folder className="size-3 shrink-0" />
+        ) : (
+          <FolderOpen className="size-3 shrink-0" />
+        )}
+        <span className="min-w-0 flex-1 truncate">{node.name}</span>
+      </button>
+      <span className="w-4 shrink-0 text-center text-[10px] font-bold tabular-nums text-muted-foreground/80">
+        {node.fileCount}
+      </span>
+    </div>
+  )
+}
+
 const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   entryKey,
   entry,
   currentWorktreeId,
   worktreePath,
+  depth = 0,
   selected,
   onSelect,
   onContextMenu,
@@ -2931,12 +3738,14 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   onStage,
   onUnstage,
   onDiscard,
-  commentCount
+  commentCount,
+  showPathHint = true
 }: {
   entryKey: string
   entry: GitStatusEntry
   currentWorktreeId: string
   worktreePath: string
+  depth?: number
   selected?: boolean
   onSelect?: (e: React.MouseEvent, key: string, entry: GitStatusEntry) => void
   onContextMenu?: (key: string) => void
@@ -2946,8 +3755,9 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   onUnstage: (filePath: string) => Promise<void>
   onDiscard: (entry: GitStatusEntry) => void
   commentCount: number
+  showPathHint?: boolean
 }): React.JSX.Element {
-  const StatusIcon = STATUS_ICONS[entry.status] ?? FileQuestion
+  const FileIcon = getFileTypeIcon(entry.path)
   const fileName = basename(entry.path)
   const parentDir = dirname(entry.path)
   const dirPath = parentDir === '.' ? '' : parentDir
@@ -2990,9 +3800,12 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
         data-source-control-path={entry.path}
         data-source-control-area={entry.area}
         className={cn(
-          'group relative flex cursor-pointer items-center gap-1 pl-5 pr-3 py-1 transition-colors hover:bg-accent/40',
+          'group relative flex cursor-pointer items-center gap-1 pr-3 py-1 transition-colors hover:bg-accent/40',
           selected && 'bg-accent/60'
         )}
+        style={{
+          paddingLeft: `${depth * SOURCE_CONTROL_TREE_INDENT_PX + SOURCE_CONTROL_TREE_FILE_PADDING_PX}px`
+        }}
         draggable
         onDragStart={(e) => {
           if (isUnresolvedConflict && entry.status === 'deleted') {
@@ -3011,11 +3824,13 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
           }
         }}
       >
-        <StatusIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[entry.status] }} />
+        <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[entry.status] }} />
         <div className="min-w-0 flex-1 text-xs">
           <span className="min-w-0 block truncate">
             <span className="text-foreground">{fileName}</span>
-            {dirPath && <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>}
+            {showPathHint && dirPath && (
+              <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>
+            )}
           </span>
           {conflictLabel && (
             <div className="truncate text-[11px] text-muted-foreground">{conflictLabel}</div>
@@ -3043,7 +3858,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
             {STATUS_LABELS[entry.status]}
           </span>
         )}
-        <div className="absolute right-0 top-0 bottom-0 shrink-0 hidden group-hover:flex items-center gap-1.5 bg-accent pr-3 pl-2">
+        <div className={SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS}>
           {canDiscard && (
             <ActionButton
               icon={entry.area === 'untracked' ? Trash : Undo2}
@@ -3126,18 +3941,22 @@ function BranchEntryRow({
   entry,
   currentWorktreeId,
   worktreePath,
+  depth = 0,
   onRevealInExplorer,
   onOpen,
-  commentCount
+  commentCount,
+  showPathHint = true
 }: {
   entry: GitBranchChangeEntry
   currentWorktreeId: string
   worktreePath: string
+  depth?: number
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
   onOpen: () => void
   commentCount: number
+  showPathHint?: boolean
 }): React.JSX.Element {
-  const StatusIcon = STATUS_ICONS[entry.status] ?? FileQuestion
+  const FileIcon = getFileTypeIcon(entry.path)
   const fileName = basename(entry.path)
   const parentDir = dirname(entry.path)
   const dirPath = parentDir === '.' ? '' : parentDir
@@ -3149,7 +3968,10 @@ function BranchEntryRow({
       onRevealInExplorer={onRevealInExplorer}
     >
       <div
-        className="group flex cursor-pointer items-center gap-1 pl-5 pr-3 py-1 transition-colors hover:bg-accent/40"
+        className="group flex cursor-pointer items-center gap-1 pr-3 py-1 transition-colors hover:bg-accent/40"
+        style={{
+          paddingLeft: `${depth * SOURCE_CONTROL_TREE_INDENT_PX + SOURCE_CONTROL_TREE_FILE_PADDING_PX}px`
+        }}
         draggable
         onDragStart={(e) => {
           const absolutePath = joinPath(worktreePath, entry.path)
@@ -3158,10 +3980,12 @@ function BranchEntryRow({
         }}
         onClick={onOpen}
       >
-        <StatusIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[entry.status] }} />
+        <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[entry.status] }} />
         <span className="min-w-0 flex-1 truncate text-xs">
           <span className="text-foreground">{fileName}</span>
-          {dirPath && <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>}
+          {showPathHint && dirPath && (
+            <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>
+          )}
         </span>
         {commentCount > 0 && (
           <span
@@ -3266,7 +4090,7 @@ export function ActionButton({
           variant="ghost"
           size="icon-xs"
           className={cn(
-            'h-auto w-auto p-0.5 text-muted-foreground hover:text-foreground',
+            'text-muted-foreground hover:bg-background/70 hover:text-foreground',
             disabled && 'opacity-50 cursor-not-allowed'
           )}
           aria-label={title}

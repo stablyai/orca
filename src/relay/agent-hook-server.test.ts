@@ -4,6 +4,10 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
 import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
+import { makePaneKey } from '../shared/stable-pane-id'
+
+const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
 
 describe('RelayAgentHookServer', () => {
   let dir: string
@@ -36,7 +40,7 @@ describe('RelayAgentHookServer', () => {
           'X-Orca-Agent-Hook-Token': token
         },
         body: JSON.stringify({
-          paneKey: 'tab-1:0',
+          paneKey: PANE_KEY,
           tabId: 'tab-1',
           worktreeId: 'wt-1',
           env: 'remote',
@@ -48,7 +52,7 @@ describe('RelayAgentHookServer', () => {
       expect(forward).toHaveBeenCalledTimes(1)
       const envelope = forward.mock.calls[0][0]
       expect(envelope.source).toBe('claude')
-      expect(envelope.paneKey).toBe('tab-1:0')
+      expect(envelope.paneKey).toBe(PANE_KEY)
       expect(envelope.tabId).toBe('tab-1')
       expect(envelope.connectionId).toBeNull()
       expect(envelope.payload.state).toBe('working')
@@ -96,7 +100,7 @@ describe('RelayAgentHookServer', () => {
           'X-Orca-Agent-Hook-Token': token
         },
         body: JSON.stringify({
-          paneKey: 'tab-1:0',
+          paneKey: PANE_KEY,
           tabId: 'tab-1',
           env: 'remote',
           version: '1',
@@ -131,11 +135,11 @@ describe('RelayAgentHookServer', () => {
           'X-Orca-Agent-Hook-Token': token
         },
         body: JSON.stringify({
-          paneKey: 'tab-1:0',
+          paneKey: PANE_KEY,
           payload: { hook_event_name: 'UserPromptSubmit', prompt: 'gone' }
         })
       })
-      server.clearPaneState('tab-1:0')
+      server.clearPaneState(PANE_KEY)
       forward.mockClear()
       const replayed = server.replayCachedPayloadsForPanes()
       expect(replayed).toBe(0)

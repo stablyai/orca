@@ -1,14 +1,24 @@
+/* eslint-disable max-lines -- Why: the Linear slice owns status, workspace
+   selection, issue caches, and optimistic patch propagation as one store
+   boundary so cache invalidation stays coherent. */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { LinearViewer, LinearConnectionStatus, LinearIssue } from '../../../../shared/types'
+import type {
+  LinearViewer,
+  LinearConnectionStatus,
+  LinearIssue,
+  LinearWorkspaceSelection
+} from '../../../../shared/types'
 import type { CacheEntry } from './github'
 import { clearLinearMetadataCache } from '../../hooks/useIssueMetadata'
 import {
   linearConnect,
   linearDisconnect,
+  linearDisconnectWorkspace,
   linearGetIssue,
   linearListIssues,
   linearSearchIssues,
+  linearSelectWorkspace,
   linearStatus,
   linearTestConnection
 } from '@/runtime/runtime-linear-client'
@@ -45,6 +55,10 @@ const inflightIssueRequests = new Map<string, Promise<LinearIssue | null>>()
 const inflightSearchRequests = new Map<string, Promise<LinearIssue[]>>()
 const inflightListRequests = new Map<string, Promise<LinearIssue[]>>()
 
+function getSelectedWorkspaceId(status: LinearConnectionStatus): LinearWorkspaceSelection | null {
+  return status.selectedWorkspaceId ?? status.activeWorkspaceId ?? null
+}
+
 export type LinearSlice = {
   linearStatus: LinearConnectionStatus
   linearStatusChecked: boolean
@@ -55,11 +69,13 @@ export type LinearSlice = {
   connectLinear: (
     apiKey: string
   ) => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>
-  testLinearConnection: () => Promise<
-    { ok: true; viewer: LinearViewer } | { ok: false; error: string }
-  >
+  testLinearConnection: (
+    workspaceId?: string | null
+  ) => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>
+  selectLinearWorkspace: (workspaceId: LinearWorkspaceSelection) => Promise<void>
   disconnectLinear: () => Promise<void>
-  fetchLinearIssue: (id: string) => Promise<LinearIssue | null>
+  disconnectLinearWorkspace: (workspaceId: string) => Promise<void>
+  fetchLinearIssue: (id: string, workspaceId?: string | null) => Promise<LinearIssue | null>
   searchLinearIssues: (query: string, limit?: number) => Promise<LinearIssue[]>
   listLinearIssues: (
     filter?: 'assigned' | 'created' | 'all' | 'completed',
@@ -78,7 +94,12 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     try {
       const status = (await linearStatus(get().settings)) as LinearConnectionStatus
       const prev = get().linearStatus
-      if (prev.connected !== status.connected || prev.viewer?.email !== status.viewer?.email) {
+      if (
+        prev.connected !== status.connected ||
+        prev.viewer?.email !== status.viewer?.email ||
+        getSelectedWorkspaceId(prev) !== getSelectedWorkspaceId(status) ||
+        (prev.workspaces?.length ?? 0) !== (status.workspaces?.length ?? 0)
+      ) {
         set({ linearStatus: status, linearStatusChecked: true })
       } else if (!get().linearStatusChecked) {
         set({ linearStatusChecked: true })
@@ -92,24 +113,13 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
   },
 
-  testLinearConnection: async () => {
+  testLinearConnection: async (workspaceId) => {
     try {
-      const result = (await linearTestConnection(get().settings)) as
+      const result = (await linearTestConnection(get().settings, workspaceId)) as
         | { ok: true; viewer: LinearViewer }
         | { ok: false; error: string }
-      if (result.ok) {
-        set({
-          linearStatus: { connected: true, viewer: result.viewer },
-          linearStatusChecked: true
-        })
-      } else {
-        // Why: testConnection clears the token on auth errors; reflect that
-        // locally so the UI drops back to the Connect state.
-        set({
-          linearStatus: { connected: false, viewer: null },
-          linearStatusChecked: true
-        })
-      }
+      const status = await linearStatus(get().settings)
+      set({ linearStatus: status, linearStatusChecked: true })
       return result
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Test failed'
@@ -127,12 +137,27 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
             viewer: result.viewer as LinearViewer
           }
         })
+        void get().checkLinearConnection()
       }
       return result as { ok: true; viewer: LinearViewer } | { ok: false; error: string }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Connection failed'
       return { ok: false as const, error: message }
     }
+  },
+
+  selectLinearWorkspace: async (workspaceId) => {
+    const status = await linearSelectWorkspace(get().settings, workspaceId)
+    inflightIssueRequests.clear()
+    inflightSearchRequests.clear()
+    inflightListRequests.clear()
+    clearLinearMetadataCache()
+    set({
+      linearStatus: status,
+      linearIssueCache: {},
+      linearSearchCache: {},
+      linearStatusChecked: true
+    })
   },
 
   disconnectLinear: async () => {
@@ -148,24 +173,40 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     })
   },
 
-  fetchLinearIssue: async (id: string) => {
-    const cached = get().linearIssueCache[id]
+  disconnectLinearWorkspace: async (workspaceId) => {
+    await linearDisconnectWorkspace(get().settings, workspaceId)
+    inflightIssueRequests.clear()
+    inflightSearchRequests.clear()
+    inflightListRequests.clear()
+    clearLinearMetadataCache()
+    const status = await linearStatus(get().settings)
+    set({
+      linearStatus: status,
+      linearIssueCache: {},
+      linearSearchCache: {},
+      linearStatusChecked: true
+    })
+  },
+
+  fetchLinearIssue: async (id: string, workspaceId?: string | null) => {
+    const issueCacheKey = `${workspaceId ?? 'selected'}::${id}`
+    const cached = get().linearIssueCache[issueCacheKey] ?? get().linearIssueCache[id]
     if (isFresh(cached)) {
       return cached.data
     }
 
-    const inflight = inflightIssueRequests.get(id)
+    const inflight = inflightIssueRequests.get(issueCacheKey)
     if (inflight) {
       return inflight
     }
 
-    const promise = linearGetIssue(get().settings, id)
+    const promise = linearGetIssue(get().settings, id, workspaceId)
       .then((issue) => {
         const data = issue as LinearIssue | null
         set((s) => ({
           linearIssueCache: evictStaleEntries({
             ...s.linearIssueCache,
-            [id]: { data, fetchedAt: Date.now() }
+            [issueCacheKey]: { data, fetchedAt: Date.now() }
           })
         }))
         return data
@@ -178,15 +219,16 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         return null
       })
       .finally(() => {
-        inflightIssueRequests.delete(id)
+        inflightIssueRequests.delete(issueCacheKey)
       })
 
-    inflightIssueRequests.set(id, promise)
+    inflightIssueRequests.set(issueCacheKey, promise)
     return promise
   },
 
   searchLinearIssues: async (query: string, limit = 20) => {
-    const cacheKey = `${query}::${limit}`
+    const workspaceId = getSelectedWorkspaceId(get().linearStatus)
+    const cacheKey = `${workspaceId ?? 'default'}::${query}::${limit}`
     const cached = get().linearSearchCache[cacheKey]
     if (isFresh(cached)) {
       return cached.data ?? []
@@ -197,7 +239,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       return inflight
     }
 
-    const promise = linearSearchIssues(get().settings, query, limit)
+    const promise = linearSearchIssues(get().settings, query, limit, workspaceId)
       .then((issues) => {
         const data = issues as LinearIssue[]
         set((s) => ({
@@ -224,7 +266,8 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   listLinearIssues: async (filter = 'assigned', limit = 20) => {
-    const cacheKey = `list::${filter}::${limit}`
+    const workspaceId = getSelectedWorkspaceId(get().linearStatus)
+    const cacheKey = `${workspaceId ?? 'default'}::list::${filter}::${limit}`
     const cached = get().linearSearchCache[cacheKey]
     if (isFresh(cached)) {
       return cached.data ?? []
@@ -235,7 +278,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       return inflight
     }
 
-    const promise = linearListIssues(get().settings, filter, limit)
+    const promise = linearListIssues(get().settings, filter, limit, workspaceId)
       .then((issues) => {
         const data = issues as LinearIssue[]
         set((s) => ({

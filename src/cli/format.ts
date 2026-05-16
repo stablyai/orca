@@ -34,7 +34,6 @@ import type {
   RuntimeWorktreeRecord
 } from '../shared/runtime-types'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
-import type { NoteListResult, NoteMutationResult, NoteShowResult } from '../shared/notes-types'
 import type { RuntimeRpcFailure, RuntimeRpcSuccess } from './runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
 
@@ -60,6 +59,18 @@ export function formatCliError(error: unknown): string {
     error.response.error.code === 'runtime_unavailable'
   ) {
     return `${message}\nOrca is not running. Run 'orca open' first.`
+  }
+  if (error instanceof RuntimeRpcFailureError) {
+    const data = error.response.error.data
+    const nextSteps =
+      data && typeof data === 'object' && Array.isArray((data as { nextSteps?: unknown }).nextSteps)
+        ? (data as { nextSteps: unknown[] }).nextSteps.filter(
+            (step): step is string => typeof step === 'string'
+          )
+        : []
+    if (nextSteps.length > 0) {
+      return `${message}\n${nextSteps.map((step) => `Next step: ${step}`).join('\n')}`
+    }
   }
   return message
 }
@@ -208,39 +219,6 @@ export function formatTerminalWait(result: { wait: RuntimeTerminalWait }): strin
   ].join('\n')
 }
 
-export function formatNoteList(result: NoteListResult): string {
-  if (result.notes.length === 0) {
-    return 'No notes.'
-  }
-  const body = result.notes
-    .map((note) => {
-      const link = note.linkKind ? `  ${note.linkKind}` : ''
-      const preview = note.preview ? `\n${note.preview}` : ''
-      return `${note.id}  ${note.title}${link}\npath: ${note.relativePath}\nupdated: ${note.updatedAt}${preview}`
-    })
-    .join('\n\n')
-  return result.truncated
-    ? `${body}\n\ntruncated: showing ${result.notes.length} of ${result.totalCount}`
-    : body
-}
-
-export function formatNoteShow(result: NoteShowResult): string {
-  const link = result.linkKind ? `link: ${result.linkKind}` : 'link: none'
-  return [
-    `id: ${result.note.id}`,
-    `path: ${result.note.relativePath}`,
-    `title: ${result.note.title}`,
-    `revision: ${result.note.revision}`,
-    link,
-    '',
-    result.note.bodyMarkdown
-  ].join('\n')
-}
-
-export function formatNoteMutation(result: NoteMutationResult): string {
-  return `Saved note ${result.note.id} (${result.note.title}) revision ${result.note.revision}.`
-}
-
 export function formatWorktreePs(result: RuntimeWorktreePsResult): string {
   if (result.worktrees.length === 0) {
     return 'No worktrees found.'
@@ -284,10 +262,10 @@ export function formatWorktreeList(result: RuntimeWorktreeListResult): string {
     return 'No worktrees found.'
   }
   const body = result.worktrees
-    .map(
-      (worktree) =>
-        `${String(worktree.id)}  ${String(worktree.branch)}  ${String(worktree.path)}\ndisplayName: ${String(worktree.displayName ?? '')}\nlinkedIssue: ${String(worktree.linkedIssue ?? 'null')}\ncomment: ${String(worktree.comment ?? '')}`
-    )
+    .map((worktree) => {
+      const childCount = worktree.childWorktreeIds?.length ?? 0
+      return `${String(worktree.id)}  ${String(worktree.branch)}  ${String(worktree.path)}\ndisplayName: ${String(worktree.displayName ?? '')}\nparentWorktreeId: ${String(worktree.parentWorktreeId ?? 'null')}\nchildWorktreeIds: ${childCount > 0 ? worktree.childWorktreeIds.join(',') : '[]'}\nlinkedIssue: ${String(worktree.linkedIssue ?? 'null')}\ncomment: ${String(worktree.comment ?? '')}`
+    })
     .join('\n\n')
   return result.truncated
     ? `${body}\n\ntruncated: showing ${result.worktrees.length} of ${result.totalCount}`

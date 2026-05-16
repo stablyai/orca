@@ -94,6 +94,7 @@ describe('hosted review slice', () => {
       'hostedReview.forBranch',
       {
         repo: 'C:\\repo',
+        repoPath: 'C:\\repo',
         branch: 'feature/windows',
         linkedGitHubPR: 12,
         linkedGitLabMR: null,

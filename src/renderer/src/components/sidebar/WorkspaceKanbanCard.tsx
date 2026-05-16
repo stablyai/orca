@@ -18,16 +18,27 @@ type WorkspaceKanbanCardProps = {
   worktree: Worktree
   repo: Repo | undefined
   isActive: boolean
+  isSelected: boolean
+  selectedWorktrees: readonly Worktree[]
   compact: boolean
   onActivate: () => void
+  onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
+  onContextMenuSelect: (
+    event: React.MouseEvent<HTMLElement>,
+    worktree: Worktree
+  ) => readonly Worktree[]
 }
 
 export default function WorkspaceKanbanCard({
   worktree,
   repo,
   isActive,
+  isSelected,
+  selectedWorktrees,
   compact,
-  onActivate
+  onActivate,
+  onSelectionGesture,
+  onContextMenuSelect
 }: WorkspaceKanbanCardProps): React.JSX.Element {
   if (compact) {
     return (
@@ -35,7 +46,11 @@ export default function WorkspaceKanbanCard({
         worktree={worktree}
         repo={repo}
         isActive={isActive}
+        isSelected={isSelected}
+        selectedWorktrees={selectedWorktrees}
         onActivate={onActivate}
+        onSelectionGesture={onSelectionGesture}
+        onContextMenuSelect={onContextMenuSelect}
       />
     )
   }
@@ -45,13 +60,23 @@ export default function WorkspaceKanbanCard({
       {worktree.isPinned ? (
         <Badge
           variant="outline"
-          className="pointer-events-none absolute right-2 top-1.5 z-10 h-4 gap-1 rounded-full bg-background/90 px-1.5 text-[9px] leading-none text-muted-foreground"
+          className="pointer-events-none absolute right-2 top-1.5 z-10 flex size-4 items-center justify-center rounded-full bg-background/90 p-0 text-muted-foreground"
+          aria-label="Pinned"
         >
           <Pin className="size-2.5" />
-          Pinned
         </Badge>
       ) : null}
-      <WorktreeCard worktree={worktree} repo={repo} isActive={isActive} onActivate={onActivate} />
+      <WorktreeCard
+        worktree={worktree}
+        repo={repo}
+        isActive={isActive}
+        isMultiSelected={isSelected}
+        selectedWorktrees={selectedWorktrees}
+        hideCiCheck={worktree.isPinned}
+        onActivate={onActivate}
+        onSelectionGesture={onSelectionGesture}
+        onContextMenuSelect={(event) => onContextMenuSelect(event, worktree)}
+      />
     </div>
   )
 }
@@ -60,7 +85,11 @@ function WorkspaceKanbanCompactCard({
   worktree,
   repo,
   isActive,
-  onActivate
+  isSelected,
+  selectedWorktrees,
+  onActivate,
+  onSelectionGesture,
+  onContextMenuSelect
 }: Omit<WorkspaceKanbanCardProps, 'compact'>): React.JSX.Element {
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const isDeleting = deleteState?.isDeleting ?? false
@@ -74,31 +103,55 @@ function WorkspaceKanbanCompactCard({
     onActivate()
   }, [isDeleting, onActivate, worktree.id])
 
+  const handleClick = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      const selectionOnly = onSelectionGesture(event, worktree.id)
+      if (selectionOnly) {
+        event.preventDefault()
+        event.stopPropagation()
+        return
+      }
+      handleActivate()
+    },
+    [handleActivate, onSelectionGesture, worktree.id]
+  )
+
   const handleDragStart = useCallback(
     (event: React.DragEvent<HTMLButtonElement>) => {
       if (isDeleting) {
         event.preventDefault()
         return
       }
-      writeWorkspaceDragData(event.dataTransfer, worktree.id)
+      const dragIds =
+        isSelected && selectedWorktrees.length > 1
+          ? selectedWorktrees.map((item) => item.id)
+          : worktree.id
+      writeWorkspaceDragData(event.dataTransfer, dragIds)
     },
-    [isDeleting, worktree.id]
+    [isDeleting, isSelected, selectedWorktrees, worktree.id]
   )
 
   return (
-    <WorktreeContextMenu worktree={worktree}>
+    <WorktreeContextMenu
+      worktree={worktree}
+      selectedWorktrees={selectedWorktrees}
+      onContextMenuSelect={(event) => onContextMenuSelect(event, worktree)}
+    >
       <HoverCard openDelay={450} closeDelay={100}>
         <HoverCardTrigger asChild>
           <button
             type="button"
             draggable={!isDeleting}
             onDragStart={handleDragStart}
-            onClick={handleActivate}
+            onClick={handleClick}
             className={cn(
               'flex h-8 w-full min-w-0 cursor-pointer items-center rounded-md border px-2 text-left text-[12px] outline-none transition-colors',
               isActive
                 ? 'border-sidebar-ring bg-sidebar-accent text-sidebar-accent-foreground'
-                : 'border-transparent text-foreground hover:bg-sidebar-accent/60 focus-visible:border-sidebar-ring',
+                : isSelected
+                  ? 'border-sidebar-ring/50 bg-sidebar-accent/75 text-foreground ring-1 ring-sidebar-ring/30'
+                  : 'border-transparent text-foreground hover:bg-sidebar-accent/60 focus-visible:border-sidebar-ring',
+              isActive && isSelected && 'ring-1 ring-sidebar-ring/35',
               isDeleting && 'cursor-not-allowed opacity-50 grayscale'
             )}
             data-workspace-board-card-mode="compact"

@@ -7,7 +7,7 @@ import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
-import { FIRST_PANE_ID } from '../../../shared/pane-key'
+import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
   registerEagerPtyBuffer,
   subscribeToPtyData,
@@ -15,6 +15,7 @@ import {
 } from '@/components/terminal-pane/pty-dispatcher'
 import { createAgentStatusOscProcessor } from '@/components/terminal-pane/agent-status-osc'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import {
   getRemoteRuntimeTerminalHandle,
   subscribeToRuntimeTerminalData,
@@ -84,9 +85,11 @@ export async function launchAgentBackgroundSession(
   if (title) {
     store.setTabCustomTitle(tab.id, title)
   }
-  const paneKey = `${tab.id}:${FIRST_PANE_ID}`
   // Why: agent hook callbacks are keyed by pane, and background automation
   // tabs never mount a TerminalPane to inject this env for us.
+  const leafId = globalThis.crypto.randomUUID()
+  const paneKey = makePaneKey(tab.id, leafId)
+  store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, undefined, title))
   const paneEnv = {
     ...startupPlan.env,
     ORCA_PANE_KEY: paneKey,
@@ -107,6 +110,8 @@ export async function launchAgentBackgroundSession(
           command: startupPlan.launchCommand,
           env: paneEnv,
           title,
+          tabId: tab.id,
+          leafId,
           focus: false
         },
         { timeoutMs: 15_000 }
@@ -122,7 +127,7 @@ export async function launchAgentBackgroundSession(
         connectionId: repo?.connectionId ?? null,
         worktreeId,
         tabId: tab.id,
-        leafId: 'pane:1',
+        leafId,
         telemetry: {
           agent_kind: tuiAgentToAgentKind(agent),
           launch_source: launchSource ?? 'unknown',
@@ -136,6 +141,7 @@ export async function launchAgentBackgroundSession(
     throw error
   }
   store.updateTabPtyId(tab.id, ptyId)
+  store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId, title))
   let exitHandled = false
   let unsubscribeExit = (): void => {}
   let unsubscribeData = (): void => {}

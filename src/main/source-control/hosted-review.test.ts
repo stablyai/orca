@@ -108,7 +108,7 @@ describe('getHostedReviewForBranch', () => {
       number: 3,
       status: 'pending'
     })
-    expect(getPRForBranchMock).toHaveBeenCalledWith('/repo', 'feature', 3)
+    expect(getPRForBranchMock).toHaveBeenCalledWith('/repo', 'feature', 3, undefined)
   })
 
   it('falls through to Bitbucket when origin is not GitLab or GitHub', async () => {

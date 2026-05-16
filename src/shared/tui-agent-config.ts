@@ -207,8 +207,16 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
   },
   hermes: {
     detectCmd: 'hermes',
-    launchCmd: 'hermes',
+    // Why: bare `hermes` opens the classic REPL in recent Hermes releases;
+    // `--tui` starts the full-screen agent UI Orca is designed to host.
+    launchCmd: 'hermes --tui',
     expectedProcess: 'hermes',
+    promptInjectionMode: 'stdin-after-start'
+  },
+  openclaw: {
+    detectCmd: 'openclaw',
+    launchCmd: 'openclaw',
+    expectedProcess: 'openclaw',
     promptInjectionMode: 'stdin-after-start'
   },
   copilot: {
@@ -226,6 +234,12 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // `addTrustedFolder` writes after the user accepts) makes the menu skip
     // entirely. See agent-trust-presets.ts for the file layout.
     preflightTrust: 'copilot'
+  },
+  grok: {
+    detectCmd: 'grok',
+    launchCmd: 'grok',
+    expectedProcess: 'grok',
+    promptInjectionMode: 'stdin-after-start'
   }
 }
 
