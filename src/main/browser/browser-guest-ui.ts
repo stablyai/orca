@@ -8,19 +8,10 @@ import {
   isWindowShortcutModifierChord,
   resolveWindowShortcutAction
 } from '../../shared/window-shortcut-policy'
+import { readGuestNavigationState } from './browser-guest-navigation-state'
 
 type ResolveRenderer = (browserTabId: string) => Electron.WebContents | null
 type ShouldForwardDictationShortcut = () => boolean
-
-function readGuestNavigationState(guest: Electron.WebContents): {
-  canGoBack: boolean
-  canGoForward: boolean
-} {
-  return {
-    canGoBack: guest.navigationHistory.canGoBack(),
-    canGoForward: guest.navigationHistory.canGoForward()
-  }
-}
 
 function isTerminalTabSwitchChord(input: Electron.Input): boolean {
   return (

@@ -168,6 +168,70 @@ function mergeTerminalRecordsByCurrentOrder(
   ]
 }
 
+function terminalRecordsEqual(a: Terminal[], b: Terminal[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every(
+      (terminal, index) =>
+        terminal.handle === b[index]?.handle &&
+        terminal.title === b[index]?.title &&
+        terminal.isActive === b[index]?.isActive
+    )
+  )
+}
+
+function mobileSessionTabsEqual(a: MobileSessionTab[], b: MobileSessionTab[]): boolean {
+  return a.length === b.length && a.every((tab, index) => mobileSessionTabEqual(tab, b[index]))
+}
+
+function mobileSessionTabEqual(a: MobileSessionTab, b: MobileSessionTab | undefined): boolean {
+  if (
+    !b ||
+    a.type !== b.type ||
+    a.id !== b.id ||
+    a.title !== b.title ||
+    a.isActive !== b.isActive
+  ) {
+    return false
+  }
+  switch (a.type) {
+    case 'terminal':
+      return (
+        b.type === 'terminal' &&
+        a.parentTabId === b.parentTabId &&
+        a.leafId === b.leafId &&
+        a.status === b.status &&
+        a.terminal === b.terminal
+      )
+    case 'markdown':
+      return (
+        b.type === 'markdown' &&
+        a.filePath === b.filePath &&
+        a.relativePath === b.relativePath &&
+        a.isDirty === b.isDirty &&
+        a.documentVersion === b.documentVersion
+      )
+    case 'file':
+      return (
+        b.type === 'file' &&
+        a.filePath === b.filePath &&
+        a.relativePath === b.relativePath &&
+        a.language === b.language &&
+        a.isDirty === b.isDirty
+      )
+    case 'browser':
+      return (
+        b.type === 'browser' &&
+        a.browserWorkspaceId === b.browserWorkspaceId &&
+        a.browserPageId === b.browserPageId &&
+        a.url === b.url &&
+        a.loading === b.loading &&
+        a.canGoBack === b.canGoBack &&
+        a.canGoForward === b.canGoForward
+      )
+  }
+}
+
 function getActiveTabIdForHandle(
   tabs: MobileSessionTab[],
   terminalHandle: string | null
@@ -550,11 +614,14 @@ export default function SessionScreen() {
   const [terminals, setTerminals] = useState<Terminal[]>([])
   const terminalsRef = useRef<Terminal[]>([])
   const [sessionTabs, setSessionTabs] = useState<MobileSessionTab[]>([])
+  const sessionTabsRef = useRef<MobileSessionTab[]>([])
   const [terminalsLoaded, setTerminalsLoaded] = useState(false)
   const [input, setInput] = useState('')
   const [activeHandle, setActiveHandle] = useState<string | null>(null)
   const [activeSessionTabId, setActiveSessionTabId] = useState<string | null>(null)
+  const activeSessionTabIdRef = useRef<string | null>(null)
   const [markdownDocs, setMarkdownDocs] = useState<Map<string, MarkdownDocState>>(new Map())
+  const markdownDocsRef = useRef<Map<string, MarkdownDocState>>(new Map())
   const [fileDocs, setFileDocs] = useState<Map<string, FileDocState>>(new Map())
   const [creating, setCreating] = useState(false)
   const [creatingBrowser, setCreatingBrowser] = useState(false)
@@ -689,6 +756,18 @@ export default function SessionScreen() {
   useEffect(() => {
     activeSessionTabTypeRef.current = activeSessionTab?.type ?? null
   }, [activeSessionTab])
+
+  useEffect(() => {
+    sessionTabsRef.current = sessionTabs
+  }, [sessionTabs])
+
+  useEffect(() => {
+    activeSessionTabIdRef.current = activeSessionTabId
+  }, [activeSessionTabId])
+
+  useEffect(() => {
+    markdownDocsRef.current = markdownDocs
+  }, [markdownDocs])
 
   const getTerminalRef = useCallback((handle: string | null) => {
     return handle ? terminalRefs.current.get(handle) : undefined
@@ -1060,24 +1139,29 @@ export default function SessionScreen() {
       let nextTabs = result.tabs
       const presentTabIds = new Set(nextTabs.map((tab) => tab.id))
       const orphanedDraftTabs: MobileSessionTab[] = []
-      for (const [tabId, doc] of markdownDocs) {
+      const currentMarkdownDocs = markdownDocsRef.current
+      const currentSessionTabs = sessionTabsRef.current
+      for (const [tabId, doc] of currentMarkdownDocs) {
         if (doc.status !== 'ready' || !doc.isDirty || presentTabIds.has(tabId)) {
           continue
         }
-        const draftTab = sessionTabs.find(
+        const draftTab = currentSessionTabs.find(
           (tab): tab is Extract<MobileSessionTab, { type: 'markdown' }> =>
             tab.type === 'markdown' && tab.id === tabId
         )
         if (draftTab) {
           // Why: save-only mobile edits live only on the phone until Save. If the
           // desktop tab disappears, keep every local draft reachable for copy/discard.
-          orphanedDraftTabs.push({ ...draftTab, isActive: tabId === activeSessionTabId })
+          orphanedDraftTabs.push({ ...draftTab, isActive: tabId === activeSessionTabIdRef.current })
         }
       }
       if (orphanedDraftTabs.length > 0) {
         nextTabs = [...orphanedDraftTabs, ...nextTabs]
       }
-      setSessionTabs(nextTabs)
+      sessionTabsRef.current = nextTabs
+      // Why: subscribe snapshots often repeat identical tab payloads. Avoid a
+      // render loop where the subscription effect tears down and replays itself.
+      setSessionTabs((prev) => (mobileSessionTabsEqual(prev, nextTabs) ? prev : nextTabs))
       const terminalTabs = nextTabs.flatMap((tab): Terminal[] => {
         if (tab.type !== 'terminal' || typeof tab.terminal !== 'string') {
           return []
@@ -1088,8 +1172,10 @@ export default function SessionScreen() {
         terminalTabs,
         terminalsRef.current
       )
-      setTerminals(mergedTerminalsForActive)
       terminalsRef.current = mergedTerminalsForActive
+      setTerminals((prev) =>
+        terminalRecordsEqual(prev, mergedTerminalsForActive) ? prev : mergedTerminalsForActive
+      )
       lastKnownTerminalCountRef.current = Math.max(
         lastKnownTerminalCountRef.current,
         terminalTabs.length
@@ -1133,7 +1219,9 @@ export default function SessionScreen() {
           // stable session tab id during new-worktree startup.
           active = pendingTerminalTab
         } else if (pendingTerminalExists) {
-          setActiveSessionTabId(getActiveTabIdForHandle(nextTabs, pendingActiveTerminalHandle))
+          const nextActiveTabId = getActiveTabIdForHandle(nextTabs, pendingActiveTerminalHandle)
+          activeSessionTabIdRef.current = nextActiveTabId
+          setActiveSessionTabId(nextActiveTabId)
           activeSessionTabTypeRef.current = 'terminal'
           setActiveHandle(pendingActiveTerminalHandle)
           subscribeToTerminal(pendingActiveTerminalHandle)
@@ -1143,6 +1231,7 @@ export default function SessionScreen() {
         }
       }
       activeSessionTabTypeRef.current = active?.type ?? null
+      activeSessionTabIdRef.current = active?.id ?? null
       setActiveSessionTabId(active?.id ?? null)
       if (active?.type === 'terminal') {
         if (typeof active.terminal !== 'string') {
@@ -1173,7 +1262,7 @@ export default function SessionScreen() {
         setActiveHandle(null)
       }
     },
-    [activeSessionTabId, markdownDocs, sessionTabs, subscribeToTerminal, unsubscribeTerminal]
+    [subscribeToTerminal, unsubscribeTerminal]
   )
 
   const readMarkdownTab = useCallback(

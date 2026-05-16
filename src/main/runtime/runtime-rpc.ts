@@ -124,6 +124,8 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'accounts.subscribe',
   'accounts.unsubscribe',
   'browser.back',
+  'browser.dialogAccept',
+  'browser.dialogDismiss',
   'browser.forward',
   'browser.goto',
   'browser.keyboardInsertText',

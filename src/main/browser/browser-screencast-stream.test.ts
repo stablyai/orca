@@ -167,6 +167,101 @@ describe('startBrowserScreencast', () => {
     await session.done
   })
 
+  it('does not emit a stale navigation fallback capture after newer live frames', async () => {
+    vi.useFakeTimers()
+    const webContents = createMockWebContents()
+    const pendingCaptures: ((value: { data: string }) => void)[] = []
+    webContents.debugger.sendCommand.mockImplementation(async (method: string) => {
+      if (method === 'Page.captureScreenshot') {
+        return await new Promise<{ data: string }>((resolve) => pendingCaptures.push(resolve))
+      }
+      return {}
+    })
+    const onFrame = vi.fn()
+
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 1440,
+      maxHeight: 1200,
+      everyNthFrame: 1,
+      minFrameIntervalMs: 0,
+      onFrame
+    })
+
+    try {
+      await Promise.resolve()
+      webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
+        data: Buffer.from('first-live-frame').toString('base64'),
+        sessionId: 42,
+        metadata: { deviceWidth: 800, deviceHeight: 600 }
+      })
+      expect(onFrame).toHaveBeenCalledTimes(1)
+
+      pendingCaptures[0]?.({ data: Buffer.from('stale-initial').toString('base64') })
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(onFrame).toHaveBeenCalledTimes(1)
+
+      webContents.debugger.emit('message', {}, 'Page.loadEventFired', {})
+      await vi.advanceTimersByTimeAsync(250)
+      await Promise.resolve()
+      expect(pendingCaptures).toHaveLength(2)
+
+      webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
+        data: Buffer.from('newer-live-frame').toString('base64'),
+        sessionId: 43,
+        metadata: { deviceWidth: 800, deviceHeight: 600 }
+      })
+      pendingCaptures[1]?.({ data: Buffer.from('stale-navigation').toString('base64') })
+      await Promise.resolve()
+      await Promise.resolve()
+
+      expect(onFrame).toHaveBeenCalledTimes(2)
+      const secondFrame = decodeBrowserScreencastFrame(onFrame.mock.calls[1][0])
+      expect(Buffer.from(secondFrame?.image ?? new Uint8Array()).toString()).toBe(
+        'newer-live-frame'
+      )
+    } finally {
+      session.stop()
+      await session.done
+      vi.useRealTimers()
+    }
+  })
+
+  it('captures a fresh fallback frame after static page navigation', async () => {
+    const webContents = createMockWebContents()
+    let captureCount = 0
+    webContents.debugger.sendCommand.mockImplementation(async (method: string) => {
+      if (method === 'Page.captureScreenshot') {
+        captureCount += 1
+        return { data: Buffer.from(`capture-${captureCount}`).toString('base64') }
+      }
+      return {}
+    })
+    const onFrame = vi.fn()
+
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 1440,
+      maxHeight: 1200,
+      everyNthFrame: 2,
+      minFrameIntervalMs: 0,
+      onFrame
+    })
+
+    await vi.waitFor(() => expect(onFrame).toHaveBeenCalledTimes(1))
+    webContents.debugger.emit('message', {}, 'Page.loadEventFired', {})
+
+    await vi.waitFor(() => expect(onFrame).toHaveBeenCalledTimes(2))
+    const frame = decodeBrowserScreencastFrame(onFrame.mock.calls[1][0])
+    expect(Buffer.from(frame?.image ?? new Uint8Array()).toString()).toBe('capture-2')
+
+    session.stop()
+    await session.done
+  })
+
   it('throttles live frames before sending them to the client stream', async () => {
     const webContents = createMockWebContents()
     const onFrame = vi.fn()
@@ -203,9 +298,11 @@ describe('startBrowserScreencast', () => {
       })
 
       expect(onFrame).toHaveBeenCalledTimes(2)
-      expect(webContents.debugger.sendCommand).toHaveBeenCalledWith('Page.screencastFrameAck', {
-        sessionId: 43
-      })
+      await vi.waitFor(() =>
+        expect(webContents.debugger.sendCommand).toHaveBeenCalledWith('Page.screencastFrameAck', {
+          sessionId: 43
+        })
+      )
       const secondFrame = decodeBrowserScreencastFrame(onFrame.mock.calls[1][0])
       expect(Buffer.from(secondFrame?.image ?? new Uint8Array()).toString()).toBe(
         'second-live-frame'
@@ -214,6 +311,116 @@ describe('startBrowserScreencast', () => {
       dateNow.mockRestore()
       session.stop()
       await session.done
+    }
+  })
+
+  it('flushes the latest throttled live frame when the page becomes static', async () => {
+    vi.useFakeTimers()
+    const webContents = createMockWebContents()
+    const onFrame = vi.fn()
+    let now = 1000
+    const dateNow = vi.spyOn(Date, 'now').mockImplementation(() => now)
+
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 1440,
+      maxHeight: 1200,
+      everyNthFrame: 1,
+      minFrameIntervalMs: 100,
+      onFrame
+    })
+
+    try {
+      webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
+        data: Buffer.from('before-menu').toString('base64'),
+        sessionId: 42,
+        metadata: { deviceWidth: 800, deviceHeight: 600 }
+      })
+      now = 1040
+      webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
+        data: Buffer.from('menu-opening').toString('base64'),
+        sessionId: 43,
+        metadata: { deviceWidth: 800, deviceHeight: 600 }
+      })
+      now = 1060
+      webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
+        data: Buffer.from('menu-open-final').toString('base64'),
+        sessionId: 44,
+        metadata: { deviceWidth: 800, deviceHeight: 600 }
+      })
+
+      expect(onFrame).toHaveBeenCalledTimes(1)
+      now = 1100
+      await vi.advanceTimersByTimeAsync(60)
+
+      expect(onFrame).toHaveBeenCalledTimes(2)
+      const frame = decodeBrowserScreencastFrame(onFrame.mock.calls[1][0])
+      expect(Buffer.from(frame?.image ?? new Uint8Array()).toString()).toBe('menu-open-final')
+    } finally {
+      dateNow.mockRestore()
+      session.stop()
+      await session.done
+      vi.useRealTimers()
+    }
+  })
+
+  it('drops pending and late screencast frames after stop is requested', async () => {
+    vi.useFakeTimers()
+    const webContents = createMockWebContents()
+    const onFrame = vi.fn()
+    let now = 1000
+    const dateNow = vi.spyOn(Date, 'now').mockImplementation(() => now)
+
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 1440,
+      maxHeight: 1200,
+      everyNthFrame: 1,
+      minFrameIntervalMs: 100,
+      onFrame
+    })
+
+    let stopped = false
+    try {
+      webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
+        data: Buffer.from('before-stop').toString('base64'),
+        sessionId: 42,
+        metadata: { deviceWidth: 800, deviceHeight: 600 }
+      })
+      now = 1040
+      webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
+        data: Buffer.from('pending-before-stop').toString('base64'),
+        sessionId: 43,
+        metadata: { deviceWidth: 800, deviceHeight: 600 }
+      })
+      expect(onFrame).toHaveBeenCalledTimes(1)
+
+      session.stop()
+      stopped = true
+      now = 1060
+      webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
+        data: Buffer.from('late-after-stop').toString('base64'),
+        sessionId: 44,
+        metadata: { deviceWidth: 800, deviceHeight: 600 }
+      })
+      await vi.advanceTimersByTimeAsync(200)
+      await session.done
+
+      expect(onFrame).toHaveBeenCalledTimes(1)
+      const frame = decodeBrowserScreencastFrame(onFrame.mock.calls[0][0])
+      expect(Buffer.from(frame?.image ?? new Uint8Array()).toString()).toBe('before-stop')
+      expect(webContents.debugger.sendCommand).toHaveBeenCalledWith('Page.screencastFrameAck', {
+        sessionId: 44
+      })
+    } finally {
+      dateNow.mockRestore()
+      if (!stopped) {
+        session.stop()
+        await session.done
+      }
+      vi.useRealTimers()
     }
   })
 
@@ -238,6 +445,42 @@ describe('startBrowserScreencast', () => {
       data: image.toString('base64'),
       sessionId: 42,
       metadata: {}
+    })
+
+    await vi.waitFor(() => expect(onFrame).toHaveBeenCalledTimes(1))
+    const frame = decodeBrowserScreencastFrame(onFrame.mock.calls[0][0])
+    expect(frame?.metadata).toMatchObject({
+      deviceWidth: 390,
+      deviceHeight: 720,
+      imageWidth: 900,
+      imageHeight: 500
+    })
+
+    session.stop()
+    await session.done
+  })
+
+  it('keeps client viewport dimensions when CDP reports DPR-sized live metadata', async () => {
+    const webContents = createMockWebContents()
+    const onFrame = vi.fn()
+    const image = jpegWithSize(900, 500)
+
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 1440,
+      maxHeight: 1200,
+      viewportWidth: 390,
+      viewportHeight: 720,
+      everyNthFrame: 2,
+      minFrameIntervalMs: 0,
+      onFrame
+    })
+
+    webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
+      data: image.toString('base64'),
+      sessionId: 42,
+      metadata: { deviceWidth: 900, deviceHeight: 500, imageWidth: 900, imageHeight: 500 }
     })
 
     await vi.waitFor(() => expect(onFrame).toHaveBeenCalledTimes(1))

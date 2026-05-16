@@ -15,7 +15,7 @@ import {
   type GestureResponderEvent,
   type PanResponderGestureState
 } from 'react-native'
-import { ArrowUp, Monitor, Smartphone } from 'lucide-react-native'
+import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
 import type {
@@ -23,6 +23,21 @@ import type {
   BrowserScreencastFrameMetadata
 } from '../transport/browser-screencast-protocol'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import {
+  MOBILE_BROWSER_FRAME_MIN_INTERVAL_MS,
+  buildMobileBrowserScreencastRequest
+} from './browser-screencast-request'
+import {
+  clampBrowserZoomState,
+  computeBrowserFrameGeometry,
+  computeBrowserTouchClickRadiusCss,
+  mapScreenToBrowserPoint,
+  readLocalTouchPoint,
+  type BrowserFrameGeometry,
+  type BrowserPoint,
+  type BrowserTouchLayout,
+  type BrowserZoomState
+} from './browser-touch-geometry'
 
 export type MobileBrowserTab = {
   type: 'browser'
@@ -47,43 +62,6 @@ type MobileBrowserPaneProps = {
   onToast: (message: string, durationMs?: number) => void
 }
 
-type ViewportLayout = {
-  width: number
-  height: number
-}
-
-type BrowserPoint = {
-  x: number
-  y: number
-}
-
-type FrameGeometry = {
-  sourceWidth: number
-  sourceHeight: number
-  viewportWidth: number
-  viewportHeight: number
-  renderedWidth: number
-  renderedHeight: number
-  offsetX: number
-  offsetY: number
-  scale: number
-}
-
-type StreamViewport = {
-  width: number
-  height: number
-  viewportWidth: number
-  viewportHeight: number
-  deviceScaleFactor: number
-  mobile: boolean
-}
-
-type ZoomState = {
-  scale: number
-  offsetX: number
-  offsetY: number
-}
-
 type FrameLayer = 0 | 1
 
 type PinchGesture = {
@@ -100,8 +78,6 @@ type PanGesture = {
   offsetY: number
 }
 
-type BrowserViewMode = 'phone' | 'desktop'
-
 type BrowserDialogState = {
   dialogType: string
   message: string
@@ -112,20 +88,9 @@ const SCROLL_START_SLOP = 22
 const LONG_PRESS_MS = 550
 const WHEEL_INTERVAL_MS = 70
 const TOUCH_CLICK_RADIUS_DIP = 14
-const BROWSER_FRAME_FORMAT = 'jpeg'
-const BROWSER_FRAME_QUALITY = 72
-const BROWSER_FRAME_EVERY_NTH_FRAME = 3
-const BROWSER_FRAME_MIN_INTERVAL_MS = 100
-const BROWSER_MIN_VIEWPORT_WIDTH = 320
-const BROWSER_MIN_VIEWPORT_HEIGHT = 240
-const BROWSER_MAX_VIEWPORT_WIDTH = 2400
-const BROWSER_MAX_VIEWPORT_HEIGHT = 2160
-const BROWSER_MAX_STREAM_SCALE = 2.5
-const BROWSER_DESKTOP_VIEWPORT_WIDTH = 1280
-const BROWSER_DESKTOP_VIEWPORT_HEIGHT = 720
 const MIN_ZOOM = 1
 const MAX_ZOOM = 3.5
-const DEFAULT_ZOOM: ZoomState = { scale: 1, offsetX: 0, offsetY: 0 }
+const DEFAULT_ZOOM: BrowserZoomState = { scale: 1, offsetX: 0, offsetY: 0 }
 const BROWSER_FRAME_CACHE_LIMIT = 8
 
 type BrowserFrameCacheEntry = {
@@ -155,13 +120,12 @@ export function MobileBrowserPane({
   const [ready, setReady] = useState(cachedInitialFrame !== null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<BrowserViewMode>('phone')
   const [dialog, setDialog] = useState<BrowserDialogState | null>(null)
-  const [zoom, setZoom] = useState<ZoomState>(DEFAULT_ZOOM)
-  const [layout, setLayout] = useState<ViewportLayout | null>(null)
+  const [zoom, setZoom] = useState<BrowserZoomState>(DEFAULT_ZOOM)
+  const [layout, setLayout] = useState<BrowserTouchLayout | null>(null)
   const [appActive, setAppActive] = useState(AppState.currentState === 'active')
   const streamGenerationRef = useRef(0)
-  const layoutRef = useRef<ViewportLayout | null>(null)
+  const layoutRef = useRef<BrowserTouchLayout | null>(null)
   const frameMetadataRef = useRef<BrowserScreencastFrameMetadata | null>(
     cachedInitialFrame?.metadata ?? null
   )
@@ -174,13 +138,18 @@ export function MobileBrowserPane({
   const readyRef = useRef(cachedInitialFrame !== null)
   const busyRef = useRef(false)
   const lastAppliedFrameAtRef = useRef(0)
+  const pendingThrottledFrameRef = useRef<{
+    frame: BrowserScreencastFrame
+    browserPageId: string
+  } | null>(null)
+  const frameThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dialogRef = useRef<BrowserDialogState | null>(null)
   const lastStreamPageIdRef = useRef<string | null>(tab.browserPageId)
   const startPointRef = useRef<{ x: number; y: number; t: number } | null>(null)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const rightClickSentRef = useRef(false)
   const lastWheelRef = useRef<{ dx: number; dy: number; at: number }>({ dx: 0, dy: 0, at: 0 })
-  const zoomRef = useRef<ZoomState>(DEFAULT_ZOOM)
+  const zoomRef = useRef<BrowserZoomState>(DEFAULT_ZOOM)
   const pinchRef = useRef<PinchGesture | null>(null)
   const panRef = useRef<PanGesture | null>(null)
   const scrollingRef = useRef(false)
@@ -193,7 +162,7 @@ export function MobileBrowserPane({
     }
   }, [])
 
-  const resetZoomState = useCallback(() => {
+  const resetBrowserZoomState = useCallback(() => {
     clearLongPressTimer()
     pinchRef.current = null
     panRef.current = null
@@ -236,8 +205,8 @@ export function MobileBrowserPane({
 
   useEffect(() => {
     lastZoomResetUrlRef.current = tab.url || 'about:blank'
-    resetZoomState()
-  }, [resetZoomState, tab.browserPageId, tab.url, viewMode])
+    resetBrowserZoomState()
+  }, [resetBrowserZoomState, tab.browserPageId, tab.url])
 
   const pageParams = useCallback(() => {
     if (!tab.browserPageId) {
@@ -268,6 +237,12 @@ export function MobileBrowserPane({
       frameUriRef.current = nextFrameUri
       pendingFrameLayerRef.current = nextLayer
       updateBrowserImageSource(browserImageRefs.current[nextLayer], nextFrameUri)
+    } else {
+      // Why: popovers/menus can settle in one final frame while the previous
+      // offscreen frame is still decoding. Keep the hidden layer pointed at
+      // the newest frame instead of dropping the final static state.
+      frameUriRef.current = nextFrameUri
+      updateBrowserImageSource(browserImageRefs.current[pendingFrameLayerRef.current], nextFrameUri)
     }
     if (busyRef.current) {
       busyRef.current = false
@@ -279,10 +254,55 @@ export function MobileBrowserPane({
     }
   }, [])
 
-  const streamViewport = useMemo(() => computeStreamViewport(layout, viewMode), [layout, viewMode])
+  const clearFrameThrottle = useCallback(() => {
+    pendingThrottledFrameRef.current = null
+    if (frameThrottleTimerRef.current) {
+      clearTimeout(frameThrottleTimerRef.current)
+      frameThrottleTimerRef.current = null
+    }
+  }, [])
+
+  const applyFrameThrottled = useCallback(
+    (frame: BrowserScreencastFrame, browserPageId: string): void => {
+      const now = Date.now()
+      const elapsed = now - lastAppliedFrameAtRef.current
+      if (lastAppliedFrameAtRef.current === 0 || elapsed >= MOBILE_BROWSER_FRAME_MIN_INTERVAL_MS) {
+        clearFrameThrottle()
+        lastAppliedFrameAtRef.current = now
+        applyFrame(frame, browserPageId)
+        return
+      }
+
+      // Why: static UI changes can be the last frame Chromium emits. Coalesce
+      // throttled frames so the final visible state is applied after the delay.
+      pendingThrottledFrameRef.current = { frame, browserPageId }
+      if (frameThrottleTimerRef.current) {
+        return
+      }
+      frameThrottleTimerRef.current = setTimeout(
+        () => {
+          frameThrottleTimerRef.current = null
+          const pending = pendingThrottledFrameRef.current
+          pendingThrottledFrameRef.current = null
+          if (!pending) {
+            return
+          }
+          lastAppliedFrameAtRef.current = Date.now()
+          applyFrame(pending.frame, pending.browserPageId)
+        },
+        Math.max(0, MOBILE_BROWSER_FRAME_MIN_INTERVAL_MS - elapsed)
+      )
+    },
+    [applyFrame, clearFrameThrottle]
+  )
+
+  const streamRequest = useMemo(
+    () => buildMobileBrowserScreencastRequest(layout, PixelRatio.get()),
+    [layout]
+  )
 
   const frameGeometry = useMemo(
-    () => computeFrameGeometry(layout, frameMetadata),
+    () => computeBrowserFrameGeometry(layout, frameMetadata),
     [frameMetadata, layout]
   )
 
@@ -314,9 +334,12 @@ export function MobileBrowserPane({
       frameMountedRef.current = true
     }
     pendingFrameLayerRef.current = null
-    visibleFrameLayerRef.current = 0
-    updateBrowserLayerVisibility(browserLayerRefs.current, 0)
+    if (!samePage || !frameUriRef.current) {
+      visibleFrameLayerRef.current = 0
+    }
+    updateBrowserLayerVisibility(browserLayerRefs.current, visibleFrameLayerRef.current)
     lastAppliedFrameAtRef.current = 0
+    clearFrameThrottle()
     busyRef.current = false
     setDialog(null)
     setError(null)
@@ -325,7 +348,7 @@ export function MobileBrowserPane({
       screencastSupported !== true ||
       !tab.browserPageId ||
       !appActive ||
-      !streamViewport
+      !streamRequest
     ) {
       busyRef.current = false
       setBusy(false)
@@ -357,16 +380,7 @@ export function MobileBrowserPane({
       {
         worktree: `id:${worktreeId}`,
         page: tab.browserPageId,
-        format: BROWSER_FRAME_FORMAT,
-        quality: BROWSER_FRAME_QUALITY,
-        maxWidth: streamViewport.width,
-        maxHeight: streamViewport.height,
-        viewportWidth: streamViewport.viewportWidth,
-        viewportHeight: streamViewport.viewportHeight,
-        deviceScaleFactor: streamViewport.deviceScaleFactor,
-        mobile: streamViewport.mobile,
-        everyNthFrame: BROWSER_FRAME_EVERY_NTH_FRAME,
-        minFrameIntervalMs: BROWSER_FRAME_MIN_INTERVAL_MS
+        ...streamRequest
       },
       (payload) => {
         if (streamGenerationRef.current !== generation) return
@@ -391,7 +405,7 @@ export function MobileBrowserPane({
             setAddressValue(displayMobileBrowserUrl(event.tab.url))
             if (event.tab.url !== lastZoomResetUrlRef.current) {
               lastZoomResetUrlRef.current = event.tab.url
-              resetZoomState()
+              resetBrowserZoomState()
             }
           }
         } else if (event.type === 'end') {
@@ -431,33 +445,25 @@ export function MobileBrowserPane({
         onBinaryFrame: (frame) => {
           if (streamGenerationRef.current !== generation) return
           clearStartupTimer()
-          const now = Date.now()
-          // Why: each image swap crosses RN's native boundary; applying every
-          // desktop screencast frame can starve tab switching on the phone.
-          if (
-            lastAppliedFrameAtRef.current > 0 &&
-            now - lastAppliedFrameAtRef.current < BROWSER_FRAME_MIN_INTERVAL_MS
-          ) {
-            return
-          }
-          lastAppliedFrameAtRef.current = now
           if (tab.browserPageId) {
-            applyFrame(frame, tab.browserPageId)
+            applyFrameThrottled(frame, tab.browserPageId)
           }
         }
       }
     )
     return () => {
       clearStartupTimer()
+      clearFrameThrottle()
       unsubscribe()
     }
   }, [
     appActive,
-    applyFrame,
+    applyFrameThrottled,
+    clearFrameThrottle,
     client,
-    resetZoomState,
+    resetBrowserZoomState,
     screencastSupported,
-    streamViewport,
+    streamRequest,
     tab.browserPageId,
     worktreeId
   ])
@@ -517,9 +523,9 @@ export function MobileBrowserPane({
     if (typeof result?.url === 'string') {
       setAddressValue(displayMobileBrowserUrl(result.url))
       lastZoomResetUrlRef.current = result.url
-      resetZoomState()
+      resetBrowserZoomState()
     }
-  }, [addressValue, resetZoomState, sendBrowserRequest])
+  }, [addressValue, resetBrowserZoomState, sendBrowserRequest])
 
   const sendPointerClick = useCallback(
     async (point: BrowserPoint, button: 'left' | 'right') => {
@@ -535,10 +541,11 @@ export function MobileBrowserPane({
           button,
           ...(button === 'left'
             ? {
-                radius: computeTouchClickRadiusCss(
+                radius: computeBrowserTouchClickRadiusCss(
                   layoutRef.current,
                   frameMetadataRef.current,
-                  zoomRef.current
+                  zoomRef.current,
+                  TOUCH_CLICK_RADIUS_DIP
                 )
               }
             : {})
@@ -577,7 +584,7 @@ export function MobileBrowserPane({
         return
       }
       const currentLayout = layoutRef.current
-      const geometry = computeFrameGeometry(currentLayout, frameMetadataRef.current)
+      const geometry = computeBrowserFrameGeometry(currentLayout, frameMetadataRef.current)
       const localZoom = zoomRef.current.scale
       const scale = (geometry?.scale ?? 1) * localZoom
       const cssDx = screenDx / scale
@@ -609,38 +616,13 @@ export function MobileBrowserPane({
   useEffect(() => () => clearLongPressTimer(), [clearLongPressTimer])
 
   const mapTouchPoint = useCallback((locationX: number, locationY: number): BrowserPoint | null => {
-    const currentLayout = layoutRef.current
-    const metadata = frameMetadataRef.current
-    const geometry = computeFrameGeometry(currentLayout, metadata)
-    if (!geometry) {
-      return null
-    }
-    const zoomState = zoomRef.current
-    const local = screenToFrameLocal(locationX, locationY, geometry, zoomState)
-    if (!local) {
-      return null
-    }
-    const { localX, localY } = local
-    if (
-      localX < 0 ||
-      localY < 0 ||
-      localX > geometry.renderedWidth ||
-      localY > geometry.renderedHeight
-    ) {
-      return null
-    }
-    return {
-      x: clamp(
-        Math.round((localX / geometry.renderedWidth) * geometry.sourceWidth),
-        0,
-        geometry.sourceWidth
-      ),
-      y: clamp(
-        Math.round((localY / geometry.renderedHeight) * geometry.sourceHeight),
-        0,
-        geometry.sourceHeight
-      )
-    }
+    return mapScreenToBrowserPoint(
+      locationX,
+      locationY,
+      layoutRef.current,
+      frameMetadataRef.current,
+      zoomRef.current
+    )
   }, [])
 
   const handleResponderGrant = useCallback(
@@ -653,16 +635,19 @@ export function MobileBrowserPane({
         startPointRef.current = null
         return
       }
-      const { locationX, locationY } = event.nativeEvent
-      startPointRef.current = { x: locationX, y: locationY, t: Date.now() }
+      const startPoint = readLocalTouchPoint(event.nativeEvent)
+      if (!startPoint) {
+        return
+      }
+      startPointRef.current = { x: startPoint.x, y: startPoint.y, t: Date.now() }
       rightClickSentRef.current = false
       scrollingRef.current = false
       lastWheelRef.current = { dx: 0, dy: 0, at: 0 }
       panRef.current =
         zoomRef.current.scale > MIN_ZOOM
           ? {
-              x: locationX,
-              y: locationY,
+              x: startPoint.x,
+              y: startPoint.y,
               offsetX: zoomRef.current.offsetX,
               offsetY: zoomRef.current.offsetY
             }
@@ -709,18 +694,24 @@ export function MobileBrowserPane({
       }
       const activePan = panRef.current
       if (activePan && frameGeometry) {
+        const currentPoint = readLocalTouchPoint(event.nativeEvent)
+        if (!currentPoint) {
+          return
+        }
         if (!scrollingRef.current && moved <= TAP_SLOP) {
           return
         }
         scrollingRef.current = true
         startPointRef.current = null
-        const nextZoom = clampZoomState(
+        const nextZoom = clampBrowserZoomState(
           {
             scale: zoomRef.current.scale,
-            offsetX: activePan.offsetX + event.nativeEvent.locationX - activePan.x,
-            offsetY: activePan.offsetY + event.nativeEvent.locationY - activePan.y
+            offsetX: activePan.offsetX + currentPoint.x - activePan.x,
+            offsetY: activePan.offsetY + currentPoint.y - activePan.y
           },
-          frameGeometry
+          frameGeometry,
+          MIN_ZOOM,
+          MAX_ZOOM
         )
         zoomRef.current = nextZoom
         setZoom(nextZoom)
@@ -742,7 +733,11 @@ export function MobileBrowserPane({
       if (Math.abs(deltaX) + Math.abs(deltaY) < 8) {
         return
       }
-      const point = mapTouchPoint(event.nativeEvent.locationX, event.nativeEvent.locationY)
+      const currentPoint = readLocalTouchPoint(event.nativeEvent)
+      if (!currentPoint) {
+        return
+      }
+      const point = mapTouchPoint(currentPoint.x, currentPoint.y)
       if (!point) {
         return
       }
@@ -766,7 +761,10 @@ export function MobileBrowserPane({
       }
       const moved = Math.hypot(gesture.dx, gesture.dy)
       if (moved <= TAP_SLOP && Date.now() - start.t < LONG_PRESS_MS) {
-        const point = mapTouchPoint(start.x, start.y)
+        // Why: native browser taps resolve at touch-up. Using touch-down makes
+        // tiny finger drift feel like the click lands left/up of the finger.
+        const release = readLocalTouchPoint(event.nativeEvent) ?? start
+        const point = mapTouchPoint(release.x, release.y)
         if (point) {
           void sendPointerClick(point, 'left')
         }
@@ -887,6 +885,28 @@ export function MobileBrowserPane({
   )
 
   const controlsDisabled = !client || !tab.browserPageId || screencastSupported !== true
+  const addressSelection = useMemo(
+    () => (addressFocused ? undefined : { start: 0, end: 0 }),
+    [addressFocused]
+  )
+  const goBack = useCallback(() => {
+    if (controlsDisabled || !tab.canGoBack) {
+      return
+    }
+    void sendBrowserRequest('browser.back', {}, { suppressError: true })
+  }, [controlsDisabled, sendBrowserRequest, tab.canGoBack])
+  const goForward = useCallback(() => {
+    if (controlsDisabled || !tab.canGoForward) {
+      return
+    }
+    void sendBrowserRequest('browser.forward', {}, { suppressError: true })
+  }, [controlsDisabled, sendBrowserRequest, tab.canGoForward])
+  const reloadPage = useCallback(() => {
+    if (controlsDisabled) {
+      return
+    }
+    void sendBrowserRequest('browser.reload', {}, { suppressError: true })
+  }, [controlsDisabled, sendBrowserRequest])
   const initialFrameSource = useMemo(() => (frameUri ? { uri: frameUri } : null), [frameUri])
   const frameLayerStyle = useCallback((layer: FrameLayer) => {
     return [
@@ -916,6 +936,23 @@ export function MobileBrowserPane({
   return (
     <View style={styles.root}>
       <View style={styles.toolbar}>
+        <ToolbarIconButton
+          disabled={controlsDisabled || !tab.canGoBack}
+          label="Back"
+          onPress={goBack}
+        >
+          <ChevronLeft size={18} color={buttonColor(!controlsDisabled && tab.canGoBack)} />
+        </ToolbarIconButton>
+        <ToolbarIconButton
+          disabled={controlsDisabled || !tab.canGoForward}
+          label="Forward"
+          onPress={goForward}
+        >
+          <ChevronRight size={18} color={buttonColor(!controlsDisabled && tab.canGoForward)} />
+        </ToolbarIconButton>
+        <ToolbarIconButton disabled={controlsDisabled} label="Reload" onPress={reloadPage}>
+          <RefreshCw size={17} color={buttonColor(!controlsDisabled)} />
+        </ToolbarIconButton>
         <TextInput
           style={styles.addressInput}
           value={addressValue}
@@ -923,6 +960,8 @@ export function MobileBrowserPane({
           onFocus={() => setAddressFocused(true)}
           onBlur={() => setAddressFocused(false)}
           onSubmitEditing={() => void navigateToAddress()}
+          selectTextOnFocus
+          selection={addressSelection}
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType={Platform.OS === 'ios' ? 'url' : 'default'}
@@ -932,22 +971,6 @@ export function MobileBrowserPane({
           placeholderTextColor={colors.textMuted}
           editable={!controlsDisabled}
         />
-        <IconButton
-          disabled={controlsDisabled}
-          label="Phone view"
-          selected={viewMode === 'phone'}
-          onPress={() => setViewMode('phone')}
-        >
-          <Smartphone size={16} color={buttonColor(!controlsDisabled)} />
-        </IconButton>
-        <IconButton
-          disabled={controlsDisabled}
-          label="Desktop view"
-          selected={viewMode === 'desktop'}
-          onPress={() => setViewMode('desktop')}
-        >
-          <Monitor size={16} color={buttonColor(!controlsDisabled)} />
-        </IconButton>
       </View>
 
       <View
@@ -1129,25 +1152,22 @@ export function MobileBrowserPane({
   )
 }
 
-function IconButton({
+function ToolbarIconButton({
   children,
   disabled,
   label,
-  onPress,
-  selected
+  onPress
 }: {
   children: ReactNode
   disabled?: boolean
   label: string
   onPress: () => void
-  selected?: boolean
 }) {
   return (
     <Pressable
       style={({ pressed }) => [
-        styles.iconButton,
-        selected && styles.iconButtonSelected,
-        pressed && styles.iconButtonPressed,
+        styles.toolbarIconButton,
+        pressed && !disabled && styles.toolbarIconButtonPressed,
         disabled && styles.disabled
       ]}
       disabled={disabled}
@@ -1251,10 +1271,6 @@ function isBlankMobileBrowserUrl(value: string): boolean {
   return !value || value === 'about:blank' || value.startsWith('data:text/html')
 }
 
-function getPositiveFiniteNumber(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
-}
-
 function browserFrameMetadataEqual(
   a: BrowserScreencastFrameMetadata | null,
   b: BrowserScreencastFrameMetadata
@@ -1264,64 +1280,6 @@ function browserFrameMetadataEqual(
     a?.deviceHeight === b.deviceHeight &&
     a?.pageScaleFactor === b.pageScaleFactor
   )
-}
-
-function computeStreamViewport(
-  layout: ViewportLayout | null,
-  viewMode: BrowserViewMode
-): StreamViewport | null {
-  if (!layout || layout.width <= 0 || layout.height <= 0) {
-    return null
-  }
-  // Why: React Native layout is in density-independent points; requesting
-  // point-sized frames makes desktop pages unreadably soft on high-DPI phones.
-  const streamScale = clamp(PixelRatio.get(), 1, BROWSER_MAX_STREAM_SCALE)
-  const viewportWidth =
-    viewMode === 'desktop' ? BROWSER_DESKTOP_VIEWPORT_WIDTH : Math.round(layout.width)
-  const viewportHeight =
-    viewMode === 'desktop' ? BROWSER_DESKTOP_VIEWPORT_HEIGHT : Math.round(layout.height)
-  const width = viewportWidth * streamScale
-  const height = viewportHeight * streamScale
-  return {
-    width: clamp(Math.round(width), BROWSER_MIN_VIEWPORT_WIDTH, BROWSER_MAX_VIEWPORT_WIDTH),
-    height: clamp(Math.round(height), BROWSER_MIN_VIEWPORT_HEIGHT, BROWSER_MAX_VIEWPORT_HEIGHT),
-    viewportWidth: clamp(
-      Math.round(viewportWidth),
-      BROWSER_MIN_VIEWPORT_WIDTH,
-      BROWSER_MAX_VIEWPORT_WIDTH
-    ),
-    viewportHeight: clamp(viewportHeight, BROWSER_MIN_VIEWPORT_HEIGHT, BROWSER_MAX_VIEWPORT_HEIGHT),
-    deviceScaleFactor: streamScale,
-    mobile: viewMode === 'phone'
-  }
-}
-
-function computeFrameGeometry(
-  layout: ViewportLayout | null,
-  metadata: BrowserScreencastFrameMetadata | null
-): FrameGeometry | null {
-  if (!layout || layout.width <= 0 || layout.height <= 0) {
-    return null
-  }
-  const sourceWidth = getPositiveFiniteNumber(metadata?.deviceWidth) ?? layout.width
-  const sourceHeight = getPositiveFiniteNumber(metadata?.deviceHeight) ?? layout.height
-  const scale = Math.min(layout.width / sourceWidth, layout.height / sourceHeight)
-  if (!Number.isFinite(scale) || scale <= 0) {
-    return null
-  }
-  const renderedWidth = sourceWidth * scale
-  const renderedHeight = sourceHeight * scale
-  return {
-    sourceWidth,
-    sourceHeight,
-    viewportWidth: layout.width,
-    viewportHeight: layout.height,
-    renderedWidth,
-    renderedHeight,
-    offsetX: (layout.width - renderedWidth) / 2,
-    offsetY: (layout.height - renderedHeight) / 2,
-    scale
-  }
 }
 
 function browserErrorMessage(error: unknown, fallback: string): string {
@@ -1335,74 +1293,13 @@ function shouldSurfaceBrowserError(message: string): boolean {
   return !normalized.includes('selector_not_found') && !normalized.includes('selector not found')
 }
 
-function computeTouchClickRadiusCss(
-  layout: ViewportLayout | null,
-  metadata: BrowserScreencastFrameMetadata | null,
-  zoom: ZoomState
-): number {
-  const geometry = computeFrameGeometry(layout, metadata)
-  const scale = geometry ? geometry.scale * zoom.scale : 1
-  if (!Number.isFinite(scale) || scale <= 0) {
-    return 10
-  }
-  // Why: phone taps are finger-sized while CDP clicks are pixel exact. Convert a
-  // small screen radius back into page CSS pixels so tiny links remain hittable.
-  return clamp(Math.round(TOUCH_CLICK_RADIUS_DIP / scale), 6, 48)
-}
-
-function screenToFrameLocal(
-  x: number,
-  y: number,
-  geometry: FrameGeometry,
-  zoom: ZoomState
-): { localX: number; localY: number } | null {
-  if (zoom.scale <= 0) {
-    return null
-  }
-  const frameCenterX = geometry.offsetX + geometry.renderedWidth / 2 + zoom.offsetX
-  const frameCenterY = geometry.offsetY + geometry.renderedHeight / 2 + zoom.offsetY
-  return {
-    localX: (x - frameCenterX) / zoom.scale + geometry.renderedWidth / 2,
-    localY: (y - frameCenterY) / zoom.scale + geometry.renderedHeight / 2
-  }
-}
-
-function touchPoint(touch: unknown): BrowserPoint | null {
-  if (!touch || typeof touch !== 'object') {
-    return null
-  }
-  const eventTouch = touch as {
-    locationX?: unknown
-    locationY?: unknown
-    pageX?: unknown
-    pageY?: unknown
-  }
-  if (
-    typeof eventTouch.locationX === 'number' &&
-    Number.isFinite(eventTouch.locationX) &&
-    typeof eventTouch.locationY === 'number' &&
-    Number.isFinite(eventTouch.locationY)
-  ) {
-    return { x: eventTouch.locationX, y: eventTouch.locationY }
-  }
-  if (
-    typeof eventTouch.pageX === 'number' &&
-    Number.isFinite(eventTouch.pageX) &&
-    typeof eventTouch.pageY === 'number' &&
-    Number.isFinite(eventTouch.pageY)
-  ) {
-    return { x: eventTouch.pageX, y: eventTouch.pageY }
-  }
-  return null
-}
-
 function touchPair(event: GestureResponderEvent): { a: BrowserPoint; b: BrowserPoint } | null {
   const touches = event.nativeEvent.touches
   if (!touches || touches.length < 2) {
     return null
   }
-  const a = touchPoint(touches[0])
-  const b = touchPoint(touches[1])
+  const a = readLocalTouchPoint(touches[0])
+  const b = readLocalTouchPoint(touches[1])
   return a && b ? { a, b } : null
 }
 
@@ -1412,8 +1309,8 @@ function pointDistance(a: BrowserPoint, b: BrowserPoint): number {
 
 function createPinchGesture(
   event: GestureResponderEvent,
-  geometry: FrameGeometry | null,
-  zoom: ZoomState
+  geometry: BrowserFrameGeometry | null,
+  zoom: BrowserZoomState
 ): PinchGesture | null {
   if (!geometry) {
     return null
@@ -1440,9 +1337,9 @@ function createPinchGesture(
 
 function updatePinchZoom(
   event: GestureResponderEvent,
-  geometry: FrameGeometry | null,
+  geometry: BrowserFrameGeometry | null,
   pinch: PinchGesture
-): ZoomState | null {
+): BrowserZoomState | null {
   if (!geometry) {
     return null
   }
@@ -1450,41 +1347,24 @@ function updatePinchZoom(
   if (!pair) {
     return null
   }
-  const nextScale = clamp(
-    (pinch.scale * pointDistance(pair.a, pair.b)) / pinch.distance,
-    MIN_ZOOM,
-    MAX_ZOOM
+  const nextScale = Math.min(
+    MAX_ZOOM,
+    Math.max(MIN_ZOOM, (pinch.scale * pointDistance(pair.a, pair.b)) / pinch.distance)
   )
   const centerX = (pair.a.x + pair.b.x) / 2
   const centerY = (pair.a.y + pair.b.y) / 2
   const baseCenterX = geometry.offsetX + geometry.renderedWidth / 2
   const baseCenterY = geometry.offsetY + geometry.renderedHeight / 2
-  return clampZoomState(
+  return clampBrowserZoomState(
     {
       scale: nextScale,
       offsetX: centerX - baseCenterX - pinch.anchorX * nextScale,
       offsetY: centerY - baseCenterY - pinch.anchorY * nextScale
     },
-    geometry
+    geometry,
+    MIN_ZOOM,
+    MAX_ZOOM
   )
-}
-
-function clampZoomState(next: ZoomState, geometry: FrameGeometry): ZoomState {
-  const scale = clamp(next.scale, MIN_ZOOM, MAX_ZOOM)
-  if (scale <= MIN_ZOOM + 0.01) {
-    return DEFAULT_ZOOM
-  }
-  const maxOffsetX = Math.max(0, (geometry.renderedWidth * scale - geometry.viewportWidth) / 2)
-  const maxOffsetY = Math.max(0, (geometry.renderedHeight * scale - geometry.viewportHeight) / 2)
-  return {
-    scale,
-    offsetX: clamp(next.offsetX, -maxOffsetX, maxOffsetX),
-    offsetY: clamp(next.offsetY, -maxOffsetY, maxOffsetY)
-  }
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value))
 }
 
 const styles = StyleSheet.create({
@@ -1504,20 +1384,15 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel
   },
-  iconButton: {
+  toolbarIconButton: {
     width: 36,
     height: 36,
     borderRadius: radii.button,
     alignItems: 'center',
     justifyContent: 'center'
   },
-  iconButtonPressed: {
+  toolbarIconButtonPressed: {
     backgroundColor: colors.bgRaised
-  },
-  iconButtonSelected: {
-    backgroundColor: colors.bgRaised,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
   },
   addressInput: {
     flex: 1,

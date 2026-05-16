@@ -371,6 +371,58 @@ describe('mobile rpc-client connection timeout', () => {
     client.close()
   })
 
+  it('drops old browser frames while a replacement stream is waiting for ready', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = mockSockets[0]!
+    const firstFrames: unknown[] = []
+    const secondFrames: unknown[] = []
+
+    socket.open()
+    socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+    socket.receive('encrypted:{"type":"e2ee_authenticated"}')
+
+    client.subscribe('browser.screencast', { worktree: 'id:wt-1', page: 'page-1' }, () => {}, {
+      onBinaryFrame: (frame) => firstFrames.push(frame)
+    })
+    const first = sentRequest(socket, 'browser.screencast')
+    socket.receive(
+      `encrypted:${JSON.stringify({
+        id: first.id,
+        ok: true,
+        streaming: true,
+        result: { type: 'ready', subscriptionId: 'browser-screencast:page-1:first' },
+        _meta: { runtimeId: 'r1' }
+      })}`
+    )
+
+    client.subscribe('browser.screencast', { worktree: 'id:wt-1', page: 'page-2' }, () => {}, {
+      onBinaryFrame: (frame) => secondFrames.push(frame)
+    })
+    const browserRequests = sentRequests(socket, 'browser.screencast')
+    const second = browserRequests[browserRequests.length - 1]!
+    socket.receive(encodeBrowserFrame())
+    await Promise.resolve()
+    await Promise.resolve()
+
+    socket.receive(
+      `encrypted:${JSON.stringify({
+        id: second.id,
+        ok: true,
+        streaming: true,
+        result: { type: 'ready', subscriptionId: 'browser-screencast:page-2:second' },
+        _meta: { runtimeId: 'r1' }
+      })}`
+    )
+    socket.receive(encodeBrowserFrame())
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(firstFrames).toHaveLength(0)
+    expect(secondFrames).toHaveLength(1)
+
+    client.close()
+  })
+
   it('still routes terminal binary frames after browser demux is enabled', async () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const socket = mockSockets[0]!

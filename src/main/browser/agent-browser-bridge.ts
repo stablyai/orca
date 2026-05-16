@@ -190,6 +190,7 @@ type BrowserClickPoint = {
   x: number
   y: number
   adjusted: boolean
+  handled: boolean
 }
 
 function normalizeCdpMouseButton(button?: string): CdpMouseButton {
@@ -218,7 +219,7 @@ function readClickPoint(value: unknown, fallback: BrowserClickPoint): BrowserCli
   ) {
     return fallback
   }
-  return { x, y, adjusted: point.adjusted === true }
+  return { x, y, adjusted: point?.adjusted === true, handled: point?.handled === true }
 }
 
 function mobileTouchClickExpression(x: number, y: number, radius: number): string {
@@ -251,6 +252,41 @@ function mobileTouchClickExpression(x: number, y: number, radius: number): strin
       return rect.width > 0 && rect.height > 0 && style.display !== 'none' &&
         style.visibility !== 'hidden' && style.pointerEvents !== 'none';
     };
+    const dispatchClick = (target, clickX, clickY) => {
+      try {
+        if (typeof target.focus === 'function') {
+          target.focus({ preventScroll: true });
+        }
+      } catch {
+        try { target.focus(); } catch {}
+      }
+      if (typeof target.click === 'function') {
+        target.click();
+        return true;
+      }
+      const init = {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        view: window,
+        clientX: clickX,
+        clientY: clickY,
+        screenX: clickX,
+        screenY: clickY,
+        button: 0,
+        buttons: 1
+      };
+      try {
+        if (typeof PointerEvent === 'function') {
+          target.dispatchEvent(new PointerEvent('pointerdown', { ...init, pointerType: 'touch', pointerId: 1 }));
+          target.dispatchEvent(new PointerEvent('pointerup', { ...init, buttons: 0, pointerType: 'touch', pointerId: 1 }));
+        }
+      } catch {}
+      target.dispatchEvent(new MouseEvent('mousedown', init));
+      target.dispatchEvent(new MouseEvent('mouseup', { ...init, buttons: 0 }));
+      target.dispatchEvent(new MouseEvent('click', { ...init, buttons: 0 }));
+      return true;
+    };
     const clickableFor = (el) => {
       for (let node = el; node && node.nodeType === 1; node = node.parentElement) {
         if (node.matches(selector)) return node;
@@ -277,11 +313,14 @@ function mobileTouchClickExpression(x: number, y: number, radius: number): strin
         const clickX = clamp(inputX, rect.left + 1, rect.right - 1);
         const clickY = clamp(inputY, rect.top + 1, rect.bottom - 1);
         const score = Math.hypot(clickX - inputX, clickY - inputY) + Math.hypot(dx, dy) * 0.25;
-        if (!best || score < best.score) best = { score, x: clickX, y: clickY };
+        if (!best || score < best.score) best = { score, x: clickX, y: clickY, target };
         break;
       }
     }
-    return best ? { x: best.x, y: best.y, adjusted: true } : { x: inputX, y: inputY, adjusted: false };
+    if (best && dispatchClick(best.target, best.x, best.y)) {
+      return { x: best.x, y: best.y, adjusted: true, handled: true };
+    }
+    return { x: inputX, y: inputY, adjusted: false, handled: false };
   })()`
 }
 
@@ -291,7 +330,7 @@ async function resolveMobileTouchClickPoint(
   y: number,
   radius?: number
 ): Promise<BrowserClickPoint> {
-  const fallback = { x, y, adjusted: false }
+  const fallback = { x, y, adjusted: false, handled: false }
   if (typeof radius !== 'number' || !Number.isFinite(radius) || radius <= 0) {
     return fallback
   }
@@ -781,27 +820,39 @@ export class AgentBrowserBridge {
         const point =
           cdpButton === 'left'
             ? await resolveMobileTouchClickPoint(wc.debugger, x, y, radius)
-            : { x, y, adjusted: false }
+            : { x, y, adjusted: false, handled: false }
         // Why: mobile taps should land as one atomic input operation. Sending
         // move/down/up through separate CLI calls visibly hovers targets and can
         // miss small controls before the click lands.
-        await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
-          type: 'mousePressed',
-          x: point.x,
-          y: point.y,
-          button: cdpButton,
-          buttons,
-          clickCount: 1
-        })
-        await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
-          type: 'mouseReleased',
-          x: point.x,
-          y: point.y,
-          button: cdpButton,
-          buttons: 0,
-          clickCount: 1
-        })
-        return { clicked: { x: point.x, y: point.y, button: cdpButton, adjusted: point.adjusted } }
+        // Runtime may already activate DOM controls because mobile-emulated
+        // BrowserViews can ignore CDP mouse clicks for regular page taps.
+        if (!point.handled) {
+          await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
+            type: 'mousePressed',
+            x: point.x,
+            y: point.y,
+            button: cdpButton,
+            buttons,
+            clickCount: 1
+          })
+          await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
+            type: 'mouseReleased',
+            x: point.x,
+            y: point.y,
+            button: cdpButton,
+            buttons: 0,
+            clickCount: 1
+          })
+        }
+        return {
+          clicked: {
+            x: point.x,
+            y: point.y,
+            button: cdpButton,
+            adjusted: point.adjusted,
+            handled: point.handled
+          }
+        }
       } finally {
         lease.release()
       }

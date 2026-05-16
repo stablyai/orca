@@ -35,6 +35,12 @@ type BrowserScreencastEvent =
   | { type: 'dialog'; dialogType: string; message: string }
   | { type: 'dialogClosed' }
 
+type PendingScreencastFrame = {
+  metadata: BrowserScreencastFrameMetadata
+  image: Uint8Array
+  sessionId?: number
+}
+
 function finiteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
@@ -61,21 +67,13 @@ function enrichFrameMetadata(
 ): BrowserScreencastFrameMetadata {
   const viewportWidth = positiveInteger(options.viewportWidth)
   const viewportHeight = positiveInteger(options.viewportHeight)
-  if (
-    metadata.deviceWidth &&
-    metadata.deviceHeight &&
-    metadata.imageWidth &&
-    metadata.imageHeight
-  ) {
-    return metadata
-  }
   const imageSize =
     metadata.imageWidth && metadata.imageHeight
       ? { width: metadata.imageWidth, height: metadata.imageHeight }
       : readBrowserScreencastImageSize(image, options.format)
   const enriched: BrowserScreencastFrameMetadata = { ...metadata }
-  const deviceWidth = enriched.deviceWidth ?? viewportWidth ?? imageSize?.width
-  const deviceHeight = enriched.deviceHeight ?? viewportHeight ?? imageSize?.height
+  const deviceWidth = viewportWidth ?? enriched.deviceWidth ?? imageSize?.width
+  const deviceHeight = viewportHeight ?? enriched.deviceHeight ?? imageSize?.height
   const imageWidth = enriched.imageWidth ?? imageSize?.width
   const imageHeight = enriched.imageHeight ?? imageSize?.height
   if (deviceWidth !== undefined) {
@@ -143,13 +141,106 @@ export async function startBrowserScreencast(
   }
 
   let closed = false
+  let stopping = false
   let seq = 0
   let lastFrameSentAt = 0
   let deviceMetricsOverridden = false
+  let snapshotGeneration = 0
+  let navigationCaptureTimer: ReturnType<typeof setTimeout> | null = null
+  let pendingFrame: PendingScreencastFrame | null = null
+  let pendingFrameTimer: ReturnType<typeof setTimeout> | null = null
   let resolveDone!: () => void
   const done = new Promise<void>((resolve) => {
     resolveDone = resolve
   })
+
+  const clearNavigationCaptureTimer = (): void => {
+    if (navigationCaptureTimer) {
+      clearTimeout(navigationCaptureTimer)
+      navigationCaptureTimer = null
+    }
+  }
+
+  const ackScreencastFrame = (sessionId: number | undefined): void => {
+    if (sessionId === undefined) {
+      return
+    }
+    // Why: CDP only sends the next frame after ACK; delaying ACK for
+    // throttled frames applies back-pressure before Chromium/base64 work piles up.
+    void sendDebuggerCommand(dbg, 'Page.screencastFrameAck', { sessionId }).catch(() => {})
+  }
+
+  const clearPendingFrameTimer = (ackPending = false): void => {
+    const pending = pendingFrame
+    pendingFrame = null
+    if (pendingFrameTimer) {
+      clearTimeout(pendingFrameTimer)
+      pendingFrameTimer = null
+    }
+    if (ackPending) {
+      ackScreencastFrame(pending?.sessionId)
+    }
+  }
+
+  const emitFrame = (frame: PendingScreencastFrame): void => {
+    if (closed || stopping) {
+      return
+    }
+    lastFrameSentAt = Date.now()
+    options.onFrame(
+      encodeBrowserScreencastFrame({
+        opcode: BrowserScreencastOpcode.Frame,
+        seq: seq++,
+        format: options.format,
+        // Why: Chromium sometimes omits device dimensions on static/mobile
+        // pages; carrying viewport/image dimensions prevents client stretch.
+        metadata: frame.metadata,
+        image: frame.image
+      })
+    )
+  }
+
+  const queueFrame = (frame: PendingScreencastFrame): void => {
+    if (closed || stopping) {
+      return
+    }
+    const now = Date.now()
+    const elapsed = now - lastFrameSentAt
+    if (
+      options.minFrameIntervalMs <= 0 ||
+      lastFrameSentAt === 0 ||
+      elapsed >= options.minFrameIntervalMs
+    ) {
+      clearPendingFrameTimer(true)
+      emitFrame(frame)
+      ackScreencastFrame(frame.sessionId)
+      return
+    }
+
+    // Why: static UI changes can be the last frame Chromium emits. Keep the
+    // newest throttled frame and flush it after the interval instead of
+    // dropping it forever.
+    if (pendingFrame?.sessionId !== frame.sessionId) {
+      ackScreencastFrame(pendingFrame?.sessionId)
+    }
+    pendingFrame = frame
+    if (pendingFrameTimer) {
+      return
+    }
+    pendingFrameTimer = setTimeout(
+      () => {
+        pendingFrameTimer = null
+        const latest = pendingFrame
+        pendingFrame = null
+        if (closed || stopping || !latest) {
+          return
+        }
+        emitFrame(latest)
+        ackScreencastFrame(latest.sessionId)
+      },
+      Math.max(0, options.minFrameIntervalMs - elapsed)
+    )
+  }
 
   const clearDeviceMetricsOverride = async (): Promise<void> => {
     if (webContents.isDestroyed() || !dbg.isAttached()) {
@@ -165,6 +256,8 @@ export async function startBrowserScreencast(
       return
     }
     closed = true
+    clearNavigationCaptureTimer()
+    clearPendingFrameTimer()
     dbg.removeListener('message', handleMessage as never)
     dbg.removeListener('detach', handleDetach as never)
     debuggerLease?.release()
@@ -181,6 +274,9 @@ export async function startBrowserScreencast(
     if (closed) {
       return
     }
+    if (stopping && method !== 'Page.screencastFrame') {
+      return
+    }
     if (method === 'Page.javascriptDialogOpening') {
       const payload =
         params && typeof params === 'object' ? (params as Record<string, unknown>) : {}
@@ -195,6 +291,19 @@ export async function startBrowserScreencast(
       options.onEvent?.({ type: 'dialogClosed' })
       return
     }
+    if (method === 'Page.frameNavigated') {
+      const payload =
+        params && typeof params === 'object' ? (params as Record<string, unknown>) : {}
+      const frame = payload.frame && typeof payload.frame === 'object' ? payload.frame : null
+      if (!frame || !('parentId' in frame)) {
+        scheduleNavigationFrameCapture()
+      }
+      return
+    }
+    if (method === 'Page.loadEventFired') {
+      scheduleNavigationFrameCapture()
+      return
+    }
     if (method !== 'Page.screencastFrame') {
       return
     }
@@ -204,82 +313,124 @@ export async function startBrowserScreencast(
     if (!data || sessionId === null) {
       return
     }
+    if (stopping) {
+      void sendDebuggerCommand(dbg, 'Page.screencastFrameAck', { sessionId }).catch(() => {})
+      return
+    }
 
     try {
-      const now = Date.now()
-      if (
-        options.minFrameIntervalMs > 0 &&
-        lastFrameSentAt > 0 &&
-        now - lastFrameSentAt < options.minFrameIntervalMs
-      ) {
-        return
-      }
-      lastFrameSentAt = now
       const image = new Uint8Array(Buffer.from(data, 'base64'))
-      options.onFrame(
-        encodeBrowserScreencastFrame({
-          opcode: BrowserScreencastOpcode.Frame,
-          seq: seq++,
-          format: options.format,
-          // Why: Chromium sometimes omits device dimensions on static/mobile
-          // pages; carrying viewport/image dimensions prevents client stretch.
-          metadata: enrichFrameMetadata(readFrameMetadata(payload.metadata), image, options),
-          image
-        })
-      )
-    } finally {
-      // Why: CDP only sends the next screencast frame after the current frame
-      // is acknowledged, so the ack is the back-pressure point for this feed.
-      void sendDebuggerCommand(dbg, 'Page.screencastFrameAck', { sessionId }).catch(() => {})
+      snapshotGeneration += 1
+      clearNavigationCaptureTimer()
+      queueFrame({
+        metadata: enrichFrameMetadata(readFrameMetadata(payload.metadata), image, options),
+        image,
+        sessionId
+      })
+    } catch {
+      ackScreencastFrame(sessionId)
     }
   }
 
-  const emitInitialFrameIfNeeded = async (): Promise<void> => {
-    if (closed || seq > 0) {
+  const scheduleNavigationFrameCapture = (): void => {
+    if (closed || stopping) {
+      return
+    }
+    clearNavigationCaptureTimer()
+    const generation = ++snapshotGeneration
+    // Why: static pages can finish navigation without producing a live
+    // screencast frame, leaving mobile on the previous page image.
+    navigationCaptureTimer = setTimeout(() => {
+      navigationCaptureTimer = null
+      void emitSnapshotFrame(false, generation)
+    }, 250)
+  }
+
+  const isSnapshotStale = (initialOnly: boolean, generation?: number): boolean =>
+    closed ||
+    stopping ||
+    (initialOnly && seq > 0) ||
+    (generation !== undefined && generation !== snapshotGeneration)
+
+  const emitSnapshotFrame = async (initialOnly: boolean, generation?: number): Promise<void> => {
+    if (isSnapshotStale(initialOnly, generation)) {
       return
     }
     try {
-      // Why: Page.startScreencast may not produce a frame for an already-painted
-      // blank/static page, which leaves remote browser clients showing only the shell.
-      const result = await sendDebuggerCommand(dbg, 'Page.captureScreenshot', {
-        format: options.format,
-        ...(options.format === 'jpeg' ? { quality: options.quality } : {}),
-        captureBeyondViewport: false
-      })
-      if (closed || seq > 0) {
-        return
-      }
-      const payload =
-        result && typeof result === 'object' ? (result as Record<string, unknown>) : {}
-      const data = typeof payload.data === 'string' ? payload.data : null
-      if (!data) {
-        return
-      }
-      const image = new Uint8Array(Buffer.from(data, 'base64'))
-      const imageSize = readBrowserScreencastImageSize(image, options.format)
       const viewportWidth = positiveInteger(options.viewportWidth)
       const viewportHeight = positiveInteger(options.viewportHeight)
+      let image: Uint8Array | null = null
+      if (viewportWidth && viewportHeight && typeof webContents.capturePage === 'function') {
+        try {
+          // Why: CDP captureScreenshot can tile BrowserView surfaces under
+          // mobile emulation; Electron captures the actual visible viewport.
+          const nativeImage = await webContents.capturePage({
+            x: 0,
+            y: 0,
+            width: viewportWidth,
+            height: viewportHeight
+          })
+          const buffer =
+            options.format === 'png' ? nativeImage.toPNG() : nativeImage.toJPEG(options.quality)
+          if (buffer.byteLength > 0) {
+            image = new Uint8Array(buffer)
+          }
+        } catch {
+          image = null
+        }
+      }
+      // Why: Page.startScreencast may not produce a frame for an already-painted
+      // blank/static page, which leaves remote browser clients showing only the shell.
+      if (!image) {
+        const result = await sendDebuggerCommand(dbg, 'Page.captureScreenshot', {
+          format: options.format,
+          ...(options.format === 'jpeg' ? { quality: options.quality } : {}),
+          ...(viewportWidth && viewportHeight
+            ? {
+                // Why: mobile emulation + DPR can make Chromium capture a larger
+                // surface than the visual viewport. Clipping keeps fallback frames
+                // in the same coordinate space as live screencast frames.
+                clip: {
+                  x: 0,
+                  y: 0,
+                  width: viewportWidth,
+                  height: viewportHeight,
+                  scale: 1
+                }
+              }
+            : {}),
+          captureBeyondViewport: false
+        })
+        if (isSnapshotStale(initialOnly, generation)) {
+          return
+        }
+        const payload =
+          result && typeof result === 'object' ? (result as Record<string, unknown>) : {}
+        const data = typeof payload.data === 'string' ? payload.data : null
+        if (!data) {
+          return
+        }
+        image = new Uint8Array(Buffer.from(data, 'base64'))
+      }
+      if (isSnapshotStale(initialOnly, generation)) {
+        return
+      }
+      const imageSize = readBrowserScreencastImageSize(image, options.format)
       const baseMetadata =
         viewportWidth && viewportHeight
           ? { deviceWidth: viewportWidth, deviceHeight: viewportHeight }
           : imageSize
             ? { deviceWidth: imageSize.width, deviceHeight: imageSize.height }
             : {}
-      lastFrameSentAt = Date.now()
-      options.onFrame(
-        encodeBrowserScreencastFrame({
-          opcode: BrowserScreencastOpcode.Frame,
-          seq: seq++,
-          format: options.format,
-          // Why: static pages may only produce this fallback capture. Without
-          // dimensions, mobile clients stretch it to the phone aspect ratio.
-          metadata: {
-            ...baseMetadata,
-            ...(imageSize ? { imageWidth: imageSize.width, imageHeight: imageSize.height } : {})
-          },
-          image
-        })
-      )
+      queueFrame({
+        // Why: static pages may only produce this fallback capture. Without
+        // dimensions, mobile clients stretch it to the phone aspect ratio.
+        metadata: {
+          ...baseMetadata,
+          ...(imageSize ? { imageWidth: imageSize.width, imageHeight: imageSize.height } : {})
+        },
+        image
+      })
     } catch {
       // Best effort only: live Page.screencastFrame events still drive the stream.
     }
@@ -302,6 +453,13 @@ export async function startBrowserScreencast(
         deviceScaleFactor,
         mobile: options.mobile === true
       })
+      // Why: BrowserViews keep their host surface size unless the visible area
+      // is overridden too; fallback screenshots can otherwise capture repeated
+      // compositor tiles even though the emulated CSS viewport is correct.
+      await sendDebuggerCommand(dbg, 'Emulation.setVisibleSize', {
+        width: viewportWidth,
+        height: viewportHeight
+      }).catch(() => {})
       deviceMetricsOverridden = true
     } else {
       // Why: older mobile streams briefly set page metrics from phone geometry.
@@ -316,7 +474,7 @@ export async function startBrowserScreencast(
       maxHeight: options.maxHeight,
       everyNthFrame: options.everyNthFrame
     })
-    void emitInitialFrameIfNeeded()
+    void emitSnapshotFrame(true)
   } catch (error) {
     if (deviceMetricsOverridden) {
       await clearDeviceMetricsOverride().catch(() => {})
@@ -333,6 +491,10 @@ export async function startBrowserScreencast(
       if (closed) {
         return
       }
+      stopping = true
+      snapshotGeneration += 1
+      clearNavigationCaptureTimer()
+      clearPendingFrameTimer(true)
       try {
         void (async () => {
           await sendDebuggerCommand(dbg, 'Page.stopScreencast').catch(() => {})

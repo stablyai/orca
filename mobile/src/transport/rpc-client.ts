@@ -186,6 +186,7 @@ export function connect(
   const terminalStreamIdsByRequest = new Map<string, Set<number>>()
   const terminalSnapshots = new Map<number, TerminalSnapshotState>()
   let activeBrowserScreencastRequestId: string | null = null
+  let pendingBrowserScreencastRequestId: string | null = null
   const stateListeners = new Set<(state: ConnectionState) => void>()
   const connectWaiters: Array<{ resolve: () => void; reject: (e: Error) => void }> = []
 
@@ -388,6 +389,10 @@ export function connect(
                 removeStreamListener(id)
                 continue
               }
+              if (stream.method === 'browser.screencast') {
+                pendingBrowserScreencastRequestId = id
+                activeBrowserScreencastRequestId = null
+              }
               if (
                 sendEncrypted({ id, deviceToken, method: stream.method, params: stream.params })
               ) {
@@ -407,6 +412,8 @@ export function connect(
             intentionallyClosed = true
             ws?.close()
             ws = null
+            activeBrowserScreencastRequestId = null
+            pendingBrowserScreencastRequestId = null
             setState('auth-failed')
             rejectAllPending('Unauthorized — pairing may be revoked')
           }
@@ -453,6 +460,8 @@ export function connect(
         intentionallyClosed = true
         ws?.close()
         ws = null
+        activeBrowserScreencastRequestId = null
+        pendingBrowserScreencastRequestId = null
         setState('auth-failed')
         rejectAllPending('Unauthorized — pairing may be revoked')
         return
@@ -470,6 +479,18 @@ export function connect(
               sendBrowserScreencastUnsubscribe(result.subscriptionId)
               removeStreamListener(response.id)
               return
+            }
+            if (stream.method === 'browser.screencast') {
+              if (
+                pendingBrowserScreencastRequestId !== response.id &&
+                activeBrowserScreencastRequestId !== response.id
+              ) {
+                sendBrowserScreencastUnsubscribe(result.subscriptionId)
+                removeStreamListener(response.id)
+                return
+              }
+              pendingBrowserScreencastRequestId = null
+              activeBrowserScreencastRequestId = response.id
             }
           }
           if (isTerminalSubscribedResult(result)) {
@@ -638,6 +659,8 @@ export function connect(
     clearConnectTimer()
     ws = null
     sharedKey = null
+    activeBrowserScreencastRequestId = null
+    pendingBrowserScreencastRequestId = null
     if (handshakeTimer) {
       clearTimeout(handshakeTimer)
       handshakeTimer = null
@@ -766,6 +789,9 @@ export function connect(
     if (activeBrowserScreencastRequestId === id) {
       activeBrowserScreencastRequestId = null
     }
+    if (pendingBrowserScreencastRequestId === id) {
+      pendingBrowserScreencastRequestId = null
+    }
     const terminalStreamIds = terminalStreamIdsByRequest.get(id)
     if (terminalStreamIds) {
       for (const streamId of terminalStreamIds) {
@@ -794,6 +820,9 @@ export function connect(
     stream.cancelled = true
     if (activeBrowserScreencastRequestId === id) {
       activeBrowserScreencastRequestId = null
+    }
+    if (pendingBrowserScreencastRequestId === id) {
+      pendingBrowserScreencastRequestId = null
     }
     if (stream.subscriptionId) {
       sendBrowserScreencastUnsubscribe(stream.subscriptionId)
@@ -998,10 +1027,14 @@ export function connect(
         if (activeBrowserScreencastRequestId && activeBrowserScreencastRequestId !== id) {
           disposeBrowserScreencastStream(activeBrowserScreencastRequestId)
         }
+        if (pendingBrowserScreencastRequestId && pendingBrowserScreencastRequestId !== id) {
+          disposeBrowserScreencastStream(pendingBrowserScreencastRequestId)
+        }
         // Why: browser screencast frames are connection-scoped and carry no
-        // stream id, so mobile must keep exactly one active frame sink per
-        // WebSocket.
-        activeBrowserScreencastRequestId = id
+        // stream id. Wait for the replacement stream's ready response before
+        // routing frames, so in-flight old-page pixels are dropped.
+        pendingBrowserScreencastRequestId = id
+        activeBrowserScreencastRequestId = null
       }
 
       if (state === 'connected') {
