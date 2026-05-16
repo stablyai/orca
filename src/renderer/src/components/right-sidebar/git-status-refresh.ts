@@ -28,9 +28,6 @@ export async function refreshGitStatusForWorktree({
   connectionId?: string
   deps: GitStatusRefreshDeps
 }): Promise<void> {
-  // Why: setting is optional in the type for backward-compat with pre-feature
-  // profiles, but the persistence merge fills the default before this runs.
-  // Fall back to true so first-launch behavior matches getDefaultSettings.
   const includeIgnored = settings?.showGitIgnoredFiles ?? true
   const status = (await getRuntimeGitStatus(
     {

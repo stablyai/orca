@@ -40,8 +40,6 @@ describe('refreshGitStatusForWorktree', () => {
       deps
     })
 
-    // Why: settings is undefined in this test, which the refresh helper treats
-    // as the default-on case for showGitIgnoredFiles (matches getDefaultSettings).
     expect(gitStatus).toHaveBeenCalledWith({
       worktreePath: '/repo',
       connectionId: 'ssh-1',

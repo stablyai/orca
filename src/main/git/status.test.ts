@@ -449,8 +449,6 @@ describe('getStatus', () => {
       { cwd: '/repo' }
     )
     expect(result.ignoredPaths).toEqual(['dist/', '.env', 'coverage/'])
-    // Why: ignored entries must never bleed into the staging-area surface or
-    // Source Control would create a phantom group for them.
     expect(result.entries).toEqual([])
   })
 })

@@ -298,8 +298,6 @@ export type EditorSlice = {
 
   // Git status cache
   gitStatusByWorktree: Record<string, GitStatusEntry[]>
-  // Why: separate slice so the file explorer's ignored decoration does not
-  // extend GitStatusEntry / GitStagingArea and break Source Control grouping.
   gitIgnoredPathsByWorktree: Record<string, string[]>
   gitConflictOperationByWorktree: Record<string, GitConflictOperation>
   trackedConflictPathsByWorktree: Record<string, Record<string, GitConflictKind>>
@@ -1901,8 +1899,6 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const openFilesUnchanged = nextOpenFiles === s.openFiles
       const operationUnchanged = prevOperation === status.conflictOperation
 
-      // Why: skip writing the ignored slice when the response didn't carry
-      // it (undefined when the caller didn't pass --ignored).
       const prevIgnored = s.gitIgnoredPathsByWorktree[worktreeId]
       const nextIgnored = status.ignoredPaths
       const ignoredUnchanged =

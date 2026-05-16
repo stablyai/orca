@@ -25,8 +25,6 @@ describe('isPathIgnored', () => {
   })
 
   it('inherits ignored status from an ancestor directory', () => {
-    // Why: --ignored=matching reports the matched pattern (e.g. "dist/"), so
-    // children of an ignored directory are only covered by the ancestor walk.
     const ignored = new Set(['dist'])
     expect(isPathIgnored(ignored, 'dist/index.js')).toBe(true)
     expect(isPathIgnored(ignored, 'dist/sub/deep/file.js')).toBe(true)

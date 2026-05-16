@@ -47,10 +47,6 @@ export async function getStatus(
   // etc.) as raw UTF-8 instead of git's default C-style octal escapes wrapped
   // in double quotes. Without it, the parsed entry.path is unreadable in the
   // sidebar and downstream `git show :"docs/\346..."` lookups silently miss.
-  // Why --ignored=matching (only when requested): lists only files that match
-  // a pattern in .gitignore, NOT the contents of ignored directories. That
-  // keeps the payload bounded on repos with heavy build artifacts while
-  // still letting the explorer dim the matched paths it already shows.
   const statusArgs = [
     '-c',
     'core.quotePath=false',
@@ -137,7 +133,6 @@ export async function getStatus(
         const path = line.slice(2)
         entries.push({ path, status: 'untracked', area: 'untracked' })
       } else if (line.startsWith('! ')) {
-        // Why: porcelain v2 emits `!` records only when --ignored is set.
         ignoredPaths.push(line.slice(2))
       } else if (line.startsWith('u ')) {
         const unmergedEntry = await parseUnmergedEntry(worktreePath, line)

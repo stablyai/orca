@@ -32,9 +32,6 @@ export async function getRuntimeGitStatus(
   options?: { includeIgnored?: boolean }
 ): Promise<GitStatusResult> {
   const target = getActiveRuntimeTarget(context.settings)
-  // Why: only attach includeIgnored when explicitly requested so the params
-  // shape stays identical to the pre-feature contract for callers that don't
-  // opt in. Both downstream branches treat a missing key as `false`.
   const includeIgnoredArgs = options?.includeIgnored ? { includeIgnored: true } : {}
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.status({
