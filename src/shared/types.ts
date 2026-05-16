@@ -1023,6 +1023,7 @@ export type CreateWorktreeArgs = {
   linkedPR?: number
   linkedLinearIssue?: string
   pushTarget?: GitPushTarget
+  workspaceStatus?: WorkspaceStatus
   /** Agent selected in the create surface. Omitted for blank-shell creates. */
   createdWithAgent?: TuiAgent
   /** Telemetry-only: which UI surface initiated this create. Threaded from

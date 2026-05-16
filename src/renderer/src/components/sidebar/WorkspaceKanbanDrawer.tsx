@@ -14,6 +14,7 @@ import {
 import { useWorkspaceStatusDocumentDrop } from './use-workspace-status-drop'
 import { useWorkspaceKanbanAreaSelection } from './use-workspace-kanban-area-selection'
 import { useWorkspaceKanbanColumnResize } from './use-workspace-kanban-column-resize'
+import { useWorkspaceKanbanCreateWorktree } from './use-workspace-kanban-create-worktree'
 import { useWorkspaceKanbanSelection } from './use-workspace-kanban-selection'
 import {
   isWorkspaceBoardKeepOpenTarget,
@@ -56,6 +57,7 @@ export default function WorkspaceKanbanDrawer({
   const areaSelectionOverlayRef = useRef<HTMLDivElement>(null)
   const [dragOverStatus, setDragOverStatus] = useState<WorkspaceStatus | null>(null)
   const [pinDragOver, setPinDragOver] = useState(false)
+  const { canCreateWorktree, createWorktreeForStatus } = useWorkspaceKanbanCreateWorktree()
 
   const visibleWorktreeIdSet = useVisibleWorkspaceKanbanWorktreeIds({
     allWorktrees,
@@ -409,6 +411,7 @@ export default function WorkspaceKanbanDrawer({
                     columnWidth={columnWidth}
                     isResizingColumn={isResizingColumn}
                     isDragTarget={dragOverStatus === status.id}
+                    canCreateWorktree={canCreateWorktree}
                     selectedWorktreeIds={selectedWorktreeIds}
                     selectedWorktrees={selectedWorktrees}
                     onDragOver={handleDragOver}
@@ -417,6 +420,7 @@ export default function WorkspaceKanbanDrawer({
                     onActivate={handleWorktreeActivate}
                     onSelectionGesture={updateSelectionForGesture}
                     onContextMenuSelect={selectForContextMenu}
+                    onCreateWorktree={createWorktreeForStatus}
                     onColumnResizeStart={onColumnResizeStart}
                     onColumnResizeKeyDown={onColumnResizeKeyDown}
                   />
