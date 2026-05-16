@@ -392,8 +392,42 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 
   const prCacheLen = useAppStore((s) => Object.keys(s.prCache).length)
   const issueCacheLen = useAppStore((s) => Object.keys(s.issueCache).length)
+  const renderRowKeySignature = useMemo(
+    () => renderRows.map(getRenderRowKey).join('\n'),
+    [renderRows]
+  )
+  const renderRowsRef = useRef(renderRows)
+  renderRowsRef.current = renderRows
   const totalSize = virtualizer.getTotalSize()
   const virtualItems = virtualizer.getVirtualItems()
+
+  const measureMountedRows = useCallback(() => {
+    const currentRows = renderRowsRef.current
+    virtualizer.elementsCache.forEach((element) => {
+      const idx = parseInt(element.getAttribute('data-index') ?? '', 10)
+      const row = Number.isNaN(idx) ? undefined : currentRows[idx]
+      const expectedKey = row ? getRenderRowKey(row) : null
+      if (
+        !element.isConnected ||
+        expectedKey === null ||
+        element.getAttribute('data-worktree-virtual-row-key') !== expectedKey
+      ) {
+        return
+      }
+      virtualizer.measureElement(element)
+    })
+  }, [virtualizer])
+
+  useLayoutEffect(() => {
+    // Why: after delete/collapse, TanStack may briefly retain the removed row's
+    // cached element. Measuring that disconnected node reports 0px and corrupts
+    // the next row's slot, so measure only elements whose DOM key still matches
+    // the row currently rendered at that index.
+    measureMountedRows()
+    const frameId = window.requestAnimationFrame(measureMountedRows)
+    return () => window.cancelAnimationFrame(frameId)
+  }, [prCacheLen, issueCacheLen, measureMountedRows, renderRowKeySignature])
+
   useVirtualizedScrollAnchor({
     anchorRef: scrollAnchorRef,
     getRowKey: getRenderRowKey,
@@ -403,16 +437,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     totalSize,
     virtualizer
   })
-
-  useLayoutEffect(() => {
-    virtualizer.elementsCache.forEach((element) => {
-      const idx = parseInt(element.getAttribute('data-index') ?? '', 10)
-      if (Number.isNaN(idx) || idx >= renderRows.length) {
-        return
-      }
-      virtualizer.measureElement(element)
-    })
-  }, [prCacheLen, issueCacheLen, virtualizer, renderRows.length])
 
   const navigateWorktree = useCallback(
     (direction: 'up' | 'down') => {
