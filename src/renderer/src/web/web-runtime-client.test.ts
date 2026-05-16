@@ -49,13 +49,83 @@ describe('WebRuntimeClient', () => {
 
     ;(
       client as unknown as {
-        childClients: Set<{ close: () => void }>
+        childClients: Set<{ close: (options?: { notifySubscriptions?: boolean }) => void }>
       }
     ).childClients.add(child)
 
     client.close()
 
-    expect(child.close).toHaveBeenCalledTimes(1)
+    expect(child.close).toHaveBeenCalledWith({ notifySubscriptions: true })
+  })
+
+  it('passes local close semantics to child subscription clients', () => {
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+    const child = { close: vi.fn() }
+
+    ;(
+      client as unknown as {
+        childClients: Set<{ close: (options?: { notifySubscriptions?: boolean }) => void }>
+      }
+    ).childClients.add(child)
+
+    client.close({ notifySubscriptions: false })
+
+    expect(child.close).toHaveBeenCalledWith({ notifySubscriptions: false })
+  })
+
+  it('does not report locally closed subscriptions as remote closes', () => {
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+    const onClose = vi.fn()
+    const internals = client as unknown as {
+      subscriptions: Map<
+        string,
+        { method: string; params: unknown; callbacks: { onClose: typeof onClose } }
+      >
+    }
+    internals.subscriptions.set('stream-1', {
+      method: 'terminal.multiplex',
+      params: {},
+      callbacks: { onClose }
+    })
+
+    client.close({ notifySubscriptions: false })
+
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('reports subscriptions closed when the owning client closes', () => {
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+    const onClose = vi.fn()
+    const internals = client as unknown as {
+      subscriptions: Map<
+        string,
+        { method: string; params: unknown; callbacks: { onClose: typeof onClose } }
+      >
+    }
+    internals.subscriptions.set('stream-1', {
+      method: 'terminal.multiplex',
+      params: {},
+      callbacks: { onClose }
+    })
+
+    client.close()
+
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 
   it('decrypts binary WebSocket frames into subscription callbacks', async () => {

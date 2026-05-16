@@ -14,6 +14,7 @@ import type { LinkHandlerDeps } from './terminal-link-handlers'
 import type {
   GlobalSettings,
   SetupSplitDirection,
+  TerminalTab,
   TerminalLayoutSnapshot
 } from '../../../../shared/types'
 import type { EventProps } from '../../../../shared/telemetry-events'
@@ -181,6 +182,23 @@ export function splitPaneWithOneShotStartup<TPane>(
   } finally {
     deps.startup = null
   }
+}
+
+export function shouldDetachPaneTransportOnUnmount(args: {
+  tabStillExists: boolean
+  tabId: string
+  ptyId: string | null
+  worktreeTabs: readonly TerminalTab[] | undefined
+}): boolean {
+  if (!args.ptyId) {
+    return false
+  }
+  if (args.tabStillExists) {
+    return true
+  }
+  return Boolean(
+    args.worktreeTabs?.some((tab) => tab.id !== args.tabId && tab.ptyId === args.ptyId)
+  )
 }
 
 export function useTerminalPaneLifecycle({
@@ -967,10 +985,9 @@ export function useTerminalPaneLifecycle({
     return () => {
       window.removeEventListener(SPLIT_TERMINAL_PANE_EVENT, onCliSplitPane)
       window.removeEventListener(CLOSE_TERMINAL_PANE_EVENT, onCliClosePane)
+      const currentWorktreeTabs = useAppStore.getState().tabsByWorktree[worktreeId]
       const tabStillExists = Boolean(
-        useAppStore
-          .getState()
-          .tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
+        currentWorktreeTabs?.some((candidate) => candidate.id === tabId)
       )
       unregisterRuntimeTab()
       if (resizeRaf !== null) {
@@ -994,11 +1011,21 @@ export function useTerminalPaneLifecycle({
       }
       mouseHideDisposables.clear()
       for (const transport of paneTransports.values()) {
-        if (tabStillExists && transport.getPtyId()) {
+        const ptyId = transport.getPtyId()
+        if (
+          shouldDetachPaneTransportOnUnmount({
+            tabStillExists,
+            tabId,
+            ptyId,
+            worktreeTabs: currentWorktreeTabs
+          })
+        ) {
           // Why: moving a terminal tab between groups currently rehomes the
           // React subtree, which unmounts this TerminalPane even though the tab
-          // itself is still alive. Detaching preserves the running PTY so the
-          // remounted pane can reattach without restarting the user's shell.
+          // itself is still alive. Web session mirroring can also replace a
+          // temporary local tab with a host surface that owns the same PTY.
+          // Detaching preserves the running PTY so the remounted pane can
+          // reattach without restarting the user's shell.
           // Transports that have not attached yet still have no PTY ID; those
           // must be destroyed so any in-flight spawn resolves into a killed PTY
           // instead of reviving a stale binding after unmount.
