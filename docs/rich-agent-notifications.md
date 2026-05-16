@@ -32,7 +32,9 @@ Use the best available `AgentStatusEntry` snapshot for the emitting pane to enri
 
 `connectPanePty` already has the canonical pane key (`makePaneKey(tabId, leafId)`). Pass it only for `agent-task-complete`.
 
-2. Snapshot agent status in `useNotificationDispatch`.
+2. Defer task-complete dispatch briefly, then snapshot agent status in `useNotificationDispatch`.
+
+`onAgentBecameIdle` waits a short grace window before dispatching `agent-task-complete`. Title-based idle can arrive before the final hook status update; delaying at the producer lets `useNotificationDispatch` read the richer pane snapshot without adding a second notification source.
 
 At dispatch time, read `useAppStore.getState().agentStatusByPaneKey[paneKey]` once. Forward only bounded display fields:
 - `agentType`
@@ -71,7 +73,7 @@ If no `paneKey` or no entry, preserve current `repoLabel`/`terminalTitle` format
 ## Edge Cases To Handle
 
 - Status missing because `removeAgentStatus`/`dropAgentStatus` ran before dispatch.
-- Status lag: working→idle notification may race status updates.
+- Status lag: working→idle notification may race status updates; the grace window covers ordinary same-turn lag, then falls back deterministically.
 - Unknown/custom `agentType` values must render safely.
 - `lastAssistantMessage` may be multiline/large; main must re-bound.
 - `terminal-bell` must not include agent fields.
@@ -87,6 +89,7 @@ If no `paneKey` or no entry, preserve current `repoLabel`/`terminalTitle` format
 ## Tests
 
 - `pty-connection.test.ts`: `agent-task-complete` dispatch includes `paneKey`.
+- `pty-connection.test.ts`: delayed hook status arriving during the grace window enriches the notification.
 - `notifications.test.ts`: rich formatter behavior + fallback parity.
 - `notifications.test.ts`: dedupe remains keyed by worktree/worktreeLabel/global for desktop path.
 - Add/adjust test coverage for shared formatter impact on mobile payload construction if runtime path is exercised.

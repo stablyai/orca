@@ -323,6 +323,7 @@ describe('connectPanePty', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     if (originalRequestAnimationFrame) {
       globalThis.requestAnimationFrame = originalRequestAnimationFrame
     } else {
@@ -1468,10 +1469,16 @@ describe('connectPanePty', () => {
       throw new Error('Expected onAgentBecameIdle to be registered')
     }
 
+    vi.useFakeTimers()
     idleHandler('* Claude done')
 
     expect(deps.markWorktreeUnread).not.toHaveBeenCalled()
     expect(deps.markTerminalTabUnread).not.toHaveBeenCalled()
+    expect(dispatchNotification).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(250)
+    await flushAsyncTicks()
+
     expect(dispatchNotification).toHaveBeenCalledWith({
       source: 'agent-task-complete',
       terminalTitle: '* Claude done',
@@ -1491,6 +1498,60 @@ describe('connectPanePty', () => {
         agentToolInput: 'src/main/ipc/notifications.ts',
         agentLastAssistantMessage: 'Implemented the formatter.',
         agentInterrupted: false
+      })
+    )
+  })
+
+  it('waits briefly for delayed agent status before dispatching task-complete', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { useNotificationDispatch } = await vi.importActual<typeof UseNotificationDispatchModule>(
+      './use-notification-dispatch'
+    )
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    vi.useFakeTimers()
+    const dispatchNotification = useNotificationDispatch('wt-1')
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({ dispatchNotification })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
+      | ((title: string) => void)
+      | undefined
+    if (!idleHandler) {
+      throw new Error('Expected onAgentBecameIdle to be registered')
+    }
+
+    idleHandler('* Codex done')
+    expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
+
+    mockStoreState.agentStatusByPaneKey[paneKey] = {
+      state: 'done',
+      prompt: 'Use delayed hook status in notification',
+      updatedAt: Date.now(),
+      stateStartedAt: Date.now(),
+      agentType: 'codex',
+      paneKey,
+      terminalTitle: '* Codex done',
+      stateHistory: [],
+      lastAssistantMessage: 'Delayed status arrived.'
+    }
+
+    vi.advanceTimersByTime(250)
+    await flushAsyncTicks()
+
+    expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        terminalTitle: '* Codex done',
+        agentType: 'codex',
+        agentState: 'done',
+        agentPrompt: 'Use delayed hook status in notification',
+        agentLastAssistantMessage: 'Delayed status arrived.'
       })
     )
   })
