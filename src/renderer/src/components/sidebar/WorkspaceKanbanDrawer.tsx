@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: the board drawer owns shared board state, drag/drop, and settings callbacks that need one coordinated surface. */
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useAllWorktrees, useRepoMap } from '@/store/selectors'
@@ -13,6 +14,7 @@ import {
 } from './workspace-status'
 import { useWorkspaceStatusDocumentDrop } from './use-workspace-status-drop'
 import { useWorkspaceKanbanAreaSelection } from './use-workspace-kanban-area-selection'
+import { useWorkspaceKanbanCardPointerDrag } from './use-workspace-kanban-card-pointer-drag'
 import { useWorkspaceKanbanColumnResize } from './use-workspace-kanban-column-resize'
 import { useWorkspaceKanbanCreateWorktree } from './use-workspace-kanban-create-worktree'
 import { useWorkspaceKanbanSelection } from './use-workspace-kanban-selection'
@@ -60,13 +62,11 @@ export default function WorkspaceKanbanDrawer({
   const [dragOverStatus, setDragOverStatus] = useState<WorkspaceStatus | null>(null)
   const [pinDragOver, setPinDragOver] = useState(false)
   const { canCreateWorktree, createWorktreeForStatus } = useWorkspaceKanbanCreateWorktree()
-
   const visibleWorktreeIdSet = useVisibleWorkspaceKanbanWorktreeIds({
     allWorktrees,
     activeWorktreeId,
     repoMap
   })
-
   const worktreesByStatus = useMemo(() => {
     return groupWorkspaceKanbanWorktrees({
       worktrees: allWorktrees,
@@ -78,7 +78,6 @@ export default function WorkspaceKanbanDrawer({
     () => new Map(allWorktrees.map((worktree) => [worktree.id, worktree])),
     [allWorktrees]
   )
-
   const boardWorktrees = useMemo(
     () => workspaceStatuses.flatMap((status) => worktreesByStatus.get(status.id) ?? []),
     [worktreesByStatus, workspaceStatuses]
@@ -101,7 +100,6 @@ export default function WorkspaceKanbanDrawer({
   })
   const { columnWidth, isResizingColumn, onColumnResizeStart, onColumnResizeKeyDown } =
     useWorkspaceKanbanColumnResize(workspaceBoardColumnWidth, setWorkspaceBoardColumnWidth)
-
   const moveWorktreeToStatus = useCallback(
     (worktreeId: string, status: WorkspaceStatus) => {
       const current = worktreeById.get(worktreeId)
@@ -112,7 +110,6 @@ export default function WorkspaceKanbanDrawer({
     },
     [updateWorktreeMeta, workspaceStatuses, worktreeById]
   )
-
   const moveWorktreesToStatus = useCallback(
     (worktreeIds: readonly string[], status: WorkspaceStatus) => {
       const updates = new Map<string, { workspaceStatus: WorkspaceStatus }>()
@@ -129,7 +126,6 @@ export default function WorkspaceKanbanDrawer({
     },
     [updateWorktreesMeta, workspaceStatuses, worktreeById]
   )
-
   const pinWorktree = useCallback(
     (worktreeId: string) => {
       const current = worktreeById.get(worktreeId)
@@ -157,7 +153,16 @@ export default function WorkspaceKanbanDrawer({
     },
     [updateWorktreesMeta, worktreeById]
   )
-
+  const { isPointerDragActiveRef, onCardPointerDownCapture } = useWorkspaceKanbanCardPointerDrag({
+    open,
+    boardRef,
+    selectedWorktreeIds,
+    selectedWorktrees,
+    onMoveWorktreesToStatus: moveWorktreesToStatus,
+    onPinWorktrees: pinWorktrees,
+    onDragTargetChange: setDragOverStatus,
+    onPinDragTargetChange: setPinDragOver
+  })
   const handleDragOver = useCallback((event: React.DragEvent, status: WorkspaceStatus) => {
     if (!hasWorkspaceDragData(event.dataTransfer)) {
       return
@@ -310,7 +315,7 @@ export default function WorkspaceKanbanDrawer({
     }
   )
 
-  useWorkspaceKanbanShiftWheelScroll(boardRef, laneScrollerRef, open)
+  useWorkspaceKanbanShiftWheelScroll(boardRef, laneScrollerRef, open, isPointerDragActiveRef)
   useWorkspaceKanbanOutsideDismiss({ open, boardRef, preserveOpenForMenu, onOpenChange })
 
   const opacityPercent = Math.round(workspaceBoardOpacity * 100)
@@ -385,6 +390,7 @@ export default function WorkspaceKanbanDrawer({
           ref={boardRef}
           className="relative flex min-h-0 flex-1 flex-col overflow-hidden p-3"
           data-workspace-board-selection-surface=""
+          onPointerDownCapture={onCardPointerDownCapture}
           onPointerDown={handleAreaSelectionPointerDown}
         >
           <WorkspaceKanbanAreaSelectionOverlay ref={areaSelectionOverlayRef} />

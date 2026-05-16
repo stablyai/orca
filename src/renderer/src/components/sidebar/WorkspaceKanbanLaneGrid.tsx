@@ -76,6 +76,7 @@ export default function WorkspaceKanbanLaneGrid({
           canCreateWorktree={canCreateWorktree}
           selectedWorktreeIds={selectedWorktreeIds}
           selectedWorktrees={selectedWorktrees}
+          nativeDragEnabled={false}
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
           onDrop={onDrop}

@@ -40,7 +40,8 @@ function pointIsInsideElement(
 export function useWorkspaceKanbanShiftWheelScroll(
   boardRef: React.RefObject<HTMLElement | null>,
   scrollerRef: React.RefObject<HTMLElement | null>,
-  enabled: boolean
+  enabled: boolean,
+  isPointerDragActiveRef?: React.RefObject<boolean>
 ): void {
   useEffect(() => {
     if (!enabled) {
@@ -70,9 +71,10 @@ export function useWorkspaceKanbanShiftWheelScroll(
     const handleWheel = (event: WheelEvent): void => {
       const board = boardRef.current
       const scroller = scrollerRef.current
+      const isPointerDragActive = isPointerDragActiveRef?.current === true
       if (
         !event.shiftKey ||
-        !isWorkspaceDragActive ||
+        (!isWorkspaceDragActive && !isPointerDragActive) ||
         !board ||
         !scroller ||
         (!isEventInsideElement(event, board) && !pointIsInsideElement(lastDragPoint, board))
@@ -106,5 +108,5 @@ export function useWorkspaceKanbanShiftWheelScroll(
       window.removeEventListener('blur', stopTrackingDrag)
       document.removeEventListener('wheel', handleWheel, true)
     }
-  }, [boardRef, enabled, scrollerRef])
+  }, [boardRef, enabled, isPointerDragActiveRef, scrollerRef])
 }

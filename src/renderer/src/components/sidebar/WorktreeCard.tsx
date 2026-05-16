@@ -56,6 +56,7 @@ type WorktreeCardProps = {
   onActivate?: () => void
   onSelectionGesture?: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
   onContextMenuSelect?: (event: React.MouseEvent<HTMLElement>) => readonly Worktree[]
+  nativeDragEnabled?: boolean
 }
 
 function formatSparseDirectoryPreview(directories: string[]): string {
@@ -72,6 +73,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   onActivate,
   onSelectionGesture,
   onContextMenuSelect,
+  nativeDragEnabled = true,
   hideRepoBadge,
   hideCiCheck = false,
   parentLabel,
@@ -355,8 +357,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
       )}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
-      draggable={!isDeleting}
-      onDragStart={handleDragStart}
+      draggable={nativeDragEnabled && !isDeleting}
+      onDragStart={nativeDragEnabled ? handleDragStart : undefined}
       aria-busy={isDeleting}
     >
       {isDeleting && (

@@ -21,6 +21,7 @@ type WorkspaceKanbanStatusLaneProps = {
   isResizingColumn: boolean
   isDragTarget: boolean
   canCreateWorktree: boolean
+  nativeDragEnabled?: boolean
   selectedWorktreeIds: ReadonlySet<string>
   selectedWorktrees: readonly Worktree[]
   onDragOver: (event: React.DragEvent, statusId: string) => void
@@ -47,6 +48,7 @@ export default function WorkspaceKanbanStatusLane({
   isResizingColumn,
   isDragTarget,
   canCreateWorktree,
+  nativeDragEnabled = true,
   selectedWorktreeIds,
   selectedWorktrees,
   onDragOver,
@@ -148,6 +150,7 @@ export default function WorkspaceKanbanStatusLane({
                   repo={repoMap.get(worktree.repoId)}
                   isActive={activeWorktreeId === worktree.id}
                   isSelected={isSelected}
+                  nativeDragEnabled={nativeDragEnabled}
                   selectedWorktrees={
                     isSelected && selectedWorktrees.length > 0 ? selectedWorktrees : undefined
                   }
