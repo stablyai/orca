@@ -369,6 +369,7 @@ function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSide
   if (
     tab === 'explorer' ||
     tab === 'search' ||
+    tab === 'vault' ||
     tab === 'source-control' ||
     tab === 'checks' ||
     tab === 'ports'

@@ -625,6 +625,8 @@ function openMainWindow(): BrowserWindow {
     crashReports ?? undefined,
     keybindings,
     {
+      getAdditionalAiVaultCodexHomePaths: () =>
+        codexRuntimeHome ? [codexRuntimeHome.getHostRuntimeHomePath()] : [],
       onBeforeRelaunch: () => {
         isQuitting = true
         store?.flush()

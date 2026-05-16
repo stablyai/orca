@@ -248,6 +248,7 @@ function normalizePersistedRightSidebarTab(
   if (
     tab === 'explorer' ||
     tab === 'search' ||
+    tab === 'vault' ||
     tab === 'source-control' ||
     tab === 'checks' ||
     tab === 'ports'

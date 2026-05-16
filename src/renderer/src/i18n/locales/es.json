@@ -2240,6 +2240,13 @@
             "1bce81dba6": "simulador",
             "1ff1c77616": "navegador",
             "586d2ac445": "terminal"
+          },
+          "AiVaultSessionDropLayer": {
+            "dropOntoTerminalPane": "Drop onto a terminal pane to resume this session.",
+            "couldNotReadPayload": "Could not read the session drag payload.",
+            "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
+            "openLocalWorkspace": "Open a local workspace before resuming a session.",
+            "sessionQueued": "Session queued"
           }
         },
         "bar": {
@@ -7971,7 +7978,8 @@
             "9f83375839": "cheques",
             "6306b48afd": "control de fuente",
             "ef182dcb12": "buscar",
-            "fc3095d2ed": "explorador"
+            "fc3095d2ed": "explorador",
+            "aiVaultSessionHistory": "Agents"
           },
           "right": {
             "panel": {
@@ -8105,6 +8113,97 @@
                 }
               }
             }
+          },
+          "AiVaultPanel": {
+            "resumeCommandCopied": "Resume command copied",
+            "valueCopied": "{{value0}} copied",
+            "openWorkspaceBeforeResuming": "Open a workspace before resuming a session.",
+            "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
+            "agentSessionQueued": "{{value0}} session queued",
+            "sessionHistory": "Agent Session History",
+            "shownRecent": "{{value0}} shown · {{value1}} recent",
+            "resumePastSessions": "Resume past sessions",
+            "refreshSessionHistory": "Refresh Session History",
+            "searchSessions": "Search sessions",
+            "clearSearch": "Clear search",
+            "remoteBrowseLocalHistory": "Remote workspaces can browse local history. Resume actions run from local workspaces.",
+            "transcriptsSkipped": "{{count}} transcript skipped",
+            "noAgentSessionsFound": "No agent sessions found",
+            "noSessionsMatchFilters": "No sessions match the current filters",
+            "sessionId": "Session ID",
+            "logPath": "Log path"
+          },
+          "AiVaultPanelControls": {
+            "scanningSessions": "Scanning sessions",
+            "scopeAriaLabel": "Session History scope: {{value0}}",
+            "currentWorkspaceLower": "current workspace",
+            "allSessionsLower": "all sessions",
+            "thisScope": "This",
+            "allScope": "All",
+            "scope": "Scope",
+            "currentWorkspace": "Current workspace",
+            "allSessions": "All sessions",
+            "viewOptionsAriaLabel": "Session History view options",
+            "viewOptions": "View options",
+            "agents": "Agents",
+            "sort": "Sort",
+            "lastUpdated": "Last updated",
+            "created": "Created",
+            "group": "Group",
+            "folder": "Folder",
+            "agent": "Agent",
+            "resetView": "Reset view",
+            "hideEmptySessions": "Hide empty sessions",
+            "workspaceScope": "Workspace",
+            "globalScope": "Global"
+          },
+          "AiVaultSessionDetails": {
+            "updated": "Updated",
+            "created": "Created",
+            "workingDir": "Working dir",
+            "unknownLocation": "Unknown location",
+            "branch": "Branch",
+            "model": "Model",
+            "usage": "Usage",
+            "usageValue": "{{value0}} msgs{{value1}}",
+            "tokenSuffix": " · {{value0}} tok",
+            "session": "Session",
+            "latestLog": "Latest log",
+            "noReadablePreview": "No readable message preview in this transcript.",
+            "resumeCommand": "Resume command",
+            "sessionActions": "{{value0}} session actions",
+            "resumeInNewTab": "Resume in New Tab",
+            "copyResumeCommand": "Copy Resume Command",
+            "openLog": "Open Log",
+            "revealLog": "Reveal Log",
+            "openWorkingDirectory": "Open Working Directory",
+            "copySessionId": "Copy Session ID",
+            "copyLogPath": "Copy Log Path",
+            "unknownTime": "Unknown time",
+            "unknown": "Unknown",
+            "user": "User",
+            "assistant": "Assistant",
+            "tool": "Tool",
+            "system": "System",
+            "log": "Log",
+            "justNow": "Just now",
+            "minutesAgo": "{{value0}}m ago",
+            "hoursAgo": "{{value0}}h ago",
+            "daysAgo": "{{value0}}d ago",
+            "monthsAgo": "{{value0}}mo ago",
+            "yearsAgo": "{{value0}}y ago"
+          },
+          "AiVaultSessionRow": {
+            "resumeAgentSession": "Resume {{value0}} session",
+            "resumeInNewTab": "Resume in New Tab",
+            "copyResumeCommand": "Copy Resume Command",
+            "openLog": "Open Log",
+            "revealLog": "Reveal Log",
+            "openWorkingDirectory": "Open Working Directory",
+            "copySessionId": "Copy Session ID",
+            "copyLogPath": "Copy Log Path",
+            "messageCount": "{{value0}} msgs",
+            "tokenCount": "{{value0}} tok"
           }
         }
       },

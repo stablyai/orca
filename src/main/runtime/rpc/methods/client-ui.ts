@@ -133,7 +133,9 @@ const UiUpdate = z
     lastActiveWorktreeId: NullableString.optional(),
     sidebarWidth: z.number().finite().optional(),
     rightSidebarOpen: z.boolean().optional(),
-    rightSidebarTab: z.enum(['explorer', 'search', 'source-control', 'checks', 'ports']).optional(),
+    rightSidebarTab: z
+      .enum(['explorer', 'search', 'vault', 'source-control', 'checks', 'ports'])
+      .optional(),
     rightSidebarWidth: z.number().finite().optional(),
     groupBy: z.enum(['none', 'workspace-status', 'repo', 'pr-status']).optional(),
     showWorkspaceLineage: z.boolean().optional(),
