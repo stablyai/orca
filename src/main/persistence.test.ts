@@ -195,6 +195,7 @@ describe('Store', () => {
     expect(settings.rightSidebarOpenByDefault).toBe(true)
     expect(settings.showTasksButton).toBe(true)
     expect(settings.visibleTaskProviders).toEqual(['github', 'gitlab', 'linear'])
+    expect(settings.openInApplications).toEqual([])
     expect(settings.experimentalActivity).toBe(true)
     expect(settings.floatingTerminalEnabled).toBe(true)
     expect(settings.floatingTerminalDefaultedForAllUsers).toBe(true)
@@ -487,6 +488,31 @@ describe('Store', () => {
     expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab'])
   })
 
+  it('normalizes persisted open-in applications on load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        openInApplications: [
+          { id: 'cursor', label: ' Cursor ', command: ' cursor ' },
+          { id: 'cursor', label: 'Dup', command: 'dup' },
+          { id: '', label: 'Zed', command: 'zed' },
+          { id: 'bad', label: ' ', command: 'bad' }
+        ]
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().openInApplications).toEqual([
+      { id: 'cursor', label: 'Cursor', command: 'cursor' },
+      { id: 'open-in-3', label: 'Zed', command: 'zed' }
+    ])
+  })
+
   it('migrates the legacy floating terminal disabled default to enabled', async () => {
     writeDataFile({
       schemaVersion: 1,
@@ -768,6 +794,20 @@ describe('Store', () => {
     expect(updated.terminalFontWeight).toBe(600)
     // Other fields preserved
     expect(updated.branchPrefix).toBe('git-username')
+  })
+
+  it('updateSettings normalizes open-in applications', async () => {
+    const store = await createStore()
+    const updated = store.updateSettings({
+      openInApplications: [
+        { id: 'cursor', label: ' Cursor ', command: ' cursor ' },
+        { id: 'cursor', label: 'Dup', command: 'dup' },
+        { id: 'bad', label: '', command: 'bad' }
+      ]
+    })
+    expect(updated.openInApplications).toEqual([
+      { id: 'cursor', label: 'Cursor', command: 'cursor' }
+    ])
   })
 
   it('updateSettings toggles editorAutoSave', async () => {

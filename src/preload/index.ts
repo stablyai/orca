@@ -1282,8 +1282,8 @@ const api = {
     openInFileManager: (path: string): Promise<ShellOpenLocalPathResult> =>
       ipcRenderer.invoke('shell:openInFileManager', path),
 
-    openInExternalEditor: (path: string): Promise<ShellOpenLocalPathResult> =>
-      ipcRenderer.invoke('shell:openInExternalEditor', path),
+    openInExternalEditor: (path: string, command?: string): Promise<ShellOpenLocalPathResult> =>
+      ipcRenderer.invoke('shell:openInExternalEditor', path, command),
 
     openUrl: (url: string): Promise<void> => ipcRenderer.invoke('shell:openUrl', url),
 

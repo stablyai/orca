@@ -1153,7 +1153,7 @@ export type PreloadApi = {
   shell: {
     openPath: (path: string) => Promise<void>
     openInFileManager: (path: string) => Promise<ShellOpenLocalPathResult>
-    openInExternalEditor: (path: string) => Promise<ShellOpenLocalPathResult>
+    openInExternalEditor: (path: string, command?: string) => Promise<ShellOpenLocalPathResult>
     openUrl: (url: string) => Promise<void>
     openFilePath: (path: string) => Promise<void>
     openFileUri: (uri: string) => Promise<void>

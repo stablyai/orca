@@ -94,13 +94,13 @@ describe('registerShellHandlers', () => {
     statMock.mockResolvedValue({ isDirectory: () => true })
   })
 
-  function getHandler(channel: string): (event: unknown, args?: unknown) => Promise<unknown> {
+  function getHandler(channel: string): (event: unknown, ...args: unknown[]) => Promise<unknown> {
     registerShellHandlers()
     const call = handleMock.mock.calls.find((c: unknown[]) => c[0] === channel)
     if (!call) {
       throw new Error(`${channel} handler not registered`)
     }
-    return call[1] as (event: unknown, args?: unknown) => Promise<unknown>
+    return call[1] as (event: unknown, ...args: unknown[]) => Promise<unknown>
   }
 
   it('picks audio files with a constrained native dialog filter', async () => {
@@ -238,6 +238,25 @@ describe('registerShellHandlers', () => {
         windowsHide: true
       })
       expect(openPathMock).not.toHaveBeenCalled()
+    })
+
+    it('uses a provided launcher command', async () => {
+      const workspacePath = resolve('workspace')
+      const handler = getHandler('shell:openInExternalEditor')
+
+      await expect(handler({}, workspacePath, 'cursor')).resolves.toEqual({ ok: true })
+      expect(resolveCliCommandMock).toHaveBeenCalledWith('cursor')
+      expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith('editor-cli', [
+        normalize(workspacePath)
+      ])
+    })
+
+    it('falls back to VS Code when command is blank', async () => {
+      const workspacePath = resolve('workspace')
+      const handler = getHandler('shell:openInExternalEditor')
+
+      await expect(handler({}, workspacePath, '   ')).resolves.toEqual({ ok: true })
+      expect(resolveCliCommandMock).toHaveBeenCalledWith(EXTERNAL_EDITOR_CLI_COMMAND)
     })
 
     it('uses platform-safe launcher command arguments', async () => {

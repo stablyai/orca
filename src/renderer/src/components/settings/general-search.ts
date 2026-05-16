@@ -20,6 +20,11 @@ export const GENERAL_WORKSPACE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Skip Delete Automation Confirmation',
     description: 'Delete automations without a confirmation dialog.',
     keywords: ['delete', 'automation', 'confirm', 'dialog', 'skip', 'prompt']
+  },
+  {
+    title: 'Open In Menu',
+    description: 'Add custom launchers to the worktree Open in menu.',
+    keywords: ['open in', 'editor', 'launcher', 'cursor', 'zed', 'command', 'vscode']
   }
 ]
 

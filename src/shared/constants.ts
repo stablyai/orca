@@ -217,6 +217,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     setupScriptLaunchMode: 'new-tab',
     terminalScrollbackBytes: 10_000_000,
     openLinksInApp: true,
+    openInApplications: [],
     rightSidebarOpenByDefault: true,
     showGitIgnoredFiles: true,
     showTitlebarAppName: true,

@@ -75,6 +75,7 @@ import { pruneWorkspaceSessionBrowserHistory } from '../shared/workspace-session
 import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
 import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
 import { normalizeVisibleTaskProviders } from '../shared/task-providers'
+import { normalizeOpenInApplications } from '../shared/open-in-applications'
 import {
   DEFAULT_WORKSPACE_STATUS_ID,
   clampWorkspaceBoardOpacity,
@@ -1201,6 +1202,7 @@ export class Store {
             visibleTaskProviders: normalizeVisibleTaskProviders(
               parsed.settings?.visibleTaskProviders
             ),
+            openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications),
             notifications: {
               ...getDefaultNotificationSettings(),
               ...parsed.settings?.notifications
@@ -2012,6 +2014,9 @@ export class Store {
       sanitizedUpdates.visibleTaskProviders = normalizeVisibleTaskProviders(
         updates.visibleTaskProviders
       )
+    }
+    if ('openInApplications' in updates) {
+      sanitizedUpdates.openInApplications = normalizeOpenInApplications(updates.openInApplications)
     }
     // Why: `telemetry` is deep-merged for the same reason `notifications` is —
     // partial updates from the Privacy pane / consent flow (e.g., flipping

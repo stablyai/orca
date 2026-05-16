@@ -1253,6 +1253,12 @@ export type TerminalQuickCommand = {
   appendEnter: boolean
 }
 
+export type OpenInApplication = {
+  id: string
+  label: string
+  command: string
+}
+
 export type FloatingTerminalCwdRequest = {
   path?: string
 }
@@ -1348,6 +1354,8 @@ export type GlobalSettings = {
    *  The setting stays opt-in so existing workflows continue to use the system browser
    *  until the user explicitly wants worktree-scoped in-app browsing. */
   openLinksInApp: boolean
+  /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */
+  openInApplications?: OpenInApplication[]
   rightSidebarOpenByDefault: boolean
   showGitIgnoredFiles?: boolean
   /** Whether to show the Orca app name in the titlebar. */
