@@ -23,8 +23,10 @@ import { getDiffCommentPopoverTop } from '../diff-comments/diff-comment-popover-
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import { computeLineStats } from './diff-line-stats'
 import { DiffSectionHeader } from './DiffSectionHeader'
+import { getDiffSectionBodyHeight, isIntrinsicHeightImageDiff } from './diff-section-layout'
 import type { DiffSection } from './diff-section-types'
 import type { DiffComment } from '../../../../shared/types'
+import { cn } from '@/lib/utils'
 import { isDiffComment } from '@/lib/diff-comment-compat'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
@@ -217,6 +219,15 @@ export function DiffSectionItem({
         : computeLineStats(section.originalContent, section.modifiedContent, section.status),
     [section.loading, section.originalContent, section.modifiedContent, section.status]
   )
+  // Why: image diffs need document-flow height in the combined view; the text
+  // fallback only knows line counts and would squash screenshots into one row.
+  const useIntrinsicImageHeight = isIntrinsicHeightImageDiff(section.diffResult)
+  const sectionBodyHeight = getDiffSectionBodyHeight({
+    measuredContentHeight: sectionHeight,
+    originalContent: section.originalContent,
+    modifiedContent: section.modifiedContent,
+    useIntrinsicImageHeight
+  })
 
   const handleOpenInEditor = (e: React.MouseEvent): void => {
     e.stopPropagation()
@@ -292,20 +303,8 @@ export function DiffSectionItem({
 
       {!section.collapsed && (
         <div
-          className="relative"
-          style={{
-            height: sectionHeight
-              ? sectionHeight + 19
-              : Math.max(
-                  60,
-                  Math.max(
-                    section.originalContent.split('\n').length,
-                    section.modifiedContent.split('\n').length
-                  ) *
-                    19 +
-                    19
-                )
-          }}
+          className={cn('relative', useIntrinsicImageHeight && 'overflow-visible')}
+          style={sectionBodyHeight === undefined ? undefined : { height: sectionBodyHeight }}
         >
           {popover && (
             // Why: key by lineNumber so the popover remounts when the anchor
@@ -332,6 +331,7 @@ export function DiffSectionItem({
                 filePath={section.path}
                 mimeType={section.diffResult.mimeType}
                 sideBySide={sideBySide}
+                layout={useIntrinsicImageHeight ? 'intrinsic' : 'fill'}
               />
             ) : (
               <div className="flex h-full items-center justify-center px-6 text-center">
