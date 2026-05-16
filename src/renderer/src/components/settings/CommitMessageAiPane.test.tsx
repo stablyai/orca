@@ -70,6 +70,23 @@ describe('CommitMessageAiPane', () => {
     expect(markup).toContain('Use Conventional Commits.')
   })
 
+  it('keeps the agent selector wide enough for GitHub Copilot', () => {
+    const markup = renderPane(
+      buildSettings({
+        commitMessageAi: {
+          enabled: true,
+          agentId: 'copilot',
+          selectedModelByAgent: { copilot: 'gpt-5.5' },
+          selectedThinkingByModel: {},
+          customPrompt: '',
+          customAgentCommand: ''
+        }
+      })
+    )
+
+    expect(markup).toContain('w-[220px]')
+  })
+
   it('renders custom command settings for custom agents', () => {
     const markup = renderPane(
       buildSettings({

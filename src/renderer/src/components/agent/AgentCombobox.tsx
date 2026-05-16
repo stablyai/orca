@@ -42,7 +42,7 @@ type AgentComboboxProps = {
 }
 
 const BLANK_VALUE = '__none__'
-const TRIGGER_MIN_WIDTH_CLASS = '!min-w-[184px]'
+const TRIGGER_MIN_WIDTH_CLASS = '!min-w-[220px]'
 
 type ItemRenderArgs = {
   key: string
@@ -241,7 +241,7 @@ export default function AgentCombobox({
             onKeyDown={handleTriggerKeyDown}
             className={cn(
               // Why: callers sometimes pass `min-w-0` for grid layouts, but
-              // the compact trigger still needs room for "Autohand Code".
+              // the compact trigger still needs room for "GitHub Copilot".
               'h-8 justify-between px-3 text-xs font-normal',
               triggerClassName,
               TRIGGER_MIN_WIDTH_CLASS

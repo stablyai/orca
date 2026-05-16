@@ -526,7 +526,7 @@ export function CommitMessageAiPane({
           </p>
         </div>
         <Select value={activeAgentId} onValueChange={onAgentChange}>
-          <SelectTrigger size="sm" className="h-8 text-xs w-[180px]">
+          <SelectTrigger size="sm" className="h-8 text-xs w-[220px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
