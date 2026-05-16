@@ -115,28 +115,53 @@ export function _resetProjectRefCache(): void {
  */
 export const DEFAULT_GITLAB_HOSTS = ['gitlab.com'] as const
 
+function normalizeHost(value: string): string {
+  return value.trim().toLowerCase()
+}
+
+function stripGitSuffix(path: string): string {
+  return path.replace(/\.git$/i, '')
+}
+
+function makeProjectRef(
+  host: string,
+  path: string,
+  knownHosts: readonly string[]
+): ProjectRef | null {
+  const normalizedHost = normalizeHost(host)
+  if (!knownHosts.map(normalizeHost).includes(normalizedHost)) {
+    return null
+  }
+  const normalizedPath = stripGitSuffix(path.replace(/^\/+/, '')).trim()
+  // Reject paths without at least one group segment — `gitlab.com:foo`
+  // alone is not a project reference.
+  if (!normalizedPath.includes('/')) {
+    return null
+  }
+  return { host: normalizedHost, path: normalizedPath }
+}
+
 export function parseGitLabProjectRef(
   remoteUrl: string,
   knownHosts: readonly string[] = DEFAULT_GITLAB_HOSTS
 ): ProjectRef | null {
   const trimmed = remoteUrl.trim()
-  for (const host of knownHosts) {
-    const escapedHost = host.replace(/\./g, '\\.')
-    // Match SSH (git@host:path) and HTTPS (https://host/path) forms with an
-    // optional .git suffix. Path may contain nested groups — keep it whole.
-    const match = trimmed.match(new RegExp(`${escapedHost}[:/]([^\\s]+?)(?:\\.git)?$`))
-    if (!match) {
-      continue
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) {
+    const scpLike = trimmed.match(/^(?:[^@/:]+@)?([^:\s/]+):([^\s]+?)(?:\.git)?$/)
+    if (scpLike) {
+      return makeProjectRef(scpLike[1], scpLike[2], knownHosts)
     }
-    const path = match[1]
-    // Reject paths without at least one group segment — `gitlab.com:foo`
-    // alone is not a project reference.
-    if (!path.includes('/')) {
-      continue
-    }
-    return { host, path }
   }
-  return null
+
+  try {
+    const url = new URL(trimmed)
+    if (!['http:', 'https:', 'ssh:', 'git:', 'git+ssh:'].includes(url.protocol.toLowerCase())) {
+      return null
+    }
+    return makeProjectRef(url.hostname, url.pathname, knownHosts)
+  } catch {
+    return null
+  }
 }
 
 export async function getProjectRefForRemote(
