@@ -553,7 +553,9 @@
   -webkit-app-region: no-drag;
   display: inline-flex;
   align-items: center;
+  gap: 4px;
   height: 24px;
+  max-width: min(280px, 32vw);
   margin-left: 2px;
   margin-right: 4px;
   padding: 0 6px;
@@ -563,7 +565,40 @@
   font-weight: 600;
   line-height: 24px;
   white-space: nowrap;
+  overflow: hidden;
   cursor: pointer;
+}
+
+.titlebar-app-name-main {
+  flex: 0 0 auto;
+}
+
+.titlebar-dev-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+
+.titlebar-dev-label::before {
+  content: 'Dev:';
+  margin-right: 4px;
+  color: var(--muted-foreground);
+}
+
+.titlebar-dev-badge {
+  flex: 0 0 auto;
+  height: 16px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
 }
 
 .titlebar-icon-button {

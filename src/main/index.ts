@@ -39,6 +39,7 @@ import {
   patchPackagedProcessPath
 } from './startup/configure-process'
 import { startFirstWindowStartupServices } from './startup/first-window-startup-services'
+import { getDevInstanceIdentity } from './startup/dev-instance-identity'
 import { hydrateShellPath, mergePathSegments } from './startup/hydrate-shell-path'
 import { acquireSingleInstanceLock } from './startup/single-instance-lock'
 import { RateLimitService } from './rate-limits/service'
@@ -66,7 +67,7 @@ import {
 } from './ipc/pty'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { browserManager } from './browser/browser-manager'
-import { setUnreadDockBadgeCount } from './dock/unread-badge'
+import { setIdleDockBadgeLabel, setUnreadDockBadgeCount } from './dock/unread-badge'
 import { registerFeatureWallFirstAgentTour } from './feature-wall/first-agent-tour'
 import { AutomationService } from './automations/service'
 import { AgentAwakeService } from './agent-awake-service'
@@ -96,6 +97,7 @@ let watcherShutdownPromise: Promise<void> | null = null
 let watcherShutdownDone = false
 let automations: AutomationService | null = null
 const isServeMode = process.argv.includes('--serve')
+const devInstanceIdentity = getDevInstanceIdentity(is.dev)
 
 installUncaughtPipeErrorGuard()
 // Why: propagate the Orca app version into `process.env` so PTY-env
@@ -255,7 +257,8 @@ function openMainWindow(): BrowserWindow {
     onQuitAborted: () => {
       isQuitting = false
     },
-    deferLoad: true
+    deferLoad: true,
+    title: devInstanceIdentity.windowTitle
   })
 
   // Why: telemetry-plan.md§First-launch experience anchors default-on
@@ -643,12 +646,13 @@ function driveSyntheticTitleFromHook(
 }
 
 app.whenReady().then(async () => {
-  electronApp.setAppUserModelId('com.stablyai.orca')
-  app.setName('Orca')
+  electronApp.setAppUserModelId(devInstanceIdentity.appUserModelId)
+  app.setName(devInstanceIdentity.name)
 
   if (process.platform === 'darwin' && is.dev) {
     const dockIcon = nativeImage.createFromPath(devIcon)
     app.dock?.setIcon(dockIcon)
+    setIdleDockBadgeLabel(devInstanceIdentity.dockBadgeLabel)
   }
 
   store = new Store()

@@ -61,6 +61,17 @@ export function installWebPreloadApi(): void {
 function createWebPreloadApi(): Partial<PreloadApi> {
   return {
     app: {
+      getIdentity: () =>
+        Promise.resolve({
+          name: 'Orca',
+          isDev: false,
+          devLabel: null,
+          devBranch: null,
+          devWorktreeName: null,
+          devRepoRoot: null,
+          dockBadgeLabel: null,
+          dockTitle: null
+        }),
       getFeatureWallAssetBaseUrl: () => Promise.resolve('/'),
       relaunch: () => Promise.resolve(window.location.reload()),
       getKeyboardInputSourceId: () => Promise.resolve(null),
@@ -816,9 +827,7 @@ function createCliApi(): NonNullable<Partial<PreloadApi>['cli']> {
 }
 
 function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
-  const status = (
-    agent: 'claude' | 'codex' | 'gemini' | 'cursor' | 'droid' | 'grok' | 'hermes'
-  ) =>
+  const status = (agent: 'claude' | 'codex' | 'gemini' | 'cursor' | 'droid' | 'grok' | 'hermes') =>
     Promise.resolve({
       agent,
       state: 'not_installed',
