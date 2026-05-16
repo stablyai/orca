@@ -573,34 +573,6 @@
   flex: 0 0 auto;
 }
 
-.titlebar-dev-label {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--foreground);
-  font-family: var(--font-mono);
-  font-weight: 500;
-  text-overflow: ellipsis;
-}
-
-.titlebar-dev-label::before {
-  content: 'Dev:';
-  margin-right: 4px;
-  color: var(--muted-foreground);
-}
-
-.titlebar-dev-badge {
-  flex: 0 0 auto;
-  height: 16px;
-  padding: 0 4px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--muted-foreground);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 14px;
-}
-
 .titlebar-icon-button {
   -webkit-app-region: no-drag;
   background: none;
