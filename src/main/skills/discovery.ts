@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { Dirent } from 'node:fs'
-import { readdir, readFile, stat } from 'node:fs/promises'
+import { open, readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join, relative, sep } from 'node:path'
 import type { Repo } from '../../shared/types'
@@ -127,12 +127,17 @@ async function readSkillSummary(skillFilePath: string): Promise<{
 }> {
   try {
     const fileStat = await stat(skillFilePath)
-    const content = await readFile(skillFilePath, {
-      encoding: 'utf8',
-      flag: 'r'
-    })
+    const file = await open(skillFilePath, 'r')
+    let content = ''
+    try {
+      const buffer = Buffer.alloc(Math.min(fileStat.size, MAX_MARKDOWN_BYTES))
+      const { bytesRead } = await file.read(buffer, 0, buffer.length, 0)
+      content = buffer.toString('utf8', 0, bytesRead)
+    } finally {
+      await file.close()
+    }
     return {
-      ...summarizeSkillMarkdown(content.slice(0, MAX_MARKDOWN_BYTES)),
+      ...summarizeSkillMarkdown(content),
       updatedAt: fileStat.mtimeMs
     }
   } catch {
