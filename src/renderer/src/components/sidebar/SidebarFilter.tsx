@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import { Check, FolderPlus, ListFilter, Server } from 'lucide-react'
+import { Activity, Check, FolderPlus, GitBranch, ListFilter, Server } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import {
@@ -125,11 +125,13 @@ const SidebarFilter = React.memo(function SidebarFilter() {
       >
         <div className="space-y-0">
           <ToggleRow
+            icon={<Activity className="size-3.5" />}
             label="Active only"
             checked={showActiveOnly}
             onClick={() => setShowActiveOnly(!showActiveOnly)}
           />
           <ToggleRow
+            icon={<GitBranch className="size-3.5" />}
             label="Hide default branch"
             checked={hideDefaultBranchWorkspace}
             onClick={() => setHideDefaultBranchWorkspace(!hideDefaultBranchWorkspace)}
@@ -258,12 +260,13 @@ const SidebarFilter = React.memo(function SidebarFilter() {
 })
 
 type ToggleRowProps = {
+  icon: React.ReactNode
   label: string
   checked: boolean
   onClick: () => void
 }
 
-function ToggleRow({ label, checked, onClick }: ToggleRowProps) {
+function ToggleRow({ icon, label, checked, onClick }: ToggleRowProps) {
   // Why: the popover is not a true menu, so we use a plain button with
   // aria-pressed rather than role="menuitemcheckbox". The checkbox square
   // carries the state for sighted users.
@@ -286,6 +289,9 @@ function ToggleRow({ label, checked, onClick }: ToggleRowProps) {
         )}
       >
         {checked && <Check className="size-3" strokeWidth={2.5} />}
+      </span>
+      <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground">
+        {icon}
       </span>
       <span className="min-w-0 truncate">{label}</span>
     </button>
