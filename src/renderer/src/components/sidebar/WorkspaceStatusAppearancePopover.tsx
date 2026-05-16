@@ -49,7 +49,7 @@ export default function WorkspaceStatusAppearancePopover({
         align="end"
         side="left"
         sideOffset={8}
-        className="w-72 p-2"
+        className="z-[80] w-72 p-2"
         data-workspace-status-appearance-popover=""
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
