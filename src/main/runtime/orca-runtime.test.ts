@@ -1421,6 +1421,65 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('splits visible pty-backed terminal sessions through the parent renderer tab', async () => {
+    const spawn = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'pty-source' })
+      .mockResolvedValueOnce({ id: 'pty-split' })
+    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-bg' })
+    const splitTerminal = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession,
+      splitTerminal,
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    const sourceEnv =
+      (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
+    const sourceLeafId = sourceEnv.ORCA_PANE_KEY.slice(`${sourceEnv.ORCA_TAB_ID}:`.length)
+
+    await expect(runtime.splitTerminal(handle, { direction: 'vertical' })).resolves.toMatchObject({
+      handle: expect.stringMatching(/^term_/),
+      tabId: sourceEnv.ORCA_TAB_ID,
+      paneRuntimeId: -1
+    })
+
+    const splitEnv =
+      (spawn.mock.calls[1]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
+    const splitLeafId = splitEnv.ORCA_PANE_KEY.slice(`${sourceEnv.ORCA_TAB_ID}:`.length)
+    expect(splitTerminal).not.toHaveBeenCalled()
+    expect(splitEnv.ORCA_TAB_ID).toBe(sourceEnv.ORCA_TAB_ID)
+    expect(splitEnv.ORCA_WORKTREE_ID).toBe(TEST_WORKTREE_ID)
+    expect(revealTerminalSession).toHaveBeenLastCalledWith(TEST_WORKTREE_ID, {
+      ptyId: 'pty-split',
+      title: null,
+      activate: true,
+      tabId: sourceEnv.ORCA_TAB_ID,
+      leafId: splitLeafId,
+      splitFromLeafId: sourceLeafId,
+      splitDirection: 'vertical'
+    })
+  })
+
   it('returns a background handle when inactive tab adoption fails after spawn', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const revealTerminalSession = vi.fn().mockRejectedValue(new Error('Renderer timed out'))

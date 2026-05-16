@@ -424,6 +424,8 @@ type RuntimeNotifier = {
       activate?: boolean
       tabId?: string
       leafId?: string
+      splitFromLeafId?: string
+      splitDirection?: 'horizontal' | 'vertical'
     }
   ):
     | Promise<{ tabId: string; title?: string | null }>
@@ -6848,6 +6850,10 @@ export class OrcaRuntimeService {
     opts: { direction?: 'horizontal' | 'vertical'; command?: string } = {}
   ): Promise<RuntimeTerminalSplit> {
     this.assertGraphReady()
+    const livePty = this.getLivePtyForHandle(handle)
+    if (livePty) {
+      return await this.splitPtyBackedTerminal(livePty.pty, opts)
+    }
     const { leaf } = this.getLiveLeafForHandle(handle)
     const direction = opts.direction ?? 'horizontal'
 
@@ -6867,6 +6873,67 @@ export class OrcaRuntimeService {
 
     const newHandle = await this.waitForNewLeafInTab(leaf.tabId, leafKeysBefore)
     return { handle: newHandle, tabId: leaf.tabId, paneRuntimeId: leaf.paneRuntimeId }
+  }
+
+  private async splitPtyBackedTerminal(
+    pty: RuntimePtyWorktreeRecord,
+    opts: { direction?: 'horizontal' | 'vertical'; command?: string } = {}
+  ): Promise<RuntimeTerminalSplit> {
+    if (!this.ptyController?.spawn) {
+      throw new Error('runtime_unavailable')
+    }
+    if (!pty.connected) {
+      throw new Error('terminal_exited')
+    }
+    const parsedPaneKey = parsePaneKey(pty.paneKey ?? '')
+    const parentTabId = pty.tabId?.trim()
+    if (!parentTabId || !parsedPaneKey) {
+      throw new Error('terminal_handle_stale')
+    }
+    const direction = opts.direction ?? 'horizontal'
+    const worktree = await this.resolveWorktreeSelector(`id:${pty.worktreeId}`)
+    const repo = this.store?.getRepo(worktree.repoId)
+    const leafId = randomUUID()
+    const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
+    const paneKey = makePaneKey(parentTabId, leafId)
+    const result = await this.ptyController.spawn({
+      cols: 120,
+      rows: 40,
+      cwd: worktree.path,
+      command: opts.command,
+      env: {
+        ORCA_PANE_KEY: paneKey,
+        ORCA_TAB_ID: parentTabId,
+        ORCA_WORKTREE_ID: worktree.id
+      },
+      connectionId: repo?.connectionId ?? null,
+      worktreeId: worktree.id,
+      preAllocatedHandle
+    })
+    this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
+    this.registerPty(result.id, worktree.id)
+    const createdPty = this.getOrCreatePtyWorktreeRecord(result.id)
+    if (createdPty) {
+      createdPty.tabId = parentTabId
+      createdPty.paneKey = paneKey
+    }
+
+    try {
+      await this.notifier?.revealTerminalSession?.(worktree.id, {
+        ptyId: result.id,
+        title: null,
+        activate: true,
+        tabId: parentTabId,
+        leafId,
+        splitFromLeafId: parsedPaneKey.leafId,
+        splitDirection: direction
+      })
+    } catch (error) {
+      this.ptyController.kill?.(result.id)
+      throw error
+    }
+
+    return { handle: this.issuePtyHandle(createdPty ?? pty), tabId: parentTabId, paneRuntimeId: -1 }
   }
 
   private waitForNewLeafInTab(

@@ -15,11 +15,12 @@ import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 // ---------------------------------------------------------------------------
 
 /** Hints forwarded from splitPane() into onPaneCreated for a single split.
- *  Currently only carries the resolved cwd for the new pane's PTY spawn.
+ *  Carries one-shot PTY spawn/adoption data for the new pane.
  *  Kept as a separate parameter (rather than extending ManagedPane) so the
  *  hint is scoped to pane creation and does not live on the pane afterwards. */
 export type PaneSpawnHints = {
   cwd?: string
+  ptyId?: string
 }
 
 export type ClosedPaneInfo = {

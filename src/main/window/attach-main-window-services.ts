@@ -270,7 +270,9 @@ function registerRuntimeWindowLifecycle(
           // with the paneKey baked into the PTY env at spawn time, so hook
           // events route to the right slot.
           ...(opts.tabId !== undefined ? { tabId: opts.tabId } : {}),
-          ...(opts.leafId !== undefined ? { leafId: opts.leafId } : {})
+          ...(opts.leafId !== undefined ? { leafId: opts.leafId } : {}),
+          ...(opts.splitFromLeafId !== undefined ? { splitFromLeafId: opts.splitFromLeafId } : {}),
+          ...(opts.splitDirection !== undefined ? { splitDirection: opts.splitDirection } : {})
         })
       }),
     splitTerminal: (tabId, paneRuntimeId, opts) => {

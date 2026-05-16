@@ -13,7 +13,12 @@ import {
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-font-zoom'
-import type { UpdateStatus, WorkspaceSessionState } from '../../../shared/types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode,
+  UpdateStatus,
+  WorkspaceSessionState
+} from '../../../shared/types'
 import type {
   RemoteWorkspacePatchResult,
   RemoteWorkspaceSnapshot
@@ -63,6 +68,114 @@ const ZOOM_STEP = 0.5
 let remoteWorkspaceSnapshotApplyDepth = 0
 let remoteWorkspaceSnapshotWriteSuppressUntil = 0
 const REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS = 1000
+
+type TerminalSplitDirection = 'horizontal' | 'vertical'
+
+function insertLeafAfterSource(
+  node: TerminalPaneLayoutNode,
+  sourceLeafId: string,
+  newLeafId: string,
+  direction: TerminalSplitDirection
+): { node: TerminalPaneLayoutNode; inserted: boolean } {
+  if (node.type === 'leaf') {
+    if (node.leafId !== sourceLeafId) {
+      return { node, inserted: false }
+    }
+    return {
+      node: {
+        type: 'split',
+        direction,
+        first: node,
+        second: { type: 'leaf', leafId: newLeafId },
+        ratio: 0.5
+      },
+      inserted: true
+    }
+  }
+
+  const first = insertLeafAfterSource(node.first, sourceLeafId, newLeafId, direction)
+  if (first.inserted) {
+    return { node: { ...node, first: first.node }, inserted: true }
+  }
+  const second = insertLeafAfterSource(node.second, sourceLeafId, newLeafId, direction)
+  if (second.inserted) {
+    return { node: { ...node, second: second.node }, inserted: true }
+  }
+  return { node, inserted: false }
+}
+
+function addSplitLeafToLayout(
+  layout: TerminalLayoutSnapshot | null | undefined,
+  sourceLeafId: string,
+  newLeafId: string,
+  ptyId: string,
+  direction: TerminalSplitDirection,
+  title?: string | null
+): TerminalLayoutSnapshot {
+  const root = layout?.root ?? { type: 'leaf', leafId: sourceLeafId }
+  const existingLeafIds = collectLeafIdsInOrder(root)
+  const nextRoot = existingLeafIds.includes(newLeafId)
+    ? root
+    : (() => {
+        const inserted = insertLeafAfterSource(root, sourceLeafId, newLeafId, direction)
+        if (inserted.inserted) {
+          return inserted.node
+        }
+        return {
+          type: 'split' as const,
+          direction,
+          first: root,
+          second: { type: 'leaf' as const, leafId: newLeafId },
+          ratio: 0.5
+        }
+      })()
+  return {
+    ...(layout ?? { root: null, activeLeafId: null, expandedLeafId: null }),
+    root: nextRoot,
+    activeLeafId: newLeafId,
+    expandedLeafId: null,
+    ptyIdsByLeafId: {
+      ...layout?.ptyIdsByLeafId,
+      [newLeafId]: ptyId
+    },
+    ...(title
+      ? {
+          titlesByLeafId: {
+            ...layout?.titlesByLeafId,
+            [newLeafId]: title
+          }
+        }
+      : {})
+  }
+}
+
+function activateExistingLeafInLayout(
+  layout: TerminalLayoutSnapshot | null | undefined,
+  leafId: string,
+  ptyId: string,
+  title?: string | null
+): TerminalLayoutSnapshot | null {
+  if (!layout?.root || !collectLeafIdsInOrder(layout.root).includes(leafId)) {
+    return null
+  }
+  return {
+    ...layout,
+    activeLeafId: leafId,
+    expandedLeafId: null,
+    ptyIdsByLeafId: {
+      ...layout.ptyIdsByLeafId,
+      [leafId]: ptyId
+    },
+    ...(title
+      ? {
+          titlesByLeafId: {
+            ...layout.titlesByLeafId,
+            [leafId]: title
+          }
+        }
+      : {})
+  }
+}
 
 export function isRemoteWorkspaceSnapshotApplyInProgress(): boolean {
   return (
@@ -588,7 +701,18 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onCreateTerminal(
-        ({ requestId, worktreeId, command, title, ptyId, activate, tabId, leafId }) => {
+        ({
+          requestId,
+          worktreeId,
+          command,
+          title,
+          ptyId,
+          activate,
+          tabId,
+          leafId,
+          splitFromLeafId,
+          splitDirection
+        }) => {
           try {
             if (isRuntimeEnvironmentActive()) {
               if (requestId) {
@@ -617,8 +741,16 @@ export function useIpcEvents(): void {
                     (store.ptyIdsByTabId[candidate.id] ?? []).includes(ptyId)
                 )
               : undefined
+            const isSplitReveal = Boolean(ptyId && tabId && leafId && splitFromLeafId)
+            const splitTargetTab = isSplitReveal
+              ? (store.tabsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === tabId)
+              : undefined
+            if (isSplitReveal && !splitTargetTab) {
+              throw new Error(`Terminal tab ${tabId} not found`)
+            }
+            const reusedTab = existingTab ?? splitTargetTab
             const tab =
-              existingTab ??
+              reusedTab ??
               (ptyId
                 ? store.createTab(worktreeId, undefined, undefined, {
                     initialPtyId: ptyId,
@@ -647,14 +779,57 @@ export function useIpcEvents(): void {
             // Existing tabs may have a user customTitle (set via UI rename) that
             // the runtime's stored title would otherwise silently overwrite on
             // every focus.
-            if (title && !existingTab) {
+            if (title && !reusedTab) {
               store.setTabCustomTitle(tab.id, title)
             }
             if (leafId && ptyId) {
-              // Why: CLI/runtime-spawned PTYs emit hook events before a hidden
-              // tab mounts TerminalPane, so the adopted UUID leaf must exist
-              // in layout state for paneKey validation to accept them.
-              store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId, title))
+              if (splitFromLeafId) {
+                // Why: runtime-spawned split PTYs already carry the parent tab's
+                // paneKey. Reusing the existing tab preserves native split-pane
+                // behavior instead of letting createTab mint a collision tab.
+                store.updateTabPtyId(tab.id, ptyId)
+                store.setTabLayout(
+                  tab.id,
+                  addSplitLeafToLayout(
+                    store.terminalLayoutsByTabId?.[tab.id],
+                    splitFromLeafId,
+                    leafId,
+                    ptyId,
+                    splitDirection ?? 'horizontal',
+                    title
+                  )
+                )
+                window.dispatchEvent(
+                  new CustomEvent<SplitTerminalPaneDetail>(SPLIT_TERMINAL_PANE_EVENT, {
+                    detail: {
+                      tabId: tab.id,
+                      paneRuntimeId: -1,
+                      direction: splitDirection ?? 'horizontal',
+                      sourceLeafId: splitFromLeafId,
+                      newLeafId: leafId,
+                      ptyId
+                    }
+                  })
+                )
+              } else {
+                // Why: CLI/runtime-spawned PTYs emit hook events before a hidden
+                // tab mounts TerminalPane, so the adopted UUID leaf must exist
+                // in layout state for paneKey validation to accept them.
+                const existingLayout = reusedTab
+                  ? activateExistingLeafInLayout(
+                      store.terminalLayoutsByTabId?.[tab.id],
+                      leafId,
+                      ptyId,
+                      title
+                    )
+                  : null
+                if (existingLayout) {
+                  store.updateTabPtyId(tab.id, ptyId)
+                  store.setTabLayout(tab.id, existingLayout)
+                } else {
+                  store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId, title))
+                }
+              }
             }
             if (command) {
               store.queueTabStartupCommand(tab.id, { command })

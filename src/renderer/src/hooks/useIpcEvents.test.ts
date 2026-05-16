@@ -545,6 +545,8 @@ describe('useIpcEvents updater integration', () => {
     const revealWorktreeInSidebar = vi.fn()
     const setTabCustomTitle = vi.fn()
     const queueTabStartupCommand = vi.fn()
+    const updateTabPtyId = vi.fn()
+    const setTabLayout = vi.fn()
     const replyTerminalCreate = vi.fn()
     const dispatchEvent = vi.fn()
     const storeState = {
@@ -558,8 +560,11 @@ describe('useIpcEvents updater integration', () => {
       revealWorktreeInSidebar,
       setTabCustomTitle,
       queueTabStartupCommand,
+      updateTabPtyId,
+      setTabLayout,
       tabsByWorktree: {} as Record<string, { id: string; ptyId?: string | null; title?: string }[]>,
       ptyIdsByTabId: {} as Record<string, string[]>,
+      terminalLayoutsByTabId: {} as Record<string, unknown>,
       fetchRepos: vi.fn(),
       fetchWorktrees: vi.fn(),
       activeModal: null,
@@ -594,6 +599,9 @@ describe('useIpcEvents updater integration', () => {
             ptyId?: string
             activate?: boolean
             tabId?: string
+            leafId?: string
+            splitFromLeafId?: string
+            splitDirection?: 'horizontal' | 'vertical'
           }) => void)
         | null
     } = { current: null }
@@ -684,6 +692,9 @@ describe('useIpcEvents updater integration', () => {
               ptyId?: string
               activate?: boolean
               tabId?: string
+              leafId?: string
+              splitFromLeafId?: string
+              splitDirection?: 'horizontal' | 'vertical'
             }) => void
           ) => {
             createTerminalListenerRef.current = listener
@@ -898,6 +909,97 @@ describe('useIpcEvents updater integration', () => {
       tabId: 'tab-existing',
       title: 'Terminal 1'
     })
+
+    storeState.tabsByWorktree = {
+      'wt-2': [{ id: 'tab-existing', ptyId: 'pty-bg', title: 'Terminal 1' }]
+    }
+    storeState.ptyIdsByTabId = { 'tab-existing': ['pty-bg'] }
+    storeState.terminalLayoutsByTabId = {
+      'tab-existing': {
+        root: { type: 'leaf', leafId: 'leaf-source' },
+        activeLeafId: 'leaf-source',
+        expandedLeafId: null,
+        ptyIdsByLeafId: { 'leaf-source': 'pty-bg' }
+      }
+    }
+    createTab.mockClear()
+    updateTabPtyId.mockClear()
+    setTabLayout.mockClear()
+    replyTerminalCreate.mockClear()
+    createTerminalListenerRef.current({
+      requestId: 'req-split',
+      worktreeId: 'wt-2',
+      ptyId: 'pty-split',
+      tabId: 'tab-existing',
+      leafId: 'leaf-split',
+      splitFromLeafId: 'leaf-source',
+      splitDirection: 'vertical'
+    })
+
+    expect(createTab).not.toHaveBeenCalled()
+    expect(updateTabPtyId).toHaveBeenCalledWith('tab-existing', 'pty-split')
+    expect(setTabLayout).toHaveBeenCalledWith('tab-existing', {
+      root: {
+        type: 'split',
+        direction: 'vertical',
+        first: { type: 'leaf', leafId: 'leaf-source' },
+        second: { type: 'leaf', leafId: 'leaf-split' },
+        ratio: 0.5
+      },
+      activeLeafId: 'leaf-split',
+      expandedLeafId: null,
+      ptyIdsByLeafId: {
+        'leaf-source': 'pty-bg',
+        'leaf-split': 'pty-split'
+      }
+    })
+    expect(dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'orca-split-terminal-pane',
+        detail: {
+          tabId: 'tab-existing',
+          paneRuntimeId: -1,
+          direction: 'vertical',
+          sourceLeafId: 'leaf-source',
+          newLeafId: 'leaf-split',
+          ptyId: 'pty-split'
+        }
+      })
+    )
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-split',
+      tabId: 'tab-existing',
+      title: 'Terminal 1'
+    })
+
+    const splitLayout = {
+      root: {
+        type: 'split',
+        direction: 'vertical',
+        first: { type: 'leaf', leafId: 'leaf-source' },
+        second: { type: 'leaf', leafId: 'leaf-split' },
+        ratio: 0.5
+      },
+      activeLeafId: 'leaf-split',
+      expandedLeafId: null,
+      ptyIdsByLeafId: {
+        'leaf-source': 'pty-bg',
+        'leaf-split': 'pty-split'
+      }
+    }
+    storeState.ptyIdsByTabId = { 'tab-existing': ['pty-bg', 'pty-split'] }
+    storeState.terminalLayoutsByTabId = { 'tab-existing': splitLayout }
+    updateTabPtyId.mockClear()
+    setTabLayout.mockClear()
+    createTerminalListenerRef.current({
+      worktreeId: 'wt-2',
+      ptyId: 'pty-split',
+      tabId: 'tab-existing',
+      leafId: 'leaf-split'
+    })
+
+    expect(updateTabPtyId).toHaveBeenCalledWith('tab-existing', 'pty-split')
+    expect(setTabLayout).toHaveBeenCalledWith('tab-existing', splitLayout)
   })
 })
 

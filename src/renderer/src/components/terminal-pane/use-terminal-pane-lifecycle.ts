@@ -606,6 +606,12 @@ export function useTerminalPaneLifecycle({
           // source pane) must override the tab-level ptyDeps.cwd (worktree
           // root) so Cmd+D splits boot in the live cwd.
           ...(spawnHints?.cwd ? { cwd: spawnHints.cwd } : {}),
+          restoredPtyIdByLeafId: spawnHints?.ptyId
+            ? {
+                ...ptyDeps.restoredPtyIdByLeafId,
+                [pane.leafId]: spawnHints.ptyId
+              }
+            : ptyDeps.restoredPtyIdByLeafId,
           restoredLeafId: pane.leafId
         })
         // Why: connectPanePty receives a spread copy of ptyDeps, so the
@@ -948,12 +954,25 @@ export function useTerminalPaneLifecycle({
       if (!mgr) {
         return
       }
+      if (detail.newLeafId && mgr.getNumericIdForLeaf(detail.newLeafId) !== null) {
+        return
+      }
+      const sourcePaneId = detail.sourceLeafId
+        ? (mgr.getNumericIdForLeaf(detail.sourceLeafId) ?? detail.paneRuntimeId)
+        : detail.paneRuntimeId
+      if (sourcePaneId < 0) {
+        return
+      }
+      const splitOptions = {
+        ...(detail.newLeafId ? { leafId: detail.newLeafId } : {}),
+        ...(detail.ptyId ? { ptyId: detail.ptyId } : {})
+      }
       if (detail.command) {
         splitPaneWithOneShotStartup(ptyDeps, { command: detail.command }, () =>
-          mgr.splitPane(detail.paneRuntimeId, detail.direction)
+          mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
         )
       } else {
-        mgr.splitPane(detail.paneRuntimeId, detail.direction)
+        mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
       }
     }
     window.addEventListener(SPLIT_TERMINAL_PANE_EVENT, onCliSplitPane)
