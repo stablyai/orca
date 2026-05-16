@@ -17,11 +17,11 @@ import { CircleDot, GitMerge, Pencil, Unlink } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import CommentMarkdown from './CommentMarkdown'
 import { PullRequestIcon, prStateLabel, checksLabel } from './WorktreeCardHelpers'
+import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import {
   CLOSE_ALL_CONTEXT_MENUS_EVENT,
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR
 } from './WorktreeContextMenu'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { IssueInfo } from '../../../../shared/types'
 
 // ── Issue section ────────────────────────────────────────────────────
@@ -93,16 +93,16 @@ export function IssueSection({ issue, onClick }: IssueSectionProps): React.JSX.E
 // ── Hosted review section ────────────────────────────────────────────
 
 type ReviewSectionProps = {
-  review: HostedReviewInfo
+  review: WorktreeCardPrDisplay
   onEdit: () => void
   onRemove: () => void
 }
 
-function getReviewLabel(review: HostedReviewInfo): 'MR' | 'PR' {
+function getReviewLabel(review: WorktreeCardPrDisplay): 'MR' | 'PR' {
   return review.provider === 'gitlab' ? 'MR' : 'PR'
 }
 
-function getProviderName(review: HostedReviewInfo): string {
+function getProviderName(review: WorktreeCardPrDisplay): string {
   if (review.provider === 'gitlab') {
     return 'GitLab'
   }
@@ -115,7 +115,7 @@ function getProviderName(review: HostedReviewInfo): string {
   return 'GitHub'
 }
 
-function ReviewIcon({ review }: { review: HostedReviewInfo }): React.JSX.Element {
+function ReviewIcon({ review }: { review: WorktreeCardPrDisplay }): React.JSX.Element {
   const Icon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
   return (
     <Icon
@@ -137,47 +137,72 @@ export function ReviewSection({ review, onEdit, onRemove }: ReviewSectionProps):
   const [menuPoint, setMenuPoint] = React.useState({ x: 0, y: 0 })
   const label = getReviewLabel(review)
   const providerName = getProviderName(review)
-  const hasChecks = review.status !== 'neutral'
+  const checksText =
+    review.status !== undefined && review.status !== 'neutral' ? checksLabel(review.status) : null
   const canManageGitHubLink = review.provider === 'github'
+  const stateLabel = review.state ? prStateLabel(review.state) : null
+
+  const reviewRow = (
+    <>
+      <ReviewIcon review={review} />
+      <div className="flex-1 min-w-0 flex items-center gap-1.5 text-[11.5px] leading-none">
+        <span className="text-foreground opacity-80 shrink-0 group-hover/meta:underline">
+          {label} #{review.number}
+        </span>
+        <span className="text-muted-foreground truncate group-hover/meta:text-foreground transition-colors">
+          {review.title}
+        </span>
+      </div>
+    </>
+  )
+
+  const trigger = review.url ? (
+    <a
+      href={review.url}
+      target="_blank"
+      rel="noreferrer"
+      className="flex items-center gap-1.5 min-w-0 cursor-pointer group/meta -mx-1.5 px-1.5 py-0.5 rounded transition-colors hover:bg-background/40"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {reviewRow}
+    </a>
+  ) : (
+    <button
+      type="button"
+      className="flex w-full items-center gap-1.5 min-w-0 cursor-pointer group/meta -mx-1.5 px-1.5 py-0.5 rounded transition-colors hover:bg-background/40 text-left"
+      onClick={(e) => {
+        e.stopPropagation()
+        onEdit()
+      }}
+    >
+      {reviewRow}
+    </button>
+  )
 
   const content = (
     <HoverCard openDelay={300}>
-      <HoverCardTrigger asChild>
-        <a
-          href={review.url}
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center gap-1.5 min-w-0 cursor-pointer group/meta -mx-1.5 px-1.5 py-0.5 rounded transition-colors hover:bg-background/40"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <ReviewIcon review={review} />
-          <div className="flex-1 min-w-0 flex items-center gap-1.5 text-[11.5px] leading-none">
-            <span className="text-foreground opacity-80 shrink-0 group-hover/meta:underline">
-              {label} #{review.number}
-            </span>
-            <span className="text-muted-foreground truncate group-hover/meta:text-foreground transition-colors">
-              {review.title}
-            </span>
-          </div>
-        </a>
-      </HoverCardTrigger>
+      <HoverCardTrigger asChild>{trigger}</HoverCardTrigger>
       <HoverCardContent side="right" align="start" className="w-72 p-3 text-xs space-y-1.5">
         <div className="font-semibold text-[13px]">
           {label} #{review.number} {review.title}
         </div>
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <span>State: {prStateLabel(review.state)}</span>
-          {hasChecks && <span>Checks: {checksLabel(review.status)}</span>}
-        </div>
-        <a
-          href={review.url}
-          target="_blank"
-          rel="noreferrer"
-          className="text-muted-foreground underline underline-offset-2 hover:text-foreground"
-          onClick={(e) => e.stopPropagation()}
-        >
-          View on {providerName}
-        </a>
+        {(stateLabel || checksText) && (
+          <div className="flex items-center gap-2 text-muted-foreground">
+            {stateLabel && <span>State: {stateLabel}</span>}
+            {checksText && <span>Checks: {checksText}</span>}
+          </div>
+        )}
+        {review.url && (
+          <a
+            href={review.url}
+            target="_blank"
+            rel="noreferrer"
+            className="text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            onClick={(e) => e.stopPropagation()}
+          >
+            View on {providerName}
+          </a>
+        )}
       </HoverCardContent>
     </HoverCard>
   )
