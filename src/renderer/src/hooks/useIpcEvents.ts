@@ -1474,7 +1474,8 @@ export function useIpcEvents(): void {
       if (!payload) {
         return
       }
-      const { exists, title, repoConnectionId } = resolvePaneKey(store, data.paneKey)
+      const { exists, title, repoConnectionId, repoConnectionResolved, owningWorktreeId } =
+        resolvePaneKey(store, data.paneKey)
       if (!exists) {
         // Why: empty paneKeys are dropped in main before IPC fanout. Reaching
         // this branch means a non-empty paneKey escaped without a matching
@@ -1496,7 +1497,22 @@ export function useIpcEvents(): void {
       // The IPC contract declares connectionId as required (string | null),
       // so the undefined branch only fires under dev hot-reload skew where
       // the renderer bundle is newer than the preload bundle.
-      if (data.connectionId !== undefined && data.connectionId !== repoConnectionId) {
+      // Why: startup snapshot replay can beat repo/worktree hydration for SSH
+      // panes. If the pane is already present and the event's worktreeId
+      // matches that tab's worktree, accept the status until repo ownership
+      // becomes available; once ownership is resolved, keep the strict
+      // connectionId check below.
+      const canAcceptPendingRemoteOwnership =
+        data.connectionId !== undefined &&
+        data.connectionId !== null &&
+        !repoConnectionResolved &&
+        data.worktreeId !== undefined &&
+        data.worktreeId === owningWorktreeId
+      if (
+        data.connectionId !== undefined &&
+        data.connectionId !== repoConnectionId &&
+        !canAcceptPendingRemoteOwnership
+      ) {
         return
       }
       store.setAgentStatus(data.paneKey, payload, title, {
@@ -1685,29 +1701,47 @@ export function useIpcEvents(): void {
 }
 
 /** Resolve a paneKey (tabId:leafId) to both a liveness check and the current
- *  title, and the connectionId of the repo that owns the pane's worktree.
+ *  title, the pane's worktree, and the connectionId of the repo that owns it.
  *  Walks tabsByWorktree to locate the tab, then resolves the owning worktree
  *  and repo via cached selector maps. Used for agent type inference when the
  *  CLI payload omits agentType, plus to drop status updates targeted at panes
  *  whose tabs have already been torn down or whose owning connection is no
  *  longer live (see docs/design/agent-status-over-ssh.md §5).
- *  Why combined: callers need all three pieces per hook event, and hook
+ *  Why combined: callers need all routing pieces per hook event, and hook
  *  events can fire many times per second during a tool-use run. Bundling
  *  liveness + title + connectionId into one helper keeps the per-event work
  *  in one place and avoids re-deriving the owning repo at the call site. */
 function resolvePaneKey(
   store: ReturnType<typeof useAppStore.getState>,
   paneKey: string
-): { exists: boolean; title: string | undefined; repoConnectionId: string | null } {
+): {
+  exists: boolean
+  title: string | undefined
+  repoConnectionId: string | null
+  repoConnectionResolved: boolean
+  owningWorktreeId: string | undefined
+} {
   const parsed = parsePaneKey(paneKey)
   if (!parsed) {
-    return { exists: false, title: undefined, repoConnectionId: null }
+    return {
+      exists: false,
+      title: undefined,
+      repoConnectionId: null,
+      repoConnectionResolved: false,
+      owningWorktreeId: undefined
+    }
   }
   const { tabId, leafId } = parsed
   const layout = store.terminalLayoutsByTabId?.[tabId]
   const leafExists = collectLeafIdsInOrder(layout?.root).includes(leafId)
   if (!leafExists) {
-    return { exists: false, title: undefined, repoConnectionId: null }
+    return {
+      exists: false,
+      title: undefined,
+      repoConnectionId: null,
+      repoConnectionResolved: false,
+      owningWorktreeId: undefined
+    }
   }
   // Why: replay can remint numeric pane ids, so status title recovery must use
   // persisted leaf-keyed titles when crossing from hook state into tab state.
@@ -1734,16 +1768,24 @@ function resolvePaneKey(
     }
   }
   // Why: ownership lookup is `tab → worktree → repo → repo.connectionId`.
-  // Treat unknown owner (no matching worktree/repo) as `null` so remote
-  // events stamped with a string connectionId are dropped by the caller —
-  // we cannot prove they belong to the currently-live local repo.
+  // Keep "resolved to a local repo" distinct from "not hydrated yet" so the
+  // caller can preserve strict filtering after hydration while accepting SSH
+  // snapshots that arrive during the startup ownership gap.
   let repoConnectionId: string | null = null
+  let repoConnectionResolved = false
   if (owningWorktreeId !== undefined) {
     const worktree = getWorktreeMapFromState(store).get(owningWorktreeId)
     if (worktree) {
       const repo = getRepoMapFromState(store).get(worktree.repoId)
+      repoConnectionResolved = repo !== undefined
       repoConnectionId = repo?.connectionId ?? null
     }
   }
-  return { exists, title: paneTitle ?? tabTitle, repoConnectionId }
+  return {
+    exists,
+    title: paneTitle ?? tabTitle,
+    repoConnectionId,
+    repoConnectionResolved,
+    owningWorktreeId
+  }
 }
