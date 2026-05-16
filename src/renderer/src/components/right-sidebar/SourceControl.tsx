@@ -190,6 +190,11 @@ const SOURCE_CONTROL_TREE_INDENT_PX = 12
 const SOURCE_CONTROL_TREE_DIRECTORY_PADDING_PX = 8
 const SOURCE_CONTROL_TREE_FILE_PADDING_PX = 20
 const EMPTY_GIT_HISTORY_STATE: GitHistoryPanelState = { status: 'idle' }
+const DEFAULT_COLLAPSED_SECTIONS = ['history'] as const
+
+function createDefaultCollapsedSections(): Set<string> {
+  return new Set(DEFAULT_COLLAPSED_SECTIONS)
+}
 
 // Why: the pure state-machine logic now lives in
 // ./source-control-primary-action.ts. It is imported directly by callers
@@ -473,7 +478,9 @@ function SourceControlInner(): React.JSX.Element {
   ])
 
   const [scope, setScope] = useState<SourceControlScope>('all')
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
+    createDefaultCollapsedSections
+  )
   const [sourceControlViewMode, setSourceControlViewMode] = useState<SourceControlViewMode>('list')
   const [collapsedTreeDirs, setCollapsedTreeDirs] = useState<Set<string>>(new Set())
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
@@ -901,7 +908,7 @@ function SourceControlInner(): React.JSX.Element {
   // worktree's UI state doesn't leak into the new one.
   useEffect(() => {
     setScope('all')
-    setCollapsedSections(new Set())
+    setCollapsedSections(createDefaultCollapsedSections())
     setCollapsedTreeDirs(new Set())
     setBaseRefDialogOpen(false)
     setPendingDiscard(null)
