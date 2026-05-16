@@ -57,7 +57,6 @@ import TeamMultiCombobox from '@/components/ui/team-multi-combobox'
 import RepoDotLabel from '@/components/repo/RepoDotLabel'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import IssueSourceSelector, { issueSourceChipClass } from '@/components/github/IssueSourceSelector'
-import GitHubRateLimitPill from '@/components/github/GitHubRateLimitPill'
 import { reconcileLinearTeamSelection } from '@/components/task-page-linear-team-selection'
 import { stripRepoQualifiers } from '../../../shared/task-query'
 import GitHubItemDialog from '@/components/GitHubItemDialog'
@@ -2161,13 +2160,6 @@ export default function TaskPage(): React.JSX.Element {
                       </div>
 
                       <div className="flex shrink-0 items-center gap-2">
-                        {/* Why: GitHub API budget pill is anchored next to the
-                            Refresh button so the "maybe I shouldn't click
-                            refresh again" decision is one glance away. Only
-                            rendered in the GitHub section because Linear has
-                            its own SDK-based quota and doesn't consume gh
-                            budget. */}
-                        <GitHubRateLimitPill />
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
