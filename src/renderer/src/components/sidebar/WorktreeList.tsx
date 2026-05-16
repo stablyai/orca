@@ -80,6 +80,7 @@ const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
   overflowAnchor: 'none'
 }
 const WORKTREE_REMOVE_LAYOUT_ANIMATION_MS = 180
+const WORKTREE_REMOVE_LAYOUT_ANIMATION_EASING = 'cubic-bezier(0.16, 1, 0.3, 1)'
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -216,6 +217,18 @@ function getRenderRowKey(row: RenderRow): string {
   return `wt:${row.worktree.id}`
 }
 
+function getVirtualRowTransform(start: number): string {
+  return `translateY(${start}px)`
+}
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+}
+
 const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewport({
   rows,
   activeWorktreeId,
@@ -263,8 +276,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     () => buildRenderableRows(rows, showWorkspaceLineage),
     [rows, showWorkspaceLineage]
   )
-  const [layoutAnimationActive, setLayoutAnimationActive] = useState(false)
   const previousRenderRowCountRef = useRef(renderRows.length)
+  const previousVirtualRowTopByKeyRef = useRef(new Map<string, number>())
+  const activeVirtualRowAnimationsRef = useRef(new Map<string, Animation>())
   const activeWorktreeRowIndex = useMemo(
     () => renderRows.findIndex((row) => renderRowContainsWorktree(row, activeWorktreeId)),
     [renderRows, activeWorktreeId]
@@ -388,6 +402,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const prCacheLen = useAppStore((s) => Object.keys(s.prCache).length)
   const issueCacheLen = useAppStore((s) => Object.keys(s.issueCache).length)
   const totalSize = virtualizer.getTotalSize()
+  const virtualItems = virtualizer.getVirtualItems()
   useVirtualizedScrollAnchor({
     anchorRef: scrollAnchorRef,
     getRowKey: getRenderRowKey,
@@ -399,19 +414,88 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   })
 
   useEffect(() => {
+    const activeAnimations = activeVirtualRowAnimationsRef.current
+    return () => {
+      activeAnimations.forEach((animation) => animation.cancel())
+      activeAnimations.clear()
+    }
+  }, [])
+
+  useLayoutEffect(() => {
     const previousCount = previousRenderRowCountRef.current
-    previousRenderRowCountRef.current = renderRows.length
-    if (renderRows.length >= previousCount) {
-      return
+    const rowCountDecreased = renderRows.length < previousCount
+    const previousTopByKey = previousVirtualRowTopByKeyRef.current
+    const nextTopByKey = new Map<string, number>()
+    const activeRowKeys = new Set<string>()
+    const scrollElement = scrollRef.current
+    const scrollTop = scrollElement?.scrollTop ?? 0
+    const viewportTop = scrollElement?.getBoundingClientRect().top ?? 0
+
+    const elementByRowKey = new Map<string, HTMLElement>()
+    scrollElement
+      ?.querySelectorAll<HTMLElement>('[data-worktree-virtual-row-key]')
+      .forEach((element) => {
+        const rowKey = element.dataset.worktreeVirtualRowKey
+        if (rowKey) {
+          elementByRowKey.set(rowKey, element)
+        }
+      })
+
+    for (const item of virtualItems) {
+      const rowKey = String(item.key)
+      const currentTop = viewportTop + item.start - scrollTop
+      nextTopByKey.set(rowKey, currentTop)
+      activeRowKeys.add(rowKey)
+
+      if (!rowCountDecreased || prefersReducedMotion()) {
+        continue
+      }
+
+      const element = elementByRowKey.get(rowKey)
+      const previousTop = previousTopByKey.get(rowKey)
+      if (!element || previousTop === undefined || typeof element.animate !== 'function') {
+        continue
+      }
+
+      const delta = previousTop - currentTop
+      if (Math.abs(delta) < 1) {
+        continue
+      }
+
+      const runningAnimation = activeVirtualRowAnimationsRef.current.get(rowKey)
+      const fromTransform = runningAnimation
+        ? window.getComputedStyle(element).transform
+        : getVirtualRowTransform(item.start + delta)
+      runningAnimation?.cancel()
+
+      // Why: CSS transition classes are one render behind delete commits. FLIP
+      // keeps rapid multi-delete rows anchored to their current visual position.
+      const animation = element.animate(
+        [{ transform: fromTransform }, { transform: getVirtualRowTransform(item.start) }],
+        {
+          duration: WORKTREE_REMOVE_LAYOUT_ANIMATION_MS,
+          easing: WORKTREE_REMOVE_LAYOUT_ANIMATION_EASING
+        }
+      )
+      activeVirtualRowAnimationsRef.current.set(rowKey, animation)
+      void animation.finished
+        .catch(() => undefined)
+        .finally(() => {
+          if (activeVirtualRowAnimationsRef.current.get(rowKey) === animation) {
+            activeVirtualRowAnimationsRef.current.delete(rowKey)
+          }
+        })
     }
 
-    setLayoutAnimationActive(true)
-    const timeoutId = window.setTimeout(
-      () => setLayoutAnimationActive(false),
-      WORKTREE_REMOVE_LAYOUT_ANIMATION_MS
-    )
-    return () => window.clearTimeout(timeoutId)
-  }, [renderRows.length])
+    activeVirtualRowAnimationsRef.current.forEach((animation, rowKey) => {
+      if (!activeRowKeys.has(rowKey)) {
+        animation.cancel()
+        activeVirtualRowAnimationsRef.current.delete(rowKey)
+      }
+    })
+    previousRenderRowCountRef.current = renderRows.length
+    previousVirtualRowTopByKeyRef.current = nextTopByKey
+  }, [renderRows.length, virtualItems])
 
   useLayoutEffect(() => {
     virtualizer.elementsCache.forEach((element) => {
@@ -542,7 +626,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     [renderRows]
   )
 
-  const virtualItems = virtualizer.getVirtualItems()
   const activeDescendantId =
     activeWorktreeId != null &&
     activeWorktreeRowIndex !== -1 &&
@@ -631,10 +714,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       aria-multiselectable="true"
       aria-activedescendant={activeDescendantId}
       onKeyDown={handleContainerKeyDown}
-      className={cn(
-        'worktree-sidebar-scrollbar flex-1 overflow-y-scroll overflow-x-hidden pl-1 scrollbar-sleek outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px',
-        layoutAnimationActive && 'worktree-sidebar-layout-animate'
-      )}
+      className="worktree-sidebar-scrollbar flex-1 overflow-y-scroll overflow-x-hidden pl-1 scrollbar-sleek outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px"
       style={WORKTREE_SIDEBAR_SCROLL_STYLE}
     >
       <div
@@ -672,10 +752,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 key={vItem.key}
                 role="presentation"
                 data-worktree-virtual-row
+                data-worktree-virtual-row-key={String(vItem.key)}
                 data-index={vItem.index}
                 ref={virtualizer.measureElement}
                 className="absolute left-0 right-0"
-                style={{ transform: `translateY(${vItem.start}px)` }}
+                style={{ transform: getVirtualRowTransform(vItem.start) }}
               >
                 <div
                   role="button"
@@ -986,10 +1067,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 key={vItem.key}
                 role="presentation"
                 data-worktree-virtual-row
+                data-worktree-virtual-row-key={String(vItem.key)}
                 data-index={vItem.index}
                 ref={virtualizer.measureElement}
                 className="absolute left-0 right-0"
-                style={{ transform: `translateY(${vItem.start}px)` }}
+                style={{ transform: getVirtualRowTransform(vItem.start) }}
               >
                 <div className="overflow-visible">
                   {parent
@@ -1013,12 +1095,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               key={vItem.key}
               role="presentation"
               data-worktree-virtual-row
+              data-worktree-virtual-row-key={String(vItem.key)}
               data-index={vItem.index}
               ref={virtualizer.measureElement}
               data-workspace-status-drop-target={itemWorkspaceStatus ? '' : undefined}
               data-workspace-status={itemWorkspaceStatus ?? undefined}
               className="absolute left-0 right-0"
-              style={{ transform: `translateY(${vItem.start}px)` }}
+              style={{ transform: getVirtualRowTransform(vItem.start) }}
               onDragOver={
                 itemWorkspaceStatus
                   ? (event) => handleWorkspaceStatusDragOver(event, itemWorkspaceStatus)
