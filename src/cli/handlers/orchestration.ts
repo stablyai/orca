@@ -207,12 +207,18 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   },
 
   'orchestration task-create': async ({ flags, client, json }) => {
+    const callerTerminalHandle =
+      typeof process.env.ORCA_TERMINAL_HANDLE === 'string' &&
+      process.env.ORCA_TERMINAL_HANDLE.length > 0
+        ? process.env.ORCA_TERMINAL_HANDLE
+        : undefined
     const result = await client.call<{ task: { id: string; status: string } }>(
       'orchestration.taskCreate',
       {
         spec: getRequiredStringFlag(flags, 'spec'),
         deps: getOptionalStringFlag(flags, 'deps'),
-        parent: getOptionalStringFlag(flags, 'parent')
+        parent: getOptionalStringFlag(flags, 'parent'),
+        callerTerminalHandle
       }
     )
     printResult(result, json, (r) => `Created ${r.task.id} [${r.task.status}]`)

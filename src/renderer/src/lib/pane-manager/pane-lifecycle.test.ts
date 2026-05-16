@@ -83,6 +83,10 @@ describe('attachWebgl', () => {
     webglMock.dispose.mockClear()
     vi.mocked(WebglAddon).mockClear()
     resetTerminalWebglSuggestion()
+    vi.stubGlobal('navigator', {
+      platform: 'MacIntel',
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
+    })
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(16)
       return 1
@@ -139,6 +143,32 @@ describe('attachWebgl', () => {
 
     expect(pane.webglAddon).toBeNull()
     expect(pane.terminal.loadAddon).not.toHaveBeenCalled()
+  })
+
+  it('uses DOM rendering for auto GPU acceleration on Linux', () => {
+    vi.stubGlobal('navigator', {
+      platform: 'Linux x86_64',
+      userAgent: 'Mozilla/5.0 (X11; Linux x86_64)'
+    })
+    const pane = createPane()
+
+    attachWebgl(pane)
+
+    expect(pane.webglAddon).toBeNull()
+    expect(pane.terminal.loadAddon).not.toHaveBeenCalled()
+  })
+
+  it('still allows forced WebGL on Linux', () => {
+    vi.stubGlobal('navigator', {
+      platform: 'Linux x86_64',
+      userAgent: 'Mozilla/5.0 (X11; Linux x86_64)'
+    })
+    const pane = createPane()
+    pane.terminalGpuAcceleration = 'on'
+
+    attachWebgl(pane)
+
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
   })
 
   it('uses DOM for later auto panes after WebGL attach fails until the suggestion resets', () => {

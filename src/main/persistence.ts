@@ -33,6 +33,7 @@ import type {
   Repo,
   SparsePreset,
   WorktreeMeta,
+  WorktreeLineage,
   GlobalSettings,
   OnboardingChecklistState,
   OnboardingOutcome,
@@ -779,6 +780,10 @@ function normalizePersistedPaneIdentityState(state: PersistedState): {
     ...legacyMigrationUnsupportedRowsToAliasEntries(state.migrationUnsupportedPtyEntries ?? []),
     ...normalizedSession.legacyPaneKeyAliasEntries
   ])
+  const remappedAcknowledgements = remapAcknowledgedAgentPaneKeys(
+    state.ui?.acknowledgedAgentsByPaneKey,
+    normalizedSession.leafIdByInputLeafIdByTabId
+  )
   const migrationUnsupportedChanged = !migrationUnsupportedEntriesEqual(
     state.migrationUnsupportedPtyEntries ?? [],
     mergedMigrationUnsupportedEntries
@@ -791,7 +796,8 @@ function normalizePersistedPaneIdentityState(state: PersistedState): {
     !normalizedSession.changed &&
     !remappedLeases.changed &&
     !migrationUnsupportedChanged &&
-    !legacyAliasesChanged
+    !legacyAliasesChanged &&
+    !remappedAcknowledgements.changed
   ) {
     return {
       state,
@@ -806,12 +812,69 @@ function normalizePersistedPaneIdentityState(state: PersistedState): {
       workspaceSession: normalizedSession.session,
       sshRemotePtyLeases: remappedLeases.leases,
       migrationUnsupportedPtyEntries: mergedMigrationUnsupportedEntries,
-      legacyPaneKeyAliasEntries: mergedLegacyPaneKeyAliasEntries
+      legacyPaneKeyAliasEntries: mergedLegacyPaneKeyAliasEntries,
+      ...(remappedAcknowledgements.changed
+        ? {
+            ui: {
+              ...state.ui,
+              acknowledgedAgentsByPaneKey: remappedAcknowledgements.acknowledgements
+            }
+          }
+        : {})
     },
     changed: true,
     migrationUnsupportedEntries: mergedMigrationUnsupportedEntries,
     legacyPaneKeyAliasEntries: mergedLegacyPaneKeyAliasEntries
   }
+}
+
+function remapAcknowledgedAgentPaneKeys(
+  acknowledgements: PersistedState['ui']['acknowledgedAgentsByPaneKey'],
+  leafIdByInputLeafIdByTabId: Map<string, Map<string, string>>
+): { acknowledgements: PersistedState['ui']['acknowledgedAgentsByPaneKey']; changed: boolean } {
+  if (!acknowledgements || Object.keys(acknowledgements).length === 0) {
+    return { acknowledgements, changed: false }
+  }
+
+  let changed = false
+  const next: NonNullable<PersistedState['ui']['acknowledgedAgentsByPaneKey']> = {}
+  const setAcknowledgement = (paneKey: string, acknowledgedAt: number): void => {
+    const existing = next[paneKey]
+    next[paneKey] = existing === undefined ? acknowledgedAt : Math.max(existing, acknowledgedAt)
+  }
+  for (const [paneKey, acknowledgedAt] of Object.entries(acknowledgements)) {
+    const parsed = parsePaneKey(paneKey)
+    if (parsed) {
+      setAcknowledgement(paneKey, acknowledgedAt)
+      continue
+    }
+
+    const delimiter = paneKey.indexOf(':')
+    if (delimiter <= 0 || delimiter === paneKey.length - 1) {
+      setAcknowledgement(paneKey, acknowledgedAt)
+      continue
+    }
+
+    const tabId = paneKey.slice(0, delimiter)
+    const legacyLeafId = paneKey.slice(delimiter + 1)
+    const remappedLeafId = leafIdByInputLeafIdByTabId.get(tabId)?.get(legacyLeafId)
+    if (!remappedLeafId || !isTerminalLeafId(remappedLeafId)) {
+      setAcknowledgement(paneKey, acknowledgedAt)
+      continue
+    }
+
+    try {
+      // Why: UI acks are keyed by paneKey just like hook rows. When a legacy
+      // numeric/pane:* leaf is promoted to a UUID, carry the read marker over
+      // so already-seen Activity/sidebar rows do not come back unread.
+      setAcknowledgement(makePaneKey(tabId, remappedLeafId), acknowledgedAt)
+      changed = true
+    } catch {
+      setAcknowledgement(paneKey, acknowledgedAt)
+    }
+  }
+
+  return { acknowledgements: next, changed }
 }
 
 function normalizeMigrationUnsupportedPtyEntries(value: unknown): MigrationUnsupportedPtyEntry[] {
@@ -1112,6 +1175,7 @@ export class Store {
         result = {
           ...defaults,
           ...parsed,
+          worktreeLineageById: parsed.worktreeLineageById ?? {},
           settings: {
             ...defaults.settings,
             ...parsed.settings,
@@ -1585,6 +1649,11 @@ export class Store {
         delete this.state.worktreeMeta[key]
       }
     }
+    for (const [childId, lineage] of Object.entries(this.state.worktreeLineageById)) {
+      if (childId.startsWith(prefix) || lineage.parentWorktreeId.startsWith(prefix)) {
+        delete this.state.worktreeLineageById[childId]
+      }
+    }
     this.scheduleSave()
   }
 
@@ -1799,6 +1868,7 @@ export class Store {
       sessionKind: 'terminal',
       chatSessionId: null,
       terminalSessionId: null,
+      usage: null,
       error: null,
       startedAt: null,
       dispatchedAt: null,
@@ -1821,6 +1891,7 @@ export class Store {
       status: result.status,
       workspaceId: result.workspaceId ?? current.workspaceId,
       terminalSessionId: result.terminalSessionId ?? current.terminalSessionId,
+      usage: Object.hasOwn(result, 'usage') ? (result.usage ?? null) : (current.usage ?? null),
       error: result.error ?? null,
       startedAt: current.startedAt ?? now,
       dispatchedAt: result.status === 'dispatched' ? now : current.dispatchedAt
@@ -1865,6 +1936,9 @@ export class Store {
   setWorktreeMeta(worktreeId: string, meta: Partial<WorktreeMeta>): WorktreeMeta {
     const existing = this.state.worktreeMeta[worktreeId] || getDefaultWorktreeMeta()
     const updated = { ...existing, ...meta }
+    if (!updated.instanceId) {
+      updated.instanceId = randomUUID()
+    }
     this.state.worktreeMeta[worktreeId] = updated
     this.scheduleSave()
     return updated
@@ -1872,6 +1946,26 @@ export class Store {
 
   removeWorktreeMeta(worktreeId: string): void {
     delete this.state.worktreeMeta[worktreeId]
+    delete this.state.worktreeLineageById[worktreeId]
+    this.scheduleSave()
+  }
+
+  getWorktreeLineage(worktreeId: string): WorktreeLineage | undefined {
+    return this.state.worktreeLineageById[worktreeId]
+  }
+
+  getAllWorktreeLineage(): Record<string, WorktreeLineage> {
+    return this.state.worktreeLineageById
+  }
+
+  setWorktreeLineage(worktreeId: string, lineage: WorktreeLineage): WorktreeLineage {
+    this.state.worktreeLineageById[worktreeId] = lineage
+    this.scheduleSave()
+    return lineage
+  }
+
+  removeWorktreeLineage(worktreeId: string): void {
+    delete this.state.worktreeLineageById[worktreeId]
     this.scheduleSave()
   }
 
@@ -2021,6 +2115,16 @@ export class Store {
     )
     for (const entry of normalized.migrationUnsupportedEntries) {
       setMigrationUnsupportedPty(entry)
+    }
+    const remappedAcknowledgements = remapAcknowledgedAgentPaneKeys(
+      this.state.ui?.acknowledgedAgentsByPaneKey,
+      normalized.leafIdByInputLeafIdByTabId
+    )
+    if (remappedAcknowledgements.changed) {
+      this.state.ui = {
+        ...this.state.ui,
+        acknowledgedAgentsByPaneKey: remappedAcknowledgements.acknowledgements
+      }
     }
     for (const entry of normalized.legacyPaneKeyAliasEntries) {
       agentHookServer.registerPaneKeyAlias(
@@ -2557,6 +2661,7 @@ export class Store {
 
 function getDefaultWorktreeMeta(): WorktreeMeta {
   return {
+    instanceId: randomUUID(),
     displayName: '',
     comment: '',
     linkedIssue: null,

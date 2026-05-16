@@ -25,6 +25,7 @@ import {
   getPRChecks,
   getPRComments,
   resolveReviewThread,
+  setPRFileViewed,
   addPRReviewComment,
   addPRReviewCommentReply,
   updatePRTitle,
@@ -313,6 +314,47 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       // event shape; instead, the drawer's existing thread-resolve UI updates
       // its local state immediately and the next reopen pays one fresh fetch.
       return resolveReviewThread(repo.path, args.threadId, args.resolve, repoConnectionId(repo))
+    }
+  )
+
+  ipcMain.handle(
+    'gh:setPRFileViewed',
+    async (
+      event,
+      args: {
+        repoPath: string
+        repoId?: string
+        prNumber: number
+        pullRequestId: string
+        path: string
+        viewed: boolean
+      }
+    ) => {
+      const repo = assertRegisteredRepo(args, store)
+      if (
+        typeof args.prNumber !== 'number' ||
+        !Number.isInteger(args.prNumber) ||
+        args.prNumber < 1
+      ) {
+        return false
+      }
+      if (!args.pullRequestId?.trim() || !args.path?.trim()) {
+        return false
+      }
+      const ok = await setPRFileViewed({
+        repoPath: repo.path,
+        connectionId: repoConnectionId(repo),
+        pullRequestId: args.pullRequestId.trim(),
+        path: args.path,
+        viewed: Boolean(args.viewed)
+      })
+      if (ok) {
+        broadcastWorkItemMutated(
+          { repoPath: repo.path, type: 'pr', number: args.prNumber },
+          event.sender.id
+        )
+      }
+      return ok
     }
   )
 

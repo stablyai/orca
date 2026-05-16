@@ -174,7 +174,7 @@ export default function PRActions({
         type="button"
         variant="secondary"
         size="xs"
-        className="w-full text-[11px]"
+        className="w-full cursor-pointer text-[11px]"
         onClick={handleDeleteWorktree}
       >
         <Trash2 className="size-3.5" />

@@ -37,6 +37,11 @@ import {
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import { cleanElectronUserAgent } from './browser-session-ua'
 import type { BrowserViewportOverride } from '../../shared/types'
+import {
+  type BrowserAnnotationViewportBridgeOptions,
+  BROWSER_ANNOTATION_VIEWPORT_BRIDGE_WORLD_ID,
+  buildBrowserAnnotationViewportBridgeScript
+} from '../../shared/browser-annotation-viewport-bridge'
 
 // Why: mobile presets need a touch-capable UA or responsive sites serve the
 // desktop variant based on UA sniffing. This is the Chrome DevTools default
@@ -109,6 +114,7 @@ export class BrowserManager {
   private readonly contextMenuCleanupByTabId = new Map<string, () => void>()
   private readonly grabShortcutCleanupByTabId = new Map<string, () => void>()
   private readonly shortcutForwardingCleanupByTabId = new Map<string, () => void>()
+  private readonly annotationViewportBridgeOpsByTabId = new Map<string, Promise<unknown>>()
   private readonly worktreeIdByTabId = new Map<string, string>()
   private readonly policyAttachedGuestIds = new Set<number>()
   private readonly policyCleanupByGuestId = new Map<number, () => void>()
@@ -681,6 +687,7 @@ export class BrowserManager {
     // Why: drop any pending viewport-op chain for this tab so the Map doesn't
     // retain a resolved promise keyed to a destroyed guest.
     this.viewportOpsByTabId.delete(browserTabId)
+    this.annotationViewportBridgeOpsByTabId.delete(browserTabId)
   }
 
   unregisterAll(): void {
@@ -708,6 +715,7 @@ export class BrowserManager {
     this.pendingPermissionEventsByGuestId.clear()
     this.pendingPopupEventsByGuestId.clear()
     this.pendingDownloadIdsByGuestId.clear()
+    this.annotationViewportBridgeOpsByTabId.clear()
   }
 
   getGuestWebContentsId(browserTabId: string): number | null {
@@ -953,6 +961,53 @@ export class BrowserManager {
       if (this.viewportOpsByTabId.get(browserTabId) === next) {
         this.viewportOpsByTabId.delete(browserTabId)
       }
+    }
+  }
+
+  async setAnnotationViewportBridge(
+    browserTabId: string,
+    options: BrowserAnnotationViewportBridgeOptions
+  ): Promise<boolean> {
+    const prev = this.annotationViewportBridgeOpsByTabId.get(browserTabId) ?? Promise.resolve()
+    const next = prev
+      .catch(() => {})
+      .then(() => this.doSetAnnotationViewportBridgeImpl(browserTabId, options))
+    this.annotationViewportBridgeOpsByTabId.set(browserTabId, next)
+    try {
+      return await next
+    } finally {
+      if (this.annotationViewportBridgeOpsByTabId.get(browserTabId) === next) {
+        this.annotationViewportBridgeOpsByTabId.delete(browserTabId)
+      }
+    }
+  }
+
+  private async doSetAnnotationViewportBridgeImpl(
+    browserTabId: string,
+    options: BrowserAnnotationViewportBridgeOptions
+  ): Promise<boolean> {
+    const webContentsId = this.webContentsIdByTabId.get(browserTabId)
+    if (!webContentsId) {
+      return false
+    }
+    const guest = webContents.fromId(webContentsId)
+    if (!guest || guest.isDestroyed()) {
+      this.webContentsIdByTabId.delete(browserTabId)
+      this.tabIdByWebContentsId.delete(webContentsId)
+      return false
+    }
+
+    try {
+      // Why: the scroll bridge runs outside the page world so page monkey
+      // patches cannot read the per-tab token or tamper with bridge state.
+      await guest.executeJavaScriptInIsolatedWorld(
+        BROWSER_ANNOTATION_VIEWPORT_BRIDGE_WORLD_ID,
+        [{ code: buildBrowserAnnotationViewportBridgeScript(options) }],
+        false
+      )
+      return true
+    } catch {
+      return false
     }
   }
 

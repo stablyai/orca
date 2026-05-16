@@ -87,6 +87,7 @@ import type {
   UpdateStatus,
   Worktree,
   WorktreeBaseStatusEvent,
+  WorktreeLineage,
   WorktreeMeta,
   WorktreeRemoteBranchConflictEvent,
   WorktreeSetupLaunch,
@@ -144,6 +145,7 @@ import type {
   BrowserPopupEvent
 } from '../shared/browser-guest-events'
 import type { ElectronAPI } from '@electron-toolkit/preload'
+import type { BrowserSetAnnotationViewportBridgeArgs } from '../shared/browser-annotation-viewport-bridge'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { E2EConfig } from '../shared/e2e-config'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
@@ -161,6 +163,7 @@ import type {
   CommitMessageModelCapability
 } from '../shared/commit-message-agent-spec'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
+import type { SkillDiscoveryResult } from '../shared/skills'
 
 export type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
 
@@ -265,6 +268,7 @@ export type BrowserApi = {
     browserPageId: string
     override: BrowserViewportOverride | null
   }) => Promise<boolean>
+  setAnnotationViewportBridge: (args: BrowserSetAnnotationViewportBridgeArgs) => Promise<boolean>
   onGuestLoadFailed: (
     callback: (args: { browserPageId: string; loadError: BrowserLoadError }) => void
   ) => () => void
@@ -590,6 +594,12 @@ export type PreloadApi = {
     }) => Promise<{ baseBranch: string } | { error: string }>
     remove: (args: { worktreeId: string; force?: boolean; skipArchive?: boolean }) => Promise<void>
     updateMeta: (args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => Promise<Worktree>
+    listLineage: () => Promise<Record<string, WorktreeLineage>>
+    updateLineage: (args: {
+      worktreeId: string
+      parentWorktreeId?: string
+      noParent?: boolean
+    }) => Promise<WorktreeLineage | null>
     persistSortOrder: (args: { orderedIds: string[] }) => Promise<void>
     onChanged: (callback: (data: { repoId: string }) => void) => () => void
     onBaseStatus: (callback: (data: WorktreeBaseStatusEvent) => void) => () => void
@@ -768,6 +778,14 @@ export type PreloadApi = {
       repoId?: string
       threadId: string
       resolve: boolean
+    }) => Promise<boolean>
+    setPRFileViewed: (args: {
+      repoPath: string
+      repoId?: string
+      prNumber: number
+      pullRequestId: string
+      path: string
+      viewed: boolean
     }) => Promise<boolean>
     updatePRTitle: (args: {
       repoPath: string
@@ -1075,6 +1093,7 @@ export type PreloadApi = {
     cursorStatus: () => Promise<AgentHookInstallStatus>
     droidStatus: () => Promise<AgentHookInstallStatus>
     grokStatus: () => Promise<AgentHookInstallStatus>
+    hermesStatus: () => Promise<AgentHookInstallStatus>
   }
   agentTrust: {
     markTrusted: (args: { preset: 'cursor' | 'copilot'; workspacePath: string }) => Promise<void>
@@ -1122,6 +1141,9 @@ export type PreloadApi = {
     pickAudio: () => Promise<string | null>
     pickDirectory: (args: { defaultPath?: string }) => Promise<string | null>
     copyFile: (args: { srcPath: string; destPath: string }) => Promise<void>
+  }
+  skills: {
+    discover: () => Promise<SkillDiscoveryResult>
   }
   pet: {
     import: () => Promise<CustomPet | null>
@@ -1451,6 +1473,8 @@ export type PreloadApi = {
     onSwitchTab: (callback: (direction: 1 | -1) => void) => () => void
     onSwitchTabAcrossAllTypes: (callback: (direction: 1 | -1) => void) => () => void
     onSwitchTerminalTab: (callback: (direction: 1 | -1) => void) => () => void
+    onCtrlTabKeyDown: (callback: (data: { shiftKey: boolean }) => void) => () => void
+    onCtrlTabKeyUp: (callback: () => void) => () => void
     onToggleStatusBar: (callback: () => void) => () => void
     onDictationKeyDown: (callback: () => void) => () => void
     onExportPdfRequested: (callback: () => void) => () => void

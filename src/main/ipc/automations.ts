@@ -49,7 +49,8 @@ export function registerAutomationHandlers(store: Store, service: AutomationServ
   )
   ipcMain.handle(
     'automations:markDispatchResult',
-    (_event, result: AutomationDispatchResult): AutomationRun => service.markDispatchResult(result)
+    (_event, result: AutomationDispatchResult): Promise<AutomationRun> =>
+      service.markDispatchResult(result)
   )
   ipcMain.handle('automations:rendererReady', (): void => {
     service.setRendererReady()

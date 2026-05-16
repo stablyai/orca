@@ -523,29 +523,6 @@ export default function MonacoEditor({
     }
   }, [])
 
-  useEffect(() => {
-    const handler = (event: Event): void => {
-      const detail = (event as CustomEvent).detail as
-        | { filePath?: string; line?: number; column?: number | null }
-        | undefined
-      if (!detail || detail.filePath !== filePath || !detail.line) {
-        return
-      }
-      const editor = editorRef.current
-      if (!editor) {
-        return
-      }
-      const targetColumn = Math.max(1, detail.column ?? 1)
-      const targetLine = Math.max(1, detail.line)
-      editor.revealPositionInCenter({ lineNumber: targetLine, column: targetColumn })
-      editor.setPosition({ lineNumber: targetLine, column: targetColumn })
-      editor.focus()
-    }
-
-    window.addEventListener('orca:editor-reveal-location', handler as EventListener)
-    return () => window.removeEventListener('orca:editor-reveal-location', handler as EventListener)
-  }, [filePath])
-
   // Navigate to line and highlight match when requested (for already-mounted editor)
   useEffect(() => {
     if (!revealLine || !editorRef.current) {

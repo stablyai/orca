@@ -10,6 +10,7 @@
 import type { BrowserWindow } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
+import { randomUUID } from 'crypto'
 import type { Store } from '../persistence'
 import type {
   CreateWorktreeArgs,
@@ -430,6 +431,10 @@ export async function createRemoteWorktree(
     )
   }
   const metaUpdates: Partial<WorktreeMeta> = {
+    // Why: path-derived worktree IDs can be reused after external deletion.
+    // Fresh creations must rotate instance identity so stale lineage cannot
+    // attach to the new occupant of the same path.
+    instanceId: randomUUID(),
     lastActivityAt: now,
     // Why: grants the new worktree a short grace window at the top of the
     // Recent sort. During worktree creation (git fetch + add can take several
@@ -716,6 +721,10 @@ export async function createLocalWorktree(
   const worktreeId = `${repo.id}::${created.path}`
   const now = Date.now()
   const metaUpdates: Partial<WorktreeMeta> = {
+    // Why: path-derived worktree IDs can be reused after external deletion.
+    // Fresh creations must rotate instance identity so stale lineage cannot
+    // attach to the new occupant of the same path.
+    instanceId: randomUUID(),
     // Stamp activity so the worktree sorts into its final position
     // immediately — prevents scroll-to-reveal racing with a later
     // bumpWorktreeActivity that would re-sort the list.

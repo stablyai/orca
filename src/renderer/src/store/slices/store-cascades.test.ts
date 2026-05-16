@@ -60,6 +60,7 @@ import {
   makeWorktree,
   seedStore
 } from './store-test-helpers'
+import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 
 // ─── Tests ────────────────────────────────────────────────────────────
 
@@ -1366,6 +1367,28 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockApi.pty.kill.mockResolvedValue(undefined)
+    shutdownBufferCaptures.clear()
+  })
+
+  it('asks sleep-time buffer capture to skip local scrollback serialization', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const capture = vi.fn()
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId: 'pty-1' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    })
+    shutdownBufferCaptures.set('tab-1', capture)
+
+    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
+
+    expect(capture).toHaveBeenCalledWith({ includeLocalBuffers: false })
   })
 
   it('drops live agentStatusByPaneKey entries on sleep so the working row disappears', async () => {

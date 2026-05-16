@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: this component owns diff rendering, image previews, comment popovers, and expansion state as one synchronized editor row. */
 import {
   lazy,
   useCallback,
@@ -8,7 +9,6 @@ import {
   type MutableRefObject
 } from 'react'
 import { LazySection } from './LazySection'
-import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { monaco } from '@/lib/monaco-setup'
@@ -19,26 +19,17 @@ import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
+import { getDiffCommentPopoverTop } from '../diff-comments/diff-comment-popover-position'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import { computeLineStats } from './diff-line-stats'
-import type { DiffComment, GitDiffResult } from '../../../../shared/types'
+import { DiffSectionHeader } from './DiffSectionHeader'
+import { getDiffSectionBodyHeight, isIntrinsicHeightImageDiff } from './diff-section-layout'
+import type { DiffSection } from './diff-section-types'
+import type { DiffComment } from '../../../../shared/types'
+import { cn } from '@/lib/utils'
 import { isDiffComment } from '@/lib/diff-comment-compat'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
-
-type DiffSection = {
-  key: string
-  path: string
-  status: string
-  area?: 'staged' | 'unstaged' | 'untracked'
-  oldPath?: string
-  originalContent: string
-  modifiedContent: string
-  collapsed: boolean
-  loading: boolean
-  dirty: boolean
-  diffResult: GitDiffResult | null
-}
 
 export function DiffSectionItem({
   section,
@@ -161,8 +152,15 @@ export function DiffSectionItem({
       return
     }
     const update = (): void => {
-      const top =
-        modifiedEditor.getTopForLineNumber(popover.lineNumber) - modifiedEditor.getScrollTop()
+      const top = getDiffCommentPopoverTop(
+        modifiedEditor,
+        popover.lineNumber,
+        modifiedEditor.getOption(monaco.editor.EditorOption.lineHeight)
+      )
+      if (top == null) {
+        setPopover(null)
+        return
+      }
       setPopover((prev) => (prev ? { ...prev, top } : prev))
     }
     const scrollSub = modifiedEditor.onDidScrollChange(update)
@@ -221,6 +219,15 @@ export function DiffSectionItem({
         : computeLineStats(section.originalContent, section.modifiedContent, section.status),
     [section.loading, section.originalContent, section.modifiedContent, section.status]
   )
+  // Why: image diffs need document-flow height in the combined view; the text
+  // fallback only knows line counts and would squash screenshots into one row.
+  const useIntrinsicImageHeight = isIntrinsicHeightImageDiff(section.diffResult)
+  const sectionBodyHeight = getDiffSectionBodyHeight({
+    measuredContentHeight: sectionHeight,
+    originalContent: section.originalContent,
+    modifiedContent: section.modifiedContent,
+    useIntrinsicImageHeight
+  })
 
   const handleOpenInEditor = (e: React.MouseEvent): void => {
     e.stopPropagation()
@@ -284,86 +291,20 @@ export function DiffSectionItem({
 
   return (
     <LazySection key={section.key} index={index} onVisible={loadSection}>
-      <div
-        className="sticky top-0 z-10 bg-background flex items-center w-full px-3 py-1.5 text-left text-xs hover:bg-accent transition-colors group cursor-pointer"
-        onClick={() => toggleSection(index)}
-      >
-        <span className="min-w-0 flex-1 truncate text-muted-foreground">
-          <span
-            role="button"
-            tabIndex={0}
-            className="cursor-copy hover:underline"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-            }}
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              // Why: stop both mouse-down and click on the path affordance so
-              // the parent section-toggle row cannot consume the interaction
-              // before the Electron clipboard write runs.
-              void window.api.ui.writeClipboardText(section.path).catch((err) => {
-                console.error('Failed to copy diff path:', err)
-              })
-            }}
-            onKeyDown={(e) => {
-              if (e.key !== 'Enter' && e.key !== ' ') {
-                return
-              }
-              e.preventDefault()
-              e.stopPropagation()
-              void window.api.ui.writeClipboardText(section.path).catch((err) => {
-                console.error('Failed to copy diff path:', err)
-              })
-            }}
-            title="Copy path"
-          >
-            {section.path}
-          </span>
-          {section.dirty && <span className="font-medium ml-1">M</span>}
-          {lineStats && (lineStats.added > 0 || lineStats.removed > 0) && (
-            <span className="tabular-nums ml-2">
-              {lineStats.added > 0 && (
-                <span className="text-green-600 dark:text-green-500">+{lineStats.added}</span>
-              )}
-              {lineStats.added > 0 && lineStats.removed > 0 && <span> </span>}
-              {lineStats.removed > 0 && <span className="text-red-500">-{lineStats.removed}</span>}
-            </span>
-          )}
-        </span>
-        <div className="flex items-center gap-1 shrink-0 ml-2">
-          <button
-            className="p-0.5 rounded text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-            onClick={handleOpenInEditor}
-            title="Open in editor"
-          >
-            <ExternalLink className="size-3.5" />
-          </button>
-          {section.collapsed ? (
-            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
-          ) : (
-            <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
-          )}
-        </div>
-      </div>
+      <DiffSectionHeader
+        path={section.path}
+        dirty={section.dirty}
+        collapsed={section.collapsed}
+        added={lineStats?.added ?? 0}
+        removed={lineStats?.removed ?? 0}
+        onToggle={() => toggleSection(index)}
+        onOpenInEditor={handleOpenInEditor}
+      />
 
       {!section.collapsed && (
         <div
-          className="relative"
-          style={{
-            height: sectionHeight
-              ? sectionHeight + 19
-              : Math.max(
-                  60,
-                  Math.max(
-                    section.originalContent.split('\n').length,
-                    section.modifiedContent.split('\n').length
-                  ) *
-                    19 +
-                    19
-                )
-          }}
+          className={cn('relative', useIntrinsicImageHeight && 'overflow-visible')}
+          style={sectionBodyHeight === undefined ? undefined : { height: sectionBodyHeight }}
         >
           {popover && (
             // Why: key by lineNumber so the popover remounts when the anchor
@@ -390,6 +331,7 @@ export function DiffSectionItem({
                 filePath={section.path}
                 mimeType={section.diffResult.mimeType}
                 sideBySide={sideBySide}
+                layout={useIntrinsicImageHeight ? 'intrinsic' : 'fill'}
               />
             ) : (
               <div className="flex h-full items-center justify-center px-6 text-center">

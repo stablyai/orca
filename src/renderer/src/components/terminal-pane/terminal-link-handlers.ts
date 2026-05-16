@@ -20,6 +20,7 @@ import {
   type RuntimeFileOperationArgs
 } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { resolveTerminalFileUrlTarget } from './terminal-file-url-target'
 
 export type LinkHandlerDeps = {
   worktreeId: string
@@ -178,11 +179,6 @@ export function openDetectedFilePath(
             column: targetColumn,
             matchLength: 0
           })
-          window.dispatchEvent(
-            new CustomEvent('orca:editor-reveal-location', {
-              detail: { filePath, line, column: targetColumn }
-            })
-          )
         })
       })
     }
@@ -339,15 +335,10 @@ export function handleOscLink(
     // the same openDetectedFilePath logic used for detected file-path links.
     // Only local files are supported — remote hosts (file://remote/…) are rejected
     // because we cannot open them as local paths.
-    if (parsed.hostname && parsed.hostname !== 'localhost') {
+    const resolved = resolveTerminalFileUrlTarget(parsed)
+    if (!resolved) {
       return
     }
-    let filePath = decodeURIComponent(parsed.pathname)
-    // Why: on Windows, file:///C:/foo yields pathname "/C:/foo". The leading
-    // slash must be stripped to produce a valid Windows path ("C:/foo").
-    if (/^\/[A-Za-z]:/.test(filePath)) {
-      filePath = filePath.slice(1)
-    }
-    openDetectedFilePath(filePath, null, null, deps)
+    openDetectedFilePath(resolved.filePath, resolved.line, resolved.column, deps)
   }
 }

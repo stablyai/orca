@@ -59,6 +59,9 @@ vi.mock('../droid/hook-service', () => ({
 vi.mock('../grok/hook-service', () => ({
   grokHookService: { getStatus: vi.fn(() => ({ agent: 'grok', state: 'absent' })) }
 }))
+vi.mock('../hermes/hook-service', () => ({
+  hermesHookService: { getStatus: vi.fn(() => ({ agent: 'hermes', state: 'absent' })) }
+}))
 
 beforeEach(() => {
   dropStatusEntry.mockReset()

@@ -56,6 +56,7 @@ import {
 } from './components/floating-terminal/FloatingTerminalPanel'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { DictationController } from './components/dictation/DictationController'
+import RecentTabSwitcher from './components/tab-bar/RecentTabSwitcher'
 import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
 import { useEditorExternalWatch } from './hooks/useEditorExternalWatch'
 import { useAutoAckViewedAgent } from './hooks/useAutoAckViewedAgent'
@@ -161,6 +162,7 @@ const TaskPage = lazy(() => import('./components/TaskPage'))
 const AutomationsPage = lazy(() => import('./components/automations/AutomationsPage'))
 const ActivityPrototypePage = lazy(() => import('./components/activity/ActivityPrototypePage'))
 const Settings = lazy(() => import('./components/settings/Settings'))
+const SkillsPage = lazy(() => import('./components/skills/SkillsPage'))
 const WorkspaceSpacePage = lazy(() => import('./components/workspace-space/WorkspaceSpacePage'))
 const QuickOpen = lazy(() => import('./components/QuickOpen'))
 const WorktreeJumpPalette = lazy(() => import('./components/WorktreeJumpPalette'))
@@ -220,6 +222,7 @@ function App(): React.JSX.Element {
       toggleSidebar: s.toggleSidebar,
       fetchRepos: s.fetchRepos,
       fetchAllWorktrees: s.fetchAllWorktrees,
+      fetchWorktreeLineage: s.fetchWorktreeLineage,
       fetchSettings: s.fetchSettings,
       initGitHubCache: s.initGitHubCache,
       refreshAllGitHub: s.refreshAllGitHub,
@@ -320,6 +323,7 @@ function App(): React.JSX.Element {
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const groupBy = useAppStore((s) => s.groupBy)
+  const showWorkspaceLineage = useAppStore((s) => s.showWorkspaceLineage)
   const sortBy = useAppStore((s) => s.sortBy)
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
@@ -408,6 +412,7 @@ function App(): React.JSX.Element {
         await actions.fetchSettings()
         await actions.fetchRepos()
         await actions.fetchAllWorktrees()
+        await actions.fetchWorktreeLineage()
         const persistedUI = await window.api.ui.get()
         uiHydrated = hydratePersistedUIAfterStartupRead({
           persistedUI,
@@ -782,6 +787,7 @@ function App(): React.JSX.Element {
         sidebarWidth,
         rightSidebarWidth,
         groupBy,
+        showWorkspaceLineage,
         sortBy,
         showActiveOnly,
         hideDefaultBranchWorkspace,
@@ -801,6 +807,7 @@ function App(): React.JSX.Element {
     sidebarWidth,
     rightSidebarWidth,
     groupBy,
+    showWorkspaceLineage,
     sortBy,
     showActiveOnly,
     hideDefaultBranchWorkspace,
@@ -865,7 +872,10 @@ function App(): React.JSX.Element {
   // Why: Activity and Space are full-page navigation surfaces — same
   // treatment as Settings — so the worktree sidebar is removed for those views.
   const showSidebar =
-    activeView !== 'settings' && activeView !== 'activity' && activeView !== 'space'
+    activeView !== 'settings' &&
+    activeView !== 'activity' &&
+    activeView !== 'space' &&
+    activeView !== 'skills'
   // Why: only the terminal workspace replaces the full-width titlebar with
   // split-column chrome. Full-page navigation views keep the draggable app
   // titlebar so their page-level controls can live in that window strip.
@@ -877,7 +887,8 @@ function App(): React.JSX.Element {
     activeView !== 'tasks' &&
     activeView !== 'activity' &&
     activeView !== 'automations' &&
-    activeView !== 'space'
+    activeView !== 'space' &&
+    activeView !== 'skills'
 
   const handleToggleExpand = (): void => {
     if (!effectiveActiveTabId) {
@@ -968,7 +979,8 @@ function App(): React.JSX.Element {
         activeView === 'tasks' ||
         activeView === 'activity' ||
         activeView === 'automations' ||
-        activeView === 'space'
+        activeView === 'space' ||
+        activeView === 'skills'
       ) {
         return
       }
@@ -1207,7 +1219,8 @@ function App(): React.JSX.Element {
       (activeView === 'tasks' ||
         activeView === 'activity' ||
         activeView === 'automations' ||
-        activeView === 'space') &&
+        activeView === 'space' ||
+        activeView === 'skills') &&
       rightSidebarOpen
     ) {
       // Why: hide the right sidebar immediately when entering full-page
@@ -1374,6 +1387,7 @@ function App(): React.JSX.Element {
                   </div>
                   <Suspense fallback={null}>
                     {activeView === 'settings' ? <Settings /> : null}
+                    {activeView === 'skills' ? <SkillsPage /> : null}
                     {activeView === 'tasks' ? <TaskPage /> : null}
                     {activeView === 'automations' ? <AutomationsPage /> : null}
                     {activeView === 'activity' ? <ActivityPrototypePage /> : null}
@@ -1449,6 +1463,7 @@ function App(): React.JSX.Element {
         </Suspense>
       ) : null}
       <DictationController />
+      <RecentTabSwitcher />
       <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
       {/* Why: rendered last so it sits after all -webkit-app-region:drag elements
           in DOM order. Electron's hit-test for drag regions is DOM-order-based and

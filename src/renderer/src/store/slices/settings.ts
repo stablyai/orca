@@ -33,6 +33,7 @@ function runtimeScopedStateReset(): Partial<AppState> {
     sparsePresetsLoadStatusByRepo: {},
     sparsePresetsErrorByRepo: {},
     worktreesByRepo: {},
+    worktreeLineageById: {},
     activeWorktreeId: null,
     deleteStateByWorktreeId: {},
     baseStatusByWorktreeId: {},
@@ -84,6 +85,7 @@ function runtimeScopedStateReset(): Partial<AppState> {
     recentlyClosedEditorTabsByWorktree: {},
     browserTabsByWorktree: {},
     browserPagesByWorkspace: {},
+    browserAnnotationsByPageId: {},
     remoteBrowserPageHandlesByPageId: {},
     activeBrowserTabId: null,
     activeBrowserTabIdByWorktree: {},
@@ -303,6 +305,7 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       // while the new environment is loading.
       await get().fetchRepos()
       await get().fetchAllWorktrees()
+      await get().fetchWorktreeLineage()
       await get().fetchBrowserSessionProfiles()
       return true
     } catch (err) {

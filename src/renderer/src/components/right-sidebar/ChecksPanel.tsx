@@ -765,7 +765,7 @@ export default function ChecksPanel(): React.JSX.Element {
           </span>
           <div className="flex-1" />
           <button
-            className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+            className="cursor-pointer rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-50"
             title="Refresh"
             onClick={() => void handleRefresh()}
             disabled={isRefreshing}
@@ -773,7 +773,7 @@ export default function ChecksPanel(): React.JSX.Element {
             <RefreshCw className={cn('size-3.5', isRefreshing && 'animate-spin')} />
           </button>
           <button
-            className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+            className="cursor-pointer rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             title="Open on GitHub"
             onClick={handleOpenPR}
           >
@@ -793,7 +793,7 @@ export default function ChecksPanel(): React.JSX.Element {
               disabled={titleSaving}
             />
             <button
-              className="p-1 rounded hover:bg-accent text-emerald-500 hover:text-emerald-400 transition-colors"
+              className="cursor-pointer rounded p-1 text-emerald-500 transition-colors hover:bg-accent hover:text-emerald-400 disabled:cursor-default disabled:opacity-50"
               title="Save"
               onClick={() => void handleSaveTitle()}
               disabled={titleSaving}
@@ -805,7 +805,7 @@ export default function ChecksPanel(): React.JSX.Element {
               )}
             </button>
             <button
-              className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+              className="cursor-pointer rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-50"
               title="Cancel"
               onClick={handleCancelEdit}
               disabled={titleSaving}

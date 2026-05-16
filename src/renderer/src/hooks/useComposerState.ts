@@ -61,6 +61,11 @@ import {
   readRuntimeIssueCommand,
   type HookCheckResult
 } from '@/runtime/runtime-hooks-client'
+import {
+  formatWorkspaceCreateError,
+  getWorkspaceCreateErrorToastMessage,
+  type WorkspaceCreateErrorDisplay
+} from '@/lib/workspace-create-error-format'
 
 export type UseComposerStateOptions = {
   initialRepoId?: string
@@ -167,7 +172,7 @@ export type ComposerCardProps = {
   onSetupDecisionChange: (value: 'run' | 'skip') => void
   shouldWaitForSetupCheck: boolean
   resolvedSetupDecision: 'run' | 'skip' | null
-  createError: string | null
+  createError: WorkspaceCreateErrorDisplay | null
   canUseSparseCheckout: boolean
   /** Saved presets for the currently-selected repo. Empty array when no
    *  presets exist or when the repo is remote. */
@@ -375,7 +380,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [hasLoadedIssueCommand, setHasLoadedIssueCommand] = useState(false)
   const [setupDecision, setSetupDecision] = useState<'run' | 'skip' | null>(null)
   const [creating, setCreating] = useState(false)
-  const [createError, setCreateError] = useState<string | null>(null)
+  const [createError, setCreateError] = useState<WorkspaceCreateErrorDisplay | null>(null)
   const [advancedOpen, setAdvancedOpen] = useState(
     persistDraft ? Boolean((newWorkspaceDraft?.note ?? '').trim()) : false
   )
@@ -1664,9 +1669,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
       onCreated?.()
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to create worktree.'
-      setCreateError(message)
-      toast.error(message)
+      const formattedError = formatWorkspaceCreateError(error)
+      setCreateError(formattedError)
+      toast.error(getWorkspaceCreateErrorToastMessage(formattedError))
     } finally {
       setCreating(false)
     }
@@ -1896,9 +1901,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         }
         onCreated?.()
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to create worktree.'
-        setCreateError(message)
-        toast.error(message)
+        const formattedError = formatWorkspaceCreateError(error)
+        setCreateError(formattedError)
+        toast.error(getWorkspaceCreateErrorToastMessage(formattedError))
       } finally {
         setCreating(false)
       }

@@ -7,6 +7,7 @@ import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/runtime-compatibility-test-fixture'
+import { GRAB_BUDGET, type BrowserPageAnnotation } from '../../../../shared/browser-grab-types'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 
 const runtimeEnvironmentCall = vi.fn()
@@ -55,6 +56,129 @@ function createTestStore() {
 function settingsWithRuntime(id: string): AppState['settings'] {
   return { activeRuntimeEnvironmentId: id } as AppState['settings']
 }
+
+function makeAnnotation(pageId: string, id = 'annotation-1'): BrowserPageAnnotation {
+  return {
+    id,
+    browserPageId: pageId,
+    comment: 'Fix this button',
+    intent: 'fix',
+    priority: 'important',
+    createdAt: '2026-05-15T00:00:00.000Z',
+    payload: {
+      page: {
+        sanitizedUrl: 'https://example.com',
+        title: 'Example',
+        viewportWidth: 1280,
+        viewportHeight: 720,
+        scrollX: 0,
+        scrollY: 0,
+        devicePixelRatio: 1,
+        capturedAt: '2026-05-15T00:00:00.000Z'
+      },
+      target: {
+        tagName: 'button',
+        selector: 'button',
+        textSnippet: 'Submit',
+        htmlSnippet: '<button>Submit</button>',
+        attributes: {},
+        accessibility: {
+          role: 'button',
+          accessibleName: 'Submit',
+          ariaLabel: null,
+          ariaLabelledBy: null
+        },
+        rectViewport: { x: 0, y: 0, width: 100, height: 40 },
+        rectPage: { x: 0, y: 0, width: 100, height: 40 },
+        computedStyles: {
+          display: 'inline-flex',
+          position: 'static',
+          width: '100px',
+          height: '40px',
+          margin: '0px',
+          padding: '0px',
+          color: 'rgb(0, 0, 0)',
+          backgroundColor: 'rgba(0, 0, 0, 0)',
+          border: '0px none',
+          borderRadius: '0px',
+          fontFamily: 'Geist',
+          fontSize: '14px',
+          fontWeight: '400',
+          lineHeight: '20px',
+          textAlign: 'center',
+          zIndex: 'auto'
+        }
+      },
+      nearbyText: [],
+      ancestorPath: [],
+      screenshot: null
+    }
+  }
+}
+
+describe('createBrowserSlice annotations', () => {
+  it('clears page annotations when the browser page URL changes', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+
+    store.getState().addBrowserPageAnnotation(makeAnnotation(pageId))
+    expect(store.getState().browserAnnotationsByPageId[pageId]).toHaveLength(1)
+
+    store.getState().setBrowserPageUrl(pageId, 'https://example.com/next')
+
+    expect(store.getState().browserAnnotationsByPageId[pageId]).toBeUndefined()
+  })
+
+  it('caps stored browser annotations per page', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+
+    for (let index = 0; index < GRAB_BUDGET.annotationsMaxPerPage + 3; index++) {
+      store.getState().addBrowserPageAnnotation(makeAnnotation(pageId, `annotation-${index}`))
+    }
+
+    const annotations = store.getState().browserAnnotationsByPageId[pageId] ?? []
+    expect(annotations).toHaveLength(GRAB_BUDGET.annotationsMaxPerPage)
+    expect(annotations[0]?.id).toBe('annotation-3')
+  })
+
+  it('sanitizes persistent annotation payloads at the store boundary', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    const annotation = makeAnnotation(pageId)
+    const oversizedComment = 'a'.repeat(GRAB_BUDGET.annotationCommentMaxLength + 10)
+
+    store.getState().addBrowserPageAnnotation({
+      ...annotation,
+      comment: oversizedComment,
+      payload: {
+        ...annotation.payload,
+        screenshot: {
+          mimeType: 'image/png',
+          dataUrl: 'data:image/png;base64,abc',
+          width: 1,
+          height: 1
+        }
+      } as unknown as BrowserPageAnnotation['payload']
+    })
+
+    const stored = store.getState().browserAnnotationsByPageId[pageId]?.[0]
+    expect(stored?.comment).toHaveLength(GRAB_BUDGET.annotationCommentMaxLength)
+    expect(stored?.payload.screenshot).toBeNull()
+  })
+})
 
 describe('createBrowserSlice runtime guard', () => {
   beforeEach(() => {

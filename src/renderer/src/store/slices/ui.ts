@@ -244,12 +244,13 @@ export type UISlice = {
   acknowledgedAgentsByPaneKey: Record<string, number>
   acknowledgeAgents: (paneKeys: string[]) => void
   unacknowledgeAgents: (paneKeys: string[]) => void
-  activeView: 'terminal' | 'settings' | 'tasks' | 'activity' | 'automations' | 'space'
-  previousViewBeforeTasks: 'terminal' | 'settings' | 'activity' | 'automations' | 'space'
-  previousViewBeforeSettings: 'terminal' | 'tasks' | 'activity' | 'automations' | 'space'
-  previousViewBeforeActivity: 'terminal' | 'settings' | 'tasks' | 'automations' | 'space'
-  previousViewBeforeAutomations: 'terminal' | 'settings' | 'tasks' | 'activity' | 'space'
-  previousViewBeforeSpace: 'terminal' | 'settings' | 'tasks' | 'activity' | 'automations'
+  activeView: 'terminal' | 'settings' | 'tasks' | 'activity' | 'automations' | 'space' | 'skills'
+  previousViewBeforeTasks: 'terminal' | 'settings' | 'activity' | 'automations' | 'space' | 'skills'
+  previousViewBeforeSettings: 'terminal' | 'tasks' | 'activity' | 'automations' | 'space' | 'skills'
+  previousViewBeforeActivity: 'terminal' | 'settings' | 'tasks' | 'automations' | 'space' | 'skills'
+  previousViewBeforeAutomations: 'terminal' | 'settings' | 'tasks' | 'activity' | 'space' | 'skills'
+  previousViewBeforeSpace: 'terminal' | 'settings' | 'tasks' | 'activity' | 'automations' | 'skills'
+  previousViewBeforeSkills: 'terminal' | 'settings' | 'tasks' | 'activity' | 'automations' | 'space'
   setActiveView: (view: UISlice['activeView']) => void
   taskPageData: {
     preselectedRepoId?: string
@@ -291,6 +292,8 @@ export type UISlice = {
   closeAutomationsPage: () => void
   openSpacePage: () => void
   closeSpacePage: () => void
+  openSkillsPage: () => void
+  closeSkillsPage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
   openSettingsPage: () => void
@@ -348,6 +351,8 @@ export type UISlice = {
   clearOrcaHookTrustForRepo: (repoId: string) => void
   groupBy: 'none' | 'repo' | 'pr-status'
   setGroupBy: (g: UISlice['groupBy']) => void
+  showWorkspaceLineage: boolean
+  setShowWorkspaceLineage: (v: boolean) => void
   sortBy: 'name' | 'smart' | 'recent' | 'repo'
   setSortBy: (s: UISlice['sortBy']) => void
   showActiveOnly: boolean
@@ -486,6 +491,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   previousViewBeforeActivity: 'terminal',
   previousViewBeforeAutomations: 'terminal',
   previousViewBeforeSpace: 'terminal',
+  previousViewBeforeSkills: 'terminal',
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
   taskResumeState: undefined,
@@ -613,6 +619,16 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set((state) => ({
       activeView: state.previousViewBeforeSpace
     })),
+  openSkillsPage: () =>
+    set((state) => ({
+      activeView: 'skills',
+      previousViewBeforeSkills:
+        state.activeView === 'skills' ? state.previousViewBeforeSkills : state.activeView
+    })),
+  closeSkillsPage: () =>
+    set((state) => ({
+      activeView: state.previousViewBeforeSkills
+    })),
   setNewWorkspaceDraft: (draft) => set({ newWorkspaceDraft: draft }),
   clearNewWorkspaceDraft: () => set({ newWorkspaceDraft: null }),
   openSettingsPage: () =>
@@ -701,6 +717,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     window.api.ui.set({ collapsedGroups: [] }).catch(console.error)
     set({ groupBy: g, collapsedGroups: new Set<string>() })
   },
+
+  showWorkspaceLineage: false,
+  setShowWorkspaceLineage: (v) => set({ showWorkspaceLineage: v }),
 
   sortBy: 'recent',
   setSortBy: (s) => set({ sortBy: s }),
@@ -886,7 +905,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           s.rightSidebarWidth,
           MAX_RIGHT_SIDEBAR_WIDTH
         ),
-        groupBy: ui.groupBy,
+        groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
+        showWorkspaceLineage: ui.showWorkspaceLineage ?? false,
         sortBy,
         // Why: "Active only" is part of the user's sidebar working set, not a
         // transient render detail. Restoring it on launch keeps the filtered

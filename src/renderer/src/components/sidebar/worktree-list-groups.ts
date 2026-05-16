@@ -1,6 +1,12 @@
+/* eslint-disable max-lines -- Why: sidebar row construction keeps every grouping mode in one pure module so reveal, virtualized rendering, and tests share the same flat row contract. */
 import { CircleCheckBig, CircleDot, CircleX, Folder, GitPullRequest, Pin } from 'lucide-react'
 import type React from 'react'
-import type { Repo, Worktree, WorkspaceStatusDefinition } from '../../../../shared/types'
+import type {
+  Repo,
+  Worktree,
+  WorktreeLineage,
+  WorkspaceStatusDefinition
+} from '../../../../shared/types'
 import { branchName } from '@/lib/git-utils'
 import {
   getWorkspaceStatus,
@@ -32,7 +38,19 @@ export type GroupHeaderRow = {
   repo?: Repo
 }
 
-export type WorktreeRow = { type: 'item'; worktree: Worktree; repo: Repo | undefined }
+export type WorktreeRow = {
+  type: 'item'
+  worktree: Worktree
+  repo: Repo | undefined
+  depth: number
+  lineageTrail: boolean[]
+  isLastLineageChild: boolean
+  lineageChildCount: number
+  lineageGroupKey?: string
+  lineageCollapsed?: boolean
+  parentLabel?: string
+  lineageState?: 'valid' | 'missing'
+}
 export type Row = GroupHeaderRow | WorktreeRow
 
 export type PRGroupKey = 'done' | 'in-review' | 'in-progress' | 'closed'
@@ -82,6 +100,40 @@ export const PINNED_GROUP_META = {
   icon: Pin
 } as const
 
+export const MISSING_PARENT_GROUP_META = {
+  label: 'Missing parent'
+} as const
+
+export const LINEAGE_GROUP_PREFIX = 'lineage:'
+
+export function getLineageGroupKey(worktreeId: string): string {
+  return `${LINEAGE_GROUP_PREFIX}${worktreeId}`
+}
+
+export type LineageRenderInfo =
+  | { state: 'none' }
+  | { state: 'valid'; lineage: WorktreeLineage; parent: Worktree }
+  | { state: 'missing'; lineage: WorktreeLineage }
+
+export function getLineageRenderInfo(
+  worktree: Worktree,
+  lineageById: Record<string, WorktreeLineage>,
+  worktreeMap: Map<string, Worktree>
+): LineageRenderInfo {
+  const lineage = lineageById[worktree.id]
+  if (!lineage) {
+    return { state: 'none' }
+  }
+  const parent = worktreeMap.get(lineage.parentWorktreeId)
+  if (
+    !parent ||
+    worktree.instanceId !== lineage.worktreeInstanceId ||
+    parent.instanceId !== lineage.parentWorktreeInstanceId
+  ) {
+    return { state: 'missing', lineage }
+  }
+  return { state: 'valid', lineage, parent }
+}
 export function getPRGroupKey(
   worktree: Worktree,
   repoMap: Map<string, Repo>,
@@ -118,8 +170,11 @@ export function getPRGroupKey(
 function emitPinnedGroup(
   worktrees: Worktree[],
   repoMap: Map<string, Repo>,
+  lineageById: Record<string, WorktreeLineage>,
+  worktreeMap: Map<string, Worktree>,
   collapsedGroups: Set<string>,
   result: Row[],
+  showLineageContext: boolean,
   force = false
 ): Set<string> {
   const pinned = worktrees.filter((w) => w.isPinned)
@@ -136,11 +191,149 @@ function emitPinnedGroup(
     icon: PINNED_GROUP_META.icon
   })
   if (!collapsedGroups.has(PINNED_GROUP_KEY)) {
-    for (const w of pinned) {
-      result.push({ type: 'item', worktree: w, repo: repoMap.get(w.repoId) })
-    }
+    appendWorktreeRows(result, pinned, repoMap, lineageById, worktreeMap, {
+      nestLineage: false,
+      showLineageContext,
+      collapsedGroups
+    })
   }
   return new Set(pinned.map((w) => w.id))
+}
+
+function buildWorktreeRow(
+  worktree: Worktree,
+  repoMap: Map<string, Repo>,
+  lineageById: Record<string, WorktreeLineage>,
+  worktreeMap: Map<string, Worktree>,
+  showLineageContext: boolean,
+  depth: number,
+  lineageTrail: boolean[],
+  isLastLineageChild: boolean,
+  lineageChildCount: number,
+  lineageCollapsed: boolean
+): WorktreeRow {
+  const lineage = showLineageContext
+    ? getLineageRenderInfo(worktree, lineageById, worktreeMap)
+    : { state: 'none' as const }
+  return {
+    type: 'item',
+    worktree,
+    repo: repoMap.get(worktree.repoId),
+    depth,
+    lineageTrail,
+    isLastLineageChild,
+    lineageChildCount,
+    ...(lineageChildCount > 0 ? { lineageGroupKey: getLineageGroupKey(worktree.id) } : {}),
+    ...(lineageChildCount > 0 ? { lineageCollapsed } : {}),
+    ...(lineage.state === 'valid'
+      ? { parentLabel: lineage.parent.displayName, lineageState: 'valid' as const }
+      : lineage.state === 'missing'
+        ? { parentLabel: MISSING_PARENT_GROUP_META.label, lineageState: 'missing' as const }
+        : {})
+  }
+}
+
+function appendWorktreeRows(
+  result: Row[],
+  worktrees: Worktree[],
+  repoMap: Map<string, Repo>,
+  lineageById: Record<string, WorktreeLineage>,
+  worktreeMap: Map<string, Worktree>,
+  options: {
+    nestLineage: boolean
+    showLineageContext: boolean
+    collapsedGroups: Set<string>
+  }
+): void {
+  const { nestLineage, showLineageContext, collapsedGroups } = options
+  if (!nestLineage) {
+    for (const worktree of worktrees) {
+      result.push(
+        buildWorktreeRow(
+          worktree,
+          repoMap,
+          lineageById,
+          worktreeMap,
+          showLineageContext,
+          0,
+          [],
+          false,
+          0,
+          false
+        )
+      )
+    }
+    return
+  }
+
+  const visibleIds = new Set(worktrees.map((worktree) => worktree.id))
+  const childrenByParentId = new Map<string, Worktree[]>()
+  const childIds = new Set<string>()
+  for (const worktree of worktrees) {
+    const lineage = getLineageRenderInfo(worktree, lineageById, worktreeMap)
+    if (lineage.state !== 'valid' || !visibleIds.has(lineage.parent.id)) {
+      continue
+    }
+    childIds.add(worktree.id)
+    const children = childrenByParentId.get(lineage.parent.id) ?? []
+    children.push(worktree)
+    childrenByParentId.set(lineage.parent.id, children)
+  }
+
+  const emitted = new Set<string>()
+  const emit = (
+    worktree: Worktree,
+    depth: number,
+    lineageTrail: boolean[],
+    isLastChild: boolean
+  ): void => {
+    if (emitted.has(worktree.id)) {
+      return
+    }
+    const children = childrenByParentId.get(worktree.id) ?? []
+    const lineageGroupKey = getLineageGroupKey(worktree.id)
+    const lineageCollapsed = collapsedGroups.has(lineageGroupKey)
+    emitted.add(worktree.id)
+    result.push(
+      buildWorktreeRow(
+        worktree,
+        repoMap,
+        lineageById,
+        worktreeMap,
+        showLineageContext,
+        depth,
+        lineageTrail,
+        isLastChild,
+        children.length,
+        lineageCollapsed
+      )
+    )
+    if (lineageCollapsed) {
+      return
+    }
+    children.forEach((child, index) => {
+      emit(
+        child,
+        depth + 1,
+        [...lineageTrail, index < children.length - 1],
+        index === children.length - 1
+      )
+    })
+  }
+
+  const roots = worktrees.filter((worktree) => !childIds.has(worktree.id))
+  for (const [index, worktree] of roots.entries()) {
+    emit(worktree, 0, [], index === roots.length - 1)
+  }
+  if (roots.length === 0) {
+    for (const worktree of worktrees) {
+      if (!emitted.has(worktree.id)) {
+        // Why: malformed cyclic lineage should not hide every participant.
+        // Render any leftovers as roots rather than recursing forever.
+        emit(worktree, 0, [], true)
+      }
+    }
+  }
 }
 
 /**
@@ -155,11 +348,25 @@ export function buildRows(
   collapsedGroups: Set<string>,
   repoOrder?: Map<string, number>,
   workspaceStatuses: readonly WorkspaceStatusDefinition[] = cloneDefaultWorkspaceStatuses(),
-  repoGroupOrdering: RepoGroupOrdering = 'manual'
+  repoGroupOrdering: RepoGroupOrdering = 'manual',
+  lineageById: Record<string, WorktreeLineage> = {},
+  worktreeMap: Map<string, Worktree> = new Map(
+    worktrees.map((worktree) => [worktree.id, worktree])
+  ),
+  nestLineage = false
 ): Row[] {
   const result: Row[] = []
 
-  const pinnedIds = emitPinnedGroup(worktrees, repoMap, collapsedGroups, result, groupBy === 'none')
+  const pinnedIds = emitPinnedGroup(
+    worktrees,
+    repoMap,
+    lineageById,
+    worktreeMap,
+    collapsedGroups,
+    result,
+    nestLineage,
+    groupBy === 'none'
+  )
   const unpinned = pinnedIds.size > 0 ? worktrees.filter((w) => !pinnedIds.has(w.id)) : worktrees
 
   const grouped = new Map<string, { label: string; items: Worktree[]; repo?: Repo }>()
@@ -276,9 +483,11 @@ export function buildRows(
 
     result.push(header)
     if (!isCollapsed) {
-      for (const w of group.items) {
-        result.push({ type: 'item', worktree: w, repo: repoMap.get(w.repoId) })
-      }
+      appendWorktreeRows(result, group.items, repoMap, lineageById, worktreeMap, {
+        nestLineage,
+        showLineageContext: nestLineage,
+        collapsedGroups
+      })
     }
   }
 

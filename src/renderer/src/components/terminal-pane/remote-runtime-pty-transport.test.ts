@@ -91,6 +91,24 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
   }
 
+  function emitSnapshotFrame(
+    streamId: number,
+    opcode:
+      | TerminalStreamOpcode.SnapshotStart
+      | TerminalStreamOpcode.SnapshotChunk
+      | TerminalStreamOpcode.SnapshotEnd,
+    payload: Uint8Array<ArrayBufferLike>
+  ): void {
+    subscriptionCallbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode,
+        streamId,
+        seq: 1,
+        payload
+      })
+    )
+  }
+
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
@@ -508,5 +526,38 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(onAgentStatus).not.toHaveBeenCalled()
     expect(onBell).not.toHaveBeenCalled()
     expect(onConnect).toHaveBeenCalled()
+  })
+
+  it('bounds oversized binary snapshots without closing the live stream', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onReplayData = vi.fn()
+    const onData = vi.fn()
+    const onError = vi.fn()
+    const onConnect = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1'
+    })
+
+    await transport.connect({ url: '', callbacks: { onReplayData, onData, onError, onConnect } })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    const { streamId } = latestSubscribePayload()
+
+    emitSnapshotFrame(
+      streamId,
+      TerminalStreamOpcode.SnapshotStart,
+      encodeTerminalStreamJson({ kind: 'scrollback' })
+    )
+    emitSnapshotFrame(streamId, TerminalStreamOpcode.SnapshotChunk, new Uint8Array(1024 * 1024))
+    emitSnapshotFrame(streamId, TerminalStreamOpcode.SnapshotChunk, new Uint8Array(1024 * 1024))
+    emitSnapshotFrame(streamId, TerminalStreamOpcode.SnapshotChunk, new Uint8Array(1))
+    emitSnapshotFrame(streamId, TerminalStreamOpcode.SnapshotEnd, new Uint8Array())
+    emitOutput(streamId, 'live-after-overflow')
+
+    expect(onReplayData).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledWith(
+      'Remote terminal snapshot exceeded the 2 MiB replay limit; live output will continue.'
+    )
+    expect(onConnect).toHaveBeenCalled()
+    expect(onData).toHaveBeenCalledWith('live-after-overflow')
   })
 })

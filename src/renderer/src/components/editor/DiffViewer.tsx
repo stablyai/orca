@@ -3,12 +3,13 @@ import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
-import '@/lib/monaco-setup'
+import { monaco } from '@/lib/monaco-setup'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
+import { getDiffCommentPopoverTop } from '../diff-comments/diff-comment-popover-position'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import type { DiffComment } from '../../../../shared/types'
 import { isDiffComment } from '@/lib/diff-comment-compat'
@@ -129,8 +130,15 @@ export default function DiffViewer({
       return
     }
     const update = (): void => {
-      const top =
-        modifiedEditor.getTopForLineNumber(popover.lineNumber) - modifiedEditor.getScrollTop()
+      const top = getDiffCommentPopoverTop(
+        modifiedEditor,
+        popover.lineNumber,
+        modifiedEditor.getOption(monaco.editor.EditorOption.lineHeight)
+      )
+      if (top == null) {
+        setPopover(null)
+        return
+      }
       setPopover((prev) => (prev ? { ...prev, top } : prev))
     }
     const scrollSub = modifiedEditor.onDidScrollChange(update)

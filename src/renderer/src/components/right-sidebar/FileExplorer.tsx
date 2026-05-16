@@ -24,6 +24,7 @@ import { useFileExplorerImport } from './useFileExplorerImport'
 import { useFileExplorerManualRefresh } from './useFileExplorerManualRefresh'
 import { useFileExplorerTree } from './useFileExplorerTree'
 import { useFileExplorerWatch } from './useFileExplorerWatch'
+import { useFileExplorerSelection } from './useFileExplorerSelection'
 
 function FileExplorerInner(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -64,7 +65,6 @@ function FileExplorerInner(): React.JSX.Element {
   } = useFileExplorerTree(worktreePath, expanded, activeWorktreeId)
   const manualRefresh = useFileExplorerManualRefresh(refreshTree)
 
-  const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const [flashingPath, setFlashingPath] = useState<string | null>(null)
   const [bgMenuOpen, setBgMenuOpen] = useState(false)
   const [bgMenuPoint, setBgMenuPoint] = useState({ x: 0, y: 0 })
@@ -74,6 +74,15 @@ function FileExplorerInner(): React.JSX.Element {
   const flashTimeoutRef = useRef<number | null>(null)
   const isMac = useMemo(() => navigator.userAgent.includes('Mac'), [])
   const isWindows = useMemo(() => navigator.userAgent.includes('Windows'), [])
+  const {
+    selectedPath,
+    selectedPaths,
+    setSingleSelectedPath,
+    resetSelection,
+    selectRowWithModifiers,
+    preserveSelectionForContextMenu,
+    copyPathsForNode
+  } = useFileExplorerSelection(flatRows, isMac)
 
   const clearFlashTimeout = useCallback(() => {
     if (flashTimeoutRef.current !== null) {
@@ -95,7 +104,7 @@ function FileExplorerInner(): React.JSX.Element {
     closeFile,
     refreshDir,
     selectedPath,
-    setSelectedPath,
+    setSelectedPath: setSingleSelectedPath,
     isMac,
     isWindows
   })
@@ -128,10 +137,10 @@ function FileExplorerInner(): React.JSX.Element {
     if (!worktreePath) {
       return
     }
-    setSelectedPath(null)
+    resetSelection()
     resetAndLoad()
     clearFileExplorerUndoHistory()
-  }, [worktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [worktreePath, resetSelection]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Why: on app startup the file explorer loads before SSH providers are
   // registered, so readDir fails for remote worktrees. When the SSH
@@ -183,7 +192,7 @@ function FileExplorerInner(): React.JSX.Element {
     dirCache,
     setDirCache,
     expanded,
-    setSelectedPath,
+    setSelectedPath: setSingleSelectedPath,
     refreshDir,
     refreshTree,
     inlineInput,
@@ -196,7 +205,7 @@ function FileExplorerInner(): React.JSX.Element {
     activeWorktreeId,
     refreshDir,
     clearNativeDragState,
-    setSelectedPath
+    setSelectedPath: setSingleSelectedPath
   })
 
   const totalCount = flatRows.length + (inlineInputIndex >= 0 ? 1 : 0)
@@ -229,7 +238,7 @@ function FileExplorerInner(): React.JSX.Element {
     rowsByPath,
     flatRows,
     loadDir,
-    setSelectedPath,
+    setSelectedPath: setSingleSelectedPath,
     setFlashingPath,
     flashTimeoutRef,
     virtualizer
@@ -243,7 +252,7 @@ function FileExplorerInner(): React.JSX.Element {
     openFiles,
     rowsByPath,
     flatRows,
-    setSelectedPath,
+    setSelectedPath: setSingleSelectedPath,
     virtualizer
   })
 
@@ -258,6 +267,7 @@ function FileExplorerInner(): React.JSX.Element {
     containerRef: explorerShellRef,
     flatRows,
     inlineInput,
+    selectedPaths,
     selectedNode,
     startRename,
     requestDelete
@@ -268,11 +278,16 @@ function FileExplorerInner(): React.JSX.Element {
     openFile,
     pinFile,
     toggleDir,
-    setSelectedPath,
+    setSelectedPath: setSingleSelectedPath,
     scrollRef
   })
 
   const handleDuplicate = useFileDuplicate({ activeWorktreeId, worktreePath, refreshDir })
+  const handleRowClick = useCallback(
+    (node: (typeof flatRows)[number], event: React.MouseEvent<HTMLButtonElement>) =>
+      selectRowWithModifiers(node, event, handleClick),
+    [handleClick, selectRowWithModifiers]
+  )
 
   if (!worktreePath) {
     return (
@@ -357,13 +372,14 @@ function FileExplorerInner(): React.JSX.Element {
               statusByRelativePath={statusByRelativePath}
               expanded={expanded}
               dirCache={dirCache}
-              selectedPath={selectedPath}
+              selectedPaths={selectedPaths}
               activeFileId={activeFileId}
               flashingPath={flashingPath}
               deleteShortcutLabel={deleteShortcutLabel}
-              onClick={handleClick}
+              onClick={handleRowClick}
               onDoubleClick={handleDoubleClick}
-              onSelectPath={setSelectedPath}
+              onContextMenuSelect={preserveSelectionForContextMenu}
+              onCopyPaths={copyPathsForNode}
               onStartNew={startNew}
               onStartRename={startRename}
               onDuplicate={handleDuplicate}

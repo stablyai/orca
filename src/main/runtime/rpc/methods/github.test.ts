@@ -219,6 +219,30 @@ describe('github RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: true })
   })
 
+  it('marks PR files viewed on the runtime server', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      setRepoPRFileViewed: vi.fn().mockResolvedValue(true)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('github.setPRFileViewed', {
+        repo: 'repo-1',
+        pullRequestId: 'PR_kwDO123',
+        path: 'src/app.ts',
+        viewed: true
+      })
+    )
+
+    expect(runtime.setRepoPRFileViewed).toHaveBeenCalledWith('repo-1', {
+      pullRequestId: 'PR_kwDO123',
+      path: 'src/app.ts',
+      viewed: true
+    })
+    expect(response).toMatchObject({ ok: true, result: true })
+  })
+
   it('updates PR titles on the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

@@ -11,7 +11,8 @@ import type {
   Repo,
   SearchResult,
   StatsSummary,
-  Worktree
+  Worktree,
+  WorktreeLineage
 } from '../../../shared/types'
 import {
   getDefaultOnboardingState,
@@ -154,6 +155,9 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     computerUsePermissions: createComputerUsePermissionsApi(),
     updater: createUpdaterApi(),
     shell: createShellApi(),
+    skills: {
+      discover: () => Promise.resolve({ skills: [], sources: [], scannedAt: Date.now() })
+    },
     pty: createPtyApi(),
     ssh: createSshApi(),
     wsl: { isAvailable: () => Promise.resolve(false) },
@@ -323,6 +327,23 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
           ...updates
         })
       ).worktree,
+    listLineage: async () =>
+      (
+        await callRuntimeResult<{ lineage: Record<string, WorktreeLineage> }>(
+          'worktree.lineageList'
+        )
+      ).lineage,
+    updateLineage: async ({ worktreeId, parentWorktreeId, noParent }) => {
+      cachedWorktrees = null
+      const result = await callRuntimeResult<{
+        worktree: Worktree & { lineage?: WorktreeLineage | null }
+      }>('worktree.set', {
+        worktree: worktreeId,
+        parentWorktree: parentWorktreeId,
+        noParent
+      })
+      return result.worktree.lineage ?? null
+    },
     persistSortOrder: async ({ orderedIds }) => {
       await callRuntimeResult('worktree.persistSortOrder', { orderedIds })
     },
@@ -533,6 +554,7 @@ function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
     unregisterGuest: () => Promise.resolve(),
     openDevTools: () => Promise.resolve(false),
     setViewportOverride: () => Promise.resolve(false),
+    setAnnotationViewportBridge: () => Promise.resolve(false),
     onGuestLoadFailed: () => noopUnsubscribe,
     onPermissionDenied: () => noopUnsubscribe,
     onPopup: () => noopUnsubscribe,
@@ -603,6 +625,7 @@ function createGitHubApi(): NonNullable<Partial<PreloadApi>['gh']> {
     prChecks: direct('github.prChecks'),
     prComments: direct('github.prComments'),
     resolveReviewThread: direct('github.resolveReviewThread'),
+    setPRFileViewed: direct('github.setPRFileViewed'),
     updatePRTitle: direct('github.updatePRTitle'),
     mergePR: direct('github.mergePR'),
     updateIssue: direct('github.updateIssue'),
@@ -699,6 +722,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onSwitchTab: () => noopUnsubscribe,
     onSwitchTabAcrossAllTypes: () => noopUnsubscribe,
     onSwitchTerminalTab: () => noopUnsubscribe,
+    onCtrlTabKeyDown: () => noopUnsubscribe,
+    onCtrlTabKeyUp: () => noopUnsubscribe,
     onToggleStatusBar: () => noopUnsubscribe,
     onDictationKeyDown: () => noopUnsubscribe,
     onExportPdfRequested: () => noopUnsubscribe,
@@ -795,7 +820,9 @@ function createCliApi(): NonNullable<Partial<PreloadApi>['cli']> {
 }
 
 function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
-  const status = (agent: 'claude' | 'codex' | 'gemini' | 'cursor' | 'droid' | 'grok') =>
+  const status = (
+    agent: 'claude' | 'codex' | 'gemini' | 'cursor' | 'droid' | 'grok' | 'hermes'
+  ) =>
     Promise.resolve({
       agent,
       state: 'not_installed',
@@ -809,7 +836,8 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
     geminiStatus: () => status('gemini'),
     cursorStatus: () => status('cursor'),
     droidStatus: () => status('droid'),
-    grokStatus: () => status('grok')
+    grokStatus: () => status('grok'),
+    hermesStatus: () => status('hermes')
   }
 }
 

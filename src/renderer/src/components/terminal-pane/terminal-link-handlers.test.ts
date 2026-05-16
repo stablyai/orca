@@ -301,6 +301,46 @@ describe('handleOscLink', () => {
     )
   })
 
+  it('preserves #L line anchors from file URL links', async () => {
+    setPlatform('Macintosh')
+
+    handleOscLink('file:///tmp/test.txt#L42', { metaKey: true, ctrlKey: false }, deps)
+    await flushAsyncWork()
+    await flushDoubleRaf()
+
+    expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/tmp/test.txt' })
+    )
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
+      filePath: '/tmp/test.txt',
+      line: 42,
+      column: 1,
+      matchLength: 0
+    })
+  })
+
+  it('preserves trailing line and column suffixes from file URL links', async () => {
+    setPlatform('Macintosh')
+
+    handleOscLink('file:///tmp/test.txt:42:7', { metaKey: true, ctrlKey: false }, deps)
+    await flushAsyncWork()
+    await flushDoubleRaf()
+
+    expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/tmp/test.txt' })
+    )
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
+    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
+      filePath: '/tmp/test.txt',
+      line: 42,
+      column: 7,
+      matchLength: 0
+    })
+  })
+
   it('opens relative OSC file links against the terminal cwd', async () => {
     setPlatform('Macintosh')
 

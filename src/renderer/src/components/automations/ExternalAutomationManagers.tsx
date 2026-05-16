@@ -121,6 +121,7 @@ export function ExternalAutomationManagers({
                       <Badge variant={job.enabled ? 'secondary' : 'outline'}>
                         {job.enabled ? 'Active' : 'Paused'}
                       </Badge>
+                      <Badge variant="outline">Usage unsupported</Badge>
                     </div>
                     <div className="mt-1 truncate text-xs text-muted-foreground">
                       {job.schedule} · next {formatExternalDate(job.nextRunAt, now)}

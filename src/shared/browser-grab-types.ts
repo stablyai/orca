@@ -58,6 +58,14 @@ export type BrowserGrabRect = {
 export type BrowserGrabTarget = {
   tagName: string
   selector: string
+  elementPath?: string
+  fullPath?: string
+  cssClasses?: string
+  nearbyElements?: string[]
+  selectedText?: string | null
+  isFixed?: boolean
+  reactComponents?: string | null
+  sourceFile?: string | null
   textSnippet: string
   htmlSnippet: string
   attributes: Record<string, string>
@@ -82,6 +90,11 @@ export type BrowserGrabPayload = {
   nearbyText: string[]
   ancestorPath: string[]
   screenshot: BrowserGrabScreenshot | null
+}
+
+/** Persisted annotation payloads keep DOM context but drop transient screenshots. */
+export type BrowserAnnotationPayload = Omit<BrowserGrabPayload, 'screenshot'> & {
+  screenshot: null
 }
 
 // ---------------------------------------------------------------------------
@@ -138,6 +151,20 @@ export type BrowserExtractHoverResult =
   | { ok: true; payload: BrowserGrabPayload }
   | { ok: false; reason: string }
 
+export type BrowserAnnotationIntent = 'fix' | 'change' | 'question' | 'approve'
+
+export type BrowserAnnotationPriority = 'blocking' | 'important' | 'suggestion'
+
+export type BrowserPageAnnotation = {
+  id: string
+  browserPageId: string
+  comment: string
+  intent: BrowserAnnotationIntent
+  priority: BrowserAnnotationPriority
+  createdAt: string
+  payload: BrowserAnnotationPayload
+}
+
 // ---------------------------------------------------------------------------
 // Payload budgets — enforced in both guest and main
 // ---------------------------------------------------------------------------
@@ -148,6 +175,16 @@ export const GRAB_BUDGET = {
   nearbyTextMaxEntries: 10,
   htmlSnippetMaxLength: 4096,
   ancestorPathMaxEntries: 10,
+  nearbyElementsMaxEntries: 6,
+  nearbyElementMaxLength: 160,
+  selectorMaxLength: 700,
+  pathMaxLength: 900,
+  cssClassesMaxLength: 500,
+  selectedTextMaxLength: 500,
+  sourceFileMaxLength: 500,
+  reactComponentsMaxLength: 500,
+  annotationCommentMaxLength: 2000,
+  annotationsMaxPerPage: 20,
   /** Hard byte budget for screenshot PNG data URL before we omit the screenshot. */
   screenshotMaxBytes: 2 * 1024 * 1024
 } as const

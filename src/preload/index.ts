@@ -33,6 +33,7 @@ import type {
   WorktreeRemoteBranchConflictEvent
 } from '../shared/types'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
+import type { SkillDiscoveryResult } from '../shared/skills'
 import type {
   RuntimeStatus,
   RuntimeSyncWindowGraph,
@@ -465,6 +466,15 @@ const api = {
       updates: Record<string, unknown>
     }): Promise<unknown> => ipcRenderer.invoke('worktrees:updateMeta', args),
 
+    listLineage: (): Promise<Record<string, unknown>> =>
+      ipcRenderer.invoke('worktrees:listLineage'),
+
+    updateLineage: (args: {
+      worktreeId: string
+      parentWorktreeId?: string
+      noParent?: boolean
+    }): Promise<unknown> => ipcRenderer.invoke('worktrees:updateLineage', args),
+
     persistSortOrder: (args: { orderedIds: string[] }): Promise<void> =>
       ipcRenderer.invoke('worktrees:persistSortOrder', args),
 
@@ -793,6 +803,15 @@ const api = {
       resolve: boolean
     }): Promise<boolean> => ipcRenderer.invoke('gh:resolveReviewThread', args),
 
+    setPRFileViewed: (args: {
+      repoPath: string
+      repoId?: string
+      prNumber: number
+      pullRequestId: string
+      path: string
+      viewed: boolean
+    }): Promise<boolean> => ipcRenderer.invoke('gh:setPRFileViewed', args),
+
     updatePRTitle: (args: {
       repoPath: string
       repoId?: string
@@ -1107,7 +1126,9 @@ const api = {
       ipcRenderer.invoke('agentHooks:cursorStatus'),
     droidStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:droidStatus'),
-    grokStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:grokStatus')
+    grokStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:grokStatus'),
+    hermesStatus: (): Promise<AgentHookInstallStatus> =>
+      ipcRenderer.invoke('agentHooks:hermesStatus')
   },
 
   agentTrust: {
@@ -1261,6 +1282,10 @@ const api = {
       ipcRenderer.invoke('shell:copyFile', args)
   },
 
+  skills: {
+    discover: (): Promise<SkillDiscoveryResult> => ipcRenderer.invoke('skills:discover')
+  },
+
   pet: {
     import: (): Promise<CustomPet | null> => ipcRenderer.invoke('pet:import'),
     importPetBundle: (): Promise<CustomPet | null> => ipcRenderer.invoke('pet:importPetBundle'),
@@ -1289,6 +1314,9 @@ const api = {
       browserPageId: string
       override: BrowserViewportOverride | null
     }): Promise<boolean> => ipcRenderer.invoke('browser:setViewportOverride', args),
+
+    setAnnotationViewportBridge: (args): Promise<boolean> =>
+      ipcRenderer.invoke('browser:setAnnotationViewportBridge', args),
 
     onGuestLoadFailed: (
       callback: (args: {
@@ -2096,6 +2124,17 @@ const api = {
       const listener = (_event: Electron.IpcRendererEvent, direction: 1 | -1) => callback(direction)
       ipcRenderer.on('ui:switchTerminalTab', listener)
       return () => ipcRenderer.removeListener('ui:switchTerminalTab', listener)
+    },
+    onCtrlTabKeyDown: (callback: (data: { shiftKey: boolean }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { shiftKey: boolean }) =>
+        callback(data)
+      ipcRenderer.on('ui:ctrlTabKeyDown', listener)
+      return () => ipcRenderer.removeListener('ui:ctrlTabKeyDown', listener)
+    },
+    onCtrlTabKeyUp: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:ctrlTabKeyUp', listener)
+      return () => ipcRenderer.removeListener('ui:ctrlTabKeyUp', listener)
     },
     onToggleStatusBar: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()

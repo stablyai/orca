@@ -279,6 +279,55 @@ test.describe('Activity Agent Pane Isolation', () => {
       })
   })
 
+  test('acknowledged stable pane keys clear the Agents unread badge', async ({ orcaPage }) => {
+    await splitActiveTerminalPane(orcaPage, 'vertical')
+    await waitForPaneCount(orcaPage, 2)
+    const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 2)
+    const firstPane = snapshot.panes[0]
+    if (!firstPane) {
+      throw new Error('Activity acknowledgement test needs a split pane')
+    }
+    const now = Date.now()
+    const thread: SeededActivityThread = {
+      paneKey: `${snapshot.tabId}:${firstPane.leafId}`,
+      leafId: firstPane.leafId,
+      prompt: `ACTIVITY_ACK_STABLE_PANE_${now}`
+    }
+
+    await orcaPage.evaluate(() => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available')
+      }
+      const state = store.getState()
+      for (const worktree of Object.values(state.worktreesByRepo).flat()) {
+        state.markWorktreeVisited(worktree.id)
+      }
+    })
+
+    await seedActivityThread(
+      orcaPage,
+      thread,
+      'Codex acknowledged pane',
+      'blocked',
+      'Waiting for acknowledgement migration coverage.',
+      now - 5_000
+    )
+
+    await expect(orcaPage.getByRole('button', { name: /^Agents\s+1$/ })).toBeVisible()
+
+    await orcaPage.evaluate((paneKey) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available')
+      }
+      store.getState().acknowledgeAgents([paneKey])
+    }, thread.paneKey)
+
+    await expect(orcaPage.getByRole('button', { name: /^Agents$/ })).toBeVisible()
+    await expect(orcaPage.getByRole('button', { name: /^Agents\s+1$/ })).toHaveCount(0)
+  })
+
   test('workspace card agent rows focus the matching terminal split pane', async ({ orcaPage }) => {
     await splitActiveTerminalPane(orcaPage, 'vertical')
     await waitForPaneCount(orcaPage, 2)

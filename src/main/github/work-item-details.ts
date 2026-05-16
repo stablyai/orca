@@ -5,6 +5,7 @@ import type {
   GitHubAssignableUser,
   GitHubPRFile,
   GitHubPRFileContents,
+  GitHubPRFileViewedState,
   GitHubWorkItem,
   GitHubWorkItemDetails,
   PRComment
@@ -25,6 +26,21 @@ import { noteRateLimitSpend, rateLimitGuard } from './rate-limit'
 // at 100 per page; we cap at a reasonable total so a massive PR cannot starve
 // the gh semaphore while we fetch file listings.
 const MAX_PR_FILES = 300
+
+const PR_FILE_VIEWED_STATES_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $after: String) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $number) {
+      id
+      files(first: 100, after: $after) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          path
+          viewerViewedState
+        }
+      }
+    }
+  }
+}`
 
 const WORK_ITEM_PARTICIPANTS_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $isPr: Boolean!) {
   repository(owner: $owner, name: $repo) {
@@ -316,6 +332,102 @@ async function getPRFiles(
   } catch {
     return []
   }
+}
+
+type PRFileViewedStatesResult = {
+  pullRequestId: string
+  viewedStates: Map<string, GitHubPRFileViewedState>
+}
+
+async function getPRFileViewedStates(
+  repoPath: string,
+  prNumber: number,
+  connectionId?: string | null
+): Promise<PRFileViewedStatesResult | null> {
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
+  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+  if (!ownerRepo) {
+    return null
+  }
+  if (rateLimitGuard('graphql').blocked) {
+    return null
+  }
+  const viewedStates = new Map<string, GitHubPRFileViewedState>()
+  let pullRequestId: string | null = null
+  let after: string | null = null
+
+  try {
+    for (let fetched = 0; fetched < MAX_PR_FILES; fetched += 100) {
+      const args = [
+        'api',
+        'graphql',
+        '-f',
+        `query=${PR_FILE_VIEWED_STATES_QUERY}`,
+        '-f',
+        `owner=${ownerRepo.owner}`,
+        '-f',
+        `repo=${ownerRepo.repo}`,
+        '-F',
+        `number=${prNumber}`
+      ]
+      if (after) {
+        args.push('-f', `after=${after}`)
+      }
+      noteRateLimitSpend('graphql')
+      const { stdout } = await ghExecFileAsync(args, ghOptions)
+      const parsed = JSON.parse(stdout) as {
+        data?: {
+          repository?: {
+            pullRequest?: {
+              id?: string
+              files?: {
+                pageInfo?: { hasNextPage?: boolean; endCursor?: string | null }
+                nodes?: {
+                  path?: string | null
+                  viewerViewedState?: GitHubPRFileViewedState | null
+                }[]
+              }
+            } | null
+          } | null
+        }
+        errors?: { message?: string }[]
+      }
+      if (parsed.errors && parsed.errors.length > 0) {
+        return null
+      }
+      const pullRequest = parsed.data?.repository?.pullRequest
+      if (!pullRequest?.id) {
+        return null
+      }
+      pullRequestId = pullRequest.id
+      for (const file of pullRequest.files?.nodes ?? []) {
+        if (file.path && file.viewerViewedState) {
+          viewedStates.set(file.path, file.viewerViewedState)
+        }
+      }
+      if (!pullRequest.files?.pageInfo?.hasNextPage || !pullRequest.files.pageInfo.endCursor) {
+        break
+      }
+      after = pullRequest.files.pageInfo.endCursor
+    }
+  } catch {
+    return null
+  }
+
+  return pullRequestId ? { pullRequestId, viewedStates } : null
+}
+
+function mergePRFileViewedStates(
+  files: GitHubPRFile[],
+  viewedStates: PRFileViewedStatesResult | null
+): GitHubPRFile[] {
+  if (!viewedStates) {
+    return files
+  }
+  return files.map((file) => ({
+    ...file,
+    viewerViewedState: viewedStates.viewedStates.get(file.path) ?? 'UNVIEWED'
+  }))
 }
 
 async function getIssueBodyAndComments(
@@ -614,11 +726,12 @@ export async function getWorkItemDetails(
     }
 
     // PR: fetch body + comments + checks + files + head/base SHAs in parallel.
-    const [body, comments, shas, files, participants] = await Promise.all([
+    const [body, comments, shas, files, viewedStates, participants] = await Promise.all([
       getPRBody(repoPath, item.number, connectionId),
       getPRComments(repoPath, item.number, undefined, connectionId),
       getPRHeadBaseSha(repoPath, item.number, connectionId),
       getPRFiles(repoPath, item.number, connectionId),
+      getPRFileViewedStates(repoPath, item.number, connectionId),
       getWorkItemParticipants(repoPath, item, connectionId)
     ])
 
@@ -638,8 +751,9 @@ export async function getWorkItemDetails(
       comments,
       headSha: shas?.headSha,
       baseSha: shas?.baseSha,
+      pullRequestId: viewedStates?.pullRequestId,
       checks,
-      files,
+      files: mergePRFileViewedStates(files, viewedStates),
       participants: mentionParticipants
     }
   } finally {

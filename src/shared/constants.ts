@@ -170,8 +170,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalFontFamily: defaultTerminalFontFamily(),
     terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT,
     terminalLineHeight: 1,
-    // Why: VS Code defaults terminal GPU acceleration to "auto": prefer
-    // xterm WebGL for performance, but allow renderer failure to choose DOM.
+    // Why: keep the setting on "auto" so explicit user choices stay available,
+    // but renderer policy maps Linux auto to DOM to avoid GPU glyph corruption.
     terminalGpuAcceleration: 'auto',
     // Why 'auto': when the user has picked a known ligature font we want the
     // feature enabled by default, but we never force it if they pick a font
@@ -213,6 +213,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     rightSidebarOpenByDefault: true,
     showTitlebarAppName: true,
     showTasksButton: true,
+    ctrlTabOrderMode: 'mru',
     floatingTerminalEnabled: true,
     floatingTerminalDefaultedForAllUsers: true,
     floatingTerminalCwd: '~',
@@ -318,6 +319,7 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
     repos: [],
     sparsePresetsByRepo: {},
     worktreeMeta: {},
+    worktreeLineageById: {},
     settings: getDefaultSettings(homedir),
     ui: getDefaultUIState(),
     githubCache: { pr: {}, issue: {} },
@@ -339,6 +341,7 @@ export function getDefaultUIState(): PersistedUIState {
     sidebarWidth: 280,
     rightSidebarWidth: 350,
     groupBy: 'repo',
+    showWorkspaceLineage: false,
     sortBy: 'recent',
     showActiveOnly: false,
     hideDefaultBranchWorkspace: false,

@@ -1,7 +1,17 @@
 /* eslint-disable max-lines -- Why: this page owns the automations list/detail
  * orchestration while the form and detail presentation live in sibling files. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CalendarClock, Check, Pause, Pencil, Play, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import {
+  CalendarClock,
+  Check,
+  Clock,
+  Pause,
+  Pencil,
+  Play,
+  Plus,
+  RefreshCw,
+  Trash2
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -35,10 +45,21 @@ import type {
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
 import type { Worktree } from '../../../../shared/types'
-import { buildAutomationRrule, parseAutomationRrule } from '../../../../shared/automation-schedules'
+import {
+  buildAutomationRrule,
+  formatAutomationSchedule,
+  isValidAutomationSchedule,
+  tryParseAutomationRrule
+} from '../../../../shared/automation-schedules'
 import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
+import {
+  formatAutomationCost,
+  formatAutomationTokens,
+  summarizeAutomationRunUsage
+} from './automation-usage-model'
 import { AutomationDetail } from './AutomationDetail'
 import { AutomationEditorDialog, type AutomationDraft } from './AutomationEditorDialog'
+import { AUTOMATION_TEMPLATES, type AutomationTemplate } from './automation-templates'
 import { ExternalAutomationManagers } from './ExternalAutomationManagers'
 
 const AGENTS = AGENT_CATALOG.map((agent) => agent.id)
@@ -51,6 +72,10 @@ function getDefaultWorktree(worktrees: readonly Worktree[]): Worktree | null {
 
 function formatTimeInput(hour: number, minute: number): string {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+}
+
+function getAgentLabel(agentId: string): string {
+  return AGENT_CATALOG.find((agent) => agent.id === agentId)?.label ?? agentId
 }
 
 export default function AutomationsPage(): React.JSX.Element {
@@ -103,7 +128,9 @@ export default function AutomationsPage(): React.JSX.Element {
     preset: 'weekdays',
     time: DEFAULT_TIME,
     dayOfWeek: '1',
-    missedRunGraceMinutes: '720'
+    customSchedule: '',
+    missedRunGraceMinutes: '720',
+    scheduleWarning: null
   })
 
   const selected =
@@ -178,6 +205,20 @@ export default function AutomationsPage(): React.JSX.Element {
   }, [refresh])
 
   useEffect(() => {
+    const onVisibilityOrFocus = (): void => {
+      if (document.visibilityState === 'visible') {
+        void refresh()
+      }
+    }
+    window.addEventListener('focus', onVisibilityOrFocus)
+    document.addEventListener('visibilitychange', onVisibilityOrFocus)
+    return () => {
+      window.removeEventListener('focus', onVisibilityOrFocus)
+      document.removeEventListener('visibilitychange', onVisibilityOrFocus)
+    }
+  }, [refresh])
+
+  useEffect(() => {
     const completedRuns = runs.filter((run) => {
       if (run.status !== 'dispatched' || !run.terminalSessionId) {
         return false
@@ -235,11 +276,26 @@ export default function AutomationsPage(): React.JSX.Element {
     }
   }, [draft.projectId, draft.workspaceId, worktreesByRepo])
 
-  const openCreateDialog = (): void => {
+  const applyTemplateToDraft = useCallback((template: AutomationTemplate): void => {
+    setDraft((current) => ({
+      ...current,
+      name: template.name,
+      prompt: template.prompt,
+      preset: template.preset,
+      time: template.time ?? current.time,
+      dayOfWeek: template.dayOfWeek ?? current.dayOfWeek,
+      customSchedule: '',
+      agentId: template.agentId ?? current.agentId,
+      missedRunGraceMinutes: template.missedRunGraceMinutes ?? current.missedRunGraceMinutes,
+      scheduleWarning: null
+    }))
+  }, [])
+
+  const openCreateDialog = (template?: AutomationTemplate): void => {
     editRequestRef.current += 1
     const target = getDefaultTarget()
     setEditingAutomationId(null)
-    const nextDraft: AutomationDraft = {
+    const baseDraft: AutomationDraft = {
       name: '',
       prompt: '',
       agentId: defaultAgent,
@@ -250,8 +306,23 @@ export default function AutomationsPage(): React.JSX.Element {
       preset: 'weekdays',
       time: DEFAULT_TIME,
       dayOfWeek: '1',
-      missedRunGraceMinutes: '720'
+      customSchedule: '',
+      missedRunGraceMinutes: '720',
+      scheduleWarning: null
     }
+    const nextDraft = template
+      ? {
+          ...baseDraft,
+          name: template.name,
+          prompt: template.prompt,
+          preset: template.preset,
+          time: template.time ?? baseDraft.time,
+          dayOfWeek: template.dayOfWeek ?? baseDraft.dayOfWeek,
+          customSchedule: '',
+          agentId: template.agentId ?? baseDraft.agentId,
+          missedRunGraceMinutes: template.missedRunGraceMinutes ?? baseDraft.missedRunGraceMinutes
+        }
+      : baseDraft
     setDraft(nextDraft)
     setDraftAtOpen(nextDraft)
     setCreateOpen(true)
@@ -270,7 +341,8 @@ export default function AutomationsPage(): React.JSX.Element {
     if (requestId !== editRequestRef.current) {
       return
     }
-    const schedule = parseAutomationRrule(latest.rrule)
+    const schedule = tryParseAutomationRrule(latest.rrule)
+    const hasCustomSchedule = !schedule && isValidAutomationSchedule(latest.rrule)
     setEditingAutomationId(latest.id)
     const nextDraft: AutomationDraft = {
       name: latest.name,
@@ -280,10 +352,15 @@ export default function AutomationsPage(): React.JSX.Element {
       workspaceMode: latest.workspaceMode,
       workspaceId: latest.workspaceId ?? '',
       baseBranch: latest.baseBranch ?? '',
-      preset: schedule.preset,
-      time: formatTimeInput(schedule.hour, schedule.minute),
-      dayOfWeek: String(schedule.dayOfWeek),
-      missedRunGraceMinutes: String(latest.missedRunGraceMinutes)
+      preset: schedule?.preset ?? (hasCustomSchedule ? 'custom' : 'weekdays'),
+      time: schedule ? formatTimeInput(schedule.hour, schedule.minute) : DEFAULT_TIME,
+      dayOfWeek: String(schedule?.dayOfWeek ?? 1),
+      customSchedule: hasCustomSchedule ? latest.rrule : '',
+      missedRunGraceMinutes: String(latest.missedRunGraceMinutes),
+      scheduleWarning:
+        schedule || hasCustomSchedule
+          ? null
+          : 'This automation has an unsupported saved schedule. Pick a supported schedule before saving changes.'
     }
     setDraft(nextDraft)
     setDraftAtOpen(nextDraft)
@@ -329,6 +406,14 @@ export default function AutomationsPage(): React.JSX.Element {
       toast.error('Choose a run location and enter a prompt before saving.')
       return
     }
+    if (draft.scheduleWarning) {
+      toast.error('Pick a supported schedule before saving.')
+      return
+    }
+    if (draft.preset === 'custom' && !isValidAutomationSchedule(draft.customSchedule)) {
+      toast.error('Enter a valid 5-field cron expression before saving.')
+      return
+    }
     setIsSaving(true)
     try {
       const selectedWorkspaceExists =
@@ -340,12 +425,15 @@ export default function AutomationsPage(): React.JSX.Element {
       }
       const now = Date.now()
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
-      const rrule = buildAutomationRrule({
-        preset: draft.preset,
-        hour: Number.isFinite(hour) ? hour : 9,
-        minute: Number.isFinite(minute) ? minute : 0,
-        dayOfWeek: Number(draft.dayOfWeek)
-      })
+      const rrule =
+        draft.preset === 'custom'
+          ? draft.customSchedule.trim()
+          : buildAutomationRrule({
+              preset: draft.preset,
+              hour: Number.isFinite(hour) ? hour : 9,
+              minute: Number.isFinite(minute) ? minute : 0,
+              dayOfWeek: Number(draft.dayOfWeek)
+            })
       const rawMissedRunGraceMinutes = Number(draft.missedRunGraceMinutes)
       const missedRunGraceMinutes = Number.isFinite(rawMissedRunGraceMinutes)
         ? Math.max(0, rawMissedRunGraceMinutes)
@@ -574,7 +662,7 @@ export default function AutomationsPage(): React.JSX.Element {
                 variant="ghost"
                 size="icon-sm"
                 aria-label="Add automation"
-                onClick={openCreateDialog}
+                onClick={() => openCreateDialog()}
                 className="border border-border/50 bg-transparent hover:bg-muted/50"
               >
                 <Plus className="size-4" />
@@ -600,6 +688,7 @@ export default function AutomationsPage(): React.JSX.Element {
         onProjectChange={handleProjectChange}
         onOpenChange={setCreateOpen}
         onDraftChange={setDraft}
+        onApplyTemplate={applyTemplateToDraft}
         onSave={() => void saveAutomation()}
       />
 
@@ -730,6 +819,12 @@ export default function AutomationsPage(): React.JSX.Element {
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(280px,360px)_1fr] overflow-hidden border-t border-border/50">
         <section className="flex min-h-0 flex-col border-r border-border/50 bg-muted/20">
           <div className="min-h-0 flex-1 overflow-auto p-2">
+            {automations.length > 0 ? (
+              <div className="grid grid-cols-[1fr_auto] gap-2 px-2 pb-2 text-[11px] font-medium uppercase text-muted-foreground">
+                <span>Automation</span>
+                <span>Next</span>
+              </div>
+            ) : null}
             {automations.map((automation) => {
               const automationRepo = repoMap.get(automation.projectId)
               const automationWorktree = automation.workspaceId
@@ -737,8 +832,22 @@ export default function AutomationsPage(): React.JSX.Element {
                 : null
               const workspaceLabel =
                 automation.workspaceMode === 'new_per_run'
-                  ? 'New workspace each run'
+                  ? `Create from ${automation.baseBranch ?? automationRepo?.worktreeBaseRef ?? 'project default'}`
                   : (automationWorktree?.displayName ?? 'Missing workspace')
+              const usageSummary = summarizeAutomationRunUsage(
+                runs.filter((run) => run.automationId === automation.id)
+              )
+              const usageText =
+                usageSummary.knownRuns > 0
+                  ? `${formatAutomationCost(
+                      usageSummary.estimatedCostUsd
+                    )} est. · ${formatAutomationTokens(usageSummary.totalTokens)} tokens`
+                  : usageSummary.unavailableRuns > 0
+                    ? 'Usage unavailable'
+                    : 'No run usage yet'
+              const nextRunLabel = automation.enabled
+                ? formatAutomationDateTimeWithRelative(automation.nextRunAt, relativeNow)
+                : 'Paused'
               return (
                 <ContextMenu key={automation.id}>
                   <ContextMenuTrigger asChild>
@@ -746,33 +855,49 @@ export default function AutomationsPage(): React.JSX.Element {
                       type="button"
                       onClick={() => setSelectedId(automation.id)}
                       className={cn(
-                        'mb-1 flex w-full flex-col gap-1 rounded-md border px-3 py-2 text-left text-sm transition-colors',
+                        'mb-1 grid w-full grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors',
                         selected?.id === automation.id
                           ? 'border-foreground/30 bg-muted/70 text-foreground shadow-sm'
                           : 'border-transparent hover:bg-muted/50'
                       )}
                     >
-                      <span className="font-medium">{automation.name}</span>
-                      <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                        {automationRepo ? (
-                          <RepoDotLabel
-                            name={automationRepo.displayName}
-                            color={automationRepo.badgeColor}
-                            dotClassName="size-1.5"
+                      <span className="min-w-0">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span
+                            className={cn(
+                              'size-2 rounded-full',
+                              automation.enabled ? 'bg-foreground' : 'bg-muted-foreground/40'
+                            )}
                           />
-                        ) : (
-                          <span>Unknown project</span>
-                        )}
-                        <span className="shrink-0">/</span>
-                        <span className="truncate">{workspaceLabel}</span>
+                          <span className="truncate font-medium">{automation.name}</span>
+                        </span>
+                        <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                          {automationRepo ? (
+                            <RepoDotLabel
+                              name={automationRepo.displayName}
+                              color={automationRepo.badgeColor}
+                              dotClassName="size-1.5"
+                            />
+                          ) : (
+                            <span>Unknown project</span>
+                          )}
+                          <span className="shrink-0">/</span>
+                          <span className="truncate">{workspaceLabel}</span>
+                        </span>
+                        <span className="mt-1 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                          <span className="truncate">
+                            {formatAutomationSchedule(automation.rrule)}
+                          </span>
+                          <span className="shrink-0">·</span>
+                          <span className="truncate">{getAgentLabel(automation.agentId)}</span>
+                        </span>
+                        <span className="mt-1 block truncate text-xs text-muted-foreground">
+                          {usageText}
+                        </span>
                       </span>
-                      <span className="text-xs text-muted-foreground">
-                        {automation.enabled
-                          ? `Next run ${formatAutomationDateTimeWithRelative(
-                              automation.nextRunAt,
-                              relativeNow
-                            )}`
-                          : 'Paused'}
+                      <span className="flex max-w-28 flex-col items-end gap-1 text-right text-xs text-muted-foreground">
+                        <Clock className="size-3.5" />
+                        <span className="line-clamp-2">{nextRunLabel}</span>
                       </span>
                     </button>
                   </ContextMenuTrigger>
@@ -806,7 +931,34 @@ export default function AutomationsPage(): React.JSX.Element {
               )
             })}
             {automations.length === 0 ? (
-              <div className="p-4 text-sm text-muted-foreground">No automations yet.</div>
+              <div className="grid gap-2 p-2">
+                <div className="px-1 pb-1 text-sm font-medium">Start from a template</div>
+                {AUTOMATION_TEMPLATES.map((template) => (
+                  <button
+                    key={template.id}
+                    type="button"
+                    onClick={() => openCreateDialog(template)}
+                    className="rounded-md border border-border/70 bg-background px-3 py-2 text-left shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  >
+                    <div className="text-[11px] font-medium uppercase text-muted-foreground">
+                      {template.category}
+                    </div>
+                    <div className="mt-1 text-sm font-medium">{template.label}</div>
+                    <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                      {template.description}
+                    </div>
+                  </button>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mt-1 w-full justify-start"
+                  onClick={() => openCreateDialog()}
+                >
+                  <Plus className="size-4" />
+                  Add new
+                </Button>
+              </div>
             ) : null}
           </div>
         </section>

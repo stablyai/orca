@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { writeFileSync, readFileSync, rmSync, mkdtempSync, mkdirSync, existsSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
-import type { Repo, TerminalTab, WorkspaceSessionState } from '../shared/types'
+import type { Repo, TerminalTab, WorktreeLineage, WorkspaceSessionState } from '../shared/types'
 import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
 import { MAX_BROWSER_HISTORY_ENTRIES } from '../shared/workspace-session-browser-history'
 
@@ -75,6 +75,17 @@ const makeTerminalTab = (overrides: Partial<TerminalTab> = {}): TerminalTab => (
   customTitle: null,
   color: null,
   sortOrder: 0,
+  createdAt: 1,
+  ...overrides
+})
+
+const makeWorktreeLineage = (overrides: Partial<WorktreeLineage> = {}): WorktreeLineage => ({
+  worktreeId: 'r1::/path/child',
+  worktreeInstanceId: 'child-instance',
+  parentWorktreeId: 'r1::/path/parent',
+  parentWorktreeInstanceId: 'parent-instance',
+  origin: 'manual',
+  capture: { source: 'manual-action', confidence: 'explicit' },
   createdAt: 1,
   ...overrides
 })
@@ -219,6 +230,135 @@ describe('Store', () => {
     const store = await createStore()
 
     expect(store.getRepos()).toHaveLength(1)
+  })
+
+  it('remaps persisted agent acknowledgement pane keys when terminal leaves migrate to UUIDs', async () => {
+    const acknowledgedAt = 1_700_000_000_000
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [makeRepo()],
+      worktreeMeta: {},
+      settings: {},
+      ui: {
+        acknowledgedAgentsByPaneKey: {
+          'tab1:0': acknowledgedAt,
+          'tab1:pane:1': acknowledgedAt - 1_000,
+          'other-tab:0': acknowledgedAt - 2_000
+        }
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {
+        activeRepoId: 'r1',
+        activeWorktreeId: 'repo1::/worktree',
+        activeTabId: 'tab1',
+        tabsByWorktree: {
+          'repo1::/worktree': [
+            makeTerminalTab({
+              id: 'tab1',
+              ptyId: 'pty1',
+              worktreeId: 'repo1::/worktree'
+            })
+          ]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            root: {
+              type: 'split',
+              direction: 'horizontal',
+              first: { type: 'leaf', leafId: '0' },
+              second: { type: 'leaf', leafId: 'pane:1' }
+            },
+            activeLeafId: '0',
+            expandedLeafId: null,
+            ptyIdsByLeafId: { '0': 'pty1', 'pane:1': 'pty2' }
+          }
+        }
+      }
+    })
+
+    const store = await createStore()
+    const layout = store.getWorkspaceSession().terminalLayoutsByTabId.tab1
+    const migratedLeafIds = Object.keys(layout.ptyIdsByLeafId ?? {})
+
+    expect(migratedLeafIds).toHaveLength(2)
+    expect(migratedLeafIds.every(isTerminalLeafId)).toBe(true)
+
+    const ui = store.getUI()
+    expect(ui.acknowledgedAgentsByPaneKey).toEqual({
+      [makePaneKey('tab1', migratedLeafIds[0])]: acknowledgedAt,
+      [makePaneKey('tab1', migratedLeafIds[1])]: acknowledgedAt - 1_000,
+      'other-tab:0': acknowledgedAt - 2_000
+    })
+  })
+
+  it('keeps the newest acknowledgement when legacy and migrated pane keys collide', async () => {
+    const legacyAcknowledgedAt = 1_700_000_000_000
+    const migratedAcknowledgedAt = legacyAcknowledgedAt + 5_000
+    const migratedPaneKey = makePaneKey('tab1', TEST_LEAF_1)
+
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [makeRepo()],
+      worktreeMeta: {},
+      settings: {},
+      ui: {
+        acknowledgedAgentsByPaneKey: {
+          'tab1:0': legacyAcknowledgedAt,
+          [migratedPaneKey]: migratedAcknowledgedAt
+        }
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {
+        activeRepoId: 'r1',
+        activeWorktreeId: 'repo1::/worktree',
+        activeTabId: 'tab1',
+        tabsByWorktree: {
+          'repo1::/worktree': [
+            makeTerminalTab({
+              id: 'tab1',
+              ptyId: 'pty1',
+              worktreeId: 'repo1::/worktree'
+            })
+          ]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            root: { type: 'leaf', leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+          }
+        }
+      }
+    })
+
+    const store = await createStore()
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'repo1::/worktree',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        'repo1::/worktree': [
+          makeTerminalTab({
+            id: 'tab1',
+            ptyId: 'pty1',
+            worktreeId: 'repo1::/worktree'
+          })
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: '0' },
+          activeLeafId: '0',
+          expandedLeafId: null,
+          ptyIdsByLeafId: { '0': 'pty1' }
+        }
+      }
+    })
+
+    expect(store.getUI().acknowledgedAgentsByPaneKey).toEqual({
+      [migratedPaneKey]: migratedAcknowledgedAt
+    })
   })
 
   it('can clear an automation back to the project default branch', async () => {
@@ -469,6 +609,40 @@ describe('Store', () => {
     expect(store.getWorktreeMeta('r1::/path/wt2')).toBeUndefined()
     expect(store.getWorktreeMeta('r2::/other')).toBeDefined()
     expect(store.getWorktreeMeta('r2::/other')!.displayName).toBe('other')
+  })
+
+  it('removeRepo deletes child and parent lineage for the repo', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1' }))
+    store.addRepo(makeRepo({ id: 'r2', path: '/repo2' }))
+
+    store.setWorktreeLineage(
+      'r1::/path/child',
+      makeWorktreeLineage({
+        worktreeId: 'r1::/path/child',
+        parentWorktreeId: 'r1::/path/parent'
+      })
+    )
+    store.setWorktreeLineage(
+      'r2::/other-child',
+      makeWorktreeLineage({
+        worktreeId: 'r2::/other-child',
+        parentWorktreeId: 'r1::/path/parent'
+      })
+    )
+    store.setWorktreeLineage(
+      'r2::/other',
+      makeWorktreeLineage({
+        worktreeId: 'r2::/other',
+        parentWorktreeId: 'r2::/parent'
+      })
+    )
+
+    store.removeRepo('r1')
+
+    expect(store.getWorktreeLineage('r1::/path/child')).toBeUndefined()
+    expect(store.getWorktreeLineage('r2::/other-child')).toBeUndefined()
+    expect(store.getWorktreeLineage('r2::/other')).toBeDefined()
   })
 
   // ── 7. updateRepo ──────────────────────────────────────────────────
@@ -2999,6 +3173,35 @@ describe('Store', () => {
     store.removeWorktreeMeta('a')
     expect(store.getWorktreeMeta('a')).toBeUndefined()
     expect(store.getWorktreeMeta('b')).toBeDefined()
+  })
+
+  it('stores and removes worktree lineage independently from metadata', async () => {
+    const store = await createStore()
+    const lineage = makeWorktreeLineage()
+
+    store.setWorktreeMeta(lineage.worktreeId, { displayName: 'child' })
+    store.setWorktreeLineage(lineage.worktreeId, lineage)
+
+    expect(store.getWorktreeLineage(lineage.worktreeId)).toEqual(lineage)
+    expect(store.getAllWorktreeLineage()).toEqual({ [lineage.worktreeId]: lineage })
+
+    store.removeWorktreeLineage(lineage.worktreeId)
+
+    expect(store.getWorktreeLineage(lineage.worktreeId)).toBeUndefined()
+    expect(store.getWorktreeMeta(lineage.worktreeId)).toBeDefined()
+  })
+
+  it('removeWorktreeMeta deletes that worktree lineage entry', async () => {
+    const store = await createStore()
+    const lineage = makeWorktreeLineage()
+
+    store.setWorktreeMeta(lineage.worktreeId, { displayName: 'child' })
+    store.setWorktreeLineage(lineage.worktreeId, lineage)
+
+    store.removeWorktreeMeta(lineage.worktreeId)
+
+    expect(store.getWorktreeMeta(lineage.worktreeId)).toBeUndefined()
+    expect(store.getWorktreeLineage(lineage.worktreeId)).toBeUndefined()
   })
 
   // ── Rolling backups (issue #1158) ──────────────────────────────────

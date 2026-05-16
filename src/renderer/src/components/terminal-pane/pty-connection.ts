@@ -26,10 +26,25 @@ import {
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
+import { e2eConfig } from '@/lib/e2e-config'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
 const REMOTE_PTY_ID_PREFIX = 'remote:'
+const PTY_CONNECT_DIAG_LIMIT = 200
+
+function recordPtyConnectDiagnostic(message: string): void {
+  if (!e2eConfig.exposeStore) {
+    return
+  }
+  console.log(`[pty-connect] ${message}`)
+  const target = globalThis as Record<string, unknown>
+  const diag = (target.__ptyConnectDiag ??= [] as string[]) as string[]
+  diag.push(message)
+  if (diag.length > PTY_CONNECT_DIAG_LIMIT) {
+    diag.splice(0, diag.length - PTY_CONNECT_DIAG_LIMIT)
+  }
+}
 
 // Why: when multiple panes/tabs need the same deferred SSH connection,
 // the first one calls ssh.connect() and subsequent ones must wait for it
@@ -1086,17 +1101,13 @@ export function connectPanePty(
       isSessionOwnedByWorktree(candidateReattachSessionId, deps.worktreeId)
         ? candidateReattachSessionId
         : null
-    const _diagMsg = `pane=${pane.id} tab=${deps.tabId} restored=${restoredPtyId} existing=${existingPtyId} detached=${detachedLivePtyId} reattach=${deferredReattachSessionId} hasTransport=${hasExistingPaneTransport} pendingKey=${pendingSpawnKey}`
-    console.log(`[pty-connect] ${_diagMsg}`)
-    ;((globalThis as Record<string, unknown>).__ptyConnectDiag ??= [] as string[]) as string[]
-    ;((globalThis as Record<string, unknown>).__ptyConnectDiag as string[]).push(_diagMsg)
+    recordPtyConnectDiagnostic(
+      `pane=${pane.id} tab=${deps.tabId} restored=${restoredPtyId} existing=${existingPtyId} detached=${detachedLivePtyId} reattach=${deferredReattachSessionId} hasTransport=${hasExistingPaneTransport} pendingKey=${pendingSpawnKey}`
+    )
 
     if (deferredReattachSessionId) {
       allowInitialIdleCacheSeed = true
-      console.log(`[pty-connect] pane=${pane.id} → REATTACH ${deferredReattachSessionId}`)
-      ;((globalThis as Record<string, unknown>).__ptyConnectDiag as string[])?.push(
-        `pane=${pane.id} → REATTACH`
-      )
+      recordPtyConnectDiagnostic(`pane=${pane.id} -> REATTACH ${deferredReattachSessionId}`)
 
       // Why: reattach also pre-signals so the cooperation gate suppresses
       // the daemon seed for this paneKey. Reattach paths register their
@@ -1174,10 +1185,7 @@ export function connectPanePty(
           startFreshSpawn()
         })
     } else if (detachedLivePtyId) {
-      console.log(`[pty-connect] pane=${pane.id} → ATTACH detached=${detachedLivePtyId}`)
-      ;((globalThis as Record<string, unknown>).__ptyConnectDiag as string[])?.push(
-        `pane=${pane.id} → ATTACH ${detachedLivePtyId}`
-      )
+      recordPtyConnectDiagnostic(`pane=${pane.id} -> ATTACH detached=${detachedLivePtyId}`)
       allowInitialIdleCacheSeed = false
       // Why: surface synchronous attach failures (e.g., the PTY died between
       // mount and remount, so window.api.pty.resize rejects) through
@@ -1210,10 +1218,7 @@ export function connectPanePty(
       allowInitialIdleCacheSeed = false
       const pendingSpawn = pendingSpawnByPaneKey.get(pendingSpawnKey)
       if (pendingSpawn) {
-        console.log(`[pty-connect] pane=${pane.id} → PENDING SPAWN (waiting on same leaf)`)
-        ;((globalThis as Record<string, unknown>).__ptyConnectDiag as string[])?.push(
-          `pane=${pane.id} → PENDING SPAWN`
-        )
+        recordPtyConnectDiagnostic(`pane=${pane.id} -> PENDING SPAWN`)
         void pendingSpawn
           .then((spawnedPtyId) => {
             if (disposed) {
@@ -1254,10 +1259,7 @@ export function connectPanePty(
             reportError(err instanceof Error ? err.message : String(err))
           })
       } else {
-        console.log(`[pty-connect] pane=${pane.id} → FRESH SPAWN`)
-        ;((globalThis as Record<string, unknown>).__ptyConnectDiag as string[])?.push(
-          `pane=${pane.id} → FRESH SPAWN`
-        )
+        recordPtyConnectDiagnostic(`pane=${pane.id} -> FRESH SPAWN`)
         startFreshSpawn()
       }
     }

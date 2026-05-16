@@ -21,10 +21,13 @@ function PopoverContent({
   className,
   align = 'center',
   sideOffset = 4,
+  portalContainer,
   style,
   onWheel,
   ...props
-}: React.ComponentProps<typeof PopoverPrimitive.Content>) {
+}: React.ComponentProps<typeof PopoverPrimitive.Content> & {
+  portalContainer?: HTMLElement | null
+}) {
   const handleWheel = React.useCallback(
     (event: React.WheelEvent<HTMLDivElement>) => {
       onWheel?.(event)
@@ -63,7 +66,7 @@ function PopoverContent({
   )
 
   return (
-    <PopoverPrimitive.Portal>
+    <PopoverPrimitive.Portal container={portalContainer ?? undefined}>
       <PopoverPrimitive.Content
         data-slot="popover-content"
         align={align}

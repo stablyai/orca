@@ -29,48 +29,69 @@ const WorktreeSelector = z.object({
     .pipe(z.string().min(1, 'Missing worktree selector'))
 })
 
-const WorktreeCreate = z.object({
-  repo: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing repo selector')),
-  name: OptionalString,
-  baseBranch: OptionalString,
-  linkedIssue: TriStateLinkedIssue,
-  linkedPR: TriStateLinkedIssue,
-  linkedLinearIssue: z.string().optional(),
-  comment: OptionalString,
-  displayName: OptionalString,
-  sparseCheckout: z
-    .object({
-      directories: z.array(z.string()),
-      presetId: OptionalString
-    })
-    .optional(),
-  pushTarget: z
-    .object({
-      remoteName: z.string(),
-      branchName: z.string(),
-      remoteUrl: OptionalString
-    })
-    .optional(),
-  runHooks: OptionalBoolean,
-  activate: OptionalBoolean,
-  setupDecision: z
-    .unknown()
-    .transform((v) =>
-      typeof v === 'string' && (v === 'run' || v === 'skip' || v === 'inherit') ? v : undefined
-    )
-    .pipe(z.union([z.enum(['run', 'skip', 'inherit']), z.undefined()]))
-    .optional(),
-  // Why: mobile clients pass a startup command (e.g. 'claude') so the first
-  // terminal pane launches the selected agent instead of an idle shell.
-  startupCommand: OptionalString,
-  createdWithAgent: z
-    .unknown()
-    .transform((value) => (isTuiAgent(value) ? value : undefined))
-    .optional()
-})
+const WorktreeCreate = z
+  .object({
+    repo: z
+      .unknown()
+      .transform((v) => (typeof v === 'string' ? v : ''))
+      .pipe(z.string().min(1, 'Missing repo selector')),
+    name: OptionalString,
+    baseBranch: OptionalString,
+    linkedIssue: TriStateLinkedIssue,
+    linkedPR: TriStateLinkedIssue,
+    linkedLinearIssue: z.string().optional(),
+    comment: OptionalString,
+    displayName: OptionalString,
+    sparseCheckout: z
+      .object({
+        directories: z.array(z.string()),
+        presetId: OptionalString
+      })
+      .optional(),
+    pushTarget: z
+      .object({
+        remoteName: z.string(),
+        branchName: z.string(),
+        remoteUrl: OptionalString
+      })
+      .optional(),
+    runHooks: OptionalBoolean,
+    activate: OptionalBoolean,
+    parentWorktree: OptionalString,
+    cwdParentWorktree: OptionalString,
+    noParent: OptionalBoolean,
+    callerTerminalHandle: OptionalString,
+    orchestrationContext: z
+      .object({
+        parentWorktreeId: OptionalString,
+        orchestrationRunId: OptionalString,
+        taskId: OptionalString,
+        coordinatorHandle: OptionalString
+      })
+      .optional(),
+    setupDecision: z
+      .unknown()
+      .transform((v) =>
+        typeof v === 'string' && (v === 'run' || v === 'skip' || v === 'inherit') ? v : undefined
+      )
+      .pipe(z.union([z.enum(['run', 'skip', 'inherit']), z.undefined()]))
+      .optional(),
+    // Why: mobile clients pass a startup command (e.g. 'claude') so the first
+    // terminal pane launches the selected agent instead of an idle shell.
+    startupCommand: OptionalString,
+    createdWithAgent: z
+      .unknown()
+      .transform((value) => (isTuiAgent(value) ? value : undefined))
+      .optional()
+  })
+  .superRefine((params, ctx) => {
+    if (params.parentWorktree && params.noParent === true) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Choose either --parent-worktree or --no-parent, not both.'
+      })
+    }
+  })
 
 const WorktreeSet = WorktreeSelector.extend({
   displayName: OptionalString,
@@ -97,7 +118,16 @@ const WorktreeSet = WorktreeSelector.extend({
       remoteUrl: OptionalString
     })
     .optional(),
-  diffComments: z.array(z.unknown()).optional()
+  diffComments: z.array(z.unknown()).optional(),
+  parentWorktree: OptionalString,
+  noParent: OptionalBoolean
+}).superRefine((params, ctx) => {
+  if (params.parentWorktree && params.noParent === true) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Choose either --parent-worktree or --no-parent, not both.'
+    })
+  }
 })
 
 const WorktreeRemove = WorktreeSelector.extend({
@@ -128,6 +158,11 @@ export const WORKTREE_METHODS: RpcMethod[] = [
     name: 'worktree.list',
     params: WorktreeListParams,
     handler: async (params, { runtime }) => runtime.listManagedWorktrees(params.repo, params.limit)
+  }),
+  defineMethod({
+    name: 'worktree.lineageList',
+    params: null,
+    handler: async (_params, { runtime }) => ({ lineage: await runtime.listWorktreeLineage() })
   }),
   defineMethod({
     name: 'worktree.show',
@@ -165,7 +200,14 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         activate: params.activate === true,
         setupDecision: params.setupDecision,
         createdWithAgent: params.createdWithAgent,
-        startup: params.startupCommand ? { command: params.startupCommand } : undefined
+        startup: params.startupCommand ? { command: params.startupCommand } : undefined,
+        lineage: {
+          parentWorktree: params.parentWorktree,
+          ...(params.cwdParentWorktree ? { cwdParentWorktree: params.cwdParentWorktree } : {}),
+          noParent: params.noParent === true,
+          callerTerminalHandle: params.callerTerminalHandle,
+          orchestrationContext: params.orchestrationContext
+        }
       })
   }),
   defineMethod({
@@ -189,7 +231,14 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         sparsePresetId: params.sparsePresetId,
         baseRef: params.baseRef,
         pushTarget: params.pushTarget,
-        diffComments: params.diffComments
+        diffComments: params.diffComments,
+        lineage:
+          params.parentWorktree || params.noParent === true
+            ? {
+                parentWorktree: params.parentWorktree,
+                noParent: params.noParent === true
+              }
+            : undefined
       } as Parameters<typeof runtime.updateManagedWorktreeMeta>[1])
     })
   }),

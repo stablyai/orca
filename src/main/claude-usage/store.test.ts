@@ -257,4 +257,66 @@ describe('ClaudeUsageStore', () => {
 
     expect(summary.estimatedCostUsd).toBeCloseTo(8.07)
   })
+
+  it('returns automation usage for a single matching worktree session', async () => {
+    const worktreeId = 'repo-1::/workspace/repo-a'
+    const store = createStoreWithState({
+      scanState: {
+        enabled: true,
+        lastScanStartedAt: 1,
+        lastScanCompletedAt: 2,
+        lastScanError: null
+      },
+      sessions: [
+        {
+          sessionId: 'session-1',
+          firstTimestamp: '2026-04-09T15:00:00.000Z',
+          lastTimestamp: '2026-04-09T15:05:00.000Z',
+          model: 'claude-sonnet-4-6',
+          lastCwd: '/workspace/repo-a',
+          lastGitBranch: 'feature/a',
+          primaryWorktreeId: worktreeId,
+          primaryRepoId: 'repo-1',
+          turnCount: 1,
+          totalInputTokens: 1000,
+          totalOutputTokens: 500,
+          totalCacheReadTokens: 200,
+          totalCacheWriteTokens: 100,
+          locationBreakdown: [
+            {
+              locationKey: `worktree:${worktreeId}`,
+              projectLabel: 'Repo A',
+              repoId: 'repo-1',
+              worktreeId,
+              turnCount: 1,
+              inputTokens: 1000,
+              outputTokens: 500,
+              cacheReadTokens: 200,
+              cacheWriteTokens: 100
+            }
+          ]
+        }
+      ]
+    })
+    ;(store as unknown as { refresh: typeof store.refresh }).refresh = vi.fn().mockResolvedValue({
+      enabled: true,
+      isScanning: false,
+      lastScanStartedAt: 1,
+      lastScanCompletedAt: 2,
+      lastScanError: null,
+      hasAnyClaudeData: true
+    })
+
+    const usage = await store.getAutomationRunUsage({
+      worktreeId,
+      terminalSessionId: 'tab-1',
+      startedAt: new Date('2026-04-09T14:59:00.000Z').getTime(),
+      completedAt: new Date('2026-04-09T15:06:00.000Z').getTime()
+    })
+
+    expect(usage.status).toBe('known')
+    expect(usage.providerSessionId).toBe('session-1')
+    expect(usage.totalTokens).toBe(1800)
+    expect(usage.estimatedCostUsd).toBeCloseTo(0.010935)
+  })
 })

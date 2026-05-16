@@ -121,6 +121,7 @@ export type WorkspaceStatusDefinition = {
 
 export type Worktree = {
   id: string // `${repoId}::${path}`
+  instanceId?: string
   repoId: string
   displayName: string
   comment: string
@@ -172,6 +173,8 @@ export type GitPushTarget = {
 
 // ─── Worktree metadata (persisted user-authored fields only) ─────────
 export type WorktreeMeta = {
+  /** Immutable per-workspace-instance ID used to reject stale lineage after path reuse. */
+  instanceId?: string
   displayName: string
   comment: string
   linkedIssue: number | null
@@ -200,6 +203,45 @@ export type WorktreeMeta = {
   /** User-assigned workspace board status for manual sidebar organization. */
   workspaceStatus?: WorkspaceStatus
   diffComments?: DiffComment[]
+}
+
+export type WorktreeLineageOrigin = 'orchestration' | 'cli' | 'manual'
+export type WorktreeLineageCaptureConfidence = 'explicit' | 'inferred'
+export type WorktreeLineageCaptureSource =
+  | 'explicit-cli-flag'
+  | 'cwd-context'
+  | 'terminal-context'
+  | 'orchestration-context'
+  | 'manual-action'
+
+export type WorktreeLineageCapture = {
+  source: WorktreeLineageCaptureSource
+  confidence: WorktreeLineageCaptureConfidence
+}
+
+export type WorktreeLineage = {
+  worktreeId: string
+  worktreeInstanceId: string
+  parentWorktreeId: string
+  parentWorktreeInstanceId: string
+  origin: WorktreeLineageOrigin
+  capture: WorktreeLineageCapture
+  orchestrationRunId?: string
+  taskId?: string
+  coordinatorHandle?: string
+  createdByTerminalHandle?: string
+  createdAt: number
+}
+
+export type WorktreeLineageWarningCode =
+  | 'LINEAGE_PARENT_CONTEXT_MISSING'
+  | 'LINEAGE_PARENT_CONTEXT_CONFLICT'
+  | 'LINEAGE_PARENT_INSTANCE_STALE'
+
+export type WorktreeLineageWarning = {
+  code: WorktreeLineageWarningCode
+  message: string
+  details?: Record<string, unknown>
 }
 
 // ─── Diff line comments ──────────────────────────────────────────────
@@ -242,6 +284,7 @@ export type TabGroupLayoutNode =
 export type TabContentType = 'terminal' | 'editor' | 'diff' | 'conflict-review' | 'browser'
 
 export type WorkspaceVisibleTabType = 'terminal' | 'editor' | 'browser'
+export type CtrlTabOrderMode = 'mru' | 'sequential'
 
 export type Tab = {
   id: string // UUID for terminals, filePath for editors (preserves current convention)
@@ -613,6 +656,8 @@ export type GitHubAssignableUser = {
   avatarUrl: string
 }
 
+export type GitHubPRFileViewedState = 'DISMISSED' | 'VIEWED' | 'UNVIEWED'
+
 export type GitHubWorkItem = {
   id: string
   type: 'issue' | 'pr'
@@ -644,6 +689,8 @@ export type GitHubPRFile = {
   deletions: number
   /** GitHub marks files above its diff size limit as binary-like; we skip content fetches for these. */
   isBinary: boolean
+  /** GitHub's per-viewer review state. DISMISSED means new changes arrived after the file was viewed. */
+  viewerViewedState?: GitHubPRFileViewedState
 }
 
 export type GitHubPRFileContents = {
@@ -672,6 +719,8 @@ export type GitHubWorkItemDetails = {
   /** Only set for PRs. Head/base SHAs used by the Files tab to fetch per-file content. */
   headSha?: string
   baseSha?: string
+  /** GraphQL node ID required by GitHub's file-viewed mutations. Only set for PRs. */
+  pullRequestId?: string
   checks?: PRCheckDetail[]
   files?: GitHubPRFile[]
   participants?: GitHubAssignableUser[]
@@ -988,7 +1037,14 @@ export type CreateWorktreeArgs = {
 }
 
 export type CreateWorktreeResult = {
-  worktree: Worktree
+  worktree: Worktree & {
+    parentWorktreeId?: string | null
+    childWorktreeIds?: string[]
+    lineage?: WorktreeLineage | null
+    git?: GitWorktreeInfo
+  }
+  lineage?: WorktreeLineage | null
+  warnings?: WorktreeLineageWarning[]
   setup?: WorktreeSetupLaunch
   warning?: string
   initialBaseStatus?: WorktreeBaseStatusEvent
@@ -1220,7 +1276,7 @@ export type GlobalSettings = {
   terminalFontWeight: number
   terminalLineHeight: number
   /** Mirrors VS Code's terminal.integrated.gpuAcceleration shape.
-   *  - 'auto': try xterm WebGL and fall back to DOM if the renderer fails.
+   *  - 'auto': use DOM on Linux; otherwise try xterm WebGL and fall back to DOM if the renderer fails.
    *  - 'on': always try xterm WebGL.
    *  - 'off': keep terminal rendering on xterm's DOM renderer. */
   terminalGpuAcceleration: 'auto' | 'on' | 'off'
@@ -1295,6 +1351,9 @@ export type GlobalSettings = {
    *  left sidebar free of its button entirely. Hiding the button here also
    *  removes it from keyboard navigation. */
   showTasksButton: boolean
+  /** Controls how Ctrl+Tab chooses the next visible tab. Optional for
+   *  profiles saved before this setting existed; readers default to MRU. */
+  ctrlTabOrderMode?: CtrlTabOrderMode
   /** Why: Floating Terminal is the default global shell surface so users can
    *  reach a terminal outside repo/worktree context immediately. */
   floatingTerminalEnabled: boolean
@@ -1636,6 +1695,7 @@ export type PersistedUIState = {
   sidebarWidth: number
   rightSidebarWidth: number
   groupBy: 'none' | 'repo' | 'pr-status'
+  showWorkspaceLineage?: boolean
   sortBy: 'name' | 'smart' | 'recent' | 'repo'
   showActiveOnly: boolean
   /** Hide the repo's original checked-out branch from workspace navigation
@@ -1834,6 +1894,7 @@ export type PersistedState = {
    *  presets are managed from the new-workspace composer and repo settings. */
   sparsePresetsByRepo: Record<string, SparsePreset[]>
   worktreeMeta: Record<string, WorktreeMeta>
+  worktreeLineageById: Record<string, WorktreeLineage>
   settings: GlobalSettings
   ui: PersistedUIState
   githubCache: {

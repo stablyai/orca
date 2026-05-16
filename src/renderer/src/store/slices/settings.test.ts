@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import type { AppState } from '../types'
+import type { WorktreeLineage } from '../../../../shared/types'
 import { toast } from 'sonner'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
@@ -19,6 +20,16 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 
 const runtimeEnvironmentCall = vi.fn()
 const settingsSet = vi.fn().mockResolvedValue(undefined)
+
+const env2Lineage: WorktreeLineage = {
+  worktreeId: 'repo-env-2::/env-2/repo',
+  worktreeInstanceId: 'env-2-instance',
+  parentWorktreeId: 'repo-env-2::/env-2/parent',
+  parentWorktreeInstanceId: 'env-2-parent-instance',
+  origin: 'manual',
+  capture: { source: 'manual-action', confidence: 'explicit' },
+  createdAt: 1
+}
 
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
@@ -58,7 +69,9 @@ beforeEach(() => {
               }
             : method === 'browser.profile.list'
               ? { profiles: [] }
-              : {}
+              : method === 'worktree.lineageList'
+                ? { lineage: { [env2Lineage.worktreeId]: env2Lineage } }
+                : {}
     return Promise.resolve({ id: 'rpc-1', ok: true, result, _meta: { runtimeId: 'runtime-2' } })
   })
   vi.stubGlobal('window', {
@@ -77,6 +90,13 @@ describe('createSettingsSlice runtime switching', () => {
       repos: [{ id: 'repo-env-1', path: '/env-1/repo', displayName: 'Env 1' } as never],
       worktreesByRepo: {
         'repo-env-1': [makeWorktree({ id: 'repo-env-1::/env-1/repo', repoId: 'repo-env-1' })]
+      },
+      worktreeLineageById: {
+        'repo-env-1::/env-1/repo': {
+          ...env2Lineage,
+          worktreeId: 'repo-env-1::/env-1/repo',
+          parentWorktreeId: 'repo-env-1::/env-1/parent'
+        }
       },
       activeWorktreeId: 'repo-env-1::/env-1/repo',
       openFiles: [{ id: '/env-1/repo/a.md', worktreeId: 'repo-env-1::/env-1/repo' } as never],
@@ -114,6 +134,9 @@ describe('createSettingsSlice runtime switching', () => {
       expect.objectContaining({ selector: 'env-2', method: 'repo.list' })
     )
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({ selector: 'env-2', method: 'worktree.lineageList' })
+    )
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
       expect.objectContaining({
         selector: 'env-1',
         method: 'terminal.close',
@@ -138,6 +161,9 @@ describe('createSettingsSlice runtime switching', () => {
     expect(store.getState().worktreesByRepo['repo-env-2']?.map((worktree) => worktree.id)).toEqual([
       'repo-env-2::/env-2/repo'
     ])
+    expect(store.getState().worktreeLineageById).toEqual({
+      [env2Lineage.worktreeId]: env2Lineage
+    })
     expect(store.getState().activeWorktreeId).toBeNull()
     expect(store.getState().openFiles).toEqual([])
     expect(store.getState().editorDrafts).toEqual({})

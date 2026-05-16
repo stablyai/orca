@@ -217,7 +217,7 @@ export function readRequestBody(req: IncomingMessage): Promise<unknown> {
 // ─── Per-pane field caches + extractors ─────────────────────────────
 
 function extractPromptText(hookPayload: Record<string, unknown>): string {
-  const candidateKeys = ['prompt', 'user_prompt', 'userPrompt', 'message']
+  const candidateKeys = ['prompt', 'user_prompt', 'userPrompt', 'user_message', 'message']
   for (const key of candidateKeys) {
     const value = hookPayload[key]
     if (typeof value === 'string' && value.trim().length > 0) {
@@ -306,6 +306,7 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   exec_command: ['cmd', 'command'],
   shell_command: ['cmd', 'command'],
   run_terminal_cmd: ['command'],
+  execute_code: ['code', 'command', 'cmd'],
   apply_patch: ['path', 'file_path'],
   view_image: ['path', 'file_path'],
   bash: ['command'],
@@ -314,8 +315,35 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   edit: ['path', 'file_path'],
   grep: ['pattern'],
   web_search: ['query'],
-  fetch_content: ['url']
+  fetch_content: ['url'],
+  terminal: ['command'],
+  patch: ['path', 'file_path'],
+  search_files: ['query', 'pattern', 'path'],
+  browser_navigate: ['url'],
+  browser_click: ['target', 'selector', 'text'],
+  browser_type: ['text', 'target', 'selector'],
+  session_search: ['query'],
+  skill_manage: ['action', 'name', 'file_path'],
+  delegate_task: ['task', 'prompt', 'description']
 }
+
+const FALLBACK_TOOL_INPUT_KEYS = [
+  'command',
+  'cmd',
+  'code',
+  'query',
+  'pattern',
+  'url',
+  'path',
+  'file_path',
+  'filePath',
+  'target',
+  'selector',
+  'text',
+  'action',
+  'name',
+  'description'
+] as const
 
 function deriveToolInputPreview(
   toolName: string | undefined,
@@ -336,6 +364,23 @@ function deriveToolInputPreview(
   }
   const record = toolInput as Record<string, unknown>
   for (const key of keys) {
+    const value = record[key]
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value
+    }
+  }
+  return undefined
+}
+
+function deriveFallbackToolInputPreview(toolInput: unknown): string | undefined {
+  if (typeof toolInput === 'string') {
+    return toolInput
+  }
+  if (typeof toolInput !== 'object' || toolInput === null) {
+    return undefined
+  }
+  const record = toolInput as Record<string, unknown>
+  for (const key of FALLBACK_TOOL_INPUT_KEYS) {
     const value = record[key]
     if (typeof value === 'string' && value.trim().length > 0) {
       return value
@@ -804,6 +849,57 @@ function extractGrokToolFields(
   return {}
 }
 
+function extractHermesToolFields(
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): ToolSnapshot {
+  if (
+    eventName === 'pre_tool_call' ||
+    eventName === 'post_tool_call' ||
+    eventName === 'pre_approval_request' ||
+    eventName === 'post_approval_response'
+  ) {
+    const toolName =
+      readString(hookPayload, 'tool_name') ??
+      readString(hookPayload, 'name') ??
+      (eventName === 'pre_approval_request' || eventName === 'post_approval_response'
+        ? 'approval'
+        : undefined)
+    const toolInput =
+      deriveToolInputPreview(toolName, hookPayload.tool_input) ??
+      deriveToolInputPreview(toolName, hookPayload.args) ??
+      deriveToolInputPreview(toolName, hookPayload.input) ??
+      // Why: Hermes exposes many first-party/plugin tool names. When a new
+      // name appears, still show the obvious argument instead of a blank row.
+      deriveFallbackToolInputPreview(hookPayload.tool_input) ??
+      deriveFallbackToolInputPreview(hookPayload.args) ??
+      deriveFallbackToolInputPreview(hookPayload.input) ??
+      readString(hookPayload, 'command') ??
+      readString(hookPayload, 'description')
+    const update: ToolSnapshot = { toolName, toolInput }
+    if (eventName === 'post_tool_call') {
+      const responseText =
+        extractToolResponseText(hookPayload.result) ??
+        extractToolResponseText(hookPayload.tool_response) ??
+        extractToolResponseText(hookPayload.output)
+      if (responseText) {
+        update.lastAssistantMessage = responseText
+      }
+    }
+    return update
+  }
+  if (eventName === 'post_llm_call') {
+    const message =
+      readString(hookPayload, 'last_assistant_message') ??
+      readString(hookPayload, 'assistant_response') ??
+      readString(hookPayload, 'response_text')
+    if (message) {
+      return { lastAssistantMessage: message }
+    }
+  }
+  return {}
+}
+
 function isGrokPermissionNotification(message: string | undefined): boolean {
   if (!message) {
     return false
@@ -856,6 +952,8 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
       return eventName === 'UserPromptSubmit'
     case 'grok':
       return isGrokEvent(eventName, 'user_prompt_submit')
+    case 'hermes':
+      return eventName === 'pre_llm_call' || eventName === 'on_session_start'
     default: {
       const _exhaustive: never = source
       void _exhaustive
@@ -888,6 +986,8 @@ function extractToolFields(
       return extractDroidToolFields(eventName, hookPayload)
     case 'grok':
       return extractGrokToolFields(eventName, hookPayload)
+    case 'hermes':
+      return extractHermesToolFields(eventName, hookPayload)
     default: {
       const _exhaustive: never = source
       void _exhaustive
@@ -1309,6 +1409,54 @@ function normalizeGrokEvent(
   )
 }
 
+function normalizeHermesEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  const stateName =
+    eventName === 'pre_approval_request'
+      ? 'waiting'
+      : eventName === 'post_llm_call' ||
+          eventName === 'on_session_end' ||
+          eventName === 'on_session_finalize' ||
+          eventName === 'on_session_reset'
+        ? 'done'
+        : eventName === 'on_session_start' ||
+            eventName === 'pre_llm_call' ||
+            eventName === 'pre_tool_call' ||
+            eventName === 'post_tool_call' ||
+            eventName === 'post_approval_response'
+          ? 'working'
+          : null
+
+  if (!stateName) {
+    return null
+  }
+
+  const snapshot = resolveToolState(
+    state,
+    paneKey,
+    extractToolFields('hermes', eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent('hermes', eventName) }
+  )
+
+  return parseAgentStatusPayload(
+    JSON.stringify({
+      state: stateName,
+      prompt: resolvePrompt(state, paneKey, promptText, {
+        resetOnNewTurn: isNewTurnEvent('hermes', eventName)
+      }),
+      agentType: 'hermes',
+      toolName: snapshot.toolName,
+      toolInput: snapshot.toolInput,
+      lastAssistantMessage: snapshot.lastAssistantMessage
+    })
+  )
+}
+
 function readStringField(record: Record<string, unknown>, key: string): string | undefined {
   const value = record[key]
   if (typeof value !== 'string') {
@@ -1395,6 +1543,9 @@ export function normalizeHookPayload(
     case 'grok':
       payload = normalizeGrokEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
+    case 'hermes':
+      payload = normalizeHermesEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
     default: {
       const _exhaustive: never = source
       void _exhaustive
@@ -1419,7 +1570,8 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/cursor': 'cursor',
   '/hook/pi': 'pi',
   '/hook/droid': 'droid',
-  '/hook/grok': 'grok'
+  '/hook/grok': 'grok',
+  '/hook/hermes': 'hermes'
 })
 
 export function resolveHookSource(pathname: string): AgentHookSource | null {

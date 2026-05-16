@@ -383,6 +383,7 @@ function TabBarInner({
               visibleTabId: item.id,
               tabType: item.type,
               label: getTabDragLabel(item),
+              iconPath: item.type === 'editor' ? item.data.filePath : undefined,
               color: item.type === 'terminal' ? (item.data.color ?? null) : null
             }
             if (item.type === 'terminal') {
