@@ -5,6 +5,7 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
+import type { AppIdentity } from '../shared/app-identity'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type {
@@ -324,6 +325,7 @@ document.addEventListener(
 // Custom APIs for renderer
 const api = {
   app: {
+    getIdentity: (): Promise<AppIdentity> => ipcRenderer.invoke('app:getIdentity'),
     getFeatureWallAssetBaseUrl: (): Promise<string> =>
       ipcRenderer.invoke('app:getFeatureWallAssetBaseUrl'),
     relaunch: (): Promise<void> => ipcRenderer.invoke('app:relaunch'),
@@ -1158,6 +1160,13 @@ const api = {
       gh: { installed: boolean; authenticated: boolean }
       glab?: { installed: boolean; authenticated: boolean }
       bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
+      azureDevOps?: {
+        configured: boolean
+        authenticated: boolean
+        account: string | null
+        baseUrl: string | null
+        tokenConfigured: boolean
+      }
       gitea?: {
         configured: boolean
         authenticated: boolean
@@ -2351,10 +2360,14 @@ const api = {
       return () => ipcRenderer.removeListener('terminal:zoom', listener)
     },
     readClipboardText: (): Promise<string> => ipcRenderer.invoke('clipboard:readText'),
+    readSelectionClipboardText: (): Promise<string> =>
+      ipcRenderer.invoke('clipboard:readSelectionText'),
     saveClipboardImageAsTempFile: (): Promise<string | null> =>
       ipcRenderer.invoke('clipboard:saveImageAsTempFile'),
     writeClipboardText: (text: string): Promise<void> =>
       ipcRenderer.invoke('clipboard:writeText', text),
+    writeSelectionClipboardText: (text: string): Promise<void> =>
+      ipcRenderer.invoke('clipboard:writeSelectionText', text),
     writeClipboardImage: (dataUrl: string): Promise<void> =>
       ipcRenderer.invoke('clipboard:writeImage', dataUrl),
     onFileDrop: (callback: (data: NativeFileDropPayload) => void): (() => void) =>

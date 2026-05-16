@@ -5,7 +5,10 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import { app, ipcMain } from 'electron'
+import { is } from '@electron-toolkit/utils'
+import type { AppIdentity } from '../../shared/app-identity'
 import type { FloatingTerminalCwdRequest } from '../../shared/types'
+import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
 import { isPwshAvailable } from '../pwsh'
 import { isWslAvailable } from '../wsl'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
@@ -72,6 +75,19 @@ function resolveDevFeatureWallAssetDir(): string {
 
 export function registerAppHandlers(): void {
   ipcMain.handle('app:getFeatureWallAssetBaseUrl', (): string => getFeatureWallAssetBaseUrl())
+
+  ipcMain.handle('app:getIdentity', (): AppIdentity => {
+    const identity = getDevInstanceIdentity(is.dev)
+    return {
+      name: identity.name,
+      isDev: identity.isDev,
+      devLabel: identity.devLabel,
+      devBranch: identity.devBranch,
+      devWorktreeName: identity.devWorktreeName,
+      devRepoRoot: identity.devRepoRoot,
+      dockBadgeLabel: identity.dockBadgeLabel
+    }
+  })
 
   ipcMain.handle('wsl:isAvailable', (): boolean => isWslAvailable())
   ipcMain.handle('pwsh:isAvailable', (): boolean => isPwshAvailable())

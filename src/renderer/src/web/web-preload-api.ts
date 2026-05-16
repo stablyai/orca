@@ -61,6 +61,16 @@ export function installWebPreloadApi(): void {
 function createWebPreloadApi(): Partial<PreloadApi> {
   return {
     app: {
+      getIdentity: () =>
+        Promise.resolve({
+          name: 'Orca',
+          isDev: false,
+          devLabel: null,
+          devBranch: null,
+          devWorktreeName: null,
+          devRepoRoot: null,
+          dockBadgeLabel: null
+        }),
       getFeatureWallAssetBaseUrl: () => Promise.resolve('/'),
       relaunch: () => Promise.resolve(window.location.reload()),
       getKeyboardInputSourceId: () => Promise.resolve(null),
@@ -689,8 +699,12 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       writeJson(UI_STORAGE_KEY, next)
     },
     readClipboardText: () => navigator.clipboard?.readText?.() ?? Promise.resolve(''),
+    readSelectionClipboardText: () =>
+      Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     saveClipboardImageAsTempFile: () => Promise.resolve(null),
     writeClipboardText: (text) => navigator.clipboard?.writeText?.(text) ?? Promise.resolve(),
+    writeSelectionClipboardText: () =>
+      Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     writeClipboardImage: () => Promise.resolve(),
     getZoomLevel: () => zoomLevel,
     setZoomLevel: (level) => {
@@ -765,7 +779,21 @@ function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
     git: { installed: false },
     gh: { installed: false, authenticated: false },
     glab: { installed: false, authenticated: false },
-    bitbucket: { configured: false, authenticated: false, account: null }
+    bitbucket: { configured: false, authenticated: false, account: null },
+    azureDevOps: {
+      configured: false,
+      authenticated: false,
+      account: null,
+      baseUrl: null,
+      tokenConfigured: false
+    },
+    gitea: {
+      configured: false,
+      authenticated: false,
+      account: null,
+      baseUrl: null,
+      tokenConfigured: false
+    }
   }
   const fallbackRefreshAgents: RefreshAgentsResult = {
     agents: [],

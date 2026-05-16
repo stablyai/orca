@@ -63,6 +63,10 @@ import { useEditorExternalWatch } from './hooks/useEditorExternalWatch'
 import { useAutoAckViewedAgent } from './hooks/useAutoAckViewedAgent'
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
 import {
+  resolvePrimarySelectionMiddleClickPaste,
+  usePrimarySelectionPaste
+} from './hooks/usePrimarySelectionPaste'
+import {
   getRuntimeMobileSessionSyncKey,
   runtimeMobileSessionSyncKeysEqual,
   scheduleRuntimeGraphSync,
@@ -90,6 +94,7 @@ import {
 import type { VirtualizedScrollAnchor } from './hooks/useVirtualizedScrollAnchor'
 import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
 import type { OnboardingState } from '../../shared/types'
+import type { AppIdentity } from '../../shared/app-identity'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')
@@ -343,6 +348,10 @@ function App(): React.JSX.Element {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
+  const primarySelectionMiddleClickPaste = resolvePrimarySelectionMiddleClickPaste(
+    settings?.primarySelectionMiddleClickPaste
+  )
+  usePrimarySelectionPaste(primarySelectionMiddleClickPaste)
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
   const petVisible = useAppStore((s) => s.petVisible)
   const canGoBackWorktree = useAppStore(canGoBackWorktreeHistory)
@@ -351,10 +360,27 @@ function App(): React.JSX.Element {
   const [collapsedSidebarHeaderWidth, setCollapsedSidebarHeaderWidth] = useState(0)
   const [mountedLazyModalIds, setMountedLazyModalIds] = useState(() => new Set<string>())
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
+  const [appIdentity, setAppIdentity] = useState<AppIdentity | null>(null)
 
   // Subscribe to IPC push events
   useIpcEvents()
   useAutomationDispatchEvents()
+
+  useEffect(() => {
+    let disposed = false
+    void window.api.app
+      .getIdentity()
+      .then((identity) => {
+        if (!disposed) {
+          document.title = identity.name
+          setAppIdentity(identity)
+        }
+      })
+      .catch(console.error)
+    return () => {
+      disposed = true
+    }
+  }, [])
   // Why: retention must run at App level so the inline per-card agents list
   // always sees retained entries. If retention ran inside the sidebar-card
   // subtree, "done" agents would vanish any time the user collapsed a card's
@@ -1104,6 +1130,17 @@ function App(): React.JSX.Element {
     })
   }, [activeModal])
 
+  const appIdentityTitle =
+    appIdentity?.isDev === true
+      ? [
+          appIdentity.name,
+          appIdentity.devBranch ? `Branch: ${appIdentity.devBranch}` : null,
+          appIdentity.devRepoRoot ? `Path: ${appIdentity.devRepoRoot}` : null
+        ]
+          .filter(Boolean)
+          .join(' | ')
+      : undefined
+
   // Why: extracted so both the full-width titlebar (settings/landing) and
   // the sidebar-width left header (workspace view) can share the same
   // controls without duplicating the agent badge popover.
@@ -1148,8 +1185,18 @@ function App(): React.JSX.Element {
             {settings?.showTitlebarAppName !== false && (
               <ContextMenu>
                 <ContextMenuTrigger asChild>
-                  <div className="titlebar-app-name" aria-label="Orca">
-                    Orca
+                  <div
+                    className="titlebar-app-name"
+                    aria-label={appIdentity?.name ?? 'Orca'}
+                    title={appIdentityTitle}
+                  >
+                    <span className="titlebar-app-name-main">Orca</span>
+                    {appIdentity?.isDev && appIdentity.devLabel ? (
+                      <span className="titlebar-dev-label">{appIdentity.devLabel}</span>
+                    ) : null}
+                    {appIdentity?.isDev && appIdentity.dockBadgeLabel ? (
+                      <span className="titlebar-dev-badge">{appIdentity.dockBadgeLabel}</span>
+                    ) : null}
                   </div>
                 </ContextMenuTrigger>
                 <ContextMenuContent>

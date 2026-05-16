@@ -4544,6 +4544,7 @@ export class OrcaRuntimeService {
     linkedGitHubPR?: number | null
     linkedGitLabMR?: number | null
     linkedBitbucketPR?: number | null
+    linkedAzureDevOpsPR?: number | null
     linkedGiteaPR?: number | null
   }): Promise<HostedReviewInfo | null> {
     const repo = await this.resolveRepoSelector(args.repoSelector)
@@ -4554,6 +4555,7 @@ export class OrcaRuntimeService {
       linkedGitHubPR: args.linkedGitHubPR ?? null,
       linkedGitLabMR: args.linkedGitLabMR ?? null,
       linkedBitbucketPR: args.linkedBitbucketPR ?? null,
+      linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
       linkedGiteaPR: args.linkedGiteaPR ?? null
     })
     if (review?.provider === 'github' && this.stats && !this.stats.hasCountedPR(review.url)) {
@@ -4583,6 +4585,7 @@ export class OrcaRuntimeService {
       linkedGitHubPR: args.linkedGitHubPR ?? null,
       linkedGitLabMR: args.linkedGitLabMR ?? null,
       linkedBitbucketPR: args.linkedBitbucketPR ?? null,
+      linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
       linkedGiteaPR: args.linkedGiteaPR ?? null
     })
   }

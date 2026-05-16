@@ -39,6 +39,7 @@ describe('hosted review RPC methods', () => {
       linkedGitHubPR: 12,
       linkedGitLabMR: null,
       linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
       linkedGiteaPR: null
     })
     expect(response).toMatchObject({
@@ -87,6 +88,7 @@ describe('hosted review RPC methods', () => {
       linkedGitHubPR: null,
       linkedGitLabMR: null,
       linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
       linkedGiteaPR: null
     })
     expect(response).toMatchObject({

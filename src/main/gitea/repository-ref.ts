@@ -8,7 +8,13 @@ export type GiteaRepoRef = {
   webBaseUrl: string
 }
 
-const KNOWN_NON_GITEA_HOSTS = new Set(['github.com', 'gitlab.com', 'bitbucket.org'])
+const KNOWN_NON_GITEA_HOSTS = new Set([
+  'github.com',
+  'gitlab.com',
+  'bitbucket.org',
+  'dev.azure.com',
+  'ssh.dev.azure.com'
+])
 const repoRefCache = new Map<string, GiteaRepoRef | null>()
 
 /** @internal - exposed for tests only */
@@ -53,7 +59,11 @@ function apiBaseUrlFromWebBase(webBaseUrl: string): string {
 
 function makeRepoRef(host: string, path: string, webOrigin: string): GiteaRepoRef | null {
   const normalizedHost = host.toLowerCase()
-  if (!normalizedHost || KNOWN_NON_GITEA_HOSTS.has(normalizedHost)) {
+  if (
+    !normalizedHost ||
+    KNOWN_NON_GITEA_HOSTS.has(normalizedHost) ||
+    normalizedHost.endsWith('.visualstudio.com')
+  ) {
     return null
   }
 

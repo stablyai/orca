@@ -1,6 +1,12 @@
 import type { HostedReviewInfo } from '../../shared/hosted-review'
 import type { MRInfo, PRInfo } from '../../shared/types'
 import {
+  getAzureDevOpsPullRequest,
+  getAzureDevOpsPullRequestForBranch,
+  getAzureDevOpsRepoSlug
+} from '../azure-devops/client'
+import type { AzureDevOpsPullRequestInfo } from '../azure-devops/pull-request-mappers'
+import {
   getBitbucketPullRequest,
   getBitbucketPullRequestForBranch,
   getBitbucketRepoSlug
@@ -66,6 +72,20 @@ function mapBitbucketReview(pr: BitbucketPullRequestInfo): HostedReviewInfo {
   }
 }
 
+function mapAzureDevOpsReview(pr: AzureDevOpsPullRequestInfo): HostedReviewInfo {
+  return {
+    provider: 'azure-devops',
+    number: pr.number,
+    title: pr.title,
+    state: pr.state,
+    url: pr.url,
+    status: pr.status,
+    updatedAt: pr.updatedAt,
+    mergeable: pr.mergeable,
+    ...(pr.headSha ? { headSha: pr.headSha } : {})
+  }
+}
+
 function mapGiteaReview(pr: GiteaPullRequestInfo): HostedReviewInfo {
   return {
     provider: 'gitea',
@@ -87,6 +107,7 @@ export async function getHostedReviewForBranch(input: {
   linkedGitHubPR?: number | null
   linkedGitLabMR?: number | null
   linkedBitbucketPR?: number | null
+  linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
 }): Promise<HostedReviewInfo | null> {
   const branchName = input.branch.replace(/^refs\/heads\//, '')
@@ -95,6 +116,7 @@ export async function getHostedReviewForBranch(input: {
     input.linkedGitHubPR == null &&
     input.linkedGitLabMR == null &&
     input.linkedBitbucketPR == null &&
+    input.linkedAzureDevOpsPR == null &&
     input.linkedGiteaPR == null
   ) {
     return null
@@ -132,6 +154,16 @@ export async function getHostedReviewForBranch(input: {
     return pr ? mapBitbucketReview(pr) : null
   }
 
+  const azureDevOpsRepo = await getAzureDevOpsRepoSlug(input.repoPath)
+  if (azureDevOpsRepo) {
+    const pr = await getAzureDevOpsPullRequestForBranch(
+      input.repoPath,
+      branchName,
+      input.linkedAzureDevOpsPR ?? null
+    )
+    return pr ? mapAzureDevOpsReview(pr) : null
+  }
+
   const giteaRepo = await getGiteaRepoSlug(input.repoPath)
   if (giteaRepo) {
     const pr = await getGiteaPullRequestForBranch(
@@ -147,7 +179,7 @@ export async function getHostedReviewForBranch(input: {
 
 export async function getHostedReviewByNumber(input: {
   repoPath: string
-  provider: 'github' | 'gitlab' | 'bitbucket' | 'gitea'
+  provider: 'github' | 'gitlab' | 'bitbucket' | 'azure-devops' | 'gitea'
   number: number
 }): Promise<HostedReviewInfo | null> {
   if (input.provider === 'gitlab') {
@@ -157,6 +189,10 @@ export async function getHostedReviewByNumber(input: {
   if (input.provider === 'bitbucket') {
     const pr = await getBitbucketPullRequest(input.repoPath, input.number)
     return pr ? mapBitbucketReview(pr) : null
+  }
+  if (input.provider === 'azure-devops') {
+    const pr = await getAzureDevOpsPullRequest(input.repoPath, input.number)
+    return pr ? mapAzureDevOpsReview(pr) : null
   }
   if (input.provider === 'gitea') {
     const pr = await getGiteaPullRequest(input.repoPath, input.number)

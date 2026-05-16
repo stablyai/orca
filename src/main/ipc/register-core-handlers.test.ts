@@ -223,8 +223,11 @@ vi.mock('./claude-accounts', () => ({
 }))
 
 vi.mock('../window/attach-main-window-services', () => ({
-  registerClipboardHandlers: registerClipboardHandlersMock,
   registerUpdaterHandlers: registerUpdaterHandlersMock
+}))
+
+vi.mock('../window/clipboard-ipc-handlers', () => ({
+  registerClipboardHandlers: registerClipboardHandlersMock
 }))
 
 vi.mock('./browser', () => ({

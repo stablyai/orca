@@ -54,6 +54,11 @@ export const INTEGRATIONS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     keywords: ['bitbucket', 'integration', 'pull request', 'api token']
   },
   {
+    title: 'Azure DevOps Integration',
+    description: 'Azure DevOps Repos authentication via token environment variables.',
+    keywords: ['azure devops', 'azure repos', 'ado', 'integration', 'pull request', 'api token']
+  },
+  {
     title: 'Gitea Integration',
     description: 'Gitea authentication via API token environment variables.',
     keywords: ['gitea', 'self-hosted', 'integration', 'pull request', 'api token']
@@ -70,7 +75,16 @@ type GhStatus = 'checking' | 'connected' | 'not-installed' | 'not-authenticated'
 // modes (probe in-flight / installed-but-unauth / missing entirely).
 type GlabStatus = GhStatus
 type BitbucketStatus = 'checking' | 'connected' | 'not-configured' | 'not-authenticated'
+type AzureDevOpsStatus = 'checking' | 'configured' | 'not-configured' | 'not-authenticated'
 type GiteaStatus = 'checking' | 'configured' | 'not-configured' | 'not-authenticated'
+
+type TokenApiPreflightStatus = {
+  configured: boolean
+  authenticated: boolean
+  account: string | null
+  baseUrl: string | null
+  tokenConfigured: boolean
+}
 
 type GiteaPreflightStatus = {
   configured: boolean
@@ -78,6 +92,21 @@ type GiteaPreflightStatus = {
   account: string | null
   baseUrl: string | null
   tokenConfigured: boolean
+}
+
+function tokenApiStatusFromPreflight(
+  status: TokenApiPreflightStatus | undefined
+): AzureDevOpsStatus {
+  if (!status?.configured) {
+    return 'not-configured'
+  }
+  if (status.tokenConfigured && !status.baseUrl) {
+    return 'configured'
+  }
+  if (status.tokenConfigured && !status.authenticated) {
+    return 'not-authenticated'
+  }
+  return 'configured'
 }
 
 function giteaStatusFromPreflight(status: GiteaPreflightStatus | undefined): GiteaStatus {
@@ -103,6 +132,9 @@ export function IntegrationsPane(): React.JSX.Element {
   const [glabStatus, setGlabStatus] = useState<GlabStatus>('checking')
   const [bitbucketStatus, setBitbucketStatus] = useState<BitbucketStatus>('checking')
   const [bitbucketAccount, setBitbucketAccount] = useState<string | null>(null)
+  const [azureDevOpsStatus, setAzureDevOpsStatus] = useState<AzureDevOpsStatus>('checking')
+  const [azureDevOpsAccount, setAzureDevOpsAccount] = useState<string | null>(null)
+  const [azureDevOpsBaseUrl, setAzureDevOpsBaseUrl] = useState<string | null>(null)
   const [giteaStatus, setGiteaStatus] = useState<GiteaStatus>('checking')
   const [giteaAccount, setGiteaAccount] = useState<string | null>(null)
   const [giteaBaseUrl, setGiteaBaseUrl] = useState<string | null>(null)
@@ -147,6 +179,10 @@ export function IntegrationsPane(): React.JSX.Element {
       } else {
         setBitbucketStatus('connected')
       }
+      const azureDevOps = status.azureDevOps
+      setAzureDevOpsAccount(azureDevOps?.account ?? null)
+      setAzureDevOpsBaseUrl(azureDevOps?.baseUrl ?? null)
+      setAzureDevOpsStatus(tokenApiStatusFromPreflight(azureDevOps))
       const gitea = status.gitea
       setGiteaAccount(gitea?.account ?? null)
       setGiteaBaseUrl(gitea?.baseUrl ?? null)
@@ -250,6 +286,16 @@ export function IntegrationsPane(): React.JSX.Element {
       } else {
         setBitbucketStatus('connected')
       }
+    })
+  }
+
+  const handleRefreshAzureDevOps = (): void => {
+    setAzureDevOpsStatus('checking')
+    void window.api.preflight.check({ force: true }).then((status) => {
+      const azureDevOps = status.azureDevOps
+      setAzureDevOpsAccount(azureDevOps?.account ?? null)
+      setAzureDevOpsBaseUrl(azureDevOps?.baseUrl ?? null)
+      setAzureDevOpsStatus(tokenApiStatusFromPreflight(azureDevOps))
     })
   }
 
@@ -493,6 +539,93 @@ export function IntegrationsPane(): React.JSX.Element {
                     Learn more
                   </Button>
                   <Button variant="ghost" size="sm" onClick={handleRefreshBitbucket}>
+                    Re-check
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Azure DevOps */}
+      <div className="rounded-md border border-border/50 bg-muted/30 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <GitPullRequestArrow className="size-5 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <p className="text-sm font-medium">Azure DevOps</p>
+            <p className="text-xs text-muted-foreground">
+              {azureDevOpsStatus === 'configured'
+                ? azureDevOpsAccount
+                  ? `${azureDevOpsAccount} · Pull requests and build statuses`
+                  : azureDevOpsBaseUrl
+                    ? `${azureDevOpsBaseUrl} · Pull requests and build statuses`
+                    : 'Pull requests and build statuses for detected Azure Repos'
+                : 'Pull requests and build statuses via Azure DevOps REST API tokens.'}
+            </p>
+          </div>
+          {azureDevOpsStatus === 'checking' ? (
+            <LoaderCircle className="size-4 shrink-0 animate-spin text-muted-foreground" />
+          ) : azureDevOpsStatus === 'configured' ? (
+            <span className="shrink-0 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+              {azureDevOpsAccount ? 'Connected' : 'Configured'}
+            </span>
+          ) : (
+            <span className="shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+              {azureDevOpsStatus === 'not-configured' ? 'Not configured' : 'Auth failed'}
+            </span>
+          )}
+        </div>
+
+        {azureDevOpsStatus !== 'checking' && azureDevOpsStatus !== 'configured' && (
+          <div className="mt-3 rounded-md border border-border/30 bg-background/50 px-3 py-2.5 space-y-2">
+            {azureDevOpsStatus === 'not-configured' ? (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  Set <span className="font-mono text-[11px]">ORCA_AZURE_DEVOPS_TOKEN</span>, or set{' '}
+                  <span className="font-mono text-[11px]">ORCA_AZURE_DEVOPS_ACCESS_TOKEN</span>. Set{' '}
+                  <span className="font-mono text-[11px]">ORCA_AZURE_DEVOPS_API_BASE_URL</span> only
+                  when Orca cannot derive the API base URL from the git remote.
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      window.api.shell.openUrl(
+                        'https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate'
+                      )
+                    }
+                  >
+                    <ExternalLink className="size-3.5 mr-1.5" />
+                    Learn more
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={handleRefreshAzureDevOps}>
+                    Re-check
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  Azure DevOps credentials are configured but could not authenticate. Check the
+                  token, API base URL, and repository permissions, then restart Orca if environment
+                  variables changed.
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      window.api.shell.openUrl(
+                        'https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/get-pull-requests'
+                      )
+                    }
+                  >
+                    <ExternalLink className="size-3.5 mr-1.5" />
+                    Learn more
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={handleRefreshAzureDevOps}>
                     Re-check
                   </Button>
                 </div>

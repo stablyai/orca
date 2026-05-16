@@ -45,10 +45,8 @@ import { registerAgentHookHandlers } from './agent-hooks'
 import { registerAgentTrustHandlers } from './agent-trust'
 import { registerClaudeAccountHandlers } from './claude-accounts'
 import { warmSystemFontFamilies } from '../system-fonts'
-import {
-  registerClipboardHandlers,
-  registerUpdaterHandlers
-} from '../window/attach-main-window-services'
+import { registerUpdaterHandlers } from '../window/attach-main-window-services'
+import { registerClipboardHandlers } from '../window/clipboard-ipc-handlers'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type { OpenCodeUsageStore } from '../opencode-usage/store'

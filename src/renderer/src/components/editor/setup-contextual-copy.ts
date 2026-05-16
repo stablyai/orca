@@ -1,5 +1,10 @@
 import type { editor } from 'monaco-editor'
 import { formatCopiedSelectionWithContext, getContextualCopyLineRange } from './selection-copy'
+import {
+  PRIMARY_SELECTION_MAX_LENGTH,
+  isPrimarySelectionEnabled,
+  setPrimarySelectionText
+} from '@/lib/primary-selection'
 
 export function setupContextualCopy({
   editorInstance,
@@ -24,6 +29,7 @@ export function setupContextualCopy({
   copyToastTimeoutRef: React.MutableRefObject<number | null>
 }): void {
   let copyHintInterval: number | null = null
+  let primarySelectionTimer: number | null = null
   let copyHintWidgetPosition: editor.IContentWidgetPosition | null = null
   let lastCopiedSelectionKey: string | null = null
   const copyHintNode = document.createElement('div')
@@ -180,6 +186,48 @@ export function setupContextualCopy({
     })
   }
 
+  const updatePrimarySelectionBuffer = (): void => {
+    const model = editorInstance.getModel()
+    const selections = editorInstance.getSelections()
+    if (!isPrimarySelectionEnabled() || !model || !selections?.length) {
+      return
+    }
+
+    const sortedSelections = selections.slice().sort((a, b) => {
+      if (a.startLineNumber !== b.startLineNumber) {
+        return a.startLineNumber - b.startLineNumber
+      }
+      return a.startColumn - b.startColumn
+    })
+
+    let totalLength = 0
+    for (const selection of sortedSelections) {
+      if (selection.isEmpty()) {
+        return
+      }
+      totalLength += model.getValueLengthInRange(selection)
+      if (totalLength > PRIMARY_SELECTION_MAX_LENGTH) {
+        return
+      }
+    }
+
+    setPrimarySelectionText(
+      sortedSelections.map((selection) => model.getValueInRange(selection)).join(model.getEOL())
+    )
+  }
+
+  const schedulePrimarySelectionBufferUpdate = (): void => {
+    if (primarySelectionTimer !== null) {
+      window.clearTimeout(primarySelectionTimer)
+    }
+    // Why: Monaco emits intermediate selection changes during drag; match the
+    // editor selection clipboard debounce so we don't churn the clipboard.
+    primarySelectionTimer = window.setTimeout(() => {
+      primarySelectionTimer = null
+      updatePrimarySelectionBuffer()
+    }, 100)
+  }
+
   const copySelectionWithContext = async (): Promise<boolean> => {
     const copiedText = getContextualCopyText()
     if (!copiedText) {
@@ -211,7 +259,10 @@ export function setupContextualCopy({
     void copySelectionWithContext()
   })
 
-  editorInstance.onDidChangeCursorSelection(() => {
+  editorInstance.onDidChangeCursorSelection((event) => {
+    if (event.source !== 'restoreState') {
+      schedulePrimarySelectionBufferUpdate()
+    }
     if (getSelectionKey() !== lastCopiedSelectionKey) {
       lastCopiedSelectionKey = null
     }
@@ -247,6 +298,10 @@ export function setupContextualCopy({
   editorDomNode.addEventListener('mouseup', updateCopyHint, true)
   editorDomNode.addEventListener('keyup', updateCopyHint, true)
   editorInstance.onDidDispose(() => {
+    if (primarySelectionTimer !== null) {
+      window.clearTimeout(primarySelectionTimer)
+      primarySelectionTimer = null
+    }
     editorDomNode.removeEventListener('keydown', handleKeyDown, true)
     editorDomNode.removeEventListener('mouseup', updateCopyHint, true)
     editorDomNode.removeEventListener('keyup', updateCopyHint, true)
