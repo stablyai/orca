@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { Loader2, RefreshCw } from 'lucide-react'
+import { ListCollapse, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { FileExplorerToolbar } from './FileExplorerToolbar'
+import { FileExplorerRow, shouldShowCollapseFolderAction } from './FileExplorerRow'
+import { FileExplorerVirtualRows } from './FileExplorerVirtualRows'
+import type { TreeNode } from './file-explorer-types'
 
 type ReactElementLike = {
   type: unknown
@@ -32,6 +35,32 @@ function findRefreshButton(node: unknown): ReactElementLike {
   })
   if (!found) {
     throw new Error('refresh button not found')
+  }
+  return found
+}
+
+function findCollapseAllButton(node: unknown): ReactElementLike {
+  let found: ReactElementLike | null = null
+  visit(node, (entry) => {
+    if (entry.type === Button && entry.props['aria-label'] === 'Collapse All') {
+      found = entry
+    }
+  })
+  if (!found) {
+    throw new Error('collapse all button not found')
+  }
+  return found
+}
+
+function findFileExplorerRow(node: unknown): ReactElementLike {
+  let found: ReactElementLike | null = null
+  visit(node, (entry) => {
+    if (entry.type === FileExplorerRow) {
+      found = entry
+    }
+  })
+  if (!found) {
+    throw new Error('file explorer row not found')
   }
   return found
 }
@@ -79,7 +108,9 @@ describe('FileExplorerToolbar', () => {
     const onRefresh = vi.fn()
     const element = FileExplorerToolbar({
       repoName: 'orca',
-      refresh: makeRefreshState({ handleRefresh: onRefresh })
+      refresh: makeRefreshState({ handleRefresh: onRefresh }),
+      canCollapseAll: false,
+      onCollapseAll: vi.fn()
     })
 
     const button = findRefreshButton(element)
@@ -95,7 +126,9 @@ describe('FileExplorerToolbar', () => {
     const repoName = 'really-long-repo-name-that-should-not-push-refresh-offscreen'
     const element = FileExplorerToolbar({
       repoName,
-      refresh: makeRefreshState()
+      refresh: makeRefreshState(),
+      canCollapseAll: false,
+      onCollapseAll: vi.fn()
     })
 
     const label = findRepoNameLabel(element, repoName)
@@ -108,7 +141,9 @@ describe('FileExplorerToolbar', () => {
   it('disables the refresh button and shows a spinner while refreshing', () => {
     const element = FileExplorerToolbar({
       repoName: 'orca',
-      refresh: makeRefreshState({ isRefreshing: true, showRefreshSpinner: true })
+      refresh: makeRefreshState({ isRefreshing: true, showRefreshSpinner: true }),
+      canCollapseAll: false,
+      onCollapseAll: vi.fn()
     })
 
     const button = findRefreshButton(element)
@@ -116,5 +151,111 @@ describe('FileExplorerToolbar', () => {
     expect(button.props.disabled).toBe(true)
     expect(hasIcon(button, Loader2)).toBe(true)
     expect(hasIcon(button, RefreshCw)).toBe(false)
+  })
+
+  it('fires the collapse all action from the icon button', () => {
+    const onCollapseAll = vi.fn()
+    const element = FileExplorerToolbar({
+      repoName: 'orca',
+      refresh: makeRefreshState(),
+      canCollapseAll: true,
+      onCollapseAll
+    })
+
+    const button = findCollapseAllButton(element)
+    ;(button.props.onClick as () => void)()
+
+    expect(onCollapseAll).toHaveBeenCalledTimes(1)
+    expect(button.props.disabled).toBe(false)
+    expect(hasIcon(button, ListCollapse)).toBe(true)
+  })
+
+  it('disables collapse all when no directories are expanded', () => {
+    const element = FileExplorerToolbar({
+      repoName: 'orca',
+      refresh: makeRefreshState(),
+      canCollapseAll: false,
+      onCollapseAll: vi.fn()
+    })
+
+    const button = findCollapseAllButton(element)
+
+    expect(button.props.disabled).toBe(true)
+    expect(hasIcon(button, ListCollapse)).toBe(true)
+  })
+})
+
+describe('FileExplorerRow collapse folder action', () => {
+  const directoryNode: TreeNode = {
+    name: 'src',
+    path: '/repo/src',
+    relativePath: 'src',
+    isDirectory: true,
+    depth: 0
+  }
+
+  it('only shows collapse folder for expanded directories', () => {
+    expect(shouldShowCollapseFolderAction(directoryNode, true)).toBe(true)
+    expect(shouldShowCollapseFolderAction(directoryNode, false)).toBe(false)
+    expect(
+      shouldShowCollapseFolderAction(
+        {
+          ...directoryNode,
+          name: 'index.ts',
+          path: '/repo/src/index.ts',
+          relativePath: 'src/index.ts',
+          isDirectory: false
+        },
+        true
+      )
+    ).toBe(false)
+  })
+
+  it('passes the row node to the collapse folder handler', () => {
+    const onCollapseFolderSubtree = vi.fn()
+    const element = FileExplorerVirtualRows({
+      virtualizer: {
+        getTotalSize: () => 26,
+        getVirtualItems: () => [{ index: 0, key: 'src', start: 0 }],
+        measureElement: vi.fn()
+      } as never,
+      inlineInputIndex: -1,
+      flatRows: [directoryNode],
+      inlineInput: null,
+      handleInlineSubmit: vi.fn(),
+      dismissInlineInput: vi.fn(),
+      folderStatusByRelativePath: new Map(),
+      statusByRelativePath: new Map(),
+      ignoredByRelativePath: new Set(),
+      expanded: new Set([directoryNode.path]),
+      dirCache: {},
+      selectedPaths: new Set(),
+      activeFileId: null,
+      flashingPath: null,
+      deleteShortcutLabel: 'Del',
+      onClick: vi.fn(),
+      onDoubleClick: vi.fn(),
+      onContextMenuSelect: vi.fn(),
+      onCopyPaths: vi.fn(),
+      onStartNew: vi.fn(),
+      onStartRename: vi.fn(),
+      onDuplicate: vi.fn(),
+      onRequestDelete: vi.fn(),
+      onCollapseFolderSubtree,
+      onMoveDrop: vi.fn(),
+      onDragTargetChange: vi.fn(),
+      onDragSourceChange: vi.fn(),
+      onDragExpandDir: vi.fn(),
+      onNativeDragTargetChange: vi.fn(),
+      onNativeDragExpandDir: vi.fn(),
+      dropTargetDir: null,
+      dragSourcePath: null,
+      nativeDropTargetDir: null
+    })
+
+    const row = findFileExplorerRow(element)
+    ;(row.props.onCollapseFolderSubtree as () => void)()
+
+    expect(onCollapseFolderSubtree).toHaveBeenCalledWith(directoryNode)
   })
 })

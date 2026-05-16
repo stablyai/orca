@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- File Explorer coordinates tree state, selection, drag/drop, and toolbar actions in one component. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
@@ -32,6 +33,8 @@ function FileExplorerInner(): React.JSX.Element {
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
   const expandedDirs = useAppStore((s) => s.expandedDirs)
+  const collapseAllDirs = useAppStore((s) => s.collapseAllDirs)
+  const collapseDirSubtree = useAppStore((s) => s.collapseDirSubtree)
   const toggleDir = useAppStore((s) => s.toggleDir)
   const pendingExplorerReveal = useAppStore((s) => s.pendingExplorerReveal)
   const clearPendingExplorerReveal = useAppStore((s) => s.clearPendingExplorerReveal)
@@ -65,6 +68,13 @@ function FileExplorerInner(): React.JSX.Element {
     resetAndLoad
   } = useFileExplorerTree(worktreePath, expanded, activeWorktreeId)
   const manualRefresh = useFileExplorerManualRefresh(refreshTree)
+  const canCollapseAll = expanded.size > 0
+  const handleCollapseAll = useCallback(() => {
+    if (!activeWorktreeId) {
+      return
+    }
+    collapseAllDirs(activeWorktreeId)
+  }, [activeWorktreeId, collapseAllDirs])
 
   const [flashingPath, setFlashingPath] = useState<string | null>(null)
   const [bgMenuOpen, setBgMenuOpen] = useState(false)
@@ -296,6 +306,15 @@ function FileExplorerInner(): React.JSX.Element {
       selectRowWithModifiers(node, event, handleClick),
     [handleClick, selectRowWithModifiers]
   )
+  const handleCollapseFolderSubtree = useCallback(
+    (node: (typeof flatRows)[number]) => {
+      if (!activeWorktreeId || !node.isDirectory) {
+        return
+      }
+      collapseDirSubtree(activeWorktreeId, node.path)
+    },
+    [activeWorktreeId, collapseDirSubtree]
+  )
 
   if (!worktreePath) {
     return (
@@ -318,7 +337,12 @@ function FileExplorerInner(): React.JSX.Element {
   return (
     <>
       <div ref={explorerShellRef} data-orca-explorer-shell className="flex h-full min-h-0 flex-col">
-        <FileExplorerToolbar repoName={repoName} refresh={manualRefresh} />
+        <FileExplorerToolbar
+          repoName={repoName}
+          refresh={manualRefresh}
+          canCollapseAll={canCollapseAll}
+          onCollapseAll={handleCollapseAll}
+        />
         <ScrollArea
           className={cn(
             'min-h-0 flex-1',
@@ -393,6 +417,7 @@ function FileExplorerInner(): React.JSX.Element {
               onStartRename={startRename}
               onDuplicate={handleDuplicate}
               onRequestDelete={requestDelete}
+              onCollapseFolderSubtree={handleCollapseFolderSubtree}
               onMoveDrop={handleMoveDrop}
               onDragTargetChange={setDropTargetDir}
               onDragSourceChange={setDragSourcePath}
