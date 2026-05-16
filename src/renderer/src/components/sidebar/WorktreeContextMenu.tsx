@@ -17,8 +17,6 @@ import {
   Copy,
   Bell,
   BellOff,
-  Link,
-  MessageSquare,
   Moon,
   Pencil,
   Pin,
@@ -203,42 +201,6 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     openModal
   ])
 
-  const handleLinkIssue = useCallback(() => {
-    openModal('edit-meta', {
-      worktreeId: worktree.id,
-      currentDisplayName: worktree.displayName,
-      currentIssue: worktree.linkedIssue,
-      currentPR: worktree.linkedPR,
-      currentComment: worktree.comment,
-      focus: 'issue'
-    })
-  }, [
-    worktree.id,
-    worktree.displayName,
-    worktree.linkedIssue,
-    worktree.linkedPR,
-    worktree.comment,
-    openModal
-  ])
-
-  const handleComment = useCallback(() => {
-    openModal('edit-meta', {
-      worktreeId: worktree.id,
-      currentDisplayName: worktree.displayName,
-      currentIssue: worktree.linkedIssue,
-      currentPR: worktree.linkedPR,
-      currentComment: worktree.comment,
-      focus: 'comment'
-    })
-  }, [
-    worktree.id,
-    worktree.displayName,
-    worktree.linkedIssue,
-    worktree.linkedPR,
-    worktree.comment,
-    openModal
-  ])
-
   const handleCloseTerminals = useCallback(async () => {
     await runSleepWorktrees(sleepableWorktrees.map((item) => item.id))
   }, [sleepableWorktrees])
@@ -362,9 +324,10 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                 {worktree.isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
                 {worktree.isPinned ? 'Unpin' : 'Pin'}
               </DropdownMenuItem>
+              {/* Why: consolidated 'Rename'/'Link GH Issue'/'Add Comment' into single 'Update' (reuses Pencil edit icon + rename handler) for simplified workspace right-click menu */}
               <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>
                 <Pencil className="size-3.5" />
-                Rename
+                Update
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
                 {worktree.isUnread ? (
@@ -374,29 +337,24 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                 )}
                 {worktree.isUnread ? 'Mark Read' : 'Mark Unread'}
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={handleLinkIssue} disabled={isDeleting}>
-                <Link className="size-3.5" />
-                {worktree.linkedIssue ? 'Edit GH Issue' : 'Link GH Issue'}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={handleComment} disabled={isDeleting}>
-                <MessageSquare className="size-3.5" />
-                {worktree.comment ? 'Edit Comment' : 'Add Comment'}
-              </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={handleOpenParent}
-                disabled={isDeleting || !validParentWorktreeId}
-              >
-                <Workflow className="size-3.5" />
-                Open Parent Workspace
-              </DropdownMenuItem>
-              {lineage && (
-                <DropdownMenuItem onSelect={handleRemoveParentLink} disabled={isDeleting}>
-                  <Unlink className="size-3.5" />
-                  Remove from Parent
-                </DropdownMenuItem>
+              {(validParentWorktreeId || lineage) && (
+                <>
+                  {validParentWorktreeId && (
+                    <DropdownMenuItem onSelect={handleOpenParent} disabled={isDeleting}>
+                      <Workflow className="size-3.5" />
+                      Open Parent Workspace
+                    </DropdownMenuItem>
+                  )}
+                  {lineage && (
+                    <DropdownMenuItem onSelect={handleRemoveParentLink} disabled={isDeleting}>
+                      <Unlink className="size-3.5" />
+                      Remove from Parent
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                </>
               )}
-              <DropdownMenuSeparator />
             </>
           )}
           {isMultiContext && (
