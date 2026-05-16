@@ -3,6 +3,7 @@ export const FOCUS_TERMINAL_PANE_EVENT = 'orca-focus-terminal-pane'
 export const PASTE_TERMINAL_TEXT_EVENT = 'orca-paste-terminal-text'
 export const SPLIT_TERMINAL_PANE_EVENT = 'orca-split-terminal-pane'
 export const CLOSE_TERMINAL_PANE_EVENT = 'orca-close-terminal-pane'
+export const BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT = 'orca-background-mount-terminal-worktree'
 
 // Why: sidebar open/close is an instantaneous width change. If we wait for
 // the ResizeObserver rAF (and the 150ms debounced global fit) to catch up,
@@ -47,4 +48,8 @@ export type SplitTerminalPaneDetail = {
 export type CloseTerminalPaneDetail = {
   tabId: string
   paneRuntimeId: number
+}
+
+export type BackgroundMountTerminalWorktreeDetail = {
+  worktreeId: string
 }

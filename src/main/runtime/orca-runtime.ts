@@ -6098,11 +6098,13 @@ export class OrcaRuntimeService {
       env?: Record<string, string>
       title?: string
       focus?: boolean
+      rendererBacked?: boolean
+      activate?: boolean
       tabId?: string
       leafId?: string
     } = {}
   ): Promise<RuntimeTerminalCreate> {
-    if (opts.focus !== true) {
+    if (opts.focus !== true && opts.rendererBacked !== true) {
       if (!worktreeSelector) {
         throw new Error('MISSING_WORKTREE')
       }
@@ -6213,7 +6215,8 @@ export class OrcaRuntimeService {
         requestId,
         worktreeId,
         command: opts.command,
-        title: opts.title
+        title: opts.title,
+        activate: opts.focus === true || opts.activate === true
       })
     })
 

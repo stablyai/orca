@@ -11,6 +11,7 @@ import type {
   RuntimeTerminalWait
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
+import { shouldForceVisibleCodexTerminal } from '../codex-command-classification'
 import {
   formatTerminalClose,
   formatTerminalCreate,
@@ -122,11 +123,18 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
         'Remote terminal create requires --worktree because the client cwd cannot identify a server worktree.'
       )
     }
+    const command = getOptionalStringFlag(flags, 'command')
+    const focus = flags.get('focus') === true
+    const rendererBacked = !client.isRemote && shouldForceVisibleCodexTerminal(command)
     const result = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
       worktree: await getBrowserWorktreeSelector(flags, cwd, client),
-      command: getOptionalStringFlag(flags, 'command'),
+      command,
       title: getOptionalStringFlag(flags, 'title'),
-      focus: flags.get('focus') === true
+      // Why: Codex's interactive TUI must be born in a renderer-backed
+      // terminal. The runtime's default create path spawns first in a
+      // headless/background PTY and only adopts into the UI afterward.
+      focus,
+      ...(rendererBacked ? { rendererBacked: true, activate: focus } : {})
     })
     printResult(result, json, formatTerminalCreate)
   },

@@ -3,7 +3,11 @@
 import React, { useEffect, useCallback, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
-import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
+import {
+  BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
+  TOGGLE_TERMINAL_PANE_EXPAND_EVENT,
+  type BackgroundMountTerminalWorktreeDetail
+} from '@/constants/terminal'
 import { useAppStore } from '../store'
 import { useAllWorktrees } from '../store/selectors'
 import { findWorktreeById } from '../store/slices/worktree-helpers'
@@ -48,6 +52,7 @@ import {
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
 import { shouldRepairActiveTerminalTab } from './terminal/active-terminal-repair'
+import { addBackgroundMountedTerminalWorktree } from './terminal/background-terminal-worktree-mount'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
   getEffectiveLayoutForWorktree as getEffectiveLayout,
@@ -508,6 +513,26 @@ function Terminal(): React.JSX.Element | null {
   // Only mount TerminalPanes for visited worktrees to prevent mass PTY
   // spawning when restoring a session with many saved worktree tabs.
   const mountedWorktreeIdsRef = useRef(new Set<string>())
+  const [, setBackgroundMountRevision] = useState(0)
+  useEffect(() => {
+    const onBackgroundMountTerminalWorktree = (event: Event): void => {
+      const customEvent = event as CustomEvent<BackgroundMountTerminalWorktreeDetail>
+      addBackgroundMountedTerminalWorktree(
+        mountedWorktreeIdsRef.current,
+        customEvent.detail?.worktreeId,
+        () => setBackgroundMountRevision((revision) => revision + 1)
+      )
+    }
+    window.addEventListener(
+      BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
+      onBackgroundMountTerminalWorktree as EventListener
+    )
+    return () =>
+      window.removeEventListener(
+        BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
+        onBackgroundMountTerminalWorktree as EventListener
+      )
+  }, [])
   // Why: gated on workspaceSessionReady to prevent TerminalPane from mounting
   // before reconnectPersistedTerminals() has finished eagerly spawning PTYs.
   // Without this gate, Phase 1 (hydrateWorkspaceSession) sets activeWorktreeId
