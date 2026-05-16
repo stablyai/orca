@@ -333,7 +333,7 @@ export default function WorkspaceKanbanDrawer({
             left: drawerLeftCss,
             top: 36,
             height: 'calc(100% - 36px)',
-            width: `min(calc(100vw - ${drawerLeftCss}), 1320px)`,
+            width: `min(calc(100vw - ${drawerLeftCss}), 1294px)`,
             opacity: workspaceBoardOpacity
           } as React.CSSProperties
         }
