@@ -546,6 +546,22 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       await get().shutdownWorktreeBrowsers(worktreeId)
       await get().shutdownWorktreeTerminals(worktreeId)
       const target = getActiveRuntimeTarget(get().settings)
+      const worktreeDisplayName = get()
+        .allWorktrees()
+        .find((entry) => entry.id === worktreeId)
+        ?.displayName?.trim()
+      if (worktreeDisplayName) {
+        try {
+          await window.api.automations?.snapshotWorkspaceName?.({
+            workspaceId: worktreeId,
+            displayName: worktreeDisplayName
+          })
+        } catch (error) {
+          // Why: preserving automation history labels is best-effort; a stale
+          // preload/test harness must not block worktree removal cleanup.
+          console.warn('Failed to snapshot automation workspace name:', error)
+        }
+      }
       await (target.kind === 'local'
         ? window.api.worktrees.remove({ worktreeId, force, skipArchive })
         : callRuntimeRpc(
