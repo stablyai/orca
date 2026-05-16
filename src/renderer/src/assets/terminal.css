@@ -128,6 +128,37 @@
   opacity: 0.4 !important;
 }
 
+.pane.pane-focus-rim-flash::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  z-index: 30;
+  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--ring) 82%, transparent);
+  border-radius: 3px;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--ring) 44%, transparent),
+    0 0 0 2px color-mix(in srgb, var(--ring) 28%, transparent),
+    0 0 18px color-mix(in srgb, var(--ring) 28%, transparent);
+  animation: pane-focus-rim-flash 1.5s ease-out forwards;
+}
+
+@keyframes pane-focus-rim-flash {
+  0%,
+  72% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pane.pane-focus-rim-flash::before {
+    animation: none;
+  }
+}
+
 /* Suppress pointer events on terminals during pane drag so overlay works */
 .is-pane-dragging .pane {
   pointer-events: none;

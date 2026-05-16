@@ -31,6 +31,8 @@ export type FocusTerminalPaneDetail = {
   leafId: string | null
   /** Optional paneKey to ack only after the target leaf resolves and focuses. */
   ackPaneKeyOnSuccess?: string
+  /** Briefly lights the resolved pane rim after focus for click-to-locate flows. */
+  flashFocusedPane?: boolean
 }
 
 export type PasteTerminalTextDetail = {
