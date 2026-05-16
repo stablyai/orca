@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
+import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../shared/types'
 import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
 
@@ -12,6 +13,7 @@ vi.mock('../store', () => ({
 const WT = 'repo::/worktree'
 const ENV = 'web-env-1'
 const NOW = 1_700_000_000_000
+const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 function makeState(overrides: Partial<WebSessionTabsSyncState> = {}): WebSessionTabsSyncState {
   return {
@@ -69,22 +71,26 @@ describe('applyWebSessionTabsSnapshot', () => {
       NOW
     ) as Partial<WebSessionTabsSyncState>
 
+    const mirroredId = patch.tabsByWorktree?.[WT]?.[0]?.id
+    expect(mirroredId).toBeTruthy()
+    expect(mirroredId).not.toContain(':')
+    expect(() => makePaneKey(mirroredId!, LEAF_ID)).not.toThrow()
     expect(patch.tabsByWorktree?.[WT]).toMatchObject([
       {
-        id: 'host-tab-1::pane:1',
+        id: mirroredId,
         ptyId: 'remote:web-env-1@@terminal-1',
         title: 'host shell',
         worktreeId: WT
       }
     ])
-    expect(patch.ptyIdsByTabId?.['host-tab-1::pane:1']).toEqual(['remote:web-env-1@@terminal-1'])
+    expect(patch.ptyIdsByTabId?.[mirroredId!]).toEqual(['remote:web-env-1@@terminal-1'])
     expect(patch.groupsByWorktree?.[WT]?.[0]).toMatchObject({
       id: 'host-group-1',
-      activeTabId: 'host-tab-1::pane:1',
-      tabOrder: ['host-tab-1::pane:1']
+      activeTabId: mirroredId,
+      tabOrder: [mirroredId]
     })
-    expect(patch.activeTabId).toBe('host-tab-1::pane:1')
-    expect(patch.activeTabIdByWorktree?.[WT]).toBe('host-tab-1::pane:1')
+    expect(patch.activeTabId).toBe(mirroredId)
+    expect(patch.activeTabIdByWorktree?.[WT]).toBe(mirroredId)
   })
 
   it('replaces temporary web-created tabs once the host publishes the same PTY', () => {
@@ -124,7 +130,9 @@ describe('applyWebSessionTabsSnapshot', () => {
       NOW
     ) as Partial<WebSessionTabsSyncState>
 
-    expect(patch.tabsByWorktree?.[WT]?.map((tab) => tab.id)).toEqual(['host-tab-1::pane:1'])
+    expect(patch.tabsByWorktree?.[WT]?.map((tab) => tab.id)).toEqual([
+      expect.not.stringContaining(':')
+    ])
     expect(patch.ptyIdsByTabId?.['local-web-tab']).toBeUndefined()
     expect(patch.unreadTerminalTabs?.['local-web-tab']).toBeUndefined()
   })

@@ -13,7 +13,8 @@ import type { Tab, TabGroup, TerminalLayoutSnapshot, TerminalTab } from '../../.
 import { getRemoteRuntimePtyEnvironmentId, toRemoteRuntimePtyId } from './runtime-terminal-stream'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
-const TERMINAL_SURFACE_SEPARATOR = '::pane:'
+const WEB_TERMINAL_SURFACE_TAB_PREFIX = 'web-terminal-'
+const HOST_TERMINAL_SURFACE_SEPARATOR = '::pane:'
 
 type SessionTabsStreamEvent =
   | (RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' })
@@ -63,7 +64,14 @@ function isRuntimeTerminalTabForEnvironment(tab: TerminalTab, environmentId: str
 }
 
 function isMirroredTerminalSurfaceId(tabId: string): boolean {
-  return tabId.includes(TERMINAL_SURFACE_SEPARATOR)
+  return tabId.startsWith(WEB_TERMINAL_SURFACE_TAB_PREFIX) || tabId.includes(HOST_TERMINAL_SURFACE_SEPARATOR)
+}
+
+function toWebTerminalSurfaceTabId(hostSurfaceId: string): string {
+  // Why: host session surface ids use `tab::pane:leaf`, but renderer pane keys
+  // reserve `:` as the tab/leaf delimiter. Keep host identity while making a
+  // local tab id that can safely flow through makePaneKey().
+  return `${WEB_TERMINAL_SURFACE_TAB_PREFIX}${encodeURIComponent(hostSurfaceId)}`
 }
 
 function shouldReplaceTerminalTab(
@@ -91,10 +99,11 @@ function buildMirroredTerminalTabs(
 ): TerminalTab[] {
   return snapshot.tabs.filter(isReadyTerminalTab).map((tab, index) => {
     const ptyId = toRemoteRuntimePtyId(tab.terminal, environmentId)
-    const existing = existingById.get(tab.id)
+    const localTabId = toWebTerminalSurfaceTabId(tab.id)
+    const existing = existingById.get(localTabId) ?? existingById.get(tab.id)
     const title = tab.title.trim() || 'Terminal'
     return {
-      id: tab.id,
+      id: localTabId,
       ptyId,
       worktreeId: snapshot.worktree,
       title,
@@ -316,10 +325,13 @@ export function applyWebSessionTabsSnapshot(
       ? [...retainedUnifiedTabs, ...mirroredUnifiedTabs]
       : null
   const validUnifiedTabIds = new Set(nextUnifiedTabs?.map((tab) => tab.id) ?? [])
-  const activeMirroredTerminalId =
+  const activeHostTerminalId =
     readyTerminalTabs.find((tab) => tab.id === snapshot.activeTabId)?.id ??
     readyTerminalTabs.find((tab) => tab.isActive)?.id ??
     null
+  const activeMirroredTerminalId = activeHostTerminalId
+    ? toWebTerminalSurfaceTabId(activeHostTerminalId)
+    : null
   const currentActiveTerminalStillExists =
     state.activeTabIdByWorktree[worktreeId] &&
     (nextTerminalTabs ?? []).some((tab) => tab.id === state.activeTabIdByWorktree[worktreeId])
