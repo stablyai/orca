@@ -16,23 +16,10 @@ import { getRuntimeGitBranchDiff, getRuntimeGitDiff } from '@/runtime/runtime-gi
 import '@/lib/monaco-setup'
 import { Button } from '@/components/ui/button'
 import type { OpenFile } from '@/store/slices/editor'
-import type { GitBranchChangeEntry, GitDiffResult, GitStatusEntry } from '../../../../shared/types'
+import type { GitBranchChangeEntry, GitDiffResult } from '../../../../shared/types'
 import { DiffSectionItem } from './DiffSectionItem'
 import { getCombinedUncommittedEntries } from './combined-diff-entries'
-
-type DiffSection = {
-  key: string
-  path: string
-  status: string
-  area?: GitStatusEntry['area']
-  oldPath?: string
-  originalContent: string
-  modifiedContent: string
-  collapsed: boolean
-  loading: boolean
-  dirty: boolean
-  diffResult: GitDiffResult | null
-}
+import type { DiffSection } from './diff-section-types'
 
 type CachedCombinedDiffViewState = {
   entrySignature: string

@@ -22,24 +22,11 @@ import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
 import { getDiffCommentPopoverTop } from '../diff-comments/diff-comment-popover-position'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import { computeLineStats } from './diff-line-stats'
-import type { DiffComment, GitDiffResult } from '../../../../shared/types'
+import type { DiffSection } from './diff-section-types'
+import type { DiffComment } from '../../../../shared/types'
 import { isDiffComment } from '@/lib/diff-comment-compat'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
-
-type DiffSection = {
-  key: string
-  path: string
-  status: string
-  area?: 'staged' | 'unstaged' | 'untracked'
-  oldPath?: string
-  originalContent: string
-  modifiedContent: string
-  collapsed: boolean
-  loading: boolean
-  dirty: boolean
-  diffResult: GitDiffResult | null
-}
 
 export function DiffSectionItem({
   section,
