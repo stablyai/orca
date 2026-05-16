@@ -223,6 +223,33 @@ describe('Store', () => {
     expect(ui.lastUpdateCheckAt).toBeNull()
   })
 
+  it('preserves legacy none grouping as ungrouped workspaces', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      ui: { groupBy: 'none' }
+    })
+    const store = await createStore()
+    expect(store.getUI().groupBy).toBe('none')
+  })
+
+  it('normalizes interim flat grouping back to none', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      ui: { groupBy: 'flat' }
+    })
+    const store = await createStore()
+    expect(store.getUI().groupBy).toBe('none')
+  })
+
+  it('preserves explicit workspace status grouping', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      ui: { groupBy: 'workspace-status' }
+    })
+    const store = await createStore()
+    expect(store.getUI().groupBy).toBe('workspace-status')
+  })
+
   // ── 2. Load from existing valid file ─────────────────────────────────
 
   it('reads repos from an existing data file', async () => {

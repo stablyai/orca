@@ -1705,7 +1705,7 @@ export type PersistedUIState = {
   lastActiveWorktreeId: string | null
   sidebarWidth: number
   rightSidebarWidth: number
-  groupBy: 'flat' | 'none' | 'repo' | 'pr-status'
+  groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   showWorkspaceLineage?: boolean
   sortBy: 'name' | 'smart' | 'recent' | 'repo'
   showActiveOnly: boolean

@@ -637,7 +637,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 
   const hasWorkspaceDropTargets = useMemo(
     () =>
-      groupBy === 'none' ||
+      groupBy === 'workspace-status' ||
       rows.some((row) => row.type === 'header' && row.key === PINNED_GROUP_KEY),
     [groupBy, rows]
   )
@@ -751,7 +751,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               repoDrag.state.draggingRepoId !== null &&
               repoDrag.state.draggingRepoId === repoIdForHeader
             const headerWorkspaceStatus =
-              groupBy === 'none' ? getWorkspaceStatusFromGroupKey(row.key, workspaceStatuses) : null
+              groupBy === 'workspace-status'
+                ? getWorkspaceStatusFromGroupKey(row.key, workspaceStatuses)
+                : null
             const isPinnedHeader = row.key === PINNED_GROUP_KEY
             return (
               <div
@@ -1094,7 +1096,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           }
 
           const itemWorkspaceStatus =
-            groupBy === 'none' ? getWorkspaceStatus(row.worktree, workspaceStatuses) : null
+            groupBy === 'workspace-status'
+              ? getWorkspaceStatus(row.worktree, workspaceStatuses)
+              : null
 
           return (
             <div

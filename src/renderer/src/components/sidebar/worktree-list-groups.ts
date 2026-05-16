@@ -24,9 +24,7 @@ import type { SortBy } from './smart-sort'
 
 export { branchName }
 
-// Why: `none` is the legacy persisted value for Status grouping. The actual
-// ungrouped sidebar mode is `flat`.
-export type WorktreeGroupBy = 'flat' | 'none' | 'repo' | 'pr-status'
+export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status'
 export type RepoGroupOrdering = 'manual' | 'visible-worktree-order'
 
 export function getRepoGroupOrdering(groupBy: WorktreeGroupBy, sortBy: SortBy): RepoGroupOrdering {
@@ -374,7 +372,7 @@ export function buildRows(
   )
   const unpinned = pinnedIds.size > 0 ? worktrees.filter((w) => !pinnedIds.has(w.id)) : worktrees
 
-  if (groupBy === 'flat') {
+  if (groupBy === 'none') {
     appendWorktreeRows(result, unpinned, repoMap, lineageById, worktreeMap, {
       nestLineage,
       showLineageContext: nestLineage,
@@ -392,7 +390,7 @@ export function buildRows(
       repo = repoMap.get(w.repoId)
       key = `repo:${w.repoId}`
       label = repo?.displayName ?? 'Unknown'
-    } else if (groupBy === 'none') {
+    } else if (groupBy === 'workspace-status') {
       const workspaceStatus = getWorkspaceStatus(w, workspaceStatuses)
       key = getWorkspaceStatusGroupKey(workspaceStatus)
       label =
@@ -417,10 +415,9 @@ export function buildRows(
         orderedGroups.push([key, group])
       }
     }
-  } else if (groupBy === 'none') {
-    // Why: the old "All" grouping now organizes workspaces by user status.
-    // Keep the sidebar compact by rendering only sections that contain cards;
-    // the board drawer is the wider all-lanes drag target.
+  } else if (groupBy === 'workspace-status') {
+    // Why: status grouping is opt-in while the board drawer remains the wider
+    // all-lanes drag target; keep the sidebar compact by omitting empty lanes.
     for (const status of workspaceStatuses) {
       const key = getWorkspaceStatusGroupKey(status.id)
       const group = grouped.get(key)
@@ -465,7 +462,7 @@ export function buildRows(
             icon: REPO_GROUP_META.icon,
             repo
           }
-        : groupBy === 'none'
+        : groupBy === 'workspace-status'
           ? (() => {
               const workspaceStatus =
                 getWorkspaceStatusFromGroupKey(key, workspaceStatuses) ??
@@ -515,10 +512,10 @@ export function getGroupKeyForWorktree(
   prCache: Record<string, unknown> | null,
   workspaceStatuses: readonly WorkspaceStatusDefinition[] = cloneDefaultWorkspaceStatuses()
 ): string | null {
-  if (groupBy === 'flat') {
+  if (groupBy === 'none') {
     return null
   }
-  if (groupBy === 'none') {
+  if (groupBy === 'workspace-status') {
     return getWorkspaceStatusGroupKey(getWorkspaceStatus(worktree, workspaceStatuses))
   }
   if (groupBy === 'repo') {

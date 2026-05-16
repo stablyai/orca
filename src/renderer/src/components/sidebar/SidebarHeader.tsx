@@ -20,8 +20,8 @@ import SidebarFilter from './SidebarFilter'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 
 const GROUP_BY_OPTIONS = [
-  { id: 'flat', label: 'None' },
-  { id: 'none', label: 'Status' },
+  { id: 'none', label: 'None' },
+  { id: 'workspace-status', label: 'Status' },
   { id: 'pr-status', label: 'PR' },
   { id: 'repo', label: 'Repo' }
 ] as const

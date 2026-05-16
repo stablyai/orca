@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   buildRows,
+  getGroupKeyForWorktree,
   getLineageGroupKey,
   getLineageRenderInfo,
   getPRGroupKey,
@@ -53,6 +54,18 @@ describe('getPRGroupKey', () => {
   })
 })
 
+describe('getGroupKeyForWorktree', () => {
+  it('returns no group key for the ungrouped mode', () => {
+    expect(getGroupKeyForWorktree('none', worktree, repoMap, null)).toBeNull()
+  })
+
+  it('returns a workspace-status key only in status grouping mode', () => {
+    expect(getGroupKeyForWorktree('workspace-status', worktree, repoMap, null)).toBe(
+      'workspace-status:in-progress'
+    )
+  })
+})
+
 describe('buildRows with pinned worktrees', () => {
   const pinned = { ...worktree, id: 'wt-pinned', isPinned: true, displayName: 'pinned-feature' }
   const unpinned1 = { ...worktree, id: 'wt-1', displayName: 'alpha' }
@@ -64,8 +77,8 @@ describe('buildRows with pinned worktrees', () => {
     expect(rows[1]).toMatchObject({ type: 'item', worktree: { id: 'wt-pinned' } })
   })
 
-  it('renders a flat list without status headers in groupBy flat', () => {
-    const rows = buildRows('flat', [unpinned1, unpinned2], repoMap, null, new Set())
+  it('renders a flat list without status headers in groupBy none', () => {
+    const rows = buildRows('none', [unpinned1, unpinned2], repoMap, null, new Set())
 
     expect(rows).toMatchObject([
       { type: 'item', worktree: { id: 'wt-1' } },
@@ -74,7 +87,7 @@ describe('buildRows with pinned worktrees', () => {
   })
 
   it('keeps pinned worktrees above the flat list', () => {
-    const rows = buildRows('flat', [unpinned1, pinned, unpinned2], repoMap, null, new Set())
+    const rows = buildRows('none', [unpinned1, pinned, unpinned2], repoMap, null, new Set())
 
     expect(rows).toMatchObject([
       { type: 'header', key: 'pinned', count: 1 },
@@ -84,8 +97,14 @@ describe('buildRows with pinned worktrees', () => {
     ])
   })
 
-  it('emits status headers for unpinned worktrees in groupBy none', () => {
-    const rows = buildRows('none', [unpinned1, pinned, unpinned2], repoMap, null, new Set())
+  it('emits status headers for unpinned worktrees in groupBy workspace-status', () => {
+    const rows = buildRows(
+      'workspace-status',
+      [unpinned1, pinned, unpinned2],
+      repoMap,
+      null,
+      new Set()
+    )
     expect(rows[2]).toMatchObject({
       type: 'header',
       key: 'workspace-status:in-progress',
@@ -108,8 +127,8 @@ describe('buildRows with pinned worktrees', () => {
     }
   })
 
-  it('omits empty pinned sections in groupBy none', () => {
-    const rows = buildRows('none', [unpinned1, unpinned2], repoMap, null, new Set())
+  it('omits empty pinned sections in groupBy workspace-status', () => {
+    const rows = buildRows('workspace-status', [unpinned1, unpinned2], repoMap, null, new Set())
     expect(rows[0]).toMatchObject({
       type: 'header',
       key: 'workspace-status:in-progress',
@@ -121,7 +140,13 @@ describe('buildRows with pinned worktrees', () => {
   })
 
   it('collapses pinned group when in collapsedGroups', () => {
-    const rows = buildRows('none', [pinned, unpinned1], repoMap, null, new Set(['pinned']))
+    const rows = buildRows(
+      'workspace-status',
+      [pinned, unpinned1],
+      repoMap,
+      null,
+      new Set(['pinned'])
+    )
     expect(rows[0]).toMatchObject({ type: 'header', key: 'pinned' })
     expect(rows[1]).toMatchObject({ type: 'header', key: 'workspace-status:in-progress' })
     expect(rows[2]).toMatchObject({ type: 'item', worktree: { id: 'wt-1' } })
@@ -129,7 +154,7 @@ describe('buildRows with pinned worktrees', () => {
 
   it('does not emit empty status sections when all worktrees are pinned', () => {
     const allPinned = { ...unpinned1, isPinned: true }
-    const rows = buildRows('none', [pinned, allPinned], repoMap, null, new Set())
+    const rows = buildRows('workspace-status', [pinned, allPinned], repoMap, null, new Set())
     expect(rows.filter((r) => r.type === 'header')).toHaveLength(1)
     expect(rows[0]).toMatchObject({ type: 'header', key: 'pinned', count: 2 })
   })
@@ -176,9 +201,9 @@ describe('buildRows with pinned worktrees', () => {
     expect(rows[1]).toMatchObject({ type: 'item', worktree: { id: folderWorktree.id } })
   })
 
-  it('emits assigned workspace statuses as sections in groupBy none', () => {
+  it('emits assigned workspace statuses as sections in groupBy workspace-status', () => {
     const review = { ...worktree, id: 'wt-review', workspaceStatus: 'in-review' as const }
-    const rows = buildRows('none', [review], repoMap, null, new Set())
+    const rows = buildRows('workspace-status', [review], repoMap, null, new Set())
 
     expect(
       rows
@@ -196,7 +221,7 @@ describe('buildRows with pinned worktrees', () => {
     const blocked = { ...worktree, id: 'wt-blocked', workspaceStatus: 'blocked' }
     const doing = { ...worktree, id: 'wt-doing', workspaceStatus: 'in-progress' }
     const rows = buildRows(
-      'none',
+      'workspace-status',
       [doing, blocked],
       repoMap,
       null,
@@ -320,8 +345,8 @@ describe('getRepoGroupOrdering', () => {
     ['repo', 'smart', 'visible-worktree-order'],
     ['repo', 'name', 'manual'],
     ['repo', 'repo', 'manual'],
-    ['flat', 'recent', 'manual'],
     ['none', 'recent', 'manual'],
+    ['workspace-status', 'recent', 'manual'],
     ['pr-status', 'recent', 'manual']
   ] as const)('uses %s/%s -> %s', (groupBy, sortBy, expected) => {
     expect(getRepoGroupOrdering(groupBy, sortBy)).toBe(expected)

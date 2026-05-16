@@ -160,10 +160,15 @@ function backupPath(dataFile: string, index: number): string {
 }
 
 function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupBy'] {
-  if (groupBy === 'flat' || groupBy === 'none' || groupBy === 'repo' || groupBy === 'pr-status') {
+  if (
+    groupBy === 'none' ||
+    groupBy === 'workspace-status' ||
+    groupBy === 'repo' ||
+    groupBy === 'pr-status'
+  ) {
     return groupBy
   }
-  if (groupBy === 'workspace-status') {
+  if (groupBy === 'flat') {
     return 'none'
   }
   return getDefaultUIState().groupBy
