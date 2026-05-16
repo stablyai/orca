@@ -54,7 +54,7 @@ describe('resolveCommitMessageSettings', () => {
       ok: true,
       params: {
         agentId: 'codex',
-        model: 'gpt-5.4-mini',
+        model: 'gpt-5.5',
         thinkingLevel: 'low',
         customPrompt: 'Use Conventional Commits.'
       }
@@ -71,7 +71,7 @@ describe('resolveCommitMessageSettings', () => {
       ok: true,
       params: {
         agentId: 'codex',
-        model: 'gpt-5.4-mini',
+        model: 'gpt-5.5',
         thinkingLevel: 'low'
       }
     })
