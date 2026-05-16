@@ -36,6 +36,7 @@ import { SshStatusSegment } from './SshStatusSegment'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { ResourceUsageStatusSegment } from './ResourceUsageStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
+import { shouldOpenStatusBarContextMenu } from './status-bar-context-menu-policy'
 import { PetStatusSegment } from './PetStatusSegment'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/FloatingTerminalIconContextMenu'
@@ -837,10 +838,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
       ref={containerRefCallback}
       className="flex items-center h-6 min-h-[24px] px-3 gap-4 border-t border-border bg-[var(--bg-titlebar,var(--card))] text-xs select-none shrink-0 relative"
       onContextMenuCapture={(event) => {
-        if (
-          event.target instanceof Element &&
-          event.target.closest('[data-floating-terminal-toggle]')
-        ) {
+        if (!shouldOpenStatusBarContextMenu(event.target)) {
           return
         }
         // Why: mirror the right-click pattern used across the app
