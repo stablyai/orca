@@ -104,14 +104,9 @@ export function shouldPropagateStatus(status: GitFileStatus): boolean {
  * we extended GitStagingArea. Keeping ignored as a peer to the status map lets
  * the explorer decorate paths without touching staging-area code.
  */
-/**
- * Whether `relativePath` is ignored, walking up ancestors so children of an
- * ignored directory inherit the decoration.
- *
- * Why ancestor walk: `--ignored=matching` reports the matched pattern, so a
- * `dist/` rule produces a single `dist` entry. Without the walk, expanding
- * `dist/` would show its children with normal styling.
- */
+// Why ancestor walk: `--ignored=matching` reports the matched pattern, so a
+// `dist/` rule produces a single `dist` entry. Without the walk, expanding
+// `dist/` would show its children with normal styling.
 export function isPathIgnored(ignored: Set<string>, relativePath: string): boolean {
   if (ignored.size === 0) {
     return false

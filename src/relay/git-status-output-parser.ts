@@ -111,9 +111,6 @@ export function parseStatusOutput(stdout: string): {
     } else if (line.startsWith('? ')) {
       entries.push({ path: line.slice(2), status: 'untracked', area: 'untracked' })
     } else if (line.startsWith('! ')) {
-      // Why: porcelain v2 emits `! path` only when `--ignored` is passed.
-      // Surfaced separately from `entries` so staging-area consumers stay
-      // unaffected; the file explorer reads ignoredPaths to dim matches.
       ignoredPaths.push(line.slice(2))
     } else if (line.startsWith('u ')) {
       unmergedLines.push(line)

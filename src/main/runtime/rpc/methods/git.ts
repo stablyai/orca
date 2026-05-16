@@ -78,9 +78,6 @@ export const GIT_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'git.status',
     params: GitStatusParams,
-    // Why: only forward the options bag when the request actually carried
-    // includeIgnored, so the call shape stays identical to the pre-feature
-    // signature for legacy callers (matters because tests assert exact argv).
     handler: async (params, { runtime }) =>
       params.includeIgnored === undefined
         ? runtime.getRuntimeGitStatus(params.worktree)

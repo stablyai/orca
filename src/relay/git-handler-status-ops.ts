@@ -83,9 +83,6 @@ export async function getStatusOp(
     // git's stdout instead of C-style octal escapes; without it the parsed
     // entry.path renders as gibberish in the source-control sidebar and
     // downstream blob lookups miss.
-    // Why --ignored=matching is gated on the caller flag: lists only files
-    // that match .gitignore patterns (not the recursive contents of ignored
-    // directories), keeping the remote payload bounded for large repos.
     const statusArgs = [
       '-c',
       'core.quotePath=false',

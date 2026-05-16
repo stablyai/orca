@@ -35,9 +35,6 @@ export class SshGitProvider implements IGitProvider {
     worktreePath: string,
     options?: { includeIgnored?: boolean }
   ): Promise<GitStatusResult> {
-    // Why: only forward includeIgnored when the caller opted in so the request
-    // params stay identical to the pre-feature contract for non-opted-in
-    // callers. The relay handler treats a missing key as false anyway.
     const includeIgnoredArgs = options?.includeIgnored ? { includeIgnored: true } : {}
     return (await this.mux.request('git.status', {
       worktreePath,

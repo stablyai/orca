@@ -22,10 +22,6 @@ const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
 const BULK_CHUNK_SIZE = 100
 
 export type GetStatusOptions = {
-  /** When true, adds `--ignored=matching` so the porcelain output includes
-   *  `!` records for files matched by `.gitignore`. Results are surfaced via
-   *  `GitStatusResult.ignoredPaths`, not the `entries` array, so staging-area
-   *  consumers (Source Control) are unaffected. */
   includeIgnored?: boolean
 }
 
@@ -141,8 +137,7 @@ export async function getStatus(
         const path = line.slice(2)
         entries.push({ path, status: 'untracked', area: 'untracked' })
       } else if (line.startsWith('! ')) {
-        // Why: porcelain v2 `!` records are emitted only when --ignored is set.
-        // Path runs from index 2 to end of line, with no further fields.
+        // Why: porcelain v2 emits `!` records only when --ignored is set.
         ignoredPaths.push(line.slice(2))
       } else if (line.startsWith('u ')) {
         const unmergedEntry = await parseUnmergedEntry(worktreePath, line)
@@ -161,9 +156,6 @@ export async function getStatus(
     conflictOperation,
     head,
     branch,
-    // Why: only attach ignoredPaths when the caller asked for them — keeps the
-    // response shape identical to the pre-feature contract when the setting is
-    // off, so downstream consumers that branch on key presence stay correct.
     ...(options.includeIgnored ? { ignoredPaths } : {}),
     ...(statusSucceeded
       ? {

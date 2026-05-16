@@ -198,10 +198,8 @@ type FileExplorerRowProps = {
   isFlashing: boolean
   nodeStatus: GitFileStatus | null
   statusColor: string | null
-  /** When true, the row is dimmed + italicised and shows the CircleSlash
-   *  indicator in the same slot the status letter occupies. Mutually exclusive
-   *  with nodeStatus — the virtual-row builder only sets isIgnored when there
-   *  is no other git status to render. */
+  /** Mutually exclusive with nodeStatus: the virtual-row builder only sets
+   *  isIgnored when there is no other git status to render. */
   isIgnored: boolean
   deleteShortcutLabel: string
   targetDir: string
@@ -344,9 +342,8 @@ export function FileExplorerRow({
               {STATUS_LABELS[nodeStatus]}
             </span>
           ) : isIgnored ? (
-            // Why: occupies the same trailing slot as the git status letter so
-            // the column stays visually aligned across rows. size-3 matches the
-            // file/folder leading icon for consistent optical weight.
+            // Why: occupies the same trailing slot as the git status letter
+            // so the column stays visually aligned across rows.
             <CircleSlash
               aria-label="Ignored by .gitignore"
               className="ml-auto size-3 shrink-0 mr-2"

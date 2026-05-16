@@ -48,10 +48,9 @@ export class RuntimeGitCommands {
       if (!provider) {
         throw new Error('remote_git_unavailable')
       }
-      // Why: forward the options argument only when present so this call
-      // remains argv-identical to the pre-feature signature for callers that
-      // don't opt in (matters because spies assert exact argument lists).
-      return options ? provider.getStatus(target.worktree.path, options) : provider.getStatus(target.worktree.path)
+      return options
+        ? provider.getStatus(target.worktree.path, options)
+        : provider.getStatus(target.worktree.path)
     }
     return options ? getGitStatus(target.worktree.path, options) : getGitStatus(target.worktree.path)
   }

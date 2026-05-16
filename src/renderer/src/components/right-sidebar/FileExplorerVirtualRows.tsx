@@ -118,9 +118,6 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
         const nodeStatus = n.isDirectory
           ? (folderStatusByRelativePath.get(normalizedRelativePath) ?? null)
           : (statusByRelativePath.get(normalizedRelativePath) ?? null)
-        // Why: ignored decoration is independent of nodeStatus so a tracked
-        // change still wins the status color/letter; ignored only applies
-        // when there's no other status on the row.
         const isIgnored = !nodeStatus && isPathIgnored(ignoredByRelativePath, normalizedRelativePath)
 
         const rowParentDir = n.isDirectory ? n.path : dirname(n.path)
