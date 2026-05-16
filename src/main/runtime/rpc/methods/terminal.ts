@@ -529,10 +529,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.wait',
     params: TerminalWait,
-    handler: async (params, { runtime }) => ({
+    handler: async (params, { runtime, signal }) => ({
       wait: await runtime.waitForTerminal(params.terminal, {
         condition: params.for,
-        timeoutMs: params.timeoutMs
+        timeoutMs: params.timeoutMs,
+        signal
       })
     })
   }),

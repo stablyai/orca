@@ -13,7 +13,7 @@ import {
   RUNTIME_PROTOCOL_VERSION
 } from '../../shared/protocol-version'
 
-// Why: for `orchestration.check --wait` the caller's method-level
+// Why: for long-poll methods the caller's method-level
 // `params.timeoutMs` is the inner waiter budget; we extend the client-side
 // socket timeout to `timeoutMs + GRACE_MS` so the client's own idle timer
 // never fires before the server-side waiter has had a chance to resolve and
@@ -83,15 +83,17 @@ export class RuntimeClient {
     return response
   }
 
-  // Why: centralises the per-method timeout policy. `orchestration.check` with
-  // `wait: true` is the only long-poll today, and its inner waiter budget
-  // lives in `params.timeoutMs`. We widen the client-side socket timeout to
-  // `timeoutMs + grace` so it doesn't fire before the server has a chance to
-  // resolve. Without this, a 5 min wait would still die at the 60 s default.
+  // Why: centralises the per-method timeout policy. Long-poll inner waiter
+  // budgets live in `params.timeoutMs`; widen the client-side socket timeout
+  // to `timeoutMs + grace` so it doesn't fire before the server has a chance
+  // to resolve. Without this, a 5 min wait would still die at the 60 s default.
   // See design doc §3.1.
   private resolveMethodTimeoutMs(method: string, params?: unknown): number {
-    if (method === 'orchestration.check' && isWaitingCheck(params)) {
-      const inner = Number((params as { timeoutMs?: unknown }).timeoutMs)
+    if (
+      (method === 'orchestration.check' && isWaitingCheck(params)) ||
+      method === 'terminal.wait'
+    ) {
+      const inner = Number(getTimeoutMsParam(params))
       if (Number.isFinite(inner) && inner > 0) {
         return Math.max(inner + LONG_POLL_CLIENT_GRACE_MS, this.requestTimeoutMs)
       }
@@ -224,4 +226,11 @@ function isWaitingCheck(params: unknown): boolean {
     'wait' in params &&
     (params as { wait: unknown }).wait === true
   )
+}
+
+function getTimeoutMsParam(params: unknown): unknown {
+  if (typeof params !== 'object' || params === null || !('timeoutMs' in params)) {
+    return undefined
+  }
+  return (params as { timeoutMs?: unknown }).timeoutMs
 }

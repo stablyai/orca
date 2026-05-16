@@ -163,17 +163,19 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'worktree.sleep'
 ])
 
-// Why: a long-poll request is one whose handler blocks for an unbounded
-// amount of time waiting for an external event (today, only
-// `orchestration.check` with `wait === true`). This function is the single
-// place that classifies it — the long-poll counter, abort wiring, and
-// runtime_busy admission check all share this decision. See §3.1.
+// Why: a long-poll request is one whose handler blocks waiting for an external
+// event. This function is the single place that classifies it — the long-poll
+// counter, abort wiring, keepalives, and runtime_busy admission check all
+// share this decision. See §3.1.
 function isLongPollRequest(request: RpcRequest): boolean {
-  if (request.method !== 'orchestration.check') {
-    return false
+  if (request.method === 'terminal.wait') {
+    return true
   }
-  const params = request.params as { wait?: unknown } | undefined
-  return params?.wait === true
+  if (request.method === 'orchestration.check') {
+    const params = request.params as { wait?: unknown } | undefined
+    return params?.wait === true
+  }
+  return false
 }
 
 export class OrcaRuntimeRpcServer {

@@ -462,6 +462,7 @@ type TerminalWaiter = {
   reject: (error: Error) => void
   timeout: NodeJS.Timeout | null
   pollInterval: NodeJS.Timeout | null
+  abortCleanup: (() => void) | null
 }
 
 type MessageWaiter = {
@@ -3752,6 +3753,7 @@ export class OrcaRuntimeService {
     options?: {
       condition?: RuntimeTerminalWaitCondition
       timeoutMs?: number
+      signal?: AbortSignal
     }
   ): Promise<RuntimeTerminalWait> {
     const condition = options?.condition ?? 'exit'
@@ -3776,7 +3778,12 @@ export class OrcaRuntimeService {
           resolve,
           reject,
           timeout: null,
-          pollInterval: null
+          pollInterval: null,
+          abortCleanup: null
+        }
+        if (!this.bindTerminalWaiterAbort(waiter, options?.signal)) {
+          reject(new Error('request_aborted'))
+          return
         }
         if (effectiveTimeoutMs > 0) {
           waiter.timeout = setTimeout(() => {
@@ -3833,7 +3840,13 @@ export class OrcaRuntimeService {
         resolve,
         reject,
         timeout: null,
-        pollInterval: null
+        pollInterval: null,
+        abortCleanup: null
+      }
+
+      if (!this.bindTerminalWaiterAbort(waiter, options?.signal)) {
+        reject(new Error('request_aborted'))
+        return
       }
 
       if (effectiveTimeoutMs > 0) {
@@ -8122,6 +8135,25 @@ export class OrcaRuntimeService {
     waiter.resolve(result)
   }
 
+  private bindTerminalWaiterAbort(
+    waiter: TerminalWaiter,
+    signal: AbortSignal | undefined
+  ): boolean {
+    if (!signal) {
+      return true
+    }
+    if (signal.aborted) {
+      return false
+    }
+    const onAbort = (): void => {
+      this.removeWaiter(waiter)
+      waiter.reject(new Error('request_aborted'))
+    }
+    waiter.abortCleanup = () => signal.removeEventListener('abort', onAbort)
+    signal.addEventListener('abort', onAbort, { once: true })
+    return true
+  }
+
   private rejectWaitersForHandle(handle: string, code: string): void {
     const waiters = this.waitersByHandle.get(handle)
     if (!waiters || waiters.size === 0) {
@@ -8145,6 +8177,10 @@ export class OrcaRuntimeService {
     }
     if (waiter.pollInterval) {
       clearInterval(waiter.pollInterval)
+    }
+    if (waiter.abortCleanup) {
+      waiter.abortCleanup()
+      waiter.abortCleanup = null
     }
     const waiters = this.waitersByHandle.get(waiter.handle)
     if (!waiters) {
