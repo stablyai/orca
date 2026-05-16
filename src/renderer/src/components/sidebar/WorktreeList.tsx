@@ -231,6 +231,20 @@ function prefersReducedMotion(): boolean {
   )
 }
 
+function getVisibleWorktreeIdSet(worktrees: readonly Worktree[]): Set<string> {
+  return new Set(worktrees.map((worktree) => worktree.id))
+}
+
+function haveOrderedRowKeysChanged(
+  previousKeys: readonly string[],
+  nextRows: readonly RenderRow[]
+): boolean {
+  if (previousKeys.length !== nextRows.length) {
+    return true
+  }
+  return nextRows.some((row, index) => getRenderRowKey(row) !== previousKeys[index])
+}
+
 const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewport({
   rows,
   activeWorktreeId,
@@ -281,6 +295,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     [rows, showWorkspaceLineage]
   )
   const previousRenderRowCountRef = useRef(renderRows.length)
+  const previousRenderRowKeysRef = useRef(renderRows.map(getRenderRowKey))
+  const previousVisibleWorktreeIdsRef = useRef(getVisibleWorktreeIdSet(worktrees))
   const previousVirtualRowTopByKeyRef = useRef(new Map<string, number>())
   const activeVirtualRowAnimationsRef = useRef(new Map<string, Animation>())
   const activeWorktreeRowIndex = useMemo(
@@ -427,13 +443,25 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 
   useLayoutEffect(() => {
     const previousCount = previousRenderRowCountRef.current
+    const previousRowKeys = previousRenderRowKeysRef.current
+    const previousVisibleWorktreeIds = previousVisibleWorktreeIdsRef.current
     const rowCountDecreased = renderRows.length < previousCount
+    const rowKeysChanged = haveOrderedRowKeysChanged(previousRowKeys, renderRows)
+    const removedVisibleWorktree = Array.from(previousVisibleWorktreeIds).some(
+      (worktreeId) => !worktreeMap.has(worktreeId)
+    )
+    const shouldAnimateRemovedWorktreeRows = rowCountDecreased && removedVisibleWorktree
     const previousTopByKey = previousVirtualRowTopByKeyRef.current
     const nextTopByKey = new Map<string, number>()
     const activeRowKeys = new Set<string>()
     const scrollElement = scrollRef.current
     const scrollTop = scrollElement?.scrollTop ?? 0
     const viewportTop = scrollElement?.getBoundingClientRect().top ?? 0
+
+    if (rowKeysChanged && !shouldAnimateRemovedWorktreeRows) {
+      activeVirtualRowAnimationsRef.current.forEach((animation) => animation.cancel())
+      activeVirtualRowAnimationsRef.current.clear()
+    }
 
     const elementByRowKey = new Map<string, HTMLElement>()
     scrollElement
@@ -451,7 +479,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       nextTopByKey.set(rowKey, currentTop)
       activeRowKeys.add(rowKey)
 
-      if (!rowCountDecreased || prefersReducedMotion()) {
+      if (!shouldAnimateRemovedWorktreeRows || prefersReducedMotion()) {
         continue
       }
 
@@ -472,8 +500,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         : getVirtualRowTransform(item.start + delta)
       runningAnimation?.cancel()
 
-      // Why: CSS transition classes are one render behind delete commits. FLIP
-      // keeps rapid multi-delete rows anchored to their current visual position.
+      // Why: only real worktree removals should FLIP. Collapse/expand also
+      // changes virtual rows, but TanStack reindexes those rows immediately
+      // and any lingering transform animation can fight the final layout.
       const animation = element.animate(
         [{ transform: fromTransform }, { transform: getVirtualRowTransform(item.start) }],
         {
@@ -498,8 +527,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       }
     })
     previousRenderRowCountRef.current = renderRows.length
+    previousRenderRowKeysRef.current = renderRows.map(getRenderRowKey)
+    previousVisibleWorktreeIdsRef.current = getVisibleWorktreeIdSet(worktrees)
     previousVirtualRowTopByKeyRef.current = nextTopByKey
-  }, [renderRows.length, virtualItems])
+  }, [renderRows, virtualItems, worktreeMap, worktrees])
 
   useLayoutEffect(() => {
     virtualizer.elementsCache.forEach((element) => {
