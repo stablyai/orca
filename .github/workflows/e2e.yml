@@ -7,6 +7,16 @@ on:
         description: Ref to check out (defaults to the calling workflow's ref)
         required: false
         type: string
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Ref to check out (defaults to the workflow ref)
+        required: false
+        type: string
+  schedule:
+    # Why: GitHub cron uses UTC; these slots map to 10am and 3pm
+    # America/Phoenix for the default-branch E2E run.
+    - cron: '0 17,22 * * *'
 
 jobs:
   build:
