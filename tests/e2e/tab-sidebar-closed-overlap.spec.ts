@@ -267,7 +267,16 @@ test.describe('Tab visibility with closed sidebar', () => {
       )
       .toEqual({ activeView: 'terminal', sidebarOpen: true })
 
-    await orcaPage.locator('.titlebar-left button[aria-label="Toggle sidebar"]').click()
+    await orcaPage.evaluate(() => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available — is the app in dev mode?')
+      }
+      // Why: CI runs Electron hidden, where Playwright can wait forever for
+      // a titlebar button to be "stable". The regression is the collapsed
+      // geometry and hit target, so drive that state directly.
+      store.getState().setSidebarOpen(false)
+    })
 
     await expect
       .poll(
@@ -281,7 +290,7 @@ test.describe('Tab visibility with closed sidebar', () => {
           }),
         {
           timeout: 5_000,
-          message: 'Clicking the sidebar toggle did not collapse the sidebar'
+          message: 'Sidebar did not enter the collapsed state'
         }
       )
       .toBe(false)
