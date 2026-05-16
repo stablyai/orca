@@ -245,6 +245,8 @@ function Settings(): React.JSX.Element {
   )
   const [activeSectionId, setActiveSectionId] = useState('general')
   const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
+  const [hasUnsavedCommitPromptChanges, setHasUnsavedCommitPromptChanges] = useState(false)
+  const [commitPromptDiscardSignal, setCommitPromptDiscardSignal] = useState(0)
   // Why: the hidden-experimental group is an unlock — Shift-clicking the
   // Experimental sidebar entry reveals it for the remainder of the session.
   // Not persisted on purpose: it's a power-user affordance we don't want to
@@ -255,6 +257,27 @@ function Settings(): React.JSX.Element {
   const terminalFontsLoadedRef = useRef(false)
   const pendingNavSectionRef = useRef<string | null>(null)
   const pendingScrollTargetRef = useRef<string | null>(null)
+
+  const confirmDiscardCommitPromptChanges = useCallback((): boolean => {
+    if (!hasUnsavedCommitPromptChanges) {
+      return true
+    }
+    const shouldDiscard = window.confirm(
+      'You have unsaved AI commit prompt changes. Leave without saving?'
+    )
+    if (shouldDiscard) {
+      setCommitPromptDiscardSignal((signal) => signal + 1)
+      setHasUnsavedCommitPromptChanges(false)
+    }
+    return shouldDiscard
+  }, [hasUnsavedCommitPromptChanges])
+
+  const closeSettingsPageWithPromptGuard = useCallback((): void => {
+    if (!confirmDiscardCommitPromptChanges()) {
+      return
+    }
+    closeSettingsPage()
+  }, [closeSettingsPage, confirmDiscardCommitPromptChanges])
 
   useEffect(() => {
     fetchSettings()
@@ -273,12 +296,23 @@ function Settings(): React.JSX.Element {
       if (isEditableTarget(event.target)) {
         return
       }
-      closeSettingsPage()
+      closeSettingsPageWithPromptGuard()
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [closeSettingsPage])
+  }, [closeSettingsPageWithPromptGuard])
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent): void => {
+      if (!hasUnsavedCommitPromptChanges) {
+        return
+      }
+      event.preventDefault()
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasUnsavedCommitPromptChanges])
 
   useEffect(() => {
     const handleFindShortcut = (event: KeyboardEvent): void => {
@@ -613,9 +647,11 @@ function Settings(): React.JSX.Element {
   const visibleNavSections = useMemo(
     () =>
       navSections.filter((section) =>
-        matchesSettingsSearch(settingsSearchQuery, section.searchEntries)
+        section.id === 'git' && hasUnsavedCommitPromptChanges
+          ? true
+          : matchesSettingsSearch(settingsSearchQuery, section.searchEntries)
       ),
-    [navSections, settingsSearchQuery]
+    [hasUnsavedCommitPromptChanges, navSections, settingsSearchQuery]
   )
 
   useEffect(() => {
@@ -723,6 +759,9 @@ function Settings(): React.JSX.Element {
       sectionId: string,
       modifiers?: { metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }
     ) => {
+      if (sectionId !== activeSectionId && !confirmDiscardCommitPromptChanges()) {
+        return
+      }
       // Why: Shift-clicking the Experimental sidebar entry unlocks a hidden
       // power-user group. Keep this scoped to the Experimental row so normal
       // shortcut combos on other rows don't accidentally flip state. The
@@ -735,10 +774,13 @@ function Settings(): React.JSX.Element {
       flashSectionHighlight(sectionId)
       setActiveSectionId(sectionId)
     },
-    []
+    [activeSectionId, confirmDiscardCommitPromptChanges]
   )
 
   const openComputerUseFromBrowser = useCallback(() => {
+    if (!confirmDiscardCommitPromptChanges()) {
+      return
+    }
     pendingNavSectionRef.current = 'computer-use'
     pendingScrollTargetRef.current = 'computer-use'
     if (settingsSearchQuery !== '') {
@@ -748,7 +790,7 @@ function Settings(): React.JSX.Element {
     // Why: the pending section refs do not schedule a render by themselves.
     // When search is already clear, this reruns the centralized jump effect.
     setPendingNavRequestTick((tick) => tick + 1)
-  }, [setSettingsSearchQuery, settingsSearchQuery])
+  }, [confirmDiscardCommitPromptChanges, setSettingsSearchQuery, settingsSearchQuery])
 
   if (!settings) {
     return (
@@ -775,7 +817,7 @@ function Settings(): React.JSX.Element {
         hasRepos={repos.length > 0}
         searchQuery={settingsSearchQuery}
         searchInputRef={searchInputRef}
-        onBack={closeSettingsPage}
+        onBack={closeSettingsPageWithPromptGuard}
         onSearchChange={setSettingsSearchQuery}
         onSelectSection={scrollToSection}
       />
@@ -833,13 +875,19 @@ function Settings(): React.JSX.Element {
                     ...GIT_PANE_SEARCH_ENTRIES,
                     ...COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES
                   ]}
+                  forceVisible={hasUnsavedCommitPromptChanges}
                 >
                   <GitPane
                     settings={settings}
                     updateSettings={updateSettings}
                     displayedGitUsername={displayedGitUsername}
                   />
-                  <CommitMessageAiPane settings={settings} updateSettings={updateSettings} />
+                  <CommitMessageAiPane
+                    settings={settings}
+                    updateSettings={updateSettings}
+                    onCustomPromptDirtyChange={setHasUnsavedCommitPromptChanges}
+                    customPromptDiscardSignal={commitPromptDiscardSignal}
+                  />
                 </SettingsSection>
 
                 <SettingsSection

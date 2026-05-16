@@ -64,6 +64,8 @@ describe('CommitMessageAiPane', () => {
     expect(markup).toContain('Thinking effort')
     expect(markup).toContain('Higher effort produces more careful messages')
     expect(markup).toContain('Use Conventional Commits.')
+    expect(markup).toContain('Save')
+    expect(markup).toContain('Saved')
   })
 
   it('renders custom command settings for custom agents', () => {
