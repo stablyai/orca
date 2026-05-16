@@ -70,11 +70,17 @@ design-docs/
 # Machine-local agent hook endpoint files may contain auth tokens.
 /agent-hooks/
 
-# Local-only design/planning docs (not checked in)
-docs/*.md
-docs/**/*.md
-!docs/README*.md
-!docs/**/README*.md
+# Local-only design/planning docs (not checked in).
+# Durable docs must live in one of the allow-listed locations below.
+docs/**
+!docs/
+!docs/assets/
+!docs/assets/**
+!docs/readme/
+!docs/readme/**
+!docs/reference/
+!docs/reference/**
+!docs/STYLEGUIDE.md
 
 # Stably CLI (only docs/ are tracked)
 .stably/*

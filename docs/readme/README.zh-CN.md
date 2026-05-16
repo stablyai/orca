@@ -1,5 +1,5 @@
 <h1 align="center">
-  <a href="https://onOrca.dev"><img src="../resources/build/icon.png" alt="Orca" width="64" valign="middle" /></a> Orca
+  <a href="https://onOrca.dev"><img src="../../resources/build/icon.png" alt="Orca" width="64" valign="middle" /></a> Orca
 </h1>
 
 <p align="center">
@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="../README.md">English</a> · <a href="README.zh-CN.md">中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.es.md">Español</a>
+  <a href="../../README.md">English</a> · <a href="README.zh-CN.md">中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · <a href="README.es.md">Español</a>
 </p>
 
 <p align="center">
@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/file-drag.gif" alt="Orca Screenshot" width="800" />
+  <img src="../assets/file-drag.gif" alt="Orca Screenshot" width="800" />
 </p>
 
 ## 支持的智能体
@@ -31,7 +31,7 @@
 Orca 支持任何 CLI 智能体（*不仅限于以下列表*）。
 
 <p>
-  <a href="https://docs.anthropic.com/claude/docs/claude-code"><kbd><img src="assets/claude-logo.svg" width="16" valign="middle" /> Claude Code</kbd></a> &nbsp;
+  <a href="https://docs.anthropic.com/claude/docs/claude-code"><kbd><img src="../assets/claude-logo.svg" width="16" valign="middle" /> Claude Code</kbd></a> &nbsp;
   <a href="https://github.com/openai/codex"><kbd><img src="https://www.google.com/s2/favicons?domain=openai.com&sz=64" width="16" valign="middle" /> Codex</kbd></a> &nbsp;
   <a href="https://x.ai/cli"><kbd><img src="https://www.google.com/s2/favicons?domain=x.ai&sz=64" width="16" valign="middle" /> Grok</kbd></a> &nbsp;
   <a href="https://github.com/google-gemini/gemini-cli"><kbd><img src="https://www.google.com/s2/favicons?domain=gemini.google.com&sz=64" width="16" valign="middle" /> Gemini</kbd></a> &nbsp;
@@ -47,7 +47,7 @@ Orca 支持任何 CLI 智能体（*不仅限于以下列表*）。
   <a href="https://www.codebuff.com/docs/help/quick-start"><kbd><img src="https://www.google.com/s2/favicons?domain=codebuff.com&sz=64" width="16" valign="middle" /> Codebuff</kbd></a> &nbsp;
   <a href="https://docs.continue.dev/guides/cli"><kbd><img src="https://www.google.com/s2/favicons?domain=continue.dev&sz=64" width="16" valign="middle" /> Continue</kbd></a> &nbsp;
   <a href="https://cursor.com/cli"><kbd><img src="https://www.google.com/s2/favicons?domain=cursor.com&sz=64" width="16" valign="middle" /> Cursor</kbd></a> &nbsp;
-  <a href="https://docs.factory.ai/cli/getting-started/quickstart"><kbd><img src="assets/droid-logo.svg" width="16" valign="middle" /> Droid</kbd></a> &nbsp;
+  <a href="https://docs.factory.ai/cli/getting-started/quickstart"><kbd><img src="../assets/droid-logo.svg" width="16" valign="middle" /> Droid</kbd></a> &nbsp;
   <a href="https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli"><kbd><img src="https://www.google.com/s2/favicons?domain=github.com&sz=64" width="16" valign="middle" /> GitHub Copilot</kbd></a> &nbsp;
   <a href="https://kilo.ai/docs/cli"><kbd><img src="https://raw.githubusercontent.com/Kilo-Org/kilocode/main/packages/kilo-vscode/assets/icons/kilo-light.svg" width="16" valign="middle" /> Kilocode</kbd></a> &nbsp;
   <a href="https://www.kimi.com/code/docs/en/kimi-code-cli/getting-started.html"><kbd><img src="https://www.google.com/s2/favicons?domain=moonshot.cn&sz=64" width="16" valign="middle" /> Kimi</kbd></a> &nbsp;
@@ -103,7 +103,7 @@ yay -S stably-orca-git
 用手机控制你的智能体。
 
 <p align="center">
-  <picture><source srcset="assets/feature-wall/mobile-companion-app-showcase.gif" type="image/gif"><img src="assets/feature-wall/mobile-companion-app-showcase.jpg" alt="Orca 桌面端与移动 companion 应用" width="720" /></picture>
+  <picture><source srcset="../assets/feature-wall/mobile-companion-app-showcase.gif" type="image/gif"><img src="../assets/feature-wall/mobile-companion-app-showcase.jpg" alt="Orca 桌面端与移动 companion 应用" width="720" /></picture>
 </p>
 
 - **iOS:** [从 App Store 下载](https://apps.apple.com/us/app/orca-ide/id6766130217)
@@ -116,19 +116,19 @@ yay -S stably-orca-git
 点击任意卡片了解对应工作流。
 
 <p align="center">
-  <a href="https://www.onorca.dev/docs/model/worktrees"><kbd><strong>并行 Worktree</strong><br/><br/><picture><source srcset="assets/feature-wall/parallel-worktrees.gif" type="image/gif"><img src="assets/feature-wall/parallel-worktrees.jpg" alt="并行 worktree 编排" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
-  <a href="https://www.onorca.dev/docs/terminal"><kbd><strong>终端分屏</strong><br/><br/><picture><source srcset="assets/feature-wall/terminal-splits.gif" type="image/gif"><img src="assets/feature-wall/terminal-splits.jpg" alt="Ghostty 级终端分屏" width="390" /></picture><br/></kbd></a><br/><br/>
-  <a href="https://www.onorca.dev/docs/browser/design-mode"><kbd><strong>设计模式</strong><br/><br/><picture><source srcset="assets/feature-wall/design-mode.gif" type="image/gif"><img src="assets/feature-wall/design-mode.jpg" alt="内置浏览器与设计模式" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
-  <a href="https://www.onorca.dev/docs/review/linear"><kbd><strong>GitHub 与 Linear 原生集成</strong><br/><br/><picture><source srcset="assets/feature-wall/github-linear.gif" type="image/gif"><img src="assets/feature-wall/github-linear.jpg" alt="Orca 中的 GitHub 与 Linear 工作流" width="390" /></picture><br/></kbd></a><br/><br/>
-  <a href="https://www.onorca.dev/docs/agents/supported"><kbd><strong>任意 CLI 智能体</strong><br/><br/><picture><source srcset="assets/feature-wall/cli-agents.gif" type="image/gif"><img src="assets/feature-wall/cli-agents.jpg" alt="支持任意 CLI 智能体" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
-  <a href="https://www.onorca.dev/docs/ssh"><kbd><strong>SSH Worktree</strong><br/><br/><picture><source srcset="assets/feature-wall/ssh-worktrees.gif" type="image/gif"><img src="assets/feature-wall/ssh-worktrees.jpg" alt="通过 SSH 使用远程 worktree" width="390" /></picture><br/></kbd></a><br/><br/>
-  <a href="https://www.onorca.dev/docs/editing/file-explorer"><kbd><strong>拖文件给智能体</strong><br/><br/><picture><source srcset="assets/feature-wall/file-drag.gif" type="image/gif"><img src="assets/feature-wall/file-drag.jpg" alt="将文件和图片拖入智能体提示" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
-  <a href="https://www.onorca.dev/docs/review/annotate-ai-diff"><kbd><strong>标注 AI Diff</strong><br/><br/><picture><source srcset="assets/feature-wall/annotate-diff.gif" type="image/gif"><img src="assets/feature-wall/annotate-diff.jpg" alt="标注 AI 生成的 diff" width="390" /></picture><br/></kbd></a><br/><br/>
-  <a href="https://www.onorca.dev/docs/cli/overview"><kbd><strong>Orca CLI</strong><br/><br/><picture><source srcset="assets/feature-wall/orca-cli.gif" type="image/gif"><img src="assets/feature-wall/orca-cli.jpg" alt="从 CLI 脚本化 Orca" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
-  <a href="https://www.onorca.dev/docs/settings"><kbd><strong>原生搜索</strong><br/><br/><picture><source srcset="assets/feature-wall/keyboard-native.gif" type="image/gif"><img src="assets/feature-wall/keyboard-native.jpg" alt="贯穿 Orca 工作流的原生搜索" width="390" /></picture><br/></kbd></a><br/><br/>
-  <a href="https://www.onorca.dev/docs/agents/usage-tracking"><kbd><strong>账号切换与用量追踪</strong><br/><br/><picture><source srcset="assets/feature-wall/codex-accounts.gif" type="image/gif"><img src="assets/feature-wall/codex-accounts.jpg" alt="账号切换与用量追踪" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
-  <a href="https://www.onorca.dev/docs/editing/markdown"><kbd><strong>丰富仓库预览</strong><br/><br/><picture><source srcset="assets/feature-wall/markdown-editor.gif" type="image/gif"><img src="assets/feature-wall/markdown-editor.jpg" alt="Markdown、图片、PDF 和仓库文档预览" width="390" /></picture><br/></kbd></a><br/><br/>
-  <a href="https://www.onorca.dev/docs/model/tabs-panes-splits"><kbd><strong>任意分屏</strong><br/><br/><picture><source srcset="assets/feature-wall/split-screen.gif" type="image/gif"><img src="assets/feature-wall/split-screen.jpg" alt="为智能体、终端、浏览器和文件分屏" width="390" /></picture><br/></kbd></a>
+  <a href="https://www.onorca.dev/docs/model/worktrees"><kbd><strong>并行 Worktree</strong><br/><br/><picture><source srcset="../assets/feature-wall/parallel-worktrees.gif" type="image/gif"><img src="../assets/feature-wall/parallel-worktrees.jpg" alt="并行 worktree 编排" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
+  <a href="https://www.onorca.dev/docs/terminal"><kbd><strong>终端分屏</strong><br/><br/><picture><source srcset="../assets/feature-wall/terminal-splits.gif" type="image/gif"><img src="../assets/feature-wall/terminal-splits.jpg" alt="Ghostty 级终端分屏" width="390" /></picture><br/></kbd></a><br/><br/>
+  <a href="https://www.onorca.dev/docs/browser/design-mode"><kbd><strong>设计模式</strong><br/><br/><picture><source srcset="../assets/feature-wall/design-mode.gif" type="image/gif"><img src="../assets/feature-wall/design-mode.jpg" alt="内置浏览器与设计模式" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
+  <a href="https://www.onorca.dev/docs/review/linear"><kbd><strong>GitHub 与 Linear 原生集成</strong><br/><br/><picture><source srcset="../assets/feature-wall/github-linear.gif" type="image/gif"><img src="../assets/feature-wall/github-linear.jpg" alt="Orca 中的 GitHub 与 Linear 工作流" width="390" /></picture><br/></kbd></a><br/><br/>
+  <a href="https://www.onorca.dev/docs/agents/supported"><kbd><strong>任意 CLI 智能体</strong><br/><br/><picture><source srcset="../assets/feature-wall/cli-agents.gif" type="image/gif"><img src="../assets/feature-wall/cli-agents.jpg" alt="支持任意 CLI 智能体" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
+  <a href="https://www.onorca.dev/docs/ssh"><kbd><strong>SSH Worktree</strong><br/><br/><picture><source srcset="../assets/feature-wall/ssh-worktrees.gif" type="image/gif"><img src="../assets/feature-wall/ssh-worktrees.jpg" alt="通过 SSH 使用远程 worktree" width="390" /></picture><br/></kbd></a><br/><br/>
+  <a href="https://www.onorca.dev/docs/editing/file-explorer"><kbd><strong>拖文件给智能体</strong><br/><br/><picture><source srcset="../assets/feature-wall/file-drag.gif" type="image/gif"><img src="../assets/feature-wall/file-drag.jpg" alt="将文件和图片拖入智能体提示" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
+  <a href="https://www.onorca.dev/docs/review/annotate-ai-diff"><kbd><strong>标注 AI Diff</strong><br/><br/><picture><source srcset="../assets/feature-wall/annotate-diff.gif" type="image/gif"><img src="../assets/feature-wall/annotate-diff.jpg" alt="标注 AI 生成的 diff" width="390" /></picture><br/></kbd></a><br/><br/>
+  <a href="https://www.onorca.dev/docs/cli/overview"><kbd><strong>Orca CLI</strong><br/><br/><picture><source srcset="../assets/feature-wall/orca-cli.gif" type="image/gif"><img src="../assets/feature-wall/orca-cli.jpg" alt="从 CLI 脚本化 Orca" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
+  <a href="https://www.onorca.dev/docs/settings"><kbd><strong>原生搜索</strong><br/><br/><picture><source srcset="../assets/feature-wall/keyboard-native.gif" type="image/gif"><img src="../assets/feature-wall/keyboard-native.jpg" alt="贯穿 Orca 工作流的原生搜索" width="390" /></picture><br/></kbd></a><br/><br/>
+  <a href="https://www.onorca.dev/docs/agents/usage-tracking"><kbd><strong>账号切换与用量追踪</strong><br/><br/><picture><source srcset="../assets/feature-wall/codex-accounts.gif" type="image/gif"><img src="../assets/feature-wall/codex-accounts.jpg" alt="账号切换与用量追踪" width="390" /></picture><br/></kbd></a> &nbsp;&nbsp;
+  <a href="https://www.onorca.dev/docs/editing/markdown"><kbd><strong>丰富仓库预览</strong><br/><br/><picture><source srcset="../assets/feature-wall/markdown-editor.gif" type="image/gif"><img src="../assets/feature-wall/markdown-editor.jpg" alt="Markdown、图片、PDF 和仓库文档预览" width="390" /></picture><br/></kbd></a><br/><br/>
+  <a href="https://www.onorca.dev/docs/model/tabs-panes-splits"><kbd><strong>任意分屏</strong><br/><br/><picture><source srcset="../assets/feature-wall/split-screen.gif" type="image/gif"><img src="../assets/feature-wall/split-screen.jpg" alt="为智能体、终端、浏览器和文件分屏" width="390" /></picture><br/></kbd></a>
 </p>
 
 ---
