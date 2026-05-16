@@ -1196,7 +1196,9 @@ function App(): React.JSX.Element {
           Activity since that page owns its own back-out via the Close button
           in ActivityTitlebarControls. */}
       {(activeView === 'terminal' || activeView === 'tasks') && (
-        <div className="ml-auto mr-3 flex items-center">
+        // Why: when the workspace sidebar is collapsed, this header shrink-wraps
+        // and ml-auto has no spare width; keep a fixed gutter before Back.
+        <div className="ml-auto mr-3 flex items-center pl-2">
           <Tooltip>
             <TooltipTrigger asChild>
               <button
