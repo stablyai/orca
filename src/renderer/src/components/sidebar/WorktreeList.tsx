@@ -352,6 +352,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     measureElement: measureCurrentVirtualRowElement,
     overscan: 10,
     gap: 6,
+    // Why: the sidebar rows are rich cards. Flushing their React render inside
+    // TanStack's native scroll listener can make wheel input wait on card work;
+    // overscan gives the async render enough runway to stay visually filled.
+    useFlushSync: false,
     // Why: tells the virtualizer to start its internal scrollOffset at the
     // ref value rather than 0, so the first getVirtualItems() call after
     // remount picks the correct window of rows. The sibling useLayoutEffect

@@ -7,6 +7,7 @@ export type VirtualizedScrollAnchor = {
   offset: number
 } | null
 export const VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT = 'orca-record-virtualized-scroll-anchor'
+const RECORD_ANCHOR_SCROLL_IDLE_DELAY_MS = 150
 
 type UseVirtualizedScrollAnchorOptions<
   TRow,
@@ -95,17 +96,8 @@ export function useVirtualizedScrollAnchor<
     [getItemElementKey, itemElementSelector, rowIndexByKey]
   )
 
-  const recordScrollAnchor = useCallback(
+  const recordVirtualScrollAnchor = useCallback(
     (scrollTop: number) => {
-      const scrollElement = scrollElementRef.current
-      if (scrollElement) {
-        const domAnchor = findDomAnchor(scrollElement)
-        if (domAnchor) {
-          anchorRef.current = domAnchor
-          return
-        }
-      }
-
       const virtualItems = virtualizer.getVirtualItems()
       const firstVisible = virtualItems.find((item) => item.end > scrollTop)
       const row = firstVisible ? rows[firstVisible.index] : undefined
@@ -123,7 +115,23 @@ export function useVirtualizedScrollAnchor<
         offset: Math.max(0, scrollTop - firstVisible.start)
       }
     },
-    [anchorRef, findDomAnchor, getRowKey, rows, scrollElementRef, virtualizer]
+    [anchorRef, getRowKey, rows, virtualizer]
+  )
+
+  const recordScrollAnchor = useCallback(
+    (scrollTop: number) => {
+      const scrollElement = scrollElementRef.current
+      if (scrollElement) {
+        const domAnchor = findDomAnchor(scrollElement)
+        if (domAnchor) {
+          anchorRef.current = domAnchor
+          return
+        }
+      }
+
+      recordVirtualScrollAnchor(scrollTop)
+    },
+    [anchorRef, findDomAnchor, recordVirtualScrollAnchor, scrollElementRef]
   )
 
   useLayoutEffect(() => {
@@ -138,6 +146,35 @@ export function useVirtualizedScrollAnchor<
       el.scrollTop = targetOffset
     }
 
+    let frameId: number | null = null
+    let idleTimerId: number | null = null
+    const cancelScheduledRecord = (): void => {
+      if (idleTimerId !== null) {
+        window.clearTimeout(idleTimerId)
+        idleTimerId = null
+      }
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId)
+        frameId = null
+      }
+    }
+    const scheduleRecordAnchor = (): void => {
+      cancelScheduledRecord()
+      idleTimerId = window.setTimeout(() => {
+        idleTimerId = null
+        // Why: recording the row anchor reads layout. Wait until wheel scrolling
+        // is idle, then do the read on the next frame instead of the input path.
+        frameId = window.requestAnimationFrame(() => {
+          frameId = null
+          recordScrollAnchor(el.scrollTop)
+        })
+      }, RECORD_ANCHOR_SCROLL_IDLE_DELAY_MS)
+    }
+    const recordCurrentAnchor = (): void => {
+      cancelScheduledRecord()
+      scrollOffsetRef.current = el.scrollTop
+      recordScrollAnchor(el.scrollTop)
+    }
     const onScroll = (): void => {
       if (restoring) {
         // Why: during a fresh virtualizer mount, total height may still be
@@ -145,42 +182,43 @@ export function useVirtualizedScrollAnchor<
         // user's real position until the intended offset is reachable.
         if (el.scrollTop === targetOffset) {
           restoring = false
-          scrollOffsetRef.current = el.scrollTop
-          recordScrollAnchor(el.scrollTop)
+          recordCurrentAnchor()
           return
         }
         if (el.scrollHeight - el.clientHeight >= targetOffset) {
           el.scrollTop = targetOffset
           if (el.scrollTop === targetOffset) {
             restoring = false
-            scrollOffsetRef.current = el.scrollTop
-            recordScrollAnchor(el.scrollTop)
+            recordCurrentAnchor()
           }
         }
         return
       }
       scrollOffsetRef.current = el.scrollTop
-      recordScrollAnchor(el.scrollTop)
-    }
-    const recordCurrentAnchor = (): void => {
-      scrollOffsetRef.current = el.scrollTop
-      recordScrollAnchor(el.scrollTop)
+      recordVirtualScrollAnchor(el.scrollTop)
+      scheduleRecordAnchor()
     }
 
     el.addEventListener('scroll', onScroll, { passive: true })
     el.addEventListener(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, recordCurrentAnchor)
     return () => {
+      cancelScheduledRecord()
       scrollOffsetRef.current = el.scrollTop
       recordScrollAnchor(el.scrollTop)
       el.removeEventListener(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, recordCurrentAnchor)
       el.removeEventListener('scroll', onScroll)
     }
-  }, [recordScrollAnchor, scrollElementRef, scrollOffsetRef])
+  }, [recordScrollAnchor, recordVirtualScrollAnchor, scrollElementRef, scrollOffsetRef])
 
   useLayoutEffect(() => {
     const anchor = anchorRef.current
     const el = scrollElementRef.current
     if (!anchor || !el) {
+      return
+    }
+    if (virtualizer.isScrolling) {
+      // Why: remeasurement during wheel scrolling can change totalSize. Restoring
+      // the anchor in that window writes scrollTop and fights the user's wheel.
       return
     }
 
@@ -261,6 +299,7 @@ export function useVirtualizedScrollAnchor<
     scrollElementRef,
     scrollOffsetRef,
     totalSize,
-    virtualizer
+    virtualizer,
+    virtualizer.isScrolling
   ])
 }
