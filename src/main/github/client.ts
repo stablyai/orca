@@ -1302,6 +1302,42 @@ async function getRestPRByNumber(
   return mapRestPullRequest(JSON.parse(stdout) as RestPullRequest)
 }
 
+async function getPRByNumber(
+  ownerRepo: OwnerRepo,
+  number: number,
+  ghOptions: ReturnType<typeof ghRepoExecOptions>
+): Promise<PullRequestLookupData | null> {
+  try {
+    const { stdout } = await ghExecFileAsync(
+      [
+        'pr',
+        'view',
+        String(number),
+        '--repo',
+        `${ownerRepo.owner}/${ownerRepo.repo}`,
+        '--json',
+        PR_LOOKUP_JSON_FIELDS
+      ],
+      ghOptions
+    )
+    return JSON.parse(stdout) as PullRequestLookupData
+  } catch (err) {
+    // Why: deleted or manually edited linked PR metadata should fall back to
+    // branch discovery; quota/auth failures get one cheaper REST exact lookup.
+    if (isNotFoundGhError(err)) {
+      return null
+    }
+    try {
+      return await getRestPRByNumber(ownerRepo, number, ghOptions)
+    } catch (restErr) {
+      if (isNotFoundGhError(restErr)) {
+        return null
+      }
+      throw restErr
+    }
+  }
+}
+
 function isNotFoundGhError(err: unknown): boolean {
   const stderr = err instanceof Error ? err.message : String(err)
   return classifyGhError(stderr).type === 'not_found'
@@ -1311,11 +1347,10 @@ function isNotFoundGhError(err: unknown): boolean {
  * Get PR info for a given branch using gh CLI.
  * Returns null if gh is not installed, or no PR exists for the branch.
  *
- * When `linkedPRNumber` is provided and the branch lookup yields nothing,
- * falls back to looking up the PR by number. This handles "create from PR"
- * worktrees, whose branch is a fresh local branch (not the PR's head ref) —
- * the branch-keyed lookup misses, but the user still expects the linked PR
- * to surface on the worktree card.
+ * When `linkedPRNumber` is provided and the repo identity is known, starts
+ * with a direct PR-number lookup. This handles "create from PR" worktrees,
+ * whose branch is a fresh local branch, and avoids spending a branch-list
+ * request before asking for the exact PR the worktree already stores.
  */
 export async function getPRForBranch(
   repoPath: string,
@@ -1333,10 +1368,14 @@ export async function getPRForBranch(
     const ownerRepo = await getOwnerRepo(repoPath, connectionId)
     let data: PullRequestLookupData | null = null
 
+    if (ownerRepo && typeof linkedPRNumber === 'number') {
+      data = await getPRByNumber(ownerRepo, linkedPRNumber, ghOptions)
+    }
+
     // During a rebase the worktree is in detached HEAD and branch is empty.
     // An empty --head filter causes gh to return an arbitrary PR — skip the
     // branch lookup and rely on the linkedPR fallback below if available.
-    if (branchName) {
+    if (!data && branchName) {
       if (ownerRepo) {
         try {
           const { stdout } = await ghExecFileAsync(
@@ -1375,30 +1414,17 @@ export async function getPRForBranch(
       }
     }
 
-    if (!data && typeof linkedPRNumber === 'number') {
-      const args = ownerRepo
-        ? [
-            'pr',
-            'view',
-            String(linkedPRNumber),
-            '--repo',
-            `${ownerRepo.owner}/${ownerRepo.repo}`,
-            '--json',
-            PR_LOOKUP_JSON_FIELDS
-          ]
-        : ['pr', 'view', String(linkedPRNumber), '--json', PR_LOOKUP_JSON_FIELDS]
+    if (!data && !ownerRepo && typeof linkedPRNumber === 'number') {
+      const args = ['pr', 'view', String(linkedPRNumber), '--json', PR_LOOKUP_JSON_FIELDS]
       try {
         const { stdout } = await ghExecFileAsync(args, ghOptions)
         data = JSON.parse(stdout)
-      } catch (err) {
+      } catch {
         // Why: a stale linkedPRNumber (PR deleted, wrong repo, …) makes
         // `gh pr view <number>` reject. Treat that as the no-PR case so
         // callers see the historical `null` semantics instead of a thrown
         // error every poll cycle.
-        data =
-          ownerRepo && !isNotFoundGhError(err)
-            ? await getRestPRByNumber(ownerRepo, linkedPRNumber, ghOptions)
-            : null
+        data = null
       }
     }
 

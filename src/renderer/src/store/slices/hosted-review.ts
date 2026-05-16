@@ -11,7 +11,7 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-cl
 import type { AppState } from '../types'
 
 type CacheEntry<T> = { data: T | null; fetchedAt: number; linkedReviewHintKey?: string }
-type FetchOptions = { force?: boolean; repoId?: string }
+type FetchOptions = { force?: boolean; repoId?: string; staleWhileRevalidate?: boolean }
 type LinkedReviewHints = {
   linkedGitHubPR?: number | null
   linkedGitLabMR?: number | null
@@ -36,7 +36,7 @@ function isFresh<T>(entry: CacheEntry<T> | undefined): entry is CacheEntry<T> {
   return entry !== undefined && Date.now() - entry.fetchedAt < CACHE_TTL_MS
 }
 
-// Why: a branch-only null is weaker than a null after trying the persisted
+// Why: a branch-keyed lookup can describe a different PR than the persisted
 // linked review number. Track that distinction without changing the cache key.
 function linkedReviewHintKey(options?: LinkedReviewHints): string {
   const hints = [
@@ -51,11 +51,11 @@ function linkedReviewHintKey(options?: LinkedReviewHints): string {
     .join('|')
 }
 
-function shouldRefetchNullForLinkedHint(
+function shouldRefetchForLinkedHint(
   cached: CacheEntry<HostedReviewInfo> | undefined,
   hintKey: string
 ): boolean {
-  return cached?.data === null && hintKey !== '' && (cached.linkedReviewHintKey ?? '') !== hintKey
+  return cached !== undefined && hintKey !== '' && (cached.linkedReviewHintKey ?? '') !== hintKey
 }
 
 function canReuseInflightHint(inflightHintKey: string, nextHintKey: string): boolean {
@@ -175,7 +175,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     const cacheKey = getHostedReviewCacheKey(repoPath, branch, settings, options?.repoId)
     const cached = get().hostedReviewCache[cacheKey]
     const hintKey = linkedReviewHintKey(options)
-    const linkedRefetch = shouldRefetchNullForLinkedHint(cached, hintKey)
+    const linkedRefetch = shouldRefetchForLinkedHint(cached, hintKey)
     if (!options?.force && !linkedRefetch && isFresh(cached)) {
       return cached.data
     }
@@ -184,70 +184,88 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     const inflightHasRequestedHint =
       inflightRequest !== undefined &&
       canReuseInflightHint(inflightRequest.linkedReviewHintKey, hintKey)
+    const startRequest = (): Promise<HostedReviewInfo | null> => {
+      const generation = (requestGenerations.get(cacheKey) ?? 0) + 1
+      requestGenerations.set(cacheKey, generation)
+      const request = (async () => {
+        try {
+          const args = {
+            branch,
+            ...(options?.repoId !== undefined ? { repoId: options.repoId } : {}),
+            linkedGitHubPR: options?.linkedGitHubPR ?? null,
+            linkedGitLabMR: options?.linkedGitLabMR ?? null,
+            linkedBitbucketPR: options?.linkedBitbucketPR ?? null,
+            linkedGiteaPR: options?.linkedGiteaPR ?? null
+          }
+          const review =
+            target.kind === 'environment'
+              ? await callRuntimeRpc<HostedReviewInfo | null>(
+                  target,
+                  'hostedReview.forBranch',
+                  { repo: options?.repoId ?? repoPath, repoPath, ...args },
+                  // Why: remote dev boxes can be slower at `git`/`gh` lookups
+                  // than local desktop repos, especially on Windows filesystem
+                  // paths. The main-process queue caps concurrency, so a longer
+                  // timeout no longer risks a background socket stampede.
+                  { timeoutMs: 30_000 }
+                )
+              : await window.api.hostedReview.forBranch({ repoPath, ...args })
+          if (requestGenerations.get(cacheKey) === generation) {
+            set((state) => ({
+              hostedReviewCache: {
+                ...state.hostedReviewCache,
+                [cacheKey]: { data: review, fetchedAt: Date.now(), linkedReviewHintKey: hintKey }
+              }
+            }))
+          }
+          return review
+        } catch (error) {
+          console.error('Failed to fetch hosted review:', error)
+          if (requestGenerations.get(cacheKey) === generation) {
+            set((state) => ({
+              hostedReviewCache: {
+                ...state.hostedReviewCache,
+                [cacheKey]: { data: null, fetchedAt: Date.now(), linkedReviewHintKey: hintKey }
+              }
+            }))
+          }
+          return null
+        } finally {
+          const activeRequest = inflightHostedReviewRequests.get(cacheKey)
+          if (activeRequest?.generation === generation) {
+            inflightHostedReviewRequests.delete(cacheKey)
+          }
+        }
+      })()
+
+      inflightHostedReviewRequests.set(cacheKey, {
+        promise: request,
+        force: Boolean(options?.force),
+        generation,
+        linkedReviewHintKey: hintKey
+      })
+      return request
+    }
+
+    if (
+      !options?.force &&
+      !linkedRefetch &&
+      options?.staleWhileRevalidate &&
+      cached !== undefined &&
+      cached.data !== null
+    ) {
+      // Why: sidebar PR metadata can stay visible while a quiet refresh updates
+      // it; don't block card rendering on a quota-bound GitHub round trip.
+      if (!inflightRequest || !inflightHasRequestedHint) {
+        void startRequest()
+      }
+      return cached.data
+    }
+
     if (inflightRequest && (!options?.force || inflightRequest.force) && inflightHasRequestedHint) {
       return inflightRequest.promise
     }
 
-    const generation = (requestGenerations.get(cacheKey) ?? 0) + 1
-    requestGenerations.set(cacheKey, generation)
-
-    const request = (async () => {
-      try {
-        const args = {
-          branch,
-          ...(options?.repoId !== undefined ? { repoId: options.repoId } : {}),
-          linkedGitHubPR: options?.linkedGitHubPR ?? null,
-          linkedGitLabMR: options?.linkedGitLabMR ?? null,
-          linkedBitbucketPR: options?.linkedBitbucketPR ?? null,
-          linkedGiteaPR: options?.linkedGiteaPR ?? null
-        }
-        const review =
-          target.kind === 'environment'
-            ? await callRuntimeRpc<HostedReviewInfo | null>(
-                target,
-                'hostedReview.forBranch',
-                { repo: options?.repoId ?? repoPath, repoPath, ...args },
-                // Why: remote dev boxes can be slower at `git`/`gh` lookups
-                // than local desktop repos, especially on Windows filesystem
-                // paths. The main-process queue caps concurrency, so a longer
-                // timeout no longer risks a background socket stampede.
-                { timeoutMs: 30_000 }
-              )
-            : await window.api.hostedReview.forBranch({ repoPath, ...args })
-        if (requestGenerations.get(cacheKey) === generation) {
-          set((state) => ({
-            hostedReviewCache: {
-              ...state.hostedReviewCache,
-              [cacheKey]: { data: review, fetchedAt: Date.now(), linkedReviewHintKey: hintKey }
-            }
-          }))
-        }
-        return review
-      } catch (error) {
-        console.error('Failed to fetch hosted review:', error)
-        if (requestGenerations.get(cacheKey) === generation) {
-          set((state) => ({
-            hostedReviewCache: {
-              ...state.hostedReviewCache,
-              [cacheKey]: { data: null, fetchedAt: Date.now(), linkedReviewHintKey: hintKey }
-            }
-          }))
-        }
-        return null
-      } finally {
-        const activeRequest = inflightHostedReviewRequests.get(cacheKey)
-        if (activeRequest?.generation === generation) {
-          inflightHostedReviewRequests.delete(cacheKey)
-        }
-      }
-    })()
-
-    inflightHostedReviewRequests.set(cacheKey, {
-      promise: request,
-      force: Boolean(options?.force),
-      generation,
-      linkedReviewHintKey: hintKey
-    })
-    return request
+    return startRequest()
   }
 })

@@ -1,7 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import { createHostedReviewSlice, refreshHostedReviewCard } from './hosted-review'
+import {
+  createHostedReviewSlice,
+  getHostedReviewCacheKey,
+  refreshHostedReviewCard
+} from './hosted-review'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 
 const runtimeRpc = vi.hoisted(() => ({
@@ -50,6 +54,10 @@ describe('hosted review slice', () => {
   beforeEach(() => {
     mockApi.hostedReview.forBranch.mockReset()
     runtimeRpc.callRuntimeRpc.mockReset()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('fetches and caches branch review status through the common IPC surface', async () => {
@@ -200,5 +208,80 @@ describe('hosted review slice', () => {
     resolveLinkedLookup(review)
     await expect(firstLinkedFetch).resolves.toEqual(review)
     await expect(secondLinkedFetch).resolves.toEqual(review)
+  })
+
+  it('serves stale hosted review metadata while revalidating in the background', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    const updatedReview: HostedReviewInfo = {
+      ...review,
+      title: 'Updated linked PR status',
+      status: 'failure',
+      updatedAt: '2026-05-10T00:01:01.000Z'
+    }
+    let resolveRefresh: (value: typeof updatedReview) => void = () => {}
+    const refresh = new Promise<typeof updatedReview>((resolve) => {
+      resolveRefresh = resolve
+    })
+    mockApi.hostedReview.forBranch
+      .mockResolvedValueOnce(review)
+      .mockReturnValueOnce(refresh as Promise<HostedReviewInfo>)
+    const store = makeStore()
+
+    await expect(
+      store.getState().fetchHostedReviewForBranch('/repo', 'feature/pr', {
+        linkedGitHubPR: 42
+      })
+    ).resolves.toEqual(review)
+    vi.setSystemTime(60_001)
+    await expect(
+      store.getState().fetchHostedReviewForBranch('/repo', 'feature/pr', {
+        linkedGitHubPR: 42,
+        staleWhileRevalidate: true
+      })
+    ).resolves.toEqual(review)
+    await expect(
+      store.getState().fetchHostedReviewForBranch('/repo', 'feature/pr', {
+        linkedGitHubPR: 42,
+        staleWhileRevalidate: true
+      })
+    ).resolves.toEqual(review)
+
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
+    const cacheKey = getHostedReviewCacheKey('/repo', 'feature/pr')
+    expect(store.getState().hostedReviewCache[cacheKey]?.data).toEqual(review)
+
+    resolveRefresh(updatedReview)
+    await refresh
+    await Promise.resolve()
+
+    expect(store.getState().hostedReviewCache[cacheKey]?.data).toEqual(updatedReview)
+  })
+
+  it('does not serve stale metadata when a stronger linked PR hint changes the lookup', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    const linkedReview: HostedReviewInfo = {
+      ...review,
+      provider: 'github',
+      number: 42,
+      title: 'Exact linked PR',
+      url: 'https://github.com/acme/orca/pull/42'
+    }
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce(review).mockResolvedValueOnce(linkedReview)
+    const store = makeStore()
+
+    await expect(store.getState().fetchHostedReviewForBranch('/repo', 'feature/pr')).resolves.toBe(
+      review
+    )
+    vi.setSystemTime(60_001)
+    await expect(
+      store.getState().fetchHostedReviewForBranch('/repo', 'feature/pr', {
+        linkedGitHubPR: 42,
+        staleWhileRevalidate: true
+      })
+    ).resolves.toEqual(linkedReview)
+
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
   })
 })

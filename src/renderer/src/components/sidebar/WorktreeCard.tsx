@@ -211,7 +211,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
       fetchHostedReviewForBranch(repo.path, branch, {
         repoId: repo.id,
         linkedGitHubPR: worktree.linkedPR ?? null,
-        linkedGitLabMR: worktree.linkedGitLabMR ?? null
+        linkedGitLabMR: worktree.linkedGitLabMR ?? null,
+        staleWhileRevalidate: true
       })
     }
   }, [

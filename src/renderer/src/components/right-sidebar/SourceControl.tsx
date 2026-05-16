@@ -630,7 +630,8 @@ function SourceControlInner(): React.JSX.Element {
     void fetchHostedReviewForBranch(activeRepo.path, branchName, {
       repoId: activeRepo.id,
       linkedGitHubPR,
-      linkedGitLabMR
+      linkedGitLabMR,
+      staleWhileRevalidate: true
     })
   }, [
     activeRepo,
