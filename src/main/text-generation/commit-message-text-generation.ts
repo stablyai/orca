@@ -238,7 +238,12 @@ function finalizeModelDiscoveryOutput(
       error: `${spec.label} model discovery failed. Check the agent CLI configuration and try again.`
     }
   }
-  const models = spec.modelDiscovery?.parse(stdout) ?? []
+  let models = spec.modelDiscovery?.parse(stdout) ?? []
+  if (models.length === 0 && stderr.trim()) {
+    // Why: Pi currently writes its successful `--list-models` table to stderr,
+    // so exit code 0 must still allow stderr-backed discovery.
+    models = spec.modelDiscovery?.parse(stderr) ?? []
+  }
   if (models.length === 0) {
     if (spec.models.length > 0) {
       console.warn('[commit-message] Model discovery returned no models; using static fallback:', {
