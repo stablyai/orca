@@ -358,6 +358,30 @@ describe('getStatus', () => {
     ])
   })
 
+  it('omits ignored files by default and parses them when requested', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: '! dist/\n! generated/file.js\n'
+    })
+
+    const result = await getStatus('/repo', { includeIgnored: true })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        '-c',
+        'core.quotePath=false',
+        'status',
+        '--porcelain=v2',
+        '--branch',
+        '--untracked-files=all',
+        '--ignored=matching'
+      ],
+      { cwd: '/repo' }
+    )
+    expect(result.ignoredPaths).toEqual(['dist/', 'generated/file.js'])
+  })
+
   it('parses branch identity from porcelain v2 branch headers', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     existsSyncMock.mockReturnValue(false)

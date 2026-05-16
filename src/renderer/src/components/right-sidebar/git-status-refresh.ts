@@ -28,7 +28,9 @@ export async function refreshGitStatusForWorktree({
   connectionId?: string
   deps: GitStatusRefreshDeps
 }): Promise<void> {
-  const includeIgnored = settings?.showGitIgnoredFiles ?? true
+  // Why: ignored paths are needed both to decorate visible ignored files and
+  // to filter them out when the File Explorer toggle is off.
+  const includeIgnored = true
   const status = (await getRuntimeGitStatus(
     {
       settings,

@@ -595,6 +595,7 @@ describe('Store', () => {
     expect(store.getSettings().editorAutoSaveDelayMs).toBe(1000)
     expect(store.getSettings().refreshLocalBaseRefOnWorktreeCreate).toBe(false)
     expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
+    expect(store.getSettings().showGitIgnoredFiles).toBe(true)
     expect(store.getSettings().showTasksButton).toBe(true)
     expect(store.getSettings().combinedDiffFileTreeVisibleByDefault).toBe(false)
     expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'gitlab', 'linear'])

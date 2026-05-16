@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ListCollapse, Loader2, RefreshCw } from 'lucide-react'
+import { EyeOff, ListCollapse, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { FileExplorerToolbar } from './FileExplorerToolbar'
 import { FileExplorerRow, shouldShowCollapseFolderAction } from './FileExplorerRow'
@@ -49,6 +49,29 @@ function findCollapseAllButton(node: unknown): ReactElementLike {
   if (!found) {
     throw new Error('collapse all button not found')
   }
+  return found
+}
+
+function findGitIgnoredButton(node: unknown): ReactElementLike {
+  let found: ReactElementLike | null = null
+  visit(node, (entry) => {
+    if (entry.type === Button && entry.props['aria-label'] === 'Hide Git Ignored Files') {
+      found = entry
+    }
+  })
+  if (!found) {
+    throw new Error('git ignored button not found')
+  }
+  return found
+}
+
+function queryGitIgnoredButton(node: unknown): ReactElementLike | null {
+  let found: ReactElementLike | null = null
+  visit(node, (entry) => {
+    if (entry.type === Button && entry.props['aria-label'] === 'Hide Git Ignored Files') {
+      found = entry
+    }
+  })
   return found
 }
 
@@ -103,15 +126,23 @@ function makeRefreshState(
   }
 }
 
+function makeToolbar(overrides: Partial<Parameters<typeof FileExplorerToolbar>[0]> = {}) {
+  return FileExplorerToolbar({
+    repoName: 'orca',
+    refresh: makeRefreshState(),
+    canCollapseAll: false,
+    onCollapseAll: vi.fn(),
+    showGitIgnoredFilesToggle: true,
+    showGitIgnoredFiles: true,
+    onToggleGitIgnoredFiles: vi.fn(),
+    ...overrides
+  })
+}
+
 describe('FileExplorerToolbar', () => {
   it('fires the refresh action from the icon button', () => {
     const onRefresh = vi.fn()
-    const element = FileExplorerToolbar({
-      repoName: 'orca',
-      refresh: makeRefreshState({ handleRefresh: onRefresh }),
-      canCollapseAll: false,
-      onCollapseAll: vi.fn()
-    })
+    const element = makeToolbar({ refresh: makeRefreshState({ handleRefresh: onRefresh }) })
 
     const button = findRefreshButton(element)
     ;(button.props.onClick as () => void)()
@@ -124,12 +155,7 @@ describe('FileExplorerToolbar', () => {
 
   it('shows the repo name in a truncated label', () => {
     const repoName = 'really-long-repo-name-that-should-not-push-refresh-offscreen'
-    const element = FileExplorerToolbar({
-      repoName,
-      refresh: makeRefreshState(),
-      canCollapseAll: false,
-      onCollapseAll: vi.fn()
-    })
+    const element = makeToolbar({ repoName })
 
     const label = findRepoNameLabel(element, repoName)
 
@@ -139,11 +165,8 @@ describe('FileExplorerToolbar', () => {
   })
 
   it('disables the refresh button and shows a spinner while refreshing', () => {
-    const element = FileExplorerToolbar({
-      repoName: 'orca',
-      refresh: makeRefreshState({ isRefreshing: true, showRefreshSpinner: true }),
-      canCollapseAll: false,
-      onCollapseAll: vi.fn()
+    const element = makeToolbar({
+      refresh: makeRefreshState({ isRefreshing: true, showRefreshSpinner: true })
     })
 
     const button = findRefreshButton(element)
@@ -155,9 +178,7 @@ describe('FileExplorerToolbar', () => {
 
   it('fires the collapse all action from the icon button', () => {
     const onCollapseAll = vi.fn()
-    const element = FileExplorerToolbar({
-      repoName: 'orca',
-      refresh: makeRefreshState(),
+    const element = makeToolbar({
       canCollapseAll: true,
       onCollapseAll
     })
@@ -171,17 +192,29 @@ describe('FileExplorerToolbar', () => {
   })
 
   it('disables collapse all when no directories are expanded', () => {
-    const element = FileExplorerToolbar({
-      repoName: 'orca',
-      refresh: makeRefreshState(),
-      canCollapseAll: false,
-      onCollapseAll: vi.fn()
-    })
+    const element = makeToolbar({ canCollapseAll: false })
 
     const button = findCollapseAllButton(element)
 
     expect(button.props.disabled).toBe(true)
     expect(hasIcon(button, ListCollapse)).toBe(true)
+  })
+
+  it('fires the git ignored visibility toggle from the icon button', () => {
+    const onToggleGitIgnoredFiles = vi.fn()
+    const element = makeToolbar({ onToggleGitIgnoredFiles })
+
+    const button = findGitIgnoredButton(element)
+    ;(button.props.onClick as () => void)()
+
+    expect(onToggleGitIgnoredFiles).toHaveBeenCalledTimes(1)
+    expect(hasIcon(button, EyeOff)).toBe(true)
+  })
+
+  it('hides the git ignored visibility toggle for non-git folders', () => {
+    const element = makeToolbar({ showGitIgnoredFilesToggle: false })
+
+    expect(queryGitIgnoredButton(element)).toBeNull()
   })
 })
 
