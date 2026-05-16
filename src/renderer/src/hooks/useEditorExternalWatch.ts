@@ -11,11 +11,15 @@ import {
   getOpenFilesForExternalFileChange,
   notifyEditorExternalFileChange
 } from '@/components/editor/editor-autosave'
-import { hasRecentSelfWrite } from '@/components/editor/editor-self-write-registry'
+import {
+  clearSelfWrite,
+  getRecentSelfWrite,
+  type RecentSelfWrite
+} from '@/components/editor/editor-self-write-registry'
 import type { FsChangedPayload } from '../../../shared/types'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { OpenFile } from '@/store/slices/editor'
-import { subscribeRuntimeFileChanges } from '@/runtime/runtime-file-client'
+import { readRuntimeFileContent, subscribeRuntimeFileChanges } from '@/runtime/runtime-file-client'
 
 // Why: atomic-write patterns (Claude Code's Edit tool, editors like vim,
 // VSCode) land as a short burst of `update` events — or `delete + create` on
@@ -475,14 +479,10 @@ export function createExternalWatchEventHandler(
       if (matching.some((f) => f.isDirty)) {
         continue
       }
-      // Why: our own save path stamps the registry right before writeFile, so
-      // a fs:changed event arriving within the TTL is the echo of that write
-      // rather than a real external edit. Skipping the reload avoids the
-      // setContent round-trip that would otherwise reset the TipTap cursor
-      // to the end of the document mid-typing. A genuinely external edit
-      // after the TTL still reaches the editor via the next fs event.
       const absolutePath = joinPath(notification.worktreePath, notification.relativePath)
-      if (hasRecentSelfWrite(absolutePath)) {
+      const recentSelfWrite = getRecentSelfWrite(absolutePath)
+      if (recentSelfWrite) {
+        scheduleSelfWriteAwareExternalReload(target, notification, matching[0], recentSelfWrite)
         continue
       }
       scheduleDebouncedExternalReload(notification)
@@ -499,6 +499,50 @@ export function createExternalWatchEventHandler(
   }
 
   return { handleFsChanged, dispose }
+}
+
+function scheduleSelfWriteAwareExternalReload(
+  target: WatchedTarget,
+  notification: ExternalWatchNotification,
+  file: OpenFile,
+  recentSelfWrite: RecentSelfWrite
+): void {
+  if (recentSelfWrite.content === null) {
+    scheduleDebouncedExternalReload(notification)
+    return
+  }
+
+  const runtimeEnvironmentId = file.runtimeEnvironmentId ?? target.runtimeEnvironmentId
+  // Why: a recent self-write stamp only proves the path changed recently; an
+  // agent can write a newer version inside the same TTL. Compare disk content
+  // with the saved text so we suppress only the echo of Orca's own write.
+  void readRuntimeFileContent({
+    settings: runtimeEnvironmentId ? { activeRuntimeEnvironmentId: runtimeEnvironmentId } : null,
+    filePath: file.filePath,
+    relativePath: file.relativePath,
+    worktreeId: file.worktreeId,
+    connectionId: target.connectionId
+  })
+    .then((result) => {
+      if (
+        (result.isBinary || result.content !== recentSelfWrite.content) &&
+        hasCleanExternalReloadTarget(notification)
+      ) {
+        clearSelfWrite(file.filePath)
+        scheduleDebouncedExternalReload(notification)
+      }
+    })
+    .catch(() => {
+      if (hasCleanExternalReloadTarget(notification)) {
+        clearSelfWrite(file.filePath)
+        scheduleDebouncedExternalReload(notification)
+      }
+    })
+}
+
+function hasCleanExternalReloadTarget(notification: ExternalWatchNotification): boolean {
+  const matching = getOpenFilesForExternalFileChange(useAppStore.getState().openFiles, notification)
+  return matching.length > 0 && matching.every((file) => !file.isDirty)
 }
 
 export function getOverflowExternalReloadTargets(
