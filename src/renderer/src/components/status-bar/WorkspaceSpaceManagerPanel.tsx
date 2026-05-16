@@ -50,6 +50,7 @@ import { buildTreemapLayout, type TreemapRect } from './workspace-space-layout'
 import {
   filterWorkspaceSpaceRows,
   getSelectedDeletableWorkspaceIds,
+  getVisibleDeletableWorkspaceIds,
   sortWorkspaceSpaceRows,
   type WorkspaceSpaceSortDirection,
   type WorkspaceSpaceSortKey
@@ -62,6 +63,12 @@ const TREEMAP_FILLS = [
   'color-mix(in srgb, var(--primary) 24%, var(--card))',
   'color-mix(in srgb, var(--chart-1) 38%, var(--card))'
 ]
+
+type WorkspaceSpaceDeleteState = {
+  isDeleting: boolean
+  error: string | null
+  canForceDelete: boolean
+}
 
 function getTreemapFill(rect: TreemapRect, selected: boolean): string {
   if (selected) {
@@ -185,7 +192,28 @@ function SortIndicator({
   return direction === 'asc' ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />
 }
 
-function StatusBadge({ worktree }: { worktree: WorkspaceSpaceWorktree }): React.JSX.Element {
+function StatusBadge({
+  worktree,
+  deleteState
+}: {
+  worktree: WorkspaceSpaceWorktree
+  deleteState?: WorkspaceSpaceDeleteState
+}): React.JSX.Element {
+  if (deleteState?.isDeleting) {
+    return (
+      <Badge variant="outline" className="gap-1.5 text-muted-foreground">
+        <Loader2 className="size-3 animate-spin" />
+        Deleting
+      </Badge>
+    )
+  }
+  if (deleteState?.error) {
+    return (
+      <Badge variant="outline" className="border-destructive/30 text-destructive">
+        Failed
+      </Badge>
+    )
+  }
   if (worktree.status !== 'ok') {
     return (
       <Badge variant="outline" className="border-destructive/30 text-destructive">
@@ -451,23 +479,36 @@ function WorkspaceRow({
   maxSize,
   selected,
   inspected,
+  deleteState,
   onToggleSelected,
   onInspect,
-  onDelete
+  onDelete,
+  onForceDelete
 }: {
   worktree: WorkspaceSpaceWorktree
   maxSize: number
   selected: boolean
   inspected: boolean
+  deleteState?: WorkspaceSpaceDeleteState
   onToggleSelected: () => void
   onInspect: () => void
   onDelete: () => void
+  onForceDelete: () => void
 }): React.JSX.Element {
-  const canDelete = worktree.canDelete && worktree.status === 'ok'
+  const isDeleting = deleteState?.isDeleting ?? false
+  const deleteError = deleteState?.error ?? null
+  const canForceDelete = deleteState?.canForceDelete ?? false
+  const canDelete = worktree.canDelete && worktree.status === 'ok' && !isDeleting
+  const handleForceDelete = (event: React.MouseEvent<HTMLButtonElement>): void => {
+    event.preventDefault()
+    event.stopPropagation()
+    onForceDelete()
+  }
   const row = (
     <div
       role="button"
       tabIndex={0}
+      aria-busy={isDeleting}
       onClick={onInspect}
       onKeyDown={(event) => {
         if (event.key !== 'Enter' && event.key !== ' ') {
@@ -478,11 +519,12 @@ function WorkspaceRow({
       }}
       className={cn(
         'grid w-full cursor-pointer grid-cols-[1.75rem_minmax(0,1.35fr)_minmax(9rem,0.65fr)_8rem_6rem] items-center gap-3 border-b border-border/45 px-3 py-2.5 text-left text-sm transition-colors last:border-b-0 hover:bg-accent/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        inspected && 'bg-accent/55'
+        inspected && 'bg-accent/55',
+        isDeleting && 'cursor-wait opacity-50 grayscale hover:bg-transparent'
       )}
     >
       <CheckButton
-        checked={selected}
+        checked={canDelete && selected}
         disabled={!canDelete}
         label={`Select ${worktree.displayName}`}
         onClick={onToggleSelected}
@@ -503,6 +545,26 @@ function WorkspaceRow({
         <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
           {worktree.path}
         </div>
+        {deleteError ? (
+          <div className="mt-2 flex min-w-0 items-start gap-2 rounded-md border border-destructive/35 bg-destructive/8 px-2 py-1.5 text-[11px] text-destructive">
+            <AlertTriangle className="mt-0.5 size-3 shrink-0" />
+            <span className="min-w-0 flex-1 break-words" title={deleteError}>
+              {deleteError}
+            </span>
+            {canForceDelete ? (
+              <Button
+                type="button"
+                variant="destructive"
+                size="xs"
+                onClick={handleForceDelete}
+                className="h-6 shrink-0 gap-1 px-2"
+              >
+                <Trash2 className="size-3" />
+                Force
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <div className="min-w-0 text-xs">
@@ -520,7 +582,7 @@ function WorkspaceRow({
       </div>
 
       <div className="flex justify-end">
-        <StatusBadge worktree={worktree} />
+        <StatusBadge worktree={worktree} deleteState={deleteState} />
       </div>
     </div>
   )
@@ -550,6 +612,8 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
   const refreshWorkspaceSpace = useAppStore((state) => state.refreshWorkspaceSpace)
   const cancelWorkspaceSpaceScan = useAppStore((state) => state.cancelWorkspaceSpaceScan)
   const removeWorkspaceSpaceWorktrees = useAppStore((state) => state.removeWorkspaceSpaceWorktrees)
+  const removeWorktree = useAppStore((state) => state.removeWorktree)
+  const deleteStateByWorktreeId = useAppStore((state) => state.deleteStateByWorktreeId)
   const [query, setQuery] = useState('')
   const [onlyDeletable, setOnlyDeletable] = useState(false)
   const [sortKey, setSortKey] = useState<WorkspaceSpaceSortKey>('size')
@@ -569,6 +633,10 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
   }, [cancelWorkspaceSpaceScan])
 
   const sourceRows = useMemo(() => analysis?.worktrees ?? [], [analysis?.worktrees])
+  const isWorktreeDeleting = useCallback(
+    (worktreeId: string): boolean => deleteStateByWorktreeId[worktreeId]?.isDeleting ?? false,
+    [deleteStateByWorktreeId]
+  )
 
   const rows = useMemo(
     () =>
@@ -589,16 +657,16 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
     null
   const maxSize = Math.max(...rows.map((row) => row.sizeBytes), 0)
   const selectedDeletableIds = useMemo(
-    () => getSelectedDeletableWorkspaceIds(rows, selectedIds),
-    [rows, selectedIds]
+    () => getSelectedDeletableWorkspaceIds(rows, selectedIds, isWorktreeDeleting),
+    [isWorktreeDeleting, rows, selectedIds]
   )
   const selectedDeletableIdSet = useMemo(
     () => new Set(selectedDeletableIds),
     [selectedDeletableIds]
   )
   const visibleDeletableIds = useMemo(
-    () => rows.filter((row) => row.canDelete && row.status === 'ok').map((row) => row.worktreeId),
-    [rows]
+    () => getVisibleDeletableWorkspaceIds(rows, isWorktreeDeleting),
+    [isWorktreeDeleting, rows]
   )
   const allVisibleSelected =
     visibleDeletableIds.length > 0 && visibleDeletableIds.every((id) => selectedIds.has(id))
@@ -686,6 +754,32 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
     })
   }
 
+  const handleDeletedWorktrees = useCallback(
+    (deletedIds: readonly string[]): void => {
+      if (deletedIds.length === 0) {
+        return
+      }
+      removeWorkspaceSpaceWorktrees(deletedIds)
+      setInspectedWorktreeId((current) =>
+        current && deletedIds.includes(current) ? null : current
+      )
+      setTreemapZoomWorktreeId((current) =>
+        current && deletedIds.includes(current) ? null : current
+      )
+      setSelectedIds((current) => {
+        const next = new Set(current)
+        for (const id of deletedIds) {
+          next.delete(id)
+        }
+        return next
+      })
+      toast.success(deletedIds.length === 1 ? 'Workspace deleted' : 'Workspaces deleted', {
+        description: `${deletedIds.length} ${deletedIds.length === 1 ? 'workspace' : 'workspaces'} removed from Space.`
+      })
+    },
+    [removeWorkspaceSpaceWorktrees]
+  )
+
   const deleteWorktrees = useCallback(
     (worktreeIds: readonly string[]): void => {
       if (worktreeIds.length === 0) {
@@ -693,31 +787,33 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
       }
       runWorktreeBatchDelete(worktreeIds, {
         forceConfirm: true,
-        onDeleted: (deletedIds) => {
-          removeWorkspaceSpaceWorktrees(deletedIds)
-          setInspectedWorktreeId((current) =>
-            current && deletedIds.includes(current) ? null : current
-          )
-          setTreemapZoomWorktreeId((current) =>
-            current && deletedIds.includes(current) ? null : current
-          )
-          setSelectedIds((current) => {
-            if (deletedIds.length === 0) {
-              return current
-            }
-            const next = new Set(current)
-            for (const id of deletedIds) {
-              next.delete(id)
-            }
-            return next
-          })
-          toast.success(deletedIds.length === 1 ? 'Workspace deleted' : 'Workspaces deleted', {
-            description: `${deletedIds.length} ${deletedIds.length === 1 ? 'workspace' : 'workspaces'} removed from Space.`
-          })
-        }
+        onDeleted: handleDeletedWorktrees
       })
     },
-    [removeWorkspaceSpaceWorktrees]
+    [handleDeletedWorktrees]
+  )
+
+  const forceDeleteWorktree = useCallback(
+    (worktree: WorkspaceSpaceWorktree): void => {
+      // Why: Space keeps normal deletes non-force so uncommitted work is not
+      // discarded silently; a failed row gets this explicit recovery path.
+      void removeWorktree(worktree.worktreeId, true)
+        .then((result) => {
+          if (!result.ok) {
+            toast.error('Force delete failed', {
+              description: result.error
+            })
+            return
+          }
+          handleDeletedWorktrees([worktree.worktreeId])
+        })
+        .catch((error: unknown) => {
+          toast.error('Force delete failed', {
+            description: error instanceof Error ? error.message : String(error)
+          })
+        })
+    },
+    [handleDeletedWorktrees, removeWorktree]
   )
 
   const deleteSelected = (): void => {
@@ -975,9 +1071,11 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
                     maxSize={maxSize}
                     selected={selectedIds.has(worktree.worktreeId)}
                     inspected={inspectedWorktree?.worktreeId === worktree.worktreeId}
+                    deleteState={deleteStateByWorktreeId[worktree.worktreeId]}
                     onToggleSelected={() => toggleSelection(worktree.worktreeId)}
                     onInspect={() => setInspectedWorktreeId(worktree.worktreeId)}
                     onDelete={() => deleteWorktrees([worktree.worktreeId])}
+                    onForceDelete={() => forceDeleteWorktree(worktree)}
                   />
                 ))
               )}

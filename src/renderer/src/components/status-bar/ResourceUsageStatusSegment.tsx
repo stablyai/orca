@@ -661,6 +661,9 @@ export function ResourceUsageStatusSegment({
   const setActiveView = useAppStore((s) => s.setActiveView)
   const openModal = useAppStore((s) => s.openModal)
   const openSpacePage = useAppStore((s) => s.openSpacePage)
+  const activeView = useAppStore((s) => s.activeView)
+  const workspaceSpaceScannedAt = useAppStore((s) => s.workspaceSpaceAnalysis?.scannedAt ?? null)
+  const workspaceSpaceScanning = useAppStore((s) => s.workspaceSpaceScanning)
   const repos = useAppStore((s) => s.repos)
   const allWorktrees = useAllWorktrees()
   const activeRuntimeEnvironmentId = useAppStore(
@@ -677,6 +680,9 @@ export function ResourceUsageStatusSegment({
   const [sessionsError, setSessionsError] = useState(false)
   const [killConfirm, setKillConfirm] = useState<UnifiedSessionRow | null>(null)
   const [killing, setKilling] = useState(false)
+  const [spaceScanReady, setSpaceScanReady] = useState(false)
+  const previousSpaceScanningRef = useRef(workspaceSpaceScanning)
+  const lastSeenSpaceScanAtRef = useRef<number | null>(workspaceSpaceScannedAt)
   // Why: this segment only understands the local Electron PTY/resource daemon.
   // While a runtime server is active, hiding local samples avoids showing or
   // killing sessions from the wrong machine.
@@ -712,6 +718,28 @@ export function ResourceUsageStatusSegment({
       void refreshSessions()
     }
   })
+
+  // Why: Space scans can finish after the user backs out of the full page or
+  // closes this popover; the status-bar trigger becomes the handoff point.
+  useEffect(() => {
+    const scannedAt = workspaceSpaceScannedAt
+    const wasScanning = previousSpaceScanningRef.current
+    const scanCompleted =
+      wasScanning &&
+      !workspaceSpaceScanning &&
+      scannedAt !== null &&
+      scannedAt !== lastSeenSpaceScanAtRef.current
+
+    if (scanCompleted) {
+      lastSeenSpaceScanAtRef.current = scannedAt
+      setSpaceScanReady(!open && activeView !== 'space')
+    } else if (spaceScanReady && (open || activeView === 'space')) {
+      setSpaceScanReady(false)
+      lastSeenSpaceScanAtRef.current = scannedAt
+    }
+
+    previousSpaceScanningRef.current = workspaceSpaceScanning
+  }, [activeView, open, spaceScanReady, workspaceSpaceScannedAt, workspaceSpaceScanning])
 
   // Poll memory + sessions when popover is open. Sessions also poll in the
   // background at a slower rate so the badge count stays reasonably fresh
@@ -1043,9 +1071,17 @@ export function ResourceUsageStatusSegment({
           <PopoverTrigger asChild>
             <button
               type="button"
-              className="inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
-              aria-label="Resource manager"
+              className="relative inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
+              aria-label={
+                spaceScanReady ? 'Resource manager, Space scan ready' : 'Resource manager'
+              }
             >
+              {spaceScanReady ? (
+                <span
+                  className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-primary"
+                  aria-hidden="true"
+                />
+              ) : null}
               <MemoryStick className="size-3 text-muted-foreground" />
               {!iconOnly && (
                 <>
@@ -1074,8 +1110,13 @@ export function ResourceUsageStatusSegment({
           </PopoverTrigger>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6}>
-          Resource Manager — {memBadgeLabel} · {sessions.length} session
-          {sessions.length === 1 ? '' : 's'}
+          <div className="space-y-0.5">
+            <div>
+              Resource Manager — {memBadgeLabel} · {sessions.length} session
+              {sessions.length === 1 ? '' : 's'}
+            </div>
+            {spaceScanReady ? <div className="text-primary">Space scan ready</div> : null}
+          </div>
         </TooltipContent>
       </Tooltip>
 
