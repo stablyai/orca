@@ -135,7 +135,8 @@ describe('fetchClaudeRateLimits', () => {
       'https://api.anthropic.com/api/oauth/usage',
       expect.objectContaining({
         headers: expect.objectContaining({
-          Authorization: 'Bearer oauth-token'
+          Authorization: 'Bearer oauth-token',
+          'User-Agent': 'claude-code/2.1.0'
         })
       })
     )
