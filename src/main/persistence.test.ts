@@ -86,6 +86,21 @@ function readDataFile(): unknown {
   return JSON.parse(readFileSync(dataFile(), 'utf-8'))
 }
 
+function collectPropertyPaths(value: unknown, property: string, prefix = ''): string[] {
+  if (!value || typeof value !== 'object') {
+    return []
+  }
+  const paths: string[] = []
+  for (const [key, child] of Object.entries(value)) {
+    const path = prefix ? `${prefix}.${key}` : key
+    if (key === property) {
+      paths.push(path)
+    }
+    paths.push(...collectPropertyPaths(child, property, path))
+  }
+  return paths
+}
+
 const makeRepo = (overrides: Partial<Repo> = {}): Repo => ({
   id: 'r1',
   path: '/repo',
@@ -595,6 +610,7 @@ describe('Store', () => {
     expect(store.getSettings().editorAutoSaveDelayMs).toBe(1000)
     expect(store.getSettings().refreshLocalBaseRefOnWorktreeCreate).toBe(false)
     expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
+    expect(store.getSettings().sourceControlViewMode).toBe('list')
     expect(store.getSettings().showTasksButton).toBe(true)
     expect(store.getSettings().combinedDiffFileTreeVisibleByDefault).toBe(false)
     expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'gitlab', 'linear'])
@@ -961,6 +977,81 @@ describe('Store', () => {
 
     store.updateSettings({ rightSidebarOpenByDefault: true })
     expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
+  })
+
+  it('updateSettings persists sourceControlViewMode as a user setting', async () => {
+    const store = await createStore()
+    expect(store.getSettings().sourceControlViewMode).toBe('list')
+
+    store.updateSettings({ sourceControlViewMode: 'tree' })
+    expect(store.getSettings().sourceControlViewMode).toBe('tree')
+  })
+
+  it('reloads sourceControlViewMode from global settings without touching workspace state', async () => {
+    const workspaceSession = {
+      activeRepoId: 'r1',
+      activeWorktreeId: 'repo1::/worktree-a',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        'repo1::/worktree-a': [
+          makeTerminalTab({
+            id: 'tab1',
+            worktreeId: 'repo1::/worktree-a'
+          })
+        ],
+        'repo1::/worktree-b': [
+          makeTerminalTab({
+            id: 'tab2',
+            worktreeId: 'repo1::/worktree-b'
+          })
+        ]
+      },
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {},
+      browserTabsByWorktree: {},
+      browserPagesByWorkspace: {},
+      activeBrowserTabIdByWorktree: {},
+      activeFileIdByWorktree: {},
+      activeTabTypeByWorktree: {},
+      browserUrlHistory: []
+    }
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [makeRepo()],
+      worktreeMeta: {
+        'repo1::/worktree-a': { status: 'active' },
+        'repo1::/worktree-b': { status: 'active' }
+      },
+      settings: { theme: 'dark' },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().sourceControlViewMode).toBe('list')
+
+    store.updateSettings({ sourceControlViewMode: 'tree' })
+    store.flush()
+
+    const persisted = readDataFile() as {
+      settings?: { sourceControlViewMode?: string }
+      workspaceSession?: typeof workspaceSession
+      worktreeMeta?: Record<string, unknown>
+    }
+    expect(persisted.settings?.sourceControlViewMode).toBe('tree')
+    expect(persisted.workspaceSession).toEqual(workspaceSession)
+    expect(persisted.worktreeMeta).toEqual({
+      'repo1::/worktree-a': { status: 'active' },
+      'repo1::/worktree-b': { status: 'active' }
+    })
+    expect(collectPropertyPaths(persisted, 'sourceControlViewMode')).toEqual([
+      'settings.sourceControlViewMode'
+    ])
+
+    const reloaded = await createStore()
+    expect(reloaded.getSettings().sourceControlViewMode).toBe('tree')
+    expect(reloaded.getWorkspaceSession().activeWorktreeId).toBe('repo1::/worktree-a')
   })
 
   // ── 10. flush writes synchronously ─────────────────────────────────

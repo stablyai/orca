@@ -1264,6 +1264,8 @@ export type OpenInApplication = {
   command: string
 }
 
+export type SourceControlViewMode = 'list' | 'tree'
+
 export type FloatingTerminalCwdRequest = {
   path?: string
 }
@@ -1363,6 +1365,8 @@ export type GlobalSettings = {
   openInApplications?: OpenInApplication[]
   rightSidebarOpenByDefault: boolean
   showGitIgnoredFiles?: boolean
+  /** Preferred Source Control changes layout. Per-user, not per-workspace. */
+  sourceControlViewMode: SourceControlViewMode
   /** Whether to show the Orca app name in the titlebar. */
   showTitlebarAppName: boolean
   /** Why: some users do not use the Tasks feature and prefer to keep the
