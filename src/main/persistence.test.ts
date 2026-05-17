@@ -222,7 +222,8 @@ describe('Store', () => {
     expect(settings.showTasksButton).toBe(true)
     expect(settings.visibleTaskProviders).toEqual(['github', 'gitlab', 'linear'])
     expect(settings.openInApplications).toEqual([])
-    expect(settings.experimentalActivity).toBe(true)
+    expect(settings.experimentalActivity).toBe(false)
+    expect(settings.experimentalActivityDefaultedOffForAllUsers).toBe(true)
     expect(settings.floatingTerminalEnabled).toBe(true)
     expect(settings.floatingTerminalDefaultedForAllUsers).toBe(true)
     expect(settings.notifications.customSoundPath).toBeNull()
@@ -615,7 +616,8 @@ describe('Store', () => {
     expect(store.getSettings().showTasksButton).toBe(true)
     expect(store.getSettings().combinedDiffFileTreeVisibleByDefault).toBe(false)
     expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'gitlab', 'linear'])
-    expect(store.getSettings().experimentalActivity).toBe(true)
+    expect(store.getSettings().experimentalActivity).toBe(false)
+    expect(store.getSettings().experimentalActivityDefaultedOffForAllUsers).toBe(true)
     expect(store.getSettings().notifications.customSoundPath).toBeNull()
     // repos should be loaded
     expect(store.getRepos()).toHaveLength(1)
@@ -1457,12 +1459,32 @@ describe('Store', () => {
     expect(store.getSettings().experimentalPet).toBe(true)
   })
 
-  it('promotes legacy experimentalActivity profiles to default-on', async () => {
+  it('defaults legacy experimentalActivity profiles off once', async () => {
     writeDataFile({
       schemaVersion: 1,
       repos: [],
       worktreeMeta: {},
-      settings: { experimentalActivity: false },
+      settings: { experimentalActivity: true },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().experimentalActivity).toBe(false)
+    expect(store.getSettings().experimentalActivityDefaultedOffForAllUsers).toBe(true)
+  })
+
+  it('preserves experimentalActivity after the default-off migration has run', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        experimentalActivity: true,
+        experimentalActivityDefaultedOffForAllUsers: true
+      },
       ui: {},
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}

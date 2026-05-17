@@ -605,12 +605,16 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         worktreeNavHistoryIndex: nextHistoryIndex
       }
     }),
-  openActivityPage: () =>
+  openActivityPage: () => {
+    if (get().settings?.experimentalActivity !== true) {
+      return
+    }
     set((state) => ({
       activeView: 'activity',
       previousViewBeforeActivity:
         state.activeView === 'activity' ? state.previousViewBeforeActivity : state.activeView
-    })),
+    }))
+  },
   closeActivityPage: () =>
     set((state) => ({
       activeView: state.previousViewBeforeActivity
@@ -660,9 +664,14 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         state.activeView === 'settings' ? state.previousViewBeforeSettings : state.activeView
     })),
   closeSettingsPage: () =>
-    set((state) => ({
-      activeView: state.previousViewBeforeSettings
-    })),
+    set((state) => {
+      const previousView =
+        state.previousViewBeforeSettings === 'activity' &&
+        state.settings?.experimentalActivity !== true
+          ? 'terminal'
+          : state.previousViewBeforeSettings
+      return { activeView: previousView }
+    }),
   settingsNavigationTarget: null,
   openSettingsTarget: (target) => set({ settingsNavigationTarget: target }),
   clearSettingsTarget: () => set({ settingsNavigationTarget: null }),

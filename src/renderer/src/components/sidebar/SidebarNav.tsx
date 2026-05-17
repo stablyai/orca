@@ -4,6 +4,7 @@ import { useAppStore } from '@/store'
 import { useRepoMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import type { GlobalSettings } from '../../../../shared/types'
 import { getTaskPresetQuery, PER_REPO_FETCH_LIMIT } from '@/lib/new-workspace'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
@@ -17,6 +18,12 @@ const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('
 // Why: the sidebar resize handle keeps a wide edge target, but primary nav
 // rows under that strip should remain clickable when their bounds overlap.
 const SIDEBAR_NAV_HIT_TARGET_CLASS = 'relative z-20'
+
+export function shouldShowAgentsButton(
+  settings: Pick<GlobalSettings, 'experimentalActivity'> | null | undefined
+): boolean {
+  return settings?.experimentalActivity === true
+}
 
 const SidebarNav = React.memo(function SidebarNav() {
   const openTaskPage = useAppStore((s) => s.openTaskPage)
@@ -38,6 +45,7 @@ const SidebarNav = React.memo(function SidebarNav() {
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
+  const showAgentsButton = useAppStore((s) => shouldShowAgentsButton(s.settings))
   const preferredVisibleTaskProviders = React.useMemo(
     () => normalizeVisibleTaskProviders(rawVisibleTaskProviders),
     [rawVisibleTaskProviders]
@@ -241,29 +249,31 @@ const SidebarNav = React.memo(function SidebarNav() {
         />
         <span className="flex-1">Automations</span>
       </button>
-      <button
-        type="button"
-        onClick={openActivityPage}
-        aria-current={activityActive ? 'page' : undefined}
-        className={cn(
-          SIDEBAR_NAV_HIT_TARGET_CLASS,
-          'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
-          activityActive
-            ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-            : 'text-sidebar-foreground/60 hover:bg-sidebar-foreground/8'
-        )}
-      >
-        <Bell
-          className={cn('size-4 shrink-0', !activityActive && 'text-sidebar-foreground/30')}
-          strokeWidth={activityActive ? 2.25 : 1.75}
-        />
-        <span className="flex-1">Agents</span>
-        {activityUnreadCount > 0 ? (
-          <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-semibold text-primary-foreground">
-            {activityUnreadCount}
-          </span>
-        ) : null}
-      </button>
+      {showAgentsButton ? (
+        <button
+          type="button"
+          onClick={openActivityPage}
+          aria-current={activityActive ? 'page' : undefined}
+          className={cn(
+            SIDEBAR_NAV_HIT_TARGET_CLASS,
+            'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+            activityActive
+              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+              : 'text-sidebar-foreground/60 hover:bg-sidebar-foreground/8'
+          )}
+        >
+          <Bell
+            className={cn('size-4 shrink-0', !activityActive && 'text-sidebar-foreground/30')}
+            strokeWidth={activityActive ? 2.25 : 1.75}
+          />
+          <span className="flex-1">Agents</span>
+          {activityUnreadCount > 0 ? (
+            <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-semibold text-primary-foreground">
+              {activityUnreadCount}
+            </span>
+          ) : null}
+        </button>
+      ) : null}
       <button
         type="button"
         onClick={() => openModal('worktree-palette')}

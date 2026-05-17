@@ -1210,6 +1210,13 @@ export class Store {
         const migratedFloatingTerminalEnabled = floatingTerminalDefaultedForAllUsers
           ? (parsed.settings?.floatingTerminalEnabled ?? true)
           : true
+        const experimentalActivityDefaultedOffForAllUsers =
+          parsed.settings?.experimentalActivityDefaultedOffForAllUsers === true
+        // Why: the Agents view moved back behind Experimental. Flip every
+        // pre-migration profile off once, then preserve future user opt-ins.
+        const migratedExperimentalActivity = experimentalActivityDefaultedOffForAllUsers
+          ? (parsed.settings?.experimentalActivity ?? false)
+          : false
         result = {
           ...defaults,
           ...parsed,
@@ -1221,10 +1228,8 @@ export class Store {
             // the old persisted flag forward once so enabled users don't lose it.
             experimentalPet:
               parsed.settings?.experimentalPet ?? readLegacySidekickFlag(parsed) ?? false,
-            // Why: Activity graduated from its experimental gate. Force the
-            // legacy flag on so existing profiles and rollback builds see the
-            // same default-on behavior as fresh installs.
-            experimentalActivity: true,
+            experimentalActivity: migratedExperimentalActivity,
+            experimentalActivityDefaultedOffForAllUsers: true,
             terminalMacOptionAsAlt: migratedOptionAsAlt,
             terminalMacOptionAsAltMigrated: true,
             floatingTerminalEnabled: migratedFloatingTerminalEnabled,

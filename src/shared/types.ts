@@ -1579,9 +1579,12 @@ export type GlobalSettings = {
   /** Legacy persisted key from before the sidekick -> pet rename. Read only
    *  during migration; new writes use experimentalPet. */
   experimentalSidekick?: boolean
-  /** Legacy persisted flag from when Activity was experimental. Activity is
-   *  now default-on and this no longer gates the page. */
+  /** Experimental: left-sidebar Agents view with a threaded feed for agent
+   *  completions, blocking states, unread state, and worktree creation events. */
   experimentalActivity: boolean
+  /** One-shot migration guard for defaulting the Agents view off for all
+   *  users. Once set, later explicit opt-ins persist normally. */
+  experimentalActivityDefaultedOffForAllUsers?: boolean
   /** Experimental: when creating a worktree, automatically symlink a
    *  user-configured set of files/folders from the primary checkout (e.g.
    *  `.env`, `node_modules`) into the new worktree. Opt-in while the
