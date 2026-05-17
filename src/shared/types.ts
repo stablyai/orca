@@ -12,6 +12,7 @@ import type { VoiceSettings } from './speech-types'
 import type { WorkspaceCleanupUIState } from './workspace-cleanup'
 import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './task-providers'
+import type { FeatureTipId } from './feature-tips'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -1837,6 +1838,9 @@ export type PersistedUIState = {
    *  and applied searches. */
   taskResumeState?: TaskResumeState
   workspaceCleanup?: WorkspaceCleanupUIState
+  /** Feature tips already surfaced to the user. Startup only opens the tips
+   *  modal when this list is missing one of the current tip ids. */
+  featureTipsSeenIds?: FeatureTipId[]
 }
 
 export const PET_SIZE_MIN = 60

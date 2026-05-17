@@ -477,6 +477,39 @@ describe('createUISlice feature tour nudge', () => {
   })
 })
 
+describe('createUISlice feature tips', () => {
+  it('marks feature tips seen and persists them once', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+
+    store.getState().markFeatureTipsSeen(['voice-dictation'])
+    store.getState().markFeatureTipsSeen(['voice-dictation'])
+
+    expect(store.getState().featureTipsSeenIds).toEqual(['voice-dictation'])
+    expect(setMock).toHaveBeenCalledTimes(1)
+    expect(setMock).toHaveBeenCalledWith({ featureTipsSeenIds: ['voice-dictation'] })
+  })
+
+  it('normalizes persisted feature tip ids during hydration', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        featureTipsSeenIds: ['voice-dictation', 'unknown', 'voice-dictation'] as never
+      })
+    )
+
+    expect(store.getState().featureTipsSeenIds).toEqual(['voice-dictation'])
+  })
+})
+
 describe('createUISlice space navigation', () => {
   it('returns to the tasks page after opening Space from an in-progress draft', () => {
     const store = createUIStore()

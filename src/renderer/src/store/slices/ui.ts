@@ -21,6 +21,7 @@ import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
   type WorkspaceCleanupDismissal
 } from '../../../../shared/workspace-cleanup'
+import { normalizeFeatureTipIds, type FeatureTipId } from '../../../../shared/feature-tips'
 import { PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items'
 import {
   normalizeVisibleTaskProviders,
@@ -336,11 +337,14 @@ export type UISlice = {
     | 'worktree-palette'
     | 'workspace-cleanup'
     | 'feature-wall'
+    | 'feature-tips'
     | 'new-workspace-composer'
     | 'confirm-orca-yaml-hooks'
   modalData: Record<string, unknown>
   openModal: (modal: UISlice['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void
+  featureTipsSeenIds: FeatureTipId[]
+  markFeatureTipsSeen: (ids: FeatureTipId[]) => void
   featureTourNudgeVisible: boolean
   showFeatureTourNudge: () => void
   dismissFeatureTourNudge: () => void
@@ -660,12 +664,35 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set((state) => ({
       activeModal: modal,
       modalData: data,
-      featureTourNudgeVisible: modal === 'feature-wall' ? false : state.featureTourNudgeVisible
+      featureTourNudgeVisible:
+        modal === 'feature-wall' || modal === 'feature-tips' ? false : state.featureTourNudgeVisible
     })),
   closeModal: () => set({ activeModal: 'none', modalData: {} }),
+  featureTipsSeenIds: [],
+  markFeatureTipsSeen: (ids) =>
+    set((s) => {
+      if (ids.length === 0) {
+        return s
+      }
+      const current = new Set(s.featureTipsSeenIds)
+      let changed = false
+      for (const id of ids) {
+        if (!current.has(id)) {
+          current.add(id)
+          changed = true
+        }
+      }
+      if (!changed) {
+        return s
+      }
+      const next = [...current]
+      window.api.ui.set({ featureTipsSeenIds: next }).catch(console.error)
+      return { featureTipsSeenIds: next }
+    }),
   featureTourNudgeVisible: false,
   showFeatureTourNudge: () => {
-    if (get().activeModal !== 'feature-wall') {
+    const activeModal = get().activeModal
+    if (activeModal !== 'feature-wall' && activeModal !== 'feature-tips') {
       set({ featureTourNudgeVisible: true })
     }
   },
@@ -964,6 +991,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         browserDefaultSearchEngine: ui.browserDefaultSearchEngine ?? null,
         browserKagiSessionLink: normalizeKagiSessionLink(ui.browserKagiSessionLink ?? ''),
         taskResumeState: sanitizeTaskResumeState(ui.taskResumeState),
+        featureTipsSeenIds: normalizeFeatureTipIds(ui.featureTipsSeenIds),
         trustedOrcaHooks: filterTrustedOrcaHooksToValidRepos(
           ui.trustedOrcaHooks ?? {},
           validRepoIds
