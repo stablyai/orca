@@ -63,6 +63,46 @@ describe('createEditorSlice right sidebar state', () => {
     store.getState().toggleRightSidebar()
     expect(store.getState().rightSidebarOpen).toBe(false)
   })
+
+  it('collapses all expanded directories for one worktree', () => {
+    const store = createEditorStore()
+    store.setState({
+      expandedDirs: {
+        'wt-1': new Set(['/repo/src', '/repo/src/components']),
+        'wt-2': new Set(['/other/packages'])
+      }
+    })
+
+    store.getState().collapseAllDirs('wt-1')
+
+    expect(store.getState().expandedDirs['wt-1']).toEqual(new Set())
+    expect(store.getState().expandedDirs['wt-2']).toEqual(new Set(['/other/packages']))
+  })
+
+  it('keeps collapse all stable when the worktree has no expanded directories', () => {
+    const store = createEditorStore()
+    const expandedDirs = { 'wt-2': new Set(['/other/packages']) }
+    store.setState({ expandedDirs })
+
+    store.getState().collapseAllDirs('wt-1')
+
+    expect(store.getState().expandedDirs).toBe(expandedDirs)
+  })
+
+  it('collapses one directory subtree without touching sibling directories', () => {
+    const store = createEditorStore()
+    store.setState({
+      expandedDirs: {
+        'wt-1': new Set(['/repo/src', '/repo/src/components', '/repo/src2', '/repo/tests']),
+        'wt-2': new Set(['/other/src'])
+      }
+    })
+
+    store.getState().collapseDirSubtree('wt-1', '/repo/src')
+
+    expect(store.getState().expandedDirs['wt-1']).toEqual(new Set(['/repo/src2', '/repo/tests']))
+    expect(store.getState().expandedDirs['wt-2']).toEqual(new Set(['/other/src']))
+  })
 })
 
 describe('createEditorSlice file search seed state', () => {

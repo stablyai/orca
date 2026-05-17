@@ -19,6 +19,8 @@ import { resolveEffectiveWindowsPowerShell } from '../providers/windows-powershe
 import { isPwshAvailable } from '../pwsh'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 
+const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
+
 export type PtySubprocessOptions = {
   sessionId: string
   cols: number
@@ -48,6 +50,17 @@ function getDefaultCwd(): string {
     return `${process.env.HOMEDRIVE}${process.env.HOMEPATH}`
   }
   return 'C:\\'
+}
+
+function removeUnspecifiedPaneIdentityEnv(
+  env: Record<string, string>,
+  explicitEnv: Record<string, string> | undefined
+): void {
+  for (const key of PANE_IDENTITY_ENV_KEYS) {
+    if (!explicitEnv || !Object.hasOwn(explicitEnv, key)) {
+      delete env[key]
+    }
+  }
 }
 
 function formatMissingDaemonPathError(kind: 'helper' | 'cwd', path: string): DaemonProtocolError {
@@ -149,6 +162,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     // restores clickable refs like `owner/repo#123` / `PR#123`.
     FORCE_HYPERLINK: '1'
   } as Record<string, string>
+  // Why: the daemon is forked from Electron and can inherit the pane identity
+  // of the terminal that launched `pn dev`; each PTY must opt into its own.
+  removeUnspecifiedPaneIdentityEnv(env, opts.env)
   removeInheritedNoColor(env)
 
   env.LANG ??= 'en_US.UTF-8'

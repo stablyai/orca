@@ -59,6 +59,44 @@ function getFallbackTabTitle(tab: TerminalTab, index?: number): string {
   )
 }
 
+function isWindowsRendererRuntime(): boolean {
+  return typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
+}
+
+function resolveCreatedTabShellOverride(
+  explicitShellOverride: string | undefined,
+  defaultWindowsShell: string | undefined,
+  isRemoteWorktree: boolean
+): string | undefined {
+  if (isRemoteWorktree) {
+    return undefined
+  }
+  if (explicitShellOverride !== undefined) {
+    return explicitShellOverride
+  }
+  if (isWindowsRendererRuntime()) {
+    return defaultWindowsShell
+  }
+  return undefined
+}
+
+function worktreeUsesRemoteConnection(
+  state: Pick<AppState, 'repos' | 'worktreesByRepo'>,
+  worktreeId: string
+): boolean {
+  const directRepoId = getRepoIdFromWorktreeId(worktreeId)
+  const directRepo = state.repos.find((repo) => repo.id === directRepoId)
+  if (directRepo) {
+    return Boolean(directRepo.connectionId)
+  }
+
+  const worktree = Object.values(state.worktreesByRepo)
+    .flat()
+    .find((entry) => entry.id === worktreeId)
+  const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
+  return Boolean(repo?.connectionId)
+}
+
 export type TerminalSlice = {
   tabsByWorktree: Record<string, TerminalTab[]>
   activeTabId: string | null
@@ -384,6 +422,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const shouldActivate = options?.activate !== false
       const nextOrdinal = getNextTerminalOrdinal(existing)
       const defaultTitle = `Terminal ${nextOrdinal}`
+      const createdShellOverride = resolveCreatedTabShellOverride(
+        shellOverride,
+        s.settings?.terminalWindowsShell,
+        // Why: SSH PTYs ignore local Windows shell selection; persisting a
+        // local shell icon would mislabel a remote terminal.
+        worktreeUsesRemoteConnection(s, worktreeId)
+      )
       tab = {
         id,
         // Why: CLI-created background sessions already own a PTY; revealing
@@ -399,7 +444,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         color: null,
         sortOrder: existing.length,
         createdAt: Date.now(),
-        ...(shellOverride !== undefined ? { shellOverride } : {}),
+        ...(createdShellOverride !== undefined ? { shellOverride: createdShellOverride } : {}),
         // Why: when Terminal.tsx's activation fallback auto-creates a tab for a
         // first-visit worktree, the resulting PTY spawn is caused by the user
         // clicking the worktree, not by work happening in it. Tagging the tab

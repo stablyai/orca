@@ -6,12 +6,13 @@ import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { basename, dirname } from '@/lib/path'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
+import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { FileExplorerBackgroundMenu } from './FileExplorerBackgroundMenu'
 import { FileExplorerToolbar } from './FileExplorerToolbar'
 import { FileExplorerTreeStatus } from './FileExplorerTreeStatus'
 import { FileExplorerVirtualRows } from './FileExplorerVirtualRows'
 import { splitPathSegments } from './path-tree'
-import { buildFolderStatusMap, buildIgnoredSet, buildStatusMap } from './status-display'
+import { buildFolderStatusMap, buildStatusMap } from './status-display'
 import { useFileDeletion } from './useFileDeletion'
 import { useFileExplorerAutoReveal } from './useFileExplorerAutoReveal'
 import { useFileExplorerHandlers } from './useFileExplorerHandlers'
@@ -31,6 +32,7 @@ import {
 } from './file-explorer-add-project-action'
 import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerSelection } from './useFileExplorerSelection'
+import { useFileExplorerGitIgnoredRows } from './useFileExplorerGitIgnoredRows'
 
 function FileExplorerInner(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -38,6 +40,8 @@ function FileExplorerInner(): React.JSX.Element {
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
   const expandedDirs = useAppStore((s) => s.expandedDirs)
+  const collapseAllDirs = useAppStore((s) => s.collapseAllDirs)
+  const collapseDirSubtree = useAppStore((s) => s.collapseDirSubtree)
   const toggleDir = useAppStore((s) => s.toggleDir)
   const pendingExplorerReveal = useAppStore((s) => s.pendingExplorerReveal)
   const clearPendingExplorerReveal = useAppStore((s) => s.clearPendingExplorerReveal)
@@ -45,13 +49,13 @@ function FileExplorerInner(): React.JSX.Element {
   const pinFile = useAppStore((s) => s.pinFile)
   const activeFileId = useAppStore((s) => s.activeFileId)
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
-  const showGitIgnoredFiles = useAppStore((s) => s.settings?.showGitIgnoredFiles ?? true)
   const openFiles = useAppStore((s) => s.openFiles)
   const closeFile = useAppStore((s) => s.closeFile)
   const openModal = useAppStore((s) => s.openModal)
 
   const worktreePath = activeWorktree?.path ?? null
   const repoName = activeRepo?.displayName ?? (worktreePath ? basename(worktreePath) : '')
+  const activeRepoSupportsGit = activeRepo ? isGitRepoKind(activeRepo) : false
 
   const expanded = useMemo(
     () =>
@@ -63,7 +67,6 @@ function FileExplorerInner(): React.JSX.Element {
     dirCache,
     setDirCache,
     flatRows,
-    rowsByPath,
     rootCache,
     rootError,
     loadDir,
@@ -71,7 +74,21 @@ function FileExplorerInner(): React.JSX.Element {
     refreshDir,
     resetAndLoad
   } = useFileExplorerTree(worktreePath, expanded, activeWorktreeId)
+  const {
+    visibleFlatRows,
+    rowsByPath,
+    ignoredByRelativePath,
+    showGitIgnoredFiles,
+    toggleGitIgnoredFiles
+  } = useFileExplorerGitIgnoredRows(activeWorktreeId, worktreePath, flatRows, activeRepoSupportsGit)
   const manualRefresh = useFileExplorerManualRefresh(refreshTree)
+  const canCollapseAll = expanded.size > 0
+  const handleCollapseAll = useCallback(() => {
+    if (!activeWorktreeId) {
+      return
+    }
+    collapseAllDirs(activeWorktreeId)
+  }, [activeWorktreeId, collapseAllDirs])
 
   const [flashingPath, setFlashingPath] = useState<string | null>(null)
   const [bgMenuOpen, setBgMenuOpen] = useState(false)
@@ -90,7 +107,7 @@ function FileExplorerInner(): React.JSX.Element {
     selectRowWithModifiers,
     preserveSelectionForContextMenu,
     copyPathsForNode
-  } = useFileExplorerSelection(flatRows, isMac)
+  } = useFileExplorerSelection(visibleFlatRows, isMac)
 
   const clearFlashTimeout = useCallback(() => {
     if (flashTimeoutRef.current !== null) {
@@ -103,15 +120,8 @@ function FileExplorerInner(): React.JSX.Element {
     () => (activeWorktreeId ? (gitStatusByWorktree[activeWorktreeId] ?? []) : []),
     [activeWorktreeId, gitStatusByWorktree]
   )
-  const ignoredPaths = useAppStore((s) =>
-    activeWorktreeId ? (s.gitIgnoredPathsByWorktree[activeWorktreeId] ?? null) : null
-  )
   const statusByRelativePath = useMemo(() => buildStatusMap(entries), [entries])
   const folderStatusByRelativePath = useMemo(() => buildFolderStatusMap(entries), [entries])
-  const ignoredByRelativePath = useMemo(
-    () => (showGitIgnoredFiles ? buildIgnoredSet(ignoredPaths ?? undefined) : new Set<string>()),
-    [ignoredPaths, showGitIgnoredFiles]
-  )
 
   const { deleteShortcutLabel, requestDelete } = useFileDeletion({
     activeWorktreeId,
@@ -196,7 +206,7 @@ function FileExplorerInner(): React.JSX.Element {
     activeWorktreeId,
     worktreePath,
     expanded,
-    flatRows,
+    flatRows: visibleFlatRows,
     scrollRef,
     refreshDir
   })
@@ -223,7 +233,7 @@ function FileExplorerInner(): React.JSX.Element {
     setSelectedPath: setSingleSelectedPath
   })
 
-  const totalCount = flatRows.length + (inlineInputIndex >= 0 ? 1 : 0)
+  const totalCount = visibleFlatRows.length + (inlineInputIndex >= 0 ? 1 : 0)
 
   const virtualizer = useVirtualizer({
     count: totalCount,
@@ -236,9 +246,9 @@ function FileExplorerInner(): React.JSX.Element {
           return '__inline_input__'
         }
         const rowIndex = index > inlineInputIndex ? index - 1 : index
-        return flatRows[rowIndex]?.path ?? `__fallback_${index}`
+        return visibleFlatRows[rowIndex]?.path ?? `__fallback_${index}`
       }
-      return flatRows[index]?.path ?? `__fallback_${index}`
+      return visibleFlatRows[index]?.path ?? `__fallback_${index}`
     }
   })
 
@@ -251,7 +261,7 @@ function FileExplorerInner(): React.JSX.Element {
     dirCache,
     rootCache,
     rowsByPath,
-    flatRows,
+    flatRows: visibleFlatRows,
     loadDir,
     setSelectedPath: setSingleSelectedPath,
     setFlashingPath,
@@ -266,7 +276,7 @@ function FileExplorerInner(): React.JSX.Element {
     pendingExplorerReveal,
     openFiles,
     rowsByPath,
-    flatRows,
+    flatRows: visibleFlatRows,
     setSelectedPath: setSingleSelectedPath,
     virtualizer
   })
@@ -280,7 +290,7 @@ function FileExplorerInner(): React.JSX.Element {
   const selectedNode = selectedPath ? (rowsByPath.get(selectedPath) ?? null) : null
   useFileExplorerKeys({
     containerRef: explorerShellRef,
-    flatRows,
+    flatRows: visibleFlatRows,
     inlineInput,
     selectedPaths,
     selectedNode,
@@ -299,9 +309,18 @@ function FileExplorerInner(): React.JSX.Element {
 
   const handleDuplicate = useFileDuplicate({ activeWorktreeId, worktreePath, refreshDir })
   const handleRowClick = useCallback(
-    (node: (typeof flatRows)[number], event: React.MouseEvent<HTMLButtonElement>) =>
+    (node: (typeof visibleFlatRows)[number], event: React.MouseEvent<HTMLButtonElement>) =>
       selectRowWithModifiers(node, event, handleClick),
     [handleClick, selectRowWithModifiers]
+  )
+  const handleCollapseFolderSubtree = useCallback(
+    (node: (typeof flatRows)[number]) => {
+      if (!activeWorktreeId || !node.isDirectory) {
+        return
+      }
+      collapseDirSubtree(activeWorktreeId, node.path)
+    },
+    [activeWorktreeId, collapseDirSubtree]
   )
 
   const handleAddFolderAsProject = useCallback(
@@ -329,7 +348,7 @@ function FileExplorerInner(): React.JSX.Element {
   // and empty states so the data-native-file-drop-target marker is always
   // present. Without this, external file drops would have no target surface
   // when the tree is empty, still loading, or showing a read error.
-  const isEmptyState = flatRows.length === 0 && !inlineInput
+  const isEmptyState = visibleFlatRows.length === 0 && !inlineInput
   const isLoading = isEmptyState && (rootCache?.loading ?? true)
   const hasError = isEmptyState && !isLoading && !!rootError
   const isEmpty = isEmptyState && !isLoading && !hasError
@@ -338,7 +357,15 @@ function FileExplorerInner(): React.JSX.Element {
   return (
     <>
       <div ref={explorerShellRef} data-orca-explorer-shell className="flex h-full min-h-0 flex-col">
-        <FileExplorerToolbar repoName={repoName} refresh={manualRefresh} />
+        <FileExplorerToolbar
+          repoName={repoName}
+          refresh={manualRefresh}
+          canCollapseAll={canCollapseAll}
+          onCollapseAll={handleCollapseAll}
+          showGitIgnoredFilesToggle={activeRepoSupportsGit}
+          showGitIgnoredFiles={showGitIgnoredFiles}
+          onToggleGitIgnoredFiles={toggleGitIgnoredFiles}
+        />
         <ScrollArea
           className={cn(
             'min-h-0 flex-1',
@@ -392,7 +419,7 @@ function FileExplorerInner(): React.JSX.Element {
             <FileExplorerVirtualRows
               virtualizer={virtualizer}
               inlineInputIndex={inlineInputIndex}
-              flatRows={flatRows}
+              flatRows={visibleFlatRows}
               inlineInput={inlineInput}
               handleInlineSubmit={handleInlineSubmit}
               dismissInlineInput={dismissInlineInput}
@@ -415,6 +442,7 @@ function FileExplorerInner(): React.JSX.Element {
               onAddFolderAsProject={handleAddFolderAsProject}
               canAddFolderAsProject={(node) => canShowAddAsProjectAction(node, activeRepo)}
               onRequestDelete={requestDelete}
+              onCollapseFolderSubtree={handleCollapseFolderSubtree}
               onMoveDrop={handleMoveDrop}
               onDragTargetChange={setDropTargetDir}
               onDragSourceChange={setDragSourcePath}

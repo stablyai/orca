@@ -4,6 +4,7 @@ import {
   GitBranchCompare,
   GitBranchDiff,
   GitBulkPaths,
+  GitCheckIgnored,
   GitCommit,
   GitCommitCompare,
   GitCommitDiff,
@@ -26,6 +27,12 @@ export const GIT_METHODS: RpcMethod[] = [
       params.includeIgnored === undefined
         ? runtime.getRuntimeGitStatus(params.worktree)
         : runtime.getRuntimeGitStatus(params.worktree, { includeIgnored: params.includeIgnored })
+  }),
+  defineMethod({
+    name: 'git.checkIgnored',
+    params: GitCheckIgnored,
+    handler: async (params, { runtime }) =>
+      runtime.checkRuntimeGitIgnoredPaths(params.worktree, params.paths)
   }),
   defineMethod({
     name: 'git.history',

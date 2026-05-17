@@ -39,6 +39,7 @@ export type AgentHookSource =
   | 'pi'
   | 'droid'
   | 'grok'
+  | 'copilot'
   | 'hermes'
 
 /** Env marker used by the remote relay. It is a transport/location marker, not

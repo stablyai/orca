@@ -41,7 +41,17 @@ type StoreState = {
   repos: { id: string; connectionId?: string | null; displayName?: string }[]
   sshConnectionStates: Map<string, { status: string }>
   cacheTimerByKey: Record<string, number | null>
-  settings: { promptCacheTimerEnabled?: boolean; activeRuntimeEnvironmentId?: string | null } | null
+  settings: {
+    promptCacheTimerEnabled?: boolean
+    activeRuntimeEnvironmentId?: string | null
+    notifications?: {
+      enabled?: boolean
+      agentTaskComplete?: boolean
+      terminalBell?: boolean
+      suppressWhenFocused?: boolean
+      customSoundPath?: string | null
+    }
+  } | null
   codexRestartNoticeByPtyId: Record<
     string,
     { previousAccountLabel: string; nextAccountLabel: string }
@@ -1150,6 +1160,7 @@ describe('connectPanePty', () => {
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
 
+    vi.useFakeTimers()
     const pane = createPane(1)
     const manager = createManager(1)
     const deps = createDeps()
@@ -1165,7 +1176,137 @@ describe('connectPanePty', () => {
 
     expect(deps.markWorktreeUnread).toHaveBeenCalledTimes(1)
     expect(deps.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+    expect(deps.dispatchNotification).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(250)
     expect(deps.dispatchNotification).toHaveBeenCalledWith({ source: 'terminal-bell' })
+  })
+
+  it('lets concurrent agent-complete notifications win over terminal bell notifications', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { useNotificationDispatch } = await vi.importActual<typeof UseNotificationDispatchModule>(
+      './use-notification-dispatch'
+    )
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    vi.useFakeTimers()
+    const dispatchNotification = useNotificationDispatch('wt-1')
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState.agentStatusByPaneKey[paneKey] = {
+      state: 'done',
+      prompt: 'Fix notification payloads',
+      updatedAt: Date.now(),
+      stateStartedAt: Date.now(),
+      agentType: 'codex',
+      paneKey,
+      terminalTitle: '* Codex done',
+      stateHistory: [],
+      lastAssistantMessage: 'Implemented the formatter.'
+    }
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({ dispatchNotification })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
+    const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
+      | ((title: string) => void)
+      | undefined
+    if (!bellHandler || !idleHandler) {
+      throw new Error('Expected bell and idle handlers to be registered')
+    }
+
+    bellHandler()
+    idleHandler('* Codex done')
+    vi.advanceTimersByTime(250)
+    await flushAsyncTicks()
+
+    expect(window.api.notifications.dispatch).toHaveBeenCalledTimes(1)
+    expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        terminalTitle: '* Codex done',
+        agentType: 'codex',
+        agentLastAssistantMessage: 'Implemented the formatter.'
+      })
+    )
+  })
+
+  it('does not suppress terminal bell notifications when agent-complete notifications are disabled', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    vi.useFakeTimers()
+    mockStoreState.settings = {
+      ...mockStoreState.settings,
+      notifications: {
+        enabled: true,
+        agentTaskComplete: false,
+        terminalBell: true,
+        suppressWhenFocused: false,
+        customSoundPath: null
+      }
+    }
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
+    const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
+      | ((title: string) => void)
+      | undefined
+    if (!bellHandler || !idleHandler) {
+      throw new Error('Expected bell and idle handlers to be registered')
+    }
+
+    bellHandler()
+    idleHandler('* Codex done')
+    vi.advanceTimersByTime(250)
+
+    expect(deps.dispatchNotification).toHaveBeenCalledWith({ source: 'terminal-bell' })
+    vi.advanceTimersByTime(1000)
+    expect(deps.dispatchNotification).not.toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'agent-task-complete' })
+    )
+  })
+
+  it('restores a suppressed terminal bell when the pending agent completion is canceled', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    vi.useFakeTimers()
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
+    const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
+      | ((title: string) => void)
+      | undefined
+    const workingHandler = createdTransportOptions[0]?.onAgentBecameWorking as
+      | (() => void)
+      | undefined
+    if (!bellHandler || !idleHandler || !workingHandler) {
+      throw new Error('Expected bell, idle, and working handlers to be registered')
+    }
+
+    bellHandler()
+    idleHandler('* Codex done')
+    workingHandler()
+    vi.advanceTimersByTime(250)
+
+    expect(deps.dispatchNotification).toHaveBeenCalledWith({ source: 'terminal-bell' })
+    expect(deps.dispatchNotification).not.toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'agent-task-complete' })
+    )
   })
 
   // Why: show-until-interact — a real keystroke through xterm onData is the
@@ -1568,6 +1709,62 @@ describe('connectPanePty', () => {
     )
   })
 
+  it('waits past the grace delay when the assistant message arrives shortly after it', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { useNotificationDispatch } = await vi.importActual<typeof UseNotificationDispatchModule>(
+      './use-notification-dispatch'
+    )
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    vi.useFakeTimers()
+    const dispatchNotification = useNotificationDispatch('wt-1')
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({ dispatchNotification })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
+      | ((title: string) => void)
+      | undefined
+    if (!idleHandler) {
+      throw new Error('Expected onAgentBecameIdle to be registered')
+    }
+
+    idleHandler('* Codex done')
+    vi.advanceTimersByTime(250)
+    await flushAsyncTicks()
+    expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(100)
+    mockStoreState.agentStatusByPaneKey[paneKey] = {
+      state: 'done',
+      prompt: 'Use the late hook status in notification',
+      updatedAt: Date.now(),
+      stateStartedAt: Date.now(),
+      agentType: 'codex',
+      paneKey,
+      terminalTitle: '* Codex done',
+      stateHistory: [],
+      lastAssistantMessage: 'Late status arrived.'
+    }
+    notifyStoreSubscribers()
+    await flushAsyncTicks()
+
+    expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        terminalTitle: '* Codex done',
+        agentType: 'codex',
+        agentState: 'done',
+        agentPrompt: 'Use the late hook status in notification',
+        agentLastAssistantMessage: 'Late status arrived.'
+      })
+    )
+  })
+
   it('does not use stale agent status from an earlier turn in task-complete notifications', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const { useNotificationDispatch } = await vi.importActual<typeof UseNotificationDispatchModule>(
@@ -1606,7 +1803,7 @@ describe('connectPanePty', () => {
     }
 
     idleHandler('* Codex done')
-    vi.advanceTimersByTime(250)
+    vi.advanceTimersByTime(1000)
     await flushAsyncTicks()
 
     const dispatchArgs = (window.api.notifications.dispatch as ReturnType<typeof vi.fn>).mock
@@ -1655,7 +1852,9 @@ describe('connectPanePty', () => {
       throw new Error('Expected onBell to be registered')
     }
 
+    vi.useFakeTimers()
     bellHandler()
+    vi.advanceTimersByTime(250)
 
     const dispatchArgs = (window.api.notifications.dispatch as ReturnType<typeof vi.fn>).mock
       .calls[0]?.[0] as Record<string, unknown> | undefined

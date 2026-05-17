@@ -15,7 +15,7 @@ type PowerSaveBlocker = {
   isStarted: (id: number) => boolean
 }
 
-type Logger = Pick<Console, 'debug' | 'warn'>
+type Logger = Pick<Console, 'warn'>
 
 type AgentAwakeServiceOptions = {
   blocker?: PowerSaveBlocker
@@ -60,13 +60,6 @@ export class AgentAwakeService {
     this.scheduleStaleTimer()
     const runningStatusCount = this.getEligibleRunningStatusCount()
     const shouldBlock = this.enabled && runningStatusCount > 0
-    this.logger.debug('[agent-awake] refresh', {
-      reason,
-      enabled: this.enabled,
-      runningStatusCount,
-      shouldBlock,
-      blockerId: this.blockerId
-    })
     if (shouldBlock) {
       this.startBlocker(reason, runningStatusCount)
     } else {
@@ -135,12 +128,6 @@ export class AgentAwakeService {
     try {
       const id = this.blocker.start('prevent-app-suspension')
       this.blockerId = id
-      this.logger.debug('[agent-awake] started blocker', {
-        reason,
-        enabled: this.enabled,
-        runningStatusCount,
-        blockerId: id
-      })
       this.reconcileBlocker('post-start')
     } catch (err) {
       this.logger.warn('[agent-awake] failed to start blocker', {
@@ -168,14 +155,7 @@ export class AgentAwakeService {
         error: err
       })
     }
-    if (!this.reconcileBlocker('post-stop')) {
-      this.logger.debug('[agent-awake] stopped blocker', {
-        reason,
-        enabled: this.enabled,
-        runningStatusCount,
-        blockerId: id
-      })
-    }
+    this.reconcileBlocker('post-stop')
   }
 
   private reconcileBlocker(reason: string): boolean {
@@ -185,11 +165,6 @@ export class AgentAwakeService {
     const id = this.blockerId
     try {
       const isStarted = this.blocker.isStarted(id)
-      this.logger.debug('[agent-awake] reconciled blocker', {
-        reason,
-        blockerId: id,
-        isStarted
-      })
       if (!isStarted) {
         this.blockerId = null
       }

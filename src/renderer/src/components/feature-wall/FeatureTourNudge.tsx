@@ -127,8 +127,14 @@ export function FeatureTourNudge(): JSX.Element | null {
             )}
           </button>
 
-          <p className="line-clamp-2 text-xs leading-snug text-muted-foreground">
+          <p
+            className="line-clamp-2 text-xs leading-snug text-muted-foreground"
+            data-feature-tour-nudge-caption
+          >
             {FEATURE_TOUR_NUDGE_TILE.caption}
+          </p>
+          <p className="text-xs leading-snug text-muted-foreground">
+            Reopen this any time from Help &gt; Feature tour.
           </p>
 
           <Button variant="default" size="sm" className="w-full gap-1.5" onClick={handleOpenTour}>

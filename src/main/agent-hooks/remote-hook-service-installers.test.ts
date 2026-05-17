@@ -12,6 +12,7 @@ import { CursorHookService } from '../cursor/hook-service'
 import { GeminiHookService } from '../gemini/hook-service'
 import { ClaudeHookService } from '../claude/hook-service'
 import { GrokHookService } from '../grok/hook-service'
+import { CopilotHookService } from '../copilot/hook-service'
 import { HermesHookService } from '../hermes/hook-service'
 
 type FakeFs = {
@@ -130,6 +131,10 @@ describe('remote hook service installers', () => {
         {
           path: '/home/dev/.orca/agent-hooks/grok-hook.sh',
           install: (sftp: SFTPWrapper) => new GrokHookService().installRemote(sftp, '/home/dev')
+        },
+        {
+          path: '/home/dev/.orca/agent-hooks/copilot-hook.sh',
+          install: (sftp: SFTPWrapper) => new CopilotHookService().installRemote(sftp, '/home/dev')
         }
       ]
 
@@ -248,6 +253,54 @@ describe('remote hook service installers', () => {
       expect(command).toMatch(/^if \[ -x /)
     }
     expect(grokConfig.hooks.PreToolUse?.[0]?.matcher).toBe('*')
+  })
+
+  it('installs remote Copilot hooks under the user-level hooks directory', async () => {
+    const { sftp, fs } = createFakeSftp()
+    fs.dirs.add('/home/dev/.copilot')
+    fs.dirs.add('/home/dev/.copilot/hooks')
+    fs.files.set(
+      '/home/dev/.copilot/hooks/orca.json',
+      JSON.stringify({
+        version: 99,
+        disableAllHooks: true,
+        hooks: {}
+      })
+    )
+
+    const status = await new CopilotHookService().installRemote(sftp, '/home/dev/')
+
+    expect(status.state).toBe('installed')
+    expect(status.configPath).toBe('/home/dev/.copilot/hooks/orca.json')
+    const config = JSON.parse(fs.files.get('/home/dev/.copilot/hooks/orca.json')!) as {
+      version: number
+      disableAllHooks?: boolean
+      hooks: Record<string, { bash?: string; timeoutSec?: number }[]>
+    }
+    expect(config.version).toBe(1)
+    for (const eventName of [
+      'SessionStart',
+      'SessionEnd',
+      'UserPromptSubmit',
+      'PreToolUse',
+      'PostToolUse',
+      'PostToolUseFailure',
+      'subagentStart',
+      'SubagentStop',
+      'PreCompact',
+      'Stop',
+      'ErrorOccurred',
+      'PermissionRequest',
+      'Notification'
+    ]) {
+      const definition = config.hooks[eventName]?.[0]
+      expect(definition?.bash).toContain('/home/dev/.orca/agent-hooks/copilot-hook.sh')
+      expect(definition?.bash).toContain(`ORCA_COPILOT_HOOK_EVENT='${eventName}'`)
+      expect(definition?.timeoutSec).toBe(5)
+    }
+    expect(config.disableAllHooks).toBeUndefined()
+    expect(fs.files.get('/home/dev/.orca/agent-hooks/copilot-hook.sh')).toContain('#!/bin/sh')
+    expect(fs.modes.get('/home/dev/.orca/agent-hooks/copilot-hook.sh')).toBe(0o755)
   })
 
   it('installs remote Hermes plugin files and enables the plugin', async () => {

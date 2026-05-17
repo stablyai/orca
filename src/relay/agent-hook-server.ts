@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: relay hook parsing, replay cache, endpoint
+   writing, and assistant-message retry state are one lifecycle unit; splitting
+   them would obscure cleanup ordering across remote PTY reconnects. */
 // Why: relay-side adapter for the shared agent-hook listener pipeline. Hosts
 // a loopback HTTP server (same shape as Orca's main-process server: bind
 // 127.0.0.1:0, bearer-token auth, /hook/<source> routing) and forwards every
@@ -19,6 +22,7 @@ import {
   clearPaneCacheState,
   createHookListenerState,
   getEndpointFileName,
+  hasPendingAgentResultText,
   HOOK_REQUEST_SLOWLORIS_MS,
   normalizeHookPayload,
   readRequestBody,
@@ -41,6 +45,8 @@ export type RelayHookForward = (envelope: AgentHookRelayEnvelope) => void
 // server is the only consumer.
 const RELAY_HOOKS_DIR_NAME = '.orca-relay'
 const RELAY_HOOKS_SUBDIR = 'agent-hooks'
+const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
+const ASSISTANT_MESSAGE_RETRY_MS = 50
 
 // Why: cap env/version metadata at 64 chars so a misbehaving agent CLI
 // cannot grow lastEnvelopeMetaByPaneKey unboundedly per pane via the cache
@@ -87,6 +93,7 @@ export class RelayAgentHookServer {
     string,
     { source: AgentHookSource; env?: string; version?: string }
   > = new Map()
+  private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private forward: RelayHookForward
 
   constructor(options: RelayHookServerOptions) {
@@ -144,6 +151,10 @@ export class RelayAgentHookServer {
     this.port = 0
     this.token = ''
     this.endpointFileWritten = false
+    for (const timer of this.assistantMessageRetryTimers.values()) {
+      clearTimeout(timer)
+    }
+    this.assistantMessageRetryTimers.clear()
     clearAllListenerCaches(this.state)
     this.lastEnvelopeMetaByPaneKey.clear()
   }
@@ -175,6 +186,7 @@ export class RelayAgentHookServer {
    *  resurfaces as a ghost event on a later reconnect. Symmetric with the
    *  local server's clearPaneState on PTY teardown. */
   clearPaneState(paneKey: string): void {
+    this.clearAssistantMessageRetry(paneKey)
     clearPaneCacheState(this.state, paneKey)
     this.lastEnvelopeMetaByPaneKey.delete(paneKey)
   }
@@ -229,13 +241,12 @@ export class RelayAgentHookServer {
       }
       const event = normalizeHookPayload(this.state, source, body, this.env)
       if (event) {
-        this.state.lastStatusByPaneKey.set(event.paneKey, event)
         // TODO: once normalizeHookPayload returns validated env/version, drop
         // bodyEnv/bodyVersion and source those from the listener result instead.
         const env = this.bodyEnv(body)
         const version = this.bodyVersion(body)
-        this.lastEnvelopeMetaByPaneKey.set(event.paneKey, { source, env, version })
-        this.forwardEvent(event, source, env, version)
+        this.applyEvent(event, source, env, version)
+        this.scheduleAssistantMessageRetry(source, body, event, env, version)
       }
       res.writeHead(204)
       res.end()
@@ -269,6 +280,77 @@ export class RelayAgentHookServer {
       payload: event.payload
     }
     this.forward(envelope)
+  }
+
+  private applyEvent(
+    event: AgentHookEventPayload,
+    source: AgentHookSource,
+    env?: string,
+    version?: string
+  ): void {
+    if (event.payload.state !== 'done' || event.payload.lastAssistantMessage) {
+      this.clearAssistantMessageRetry(event.paneKey)
+    }
+    this.state.lastStatusByPaneKey.set(event.paneKey, event)
+    this.lastEnvelopeMetaByPaneKey.set(event.paneKey, { source, env, version })
+    this.forwardEvent(event, source, env, version)
+  }
+
+  private clearAssistantMessageRetry(paneKey: string): void {
+    const timer = this.assistantMessageRetryTimers.get(paneKey)
+    if (!timer) {
+      return
+    }
+    clearTimeout(timer)
+    this.assistantMessageRetryTimers.delete(paneKey)
+  }
+
+  private scheduleAssistantMessageRetry(
+    source: AgentHookSource,
+    body: unknown,
+    original: AgentHookEventPayload,
+    env?: string,
+    version?: string,
+    attempt = 1
+  ): void {
+    if (
+      original.payload.lastAssistantMessage ||
+      !hasPendingAgentResultText(source, body) ||
+      attempt > ASSISTANT_MESSAGE_RETRY_ATTEMPTS
+    ) {
+      return
+    }
+    this.clearAssistantMessageRetry(original.paneKey)
+    const timer = setTimeout(() => {
+      try {
+        this.assistantMessageRetryTimers.delete(original.paneKey)
+        const current = this.state.lastStatusByPaneKey.get(original.paneKey)
+        if (
+          !current ||
+          current.payload.agentType !== original.payload.agentType ||
+          current.payload.prompt !== original.payload.prompt ||
+          current.payload.lastAssistantMessage
+        ) {
+          return
+        }
+        const event = normalizeHookPayload(this.state, source, body, this.env)
+        if (!event?.payload.lastAssistantMessage) {
+          this.scheduleAssistantMessageRetry(source, body, original, env, version, attempt + 1)
+          return
+        }
+        // Why: the relay runs on SSH targets too; retry from a timer so a delayed
+        // transcript/chat-history write does not block the remote hook server.
+        this.applyEvent(event, source, env, version)
+      } catch (err) {
+        process.stderr.write(
+          `[relay-hook-server] assistant message retry failed: ${err instanceof Error ? err.message : String(err)}\n`
+        )
+      }
+    }, ASSISTANT_MESSAGE_RETRY_MS)
+    this.assistantMessageRetryTimers.set(original.paneKey, timer)
+    if (typeof timer.unref === 'function') {
+      timer.unref()
+    }
   }
 
   private bodyEnv(body: unknown): string | undefined {

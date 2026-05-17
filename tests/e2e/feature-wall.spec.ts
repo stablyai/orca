@@ -51,6 +51,7 @@ test.describe('Feature tour modal', () => {
     await expect(
       orcaPage.getByText('Tasks, terminal, agents, browser, SSH, review, and more.')
     ).toBeVisible()
+    await expect(orcaPage.getByText('Reopen this any time from Help > Feature tour.')).toBeVisible()
     await expect(orcaPage.getByRole('listitem')).toHaveCount(12)
     await expect(
       orcaPage.getByRole('listitem', { name: /Remote worktrees over SSH/i })
@@ -144,9 +145,13 @@ test.describe('Feature tour modal', () => {
         'Browse GitHub and Linear tasks in-app. Start worktrees, review PRs, and approve without switching context.'
       )
     ).toBeVisible()
+    await expect(nudge.getByText('Reopen this any time from Help > Feature tour.')).toBeVisible()
     await expect
       .poll(
-        () => nudge.locator('p').evaluate((node) => node.scrollHeight <= node.clientHeight + 1),
+        () =>
+          nudge
+            .locator('[data-feature-tour-nudge-caption]')
+            .evaluate((node) => node.scrollHeight <= node.clientHeight + 1),
         {
           message: 'feature tour nudge caption should not be clipped'
         }

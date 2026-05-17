@@ -17,6 +17,7 @@ import {
 
 const OAUTH_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
 const OAUTH_BETA_HEADER = 'oauth-2025-04-20'
+const CLAUDE_CODE_USER_AGENT = 'claude-code/2.1.0'
 const API_TIMEOUT_MS = 10_000
 
 let proxyConfigured = false
@@ -266,7 +267,10 @@ async function fetchViaOAuth(token: string): Promise<ProviderRateLimits> {
     const res = await net.fetch(OAUTH_USAGE_URL, {
       headers: {
         Authorization: `Bearer ${token}`,
-        'anthropic-beta': OAUTH_BETA_HEADER
+        'anthropic-beta': OAUTH_BETA_HEADER,
+        // Why: Claude's OAuth usage endpoint is the Claude Code usage API;
+        // matching the CLI user-agent keeps Orca aligned with that contract.
+        'User-Agent': CLAUDE_CODE_USER_AGENT
       },
       signal: controller.signal
     })

@@ -86,6 +86,29 @@ export async function getRuntimeGitStatus(
   )
 }
 
+export async function getRuntimeGitIgnoredPaths(
+  context: RuntimeGitContext,
+  paths: string[]
+): Promise<string[]> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (paths.length === 0) {
+    return []
+  }
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.checkIgnored({
+      worktreePath: context.worktreePath,
+      connectionId: context.connectionId,
+      paths
+    })
+  }
+  return callRuntimeRpc<string[]>(
+    target,
+    'git.checkIgnored',
+    { worktree: context.worktreeId, paths },
+    { timeoutMs: 15_000 }
+  )
+}
+
 export async function getRuntimeGitHistory(
   context: RuntimeGitContext,
   options: GitHistoryOptions = {}

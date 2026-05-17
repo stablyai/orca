@@ -5,6 +5,10 @@ import { getMainE2EConfig } from '../e2e-config'
 
 const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
 
+function getProcessPathDelimiter(): string {
+  return process.platform === 'win32' ? ';' : ':'
+}
+
 function requestDevParentShutdown(): void {
   app.quit()
 
@@ -36,35 +40,39 @@ export function installUncaughtPipeErrorGuard(): void {
 }
 
 export function patchPackagedProcessPath(): void {
-  if (!app.isPackaged || process.platform === 'win32') {
+  if (!app.isPackaged) {
     return
   }
 
   const home = process.env.HOME ?? ''
-  const extraPaths = [
-    '/opt/homebrew/bin',
-    '/opt/homebrew/sbin',
-    '/usr/local/bin',
-    '/usr/local/sbin',
-    '/snap/bin',
-    '/home/linuxbrew/.linuxbrew/bin',
-    '/nix/var/nix/profiles/default/bin'
-  ]
+  const extraPaths: string[] = []
 
-  if (home) {
+  if (process.platform !== 'win32') {
     extraPaths.push(
-      join(home, 'bin'),
-      join(home, '.local/bin'),
-      join(home, '.nix-profile/bin'),
-      // Why: several agent CLIs ship install scripts that drop binaries into
-      // tool-specific ~/.<name>/bin directories (opencode's documented fallback,
-      // Pi's vite-plus installer). GUI-launched Electron inherits a minimal PATH
-      // without shell rc files, so these stay invisible to `which` probes — and
-      // the Agents settings page reports them as "Not installed" even when the
-      // user can run them from Terminal. See stablyai/orca#829.
-      join(home, '.opencode/bin'),
-      join(home, '.vite-plus/bin')
+      '/opt/homebrew/bin',
+      '/opt/homebrew/sbin',
+      '/usr/local/bin',
+      '/usr/local/sbin',
+      '/snap/bin',
+      '/home/linuxbrew/.linuxbrew/bin',
+      '/nix/var/nix/profiles/default/bin'
     )
+
+    if (home) {
+      extraPaths.push(
+        join(home, 'bin'),
+        join(home, '.local/bin'),
+        join(home, '.nix-profile/bin'),
+        // Why: several agent CLIs ship install scripts that drop binaries into
+        // tool-specific ~/.<name>/bin directories (opencode's documented fallback,
+        // Pi's vite-plus installer). GUI-launched Electron inherits a minimal PATH
+        // without shell rc files, so these stay invisible to `which` probes — and
+        // the Agents settings page reports them as "Not installed" even when the
+        // user can run them from Terminal. See stablyai/orca#829.
+        join(home, '.opencode/bin'),
+        join(home, '.vite-plus/bin')
+      )
+    }
   }
 
   // Why: CLI tools installed via Node version managers (nvm, volta, asdf, fnm,
@@ -72,14 +80,20 @@ export function patchPackagedProcessPath(): void {
   // resolveCodexCommand() can locate the codex binary in these directories, but
   // spawning it still fails if node itself isn't in PATH. Adding version manager
   // bin paths here fixes all spawn sites (login, rate limits, usage tracking).
+  // On Windows this also seeds user-local installer dirs, since shell hydration
+  // is POSIX-only and Start Menu launches can miss user-level PATH updates.
   extraPaths.push(...getVersionManagerBinPaths())
 
-  const currentPath = process.env.PATH ?? ''
-  const existing = new Set(currentPath.split(':'))
+  const pathKey = process.platform === 'win32' && process.env.Path !== undefined ? 'Path' : 'PATH'
+  const currentPath = process.env[pathKey] ?? ''
+  const pathDelimiter = getProcessPathDelimiter()
+  const existing = new Set(currentPath.split(pathDelimiter))
   const missing = extraPaths.filter((path) => !existing.has(path))
 
   if (missing.length > 0) {
-    process.env.PATH = [...missing, ...currentPath.split(':').filter(Boolean)].join(':')
+    process.env[pathKey] = [...missing, ...currentPath.split(pathDelimiter).filter(Boolean)].join(
+      pathDelimiter
+    )
   }
 }
 

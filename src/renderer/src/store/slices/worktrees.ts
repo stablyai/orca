@@ -423,24 +423,34 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     pushTarget,
     createdWithAgent,
     linkedLinearIssue,
+    branchNameOverride,
     workspaceStatus
   ) => {
     const retryableConflictPatterns = [
       /already exists locally/i,
       /already exists on a remote/i,
+      /^Branch ".+" already exists\./i,
       /already has pr #\d+/i
     ]
     const nextCandidateName = (current: string, attempt: number): string =>
       attempt === 0 ? current : `${current}-${attempt + 1}`
+    const nextCandidateBranchName = (
+      current: string | undefined,
+      attempt: number
+    ): string | undefined => (current ? nextCandidateName(current, attempt) : undefined)
 
     try {
       for (let attempt = 0; attempt < 25; attempt += 1) {
         const candidateName = nextCandidateName(name, attempt)
+        const candidateBranchNameOverride = nextCandidateBranchName(branchNameOverride, attempt)
         try {
           const createArgs = {
             repoId,
             name: candidateName,
             baseBranch,
+            ...(candidateBranchNameOverride
+              ? { branchNameOverride: candidateBranchNameOverride }
+              : {}),
             setupDecision,
             sparseCheckout,
             ...(displayName ? { displayName } : {}),
@@ -463,6 +473,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                     repo: repoId,
                     name: candidateName,
                     baseBranch,
+                    ...(candidateBranchNameOverride
+                      ? { branchNameOverride: candidateBranchNameOverride }
+                      : {}),
                     setupDecision,
                     sparseCheckout,
                     ...(displayName ? { displayName } : {}),

@@ -309,6 +309,7 @@ describe('registerCoreHandlers', () => {
     const codexAccounts = { marker: 'codexAccounts' }
     const claudeAccounts = { marker: 'claudeAccounts' }
     const rateLimits = { marker: 'rateLimits' }
+    const agentAwakeService = { marker: 'agentAwakeService' }
 
     registerCoreHandlers(
       store as never,
@@ -319,7 +320,11 @@ describe('registerCoreHandlers', () => {
       openCodeUsage as never,
       codexAccounts as never,
       claudeAccounts as never,
-      rateLimits as never
+      rateLimits as never,
+      null,
+      undefined,
+      undefined,
+      agentAwakeService as never
     )
 
     expect(registerClaudeUsageHandlersMock).toHaveBeenCalledWith(claudeUsage)
@@ -341,7 +346,7 @@ describe('registerCoreHandlers', () => {
     expect(registerNotificationHandlersMock).toHaveBeenCalledWith(store, runtime)
     expect(registerDeveloperPermissionHandlersMock).toHaveBeenCalled()
     expect(registerComputerUsePermissionHandlersMock).toHaveBeenCalled()
-    expect(registerSettingsHandlersMock).toHaveBeenCalledWith(store, undefined)
+    expect(registerSettingsHandlersMock).toHaveBeenCalledWith(store, agentAwakeService)
     expect(registerSkillsHandlersMock).toHaveBeenCalledWith(store)
     expect(registerWorkspaceSpaceHandlersMock).toHaveBeenCalledWith(store)
     expect(registerTelemetryHandlersMock).toHaveBeenCalledWith(store)

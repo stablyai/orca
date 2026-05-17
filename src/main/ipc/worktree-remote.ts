@@ -90,6 +90,41 @@ async function findRemoteForUrl(repoPath: string, remoteUrl: string): Promise<st
   return null
 }
 
+async function resolveCreateBranchName(
+  repoPath: string,
+  branchNameOverride: string | undefined,
+  sanitizedName: string,
+  settings: { branchPrefix: string; branchPrefixCustom?: string },
+  username: string | null
+): Promise<string> {
+  if (!branchNameOverride) {
+    return computeBranchName(sanitizedName, settings, username)
+  }
+  if (branchNameOverride.startsWith('-')) {
+    throw new Error('Branch name must not start with "-"')
+  }
+  await gitExecFileAsync(['check-ref-format', '--branch', branchNameOverride], { cwd: repoPath })
+  return branchNameOverride
+}
+
+async function resolveCreateBranchNameSsh(
+  provider: SshGitProvider,
+  repoPath: string,
+  branchNameOverride: string | undefined,
+  sanitizedName: string,
+  settings: { branchPrefix: string; branchPrefixCustom?: string },
+  username: string | null
+): Promise<string> {
+  if (!branchNameOverride) {
+    return computeBranchName(sanitizedName, settings, username)
+  }
+  if (branchNameOverride.startsWith('-')) {
+    throw new Error('Branch name must not start with "-"')
+  }
+  await provider.exec(['check-ref-format', '--branch', branchNameOverride], repoPath)
+  return branchNameOverride
+}
+
 async function ensureUniqueRemoteName(repoPath: string, preferred: string): Promise<string> {
   const { stdout } = await gitExecFileAsync(['remote'], { cwd: repoPath })
   const existing = new Set(
@@ -305,7 +340,14 @@ export async function createRemoteWorktree(
     /* no username configured */
   }
 
-  const branchName = computeBranchName(sanitizedName, settings, username)
+  const branchName = await resolveCreateBranchNameSsh(
+    provider,
+    repo.path,
+    args.branchNameOverride,
+    sanitizedName,
+    settings,
+    username
+  )
 
   // Check branch conflict on remote
   try {
@@ -578,8 +620,18 @@ export async function createLocalWorktree(
           ? `${requestedName}-${suffix}`
           : effectiveSanitizedName
 
-    branchName = computeBranchName(effectiveSanitizedName, settings, username)
-    lastBranchConflictKind = await getBranchConflictKind(repo.path, branchName)
+    branchName = await resolveCreateBranchName(
+      repo.path,
+      suffix === 1 && args.branchNameOverride
+        ? args.branchNameOverride
+        : args.branchNameOverride
+          ? `${args.branchNameOverride}-${suffix}`
+          : undefined,
+      effectiveSanitizedName,
+      settings,
+      username
+    )
+    lastBranchConflictKind = await getBranchConflictKind(repo.path, branchName, baseBranch)
     if (lastBranchConflictKind) {
       continue
     }

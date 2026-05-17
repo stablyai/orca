@@ -3,6 +3,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { joinPath } from '@/lib/path'
 import { toast } from 'sonner'
+import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal-links'
 import { openHttpLink } from '@/lib/http-link-routing'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
@@ -239,6 +240,8 @@ export type EditorSlice = {
 
   // File explorer state
   expandedDirs: Record<string, Set<string>> // worktreeId -> set of expanded dir paths
+  collapseAllDirs: (worktreeId: string) => void
+  collapseDirSubtree: (worktreeId: string, dirPath: string) => void
   toggleDir: (worktreeId: string, dirPath: string) => void
   pendingExplorerReveal: {
     worktreeId: string
@@ -705,6 +708,33 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   // File explorer
   expandedDirs: {},
+  collapseAllDirs: (worktreeId) =>
+    set((s) => {
+      const current = s.expandedDirs[worktreeId]
+      if (!current?.size) {
+        return s
+      }
+      return {
+        expandedDirs: {
+          ...s.expandedDirs,
+          [worktreeId]: new Set<string>()
+        }
+      }
+    }),
+  collapseDirSubtree: (worktreeId, dirPath) =>
+    set((s) => {
+      const current = s.expandedDirs[worktreeId]
+      if (!current?.size) {
+        return s
+      }
+      const next = new Set(
+        Array.from(current).filter((expandedDir) => !isPathInsideOrEqual(dirPath, expandedDir))
+      )
+      if (next.size === current.size) {
+        return s
+      }
+      return { expandedDirs: { ...s.expandedDirs, [worktreeId]: next } }
+    }),
   toggleDir: (worktreeId, dirPath) =>
     set((s) => {
       const current = s.expandedDirs[worktreeId] ?? new Set<string>()

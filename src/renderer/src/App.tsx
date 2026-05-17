@@ -275,6 +275,9 @@ function App(): React.JSX.Element {
     (s) => s.settings?.floatingTerminalTriggerLocation ?? 'floating-button'
   )
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
+  const showFloatingTerminalButton =
+    floatingTerminalEnabled &&
+    (floatingTerminalTriggerLocation === 'floating-button' || !statusBarVisible)
   // Why: the floating terminal is a transient overlay; hotkey minimize should
   // return keyboard focus to the surface the user was working in before it.
   const floatingTerminalReturnFocusRef = useRef<HTMLElement | null>(null)
@@ -338,7 +341,6 @@ function App(): React.JSX.Element {
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const groupBy = useAppStore((s) => s.groupBy)
-  const showWorkspaceLineage = useAppStore((s) => s.showWorkspaceLineage)
   const sortBy = useAppStore((s) => s.sortBy)
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
@@ -810,7 +812,6 @@ function App(): React.JSX.Element {
         sidebarWidth,
         rightSidebarWidth,
         groupBy,
-        showWorkspaceLineage,
         sortBy,
         showActiveOnly,
         hideDefaultBranchWorkspace,
@@ -830,7 +831,6 @@ function App(): React.JSX.Element {
     sidebarWidth,
     rightSidebarWidth,
     groupBy,
-    showWorkspaceLineage,
     sortBy,
     showActiveOnly,
     hideDefaultBranchWorkspace,
@@ -1457,6 +1457,15 @@ function App(): React.JSX.Element {
                     {activeView === 'terminal' && !activeWorktreeId ? <Landing /> : null}
                   </Suspense>
                 </div>
+                {showFloatingTerminalButton ? (
+                  <FloatingTerminalToggleButton
+                    // Why: anchor the floating trigger to the center surface so it
+                    // cannot cover the worktree sidebar or right sidebar.
+                    className="absolute bottom-8 right-3"
+                    open={floatingTerminalOpen}
+                    onToggle={() => setFloatingTerminalOpenWithFocus((open) => !open)}
+                  />
+                ) : null}
               </div>
             </div>
           </div>
@@ -1468,18 +1477,10 @@ function App(): React.JSX.Element {
           {showRightSidebarControls ? <RightSidebar /> : null}
         </div>
         {floatingTerminalEnabled ? (
-          <>
-            <FloatingTerminalPanel
-              open={floatingTerminalOpen}
-              onOpenChange={setFloatingTerminalOpenWithFocus}
-            />
-            {floatingTerminalTriggerLocation === 'floating-button' || !statusBarVisible ? (
-              <FloatingTerminalToggleButton
-                open={floatingTerminalOpen}
-                onToggle={() => setFloatingTerminalOpenWithFocus((open) => !open)}
-              />
-            ) : null}
-          </>
+          <FloatingTerminalPanel
+            open={floatingTerminalOpen}
+            onOpenChange={setFloatingTerminalOpenWithFocus}
+          />
         ) : null}
         <StatusBar floatingTerminalOpen={floatingTerminalOpen} />
         {/* Why: root overlays can render Radix <Tooltip>s; keep them inside

@@ -12,6 +12,7 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
+  ListCollapse,
   Loader2,
   Pencil,
   Trash2
@@ -215,12 +216,17 @@ type FileExplorerRowProps = {
   onAddFolderAsProject: () => void
   canAddAsProject: boolean
   onRequestDelete: () => void
+  onCollapseFolderSubtree: () => void
   onMoveDrop: (sourcePath: string, destDir: string) => void
   onDragTargetChange: (dir: string | null) => void
   onDragSourceChange: (path: string | null) => void
   onDragExpandDir: (dirPath: string) => void
   onNativeDragTargetChange: (dir: string | null) => void
   onNativeDragExpandDir: (dirPath: string) => void
+}
+
+export function shouldShowCollapseFolderAction(node: TreeNode, isExpanded: boolean): boolean {
+  return node.isDirectory && isExpanded
 }
 
 export function FileExplorerRow({
@@ -246,6 +252,7 @@ export function FileExplorerRow({
   onAddFolderAsProject,
   canAddAsProject,
   onRequestDelete,
+  onCollapseFolderSubtree,
   onMoveDrop,
   onDragTargetChange,
   onDragSourceChange,
@@ -406,6 +413,12 @@ export function FileExplorerRow({
           >
             <Eye />
             Open Markdown Preview
+          </ContextMenuItem>
+        )}
+        {shouldShowCollapseFolderAction(node, isExpanded) && (
+          <ContextMenuItem onSelect={onCollapseFolderSubtree}>
+            <ListCollapse />
+            Collapse Folder
           </ContextMenuItem>
         )}
         <ContextMenuItem

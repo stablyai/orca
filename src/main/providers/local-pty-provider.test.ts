@@ -140,6 +140,70 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.CUSTOM_VAR).toBe('custom-value')
     })
 
+    it('does not inherit parent Orca pane identity when caller omits pane env', async () => {
+      const saved = {
+        ORCA_PANE_KEY: process.env.ORCA_PANE_KEY,
+        ORCA_TAB_ID: process.env.ORCA_TAB_ID,
+        ORCA_WORKTREE_ID: process.env.ORCA_WORKTREE_ID
+      }
+      process.env.ORCA_PANE_KEY = 'parent-tab:parent-leaf'
+      process.env.ORCA_TAB_ID = 'parent-tab'
+      process.env.ORCA_WORKTREE_ID = 'parent-worktree'
+
+      try {
+        await provider.spawn({ cols: 80, rows: 24 })
+      } finally {
+        for (const [key, value] of Object.entries(saved)) {
+          if (value === undefined) {
+            delete process.env[key]
+          } else {
+            process.env[key] = value
+          }
+        }
+      }
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[2].env.ORCA_PANE_KEY).toBeUndefined()
+      expect(spawnCall[2].env.ORCA_TAB_ID).toBeUndefined()
+      expect(spawnCall[2].env.ORCA_WORKTREE_ID).toBeUndefined()
+    })
+
+    it('preserves explicit child Orca pane identity over parent env', async () => {
+      const saved = {
+        ORCA_PANE_KEY: process.env.ORCA_PANE_KEY,
+        ORCA_TAB_ID: process.env.ORCA_TAB_ID,
+        ORCA_WORKTREE_ID: process.env.ORCA_WORKTREE_ID
+      }
+      process.env.ORCA_PANE_KEY = 'parent-tab:parent-leaf'
+      process.env.ORCA_TAB_ID = 'parent-tab'
+      process.env.ORCA_WORKTREE_ID = 'parent-worktree'
+
+      try {
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          env: {
+            ORCA_PANE_KEY: 'child-tab:child-leaf',
+            ORCA_TAB_ID: 'child-tab',
+            ORCA_WORKTREE_ID: 'child-worktree'
+          }
+        })
+      } finally {
+        for (const [key, value] of Object.entries(saved)) {
+          if (value === undefined) {
+            delete process.env[key]
+          } else {
+            process.env[key] = value
+          }
+        }
+      }
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[2].env.ORCA_PANE_KEY).toBe('child-tab:child-leaf')
+      expect(spawnCall[2].env.ORCA_TAB_ID).toBe('child-tab')
+      expect(spawnCall[2].env.ORCA_WORKTREE_ID).toBe('child-worktree')
+    })
+
     it('combines HOMEDRIVE and HOMEPATH for Windows default cwd', async () => {
       const platform = Object.getOwnPropertyDescriptor(process, 'platform')
       const originalUserProfile = process.env.USERPROFILE

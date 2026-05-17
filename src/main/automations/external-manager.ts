@@ -20,7 +20,10 @@ import type { SshTarget } from '../../shared/ssh-types'
 import type { Store } from '../persistence'
 import { getActiveMultiplexer } from '../ipc/ssh'
 import { mapHermesJobs, mapOpenClawJobs } from './external-job-mappers'
-import { readHermesCronOutputRunsPage } from './hermes-cron-output'
+import {
+  clearHermesCronOutputRunCountCache,
+  readHermesCronOutputRunsPage
+} from './hermes-cron-output'
 
 const execFileAsync = promisify(execFile)
 const HERMES_HOME = process.env.HERMES_HOME?.trim() || join(homedir(), '.hermes')
@@ -398,6 +401,7 @@ export async function createExternalAutomation(
   const normalized = normalizeHermesCronMutationInput(input)
   if (input.target.type === 'local') {
     await execFileAsync('hermes', hermesCronCreateArgs(normalized), { encoding: 'utf-8' })
+    clearHermesCronOutputRunCountCache()
     return
   }
   const mux = getActiveMultiplexer(input.target.connectionId)
@@ -421,6 +425,7 @@ export async function updateExternalAutomation(
     await execFileAsync('hermes', hermesCronEditArgs(input.jobId, normalized), {
       encoding: 'utf-8'
     })
+    clearHermesCronOutputRunCountCache(input.jobId)
     return
   }
   const mux = getActiveMultiplexer(input.target.connectionId)
@@ -446,6 +451,9 @@ export async function runExternalAutomationAction(
       : openClawCommandForAction(input.action)
   if (input.target.type === 'local') {
     await execFileAsync(input.provider, ['cron', command, input.jobId], { encoding: 'utf-8' })
+    if (input.provider === 'hermes') {
+      clearHermesCronOutputRunCountCache(input.jobId)
+    }
     return
   }
   const mux = getActiveMultiplexer(input.target.connectionId)

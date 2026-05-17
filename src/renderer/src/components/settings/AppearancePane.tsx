@@ -293,15 +293,14 @@ export function AppearancePane({
 
         <SearchableSetting
           title="Show Git-Ignored Files"
-          description="Dim files matched by .gitignore in the file explorer."
+          description="Show files matched by .gitignore in the file explorer."
           keywords={['git', 'gitignore', 'ignored', 'file explorer', 'sidebar', 'hide']}
           className="flex items-center justify-between gap-4 px-1 py-2"
         >
           <div className="space-y-0.5">
             <Label>Show Git-Ignored Files</Label>
             <p className="text-xs text-muted-foreground">
-              Dim files matched by .gitignore in the file explorer. Turn off to skip the extra git
-              status work on large repos.
+              Turn off to hide files matched by .gitignore from the file explorer.
             </p>
           </div>
           <ToggleSwitchButton

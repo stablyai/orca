@@ -15,6 +15,7 @@ export type WellKnownAgentType =
   | 'gemini'
   | 'opencode'
   | 'cursor'
+  | 'copilot'
   | 'aider'
   | 'pi'
   | 'droid'
