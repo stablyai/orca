@@ -278,9 +278,7 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
           // is deleted or inaccessible at startup).  Guard against null so
           // the cleanup path doesn't crash the main process.
           if (root.subscription) {
-            void root.subscription.unsubscribe().catch(() => {
-              // Already errored — ignore cleanup failures
-            })
+            void trackLocalUnsubscribe(rootKey, root)
           }
           errorCleanedUp = true
           watchedRoots.delete(rootKey)
@@ -298,7 +296,7 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
     // orphaned.  Unsubscribe it immediately to avoid leaking a native
     // file-watcher handle that no code path would ever clean up.
     if (errorCleanedUp) {
-      void root.subscription.unsubscribe().catch(() => {})
+      void trackLocalUnsubscribe(rootKey, root)
       throw new Error(`Watcher for ${rootKey} errored during subscribe`)
     }
   } catch (err) {
