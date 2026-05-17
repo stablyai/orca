@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: this fixture keeps cross-agent hook normalization and cache behavior together so regressions in shared listener state are visible. */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import {
@@ -237,6 +237,45 @@ describe('shared agent-hook-listener', () => {
       prompt: 'ship it',
       agentType: 'grok'
     })
+  })
+
+  it('reads Grok final assistant text from chat history on Stop', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-grok-session-'))
+    const sessionId = '019e37f4-5135-7b63-a4ab-6d13aa6bf528'
+    const cwd = join(tmpDir, 'workspace')
+    const sessionDir = join(tmpDir, '.grok', 'sessions', encodeURIComponent(cwd), sessionId)
+    try {
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'chat_history.jsonl'),
+        `${[
+          JSON.stringify({ type: 'user', content: [{ type: 'text', text: 'hihi' }] }),
+          JSON.stringify({ type: 'assistant', content: 'Hi! How can I help you today?' })
+        ].join('\n')}\n`
+      )
+
+      normalizeHookPayload(
+        state,
+        'grok',
+        { paneKey: PANE_KEY, payload: { hookEventName: 'user_prompt_submit', prompt: 'hihi' } },
+        'production'
+      )
+
+      const done = normalizeHookPayload(
+        state,
+        'grok',
+        {
+          paneKey: PANE_KEY,
+          payload: { hookEventName: 'Stop', sessionId, cwd, grokHome: join(tmpDir, '.grok') }
+        },
+        'production'
+      )
+
+      expect(done?.payload.state).toBe('done')
+      expect(done?.payload.lastAssistantMessage).toBe('Hi! How can I help you today?')
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
   })
 
   it('normalizes Hermes pre_llm_call to a working turn with prompt text', () => {

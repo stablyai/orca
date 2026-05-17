@@ -12,6 +12,7 @@
 // docs/design/agent-status-over-ssh.md §3 ("relay normalizes; Orca routes").
 import type { IncomingMessage } from 'http'
 import { randomUUID } from 'crypto'
+import { homedir } from 'os'
 import {
   chmodSync,
   closeSync,
@@ -494,7 +495,8 @@ function extractAssistantTextFromLine(line: string): string | undefined {
     }
   }
   const nestedMessage = record.message as Record<string, unknown> | undefined
-  const role = record.role ?? nestedMessage?.role
+  const role =
+    record.role ?? nestedMessage?.role ?? (record.type === 'assistant' ? 'assistant' : undefined)
   if (role !== 'assistant') {
     return undefined
   }
@@ -524,6 +526,21 @@ function readLastAssistantFromTranscript(transcriptPath: unknown): string | unde
     return undefined
   }
   return readLastAssistantFromTranscriptOnce(transcriptPath)
+}
+
+function readLastAssistantFromGrokChatHistory(
+  hookPayload: Record<string, unknown>
+): string | undefined {
+  const sessionId = readFirstString(hookPayload, ['sessionId', 'session_id'])
+  const cwd = readFirstString(hookPayload, ['cwd', 'workspaceRoot', 'workspace_root'])
+  if (!sessionId || !cwd) {
+    return undefined
+  }
+  const grokHome =
+    readFirstString(hookPayload, ['grokHome', 'grok_home']) ?? join(homedir(), '.grok')
+  return readLastAssistantFromTranscriptOnce(
+    join(grokHome, 'sessions', encodeURIComponent(cwd), sessionId, 'chat_history.jsonl')
+  )
 }
 
 function readLastAssistantFromTranscriptOnce(transcriptPath: string): string | undefined {
@@ -1085,6 +1102,10 @@ function extractGrokToolFields(
     )
     if (fromTranscript) {
       return { lastAssistantMessage: fromTranscript }
+    }
+    const fromChatHistory = readLastAssistantFromGrokChatHistory(hookPayload)
+    if (fromChatHistory) {
+      return { lastAssistantMessage: fromChatHistory }
     }
   }
   return {}
