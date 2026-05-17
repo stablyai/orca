@@ -335,10 +335,9 @@ export type TerminalTab = {
   createdAt: number
   /** Bumped on shutdown so TerminalPane remounts with a fresh PTY. */
   generation?: number
-  /** Why: records the shell this tab was explicitly opened with (e.g. 'wsl.exe'
-   *  from the "+" submenu) so the PTY can re-use the same shell on reconnect
-   *  without needing the user to interact with the tab again. Undefined means
-   *  "use the default shell setting". */
+  /** Why: records the shell this tab was opened with (e.g. 'wsl.exe') so the
+   *  PTY and tab icon stay stable even if the default shell setting changes
+   *  later. Older persisted tabs may omit this field. */
   shellOverride?: string
   /** Why: when `setActiveWorktree` bumps generation on all-dead tabs to drive a
    *  TerminalPane remount, the fresh PTY that results is caused by navigation,
