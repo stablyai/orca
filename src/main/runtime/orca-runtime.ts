@@ -557,7 +557,7 @@ type WorktreeLineageResolution =
 
 type RuntimeWorktreeScanResult =
   | { ok: true; worktrees: GitWorktreeInfo[] }
-  | { ok: false; worktrees: [] }
+  | { ok: false; worktrees: GitWorktreeInfo[] }
 
 type WorktreeLineageCandidate = {
   source: 'cwd-context' | 'terminal-context' | 'orchestration-context'
@@ -1115,6 +1115,12 @@ export class OrcaRuntimeService {
     return this.getMobileSessionTabsForWorktree(worktree.id)
   }
 
+  listAllMobileSessionTabs(): RuntimeMobileSessionTabsResult[] {
+    return [...this.mobileSessionTabsByWorktree.values()].map((snapshot) =>
+      this.toMobileSessionTabsResult(snapshot)
+    )
+  }
+
   async activateMobileSessionTab(
     worktreeSelector: string,
     tabId: string
@@ -1150,7 +1156,7 @@ export class OrcaRuntimeService {
       throw new Error('tab_not_found')
     }
     if (tab.type === 'terminal') {
-      const pty = this.findPtyForMobileTerminalTab(tab)
+      const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
       if (pty) {
         this.ptyController?.kill(pty.ptyId)
       } else {
@@ -7631,9 +7637,43 @@ export class OrcaRuntimeService {
     }
     const provider = getSshGitProvider(repo.connectionId)
     if (!provider) {
-      return { ok: false, worktrees: [] }
+      return { ok: false, worktrees: this.listStoredSshWorktreesForResolution(repo) }
     }
-    return { ok: true, worktrees: await provider.listWorktrees(repo.path) }
+    try {
+      return { ok: true, worktrees: await provider.listWorktrees(repo.path) }
+    } catch {
+      return { ok: false, worktrees: this.listStoredSshWorktreesForResolution(repo) }
+    }
+  }
+
+  private listStoredSshWorktreesForResolution(repo: Repo): GitWorktreeInfo[] {
+    const store = this.store
+    if (!store) {
+      return []
+    }
+    const byWorktreeId = new Map<string, GitWorktreeInfo>()
+    for (const [worktreeId, meta] of Object.entries(store.getAllWorktreeMeta())) {
+      const parsed = splitWorktreeId(worktreeId)
+      if (!parsed || parsed.repoId !== repo.id) {
+        continue
+      }
+      // Why: this mirrors desktop worktrees:list's disconnected-SSH fallback.
+      // Web clients should keep showing persisted SSH worktrees while the
+      // provider is reconnecting instead of dropping the repo to zero rows.
+      byWorktreeId.set(worktreeId, {
+        path: parsed.worktreePath,
+        head: '',
+        branch: '',
+        isBare: false,
+        isMainWorktree: areWorktreePathsEqual(parsed.worktreePath, repo.path),
+        ...(meta.sparseDirectories !== undefined ||
+        meta.sparseBaseRef !== undefined ||
+        meta.sparsePresetId !== undefined
+          ? { isSparse: true }
+          : {})
+      })
+    }
+    return [...byWorktreeId.values()]
   }
 
   private async getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>> {
@@ -7892,7 +7932,9 @@ export class OrcaRuntimeService {
       }
       const syncedTab = this.tabs.get(tab.parentTabId)
       const leaf = this.leaves.get(this.getLeafKey(tab.parentTabId, tab.leafId)) ?? null
-      const pty = leaf ? null : this.findPtyForMobileTerminalTab(tab)
+      const liveLeaf = leaf?.ptyId && leaf.connected ? leaf : null
+      const pty = liveLeaf ? null : this.findPtyForMobileTerminalTab(snapshot.worktree, tab)
+      const livePty = pty?.connected ? pty : null
       tabs.push({
         type: 'terminal',
         id: tab.id,
@@ -7901,10 +7943,10 @@ export class OrcaRuntimeService {
         title: leaf?.paneTitle ?? syncedTab?.title ?? pty?.title ?? tab.title,
         ...(tab.parentLayout ? { parentLayout: tab.parentLayout } : {}),
         isActive: tab.isActive,
-        ...(leaf
-          ? { status: 'ready' as const, terminal: this.issueHandle(leaf) }
-          : pty
-            ? { status: 'ready' as const, terminal: this.issuePtyHandle(pty) }
+        ...(liveLeaf
+          ? { status: 'ready' as const, terminal: this.issueHandle(liveLeaf) }
+          : livePty
+            ? { status: 'ready' as const, terminal: this.issuePtyHandle(livePty) }
             : { status: 'pending-handle' as const, terminal: null })
       })
     }
@@ -7921,8 +7963,25 @@ export class OrcaRuntimeService {
   }
 
   private findPtyForMobileTerminalTab(
+    worktreeId: string,
     tab: RuntimeMobileSessionTerminalTab
   ): RuntimePtyWorktreeRecord | null {
+    const snapshotPtyId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? null
+    if (snapshotPtyId) {
+      const legacyPaneId = /^pane:(\d+)$/.exec(tab.leafId)?.[1] ?? null
+      const paneKey = isTerminalLeafId(tab.leafId)
+        ? makePaneKey(tab.parentTabId, tab.leafId)
+        : `${tab.parentTabId}:${legacyPaneId ?? tab.leafId}`
+      // Why: background desktop terminals may be unmounted, so the runtime
+      // has no live leaf. The renderer's saved leaf->PTY map is the bridge
+      // that lets paired web/mobile attach without spawning a duplicate tab.
+      // A saved id alone is not proof the daemon PTY is still alive.
+      return this.recordPtyWorktree(snapshotPtyId, worktreeId, {
+        tabId: tab.parentTabId,
+        paneKey,
+        connected: this.ptysById.get(snapshotPtyId)?.connected ?? false
+      })
+    }
     const paneKeys = new Set([`${tab.parentTabId}:${tab.leafId}`])
     if (tab.leafId === `pane:${FIRST_PANE_ID}`) {
       paneKeys.add(`${tab.parentTabId}:${FIRST_PANE_ID}`)

@@ -19,6 +19,10 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rp
 import { getHostedReviewCacheKey } from './hosted-review'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
+// Why: the runtime RPC default is intentionally bounded for CLI calls, but the
+// UI must hydrate the same large repo lists the desktop IPC path sees.
+const REMOTE_WORKTREE_LIST_PARITY_LIMIT = 10_000
+
 function arraysShallowEqual(a: string[] | undefined, b: string[] | undefined): boolean {
   if (a === b) {
     return true
@@ -110,6 +114,16 @@ type WorktreeWithLineage = Worktree & {
   lineage?: WorktreeLineage | null
 }
 
+function isRuntimeSelectorNotFoundError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.message === 'selector_not_found' ||
+      ('code' in error &&
+        typeof (error as { code: unknown }).code === 'string' &&
+        (error as { code: string }).code === 'selector_not_found'))
+  )
+}
+
 function replaceWorktreeInRepoLists(
   worktreesByRepo: Record<string, Worktree[]>,
   updatedWorktree: Worktree
@@ -138,7 +152,7 @@ async function listWorktreesForRepo(
   const result = await callRuntimeRpc<{ worktrees: Worktree[] }>(
     target,
     'worktree.list',
-    { repo: repoId },
+    { repo: repoId, limit: REMOTE_WORKTREE_LIST_PARITY_LIMIT },
     // Why: remote environment hydration crosses the network. Bound the call
     // so startup can recover instead of leaving the renderer waiting forever.
     { timeoutMs: 15_000 }
@@ -982,6 +996,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     })
 
     void persistWorktreeMeta(get().settings, worktreeId, { lastActivityAt: now }).catch((err) => {
+      if (isRuntimeSelectorNotFoundError(err)) {
+        return
+      }
       console.error('Failed to persist worktree activity timestamp:', err)
       void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
     })

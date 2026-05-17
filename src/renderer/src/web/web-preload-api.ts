@@ -44,6 +44,9 @@ const UI_STORAGE_KEY = 'orca.web.ui.v1'
 const SESSION_STORAGE_KEY = 'orca.web.workspaceSession.v1'
 const ONBOARDING_STORAGE_KEY = 'orca.web.onboarding.v1'
 const GITHUB_CACHE_STORAGE_KEY = 'orca.web.githubCache.v1'
+// Why: browser-paired clients need desktop parity for large dev sessions; the
+// runtime's no-limit default remains capped for lower-level RPC callers.
+const WEB_RUNTIME_WORKTREE_LIST_LIMIT = 10_000
 
 let activeEnvironment: StoredWebRuntimeEnvironment | null = readStoredWebRuntimeEnvironment()
 let activeClient: WebRuntimeClient | null = null
@@ -321,8 +324,12 @@ function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
 function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
   return {
     list: async ({ repoId }) =>
-      (await callRuntimeResult<{ worktrees: Worktree[] }>('worktree.list', { repo: repoId }))
-        .worktrees,
+      (
+        await callRuntimeResult<{ worktrees: Worktree[] }>('worktree.list', {
+          repo: repoId,
+          limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT
+        })
+      ).worktrees,
     listAll: () => listAllRuntimeWorktrees(),
     create: async (args) => {
       cachedWorktrees = null
@@ -1268,7 +1275,9 @@ async function listAllRuntimeWorktrees(): Promise<Worktree[]> {
   if (cachedWorktrees && Date.now() - cachedWorktrees.loadedAt < 5_000) {
     return cachedWorktrees.worktrees
   }
-  const result = await callRuntimeResult<{ worktrees: Worktree[] }>('worktree.list', {})
+  const result = await callRuntimeResult<{ worktrees: Worktree[] }>('worktree.list', {
+    limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT
+  })
   cachedWorktrees = { loadedAt: Date.now(), worktrees: result.worktrees }
   return result.worktrees
 }

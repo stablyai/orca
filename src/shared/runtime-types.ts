@@ -101,6 +101,7 @@ export type RuntimeMobileSessionTerminalTab = {
   title: string
   parentTabId: string
   leafId: string
+  ptyId?: string | null
   parentLayout?: TerminalLayoutSnapshot
   isActive: boolean
 }

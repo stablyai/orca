@@ -25,6 +25,7 @@ const HOST_TERMINAL_SURFACE_SEPARATOR = '::'
 
 type SessionTabsStreamEvent =
   | (RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' })
+  | { type: 'snapshots'; snapshots: RuntimeMobileSessionTabsResult[] }
   | { type: 'end' }
 
 type ReadyTerminalSurface = RuntimeMobileSessionTerminalClientTab & { status: 'ready' }
@@ -707,15 +708,103 @@ export function applyWebSessionTabsSnapshot(
   return Object.keys(patch).length === 0 ? state : patch
 }
 
+export function applyWebSessionTabsSnapshots(
+  state: WebSessionTabsSyncState,
+  snapshots: readonly RuntimeMobileSessionTabsResult[],
+  environmentId: string,
+  now = Date.now()
+): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
+  let nextState = state
+  let mergedPatch: Partial<WebSessionTabsSyncState> = {}
+  for (const snapshot of snapshots) {
+    const patch = applyWebSessionTabsSnapshot(nextState, snapshot, environmentId, now)
+    if (patch === nextState) {
+      continue
+    }
+    mergedPatch = { ...mergedPatch, ...patch }
+    nextState = { ...nextState, ...patch }
+  }
+  return Object.keys(mergedPatch).length === 0 ? state : mergedPatch
+}
+
 export function useWebSessionTabsSync(): void {
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const activeRuntimeEnvironmentId = useAppStore(
     (state) => state.settings?.activeRuntimeEnvironmentId ?? null
   )
+  const workspaceSessionReady = useAppStore((state) => state.workspaceSessionReady)
 
   useEffect(() => {
     const environmentId = activeRuntimeEnvironmentId?.trim()
-    if (!isWebClient() || !activeWorktreeId || !environmentId) {
+    // Why: startup hydration writes browser-local session state; applying the
+    // host snapshot before that point gets clobbered and leaves the sidebar stale.
+    if (!isWebClient() || !environmentId || !workspaceSessionReady) {
+      return
+    }
+
+    let disposed = false
+    let unsubscribe: (() => void) | null = null
+    void window.api.runtimeEnvironments
+      .subscribe(
+        {
+          selector: environmentId,
+          method: 'session.tabs.subscribeAll',
+          params: {},
+          timeoutMs: 15_000
+        },
+        {
+          onResponse: (response: RuntimeRpcResponse<unknown>) => {
+            if (response.ok === false) {
+              console.warn(
+                '[web-session-tabs-sync] global subscription failed:',
+                response.error.message
+              )
+              return
+            }
+            const event = response.result as SessionTabsStreamEvent
+            if (event.type === 'snapshots') {
+              useAppStore.setState((state) =>
+                applyWebSessionTabsSnapshots(state, event.snapshots, environmentId)
+              )
+              return
+            }
+            if (event.type !== 'snapshot' && event.type !== 'updated') {
+              return
+            }
+            useAppStore.setState((state) =>
+              applyWebSessionTabsSnapshot(state, event, environmentId)
+            )
+          },
+          onError: (error) => {
+            console.warn('[web-session-tabs-sync] global subscription error:', error.message)
+          }
+        }
+      )
+      .then((handle) => {
+        if (disposed) {
+          handle.unsubscribe()
+          return
+        }
+        unsubscribe = handle.unsubscribe
+      })
+      .catch((error) => {
+        if (!disposed) {
+          console.warn(
+            '[web-session-tabs-sync] failed to subscribe globally:',
+            error instanceof Error ? error.message : String(error)
+          )
+        }
+      })
+
+    return () => {
+      disposed = true
+      unsubscribe?.()
+    }
+  }, [activeRuntimeEnvironmentId, workspaceSessionReady])
+
+  useEffect(() => {
+    const environmentId = activeRuntimeEnvironmentId?.trim()
+    if (!isWebClient() || !activeWorktreeId || !environmentId || !workspaceSessionReady) {
       return
     }
 
@@ -777,5 +866,5 @@ export function useWebSessionTabsSync(): void {
       disposed = true
       unsubscribe?.()
     }
-  }, [activeRuntimeEnvironmentId, activeWorktreeId])
+  }, [activeRuntimeEnvironmentId, activeWorktreeId, workspaceSessionReady])
 }

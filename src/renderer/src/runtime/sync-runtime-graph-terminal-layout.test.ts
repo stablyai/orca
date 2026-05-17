@@ -73,7 +73,11 @@ describe('terminal mobile session layout publication', () => {
             second: { type: 'leaf', leafId: secondLeaf }
           },
           activeLeafId: secondLeaf,
-          expandedLeafId: null
+          expandedLeafId: null,
+          ptyIdsByLeafId: {
+            [firstLeaf]: 'pty-left',
+            [secondLeaf]: 'pty-right'
+          }
         }
       } as unknown as AppState['terminalLayoutsByTabId']
     })
@@ -83,6 +87,7 @@ describe('terminal mobile session layout publication', () => {
         type: 'terminal',
         parentTabId: 'term-1',
         leafId: firstLeaf,
+        ptyId: 'pty-left',
         parentLayout: {
           root: {
             type: 'split',
@@ -90,7 +95,11 @@ describe('terminal mobile session layout publication', () => {
             first: { type: 'leaf', leafId: firstLeaf },
             second: { type: 'leaf', leafId: secondLeaf }
           },
-          activeLeafId: secondLeaf
+          activeLeafId: secondLeaf,
+          ptyIdsByLeafId: {
+            [firstLeaf]: 'pty-left',
+            [secondLeaf]: 'pty-right'
+          }
         },
         isActive: false
       },
@@ -98,11 +107,70 @@ describe('terminal mobile session layout publication', () => {
         type: 'terminal',
         parentTabId: 'term-1',
         leafId: secondLeaf,
+        ptyId: 'pty-right',
         parentLayout: {
-          activeLeafId: secondLeaf
+          activeLeafId: secondLeaf,
+          ptyIdsByLeafId: {
+            [firstLeaf]: 'pty-left',
+            [secondLeaf]: 'pty-right'
+          }
         },
         isActive: true
       }
     ])
+  })
+
+  it('does not publish web-mirrored terminal tabs back to the host session', () => {
+    const leaf = '11111111-1111-4111-8111-111111111111'
+    const state = makeState({
+      activeGroupIdByWorktree: { 'wt-1': 'group-1' },
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-1',
+            activeTabId: 'web-unified-term-1',
+            tabOrder: ['web-unified-term-1']
+          }
+        ]
+      } as unknown as AppState['groupsByWorktree'],
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'web-unified-term-1',
+            groupId: 'group-1',
+            contentType: 'terminal',
+            entityId: 'web-terminal-host-tab-1',
+            title: 'Terminal'
+          }
+        ]
+      } as unknown as AppState['unifiedTabsByWorktree'],
+      tabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'web-terminal-host-tab-1',
+            worktreeId: 'wt-1',
+            ptyId: 'remote:env-1@@terminal-1',
+            title: 'Terminal',
+            defaultTitle: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      } as unknown as AppState['tabsByWorktree'],
+      terminalLayoutsByTabId: {
+        'web-terminal-host-tab-1': {
+          root: { type: 'leaf', leafId: leaf },
+          activeLeafId: leaf,
+          expandedLeafId: null,
+          ptyIdsByLeafId: {
+            [leaf]: 'remote:env-1@@terminal-1'
+          }
+        }
+      } as unknown as AppState['terminalLayoutsByTabId']
+    })
+
+    expect(buildMobileSessionTabSnapshots(state)[0]?.tabs).toEqual([])
   })
 })

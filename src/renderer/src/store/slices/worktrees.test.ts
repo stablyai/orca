@@ -253,7 +253,7 @@ describe('fetchWorktrees', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'worktree.list',
-      params: { repo: 'repo1' },
+      params: { repo: 'repo1', limit: 10_000 },
       timeoutMs: 15_000
     })
     expect(mockApi.worktrees.list).not.toHaveBeenCalled()

@@ -53,6 +53,7 @@ const registeredTabs = new Map<string, RegisteredTerminalTab>()
 // grace period — that indicates a real stuck state.
 const tabRegisteredAt = new Map<string, number>()
 const NO_TRANSPORT_GRACE_MS = 10_000
+const WEB_TERMINAL_SURFACE_TAB_PREFIX = 'web-terminal-'
 const EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE: AppState['activeBrowserTabIdByWorktree'] = {}
 const EMPTY_BROWSER_TABS_BY_WORKTREE: AppState['browserTabsByWorktree'] = {}
 const EMPTY_BROWSER_PAGES_BY_WORKSPACE: AppState['browserPagesByWorkspace'] = {}
@@ -376,6 +377,9 @@ async function syncRuntimeGraph(): Promise<void> {
   }
 
   for (const [tabId, registeredTab] of registeredTabs) {
+    if (tabId.startsWith(WEB_TERMINAL_SURFACE_TAB_PREFIX)) {
+      continue
+    }
     const tab = terminalTabById.get(tabId)
     if (!tab) {
       continue
@@ -465,6 +469,11 @@ export function buildMobileSessionTabSnapshots(
 
     for (const item of order) {
       if (item.type === 'terminal') {
+        // Why: paired web clients synthesize local mirror tabs with this
+        // prefix. They must never be republished as host-owned session tabs.
+        if (item.id.startsWith(WEB_TERMINAL_SURFACE_TAB_PREFIX)) {
+          continue
+        }
         const terminal = terminalTabByIdForWorktree.get(item.id)
         if (!terminal) {
           continue
@@ -619,6 +628,7 @@ function buildMobileTerminalSurfaceTabs(
       : (state.terminalLayoutsByTabId[terminal.id]?.activeLeafId ?? leafIds[0] ?? null)
   const paneTitles = state.runtimePaneTitlesByTabId[terminal.id] ?? {}
   const savedLayout = state.terminalLayoutsByTabId[terminal.id]
+  const savedPtyIdsByLeafId = savedLayout?.ptyIdsByLeafId ?? {}
   const container = registered?.getContainer()
   const firstChild = container?.firstElementChild
   const liveLayoutRoot = serializePaneTree(
@@ -628,10 +638,15 @@ function buildMobileTerminalSurfaceTabs(
     root: liveLayoutRoot ?? savedLayout?.root ?? fallbackLayoutForLeafIds(leafIds),
     activeLeafId,
     expandedLeafId: savedLayout?.expandedLeafId ?? null,
+    ...(Object.keys(savedPtyIdsByLeafId).length > 0 ? { ptyIdsByLeafId: savedPtyIdsByLeafId } : {}),
     ...(savedLayout?.titlesByLeafId ? { titlesByLeafId: savedLayout.titlesByLeafId } : {})
   } satisfies TerminalLayoutSnapshot).snapshot
   return leafIds.map((leafId) => {
     const numericPaneId = manager?.getNumericIdForLeaf(leafId) ?? null
+    const ptyId =
+      numericPaneId === null
+        ? (savedPtyIdsByLeafId[leafId] ?? (leafIds.length === 1 ? terminal.ptyId : null))
+        : (registered?.getPtyIdForPane(numericPaneId) ?? savedPtyIdsByLeafId[leafId] ?? null)
     const legacyPaneId = numericPaneId === null ? /^pane:(\d+)$/.exec(leafId)?.[1] : null
     const paneTitle =
       numericPaneId !== null
@@ -645,6 +660,7 @@ function buildMobileTerminalSurfaceTabs(
       title: paneTitle ?? terminal.customTitle ?? terminal.title ?? 'Terminal',
       parentTabId: terminal.id,
       leafId,
+      ptyId,
       parentLayout,
       isActive: isDesktopTabActive && leafId === activeLeafId
     }

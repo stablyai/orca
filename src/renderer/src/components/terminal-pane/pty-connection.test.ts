@@ -1094,6 +1094,43 @@ describe('connectPanePty', () => {
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'remote:env-1@@terminal-1')
   })
 
+  it('attaches restored remote PTYs for later split panes instead of spawning host tabs', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const existingTransport = createMockTransport('remote:env-1@@terminal-1')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'remote:env-1@@terminal-1' }]
+      },
+      settings: {
+        ...mockStoreState.settings,
+        activeRuntimeEnvironmentId: 'env-1'
+      }
+    } as StoreState
+
+    const paneTransports = new Map([[1, existingTransport]])
+    const pane = createPane(2)
+    const manager = createManager(2)
+    const deps = createDeps({
+      restoredLeafId: LEAF_2,
+      restoredPtyIdByLeafId: {
+        [LEAF_2]: 'remote:env-1@@terminal-2'
+      },
+      paneTransportsRef: { current: paneTransports }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    expect(transport.connect).not.toHaveBeenCalled()
+    expect(transport.attach).toHaveBeenCalledWith(
+      expect.objectContaining({ existingPtyId: 'remote:env-1@@terminal-2' })
+    )
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'remote:env-1@@terminal-2')
+  })
+
   it('persists a restarted pane PTY id and uses it on the next remount', async () => {
     const { connectPanePty } = await import('./pty-connection')
 

@@ -1,8 +1,14 @@
+/* eslint-disable max-lines -- Why: these tests cover one reconciliation boundary
+ * across ready, pending, split, and batched session snapshots. */
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../shared/types'
-import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
+import {
+  applyWebSessionTabsSnapshot,
+  applyWebSessionTabsSnapshots,
+  type WebSessionTabsSyncState
+} from './web-session-tabs-sync'
 
 vi.mock('../store', () => ({
   useAppStore: {
@@ -98,6 +104,53 @@ describe('applyWebSessionTabsSnapshot', () => {
     })
     expect(patch.activeTabId).toBe(mirroredId)
     expect(patch.activeTabIdByWorktree?.[WT]).toBe(mirroredId)
+  })
+
+  it('hydrates multiple initial host snapshots in one merged patch', () => {
+    const secondWorktree = 'repo::/other-worktree'
+    const patch = applyWebSessionTabsSnapshots(
+      makeState({ activeWorktreeId: null }),
+      [
+        makeSnapshot([
+          {
+            type: 'terminal',
+            id: HOST_SURFACE_ID,
+            title: 'host shell',
+            parentTabId: 'host-tab-1',
+            leafId: LEAF_ID,
+            isActive: true,
+            status: 'ready',
+            terminal: 'terminal-1'
+          }
+        ]),
+        makeSnapshot(
+          [
+            {
+              type: 'terminal',
+              id: `host-tab-2::${SECOND_LEAF_ID}`,
+              title: 'second shell',
+              parentTabId: 'host-tab-2',
+              leafId: SECOND_LEAF_ID,
+              isActive: true,
+              status: 'ready',
+              terminal: 'terminal-2'
+            }
+          ],
+          { worktree: secondWorktree, activeGroupId: 'host-group-2' }
+        )
+      ],
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.tabsByWorktree?.[WT]).toHaveLength(1)
+    expect(patch.tabsByWorktree?.[secondWorktree]).toHaveLength(1)
+    expect(patch.ptyIdsByTabId).toEqual(
+      expect.objectContaining({
+        [patch.tabsByWorktree?.[WT]?.[0]?.id ?? '']: ['remote:web-env-1@@terminal-1'],
+        [patch.tabsByWorktree?.[secondWorktree]?.[0]?.id ?? '']: ['remote:web-env-1@@terminal-2']
+      })
+    )
   })
 
   it('replaces temporary web-created tabs once the host publishes the same PTY', () => {

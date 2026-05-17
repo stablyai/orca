@@ -555,6 +555,62 @@ describe('OrcaRuntimeService', () => {
     expect(gitProvider.getStatus).toHaveBeenCalledWith('//Server/Share/Repo')
   })
 
+  it('lists persisted SSH worktrees while the git provider is unavailable', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const remoteRepo = {
+      id: 'remote-repo',
+      path: '/home/user/repo',
+      displayName: 'remote',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-missing'
+    }
+    const mainId = `${remoteRepo.id}::/home/user/repo`
+    const childId = `${remoteRepo.id}::/home/user/repo-child`
+    const metaById: Record<string, WorktreeMeta> = {
+      [mainId]: makeWorktreeMeta({ displayName: 'Remote main' }),
+      [childId]: makeWorktreeMeta({ displayName: 'Remote child', linkedPR: 42 })
+    }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [remoteRepo],
+      getRepo: () => remoteRepo,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+        return metaById[worktreeId]
+      }
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const listed = await runtime.listManagedWorktrees('id:remote-repo')
+
+    expect(listWorktrees).not.toHaveBeenCalled()
+    expect(getSshGitProviderMock).toHaveBeenCalledWith('ssh-missing')
+    expect(listed).toMatchObject({
+      totalCount: 2,
+      truncated: false,
+      worktrees: [
+        {
+          id: mainId,
+          path: '/home/user/repo',
+          branch: '',
+          isMainWorktree: true,
+          displayName: 'Remote main'
+        },
+        {
+          id: childId,
+          path: '/home/user/repo-child',
+          branch: '',
+          isMainWorktree: false,
+          displayName: 'Remote child',
+          linkedPR: 42
+        }
+      ]
+    })
+  })
+
   it('does not interpret active as a runtime-global worktree selector', async () => {
     const runtime = new OrcaRuntimeService(store)
 
@@ -2042,6 +2098,220 @@ describe('OrcaRuntimeService', () => {
         id: 'tab-1::pane:1',
         parentTabId: 'tab-1',
         leafId: 'pane:1',
+        status: 'pending-handle',
+        terminal: null
+      })
+    ])
+  })
+
+  it('keeps mobile terminal surfaces pending while a live leaf has no PTY', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Terminal 1',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: null,
+          paneTitle: 'Terminal 1'
+        }
+      ],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'tab-1::pane:1',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-1::pane:1',
+              parentTabId: 'tab-1',
+              leafId: 'pane:1',
+              title: 'Terminal 1',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(result.tabs).toEqual([
+      expect.objectContaining({
+        type: 'terminal',
+        id: 'tab-1::pane:1',
+        status: 'pending-handle',
+        terminal: null
+      })
+    ])
+  })
+
+  it('keeps saved PTY bindings pending until the runtime knows the PTY is connected', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'tab-1::pane:1',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-1::pane:1',
+              parentTabId: 'tab-1',
+              leafId: 'pane:1',
+              title: 'Terminal 1',
+              ptyId: 'daemon-pty-1',
+              parentLayout: {
+                root: { type: 'leaf', leafId: 'pane:1' },
+                activeLeafId: 'pane:1',
+                expandedLeafId: null,
+                ptyIdsByLeafId: { 'pane:1': 'daemon-pty-1' }
+              },
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(result.tabs).toEqual([
+      expect.objectContaining({
+        type: 'terminal',
+        id: 'tab-1::pane:1',
+        parentTabId: 'tab-1',
+        leafId: 'pane:1',
+        status: 'pending-handle',
+        terminal: null
+      })
+    ])
+  })
+
+  it('reattaches mobile terminal surfaces from saved PTY bindings when the PTY is connected', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Terminal 1',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'daemon-pty-1'
+        }
+      ]
+    })
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'tab-1::pane:1',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-1::pane:1',
+              parentTabId: 'tab-1',
+              leafId: 'pane:1',
+              title: 'Terminal 1',
+              ptyId: 'daemon-pty-1',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(result.tabs).toEqual([
+      expect.objectContaining({
+        type: 'terminal',
+        id: 'tab-1::pane:1',
+        status: 'ready',
+        terminal: expect.stringMatching(/^term_/)
+      })
+    ])
+    expect(runtime.resolveLeafForHandle((result.tabs[0] as { terminal: string }).terminal)).toEqual(
+      { ptyId: 'daemon-pty-1' }
+    )
+  })
+
+  it('does not publish exited saved PTY bindings as ready terminal streams', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'tab-1::pane:1',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-1::pane:1',
+              parentTabId: 'tab-1',
+              leafId: 'pane:1',
+              title: 'Terminal 1',
+              ptyId: 'daemon-pty-1',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+    await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    runtime.onPtyExit('daemon-pty-1', 0)
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(result.tabs).toEqual([
+      expect.objectContaining({
+        type: 'terminal',
+        id: 'tab-1::pane:1',
         status: 'pending-handle',
         terminal: null
       })

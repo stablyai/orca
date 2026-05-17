@@ -35,6 +35,11 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
     handler: async (params, { runtime }) => runtime.listMobileSessionTabs(params.worktree)
   }),
   defineMethod({
+    name: 'session.tabs.listAll',
+    params: null,
+    handler: async (_params, { runtime }) => ({ snapshots: runtime.listAllMobileSessionTabs() })
+  }),
+  defineMethod({
     name: 'session.tabs.activate',
     params: ActivateTab,
     handler: async (params, { runtime }) =>
@@ -94,6 +99,36 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       runtime.cleanupSubscription(`session.tabs:${connectionId ?? 'local'}:${params.worktree}`)
       runtime.cleanupSubscription(`session.tabs:${connectionId ?? 'local'}:${snapshot.worktree}`)
       return { unsubscribed: true }
+    }
+  }),
+  defineStreamingMethod({
+    name: 'session.tabs.subscribeAll',
+    params: null,
+    handler: async (_params, { runtime, connectionId }, emit) => {
+      let unsubscribe = (): void => {}
+      let closed = false
+      const subscriptionId = `session.tabs:${connectionId ?? 'local'}:*`
+      runtime.registerSubscriptionCleanup(
+        subscriptionId,
+        () => {
+          closed = true
+          unsubscribe()
+          emit({ type: 'end' })
+        },
+        connectionId
+      )
+
+      if (closed) {
+        return
+      }
+      emit({ type: 'snapshots', snapshots: runtime.listAllMobileSessionTabs() })
+
+      if (closed) {
+        return
+      }
+      unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
+        emit({ type: 'updated', ...snapshot })
+      })
     }
   }),
   defineMethod({
