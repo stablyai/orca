@@ -78,7 +78,7 @@ function Sidebar({
         {/* Resize handle */}
         <div
           data-sidebar-resize-handle=""
-          className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-ring/20 active:bg-ring/30 transition-colors z-10"
+          className="absolute top-0 right-0 h-full w-5 cursor-col-resize transition-colors z-10 before:absolute before:inset-y-0 before:right-0 before:w-1 before:transition-colors hover:before:bg-ring/20 active:before:bg-ring/30"
           onMouseDown={onResizeStart}
         />
       </div>
