@@ -30,6 +30,7 @@ export type LaunchAgentBackgroundSessionArgs = {
   prompt?: string
   launchSource?: LaunchSource
   title?: string
+  onData?: (chunk: string) => void
   onExit?: (ptyId: string, code: number) => void
   onAgentStatus?: (payload: ParsedAgentStatusPayload) => void
 }
@@ -43,7 +44,7 @@ export type LaunchAgentBackgroundSessionResult = {
 export async function launchAgentBackgroundSession(
   args: LaunchAgentBackgroundSessionArgs
 ): Promise<LaunchAgentBackgroundSessionResult | null> {
-  const { agent, worktreeId, prompt, launchSource, title, onExit, onAgentStatus } = args
+  const { agent, worktreeId, prompt, launchSource, title, onData, onExit, onAgentStatus } = args
   const store = useAppStore.getState()
   const worktree = store.allWorktrees().find((entry) => entry.id === worktreeId)
   const repo = worktree ? store.repos.find((entry) => entry.id === worktree.repoId) : null
@@ -157,6 +158,7 @@ export async function launchAgentBackgroundSession(
   }
   const processAgentStatus = createAgentStatusOscProcessor()
   const handleData = (data: string): void => {
+    onData?.(data)
     const processed = processAgentStatus(data)
     for (const payload of processed.payloads) {
       useAppStore.getState().setAgentStatus(paneKey, payload, undefined)

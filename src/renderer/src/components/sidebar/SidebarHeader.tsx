@@ -20,8 +20,8 @@ import SidebarFilter from './SidebarFilter'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 
 const GROUP_BY_OPTIONS = [
-  { id: 'flat', label: 'None' },
-  { id: 'none', label: 'Status' },
+  { id: 'none', label: 'None' },
+  { id: 'workspace-status', label: 'Status' },
   { id: 'pr-status', label: 'PR' },
   { id: 'repo', label: 'Repo' }
 ] as const
@@ -92,6 +92,19 @@ const SidebarHeader = React.memo(function SidebarHeader() {
       if (workspaceBoardMenuOpen) {
         return
       }
+      // Why: Escape must dismiss any nested overlay (Radix dropdown, popover,
+      // tooltip, dialog, context menu) ahead of collapsing this non-modal
+      // companion panel. Radix portals open popper content into a wrapper
+      // element, and dialogs/menus expose `data-state="open"` on their
+      // content node, so the presence of either signals the user's intent
+      // is to dismiss that overlay rather than the workspace board.
+      if (
+        document.querySelector(
+          '[data-radix-popper-content-wrapper], [role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [role="menu"][data-state="open"], [role="listbox"][data-state="open"]'
+        )
+      ) {
+        return
+      }
       event.preventDefault()
       setWorkspaceBoardOpen(false)
     }
@@ -106,7 +119,7 @@ const SidebarHeader = React.memo(function SidebarHeader() {
     <>
       <div className="mt-2 flex h-8 items-center justify-between px-2 gap-2">
         <div className="flex min-w-0 items-center gap-1">
-          <span className="px-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80 select-none">
+          <span className="pl-2 pr-0.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80 select-none">
             Workspaces
           </span>
           <Tooltip>

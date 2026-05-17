@@ -1,10 +1,17 @@
 import type { FocusTerminalPaneDetail } from '@/constants/terminal'
-import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
+import { flashFocusedPaneRim } from './focused-pane-rim-flash'
+
+type FocusTerminalPaneManager = {
+  getNumericIdForLeaf(leafId: string): number | null
+  getPanes(): Pick<ManagedPane, 'id' | 'leafId' | 'container'>[]
+  setActivePane(paneId: number, opts?: { focus?: boolean }): void
+}
 
 type FocusTerminalPaneEventDeps = {
   tabId: string
-  manager: Pick<PaneManager, 'getNumericIdForLeaf' | 'getPanes' | 'setActivePane'> | null
+  manager: FocusTerminalPaneManager | null
   acknowledgeAgents: (paneKeys: string[]) => void
   surfaceStaleAgentRow: (tabId: string, leafId: string) => void
 }
@@ -33,6 +40,12 @@ export function handleFocusTerminalPaneDetail(
     return
   }
   manager.setActivePane(resolution.numericPaneId, { focus: true })
+  if (detail.flashFocusedPane) {
+    const pane = manager.getPanes().find((candidate) => candidate.id === resolution.numericPaneId)
+    if (pane) {
+      flashFocusedPaneRim(pane.container)
+    }
+  }
   if (detail.ackPaneKeyOnSuccess) {
     acknowledgeAgents([detail.ackPaneKeyOnSuccess])
   }

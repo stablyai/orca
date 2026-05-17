@@ -22,3 +22,13 @@ export function splitWorktreeId(worktreeId: string): ParsedWorktreeId | null {
     worktreePath: worktreeId.slice(separatorIdx + WORKTREE_ID_SEPARATOR.length)
   }
 }
+
+export function getWorktreePathBasenameFromId(worktreeId: string): string | null {
+  const parsed = splitWorktreeId(worktreeId)
+  const normalizedPath = parsed?.worktreePath.trim().replace(/[\\/]+$/g, '') ?? ''
+  if (!normalizedPath) {
+    return null
+  }
+  const basename = normalizedPath.split(/[\\/]/).filter(Boolean).at(-1)?.trim()
+  return basename || null
+}

@@ -432,7 +432,7 @@ describe('generateCommitMessageFromContext', () => {
         })
         expect(spawnMock).toHaveBeenCalledWith(
           'C:\\Windows\\System32\\cmd.exe',
-          ['/d', '/s', '/c', '"C:/tools/agent.cmd"'],
+          ['/d', '/c', 'C:/tools/agent.cmd'],
           expect.objectContaining({
             cwd: 'C:\\repo',
             windowsHide: true

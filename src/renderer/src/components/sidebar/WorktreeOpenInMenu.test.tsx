@@ -2,6 +2,7 @@ import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DropdownMenuSubContent, DropdownMenuSubTrigger } from '@/components/ui/dropdown-menu'
 import {
+  getWorktreeOpenInEntries,
   getLocalFileManagerLabel,
   openWorktreePath,
   WorktreeOpenInSubMenu
@@ -15,7 +16,10 @@ type ReactElementLike = {
 const { mockState, openInExternalEditorMock, openInFileManagerMock, toastErrorMock } = vi.hoisted(
   () => ({
     mockState: {
-      settings: { activeRuntimeEnvironmentId: null as string | null }
+      settings: {
+        activeRuntimeEnvironmentId: null as string | null,
+        openInApplications: [] as { id: string; label: string; command: string }[]
+      }
     },
     openInExternalEditorMock: vi.fn(),
     openInFileManagerMock: vi.fn(),
@@ -70,7 +74,7 @@ function findByType(node: unknown, type: unknown): ReactElementLike {
 
 describe('WorktreeOpenInMenu', () => {
   beforeEach(() => {
-    mockState.settings = { activeRuntimeEnvironmentId: null }
+    mockState.settings = { activeRuntimeEnvironmentId: null, openInApplications: [] }
     toastErrorMock.mockReset()
     openInFileManagerMock.mockReset()
     openInExternalEditorMock.mockReset()
@@ -119,7 +123,7 @@ describe('WorktreeOpenInMenu', () => {
   })
 
   it('uses the blocked-path toast without calling main IPC', async () => {
-    mockState.settings = { activeRuntimeEnvironmentId: 'runtime-1' }
+    mockState.settings = { activeRuntimeEnvironmentId: 'runtime-1', openInApplications: [] }
 
     await openWorktreePath({
       target: 'file-manager',
@@ -143,9 +147,47 @@ describe('WorktreeOpenInMenu', () => {
       connectionId: null
     })
 
-    expect(openInExternalEditorMock).toHaveBeenCalledWith('/tmp/workspace')
+    expect(openInExternalEditorMock).toHaveBeenCalledWith('/tmp/workspace', undefined)
     expect(toastErrorMock).toHaveBeenCalledWith('Could not open workspace folder.', {
       description: 'Check the editor command or file manager configuration on this machine.'
     })
+  })
+
+  it('builds menu entries with VS Code first and file manager last', () => {
+    expect(
+      getWorktreeOpenInEntries(
+        [
+          { id: 'cursor', label: 'Cursor', command: 'cursor' },
+          { id: 'zed', label: 'Zed', command: 'zed' }
+        ],
+        'File Manager'
+      ).map((entry) => entry.label)
+    ).toEqual(['VS Code', 'Cursor', 'Zed', 'File Manager'])
+  })
+
+  it('forwards the configured command when opening a configured launcher', async () => {
+    await openWorktreePath({
+      target: 'external-editor',
+      worktreePath: '/tmp/workspace',
+      connectionId: null,
+      command: 'cursor'
+    })
+    expect(openInExternalEditorMock).toHaveBeenCalledWith('/tmp/workspace', 'cursor')
+  })
+
+  it('blocks configured launchers in remote context before calling main IPC', async () => {
+    mockState.settings = { activeRuntimeEnvironmentId: 'runtime-1', openInApplications: [] }
+
+    await openWorktreePath({
+      target: 'external-editor',
+      worktreePath: '/tmp/workspace',
+      connectionId: null,
+      command: 'cursor'
+    })
+
+    expect(openInExternalEditorMock).not.toHaveBeenCalled()
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Opening remote paths in the local OS is not available.'
+    )
   })
 })

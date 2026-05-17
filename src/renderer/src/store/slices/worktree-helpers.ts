@@ -5,6 +5,7 @@ import type {
   SetupDecision,
   TuiAgent,
   WorkspaceCreateTelemetrySource,
+  WorkspaceStatus,
   Worktree,
   WorktreeBaseStatusEvent,
   WorktreeLineage,
@@ -85,7 +86,8 @@ export type WorktreeSlice = {
     pushTarget?: GitPushTarget,
     createdWithAgent?: TuiAgent,
     linkedLinearIssue?: string,
-    branchNameOverride?: string
+    branchNameOverride?: string,
+    workspaceStatus?: WorkspaceStatus
   ) => Promise<CreateWorktreeResult>
   removeWorktree: (
     worktreeId: string,

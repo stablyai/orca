@@ -3,6 +3,7 @@ import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-sess
 import { useAppStore } from '@/store'
 import type { AutomationDispatchResult } from '../../../shared/automations-types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { createAutomationRunOutputSnapshotBuffer } from '@/components/automations/automation-run-output-snapshot'
 
 const AUTOMATIONS_CHANGED_EVENT = 'orca:automations-changed'
 
@@ -31,13 +32,19 @@ export function useAutomationDispatchEvents(): void {
         activeTabType: state.activeTabType
       }
       const repo = state.repos.find((entry) => entry.id === automation.projectId)
+      const automationWorktree = automation.workspaceId
+        ? state.allWorktrees().find((entry) => entry.id === automation.workspaceId)
+        : null
       let dispatchWorkspaceId = automation.workspaceId
+      let dispatchWorkspaceDisplayName =
+        automationWorktree?.displayName ?? run.workspaceDisplayName ?? null
 
       if (!repo) {
         await markDispatchResult({
           runId: run.id,
           status: 'skipped_unavailable',
           workspaceId: run.workspaceId,
+          workspaceDisplayName: run.workspaceDisplayName ?? null,
           error: 'The target project is no longer available.'
         })
         return
@@ -52,6 +59,7 @@ export function useAutomationDispatchEvents(): void {
             runId: run.id,
             status: 'skipped_needs_interactive_auth',
             workspaceId: dispatchWorkspaceId,
+            workspaceDisplayName: dispatchWorkspaceDisplayName,
             error: 'SSH reconnect requires interactive credentials.'
           })
           return
@@ -68,6 +76,7 @@ export function useAutomationDispatchEvents(): void {
               runId: run.id,
               status: 'skipped_unavailable',
               workspaceId: dispatchWorkspaceId,
+              workspaceDisplayName: dispatchWorkspaceDisplayName,
               error: error instanceof Error ? error.message : String(error)
             })
             return
@@ -96,10 +105,7 @@ export function useAutomationDispatchEvents(): void {
                   )
               ).worktree
             : automation.workspaceId
-              ? useAppStore
-                  .getState()
-                  .allWorktrees()
-                  .find((entry) => entry.id === automation.workspaceId)
+              ? automationWorktree
               : null
 
         if (!worktree) {
@@ -107,12 +113,15 @@ export function useAutomationDispatchEvents(): void {
             runId: run.id,
             status: 'skipped_unavailable',
             workspaceId: automation.workspaceId,
+            workspaceDisplayName: dispatchWorkspaceDisplayName,
             error: 'The target workspace is no longer available.'
           })
           return
         }
         dispatchWorkspaceId = worktree.id
+        dispatchWorkspaceDisplayName = worktree.displayName
 
+        const outputSnapshotBuffer = createAutomationRunOutputSnapshotBuffer()
         let dispatchMarked = false
         let pendingExitCode: number | null = null
         let pendingDone = false
@@ -128,6 +137,8 @@ export function useAutomationDispatchEvents(): void {
             runId: run.id,
             status: 'completed',
             workspaceId: worktree.id,
+            workspaceDisplayName: worktree.displayName,
+            outputSnapshot: outputSnapshotBuffer.snapshot(),
             error: null
           })
         }
@@ -137,6 +148,8 @@ export function useAutomationDispatchEvents(): void {
             runId: run.id,
             status: code === 0 ? 'completed' : 'dispatch_failed',
             workspaceId: worktree.id,
+            workspaceDisplayName: worktree.displayName,
+            outputSnapshot: outputSnapshotBuffer.snapshot(),
             error: code === 0 ? null : `Automation process exited with code ${code}.`
           })
         }
@@ -172,6 +185,9 @@ export function useAutomationDispatchEvents(): void {
           prompt: automation.prompt,
           launchSource: 'unknown',
           title: run.title,
+          onData: (chunk) => {
+            outputSnapshotBuffer.append(chunk)
+          },
           onAgentStatus: (payload) => {
             if (payload.state !== 'done') {
               return
@@ -198,6 +214,7 @@ export function useAutomationDispatchEvents(): void {
             runId: run.id,
             status: 'dispatched',
             workspaceId: worktree.id,
+            workspaceDisplayName: worktree.displayName,
             terminalSessionId: result.tabId,
             error: null
           })
@@ -230,6 +247,7 @@ export function useAutomationDispatchEvents(): void {
           runId: run.id,
           status: 'dispatch_failed',
           workspaceId: dispatchWorkspaceId,
+          workspaceDisplayName: dispatchWorkspaceDisplayName,
           error: error instanceof Error ? error.message : String(error)
         })
       }

@@ -239,6 +239,25 @@ export function isOrphanedWorktreeError(error: unknown): boolean {
   return /is not a working tree/.test(msg)
 }
 
+export function isOrphanCompatiblePreflightError(error: unknown): boolean {
+  if (isOrphanedWorktreeError(error)) {
+    return true
+  }
+  if (!(error instanceof Error)) {
+    return false
+  }
+  const errorWithDetails = error as Error & { code?: unknown; stderr?: string; stdout?: string }
+  const details = [
+    errorWithDetails.stderr,
+    errorWithDetails.stdout,
+    errorWithDetails.message,
+    typeof errorWithDetails.code === 'string' ? errorWithDetails.code : undefined
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join('\n')
+  return /not a git repository/i.test(details) || /\bENOENT\b/i.test(details)
+}
+
 /**
  * Format a human-readable error message for worktree removal failures.
  */

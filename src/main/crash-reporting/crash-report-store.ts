@@ -57,6 +57,10 @@ export class CrashReportStore {
     return this.transitionPending(id, 'sent')
   }
 
+  async markDismissedSent(id: string): Promise<CrashReportRecord | null> {
+    return this.transitionStatus(id, 'dismissed', 'sent')
+  }
+
   async dismiss(id: string): Promise<CrashReportRecord | null> {
     return this.transitionPending(id, 'dismissed')
   }
@@ -76,13 +80,21 @@ export class CrashReportStore {
     id: string,
     status: Exclude<CrashReportStatus, 'pending'>
   ): Promise<CrashReportRecord | null> {
+    return this.transitionStatus(id, 'pending', status)
+  }
+
+  private async transitionStatus(
+    id: string,
+    from: CrashReportStatus,
+    status: Exclude<CrashReportStatus, 'pending'>
+  ): Promise<CrashReportRecord | null> {
     return this.withWrite(async (reports) => {
       let result: CrashReportRecord | null = null
       const nextReports = reports.map((report) => {
         if (report.id !== id) {
           return report
         }
-        if (report.status !== 'pending') {
+        if (report.status !== from) {
           result = report
           return report
         }

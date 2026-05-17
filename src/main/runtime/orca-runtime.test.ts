@@ -3,7 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'events'
 import { mkdtemp, rm } from 'fs/promises'
 import type { WorktreeLineage, WorktreeMeta } from '../../shared/types'
-import { addWorktree, listWorktrees, removeWorktree } from '../git/worktree'
+import {
+  addWorktree,
+  assertWorktreeCleanForRemoval,
+  listWorktrees,
+  removeWorktree
+} from '../git/worktree'
 import * as gitRunner from '../git/runner'
 import {
   createSetupRunnerScript,
@@ -67,6 +72,7 @@ const {
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
+  assertWorktreeCleanForRemoval: vi.fn().mockResolvedValue(undefined),
   addWorktree: addWorktreeMock,
   removeWorktree: removeWorktreeMock
 }))
@@ -122,6 +128,8 @@ vi.mock('../git/repo', async (importOriginal) => {
 afterEach(() => {
   vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
   vi.mocked(addWorktree).mockReset()
+  vi.mocked(assertWorktreeCleanForRemoval).mockReset()
+  vi.mocked(assertWorktreeCleanForRemoval).mockResolvedValue(undefined)
   vi.mocked(removeWorktree).mockReset()
   sshGitProviders.clear()
   getSshGitProviderMock.mockReset()
@@ -3820,6 +3828,73 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('fails dirty non-force deletes before PTY teardown', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const killSpy = vi.fn().mockReturnValue(true)
+    runtime.setPtyController({
+      write: () => true,
+      kill: (id) => killSpy(id),
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime, 'pty-1')
+    vi.mocked(getEffectiveHooks).mockReturnValue(null)
+    vi.mocked(assertWorktreeCleanForRemoval).mockRejectedValue(
+      Object.assign(new Error('Worktree has uncommitted or untracked changes.'), {
+        stdout: '?? scratch.txt\n'
+      })
+    )
+
+    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).rejects.toThrow(
+      `Failed to delete worktree at ${TEST_WORKTREE_PATH}. ?? scratch.txt`
+    )
+
+    expect(killSpy).not.toHaveBeenCalled()
+    expect(removeWorktree).not.toHaveBeenCalled()
+  })
+
+  it('formats preflight subprocess failures and skips PTY teardown', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const killSpy = vi.fn().mockReturnValue(true)
+    runtime.setPtyController({
+      write: () => true,
+      kill: (id) => killSpy(id),
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime, 'pty-1')
+    vi.mocked(getEffectiveHooks).mockReturnValue(null)
+    vi.mocked(assertWorktreeCleanForRemoval).mockRejectedValue(
+      Object.assign(new Error('status failed'), {
+        stderr: 'fatal: unable to read current working directory\n'
+      })
+    )
+
+    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).rejects.toThrow(
+      `Failed to delete worktree at ${TEST_WORKTREE_PATH}. fatal: unable to read current working directory`
+    )
+
+    expect(killSpy).not.toHaveBeenCalled()
+    expect(removeWorktree).not.toHaveBeenCalled()
+  })
+
+  it('falls through to orphan cleanup when preflight reports missing/non-repo worktree', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    vi.mocked(getEffectiveHooks).mockReturnValue(null)
+    vi.mocked(assertWorktreeCleanForRemoval).mockRejectedValue(
+      Object.assign(new Error('status failed'), {
+        stderr: 'fatal: not a git repository (or any of the parent directories): .git\n'
+      })
+    )
+    vi.mocked(removeWorktree).mockRejectedValue(
+      Object.assign(new Error('git worktree remove failed'), {
+        stderr: `fatal: '${TEST_WORKTREE_PATH}' is not a working tree`
+      })
+    )
+    vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({ stdout: '', stderr: '' })
+
+    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).resolves.toEqual({})
+    expect(removeWorktree).toHaveBeenCalledWith(TEST_REPO_PATH, TEST_WORKTREE_PATH, false)
+  })
+
   it('runs archive hooks for CLI worktree removal when hooks are explicitly enabled', async () => {
     const runtime = new OrcaRuntimeService(store)
     vi.mocked(getEffectiveHooks).mockReturnValue({
@@ -4228,6 +4303,9 @@ describe('OrcaRuntimeService', () => {
       const killSpy = vi.fn().mockReturnValue(true)
       const localProvider = createProviderStub(async () => [])
       const callOrder: string[] = []
+      vi.mocked(assertWorktreeCleanForRemoval).mockImplementation(async () => {
+        callOrder.push('preflight')
+      })
       vi.mocked(removeWorktree).mockImplementation(async () => {
         callOrder.push('git-removeWorktree')
       })
@@ -4253,8 +4331,11 @@ describe('OrcaRuntimeService', () => {
       expect(killSpy).toHaveBeenCalledWith('pty-1')
       // The provider-prefix sweep and the git removal must happen AFTER the
       // runtime-graph kill. Git removal must NOT happen before any kill.
+      const preflightIdx = callOrder.indexOf('preflight')
       const killIdx = callOrder.indexOf('kill:pty-1')
       const gitIdx = callOrder.indexOf('git-removeWorktree')
+      expect(preflightIdx).toBeGreaterThanOrEqual(0)
+      expect(killIdx).toBeGreaterThan(preflightIdx)
       expect(killIdx).toBeGreaterThanOrEqual(0)
       expect(gitIdx).toBeGreaterThan(killIdx)
     })

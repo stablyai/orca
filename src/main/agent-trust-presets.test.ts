@@ -25,7 +25,7 @@ vi.mock('node:os', async () => {
   }
 })
 
-const { markCopilotFolderTrusted, markCursorWorkspaceTrusted } =
+const { markCodexProjectTrusted, markCopilotFolderTrusted, markCursorWorkspaceTrusted } =
   await import('./agent-trust-presets')
 
 beforeEach(() => {
@@ -111,3 +111,55 @@ describe('markCopilotFolderTrusted', () => {
     }
   })
 })
+
+describe('markCodexProjectTrusted', () => {
+  it('writes ~/.codex/config.toml with the project marked trusted', () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
+    try {
+      const realpath = realpathSync(workspace)
+      markCodexProjectTrusted(workspace)
+      const configPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
+      expect(existsSync(configPath)).toBe(true)
+      const written = readFileSync(configPath, 'utf-8')
+      expect(written).toContain(`[projects."${escapeTomlBasicString(realpath)}"]`)
+      expect(written).toContain('trust_level = "trusted"')
+    } finally {
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
+  it('preserves existing config keys and updates an existing project block', () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
+    const realpath = realpathSync(workspace)
+    try {
+      const codexDir = join(testState.fakeHomeDir, '.codex')
+      mkdirSync(codexDir, { recursive: true })
+      writeFileSync(
+        join(codexDir, 'config.toml'),
+        [
+          'model = "gpt-5.5"',
+          '',
+          `[projects."${escapeTomlBasicString(realpath)}"]`,
+          'notes = "keep"',
+          'trust_level = "untrusted"',
+          ''
+        ].join('\n'),
+        'utf-8'
+      )
+
+      markCodexProjectTrusted(workspace)
+
+      const written = readFileSync(join(codexDir, 'config.toml'), 'utf-8')
+      expect(written).toContain('model = "gpt-5.5"')
+      expect(written).toContain('notes = "keep"')
+      expect(written).toContain('trust_level = "trusted"')
+      expect(written).not.toContain('trust_level = "untrusted"')
+    } finally {
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+})
+
+function escapeTomlBasicString(value: string): string {
+  return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')
+}

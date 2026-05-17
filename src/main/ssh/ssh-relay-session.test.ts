@@ -8,8 +8,9 @@ import type { Store } from '../persistence'
 import type { SshPortForwardManager } from './ssh-port-forward'
 import { AGENT_HOOK_INSTALL_PLUGINS_METHOD } from '../../shared/agent-hook-relay'
 
-const { muxRequestMock } = vi.hoisted(() => ({
-  muxRequestMock: vi.fn()
+const { muxRequestMock, installRemoteManagedAgentHooksMock } = vi.hoisted(() => ({
+  muxRequestMock: vi.fn(),
+  installRemoteManagedAgentHooksMock: vi.fn()
 }))
 
 vi.mock('./ssh-relay-deploy', () => ({
@@ -28,6 +29,10 @@ vi.mock('./ssh-channel-multiplexer', () => {
     }
   }
 })
+
+vi.mock('../agent-hooks/remote-managed-hook-installers', () => ({
+  installRemoteManagedAgentHooks: installRemoteManagedAgentHooksMock
+}))
 
 vi.mock('../providers/ssh-pty-provider', () => ({
   isSshPtyNotFoundError: (err: unknown) =>
@@ -127,6 +132,8 @@ describe('SshRelaySession', () => {
     delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
     muxRequestMock.mockReset()
     muxRequestMock.mockResolvedValue([])
+    installRemoteManagedAgentHooksMock.mockReset()
+    installRemoteManagedAgentHooksMock.mockResolvedValue([])
     mockDeploySuccess()
     vi.mocked(getPtyIdsForConnection).mockReturnValue([])
   })
@@ -151,9 +158,14 @@ describe('SshRelaySession', () => {
     expect(registerSshGitProvider).toHaveBeenCalledWith('target-1', expect.anything())
   })
 
-  it('syncs relay-owned plugin assets before registering the SSH PTY provider', async () => {
+  it('installs remote managed hooks and relay-owned plugin assets before registering the SSH PTY provider', async () => {
     process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
-    muxRequestMock.mockResolvedValue({ ok: true })
+    muxRequestMock.mockImplementation(async (method: string) => {
+      if (method === 'session.resolveHome') {
+        return { resolvedPath: '/home/orca' }
+      }
+      return { ok: true }
+    })
     const sftp = { end: vi.fn() }
     const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const mockConn = {
@@ -167,14 +179,15 @@ describe('SshRelaySession', () => {
       ([method]) => method === AGENT_HOOK_INSTALL_PLUGINS_METHOD
     )
     expect(installPluginsCallIndex).toBeGreaterThanOrEqual(0)
+    expect(mockConn.sftp).toHaveBeenCalledTimes(1)
+    expect(installRemoteManagedAgentHooksMock).toHaveBeenCalledWith(sftp, '/home/orca')
+    expect(sftp.end).toHaveBeenCalledTimes(1)
+    expect(installRemoteManagedAgentHooksMock.mock.invocationCallOrder[0]).toBeLessThan(
+      muxRequestMock.mock.invocationCallOrder[installPluginsCallIndex]
+    )
     expect(muxRequestMock.mock.invocationCallOrder[installPluginsCallIndex]).toBeLessThan(
       vi.mocked(registerSshPtyProvider).mock.invocationCallOrder[0]
     )
-    // Why: connecting to SSH may upload relay-owned plugin source, but must
-    // not mutate user-owned agent config files. Remote managed-hook install
-    // belongs behind an explicit per-host user action.
-    expect(mockConn.sftp).not.toHaveBeenCalled()
-    expect(sftp.end).not.toHaveBeenCalled()
   })
 
   it('does not register providers if dispose wins during initial plugin sync', async () => {

@@ -20,6 +20,11 @@ export const GENERAL_WORKSPACE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Skip Delete Automation Confirmation',
     description: 'Delete automations without a confirmation dialog.',
     keywords: ['delete', 'automation', 'confirm', 'dialog', 'skip', 'prompt']
+  },
+  {
+    title: 'Open In Menu',
+    description: 'Add custom launchers to the worktree Open in menu.',
+    keywords: ['open in', 'editor', 'launcher', 'cursor', 'zed', 'command', 'vscode']
   }
 ]
 
@@ -38,6 +43,11 @@ export const GENERAL_EDITOR_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Default Diff View',
     description: 'Preferred presentation format for showing git diffs by default.',
     keywords: ['diff', 'view', 'inline', 'side-by-side', 'split']
+  },
+  {
+    title: 'Default Diff File Tree',
+    description: 'Show or hide the file tree when opening combined diff views.',
+    keywords: ['diff', 'tree', 'file tree', 'combined diff', 'sidebar']
   },
   {
     title: 'Minimap',

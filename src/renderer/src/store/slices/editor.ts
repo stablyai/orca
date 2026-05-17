@@ -61,6 +61,7 @@ export type CommitCompareSnapshot = Pick<
 > & {
   compareVersion: string
   subject?: string
+  message?: string
 }
 
 type BranchCompareLike = Pick<
@@ -71,7 +72,10 @@ type BranchCompareLike = Pick<
 type CommitCompareLike = Pick<
   GitCommitCompareSummary,
   'commitOid' | 'parentOid' | 'compareRef' | 'baseRef'
->
+> & {
+  subject?: string
+  message?: string
+}
 
 type CombinedDiffAlternate = {
   source: 'combined-uncommitted' | 'combined-branch'
@@ -342,7 +346,8 @@ export type EditorSlice = {
     worktreePath: string,
     compare: GitCommitCompareSummary,
     entries: GitBranchChangeEntry[],
-    subject?: string
+    subject?: string,
+    message?: string
   ) => void
 
   // Cursor line tracking per file
@@ -1939,8 +1944,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     )
   },
 
-  openCommitAllDiffs: (worktreeId, worktreePath, compare, entries, subject) => {
-    const commitCompare = toCommitCompareSnapshot(compare, subject)
+  openCommitAllDiffs: (worktreeId, worktreePath, compare, entries, subject, message) => {
+    const commitCompare = toCommitCompareSnapshot(compare, subject, message)
     const id = `${worktreeId}::all-diffs::commit::${commitCompare.commitOid}`
     const label = subject
       ? `Commit ${commitCompare.compareRef}: ${subject}`
@@ -2741,7 +2746,8 @@ function toBranchCompareSnapshot(compare: BranchCompareLike): BranchCompareSnaps
 
 function toCommitCompareSnapshot(
   compare: CommitCompareLike,
-  subject?: string
+  subject?: string,
+  message?: string
 ): CommitCompareSnapshot {
   return {
     commitOid: compare.commitOid,
@@ -2751,7 +2757,10 @@ function toCommitCompareSnapshot(
     compareVersion: `${compare.parentOid ?? 'empty-tree'}:${compare.commitOid}`,
     subject:
       subject ??
-      ('subject' in compare && typeof compare.subject === 'string' ? compare.subject : undefined)
+      ('subject' in compare && typeof compare.subject === 'string' ? compare.subject : undefined),
+    message:
+      message ??
+      ('message' in compare && typeof compare.message === 'string' ? compare.message : undefined)
   }
 }
 

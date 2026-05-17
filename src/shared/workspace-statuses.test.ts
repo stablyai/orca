@@ -1,18 +1,47 @@
 import { describe, expect, it } from 'vitest'
 import {
+  WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT,
+  WORKSPACE_BOARD_COLUMN_WIDTH_MAX,
+  WORKSPACE_BOARD_COLUMN_WIDTH_MIN,
+  clampWorkspaceBoardColumnWidth,
   cloneDefaultWorkspaceStatuses,
   normalizePersistedWorkspaceStatuses,
   normalizeWorkspaceStatuses
 } from './workspace-statuses'
 
 describe('workspace status visuals', () => {
-  it('keeps todo first by default', () => {
+  it('keeps the default workflow order', () => {
     expect(cloneDefaultWorkspaceStatuses().map((status) => status.id)).toEqual([
-      'todo',
-      'in-progress',
+      'completed',
       'in-review',
-      'completed'
+      'in-progress',
+      'todo'
     ])
+    expect(cloneDefaultWorkspaceStatuses()[0]).toMatchObject({ id: 'completed', label: 'Done' })
+  })
+
+  it('migrates legacy default statuses to the default workflow order', () => {
+    const statuses = normalizePersistedWorkspaceStatuses(
+      [
+        { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' },
+        {
+          id: 'in-progress',
+          label: 'In progress',
+          color: 'conductor-progress',
+          icon: 'conductor-progress'
+        },
+        {
+          id: 'in-review',
+          label: 'In review',
+          color: 'conductor-review',
+          icon: 'conductor-review'
+        },
+        { id: 'completed', label: 'Completed', color: 'conductor-done', icon: 'conductor-done' }
+      ],
+      { migrateDefaultWorkflowStatuses: true }
+    )
+
+    expect(statuses).toEqual(cloneDefaultWorkspaceStatuses())
   })
 
   it('migrates the old default status visuals without reordering the board', () => {
@@ -32,7 +61,12 @@ describe('workspace status visuals', () => {
       'in-review',
       'completed'
     ])
-    expect(statuses).toEqual(cloneDefaultWorkspaceStatuses())
+    expect(statuses.map((status) => status.color)).toEqual([
+      'neutral',
+      'conductor-progress',
+      'conductor-review',
+      'conductor-done'
+    ])
   })
 
   it('preserves explicit status order while migrating default visuals', () => {
@@ -58,7 +92,7 @@ describe('workspace status visuals', () => {
     })
   })
 
-  it('preserves default-label reordered statuses unless the one-shot repair is requested', () => {
+  it('preserves default-label reordered statuses unless a default migration is requested', () => {
     const statuses = normalizePersistedWorkspaceStatuses([
       { id: 'completed', label: 'Completed', color: 'conductor-done', icon: 'conductor-done' },
       { id: 'in-review', label: 'In review', color: 'conductor-review', icon: 'conductor-review' },
@@ -77,6 +111,30 @@ describe('workspace status visuals', () => {
       'in-progress',
       'todo'
     ])
+  })
+
+  it('migrates exact reordered default statuses to the new Done label when requested', () => {
+    const statuses = normalizePersistedWorkspaceStatuses(
+      [
+        { id: 'completed', label: 'Completed', color: 'conductor-done', icon: 'conductor-done' },
+        {
+          id: 'in-review',
+          label: 'In review',
+          color: 'conductor-review',
+          icon: 'conductor-review'
+        },
+        {
+          id: 'in-progress',
+          label: 'In progress',
+          color: 'conductor-progress',
+          icon: 'conductor-progress'
+        },
+        { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' }
+      ],
+      { migrateDefaultWorkflowStatuses: true }
+    )
+
+    expect(statuses).toEqual(cloneDefaultWorkspaceStatuses())
   })
 
   it('repairs the exact PR-introduced default status reorder when migration-gated', () => {
@@ -183,5 +241,12 @@ describe('workspace status visuals', () => {
       color: 'blue',
       icon: 'circle-dot'
     })
+  })
+
+  it('clamps workspace board column widths to resizable bounds', () => {
+    expect(clampWorkspaceBoardColumnWidth(undefined)).toBe(WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT)
+    expect(clampWorkspaceBoardColumnWidth(100)).toBe(WORKSPACE_BOARD_COLUMN_WIDTH_MIN)
+    expect(clampWorkspaceBoardColumnWidth(321.6)).toBe(322)
+    expect(clampWorkspaceBoardColumnWidth(900)).toBe(WORKSPACE_BOARD_COLUMN_WIDTH_MAX)
   })
 })

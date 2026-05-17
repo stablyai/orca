@@ -12,7 +12,9 @@ const mocks = vi.hoisted(() => {
     ptyIdsByTabId: {} as Record<string, string[]>
   }
   const toastError = vi.fn()
-  return { state, toastError }
+  const markWorktreeSleepIntent = vi.fn()
+  const clearWorktreeSleepIntent = vi.fn()
+  return { clearWorktreeSleepIntent, markWorktreeSleepIntent, state, toastError }
 })
 
 vi.mock('@/store', () => ({
@@ -22,6 +24,10 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
+vi.mock('@/lib/worktree-sleep-intent', () => ({
+  clearWorktreeSleepIntent: mocks.clearWorktreeSleepIntent,
+  markWorktreeSleepIntent: mocks.markWorktreeSleepIntent
+}))
 
 import { runSleepWorktree, runSleepWorktrees } from './sleep-worktree-flow'
 
@@ -32,6 +38,8 @@ describe('runSleepWorktree', () => {
     mocks.state.shutdownWorktreeTerminals.mockClear().mockResolvedValue(undefined)
     mocks.state.suppressPtyExit.mockClear()
     mocks.state.consumeSuppressedPtyExit.mockClear()
+    mocks.markWorktreeSleepIntent.mockClear()
+    mocks.clearWorktreeSleepIntent.mockClear()
     mocks.toastError.mockClear()
     mocks.state.activeWorktreeId = null
     mocks.state.tabsByWorktree = {}
@@ -67,27 +75,19 @@ describe('runSleepWorktree', () => {
     expect(activeClear).toBeLessThan(browsersCall)
   })
 
-  it('suppresses active PTY exits before clearing the active slept worktree', async () => {
+  it('marks active sleep intent before clearing the active slept worktree', async () => {
     mocks.state.activeWorktreeId = 'wt-1'
-    mocks.state.tabsByWorktree = {
-      'wt-1': [{ id: 'tab-1' }, { id: 'tab-2' }],
-      'wt-2': [{ id: 'tab-other' }]
-    }
-    mocks.state.ptyIdsByTabId = {
-      'tab-1': ['pty-1'],
-      'tab-2': ['pty-2', 'pty-3'],
-      'tab-other': ['pty-other']
-    }
 
     await runSleepWorktree('wt-1')
 
-    expect(mocks.state.suppressPtyExit).toHaveBeenCalledTimes(3)
-    expect(mocks.state.suppressPtyExit).toHaveBeenNthCalledWith(1, 'pty-1')
-    expect(mocks.state.suppressPtyExit).toHaveBeenNthCalledWith(2, 'pty-2')
-    expect(mocks.state.suppressPtyExit).toHaveBeenNthCalledWith(3, 'pty-3')
-    const suppressCall = mocks.state.suppressPtyExit.mock.invocationCallOrder[0]
+    expect(mocks.markWorktreeSleepIntent).toHaveBeenCalledWith('wt-1')
+    expect(mocks.clearWorktreeSleepIntent).toHaveBeenCalledWith('wt-1')
+    const markCall = mocks.markWorktreeSleepIntent.mock.invocationCallOrder[0]
     const activeClear = mocks.state.setActiveWorktree.mock.invocationCallOrder[0]
-    expect(suppressCall).toBeLessThan(activeClear)
+    const terminalShutdown = mocks.state.shutdownWorktreeTerminals.mock.invocationCallOrder[0]
+    const clearCall = mocks.clearWorktreeSleepIntent.mock.invocationCallOrder[0]
+    expect(markCall).toBeLessThan(activeClear)
+    expect(terminalShutdown).toBeLessThan(clearCall)
   })
 
   it('leaves activeWorktreeId alone when sleeping a background worktree', async () => {
@@ -97,6 +97,7 @@ describe('runSleepWorktree', () => {
 
     expect(mocks.state.setActiveWorktree).not.toHaveBeenCalled()
     expect(mocks.state.suppressPtyExit).not.toHaveBeenCalled()
+    expect(mocks.markWorktreeSleepIntent).not.toHaveBeenCalled()
   })
 
   it('surfaces a toast and skips terminals when browsers throws', async () => {
@@ -108,7 +109,7 @@ describe('runSleepWorktree', () => {
     await runSleepWorktree('wt-1')
 
     expect(mocks.state.shutdownWorktreeTerminals).not.toHaveBeenCalled()
-    expect(mocks.state.consumeSuppressedPtyExit).toHaveBeenCalledWith('pty-1')
+    expect(mocks.clearWorktreeSleepIntent).toHaveBeenCalledWith('wt-1')
     expect(mocks.toastError).toHaveBeenCalledWith(
       'Failed to sleep workspace',
       expect.objectContaining({ description: 'boom' })

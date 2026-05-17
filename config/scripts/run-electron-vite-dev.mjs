@@ -59,28 +59,8 @@ function formatDevInstanceLabel(branch, worktreeName) {
   return branch || worktreeName || null
 }
 
-function createBadgeSuffix(seed) {
-  const n = parseInt(createHash('sha1').update(seed).digest('hex').slice(0, 8), 16)
-  return (n % 1296).toString(36).toUpperCase().padStart(2, '0')
-}
-
-function createDockBadgeLabel(displayValue, identitySeed) {
-  const source = lastBranchSegment(displayValue || identitySeed || '')
-  const words = source.split(/[^a-zA-Z0-9]+/).filter(Boolean)
-  const prefix =
-    words.length > 1
-      ? words
-          .slice(0, 2)
-          .map((word) => word[0])
-          .join('')
-      : (words[0] ?? 'D').slice(0, 2)
-  const normalizedPrefix = (prefix.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() || 'D').slice(0, 2)
-  return `${normalizedPrefix}${createBadgeSuffix(identitySeed || displayValue || source)}`
-}
-
-function createDockTitle(branch, label, badgeLabel) {
-  const title = `Orca Dev${badgeLabel ? ` [${badgeLabel}]` : ''}`
-  return `${title}: ${branch || label || 'dev'}`
+function createDockTitle(branch, label) {
+  return `Orca: ${branch || label || 'dev'}`
 }
 
 function seedDevInstanceIdentityEnv() {
@@ -91,10 +71,7 @@ function seedDevInstanceIdentityEnv() {
   const worktreeName = process.env.ORCA_DEV_WORKTREE_NAME || path.basename(repoRoot)
   const label = process.env.ORCA_DEV_INSTANCE_LABEL || formatDevInstanceLabel(branch, worktreeName)
   const identitySeed = process.env.ORCA_DEV_INSTANCE_KEY || repoRoot
-  const badgeLabel =
-    process.env.ORCA_DEV_DOCK_BADGE_LABEL ||
-    createDockBadgeLabel(worktreeName || branch || label, identitySeed)
-  const dockTitle = process.env.ORCA_DEV_DOCK_TITLE || createDockTitle(branch, label, badgeLabel)
+  const dockTitle = process.env.ORCA_DEV_DOCK_TITLE || createDockTitle(branch, label)
 
   process.env.ORCA_DEV_REPO_ROOT ||= repoRoot
   process.env.ORCA_DEV_INSTANCE_KEY ||= identitySeed
@@ -106,11 +83,8 @@ function seedDevInstanceIdentityEnv() {
   }
   if (label) {
     // Why: parallel `pn dev` runs need a stable origin label for window titles,
-    // Dock badges, and automation sessions without re-running git in Electron.
+    // Dock names, and automation sessions without re-running git in Electron.
     process.env.ORCA_DEV_INSTANCE_LABEL ||= label
-  }
-  if (badgeLabel) {
-    process.env.ORCA_DEV_DOCK_BADGE_LABEL ||= badgeLabel
   }
   process.env.ORCA_DEV_DOCK_TITLE ||= dockTitle
 }
@@ -133,12 +107,12 @@ function sanitizeMacAppBundleName(value) {
   return (
     Array.from(value, (char) => {
       const code = char.charCodeAt(0)
-      return code < 32 || code === 127 || char === ':' || char === '/' || char === '\\' ? '-' : char
+      return code < 32 || code === 127 || char === '/' || char === '\\' ? '-' : char
     })
       .join('')
       .replace(/\s+/g, ' ')
       .trim()
-      .slice(0, 120) || 'Orca Dev'
+      .slice(0, 120) || 'Orca'
   )
 }
 
@@ -158,9 +132,9 @@ function prepareMacDevElectronApp() {
     electronVersion = JSON.parse(readFileSync(electronPackagePath, 'utf8')).version ?? null
   } catch {}
 
-  const title = process.env.ORCA_DEV_DOCK_TITLE || 'Orca Dev'
+  const title = process.env.ORCA_DEV_DOCK_TITLE || 'Orca: dev'
   const identityKey = process.env.ORCA_DEV_INSTANCE_KEY || repoRoot
-  const bundleLayoutVersion = 'dock-title-app-filename-v1'
+  const bundleLayoutVersion = 'dock-title-app-filename-v2'
   const hash = createHash('sha1')
     .update(
       `${sourceAppPath}\0${electronVersion ?? ''}\0${title}\0${identityKey}\0${bundleLayoutVersion}`
@@ -326,10 +300,7 @@ const userPassedPort = forwardedRaw.some(
 // a debug-port line would be noise.
 const isHelpOrVersion = forwardedRaw.some((a) => a === '--help' || a === '-h' || a === '--version')
 if (!isHelpOrVersion && process.env.ORCA_DEV_INSTANCE_LABEL) {
-  const badge = process.env.ORCA_DEV_DOCK_BADGE_LABEL
-    ? ` [${process.env.ORCA_DEV_DOCK_BADGE_LABEL}]`
-    : ''
-  console.error(`[orca-dev] Instance: ${process.env.ORCA_DEV_INSTANCE_LABEL}${badge}`)
+  console.error(`[orca-dev] Instance: ${process.env.ORCA_DEV_INSTANCE_LABEL}`)
 }
 let forwardedExtras = []
 if (!userPassedPort && !isHelpOrVersion) {

@@ -119,7 +119,9 @@ describe('run-electron-vite-dev', () => {
         ORCA_DEV_WRAPPER_TEST_PID_FILE: pidFile,
         ORCA_DEV_WRAPPER_TEST_ENV_FILE: envFile,
         ORCA_DEV_BRANCH: 'feature/billing-shell',
-        ORCA_DEV_WORKTREE_NAME: 'payment-ui'
+        ORCA_DEV_WORKTREE_NAME: 'payment-ui',
+        ORCA_DEV_DOCK_BADGE_LABEL: undefined,
+        ORCA_DEV_DOCK_TITLE: undefined
       },
       stdio: 'ignore'
     })
@@ -146,7 +148,7 @@ describe('run-electron-vite-dev', () => {
       branch: string
       worktreeName: string
       repoRoot: string
-      badgeLabel: string
+      badgeLabel: string | null
       dockTitle: string
       stableName: string | null
       electronExecPath: string | null
@@ -156,8 +158,8 @@ describe('run-electron-vite-dev', () => {
     expect(envSnapshot.branch).toBe('feature/billing-shell')
     expect(envSnapshot.worktreeName).toBe('payment-ui')
     expect(envSnapshot.repoRoot).toBe(resolve('.'))
-    expect(envSnapshot.badgeLabel).toMatch(/^PU[A-Z0-9]{2}$/)
-    expect(envSnapshot.dockTitle).toMatch(/^Orca Dev \[PU[A-Z0-9]{2}\]: feature\/billing-shell$/)
+    expect(envSnapshot.badgeLabel).toBeNull()
+    expect(envSnapshot.dockTitle).toBe('Orca: feature/billing-shell')
     expect(envSnapshot.stableName).toBeNull()
     expect(envSnapshot.electronExecPath).toBeNull()
 

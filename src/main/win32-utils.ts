@@ -35,13 +35,6 @@ function hasUnsafeWindowsBatchSyntax(value: string): boolean {
   return /[&|<>^"%!\r\n]/.test(value)
 }
 
-function quoteWindowsBatchToken(value: string): string {
-  if (hasUnsafeWindowsBatchSyntax(value)) {
-    throw new UnsafeWindowsBatchArgumentsError()
-  }
-  return `"${value}"`
-}
-
 /** Check whether an error is a Windows permission error (EACCES or EPERM). */
 export function isPermissionError(error: unknown): boolean {
   return (
@@ -132,8 +125,16 @@ export function getSpawnArgsForWindows(
   args: string[]
 ): { spawnCmd: string; spawnArgs: string[] } {
   if (isWindowsBatchScript(command)) {
-    const commandLine = [command, ...args].map(quoteWindowsBatchToken).join(' ')
-    return { spawnCmd: getCmdExePath(), spawnArgs: ['/d', '/s', '/c', commandLine] }
+    for (const value of [command, ...args]) {
+      if (hasUnsafeWindowsBatchSyntax(value)) {
+        throw new UnsafeWindowsBatchArgumentsError()
+      }
+    }
+
+    // Why: when Node passes a pre-quoted command line as one argv entry,
+    // cmd.exe sees literal escaped quotes on Windows and refuses to run .cmd
+    // shims. Separate argv entries let Node quote spaces without breaking cmd.
+    return { spawnCmd: getCmdExePath(), spawnArgs: ['/d', '/c', command, ...args] }
   }
   return { spawnCmd: command, spawnArgs: args }
 }

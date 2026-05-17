@@ -51,6 +51,7 @@ import {
   type UnifiedWorktreeRow
 } from './mergeSnapshotAndSessions'
 import { WorkspaceSpaceCompactPanel } from './WorkspaceSpaceCompactPanel'
+import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
 
 const POLL_MS = 2_000
 const SESSIONS_POLL_MS = 10_000
@@ -1085,6 +1086,7 @@ export function ResourceUsageStatusSegment({
           <PopoverTrigger asChild>
             <button
               type="button"
+              {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
               className="relative inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
               aria-label={
                 spaceScanReady && !runtimeEnvironmentActive
@@ -1142,6 +1144,7 @@ export function ResourceUsageStatusSegment({
         side="top"
         align="end"
         sideOffset={8}
+        {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
         className="w-[26rem] max-w-[calc(100vw-2rem)] p-0"
         onOpenAutoFocus={(event) => event.preventDefault()}
         // Why: clicking a terminal row activates a tab, which causes xterm

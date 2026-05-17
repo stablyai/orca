@@ -1,4 +1,9 @@
-import type { ExternalAutomationJob } from '../../shared/automations-types'
+import type {
+  ExternalAutomationJob,
+  ExternalAutomationProvider,
+  ExternalAutomationRun,
+  ExternalAutomationRunStatus
+} from '../../shared/automations-types'
 
 type ExternalJobRecord = Record<string, unknown>
 
@@ -43,6 +48,52 @@ function isoFromMs(value: unknown): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString()
 }
 
+function asExternalRunStatus(value: unknown): ExternalAutomationRunStatus {
+  return value === 'completed' || value === 'failed' || value === 'unknown' ? value : 'unknown'
+}
+
+function mapExternalRuns({
+  managerId,
+  provider,
+  jobId,
+  rawRuns
+}: {
+  managerId: string
+  provider: ExternalAutomationProvider
+  jobId: string
+  rawRuns: unknown
+}): ExternalAutomationRun[] {
+  if (!Array.isArray(rawRuns)) {
+    return []
+  }
+  return rawRuns
+    .filter(isRecord)
+    .map((run, index) => {
+      const runAt = asString(run.run_at) ?? asString(run.runAt)
+      const id = asString(run.id) ?? `${jobId}:${runAt ?? index}`
+      return {
+        id,
+        managerId,
+        provider,
+        jobId: asString(run.job_id) ?? asString(run.jobId) ?? jobId,
+        runAt,
+        status: asExternalRunStatus(run.status),
+        outputPreview: asString(run.output_preview) ?? asString(run.outputPreview),
+        outputContent: asString(run.output_content) ?? asString(run.outputContent),
+        error: asString(run.error),
+        outputPath: asString(run.output_path) ?? asString(run.outputPath)
+      }
+    })
+    .sort((a, b) => {
+      const aTime = a.runAt ? Date.parse(a.runAt) : Number.NaN
+      const bTime = b.runAt ? Date.parse(b.runAt) : Number.NaN
+      if (Number.isFinite(aTime) && Number.isFinite(bTime)) {
+        return bTime - aTime
+      }
+      return b.id.localeCompare(a.id)
+    })
+}
+
 function hermesScheduleDisplay(job: ExternalJobRecord): string {
   const direct = asString(job.schedule_display)
   if (direct) {
@@ -59,6 +110,19 @@ function hermesScheduleDisplay(job: ExternalJobRecord): string {
     )
   }
   return asString(schedule) ?? '?'
+}
+
+function hermesRawSchedule(job: ExternalJobRecord): string | null {
+  const schedule = job.schedule
+  if (isRecord(schedule)) {
+    return (
+      asString(schedule.expr) ??
+      asString(schedule.value) ??
+      asString(schedule.display) ??
+      asString(schedule.run_at)
+    )
+  }
+  return asString(schedule) ?? asString(job.schedule_display)
 }
 
 function hermesPromptPreview(job: ExternalJobRecord): string {
@@ -94,6 +158,14 @@ function openClawScheduleDisplay(job: ExternalJobRecord): string {
   return kind ?? '?'
 }
 
+function openClawRawSchedule(job: ExternalJobRecord): string | null {
+  const schedule = job.schedule
+  if (!isRecord(schedule)) {
+    return asString(schedule)
+  }
+  return asString(schedule.expr) ?? asString(schedule.cron) ?? null
+}
+
 function openClawPromptPreview(job: ExternalJobRecord): string {
   const payload = job.payload
   if (!isRecord(payload)) {
@@ -117,14 +189,23 @@ export function mapHermesJobs(managerId: string, rawJobs: unknown): ExternalAuto
       provider: 'hermes',
       name: (asString(job.name) ?? preview) || id,
       schedule: hermesScheduleDisplay(job),
+      rawSchedule: hermesRawSchedule(job),
       enabled,
       state: asString(job.state) ?? (enabled ? 'scheduled' : 'paused'),
+      prompt: asString(job.prompt),
       promptPreview: preview,
       nextRunAt: asString(job.next_run_at),
       lastRunAt: asString(job.last_run_at),
       lastStatus: asString(job.last_status),
       lastError: asString(job.last_error) ?? asString(job.last_delivery_error),
-      workdir: asString(job.workdir)
+      workdir: asString(job.workdir),
+      runCount: asNumber(job.run_count) ?? (Array.isArray(job.runs) ? job.runs.length : 0),
+      runs: mapExternalRuns({
+        managerId,
+        provider: 'hermes',
+        jobId: id,
+        rawRuns: job.runs
+      })
     }
   })
 }
@@ -147,18 +228,27 @@ export function mapOpenClawJobs(managerId: string, rawJobs: unknown): ExternalAu
       provider: 'openclaw',
       name: (asString(job.name) ?? preview) || id,
       schedule: openClawScheduleDisplay(job),
+      rawSchedule: openClawRawSchedule(job),
       enabled,
       state: !enabled
         ? 'disabled'
         : asNumber(state.runningAtMs)
           ? 'running'
           : (lastStatus ?? 'idle'),
+      prompt: openClawPromptPreview(job) || null,
       promptPreview: preview,
       nextRunAt: isoFromMs(state.nextRunAtMs),
       lastRunAt: isoFromMs(state.lastRunAtMs),
       lastStatus,
       lastError: asString(state.lastError) ?? asString(state.lastDeliveryError),
-      workdir: null
+      workdir: null,
+      runCount: asNumber(job.run_count) ?? (Array.isArray(job.runs) ? job.runs.length : 0),
+      runs: mapExternalRuns({
+        managerId,
+        provider: 'openclaw',
+        jobId: id,
+        rawRuns: job.runs
+      })
     }
   })
 }

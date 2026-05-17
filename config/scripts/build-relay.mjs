@@ -36,7 +36,7 @@ for (const platform of PLATFORMS) {
     outfile: join(outDir, 'relay.js'),
     // Native addons cannot be bundled — they must exist on the remote host.
     // The relay gracefully degrades when they are absent.
-    external: ['node-pty', '@parcel/watcher'],
+    external: ['node-pty', '@parcel/watcher', 'better-sqlite3'],
     sourcemap: false,
     minify: true,
     define: {

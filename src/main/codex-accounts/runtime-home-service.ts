@@ -720,16 +720,34 @@ export class CodexRuntimeHomeService {
   }
 
   private readSystemDefaultSnapshot(snapshotPath: string): CodexSystemDefaultSnapshot | null {
+    let rawContents: string
     try {
-      const parsed = JSON.parse(readFileSync(snapshotPath, 'utf-8')) as unknown
+      rawContents = readFileSync(snapshotPath, 'utf-8')
+    } catch {
+      return null
+    }
+    try {
+      const parsed = JSON.parse(rawContents) as unknown
       if (
         parsed &&
         typeof parsed === 'object' &&
         !Array.isArray(parsed) &&
         'authJson' in parsed &&
-        (typeof parsed.authJson === 'string' || parsed.authJson === null)
+        (typeof (parsed as { authJson: unknown }).authJson === 'string' ||
+          (parsed as { authJson: unknown }).authJson === null)
       ) {
         return parsed as CodexSystemDefaultSnapshot
+      }
+      // Why: pre-PR snapshots wrote raw auth.json contents verbatim. Treat any
+      // valid JSON object without an authJson wrapper as the legacy format so
+      // upgraders do not lose their system-default auth on first deselect.
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        !Array.isArray(parsed) &&
+        !('authJson' in parsed)
+      ) {
+        return { authJson: rawContents }
       }
     } catch {
       return null

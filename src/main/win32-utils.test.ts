@@ -44,9 +44,9 @@ describe('getSpawnArgsForWindows', () => {
           '--foo'
         ])
         expect(spawnCmd).toBe('C:\\Windows\\System32\\cmd.exe')
-        // Why: /d disables AutoRun; /s preserves quoted command-line parsing;
-        // /c runs the quoted batch command and exits.
-        expect(spawnArgs).toEqual(['/d', '/s', '/c', '"C:\\tools\\codex.cmd" "login" "--foo"'])
+        // Why: /d disables AutoRun; /c runs the batch command and exits.
+        // Separate argv entries avoid cmd.exe seeing Node-escaped quotes.
+        expect(spawnArgs).toEqual(['/d', '/c', 'C:\\tools\\codex.cmd', 'login', '--foo'])
       })
     } finally {
       if (originalComSpec === undefined) {
@@ -76,6 +76,14 @@ describe('getSpawnArgsForWindows', () => {
   it('rejects unsafe args for .cmd scripts on win32', () => {
     withPlatform('win32', () => {
       expect(() => getSpawnArgsForWindows('C:\\tools\\agent.cmd', ['hello & goodbye'])).toThrow(
+        'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
+      )
+    })
+  })
+
+  it('rejects unsafe command paths for .cmd scripts on win32', () => {
+    withPlatform('win32', () => {
+      expect(() => getSpawnArgsForWindows('C:\\bad&path\\agent.cmd', ['login'])).toThrow(
         'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
       )
     })

@@ -103,8 +103,12 @@ import type {
   AutomationCreateInput,
   AutomationDispatchRequest,
   AutomationDispatchResult,
+  ExternalAutomationCreateInput,
   ExternalAutomationActionInput,
   ExternalAutomationManager,
+  ExternalAutomationRunsInput,
+  ExternalAutomationRunsPage,
+  ExternalAutomationUpdateInput,
   AutomationRun,
   AutomationUpdateInput
 } from '../shared/automations-types'
@@ -1155,8 +1159,10 @@ const api = {
   },
 
   agentTrust: {
-    markTrusted: (args: { preset: 'cursor' | 'copilot'; workspacePath: string }): Promise<void> =>
-      ipcRenderer.invoke('agentTrust:markTrusted', args)
+    markTrusted: (args: {
+      preset: 'cursor' | 'copilot' | 'codex'
+      workspacePath: string
+    }): Promise<void> => ipcRenderer.invoke('agentTrust:markTrusted', args)
   },
 
   preflight: {
@@ -1288,8 +1294,8 @@ const api = {
     openInFileManager: (path: string): Promise<ShellOpenLocalPathResult> =>
       ipcRenderer.invoke('shell:openInFileManager', path),
 
-    openInExternalEditor: (path: string): Promise<ShellOpenLocalPathResult> =>
-      ipcRenderer.invoke('shell:openInExternalEditor', path),
+    openInExternalEditor: (path: string, command?: string): Promise<ShellOpenLocalPathResult> =>
+      ipcRenderer.invoke('shell:openInExternalEditor', path, command),
 
     openUrl: (url: string): Promise<void> => ipcRenderer.invoke('shell:openUrl', url),
 
@@ -2778,6 +2784,12 @@ const api = {
       ipcRenderer.invoke('automations:listRuns', args),
     listExternalManagers: (): Promise<ExternalAutomationManager[]> =>
       ipcRenderer.invoke('automations:listExternalManagers'),
+    listExternalRuns: (input: ExternalAutomationRunsInput): Promise<ExternalAutomationRunsPage> =>
+      ipcRenderer.invoke('automations:listExternalRuns', input),
+    createExternal: (input: ExternalAutomationCreateInput): Promise<void> =>
+      ipcRenderer.invoke('automations:createExternal', input),
+    updateExternal: (input: ExternalAutomationUpdateInput): Promise<void> =>
+      ipcRenderer.invoke('automations:updateExternal', input),
     runExternalAction: (input: ExternalAutomationActionInput): Promise<void> =>
       ipcRenderer.invoke('automations:runExternalAction', input),
     create: (input: AutomationCreateInput): Promise<Automation> =>
@@ -2789,6 +2801,8 @@ const api = {
       ipcRenderer.invoke('automations:runNow', args),
     markDispatchResult: (result: AutomationDispatchResult): Promise<AutomationRun> =>
       ipcRenderer.invoke('automations:markDispatchResult', result),
+    snapshotWorkspaceName: (args: { workspaceId: string; displayName: string }): Promise<number> =>
+      ipcRenderer.invoke('automations:snapshotWorkspaceName', args),
     rendererReady: (): Promise<void> => ipcRenderer.invoke('automations:rendererReady'),
     onDispatchRequested: (callback: (request: AutomationDispatchRequest) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, request: AutomationDispatchRequest) =>

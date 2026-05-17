@@ -34,7 +34,7 @@ export function getStartupErrorFallbackUI(uiHydrated: boolean): PersistedUIState
     lastActiveWorktreeId: null,
     sidebarWidth: 280,
     rightSidebarWidth: 350,
-    groupBy: 'none',
+    groupBy: 'repo',
     showWorkspaceLineage: false,
     sortBy: 'name',
     showActiveOnly: false,

@@ -32,7 +32,12 @@ vi.mock('fs/promises', async () => {
   return { ...actual, stat: statMock }
 })
 
-import { addSparseWorktree, listWorktrees, removeWorktree } from './worktree'
+import {
+  addSparseWorktree,
+  assertWorktreeCleanForRemoval,
+  listWorktrees,
+  removeWorktree
+} from './worktree'
 
 type MockResult = {
   error?: Error
@@ -289,6 +294,46 @@ branch refs/heads/main
     )
 
     warnSpy.mockRestore()
+  })
+})
+
+describe('assertWorktreeCleanForRemoval', () => {
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+  })
+
+  it('returns without checking git status for force removals', async () => {
+    await expect(assertWorktreeCleanForRemoval('/repo-feature', true)).resolves.toBeUndefined()
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('passes when git status output is empty', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await expect(assertWorktreeCleanForRemoval('/repo-feature')).resolves.toBeUndefined()
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['status', '--porcelain', '--untracked-files=all'],
+      { cwd: '/repo-feature' }
+    )
+  })
+
+  it('throws a dedicated dirty/untracked error when status output is non-empty', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '?? scratch.txt\n', stderr: '' })
+
+    await expect(assertWorktreeCleanForRemoval('/repo-feature')).rejects.toMatchObject({
+      message: 'Worktree has uncommitted or untracked changes.',
+      stdout: '?? scratch.txt\n'
+    })
+  })
+
+  it('rethrows preflight subprocess failures as-is', async () => {
+    const error = Object.assign(new Error('fatal: not a git repository'), {
+      stderr: 'fatal: not a git repository (or any of the parent directories): .git\n'
+    })
+    gitExecFileAsyncMock.mockRejectedValueOnce(error)
+
+    await expect(assertWorktreeCleanForRemoval('/repo-feature')).rejects.toBe(error)
   })
 })
 

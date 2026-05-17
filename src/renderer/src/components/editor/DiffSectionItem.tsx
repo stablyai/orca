@@ -242,6 +242,15 @@ export function DiffSectionItem({
       section.status
     ]
   )
+  const changedLineCount = useMemo(() => {
+    if (lineStats) {
+      return lineStats.added + lineStats.removed
+    }
+    if (section.added === undefined && section.removed === undefined) {
+      return undefined
+    }
+    return (section.added ?? 0) + (section.removed ?? 0)
+  }, [lineStats, section.added, section.removed])
   // Why: image diffs need document-flow height in the combined view; the text
   // fallback only knows line counts and would squash screenshots into one row.
   const useIntrinsicImageHeight = isIntrinsicHeightImageDiff(section.diffResult)
@@ -249,6 +258,7 @@ export function DiffSectionItem({
     measuredContentHeight: sectionHeight,
     originalContent: section.originalContent,
     modifiedContent: section.modifiedContent,
+    changedLineCount,
     useIntrinsicImageHeight
   })
 
@@ -258,6 +268,10 @@ export function DiffSectionItem({
     lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(editor, sideBySide)
     const modified = editor.getModifiedEditor()
 
+    // Why: measuring before Monaco computes hidden unchanged regions records
+    // full-file height, making virtualized combined diffs jump as rows remount.
+    let diffLayoutReady = false
+    let pendingHeightFrame: number | null = null
     const updateHeight = (): void => {
       const contentHeight = editor.getModifiedEditor().getContentHeight()
       setSectionHeights((prev) => {
@@ -267,8 +281,28 @@ export function DiffSectionItem({
         return { ...prev, [index]: contentHeight }
       })
     }
-    modified.onDidContentSizeChange(updateHeight)
-    updateHeight()
+    const requestHeightUpdate = (): void => {
+      if (pendingHeightFrame !== null) {
+        return
+      }
+      pendingHeightFrame = window.requestAnimationFrame(() => {
+        pendingHeightFrame = null
+        updateHeight()
+      })
+    }
+    const markDiffLayoutReady = (): void => {
+      diffLayoutReady = true
+      requestHeightUpdate()
+    }
+    const contentSizeSub = modified.onDidContentSizeChange(() => {
+      if (diffLayoutReady) {
+        requestHeightUpdate()
+      }
+    })
+    const diffUpdateSub = editor.onDidUpdateDiff(markDiffLayoutReady)
+    if (editor.getLineChanges() !== null) {
+      markDiffLayoutReady()
+    }
 
     setModifiedEditor(modified)
     // Why: Monaco disposes inner editors when the DiffEditor container is
@@ -277,6 +311,12 @@ export function DiffSectionItem({
     // methods on a disposed editor instance, and avoids `popover` pointing
     // at a line in an editor that no longer exists.
     modified.onDidDispose(() => {
+      contentSizeSub.dispose()
+      diffUpdateSub.dispose()
+      if (pendingHeightFrame !== null) {
+        window.cancelAnimationFrame(pendingHeightFrame)
+        pendingHeightFrame = null
+      }
       lineNumberOptionsSubRef.current?.dispose()
       lineNumberOptionsSubRef.current = null
       diffEditorRef.current = null

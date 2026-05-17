@@ -87,6 +87,17 @@ describe('CrashReportStore', () => {
     await expect(store.markSent(report.id)).resolves.toMatchObject({ status: 'dismissed' })
   })
 
+  it('persists a submitted dismissed report as sent', async () => {
+    const { store, filePath } = await createStore()
+    const report = await store.record(input())
+
+    await expect(store.dismiss(report.id)).resolves.toMatchObject({ status: 'dismissed' })
+    await expect(store.markDismissedSent(report.id)).resolves.toMatchObject({ status: 'sent' })
+
+    const reloaded = new CrashReportStore(filePath)
+    await expect(reloaded.getById(report.id)).resolves.toMatchObject({ status: 'sent' })
+  })
+
   it('serializes concurrent writes', async () => {
     const { store } = await createStore()
 

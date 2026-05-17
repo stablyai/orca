@@ -32,6 +32,17 @@ const LEGACY_DEFAULT_WORKSPACE_STATUSES = [
   { id: 'in-review', label: 'In review', color: 'violet', icon: 'git-pull-request' },
   { id: 'completed', label: 'Completed', color: 'emerald', icon: 'circle-check' }
 ]
+const WORKFLOW_DEFAULT_WORKSPACE_STATUSES = [
+  { id: 'completed', label: 'Done', color: 'conductor-done', icon: 'conductor-done' },
+  { id: 'in-review', label: 'In review', color: 'conductor-review', icon: 'conductor-review' },
+  {
+    id: 'in-progress',
+    label: 'In progress',
+    color: 'conductor-progress',
+    icon: 'conductor-progress'
+  },
+  { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' }
+]
 
 vi.mock('electron', () => ({
   app: {
@@ -195,6 +206,7 @@ describe('Store', () => {
     expect(settings.rightSidebarOpenByDefault).toBe(true)
     expect(settings.showTasksButton).toBe(true)
     expect(settings.visibleTaskProviders).toEqual(['github', 'gitlab', 'linear'])
+    expect(settings.openInApplications).toEqual([])
     expect(settings.experimentalActivity).toBe(true)
     expect(settings.floatingTerminalEnabled).toBe(true)
     expect(settings.floatingTerminalDefaultedForAllUsers).toBe(true)
@@ -209,6 +221,33 @@ describe('Store', () => {
     expect(ui.lastActiveRepoId).toBeNull()
     expect(ui.dismissedUpdateVersion).toBeNull()
     expect(ui.lastUpdateCheckAt).toBeNull()
+  })
+
+  it('preserves legacy none grouping as ungrouped workspaces', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      ui: { groupBy: 'none' }
+    })
+    const store = await createStore()
+    expect(store.getUI().groupBy).toBe('none')
+  })
+
+  it('normalizes interim flat grouping back to none', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      ui: { groupBy: 'flat' }
+    })
+    const store = await createStore()
+    expect(store.getUI().groupBy).toBe('none')
+  })
+
+  it('preserves explicit workspace status grouping', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      ui: { groupBy: 'workspace-status' }
+    })
+    const store = await createStore()
+    expect(store.getUI().groupBy).toBe('workspace-status')
   })
 
   // ── 2. Load from existing valid file ─────────────────────────────────
@@ -430,6 +469,98 @@ describe('Store', () => {
     expect(second.title).toBe('Nightly run 2')
   })
 
+  it('snapshots automation run workspace names for deleted-workspace history', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    store.setWorktreeMeta('wt1', { displayName: 'Nightly workspace' })
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+
+    const run = store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
+    store.removeWorktreeMeta('wt1')
+
+    expect(run.workspaceDisplayName).toBe('Nightly workspace')
+    expect(store.listAutomationRuns(automation.id)[0].workspaceDisplayName).toBe(
+      'Nightly workspace'
+    )
+  })
+
+  it('backfills automation run workspace names before workspace deletion', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
+
+    const updatedCount = store.snapshotAutomationRunWorkspaceDisplayName('wt1', 'Deleted workspace')
+
+    expect(updatedCount).toBe(1)
+    expect(store.listAutomationRuns(automation.id)[0].workspaceDisplayName).toBe(
+      'Deleted workspace'
+    )
+  })
+
+  it('persists automation run output snapshots across later status updates', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    const run = store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
+
+    store.updateAutomationRun({
+      runId: run.id,
+      status: 'completed',
+      workspaceId: 'wt1',
+      outputSnapshot: {
+        format: 'plain_text',
+        content: 'Run finished',
+        capturedAt: 1,
+        truncated: false
+      },
+      error: null
+    })
+    store.updateAutomationRun({
+      runId: run.id,
+      status: 'completed',
+      workspaceId: 'wt1',
+      terminalSessionId: 'tab-1',
+      usage: null,
+      error: null
+    })
+
+    expect(store.listAutomationRuns(automation.id)[0].outputSnapshot).toMatchObject({
+      content: 'Run finished',
+      truncated: false
+    })
+  })
+
   // ── 3. Corrupt JSON → falls back to defaults ────────────────────────
 
   it('falls back to defaults when data file contains invalid JSON', async () => {
@@ -465,6 +596,7 @@ describe('Store', () => {
     expect(store.getSettings().refreshLocalBaseRefOnWorktreeCreate).toBe(false)
     expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
     expect(store.getSettings().showTasksButton).toBe(true)
+    expect(store.getSettings().combinedDiffFileTreeVisibleByDefault).toBe(true)
     expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'gitlab', 'linear'])
     expect(store.getSettings().experimentalActivity).toBe(true)
     expect(store.getSettings().notifications.customSoundPath).toBeNull()
@@ -485,6 +617,31 @@ describe('Store', () => {
 
     const store = await createStore()
     expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab'])
+  })
+
+  it('normalizes persisted open-in applications on load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        openInApplications: [
+          { id: 'cursor', label: ' Cursor ', command: ' cursor ' },
+          { id: 'cursor', label: 'Dup', command: 'dup' },
+          { id: '', label: 'Zed', command: 'zed' },
+          { id: 'bad', label: ' ', command: 'bad' }
+        ]
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().openInApplications).toEqual([
+      { id: 'cursor', label: 'Cursor', command: 'cursor' },
+      { id: 'open-in-3', label: 'Zed', command: 'zed' }
+    ])
   })
 
   it('migrates the legacy floating terminal disabled default to enabled', async () => {
@@ -770,6 +927,20 @@ describe('Store', () => {
     expect(updated.branchPrefix).toBe('git-username')
   })
 
+  it('updateSettings normalizes open-in applications', async () => {
+    const store = await createStore()
+    const updated = store.updateSettings({
+      openInApplications: [
+        { id: 'cursor', label: ' Cursor ', command: ' cursor ' },
+        { id: 'cursor', label: 'Dup', command: 'dup' },
+        { id: 'bad', label: '', command: 'bad' }
+      ]
+    })
+    expect(updated.openInApplications).toEqual([
+      { id: 'cursor', label: 'Cursor', command: 'cursor' }
+    ])
+  })
+
   it('updateSettings toggles editorAutoSave', async () => {
     const store = await createStore()
     expect(store.getSettings().editorAutoSave).toBe(false)
@@ -971,32 +1142,37 @@ describe('Store', () => {
     const store = await createStore()
     const ui = store.getUI()
     expect(ui.workspaceStatuses?.map((status) => status.id)).toEqual([
-      'todo',
-      'in-progress',
+      'completed',
       'in-review',
-      'completed'
+      'in-progress',
+      'todo'
     ])
+    expect(ui.workspaceStatuses?.[0]?.label).toBe('Done')
     expect(ui._workspaceStatusesDefaultOrderMigrated).toBe(true)
+    expect(ui._workspaceStatusesDefaultWorkflowMigrated).toBe(true)
 
     store.flush()
     const persisted = readDataFile() as {
       ui?: {
         workspaceStatuses?: typeof REORDERED_DEFAULT_WORKSPACE_STATUSES
         _workspaceStatusesDefaultOrderMigrated?: boolean
+        _workspaceStatusesDefaultWorkflowMigrated?: boolean
         _workspaceStatusesDefaultVisualsMigrated?: boolean
       }
     }
     expect(persisted.ui?._workspaceStatusesDefaultOrderMigrated).toBe(true)
+    expect(persisted.ui?._workspaceStatusesDefaultWorkflowMigrated).toBe(true)
     expect(persisted.ui?._workspaceStatusesDefaultVisualsMigrated).toBe(true)
     expect(persisted.ui?.workspaceStatuses?.map((status) => status.id)).toEqual([
-      'todo',
-      'in-progress',
+      'completed',
       'in-review',
-      'completed'
+      'in-progress',
+      'todo'
     ])
+    expect(persisted.ui?.workspaceStatuses?.[0]?.label).toBe('Done')
   })
 
-  it('migrates legacy default workspace status visuals once on load', async () => {
+  it('migrates legacy default workspace status visuals and workflow once on load', async () => {
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -1011,25 +1187,18 @@ describe('Store', () => {
     })
 
     const store = await createStore()
-    expect(store.getUI().workspaceStatuses).toEqual([
-      { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' },
-      {
-        id: 'in-progress',
-        label: 'In progress',
-        color: 'conductor-progress',
-        icon: 'conductor-progress'
-      },
-      { id: 'in-review', label: 'In review', color: 'conductor-review', icon: 'conductor-review' },
-      { id: 'completed', label: 'Completed', color: 'conductor-done', icon: 'conductor-done' }
-    ])
+    expect(store.getUI().workspaceStatuses).toEqual(WORKFLOW_DEFAULT_WORKSPACE_STATUSES)
+    expect(store.getUI()._workspaceStatusesDefaultWorkflowMigrated).toBe(true)
     expect(store.getUI()._workspaceStatusesDefaultVisualsMigrated).toBe(true)
 
     store.flush()
     const persisted = readDataFile() as {
       ui?: {
+        _workspaceStatusesDefaultWorkflowMigrated?: boolean
         _workspaceStatusesDefaultVisualsMigrated?: boolean
       }
     }
+    expect(persisted.ui?._workspaceStatusesDefaultWorkflowMigrated).toBe(true)
     expect(persisted.ui?._workspaceStatusesDefaultVisualsMigrated).toBe(true)
   })
 
@@ -1042,6 +1211,7 @@ describe('Store', () => {
       ui: {
         workspaceStatuses: LEGACY_DEFAULT_WORKSPACE_STATUSES,
         _workspaceStatusesDefaultOrderMigrated: true,
+        _workspaceStatusesDefaultWorkflowMigrated: true,
         _workspaceStatusesDefaultVisualsMigrated: true
       },
       githubCache: { pr: {}, issue: {} },
@@ -1063,7 +1233,8 @@ describe('Store', () => {
       settings: {},
       ui: {
         workspaceStatuses: REORDERED_DEFAULT_WORKSPACE_STATUSES,
-        _workspaceStatusesDefaultOrderMigrated: true
+        _workspaceStatusesDefaultOrderMigrated: true,
+        _workspaceStatusesDefaultWorkflowMigrated: true
       },
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}

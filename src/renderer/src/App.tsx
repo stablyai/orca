@@ -47,6 +47,7 @@ import { StarNagCard } from './components/StarNagCard'
 import { FeatureTourNudge } from './components/feature-wall/FeatureTourNudge'
 import { TelemetryFirstLaunchSurface } from './components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from './components/ZoomOverlay'
+import { onOnboardingReopened } from './components/onboarding/show-onboarding-event'
 import { shouldShowOnboarding } from './components/onboarding/should-show-onboarding'
 import { SshPassphraseDialog } from './components/settings/SshPassphraseDialog'
 import DeleteWorktreeDialog from './components/sidebar/DeleteWorktreeDialog'
@@ -273,6 +274,7 @@ function App(): React.JSX.Element {
   const floatingTerminalTriggerLocation = useAppStore(
     (s) => s.settings?.floatingTerminalTriggerLocation ?? 'floating-button'
   )
+  const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   // Why: the floating terminal is a transient overlay; hotkey minimize should
   // return keyboard focus to the surface the user was working in before it.
   const floatingTerminalReturnFocusRef = useRef<HTMLElement | null>(null)
@@ -385,6 +387,10 @@ function App(): React.JSX.Element {
   useEditorExternalWatch()
   useGlobalFileDrop()
   useAutoAckViewedAgent()
+
+  useEffect(() => {
+    return onOnboardingReopened(setOnboarding)
+  }, [])
 
   // Why: sidebar open/close flips width instantaneously. useLayoutEffect
   // runs synchronously after React commits the DOM but before paint, so
@@ -1122,7 +1128,14 @@ function App(): React.JSX.Element {
     // `titlebar-left`. Measuring only the inner control cluster left the
     // back/forward arrows hanging over the first tab when the sidebar was
     // collapsed (Cmd+B), producing a half-occluded, non-scrollable tab strip.
-    <div ref={titlebarLeftControlsRef} className="flex h-full w-full shrink-0 items-center">
+    // Why: collapsed workspace mode floats inside a w-0 sidebar wrapper; w-max
+    // prevents Windows Chromium from shrinking the app name down to one glyph.
+    <div
+      ref={titlebarLeftControlsRef}
+      className={`flex h-full shrink-0 items-center${
+        workspaceActive && !sidebarOpen ? ' w-max' : ' w-full'
+      }`}
+    >
       <div className="flex h-full items-center">
         {isMac && !isFullScreen ? (
           <div className="titlebar-traffic-light-pad" />
@@ -1151,7 +1164,7 @@ function App(): React.JSX.Element {
         ) : (
           <div className="pl-2" />
         )}
-        {showSidebar && (
+        {showSidebar && !isWindows && (
           <>
             {settings?.showTitlebarAppName !== false && (
               <ContextMenu>
@@ -1196,7 +1209,9 @@ function App(): React.JSX.Element {
           Activity since that page owns its own back-out via the Close button
           in ActivityTitlebarControls. */}
       {(activeView === 'terminal' || activeView === 'tasks') && (
-        <div className="ml-auto mr-3 flex items-center">
+        // Why: when the workspace sidebar is collapsed, this header shrink-wraps
+        // and ml-auto has no spare width; keep a fixed gutter before Back.
+        <div className="ml-auto mr-3 flex items-center pl-2">
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -1357,8 +1372,14 @@ function App(): React.JSX.Element {
                       // (see TabGroupSplitLayout), occluding that seam. Add a
                       // `border-r` in the floating state so the vertical line
                       // between the traffic-light/nav cluster and the tab strip
-                      // stays visible in both states.
-                      className={`titlebar-left${sidebarOpen ? '' : ' absolute top-0 left-0 z-10 border-r border-border'}`}
+                      // stays visible in both states. w-max keeps the floating
+                      // header sized to its own controls instead of the w-0
+                      // sidebar wrapper.
+                      className={`titlebar-left${
+                        sidebarOpen
+                          ? ''
+                          : ' absolute top-0 left-0 z-10 w-max border-r border-border'
+                      }`}
                       style={{
                         // Why: the Sidebar resize hook updates the sidebar DOM width
                         // directly during drag and only persists to Zustand on
@@ -1452,7 +1473,7 @@ function App(): React.JSX.Element {
               open={floatingTerminalOpen}
               onOpenChange={setFloatingTerminalOpenWithFocus}
             />
-            {floatingTerminalTriggerLocation === 'floating-button' ? (
+            {floatingTerminalTriggerLocation === 'floating-button' || !statusBarVisible ? (
               <FloatingTerminalToggleButton
                 open={floatingTerminalOpen}
                 onToggle={() => setFloatingTerminalOpenWithFocus((open) => !open)}
@@ -1461,51 +1482,49 @@ function App(): React.JSX.Element {
           </>
         ) : null}
         <StatusBar floatingTerminalOpen={floatingTerminalOpen} />
-        {/* Why: NewWorkspaceComposerCard renders Radix <Tooltip>s that crash
-            when mounted outside a TooltipProvider ancestor. Keep the global
-            composer modal inside this provider so the card renders safely
-            whether triggered from Cmd+J or any future entry point. */}
+        {/* Why: root overlays can render Radix <Tooltip>s; keep them inside
+            the shared provider so lazy surfaces mount safely from any entry point. */}
         <Suspense fallback={null}>
           {mountedLazyModalIds.has('new-workspace-composer') ? <NewWorkspaceComposerModal /> : null}
           {mountedLazyModalIds.has('workspace-cleanup') ? <WorkspaceCleanupDialog /> : null}
         </Suspense>
-      </TooltipProvider>
-      <Suspense fallback={null}>
-        {mountedLazyModalIds.has('quick-open') ? <QuickOpen /> : null}
-        {mountedLazyModalIds.has('worktree-palette') ? <WorktreeJumpPalette /> : null}
-        {mountedLazyModalIds.has('feature-wall') ? <FeatureWallModal /> : null}
-      </Suspense>
-      {/* Why: mount PetOverlay only when the experimental flag is on AND
+        <Suspense fallback={null}>
+          {mountedLazyModalIds.has('quick-open') ? <QuickOpen /> : null}
+          {mountedLazyModalIds.has('worktree-palette') ? <WorktreeJumpPalette /> : null}
+          {mountedLazyModalIds.has('feature-wall') ? <FeatureWallModal /> : null}
+        </Suspense>
+        {/* Why: mount PetOverlay only when the experimental flag is on AND
           the user hasn't hit "Hide pet" in the status-bar menu. Both
           conditions must be true — see design doc (pet-overlay.md) on why
           the two toggles are kept independent. */}
-      {petEnabled && petVisible ? (
-        <Suspense fallback={null}>
-          <PetOverlay />
-        </Suspense>
-      ) : null}
-      <UpdateCard />
-      <FeatureTourNudge />
-      <StarNagCard />
-      {/* Why: the existing-user opt-in banner mounts at App root so it
+        {petEnabled && petVisible ? (
+          <Suspense fallback={null}>
+            <PetOverlay />
+          </Suspense>
+        ) : null}
+        <UpdateCard />
+        <FeatureTourNudge />
+        <StarNagCard />
+        {/* Why: the existing-user opt-in banner mounts at App root so it
           renders once per renderer session, not per view. It gates
           internally on the cohort markers populated by the migration,
           so it only shows for users who installed before the telemetry
           release and have not yet resolved consent. New users get no
           first-launch surface — see telemetry-plan.md §First-launch
           experience. */}
-      <TelemetryFirstLaunchSurface />
-      <ZoomOverlay />
-      <SshPassphraseDialog />
-      <DeleteWorktreeDialog />
-      <CrashReportDialog />
-      {onboarding && shouldShowOnboarding(onboarding) ? (
-        <Suspense fallback={null}>
-          <OnboardingFlow onboarding={onboarding} onOnboardingChange={setOnboarding} />
-        </Suspense>
-      ) : null}
-      <DictationController />
-      <RecentTabSwitcher />
+        <TelemetryFirstLaunchSurface />
+        <ZoomOverlay />
+        <SshPassphraseDialog />
+        <DeleteWorktreeDialog />
+        <CrashReportDialog />
+        {onboarding && shouldShowOnboarding(onboarding) ? (
+          <Suspense fallback={null}>
+            <OnboardingFlow onboarding={onboarding} onOnboardingChange={setOnboarding} />
+          </Suspense>
+        ) : null}
+        <DictationController />
+        <RecentTabSwitcher />
+      </TooltipProvider>
       <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
       {/* Why: rendered last so it sits after all -webkit-app-region:drag elements
           in DOM order. Electron's hit-test for drag regions is DOM-order-based and

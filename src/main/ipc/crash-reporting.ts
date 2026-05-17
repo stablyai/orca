@@ -61,7 +61,11 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
       if (!report) {
         return { ok: false, status: null, error: 'No crash report available.' }
       }
-      if (report.status !== 'pending' || uploadedReportIds.has(report.id)) {
+      const canSubmitDismissedReport = Boolean(args.reportId && report.status === 'dismissed')
+      if (
+        (!canSubmitDismissedReport && report.status !== 'pending') ||
+        uploadedReportIds.has(report.id)
+      ) {
         return {
           ok: true,
           report: uploadedReportIds.has(report.id) ? { ...report, status: 'sent' } : report
@@ -88,6 +92,17 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
           return { ...result, report }
         }
         uploadedReportIds.add(report.id)
+        if (report.status === 'dismissed') {
+          try {
+            // Why: startup prompts are dismissed before the user can send from
+            // the still-open dialog, so successful uploads must update storage.
+            const sent = await store.markDismissedSent(report.id)
+            return { ok: true, report: sent ?? { ...report, status: 'sent' } }
+          } catch (error) {
+            console.error('[crash-reporting] Failed to mark dismissed crash report sent:', error)
+            return { ok: true, report: { ...report, status: 'sent' } }
+          }
+        }
         try {
           const sent = await store.markSent(report.id)
           return { ok: true, report: sent ?? { ...report, status: 'sent' } }

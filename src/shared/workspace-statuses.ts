@@ -1,15 +1,27 @@
 import type { Worktree, WorkspaceStatus, WorkspaceStatusDefinition } from './types'
+import { DEFAULT_STATUS_VISUALS, DEFAULT_WORKSPACE_STATUSES } from './workspace-status-defaults'
+import {
+  isKnownBadPRReorderedDefaultStatusPayload,
+  isLegacyDefaultWorkflowStatusPayload
+} from './workspace-status-default-migration'
+
+export { DEFAULT_WORKSPACE_STATUSES } from './workspace-status-defaults'
 
 const WORKSPACE_STATUS_GROUP_PREFIX = 'workspace-status:'
 const MAX_STATUS_LABEL_LENGTH = 32
 const MAX_WORKSPACE_STATUSES = 12
 type WorkspaceStatusNormalizationOptions = {
+  migrateDefaultWorkflowStatuses?: boolean
   migrateLegacyDefaultStatusVisuals?: boolean
 }
 
 export const DEFAULT_WORKSPACE_STATUS_ID: WorkspaceStatus = 'in-progress'
 export const DEFAULT_WORKSPACE_STATUS_COLOR_ID = 'neutral'
 export const DEFAULT_WORKSPACE_STATUS_ICON_ID = 'circle-dot'
+export const WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT = 308
+export const WORKSPACE_BOARD_COLUMN_WIDTH_MIN = 220
+export const WORKSPACE_BOARD_COLUMN_WIDTH_MAX = 520
+export const WORKSPACE_BOARD_COLUMN_WIDTH_STEP = 20
 
 export const WORKSPACE_STATUS_COLOR_IDS = [
   'neutral',
@@ -43,25 +55,6 @@ export const WORKSPACE_STATUS_ICON_IDS = [
   'conductor-review',
   'conductor-progress'
 ] as const
-
-const DEFAULT_STATUS_VISUALS: Record<string, { color: string; icon: string }> = {
-  todo: { color: 'neutral', icon: 'circle' },
-  'in-progress': { color: 'conductor-progress', icon: 'conductor-progress' },
-  'in-review': { color: 'conductor-review', icon: 'conductor-review' },
-  completed: { color: 'conductor-done', icon: 'conductor-done' }
-}
-
-export const DEFAULT_WORKSPACE_STATUSES = [
-  { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' },
-  {
-    id: 'in-progress',
-    label: 'In progress',
-    color: 'conductor-progress',
-    icon: 'conductor-progress'
-  },
-  { id: 'in-review', label: 'In review', color: 'conductor-review', icon: 'conductor-review' },
-  { id: 'completed', label: 'Completed', color: 'conductor-done', icon: 'conductor-done' }
-] as const satisfies readonly WorkspaceStatusDefinition[]
 
 export function cloneDefaultWorkspaceStatuses(): WorkspaceStatusDefinition[] {
   return DEFAULT_WORKSPACE_STATUSES.map((status) => ({ ...status }))
@@ -106,7 +99,9 @@ function sanitizeWorkspaceStatusColor(
     options.migrateLegacyDefaultStatusVisuals === true &&
     ((statusId === 'in-progress' && label === 'In progress' && value === 'blue') ||
       (statusId === 'in-review' && label === 'In review' && value === 'violet') ||
-      (statusId === 'completed' && label === 'Completed' && value === 'emerald')) &&
+      (statusId === 'completed' &&
+        (label === 'Completed' || label === 'Done') &&
+        value === 'emerald')) &&
     DEFAULT_STATUS_VISUALS[statusId]
   ) {
     return DEFAULT_STATUS_VISUALS[statusId]?.color ?? DEFAULT_WORKSPACE_STATUS_COLOR_ID
@@ -133,7 +128,9 @@ function sanitizeWorkspaceStatusIcon(
       label === 'In progress' &&
       (value === 'circle-dot' || value === 'circle-progress')) ||
       (statusId === 'in-review' && label === 'In review' && value === 'git-pull-request') ||
-      (statusId === 'completed' && label === 'Completed' && value === 'circle-check')) &&
+      (statusId === 'completed' &&
+        (label === 'Completed' || label === 'Done') &&
+        value === 'circle-check')) &&
     DEFAULT_STATUS_VISUALS[statusId]
   ) {
     return DEFAULT_STATUS_VISUALS[statusId]?.icon ?? DEFAULT_WORKSPACE_STATUS_ICON_ID
@@ -203,43 +200,20 @@ export function normalizeWorkspaceStatuses(value: unknown): WorkspaceStatusDefin
   return normalizeWorkspaceStatusesInternal(value, {})
 }
 
-const PR_REORDERED_DEFAULT_STATUS_IDS = ['completed', 'in-review', 'in-progress', 'todo'] as const
-
-const PR_REORDERED_DEFAULT_STATUSES = PR_REORDERED_DEFAULT_STATUS_IDS.map((id) => {
-  const status = DEFAULT_WORKSPACE_STATUSES.find((entry) => entry.id === id)
-  if (!status) {
-    throw new Error(`Missing default workspace status: ${id}`)
-  }
-  return { ...status }
-})
-
-function isKnownBadPRReorderedDefaultStatusPayload(value: unknown): boolean {
-  if (!Array.isArray(value) || value.length !== PR_REORDERED_DEFAULT_STATUSES.length) {
-    return false
-  }
-  return value.every((rawStatus, index) => {
-    if (!rawStatus || typeof rawStatus !== 'object' || Array.isArray(rawStatus)) {
-      return false
-    }
-    const raw = rawStatus as Record<string, unknown>
-    const expected = PR_REORDERED_DEFAULT_STATUSES[index]
-    return (
-      Object.keys(raw).length === 4 &&
-      raw.id === expected.id &&
-      raw.label === expected.label &&
-      raw.color === expected.color &&
-      raw.icon === expected.icon
-    )
-  })
-}
-
 export function normalizePersistedWorkspaceStatuses(
   value: unknown,
   options: {
+    migrateDefaultWorkflowStatuses?: boolean
     repairReorderedDefaultStatuses?: boolean
     migrateLegacyDefaultStatusVisuals?: boolean
   } = {}
 ): WorkspaceStatusDefinition[] {
+  if (
+    options.migrateDefaultWorkflowStatuses === true &&
+    isLegacyDefaultWorkflowStatusPayload(value)
+  ) {
+    return cloneDefaultWorkspaceStatuses()
+  }
   // Why: this PR briefly wrote the default columns in reverse workflow order.
   // The repair is one-shot and checks the raw payload, because normalized
   // IDs/labels are indistinguishable from a user-authored column reorder.
@@ -263,6 +237,16 @@ export function clampWorkspaceBoardOpacity(value: unknown): number {
 
 export function normalizeWorkspaceBoardCompact(value: unknown): boolean {
   return value === true
+}
+
+export function clampWorkspaceBoardColumnWidth(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT
+  }
+  return Math.min(
+    WORKSPACE_BOARD_COLUMN_WIDTH_MAX,
+    Math.max(WORKSPACE_BOARD_COLUMN_WIDTH_MIN, Math.round(value))
+  )
 }
 
 export function isWorkspaceStatusId(

@@ -86,17 +86,21 @@ export function CreatePullRequestDialog({
       setError(null)
       return
     }
-    const initializationKey = `${repoId}:${branch}:${eligibility ? 'ready' : 'pending'}`
+    if (!eligibility) {
+      return
+    }
+    const initializationKey = `${repoId}:${branch}`
     if (initializedFromEligibilityRef.current === initializationKey) {
       return
     }
     // Why: eligibility refreshes while the dialog is open; only seed fields
-    // once per branch so late refreshes do not overwrite user edits.
+    // once per branch so late refreshes (including populated→null transitions
+    // when a background eligibility fetch errors out) do not overwrite user edits.
     initializedFromEligibilityRef.current = initializationKey
-    const initialBase = eligibility?.defaultBaseRef ?? ''
+    const initialBase = eligibility.defaultBaseRef ?? ''
     setBase(stripBaseRef(initialBase))
-    setTitle(eligibility?.title ?? '')
-    setBody(eligibility?.body ?? '')
+    setTitle(eligibility.title ?? '')
+    setBody(eligibility.body ?? '')
     setDraft(false)
     setBaseQuery('')
     setBaseResults([])

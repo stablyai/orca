@@ -269,7 +269,7 @@ export default function NewWorkspaceComposerCard({
       <div className="min-w-0 space-y-4 pt-3">
         <div className="space-y-1">
           <div className="flex items-center justify-between gap-2">
-            <label className="text-xs font-medium text-muted-foreground">Repository</label>
+            <label className="text-xs font-medium text-muted-foreground">Project</label>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -293,7 +293,7 @@ export default function NewWorkspaceComposerCard({
             value={repoId}
             onValueChange={onRepoChange}
             onValueSelected={focusNameInput}
-            placeholder="Choose repository"
+            placeholder="Choose project"
             // Why: programmatic .focus() from the Dialog's onOpenAutoFocus
             // handler does not reliably trigger :focus-visible in Chromium.
             // Mirror the Input component's standard ring (border-ring +
