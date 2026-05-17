@@ -61,6 +61,10 @@ function formatSparseDirectoryPreview(directories: string[]): string {
   return directories.length <= 4 ? preview : `${preview}, +${directories.length - 4} more`
 }
 
+function isWebClient(): boolean {
+  return Boolean((window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__)
+}
+
 const WorktreeCard = React.memo(function WorktreeCard({
   worktree,
   repo,
@@ -218,6 +222,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // This preference is purely presentational, so background refreshes would
   // spend rate limit budget on data the user cannot see.
   useEffect(() => {
+    // Why: paired web should not fan out per-card decoration RPCs during
+    // startup; host session/tab parity is the critical path.
+    if (isWebClient()) {
+      return
+    }
     if (repo && !isFolder && !worktree.isBare && hostedReviewCacheKey && showPR) {
       // Why: pass linkedPR so worktrees created from a PR (whose new local
       // branch differs from the remote head ref) still resolve their PR/MR via
@@ -244,7 +253,17 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // Same rationale for issues: once that section is hidden, polling only burns
   // GitHub calls and keeps stale-but-invisible data warm for no user benefit.
   useEffect(() => {
-    if (!repo || isFolder || !worktree.linkedIssue || !issueCacheKey || !showIssue) {
+    // Why: paired web startup can render hundreds of visible workspace cards.
+    // The host is authoritative for repo metadata; issuing decoration lookups
+    // from the browser floods the runtime RPC path and delays live surfaces.
+    if (
+      isWebClient() ||
+      !repo ||
+      isFolder ||
+      !worktree.linkedIssue ||
+      !issueCacheKey ||
+      !showIssue
+    ) {
       return
     }
 

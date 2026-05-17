@@ -119,6 +119,14 @@ type WorktreeWithLineage = Worktree & {
 }
 
 function isRuntimeSelectorNotFoundError(error: unknown): boolean {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'cause' in error &&
+    isRuntimeSelectorNotFoundError((error as { cause?: unknown }).cause)
+  ) {
+    return true
+  }
   const code =
     error &&
     typeof error === 'object' &&
@@ -134,12 +142,22 @@ function isRuntimeSelectorNotFoundError(error: unknown): boolean {
       'string'
       ? (error as { response: { error: { code: string } } }).response.error.code
       : null
+  const responseMessage =
+    error &&
+    typeof error === 'object' &&
+    'response' in error &&
+    typeof (error as { response?: { error?: { message?: unknown } } }).response?.error?.message ===
+      'string'
+      ? (error as { response: { error: { message: string } } }).response.error.message
+      : null
   const message = error instanceof Error ? error.message : String(error)
   return (
     message === 'selector_not_found' ||
     message.includes('selector_not_found') ||
     code === 'selector_not_found' ||
-    responseCode === 'selector_not_found'
+    responseCode === 'selector_not_found' ||
+    responseMessage === 'selector_not_found' ||
+    String(error).includes('selector_not_found')
   )
 }
 
@@ -1007,11 +1025,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
   bumpWorktreeActivity: (worktreeId) => {
     const now = Date.now()
+    let shouldPersist = false
     set((s) => {
       const worktree = findWorktreeById(s.worktreesByRepo, worktreeId)
       if (!worktree) {
         return {}
       }
+      shouldPersist = true
       // Skip sortEpoch bump for the active worktree. Terminal events
       // (PTY spawn, PTY exit) in the active worktree are side-effects of
       // the user clicking the card or interacting with the terminal —
@@ -1029,6 +1049,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         ...(isActive ? {} : { sortEpoch: s.sortEpoch + 1 })
       }
     })
+
+    if (!shouldPersist) {
+      return
+    }
 
     void persistWorktreeMeta(get().settings, worktreeId, { lastActivityAt: now }).catch((err) => {
       if (isRuntimeSelectorNotFoundError(err)) {

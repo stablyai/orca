@@ -1295,6 +1295,20 @@ describe('worktree remote runtime mutations', () => {
     }
   })
 
+  it('does not persist activity for a missing worktree', async () => {
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+
+    store.getState().bumpWorktreeActivity('repo1::/missing')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+  })
+
   it('clears stale hosted review cache and force-refetches when removing linked PR metadata', async () => {
     const store = createTestStore()
     const wt = makeWorktree({

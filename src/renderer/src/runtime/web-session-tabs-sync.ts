@@ -37,6 +37,10 @@ type SessionTabsStreamEvent =
   | { type: 'snapshots'; snapshots: RuntimeMobileSessionTabsResult[] }
   | { type: 'end' }
 
+type SessionTabsListAllResult = {
+  snapshots: RuntimeMobileSessionTabsResult[]
+}
+
 type ReadyTerminalSurface = RuntimeMobileSessionTerminalClientTab & { status: 'ready' }
 type ReadyBrowserSurface = RuntimeMobileSessionBrowserTab & { browserPageId: string }
 type ReadyEditorSurface = RuntimeMobileSessionMarkdownTab | RuntimeMobileSessionFileTab
@@ -88,6 +92,14 @@ export type WebSessionTabsSyncState = Pick<
 
 function isWebClient(): boolean {
   return Boolean((window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__)
+}
+
+function isSessionTabsListAllResult(value: unknown): value is SessionTabsListAllResult {
+  return (
+    Boolean(value) &&
+    typeof value === 'object' &&
+    Array.isArray((value as { snapshots?: unknown }).snapshots)
+  )
 }
 
 function isReadyTerminalTab(
@@ -1336,6 +1348,42 @@ export function useWebSessionTabsSync(): void {
 
     let disposed = false
     let unsubscribe: (() => void) | null = null
+    // Why: the streaming RPC emits an initial snapshots event, but startup can
+    // render a paired web session before that event is applied. A one-shot
+    // fetch makes initial parity deterministic; the stream remains the live
+    // update path afterward.
+    void window.api.runtimeEnvironments
+      .call({
+        selector: environmentId,
+        method: 'session.tabs.listAll',
+        params: {},
+        timeoutMs: 15_000
+      })
+      .then((response: RuntimeRpcResponse<unknown>) => {
+        if (disposed) {
+          return
+        }
+        if (response.ok === false) {
+          console.warn('[web-session-tabs-sync] initial listAll failed:', response.error.message)
+          return
+        }
+        if (!isSessionTabsListAllResult(response.result)) {
+          console.warn('[web-session-tabs-sync] initial listAll returned an invalid payload')
+          return
+        }
+        useAppStore.setState((state) =>
+          applyWebSessionTabsSnapshots(state, response.result.snapshots, environmentId)
+        )
+      })
+      .catch((error) => {
+        if (!disposed) {
+          console.warn(
+            '[web-session-tabs-sync] failed to load initial session tabs:',
+            error instanceof Error ? error.message : String(error)
+          )
+        }
+      })
+
     void window.api.runtimeEnvironments
       .subscribe(
         {
