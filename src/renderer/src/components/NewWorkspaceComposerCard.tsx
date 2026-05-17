@@ -49,7 +49,7 @@ type NewWorkspaceComposerCardProps = {
   onNameValueChange: (value: string) => void
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
   onSmartGitLabItemSelect: (item: GitLabWorkItem) => void
-  onSmartBranchSelect: (refName: string) => void
+  onSmartBranchSelect: (refName: string, localBranchName: string) => void
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void

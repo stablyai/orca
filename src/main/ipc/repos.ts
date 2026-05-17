@@ -5,7 +5,12 @@ import type { BrowserWindow } from 'electron'
 import { dialog, ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
 import type { Store } from '../persistence'
-import type { Repo, BaseRefDefaultResult, SparsePreset } from '../../shared/types'
+import type {
+  BaseRefSearchResult,
+  Repo,
+  BaseRefDefaultResult,
+  SparsePreset
+} from '../../shared/types'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { invalidateAuthorizedRootsCache } from './filesystem-auth'
@@ -20,11 +25,11 @@ import {
   getBaseRefDefault,
   getRemoteCount,
   normalizeRefSearchQuery,
-  parseAndFilterSearchRefs,
+  parseAndFilterSearchRefDetails,
   parseRemoteCount,
   resolveDefaultBaseRefViaExec,
   buildSearchBaseRefsArgv,
-  searchBaseRefs
+  searchBaseRefDetails
 } from '../git/repo'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getActiveMultiplexer } from './ssh'
@@ -75,6 +80,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('repos:getGitUsername')
   ipcMain.removeHandler('repos:getBaseRefDefault')
   ipcMain.removeHandler('repos:searchBaseRefs')
+  ipcMain.removeHandler('repos:searchBaseRefDetails')
   ipcMain.removeHandler('repos:addRemote')
   ipcMain.removeHandler('repos:create')
   ipcMain.removeHandler('sparsePresets:list')
@@ -801,46 +807,67 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.handle(
     'repos:searchBaseRefs',
     async (_event, args: { repoId: string; query: string; limit?: number }) => {
-      const repo = store.getRepo(args.repoId)
-      if (!repo || isFolderRepo(repo)) {
-        return []
-      }
-      const limit = args.limit ?? 25
-      // Why: remote repos need the relay to list branches on the remote host.
-      if (repo.connectionId) {
-        const provider = getSshGitProvider(repo.connectionId)
-        if (!provider) {
-          return []
-        }
-        // Why: mirror the local path's sanitization (normalizeRefSearchQuery
-        // in ../git/repo.ts) — strip glob metacharacters to prevent glob
-        // injection via the SSH branch, and short-circuit empty queries so
-        // we don't leak every ref. Without this the SSH path diverges from
-        // the local path's behavior.
-        const normalizedQuery = normalizeRefSearchQuery(args.query)
-        if (!normalizedQuery) {
-          return []
-        }
-        try {
-          // Why: argv (including the two-remote-glob rationale) lives in
-          // buildSearchBaseRefsArgv so the SSH and local paths cannot drift.
-          const result = await provider.exec(buildSearchBaseRefsArgv(normalizedQuery), repo.path)
-          // Why: delegate the NUL-parse + HEAD filter + dedup + limit pipeline
-          // to the shared helper so the SSH and local paths cannot diverge.
-          // See parseAndFilterSearchRefs in ../git/repo.ts for the dedup +
-          // HEAD-filter rationale.
-          return parseAndFilterSearchRefs(result.stdout, limit)
-        } catch (err) {
-          console.warn('[repos:searchBaseRefs] SSH for-each-ref failed', {
-            path: repo.path,
-            err
-          })
-          return []
-        }
-      }
-      return searchBaseRefs(repo.path, args.query, limit)
+      return (await searchBaseRefDetailsForRepo(store, args)).map((entry) => entry.refName)
     }
   )
+
+  ipcMain.handle(
+    'repos:searchBaseRefDetails',
+    async (_event, args: { repoId: string; query: string; limit?: number }) => {
+      return searchBaseRefDetailsForRepo(store, args)
+    }
+  )
+}
+
+async function searchBaseRefDetailsForRepo(
+  store: Store,
+  args: { repoId: string; query: string; limit?: number }
+): Promise<BaseRefSearchResult[]> {
+  const repo = store.getRepo(args.repoId)
+  if (!repo || isFolderRepo(repo)) {
+    return []
+  }
+  const limit = args.limit ?? 25
+  // Why: remote repos need the relay to list branches on the remote host.
+  if (repo.connectionId) {
+    const provider = getSshGitProvider(repo.connectionId)
+    if (!provider) {
+      return []
+    }
+    // Why: mirror the local path's sanitization (normalizeRefSearchQuery
+    // in ../git/repo.ts) — strip glob metacharacters to prevent glob
+    // injection via the SSH branch, and short-circuit empty queries so
+    // we don't leak every ref. Without this the SSH path diverges from
+    // the local path's behavior.
+    const normalizedQuery = normalizeRefSearchQuery(args.query)
+    if (!normalizedQuery) {
+      return []
+    }
+    try {
+      // Why: argv (including the two-remote-glob rationale) lives in
+      // buildSearchBaseRefsArgv so the SSH and local paths cannot drift.
+      const [result, remotesResult] = await Promise.all([
+        provider.exec(buildSearchBaseRefsArgv(normalizedQuery), repo.path),
+        provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
+      ])
+      // Why: delegate the NUL-parse + HEAD filter + dedup + limit pipeline
+      // to the shared helper so the SSH and local paths cannot diverge.
+      // See parseAndFilterSearchRefs in ../git/repo.ts for the dedup +
+      // HEAD-filter rationale.
+      const remotes = remotesResult.stdout
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+      return parseAndFilterSearchRefDetails(result.stdout, limit, remotes)
+    } catch (err) {
+      console.warn('[repos:searchBaseRefs] SSH for-each-ref failed', {
+        path: repo.path,
+        err
+      })
+      return []
+    }
+  }
+  return searchBaseRefDetails(repo.path, args.query, limit)
 }
 
 function notifyReposChanged(mainWindow: BrowserWindow): void {

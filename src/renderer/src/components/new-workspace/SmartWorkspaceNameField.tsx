@@ -41,7 +41,13 @@ import {
 import { parseGitLabIssueOrMRLink } from '@/lib/gitlab-links'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
-import type { GitHubWorkItem, GitLabWorkItem, LinearIssue } from '../../../../shared/types'
+import { searchRuntimeRepoBaseRefDetails } from '@/runtime/runtime-repo-client'
+import type {
+  BaseRefSearchResult,
+  GitHubWorkItem,
+  GitLabWorkItem,
+  LinearIssue
+} from '../../../../shared/types'
 
 type SmartNameMode = 'smart' | 'github' | 'gitlab' | 'branches' | 'linear' | 'text'
 
@@ -68,7 +74,7 @@ type SmartWorkspaceNameFieldProps = {
   /** Optional so callers that pre-date GitLab support don't need to wire
    *  it. When omitted, GitLab paste-URL detection is silently skipped. */
   onGitLabItemSelect?: (item: GitLabWorkItem) => void
-  onBranchSelect: (refName: string) => void
+  onBranchSelect: (refName: string, localBranchName: string) => void
   onLinearIssueSelect: (issue: LinearIssue) => void
   selectedSource: SmartWorkspaceNameSelection | null
   onClearSelectedSource: () => void
@@ -122,7 +128,7 @@ type RowEntry =
   | { kind: 'create-branch'; value: string; name: string }
   | { kind: 'github'; value: string; item: GitHubWorkItem }
   | { kind: 'gitlab'; value: string; item: GitLabWorkItem }
-  | { kind: 'branch'; value: string; refName: string }
+  | { kind: 'branch'; value: string; refName: string; localBranchName: string }
   | { kind: 'linear'; value: string; issue: LinearIssue }
 
 export default function SmartWorkspaceNameField({
@@ -150,7 +156,8 @@ export default function SmartWorkspaceNameField({
     linearStatus,
     linearStatusChecked,
     listLinearIssues,
-    searchLinearIssues
+    searchLinearIssues,
+    settings
   } = useAppStore(
     useShallow((s) => ({
       addRepo: s.addRepo,
@@ -160,7 +167,8 @@ export default function SmartWorkspaceNameField({
       linearStatus: s.linearStatus,
       linearStatusChecked: s.linearStatusChecked,
       listLinearIssues: s.listLinearIssues,
-      searchLinearIssues: s.searchLinearIssues
+      searchLinearIssues: s.searchLinearIssues,
+      settings: s.settings
     }))
   )
   const selectedRepo = useMemo(
@@ -173,7 +181,7 @@ export default function SmartWorkspaceNameField({
   const [debouncedQuery, setDebouncedQuery] = useState(value)
   const [githubItems, setGithubItems] = useState<GitHubWorkItem[]>([])
   const [gitlabItems, setGitlabItems] = useState<GitLabWorkItem[]>([])
-  const [branches, setBranches] = useState<string[]>([])
+  const [branches, setBranches] = useState<BaseRefSearchResult[]>([])
   const [linearIssues, setLinearIssues] = useState<LinearIssue[]>([])
   const [githubLoading, setGithubLoading] = useState(false)
   const [gitlabLoading, setGitlabLoading] = useState(false)
@@ -386,12 +394,12 @@ export default function SmartWorkspaceNameField({
     }
     let stale = false
     setBranchesLoading(true)
-    void window.api.repos
-      .searchBaseRefs({
-        repoId: selectedRepo.id,
-        query: debouncedQuery.trim(),
-        limit: RESULT_LIMIT
-      })
+    void searchRuntimeRepoBaseRefDetails(
+      settings,
+      selectedRepo.id,
+      debouncedQuery.trim(),
+      RESULT_LIMIT
+    )
       .then((results) => {
         if (!stale) {
           setBranches(results)
@@ -410,7 +418,7 @@ export default function SmartWorkspaceNameField({
     return () => {
       stale = true
     }
-  }, [debouncedQuery, disabled, selectedRepo, shouldQueryBranches])
+  }, [debouncedQuery, disabled, selectedRepo, settings, shouldQueryBranches])
 
   useEffect(() => {
     if (disabled || !shouldQueryLinear || !linearStatus.connected) {
@@ -577,7 +585,10 @@ export default function SmartWorkspaceNameField({
     // for a branch-creation row that's pinned above existing-branch results
     // (suppressed when an existing branch matches exactly so we don't offer
     // to "create" something that already exists).
-    const branchExactMatch = mode === 'branches' && trimmed.length > 0 && branches.includes(trimmed)
+    const branchExactMatch =
+      mode === 'branches' &&
+      trimmed.length > 0 &&
+      branches.some((branch) => branch.refName === trimmed || branch.localBranchName === trimmed)
     // Why: the "Use … as workspace name" row only makes sense in Smart
     // mode, where the user might be typing a free-form name. On dedicated
     // source tabs (GitHub/Linear/Branches) it's off-topic — the user is
@@ -620,10 +631,11 @@ export default function SmartWorkspaceNameField({
         nextRows.push(createBranchRow)
       }
       nextRows.push(
-        ...branches.map((refName) => ({
+        ...branches.map((branch) => ({
           kind: 'branch' as const,
-          value: `branch-${refName}`,
-          refName
+          value: `branch-${branch.refName}`,
+          refName: branch.refName,
+          localBranchName: branch.localBranchName
         }))
       )
     }
@@ -719,7 +731,7 @@ export default function SmartWorkspaceNameField({
         // no-op for hosts that haven't wired GitLab support yet.
         onGitLabItemSelect?.(row.item)
       } else if (row.kind === 'branch') {
-        onBranchSelect(row.refName)
+        onBranchSelect(row.refName, row.localBranchName)
       } else {
         onLinearIssueSelect(row.issue)
       }

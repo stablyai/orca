@@ -60,6 +60,7 @@ import { geminiHookService } from './gemini/hook-service'
 import { cursorHookService } from './cursor/hook-service'
 import { droidHookService } from './droid/hook-service'
 import { grokHookService } from './grok/hook-service'
+import { copilotHookService } from './copilot/hook-service'
 import { hermesHookService } from './hermes/hook-service'
 import {
   getPtyIdForPaneKey,
@@ -806,15 +807,17 @@ app.whenReady().then(async () => {
   // (e.g. corrupted ~/.claude/settings.json) cannot brick Orca startup.
   // The agent label travels with each installer so the catch can attribute
   // the failure in the `agent_hook_install_failed` telemetry event.
-  runManagedHookInstallers([
+  const managedHookInstallers = [
     ['claude', () => claudeHookService.install()],
     ['codex', () => codexHookService.install()],
     ['gemini', () => geminiHookService.install()],
     ['cursor', () => cursorHookService.install()],
     ['droid', () => droidHookService.install()],
     ['grok', () => grokHookService.install()],
+    ['copilot', () => copilotHookService.install()],
     ['hermes', () => hermesHookService.install()]
-  ])
+  ] as const
+  runManagedHookInstallers(managedHookInstallers)
 
   app.on('child-process-gone', (_event, details) => {
     recordProcessGoneCrash('child', details.type, details.reason, details.exitCode ?? null, {

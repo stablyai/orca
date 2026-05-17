@@ -23,6 +23,9 @@ export type HookCommandConfig = {
 
 export type HookDefinition = {
   matcher?: string
+  command?: string
+  bash?: string
+  powershell?: string
   hooks?: HookCommandConfig[]
   [key: string]: unknown
 }
@@ -81,12 +84,16 @@ export function getSharedManagedScriptPath(scriptFileName: string): string {
 // missing/non-executable script a silent no-op so a broken install never
 // poisons the user's session. Failures inside the script itself are
 // unaffected — only the missing-script case short-circuits.
-export function wrapPosixHookCommand(scriptPath: string): string {
+export function wrapPosixHookCommand(scriptPath: string, env: Record<string, string> = {}): string {
   // Why: POSIX single-quote escape so $, `, ", and \ in scriptPath are taken
   // literally — avoids a shell-injection footgun if a future caller passes an
   // arbitrary path.
   const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
-  return `if [ -x ${quoted} ]; then /bin/sh ${quoted}; fi`
+  const envPrefix = Object.entries(env)
+    .map(([key, value]) => `${key}='${value.replaceAll("'", "'\\''")}'`)
+    .join(' ')
+  const invocation = envPrefix ? `${envPrefix} /bin/sh ${quoted}` : `/bin/sh ${quoted}`
+  return `if [ -x ${quoted} ]; then ${invocation}; fi`
 }
 
 export function buildWindowsAgentHookPostCommand(source: AgentHookSource): string {
@@ -101,17 +108,52 @@ export function removeManagedCommands(
   isManagedCommand: (command: string | undefined) => boolean
 ): HookDefinition[] {
   return definitions.flatMap((definition) => {
-    if (!Array.isArray(definition.hooks)) {
+    const directCommandKeys = ['command', 'bash', 'powershell'] as const
+    const directManagedKeys = directCommandKeys.filter((key) => isManagedCommand(definition[key]))
+    const hasNestedHooks = Array.isArray(definition.hooks)
+    const hasManagedNestedHook =
+      hasNestedHooks && definition.hooks!.some((hook) => isManagedCommand(hook.command))
+
+    if (directManagedKeys.length === 0 && !hasManagedNestedHook) {
       return [definition]
     }
 
-    const filteredHooks = definition.hooks.filter((hook) => !isManagedCommand(hook.command))
-    if (filteredHooks.length === 0) {
+    const nextDefinition: HookDefinition = { ...definition }
+    for (const key of directManagedKeys) {
+      delete nextDefinition[key]
+    }
+
+    if (hasManagedNestedHook) {
+      const filteredHooks = definition.hooks!.filter((hook) => !isManagedCommand(hook.command))
+      if (filteredHooks.length > 0) {
+        nextDefinition.hooks = filteredHooks
+      } else {
+        delete nextDefinition.hooks
+      }
+    }
+
+    const hasCommandAfterCleanup =
+      directCommandKeys.some((key) => typeof nextDefinition[key] === 'string') ||
+      (Array.isArray(nextDefinition.hooks) && nextDefinition.hooks.length > 0)
+    if (!hasCommandAfterCleanup) {
       return []
     }
 
-    return [{ ...definition, hooks: filteredHooks }]
+    return [nextDefinition]
   })
+}
+
+export function hookDefinitionHasManagedCommand(
+  definition: HookDefinition,
+  isManagedCommand: (command: string | undefined) => boolean
+): boolean {
+  return (
+    isManagedCommand(definition.command) ||
+    isManagedCommand(definition.bash) ||
+    isManagedCommand(definition.powershell) ||
+    (Array.isArray(definition.hooks) &&
+      definition.hooks.some((hook) => isManagedCommand(hook.command)))
+  )
 }
 
 // Why: temp+rename so concurrent Orca instances writing this shared path can't

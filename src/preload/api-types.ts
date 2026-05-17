@@ -10,6 +10,7 @@ import type {
 import type { AppIdentity } from '../shared/app-identity'
 import type {
   BaseRefDefaultResult,
+  BaseRefSearchResult,
   BrowserCookieImportResult,
   BrowserLoadError,
   BrowserSessionProfile,
@@ -581,6 +582,11 @@ export type PreloadApi = {
     getGitUsername: (args: { repoId: string }) => Promise<string>
     getBaseRefDefault: (args: { repoId: string }) => Promise<BaseRefDefaultResult>
     searchBaseRefs: (args: { repoId: string; query: string; limit?: number }) => Promise<string[]>
+    searchBaseRefDetails: (args: {
+      repoId: string
+      query: string
+      limit?: number
+    }) => Promise<BaseRefSearchResult[]>
     onChanged: (callback: () => void) => () => void
   }
   sparsePresets: {
@@ -1123,6 +1129,7 @@ export type PreloadApi = {
     cursorStatus: () => Promise<AgentHookInstallStatus>
     droidStatus: () => Promise<AgentHookInstallStatus>
     grokStatus: () => Promise<AgentHookInstallStatus>
+    copilotStatus: () => Promise<AgentHookInstallStatus>
     hermesStatus: () => Promise<AgentHookInstallStatus>
   }
   agentTrust: {
@@ -1363,6 +1370,11 @@ export type PreloadApi = {
       connectionId?: string
       includeIgnored?: boolean
     }) => Promise<GitStatusResult>
+    checkIgnored: (args: {
+      worktreePath: string
+      paths: string[]
+      connectionId?: string
+    }) => Promise<string[]>
     history: (
       args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
     ) => Promise<GitHistoryResult>

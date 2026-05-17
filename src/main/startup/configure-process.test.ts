@@ -1,3 +1,4 @@
+import { homedir } from 'os'
 import { join } from 'path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -70,9 +71,9 @@ describe('patchPackagedProcessPath', () => {
     // fallback install locations for the opencode and Pi CLI install scripts.
     // Without them on PATH, GUI-launched Orca reports both as "Not installed"
     // even when `which` resolves them in the user's shell.
-    expect(segments).toContain('/Users/tester/.opencode/bin')
-    expect(segments).toContain('/Users/tester/.vite-plus/bin')
-    expect(segments).toContain('/Users/tester/bin')
+    expect(segments).toContain(join('/Users/tester', '.opencode/bin'))
+    expect(segments).toContain(join('/Users/tester', '.vite-plus/bin'))
+    expect(segments).toContain(join('/Users/tester', 'bin'))
   })
 
   it('leaves PATH untouched when the app is not packaged', async () => {
@@ -87,6 +88,23 @@ describe('patchPackagedProcessPath', () => {
     patchPackagedProcessPath()
 
     expect(process.env.PATH).toBe('/usr/bin:/bin')
+  })
+
+  it('prepends Windows user-local CLI dirs for packaged Start Menu launches', async () => {
+    const { app } = await import('electron')
+    const { patchPackagedProcessPath } = await import('./configure-process')
+
+    setPlatform('win32')
+    Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    const pathDelimiter = process.platform === 'win32' ? ';' : ':'
+    process.env.PATH = `C:\\Windows\\System32${pathDelimiter}C:\\Windows`
+
+    patchPackagedProcessPath()
+
+    const segments = (process.env.PATH ?? '').split(pathDelimiter)
+    const userLocalBin = join(homedir(), '.local', 'bin')
+    expect(segments).toContain(userLocalBin)
+    expect(segments.indexOf(userLocalBin)).toBeLessThan(segments.indexOf('C:\\Windows\\System32'))
   })
 })
 

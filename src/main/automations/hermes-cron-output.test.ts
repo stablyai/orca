@@ -204,4 +204,29 @@ Run summary: monitor automation completed successfully.
     expect(page).toEqual({ total: 1, runs: [] })
     expect(fakePrepareSqls.some((sql) => sql.includes('FROM messages'))).toBe(false)
   })
+
+  it('caches count-only reads until the cache is cleared', async () => {
+    const home = await createHermesHome()
+    const outputDir = join(home, 'cron', 'output', 'job-1')
+    await mkdir(outputDir, { recursive: true })
+    await writeFile(join(outputDir, '2026-05-15_09-02-00.md'), 'first run', 'utf-8')
+
+    const { clearHermesCronOutputRunCountCache, readHermesCronOutputRunsPage } = await loadReader()
+    await expect(readHermesCronOutputRunsPage('job-1', { page: 1, pageSize: 0 })).resolves.toEqual({
+      total: 1,
+      runs: []
+    })
+
+    await writeFile(join(outputDir, '2026-05-15_09-03-00.md'), 'second run', 'utf-8')
+    await expect(readHermesCronOutputRunsPage('job-1', { page: 1, pageSize: 0 })).resolves.toEqual({
+      total: 1,
+      runs: []
+    })
+
+    clearHermesCronOutputRunCountCache('job-1')
+    await expect(readHermesCronOutputRunsPage('job-1', { page: 1, pageSize: 0 })).resolves.toEqual({
+      total: 2,
+      runs: []
+    })
+  })
 })

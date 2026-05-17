@@ -145,6 +145,7 @@ export type IFilesystemProvider = {
 
 export type IGitProvider = {
   getStatus(worktreePath: string, options?: { includeIgnored?: boolean }): Promise<GitStatusResult>
+  checkIgnoredPaths(worktreePath: string, relativePaths: string[]): Promise<string[]>
   getHistory(worktreePath: string, options?: GitHistoryOptions): Promise<GitHistoryResult>
   commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>
   getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null>

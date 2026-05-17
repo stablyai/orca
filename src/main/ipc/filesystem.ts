@@ -62,6 +62,7 @@ import {
 import { getPullRequestDraftContext } from '../text-generation/pull-request-context'
 import { getUpstreamStatus } from '../git/upstream'
 import { gitFetch, gitPull, gitPush } from '../git/remote'
+import { checkIgnoredPaths } from '../git/check-ignored-paths'
 import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
 import { validateGitPushTarget } from '../git/push-target-validation'
@@ -518,6 +519,26 @@ export function registerFilesystemHandlers(
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       return getStatus(worktreePath, options)
+    }
+  )
+
+  ipcMain.handle(
+    'git:checkIgnored',
+    async (
+      _event,
+      args: { worktreePath: string; paths: string[]; connectionId?: string }
+    ): Promise<string[]> => {
+      if (args.connectionId) {
+        const paths = args.paths.map((p) => validateGitRelativeFilePath(args.worktreePath, p))
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No git provider for connection "${args.connectionId}"`)
+        }
+        return provider.checkIgnoredPaths(args.worktreePath, paths)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const paths = args.paths.map((p) => validateGitRelativeFilePath(worktreePath, p))
+      return checkIgnoredPaths(worktreePath, paths)
     }
   )
 

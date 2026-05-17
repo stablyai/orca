@@ -354,8 +354,6 @@ export type UISlice = {
   clearOrcaHookTrustForRepo: (repoId: string) => void
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   setGroupBy: (g: UISlice['groupBy']) => void
-  showWorkspaceLineage: boolean
-  setShowWorkspaceLineage: (v: boolean) => void
   sortBy: 'name' | 'smart' | 'recent' | 'repo'
   setSortBy: (s: UISlice['sortBy']) => void
   showActiveOnly: boolean
@@ -723,9 +721,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ groupBy: g, collapsedGroups: new Set<string>() })
   },
 
-  showWorkspaceLineage: false,
-  setShowWorkspaceLineage: (v) => set({ showWorkspaceLineage: v }),
-
   sortBy: 'recent',
   setSortBy: (s) => set({ sortBy: s }),
 
@@ -918,7 +913,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           MAX_RIGHT_SIDEBAR_WIDTH
         ),
         groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
-        showWorkspaceLineage: ui.showWorkspaceLineage ?? false,
         sortBy,
         // Why: "Active only" is part of the user's sidebar working set, not a
         // transient render detail. Restoring it on launch keeps the filtered

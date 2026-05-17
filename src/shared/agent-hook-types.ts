@@ -1,8 +1,7 @@
 // Why: shared agent-hook IPC payload shapes and the managed-script protocol
 // version constant. Consumed by both the main-process hook server (src/main/
-// agent-hooks/server.ts) and each per-agent hook service (claude/codex/
-// gemini/cursor/hook-service.ts). Lives in `shared/` to keep a single
-// source of truth for the version string and status contract.
+// agent-hooks/server.ts) and each per-agent hook service. Lives in `shared/`
+// to keep a single source of truth for the version string and status contract.
 
 export const AGENT_HOOK_TARGETS = [
   'claude',
@@ -11,6 +10,7 @@ export const AGENT_HOOK_TARGETS = [
   'cursor',
   'droid',
   'grok',
+  'copilot',
   'hermes'
 ] as const
 export type AgentHookTarget = (typeof AGENT_HOOK_TARGETS)[number]

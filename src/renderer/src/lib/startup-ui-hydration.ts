@@ -35,7 +35,6 @@ export function getStartupErrorFallbackUI(uiHydrated: boolean): PersistedUIState
     sidebarWidth: 280,
     rightSidebarWidth: 350,
     groupBy: 'repo',
-    showWorkspaceLineage: false,
     sortBy: 'name',
     showActiveOnly: false,
     hideDefaultBranchWorkspace: false,

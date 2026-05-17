@@ -55,8 +55,16 @@ type HermesMergedRunRef = {
   output: HermesOutputRunRef | null
   session: HermesSessionRunRef | null
 }
+type HermesRunCountCacheEntry = {
+  promise: Promise<number>
+  expiresAt: number
+}
+
+const HERMES_RUN_COUNT_CACHE_TTL_MS = 2000
 
 export class ExternalAutomationsHandler {
+  private readonly hermesRunCountCache = new Map<string, HermesRunCountCacheEntry>()
+
   constructor(private readonly dispatcher: RelayDispatcher) {
     this.dispatcher.onRequest('externalAutomations.list', (params) => this.listJobs(params))
     this.dispatcher.onRequest('externalAutomations.runs', (params) => this.listRuns(params))
@@ -510,7 +518,34 @@ export class ExternalAutomationsHandler {
     if (!EXTERNAL_JOB_ID_PATTERN.test(jobId)) {
       return 0
     }
-    return (await this.readHermesRunRefs(jobId)).length
+    const now = Date.now()
+    const cached = this.hermesRunCountCache.get(jobId)
+    if (cached && cached.expiresAt > now) {
+      return cached.promise
+    }
+    const entry: HermesRunCountCacheEntry = {
+      promise: this.readHermesRunRefs(jobId).then((refs) => refs.length),
+      expiresAt: Number.POSITIVE_INFINITY
+    }
+    this.hermesRunCountCache.set(jobId, entry)
+    try {
+      const count = await entry.promise
+      entry.expiresAt = Date.now() + HERMES_RUN_COUNT_CACHE_TTL_MS
+      return count
+    } catch (error) {
+      if (this.hermesRunCountCache.get(jobId) === entry) {
+        this.hermesRunCountCache.delete(jobId)
+      }
+      throw error
+    }
+  }
+
+  private clearHermesRunCountCache(jobId?: string): void {
+    if (jobId) {
+      this.hermesRunCountCache.delete(jobId)
+      return
+    }
+    this.hermesRunCountCache.clear()
   }
 
   private async listRuns(params: Record<string, unknown> = {}): Promise<{
@@ -808,6 +843,7 @@ export class ExternalAutomationsHandler {
       args.push('--workdir', input.workdir)
     }
     await this.runHermesCronCommand(args)
+    this.clearHermesRunCountCache()
     return { ok: true }
   }
 
@@ -832,6 +868,7 @@ export class ExternalAutomationsHandler {
       args.push('--workdir', input.workdir)
     }
     await this.runHermesCronCommand(args)
+    this.clearHermesRunCountCache(jobId)
     return { ok: true }
   }
 
@@ -851,6 +888,9 @@ export class ExternalAutomationsHandler {
       encoding: 'utf-8',
       timeout: 30_000
     })
+    if (provider === 'hermes') {
+      this.clearHermesRunCountCache(jobId)
+    }
     return { ok: true }
   }
 }

@@ -121,7 +121,9 @@ function getInitialCombinedDiffSideBySide(diffDefaultView: string | undefined): 
 function getInitialCombinedDiffFileTreeCollapsed(
   combinedDiffFileTreeVisibleByDefault: boolean | undefined
 ): boolean {
-  return combinedDiffFileTreeCollapsedPreference ?? combinedDiffFileTreeVisibleByDefault === false
+  // Why: the tree is opt-in for new sessions; only an explicit saved setting
+  // should make it the opening surface while settings are still loading.
+  return combinedDiffFileTreeCollapsedPreference ?? combinedDiffFileTreeVisibleByDefault !== true
 }
 
 function commitMessageBody(message: string | undefined, subject: string | undefined): string {

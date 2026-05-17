@@ -2,6 +2,7 @@
 one focused file because the registration helper is stateful and each spawn-path
 assertion reuses the same mocked IPC and node-pty harness. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { delimiter, join } from 'node:path'
 
 const {
   handleMock,
@@ -780,7 +781,23 @@ describe('registerPtyHandlers', () => {
         try {
           const env = await daemonSpawnAndGetEnv({ PATH: '/usr/bin' })
           expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
-          expect(env.PATH).toContain('/tmp/orca-user-data/cli/bin')
+          expect(env.PATH).toContain(join('/tmp/orca-user-data', 'cli', 'bin'))
+        } finally {
+          mockedApp.isPackaged = prev
+        }
+      })
+
+      it('preserves the inherited PATH when dev-mode daemon env omits PATH', async () => {
+        const { app } = await import('electron')
+        const mockedApp = app as unknown as { isPackaged: boolean }
+        const prev = mockedApp.isPackaged
+        mockedApp.isPackaged = false
+        try {
+          const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
+            PATH: '/system/bin'
+          })
+          expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
+          expect(env.PATH).toBe(`${join('/tmp/orca-user-data', 'cli', 'bin')}${delimiter}/system/bin`)
         } finally {
           mockedApp.isPackaged = prev
         }

@@ -101,6 +101,11 @@ export type BaseRefDefaultResult = {
   remoteCount: number
 }
 
+export type BaseRefSearchResult = {
+  refName: string
+  localBranchName: string
+}
+
 // ─── Worktree (git-level) ────────────────────────────────────────────
 export type GitWorktreeInfo = {
   path: string
@@ -335,10 +340,9 @@ export type TerminalTab = {
   createdAt: number
   /** Bumped on shutdown so TerminalPane remounts with a fresh PTY. */
   generation?: number
-  /** Why: records the shell this tab was explicitly opened with (e.g. 'wsl.exe'
-   *  from the "+" submenu) so the PTY can re-use the same shell on reconnect
-   *  without needing the user to interact with the tab again. Undefined means
-   *  "use the default shell setting". */
+  /** Why: records the shell this tab was opened with (e.g. 'wsl.exe') so the
+   *  PTY and tab icon stay stable even if the default shell setting changes
+   *  later. Older persisted tabs may omit this field. */
   shellOverride?: string
   /** Why: when `setActiveWorktree` bumps generation on all-dead tabs to drive a
    *  TerminalPane remount, the fresh PTY that results is caused by navigation,
@@ -1021,6 +1025,10 @@ export type CreateWorktreeArgs = {
    *  Linear artifact whose title should remain readable in the sidebar. */
   displayName?: string
   baseBranch?: string
+  /** Optional git branch to create, separate from the filesystem-safe worktree
+   *  name. Used when creating from an existing branch whose local branch name
+   *  legitimately contains `/` while the worktree directory must not. */
+  branchNameOverride?: string
   setupDecision?: SetupDecision
   sparseCheckout?: CreateSparseCheckoutRequest
   linkedIssue?: number
@@ -1722,7 +1730,6 @@ export type PersistedUIState = {
   sidebarWidth: number
   rightSidebarWidth: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
-  showWorkspaceLineage?: boolean
   sortBy: 'name' | 'smart' | 'recent' | 'repo'
   showActiveOnly: boolean
   /** Hide the repo's original checked-out branch from workspace navigation

@@ -32,6 +32,7 @@ type FileExplorerVirtualRowsProps = {
   onStartRename: (node: TreeNode) => void
   onDuplicate: (node: TreeNode) => void
   onRequestDelete: (node: TreeNode) => void
+  onCollapseFolderSubtree: (node: TreeNode) => void
   onMoveDrop: (sourcePath: string, destDir: string) => void
   onDragTargetChange: (dir: string | null) => void
   onDragSourceChange: (path: string | null) => void
@@ -68,6 +69,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     onStartRename,
     onDuplicate,
     onRequestDelete,
+    onCollapseFolderSubtree,
     onMoveDrop,
     onDragTargetChange,
     onDragSourceChange,
@@ -165,6 +167,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               onStartRename={onStartRename}
               onDuplicate={onDuplicate}
               onRequestDelete={() => onRequestDelete(n)}
+              onCollapseFolderSubtree={() => onCollapseFolderSubtree(n)}
               onMoveDrop={onMoveDrop}
               onDragTargetChange={onDragTargetChange}
               onDragSourceChange={onDragSourceChange}

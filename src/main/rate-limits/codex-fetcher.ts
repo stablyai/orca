@@ -74,7 +74,7 @@ function mapRpcWindow(
   return {
     usedPercent: Math.min(100, Math.max(0, raw.usedPercent)),
     // Why: Codex currently reports remaining minutes in `windowDurationMins`.
-    // Orca's UI needs the fixed bucket duration so labels stay "5h" / "7d".
+    // Orca's UI needs the fixed bucket duration so labels stay "5h" / "wk".
     windowMinutes: expectedWindowMinutes,
     resetsAt,
     resetDescription

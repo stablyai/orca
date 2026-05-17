@@ -41,7 +41,6 @@ function createService(now: () => number, blocker = createBlocker()): AgentAwake
     blocker,
     now,
     logger: {
-      debug: vi.fn(),
       warn: vi.fn()
     }
   })

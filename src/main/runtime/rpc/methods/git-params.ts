@@ -11,6 +11,10 @@ export const GitStatusParams = WorktreeSelector.extend({
   includeIgnored: z.boolean().optional()
 })
 
+export const GitCheckIgnored = WorktreeSelector.extend({
+  paths: z.array(z.string().min(1, 'Missing path')).max(2000)
+})
+
 export const GitFilePath = WorktreeSelector.extend({
   filePath: z
     .unknown()

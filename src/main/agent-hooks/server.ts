@@ -22,6 +22,7 @@ import {
   clearPaneCacheState,
   createHookListenerState,
   getEndpointFileName,
+  hasPendingAgentResultText,
   HOOK_REQUEST_SLOWLORIS_MS,
   MAX_PANE_KEY_LEN,
   normalizeHookPayload,
@@ -75,6 +76,8 @@ type PaneKeyAliasEntry = {
 // the endpoint file in userData/agent-hooks/ so all hook-server-owned cross-
 // restart artifacts stay co-located.
 const LAST_STATUS_FILE_NAME = 'last-status.json'
+const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
+const ASSISTANT_MESSAGE_RETRY_MS = 50
 
 // Why: starts at 2 (not 1) because pre-merge dev iterations of this branch
 // wrote a v1 shape with no receivedAt / stateStartedAt. Bumping to 2 means a
@@ -232,6 +235,7 @@ export class AgentHookServer {
   // Why: trailing-edge debounce timer. Captured per-instance so multiple
   // server instances in the same process (tests) don't share state.
   private statusPersistTimer: ReturnType<typeof setTimeout> | null = null
+  private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   // Why: identity check — skip writes when the JSON-stringified contents
   // exactly match the last successful disk write. Cheap protection against
   // re-firing trailing timers when nothing changed.
@@ -311,6 +315,74 @@ export class AgentHookServer {
       ...payload,
       receivedAt: now,
       stateStartedAt
+    }
+  }
+
+  private applyNormalizedStatus(payload: AgentHookEventPayload): EnrichedAgentHookEventPayload {
+    if (payload.payload.state !== 'done' || payload.payload.lastAssistantMessage) {
+      this.clearAssistantMessageRetry(payload.paneKey)
+    }
+    const enriched = this.attachStatusTiming(payload)
+    this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
+    this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
+    this.scheduleStatusPersist()
+    this.notifyStatusChangeListeners()
+    this.onAgentStatus?.(enriched)
+    return enriched
+  }
+
+  private clearAssistantMessageRetry(paneKey: string): void {
+    const timer = this.assistantMessageRetryTimers.get(paneKey)
+    if (!timer) {
+      return
+    }
+    clearTimeout(timer)
+    this.assistantMessageRetryTimers.delete(paneKey)
+  }
+
+  private scheduleAssistantMessageRetry(
+    source: AgentHookSource,
+    body: unknown,
+    original: EnrichedAgentHookEventPayload,
+    attempt = 1
+  ): void {
+    if (
+      original.payload.lastAssistantMessage ||
+      !hasPendingAgentResultText(source, body) ||
+      attempt > ASSISTANT_MESSAGE_RETRY_ATTEMPTS
+    ) {
+      return
+    }
+    this.clearAssistantMessageRetry(original.paneKey)
+    const timer = setTimeout(() => {
+      try {
+        this.assistantMessageRetryTimers.delete(original.paneKey)
+        const current = this.state.lastStatusByPaneKey.get(original.paneKey) as
+          | EnrichedAgentHookEventPayload
+          | undefined
+        if (
+          !current ||
+          current.payload.agentType !== original.payload.agentType ||
+          current.payload.prompt !== original.payload.prompt ||
+          current.payload.lastAssistantMessage
+        ) {
+          return
+        }
+        const normalized = normalizeHookPayload(this.state, source, body, this.env)
+        if (!normalized?.payload.lastAssistantMessage) {
+          this.scheduleAssistantMessageRetry(source, body, original, attempt + 1)
+          return
+        }
+        // Why: some agents POST Stop before their transcript/chat-history line
+        // is flushed. Retry from a timer so the hook request returns immediately.
+        this.applyNormalizedStatus(normalized)
+      } catch (err) {
+        console.error('[agent-hooks] assistant message retry failed:', err)
+      }
+    }, ASSISTANT_MESSAGE_RETRY_MS)
+    this.assistantMessageRetryTimers.set(original.paneKey, timer)
+    if (typeof timer.unref === 'function') {
+      timer.unref()
     }
   }
 
@@ -522,12 +594,7 @@ export class AgentHookServer {
       connectionId: trimmedConnectionId,
       payload: normalizedPayload
     }
-    const enriched = this.attachStatusTiming(event)
-    this.runtimeObservedStatusPaneKeys.add(paneKey)
-    this.state.lastStatusByPaneKey.set(paneKey, enriched)
-    this.scheduleStatusPersist()
-    this.notifyStatusChangeListeners()
-    this.onAgentStatus?.(enriched)
+    this.applyNormalizedStatus(event)
   }
 
   async start(options?: { env?: string; userDataPath?: string }): Promise<void> {
@@ -584,19 +651,11 @@ export class AgentHookServer {
         }
 
         trackEmptyPaneKeyHook(body)
-        const normalized = normalizeHookPayload(
-          this.state,
-          source,
-          this.normalizeHookBodyPaneKeyAlias(body),
-          this.env
-        )
+        const aliasedBody = this.normalizeHookBodyPaneKeyAlias(body)
+        const normalized = normalizeHookPayload(this.state, source, aliasedBody, this.env)
         if (normalized) {
-          const enriched = this.attachStatusTiming(normalized)
-          this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
-          this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
-          this.scheduleStatusPersist()
-          this.notifyStatusChangeListeners()
-          this.onAgentStatus?.(enriched)
+          const enriched = this.applyNormalizedStatus(normalized)
+          this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
         }
 
         res.writeHead(204)
@@ -647,6 +706,10 @@ export class AgentHookServer {
     this.token = ''
     this.env = 'production'
     this.onAgentStatus = null
+    for (const timer of this.assistantMessageRetryTimers.values()) {
+      clearTimeout(timer)
+    }
+    this.assistantMessageRetryTimers.clear()
     // Why: intentionally do NOT delete the endpoint file on stop(). A stale
     // file points at a dead port, which matches the fail-open policy. Unlink
     // would introduce a TOCTOU race vs. a concurrent Orca instance.
@@ -674,6 +737,7 @@ export class AgentHookServer {
       return
     }
     this.state.lastStatusByPaneKey.delete(resolvedPaneKey)
+    this.clearAssistantMessageRetry(resolvedPaneKey)
     this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
     this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()
@@ -686,6 +750,7 @@ export class AgentHookServer {
     // event does not change the on-disk file, and skipping the write avoids
     // re-stat'ing on every dead-pane teardown.
     const hadStatus = this.state.lastStatusByPaneKey.has(resolvedPaneKey)
+    this.clearAssistantMessageRetry(resolvedPaneKey)
     clearPaneCacheState(this.state, resolvedPaneKey)
     let clearedAlias = false
     for (const [legacyPaneKey, stablePaneKey] of this.legacyPaneKeyAliases) {

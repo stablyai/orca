@@ -18,7 +18,7 @@ import {
   runHook,
   shouldRunSetupForCreate
 } from '../hooks'
-import { getDefaultBaseRef } from '../git/repo'
+import { getBranchConflictKind, getDefaultBaseRef } from '../git/repo'
 import { OrchestrationDb } from './orchestration/db'
 import { OrcaRuntimeService } from './orca-runtime'
 import {
@@ -579,6 +579,46 @@ describe('OrcaRuntimeService', () => {
     await expect(freshLookup).resolves.toMatchObject({
       id: result.worktree.id,
       path: createdWorktree.path
+    })
+  })
+
+  it('creates a branchNameOverride worktree from the selected matching remote base ref', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({ stdout: '', stderr: '' })
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/feature-something')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/feature-something')
+    vi.mocked(listWorktrees).mockResolvedValueOnce([
+      {
+        path: '/tmp/workspaces/feature-something',
+        head: 'def',
+        branch: 'feature/something',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'feature/something',
+      baseBranch: 'origin/feature/something',
+      branchNameOverride: 'feature/something'
+    })
+
+    expect(getBranchConflictKind).toHaveBeenCalledWith(
+      TEST_REPO_PATH,
+      'feature/something',
+      'origin/feature/something'
+    )
+    expect(addWorktree).toHaveBeenCalledWith(
+      TEST_REPO_PATH,
+      '/tmp/workspaces/feature-something',
+      'feature/something',
+      'origin/feature/something',
+      false
+    )
+    expect(result.worktree).toMatchObject({
+      path: '/tmp/workspaces/feature-something',
+      branch: 'feature/something'
     })
   })
 

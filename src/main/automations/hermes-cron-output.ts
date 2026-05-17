@@ -401,8 +401,46 @@ async function readHermesCronOutputRunRefs(jobId: string): Promise<HermesMergedR
   )
 }
 
+// Why: opening the Automations page calls readHermesCronOutputRunsPage with
+// pageSize:0 once per local Hermes job to populate badge counts. Without a
+// cache this performs N readdir + N sqlite open/query on every list call,
+// which scales linearly with job and run-history size on the main process.
+const HERMES_RUN_COUNT_CACHE_TTL_MS = 2000
+type HermesRunCountCacheEntry = {
+  promise: Promise<number>
+  expiresAt: number
+}
+const hermesRunCountCache = new Map<string, HermesRunCountCacheEntry>()
+
+export function clearHermesCronOutputRunCountCache(jobId?: string): void {
+  if (jobId) {
+    hermesRunCountCache.delete(jobId)
+    return
+  }
+  hermesRunCountCache.clear()
+}
+
 async function readHermesCronOutputRunCount(jobId: string): Promise<number> {
-  return (await readHermesCronOutputRunRefs(jobId)).length
+  const now = Date.now()
+  const cached = hermesRunCountCache.get(jobId)
+  if (cached && cached.expiresAt > now) {
+    return cached.promise
+  }
+  const entry: HermesRunCountCacheEntry = {
+    promise: readHermesCronOutputRunRefs(jobId).then((refs) => refs.length),
+    expiresAt: Number.POSITIVE_INFINITY
+  }
+  hermesRunCountCache.set(jobId, entry)
+  try {
+    const count = await entry.promise
+    entry.expiresAt = Date.now() + HERMES_RUN_COUNT_CACHE_TTL_MS
+    return count
+  } catch (error) {
+    if (hermesRunCountCache.get(jobId) === entry) {
+      hermesRunCountCache.delete(jobId)
+    }
+    throw error
+  }
 }
 
 async function hydrateHermesRunRef(jobId: string, ref: HermesMergedRunRef): Promise<unknown> {
