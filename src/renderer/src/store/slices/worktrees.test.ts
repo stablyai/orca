@@ -1261,6 +1261,37 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().worktreesByRepo.repo1[0]?.comment).toBe('remote note')
   })
 
+  it('does not surface remote selector misses while persisting activity timestamps', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-set',
+      ok: false,
+      error: { code: 'selector_not_found', message: 'selector_not_found' },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [wt] }
+    } as Partial<AppState>)
+
+    try {
+      store.getState().bumpWorktreeActivity(wt.id)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'worktree.set',
+        params: expect.objectContaining({ worktree: wt.id, lastActivityAt: expect.any(Number) }),
+        timeoutMs: 15_000
+      })
+      expect(errorSpy).not.toHaveBeenCalled()
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+
   it('clears stale hosted review cache and force-refetches when removing linked PR metadata', async () => {
     const store = createTestStore()
     const wt = makeWorktree({

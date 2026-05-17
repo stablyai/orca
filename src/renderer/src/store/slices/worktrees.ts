@@ -115,12 +115,27 @@ type WorktreeWithLineage = Worktree & {
 }
 
 function isRuntimeSelectorNotFoundError(error: unknown): boolean {
+  const code =
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    typeof (error as { code: unknown }).code === 'string'
+      ? (error as { code: string }).code
+      : null
+  const responseCode =
+    error &&
+    typeof error === 'object' &&
+    'response' in error &&
+    typeof (error as { response?: { error?: { code?: unknown } } }).response?.error?.code ===
+      'string'
+      ? (error as { response: { error: { code: string } } }).response.error.code
+      : null
+  const message = error instanceof Error ? error.message : String(error)
   return (
-    error instanceof Error &&
-    (error.message === 'selector_not_found' ||
-      ('code' in error &&
-        typeof (error as { code: unknown }).code === 'string' &&
-        (error as { code: string }).code === 'selector_not_found'))
+    message === 'selector_not_found' ||
+    message.includes('selector_not_found') ||
+    code === 'selector_not_found' ||
+    responseCode === 'selector_not_found'
   )
 }
 

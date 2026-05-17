@@ -7933,8 +7933,26 @@ export class OrcaRuntimeService {
       const syncedTab = this.tabs.get(tab.parentTabId)
       const leaf = this.leaves.get(this.getLeafKey(tab.parentTabId, tab.leafId)) ?? null
       const liveLeaf = leaf?.ptyId && leaf.connected ? leaf : null
+      const liveLeafPtyId = liveLeaf?.ptyId ?? null
       const pty = liveLeaf ? null : this.findPtyForMobileTerminalTab(snapshot.worktree, tab)
       const livePty = pty?.connected ? pty : null
+      const legacyPaneId = /^pane:(\d+)$/.exec(tab.leafId)?.[1] ?? null
+      const paneKey = isTerminalLeafId(tab.leafId)
+        ? makePaneKey(tab.parentTabId, tab.leafId)
+        : `${tab.parentTabId}:${legacyPaneId ?? tab.leafId}`
+      // Why: web/mobile clients hold these handles across renderer graph syncs;
+      // leaf handles are graph-epoch-bound, but PTY handles remain streamable.
+      const terminalHandle = liveLeafPtyId
+        ? this.issuePtyHandle(
+            this.recordPtyWorktree(liveLeafPtyId, snapshot.worktree, {
+              tabId: tab.parentTabId,
+              paneKey,
+              connected: true
+            })
+          )
+        : livePty
+          ? this.issuePtyHandle(livePty)
+          : null
       tabs.push({
         type: 'terminal',
         id: tab.id,
@@ -7943,11 +7961,9 @@ export class OrcaRuntimeService {
         title: leaf?.paneTitle ?? syncedTab?.title ?? pty?.title ?? tab.title,
         ...(tab.parentLayout ? { parentLayout: tab.parentLayout } : {}),
         isActive: tab.isActive,
-        ...(liveLeaf
-          ? { status: 'ready' as const, terminal: this.issueHandle(liveLeaf) }
-          : livePty
-            ? { status: 'ready' as const, terminal: this.issuePtyHandle(livePty) }
-            : { status: 'pending-handle' as const, terminal: null })
+        ...(terminalHandle
+          ? { status: 'ready' as const, terminal: terminalHandle }
+          : { status: 'pending-handle' as const, terminal: null })
       })
     }
     const active = tabs.find((tab) => tab.isActive) ?? null
