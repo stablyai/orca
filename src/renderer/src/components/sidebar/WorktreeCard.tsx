@@ -336,6 +336,15 @@ const WorktreeCard = React.memo(function WorktreeCard({
     [isDeleting, isMultiSelected, selectedWorktrees, worktree.id]
   )
 
+  const stopQuickActionPointerPropagation = useCallback(
+    (event: React.PointerEvent<HTMLButtonElement>) => {
+      // Why: the Kanban board is dismissed by document-level pointer handling.
+      // Quick card actions mutate metadata, but must not count as card activation.
+      event.stopPropagation()
+    },
+    []
+  )
+
   // Why: the 'unread' card property is the user's opt-out. When off, we render
   // as if the workspace is read so bold emphasis never appears. The persisted
   // `worktree.isUnread` flag is unchanged; only the rendering changes.
@@ -386,6 +395,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
               <TooltipTrigger asChild>
                 <button
                   type="button"
+                  data-workspace-board-preserve-open=""
+                  onPointerDown={stopQuickActionPointerPropagation}
                   onClick={handleToggleUnreadQuick}
                   className={cn(
                     'group/unread flex size-4 cursor-pointer items-center justify-center rounded transition-all',
