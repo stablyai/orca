@@ -700,6 +700,111 @@ describe('terminal slice behaviors', () => {
     expect(store.getState().ptyIdsByTabId['tab-1']).toEqual(['pty-1', 'pty-2'])
   })
 
+  it('preserves unrelated worktree tab arrays when recording a spawned PTY', () => {
+    const store = createTestStore()
+    const targetWorktreeId = 'repo1::/path/wt1'
+    const otherWorktreeId = 'repo1::/path/wt2'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: targetWorktreeId, repoId: 'repo1', path: '/path/wt1' }),
+          makeWorktree({ id: otherWorktreeId, repoId: 'repo1', path: '/path/wt2' })
+        ]
+      },
+      tabsByWorktree: {
+        [targetWorktreeId]: [makeTab({ id: 'tab-1', worktreeId: targetWorktreeId })],
+        [otherWorktreeId]: [makeTab({ id: 'tab-2', worktreeId: otherWorktreeId })]
+      }
+    })
+
+    const before = store.getState().tabsByWorktree
+    const beforeOtherTabs = before[otherWorktreeId]
+
+    store.getState().updateTabPtyId('tab-1', 'pty-fresh')
+
+    const after = store.getState().tabsByWorktree
+    expect(after[targetWorktreeId]).not.toBe(before[targetWorktreeId])
+    expect(after[otherWorktreeId]).toBe(beforeOtherTabs)
+  })
+
+  it('preserves unrelated worktree tab arrays when clearing a PTY', () => {
+    const store = createTestStore()
+    const targetWorktreeId = 'repo1::/path/wt1'
+    const otherWorktreeId = 'repo1::/path/wt2'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: targetWorktreeId, repoId: 'repo1', path: '/path/wt1' }),
+          makeWorktree({ id: otherWorktreeId, repoId: 'repo1', path: '/path/wt2' })
+        ]
+      },
+      tabsByWorktree: {
+        [targetWorktreeId]: [
+          makeTab({ id: 'tab-1', worktreeId: targetWorktreeId, ptyId: 'pty-fresh' })
+        ],
+        [otherWorktreeId]: [makeTab({ id: 'tab-2', worktreeId: otherWorktreeId })]
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['pty-fresh']
+      }
+    })
+
+    const before = store.getState().tabsByWorktree
+    const beforeOtherTabs = before[otherWorktreeId]
+
+    store.getState().clearTabPtyId('tab-1', 'pty-fresh')
+
+    const after = store.getState().tabsByWorktree
+    expect(after[targetWorktreeId]).not.toBe(before[targetWorktreeId])
+    expect(after[otherWorktreeId]).toBe(beforeOtherTabs)
+  })
+
+  it('changes only the owning worktree tab array when recording a PTY in a large session', () => {
+    const store = createTestStore()
+    const worktreeCount = 125
+    const targetIndex = 73
+    const worktrees = Array.from({ length: worktreeCount }, (_, index) =>
+      makeWorktree({
+        id: `repo1::/path/wt-${index}`,
+        repoId: 'repo1',
+        path: `/path/wt-${index}`
+      })
+    )
+    const tabsByWorktree = Object.fromEntries(
+      worktrees.map((worktree, index) => [
+        worktree.id,
+        [makeTab({ id: `tab-${index}`, worktreeId: worktree.id })]
+      ])
+    )
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: worktrees },
+      tabsByWorktree
+    })
+
+    const targetTabId = `tab-${targetIndex}`
+    const before = store.getState().tabsByWorktree
+
+    store.getState().updateTabPtyId(targetTabId, 'pty-fresh')
+
+    const after = store.getState().tabsByWorktree
+    const changedWorktreeIds = Object.keys(after).filter(
+      (worktreeId) => after[worktreeId] !== before[worktreeId]
+    )
+    expect(changedWorktreeIds).toEqual([`repo1::/path/wt-${targetIndex}`])
+  })
+
   // Why: clicking a worktree in the sidebar triggers a generation bump on
   // dead-PTY tabs which remounts TerminalPane and fresh-spawns a PTY. That
   // fresh spawn calls updateTabPtyId → bumpWorktreeActivity. Without the

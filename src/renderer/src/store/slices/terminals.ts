@@ -995,42 +995,41 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     let worktreeId: string | null = null
     let wasActivationSpawn = false
     set((s) => {
-      const next = { ...s.tabsByWorktree }
-      for (const wId of Object.keys(next)) {
-        const found = next[wId].some((t) => t.id === tabId)
-        if (found) {
-          worktreeId = wId
-        }
-        next[wId] = next[wId].map((t) => {
-          if (t.id !== tabId) {
-            return t
-          }
-          const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
-          const nextPtyIds = existingPtyIds.includes(ptyId)
-            ? existingPtyIds
-            : [...existingPtyIds, ptyId]
-          if (t.pendingActivationSpawn) {
-            wasActivationSpawn = true
-          }
-          // Why: consume pendingActivationSpawn here. The flag is set by
-          // setActiveWorktree when it bumps generation on all-dead tabs, and
-          // must be cleared on the first PTY that comes back or a later
-          // legitimate respawn (e.g. the user restarting a codex tab) would
-          // also be classified as activation and silently dropped from the
-          // recency sort.
-          const { pendingActivationSpawn: _unused, ...rest } = t
-          void _unused
-          return {
-            ...rest,
-            // Why: tab.ptyId is the single-pane fallback used by legacy attach
-            // paths. In split panes, later pane spawns must not steal that
-            // primary binding from the original pane or remount/close flows can
-            // reattach the tab to the wrong PTY and appear to "reset" panes.
-            ptyId: t.ptyId ?? nextPtyIds[0] ?? null
-          }
-        })
-      }
       const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
+      const nextPtyIds = existingPtyIds.includes(ptyId)
+        ? existingPtyIds
+        : [...existingPtyIds, ptyId]
+      let nextTabsByWorktree = s.tabsByWorktree
+      for (const [wId, tabs] of Object.entries(s.tabsByWorktree)) {
+        const index = tabs.findIndex((t) => t.id === tabId)
+        if (index === -1) {
+          continue
+        }
+        worktreeId = wId
+        const tab = tabs[index]
+        if (tab.pendingActivationSpawn) {
+          wasActivationSpawn = true
+        }
+        // Why: consume pendingActivationSpawn here. The flag is set by
+        // setActiveWorktree when it bumps generation on all-dead tabs, and
+        // must be cleared on the first PTY that comes back or a later
+        // legitimate respawn (e.g. the user restarting a codex tab) would
+        // also be classified as activation and silently dropped from the
+        // recency sort.
+        const { pendingActivationSpawn: _unused, ...rest } = tab
+        void _unused
+        // Why: tab.ptyId is the single-pane fallback used by legacy attach
+        // paths. In split panes, later pane spawns must not steal that
+        // primary binding from the original pane or remount/close flows can
+        // reattach the tab to the wrong PTY and appear to "reset" panes.
+        const nextTabPtyId = tab.ptyId ?? nextPtyIds[0] ?? null
+        if (tab.pendingActivationSpawn || tab.ptyId !== nextTabPtyId) {
+          const nextTabs = [...tabs]
+          nextTabs[index] = { ...rest, ptyId: nextTabPtyId }
+          nextTabsByWorktree = { ...s.tabsByWorktree, [wId]: nextTabs }
+        }
+        break
+      }
       // Why: when a brand-new tab in the active worktree receives its first
       // PTY, the live-tab signal (+12) flips on. Normally we bump sortEpoch
       // here so the sort reflects the new signal immediately. Suppress the
@@ -1041,10 +1040,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const isActiveWorktree = worktreeId != null && s.activeWorktreeId === worktreeId
       const shouldBumpSortEpoch = isFirstPty && isActiveWorktree && !wasActivationSpawn
       return {
-        tabsByWorktree: next,
+        ...(nextTabsByWorktree !== s.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {}),
         ptyIdsByTabId: {
           ...s.ptyIdsByTabId,
-          [tabId]: existingPtyIds.includes(ptyId) ? existingPtyIds : [...existingPtyIds, ptyId]
+          [tabId]: nextPtyIds
         },
         lastKnownRelayPtyIdByTabId: {
           ...s.lastKnownRelayPtyIdByTabId,
@@ -1068,35 +1067,36 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     let worktreeId: string | null = null
     let wasActivationSpawn = false
     set((s) => {
-      const next = { ...s.tabsByWorktree }
-      for (const wId of Object.keys(next)) {
-        if (next[wId].some((t) => t.id === tabId)) {
-          worktreeId = wId
+      const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
+      const remainingPtyIds = ptyId ? existingPtyIds.filter((id) => id !== ptyId) : []
+      let nextTabsByWorktree = s.tabsByWorktree
+      for (const [wId, tabs] of Object.entries(s.tabsByWorktree)) {
+        const index = tabs.findIndex((t) => t.id === tabId)
+        if (index === -1) {
+          continue
         }
-        next[wId] = next[wId].map((t) => {
-          if (t.id !== tabId) {
-            return t
-          }
-          if (t.pendingActivationSpawn) {
-            wasActivationSpawn = true
-          }
-          const remainingPtyIds = ptyId
-            ? (s.ptyIdsByTabId[tabId] ?? []).filter((id) => id !== ptyId)
-            : []
-          // Why: consume pendingActivationSpawn here too. Panes tearing down
-          // during a worktree switch (e.g. the previously-active worktree
-          // unmounting its panes) fire onExit → clearTabPtyId, which must
-          // not count as activity. Strip the flag on consumption so later
-          // legitimate exits still bump.
-          const { pendingActivationSpawn: _unused, ...rest } = t
-          void _unused
-          return { ...rest, ptyId: remainingPtyIds.at(-1) ?? null }
-        })
+        worktreeId = wId
+        const tab = tabs[index]
+        if (tab.pendingActivationSpawn) {
+          wasActivationSpawn = true
+        }
+        // Why: consume pendingActivationSpawn here too. Panes tearing down
+        // during a worktree switch (e.g. the previously-active worktree
+        // unmounting its panes) fire onExit → clearTabPtyId, which must
+        // not count as activity. Strip the flag on consumption so later
+        // legitimate exits still bump.
+        const { pendingActivationSpawn: _unused, ...rest } = tab
+        void _unused
+        const nextTabPtyId = remainingPtyIds.at(-1) ?? null
+        if (tab.pendingActivationSpawn || tab.ptyId !== nextTabPtyId) {
+          const nextTabs = [...tabs]
+          nextTabs[index] = { ...rest, ptyId: nextTabPtyId }
+          nextTabsByWorktree = { ...s.tabsByWorktree, [wId]: nextTabs }
+        }
+        break
       }
       const nextPtyIdsByTabId = { ...s.ptyIdsByTabId }
-      nextPtyIdsByTabId[tabId] = ptyId
-        ? (nextPtyIdsByTabId[tabId] ?? []).filter((id) => id !== ptyId)
-        : []
+      nextPtyIdsByTabId[tabId] = remainingPtyIds
       const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
       const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
       if (ptyId) {
@@ -1119,7 +1119,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
 
       return {
-        tabsByWorktree: next,
+        ...(nextTabsByWorktree !== s.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {}),
         ptyIdsByTabId: nextPtyIdsByTabId,
         lastKnownRelayPtyIdByTabId: nextLastKnownRelay,
         pendingCodexPaneRestartIds: nextPendingCodexPaneRestartIds,
