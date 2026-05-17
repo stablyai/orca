@@ -229,6 +229,36 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
   })
 
+  it('retires stale host-owned terminal handles without surfacing pane errors', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onError = vi.fn()
+    const onPtyExit = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-tab-1',
+      leafId: 'pane:1',
+      onPtyExit
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-stale',
+      cols: 80,
+      rows: 24,
+      callbacks: { onError }
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    const { streamId } = latestSubscribePayload()
+
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: { type: 'error', streamId, message: 'terminal_handle_stale' }
+    })
+
+    expect(onError).not.toHaveBeenCalled()
+    expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-stale')
+    expect(transport.getPtyId()).toBeNull()
+  })
+
   it('closes a remote terminal created after the pane was destroyed', async () => {
     let resolveCreate: (value: unknown) => void = () => {}
     runtimeCall.mockImplementation((args) => {

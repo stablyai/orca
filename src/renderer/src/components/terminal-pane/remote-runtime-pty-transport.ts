@@ -24,6 +24,15 @@ import { setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
 const REMOTE_TERMINAL_INPUT_FLUSH_MS = 8
 const REMOTE_TERMINAL_VIEWPORT_FLUSH_MS = 33
 
+function isRemoteTerminalGoneMessage(message: string): boolean {
+  return (
+    message.includes('terminal_handle_stale') ||
+    message.includes('terminal_exited') ||
+    message.includes('terminal_gone') ||
+    message.includes('no_connected_pty')
+  )
+}
+
 export function createRemoteRuntimePtyTransport(
   runtimeEnvironmentId: string,
   opts: IpcPtyTransportOptions = {}
@@ -129,6 +138,30 @@ export function createRemoteRuntimePtyTransport(
     desiredViewport = { cols, rows }
   }
 
+  function retireRemoteTerminalId(): void {
+    connected = false
+    const stalePtyId = remotePtyId
+    handle = null
+    remotePtyId = null
+    multiplexedStream?.close()
+    multiplexedStream = null
+    if (stalePtyId) {
+      onPtyExit?.(stalePtyId)
+    }
+  }
+
+  function handleRemoteTerminalError(error: unknown): void {
+    const message = runtimeTerminalErrorMessage(error)
+    if (isRemoteTerminalGoneMessage(message)) {
+      // Why: paired web clients consume host-published PTY handles. If the host
+      // retires one between snapshots, clear this mirror and wait for the next
+      // session-tabs update instead of surfacing a red xterm error.
+      retireRemoteTerminalId()
+      return
+    }
+    storedCallbacks.onError?.(message)
+  }
+
   async function subscribeToHandle(): Promise<void> {
     if (!handle) {
       return
@@ -163,7 +196,7 @@ export function createRemoteRuntimePtyTransport(
             onPtyExit?.(remotePtyId)
           }
         },
-        onError: (message) => storedCallbacks.onError?.(message),
+        onError: (message) => handleRemoteTerminalError(message),
         onFitOverrideChanged: (event) => {
           if (remotePtyId) {
             setFitOverride(remotePtyId, event.mode, event.cols, event.rows)
@@ -181,7 +214,7 @@ export function createRemoteRuntimePtyTransport(
           }
           resubscribing = true
           void subscribeToHandle()
-            .catch((error) => storedCallbacks.onError?.(runtimeTerminalErrorMessage(error)))
+            .catch((error) => handleRemoteTerminalError(error))
             .finally(() => {
               resubscribing = false
             })
@@ -261,8 +294,7 @@ export function createRemoteRuntimePtyTransport(
         rows: options.rows ?? 24
       }
       void subscribeToHandle().catch((error) => {
-        connected = false
-        storedCallbacks.onError?.(runtimeTerminalErrorMessage(error))
+        handleRemoteTerminalError(error)
       })
     },
 

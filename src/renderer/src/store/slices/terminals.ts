@@ -31,6 +31,7 @@ import {
 import { normalizeTerminalLayoutSnapshot } from '@/components/terminal-pane/terminal-layout-leaf-ids'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 
@@ -49,6 +50,10 @@ function getNextTerminalOrdinal(tabs: TerminalTab[]): number {
     nextOrdinal += 1
   }
   return nextOrdinal
+}
+
+function isRemoteRuntimePtyId(ptyId: string | null | undefined): boolean {
+  return typeof ptyId === 'string' && parseRemoteRuntimePtyId(ptyId) !== null
 }
 
 function getFallbackTabTitle(tab: TerminalTab, index?: number): string {
@@ -995,6 +1000,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   updateTabPtyId: (tabId, ptyId) => {
     let worktreeId: string | null = null
     let wasActivationSpawn = false
+    const isRemoteRuntimeMirror = isRemoteRuntimePtyId(ptyId)
     set((s) => {
       const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
       const nextPtyIds = existingPtyIds.includes(ptyId)
@@ -1059,7 +1065,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // stamp and the sortEpoch bump so the sidebar does not reorder on click.
     // Other spawn reasons (new tab, codex restart, reconnect) still flow
     // through bumpWorktreeActivity as a normal activity signal.
-    if (worktreeId && !wasActivationSpawn) {
+    if (worktreeId && !wasActivationSpawn && !isRemoteRuntimeMirror) {
       get().bumpWorktreeActivity(worktreeId)
     }
   },
@@ -1067,6 +1073,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   clearTabPtyId: (tabId, ptyId) => {
     let worktreeId: string | null = null
     let wasActivationSpawn = false
+    let isRemoteRuntimeMirror = isRemoteRuntimePtyId(ptyId)
     set((s) => {
       const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
       const remainingPtyIds = ptyId ? existingPtyIds.filter((id) => id !== ptyId) : []
@@ -1080,6 +1087,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         const tab = tabs[index]
         if (tab.pendingActivationSpawn) {
           wasActivationSpawn = true
+        }
+        if (!ptyId) {
+          isRemoteRuntimeMirror =
+            existingPtyIds.length > 0 && existingPtyIds.every((id) => isRemoteRuntimePtyId(id))
         }
         // Why: consume pendingActivationSpawn here too. Panes tearing down
         // during a worktree switch (e.g. the previously-active worktree
@@ -1134,6 +1145,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     if (
       worktreeId &&
       !wasActivationSpawn &&
+      !isRemoteRuntimeMirror &&
       !hasWorktreeSleepIntent(worktreeId) &&
       !(ptyId && get().suppressedPtyExitIds[ptyId])
     ) {

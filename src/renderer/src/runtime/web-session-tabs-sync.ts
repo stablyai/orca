@@ -1367,12 +1367,13 @@ export function useWebSessionTabsSync(): void {
           console.warn('[web-session-tabs-sync] initial listAll failed:', response.error.message)
           return
         }
-        if (!isSessionTabsListAllResult(response.result)) {
+        const result = response.result
+        if (!isSessionTabsListAllResult(result)) {
           console.warn('[web-session-tabs-sync] initial listAll returned an invalid payload')
           return
         }
         useAppStore.setState((state) =>
-          applyWebSessionTabsSnapshots(state, response.result.snapshots, environmentId)
+          applyWebSessionTabsSnapshots(state, result.snapshots, environmentId)
         )
       })
       .catch((error) => {
