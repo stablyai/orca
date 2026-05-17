@@ -30,7 +30,7 @@ const stepCopy = {
   },
   repo: {
     title: 'Point Orca at some code',
-    subtitle: 'Open a folder, clone a repo, or skip and add one later.'
+    subtitle: 'Open a folder or clone a repo to finish setup.'
   }
 } as const
 
@@ -208,13 +208,17 @@ export default function OnboardingFlow({
         </div>
 
         <footer className="mt-10 flex items-center justify-between border-t border-border pt-5">
-          <button
-            className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-muted-foreground"
-            disabled={Boolean(busyLabel)}
-            onClick={() => void flow.skip()}
-          >
-            Skip all onboarding
-          </button>
+          {currentStep.id !== 'repo' ? (
+            <button
+              className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-muted-foreground"
+              disabled={Boolean(busyLabel)}
+              onClick={() => void flow.skipToRepo()}
+            >
+              Skip to Add Project
+            </button>
+          ) : (
+            <span />
+          )}
           <div className="flex items-center gap-2">
             {stepIndex > 0 && (
               <button

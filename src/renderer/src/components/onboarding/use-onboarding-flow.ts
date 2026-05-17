@@ -18,7 +18,7 @@ import {
   type OnboardingFeatureSetupSelection
 } from './onboarding-feature-setup'
 import { STEPS, type StepNumber } from './use-onboarding-flow-types'
-import { useCloseWith, usePersistCurrentStep } from './use-onboarding-flow-persistence'
+import { persistStep, useCloseWith, usePersistCurrentStep } from './use-onboarding-flow-persistence'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 
 export { STEPS } from './use-onboarding-flow-types'
@@ -502,35 +502,45 @@ export function useOnboardingFlow(
     }
   }, [busyLabel, cloneDestination, cloneUrl, completeRepo, settings])
 
-  const skip = useCallback(async () => {
+  const skipToRepo = useCallback(async () => {
     if (busyLabel) {
       return
     }
+    setError(null)
+    const repoStepIndex = STEPS.findIndex((step) => step.id === 'repo')
+    const repoStep = STEPS[repoStepIndex]
+    if (currentStep.id === 'repo' || !repoStep) {
+      return
+    }
     const durationMs = consumeStepDurationMs()
-    // Why: skip has no keyboard path today, so `advanced_via` is always
-    // `'button'`. Keep the current step event before the all-onboarding
-    // dismissal so the funnel still records where the user bailed.
-    track('onboarding_step_skipped', {
-      step: currentStep.stepNumber,
-      duration_ms: durationMs,
-      advanced_via: 'button'
-    })
     // Why: theme step previews on the document without persisting. On skip,
     // revert to the saved theme before advancing so the preview doesn't leak.
     if (currentStep.id === 'theme' && settings) {
       setTheme(settings.theme)
       applyDocumentTheme(settings.theme)
     }
-    await closeWith('dismissed', {}, currentStep.stepNumber, undefined, {
-      advancedVia: 'button',
-      durationMs
-    })
+    try {
+      const nextState = await persistStep(repoStep.stepNumber - 1)
+      onOnboardingChange(nextState)
+      // Why: users can skip optional preferences, but onboarding remains open
+      // because Orca needs a project before the app has a useful first state.
+      track('onboarding_step_skipped', {
+        step: currentStep.stepNumber,
+        duration_ms: durationMs,
+        advanced_via: 'button'
+      })
+      setStepIndex(repoStepIndex)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setError(message)
+      toast.error('Could not skip to Add Project', { description: message })
+    }
   }, [
     busyLabel,
-    closeWith,
     consumeStepDurationMs,
     currentStep.id,
     currentStep.stepNumber,
+    onOnboardingChange,
     settings
   ])
 
@@ -569,7 +579,7 @@ export function useOnboardingFlow(
     detectedSet,
     isDetectingAgents,
     next,
-    skip,
+    skipToRepo,
     back,
     jumpToStep,
     openFolder,
