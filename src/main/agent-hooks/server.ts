@@ -346,7 +346,9 @@ export class AgentHookServer {
   }
 
   private applyNormalizedStatus(payload: AgentHookEventPayload): EnrichedAgentHookEventPayload {
-    this.clearCopilotTranscriptRetry(payload.paneKey)
+    if (payload.payload.state !== 'done' || payload.payload.lastAssistantMessage) {
+      this.clearCopilotTranscriptRetry(payload.paneKey)
+    }
     const enriched = this.attachStatusTiming(payload)
     this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
     this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
@@ -385,7 +387,12 @@ export class AgentHookServer {
         const current = this.state.lastStatusByPaneKey.get(original.paneKey) as
           | EnrichedAgentHookEventPayload
           | undefined
-        if (!current || current.receivedAt !== original.receivedAt) {
+        if (
+          !current ||
+          current.payload.agentType !== 'copilot' ||
+          current.payload.prompt !== original.payload.prompt ||
+          current.payload.lastAssistantMessage
+        ) {
           return
         }
         const normalized = normalizeHookPayload(this.state, source, body, this.env)

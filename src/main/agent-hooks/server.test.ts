@@ -1922,6 +1922,14 @@ describe('Copilot hook normalization', () => {
       })
 
       expect(response.status).toBe(204)
+      await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/copilot`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify(buildBody({ hook_event_name: 'SessionEnd', reason: 'complete' }))
+      })
       expect(listener).toHaveBeenLastCalledWith(
         expect.objectContaining({
           payload: expect.objectContaining({

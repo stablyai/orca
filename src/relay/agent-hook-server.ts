@@ -315,7 +315,9 @@ export class RelayAgentHookServer {
     env?: string,
     version?: string
   ): void {
-    this.clearCopilotTranscriptRetry(event.paneKey)
+    if (event.payload.state !== 'done' || event.payload.lastAssistantMessage) {
+      this.clearCopilotTranscriptRetry(event.paneKey)
+    }
     this.state.lastStatusByPaneKey.set(event.paneKey, event)
     this.lastEnvelopeMetaByPaneKey.set(event.paneKey, { source, env, version })
     this.forwardEvent(event, source, env, version)
@@ -349,7 +351,13 @@ export class RelayAgentHookServer {
     const timer = setTimeout(() => {
       try {
         this.copilotTranscriptRetryTimers.delete(original.paneKey)
-        if (this.state.lastStatusByPaneKey.get(original.paneKey) !== original) {
+        const current = this.state.lastStatusByPaneKey.get(original.paneKey)
+        if (
+          !current ||
+          current.payload.agentType !== 'copilot' ||
+          current.payload.prompt !== original.payload.prompt ||
+          current.payload.lastAssistantMessage
+        ) {
           return
         }
         const event = normalizeHookPayload(this.state, source, body, this.env)

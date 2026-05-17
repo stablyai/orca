@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
@@ -193,6 +193,61 @@ describe('RelayAgentHookServer', () => {
       expect(env.ORCA_AGENT_HOOK_ENV).toBe('remote')
       expect(env.ORCA_AGENT_HOOK_VERSION).toBe('1')
       expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeTruthy()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('keeps Copilot transcript retry alive across a following SessionEnd event', async () => {
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    const transcriptPath = join(dir, 'events.jsonl')
+    writeFileSync(transcriptPath, '')
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      await fetch(`http://127.0.0.1:${port}/hook/copilot`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: JSON.stringify({
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          env: 'remote',
+          version: '1',
+          payload: { hook_event_name: 'Stop', transcriptPath }
+        })
+      })
+      await fetch(`http://127.0.0.1:${port}/hook/copilot`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: JSON.stringify({
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          env: 'remote',
+          version: '1',
+          payload: { hook_event_name: 'SessionEnd', reason: 'complete' }
+        })
+      })
+      expect(forward.mock.calls.at(-1)?.[0].payload.lastAssistantMessage).toBeUndefined()
+
+      writeFileSync(
+        transcriptPath,
+        `${JSON.stringify({
+          type: 'assistant.message',
+          data: { content: 'Relay transcript completed.' }
+        })}\n`
+      )
+      await new Promise((resolve) => setTimeout(resolve, 120))
+
+      expect(forward.mock.calls.at(-1)?.[0].payload.lastAssistantMessage).toBe(
+        'Relay transcript completed.'
+      )
     } finally {
       server.stop()
     }
