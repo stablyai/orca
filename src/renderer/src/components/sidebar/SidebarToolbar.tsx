@@ -1,8 +1,12 @@
 import React, { useState } from 'react'
 import {
+  BookOpen,
+  Boxes,
+  CircleHelp,
   ExternalLink,
   FolderPlus,
   Github,
+  HardDrive,
   MessageSquareText,
   Settings,
   Smartphone
@@ -10,6 +14,12 @@ import {
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import {
   Dialog,
   DialogContent,
@@ -25,6 +35,7 @@ import type { GitHubViewer } from '../../../../shared/types'
 const GITHUB_ISSUES_URL = 'https://github.com/stablyai/orca/issues/'
 const DISCORD_URL = 'https://discord.gg/fzjDKHxv8Q'
 const X_URL = 'https://x.com/orca_build'
+const DOCS_URL = 'https://www.onorca.dev/docs'
 
 type SubmitIdentity = {
   githubLogin: string | null
@@ -241,6 +252,8 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
   const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const openSkillsPage = useAppStore((s) => s.openSkillsPage)
+  const openSpacePage = useAppStore((s) => s.openSpacePage)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
 
   const openMobileSettings = (): void => {
@@ -268,37 +281,70 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
           </TooltipContent>
         </Tooltip>
         <div className="flex items-center gap-1">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={openMobileSettings}
-                aria-label="Open Orca Mobile settings"
-                className="text-muted-foreground"
-              >
+          <DropdownMenu modal={false}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    type="button"
+                    aria-label="Toolbox"
+                    className="text-muted-foreground"
+                  >
+                    <Boxes className="size-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                Toolbox
+              </TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-44">
+              <DropdownMenuItem onSelect={openMobileSettings}>
                 <Smartphone className="size-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              Orca Mobile
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => setFeedbackOpen(true)}
-                className="text-muted-foreground"
-              >
+                Orca Mobile
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={openSkillsPage}>
+                <BookOpen className="size-3.5" />
+                Skills
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={openSpacePage}>
+                <HardDrive className="size-3.5" />
+                Space Analyzer
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu modal={false}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    type="button"
+                    aria-label="Help"
+                    className="text-muted-foreground"
+                  >
+                    <CircleHelp className="size-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                Help
+              </TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-44">
+              <DropdownMenuItem onSelect={() => setFeedbackOpen(true)}>
                 <MessageSquareText className="size-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              Send feedback
-            </TooltipContent>
-          </Tooltip>
+                Send feedback
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => openExternalUrl(DOCS_URL)}>
+                <ExternalLink className="size-3.5" />
+                Docs
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
