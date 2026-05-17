@@ -1129,13 +1129,29 @@ export class OrcaRuntimeService {
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-    const tab = snapshot?.tabs.find((candidate) => candidate.id === tabId)
+    const tab =
+      snapshot?.tabs.find((candidate) => candidate.id === tabId) ??
+      snapshot?.tabs.find(
+        (candidate) => candidate.type === 'terminal' && candidate.parentTabId === tabId
+      ) ??
+      snapshot?.tabs.find(
+        (candidate) => candidate.type === 'browser' && candidate.browserWorkspaceId === tabId
+      )
     if (!tab) {
       throw new Error('tab_not_found')
     }
 
     if (tab.type === 'terminal') {
-      this.notifier?.focusTerminal(tab.parentTabId, worktreeId, tab.leafId)
+      const targetTab =
+        tab.id === tabId
+          ? tab
+          : (snapshot?.tabs.find(
+              (candidate) =>
+                candidate.type === 'terminal' &&
+                candidate.parentTabId === tab.parentTabId &&
+                candidate.isActive
+            ) ?? tab)
+      this.notifier?.focusTerminal(targetTab.parentTabId, worktreeId, targetTab.leafId)
     } else if (tab.type === 'browser') {
       // Why: browser mobile tabs are renderer-owned unified tabs; focusing the
       // session tab keeps desktop tab order/group state authoritative.
@@ -1151,15 +1167,29 @@ export class OrcaRuntimeService {
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-    const tab = snapshot?.tabs.find((candidate) => candidate.id === tabId)
+    const tab =
+      snapshot?.tabs.find((candidate) => candidate.id === tabId) ??
+      snapshot?.tabs.find(
+        (candidate) => candidate.type === 'terminal' && candidate.parentTabId === tabId
+      ) ??
+      snapshot?.tabs.find(
+        (candidate) => candidate.type === 'browser' && candidate.browserWorkspaceId === tabId
+      )
     if (!tab) {
       throw new Error('tab_not_found')
     }
     if (tab.type === 'terminal') {
-      const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
-      if (pty) {
-        this.ptyController?.kill(pty.ptyId)
+      if (tab.id === tabId) {
+        const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
+        if (pty) {
+          this.ptyController?.kill(pty.ptyId)
+        } else {
+          this.notifier?.closeTerminal(tab.parentTabId)
+        }
       } else {
+        // Why: paired web tab bars represent a split terminal with one local
+        // parent tab id. Closing that parent should close the desktop tab, not
+        // just whichever leaf happened to be first in the session snapshot.
         this.notifier?.closeTerminal(tab.parentTabId)
       }
     } else {

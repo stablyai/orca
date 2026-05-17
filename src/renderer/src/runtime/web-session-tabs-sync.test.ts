@@ -3,7 +3,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../shared/types'
+import type { BrowserPage, BrowserWorkspace, Tab, TerminalTab } from '../../../shared/types'
 import {
   applyWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshots,
@@ -25,15 +25,20 @@ const HOST_SURFACE_ID = `host-tab-1::${LEAF_ID}`
 
 function makeState(overrides: Partial<WebSessionTabsSyncState> = {}): WebSessionTabsSyncState {
   return {
+    activeBrowserTabId: null,
+    activeBrowserTabIdByWorktree: {},
     activeGroupIdByWorktree: {},
     activeTabId: null,
     activeTabIdByWorktree: {},
     activeTabType: 'terminal',
     activeTabTypeByWorktree: {},
     activeWorktreeId: WT,
+    browserPagesByWorkspace: {},
+    browserTabsByWorktree: {},
     groupsByWorktree: {},
     layoutByWorktree: {},
     ptyIdsByTabId: {},
+    remoteBrowserPageHandlesByPageId: {},
     tabBarOrderByWorktree: {},
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},
@@ -312,6 +317,284 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     expect(patch.tabsByWorktree?.[WT]?.map((tab) => tab.id)).not.toContain(pendingTab.id)
     expect(patch.activeTabIdByWorktree?.[WT]).not.toBe(pendingTab.id)
+  })
+
+  it('hydrates active host browser tabs with remote page handles', () => {
+    const patch = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot(
+        [
+          {
+            type: 'terminal',
+            id: HOST_SURFACE_ID,
+            title: 'host shell',
+            parentTabId: 'host-tab-1',
+            leafId: LEAF_ID,
+            isActive: false,
+            status: 'ready',
+            terminal: 'terminal-1'
+          },
+          {
+            type: 'browser',
+            id: 'host-browser-unified',
+            title: 'Example Domain',
+            browserWorkspaceId: 'host-browser-workspace',
+            browserPageId: 'host-browser-page',
+            url: 'https://example.com/',
+            loading: false,
+            canGoBack: true,
+            canGoForward: false,
+            isActive: true
+          }
+        ],
+        { activeTabId: 'host-browser-unified', activeTabType: 'browser' }
+      ),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    const terminalId = patch.tabsByWorktree?.[WT]?.[0]?.id
+    expect(patch.browserTabsByWorktree?.[WT]).toMatchObject([
+      {
+        id: 'host-browser-workspace',
+        worktreeId: WT,
+        activePageId: 'host-browser-page',
+        pageIds: ['host-browser-page'],
+        url: 'https://example.com/',
+        title: 'Example Domain',
+        canGoBack: true,
+        canGoForward: false
+      }
+    ])
+    expect(patch.browserPagesByWorkspace?.['host-browser-workspace']).toMatchObject([
+      {
+        id: 'host-browser-page',
+        workspaceId: 'host-browser-workspace',
+        worktreeId: WT,
+        url: 'https://example.com/',
+        title: 'Example Domain',
+        loading: false
+      }
+    ])
+    expect(patch.remoteBrowserPageHandlesByPageId?.['host-browser-page']).toEqual({
+      environmentId: ENV,
+      remotePageId: 'host-browser-page'
+    })
+    expect(patch.unifiedTabsByWorktree?.[WT]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: terminalId,
+          entityId: terminalId,
+          contentType: 'terminal'
+        }),
+        expect.objectContaining({
+          id: 'host-browser-unified',
+          entityId: 'host-browser-workspace',
+          contentType: 'browser',
+          label: 'Example Domain'
+        })
+      ])
+    )
+    expect(patch.groupsByWorktree?.[WT]?.[0]).toMatchObject({
+      id: 'host-group-1',
+      activeTabId: 'host-browser-unified',
+      tabOrder: [terminalId, 'host-browser-unified']
+    })
+    expect(patch.activeBrowserTabId).toBe('host-browser-workspace')
+    expect(patch.activeBrowserTabIdByWorktree?.[WT]).toBe('host-browser-workspace')
+    expect(patch.activeTabId).toBe(terminalId)
+    expect(patch.activeTabIdByWorktree?.[WT]).toBe(terminalId)
+    expect(patch.activeTabType).toBe('browser')
+    expect(patch.activeTabTypeByWorktree?.[WT]).toBe('browser')
+  })
+
+  it('reuses a local browser workspace that already points at the host page', () => {
+    const workspace: BrowserWorkspace = {
+      id: 'local-browser-workspace',
+      worktreeId: WT,
+      activePageId: 'local-browser-page',
+      pageIds: ['local-browser-page'],
+      url: 'about:blank',
+      title: 'New Tab',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: NOW - 10
+    }
+    const page: BrowserPage = {
+      id: 'local-browser-page',
+      workspaceId: workspace.id,
+      worktreeId: WT,
+      url: 'about:blank',
+      title: 'New Tab',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: NOW - 10
+    }
+    const unifiedTab: Tab = {
+      id: 'local-browser-unified',
+      entityId: workspace.id,
+      groupId: 'host-group-1',
+      worktreeId: WT,
+      contentType: 'browser',
+      label: 'New Tab',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW - 10,
+      isPreview: false,
+      isPinned: false
+    }
+
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        browserTabsByWorktree: { [WT]: [workspace] },
+        browserPagesByWorkspace: { [workspace.id]: [page] },
+        remoteBrowserPageHandlesByPageId: {
+          [page.id]: { environmentId: ENV, remotePageId: 'host-browser-page' }
+        },
+        unifiedTabsByWorktree: { [WT]: [unifiedTab] },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              id: 'host-group-1',
+              worktreeId: WT,
+              activeTabId: unifiedTab.id,
+              tabOrder: [unifiedTab.id],
+              recentTabIds: [unifiedTab.id]
+            }
+          ]
+        }
+      }),
+      makeSnapshot(
+        [
+          {
+            type: 'browser',
+            id: 'host-browser-unified',
+            title: 'Example Domain',
+            browserWorkspaceId: 'host-browser-workspace',
+            browserPageId: 'host-browser-page',
+            url: 'https://example.com/',
+            loading: false,
+            canGoBack: false,
+            canGoForward: false,
+            isActive: true
+          }
+        ],
+        { activeTabId: 'host-browser-unified', activeTabType: 'browser' }
+      ),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.browserTabsByWorktree?.[WT]).toHaveLength(1)
+    expect(patch.browserTabsByWorktree?.[WT]?.[0]).toMatchObject({
+      id: workspace.id,
+      activePageId: page.id,
+      url: 'https://example.com/',
+      title: 'Example Domain'
+    })
+    expect(patch.browserPagesByWorkspace?.[workspace.id]).toMatchObject([
+      {
+        id: page.id,
+        workspaceId: workspace.id,
+        url: 'https://example.com/',
+        title: 'Example Domain'
+      }
+    ])
+    expect(patch.remoteBrowserPageHandlesByPageId?.[page.id]).toEqual({
+      environmentId: ENV,
+      remotePageId: 'host-browser-page'
+    })
+    expect(patch.unifiedTabsByWorktree?.[WT]?.map((tab) => tab.id)).toEqual([
+      'local-browser-unified'
+    ])
+  })
+
+  it('removes mirrored browser tabs when the host closes the page', () => {
+    const workspace: BrowserWorkspace = {
+      id: 'local-browser-workspace',
+      worktreeId: WT,
+      activePageId: 'local-browser-page',
+      pageIds: ['local-browser-page'],
+      url: 'https://example.com/',
+      title: 'Example Domain',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: NOW - 10
+    }
+    const page: BrowserPage = {
+      id: 'local-browser-page',
+      workspaceId: workspace.id,
+      worktreeId: WT,
+      url: workspace.url,
+      title: workspace.title,
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: workspace.createdAt
+    }
+    const unifiedTab: Tab = {
+      id: 'local-browser-unified',
+      entityId: workspace.id,
+      groupId: 'host-group-1',
+      worktreeId: WT,
+      contentType: 'browser',
+      label: workspace.title,
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: workspace.createdAt,
+      isPreview: false,
+      isPinned: false
+    }
+
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        activeBrowserTabId: workspace.id,
+        activeBrowserTabIdByWorktree: { [WT]: workspace.id },
+        activeTabType: 'browser',
+        activeTabTypeByWorktree: { [WT]: 'browser' },
+        browserTabsByWorktree: { [WT]: [workspace] },
+        browserPagesByWorkspace: { [workspace.id]: [page] },
+        remoteBrowserPageHandlesByPageId: {
+          [page.id]: { environmentId: ENV, remotePageId: 'host-browser-page' }
+        },
+        unifiedTabsByWorktree: { [WT]: [unifiedTab] },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              id: 'host-group-1',
+              worktreeId: WT,
+              activeTabId: unifiedTab.id,
+              tabOrder: [unifiedTab.id],
+              recentTabIds: [unifiedTab.id]
+            }
+          ]
+        }
+      }),
+      makeSnapshot([], { activeTabId: null, activeTabType: null }),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.browserTabsByWorktree?.[WT]).toBeUndefined()
+    expect(patch.browserPagesByWorkspace?.[workspace.id]).toBeUndefined()
+    expect(patch.remoteBrowserPageHandlesByPageId?.[page.id]).toBeUndefined()
+    expect(patch.unifiedTabsByWorktree?.[WT]).toBeUndefined()
+    expect(patch.groupsByWorktree?.[WT]).toBeUndefined()
+    expect(patch.activeBrowserTabId).toBeNull()
+    expect(patch.activeBrowserTabIdByWorktree?.[WT]).toBeNull()
   })
 
   it('ignores pending terminal handles so the web client does not spawn duplicates', () => {

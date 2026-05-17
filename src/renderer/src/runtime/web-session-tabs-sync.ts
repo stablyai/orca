@@ -7,9 +7,12 @@ import { useAppStore } from '../store'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type {
   RuntimeMobileSessionTabsResult,
+  RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionTerminalClientTab
 } from '../../../shared/runtime-types'
 import type {
+  BrowserPage,
+  BrowserWorkspace,
   Tab,
   TabGroup,
   TerminalLayoutSnapshot,
@@ -17,11 +20,14 @@ import type {
   TerminalTab
 } from '../../../shared/types'
 import { getRemoteRuntimePtyEnvironmentId, toRemoteRuntimePtyId } from './runtime-terminal-stream'
-import { createWebRuntimeSessionTerminal } from './web-runtime-session'
+import {
+  createWebRuntimeSessionTerminal,
+  HOST_TERMINAL_SURFACE_SEPARATOR,
+  toWebTerminalSurfaceTabId,
+  WEB_TERMINAL_SURFACE_TAB_PREFIX
+} from './web-runtime-session'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
-const WEB_TERMINAL_SURFACE_TAB_PREFIX = 'web-terminal-'
-const HOST_TERMINAL_SURFACE_SEPARATOR = '::'
 
 type SessionTabsStreamEvent =
   | (RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' })
@@ -29,6 +35,7 @@ type SessionTabsStreamEvent =
   | { type: 'end' }
 
 type ReadyTerminalSurface = RuntimeMobileSessionTerminalClientTab & { status: 'ready' }
+type ReadyBrowserSurface = RuntimeMobileSessionBrowserTab & { browserPageId: string }
 
 type MirroredTerminalTab = {
   tab: TerminalTab
@@ -36,17 +43,29 @@ type MirroredTerminalTab = {
   layout: TerminalLayoutSnapshot
 }
 
+type MirroredBrowserTab = {
+  workspace: BrowserWorkspace
+  page: BrowserPage
+  remotePageId: string
+  unifiedTab: Tab
+}
+
 export type WebSessionTabsSyncState = Pick<
   AppState,
+  | 'activeBrowserTabId'
+  | 'activeBrowserTabIdByWorktree'
   | 'activeGroupIdByWorktree'
   | 'activeTabId'
   | 'activeTabIdByWorktree'
   | 'activeTabType'
   | 'activeTabTypeByWorktree'
   | 'activeWorktreeId'
+  | 'browserPagesByWorkspace'
+  | 'browserTabsByWorktree'
   | 'groupsByWorktree'
   | 'layoutByWorktree'
   | 'ptyIdsByTabId'
+  | 'remoteBrowserPageHandlesByPageId'
   | 'tabBarOrderByWorktree'
   | 'tabsByWorktree'
   | 'terminalLayoutsByTabId'
@@ -64,6 +83,12 @@ function isReadyTerminalTab(
   return tab.type === 'terminal' && tab.status === 'ready' && tab.terminal.trim().length > 0
 }
 
+function isReadyBrowserTab(
+  tab: RuntimeMobileSessionTabsResult['tabs'][number]
+): tab is ReadyBrowserSurface {
+  return tab.type === 'browser' && typeof tab.browserPageId === 'string' && tab.browserPageId !== ''
+}
+
 function isRuntimeTerminalTabForEnvironment(tab: TerminalTab, environmentId: string): boolean {
   if (!tab.ptyId) {
     return false
@@ -76,13 +101,6 @@ function isMirroredTerminalSurfaceId(tabId: string): boolean {
     tabId.startsWith(WEB_TERMINAL_SURFACE_TAB_PREFIX) ||
     tabId.includes(HOST_TERMINAL_SURFACE_SEPARATOR)
   )
-}
-
-function toWebTerminalSurfaceTabId(hostSurfaceId: string): string {
-  // Why: host session surface ids use `tab::leaf`, but renderer pane keys
-  // reserve `:` as the tab/leaf delimiter. Keep host identity while making a
-  // local tab id that can safely flow through makePaneKey().
-  return `${WEB_TERMINAL_SURFACE_TAB_PREFIX}${encodeURIComponent(hostSurfaceId)}`
 }
 
 function fallbackLayoutForLeafIds(leafIds: readonly string[]): TerminalPaneLayoutNode | null {
@@ -244,6 +262,117 @@ function buildTerminalUnifiedTab(tab: TerminalTab, groupId: string): Tab {
   }
 }
 
+function buildBrowserUnifiedTab(tab: BrowserWorkspace, unifiedTabId: string, groupId: string): Tab {
+  return {
+    id: unifiedTabId,
+    entityId: tab.id,
+    groupId,
+    worktreeId: tab.worktreeId,
+    contentType: 'browser',
+    label: tab.title,
+    customLabel: null,
+    color: null,
+    sortOrder: tab.createdAt,
+    createdAt: tab.createdAt,
+    isPreview: false,
+    isPinned: false
+  }
+}
+
+function findBrowserWorkspaceForRemotePage(
+  state: WebSessionTabsSyncState,
+  worktreeId: string,
+  environmentId: string,
+  remotePageId: string
+): { workspace: BrowserWorkspace; page: BrowserPage; unifiedTab: Tab | null } | null {
+  const workspaces = state.browserTabsByWorktree[worktreeId] ?? []
+  for (const workspace of workspaces) {
+    const pages = state.browserPagesByWorkspace[workspace.id] ?? []
+    for (const page of pages) {
+      const handle = state.remoteBrowserPageHandlesByPageId[page.id]
+      if (handle?.environmentId === environmentId && handle.remotePageId === remotePageId) {
+        return {
+          workspace,
+          page,
+          unifiedTab:
+            (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
+              (tab) => tab.contentType === 'browser' && tab.entityId === workspace.id
+            ) ?? null
+        }
+      }
+    }
+  }
+  return null
+}
+
+function browserWorkspaceHasRemoteEnvironmentPage(
+  state: WebSessionTabsSyncState,
+  workspace: BrowserWorkspace,
+  environmentId: string
+): boolean {
+  return (state.browserPagesByWorkspace[workspace.id] ?? []).some(
+    (page) => state.remoteBrowserPageHandlesByPageId[page.id]?.environmentId === environmentId
+  )
+}
+
+function buildMirroredBrowserTabs(
+  snapshot: RuntimeMobileSessionTabsResult,
+  environmentId: string,
+  state: WebSessionTabsSyncState,
+  groupId: string,
+  sortOffset: number,
+  now: number
+): MirroredBrowserTab[] {
+  return snapshot.tabs.filter(isReadyBrowserTab).map((tab, index) => {
+    const existing = findBrowserWorkspaceForRemotePage(
+      state,
+      snapshot.worktree,
+      environmentId,
+      tab.browserPageId
+    )
+    const workspaceId = existing?.workspace.id ?? tab.browserWorkspaceId
+    const pageId = existing?.page.id ?? tab.browserPageId
+    const createdAt = existing?.page.createdAt ?? now + sortOffset + index
+    const title = tab.title.trim() || 'Browser'
+    const page: BrowserPage = {
+      id: pageId,
+      workspaceId,
+      worktreeId: snapshot.worktree,
+      url: tab.url,
+      title,
+      loading: tab.loading,
+      faviconUrl: existing?.page.faviconUrl ?? null,
+      canGoBack: tab.canGoBack,
+      canGoForward: tab.canGoForward,
+      loadError: null,
+      createdAt,
+      viewportPresetId: existing?.page.viewportPresetId ?? null
+    }
+    const workspace: BrowserWorkspace = {
+      id: workspaceId,
+      worktreeId: snapshot.worktree,
+      label: existing?.workspace.label,
+      sessionProfileId: existing?.workspace.sessionProfileId ?? null,
+      activePageId: page.id,
+      pageIds: [page.id],
+      url: page.url,
+      title: page.title,
+      loading: page.loading,
+      faviconUrl: page.faviconUrl,
+      canGoBack: page.canGoBack,
+      canGoForward: page.canGoForward,
+      loadError: page.loadError,
+      createdAt
+    }
+    return {
+      workspace,
+      page,
+      remotePageId: tab.browserPageId,
+      unifiedTab: buildBrowserUnifiedTab(workspace, existing?.unifiedTab?.id ?? tab.id, groupId)
+    }
+  })
+}
+
 function chooseTargetGroupId(
   state: WebSessionTabsSyncState,
   snapshot: RuntimeMobileSessionTabsResult
@@ -390,6 +519,70 @@ function sameTerminalTabs(
   return left.every((tab, index) => terminalTabEqual(tab, right[index]!))
 }
 
+function browserPageEqual(a: BrowserPage, b: BrowserPage): boolean {
+  return (
+    a.id === b.id &&
+    a.workspaceId === b.workspaceId &&
+    a.worktreeId === b.worktreeId &&
+    a.url === b.url &&
+    a.title === b.title &&
+    a.loading === b.loading &&
+    a.faviconUrl === b.faviconUrl &&
+    a.canGoBack === b.canGoBack &&
+    a.canGoForward === b.canGoForward &&
+    a.loadError?.code === b.loadError?.code &&
+    a.loadError?.description === b.loadError?.description &&
+    a.loadError?.validatedUrl === b.loadError?.validatedUrl &&
+    a.createdAt === b.createdAt &&
+    a.viewportPresetId === b.viewportPresetId
+  )
+}
+
+function sameBrowserPages(
+  a: readonly BrowserPage[] | undefined,
+  b: readonly BrowserPage[] | null
+): boolean {
+  const left = a ?? []
+  const right = b ?? []
+  if (left.length !== right.length) {
+    return false
+  }
+  return left.every((page, index) => browserPageEqual(page, right[index]!))
+}
+
+function browserWorkspaceEqual(a: BrowserWorkspace, b: BrowserWorkspace): boolean {
+  return (
+    a.id === b.id &&
+    a.worktreeId === b.worktreeId &&
+    a.label === b.label &&
+    a.sessionProfileId === b.sessionProfileId &&
+    a.activePageId === b.activePageId &&
+    sameStringArray(a.pageIds ?? [], b.pageIds ?? []) &&
+    a.url === b.url &&
+    a.title === b.title &&
+    a.loading === b.loading &&
+    a.faviconUrl === b.faviconUrl &&
+    a.canGoBack === b.canGoBack &&
+    a.canGoForward === b.canGoForward &&
+    a.loadError?.code === b.loadError?.code &&
+    a.loadError?.description === b.loadError?.description &&
+    a.loadError?.validatedUrl === b.loadError?.validatedUrl &&
+    a.createdAt === b.createdAt
+  )
+}
+
+function sameBrowserTabs(
+  a: readonly BrowserWorkspace[] | undefined,
+  b: readonly BrowserWorkspace[] | null
+): boolean {
+  const left = a ?? []
+  const right = b ?? []
+  if (left.length !== right.length) {
+    return false
+  }
+  return left.every((tab, index) => browserWorkspaceEqual(tab, right[index]!))
+}
+
 function tabEqual(a: Tab, b: Tab): boolean {
   return (
     a.id === b.id &&
@@ -471,8 +664,54 @@ export function applyWebSessionTabsSnapshot(
   )
 
   const targetGroupId = chooseTargetGroupId(state, snapshot)
+  const readyBrowserTabs = snapshot.tabs.filter(isReadyBrowserTab)
+  const nextRemoteBrowserPageIds = new Set(readyBrowserTabs.map((tab) => tab.browserPageId))
+  const mirroredBrowserTabs = buildMirroredBrowserTabs(
+    snapshot,
+    environmentId,
+    state,
+    targetGroupId,
+    mirroredTerminalTabEntries.length,
+    now
+  )
+  const mirroredBrowserWorkspaceIds = new Set(
+    mirroredBrowserTabs.map((entry) => entry.workspace.id)
+  )
+  const currentBrowserTabs = state.browserTabsByWorktree[worktreeId] ?? []
+  const removedBrowserWorkspaceIds = new Set(
+    currentBrowserTabs
+      .filter((tab) => {
+        if (mirroredBrowserWorkspaceIds.has(tab.id)) {
+          return true
+        }
+        if (!browserWorkspaceHasRemoteEnvironmentPage(state, tab, environmentId)) {
+          return false
+        }
+        return !(state.browserPagesByWorkspace[tab.id] ?? []).some((page) => {
+          const handle = state.remoteBrowserPageHandlesByPageId[page.id]
+          return (
+            handle?.environmentId === environmentId &&
+            nextRemoteBrowserPageIds.has(handle.remotePageId)
+          )
+        })
+      })
+      .map((tab) => tab.id)
+  )
+  const retainedBrowserTabs = currentBrowserTabs.filter(
+    (tab) => !removedBrowserWorkspaceIds.has(tab.id)
+  )
+  const nextBrowserTabs =
+    retainedBrowserTabs.length + mirroredBrowserTabs.length > 0
+      ? [...retainedBrowserTabs, ...mirroredBrowserTabs.map((entry) => entry.workspace)]
+      : null
   const currentUnifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
   const retainedUnifiedTabs = currentUnifiedTabs.filter((tab) => {
+    if (tab.contentType === 'browser') {
+      return (
+        !removedBrowserWorkspaceIds.has(tab.entityId) &&
+        !mirroredBrowserWorkspaceIds.has(tab.entityId)
+      )
+    }
     if (tab.contentType !== 'terminal') {
       return true
     }
@@ -481,9 +720,11 @@ export function applyWebSessionTabsSnapshot(
     }
     return !mirroredTerminalIds.has(tab.entityId) && !mirroredTerminalIds.has(tab.id)
   })
-  const mirroredUnifiedTabs = mirroredTerminalTabEntries.map((tab) =>
+  const mirroredTerminalUnifiedTabs = mirroredTerminalTabEntries.map((tab) =>
     buildTerminalUnifiedTab(tab, targetGroupId)
   )
+  const mirroredBrowserUnifiedTabs = mirroredBrowserTabs.map((entry) => entry.unifiedTab)
+  const mirroredUnifiedTabs = [...mirroredTerminalUnifiedTabs, ...mirroredBrowserUnifiedTabs]
   const nextUnifiedTabs =
     retainedUnifiedTabs.length + mirroredUnifiedTabs.length > 0
       ? [...retainedUnifiedTabs, ...mirroredUnifiedTabs]
@@ -500,6 +741,17 @@ export function applyWebSessionTabsSnapshot(
   const activeMirroredTerminalId = activeHostTerminalId
     ? toWebTerminalSurfaceTabId(activeHostTerminalParentId ?? activeHostTerminalId)
     : null
+  const activeHostBrowser =
+    readyBrowserTabs.find((tab) => tab.id === snapshot.activeTabId) ??
+    readyBrowserTabs.find((tab) => tab.isActive) ??
+    null
+  const activeMirroredBrowser = activeHostBrowser
+    ? (mirroredBrowserTabs.find(
+        (entry) => entry.remotePageId === activeHostBrowser.browserPageId
+      ) ?? null)
+    : null
+  const activeMirroredBrowserTabId = activeMirroredBrowser?.unifiedTab.id ?? null
+  const activeMirroredBrowserWorkspaceId = activeMirroredBrowser?.workspace.id ?? null
   const currentActiveTerminalStillExists =
     state.activeTabIdByWorktree[worktreeId] &&
     (nextTerminalTabs ?? []).some((tab) => tab.id === state.activeTabIdByWorktree[worktreeId])
@@ -511,6 +763,25 @@ export function applyWebSessionTabsSnapshot(
         mirroredTerminalTabEntries[0]?.id ??
         currentActiveTerminalStillExists)
       : (currentActiveTerminalStillExists ?? mirroredTerminalTabEntries[0]?.id ?? null)
+  const currentActiveBrowserStillExists =
+    state.activeBrowserTabIdByWorktree[worktreeId] &&
+    (nextBrowserTabs ?? []).some((tab) => tab.id === state.activeBrowserTabIdByWorktree[worktreeId])
+      ? state.activeBrowserTabIdByWorktree[worktreeId]
+      : null
+  const nextActiveBrowserWorkspaceId =
+    snapshot.activeTabType === 'browser'
+      ? (activeMirroredBrowserWorkspaceId ??
+        mirroredBrowserTabs[0]?.workspace.id ??
+        currentActiveBrowserStillExists)
+      : (currentActiveBrowserStillExists ?? mirroredBrowserTabs[0]?.workspace.id ?? null)
+  const nextActiveUnifiedTabId =
+    snapshot.activeTabType === 'browser'
+      ? (activeMirroredBrowserTabId ??
+        mirroredBrowserTabs[0]?.unifiedTab.id ??
+        state.activeTabIdByWorktree[worktreeId] ??
+        nextActiveTerminalId)
+      : nextActiveTerminalId
+  const mirroredUnifiedIds = new Set(mirroredUnifiedTabs.map((tab) => tab.id))
 
   const currentGroups = state.groupsByWorktree[worktreeId] ?? []
   const nextGroups = (() => {
@@ -520,12 +791,12 @@ export function applyWebSessionTabsSnapshot(
     const strippedGroups = currentGroups.map((group) => ({
       ...group,
       tabOrder: group.tabOrder.filter(
-        (tabId) => validUnifiedTabIds.has(tabId) && !mirroredTerminalIds.has(tabId)
+        (tabId) => validUnifiedTabIds.has(tabId) && !mirroredUnifiedIds.has(tabId)
       ),
       recentTabIds: sanitizeRecentTabIds(
         group.recentTabIds,
         group.tabOrder.filter(
-          (tabId) => validUnifiedTabIds.has(tabId) && !mirroredTerminalIds.has(tabId)
+          (tabId) => validUnifiedTabIds.has(tabId) && !mirroredUnifiedIds.has(tabId)
         )
       )
     }))
@@ -538,11 +809,11 @@ export function applyWebSessionTabsSnapshot(
     }
     const targetOrder = [
       ...target.tabOrder.filter((tabId) => validUnifiedTabIds.has(tabId)),
-      ...mirroredTerminalTabEntries.map((tab) => tab.id)
+      ...mirroredUnifiedTabs.map((tab) => tab.id)
     ]
     const targetActiveTabId =
-      nextActiveTerminalId && targetOrder.includes(nextActiveTerminalId)
-        ? nextActiveTerminalId
+      nextActiveUnifiedTabId && targetOrder.includes(nextActiveUnifiedTabId)
+        ? nextActiveUnifiedTabId
         : target.activeTabId && targetOrder.includes(target.activeTabId)
           ? target.activeTabId
           : (targetOrder[0] ?? null)
@@ -568,8 +839,8 @@ export function applyWebSessionTabsSnapshot(
       ...mirroredUnifiedTabs.map((tab) => tab.id)
     ])
     return [
-      ...current.filter((tabId) => validTabBarIds.has(tabId) && !mirroredTerminalIds.has(tabId)),
-      ...mirroredTerminalTabEntries.map((tab) => tab.id)
+      ...current.filter((tabId) => validTabBarIds.has(tabId) && !mirroredUnifiedIds.has(tabId)),
+      ...mirroredUnifiedTabs.map((tab) => tab.id)
     ]
   })()
 
@@ -621,11 +892,63 @@ export function applyWebSessionTabsSnapshot(
     }
   }
 
+  let nextBrowserPagesByWorkspace = state.browserPagesByWorkspace
+  let nextRemoteBrowserPageHandlesByPageId = state.remoteBrowserPageHandlesByPageId
+  for (const removedWorkspaceId of removedBrowserWorkspaceIds) {
+    const pages = nextBrowserPagesByWorkspace[removedWorkspaceId] ?? []
+    if (nextBrowserPagesByWorkspace[removedWorkspaceId]) {
+      nextBrowserPagesByWorkspace =
+        nextBrowserPagesByWorkspace === state.browserPagesByWorkspace
+          ? { ...state.browserPagesByWorkspace }
+          : nextBrowserPagesByWorkspace
+      delete nextBrowserPagesByWorkspace[removedWorkspaceId]
+    }
+    for (const page of pages) {
+      if (nextRemoteBrowserPageHandlesByPageId[page.id]) {
+        nextRemoteBrowserPageHandlesByPageId =
+          nextRemoteBrowserPageHandlesByPageId === state.remoteBrowserPageHandlesByPageId
+            ? { ...state.remoteBrowserPageHandlesByPageId }
+            : nextRemoteBrowserPageHandlesByPageId
+        delete nextRemoteBrowserPageHandlesByPageId[page.id]
+      }
+    }
+  }
+  for (const { page, remotePageId } of mirroredBrowserTabs) {
+    const current = nextBrowserPagesByWorkspace[page.workspaceId] ?? []
+    if (!sameBrowserPages(current, [page])) {
+      nextBrowserPagesByWorkspace =
+        nextBrowserPagesByWorkspace === state.browserPagesByWorkspace
+          ? { ...state.browserPagesByWorkspace }
+          : nextBrowserPagesByWorkspace
+      nextBrowserPagesByWorkspace[page.workspaceId] = [page]
+    }
+    const currentHandle = nextRemoteBrowserPageHandlesByPageId[page.id]
+    if (
+      currentHandle?.environmentId !== environmentId ||
+      currentHandle.remotePageId !== remotePageId
+    ) {
+      nextRemoteBrowserPageHandlesByPageId =
+        nextRemoteBrowserPageHandlesByPageId === state.remoteBrowserPageHandlesByPageId
+          ? { ...state.remoteBrowserPageHandlesByPageId }
+          : nextRemoteBrowserPageHandlesByPageId
+      nextRemoteBrowserPageHandlesByPageId[page.id] = {
+        environmentId,
+        remotePageId
+      }
+    }
+  }
+
   const nextTabsByWorktree = withWorktreeEntry(
     state.tabsByWorktree,
     worktreeId,
     nextTerminalTabs,
     sameTerminalTabs
+  )
+  const nextBrowserTabsByWorktree = withWorktreeEntry(
+    state.browserTabsByWorktree,
+    worktreeId,
+    nextBrowserTabs,
+    sameBrowserTabs
   )
   const nextUnifiedTabsByWorktree = withWorktreeEntry(
     state.unifiedTabsByWorktree,
@@ -660,19 +983,41 @@ export function applyWebSessionTabsSnapshot(
     (state.activeTabIdByWorktree[worktreeId] ?? null) !== nextActiveTerminalId
       ? { ...state.activeTabIdByWorktree, [worktreeId]: nextActiveTerminalId }
       : state.activeTabIdByWorktree
-  const shouldSurfaceTerminal =
-    snapshot.activeTabType === 'terminal' &&
-    nextActiveTerminalId !== null &&
-    state.activeWorktreeId === worktreeId
-  const nextActiveTabId = shouldSurfaceTerminal ? nextActiveTerminalId : state.activeTabId
-  const nextActiveTabType = shouldSurfaceTerminal ? 'terminal' : state.activeTabType
+  const nextActiveBrowserTabIdByWorktree =
+    (state.activeBrowserTabIdByWorktree[worktreeId] ?? null) !== nextActiveBrowserWorkspaceId
+      ? { ...state.activeBrowserTabIdByWorktree, [worktreeId]: nextActiveBrowserWorkspaceId }
+      : state.activeBrowserTabIdByWorktree
+  const isActiveWorktree = state.activeWorktreeId === worktreeId
+  const snapshotVisibleTabType =
+    snapshot.activeTabType === 'browser' && nextActiveBrowserWorkspaceId
+      ? ('browser' as const)
+      : snapshot.activeTabType === 'terminal' && nextActiveTerminalId
+        ? ('terminal' as const)
+        : null
+  const currentActiveTerminalStillValid =
+    state.activeTabId && (nextTerminalTabs ?? []).some((tab) => tab.id === state.activeTabId)
+      ? state.activeTabId
+      : null
+  const nextActiveTabId = isActiveWorktree
+    ? snapshot.activeTabType === 'terminal'
+      ? nextActiveTerminalId
+      : (currentActiveTerminalStillValid ?? nextActiveTerminalId)
+    : state.activeTabId
+  const nextActiveBrowserTabId = isActiveWorktree
+    ? nextActiveBrowserWorkspaceId
+    : state.activeBrowserTabId
+  const nextActiveTabType =
+    isActiveWorktree && snapshotVisibleTabType ? snapshotVisibleTabType : state.activeTabType
   const nextActiveTabTypeByWorktree =
-    shouldSurfaceTerminal && state.activeTabTypeByWorktree[worktreeId] !== 'terminal'
-      ? { ...state.activeTabTypeByWorktree, [worktreeId]: 'terminal' as const }
+    snapshotVisibleTabType && state.activeTabTypeByWorktree[worktreeId] !== snapshotVisibleTabType
+      ? { ...state.activeTabTypeByWorktree, [worktreeId]: snapshotVisibleTabType }
       : state.activeTabTypeByWorktree
 
   const patch: Partial<WebSessionTabsSyncState> = {
     ...(nextTabsByWorktree !== state.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {}),
+    ...(nextBrowserTabsByWorktree !== state.browserTabsByWorktree
+      ? { browserTabsByWorktree: nextBrowserTabsByWorktree }
+      : {}),
     ...(nextUnifiedTabsByWorktree !== state.unifiedTabsByWorktree
       ? { unifiedTabsByWorktree: nextUnifiedTabsByWorktree }
       : {}),
@@ -695,10 +1040,22 @@ export function applyWebSessionTabsSnapshot(
     ...(nextUnreadTerminalTabs !== state.unreadTerminalTabs
       ? { unreadTerminalTabs: nextUnreadTerminalTabs }
       : {}),
+    ...(nextBrowserPagesByWorkspace !== state.browserPagesByWorkspace
+      ? { browserPagesByWorkspace: nextBrowserPagesByWorkspace }
+      : {}),
+    ...(nextRemoteBrowserPageHandlesByPageId !== state.remoteBrowserPageHandlesByPageId
+      ? { remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId }
+      : {}),
     ...(nextActiveTabIdByWorktree !== state.activeTabIdByWorktree
       ? { activeTabIdByWorktree: nextActiveTabIdByWorktree }
       : {}),
+    ...(nextActiveBrowserTabIdByWorktree !== state.activeBrowserTabIdByWorktree
+      ? { activeBrowserTabIdByWorktree: nextActiveBrowserTabIdByWorktree }
+      : {}),
     ...(nextActiveTabId !== state.activeTabId ? { activeTabId: nextActiveTabId } : {}),
+    ...(nextActiveBrowserTabId !== state.activeBrowserTabId
+      ? { activeBrowserTabId: nextActiveBrowserTabId }
+      : {}),
     ...(nextActiveTabType !== state.activeTabType ? { activeTabType: nextActiveTabType } : {}),
     ...(nextActiveTabTypeByWorktree !== state.activeTabTypeByWorktree
       ? { activeTabTypeByWorktree: nextActiveTabTypeByWorktree }

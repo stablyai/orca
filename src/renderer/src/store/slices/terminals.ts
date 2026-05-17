@@ -1677,7 +1677,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // Why: remote PTY reattach uses the relay's pty.attach RPC, not the
       // local terminal daemon. The loop above correctly skips SSH repos
       // (connectionId check), so there is no overlap.
-      console.warn(
+      console.debug(
         `[terminals-hydration] remoteSessionIdsByTabId:`,
         JSON.stringify(remoteSessionIds)
       )
@@ -1857,7 +1857,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const sshState = repo?.connectionId ? get().sshConnectionStates.get(repo.connectionId) : null
       const sshConnected = repo?.connectionId != null && sshState?.status === 'connected'
       const supportsDeferredReattach = !repo?.connectionId || sshConnected
-      console.warn(
+      console.debug(
         `[reconnect-terminals] worktree=${worktreeId} connectionId=${repo?.connectionId} sshStatus=${sshState?.status} supportsDeferredReattach=${supportsDeferredReattach}`
       )
       const targetTabIds = pendingReconnectTabByWorktree[worktreeId] ?? []
@@ -1888,7 +1888,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         // worktrees and the user must manually search for them. The actual
         // PTY reattach is handled later by pty-connection.ts when the
         // terminal pane mounts; this block only sets the visual state.
-        console.warn(
+        console.debug(
           `[reconnect-terminals] tab=${tabId} tabLevelPtyId=${tabLevelPtyId} supportsDeferredReattach=${supportsDeferredReattach} hasLeafMappings=${hasLeafMappings}`
         )
         if (tabLevelPtyId) {

@@ -61,6 +61,11 @@ import { track } from '@/lib/telemetry'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import type { AppState } from '../store/types'
+import {
+  closeWebRuntimeSessionTab,
+  createWebRuntimeSessionBrowserTab,
+  createWebRuntimeSessionTerminal
+} from '@/runtime/web-runtime-session'
 
 export { resolveZoomTarget } from './resolve-zoom-target'
 
@@ -1204,12 +1209,18 @@ export function useIpcEvents(): void {
     // capture keyboard focus and bypass the renderer's window-level keydown.
     unsubs.push(
       window.api.ui.onNewBrowserTab(() => {
-        if (isRuntimeEnvironmentActive()) {
-          return
-        }
         const store = useAppStore.getState()
         const worktreeId = store.activeWorktreeId
         if (worktreeId) {
+          if (isRuntimeEnvironmentActive()) {
+            // Why: paired web browser tabs are host-owned and arrive through
+            // session.tabs. A local web-only tab cannot be streamed or controlled.
+            void createWebRuntimeSessionBrowserTab({
+              worktreeId,
+              url: store.browserDefaultUrl ?? 'about:blank'
+            })
+            return
+          }
           store.createBrowserTab(worktreeId, store.browserDefaultUrl ?? 'about:blank', {
             title: 'New Browser Tab',
             focusAddressBar: true
@@ -1389,31 +1400,42 @@ export function useIpcEvents(): void {
         if (!worktreeId) {
           return
         }
-        const newTab = store.createTab(worktreeId)
-        store.setActiveTabType('terminal')
-        // Why: replicate the full reconciliation from Terminal.tsx handleNewTab
-        // so the new tab appends at the visual end instead of jumping to index 0
-        // when tabBarOrderByWorktree is unset (e.g. restored worktrees).
-        const currentTerminals = store.tabsByWorktree[worktreeId] ?? []
-        const currentEditors = store.openFiles.filter((f) => f.worktreeId === worktreeId)
-        const currentBrowsers = store.browserTabsByWorktree[worktreeId] ?? []
-        const stored = store.tabBarOrderByWorktree[worktreeId]
-        const termIds = currentTerminals.map((t) => t.id)
-        const editorIds = currentEditors.map((f) => f.id)
-        const browserIds = currentBrowsers.map((tab) => tab.id)
-        const validIds = new Set([...termIds, ...editorIds, ...browserIds])
-        const base = (stored ?? []).filter((id) => validIds.has(id))
-        const inBase = new Set(base)
-        for (const id of [...termIds, ...editorIds, ...browserIds]) {
-          if (!inBase.has(id)) {
-            base.push(id)
-            inBase.add(id)
+        void (async () => {
+          if (
+            await createWebRuntimeSessionTerminal({
+              worktreeId,
+              activate: true
+            })
+          ) {
+            return
           }
-        }
-        const order = base.filter((id) => id !== newTab.id)
-        order.push(newTab.id)
-        store.setTabBarOrder(worktreeId, order)
-        focusTerminalTabSurface(newTab.id)
+          const newTab = store.createTab(worktreeId)
+          store.setActiveTabType('terminal')
+          // Why: replicate the full reconciliation from Terminal.tsx handleNewTab
+          // so the new tab appends at the visual end instead of jumping to index 0
+          // when tabBarOrderByWorktree is unset (e.g. restored worktrees).
+          const freshStore = useAppStore.getState()
+          const currentTerminals = freshStore.tabsByWorktree[worktreeId] ?? []
+          const currentEditors = freshStore.openFiles.filter((f) => f.worktreeId === worktreeId)
+          const currentBrowsers = freshStore.browserTabsByWorktree[worktreeId] ?? []
+          const stored = freshStore.tabBarOrderByWorktree[worktreeId]
+          const termIds = currentTerminals.map((t) => t.id)
+          const editorIds = currentEditors.map((f) => f.id)
+          const browserIds = currentBrowsers.map((tab) => tab.id)
+          const validIds = new Set([...termIds, ...editorIds, ...browserIds])
+          const base = (stored ?? []).filter((id) => validIds.has(id))
+          const inBase = new Set(base)
+          for (const id of [...termIds, ...editorIds, ...browserIds]) {
+            if (!inBase.has(id)) {
+              base.push(id)
+              inBase.add(id)
+            }
+          }
+          const order = base.filter((id) => id !== newTab.id)
+          order.push(newTab.id)
+          freshStore.setTabBarOrder(worktreeId, order)
+          focusTerminalTabSurface(newTab.id)
+        })()
       })
     )
 
@@ -1421,6 +1443,13 @@ export function useIpcEvents(): void {
       window.api.ui.onCloseActiveTab(() => {
         const store = useAppStore.getState()
         if (store.activeTabType === 'browser' && store.activeBrowserTabId) {
+          if (isRuntimeEnvironmentActive() && store.activeWorktreeId) {
+            void closeWebRuntimeSessionTab({
+              worktreeId: store.activeWorktreeId,
+              tabId: store.activeBrowserTabId
+            })
+            return
+          }
           store.closeBrowserTab(store.activeBrowserTabId)
         }
       })

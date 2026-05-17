@@ -1,6 +1,12 @@
 import { useAppStore } from '@/store'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { reconcileTabOrder } from '../tab-bar/reconcile-order'
+import {
+  activateWebRuntimeSessionTab,
+  closeWebRuntimeSessionTab,
+  createWebRuntimeSessionTerminal,
+  isWebRuntimeSessionActive
+} from '@/runtime/web-runtime-session'
 
 export function createNewTerminalTab(
   activeWorktreeId: string | null,
@@ -10,6 +16,18 @@ export function createNewTerminalTab(
     return
   }
   const state = useAppStore.getState()
+  const runtimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim()
+  if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+    // Why: paired web clients receive host-owned terminal tabs through
+    // session.tabs. Creating a local tab first races the host snapshot and can
+    // leave stale remote handles in the web store.
+    void createWebRuntimeSessionTerminal({
+      worktreeId: activeWorktreeId,
+      command: shellOverride,
+      activate: true
+    })
+    return
+  }
   const newTab = state.createTab(activeWorktreeId, undefined, shellOverride)
   state.setActiveTabType('terminal')
   // Why: persist the tab bar order with the new terminal at the end of the
@@ -40,6 +58,18 @@ export function closeTerminalTab(tabId: string): void {
   const owningWorktreeId = owningWorktreeEntry?.[0] ?? null
 
   if (!owningWorktreeId) {
+    return
+  }
+
+  const runtimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim()
+  if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+    // Why: paired web tabs are host-owned. Closing locally leaves the host to
+    // re-publish the same stale surface on the next session-tabs snapshot.
+    void closeWebRuntimeSessionTab({
+      worktreeId: owningWorktreeId,
+      tabId,
+      environmentId: runtimeEnvironmentId
+    })
     return
   }
 
@@ -118,6 +148,20 @@ export function closeTerminalTabsToRight(tabId: string, activeWorktreeId: string
 
 export function activateTerminalTab(tabId: string): void {
   const s = useAppStore.getState()
+  const owningWorktreeId =
+    Object.entries(s.tabsByWorktree).find(([, worktreeTabs]) =>
+      worktreeTabs.some((tab) => tab.id === tabId)
+    )?.[0] ?? null
+  const runtimeEnvironmentId = s.settings?.activeRuntimeEnvironmentId?.trim()
+  if (owningWorktreeId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+    // Why: activation needs to update the host's active tab as well as the
+    // local optimistic state, otherwise the next host snapshot snaps back.
+    void activateWebRuntimeSessionTab({
+      worktreeId: owningWorktreeId,
+      tabId,
+      environmentId: runtimeEnvironmentId
+    })
+  }
   s.setActiveTab(tabId)
   s.setActiveTabType('terminal')
 }

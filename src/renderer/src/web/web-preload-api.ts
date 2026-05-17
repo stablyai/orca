@@ -38,6 +38,7 @@ import {
 import { parseWebPairingInput } from './web-pairing'
 import { WebRuntimeClient } from './web-runtime-client'
 import { RuntimeRpcCallQueuePool } from '../../../shared/runtime-rpc-call-queue'
+import { sanitizeWebRuntimeWorkspaceSession } from './web-workspace-session'
 
 const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
 const UI_STORAGE_KEY = 'orca.web.ui.v1'
@@ -107,12 +108,17 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       submit: () => Promise.resolve({ ok: false, status: null, error: 'Unavailable on web.' })
     },
     session: {
-      get: () => Promise.resolve(readJson(SESSION_STORAGE_KEY, getDefaultWorkspaceSession())),
+      get: () =>
+        Promise.resolve(
+          sanitizeWebRuntimeWorkspaceSession(
+            readJson(SESSION_STORAGE_KEY, getDefaultWorkspaceSession())
+          )
+        ),
       set: async (session) => {
-        writeJson(SESSION_STORAGE_KEY, session)
+        writeJson(SESSION_STORAGE_KEY, sanitizeWebRuntimeWorkspaceSession(session))
       },
       setSync: (session) => {
-        writeJson(SESSION_STORAGE_KEY, session)
+        writeJson(SESSION_STORAGE_KEY, sanitizeWebRuntimeWorkspaceSession(session))
       }
     },
     onboarding: {

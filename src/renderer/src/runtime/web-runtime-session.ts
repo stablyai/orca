@@ -1,8 +1,33 @@
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import type { RuntimeTerminalCreate, RuntimeTerminalSplit } from '../../../shared/runtime-types'
+import type {
+  BrowserTabCreateResult,
+  RuntimeTerminalCreate,
+  RuntimeTerminalSplit
+} from '../../../shared/runtime-types'
 import { useAppStore } from '../store'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
 import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
+
+export const WEB_TERMINAL_SURFACE_TAB_PREFIX = 'web-terminal-'
+export const HOST_TERMINAL_SURFACE_SEPARATOR = '::'
+
+export function toWebTerminalSurfaceTabId(hostSurfaceId: string): string {
+  // Why: host session surface ids use `tab::leaf`, but renderer pane keys
+  // reserve `:` as the tab/leaf delimiter. Keep host identity while making a
+  // local tab id that can safely flow through makePaneKey().
+  return `${WEB_TERMINAL_SURFACE_TAB_PREFIX}${encodeURIComponent(hostSurfaceId)}`
+}
+
+function toHostSessionTabId(tabId: string): string {
+  if (!tabId.startsWith(WEB_TERMINAL_SURFACE_TAB_PREFIX)) {
+    return tabId
+  }
+  try {
+    return decodeURIComponent(tabId.slice(WEB_TERMINAL_SURFACE_TAB_PREFIX.length))
+  } catch {
+    return tabId
+  }
+}
 
 export function isWebRuntimeSessionActive(
   activeRuntimeEnvironmentId: string | null | undefined
@@ -17,6 +42,7 @@ export async function createWebRuntimeSessionTerminal(args: {
   worktreeId: string
   environmentId?: string | null
   afterTabId?: string
+  command?: string
   activate?: boolean
 }): Promise<boolean> {
   const environmentId =
@@ -33,6 +59,7 @@ export async function createWebRuntimeSessionTerminal(args: {
       method: 'terminal.create',
       params: {
         worktree: `id:${args.worktreeId}`,
+        command: args.command,
         activate: args.activate !== false
       },
       timeoutMs: 15_000
@@ -42,6 +69,95 @@ export async function createWebRuntimeSessionTerminal(args: {
   } catch (error) {
     console.warn(
       '[web-runtime-session] failed to create terminal:',
+      error instanceof Error ? error.message : String(error)
+    )
+    return false
+  }
+}
+
+export async function createWebRuntimeSessionBrowserTab(args: {
+  worktreeId: string
+  environmentId?: string | null
+  url?: string
+  profileId?: string | null
+}): Promise<boolean> {
+  const environmentId =
+    args.environmentId?.trim() ??
+    useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() ??
+    null
+  if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
+    return false
+  }
+
+  try {
+    const response = await window.api.runtimeEnvironments.call({
+      selector: environmentId,
+      method: 'browser.tabCreate',
+      params: {
+        worktree: `id:${args.worktreeId}`,
+        url: args.url,
+        profileId: args.profileId ?? undefined
+      },
+      timeoutMs: 15_000
+    })
+    unwrapRuntimeRpcResult(response as RuntimeRpcResponse<BrowserTabCreateResult>)
+    return true
+  } catch (error) {
+    console.warn(
+      '[web-runtime-session] failed to create browser tab:',
+      error instanceof Error ? error.message : String(error)
+    )
+    return false
+  }
+}
+
+export async function activateWebRuntimeSessionTab(args: {
+  worktreeId: string
+  tabId: string
+  environmentId?: string | null
+}): Promise<boolean> {
+  return callWebRuntimeSessionTabMethod('session.tabs.activate', args)
+}
+
+export async function closeWebRuntimeSessionTab(args: {
+  worktreeId: string
+  tabId: string
+  environmentId?: string | null
+}): Promise<boolean> {
+  return callWebRuntimeSessionTabMethod('session.tabs.close', args)
+}
+
+async function callWebRuntimeSessionTabMethod(
+  method: 'session.tabs.activate' | 'session.tabs.close',
+  args: {
+    worktreeId: string
+    tabId: string
+    environmentId?: string | null
+  }
+): Promise<boolean> {
+  const environmentId =
+    args.environmentId?.trim() ??
+    useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() ??
+    null
+  if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
+    return false
+  }
+
+  try {
+    const response = await window.api.runtimeEnvironments.call({
+      selector: environmentId,
+      method,
+      params: {
+        worktree: `id:${args.worktreeId}`,
+        tabId: toHostSessionTabId(args.tabId)
+      },
+      timeoutMs: 15_000
+    })
+    unwrapRuntimeRpcResult(response as RuntimeRpcResponse<unknown>)
+    return true
+  } catch (error) {
+    console.warn(
+      `[web-runtime-session] failed to ${method === 'session.tabs.close' ? 'close' : 'activate'} tab:`,
       error instanceof Error ? error.message : String(error)
     )
     return false

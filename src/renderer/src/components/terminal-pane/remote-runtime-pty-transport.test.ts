@@ -203,6 +203,32 @@ describe('createRemoteRuntimePtyTransport', () => {
     })
   })
 
+  it('does not close host-owned terminal handles attached from session snapshots', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-tab-1',
+      leafId: 'pane:1'
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-1',
+      cols: 80,
+      rows: 24,
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    runtimeCall.mockClear()
+
+    transport.destroy?.()
+
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.close'
+      })
+    )
+  })
+
   it('closes a remote terminal created after the pane was destroyed', async () => {
     let resolveCreate: (value: unknown) => void = () => {}
     runtimeCall.mockImplementation((args) => {
