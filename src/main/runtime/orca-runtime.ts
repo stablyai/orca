@@ -204,7 +204,13 @@ import {
   getRemoteDrift,
   getRecentDriftSubjects
 } from '../git/repo'
-import { listWorktrees, addWorktree, addSparseWorktree, removeWorktree } from '../git/worktree'
+import {
+  listWorktrees,
+  addWorktree,
+  addSparseWorktree,
+  assertWorktreeCleanForRemoval,
+  removeWorktree
+} from '../git/worktree'
 import { isENOENT } from '../ipc/filesystem-auth'
 import {
   createSetupRunnerScript,
@@ -235,6 +241,7 @@ import {
   computeWorktreePath,
   ensurePathWithinWorkspace,
   formatWorktreeRemovalError,
+  isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError,
   mergeWorktree,
   sanitizeWorktreeName,
@@ -1232,6 +1239,10 @@ export class OrcaRuntimeService {
     this.gitCommands.generateRuntimeCommitMessage.bind(this.gitCommands)
   cancelRuntimeGenerateCommitMessage: RuntimeGitCommands['cancelRuntimeGenerateCommitMessage'] =
     this.gitCommands.cancelRuntimeGenerateCommitMessage.bind(this.gitCommands)
+  generateRuntimePullRequestFields: RuntimeGitCommands['generateRuntimePullRequestFields'] =
+    this.gitCommands.generateRuntimePullRequestFields.bind(this.gitCommands)
+  cancelRuntimeGeneratePullRequestFields: RuntimeGitCommands['cancelRuntimeGeneratePullRequestFields'] =
+    this.gitCommands.cancelRuntimeGeneratePullRequestFields.bind(this.gitCommands)
   stageRuntimeGitPath: RuntimeGitCommands['stageRuntimeGitPath'] =
     this.gitCommands.stageRuntimeGitPath.bind(this.gitCommands)
   unstageRuntimeGitPath: RuntimeGitCommands['unstageRuntimeGitPath'] =
@@ -4460,6 +4471,22 @@ export class OrcaRuntimeService {
     }
   }
 
+  private async resolveHostedReviewTarget(args: {
+    repoSelector: string
+    worktreeSelector?: string
+  }): Promise<{ repo: Repo; repoPath: string }> {
+    const repo = await this.resolveRepoSelector(args.repoSelector)
+    if (!args.worktreeSelector) {
+      return { repo, repoPath: repo.path }
+    }
+
+    const worktree = await this.resolveWorktreeSelector(args.worktreeSelector)
+    if (worktree.repoId !== repo.id) {
+      throw new Error('Access denied: worktree does not belong to repository')
+    }
+    return { repo, repoPath: worktree.path }
+  }
+
   async getRepoSlug(repoSelector: string): Promise<{ owner: string; repo: string } | null> {
     const repo = await this.resolveRepoSelector(repoSelector)
     this.assertHostIntegrationRepoIsLocal(repo, 'repo_slug')
@@ -4576,12 +4603,15 @@ export class OrcaRuntimeService {
   }
 
   async getHostedReviewCreationEligibility(
-    args: Omit<HostedReviewCreationEligibilityArgs, 'repoPath'> & { repoSelector: string }
+    args: Omit<HostedReviewCreationEligibilityArgs, 'repoPath'> & {
+      repoSelector: string
+      worktreeSelector?: string
+    }
   ): Promise<HostedReviewCreationEligibility> {
-    const repo = await this.resolveRepoSelector(args.repoSelector)
+    const { repo, repoPath } = await this.resolveHostedReviewTarget(args)
     this.assertHostIntegrationRepoIsLocal(repo, 'hosted_review')
     return getHostedReviewCreationEligibilityFromRepo({
-      repoPath: repo.path,
+      repoPath,
       branch: args.branch,
       base: args.base ?? null,
       hasUncommittedChanges: args.hasUncommittedChanges,
@@ -4597,11 +4627,11 @@ export class OrcaRuntimeService {
   }
 
   async createHostedReview(
-    args: CreateHostedReviewInput & { repoSelector: string }
+    args: CreateHostedReviewInput & { repoSelector: string; worktreeSelector?: string }
   ): Promise<CreateHostedReviewResult> {
-    const repo = await this.resolveRepoSelector(args.repoSelector)
+    const { repo, repoPath } = await this.resolveHostedReviewTarget(args)
     this.assertHostIntegrationRepoIsLocal(repo, 'hosted_review')
-    const result = await createHostedReviewFromRepo(repo.path, {
+    const result = await createHostedReviewFromRepo(repoPath, {
       provider: args.provider,
       base: args.base,
       head: args.head,
@@ -5122,6 +5152,7 @@ export class OrcaRuntimeService {
     linkedLinearIssue?: string
     comment?: string
     displayName?: string
+    workspaceStatus?: string
     sparseCheckout?: { directories: string[]; presetId?: string }
     pushTarget?: GitPushTarget
     runHooks?: boolean
@@ -5289,7 +5320,8 @@ export class OrcaRuntimeService {
         ? { linkedLinearIssue: args.linkedLinearIssue }
         : {}),
       ...(args.createdWithAgent ? { createdWithAgent: args.createdWithAgent } : {}),
-      ...(args.comment !== undefined ? { comment: args.comment } : {})
+      ...(args.comment !== undefined ? { comment: args.comment } : {}),
+      ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {})
     })
     const worktree = mergeWorktree(repo.id, created, meta)
     let lineage: WorktreeLineage | null = null
@@ -6016,15 +6048,36 @@ export class OrcaRuntimeService {
       return {}
     }
 
-    // Why: kill every PTY belonging to this worktree BEFORE the git-level
-    // removal. Some shells keep the worktree directory busy, and `git worktree
-    // remove` throws a confusing error if PTYs still hold it open. This also
-    // closes the headless-CLI leak (design §2a/§2b): without this call, the
-    // CLI path runs git removal and never touches PTYs, leaving zombies
-    // behind. Best-effort: any failure here must not prevent git removal —
-    // the worst case without the call is the status quo.
+    const hooks = getEffectiveHooks(repo)
+    let warning: string | undefined
+    if (hooks?.scripts.archive && runHooks) {
+      const result = await runHook('archive', worktree.path, repo)
+      if (!result.success) {
+        console.error(`[hooks] archive hook failed for ${worktree.path}:`, result.output)
+      }
+    } else if (hooks?.scripts.archive) {
+      // Runtime RPC calls have no renderer trust prompt, so hooks require explicit CLI opt-in.
+      warning = `orca.yaml archive hook skipped for ${worktree.path}; pass --run-hooks to run it.`
+      console.warn(`[hooks] ${warning}`)
+    }
+
+    let shouldTearDownPtys = true
+    try {
+      await assertWorktreeCleanForRemoval(worktree.path, force)
+    } catch (error) {
+      if (!isOrphanCompatiblePreflightError(error)) {
+        throw new Error(formatWorktreeRemovalError(error, worktree.path, force))
+      }
+      // Why: orphan cleanup does not need live shells to be killed first,
+      // and preflight did not prove the worktree is cleanly removable.
+      shouldTearDownPtys = false
+    }
+
     const localProvider = this.getLocalProvider()
-    if (localProvider) {
+    if (localProvider && shouldTearDownPtys) {
+      // Why: once preflight proves normal deletion is clean, kill PTYs before
+      // git-level removal so shells cannot keep the directory busy. This also
+      // closes the headless-CLI leak for confirmed-removable worktrees.
       await killAllProcessesForWorktree(worktree.id, {
         runtime: this,
         localProvider
@@ -6045,19 +6098,6 @@ export class OrcaRuntimeService {
         .catch((err) => {
           console.warn(`[worktree-teardown] failed for ${worktree.id}:`, err)
         })
-    }
-
-    const hooks = getEffectiveHooks(repo)
-    let warning: string | undefined
-    if (hooks?.scripts.archive && runHooks) {
-      const result = await runHook('archive', worktree.path, repo)
-      if (!result.success) {
-        console.error(`[hooks] archive hook failed for ${worktree.path}:`, result.output)
-      }
-    } else if (hooks?.scripts.archive) {
-      // Runtime RPC calls have no renderer trust prompt, so hooks require explicit CLI opt-in.
-      warning = `orca.yaml archive hook skipped for ${worktree.path}; pass --run-hooks to run it.`
-      console.warn(`[hooks] ${warning}`)
     }
 
     try {
@@ -6129,10 +6169,11 @@ export class OrcaRuntimeService {
       leafId?: string
     } = {}
   ): Promise<RuntimeTerminalCreate> {
-    if (opts.focus !== true && opts.rendererBacked !== true) {
-      if (!worktreeSelector) {
-        throw new Error('MISSING_WORKTREE')
-      }
+    // Why: pre-diff createTerminal fell back to the renderer's active worktree
+    // when no selector was provided. The new background-spawn branch hard-
+    // requires a resolvable selector, so route the no-selector case through
+    // the renderer IPC path to preserve that behavior.
+    if (opts.focus !== true && opts.rendererBacked !== true && worktreeSelector) {
       if (!this.ptyController?.spawn) {
         throw new Error('runtime_unavailable')
       }

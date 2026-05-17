@@ -56,6 +56,8 @@ export type CodexHookTrustState = {
   enabled?: boolean
 }
 
+export type CodexProjectTrustLevel = 'trusted' | 'untrusted'
+
 // Why: matches Codex's canonical_json. Sorts object keys recursively before
 // SHA-256ing; arrays preserve order.
 function canonicalize(value: unknown): unknown {
@@ -210,6 +212,61 @@ export function upsertHookTrustEntriesInContent(
   return updated
 }
 
+export function upsertProjectTrustLevel(
+  configPath: string,
+  projectPath: string,
+  trustLevel: CodexProjectTrustLevel
+): void {
+  const existing = existsSync(configPath) ? readTomlFile(configPath) : ''
+  const updated = upsertProjectTrustLevelInContent(existing, projectPath, trustLevel)
+  if (updated === existing) {
+    return
+  }
+  writeConfigAtomically(configPath, updated)
+}
+
+export function upsertProjectTrustLevelInContent(
+  existingContent: string,
+  projectPath: string,
+  trustLevel: CodexProjectTrustLevel
+): string {
+  const existing =
+    existingContent.charCodeAt(0) === 0xfeff ? existingContent.slice(1) : existingContent
+  const headerPattern = buildProjectHeaderPattern(projectPath)
+  const match = headerPattern.exec(existing)
+  const eol = existing.includes('\r\n') ? '\r\n' : '\n'
+  const trustLine = `trust_level = "${trustLevel}"`
+
+  if (!match) {
+    const block = [`[projects."${escapeTomlString(projectPath)}"]`, trustLine].join(eol)
+    if (existing.length === 0) {
+      return `${block}${eol}`
+    }
+    const separator = existing.endsWith(`${eol}${eol}`)
+      ? ''
+      : existing.endsWith(eol)
+        ? eol
+        : eol + eol
+    return `${existing}${separator}${block}${eol}`
+  }
+
+  const headerLineEnd = match.index + match[0].length
+  const after = existing.slice(headerLineEnd)
+  const nextHeaderRel = findNextTableHeader(after)
+  const blockEnd = nextHeaderRel === -1 ? existing.length : headerLineEnd + nextHeaderRel
+  const existingBlock = existing.slice(headerLineEnd, blockEnd)
+  const trustLevelLinePattern =
+    /^[ \t]*trust_level[ \t]*=[ \t]*(?:"(?:trusted|untrusted)"|'(?:trusted|untrusted)')[ \t\r]*(?:#.*)?$/m
+  if (trustLevelLinePattern.test(existingBlock)) {
+    return (
+      existing.slice(0, headerLineEnd) +
+      existingBlock.replace(trustLevelLinePattern, trustLine) +
+      existing.slice(blockEnd)
+    )
+  }
+  return `${existing.slice(0, headerLineEnd)}${eol}${trustLine}${existing.slice(headerLineEnd)}`
+}
+
 // Why: build the canonical block we own. The two field names mirror what
 // Codex itself writes when the user approves via /hooks (HookStateToml
 // fields). `enabled` is plumbed through so an existing user-set
@@ -286,6 +343,13 @@ function buildHeaderPattern(key: string): RegExp {
   const escapedKey = escapeRegex(escapeTomlString(key))
   return new RegExp(
     `(^|\\r?\\n)[ \\t]*\\[hooks\\.state\\."${escapedKey}"\\][ \\t]*(?:#[^\\r\\n]*)?(?=\\r?\\n|$)`
+  )
+}
+
+function buildProjectHeaderPattern(projectPath: string): RegExp {
+  const escapedPath = escapeRegex(escapeTomlString(projectPath))
+  return new RegExp(
+    `(^|\\r?\\n)[ \\t]*\\[projects\\."${escapedPath}"\\][ \\t]*(?:#[^\\r\\n]*)?(?=\\r?\\n|$)`
   )
 }
 

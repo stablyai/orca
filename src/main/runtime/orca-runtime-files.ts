@@ -56,6 +56,9 @@ const MOBILE_FILE_LIST_LIMIT = 5000
 const MOBILE_FILE_READ_MAX_BYTES = 512 * 1024
 const RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES = 10 * 1024 * 1024
 const WINDOWS_RUNTIME_FILE_WATCH_DEBOUNCE_MS = 150
+// Why: runtime files.watch subscriptions are cleaned up through synchronous RPC
+// callbacks. Track native Parcel unsubscribe work so app shutdown can drain it.
+const pendingRuntimeFileWatcherUnsubscribes = new Set<Promise<void>>()
 const MOBILE_BINARY_EXTENSIONS = new Set([
   '.avif',
   '.bmp',
@@ -82,6 +85,25 @@ const RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
   '.pdf': 'application/pdf'
+}
+
+function trackRuntimeFileWatcherUnsubscribe(
+  rootPath: string,
+  unsubscribe: () => Promise<void>
+): void {
+  const promise = Promise.resolve()
+    .then(unsubscribe)
+    .catch((err: unknown) => {
+      console.error('[runtime-files.watch] unsubscribe error', { rootPath, err })
+    })
+    .finally(() => {
+      pendingRuntimeFileWatcherUnsubscribes.delete(promise)
+    })
+  pendingRuntimeFileWatcherUnsubscribes.add(promise)
+}
+
+export async function awaitRuntimeFileWatcherUnsubscribes(): Promise<void> {
+  await Promise.allSettled(Array.from(pendingRuntimeFileWatcherUnsubscribes))
 }
 
 export type ResolvedRuntimeFileWorktree = Worktree & { git: GitWorktreeInfo }
@@ -269,9 +291,7 @@ export class RuntimeFileCommands {
       }
     )
     return () => {
-      void subscription.unsubscribe().catch((err: unknown) => {
-        console.error('[runtime-files.watch] unsubscribe error', { rootPath, err })
-      })
+      trackRuntimeFileWatcherUnsubscribe(rootPath, () => subscription.unsubscribe())
     }
   }
 

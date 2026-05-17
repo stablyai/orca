@@ -1301,6 +1301,7 @@ describe('registerPtyHandlers', () => {
         try {
           expect(controller.kill('remote-pty')).toBe(true)
           await Promise.resolve()
+          await Promise.resolve()
         } finally {
           warnSpy.mockRestore()
           deletePtyOwnership('remote-pty')
@@ -1311,7 +1312,7 @@ describe('registerPtyHandlers', () => {
           'remote-pty',
           'terminated'
         )
-        expect(runtime.onPtyExit).not.toHaveBeenCalled()
+        expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1)
       })
 
       it('strips ORCA_PANE_KEY/TAB_ID/WORKTREE_ID from SSH spawn env when remote agent hooks are disabled', async () => {

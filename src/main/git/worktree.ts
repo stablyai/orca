@@ -378,6 +378,29 @@ export async function removeWorktree(
   }
 }
 
+/**
+ * Assert a worktree is clean enough for non-force removal.
+ */
+export async function assertWorktreeCleanForRemoval(
+  worktreePath: string,
+  force = false
+): Promise<void> {
+  if (force) {
+    return
+  }
+
+  const { stdout } = await gitExecFileAsync(['status', '--porcelain', '--untracked-files=all'], {
+    cwd: worktreePath
+  })
+  if (!stdout.trim()) {
+    return
+  }
+
+  const error = new Error('Worktree has uncommitted or untracked changes.')
+  ;(error as Error & { stdout?: string }).stdout = stdout
+  throw error
+}
+
 function translateWorktreePath(worktreePath: string, repoPath: string): string {
   const prefix = 'worktree '
   const translated = translateWslOutputPaths(`${prefix}${worktreePath}`, repoPath)

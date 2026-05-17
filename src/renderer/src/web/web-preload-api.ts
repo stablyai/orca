@@ -557,6 +557,11 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       error: 'Commit message model discovery is unavailable in the web client.'
     }),
     cancelGenerateCommitMessage: () => Promise.resolve(),
+    generatePullRequestFields: async () => ({
+      success: false,
+      error: 'Pull request detail generation is unavailable in the web client.'
+    }),
+    cancelGeneratePullRequestFields: () => Promise.resolve(),
     stage: async ({ worktreePath, filePath }) => mutateGitPath('git.stage', worktreePath, filePath),
     bulkStage: async ({ worktreePath, filePaths }) =>
       mutateGitPaths('git.bulkStage', worktreePath, filePaths),

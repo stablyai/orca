@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
-import { ChevronLeft, Loader2 } from 'lucide-react'
+import { ChevronLeft, CornerDownLeft, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { isEditableTarget } from '@/lib/editable-target'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { OnboardingState } from '../../../../shared/types'
 import { AgentStep } from './AgentStep'
 import { ThemeStep } from './ThemeStep'
@@ -11,8 +12,6 @@ import { STEPS, useOnboardingFlow } from './use-onboarding-flow'
 import logo from '../../../../../resources/logo.svg'
 
 const isMac = navigator.userAgent.includes('Mac')
-// Why: AGENTS.md mandates `Ctrl+Enter` style on non-Mac; bare `Ctrl↵` reads as one glyph.
-const enterLabel = isMac ? '⌘↵' : 'Ctrl+Enter'
 
 const stepCopy = {
   agent: {
@@ -33,6 +32,13 @@ const stepCopy = {
     title: 'Point Orca at some code',
     subtitle: 'Open a folder, clone a repo, or skip and add one later.'
   }
+} as const
+
+const stepTooltipLabels = {
+  agent: 'Default Agent',
+  theme: 'Appearance',
+  notifications: 'Agent tools',
+  repo: 'Create project'
 } as const
 
 type OnboardingFlowProps = {
@@ -79,7 +85,7 @@ export default function OnboardingFlow({
   }, [currentStep.id, flowNext, flowOpenFolder])
 
   return (
-    <div className="fixed inset-0 z-[100] overflow-auto bg-background text-foreground">
+    <div className="scrollbar-sleek fixed inset-0 z-[100] overflow-auto bg-background text-foreground">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-70 dark:opacity-70"
@@ -105,23 +111,37 @@ export default function OnboardingFlow({
         </div>
 
         <div className="mt-12 flex items-center gap-2">
-          {STEPS.map((step, idx) => {
-            const isActive = idx === stepIndex
-            const isDone = idx < stepIndex
-            return (
-              <div
-                key={step.id}
-                className={cn(
-                  'h-1 rounded-full transition-all duration-300',
-                  isActive
-                    ? 'w-10 bg-foreground'
-                    : isDone
-                      ? 'w-6 bg-muted-foreground/70'
-                      : 'w-6 bg-muted'
-                )}
-              />
-            )
-          })}
+          <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+            {STEPS.map((step, idx) => {
+              const isActive = idx === stepIndex
+              const isDone = idx < stepIndex
+              return (
+                <Tooltip key={step.id}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className={cn(
+                        // Why: the visible bars stay 4px tall, but the invisible
+                        // hit area makes hover/click/tooltip targeting reliable.
+                        'relative h-1 rounded-full outline-none transition-all duration-300 before:absolute before:-inset-y-2 before:-inset-x-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                        isActive
+                          ? 'w-10 bg-foreground'
+                          : isDone
+                            ? 'w-6 bg-muted-foreground/70 hover:bg-foreground/80'
+                            : 'w-6 bg-muted hover:bg-muted-foreground/60'
+                      )}
+                      aria-label={`Go to onboarding step ${step.stepNumber}: ${stepCopy[step.id].title}`}
+                      aria-current={isActive ? 'step' : undefined}
+                      onClick={() => flow.jumpToStep(idx)}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent side="top" sideOffset={8} style={{ zIndex: 110 }}>
+                    {stepTooltipLabels[step.id]}
+                  </TooltipContent>
+                </Tooltip>
+              )
+            })}
+          </TooltipProvider>
           <span className="ml-3 text-xs font-medium text-muted-foreground">
             {stepIndex + 1} of {STEPS.length}
           </span>
@@ -188,33 +208,14 @@ export default function OnboardingFlow({
         </div>
 
         <footer className="mt-10 flex items-center justify-between border-t border-border pt-5">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <kbd className="rounded-md border border-border bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] text-foreground">
-              {enterLabel}
-            </kbd>
-            <span>
-              {currentStep.id === 'repo'
-                ? 'open folder'
-                : currentStep.id === 'notifications' &&
-                    flow.hasSelectedFeatureSetup &&
-                    !flow.featureSetupTerminalCommand
-                  ? 'set up'
-                  : 'continue'}
-            </span>
-          </div>
+          <button
+            className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-muted-foreground"
+            disabled={Boolean(busyLabel)}
+            onClick={() => void flow.skip()}
+          >
+            Skip all onboarding
+          </button>
           <div className="flex items-center gap-2">
-            <button
-              className={cn(
-                currentStep.id === 'repo'
-                  ? 'rounded-md border border-foreground/20 bg-muted px-3 py-2 text-sm font-medium text-foreground hover:bg-muted-foreground/10'
-                  : 'rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground',
-                'disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-muted-foreground'
-              )}
-              disabled={Boolean(busyLabel)}
-              onClick={() => void flow.skip()}
-            >
-              {currentStep.id === 'repo' ? "I'll add one later" : 'Skip'}
-            </button>
             {stepIndex > 0 && (
               <button
                 className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/60 px-3 py-2 text-sm text-foreground hover:bg-muted disabled:opacity-60"
@@ -234,6 +235,10 @@ export default function OnboardingFlow({
               >
                 {busyLabel ? <Loader2 className="size-4 animate-spin" /> : null}
                 {primaryActionLabel}
+                <span className="ml-1 inline-flex items-center gap-0.5 rounded border border-primary-foreground/20 px-1.5 py-0.5 text-[10px] font-medium leading-none text-current/80">
+                  <span>{isMac ? '⌘' : 'Ctrl'}</span>
+                  <CornerDownLeft className="size-3" />
+                </span>
               </button>
             )}
           </div>

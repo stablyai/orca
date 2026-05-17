@@ -46,8 +46,13 @@ async function openInFileManager(pathValue: string): Promise<ShellOpenLocalPathR
   }
 }
 
-async function launchExternalEditor(pathValue: string): Promise<void> {
-  const editorCommand = resolveCliCommand(EXTERNAL_EDITOR_CLI_COMMAND)
+function resolveExternalEditorCommand(command?: string): string {
+  const trimmed = command?.trim()
+  return resolveCliCommand(trimmed || EXTERNAL_EDITOR_CLI_COMMAND)
+}
+
+async function launchExternalEditor(pathValue: string, command?: string): Promise<void> {
+  const editorCommand = resolveExternalEditorCommand(command)
   const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(editorCommand, [pathValue])
 
   await new Promise<void>((resolvePromise, rejectPromise) => {
@@ -75,13 +80,16 @@ async function launchExternalEditor(pathValue: string): Promise<void> {
   })
 }
 
-async function openInExternalEditor(pathValue: string): Promise<ShellOpenLocalPathResult> {
+async function openInExternalEditor(
+  pathValue: string,
+  command?: string
+): Promise<ShellOpenLocalPathResult> {
   const target = await validateLocalPathTarget(pathValue)
   if (!target.ok) {
     return target
   }
   try {
-    await launchExternalEditor(target.path)
+    await launchExternalEditor(target.path, command)
     return { ok: true }
   } catch {
     return { ok: false, reason: 'launch-failed' }
@@ -100,7 +108,8 @@ export function registerShellHandlers(): void {
 
   ipcMain.handle(
     'shell:openInExternalEditor',
-    (_event, path: string): Promise<ShellOpenLocalPathResult> => openInExternalEditor(path)
+    (_event, path: string, command?: string): Promise<ShellOpenLocalPathResult> =>
+      openInExternalEditor(path, command)
   )
 
   ipcMain.handle('shell:openUrl', (_event, rawUrl: string) => {

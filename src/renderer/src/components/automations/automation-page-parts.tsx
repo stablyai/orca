@@ -1,5 +1,6 @@
 import React from 'react'
 import type { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 import type { AutomationRun } from '../../../../shared/automations-types'
 
 export function formatAutomationDateTime(value: number | null | undefined): string {
@@ -90,13 +91,15 @@ export function getAutomationRunStatusLabel(status: AutomationRun['status']): st
 
 export function Field({
   label,
-  children
+  children,
+  className
 }: {
   label: React.ReactNode
   children: React.ReactNode
+  className?: string
 }): React.JSX.Element {
   return (
-    <div className="space-y-1.5">
+    <div className={cn('space-y-1.5', className)}>
       <div className="text-xs text-muted-foreground">{label}</div>
       {children}
     </div>

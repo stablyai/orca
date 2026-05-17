@@ -23,7 +23,7 @@ export type PaneKeyResolution =
 
 export type PaneKeyResolutionManager = {
   getNumericIdForLeaf(leafId: string): number | null
-  getPanes(): ManagedPane[]
+  getPanes(): Pick<ManagedPane, 'id' | 'leafId'>[]
 }
 
 export function resolvePaneKeyForManager(

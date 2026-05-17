@@ -10,7 +10,11 @@ import {
   shouldAllowComposerEnterSubmitTarget,
   shouldSuppressEnterSubmit
 } from '@/lib/new-workspace-enter-guard'
-import type { TuiAgent, WorkspaceCreateTelemetrySource } from '../../../shared/types'
+import type {
+  TuiAgent,
+  WorkspaceCreateTelemetrySource,
+  WorkspaceStatus
+} from '../../../shared/types'
 
 const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
 
@@ -19,6 +23,7 @@ type ComposerModalData = {
   initialRepoId?: string
   linkedWorkItem?: LinkedWorkItemSummary | null
   initialBaseBranch?: string
+  initialWorkspaceStatus?: WorkspaceStatus
   /** Telemetry surface that opened the composer. Set by each
    *  `openModal('new-workspace-composer', ...)` site so
    *  `workspace_created.source` carries the right value. Falls back to
@@ -109,6 +114,7 @@ function QuickTabBody({
     initialPrompt: '',
     initialLinkedWorkItem: modalData.linkedWorkItem ?? null,
     initialRepoId: modalData.initialRepoId,
+    initialWorkspaceStatus: modalData.initialWorkspaceStatus,
     ...(modalData.initialBaseBranch ? { initialBaseBranch: modalData.initialBaseBranch } : {}),
     persistDraft: false,
     onCreated: onClose,

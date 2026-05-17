@@ -422,7 +422,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     linkedPR,
     pushTarget,
     createdWithAgent,
-    linkedLinearIssue
+    linkedLinearIssue,
+    workspaceStatus
   ) => {
     const retryableConflictPatterns = [
       /already exists locally/i,
@@ -448,7 +449,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(linkedPR !== undefined ? { linkedPR } : {}),
             ...(pushTarget ? { pushTarget } : {}),
             ...(createdWithAgent ? { createdWithAgent } : {}),
-            ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {})
+            ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {}),
+            ...(workspaceStatus !== undefined ? { workspaceStatus } : {})
           }
           const target = getActiveRuntimeTarget(get().settings)
           const result =
@@ -468,7 +470,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                     ...(linkedPR !== undefined ? { linkedPR } : {}),
                     ...(pushTarget ? { pushTarget } : {}),
                     ...(createdWithAgent ? { createdWithAgent } : {}),
-                    ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {})
+                    ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {}),
+                    ...(workspaceStatus !== undefined ? { workspaceStatus } : {})
                   },
                   { timeoutMs: 10 * 60_000 }
                 )
@@ -531,10 +534,36 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const trustDecision = await ensureHooksConfirmed(get(), repoIdForTrust, 'archive')
       const skipArchive = trustDecision === 'skip'
 
-      // Why: setup-enabled worktrees now commonly have a live shell open as soon as
-      // they are created. We must tear those PTYs down before asking Git to remove
-      // the working tree or Windows and some shells can keep the directory in use
-      // and make delete look broken even though the git state itself is fine.
+      const target = getActiveRuntimeTarget(get().settings)
+      await (target.kind === 'local'
+        ? window.api.worktrees.remove({ worktreeId, force, skipArchive })
+        : callRuntimeRpc(
+            target,
+            'worktree.rm',
+            { worktree: worktreeId, force, runHooks: !skipArchive },
+            { timeoutMs: 60_000 }
+          ))
+
+      const worktreeDisplayName = get()
+        .allWorktrees()
+        .find((entry) => entry.id === worktreeId)
+        ?.displayName?.trim()
+      if (worktreeDisplayName) {
+        try {
+          await window.api.automations?.snapshotWorkspaceName?.({
+            workspaceId: worktreeId,
+            displayName: worktreeDisplayName
+          })
+        } catch (error) {
+          // Why: preserving automation history labels is best-effort; a stale
+          // preload/test harness must not block worktree removal cleanup.
+          console.warn('Failed to snapshot automation workspace name:', error)
+        }
+      }
+
+      // Why: backend delete paths now preflight and kill PTYs only after the
+      // worktree is cleanly removable. Renderer state follows the successful
+      // backend result so blocked dirty deletes keep their terminals intact.
       //
       // Why browsers first: `shutdownWorktreeTerminals` used to own the
       // `browserTabsByWorktree[worktreeId]` delete as a side effect, which would
@@ -545,15 +574,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // can intercept them.
       await get().shutdownWorktreeBrowsers(worktreeId)
       await get().shutdownWorktreeTerminals(worktreeId)
-      const target = getActiveRuntimeTarget(get().settings)
-      await (target.kind === 'local'
-        ? window.api.worktrees.remove({ worktreeId, force, skipArchive })
-        : callRuntimeRpc(
-            target,
-            'worktree.rm',
-            { worktree: worktreeId, force, runHooks: !skipArchive },
-            { timeoutMs: 60_000 }
-          ))
       const tabs = get().tabsByWorktree[worktreeId] ?? []
       const tabIds = new Set(tabs.map((t) => t.id))
 

@@ -4,7 +4,7 @@ import { FOCUS_TERMINAL_PANE_EVENT, type FocusTerminalPaneDetail } from '@/const
 export function activateTabAndFocusPane(
   tabId: string,
   leafId: string | null,
-  opts?: { ackPaneKeyOnSuccess?: string }
+  opts?: { ackPaneKeyOnSuccess?: string; flashFocusedPane?: boolean }
 ): void {
   useAppStore.getState().setActiveTab(tabId)
   if (leafId === null) {
@@ -16,7 +16,8 @@ export function activateTabAndFocusPane(
     const detail: FocusTerminalPaneDetail = {
       tabId,
       leafId,
-      ...(opts?.ackPaneKeyOnSuccess ? { ackPaneKeyOnSuccess: opts.ackPaneKeyOnSuccess } : {})
+      ...(opts?.ackPaneKeyOnSuccess ? { ackPaneKeyOnSuccess: opts.ackPaneKeyOnSuccess } : {}),
+      ...(opts?.flashFocusedPane ? { flashFocusedPane: true } : {})
     }
     window.dispatchEvent(
       new CustomEvent<FocusTerminalPaneDetail>(FOCUS_TERMINAL_PANE_EVENT, {

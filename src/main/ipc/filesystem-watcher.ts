@@ -62,6 +62,9 @@ const senderCleanupRegistered = new Set<number>()
 // Key: rootKey, Value: pending teardown timer.
 const WATCHER_TEARDOWN_GRACE_MS = 30_000
 const pendingTeardowns = new Map<string, ReturnType<typeof setTimeout>>()
+// Why: @parcel/watcher unsubscribe completes native async work. Sender-destroy
+// cleanup can start it before app shutdown, so will-quit must still await it.
+const pendingLocalUnsubscribes = new Set<Promise<void>>()
 
 // ── Path normalization ───────────────────────────────────────────────
 
@@ -275,9 +278,7 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
           // is deleted or inaccessible at startup).  Guard against null so
           // the cleanup path doesn't crash the main process.
           if (root.subscription) {
-            void root.subscription.unsubscribe().catch(() => {
-              // Already errored — ignore cleanup failures
-            })
+            void trackLocalUnsubscribe(rootKey, root)
           }
           errorCleanedUp = true
           watchedRoots.delete(rootKey)
@@ -295,7 +296,7 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
     // orphaned.  Unsubscribe it immediately to avoid leaking a native
     // file-watcher handle that no code path would ever clean up.
     if (errorCleanedUp) {
-      void root.subscription.unsubscribe().catch(() => {})
+      void trackLocalUnsubscribe(rootKey, root)
       throw new Error(`Watcher for ${rootKey} errored during subscribe`)
     }
   } catch (err) {
@@ -324,13 +325,24 @@ function cleanupLocalWatchersForSender(senderId: number): void {
         if (watchedRoot.batch.timer) {
           clearTimeout(watchedRoot.batch.timer)
         }
-        void watchedRoot.subscription.unsubscribe().catch((err: unknown) => {
-          console.error(`[filesystem-watcher] unsubscribe error for ${key}:`, err)
-        })
+        trackLocalUnsubscribe(key, watchedRoot)
         watchedRoots.delete(key)
       }
     }
   }
+}
+
+function trackLocalUnsubscribe(rootKey: string, root: WatchedRoot): Promise<void> {
+  const unsubscribePromise = Promise.resolve()
+    .then(() => root.subscription.unsubscribe())
+    .catch((err: unknown) => {
+      console.error(`[filesystem-watcher] unsubscribe error for ${rootKey}:`, err)
+    })
+    .finally(() => {
+      pendingLocalUnsubscribes.delete(unsubscribePromise)
+    })
+  pendingLocalUnsubscribes.add(unsubscribePromise)
+  return unsubscribePromise
 }
 
 function registerSenderCleanup(sender: WebContents): void {
@@ -424,9 +436,7 @@ function unsubscribe(worktreePath: string, senderId: number): void {
       if (!currentRoot || currentRoot.listeners.size > 0) {
         return
       }
-      void currentRoot.subscription.unsubscribe().catch((err: unknown) => {
-        console.error(`[filesystem-watcher] unsubscribe error for ${rootKey}:`, err)
-      })
+      void trackLocalUnsubscribe(rootKey, currentRoot)
       watchedRoots.delete(rootKey)
     }, WATCHER_TEARDOWN_GRACE_MS)
 
@@ -440,6 +450,11 @@ type RemoteWatcherState = {
   listeners: Map<number, WebContents>
 }
 
+type RemoteWatcherInstallToken = {
+  cancelled: boolean
+  listeners: Map<number, WebContents>
+}
+
 // Key: `${connectionId}:${worktreePath}`, Value: shared remote watch state.
 const remoteWatchers = new Map<string, RemoteWatcherState>()
 const loggedUnavailableRemoteWatchers = new Set<string>()
@@ -448,7 +463,12 @@ const pendingRemoteWatcherRetries = new Map<string, ReturnType<typeof setTimeout
 // arrives while a watch is still resolving can mark the install cancelled.
 // Without this, the awaited unwatch handle would be installed after the
 // renderer thinks the watch is gone, leaking a native watcher.
-const inFlightRemoteInstalls = new Map<string, { cancelled: boolean }>()
+const inFlightRemoteInstalls = new Map<string, RemoteWatcherInstallToken>()
+// Why: dedupe concurrent installRemoteWatcher calls for the same key so
+// overlapping fs:watchWorktree IPCs share one native watcher and one listener
+// map, instead of each call independently invoking provider.watch() and
+// overwriting the per-key state on resolution.
+const pendingRemoteInstallPromises = new Map<string, Promise<RemoteWatcherInstallResult>>()
 const REMOTE_WATCH_RETRY_MS = 1_000
 const REMOTE_WATCH_RETRY_TIMEOUT_MS = 60_000
 
@@ -498,8 +518,54 @@ async function installRemoteWatcher(
     addRemoteWatchListener(key, sender)
     return 'installed'
   }
-  const cancelToken = { cancelled: false }
+  // Why: a second concurrent fs:watchWorktree for the same key must share the
+  // first call's provider.watch() instead of starting its own. Without this,
+  // both calls would create distinct native watchers and the second's resolve
+  // would overwrite the per-key state, dropping the first's unwatch handle
+  // and erasing its sender from the listener map.
+  const pendingInstall = pendingRemoteInstallPromises.get(key)
+  if (pendingInstall) {
+    const inFlight = inFlightRemoteInstalls.get(key)
+    if (inFlight && !sender.isDestroyed()) {
+      inFlight.listeners.set(sender.id, sender)
+      // Why: a new watcher can join after all previous pending listeners
+      // unwatched but before provider.watch() resolves; revive that install
+      // instead of inheriting the stale cancellation.
+      inFlight.cancelled = false
+    }
+    const result = await pendingInstall
+    if (
+      result === 'installed' &&
+      remoteWatchers.has(key) &&
+      !sender.isDestroyed() &&
+      (!inFlight || inFlight.listeners.has(sender.id))
+    ) {
+      addRemoteWatchListener(key, sender)
+    }
+    return result
+  }
+  const cancelToken: RemoteWatcherInstallToken = {
+    cancelled: false,
+    listeners: sender.isDestroyed() ? new Map() : new Map([[sender.id, sender]])
+  }
   inFlightRemoteInstalls.set(key, cancelToken)
+  const installPromise = doInstallRemoteWatcher(provider, key, worktreePath, cancelToken)
+  pendingRemoteInstallPromises.set(key, installPromise)
+  try {
+    return await installPromise
+  } finally {
+    if (pendingRemoteInstallPromises.get(key) === installPromise) {
+      pendingRemoteInstallPromises.delete(key)
+    }
+  }
+}
+
+async function doInstallRemoteWatcher(
+  provider: NonNullable<ReturnType<typeof getSshFilesystemProvider>>,
+  key: string,
+  worktreePath: string,
+  cancelToken: RemoteWatcherInstallToken
+): Promise<RemoteWatcherInstallResult> {
   let unwatch: () => void
   try {
     unwatch = await provider.watch(worktreePath, (events) => {
@@ -522,7 +588,10 @@ async function installRemoteWatcher(
       inFlightRemoteInstalls.delete(key)
     }
   }
-  if (cancelToken.cancelled || sender.isDestroyed()) {
+  const liveListeners = new Map(
+    Array.from(cancelToken.listeners.entries()).filter(([, listener]) => !listener.isDestroyed())
+  )
+  if (cancelToken.cancelled || liveListeners.size === 0) {
     try {
       unwatch()
     } catch (err) {
@@ -530,8 +599,10 @@ async function installRemoteWatcher(
     }
     return 'cancelled'
   }
-  remoteWatchers.set(key, { unwatch, listeners: new Map() })
-  addRemoteWatchListener(key, sender)
+  remoteWatchers.set(key, { unwatch, listeners: liveListeners })
+  for (const listener of liveListeners.values()) {
+    registerSenderCleanup(listener)
+  }
   loggedUnavailableRemoteWatchers.delete(key)
   return 'installed'
 }
@@ -630,7 +701,8 @@ export function registerFilesystemWatcherHandlers(): void {
         // of leaving the renderer with a watcher it asked to stop.
         const inFlight = inFlightRemoteInstalls.get(key)
         if (inFlight) {
-          inFlight.cancelled = true
+          inFlight.listeners.delete(_event.sender.id)
+          inFlight.cancelled = inFlight.listeners.size === 0
         }
         loggedUnavailableRemoteWatchers.delete(key)
         releaseRemoteWatchListener(key, _event?.sender?.id ?? 0)
@@ -667,13 +739,10 @@ export async function closeAllWatchers(): Promise<void> {
     if (root.batch.timer) {
       clearTimeout(root.batch.timer)
     }
-    try {
-      await root.subscription.unsubscribe()
-    } catch (err) {
-      console.error(`[filesystem-watcher] shutdown unsubscribe error for ${rootKey}:`, err)
-    }
+    await trackLocalUnsubscribe(rootKey, root)
   }
   watchedRoots.clear()
+  await Promise.allSettled(Array.from(pendingLocalUnsubscribes))
 
   // Why: remote watchers are tracked separately from local @parcel/watcher
   // subscriptions. Without cleaning them up here, their unwatch callbacks

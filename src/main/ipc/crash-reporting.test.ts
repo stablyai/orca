@@ -76,6 +76,34 @@ describe('registerCrashReportingHandlers', () => {
     )
   })
 
+  it('submits a dismissed report when the already-open prompt sends it', async () => {
+    const dismissed = report('dismissed', 'crash-already-dismissed')
+    const sent = report('sent', dismissed.id)
+    const markDismissedSent = vi.fn(async () => sent)
+    registerCrashReportingHandlers({
+      getLatestPending: vi.fn(async () => null),
+      getById: vi.fn(async () => dismissed),
+      dismiss: vi.fn(),
+      markSent: vi.fn(),
+      markDismissedSent,
+      listRecent: vi.fn(async () => []),
+      record: vi.fn(),
+      formatDiagnosticText: vi.fn()
+    } as never)
+
+    const result = await handlers.get('crashReports:submit')?.(null, {
+      reportId: dismissed.id,
+      githubLogin: null,
+      githubEmail: null
+    })
+
+    expect(result).toEqual({ ok: true, report: sent })
+    expect(submitFeedbackMock).toHaveBeenCalledWith(
+      expect.objectContaining({ feedback: expect.stringContaining('[Crash Report]') })
+    )
+    expect(markDismissedSent).toHaveBeenCalledWith(dismissed.id)
+  })
+
   it('submits through feedback and marks the report sent only after success', async () => {
     const latest = report('pending', 'crash-submit-success')
     const sent = report('sent', latest.id)

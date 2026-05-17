@@ -47,10 +47,15 @@ import type {
   GitDiffResult,
   GitStatusEntry
 } from '../../../../shared/types'
-import { Check, Copy, MessageSquare, Send, Trash2 } from 'lucide-react'
+import { Check, Copy, MessageSquare, PanelLeftOpen, Send, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { DiffSectionItem } from './DiffSectionItem'
-import { getCombinedUncommittedEntries } from './combined-diff-entries'
+import {
+  CombinedDiffFileTree,
+  createCombinedDiffSectionIndexMap,
+  handleCombinedDiffFileTreeNavigation
+} from './CombinedDiffFileTree'
+import { getCombinedBranchEntries, getCombinedUncommittedEntries } from './combined-diff-entries'
 import { getDiffSectionEstimatedHeight, isIntrinsicHeightImageDiff } from './diff-section-layout'
 import type { DiffSection } from './diff-section-types'
 import { getInitialCombinedDiffSectionLoadIndices } from './combined-diff-initial-section-load'
@@ -72,6 +77,7 @@ const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 const EMPTY_GIT_BRANCH_ENTRIES: GitBranchChangeEntry[] = []
 let combinedDiffCollapsedPreference: boolean | null = null
 let combinedDiffSideBySidePreference: boolean | null = null
+let combinedDiffFileTreeCollapsedPreference: boolean | null = null
 // Why: local Electron IPC has no RPC timeout; a hung git diff should turn into
 // a retryable row error instead of leaving the editor in "Loading..." forever.
 const COMBINED_DIFF_SECTION_LOAD_TIMEOUT_MS = 30_000
@@ -110,6 +116,24 @@ function getDiffSectionLoadErrorMessage(error: unknown): string {
 
 function getInitialCombinedDiffSideBySide(diffDefaultView: string | undefined): boolean {
   return combinedDiffSideBySidePreference ?? diffDefaultView === 'side-by-side'
+}
+
+function getInitialCombinedDiffFileTreeCollapsed(
+  combinedDiffFileTreeVisibleByDefault: boolean | undefined
+): boolean {
+  return combinedDiffFileTreeCollapsedPreference ?? combinedDiffFileTreeVisibleByDefault === false
+}
+
+function commitMessageBody(message: string | undefined, subject: string | undefined): string {
+  const normalized = (message ?? '').replace(/\r\n/g, '\n').trim()
+  if (!normalized) {
+    return ''
+  }
+  const [firstLine = '', ...bodyLines] = normalized.split('\n')
+  if (subject && firstLine.trim() === subject.trim()) {
+    return bodyLines.join('\n').trim()
+  }
+  return normalized
 }
 
 export default function CombinedDiffViewer({
@@ -161,6 +185,9 @@ export default function CombinedDiffViewer({
   const [clearNotesDialogOpen, setClearNotesDialogOpen] = useState(false)
   const [isClearingNotes, setIsClearingNotes] = useState(false)
   const [notesCopied, setNotesCopied] = useState(false)
+  const [fileTreeCollapsed, setFileTreeCollapsedState] = useState(() =>
+    getInitialCombinedDiffFileTreeCollapsed(settings?.combinedDiffFileTreeVisibleByDefault)
+  )
   // Why: `generation` is a state counter used as a React key to force remounting
   // DiffSectionItem components when the entry list changes. A separate ref
   // (`generationRef`) is kept in sync for stale-async-result detection inside
@@ -189,6 +216,20 @@ export default function CombinedDiffViewer({
     }
   }, [settings?.diffDefaultView])
 
+  useEffect(() => {
+    if (
+      settings?.combinedDiffFileTreeVisibleByDefault !== undefined &&
+      combinedDiffFileTreeCollapsedPreference === null
+    ) {
+      setFileTreeCollapsedState(settings.combinedDiffFileTreeVisibleByDefault === false)
+    }
+  }, [settings?.combinedDiffFileTreeVisibleByDefault])
+
+  const setFileTreeCollapsed = useCallback((collapsed: boolean) => {
+    combinedDiffFileTreeCollapsedPreference = collapsed
+    setFileTreeCollapsedState(collapsed)
+  }, [])
+
   const isBranchMode = file.diffSource === 'combined-branch'
   const isCommitMode = file.diffSource === 'combined-commit'
   const branchCompare =
@@ -213,17 +254,14 @@ export default function CombinedDiffViewer({
     [snapshotEntries, gitStatusEntries, file.combinedAreaFilter]
   )
   const branchEntries = React.useMemo<GitBranchChangeEntry[]>(() => {
-    const snapshotEntries = file.branchEntriesSnapshot ?? []
-    if (snapshotEntries.length > 0) {
-      return snapshotEntries
-    }
-    return liveBranchEntries
+    return getCombinedBranchEntries(file.branchEntriesSnapshot, liveBranchEntries)
   }, [file.branchEntriesSnapshot, liveBranchEntries])
   const commitEntries = React.useMemo<GitBranchChangeEntry[]>(
     () => file.commitEntriesSnapshot ?? [],
     [file.commitEntriesSnapshot]
   )
   const entries = isBranchMode ? branchEntries : isCommitMode ? commitEntries : uncommittedEntries
+  const treeMode = isBranchMode ? 'branch' : isCommitMode ? 'commit' : 'uncommitted'
   const entrySignature = React.useMemo(
     () =>
       JSON.stringify({
@@ -534,6 +572,10 @@ export default function CombinedDiffViewer({
         measuredContentHeight: sectionHeights[index],
         originalContent: section.originalContent,
         modifiedContent: section.modifiedContent,
+        changedLineCount:
+          section.added === undefined && section.removed === undefined
+            ? undefined
+            : (section.added ?? 0) + (section.removed ?? 0),
         useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult)
       })
     },
@@ -561,6 +603,34 @@ export default function CombinedDiffViewer({
       loadSchedulerRef.current.request(index)
     }
   }, [])
+  const sectionIndexByKey = React.useMemo(
+    () => createCombinedDiffSectionIndexMap(sections),
+    [sections]
+  )
+  const [activeTreeSectionKey, setActiveTreeSectionKey] = useState<string | null>(null)
+  useEffect(() => {
+    setActiveTreeSectionKey(null)
+  }, [entrySignature])
+  const viewedSectionKeys = React.useMemo(
+    () => new Set(sections.filter((section) => !section.loading).map((section) => section.key)),
+    [sections]
+  )
+  const handleTreeNavigate = useCallback(
+    (entry: GitStatusEntry | GitBranchChangeEntry) => {
+      const navigatedIndex = handleCombinedDiffFileTreeNavigation({
+        mode: treeMode,
+        entry,
+        sections: sectionsRef.current,
+        sectionIndexByKey,
+        toggleSection,
+        scrollToIndex: (index) => virtualizer.scrollToIndex(index, { align: 'start' })
+      })
+      if (navigatedIndex !== null) {
+        setActiveTreeSectionKey(sectionsRef.current[navigatedIndex]?.key ?? null)
+      }
+    },
+    [sectionIndexByKey, toggleSection, treeMode, virtualizer]
+  )
 
   const setAllSectionsCollapsed = useCallback((collapsed: boolean) => {
     combinedDiffCollapsedPreference = collapsed
@@ -840,39 +910,76 @@ export default function CombinedDiffViewer({
     }
   }, [clearDiffComments, diffCommentCount, file.worktreeId, isClearingNotes])
 
+  const commitBody = commitMessageBody(commitCompare?.message, commitCompare?.subject)
+  const commitHeader =
+    isCommitMode && commitCompare ? (
+      <div className="border-b border-border bg-background px-4 py-3">
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0">
+            {commitCompare.subject && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div
+                    className="truncate text-sm font-semibold text-foreground"
+                    title={commitCompare.subject}
+                  >
+                    {commitCompare.subject}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6} className="max-w-96">
+                  {commitCompare.subject}
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {commitBody && (
+              <div className="mt-1 max-h-24 overflow-auto whitespace-pre-wrap text-xs leading-5 text-muted-foreground scrollbar-sleek">
+                {commitBody}
+              </div>
+            )}
+          </div>
+          <span className="shrink-0 font-mono text-[11px] leading-5 text-muted-foreground">
+            {commitCompare.compareRef}
+          </span>
+        </div>
+      </div>
+    ) : null
+
   if (sections.length === 0 && (file.skippedConflicts?.length ?? 0) > 0) {
     return (
-      <div className="flex h-full items-center justify-center px-6 text-center">
-        <div className="max-w-md space-y-3">
-          <div className="text-sm font-medium text-foreground">
-            Conflicted files are reviewed separately
-          </div>
-          <div className="text-xs text-muted-foreground">
-            This diff view excludes unresolved conflicts because the normal two-way diff pipeline is
-            not conflict-safe.
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {file.skippedConflicts!.map((entry) => entry.path).join(', ')}
-          </div>
-          <div className="flex justify-center">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                openConflictReview(
-                  file.worktreeId,
-                  file.filePath,
-                  file.skippedConflicts!.map((entry) => ({
-                    path: entry.path,
-                    conflictKind: entry.conflictKind
-                  })),
-                  'combined-diff-exclusion'
-                )
-              }
-            >
-              Review conflicts
-            </Button>
+      <div className="flex h-full min-h-0 flex-col">
+        {commitHeader}
+        <div className="flex flex-1 items-center justify-center px-6 text-center">
+          <div className="max-w-md space-y-3">
+            <div className="text-sm font-medium text-foreground">
+              Conflicted files are reviewed separately
+            </div>
+            <div className="text-xs text-muted-foreground">
+              This diff view excludes unresolved conflicts because the normal two-way diff pipeline
+              is not conflict-safe.
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {file.skippedConflicts!.map((entry) => entry.path).join(', ')}
+            </div>
+            <div className="flex justify-center">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  openConflictReview(
+                    file.worktreeId,
+                    file.filePath,
+                    file.skippedConflicts!.map((entry) => ({
+                      path: entry.path,
+                      conflictKind: entry.conflictKind
+                    })),
+                    'combined-diff-exclusion'
+                  )
+                }
+              >
+                Review conflicts
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -881,8 +988,11 @@ export default function CombinedDiffViewer({
 
   if (sections.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-        No changes to display
+      <div className="flex h-full min-h-0 flex-col">
+        {commitHeader}
+        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+          No changes to display
+        </div>
       </div>
     )
   }
@@ -925,6 +1035,24 @@ export default function CombinedDiffViewer({
       <div className="flex flex-col flex-1 min-h-0">
         <div className="flex items-center justify-between gap-3 px-3 py-1.5 border-b border-border bg-background/50 shrink-0">
           <div className="flex min-w-0 items-center gap-2">
+            {fileTreeCollapsed && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label="Show file tree"
+                    onClick={() => setFileTreeCollapsed(false)}
+                  >
+                    <PanelLeftOpen className="size-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  Show file tree
+                </TooltipContent>
+              </Tooltip>
+            )}
             <span className="truncate text-xs text-muted-foreground">
               {sections.length} changed files
               {isBranchMode && branchCompare ? ` vs ${branchCompare.baseRef}` : ''}
@@ -1012,48 +1140,64 @@ export default function CombinedDiffViewer({
           </div>
         </div>
 
-        <div ref={scrollContainerRef} className="flex-1 overflow-auto scrollbar-editor">
-          {skippedConflictNotice}
-          <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
-            {virtualizer.getVirtualItems().map((virtualItem) => {
-              const section = sections[virtualItem.index]
-              if (!section) {
-                return null
-              }
+        {commitHeader}
+        <div className="flex min-h-0 flex-1">
+          <CombinedDiffFileTree
+            mode={treeMode}
+            worktreePath={file.filePath}
+            entries={entries}
+            sectionIndexByKey={sectionIndexByKey}
+            activeSectionKey={activeTreeSectionKey}
+            viewedSectionKeys={viewedSectionKeys}
+            collapsed={fileTreeCollapsed}
+            onCollapsedChange={setFileTreeCollapsed}
+            onNavigate={handleTreeNavigate}
+          />
+          <div ref={scrollContainerRef} className="min-w-0 flex-1 overflow-auto scrollbar-editor">
+            {skippedConflictNotice}
+            <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
+              {virtualizer.getVirtualItems().map((virtualItem) => {
+                const section = sections[virtualItem.index]
+                if (!section) {
+                  return null
+                }
 
-              return (
-                <div
-                  key={virtualItem.key}
-                  data-index={virtualItem.index}
-                  ref={virtualizer.measureElement}
-                  className="absolute left-0 top-0 w-full"
-                  // Why: `top` preserves sticky file headers inside each row;
-                  // transform-based virtualization creates a containing block
-                  // that makes long-section headers feel jumpy while scrolling.
-                  style={{ top: `${virtualItem.start}px` }}
-                >
-                  <DiffSectionItem
-                    section={section}
-                    index={virtualItem.index}
-                    isBranchMode={isBranchMode}
-                    sideBySide={sideBySide}
-                    isDark={isDark}
-                    settings={settings}
-                    sectionHeight={sectionHeights[virtualItem.index]}
-                    worktreeId={file.worktreeId}
-                    loadSection={loadSection}
-                    retrySection={retrySection}
-                    toggleSection={toggleSection}
-                    openSection={openSection}
-                    openSectionTitle={isBranchMode || isCommitMode ? 'Open diff' : 'Open in editor'}
-                    setSectionHeights={setSectionHeights}
-                    setSections={setSections}
-                    modifiedEditorsRef={modifiedEditorsRef}
-                    handleSectionSaveRef={handleSectionSaveRef}
-                  />
-                </div>
-              )
-            })}
+                return (
+                  <div
+                    key={virtualItem.key}
+                    data-index={virtualItem.index}
+                    ref={virtualizer.measureElement}
+                    className="absolute left-0 top-0 w-full"
+                    // Why: `top` preserves sticky file headers inside each row;
+                    // transform-based virtualization creates a containing block
+                    // that makes long-section headers feel jumpy while scrolling.
+                    style={{ top: `${virtualItem.start}px` }}
+                  >
+                    <DiffSectionItem
+                      section={section}
+                      index={virtualItem.index}
+                      isBranchMode={isBranchMode}
+                      sideBySide={sideBySide}
+                      isDark={isDark}
+                      settings={settings}
+                      sectionHeight={sectionHeights[virtualItem.index]}
+                      worktreeId={file.worktreeId}
+                      loadSection={loadSection}
+                      retrySection={retrySection}
+                      toggleSection={toggleSection}
+                      openSection={openSection}
+                      openSectionTitle={
+                        isBranchMode || isCommitMode ? 'Open diff' : 'Open in editor'
+                      }
+                      setSectionHeights={setSectionHeights}
+                      setSections={setSections}
+                      modifiedEditorsRef={modifiedEditorsRef}
+                      handleSectionSaveRef={handleSectionSaveRef}
+                    />
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
       </div>

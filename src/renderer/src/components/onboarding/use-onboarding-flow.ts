@@ -18,7 +18,7 @@ import {
   type OnboardingFeatureSetupSelection
 } from './onboarding-feature-setup'
 import { STEPS, type StepNumber } from './use-onboarding-flow-types'
-import { persistStep, useCloseWith, usePersistCurrentStep } from './use-onboarding-flow-persistence'
+import { useCloseWith, usePersistCurrentStep } from './use-onboarding-flow-persistence'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 
 export { STEPS } from './use-onboarding-flow-types'
@@ -506,11 +506,10 @@ export function useOnboardingFlow(
     if (busyLabel) {
       return
     }
-    // Why: skip has no keyboard path today, so `advanced_via` is always
-    // `'button'`. Including the field keeps the shape uniform with the
-    // completed/dismissed events and lets a future keyboard-skip arrive
-    // without a schema migration.
     const durationMs = consumeStepDurationMs()
+    // Why: skip has no keyboard path today, so `advanced_via` is always
+    // `'button'`. Keep the current step event before the all-onboarding
+    // dismissal so the funnel still records where the user bailed.
     track('onboarding_step_skipped', {
       step: currentStep.stepNumber,
       duration_ms: durationMs,
@@ -522,34 +521,25 @@ export function useOnboardingFlow(
       setTheme(settings.theme)
       applyDocumentTheme(settings.theme)
     }
-    if (currentStep.id === 'repo') {
-      await closeWith('dismissed', {}, currentStep.stepNumber, undefined, {
-        advancedVia: 'button',
-        durationMs
-      })
-      return
-    }
-    // Why: persistence-only path — does NOT trigger requestPermission, so
-    // skipping step 3 never fires the OS permission prompt.
-    try {
-      onOnboardingChange(await persistStep(currentStep.stepNumber))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-      return
-    }
-    setStepIndex((idx) => Math.min(idx + 1, STEPS.length - 1))
+    await closeWith('dismissed', {}, currentStep.stepNumber, undefined, {
+      advancedVia: 'button',
+      durationMs
+    })
   }, [
     busyLabel,
     closeWith,
     consumeStepDurationMs,
     currentStep.id,
     currentStep.stepNumber,
-    onOnboardingChange,
     settings
   ])
 
   const back = useCallback(() => {
     setStepIndex((idx) => Math.max(idx - 1, 0))
+  }, [])
+
+  const jumpToStep = useCallback((idx: number) => {
+    setStepIndex(Math.min(Math.max(idx, 0), STEPS.length - 1))
   }, [])
 
   return {
@@ -581,6 +571,7 @@ export function useOnboardingFlow(
     next,
     skip,
     back,
+    jumpToStep,
     openFolder,
     clone
   }

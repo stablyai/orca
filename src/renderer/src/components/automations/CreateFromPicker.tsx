@@ -151,7 +151,10 @@ export function CreateFromPicker({
             aria-expanded={open}
             className={cn('h-9 w-full justify-between px-3 text-sm font-normal', triggerClassName)}
           >
-            <span className="truncate">{selectedLabel}</span>
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="shrink-0 text-muted-foreground">Branch from</span>
+              <span className="truncate">{selectedLabel}</span>
+            </span>
             <ChevronsUpDown className="size-4 opacity-50" />
           </Button>
         </PopoverTrigger>

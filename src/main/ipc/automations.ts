@@ -5,14 +5,21 @@ import type {
   Automation,
   AutomationCreateInput,
   AutomationDispatchResult,
+  ExternalAutomationCreateInput,
   ExternalAutomationActionInput,
   ExternalAutomationManager,
+  ExternalAutomationRunsInput,
+  ExternalAutomationRunsPage,
+  ExternalAutomationUpdateInput,
   AutomationRun,
   AutomationUpdateInput
 } from '../../shared/automations-types'
 import {
+  createExternalAutomation,
   listExternalAutomationManagers,
-  runExternalAutomationAction
+  listExternalAutomationRuns,
+  runExternalAutomationAction,
+  updateExternalAutomation
 } from '../automations/external-manager'
 
 export function registerAutomationHandlers(store: Store, service: AutomationService): void {
@@ -24,6 +31,18 @@ export function registerAutomationHandlers(store: Store, service: AutomationServ
   )
   ipcMain.handle('automations:listExternalManagers', (): Promise<ExternalAutomationManager[]> => {
     return listExternalAutomationManagers(store)
+  })
+  ipcMain.handle(
+    'automations:listExternalRuns',
+    (_event, input: ExternalAutomationRunsInput): Promise<ExternalAutomationRunsPage> => {
+      return listExternalAutomationRuns(input)
+    }
+  )
+  ipcMain.handle('automations:createExternal', (_event, input: ExternalAutomationCreateInput) => {
+    return createExternalAutomation(input)
+  })
+  ipcMain.handle('automations:updateExternal', (_event, input: ExternalAutomationUpdateInput) => {
+    return updateExternalAutomation(input)
   })
   ipcMain.handle(
     'automations:runExternalAction',
@@ -51,6 +70,11 @@ export function registerAutomationHandlers(store: Store, service: AutomationServ
     'automations:markDispatchResult',
     (_event, result: AutomationDispatchResult): Promise<AutomationRun> =>
       service.markDispatchResult(result)
+  )
+  ipcMain.handle(
+    'automations:snapshotWorkspaceName',
+    (_event, args: { workspaceId: string; displayName: string }): number =>
+      store.snapshotAutomationRunWorkspaceDisplayName(args.workspaceId, args.displayName)
   )
   ipcMain.handle('automations:rendererReady', (): void => {
     service.setRendererReady()

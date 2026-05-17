@@ -3,7 +3,11 @@ import type { SshRemotePtyLease, SshTarget } from './ssh-types'
 import type { Automation, AutomationRun } from './automations-types'
 import type { WorkspaceSource } from './telemetry-events'
 import type { GitHubProjectSettings } from './github-project-types'
-import type { MigrationUnsupportedPtyEntry } from './agent-status-types'
+import type {
+  AgentStatusState,
+  AgentType,
+  MigrationUnsupportedPtyEntry
+} from './agent-status-types'
 import type { VoiceSettings } from './speech-types'
 import type { WorkspaceCleanupUIState } from './workspace-cleanup'
 import type { GitLabProjectSettings } from './gitlab-types'
@@ -1023,6 +1027,7 @@ export type CreateWorktreeArgs = {
   linkedPR?: number
   linkedLinearIssue?: string
   pushTarget?: GitPushTarget
+  workspaceStatus?: WorkspaceStatus
   /** Agent selected in the create surface. Omitted for blank-shell creates. */
   createdWithAgent?: TuiAgent
   /** Telemetry-only: which UI surface initiated this create. Threaded from
@@ -1253,6 +1258,12 @@ export type TerminalQuickCommand = {
   appendEnter: boolean
 }
 
+export type OpenInApplication = {
+  id: string
+  label: string
+  command: string
+}
+
 export type FloatingTerminalCwdRequest = {
   path?: string
 }
@@ -1348,6 +1359,8 @@ export type GlobalSettings = {
    *  The setting stays opt-in so existing workflows continue to use the system browser
    *  until the user explicitly wants worktree-scoped in-app browsing. */
   openLinksInApp: boolean
+  /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */
+  openInApplications?: OpenInApplication[]
   rightSidebarOpenByDefault: boolean
   showGitIgnoredFiles?: boolean
   /** Whether to show the Orca app name in the titlebar. */
@@ -1373,6 +1386,7 @@ export type GlobalSettings = {
    *  button for discoverability. */
   floatingTerminalTriggerLocation: FloatingTerminalTriggerLocation
   diffDefaultView: 'inline' | 'side-by-side'
+  combinedDiffFileTreeVisibleByDefault: boolean
   notifications: NotificationSettings
   /** When true, a countdown timer is shown after a Claude agent becomes idle,
    *  indicating time remaining before the prompt cache expires. Disabled by default. */
@@ -1595,8 +1609,16 @@ export type NotificationDispatchRequest = {
   worktreeId?: string
   repoLabel?: string
   worktreeLabel?: string
+  hasMultipleActiveRepos?: boolean
   terminalTitle?: string
   isActiveWorktree?: boolean
+  agentType?: AgentType
+  agentState?: AgentStatusState
+  agentPrompt?: string
+  agentToolName?: string
+  agentToolInput?: string
+  agentLastAssistantMessage?: string
+  agentInterrupted?: boolean
 }
 
 export type NotificationDispatchResult = {
@@ -1699,7 +1721,7 @@ export type PersistedUIState = {
   lastActiveWorktreeId: string | null
   sidebarWidth: number
   rightSidebarWidth: number
-  groupBy: 'flat' | 'none' | 'repo' | 'pr-status'
+  groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   showWorkspaceLineage?: boolean
   sortBy: 'name' | 'smart' | 'recent' | 'repo'
   showActiveOnly: boolean
@@ -1717,10 +1739,15 @@ export type PersistedUIState = {
   workspaceStatuses?: WorkspaceStatusDefinition[]
   workspaceBoardOpacity?: number
   workspaceBoardCompact?: boolean
+  workspaceBoardColumnWidth?: number
   /** One-shot migration flag for a short-lived build that persisted the
    *  default workspace statuses in reverse workflow order. Once stamped,
    *  user-authored status ordering is never inferred from IDs/labels again. */
   _workspaceStatusesDefaultOrderMigrated?: boolean
+  /** One-shot migration flag for the default status workflow order/label:
+   *  Done -> In review -> In progress -> Todo. Exact legacy default payloads
+   *  migrate; customized statuses are preserved. */
+  _workspaceStatusesDefaultWorkflowMigrated?: boolean
   /** One-shot migration flag for the old default blue/violet/emerald status
    *  visuals. Once stamped, valid user-authored colors/icons are preserved. */
   _workspaceStatusesDefaultVisualsMigrated?: boolean

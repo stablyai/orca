@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { WORKTREE_ID_SEPARATOR, getRepoIdFromWorktreeId, splitWorktreeId } from './worktree-id'
+import {
+  WORKTREE_ID_SEPARATOR,
+  getRepoIdFromWorktreeId,
+  getWorktreePathBasenameFromId,
+  splitWorktreeId
+} from './worktree-id'
 
 describe('WORKTREE_ID_SEPARATOR', () => {
   it('is the literal "::" separator', () => {
@@ -67,5 +72,24 @@ describe('splitWorktreeId', () => {
 
   it('splits on the first separator when the path itself contains "::"', () => {
     expect(splitWorktreeId('repo::a::b')).toEqual({ repoId: 'repo', worktreePath: 'a::b' })
+  })
+})
+
+describe('getWorktreePathBasenameFromId', () => {
+  it('returns the path basename for POSIX worktree ids', () => {
+    expect(getWorktreePathBasenameFromId('repo-123::/abs/path/nightly-checks')).toBe(
+      'nightly-checks'
+    )
+  })
+
+  it('returns the path basename for Windows worktree ids', () => {
+    expect(getWorktreePathBasenameFromId('repo-123::C:\\workspaces\\nightly-checks')).toBe(
+      'nightly-checks'
+    )
+  })
+
+  it('returns null when no worktree path is available', () => {
+    expect(getWorktreePathBasenameFromId('repo-123')).toBeNull()
+    expect(getWorktreePathBasenameFromId('repo-123::')).toBeNull()
   })
 })

@@ -46,6 +46,7 @@ export type CreateHostedReviewInput = {
   title: string
   body?: string
   draft?: boolean
+  worktreePath?: string
 }
 
 export type CreateHostedReviewArgs = CreateHostedReviewInput & {
@@ -108,6 +109,7 @@ export type HostedReviewCreationEligibility = {
 
 export type HostedReviewCreationEligibilityArgs = {
   repoPath: string
+  worktreePath?: string
   connectionId?: string | null
   branch: string
   base?: string | null

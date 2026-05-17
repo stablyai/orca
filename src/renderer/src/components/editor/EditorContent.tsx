@@ -163,6 +163,7 @@ export function EditorContent({
       onSave={isMarkdown ? md.mdSave : handleSave}
       worktreeId={activeFile.worktreeId}
       markdownAnnotationsEnabled={markdownReviewToolsEnabled && isMarkdown && mdViewMode !== 'rich'}
+      conflictDecorationsEnabled={activeFile.conflict?.conflictStatus === 'unresolved'}
       revealLine={
         pendingEditorReveal?.filePath === activeFile.filePath ? pendingEditorReveal.line : undefined
       }
@@ -193,6 +194,12 @@ export function EditorContent({
       hasRichModeUnsupportedContent: richModeUnsupportedMessage !== null,
       viewMode: mdViewMode
     })
+
+    if (activeFile.conflict?.conflictStatus === 'unresolved') {
+      // Why: conflict markers are source text the user must edit directly.
+      // Rich/preview markdown modes can hide or reinterpret those marker lines.
+      return <div className="h-full min-h-0">{renderMonacoEditor(fc)}</div>
+    }
 
     // Why: the render-mode helper already folded size into the mode decision.
     // Keep the explanatory banner here so the user understands why "rich" view

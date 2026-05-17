@@ -21,6 +21,7 @@ type WorkspaceKanbanCardProps = {
   isSelected: boolean
   selectedWorktrees?: readonly Worktree[]
   compact: boolean
+  nativeDragEnabled?: boolean
   onActivate: () => void
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
   onContextMenuSelect: (
@@ -36,6 +37,7 @@ function WorkspaceKanbanCard({
   isSelected,
   selectedWorktrees,
   compact,
+  nativeDragEnabled = true,
   onActivate,
   onSelectionGesture,
   onContextMenuSelect
@@ -51,6 +53,7 @@ function WorkspaceKanbanCard({
         onActivate={onActivate}
         onSelectionGesture={onSelectionGesture}
         onContextMenuSelect={onContextMenuSelect}
+        nativeDragEnabled={nativeDragEnabled}
       />
     )
   }
@@ -64,6 +67,7 @@ function WorkspaceKanbanCard({
       data-workspace-board-card-id={worktree.id}
       data-workspace-board-card-mode="detailed"
       data-workspace-board-card-selected={isSelected ? 'true' : 'false'}
+      data-workspace-board-pointer-draggable={nativeDragEnabled ? undefined : 'true'}
     >
       {worktree.isPinned ? (
         <Badge
@@ -81,6 +85,7 @@ function WorkspaceKanbanCard({
         isMultiSelected={isSelected}
         selectedWorktrees={contextWorktrees}
         hideCiCheck={worktree.isPinned}
+        nativeDragEnabled={nativeDragEnabled}
         onActivate={onActivate}
         onSelectionGesture={onSelectionGesture}
         onContextMenuSelect={(event) => onContextMenuSelect(event, worktree)}
@@ -97,6 +102,7 @@ function WorkspaceKanbanCompactCard({
   isActive,
   isSelected,
   selectedWorktrees,
+  nativeDragEnabled = true,
   onActivate,
   onSelectionGesture,
   onContextMenuSelect
@@ -158,8 +164,8 @@ function WorkspaceKanbanCompactCard({
         <HoverCardTrigger asChild>
           <button
             type="button"
-            draggable={!isDeleting}
-            onDragStart={handleDragStart}
+            draggable={nativeDragEnabled && !isDeleting}
+            onDragStart={nativeDragEnabled ? handleDragStart : undefined}
             onClick={handleClick}
             className={cn(
               'flex h-8 w-full min-w-0 cursor-pointer items-center rounded-md border px-2 text-left text-[12px] outline-none transition-colors',
@@ -170,11 +176,15 @@ function WorkspaceKanbanCompactCard({
                   : 'border-transparent text-foreground hover:bg-sidebar-accent/60 focus-visible:border-sidebar-ring',
               isActive && isSelected && 'ring-1 ring-sidebar-ring/35',
               'data-[workspace-board-card-area-selected=true]:border-sidebar-ring/50 data-[workspace-board-card-area-selected=true]:bg-sidebar-accent/75 data-[workspace-board-card-area-selected=true]:ring-1 data-[workspace-board-card-area-selected=true]:ring-sidebar-ring/30',
+              !nativeDragEnabled && !isDeleting && '!cursor-grab',
               isDeleting && 'cursor-not-allowed opacity-50 grayscale'
             )}
             data-workspace-board-card-mode="compact"
             data-workspace-board-card-id={worktree.id}
             data-workspace-board-card-selected={isSelected ? 'true' : 'false'}
+            data-workspace-board-pointer-draggable={
+              nativeDragEnabled || isDeleting ? undefined : 'true'
+            }
             aria-label={`Open ${worktree.displayName}`}
             aria-busy={isDeleting}
           >

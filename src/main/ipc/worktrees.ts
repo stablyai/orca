@@ -14,7 +14,11 @@ import type {
   Repo,
   WorktreeMeta
 } from '../../shared/types'
-import { listWorktrees as listGitWorktrees, removeWorktree } from '../git/worktree'
+import {
+  assertWorktreeCleanForRemoval,
+  listWorktrees as listGitWorktrees,
+  removeWorktree
+} from '../git/worktree'
 import { gitExecFileAsync } from '../git/runner'
 import { getDefaultRemote } from '../git/repo'
 import { getPullRequestPushTarget, getWorkItem } from '../github/client'
@@ -37,6 +41,7 @@ import {
   parseWorktreeId,
   areWorktreePathsEqual,
   formatWorktreeRemovalError,
+  isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError
 } from './worktree-logic'
 import {
@@ -682,31 +687,6 @@ export function registerWorktreeHandlers(
         registeredWorktrees
       ).path
 
-      // Why: kill every PTY belonging to this worktree BEFORE git-level
-      // removal. The renderer pre-kills via shutdownWorktreeTerminals, but
-      // defensive teardown here protects against: (a) a future renderer bug,
-      // (b) a disconnected window, (c) an out-of-band window.api.worktrees.remove
-      // caller. Placement is before the SSH early-return so local-host PTYs
-      // are still reaped for local repos; SSH-backed PTYs are handled by the
-      // remote provider's own teardown (design §4.3, §6).
-      if (!repo.connectionId) {
-        await killAllProcessesForWorktree(args.worktreeId, {
-          runtime,
-          localProvider: getLocalPtyProvider()
-        })
-          .then((r) => {
-            const total = r.runtimeStopped + r.providerStopped + r.registryStopped
-            if (total > 0) {
-              console.info(
-                `[worktree-teardown] ${args.worktreeId} killed runtime=${r.runtimeStopped} provider=${r.providerStopped} registry=${r.registryStopped}`
-              )
-            }
-          })
-          .catch((err) => {
-            console.warn(`[worktree-teardown] failed for ${args.worktreeId}:`, err)
-          })
-      }
-
       if (repo.connectionId) {
         await provider!.removeWorktree(canonicalWorktreePath, args.force)
         runtime.clearOptimisticReconcileToken(args.worktreeId)
@@ -732,6 +712,40 @@ export function registerWorktreeHandlers(
       // deletion would require the Force Delete toast once the feature is on.
       if (repo.symlinkPaths && repo.symlinkPaths.length > 0) {
         await removeWorktreeSymlinks(canonicalWorktreePath, repo.symlinkPaths)
+      }
+
+      let shouldTearDownPtys = true
+      try {
+        await assertWorktreeCleanForRemoval(canonicalWorktreePath, args.force ?? false)
+      } catch (error) {
+        if (!isOrphanCompatiblePreflightError(error)) {
+          throw new Error(
+            formatWorktreeRemovalError(error, canonicalWorktreePath, args.force ?? false)
+          )
+        }
+        // Why: orphan cleanup does not need live shells to be killed first,
+        // and preflight did not prove the worktree is cleanly removable.
+        shouldTearDownPtys = false
+      }
+
+      if (shouldTearDownPtys) {
+        // Why: once preflight proves normal deletion is clean, kill PTYs before
+        // git-level removal so shells cannot keep the directory busy.
+        await killAllProcessesForWorktree(args.worktreeId, {
+          runtime,
+          localProvider: getLocalPtyProvider()
+        })
+          .then((r) => {
+            const total = r.runtimeStopped + r.providerStopped + r.registryStopped
+            if (total > 0) {
+              console.info(
+                `[worktree-teardown] ${args.worktreeId} killed runtime=${r.runtimeStopped} provider=${r.providerStopped} registry=${r.registryStopped}`
+              )
+            }
+          })
+          .catch((err) => {
+            console.warn(`[worktree-teardown] failed for ${args.worktreeId}:`, err)
+          })
       }
 
       try {

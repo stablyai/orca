@@ -29,6 +29,7 @@ import {
   createMarkdownDocLinkDecorationController,
   type MarkdownDocLinkDecorationController
 } from './monaco-markdown-doc-link-decorations'
+import { buildGitConflictDecorations, hasGitConflictMarkers } from './monaco-conflict-decorations'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { DiffComment } from '../../../../shared/types'
 import { isMarkdownComment } from '@/lib/diff-comment-compat'
@@ -50,6 +51,7 @@ type MonacoEditorProps = {
   markdownDocuments?: MarkdownDocument[]
   worktreeId?: string
   markdownAnnotationsEnabled?: boolean
+  conflictDecorationsEnabled?: boolean
 }
 
 export default function MonacoEditor({
@@ -65,7 +67,8 @@ export default function MonacoEditor({
   revealMatchLength,
   markdownDocuments,
   worktreeId,
-  markdownAnnotationsEnabled = false
+  markdownAnnotationsEnabled = false,
+  conflictDecorationsEnabled = false
 }: MonacoEditorProps): React.JSX.Element {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const editorContainerRef = useRef<HTMLDivElement | null>(null)
@@ -74,6 +77,7 @@ export default function MonacoEditor({
   const languageRef = useRef(language)
   languageRef.current = language
   const markdownDocLinkDecorationsRef = useRef<MarkdownDocLinkDecorationController | null>(null)
+  const conflictDecorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null)
   const revealDecorationRef = useRef<editor.IEditorDecorationsCollection | null>(null)
   const revealHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const revealRafRef = useRef<number | null>(null)
@@ -332,6 +336,8 @@ export default function MonacoEditor({
       })
 
       editorInstance.onDidDispose(() => {
+        conflictDecorationsRef.current?.clear()
+        conflictDecorationsRef.current = null
         editorRef.current = null
         setMountedEditor(null)
         setCommentPopover(null)
@@ -543,6 +549,27 @@ export default function MonacoEditor({
   }, [content, language])
 
   useEffect(() => {
+    const ed = mountedEditor
+    if (!ed) {
+      return
+    }
+
+    if (!conflictDecorationsEnabled || !hasGitConflictMarkers(content)) {
+      conflictDecorationsRef.current?.clear()
+      return
+    }
+
+    // Why: Git conflict marker lines are ordinary file text; Monaco needs
+    // explicit decorations so unresolved blocks remain visible while editing.
+    const decorations = buildGitConflictDecorations(content)
+    if (!conflictDecorationsRef.current) {
+      conflictDecorationsRef.current = ed.createDecorationsCollection(decorations)
+      return
+    }
+    conflictDecorationsRef.current.set(decorations)
+  }, [conflictDecorationsEnabled, content, mountedEditor])
+
+  useEffect(() => {
     updateMarkdownCompletionDocuments()
   }, [updateMarkdownCompletionDocuments])
 
@@ -553,6 +580,8 @@ export default function MonacoEditor({
       }
       markdownDocLinkDecorationsRef.current?.dispose()
       markdownDocLinkDecorationsRef.current = null
+      conflictDecorationsRef.current?.clear()
+      conflictDecorationsRef.current = null
     }
   }, [])
 

@@ -167,6 +167,8 @@ describe('removeWorktree cascade', () => {
     // State NOT cleaned up
     expect(s.worktreesByRepo['repo1']).toHaveLength(1)
     expect(s.tabsByWorktree[worktreeId]).toHaveLength(1)
+    expect(s.ptyIdsByTabId['tab1']).toEqual(['pty1'])
+    expect(mockApi.pty.kill).not.toHaveBeenCalled()
     expect(s.activeWorktreeId).toBe(worktreeId)
   })
 
@@ -268,7 +270,7 @@ describe('removeWorktree cascade', () => {
     expect(s.fileSearchStateByWorktree[wt1]).toBeUndefined()
   })
 
-  it('shuts down terminals before asking the backend to remove the worktree', async () => {
+  it('shuts down terminals after the backend confirms worktree removal', async () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
     const callOrder: string[] = []
@@ -298,7 +300,7 @@ describe('removeWorktree cascade', () => {
     const result = await store.getState().removeWorktree(worktreeId)
 
     expect(result).toEqual({ ok: true })
-    expect(callOrder).toEqual(['kill', 'remove'])
+    expect(callOrder).toEqual(['remove', 'kill'])
   })
 })
 
