@@ -805,6 +805,88 @@
   }
 }
 
+/* Why: board-origin cards use pointer drag so Shift+scroll can keep firing;
+   these replace the native drag cursor and ghost affordance. */
+[data-workspace-board-pointer-draggable='true'] {
+  cursor: grab;
+}
+
+[data-workspace-board-card-pointer-dragging='true'] {
+  outline: 1px solid var(--sidebar-ring);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 36%, transparent);
+}
+
+[data-workspace-board-card-pointer-dragging='true'],
+[data-workspace-board-card-pointer-dragging='true'] *,
+:root[data-workspace-board-pointer-dragging] * {
+  cursor: grabbing !important;
+}
+
+[data-workspace-board-card-drag-preview='true'] {
+  z-index: 2147483647;
+  overflow: visible;
+  border-radius: var(--radius);
+  outline: 1px solid var(--sidebar-ring);
+  outline-offset: 1px;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--foreground) 16%, transparent);
+  opacity: 0.96;
+  will-change: transform;
+}
+
+[data-workspace-board-card-drag-preview='true'][data-workspace-board-card-drag-stack='true'] {
+  isolation: isolate;
+}
+
+[data-workspace-board-card-drag-card='true'] {
+  width: 100%;
+  height: 100%;
+}
+
+[data-workspace-board-card-drag-preview='true'][data-workspace-board-card-drag-stack='true']::before,
+[data-workspace-board-card-drag-preview='true'][data-workspace-board-card-drag-stack='true']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--sidebar-ring) 44%, transparent);
+  background: var(--sidebar);
+}
+
+[data-workspace-board-card-drag-preview='true'][data-workspace-board-card-drag-stack='true']::before {
+  transform: translate(4px, 4px);
+  opacity: 0.72;
+}
+
+[data-workspace-board-card-drag-preview='true'][data-workspace-board-card-drag-stack='true']::after {
+  transform: translate(8px, 8px);
+  opacity: 0.44;
+}
+
+[data-workspace-board-card-drag-preview='true'] * {
+  cursor: grabbing !important;
+}
+
+[data-workspace-board-card-drag-count='true'] {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  z-index: 2;
+  display: flex;
+  min-width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid var(--sidebar-border);
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
+
 .sidebar-header {
   padding: 12px 16px 8px;
   font-size: 11px;

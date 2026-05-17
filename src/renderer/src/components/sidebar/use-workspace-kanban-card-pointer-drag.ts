@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type React from 'react'
 import type { WorkspaceStatus, Worktree } from '../../../../shared/types'
+import {
+  CARD_SELECTOR,
+  createDragPreview,
+  getDraggedCards,
+  getDropTarget,
+  setDragDocumentStyles,
+  setDraggedCardsDragging,
+  updateDragPreviewPosition
+} from './workspace-kanban-card-pointer-drag-dom'
 
-const CARD_SELECTOR = '[data-workspace-board-card-id]'
-const STATUS_DROP_TARGET = '[data-workspace-status-drop-target]'
-const PIN_DROP_TARGET = '[data-workspace-pin-drop-target]'
 const POINTER_DRAG_THRESHOLD = 5
 
 type DragState = {
@@ -15,6 +21,10 @@ type DragState = {
   currentY: number
   worktreeIds: string[]
   sourceCard: HTMLElement
+  draggedCards: HTMLElement[]
+  preview: HTMLElement | null
+  previewOffsetX: number
+  previewOffsetY: number
   started: boolean
 }
 
@@ -37,6 +47,7 @@ function shouldIgnorePointerDown(target: EventTarget | null, card: HTMLElement):
     [
       'a',
       'input',
+      'button',
       'select',
       'textarea',
       '[contenteditable="true"]',
@@ -45,36 +56,6 @@ function shouldIgnorePointerDown(target: EventTarget | null, card: HTMLElement):
     ].join(',')
   )
   return interactive !== null && interactive !== card
-}
-
-function getDropTarget(
-  board: HTMLElement,
-  x: number,
-  y: number
-): { status: WorkspaceStatus | null; isPinDrop: boolean } {
-  const target = document.elementFromPoint(x, y)
-  if (!(target instanceof Element) || !board.contains(target)) {
-    return { status: null, isPinDrop: false }
-  }
-
-  const pinTarget = target.closest<HTMLElement>(PIN_DROP_TARGET)
-  if (pinTarget && board.contains(pinTarget)) {
-    return { status: null, isPinDrop: true }
-  }
-
-  const statusTarget = target.closest<HTMLElement>(STATUS_DROP_TARGET)
-  return {
-    status:
-      statusTarget && board.contains(statusTarget)
-        ? (statusTarget.dataset.workspaceStatus ?? null)
-        : null,
-    isPinDrop: false
-  }
-}
-
-function setDragDocumentStyles(enabled: boolean): void {
-  document.body.style.cursor = enabled ? 'grabbing' : ''
-  document.body.style.userSelect = enabled ? 'none' : ''
 }
 
 export function useWorkspaceKanbanCardPointerDrag({
@@ -121,7 +102,8 @@ export function useWorkspaceKanbanCardPointerDrag({
         return
       }
       dragRef.current = null
-      state.sourceCard.removeAttribute('data-workspace-board-card-pointer-dragging')
+      setDraggedCardsDragging(state.draggedCards, false)
+      state.preview?.remove()
       setDragDocumentStyles(false)
       clearDragTarget()
 
@@ -152,7 +134,8 @@ export function useWorkspaceKanbanCardPointerDrag({
   const startPointerDrag = useCallback((state: DragState) => {
     state.started = true
     isPointerDragActiveRef.current = true
-    state.sourceCard.setAttribute('data-workspace-board-card-pointer-dragging', 'true')
+    setDraggedCardsDragging(state.draggedCards, true)
+    state.preview = createDragPreview(state)
     setDragDocumentStyles(true)
   }, [])
 
@@ -191,6 +174,7 @@ export function useWorkspaceKanbanCardPointerDrag({
         return
       }
       event.preventDefault()
+      updateDragPreviewPosition(state)
       updatePointerDragTarget(state)
     }
 
@@ -261,6 +245,10 @@ export function useWorkspaceKanbanCardPointerDrag({
         currentY: event.clientY,
         worktreeIds,
         sourceCard: card,
+        draggedCards: getDraggedCards(board, worktreeIds, card),
+        preview: null,
+        previewOffsetX: 0,
+        previewOffsetY: 0,
         started: false
       }
     },

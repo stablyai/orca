@@ -352,6 +352,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
             ? 'border border-sidebar-ring/35 bg-sidebar-accent/70 ring-1 ring-sidebar-ring/30'
             : 'border border-transparent hover:bg-sidebar-accent/40',
         isActive && isMultiSelected && 'ring-1 ring-sidebar-ring/35',
+        !nativeDragEnabled && !isDeleting && '!cursor-grab',
         isDeleting && 'opacity-50 grayscale cursor-not-allowed',
         isSshDisconnected && !isDeleting && 'opacity-60'
       )}
