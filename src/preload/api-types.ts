@@ -1366,6 +1366,11 @@ export type PreloadApi = {
       connectionId?: string
       includeIgnored?: boolean
     }) => Promise<GitStatusResult>
+    checkIgnored: (args: {
+      worktreePath: string
+      paths: string[]
+      connectionId?: string
+    }) => Promise<string[]>
     history: (
       args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
     ) => Promise<GitHistoryResult>

@@ -44,6 +44,13 @@ export class SshGitProvider implements IGitProvider {
     })) as GitStatusResult
   }
 
+  async checkIgnoredPaths(worktreePath: string, relativePaths: string[]): Promise<string[]> {
+    return (await this.mux.request('git.checkIgnored', {
+      worktreePath,
+      paths: relativePaths
+    })) as string[]
+  }
+
   async getHistory(
     worktreePath: string,
     options: GitHistoryOptions = {}

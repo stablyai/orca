@@ -25,6 +25,7 @@ const {
   bulkUnstageFilesMock,
   bulkDiscardChangesMock,
   discardChangesMock,
+  checkIgnoredPathsMock,
   listWorktreesMock,
   resolveCommitMessageSettingsMock,
   generateCommitMessageFromContextMock,
@@ -53,6 +54,7 @@ const {
   bulkUnstageFilesMock: vi.fn(),
   bulkDiscardChangesMock: vi.fn(),
   discardChangesMock: vi.fn(),
+  checkIgnoredPathsMock: vi.fn(),
   listWorktreesMock: vi.fn(),
   resolveCommitMessageSettingsMock: vi.fn(),
   generateCommitMessageFromContextMock: vi.fn(),
@@ -93,6 +95,10 @@ vi.mock('../git/status', () => ({
   bulkUnstageFiles: bulkUnstageFilesMock,
   bulkDiscardChanges: bulkDiscardChangesMock,
   discardChanges: discardChangesMock
+}))
+
+vi.mock('../git/check-ignored-paths', () => ({
+  checkIgnoredPaths: checkIgnoredPathsMock
 }))
 
 vi.mock('../git/worktree', () => ({
@@ -495,6 +501,39 @@ describe('registerFilesystemHandlers', () => {
 
     expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, { includeIgnored: true })
     expect(sshProvider.getStatus).toHaveBeenCalledWith('/remote/repo', { includeIgnored: true })
+  })
+
+  it('checks ignored paths through local and SSH git providers', async () => {
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+    checkIgnoredPathsMock.mockResolvedValue(['dist/bundle.js'])
+    const sshProvider = {
+      checkIgnoredPaths: vi.fn().mockResolvedValue(['build/output.js'])
+    }
+    getSshGitProviderMock.mockReturnValue(sshProvider)
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:checkIgnored')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH,
+        paths: ['dist/bundle.js', 'src/index.ts']
+      })
+    ).resolves.toEqual(['dist/bundle.js'])
+    await expect(
+      handlers.get('git:checkIgnored')!(null, {
+        worktreePath: '/remote/repo',
+        connectionId: 'ssh-1',
+        paths: ['build/output.js']
+      })
+    ).resolves.toEqual(['build/output.js'])
+
+    expect(checkIgnoredPathsMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, [
+      path.join('dist', 'bundle.js'),
+      path.join('src', 'index.ts')
+    ])
+    expect(sshProvider.checkIgnoredPaths).toHaveBeenCalledWith('/remote/repo', [
+      path.join('build', 'output.js')
+    ])
   })
 
   it('rejects git file paths that escape the selected worktree', async () => {

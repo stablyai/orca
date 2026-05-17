@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: git RPC methods share one dispatcher fixture, and keeping the contract cases together makes method coverage easy to audit. */
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
@@ -51,6 +52,30 @@ describe('git RPC methods', () => {
     expect(response).toMatchObject({
       ok: true,
       result: { ignoredPaths: ['dist/'] }
+    })
+  })
+
+  it('returns ignored paths for selected explorer rows', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      checkRuntimeGitIgnoredPaths: vi.fn().mockResolvedValue(['dist/bundle.js'])
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.checkIgnored', {
+        worktree: 'id:wt-1',
+        paths: ['dist/bundle.js', 'src/index.ts']
+      })
+    )
+
+    expect(runtime.checkRuntimeGitIgnoredPaths).toHaveBeenCalledWith('id:wt-1', [
+      'dist/bundle.js',
+      'src/index.ts'
+    ])
+    expect(response).toMatchObject({
+      ok: true,
+      result: ['dist/bundle.js']
     })
   })
 

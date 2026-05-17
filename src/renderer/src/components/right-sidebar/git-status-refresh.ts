@@ -22,24 +22,18 @@ export async function refreshGitStatusForWorktree({
   connectionId,
   deps
 }: {
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId' | 'showGitIgnoredFiles'> | null
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
   worktreeId: string
   worktreePath: string
   connectionId?: string
   deps: GitStatusRefreshDeps
 }): Promise<void> {
-  // Why: ignored paths are needed both to decorate visible ignored files and
-  // to filter them out when the File Explorer toggle is off.
-  const includeIgnored = true
-  const status = (await getRuntimeGitStatus(
-    {
-      settings,
-      worktreeId,
-      worktreePath,
-      connectionId
-    },
-    { includeIgnored }
-  )) as GitStatusResult
+  const status = (await getRuntimeGitStatus({
+    settings,
+    worktreeId,
+    worktreePath,
+    connectionId
+  })) as GitStatusResult
 
   deps.setGitStatus(worktreeId, status)
   // Why: branch switches can happen inside a terminal. `git status --branch`

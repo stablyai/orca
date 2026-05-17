@@ -497,6 +497,10 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.status', { worktree: worktree.id, includeIgnored })
     },
+    checkIgnored: async ({ worktreePath, paths }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.checkIgnored', { worktree: worktree.id, paths })
+    },
     history: async ({ worktreePath, limit, baseRef }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.history', { worktree: worktree.id, limit, baseRef })

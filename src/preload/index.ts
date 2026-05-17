@@ -1917,6 +1917,11 @@ const api = {
       connectionId?: string
       includeIgnored?: boolean
     }): Promise<unknown> => ipcRenderer.invoke('git:status', args),
+    checkIgnored: (args: {
+      worktreePath: string
+      paths: string[]
+      connectionId?: string
+    }): Promise<string[]> => ipcRenderer.invoke('git:checkIgnored', args),
     history: (
       args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
     ): Promise<GitHistoryResult> => ipcRenderer.invoke('git:history', args),

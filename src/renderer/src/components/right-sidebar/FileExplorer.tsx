@@ -74,7 +74,7 @@ function FileExplorerInner(): React.JSX.Element {
     ignoredByRelativePath,
     showGitIgnoredFiles,
     toggleGitIgnoredFiles
-  } = useFileExplorerGitIgnoredRows(activeWorktreeId, flatRows)
+  } = useFileExplorerGitIgnoredRows(activeWorktreeId, worktreePath, flatRows, activeRepoSupportsGit)
   const manualRefresh = useFileExplorerManualRefresh(refreshTree)
   const canCollapseAll = expanded.size > 0
   const handleCollapseAll = useCallback(() => {
