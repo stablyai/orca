@@ -1425,9 +1425,7 @@ describe('createMainWindow', () => {
     expect(onRendererProcessGone).toHaveBeenCalledWith(details)
   })
 
-  it('reloads the app shell after an unexpected renderer process loss', () => {
-    vi.useFakeTimers()
-
+  const createRendererRecoveryWindowHarness = () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
       on: vi.fn((event, handler) => {
@@ -1454,10 +1452,18 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(),
       loadURL: vi.fn()
     }
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
+
+    return { browserWindowInstance, windowHandlers }
+  }
+
+  it('reloads the app shell after an unexpected renderer process loss', () => {
+    vi.useFakeTimers()
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
 
     createMainWindow(null)
 
@@ -1481,36 +1487,8 @@ describe('createMainWindow', () => {
   it('does not reload after renderer loss when recovery is disabled', () => {
     vi.useFakeTimers()
 
-    const windowHandlers: Record<string, (...args: any[]) => void> = {}
-    const webContents = {
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      setZoomLevel: vi.fn(),
-      setBackgroundThrottling: vi.fn(),
-      invalidate: vi.fn(),
-      setWindowOpenHandler: vi.fn(),
-      send: vi.fn()
-    }
-    const browserWindowInstance = {
-      webContents,
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      isDestroyed: vi.fn(() => false),
-      isMaximized: vi.fn(() => true),
-      isFullScreen: vi.fn(() => false),
-      getSize: vi.fn(() => [1200, 800]),
-      setSize: vi.fn(),
-      maximize: vi.fn(),
-      show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
-    }
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    browserWindowMock.mockImplementation(function () {
-      return browserWindowInstance
-    })
+    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
 
     createMainWindow(null, { shouldRecoverRenderer: () => false })
 
@@ -1529,39 +1507,58 @@ describe('createMainWindow', () => {
     consoleError.mockRestore()
   })
 
+  it('rechecks the renderer recovery predicate before reloading', () => {
+    vi.useFakeTimers()
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
+    let shouldRecover = true
+
+    createMainWindow(null, { shouldRecoverRenderer: () => shouldRecover })
+
+    windowHandlers['render-process-gone']?.(
+      {} as never,
+      {
+        reason: 'crashed',
+        exitCode: 5
+      } as Electron.RenderProcessGoneDetails
+    )
+    shouldRecover = false
+    vi.advanceTimersByTime(250)
+
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(1)
+    expect(browserWindowInstance.loadURL).not.toHaveBeenCalled()
+
+    consoleError.mockRestore()
+  })
+
+  it('coalesces repeated renderer losses into one recovery reload', () => {
+    vi.useFakeTimers()
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
+
+    createMainWindow(null)
+
+    const details = {
+      reason: 'crashed',
+      exitCode: 5
+    } as Electron.RenderProcessGoneDetails
+    windowHandlers['render-process-gone']?.({} as never, details)
+    windowHandlers['render-process-gone']?.({} as never, details)
+    vi.advanceTimersByTime(250)
+
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
+    expect(browserWindowInstance.loadURL).not.toHaveBeenCalled()
+
+    consoleError.mockRestore()
+  })
+
   it('does not reload after a clean renderer exit', () => {
     vi.useFakeTimers()
 
-    const windowHandlers: Record<string, (...args: any[]) => void> = {}
-    const webContents = {
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      setZoomLevel: vi.fn(),
-      setBackgroundThrottling: vi.fn(),
-      invalidate: vi.fn(),
-      setWindowOpenHandler: vi.fn(),
-      send: vi.fn()
-    }
-    const browserWindowInstance = {
-      webContents,
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      isDestroyed: vi.fn(() => false),
-      isMaximized: vi.fn(() => true),
-      isFullScreen: vi.fn(() => false),
-      getSize: vi.fn(() => [1200, 800]),
-      setSize: vi.fn(),
-      maximize: vi.fn(),
-      show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
-    }
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    browserWindowMock.mockImplementation(function () {
-      return browserWindowInstance
-    })
+    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
 
     createMainWindow(null)
 
@@ -1583,36 +1580,8 @@ describe('createMainWindow', () => {
   it('cancels renderer recovery when the crashed window is closing', () => {
     vi.useFakeTimers()
 
-    const windowHandlers: Record<string, (...args: any[]) => void> = {}
-    const webContents = {
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      setZoomLevel: vi.fn(),
-      setBackgroundThrottling: vi.fn(),
-      invalidate: vi.fn(),
-      setWindowOpenHandler: vi.fn(),
-      send: vi.fn()
-    }
-    const browserWindowInstance = {
-      webContents,
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      isDestroyed: vi.fn(() => false),
-      isMaximized: vi.fn(() => true),
-      isFullScreen: vi.fn(() => false),
-      getSize: vi.fn(() => [1200, 800]),
-      setSize: vi.fn(),
-      maximize: vi.fn(),
-      show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
-    }
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    browserWindowMock.mockImplementation(function () {
-      return browserWindowInstance
-    })
+    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
 
     createMainWindow(null)
 
