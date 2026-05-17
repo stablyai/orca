@@ -596,7 +596,7 @@ describe('Store', () => {
     expect(store.getSettings().refreshLocalBaseRefOnWorktreeCreate).toBe(false)
     expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
     expect(store.getSettings().showTasksButton).toBe(true)
-    expect(store.getSettings().combinedDiffFileTreeVisibleByDefault).toBe(true)
+    expect(store.getSettings().combinedDiffFileTreeVisibleByDefault).toBe(false)
     expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'gitlab', 'linear'])
     expect(store.getSettings().experimentalActivity).toBe(true)
     expect(store.getSettings().notifications.customSoundPath).toBeNull()
