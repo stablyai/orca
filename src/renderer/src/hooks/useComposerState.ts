@@ -52,6 +52,11 @@ import {
   getFullComposerCreateDisabled,
   getQuickComposerCreateDisabled
 } from '@/lib/new-workspace-create-gates'
+import {
+  canUseRepoBackedComposerSources,
+  getSelectedRepoSshGate,
+  isSshConnectInProgress
+} from '@/lib/new-workspace-ssh-gate'
 import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
@@ -68,6 +73,7 @@ import {
   getWorkspaceCreateErrorToastMessage,
   type WorkspaceCreateErrorDisplay
 } from '@/lib/workspace-create-error-format'
+import type { SshConnectionStatus } from '../../../shared/ssh-types'
 
 export type UseComposerStateOptions = {
   initialRepoId?: string
@@ -166,6 +172,11 @@ export type ComposerCardProps = {
   selectedRepoPath: string | null
   /** True when the selected repo is a remote SSH repo. */
   selectedRepoIsRemote: boolean
+  selectedRepoConnectionId: string | null
+  selectedRepoSshStatus: SshConnectionStatus | null
+  selectedRepoRequiresConnection: boolean
+  selectedRepoConnectInProgress: boolean
+  onConnectSelectedRepo: () => Promise<void>
   /** Transient inline hint shown next to the Start-from trigger after a repo
    *  switch resets a prior selection (e.g. "was PR #8778"). Null when none. */
   startFromResetHint: string | null
@@ -267,6 +278,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const sparsePresetsByRepo = useAppStore((s) => s.sparsePresetsByRepo)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
+  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
   const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
   const draftRepoId = persistDraft ? (newWorkspaceDraft?.repoId ?? null) : null
   const resolvedInitialWorkspaceStatus = useMemo(
@@ -288,6 +301,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const [internalRepoId, setInternalRepoId] = useState<string>(resolvedInitialRepoId)
   const repoId = repoIdOverride ?? internalRepoId
+  const selectedRepo = eligibleRepos.find((repo) => repo.id === repoId)
+  const selectedRepoConnectionId = selectedRepo?.connectionId ?? null
+  const selectedRepoSshState = selectedRepoConnectionId
+    ? (sshConnectionStates.get(selectedRepoConnectionId) ?? null)
+    : null
+  const { selectedRepoSshStatus, selectedRepoRequiresConnection, selectedRepoConnectInProgress } =
+    getSelectedRepoSshGate({
+      connectionId: selectedRepoConnectionId,
+      status: selectedRepoSshState?.status ?? null
+    })
   const repoIdRef = useRef(repoId)
   repoIdRef.current = repoId
   const setRepoId = useCallback(
@@ -369,9 +392,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // Why: when the selected repo is remote (has a connectionId), read the
   // per-connection agent list instead of the local one. This ensures the
   // Create Workspace dialog shows agents installed on the SSH host, not the
-  // local machine. Derived from eligibleRepos directly because selectedRepo
-  // is declared later in this function.
-  const connectionId = eligibleRepos.find((r) => r.id === repoId)?.connectionId ?? null
+  // local machine.
+  const connectionId = selectedRepoConnectionId
   const isRemote = typeof connectionId === 'string'
   const detectedAgentList = useAppStore((s) => {
     if (isRemote) {
@@ -432,8 +454,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   agentPromptRef.current = agentPrompt
   const connectionIdRef = useRef(connectionId)
   connectionIdRef.current = connectionId
-
-  const selectedRepo = eligibleRepos.find((repo) => repo.id === repoId)
+  const selectedRepoConnectionIdRef = useRef(selectedRepoConnectionId)
+  selectedRepoConnectionIdRef.current = selectedRepoConnectionId
 
   // Why: resolves the selected repo's owner/repo slug so a PR URL pasted
   // into the workspace name field can be matched against the current repo.
@@ -740,6 +762,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // on mount (deduped by the store). For remote repos it re-runs when the
   // selected repo changes so the agent list matches the SSH host.
   useEffect(() => {
+    if (isRemote && selectedRepoSshStatus !== 'connected') {
+      return
+    }
     let cancelled = false
     const detect = isRemote ? ensureRemoteDetectedAgents(connectionId) : ensureDetectedAgents()
     void detect.then((ids) => {
@@ -760,7 +785,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     // detection targets the correct host. Draft/settings deps are intentionally
     // excluded — detection is a best-effort PATH snapshot.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connectionId, isRemote])
+  }, [connectionId, isRemote, selectedRepoSshStatus])
 
   // Per-repo: load yaml hooks + issue command template.
   useEffect(() => {
@@ -812,15 +837,49 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
   }, [commitHookCheckIfCurrent, enableIssueAutomation, loadHookCheckForRepo, repoId, settings])
 
+  const onConnectSelectedRepo = useCallback(async (): Promise<void> => {
+    const targetId = selectedRepoConnectionIdRef.current
+    if (!targetId) {
+      return
+    }
+    const liveState = useAppStore.getState()
+    const liveRepo = liveState.repos.find((repo) => repo.id === repoIdRef.current)
+    if (liveRepo?.connectionId !== targetId) {
+      return
+    }
+    const liveStatus = liveState.sshConnectionStates.get(targetId)?.status ?? null
+    if (liveStatus === 'connected' || isSshConnectInProgress(liveStatus)) {
+      return
+    }
+
+    try {
+      await window.api.ssh.connect({ targetId })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to connect to repository.')
+    }
+  }, [])
+
   // Why: warm the Start-from picker's PR cache on composer mount and whenever
   // the selected repo changes so opening the picker paints instantly from
   // cache.
+  const canPrefetchSelectedRepoWorkItems = canUseRepoBackedComposerSources({
+    connectionId: selectedRepoConnectionId,
+    status: selectedRepoSshStatus
+  })
+  const prefetchSshConnectedGeneration =
+    selectedRepoConnectionId && selectedRepoSshStatus === 'connected' ? sshConnectedGeneration : 0
   useEffect(() => {
-    if (!selectedRepo?.path) {
+    if (!selectedRepo?.path || !canPrefetchSelectedRepoWorkItems) {
       return
     }
     prefetchWorkItems(selectedRepo.id, selectedRepo.path, PER_REPO_FETCH_LIMIT, 'is:pr is:open')
-  }, [prefetchWorkItems, selectedRepo?.id, selectedRepo?.path])
+  }, [
+    canPrefetchSelectedRepoWorkItems,
+    prefetchSshConnectedGeneration,
+    prefetchWorkItems,
+    selectedRepo?.id,
+    selectedRepo?.path
+  ])
 
   // Reset setup decision when config / policy changes.
   useEffect(() => {
@@ -1568,6 +1627,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       !repoId ||
       !workspaceName ||
       !selectedRepo ||
+      selectedRepoRequiresConnection ||
       shouldWaitForSetupCheck ||
       shouldWaitForIssueAutomationCheck ||
       (requiresExplicitSetupChoice && !setupDecision) ||
@@ -1711,6 +1771,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     resolvedSetupDecision,
     resolvedInitialWorkspaceStatus,
     selectedRepo,
+    selectedRepoRequiresConnection,
     settings?.agentCmdOverrides,
     settings?.rightSidebarOpenByDefault,
     setRightSidebarOpen,
@@ -1742,6 +1803,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         !repoId ||
         !workspaceName ||
         !selectedRepo ||
+        selectedRepoRequiresConnection ||
         (requiresExplicitSetupChoice && !setupDecision) ||
         sparseError !== null
       ) {
@@ -1944,6 +2006,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       resolvedSetupDecision,
       resolvedInitialWorkspaceStatus,
       selectedRepo,
+      selectedRepoRequiresConnection,
       settings?.agentCmdOverrides,
       settings?.rightSidebarOpenByDefault,
       setRightSidebarOpen,
@@ -1970,6 +2033,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     shouldWaitForIssueAutomationCheck,
     requiresExplicitSetupChoice,
     hasSetupDecision: Boolean(setupDecision),
+    selectedRepoRequiresConnection,
     sparseError
   }
   const createDisabled =
@@ -2027,6 +2091,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       linkedWorkItem?.type === 'pr' && baseBranch ? linkedWorkItem.number : null,
     selectedRepoPath: selectedRepo?.path ?? null,
     selectedRepoIsRemote: Boolean(selectedRepo?.connectionId),
+    selectedRepoConnectionId,
+    selectedRepoSshStatus,
+    selectedRepoRequiresConnection,
+    selectedRepoConnectInProgress,
+    onConnectSelectedRepo,
     startFromResetHint,
     note,
     onNoteChange: setNote,
