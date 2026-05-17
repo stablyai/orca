@@ -169,6 +169,50 @@ describe('shared agent-hook-listener', () => {
     })
   })
 
+  it('strips Grok internal user_query wrapper before caching the prompt', () => {
+    const prompt = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'user_prompt_submit',
+          prompt: '<user_query>\nFind recent PR\n</user_query>'
+        }
+      },
+      'production'
+    )
+    expect(prompt?.payload.prompt).toBe('Find recent PR')
+
+    const tool = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'pre_tool_use',
+          toolName: 'web_search',
+          toolInput: { query: 'recent PR' }
+        }
+      },
+      'production'
+    )
+    expect(tool?.payload.prompt).toBe('Find recent PR')
+  })
+
+  it('strips Grok opening user_query wrapper even when the closing tag is absent', () => {
+    const event = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: { hookEventName: 'user_prompt_submit', prompt: '<user_query>Find recent PR' }
+      },
+      'production'
+    )
+    expect(event?.payload.prompt).toBe('Find recent PR')
+  })
+
   it('maps Grok feedback notifications to waiting without overwriting the prompt', () => {
     normalizeHookPayload(
       state,

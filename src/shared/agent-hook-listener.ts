@@ -246,6 +246,13 @@ function extractPromptText(hookPayload: Record<string, unknown>): string {
   return ''
 }
 
+function stripGrokUserQueryWrapper(promptText: string): string {
+  const match = promptText.match(/^<user_query>([\s\S]*?)(?:<\/user_query>)?$/)
+  // Why: Grok emits the submitted prompt wrapped in its internal
+  // `<user_query>` envelope; the status cache should hold the user text.
+  return match ? match[1].trim() : promptText
+}
+
 function resolvePrompt(
   state: HookListenerState,
   paneKey: string,
@@ -1696,7 +1703,9 @@ function normalizeGrokEvent(
 
   // Why: Grok Notification.message is status UI text, not necessarily the
   // user's prompt. Preserve the cached UserPromptSubmit prompt for the row.
-  const effectivePrompt = isGrokEvent(eventName, 'notification') ? '' : promptText
+  const effectivePrompt = isGrokEvent(eventName, 'notification')
+    ? ''
+    : stripGrokUserQueryWrapper(promptText)
 
   return parseAgentStatusPayload(
     JSON.stringify({
