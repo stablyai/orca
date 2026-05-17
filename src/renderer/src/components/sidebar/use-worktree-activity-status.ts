@@ -34,8 +34,8 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
         const tabIds = new Set(wtTabs.map((tab) => tab.id))
         const now = Date.now()
         for (const [paneKey, entry] of Object.entries(s.agentStatusByPaneKey)) {
-          const parsed = parsePaneKey(paneKey)
-          if (!parsed || !tabIds.has(parsed.tabId)) {
+          const tabId = getPaneKeyTabId(paneKey)
+          if (!tabId || !tabIds.has(tabId)) {
             continue
           }
           if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
@@ -54,8 +54,8 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
           if (!entry) {
             continue
           }
-          const parsed = parsePaneKey(entry.paneKey)
-          if (parsed && tabIds.has(parsed.tabId)) {
+          const tabId = getPaneKeyTabId(entry.paneKey)
+          if (tabId && tabIds.has(tabId)) {
             perm = true
           }
         }
@@ -103,4 +103,19 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
       hasRetainedDone
     ]
   )
+}
+
+function getPaneKeyTabId(paneKey: string): string | null {
+  const parsed = parsePaneKey(paneKey)
+  if (parsed) {
+    return parsed.tabId
+  }
+
+  // Why: restored snapshots and older test fixtures can still carry the
+  // pre-stable-pane-id `tabId:numericPaneId` key; status only needs tab scope.
+  const sepIdx = paneKey.indexOf(':')
+  if (sepIdx <= 0 || sepIdx !== paneKey.lastIndexOf(':') || sepIdx === paneKey.length - 1) {
+    return null
+  }
+  return paneKey.slice(0, sepIdx)
 }

@@ -70,9 +70,25 @@ export function filterWorkspaceSpaceRows(
 
 export function getSelectedDeletableWorkspaceIds(
   rows: readonly WorkspaceSpaceWorktree[],
-  selectedIds: ReadonlySet<string>
+  selectedIds: ReadonlySet<string>,
+  isWorktreeDeleting: (worktreeId: string) => boolean = () => false
 ): string[] {
   return rows
-    .filter((row) => row.canDelete && row.status === 'ok' && selectedIds.has(row.worktreeId))
+    .filter(
+      (row) =>
+        row.canDelete &&
+        row.status === 'ok' &&
+        selectedIds.has(row.worktreeId) &&
+        !isWorktreeDeleting(row.worktreeId)
+    )
+    .map((row) => row.worktreeId)
+}
+
+export function getVisibleDeletableWorkspaceIds(
+  rows: readonly WorkspaceSpaceWorktree[],
+  isWorktreeDeleting: (worktreeId: string) => boolean = () => false
+): string[] {
+  return rows
+    .filter((row) => row.canDelete && row.status === 'ok' && !isWorktreeDeleting(row.worktreeId))
     .map((row) => row.worktreeId)
 }

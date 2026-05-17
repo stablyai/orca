@@ -43,6 +43,7 @@ const {
   registerExportHandlersMock,
   registerOnboardingHandlersMock,
   registerSpeechHandlersMock,
+  registerSkillsHandlersMock,
   registerWorkspaceSpaceHandlersMock
 } = vi.hoisted(() => ({
   registerCliHandlersMock: vi.fn(),
@@ -85,6 +86,7 @@ const {
   registerExportHandlersMock: vi.fn(),
   registerOnboardingHandlersMock: vi.fn(),
   registerSpeechHandlersMock: vi.fn(),
+  registerSkillsHandlersMock: vi.fn(),
   registerWorkspaceSpaceHandlersMock: vi.fn()
 }))
 
@@ -156,6 +158,10 @@ vi.mock('./settings', () => ({
   registerSettingsHandlers: registerSettingsHandlersMock
 }))
 
+vi.mock('./skills', () => ({
+  registerSkillsHandlers: registerSkillsHandlersMock
+}))
+
 vi.mock('./workspace-space', () => ({
   registerWorkspaceSpaceHandlers: registerWorkspaceSpaceHandlersMock
 }))
@@ -217,8 +223,11 @@ vi.mock('./claude-accounts', () => ({
 }))
 
 vi.mock('../window/attach-main-window-services', () => ({
-  registerClipboardHandlers: registerClipboardHandlersMock,
   registerUpdaterHandlers: registerUpdaterHandlersMock
+}))
+
+vi.mock('../window/clipboard-ipc-handlers', () => ({
+  registerClipboardHandlers: registerClipboardHandlersMock
 }))
 
 vi.mock('./browser', () => ({
@@ -286,6 +295,7 @@ describe('registerCoreHandlers', () => {
     registerHostedReviewHandlersMock.mockReset()
     registerExportHandlersMock.mockReset()
     registerSpeechHandlersMock.mockReset()
+    registerSkillsHandlersMock.mockReset()
     registerWorkspaceSpaceHandlersMock.mockReset()
   })
 
@@ -337,6 +347,7 @@ describe('registerCoreHandlers', () => {
     expect(registerDeveloperPermissionHandlersMock).toHaveBeenCalled()
     expect(registerComputerUsePermissionHandlersMock).toHaveBeenCalled()
     expect(registerSettingsHandlersMock).toHaveBeenCalledWith(store, agentAwakeService)
+    expect(registerSkillsHandlersMock).toHaveBeenCalledWith(store)
     expect(registerWorkspaceSpaceHandlersMock).toHaveBeenCalledWith(store)
     expect(registerTelemetryHandlersMock).toHaveBeenCalledWith(store)
     expect(registerSessionHandlersMock).toHaveBeenCalledWith(store)

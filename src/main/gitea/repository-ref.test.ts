@@ -46,6 +46,16 @@ describe('Gitea repository ref parsing', () => {
     })
   })
 
+  it('preserves a scp-like SSH subpath when deriving the API base URL', () => {
+    expect(parseGiteaRepoRef('git@gitea.example.test:code/team/project.git')).toEqual({
+      host: 'gitea.example.test',
+      owner: 'team',
+      repo: 'project',
+      apiBaseUrl: 'https://gitea.example.test/code/api/v1',
+      webBaseUrl: 'https://gitea.example.test/code'
+    })
+  })
+
   it('parses ssh:// remotes without carrying the SSH port into web/API URLs', () => {
     expect(parseGiteaRepoRef('ssh://git@gitea.example.test:2222/team/project.git')).toEqual({
       host: 'gitea.example.test',
@@ -60,6 +70,8 @@ describe('Gitea repository ref parsing', () => {
     expect(parseGiteaRepoRef('git@github.com:team/project.git')).toBeNull()
     expect(parseGiteaRepoRef('https://gitlab.com/team/project.git')).toBeNull()
     expect(parseGiteaRepoRef('https://bitbucket.org/team/project.git')).toBeNull()
+    expect(parseGiteaRepoRef('https://dev.azure.com/team/project/_git/repo')).toBeNull()
+    expect(parseGiteaRepoRef('https://team.visualstudio.com/project/_git/repo')).toBeNull()
   })
 
   it('reads and caches the origin remote', async () => {

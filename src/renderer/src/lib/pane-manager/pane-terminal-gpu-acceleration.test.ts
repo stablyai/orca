@@ -72,4 +72,18 @@ describe('applyTerminalGpuAcceleration', () => {
     expect(pane.webglAddon).toBeNull()
     expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
   })
+
+  it('returns Linux panes to DOM when switching from forced WebGL back to auto', () => {
+    vi.stubGlobal('navigator', {
+      platform: 'Linux x86_64',
+      userAgent: 'Mozilla/5.0 (X11; Linux x86_64)'
+    })
+    const pane = createPane()
+    const options: PaneManagerOptions = { terminalGpuAcceleration: 'on' }
+
+    applyTerminalGpuAcceleration([pane], options, 'auto')
+
+    expect(pane.webglAddon).toBeNull()
+    expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
+  })
 })

@@ -11,7 +11,7 @@ import {
   publicKeyFromBase64,
   publicKeyToBase64
 } from './e2ee-crypto'
-import { subscribeRemoteRuntimeRequest } from './remote-runtime-client'
+import { sendRemoteRuntimeRequest, subscribeRemoteRuntimeRequest } from './remote-runtime-client'
 
 const servers: WebSocketServer[] = []
 
@@ -56,6 +56,24 @@ describe('subscribeRemoteRuntimeRequest', () => {
     await expect(server.nextBinary).resolves.toEqual(bytes)
     expect(onError).not.toHaveBeenCalled()
     subscription.close()
+  })
+})
+
+describe('sendRemoteRuntimeRequest', () => {
+  it('refreshes the per-call timeout when the runtime sends keepalive frames', async () => {
+    const server = await createOneShotServer()
+
+    const response = await sendRemoteRuntimeRequest<{ satisfied: boolean }>(
+      server.pairing,
+      'terminal.wait',
+      { terminal: 't1', for: 'tui-idle', timeoutMs: 550 },
+      300
+    )
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: { satisfied: true }
+    })
   })
 })
 
@@ -137,4 +155,72 @@ async function createSubscriptionServer(): Promise<{
 
 function sendEncrypted(ws: WebSocket, sharedKey: Uint8Array, message: unknown): void {
   ws.send(encrypt(JSON.stringify(message), sharedKey))
+}
+
+async function createOneShotServer(): Promise<{ pairing: PairingOffer }> {
+  const serverKeyPair = generateKeyPair()
+  const wss = new WebSocketServer({ port: 0 })
+  servers.push(wss)
+
+  wss.on('connection', (ws) => {
+    let sharedKey: Uint8Array | null = null
+    let authenticated = false
+
+    ws.on('message', (data, isBinary) => {
+      if (isBinary) {
+        return
+      }
+      const frame = data.toString()
+      if (!sharedKey) {
+        const hello = JSON.parse(frame) as { publicKeyB64: string }
+        sharedKey = deriveSharedKey(
+          serverKeyPair.secretKey,
+          publicKeyFromBase64(hello.publicKeyB64)
+        )
+        ws.send(JSON.stringify({ type: 'e2ee_ready' }))
+        return
+      }
+
+      const plaintext = decrypt(frame, sharedKey)
+      if (!plaintext) {
+        return
+      }
+      if (!authenticated) {
+        authenticated = true
+        sendEncrypted(ws, sharedKey, { type: 'e2ee_authenticated' })
+        return
+      }
+
+      const request = JSON.parse(plaintext) as { id: string }
+      const key = sharedKey
+      const keepalive = setInterval(() => {
+        sendEncrypted(ws, key, { _keepalive: true })
+      }, 100)
+      ws.once('close', () => clearInterval(keepalive))
+      setTimeout(() => {
+        clearInterval(keepalive)
+        sendEncrypted(ws, key, {
+          id: request.id,
+          ok: true,
+          result: { satisfied: true },
+          _meta: { runtimeId: 'runtime-test' }
+        })
+      }, 550)
+    })
+  })
+
+  await new Promise<void>((resolve) => wss.once('listening', resolve))
+  const address = wss.address() as AddressInfo
+  const pairing = parsePairingCode(
+    encodePairingOffer({
+      v: 2,
+      endpoint: `ws://127.0.0.1:${address.port}`,
+      deviceToken: 'device-token',
+      publicKeyB64: publicKeyToBase64(serverKeyPair.publicKey)
+    })
+  )
+  if (!pairing) {
+    throw new Error('Failed to create test pairing')
+  }
+  return { pairing }
 }

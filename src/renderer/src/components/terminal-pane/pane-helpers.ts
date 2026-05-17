@@ -50,6 +50,12 @@ export function isMacUserAgent(
   return userAgent.includes('Mac')
 }
 
+export function isLinuxUserAgent(
+  userAgent: string = typeof navigator === 'undefined' ? '' : navigator.userAgent
+): boolean {
+  return !isMacUserAgent(userAgent) && !isWindowsUserAgent(userAgent) && userAgent.includes('Linux')
+}
+
 // Why: escape rules are a property of the *target* shell receiving the path,
 // not the client OS. A Windows client dropping onto a Linux SSH worktree must
 // produce POSIX-quoted output; passing a userAgent string here coupled escape

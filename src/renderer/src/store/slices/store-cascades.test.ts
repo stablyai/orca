@@ -60,6 +60,7 @@ import {
   makeWorktree,
   seedStore
 } from './store-test-helpers'
+import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 
 // ─── Tests ────────────────────────────────────────────────────────────
 
@@ -166,6 +167,8 @@ describe('removeWorktree cascade', () => {
     // State NOT cleaned up
     expect(s.worktreesByRepo['repo1']).toHaveLength(1)
     expect(s.tabsByWorktree[worktreeId]).toHaveLength(1)
+    expect(s.ptyIdsByTabId['tab1']).toEqual(['pty1'])
+    expect(mockApi.pty.kill).not.toHaveBeenCalled()
     expect(s.activeWorktreeId).toBe(worktreeId)
   })
 
@@ -267,7 +270,7 @@ describe('removeWorktree cascade', () => {
     expect(s.fileSearchStateByWorktree[wt1]).toBeUndefined()
   })
 
-  it('shuts down terminals before asking the backend to remove the worktree', async () => {
+  it('shuts down terminals after the backend confirms worktree removal', async () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
     const callOrder: string[] = []
@@ -297,7 +300,7 @@ describe('removeWorktree cascade', () => {
     const result = await store.getState().removeWorktree(worktreeId)
 
     expect(result).toEqual({ ok: true })
-    expect(callOrder).toEqual(['kill', 'remove'])
+    expect(callOrder).toEqual(['remove', 'kill'])
   })
 })
 
@@ -1366,6 +1369,28 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockApi.pty.kill.mockResolvedValue(undefined)
+    shutdownBufferCaptures.clear()
+  })
+
+  it('asks sleep-time buffer capture to skip local scrollback serialization', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const capture = vi.fn()
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId: 'pty-1' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    })
+    shutdownBufferCaptures.set('tab-1', capture)
+
+    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
+
+    expect(capture).toHaveBeenCalledWith({ includeLocalBuffers: false })
   })
 
   it('drops live agentStatusByPaneKey entries on sleep so the working row disappears', async () => {

@@ -1,5 +1,4 @@
 import { app, autoUpdater as nativeUpdater } from 'electron'
-import { autoUpdater } from 'electron-updater'
 import type { UpdateStatus } from '../shared/types'
 import {
   consumeMacInstallGuardBypass,
@@ -11,11 +10,13 @@ import {
 } from './updater-mac-install'
 import { compareVersions } from './updater-fallback'
 import { fetchChangelog } from './updater-changelog'
+import type { ElectronAutoUpdater } from './electron-updater-loader'
 
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
 
 type UpdaterHandlerContext = {
+  autoUpdater: ElectronAutoUpdater
   clearBackgroundCheckLaunchPending: () => void
   clearAvailableUpdateContext: () => void
   consumeMissingManifestPrereleaseFallbackResult: () => { userInitiated: boolean } | null
@@ -45,6 +46,7 @@ type UpdaterHandlerContext = {
 }
 
 export function registerAutoUpdaterHandlers({
+  autoUpdater,
   clearBackgroundCheckLaunchPending,
   clearAvailableUpdateContext,
   consumeMissingManifestPrereleaseFallbackResult,

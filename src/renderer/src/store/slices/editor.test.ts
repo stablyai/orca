@@ -65,6 +65,63 @@ describe('createEditorSlice right sidebar state', () => {
   })
 })
 
+describe('createEditorSlice file search seed state', () => {
+  it('seeds file search with a one-shot request id', () => {
+    const store = createEditorStore()
+
+    store.getState().seedFileSearchQuery('wt-1', 'selectedText')
+
+    expect(store.getState().fileSearchStateByWorktree['wt-1']).toMatchObject({
+      query: 'selectedText',
+      results: null,
+      loading: false,
+      seedRequestId: 1
+    })
+  })
+
+  it('preserves search options while replacing stale results and collapsed files', () => {
+    const store = createEditorStore()
+    store.getState().updateFileSearchState('wt-1', {
+      query: 'old',
+      caseSensitive: true,
+      wholeWord: true,
+      useRegex: true,
+      includePattern: '*.ts',
+      excludePattern: 'dist/**',
+      results: { files: [], totalMatches: 1, truncated: false },
+      loading: true,
+      collapsedFiles: new Set(['/repo/file.ts'])
+    })
+
+    store.getState().seedFileSearchQuery('wt-1', 'next')
+
+    const state = store.getState().fileSearchStateByWorktree['wt-1']
+    expect(state).toMatchObject({
+      query: 'next',
+      caseSensitive: true,
+      wholeWord: true,
+      useRegex: true,
+      includePattern: '*.ts',
+      excludePattern: 'dist/**',
+      results: null,
+      loading: false,
+      seedRequestId: 1
+    })
+    expect(state.collapsedFiles.size).toBe(0)
+  })
+
+  it('consumes only the matching seed request id', () => {
+    const store = createEditorStore()
+    store.getState().seedFileSearchQuery('wt-1', 'selectedText')
+
+    store.getState().consumeFileSearchSeedRequest('wt-1', 2)
+    expect(store.getState().fileSearchStateByWorktree['wt-1']?.seedRequestId).toBe(1)
+
+    store.getState().consumeFileSearchSeedRequest('wt-1', 1)
+    expect(store.getState().fileSearchStateByWorktree['wt-1']?.seedRequestId).toBeUndefined()
+  })
+})
+
 describe('createEditorSlice openDiff', () => {
   it('keeps staged and unstaged diffs in separate tabs', () => {
     const store = createEditorStore()
@@ -682,6 +739,24 @@ describe('createEditorSlice editor drafts', () => {
 })
 
 describe('createEditorSlice conflict status reconciliation', () => {
+  it('clears ignored path cache when status refresh omits ignored paths', () => {
+    const store = createEditorStore()
+
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [],
+      ignoredPaths: ['dist/', '.env']
+    })
+    expect(store.getState().gitIgnoredPathsByWorktree['wt-1']).toEqual(['dist/', '.env'])
+
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: []
+    })
+
+    expect(store.getState().gitIgnoredPathsByWorktree['wt-1']).toEqual([])
+  })
+
   it('tracks unresolved conflicts when opened through the conflict-safe entry point', () => {
     const store = createEditorStore()
 
@@ -866,6 +941,24 @@ describe('createEditorSlice remote branch actions', () => {
     })
   })
 
+  it('does not notify subscribers when upstream status is unchanged', () => {
+    const store = createEditorStore()
+    const status = {
+      hasUpstream: true,
+      upstreamName: 'origin/main',
+      ahead: 2,
+      behind: 1
+    }
+
+    store.getState().setUpstreamStatus('wt-1', status)
+    const listener = vi.fn()
+    const unsubscribe = store.subscribe(listener)
+    store.getState().setUpstreamStatus('wt-1', { ...status })
+    unsubscribe()
+
+    expect(listener).not.toHaveBeenCalled()
+  })
+
   it('runs pull and refreshes status + upstream on success', async () => {
     const store = createEditorStore()
     store.getState().setGitStatus('wt-1', {
@@ -894,6 +987,21 @@ describe('createEditorSlice remote branch actions', () => {
 
     expect(toastErrorMock).toHaveBeenCalledWith(
       'Pull blocked — commit or stash your local changes first.'
+    )
+  })
+
+  it('surfaces an explicit toast when pull stops on merge conflicts', async () => {
+    const store = createEditorStore()
+    gitPullMock.mockRejectedValueOnce(
+      new Error(
+        'Auto-merging src/app.ts\nCONFLICT (content): Merge conflict in src/app.ts\nAutomatic merge failed; fix conflicts and then commit the result.'
+      )
+    )
+
+    await expect(store.getState().pullBranch('wt-1', '/repo')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Pull stopped with merge conflicts. Resolve them in Source Control, then commit the merge.'
     )
   })
 
@@ -1067,7 +1175,7 @@ describe('createEditorSlice remote branch actions', () => {
 
     await expect(store.getState().fetchBranch('wt-1', '/repo')).rejects.toThrow('network timeout')
 
-    expect(toastErrorMock).toHaveBeenCalledWith('network timeout')
+    expect(toastErrorMock).toHaveBeenCalledWith('Fetch failed. network timeout')
     expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
@@ -1242,6 +1350,24 @@ describe('createEditorSlice remote branch actions', () => {
     expect(gitPushMock).not.toHaveBeenCalled()
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
+
+  it('surfaces a sync-labeled toast when syncBranch stops on merge conflicts', async () => {
+    const store = createEditorStore()
+    gitPullMock.mockRejectedValueOnce(
+      new Error(
+        'Auto-merging src/app.ts\nCONFLICT (content): Merge conflict in src/app.ts\nAutomatic merge failed; fix conflicts and then commit the result.'
+      )
+    )
+
+    await expect(store.getState().syncBranch('wt-1', '/repo')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Sync stopped with merge conflicts. Resolve them in Source Control, then commit the merge.'
+    )
+    expect(gitPushMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
 })
 
 describe('createEditorSlice activateMarkdownLink', () => {
@@ -1249,6 +1375,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
   const openFileUriMock = vi.fn()
   const pathExistsMock = vi.fn()
   const authorizeExternalPathMock = vi.fn()
+  const fsStatMock = vi.fn()
   const runtimeEnvironmentCallMock = vi.fn()
   const runtimeEnvironmentTransportCallMock = vi.fn()
 
@@ -1260,6 +1387,14 @@ describe('createEditorSlice activateMarkdownLink', () => {
     pathExistsMock.mockReset()
     pathExistsMock.mockResolvedValue(true)
     authorizeExternalPathMock.mockReset()
+    fsStatMock.mockReset()
+    fsStatMock.mockImplementation(async ({ filePath }: { filePath: string }) => {
+      const exists = await pathExistsMock(filePath)
+      if (!exists) {
+        throw new Error('File not found')
+      }
+      return { size: 1, isDirectory: false, mtime: 1 }
+    })
     runtimeEnvironmentCallMock.mockReset()
     runtimeEnvironmentTransportCallMock.mockReset()
     runtimeEnvironmentCallMock.mockResolvedValue({
@@ -1285,13 +1420,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
       },
       fs: {
         authorizeExternalPath: authorizeExternalPathMock,
-        stat: vi.fn(async ({ filePath }: { filePath: string }) => {
-          const exists = await pathExistsMock(filePath)
-          if (!exists) {
-            throw new Error('File not found')
-          }
-          return { size: 1, isDirectory: false, mtime: 1 }
-        })
+        stat: fsStatMock
       },
       runtimeEnvironments: {
         call: runtimeEnvironmentTransportCallMock
@@ -1368,6 +1497,78 @@ describe('createEditorSlice activateMarkdownLink', () => {
         isPreview: true
       })
     ])
+  })
+
+  it('stats SSH markdown links through the source worktree connection before opening', async () => {
+    const store = createEditorStore()
+    pathExistsMock.mockResolvedValue(true)
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/repo',
+          displayName: 'Repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          {
+            id: 'wt-1',
+            repoId: 'repo1',
+            path: '/repo',
+            branch: 'refs/heads/main',
+            head: 'abc',
+            isBare: false,
+            isMainWorktree: true,
+            displayName: 'main',
+            comment: '',
+            linkedIssue: null,
+            linkedPR: null,
+            linkedLinearIssue: null,
+            isArchived: false,
+            isUnread: false,
+            isPinned: false,
+            sortOrder: 0,
+            lastActivityAt: 0
+          }
+        ]
+      }
+    } as Partial<AppState>)
+
+    await store.getState().activateMarkdownLink('./guide.md', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(fsStatMock).toHaveBeenCalledWith({
+      filePath: '/repo/docs/guide.md',
+      connectionId: 'ssh-1'
+    })
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/repo/docs/guide.md',
+        mode: 'edit',
+        isPreview: true
+      })
+    ])
+  })
+
+  it('does not open linked markdown directories as files', async () => {
+    const store = createEditorStore()
+    fsStatMock.mockResolvedValueOnce({ size: 1, isDirectory: true, mtime: 1 })
+
+    await store.getState().activateMarkdownLink('./guide.md', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(store.getState().openFiles).toEqual([])
+    expect(toastErrorMock).toHaveBeenCalledWith('Cannot open directory: docs/guide.md')
   })
 
   it('can open a file without adopting the currently active runtime owner', () => {
@@ -1516,6 +1717,57 @@ describe('createEditorSlice activateMarkdownLink', () => {
       })
     ])
     expect(openFileUriMock).not.toHaveBeenCalled()
+  })
+
+  it('blocks external file URLs from SSH markdown sources', async () => {
+    const store = createEditorStore()
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/repo',
+          displayName: 'Repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          {
+            id: 'wt-1',
+            repoId: 'repo1',
+            path: '/repo',
+            branch: 'refs/heads/main',
+            head: 'abc',
+            isBare: false,
+            isMainWorktree: true,
+            displayName: 'main',
+            comment: '',
+            linkedIssue: null,
+            linkedPR: null,
+            linkedLinearIssue: null,
+            isArchived: false,
+            isUnread: false,
+            isPinned: false,
+            sortOrder: 0,
+            lastActivityAt: 0
+          }
+        ]
+      }
+    } as Partial<AppState>)
+
+    await store.getState().activateMarkdownLink('file:///tmp/image.png', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(store.getState().openFiles).toEqual([])
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Opening remote paths in the local OS is not available.'
+    )
   })
 
   it('activates same-file line anchors via setActiveFile without opening a new tab', async () => {

@@ -153,7 +153,7 @@ export function useLocalImageSrc(
 
     const absolutePath = resolveImageAbsolutePath(rawSrc, filePath)
     if (!absolutePath) {
-      setDisplaySrc(rawSrc)
+      setDisplaySrc(undefined)
       return
     }
 
@@ -174,15 +174,14 @@ export function useLocalImageSrc(
           cacheBlobUrl(cacheKey, url)
           setDisplaySrc(url)
         } else {
-          // Why: if the file exists but is not binary (e.g. an SVG stored as
-          // text) or content is empty, fall back to the raw src so the browser
-          // can attempt its own loading rather than leaving a broken image.
-          setDisplaySrc(rawSrc)
+          // Why: local image paths must stay behind IPC/runtime authorization;
+          // handing raw file: or relative paths back to Chromium can escape it.
+          setDisplaySrc(undefined)
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setDisplaySrc(rawSrc)
+          setDisplaySrc(undefined)
         }
       })
 
@@ -232,10 +231,9 @@ export async function loadLocalImageSrc(
       cacheBlobUrl(cacheKey, url)
       return url
     }
-    // Why: if the file is not binary (e.g. an SVG stored as text) or content
-    // is empty, return the raw src so the caller can still display something
-    // rather than treating it as a permanent failure.
-    return rawSrc
+    // Why: local image paths must stay behind IPC/runtime authorization;
+    // callers should render a missing image instead of falling back to raw src.
+    return null
   } catch {
     // Fall through
   }

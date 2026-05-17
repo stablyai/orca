@@ -24,6 +24,10 @@ import {
   getOpenFilesForExternalFileChange,
   notifyEditorExternalFileChange
 } from '@/components/editor/editor-autosave'
+import {
+  __clearSelfWriteRegistryForTests,
+  recordSelfWrite
+} from '@/components/editor/editor-self-write-registry'
 
 describe('getWatchedTargetKey', () => {
   it('changes when a worktree gains an SSH connection id', () => {
@@ -161,6 +165,8 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+    vi.unstubAllGlobals()
+    __clearSelfWriteRegistryForTests()
   })
 
   function payload(events: FsChangedPayload['events']): FsChangedPayload {
@@ -282,6 +288,46 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
       worktreePath: '//Server/Share/Repo',
       relativePath: 'notes.md'
     })
+    dispose()
+  })
+
+  it('does not drop external edits that arrive inside the self-write TTL', async () => {
+    vi.mocked(useAppStore.getState).mockReturnValue({
+      openFiles: [fileNotes],
+      setExternalMutation
+    } as never)
+    vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([fileNotes] as never)
+    const readFile = vi.fn().mockResolvedValue({ content: 'agent edit', isBinary: false })
+    vi.stubGlobal('window', { api: { fs: { readFile } } })
+    const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
+
+    recordSelfWrite('/repo/notes.md', 'orca save')
+    handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(notifyEditorExternalFileChange).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      worktreePath: '/repo',
+      relativePath: 'notes.md'
+    })
+    dispose()
+  })
+
+  it('still suppresses the watcher echo from Orca self-writes', async () => {
+    vi.mocked(useAppStore.getState).mockReturnValue({
+      openFiles: [fileNotes],
+      setExternalMutation
+    } as never)
+    vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([fileNotes] as never)
+    const readFile = vi.fn().mockResolvedValue({ content: 'orca save', isBinary: false })
+    vi.stubGlobal('window', { api: { fs: { readFile } } })
+    const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
+
+    recordSelfWrite('/repo/notes.md', 'orca save')
+    handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(notifyEditorExternalFileChange).not.toHaveBeenCalled()
     dispose()
   })
 })

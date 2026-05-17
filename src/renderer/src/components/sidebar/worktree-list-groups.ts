@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: sidebar row construction keeps every grouping mode in one pure module so reveal, virtualized rendering, and tests share the same flat row contract. */
-import { CircleCheckBig, CircleDot, CircleX, Folder, GitPullRequest, Pin } from 'lucide-react'
+import { CircleX, Folder, Pin } from 'lucide-react'
 import type React from 'react'
 import type {
   Repo,
@@ -14,12 +14,17 @@ import {
   getWorkspaceStatusGroupKey,
   getWorkspaceStatusVisualMeta
 } from './workspace-status'
+import {
+  ConductorDoneIcon,
+  ConductorProgressIcon,
+  ConductorReviewIcon
+} from './workspace-status-icons'
 import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
 import type { SortBy } from './smart-sort'
 
 export { branchName }
 
-export type WorktreeGroupBy = 'none' | 'repo' | 'pr-status'
+export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status'
 export type RepoGroupOrdering = 'manual' | 'visible-worktree-order'
 
 export function getRepoGroupOrdering(groupBy: WorktreeGroupBy, sortBy: SortBy): RepoGroupOrdering {
@@ -67,18 +72,18 @@ export const PR_GROUP_META: Record<
 > = {
   done: {
     label: 'Done',
-    icon: CircleCheckBig,
-    tone: 'text-emerald-700 dark:text-emerald-200'
+    icon: ConductorDoneIcon,
+    tone: 'text-[#c7a594]'
   },
   'in-review': {
     label: 'In review',
-    icon: GitPullRequest,
-    tone: 'text-sky-700 dark:text-sky-200'
+    icon: ConductorReviewIcon,
+    tone: 'text-[#16a34a]'
   },
   'in-progress': {
     label: 'In progress',
-    icon: CircleDot,
-    tone: 'text-amber-700 dark:text-amber-200'
+    icon: ConductorProgressIcon,
+    tone: 'text-[#d4a300]'
   },
   closed: {
     label: 'Closed',
@@ -174,11 +179,10 @@ function emitPinnedGroup(
   worktreeMap: Map<string, Worktree>,
   collapsedGroups: Set<string>,
   result: Row[],
-  showLineageContext: boolean,
-  force = false
+  showLineageContext: boolean
 ): Set<string> {
   const pinned = worktrees.filter((w) => w.isPinned)
-  if (pinned.length === 0 && !force) {
+  if (pinned.length === 0) {
     return new Set()
   }
 
@@ -364,10 +368,18 @@ export function buildRows(
     worktreeMap,
     collapsedGroups,
     result,
-    nestLineage,
-    groupBy === 'none'
+    nestLineage
   )
   const unpinned = pinnedIds.size > 0 ? worktrees.filter((w) => !pinnedIds.has(w.id)) : worktrees
+
+  if (groupBy === 'none') {
+    appendWorktreeRows(result, unpinned, repoMap, lineageById, worktreeMap, {
+      nestLineage,
+      showLineageContext: nestLineage,
+      collapsedGroups
+    })
+    return result
+  }
 
   const grouped = new Map<string, { label: string; items: Worktree[]; repo?: Repo }>()
   for (const w of unpinned) {
@@ -378,7 +390,7 @@ export function buildRows(
       repo = repoMap.get(w.repoId)
       key = `repo:${w.repoId}`
       label = repo?.displayName ?? 'Unknown'
-    } else if (groupBy === 'none') {
+    } else if (groupBy === 'workspace-status') {
       const workspaceStatus = getWorkspaceStatus(w, workspaceStatuses)
       key = getWorkspaceStatusGroupKey(workspaceStatus)
       label =
@@ -403,10 +415,9 @@ export function buildRows(
         orderedGroups.push([key, group])
       }
     }
-  } else if (groupBy === 'none') {
-    // Why: the old "All" grouping now organizes workspaces by user status.
-    // Keep the sidebar compact by rendering only sections that contain cards;
-    // the board drawer is the wider all-lanes drag target.
+  } else if (groupBy === 'workspace-status') {
+    // Why: status grouping is opt-in while the board drawer remains the wider
+    // all-lanes drag target; keep the sidebar compact by omitting empty lanes.
     for (const status of workspaceStatuses) {
       const key = getWorkspaceStatusGroupKey(status.id)
       const group = grouped.get(key)
@@ -451,7 +462,7 @@ export function buildRows(
             icon: REPO_GROUP_META.icon,
             repo
           }
-        : groupBy === 'none'
+        : groupBy === 'workspace-status'
           ? (() => {
               const workspaceStatus =
                 getWorkspaceStatusFromGroupKey(key, workspaceStatuses) ??
@@ -502,6 +513,9 @@ export function getGroupKeyForWorktree(
   workspaceStatuses: readonly WorkspaceStatusDefinition[] = cloneDefaultWorkspaceStatuses()
 ): string | null {
   if (groupBy === 'none') {
+    return null
+  }
+  if (groupBy === 'workspace-status') {
     return getWorkspaceStatusGroupKey(getWorkspaceStatus(worktree, workspaceStatuses))
   }
   if (groupBy === 'repo') {

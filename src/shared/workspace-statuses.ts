@@ -1,12 +1,27 @@
 import type { Worktree, WorkspaceStatus, WorkspaceStatusDefinition } from './types'
+import { DEFAULT_STATUS_VISUALS, DEFAULT_WORKSPACE_STATUSES } from './workspace-status-defaults'
+import {
+  isKnownBadPRReorderedDefaultStatusPayload,
+  isLegacyDefaultWorkflowStatusPayload
+} from './workspace-status-default-migration'
+
+export { DEFAULT_WORKSPACE_STATUSES } from './workspace-status-defaults'
 
 const WORKSPACE_STATUS_GROUP_PREFIX = 'workspace-status:'
 const MAX_STATUS_LABEL_LENGTH = 32
 const MAX_WORKSPACE_STATUSES = 12
+type WorkspaceStatusNormalizationOptions = {
+  migrateDefaultWorkflowStatuses?: boolean
+  migrateLegacyDefaultStatusVisuals?: boolean
+}
 
 export const DEFAULT_WORKSPACE_STATUS_ID: WorkspaceStatus = 'in-progress'
 export const DEFAULT_WORKSPACE_STATUS_COLOR_ID = 'neutral'
 export const DEFAULT_WORKSPACE_STATUS_ICON_ID = 'circle-dot'
+export const WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT = 308
+export const WORKSPACE_BOARD_COLUMN_WIDTH_MIN = 220
+export const WORKSPACE_BOARD_COLUMN_WIDTH_MAX = 520
+export const WORKSPACE_BOARD_COLUMN_WIDTH_STEP = 20
 
 export const WORKSPACE_STATUS_COLOR_IDS = [
   'neutral',
@@ -16,12 +31,16 @@ export const WORKSPACE_STATUS_COLOR_IDS = [
   'amber',
   'emerald',
   'rose',
-  'zinc'
+  'zinc',
+  'conductor-done',
+  'conductor-review',
+  'conductor-progress'
 ] as const
 
 export const WORKSPACE_STATUS_ICON_IDS = [
   'circle',
   'circle-dot',
+  'circle-progress',
   'circle-dashed',
   'circle-ellipsis',
   'git-pull-request',
@@ -31,22 +50,11 @@ export const WORKSPACE_STATUS_ICON_IDS = [
   'circle-pause',
   'circle-play',
   'circle-check',
-  'ban'
+  'ban',
+  'conductor-done',
+  'conductor-review',
+  'conductor-progress'
 ] as const
-
-const DEFAULT_STATUS_VISUALS: Record<string, { color: string; icon: string }> = {
-  todo: { color: 'neutral', icon: 'circle' },
-  'in-progress': { color: 'blue', icon: 'circle-dot' },
-  'in-review': { color: 'violet', icon: 'git-pull-request' },
-  completed: { color: 'emerald', icon: 'circle-check' }
-}
-
-export const DEFAULT_WORKSPACE_STATUSES = [
-  { id: 'todo', label: 'Todo', color: 'neutral', icon: 'circle' },
-  { id: 'in-progress', label: 'In progress', color: 'blue', icon: 'circle-dot' },
-  { id: 'in-review', label: 'In review', color: 'violet', icon: 'git-pull-request' },
-  { id: 'completed', label: 'Completed', color: 'emerald', icon: 'circle-check' }
-] as const satisfies readonly WorkspaceStatusDefinition[]
 
 export function cloneDefaultWorkspaceStatuses(): WorkspaceStatusDefinition[] {
   return DEFAULT_WORKSPACE_STATUSES.map((status) => ({ ...status }))
@@ -80,7 +88,24 @@ function sanitizeWorkspaceStatusId(value: unknown, fallbackLabel: string): Works
   return trimmed.replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'status'
 }
 
-function sanitizeWorkspaceStatusColor(value: unknown, statusId: string, index: number): string {
+function sanitizeWorkspaceStatusColor(
+  value: unknown,
+  statusId: string,
+  label: string,
+  index: number,
+  options: WorkspaceStatusNormalizationOptions
+): string {
+  if (
+    options.migrateLegacyDefaultStatusVisuals === true &&
+    ((statusId === 'in-progress' && label === 'In progress' && value === 'blue') ||
+      (statusId === 'in-review' && label === 'In review' && value === 'violet') ||
+      (statusId === 'completed' &&
+        (label === 'Completed' || label === 'Done') &&
+        value === 'emerald')) &&
+    DEFAULT_STATUS_VISUALS[statusId]
+  ) {
+    return DEFAULT_STATUS_VISUALS[statusId]?.color ?? DEFAULT_WORKSPACE_STATUS_COLOR_ID
+  }
   if (typeof value === 'string' && WORKSPACE_STATUS_COLOR_IDS.some((id) => id === value)) {
     return value
   }
@@ -91,7 +116,25 @@ function sanitizeWorkspaceStatusColor(value: unknown, statusId: string, index: n
   return WORKSPACE_STATUS_COLOR_IDS[index % WORKSPACE_STATUS_COLOR_IDS.length]
 }
 
-function sanitizeWorkspaceStatusIcon(value: unknown, statusId: string): string {
+function sanitizeWorkspaceStatusIcon(
+  value: unknown,
+  statusId: string,
+  label: string,
+  options: WorkspaceStatusNormalizationOptions
+): string {
+  if (
+    options.migrateLegacyDefaultStatusVisuals === true &&
+    ((statusId === 'in-progress' &&
+      label === 'In progress' &&
+      (value === 'circle-dot' || value === 'circle-progress')) ||
+      (statusId === 'in-review' && label === 'In review' && value === 'git-pull-request') ||
+      (statusId === 'completed' &&
+        (label === 'Completed' || label === 'Done') &&
+        value === 'circle-check')) &&
+    DEFAULT_STATUS_VISUALS[statusId]
+  ) {
+    return DEFAULT_STATUS_VISUALS[statusId]?.icon ?? DEFAULT_WORKSPACE_STATUS_ICON_ID
+  }
   if (typeof value === 'string' && WORKSPACE_STATUS_ICON_IDS.some((id) => id === value)) {
     return value
   }
@@ -116,7 +159,10 @@ export function makeWorkspaceStatusId(
   return `status-${Date.now().toString(36)}`
 }
 
-export function normalizeWorkspaceStatuses(value: unknown): WorkspaceStatusDefinition[] {
+function normalizeWorkspaceStatusesInternal(
+  value: unknown,
+  options: WorkspaceStatusNormalizationOptions
+): WorkspaceStatusDefinition[] {
   if (!Array.isArray(value)) {
     return cloneDefaultWorkspaceStatuses()
   }
@@ -138,12 +184,48 @@ export function normalizeWorkspaceStatuses(value: unknown): WorkspaceStatusDefin
     statuses.push({
       id,
       label,
-      color: sanitizeWorkspaceStatusColor(raw.color, id, statuses.length),
-      icon: sanitizeWorkspaceStatusIcon(raw.icon, id)
+      color: sanitizeWorkspaceStatusColor(raw.color, id, label, statuses.length, options),
+      icon: sanitizeWorkspaceStatusIcon(raw.icon, id, label, options)
     })
   }
 
-  return statuses.length > 0 ? statuses : cloneDefaultWorkspaceStatuses()
+  if (statuses.length === 0) {
+    return cloneDefaultWorkspaceStatuses()
+  }
+
+  return statuses
+}
+
+export function normalizeWorkspaceStatuses(value: unknown): WorkspaceStatusDefinition[] {
+  return normalizeWorkspaceStatusesInternal(value, {})
+}
+
+export function normalizePersistedWorkspaceStatuses(
+  value: unknown,
+  options: {
+    migrateDefaultWorkflowStatuses?: boolean
+    repairReorderedDefaultStatuses?: boolean
+    migrateLegacyDefaultStatusVisuals?: boolean
+  } = {}
+): WorkspaceStatusDefinition[] {
+  if (
+    options.migrateDefaultWorkflowStatuses === true &&
+    isLegacyDefaultWorkflowStatusPayload(value)
+  ) {
+    return cloneDefaultWorkspaceStatuses()
+  }
+  // Why: this PR briefly wrote the default columns in reverse workflow order.
+  // The repair is one-shot and checks the raw payload, because normalized
+  // IDs/labels are indistinguishable from a user-authored column reorder.
+  if (
+    options.repairReorderedDefaultStatuses === true &&
+    isKnownBadPRReorderedDefaultStatusPayload(value)
+  ) {
+    return cloneDefaultWorkspaceStatuses()
+  }
+  return normalizeWorkspaceStatusesInternal(value, {
+    migrateLegacyDefaultStatusVisuals: options.migrateLegacyDefaultStatusVisuals
+  })
 }
 
 export function clampWorkspaceBoardOpacity(value: unknown): number {
@@ -155,6 +237,16 @@ export function clampWorkspaceBoardOpacity(value: unknown): number {
 
 export function normalizeWorkspaceBoardCompact(value: unknown): boolean {
   return value === true
+}
+
+export function clampWorkspaceBoardColumnWidth(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT
+  }
+  return Math.min(
+    WORKSPACE_BOARD_COLUMN_WIDTH_MAX,
+    Math.max(WORKSPACE_BOARD_COLUMN_WIDTH_MIN, Math.round(value))
+  )
 }
 
 export function isWorkspaceStatusId(

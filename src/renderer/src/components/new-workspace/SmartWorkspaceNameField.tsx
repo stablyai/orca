@@ -74,6 +74,8 @@ type SmartWorkspaceNameFieldProps = {
   onClearSelectedSource: () => void
   inputRef?: React.RefObject<HTMLInputElement | null>
   onPlainEnter?: () => void
+  disabled?: boolean
+  disabledPlaceholder?: string
 }
 
 export type SmartWorkspaceNameSelection = {
@@ -136,7 +138,9 @@ export default function SmartWorkspaceNameField({
   selectedSource,
   onClearSelectedSource,
   inputRef,
-  onPlainEnter
+  onPlainEnter,
+  disabled = false,
+  disabledPlaceholder
 }: SmartWorkspaceNameFieldProps): React.JSX.Element {
   const {
     addRepo,
@@ -196,6 +200,9 @@ export default function SmartWorkspaceNameField({
   )
 
   useEffect(() => {
+    if (disabled) {
+      return
+    }
     // Why: the composer can be opened before any other Linear-aware surface
     // (TaskPage, IntegrationsPane) has had a chance to refresh status, leaving
     // `linearStatus.connected=false` even when the user is actually connected.
@@ -203,7 +210,24 @@ export default function SmartWorkspaceNameField({
     if (!linearStatusChecked) {
       void checkLinearConnection()
     }
-  }, [checkLinearConnection, linearStatusChecked])
+  }, [checkLinearConnection, disabled, linearStatusChecked])
+
+  useEffect(() => {
+    if (!disabled) {
+      return
+    }
+    setOpen(false)
+    setGithubItems([])
+    setGitlabItems([])
+    setBranches([])
+    setLinearIssues([])
+    setGithubLoading(false)
+    setGitlabLoading(false)
+    setBranchesLoading(false)
+    setLinearLoading(false)
+    setCommandValue('')
+    setCrossRepoPrompt(null)
+  }, [disabled])
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(value), SEARCH_DEBOUNCE_MS)
@@ -226,7 +250,7 @@ export default function SmartWorkspaceNameField({
   const shouldQueryLinear = mode === 'smart' || mode === 'linear'
 
   useEffect(() => {
-    if (!shouldQueryGithub || !selectedRepo?.path) {
+    if (disabled || !shouldQueryGithub || !selectedRepo?.path) {
       setGithubItems([])
       setGithubLoading(false)
       return
@@ -344,6 +368,7 @@ export default function SmartWorkspaceNameField({
     }
   }, [
     debouncedQuery,
+    disabled,
     fetchWorkItems,
     getCachedWorkItems,
     normalizedGhQuery,
@@ -354,7 +379,7 @@ export default function SmartWorkspaceNameField({
   ])
 
   useEffect(() => {
-    if (!shouldQueryBranches || !selectedRepo) {
+    if (disabled || !shouldQueryBranches || !selectedRepo) {
       setBranches([])
       setBranchesLoading(false)
       return
@@ -385,10 +410,10 @@ export default function SmartWorkspaceNameField({
     return () => {
       stale = true
     }
-  }, [debouncedQuery, selectedRepo, shouldQueryBranches])
+  }, [debouncedQuery, disabled, selectedRepo, shouldQueryBranches])
 
   useEffect(() => {
-    if (!shouldQueryLinear || !linearStatus.connected) {
+    if (disabled || !shouldQueryLinear || !linearStatus.connected) {
       setLinearIssues([])
       setLinearLoading(false)
       return
@@ -421,7 +446,7 @@ export default function SmartWorkspaceNameField({
     // Why: list/search actions are stable store methods; depending on them
     // would refetch on unrelated store writes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedQuery, linearStatus.connected, shouldQueryLinear])
+  }, [debouncedQuery, disabled, linearStatus.connected, shouldQueryLinear])
 
   // Why: GitLab paste-URL flow. Watches the debounced query for a GitLab
   // issue/MR URL (parseGitLabIssueOrMRLink already filters non-GitLab URLs
@@ -433,6 +458,7 @@ export default function SmartWorkspaceNameField({
   useEffect(() => {
     if (
       !shouldQueryGitlab ||
+      disabled ||
       !onGitLabItemSelect ||
       !selectedRepo?.path ||
       selectedRepo.connectionId
@@ -487,7 +513,7 @@ export default function SmartWorkspaceNameField({
     return () => {
       stale = true
     }
-  }, [mode, onGitLabItemSelect, parsedGlLink, selectedRepo, shouldQueryGitlab])
+  }, [disabled, mode, onGitLabItemSelect, parsedGlLink, selectedRepo, shouldQueryGitlab])
 
   // Why: when the user is on the GitLab tab (or in 'smart' mix) and
   // hasn't pasted a URL, surface the project's MRs filtered by the
@@ -495,7 +521,7 @@ export default function SmartWorkspaceNameField({
   // MR list view. Smart mode includes GitLab MRs alongside GitHub
   // items so the unified picker actually surfaces both providers.
   useEffect(() => {
-    if ((mode !== 'gitlab' && mode !== 'smart') || !onGitLabItemSelect) {
+    if (disabled || (mode !== 'gitlab' && mode !== 'smart') || !onGitLabItemSelect) {
       return
     }
     if (!selectedRepo?.path || selectedRepo.connectionId) {
@@ -542,7 +568,7 @@ export default function SmartWorkspaceNameField({
     return () => {
       stale = true
     }
-  }, [mode, mrStateFilter, onGitLabItemSelect, parsedGlLink, selectedRepo])
+  }, [disabled, mode, mrStateFilter, onGitLabItemSelect, parsedGlLink, selectedRepo])
 
   const rows = useMemo<RowEntry[]>(() => {
     const trimmed = value.trim()
@@ -760,8 +786,9 @@ export default function SmartWorkspaceNameField({
     setCrossRepoPrompt(null)
   }, [debouncedQuery])
 
-  const placeholder =
-    mode === 'smart'
+  const placeholder = disabled
+    ? (disabledPlaceholder ?? 'Unavailable')
+    : mode === 'smart'
       ? 'Type a name, #1234, branch, GitHub or Linear URL'
       : mode === 'github'
         ? 'Search GitHub PRs and issues'
@@ -777,7 +804,7 @@ export default function SmartWorkspaceNameField({
         value={mode}
         onValueChange={(next) => {
           setMode(next as SmartNameMode)
-          setOpen(next !== 'text')
+          setOpen(!disabled && next !== 'text')
           requestAnimationFrame(() => localInputRef.current?.focus({ preventScroll: true }))
         }}
         className="gap-0"
@@ -827,7 +854,10 @@ export default function SmartWorkspaceNameField({
         </TabsList>
       </Tabs>
 
-      <Popover open={open && mode !== 'text'} onOpenChange={setOpen}>
+      <Popover
+        open={!disabled && open && mode !== 'text'}
+        onOpenChange={(next) => setOpen(disabled ? false : next)}
+      >
         <Command
           value={commandValue}
           onValueChange={setCommandValue}
@@ -896,12 +926,12 @@ export default function SmartWorkspaceNameField({
                     value={value}
                     onChange={(event) => {
                       onValueChange(event.target.value)
-                      if (mode !== 'text') {
+                      if (!disabled && mode !== 'text') {
                         setOpen(true)
                       }
                     }}
                     onFocus={() => {
-                      if (mode !== 'text') {
+                      if (!disabled && mode !== 'text') {
                         setOpen(true)
                       }
                     }}
@@ -943,6 +973,7 @@ export default function SmartWorkspaceNameField({
                       }
                     }}
                     placeholder={placeholder}
+                    disabled={disabled}
                     className="h-9 pl-8 text-sm"
                   />
                 </>

@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import { Pin } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Badge } from '@/components/ui/badge'
@@ -18,16 +18,29 @@ type WorkspaceKanbanCardProps = {
   worktree: Worktree
   repo: Repo | undefined
   isActive: boolean
+  isSelected: boolean
+  selectedWorktrees?: readonly Worktree[]
   compact: boolean
+  nativeDragEnabled?: boolean
   onActivate: () => void
+  onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
+  onContextMenuSelect: (
+    event: React.MouseEvent<HTMLElement>,
+    worktree: Worktree
+  ) => readonly Worktree[]
 }
 
-export default function WorkspaceKanbanCard({
+function WorkspaceKanbanCard({
   worktree,
   repo,
   isActive,
+  isSelected,
+  selectedWorktrees,
   compact,
-  onActivate
+  nativeDragEnabled = true,
+  onActivate,
+  onSelectionGesture,
+  onContextMenuSelect
 }: WorkspaceKanbanCardProps): React.JSX.Element {
   if (compact) {
     return (
@@ -35,36 +48,75 @@ export default function WorkspaceKanbanCard({
         worktree={worktree}
         repo={repo}
         isActive={isActive}
+        isSelected={isSelected}
+        selectedWorktrees={selectedWorktrees}
         onActivate={onActivate}
+        onSelectionGesture={onSelectionGesture}
+        onContextMenuSelect={onContextMenuSelect}
+        nativeDragEnabled={nativeDragEnabled}
       />
     )
   }
 
+  const contextWorktrees =
+    isSelected && selectedWorktrees && selectedWorktrees.length > 0 ? selectedWorktrees : undefined
+
   return (
-    <div className="relative" data-workspace-board-card-mode="detailed">
+    <div
+      className="relative rounded-lg data-[workspace-board-card-area-selected=true]:ring-1 data-[workspace-board-card-area-selected=true]:ring-sidebar-ring/40"
+      data-workspace-board-card-id={worktree.id}
+      data-workspace-board-card-mode="detailed"
+      data-workspace-board-card-selected={isSelected ? 'true' : 'false'}
+      data-workspace-board-pointer-draggable={nativeDragEnabled ? undefined : 'true'}
+    >
       {worktree.isPinned ? (
         <Badge
           variant="outline"
-          className="pointer-events-none absolute right-2 top-1.5 z-10 h-4 gap-1 rounded-full bg-background/90 px-1.5 text-[9px] leading-none text-muted-foreground"
+          className="pointer-events-none absolute right-2 top-1.5 z-10 flex size-4 items-center justify-center rounded-full bg-background/90 p-0 text-muted-foreground"
+          aria-label="Pinned"
         >
           <Pin className="size-2.5" />
-          Pinned
         </Badge>
       ) : null}
-      <WorktreeCard worktree={worktree} repo={repo} isActive={isActive} onActivate={onActivate} />
+      <WorktreeCard
+        worktree={worktree}
+        repo={repo}
+        isActive={isActive}
+        isMultiSelected={isSelected}
+        selectedWorktrees={contextWorktrees}
+        hideCiCheck={worktree.isPinned}
+        nativeDragEnabled={nativeDragEnabled}
+        onActivate={onActivate}
+        onSelectionGesture={onSelectionGesture}
+        onContextMenuSelect={(event) => onContextMenuSelect(event, worktree)}
+      />
     </div>
   )
 }
+
+export default React.memo(WorkspaceKanbanCard)
 
 function WorkspaceKanbanCompactCard({
   worktree,
   repo,
   isActive,
-  onActivate
+  isSelected,
+  selectedWorktrees,
+  nativeDragEnabled = true,
+  onActivate,
+  onSelectionGesture,
+  onContextMenuSelect
 }: Omit<WorkspaceKanbanCardProps, 'compact'>): React.JSX.Element {
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const isDeleting = deleteState?.isDeleting ?? false
   const status = useWorktreeActivityStatus(worktree.id)
+  const contextWorktrees = useMemo(
+    () =>
+      isSelected && selectedWorktrees && selectedWorktrees.length > 0
+        ? selectedWorktrees
+        : [worktree],
+    [isSelected, selectedWorktrees, worktree]
+  )
 
   const handleActivate = useCallback(() => {
     if (isDeleting) {
@@ -74,34 +126,65 @@ function WorkspaceKanbanCompactCard({
     onActivate()
   }, [isDeleting, onActivate, worktree.id])
 
+  const handleClick = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      const selectionOnly = onSelectionGesture(event, worktree.id)
+      if (selectionOnly) {
+        event.preventDefault()
+        event.stopPropagation()
+        return
+      }
+      handleActivate()
+    },
+    [handleActivate, onSelectionGesture, worktree.id]
+  )
+
   const handleDragStart = useCallback(
     (event: React.DragEvent<HTMLButtonElement>) => {
       if (isDeleting) {
         event.preventDefault()
         return
       }
-      writeWorkspaceDragData(event.dataTransfer, worktree.id)
+      const dragIds =
+        isSelected && contextWorktrees.length > 1
+          ? contextWorktrees.map((item) => item.id)
+          : worktree.id
+      writeWorkspaceDragData(event.dataTransfer, dragIds)
     },
-    [isDeleting, worktree.id]
+    [contextWorktrees, isDeleting, isSelected, worktree.id]
   )
 
   return (
-    <WorktreeContextMenu worktree={worktree}>
+    <WorktreeContextMenu
+      worktree={worktree}
+      selectedWorktrees={contextWorktrees}
+      onContextMenuSelect={(event) => onContextMenuSelect(event, worktree)}
+    >
       <HoverCard openDelay={450} closeDelay={100}>
         <HoverCardTrigger asChild>
           <button
             type="button"
-            draggable={!isDeleting}
-            onDragStart={handleDragStart}
-            onClick={handleActivate}
+            draggable={nativeDragEnabled && !isDeleting}
+            onDragStart={nativeDragEnabled ? handleDragStart : undefined}
+            onClick={handleClick}
             className={cn(
               'flex h-8 w-full min-w-0 cursor-pointer items-center rounded-md border px-2 text-left text-[12px] outline-none transition-colors',
               isActive
                 ? 'border-sidebar-ring bg-sidebar-accent text-sidebar-accent-foreground'
-                : 'border-transparent text-foreground hover:bg-sidebar-accent/60 focus-visible:border-sidebar-ring',
+                : isSelected
+                  ? 'border-sidebar-ring/50 bg-sidebar-accent/75 text-foreground ring-1 ring-sidebar-ring/30'
+                  : 'border-transparent text-foreground hover:bg-sidebar-accent/60 focus-visible:border-sidebar-ring',
+              isActive && isSelected && 'ring-1 ring-sidebar-ring/35',
+              'data-[workspace-board-card-area-selected=true]:border-sidebar-ring/50 data-[workspace-board-card-area-selected=true]:bg-sidebar-accent/75 data-[workspace-board-card-area-selected=true]:ring-1 data-[workspace-board-card-area-selected=true]:ring-sidebar-ring/30',
+              !nativeDragEnabled && !isDeleting && '!cursor-grab',
               isDeleting && 'cursor-not-allowed opacity-50 grayscale'
             )}
             data-workspace-board-card-mode="compact"
+            data-workspace-board-card-id={worktree.id}
+            data-workspace-board-card-selected={isSelected ? 'true' : 'false'}
+            data-workspace-board-pointer-draggable={
+              nativeDragEnabled || isDeleting ? undefined : 'true'
+            }
             aria-label={`Open ${worktree.displayName}`}
             aria-busy={isDeleting}
           >

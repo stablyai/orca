@@ -1,16 +1,14 @@
-import type React from 'react'
+import React from 'react'
 import {
   Ban,
   Circle,
   CircleAlert,
-  CircleCheckBig,
   CircleDashed,
   CircleDot,
   CircleEllipsis,
   CirclePause,
   CirclePlay,
   Flag,
-  GitPullRequest,
   Timer
 } from 'lucide-react'
 import type { WorkspaceStatus, WorkspaceStatusDefinition } from '../../../../shared/types'
@@ -26,6 +24,11 @@ import {
   getWorkspaceStatusGroupKey,
   isWorkspaceStatusId
 } from '../../../../shared/workspace-statuses'
+import {
+  ConductorDoneIcon,
+  ConductorProgressIcon,
+  ConductorReviewIcon
+} from './workspace-status-icons'
 
 export {
   DEFAULT_WORKSPACE_STATUS_COLOR_ID,
@@ -41,6 +44,7 @@ export {
 }
 
 export const WORKSPACE_STATUS_DRAG_TYPE = 'application/x-orca-worktree-id'
+export const WORKSPACE_STATUS_DRAG_IDS_TYPE = 'application/x-orca-worktree-ids'
 
 type WorkspaceStatusColorOption = {
   id: string
@@ -121,22 +125,50 @@ export const WORKSPACE_STATUS_COLOR_OPTIONS: WorkspaceStatusColorOption[] = [
     swatch: 'bg-zinc-500',
     border: 'border-t-zinc-500/70',
     laneTint: 'bg-zinc-500/[0.04]'
+  },
+  {
+    id: 'conductor-done',
+    label: 'Conductor Done',
+    tone: 'text-[#c7a594]',
+    swatch: 'bg-[#c7a594]',
+    border: 'border-t-[#c7a594]/70',
+    laneTint: 'bg-[#c7a594]/[0.04]'
+  },
+  {
+    id: 'conductor-review',
+    label: 'Conductor Review',
+    tone: 'text-[#16a34a]',
+    swatch: 'bg-[#16a34a]',
+    border: 'border-t-[#16a34a]/70',
+    laneTint: 'bg-[#16a34a]/[0.04]'
+  },
+  {
+    id: 'conductor-progress',
+    label: 'Conductor Progress',
+    tone: 'text-[#d4a300]',
+    swatch: 'bg-[#d4a300]',
+    border: 'border-t-[#d4a300]/70',
+    laneTint: 'bg-[#d4a300]/[0.04]'
   }
 ]
 
 export const WORKSPACE_STATUS_ICON_OPTIONS: WorkspaceStatusIconOption[] = [
   { id: 'circle', label: 'Circle', icon: Circle },
   { id: 'circle-dot', label: 'Dot', icon: CircleDot },
+  { id: 'circle-progress', label: 'Progress', icon: ConductorProgressIcon },
   { id: 'circle-dashed', label: 'Dashed', icon: CircleDashed },
   { id: 'circle-ellipsis', label: 'Waiting', icon: CircleEllipsis },
-  { id: 'git-pull-request', label: 'Review', icon: GitPullRequest },
+  { id: 'git-pull-request', label: 'Review', icon: ConductorReviewIcon },
   { id: 'timer', label: 'Timer', icon: Timer },
   { id: 'flag', label: 'Flag', icon: Flag },
   { id: 'circle-alert', label: 'Alert', icon: CircleAlert },
   { id: 'circle-pause', label: 'Paused', icon: CirclePause },
   { id: 'circle-play', label: 'Play', icon: CirclePlay },
-  { id: 'circle-check', label: 'Done', icon: CircleCheckBig },
-  { id: 'ban', label: 'Blocked', icon: Ban }
+  { id: 'circle-check', label: 'Done', icon: ConductorDoneIcon },
+  { id: 'ban', label: 'Blocked', icon: Ban },
+  { id: 'conductor-done', label: 'Done', icon: ConductorDoneIcon },
+  { id: 'conductor-review', label: 'In review', icon: ConductorReviewIcon },
+  { id: 'conductor-progress', label: 'In progress', icon: ConductorProgressIcon }
 ]
 
 const FALLBACK_COLOR_OPTION: WorkspaceStatusColorOption = WORKSPACE_STATUS_COLOR_OPTIONS[0] ?? {
@@ -166,16 +198,16 @@ const DEFAULT_STATUS_VISUALS: Record<
     icon: 'circle'
   },
   'in-progress': {
-    color: 'blue',
-    icon: 'circle-dot'
+    color: 'conductor-progress',
+    icon: 'conductor-progress'
   },
   'in-review': {
-    color: 'violet',
-    icon: 'git-pull-request'
+    color: 'conductor-review',
+    icon: 'conductor-review'
   },
   completed: {
-    color: 'emerald',
-    icon: 'circle-check'
+    color: 'conductor-done',
+    icon: 'conductor-done'
   }
 }
 
@@ -212,10 +244,21 @@ export function getWorkspaceStatusVisualMeta(status: WorkspaceStatus | Workspace
   }
 }
 
-export function writeWorkspaceDragData(dataTransfer: DataTransfer, worktreeId: string): void {
+export function writeWorkspaceDragData(
+  dataTransfer: DataTransfer,
+  worktreeIdOrIds: string | readonly string[]
+): void {
+  const worktreeIds = Array.isArray(worktreeIdOrIds) ? worktreeIdOrIds : [worktreeIdOrIds]
+  const [firstWorktreeId] = worktreeIds
+  if (!firstWorktreeId) {
+    return
+  }
   dataTransfer.effectAllowed = 'move'
-  dataTransfer.setData(WORKSPACE_STATUS_DRAG_TYPE, worktreeId)
-  dataTransfer.setData('text/plain', worktreeId)
+  // Why: keep the original single-id payload for older drop targets while
+  // board-to-board drags can move the whole selected batch.
+  dataTransfer.setData(WORKSPACE_STATUS_DRAG_TYPE, firstWorktreeId)
+  dataTransfer.setData(WORKSPACE_STATUS_DRAG_IDS_TYPE, JSON.stringify(worktreeIds))
+  dataTransfer.setData('text/plain', firstWorktreeId)
 }
 
 export function readWorkspaceDragData(dataTransfer: DataTransfer): string | null {
@@ -226,7 +269,27 @@ export function readWorkspaceDragData(dataTransfer: DataTransfer): string | null
   return dataTransfer.getData('text/plain') || null
 }
 
+export function readWorkspaceDragDataIds(dataTransfer: DataTransfer): string[] {
+  const rawIds = dataTransfer.getData(WORKSPACE_STATUS_DRAG_IDS_TYPE)
+  if (rawIds) {
+    try {
+      const parsed: unknown = JSON.parse(rawIds)
+      if (Array.isArray(parsed)) {
+        return parsed.filter((id): id is string => typeof id === 'string' && id.length > 0)
+      }
+    } catch {
+      // Fall back to the legacy single-card payload below.
+    }
+  }
+  const singleId = readWorkspaceDragData(dataTransfer)
+  return singleId ? [singleId] : []
+}
+
 export function hasWorkspaceDragData(dataTransfer: DataTransfer): boolean {
   const types = Array.from(dataTransfer.types)
-  return types.includes(WORKSPACE_STATUS_DRAG_TYPE) || types.includes('text/plain')
+  return (
+    types.includes(WORKSPACE_STATUS_DRAG_IDS_TYPE) ||
+    types.includes(WORKSPACE_STATUS_DRAG_TYPE) ||
+    types.includes('text/plain')
+  )
 }

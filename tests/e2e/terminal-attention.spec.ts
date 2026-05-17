@@ -12,6 +12,7 @@ import {
   waitForActiveWorktree,
   waitForSessionReady
 } from './helpers/store'
+import { getRendererTitleLog, installRendererTitleLog } from './helpers/terminal-title-log'
 import { POST_REPLAY_MODE_RESET } from '../../src/renderer/src/components/terminal-pane/layout-serialization'
 
 test.describe.configure({ mode: 'serial' })
@@ -177,6 +178,7 @@ test.describe('Terminal attention', () => {
     }
     const activePtyId = await waitForActivePanePtyId(orcaPage)
     await proveShellReadyWithSingleWrite(orcaPage, activePtyId)
+    await installRendererTitleLog(orcaPage)
 
     // Emit the BEL, then a deterministic OSC title marker. When the marker
     // title lands, all prior PTY bytes (including the BEL) have been
@@ -189,22 +191,10 @@ test.describe('Terminal attention', () => {
     await execInTerminal(orcaPage, activePtyId, `printf '\\033]0;${MARKER_TITLE}\\007'`)
 
     await expect
-      .poll(
-        async () =>
-          orcaPage.evaluate((want) => {
-            const store = window.__store
-            if (!store) {
-              return false
-            }
-            return Object.values(store.getState().tabsByWorktree ?? {})
-              .flat()
-              .some((tab) => tab.title === want)
-          }, MARKER_TITLE),
-        {
-          timeout: 10_000,
-          message: 'Marker title did not land — byte stream may not have been flushed'
-        }
-      )
+      .poll(async () => (await getRendererTitleLog(orcaPage)).includes(MARKER_TITLE), {
+        timeout: 10_000,
+        message: 'Marker title did not land — byte stream may not have been flushed'
+      })
       .toBe(true)
 
     // The focused tab is now unread — the bell persists until the user

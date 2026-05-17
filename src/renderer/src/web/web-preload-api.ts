@@ -61,6 +61,16 @@ export function installWebPreloadApi(): void {
 function createWebPreloadApi(): Partial<PreloadApi> {
   return {
     app: {
+      getIdentity: () =>
+        Promise.resolve({
+          name: 'Orca',
+          isDev: false,
+          devLabel: null,
+          devBranch: null,
+          devWorktreeName: null,
+          devRepoRoot: null,
+          dockBadgeLabel: null
+        }),
       getFeatureWallAssetBaseUrl: () => Promise.resolve('/'),
       relaunch: () => Promise.resolve(window.location.reload()),
       getKeyboardInputSourceId: () => Promise.resolve(null),
@@ -84,6 +94,12 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       onChanged: () => noopUnsubscribe
     } satisfies Partial<WebSettingsApi> as unknown as WebSettingsApi,
     ui: createWebUiApi(),
+    crashReports: {
+      getLatestPending: () => Promise.resolve(null),
+      dismiss: () => Promise.resolve(null),
+      copyLatestDiagnostics: () => Promise.resolve({ ok: false, error: 'Unavailable on web.' }),
+      submit: () => Promise.resolve({ ok: false, status: null, error: 'Unavailable on web.' })
+    },
     session: {
       get: () => Promise.resolve(readJson(SESSION_STORAGE_KEY, getDefaultWorkspaceSession())),
       set: async (session) => {
@@ -155,6 +171,9 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     computerUsePermissions: createComputerUsePermissionsApi(),
     updater: createUpdaterApi(),
     shell: createShellApi(),
+    skills: {
+      discover: () => Promise.resolve({ skills: [], sources: [], scannedAt: Date.now() })
+    },
     pty: createPtyApi(),
     ssh: createSshApi(),
     wsl: { isAvailable: () => Promise.resolve(false) },
@@ -461,9 +480,13 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
 
 function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
   return {
-    status: async ({ worktreePath }) => {
+    status: async ({ worktreePath, includeIgnored }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      return callRuntimeResult('git.status', { worktree: worktree.id })
+      return callRuntimeResult('git.status', { worktree: worktree.id, includeIgnored })
+    },
+    history: async ({ worktreePath, limit, baseRef }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.history', { worktree: worktree.id, limit, baseRef })
     },
     conflictOperation: async ({ worktreePath }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
@@ -481,6 +504,10 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     branchCompare: async ({ worktreePath, baseRef }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.branchCompare', { worktree: worktree.id, baseRef })
+    },
+    commitCompare: async ({ worktreePath, commitId }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.commitCompare', { worktree: worktree.id, commitId })
     },
     upstreamStatus: async ({ worktreePath }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
@@ -507,6 +534,16 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         oldPath
       })
     },
+    commitDiff: async ({ worktreePath, filePath, commitOid, parentOid, oldPath }) => {
+      const file = await resolveRuntimeFilePath(filePath, worktreePath)
+      return callRuntimeResult('git.commitDiff', {
+        worktree: file.worktree.id,
+        filePath: file.relativePath,
+        commitOid,
+        parentOid,
+        oldPath
+      })
+    },
     commit: async ({ worktreePath, message }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.commit', { worktree: worktree.id, message })
@@ -516,6 +553,11 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       error: 'Commit message generation is unavailable in the web client.'
     }),
     cancelGenerateCommitMessage: () => Promise.resolve(),
+    generatePullRequestFields: async () => ({
+      success: false,
+      error: 'Pull request detail generation is unavailable in the web client.'
+    }),
+    cancelGeneratePullRequestFields: () => Promise.resolve(),
     stage: async ({ worktreePath, filePath }) => mutateGitPath('git.stage', worktreePath, filePath),
     bulkStage: async ({ worktreePath, filePaths }) =>
       mutateGitPaths('git.bulkStage', worktreePath, filePaths),
@@ -547,6 +589,7 @@ function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
     unregisterGuest: () => Promise.resolve(),
     openDevTools: () => Promise.resolve(false),
     setViewportOverride: () => Promise.resolve(false),
+    setAnnotationViewportBridge: () => Promise.resolve(false),
     onGuestLoadFailed: () => noopUnsubscribe,
     onPermissionDenied: () => noopUnsubscribe,
     onPopup: () => noopUnsubscribe,
@@ -617,6 +660,7 @@ function createGitHubApi(): NonNullable<Partial<PreloadApi>['gh']> {
     prChecks: direct('github.prChecks'),
     prComments: direct('github.prComments'),
     resolveReviewThread: direct('github.resolveReviewThread'),
+    setPRFileViewed: direct('github.setPRFileViewed'),
     updatePRTitle: direct('github.updatePRTitle'),
     mergePR: direct('github.mergePR'),
     updateIssue: direct('github.updateIssue'),
@@ -678,8 +722,12 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       writeJson(UI_STORAGE_KEY, next)
     },
     readClipboardText: () => navigator.clipboard?.readText?.() ?? Promise.resolve(''),
+    readSelectionClipboardText: () =>
+      Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     saveClipboardImageAsTempFile: () => Promise.resolve(null),
     writeClipboardText: (text) => navigator.clipboard?.writeText?.(text) ?? Promise.resolve(),
+    writeSelectionClipboardText: () =>
+      Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     writeClipboardImage: () => Promise.resolve(),
     getZoomLevel: () => zoomLevel,
     setZoomLevel: (level) => {
@@ -688,6 +736,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     isMaximized: () => Promise.resolve(false),
     onOpenSettings: () => noopUnsubscribe,
     onOpenFeatureTour: () => noopUnsubscribe,
+    onOpenCrashReport: () => noopUnsubscribe,
     onShowFeatureTourNudge: () => noopUnsubscribe,
     onToggleLeftSidebar: () => noopUnsubscribe,
     onToggleRightSidebar: () => noopUnsubscribe,
@@ -713,6 +762,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onSwitchTab: () => noopUnsubscribe,
     onSwitchTabAcrossAllTypes: () => noopUnsubscribe,
     onSwitchTerminalTab: () => noopUnsubscribe,
+    onCtrlTabKeyDown: () => noopUnsubscribe,
+    onCtrlTabKeyUp: () => noopUnsubscribe,
     onToggleStatusBar: () => noopUnsubscribe,
     onDictationKeyDown: () => noopUnsubscribe,
     onExportPdfRequested: () => noopUnsubscribe,
@@ -751,7 +802,21 @@ function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
     git: { installed: false },
     gh: { installed: false, authenticated: false },
     glab: { installed: false, authenticated: false },
-    bitbucket: { configured: false, authenticated: false, account: null }
+    bitbucket: { configured: false, authenticated: false, account: null },
+    azureDevOps: {
+      configured: false,
+      authenticated: false,
+      account: null,
+      baseUrl: null,
+      tokenConfigured: false
+    },
+    gitea: {
+      configured: false,
+      authenticated: false,
+      account: null,
+      baseUrl: null,
+      tokenConfigured: false
+    }
   }
   const fallbackRefreshAgents: RefreshAgentsResult = {
     agents: [],
@@ -809,7 +874,9 @@ function createCliApi(): NonNullable<Partial<PreloadApi>['cli']> {
 }
 
 function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
-  const status = (agent: 'claude' | 'codex' | 'gemini' | 'cursor' | 'droid' | 'grok' | 'copilot') =>
+  const status = (
+    agent: 'claude' | 'codex' | 'gemini' | 'cursor' | 'droid' | 'grok' | 'copilot' | 'hermes'
+  ) =>
     Promise.resolve({
       agent,
       state: 'not_installed',
@@ -824,7 +891,8 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
     cursorStatus: () => status('cursor'),
     droidStatus: () => status('droid'),
     grokStatus: () => status('grok'),
-    copilotStatus: () => status('copilot')
+    copilotStatus: () => status('copilot'),
+    hermesStatus: () => status('hermes')
   }
 }
 

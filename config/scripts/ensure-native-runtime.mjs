@@ -1,0 +1,249 @@
+#!/usr/bin/env node
+
+import { spawnSync } from 'node:child_process'
+import { createRequire } from 'node:module'
+import { release } from 'node:os'
+import { basename, dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const require = createRequire(import.meta.url)
+const scriptPath = fileURLToPath(import.meta.url)
+const projectDir = resolve(dirname(scriptPath), '../..')
+const runtime = readRuntimeArg()
+
+const NATIVE_MODULES = ['better-sqlite3', 'node-pty']
+const CHILD_CHECK_FLAG = '--check-only'
+
+if (process.argv.includes(CHILD_CHECK_FLAG)) {
+  const failures = collectNativeModuleFailures()
+  if (failures.length > 0) {
+    for (const failure of failures) {
+      console.error(`${failure.moduleName}: ${failure.message}`)
+    }
+    process.exit(1)
+  }
+  process.exit(0)
+}
+
+if (runtime === 'node') {
+  ensureNodeRuntime()
+} else if (runtime === 'electron') {
+  ensureElectronRuntime()
+} else {
+  console.error('Usage: node config/scripts/ensure-native-runtime.mjs --runtime=node|electron')
+  process.exit(2)
+}
+
+function readRuntimeArg() {
+  const inline = process.argv.find((arg) => arg.startsWith('--runtime='))
+  if (inline) {
+    return inline.slice('--runtime='.length)
+  }
+
+  const runtimeIndex = process.argv.indexOf('--runtime')
+  if (runtimeIndex >= 0) {
+    return process.argv[runtimeIndex + 1]
+  }
+
+  return null
+}
+
+function ensureNodeRuntime() {
+  const initial = runCurrentProcessCheck()
+  if (initial.ok) {
+    return
+  }
+
+  const failedModules = initial.failures.map((failure) => failure.moduleName)
+  console.warn(
+    `[native-runtime] ${formatRuntimeLabel('node')} cannot load native modules; rebuilding ${failedModules.join(', ')} for Node.`
+  )
+  printCheckError(initial)
+  runPnpm(['rebuild', ...failedModules])
+
+  const final = runCurrentProcessCheck()
+  if (!final.ok) {
+    console.error(
+      `[native-runtime] Native modules still do not load for ${formatRuntimeLabel('node')}.`
+    )
+    printCheckError(final)
+    process.exit(1)
+  }
+}
+
+function ensureElectronRuntime() {
+  const initial = runElectronCheck()
+  if (initial.ok) {
+    return
+  }
+
+  console.warn(
+    `[native-runtime] ${formatRuntimeLabel('electron')} cannot load native modules; rebuilding native deps for Electron.`
+  )
+  printCheckError(initial)
+  runNodeScript(['config/scripts/rebuild-native-deps.mjs'])
+
+  const final = runElectronCheck()
+  if (!final.ok) {
+    console.error(
+      `[native-runtime] Native modules still do not load for ${formatRuntimeLabel('electron')}.`
+    )
+    printCheckError(final)
+    process.exit(1)
+  }
+}
+
+function runCurrentProcessCheck() {
+  const failures = collectNativeModuleFailures()
+  if (failures.length === 0) {
+    return { ok: true, failures }
+  }
+  return { ok: false, failures }
+}
+
+function runElectronCheck() {
+  let electronExecutable
+  try {
+    electronExecutable = require('electron')
+  } catch (error) {
+    return { ok: false, error }
+  }
+
+  const result = spawnSync(electronExecutable, [scriptPath, CHILD_CHECK_FLAG], {
+    cwd: projectDir,
+    env: {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: '1'
+    },
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
+
+  return {
+    ok: result.status === 0,
+    status: result.status,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    error: result.error
+  }
+}
+
+function collectNativeModuleFailures() {
+  const failures = []
+  for (const moduleName of NATIVE_MODULES) {
+    try {
+      loadNativeModule(moduleName)
+    } catch (cause) {
+      failures.push({ moduleName, message: formatError(cause), cause })
+    }
+  }
+  return failures
+}
+
+function loadNativeModule(moduleName) {
+  if (moduleName === 'better-sqlite3') {
+    const Database = require(moduleName)
+    // Why: better-sqlite3 defers loading its .node binding until Database is
+    // constructed, so a plain require() misses Node ABI mismatches.
+    const db = new Database(':memory:')
+    db.close()
+    return
+  }
+
+  if (moduleName === 'node-pty') {
+    loadNodePtyNativeModule()
+    return
+  }
+
+  require(moduleName)
+}
+
+function loadNodePtyNativeModule() {
+  require('node-pty')
+
+  const { loadNativeModule } = require('node-pty/lib/utils')
+  const nativeName = getNodePtyNativeModuleName()
+  // Why: node-pty's Windows JS wrapper defers conpty.node/pty.node until a
+  // terminal is created, so require('node-pty') alone can miss ABI mismatches.
+  loadNativeModule(nativeName)
+}
+
+function getNodePtyNativeModuleName() {
+  if (process.platform !== 'win32') {
+    return 'pty'
+  }
+
+  return getWindowsBuildNumber() >= 18309 ? 'conpty' : 'pty'
+}
+
+function getWindowsBuildNumber() {
+  const match = /(\d+)\.(\d+)\.(\d+)/g.exec(release())
+  return match && match.length === 4 ? Number.parseInt(match[3], 10) : 0
+}
+
+function runPnpm(args) {
+  const command = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+  const result = spawnSync(command, args, {
+    cwd: projectDir,
+    stdio: 'inherit',
+    shell: false
+  })
+
+  if (result.error || result.status !== 0) {
+    console.error(`[native-runtime] ${command} ${args.join(' ')} failed.`)
+    if (result.error) {
+      console.error(formatError(result.error))
+    }
+    process.exit(result.status ?? 1)
+  }
+}
+
+function runNodeScript(args) {
+  const result = spawnSync(process.execPath, args, {
+    cwd: projectDir,
+    stdio: 'inherit'
+  })
+
+  if (result.error || result.status !== 0) {
+    console.error(`[native-runtime] ${basename(process.execPath)} ${args.join(' ')} failed.`)
+    if (result.error) {
+      console.error(formatError(result.error))
+    }
+    process.exit(result.status ?? 1)
+  }
+}
+
+function printCheckError(result) {
+  for (const failure of result.failures ?? []) {
+    console.warn(`[native-runtime] ${failure.moduleName}: ${failure.message}`)
+  }
+  if (result.error) {
+    console.warn(`[native-runtime] ${formatError(result.error)}`)
+  }
+  if (result.stderr?.trim()) {
+    console.warn(result.stderr.trim())
+  }
+  if (result.stdout?.trim()) {
+    console.warn(result.stdout.trim())
+  }
+  if (
+    result.status != null &&
+    !result.error &&
+    !result.stderr?.trim() &&
+    !result.stdout?.trim() &&
+    result.status !== 0
+  ) {
+    console.warn(`[native-runtime] Native check exited with status ${result.status}.`)
+  }
+}
+
+function formatError(error) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function formatRuntimeLabel(value) {
+  if (value === 'electron') {
+    return `Electron ${process.env.npm_package_devDependencies_electron ?? ''}`.trim()
+  }
+  return `Node ${process.versions.node}`
+}

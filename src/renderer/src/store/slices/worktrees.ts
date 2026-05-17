@@ -16,6 +16,7 @@ import {
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import { getHostedReviewCacheKey } from './hosted-review'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 function arraysShallowEqual(a: string[] | undefined, b: string[] | undefined): boolean {
@@ -421,7 +422,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     linkedPR,
     pushTarget,
     createdWithAgent,
-    linkedLinearIssue
+    linkedLinearIssue,
+    workspaceStatus
   ) => {
     const retryableConflictPatterns = [
       /already exists locally/i,
@@ -447,7 +449,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(linkedPR !== undefined ? { linkedPR } : {}),
             ...(pushTarget ? { pushTarget } : {}),
             ...(createdWithAgent ? { createdWithAgent } : {}),
-            ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {})
+            ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {}),
+            ...(workspaceStatus !== undefined ? { workspaceStatus } : {})
           }
           const target = getActiveRuntimeTarget(get().settings)
           const result =
@@ -467,7 +470,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                     ...(linkedPR !== undefined ? { linkedPR } : {}),
                     ...(pushTarget ? { pushTarget } : {}),
                     ...(createdWithAgent ? { createdWithAgent } : {}),
-                    ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {})
+                    ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {}),
+                    ...(workspaceStatus !== undefined ? { workspaceStatus } : {})
                   },
                   { timeoutMs: 10 * 60_000 }
                 )
@@ -530,10 +534,36 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const trustDecision = await ensureHooksConfirmed(get(), repoIdForTrust, 'archive')
       const skipArchive = trustDecision === 'skip'
 
-      // Why: setup-enabled worktrees now commonly have a live shell open as soon as
-      // they are created. We must tear those PTYs down before asking Git to remove
-      // the working tree or Windows and some shells can keep the directory in use
-      // and make delete look broken even though the git state itself is fine.
+      const target = getActiveRuntimeTarget(get().settings)
+      await (target.kind === 'local'
+        ? window.api.worktrees.remove({ worktreeId, force, skipArchive })
+        : callRuntimeRpc(
+            target,
+            'worktree.rm',
+            { worktree: worktreeId, force, runHooks: !skipArchive },
+            { timeoutMs: 60_000 }
+          ))
+
+      const worktreeDisplayName = get()
+        .allWorktrees()
+        .find((entry) => entry.id === worktreeId)
+        ?.displayName?.trim()
+      if (worktreeDisplayName) {
+        try {
+          await window.api.automations?.snapshotWorkspaceName?.({
+            workspaceId: worktreeId,
+            displayName: worktreeDisplayName
+          })
+        } catch (error) {
+          // Why: preserving automation history labels is best-effort; a stale
+          // preload/test harness must not block worktree removal cleanup.
+          console.warn('Failed to snapshot automation workspace name:', error)
+        }
+      }
+
+      // Why: backend delete paths now preflight and kill PTYs only after the
+      // worktree is cleanly removable. Renderer state follows the successful
+      // backend result so blocked dirty deletes keep their terminals intact.
       //
       // Why browsers first: `shutdownWorktreeTerminals` used to own the
       // `browserTabsByWorktree[worktreeId]` delete as a side effect, which would
@@ -544,15 +574,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // can intercept them.
       await get().shutdownWorktreeBrowsers(worktreeId)
       await get().shutdownWorktreeTerminals(worktreeId)
-      const target = getActiveRuntimeTarget(get().settings)
-      await (target.kind === 'local'
-        ? window.api.worktrees.remove({ worktreeId, force, skipArchive })
-        : callRuntimeRpc(
-            target,
-            'worktree.rm',
-            { worktree: worktreeId, force, runHooks: !skipArchive },
-            { timeoutMs: 60_000 }
-          ))
       const tabs = get().tabsByWorktree[worktreeId] ?? []
       const tabIds = new Set(tabs.map((t) => t.id))
 
@@ -623,6 +644,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         // request keys indefinitely in a long-lived renderer session.
         const nextGitStatusByWorktree = { ...s.gitStatusByWorktree }
         delete nextGitStatusByWorktree[worktreeId]
+        const nextGitIgnoredPathsByWorktree = { ...s.gitIgnoredPathsByWorktree }
+        delete nextGitIgnoredPathsByWorktree[worktreeId]
         const nextGitConflictOperationByWorktree = { ...s.gitConflictOperationByWorktree }
         delete nextGitConflictOperationByWorktree[worktreeId]
         const nextTrackedConflictPathsByWorktree = { ...s.trackedConflictPathsByWorktree }
@@ -716,6 +739,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           editorViewMode: nextEditorViewMode,
           expandedDirs: nextExpandedDirs,
           gitStatusByWorktree: nextGitStatusByWorktree,
+          gitIgnoredPathsByWorktree: nextGitIgnoredPathsByWorktree,
           gitConflictOperationByWorktree: nextGitConflictOperationByWorktree,
           trackedConflictPathsByWorktree: nextTrackedConflictPathsByWorktree,
           gitBranchChangesByWorktree: nextGitBranchChangesByWorktree,
@@ -762,6 +786,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   },
 
   updateWorktreeMeta: async (worktreeId, updates) => {
+    const existingWorktree = findWorktreeById(get().worktreesByRepo, worktreeId)
+    const shouldRefreshHostedReview =
+      updates.linkedPR === null && existingWorktree?.linkedPR !== null
+    const reviewRepo = shouldRefreshHostedReview
+      ? get().repos.find((repo) => repo.id === existingWorktree?.repoId)
+      : undefined
+    const reviewBranch = existingWorktree?.branch.replace(/^refs\/heads\//, '')
+
     // Why: editing a comment is meaningful interaction with the worktree.
     // Without refreshing lastActivityAt, the time-decay score has decayed
     // since the previous sort, so a re-sort causes the worktree to drop in
@@ -771,17 +803,79 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
     set((s) => {
       const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, enriched)
+      const cacheKey =
+        reviewRepo && reviewBranch
+          ? getHostedReviewCacheKey(reviewRepo.path, reviewBranch, s.settings, reviewRepo.id)
+          : null
+      const hostedReviewCache = s.hostedReviewCache ?? {}
+      if (nextWorktrees === s.worktreesByRepo && !cacheKey) {
+        return {}
+      }
+
+      const nextHostedReviewCache =
+        cacheKey && hostedReviewCache[cacheKey]
+          ? (() => {
+              const next = { ...hostedReviewCache }
+              delete next[cacheKey]
+              return next
+            })()
+          : hostedReviewCache
+
+      return {
+        ...(nextWorktrees !== s.worktreesByRepo
+          ? { worktreesByRepo: nextWorktrees, sortEpoch: s.sortEpoch + 1 }
+          : {}),
+        ...(nextHostedReviewCache !== hostedReviewCache
+          ? { hostedReviewCache: nextHostedReviewCache }
+          : {})
+      }
+    })
+
+    try {
+      await persistWorktreeMeta(get().settings, worktreeId, enriched)
+      if (reviewRepo && reviewBranch && typeof get().fetchHostedReviewForBranch === 'function') {
+        // Why: the old cache entry may have been populated solely by linkedPR.
+        // Force a no-linked refetch so an in-flight linked lookup cannot keep
+        // showing the manually removed PR.
+        void get().fetchHostedReviewForBranch(reviewRepo.path, reviewBranch, {
+          repoId: reviewRepo.id,
+          linkedGitHubPR: null,
+          linkedGitLabMR: existingWorktree?.linkedGitLabMR ?? null,
+          force: true
+        })
+      }
+    } catch (err) {
+      console.error('Failed to update worktree meta:', err)
+      void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+    }
+  },
+
+  updateWorktreesMeta: async (updatesByWorktreeId) => {
+    if (updatesByWorktreeId.size === 0) {
+      return
+    }
+
+    set((s) => {
+      let nextWorktrees = s.worktreesByRepo
+      for (const [worktreeId, updates] of updatesByWorktreeId) {
+        nextWorktrees = applyWorktreeUpdates(nextWorktrees, worktreeId, updates)
+      }
       return nextWorktrees === s.worktreesByRepo
         ? {}
         : { worktreesByRepo: nextWorktrees, sortEpoch: s.sortEpoch + 1 }
     })
 
-    try {
-      await persistWorktreeMeta(get().settings, worktreeId, enriched)
-    } catch (err) {
-      console.error('Failed to update worktree meta:', err)
-      void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
-    }
+    const settings = get().settings
+    await Promise.all(
+      Array.from(updatesByWorktreeId, async ([worktreeId, updates]) => {
+        try {
+          await persistWorktreeMeta(settings, worktreeId, updates)
+        } catch (err) {
+          console.error('Failed to update worktree meta:', err)
+          void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+        }
+      })
+    )
   },
 
   markWorktreeUnread: (worktreeId) => {
@@ -1288,6 +1382,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         activeGroupIdByWorktree: omitByWorktree(s.activeGroupIdByWorktree),
         // Git status caches
         gitStatusByWorktree: omitByWorktree(s.gitStatusByWorktree),
+        gitIgnoredPathsByWorktree: omitByWorktree(s.gitIgnoredPathsByWorktree),
         gitConflictOperationByWorktree: omitByWorktree(s.gitConflictOperationByWorktree),
         trackedConflictPathsByWorktree: omitByWorktree(s.trackedConflictPathsByWorktree),
         gitBranchChangesByWorktree: omitByWorktree(s.gitBranchChangesByWorktree),

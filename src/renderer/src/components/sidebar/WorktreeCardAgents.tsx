@@ -106,7 +106,10 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       activateAndRevealWorktree(worktreeId)
       const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
       if (tabs.some((t) => t.id === tabId)) {
-        activateTabAndFocusPane(tabId, parsed.leafId, { ackPaneKeyOnSuccess: paneKey })
+        activateTabAndFocusPane(tabId, parsed.leafId, {
+          ackPaneKeyOnSuccess: paneKey,
+          flashFocusedPane: true
+        })
       } else {
         dismissStaleAgentRowByKey(paneKey)
       }

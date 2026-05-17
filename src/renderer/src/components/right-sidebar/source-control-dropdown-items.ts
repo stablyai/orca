@@ -57,6 +57,7 @@ function formatSyncLabel(base: string, ahead: number, behind: number): string {
 export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry[] {
   const {
     stagedCount,
+    hasPartiallyStagedChanges,
     hasMessage,
     hasUnresolvedConflicts,
     isCommitting,
@@ -64,7 +65,8 @@ export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry
     upstreamStatus,
     prState,
     isPRStateLoading,
-    hostedReviewCreation
+    hostedReviewCreation,
+    branchCommitsAhead
   } = inputs
 
   const hasStaged = stagedCount > 0
@@ -79,6 +81,7 @@ export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry
   const hasUpstream = upstreamStatus?.hasUpstream ?? false
   const publishBlockedByMergedPR = !hasUpstream && prState === 'merged'
   const publishBlockedByPRLoading = !hasUpstream && !!isPRStateLoading
+  const publishBlockedByNoBranchCommits = !hasUpstream && branchCommitsAhead === 0
   const ahead = upstreamStatus?.ahead ?? 0
   const behind = upstreamStatus?.behind ?? 0
 
@@ -93,6 +96,9 @@ export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry
     }
     if (!hasStaged) {
       return 'Stage at least one file to commit'
+    }
+    if (hasPartiallyStagedChanges) {
+      return 'Stage all changes before committing partially staged files'
     }
     if (!hasMessage) {
       return 'Enter a commit message to commit'
@@ -225,22 +231,30 @@ export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry
 
   const publishItem: DropdownItem = {
     kind: 'publish',
-    label: publishBlockedByMergedPR || publishBlockedByPRLoading ? 'PR Status' : 'Publish Branch',
+    label:
+      publishBlockedByMergedPR || publishBlockedByPRLoading
+        ? 'PR Status'
+        : publishBlockedByNoBranchCommits
+          ? 'No Branch Changes'
+          : 'Publish Branch',
     title: upstreamLoading
       ? 'Checking branch status…'
       : publishBlockedByPRLoading
         ? 'Checking PR status…'
         : publishBlockedByMergedPR
           ? 'PR is already merged'
-          : hasUpstream
-            ? 'Branch is already published'
-            : 'Publish this branch to origin',
+          : publishBlockedByNoBranchCommits
+            ? 'Nothing to publish'
+            : hasUpstream
+              ? 'Branch is already published'
+              : 'Publish this branch to origin',
     disabled:
       globalBusy ||
       upstreamLoading ||
       hasUpstream ||
       publishBlockedByPRLoading ||
-      publishBlockedByMergedPR
+      publishBlockedByMergedPR ||
+      publishBlockedByNoBranchCommits
   }
 
   const createBlockedHint = (() => {

@@ -32,6 +32,14 @@ function forceRepaint(window: BrowserWindow): void {
   }, 32)
 }
 
+function isCtrlTabSwitchKey(input: Electron.Input): boolean {
+  return input.code === 'Tab' && input.control && !input.meta && !input.alt
+}
+
+function isControlKeyRelease(input: Electron.Input): boolean {
+  return input.type === 'keyUp' && (input.code === 'ControlLeft' || input.code === 'ControlRight')
+}
+
 // Why: the titlebar is 36px (border-box, 1px border-bottom).  The visual
 // center of the CSS-centered content sits at ~18 CSS px from the top.
 // At zoom factor z that becomes 18·z window px.  Traffic lights are
@@ -60,6 +68,19 @@ type CreateMainWindowOptions = {
    *  latch must be cleared or later window closes will be misclassified as
    *  quit attempts. */
   onQuitAborted?: () => void
+  onRendererProcessGone?: (details: Electron.RenderProcessGoneDetails) => void
+  /** Why: main-process startup must register IPC handlers before the renderer
+   *  begins booting, or eager renderer calls can race into missing channels. */
+  deferLoad?: boolean
+  title?: string
+}
+
+export function loadMainWindow(mainWindow: BrowserWindow): void {
+  if (is.dev && process.env.ELECTRON_RENDERER_URL) {
+    void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
+  } else {
+    void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  }
 }
 
 export function createMainWindow(
@@ -153,6 +174,7 @@ export function createMainWindow(
     ...(savedBounds ? { x: savedBounds.x, y: savedBounds.y } : {}),
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
+    title: opts?.title ?? 'Orca',
     show: false,
     // Why: on macOS the menu lives in the system menu bar, so the in-window
     // menu bar is irrelevant. On Windows/Linux we auto-hide so the menu bar
@@ -460,14 +482,24 @@ export function createMainWindow(
   const resetMarkdownEditorFocus = (): void => {
     markdownEditorFocused = false
   }
-  mainWindow.webContents.on('render-process-gone', resetMarkdownEditorFocus)
+  let rendererProcessGone = false
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    rendererProcessGone = true
+    resetMarkdownEditorFocus()
+    opts?.onRendererProcessGone?.(details)
+    console.error('[window] Renderer process gone; close confirmation will be bypassed', details)
+  })
   mainWindow.webContents.on('destroyed', resetMarkdownEditorFocus)
   mainWindow.webContents.on('did-start-navigation', (_e, _url, _isInPlace, isMainFrame) => {
     if (isMainFrame) {
       resetMarkdownEditorFocus()
     }
   })
+  mainWindow.webContents.on('did-finish-load', () => {
+    rendererProcessGone = false
+  })
 
+  let ctrlTabSwitching = false
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (input.type === 'keyDown' && is.dev && input.code === 'F12') {
       event.preventDefault()
@@ -476,6 +508,25 @@ export function createMainWindow(
       } else {
         mainWindow.webContents.openDevTools({ mode: 'undocked' })
       }
+      return
+    }
+
+    if (isCtrlTabSwitchKey(input)) {
+      // Why: Ctrl+Tab is a held-key interaction. Route both press and release
+      // through IPC so renderer keyup suppression from preventDefault cannot
+      // leave the switcher overlay stranded.
+      event.preventDefault()
+      if (input.type === 'keyDown') {
+        ctrlTabSwitching = true
+        mainWindow.webContents.send('ui:ctrlTabKeyDown', { shiftKey: input.shift === true })
+      }
+      return
+    }
+
+    if (ctrlTabSwitching && isControlKeyRelease(input)) {
+      event.preventDefault()
+      ctrlTabSwitching = false
+      mainWindow.webContents.send('ui:ctrlTabKeyUp')
       return
     }
 
@@ -623,6 +674,18 @@ export function createMainWindow(
       }
       return
     }
+    const isRendererCrashed = mainWindow.webContents.isCrashed?.() ?? false
+    if (rendererProcessGone || isRendererCrashed) {
+      // Why: after a native renderer crash the renderer cannot answer
+      // window:close-requested. Let Cmd+Q / OS close complete instead of
+      // trapping the user in a blank, unquittable window.
+      windowClosing = true
+      if (boundsTimer) {
+        clearTimeout(boundsTimer)
+        boundsTimer = null
+      }
+      return
+    }
     e.preventDefault()
     mainWindow.webContents.send('window:close-requested', {
       isQuitting: opts?.getIsQuitting?.() ?? false
@@ -725,10 +788,8 @@ export function createMainWindow(
     app.removeListener('before-quit', freezeBoundsOnQuit)
   })
 
-  if (is.dev && process.env.ELECTRON_RENDERER_URL) {
-    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
-  } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  if (!opts?.deferLoad) {
+    loadMainWindow(mainWindow)
   }
 
   return mainWindow

@@ -64,6 +64,8 @@ describe('CommitMessageAiPane', () => {
     expect(markup).toContain('Thinking effort')
     expect(markup).toContain('Higher effort produces more careful messages')
     expect(markup).toContain('Use Conventional Commits.')
+    expect(markup).toContain('Save')
+    expect(markup).toContain('Saved')
   })
 
   it('renders custom command settings for custom agents', () => {
@@ -83,6 +85,28 @@ describe('CommitMessageAiPane', () => {
     expect(markup).toContain('AI Commit Messages')
     expect(markup).toContain('Custom command')
     expect(markup).toContain('ollama run llama3.1 {prompt}')
+  })
+
+  it('shows an unconfigured state when the default agent is unsupported', () => {
+    const markup = renderPane(
+      buildSettings({
+        defaultTuiAgent: 'gemini',
+        commitMessageAi: {
+          enabled: true,
+          agentId: null,
+          selectedModelByAgent: {},
+          selectedThinkingByModel: {},
+          customPrompt: '',
+          customAgentCommand: ''
+        }
+      })
+    )
+
+    expect(markup).toContain('Not configured')
+    expect(markup).toContain('Your default agent is Gemini')
+    expect(markup).toContain('Choose Claude, Codex, or Custom')
+    expect(markup).not.toContain('Which model the selected agent uses')
+    expect(markup).not.toContain('Thinking effort')
   })
 
   it('keeps custom command discoverable in settings search metadata', () => {

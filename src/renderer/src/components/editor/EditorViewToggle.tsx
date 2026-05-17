@@ -87,7 +87,7 @@ export default function EditorViewToggle({
       <ToggleGroup
         type="single"
         size="sm"
-        className="h-6 [&_[data-slot=toggle-group-item]]:h-7 [&_[data-slot=toggle-group-item]]:min-w-5 [&_[data-slot=toggle-group-item]]:px-2.5"
+        className="h-[23px] [&_[data-slot=toggle-group-item]]:h-[23px] [&_[data-slot=toggle-group-item]]:min-w-[24px] [&_[data-slot=toggle-group-item]]:px-2"
         variant="outline"
         value={value}
         onValueChange={(v) => {
@@ -113,9 +113,9 @@ export default function EditorViewToggle({
                 <ToggleGroupItem
                   value={viewMode}
                   aria-label={metadata.label}
-                  className="data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:shadow-xs data-[state=on]:hover:bg-primary/90 data-[state=on]:hover:text-primary-foreground"
+                  className="h-[23px] min-w-[24px] px-2 aria-[checked=true]:border-foreground/20 aria-[checked=true]:bg-foreground/10 aria-[checked=true]:text-foreground aria-[checked=true]:shadow-xs aria-[checked=true]:hover:bg-foreground/15 aria-[checked=true]:hover:text-foreground data-[state=on]:border-foreground/20 data-[state=on]:bg-foreground/10 data-[state=on]:text-foreground data-[state=on]:shadow-xs data-[state=on]:hover:bg-foreground/15 data-[state=on]:hover:text-foreground"
                 >
-                  <Icon className="h-3 w-3" />
+                  <Icon className="size-3.5" />
                 </ToggleGroupItem>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>

@@ -13,27 +13,42 @@ import { normalizeAbsolutePath } from '@/components/right-sidebar/file-explorer-
 // gets picked up.
 const SELF_WRITE_TTL_MS = 750
 
-const stamps = new Map<string, number>()
+export type RecentSelfWrite = {
+  content: string | null
+}
 
-export function recordSelfWrite(absolutePath: string): void {
-  stamps.set(normalizeAbsolutePath(absolutePath), Date.now() + SELF_WRITE_TTL_MS)
+type SelfWriteStamp = RecentSelfWrite & {
+  expiresAt: number
+}
+
+const stamps = new Map<string, SelfWriteStamp>()
+
+export function recordSelfWrite(absolutePath: string, content?: string): void {
+  stamps.set(normalizeAbsolutePath(absolutePath), {
+    content: content ?? null,
+    expiresAt: Date.now() + SELF_WRITE_TTL_MS
+  })
 }
 
 export function clearSelfWrite(absolutePath: string): void {
   stamps.delete(normalizeAbsolutePath(absolutePath))
 }
 
-export function hasRecentSelfWrite(absolutePath: string): boolean {
+export function getRecentSelfWrite(absolutePath: string): RecentSelfWrite | null {
   const key = normalizeAbsolutePath(absolutePath)
-  const expiry = stamps.get(key)
-  if (expiry === undefined) {
-    return false
+  const stamp = stamps.get(key)
+  if (!stamp) {
+    return null
   }
-  if (Date.now() > expiry) {
+  if (Date.now() > stamp.expiresAt) {
     stamps.delete(key)
-    return false
+    return null
   }
-  return true
+  return { content: stamp.content }
+}
+
+export function hasRecentSelfWrite(absolutePath: string): boolean {
+  return getRecentSelfWrite(absolutePath) !== null
 }
 
 export function __clearSelfWriteRegistryForTests(): void {

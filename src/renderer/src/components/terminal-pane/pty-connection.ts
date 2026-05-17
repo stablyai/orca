@@ -26,10 +26,26 @@ import {
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
+import { e2eConfig } from '@/lib/e2e-config'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
 const REMOTE_PTY_ID_PREFIX = 'remote:'
+const PTY_CONNECT_DIAG_LIMIT = 200
+const AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS = 250
+
+function recordPtyConnectDiagnostic(message: string): void {
+  if (!e2eConfig.exposeStore) {
+    return
+  }
+  console.log(`[pty-connect] ${message}`)
+  const target = globalThis as Record<string, unknown>
+  const diag = (target.__ptyConnectDiag ??= [] as string[]) as string[]
+  diag.push(message)
+  if (diag.length > PTY_CONNECT_DIAG_LIMIT) {
+    diag.splice(0, diag.length - PTY_CONNECT_DIAG_LIMIT)
+  }
+}
 
 // Why: when multiple panes/tabs need the same deferred SSH connection,
 // the first one calls ssh.connect() and subsequent ones must wait for it
@@ -42,10 +58,6 @@ const sshConnectPromises = new Map<string, Promise<SshConnectResult>>()
 
 function isSshSessionExpiredError(err: unknown): boolean {
   return (err instanceof Error ? err.message : String(err)).includes(SSH_SESSION_EXPIRED_ERROR)
-}
-
-function formatSshSessionExpiredMessage(): string {
-  return 'Previous SSH session expired. Start a new terminal to continue.'
 }
 
 function isRemoteRuntimePtyId(ptyId: string | null | undefined): boolean {
@@ -135,6 +147,7 @@ export function connectPanePty(
   let disposed = false
   let connectFrame: number | null = null
   let startupInjectTimer: ReturnType<typeof setTimeout> | null = null
+  let agentTaskCompleteNotificationTimer: ReturnType<typeof setTimeout> | null = null
   // Why: passphrase-gate waits register a teardown here so dispose() can
   // actively unsubscribe + resolve them. Without this, a pane disposed
   // mid-wait leaks its zustand subscriber and the surrounding async IIFE
@@ -305,12 +318,31 @@ export function connectPanePty(
     // events to fire. Dispatch is gated per-source in main; the main-process
     // dedupe also collapses concurrent BEL + task-complete for the same
     // worktree into a single notification.
-    deps.dispatchNotification({ source: 'agent-task-complete', terminalTitle: title })
+    // Why: title idle can beat the final hook status update by one event-loop
+    // turn; delay slightly so the notification can snapshot the richer status.
+    if (agentTaskCompleteNotificationTimer !== null) {
+      clearTimeout(agentTaskCompleteNotificationTimer)
+    }
+    agentTaskCompleteNotificationTimer = setTimeout(() => {
+      agentTaskCompleteNotificationTimer = null
+      if (disposed) {
+        return
+      }
+      deps.dispatchNotification({
+        source: 'agent-task-complete',
+        terminalTitle: title,
+        paneKey: cacheKey
+      })
+    }, AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS)
   }
   const onAgentBecameWorking = (): void => {
     // Why: a new API call refreshes the prompt-cache TTL, so clear any running
     // countdown. The timer will restart when the agent becomes idle again.
     deps.setCacheTimerStartedAt(cacheKey, null)
+    if (agentTaskCompleteNotificationTimer !== null) {
+      clearTimeout(agentTaskCompleteNotificationTimer)
+      agentTaskCompleteNotificationTimer = null
+    }
   }
   const onAgentExited = (): void => {
     // Why: when the terminal title reverts to a plain shell (e.g., "bash", "zsh"),
@@ -724,11 +756,14 @@ export function connectPanePty(
         return
       }
       if (connectResult?.sessionExpired) {
-        reportError(formatSshSessionExpiredMessage())
         deps.syncPanePtyLayoutBinding(pane.id, null)
         if (staleSessionId) {
           deps.clearTabPtyId(deps.tabId, staleSessionId)
         }
+        // Why: SSH sleep/reconnect can invalidate the relay-held PTY while
+        // leaving the tab mounted. Replace the dead lease in-place instead of
+        // stranding the pane behind a stale expired-session overlay.
+        startFreshSpawn()
         return
       }
       bindPanePtyId(pane.id, ptyId, deps.tabId)
@@ -1008,13 +1043,16 @@ export function connectPanePty(
                     : 'undefined'
                 )
                 if (!result && expiredReattachError) {
-                  reportError(formatSshSessionExpiredMessage())
+                  if (disposed) {
+                    return
+                  }
                   deps.syncPanePtyLayoutBinding(pane.id, null)
                   deps.clearTabPtyId(deps.tabId, pendingSessionId)
                   const gen = await preSignalPromise
                   if (typeof gen === 'number') {
                     void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
                   }
+                  startFreshSpawn()
                   return
                 }
                 handleReattachResult(result, pendingSessionId)
@@ -1035,9 +1073,9 @@ export function connectPanePty(
                   return
                 }
                 if (isSshSessionExpiredError(err)) {
-                  reportError(formatSshSessionExpiredMessage())
                   deps.syncPanePtyLayoutBinding(pane.id, null)
                   deps.clearTabPtyId(deps.tabId, pendingSessionId)
+                  startFreshSpawn()
                   return
                 }
                 startFreshSpawn()
@@ -1086,17 +1124,13 @@ export function connectPanePty(
       isSessionOwnedByWorktree(candidateReattachSessionId, deps.worktreeId)
         ? candidateReattachSessionId
         : null
-    const _diagMsg = `pane=${pane.id} tab=${deps.tabId} restored=${restoredPtyId} existing=${existingPtyId} detached=${detachedLivePtyId} reattach=${deferredReattachSessionId} hasTransport=${hasExistingPaneTransport} pendingKey=${pendingSpawnKey}`
-    console.log(`[pty-connect] ${_diagMsg}`)
-    ;((globalThis as Record<string, unknown>).__ptyConnectDiag ??= [] as string[]) as string[]
-    ;((globalThis as Record<string, unknown>).__ptyConnectDiag as string[]).push(_diagMsg)
+    recordPtyConnectDiagnostic(
+      `pane=${pane.id} tab=${deps.tabId} restored=${restoredPtyId} existing=${existingPtyId} detached=${detachedLivePtyId} reattach=${deferredReattachSessionId} hasTransport=${hasExistingPaneTransport} pendingKey=${pendingSpawnKey}`
+    )
 
     if (deferredReattachSessionId) {
       allowInitialIdleCacheSeed = true
-      console.log(`[pty-connect] pane=${pane.id} → REATTACH ${deferredReattachSessionId}`)
-      ;((globalThis as Record<string, unknown>).__ptyConnectDiag as string[])?.push(
-        `pane=${pane.id} → REATTACH`
-      )
+      recordPtyConnectDiagnostic(`pane=${pane.id} -> REATTACH ${deferredReattachSessionId}`)
 
       // Why: reattach also pre-signals so the cooperation gate suppresses
       // the daemon seed for this paneKey. Reattach paths register their
@@ -1133,13 +1167,16 @@ export function connectPanePty(
       void Promise.resolve(reattachPromise)
         .then(async (result) => {
           if (!result && expiredReattachError) {
-            reportError(formatSshSessionExpiredMessage())
+            if (disposed) {
+              return
+            }
             deps.syncPanePtyLayoutBinding(pane.id, null)
             deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
             const gen = await preSignalPromise
             if (typeof gen === 'number') {
               void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
             }
+            startFreshSpawn()
             return
           }
           handleReattachResult(result, deferredReattachSessionId)
@@ -1167,17 +1204,14 @@ export function connectPanePty(
           deps.syncPanePtyLayoutBinding(pane.id, null)
           deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
           if (connectionId && isSshSessionExpiredError(err)) {
-            reportError(formatSshSessionExpiredMessage())
+            startFreshSpawn()
             return
           }
           reportError(message)
           startFreshSpawn()
         })
     } else if (detachedLivePtyId) {
-      console.log(`[pty-connect] pane=${pane.id} → ATTACH detached=${detachedLivePtyId}`)
-      ;((globalThis as Record<string, unknown>).__ptyConnectDiag as string[])?.push(
-        `pane=${pane.id} → ATTACH ${detachedLivePtyId}`
-      )
+      recordPtyConnectDiagnostic(`pane=${pane.id} -> ATTACH detached=${detachedLivePtyId}`)
       allowInitialIdleCacheSeed = false
       // Why: surface synchronous attach failures (e.g., the PTY died between
       // mount and remount, so window.api.pty.resize rejects) through
@@ -1210,10 +1244,7 @@ export function connectPanePty(
       allowInitialIdleCacheSeed = false
       const pendingSpawn = pendingSpawnByPaneKey.get(pendingSpawnKey)
       if (pendingSpawn) {
-        console.log(`[pty-connect] pane=${pane.id} → PENDING SPAWN (waiting on same leaf)`)
-        ;((globalThis as Record<string, unknown>).__ptyConnectDiag as string[])?.push(
-          `pane=${pane.id} → PENDING SPAWN`
-        )
+        recordPtyConnectDiagnostic(`pane=${pane.id} -> PENDING SPAWN`)
         void pendingSpawn
           .then((spawnedPtyId) => {
             if (disposed) {
@@ -1254,10 +1285,7 @@ export function connectPanePty(
             reportError(err instanceof Error ? err.message : String(err))
           })
       } else {
-        console.log(`[pty-connect] pane=${pane.id} → FRESH SPAWN`)
-        ;((globalThis as Record<string, unknown>).__ptyConnectDiag as string[])?.push(
-          `pane=${pane.id} → FRESH SPAWN`
-        )
+        recordPtyConnectDiagnostic(`pane=${pane.id} -> FRESH SPAWN`)
         startFreshSpawn()
       }
     }
@@ -1277,6 +1305,10 @@ export function connectPanePty(
       if (startupInjectTimer !== null) {
         clearTimeout(startupInjectTimer)
         startupInjectTimer = null
+      }
+      if (agentTaskCompleteNotificationTimer !== null) {
+        clearTimeout(agentTaskCompleteNotificationTimer)
+        agentTaskCompleteNotificationTimer = null
       }
       discardTerminalOutput(pane.terminal)
       if (connectFrame !== null) {

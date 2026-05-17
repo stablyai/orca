@@ -70,6 +70,24 @@ function shouldLaunchHeadful(testInfo: TestInfo): boolean {
   return testInfo.project.metadata.orcaHeadful === true
 }
 
+function forwardElectronProcessLogs(app: ElectronApplication, testInfo: TestInfo): void {
+  if (process.env.ORCA_E2E_FORWARD_APP_LOGS !== '1') {
+    return
+  }
+
+  const child = app.process()
+  const prefix = `[electron:${testInfo.title}]`
+  child.stdout?.on('data', (chunk: Buffer) => {
+    console.log(`${prefix} stdout: ${chunk.toString().trimEnd()}`)
+  })
+  child.stderr?.on('data', (chunk: Buffer) => {
+    console.error(`${prefix} stderr: ${chunk.toString().trimEnd()}`)
+  })
+  child.on('exit', (code, signal) => {
+    console.log(`${prefix} exit: code=${code ?? 'null'} signal=${signal ?? 'null'}`)
+  })
+}
+
 function isValidGitRepo(repoPath: string): boolean {
   if (!repoPath || !existsSync(repoPath)) {
     return false
@@ -227,6 +245,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
         ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
       }
     })
+    forwardElectronProcessLogs(app, testInfo)
     await provideFixture(app)
     // Why: the Playwright close promise can settle before all Electron and PTY
     // descendants are gone in CI; worker teardown then hangs on open handles.

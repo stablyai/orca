@@ -39,6 +39,7 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 import { createWorktreeSlice } from './worktrees'
+import { getHostedReviewCacheKey } from './hosted-review'
 
 function resetRemoteRuntimeMocks() {
   clearRuntimeCompatibilityCacheForTests()
@@ -75,6 +76,7 @@ function createTestStore() {
         editorViewMode: {},
         expandedDirs: {},
         gitStatusByWorktree: {},
+        gitIgnoredPathsByWorktree: {},
         gitConflictOperationByWorktree: {},
         trackedConflictPathsByWorktree: {},
         gitBranchChangesByWorktree: {},
@@ -588,7 +590,8 @@ describe('createWorktree base status merge', () => {
       linkedIssue: 123,
       linkedPR: 456,
       createdWithAgent: 'codex',
-      linkedLinearIssue: 'ENG-123'
+      linkedLinearIssue: 'ENG-123',
+      workspaceStatus: 'in-review'
     })
     mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
 
@@ -606,7 +609,8 @@ describe('createWorktree base status merge', () => {
         456,
         undefined,
         'codex',
-        'ENG-123'
+        'ENG-123',
+        'in-review'
       )
 
     expect(mockApi.worktrees.create).toHaveBeenCalledWith(
@@ -616,14 +620,16 @@ describe('createWorktree base status merge', () => {
         linkedIssue: 123,
         linkedPR: 456,
         createdWithAgent: 'codex',
-        linkedLinearIssue: 'ENG-123'
+        linkedLinearIssue: 'ENG-123',
+        workspaceStatus: 'in-review'
       })
     )
     expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
       linkedIssue: 123,
       linkedPR: 456,
       createdWithAgent: 'codex',
-      linkedLinearIssue: 'ENG-123'
+      linkedLinearIssue: 'ENG-123',
+      workspaceStatus: 'in-review'
     })
   })
 
@@ -900,6 +906,10 @@ describe('removeWorktree state cleanup', () => {
         'repo1::/path/wt1': [{ path: 'a.ts' }],
         'repo1::/path/wt2': [{ path: 'b.ts' }]
       },
+      gitIgnoredPathsByWorktree: {
+        'repo1::/path/wt1': ['dist/'],
+        'repo1::/path/wt2': ['coverage/']
+      },
       gitConflictOperationByWorktree: {
         'repo1::/path/wt1': 'merge',
         'repo1::/path/wt2': 'unknown'
@@ -926,6 +936,9 @@ describe('removeWorktree state cleanup', () => {
 
     expect(store.getState().gitStatusByWorktree).toEqual({
       'repo1::/path/wt2': [{ path: 'b.ts' }]
+    })
+    expect(store.getState().gitIgnoredPathsByWorktree).toEqual({
+      'repo1::/path/wt2': ['coverage/']
     })
     expect(store.getState().gitConflictOperationByWorktree).toEqual({
       'repo1::/path/wt2': 'unknown'
@@ -1098,6 +1111,109 @@ describe('worktree remote runtime mutations', () => {
     })
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo.repo1[0]?.comment).toBe('remote note')
+  })
+
+  it('clears stale hosted review cache and force-refetches when removing linked PR metadata', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      branch: 'refs/heads/pr-branch',
+      linkedPR: 456
+    })
+    const fetchHostedReviewForBranch = vi.fn().mockResolvedValue(null)
+    const cacheKey = getHostedReviewCacheKey('/repo1', 'pr-branch', undefined, 'repo1')
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [wt] },
+      hostedReviewCache: {
+        [cacheKey]: {
+          data: {
+            provider: 'github',
+            number: 456,
+            title: 'Linked PR',
+            state: 'open',
+            url: 'https://github.com/acme/repo/pull/456',
+            status: 'success',
+            updatedAt: '2026-05-15T00:00:00.000Z',
+            mergeable: 'MERGEABLE'
+          },
+          fetchedAt: Date.now()
+        }
+      },
+      fetchHostedReviewForBranch
+    } as Partial<AppState>)
+
+    await store.getState().updateWorktreeMeta(wt.id, { linkedPR: null })
+
+    expect(store.getState().worktreesByRepo.repo1[0]?.linkedPR).toBeNull()
+    expect(store.getState().hostedReviewCache[cacheKey]).toBeUndefined()
+    expect(fetchHostedReviewForBranch).toHaveBeenCalledWith('/repo1', 'pr-branch', {
+      repoId: 'repo1',
+      linkedGitHubPR: null,
+      linkedGitLabMR: null,
+      force: true
+    })
+  })
+
+  it('preserves linked GitLab MR fallback when removing linked GitHub PR metadata', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      branch: 'refs/heads/review-branch',
+      linkedPR: 456,
+      linkedGitLabMR: 789
+    })
+    const fetchHostedReviewForBranch = vi.fn().mockResolvedValue(null)
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [wt] },
+      fetchHostedReviewForBranch
+    } as Partial<AppState>)
+
+    await store.getState().updateWorktreeMeta(wt.id, { linkedPR: null })
+
+    expect(fetchHostedReviewForBranch).toHaveBeenCalledWith('/repo1', 'review-branch', {
+      repoId: 'repo1',
+      linkedGitHubPR: null,
+      linkedGitLabMR: 789,
+      force: true
+    })
+  })
+
+  it('applies batch metadata updates in one store transition', async () => {
+    const store = createTestStore()
+    const first = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    const second = makeWorktree({ id: 'repo1::/path/wt2', repoId: 'repo1', path: '/path/wt2' })
+    const subscriber = vi.fn()
+    store.setState({
+      worktreesByRepo: { repo1: [first, second] },
+      sortEpoch: 7
+    } as Partial<AppState>)
+
+    const unsubscribe = store.subscribe(subscriber)
+    await store.getState().updateWorktreesMeta(
+      new Map([
+        [first.id, { workspaceStatus: 'in-review' }],
+        [second.id, { workspaceStatus: 'completed' }]
+      ])
+    )
+    unsubscribe()
+
+    expect(store.getState().worktreesByRepo.repo1.map((w) => w.workspaceStatus)).toEqual([
+      'in-review',
+      'completed'
+    ])
+    expect(store.getState().sortEpoch).toBe(8)
+    expect(subscriber).toHaveBeenCalledTimes(1)
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -1281,6 +1397,11 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
         'repoA::/a/wt1': [{ id: 'tab-A', worktreeId: 'repoA::/a/wt1' }],
         'repoA::/a/zombie': [{ id: 'tab-zombie', worktreeId: 'repoA::/a/zombie' }],
         'repoB::/b/wt1': [{ id: 'tab-B', worktreeId: 'repoB::/b/wt1' }]
+      },
+      gitIgnoredPathsByWorktree: {
+        'repoA::/a/wt1': ['dist/'],
+        'repoA::/a/zombie': ['coverage/'],
+        'repoB::/b/wt1': ['build/']
       }
     } as unknown as Partial<AppState>)
 
@@ -1291,6 +1412,10 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     expect(store.getState().tabsByWorktree).toEqual({
       'repoA::/a/wt1': [{ id: 'tab-A', worktreeId: 'repoA::/a/wt1' }],
       'repoB::/b/wt1': [{ id: 'tab-B', worktreeId: 'repoB::/b/wt1' }]
+    })
+    expect(store.getState().gitIgnoredPathsByWorktree).toEqual({
+      'repoA::/a/wt1': ['dist/'],
+      'repoB::/b/wt1': ['build/']
     })
 
     // Second call must not re-run the purge even if new stale ids appear.
@@ -1351,6 +1476,10 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
         }
       ],
       editorDrafts: { 'file-1': 'draft', 'file-99': 'other' },
+      gitIgnoredPathsByWorktree: {
+        'repoA::/a/wt1': ['dist/'],
+        'repoA::/a/wt2': ['coverage/']
+      },
       activeWorktreeId: 'repoA::/a/wt1',
       worktreeLineageById: {
         'repoA::/a/wt1': makeLineage({ worktreeId: 'repoA::/a/wt1' }),
@@ -1375,6 +1504,7 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
     expect(s.runtimePaneTitlesByTabId).toEqual({ 'tab-3': 'bash' })
     expect(s.openFiles).toEqual([])
     expect(s.editorDrafts).toEqual({ 'file-99': 'other' })
+    expect(s.gitIgnoredPathsByWorktree).toEqual({ 'repoA::/a/wt2': ['coverage/'] })
     expect(s.activeWorktreeId).toBeNull()
     expect(s.activeFileId).toBeNull()
     expect(s.activeTabId).toBeNull()

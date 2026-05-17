@@ -39,6 +39,7 @@ describe('hosted review RPC methods', () => {
       linkedGitHubPR: 12,
       linkedGitLabMR: null,
       linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
       linkedGiteaPR: null
     })
     expect(response).toMatchObject({
@@ -66,6 +67,7 @@ describe('hosted review RPC methods', () => {
     const response = await dispatcher.dispatch(
       makeRequest('hostedReview.getCreationEligibility', {
         repo: 'repo-1',
+        worktree: 'path:/worktrees/feature',
         branch: 'feature/create-pr',
         base: 'origin/main',
         hasUncommittedChanges: false,
@@ -78,6 +80,7 @@ describe('hosted review RPC methods', () => {
 
     expect(runtime.getHostedReviewCreationEligibility).toHaveBeenCalledWith({
       repoSelector: 'repo-1',
+      worktreeSelector: 'path:/worktrees/feature',
       branch: 'feature/create-pr',
       base: 'origin/main',
       hasUncommittedChanges: false,
@@ -87,6 +90,7 @@ describe('hosted review RPC methods', () => {
       linkedGitHubPR: null,
       linkedGitLabMR: null,
       linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
       linkedGiteaPR: null
     })
     expect(response).toMatchObject({
@@ -109,6 +113,7 @@ describe('hosted review RPC methods', () => {
     const response = await dispatcher.dispatch(
       makeRequest('hostedReview.create', {
         repo: 'repo-1',
+        worktree: 'path:/worktrees/feature',
         provider: 'github',
         base: 'main',
         head: 'feature/create-pr',
@@ -120,6 +125,7 @@ describe('hosted review RPC methods', () => {
 
     expect(runtime.createHostedReview).toHaveBeenCalledWith({
       repoSelector: 'repo-1',
+      worktreeSelector: 'path:/worktrees/feature',
       provider: 'github',
       base: 'main',
       head: 'feature/create-pr',

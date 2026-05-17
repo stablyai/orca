@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { Timer } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { usePromptCacheCountdownNow } from './prompt-cache-countdown-clock'
+import { getMostUrgentPromptCacheStartedAt } from './prompt-cache-timer-selection'
 
 /**
  * Per-worktree prompt-cache countdown, shown in the sidebar worktree card.
@@ -24,48 +25,13 @@ export default function CacheTimer({
   const enabled = useAppStore((s) => s.settings?.promptCacheTimerEnabled ?? false)
   const ttlMs = useAppStore((s) => s.settings?.promptCacheTtlMs ?? 0)
 
-  // Find the most urgent (minimum remaining) cache timer across all panes in this worktree.
   const mostUrgentStartedAt = useAppStore((s) => {
-    const tabs = s.tabsByWorktree[worktreeId]
-    if (!tabs) {
-      return null
-    }
-    let oldest: number | null = null
-    for (const tab of tabs) {
-      // Why: cache timer keys are `${tabId}:${leafId}` composites, so we check
-      // all keys that belong to this tab's panes.
-      for (const key of Object.keys(s.cacheTimerByKey)) {
-        if (!key.startsWith(`${tab.id}:`)) {
-          continue
-        }
-        const ts = s.cacheTimerByKey[key]
-        if (ts != null && (oldest === null || ts < oldest)) {
-          // Why: smaller startedAt = started earlier = more elapsed time = less remaining = more urgent.
-          oldest = ts
-        }
-      }
-    }
-    return oldest
+    return getMostUrgentPromptCacheStartedAt(s.tabsByWorktree[worktreeId], s.cacheTimerByKey)
   })
 
-  const [remainingMs, setRemainingMs] = useState<number | null>(null)
-
-  useEffect(() => {
-    if (!enabled || !mostUrgentStartedAt || ttlMs <= 0) {
-      setRemainingMs(null)
-      return
-    }
-
-    const tick = (): void => {
-      const elapsed = Date.now() - mostUrgentStartedAt
-      const remaining = Math.max(0, ttlMs - elapsed)
-      setRemainingMs(remaining)
-    }
-
-    tick()
-    const interval = setInterval(tick, 1000)
-    return () => clearInterval(interval)
-  }, [enabled, mostUrgentStartedAt, ttlMs])
+  const countdownActive = enabled && mostUrgentStartedAt != null && ttlMs > 0
+  const now = usePromptCacheCountdownNow(countdownActive)
+  const remainingMs = countdownActive ? Math.max(0, ttlMs - (now - mostUrgentStartedAt)) : null
 
   if (remainingMs === null) {
     return null

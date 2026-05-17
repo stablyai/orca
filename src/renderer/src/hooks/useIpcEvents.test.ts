@@ -491,6 +491,7 @@ describe('useIpcEvents updater integration', () => {
     const setTabCustomTitle = vi.fn()
     const queueTabStartupCommand = vi.fn()
     const replyTerminalCreate = vi.fn()
+    const dispatchEvent = vi.fn()
     const storeState = {
       setUpdateStatus: vi.fn(),
       createTab,
@@ -541,6 +542,18 @@ describe('useIpcEvents updater integration', () => {
           }) => void)
         | null
     } = { current: null }
+    const requestTerminalCreateListenerRef: {
+      current:
+        | ((data: {
+            requestId: string
+            worktreeId?: string
+            afterTabId?: string
+            command?: string
+            title?: string
+            activate?: boolean
+          }) => void)
+        | null
+    } = { current: null }
 
     vi.resetModules()
     vi.unstubAllGlobals()
@@ -586,6 +599,7 @@ describe('useIpcEvents updater integration', () => {
     }))
 
     vi.stubGlobal('window', {
+      dispatchEvent,
       api: {
         repos: { onChanged: () => () => {} },
         worktrees: {
@@ -620,7 +634,19 @@ describe('useIpcEvents updater integration', () => {
             createTerminalListenerRef.current = listener
             return () => {}
           },
-          onRequestTerminalCreate: () => () => {},
+          onRequestTerminalCreate: (
+            listener: (data: {
+              requestId: string
+              worktreeId?: string
+              afterTabId?: string
+              command?: string
+              title?: string
+              activate?: boolean
+            }) => void
+          ) => {
+            requestTerminalCreateListenerRef.current = listener
+            return () => {}
+          },
           replyTerminalCreate,
           onSplitTerminal: () => () => {},
           onRenameTerminal: () => () => {},
@@ -711,6 +737,46 @@ describe('useIpcEvents updater integration', () => {
     expect(setTabCustomTitle).toHaveBeenCalledWith('tab-new', 'Runner')
     expect(queueTabStartupCommand).toHaveBeenCalledWith('tab-new', { command: 'opencode' })
 
+    if (typeof requestTerminalCreateListenerRef.current !== 'function') {
+      throw new Error('Expected request-terminal-create listener to be registered')
+    }
+
+    createTab.mockClear()
+    setActiveView.mockClear()
+    setActiveWorktree.mockClear()
+    setActiveTabType.mockClear()
+    setActiveTab.mockClear()
+    revealWorktreeInSidebar.mockClear()
+    setTabCustomTitle.mockClear()
+    queueTabStartupCommand.mockClear()
+    requestTerminalCreateListenerRef.current({
+      requestId: 'req-renderer-backed',
+      worktreeId: 'wt-2',
+      title: 'Codex',
+      command: 'codex',
+      activate: false
+    })
+
+    expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, { activate: false })
+    expect(setActiveView).not.toHaveBeenCalled()
+    expect(setActiveWorktree).not.toHaveBeenCalled()
+    expect(setActiveTabType).not.toHaveBeenCalled()
+    expect(setActiveTab).not.toHaveBeenCalled()
+    expect(revealWorktreeInSidebar).not.toHaveBeenCalled()
+    expect(dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'orca-background-mount-terminal-worktree',
+        detail: { worktreeId: 'wt-2' }
+      })
+    )
+    expect(setTabCustomTitle).toHaveBeenCalledWith('tab-new', 'Codex')
+    expect(queueTabStartupCommand).toHaveBeenCalledWith('tab-new', { command: 'codex' })
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-renderer-backed',
+      tabId: 'tab-new',
+      title: 'Codex'
+    })
+
     createTab.mockClear()
     createTerminalListenerRef.current({
       worktreeId: 'wt-2',
@@ -752,13 +818,16 @@ describe('useIpcEvents updater integration', () => {
     storeState.ptyIdsByTabId = { 'tab-existing': ['pty-bg'] }
     createTab.mockClear()
     setActiveTab.mockClear()
+    setTabCustomTitle.mockClear()
     createTerminalListenerRef.current({
       worktreeId: 'wt-2',
-      ptyId: 'pty-bg'
+      ptyId: 'pty-bg',
+      title: 'Runtime title'
     })
 
     expect(createTab).not.toHaveBeenCalled()
     expect(setActiveTab).toHaveBeenCalledWith('tab-existing')
+    expect(setTabCustomTitle).not.toHaveBeenCalled()
 
     createTerminalListenerRef.current({
       requestId: 'req-reveal',
@@ -1924,6 +1993,132 @@ describe('useIpcEvents agent status snapshot integration', () => {
       'Future Tab',
       { updatedAt: 1_700_000_000_000, stateStartedAt: 1_699_999_999_000 }
     )
+  })
+
+  it('applies remote status snapshots while repo ownership is still hydrating', async () => {
+    const setAgentStatus = vi.fn()
+    const getSnapshot = vi.fn(() =>
+      Promise.resolve([
+        {
+          paneKey: FUTURE_PANE_KEY,
+          state: 'working' as const,
+          prompt: 'remote p',
+          agentType: 'codex',
+          worktreeId: 'wt-1',
+          connectionId: 'ssh-1',
+          receivedAt: 1_700_000_000_000,
+          stateStartedAt: 1_699_999_999_000
+        }
+      ])
+    )
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'SSH Tab' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      },
+      repos: [],
+      worktreesByRepo: {}
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        getSnapshot,
+        onSet: () => () => {}
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+
+    expect(setAgentStatus).toHaveBeenCalledTimes(1)
+    expect(setAgentStatus).toHaveBeenCalledWith(
+      FUTURE_PANE_KEY,
+      expect.objectContaining({ state: 'working', prompt: 'remote p', agentType: 'codex' }),
+      'SSH Tab',
+      { updatedAt: 1_700_000_000_000, stateStartedAt: 1_699_999_999_000 }
+    )
+  })
+
+  it('still rejects remote status events once the pane resolves to a local repo', async () => {
+    const setAgentStatus = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      workspaceSessionReady: true,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Local Tab' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      },
+      repos: [{ id: 'repo-1', connectionId: null }],
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+    if (typeof onSetListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onSet listener to be registered')
+    }
+
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      state: 'working',
+      prompt: 'remote p',
+      agentType: 'codex',
+      worktreeId: 'wt-1',
+      connectionId: 'ssh-1',
+      receivedAt: 1_700_000_000_000,
+      stateStartedAt: 1_699_999_999_000
+    })
+
+    expect(setAgentStatus).not.toHaveBeenCalled()
   })
 
   it('tracks ready push events whose paneKey does not resolve to a renderer tab', async () => {

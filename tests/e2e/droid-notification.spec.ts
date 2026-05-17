@@ -1,5 +1,6 @@
 import { test, expect } from './helpers/orca-app'
-import type { ElectronApplication } from '@stablyai/playwright-test'
+import type { ElectronApplication, Page } from '@stablyai/playwright-test'
+import { getRendererTitleLog, installRendererTitleLog } from './helpers/terminal-title-log'
 import {
   sendToTerminal,
   waitForActivePanePtyId,
@@ -13,11 +14,7 @@ type NotificationDispatch = {
   terminalTitle?: string
 }
 
-async function emitOscTitle(
-  page: Parameters<typeof sendToTerminal>[0],
-  ptyId: string,
-  title: string
-) {
+async function emitOscTitle(page: Page, ptyId: string, title: string) {
   await sendToTerminal(page, ptyId, `printf '\\033]0;${title}\\007'\r`)
 }
 
@@ -61,6 +58,7 @@ test.describe('Droid notifications', () => {
     // Why: contextBridge freezes window.api, so notification invokes must be
     // observed in Electron's main process rather than monkey-patched renderer-side.
     await installMainProcessNotificationDispatchSpy(electronApp)
+    await installRendererTitleLog(orcaPage)
 
     const ptyId = await waitForActivePanePtyId(orcaPage)
     const marker = `__DROID_NOTIFY_READY_${Date.now()}__`
@@ -72,16 +70,7 @@ test.describe('Droid notifications', () => {
 
     await expect
       .poll(
-        async () =>
-          orcaPage.evaluate(() => {
-            const store = window.__store
-            if (!store) {
-              return false
-            }
-            return Object.values(store.getState().tabsByWorktree ?? {})
-              .flat()
-              .some((tab) => tab.title === 'Factory Droid needs input')
-          }),
+        async () => (await getRendererTitleLog(orcaPage)).includes('Factory Droid needs input'),
         {
           timeout: 10_000,
           message: 'Factory Droid marker title did not land'

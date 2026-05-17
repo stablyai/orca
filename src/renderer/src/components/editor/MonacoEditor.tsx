@@ -9,6 +9,7 @@ import { useAppStore } from '@/store'
 import { scrollTopCache, cursorPositionCache, setWithLRU } from '@/lib/scroll-cache'
 import '@/lib/monaco-setup'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
+import { registerFileSearchSelectedTextProvider } from '@/lib/file-search-selection'
 
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MAX_REVEAL_CONTENT_WAIT_FRAMES, performReveal } from './monaco-reveal'
@@ -28,11 +29,13 @@ import {
   createMarkdownDocLinkDecorationController,
   type MarkdownDocLinkDecorationController
 } from './monaco-markdown-doc-link-decorations'
+import { buildGitConflictDecorations, hasGitConflictMarkers } from './monaco-conflict-decorations'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { DiffComment } from '../../../../shared/types'
 import { isMarkdownComment } from '@/lib/diff-comment-compat'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
+import { getDiffCommentPopoverLeft } from '../diff-comments/diff-comment-popover-position'
 
 type MonacoEditorProps = {
   filePath: string
@@ -48,6 +51,7 @@ type MonacoEditorProps = {
   markdownDocuments?: MarkdownDocument[]
   worktreeId?: string
   markdownAnnotationsEnabled?: boolean
+  conflictDecorationsEnabled?: boolean
 }
 
 export default function MonacoEditor({
@@ -63,18 +67,22 @@ export default function MonacoEditor({
   revealMatchLength,
   markdownDocuments,
   worktreeId,
-  markdownAnnotationsEnabled = false
+  markdownAnnotationsEnabled = false,
+  conflictDecorationsEnabled = false
 }: MonacoEditorProps): React.JSX.Element {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
+  const editorContainerRef = useRef<HTMLDivElement | null>(null)
   const [mountedEditor, setMountedEditor] = useState<editor.IStandaloneCodeEditor | null>(null)
   const modelKeyRef = useRef<string | null>(null)
   const languageRef = useRef(language)
   languageRef.current = language
   const markdownDocLinkDecorationsRef = useRef<MarkdownDocLinkDecorationController | null>(null)
+  const conflictDecorationsRef = useRef<editor.IEditorDecorationsCollection | null>(null)
   const revealDecorationRef = useRef<editor.IEditorDecorationsCollection | null>(null)
   const revealHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const revealRafRef = useRef<number | null>(null)
   const revealInnerRafRef = useRef<number | null>(null)
+  const unregisterFileSearchSelectionRef = useRef<(() => void) | null>(null)
   const { setupCopy, toastNode } = useContextualCopySetup()
   // Why: The scroll throttle timer must be accessible from useLayoutEffect cleanup
   // so we can cancel any pending write before synchronously snapshotting the final
@@ -133,6 +141,7 @@ export default function MonacoEditor({
     lineNumber: number
     startLine?: number
     top: number
+    left?: number
   } | null>(null)
   const isDark =
     settings?.theme === 'dark' ||
@@ -172,7 +181,14 @@ export default function MonacoEditor({
     worktreeId: worktreeId ?? '',
     comments: shouldShowMarkdownAnnotations ? markdownComments : [],
     onAddCommentClick: ({ lineNumber, startLine, top }) =>
-      setCommentPopover({ lineNumber, startLine, top }),
+      setCommentPopover({
+        lineNumber,
+        startLine,
+        top,
+        left: mountedEditor
+          ? (getDiffCommentPopoverLeft(mountedEditor, editorContainerRef.current) ?? undefined)
+          : undefined
+      }),
     onDeleteComment: (id) => {
       if (worktreeId) {
         void deleteDiffComment(worktreeId, id)
@@ -285,6 +301,20 @@ export default function MonacoEditor({
       }
 
       setupCopy(editorInstance, monaco, filePath, propsRef)
+      unregisterFileSearchSelectionRef.current?.()
+      unregisterFileSearchSelectionRef.current = registerFileSearchSelectedTextProvider(() => {
+        if (!editorInstance.hasTextFocus()) {
+          return null
+        }
+        const model = editorInstance.getModel()
+        const selection = editorInstance.getSelection()
+        if (!model || !selection || selection.isEmpty()) {
+          return null
+        }
+        // Why: Monaco selections live in its text model, not the DOM selection
+        // API that app-level keyboard shortcuts can read.
+        return model.getValueInRange(selection)
+      })
 
       // Add Cmd+S save keybinding
       editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
@@ -306,6 +336,8 @@ export default function MonacoEditor({
       })
 
       editorInstance.onDidDispose(() => {
+        conflictDecorationsRef.current?.clear()
+        conflictDecorationsRef.current = null
         editorRef.current = null
         setMountedEditor(null)
         setCommentPopover(null)
@@ -391,13 +423,18 @@ export default function MonacoEditor({
     const update = (): void => {
       const top =
         mountedEditor.getTopForLineNumber(commentPopover.lineNumber) - mountedEditor.getScrollTop()
-      setCommentPopover((prev) => (prev ? { ...prev, top } : prev))
+      const left = getDiffCommentPopoverLeft(mountedEditor, editorContainerRef.current)
+      setCommentPopover((prev) =>
+        prev ? { ...prev, top, left: left == null ? prev.left : left } : prev
+      )
     }
     const scrollSub = mountedEditor.onDidScrollChange(update)
     const contentSub = mountedEditor.onDidContentSizeChange(update)
+    const layoutSub = mountedEditor.onDidLayoutChange(update)
     return () => {
       scrollSub.dispose()
       contentSub.dispose()
+      layoutSub.dispose()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- match DiffViewer: don't resubscribe on top updates.
   }, [mountedEditor, commentPopover?.lineNumber])
@@ -491,6 +528,8 @@ export default function MonacoEditor({
       }
       cancelScheduledReveal()
       clearTransientRevealHighlight()
+      unregisterFileSearchSelectionRef.current?.()
+      unregisterFileSearchSelectionRef.current = null
     }
   }, [cancelScheduledReveal, clearTransientRevealHighlight, viewStateKey])
 
@@ -510,6 +549,27 @@ export default function MonacoEditor({
   }, [content, language])
 
   useEffect(() => {
+    const ed = mountedEditor
+    if (!ed) {
+      return
+    }
+
+    if (!conflictDecorationsEnabled || !hasGitConflictMarkers(content)) {
+      conflictDecorationsRef.current?.clear()
+      return
+    }
+
+    // Why: Git conflict marker lines are ordinary file text; Monaco needs
+    // explicit decorations so unresolved blocks remain visible while editing.
+    const decorations = buildGitConflictDecorations(content)
+    if (!conflictDecorationsRef.current) {
+      conflictDecorationsRef.current = ed.createDecorationsCollection(decorations)
+      return
+    }
+    conflictDecorationsRef.current.set(decorations)
+  }, [conflictDecorationsEnabled, content, mountedEditor])
+
+  useEffect(() => {
     updateMarkdownCompletionDocuments()
   }, [updateMarkdownCompletionDocuments])
 
@@ -520,31 +580,10 @@ export default function MonacoEditor({
       }
       markdownDocLinkDecorationsRef.current?.dispose()
       markdownDocLinkDecorationsRef.current = null
+      conflictDecorationsRef.current?.clear()
+      conflictDecorationsRef.current = null
     }
   }, [])
-
-  useEffect(() => {
-    const handler = (event: Event): void => {
-      const detail = (event as CustomEvent).detail as
-        | { filePath?: string; line?: number; column?: number | null }
-        | undefined
-      if (!detail || detail.filePath !== filePath || !detail.line) {
-        return
-      }
-      const editor = editorRef.current
-      if (!editor) {
-        return
-      }
-      const targetColumn = Math.max(1, detail.column ?? 1)
-      const targetLine = Math.max(1, detail.line)
-      editor.revealPositionInCenter({ lineNumber: targetLine, column: targetColumn })
-      editor.setPosition({ lineNumber: targetLine, column: targetColumn })
-      editor.focus()
-    }
-
-    window.addEventListener('orca:editor-reveal-location', handler as EventListener)
-    return () => window.removeEventListener('orca:editor-reveal-location', handler as EventListener)
-  }, [filePath])
 
   // Navigate to line and highlight match when requested (for already-mounted editor)
   useEffect(() => {
@@ -561,13 +600,14 @@ export default function MonacoEditor({
   }, [queueReveal, revealLine, revealColumn, revealMatchLength, setPendingEditorReveal])
 
   return (
-    <div className="relative h-full">
+    <div ref={editorContainerRef} className="relative h-full">
       {commentPopover && shouldShowMarkdownAnnotations && (
         <DiffCommentPopover
           key={commentPopover.lineNumber}
           lineNumber={commentPopover.lineNumber}
           startLine={commentPopover.startLine}
           top={commentPopover.top}
+          left={commentPopover.left}
           onCancel={() => setCommentPopover(null)}
           onSubmit={handleSubmitMarkdownComment}
         />

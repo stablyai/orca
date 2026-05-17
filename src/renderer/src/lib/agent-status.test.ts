@@ -200,6 +200,13 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('Droid working')).toBe('working')
   })
 
+  it('classifies synthesized Hermes titles', () => {
+    expect(detectAgentStatusFromTitle('⠋ Hermes')).toBe('working')
+    expect(detectAgentStatusFromTitle('Hermes ready')).toBe('idle')
+    expect(detectAgentStatusFromTitle('Hermes - action required')).toBe('permission')
+    expect(detectAgentStatusFromTitle('Hermes working')).toBe('working')
+  })
+
   it('does not treat Factory Droid native needs-input titles as completion', () => {
     expect(detectAgentStatusFromTitle('Factory Droid needs input')).toBeNull()
     expect(detectAgentStatusFromTitle('Factory Droid needs your input')).toBeNull()
@@ -236,6 +243,11 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('android emulator ready')).toBeNull()
     expect(detectAgentStatusFromTitle('android build working')).toBeNull()
     expect(detectAgentStatusFromTitle('android permission check')).toBeNull()
+  })
+
+  it('does not treat path fragments containing Hermes as agent activity', () => {
+    expect(detectAgentStatusFromTitle('~/hermes/working')).not.toBe('working')
+    expect(detectAgentStatusFromTitle('C:\\hermes\\ready')).toBeNull()
   })
 })
 
@@ -380,6 +392,8 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('Grok running')).toBe('Grok')
     expect(getAgentLabel('⠋ Droid')).toBe('Droid')
     expect(getAgentLabel('Droid ready')).toBe('Droid')
+    expect(getAgentLabel('⠋ Hermes')).toBe('Hermes')
+    expect(getAgentLabel('Hermes ready')).toBe('Hermes')
   })
 
   it('labels GitHub Copilot CLI', () => {
@@ -691,6 +705,10 @@ describe('formatAgentTypeLabel', () => {
 
   it("maps 'cursor' to 'Cursor'", () => {
     expect(formatAgentTypeLabel('cursor')).toBe('Cursor')
+  })
+
+  it("maps 'hermes' to 'Hermes'", () => {
+    expect(formatAgentTypeLabel('hermes')).toBe('Hermes')
   })
 
   it('passes through arbitrary custom agent names as-is', () => {

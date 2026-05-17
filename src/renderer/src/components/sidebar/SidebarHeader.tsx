@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Plus, SlidersHorizontal } from 'lucide-react'
+import React, { useCallback, useEffect, useState } from 'react'
+import { Kanban, Plus, SlidersHorizontal } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -20,7 +20,8 @@ import SidebarFilter from './SidebarFilter'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 
 const GROUP_BY_OPTIONS = [
-  { id: 'none', label: 'Status' },
+  { id: 'none', label: 'None' },
+  { id: 'workspace-status', label: 'Status' },
   { id: 'pr-status', label: 'PR' },
   { id: 'repo', label: 'Repo' }
 ] as const
@@ -33,7 +34,7 @@ const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
   { id: 'pr', label: 'Linked PR' },
   { id: 'comment', label: 'Comment' },
   // Why: toggles the inline "Agent activity" list rendered below each
-  // workspace card body (see WorktreeCard → WorktreeCardAgents). Off hides
+  // workspace card body (see WorktreeCard -> WorktreeCardAgents). Off hides
   // the list; there is no alternate surface.
   { id: 'inline-agents', label: 'Agent activity' }
 ]
@@ -51,18 +52,10 @@ const SORT_OPTIONS = [
 
 const isMac = navigator.userAgent.includes('Mac')
 const newWorktreeShortcutLabel = isMac ? '⌘N' : 'Ctrl+N'
-const WORKSPACE_BOARD_HOVER_OPEN_DELAY_MS = 50
-// Why: gives the pointer room to travel from the header into the board before
-// the temporary hover preview collapses.
-const WORKSPACE_BOARD_HOVER_CLOSE_DELAY_MS = 220
 
 const SidebarHeader = React.memo(function SidebarHeader() {
   const [workspaceBoardOpen, setWorkspaceBoardOpen] = useState(false)
-  // Why: entering the board turns the hover preview into a persistent drawer
-  // until the user explicitly closes it or clicks outside.
-  const workspaceBoardPinnedOpenRef = useRef(false)
-  const workspaceBoardHoverOpenTimerRef = useRef<number | null>(null)
-  const workspaceBoardHoverCloseTimerRef = useRef<number | null>(null)
+  const [workspaceBoardMenuOpen, setWorkspaceBoardMenuOpen] = useState(false)
   const openModal = useAppStore((s) => s.openModal)
   const repos = useAppStore((s) => s.repos)
   const canCreateWorktree = repos.some((repo) => isGitRepoKind(repo))
@@ -76,110 +69,81 @@ const SidebarHeader = React.memo(function SidebarHeader() {
   const showWorkspaceLineage = useAppStore((s) => s.showWorkspaceLineage)
   const setShowWorkspaceLineage = useAppStore((s) => s.setShowWorkspaceLineage)
 
-  const clearWorkspaceBoardHoverClose = useCallback(() => {
-    if (workspaceBoardHoverCloseTimerRef.current === null) {
+  const handleWorkspaceBoardOpenChange = useCallback((open: boolean) => {
+    setWorkspaceBoardOpen(open)
+    if (!open) {
+      setWorkspaceBoardMenuOpen(false)
+    }
+  }, [])
+
+  const handleWorkspaceBoardToggle = useCallback(() => {
+    setWorkspaceBoardOpen((open) => !open)
+  }, [])
+
+  useEffect(() => {
+    if (!workspaceBoardOpen) {
       return
     }
-    window.clearTimeout(workspaceBoardHoverCloseTimerRef.current)
-    workspaceBoardHoverCloseTimerRef.current = null
-  }, [])
 
-  const clearWorkspaceBoardHoverOpen = useCallback(() => {
-    if (workspaceBoardHoverOpenTimerRef.current === null) {
-      return
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') {
+        return
+      }
+      if (workspaceBoardMenuOpen) {
+        return
+      }
+      // Why: Escape must dismiss any nested overlay (Radix dropdown, popover,
+      // tooltip, dialog, context menu) ahead of collapsing this non-modal
+      // companion panel. Radix portals open popper content into a wrapper
+      // element, and dialogs/menus expose `data-state="open"` on their
+      // content node, so the presence of either signals the user's intent
+      // is to dismiss that overlay rather than the workspace board.
+      if (
+        document.querySelector(
+          '[data-radix-popper-content-wrapper], [role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], [role="menu"][data-state="open"], [role="listbox"][data-state="open"]'
+        )
+      ) {
+        return
+      }
+      event.preventDefault()
+      setWorkspaceBoardOpen(false)
     }
-    window.clearTimeout(workspaceBoardHoverOpenTimerRef.current)
-    workspaceBoardHoverOpenTimerRef.current = null
-  }, [])
 
-  useEffect(
-    () => () => {
-      clearWorkspaceBoardHoverOpen()
-      clearWorkspaceBoardHoverClose()
-    },
-    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen]
-  )
-
-  const setWorkspaceBoardPinned = useCallback((pinned: boolean) => {
-    workspaceBoardPinnedOpenRef.current = pinned
-  }, [])
-
-  const handleWorkspaceBoardOpenChange = useCallback(
-    (open: boolean) => {
-      clearWorkspaceBoardHoverOpen()
-      clearWorkspaceBoardHoverClose()
-      setWorkspaceBoardOpen(open)
-      if (!open) {
-        setWorkspaceBoardPinned(false)
-      }
-    },
-    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen, setWorkspaceBoardPinned]
-  )
-
-  const handleWorkspaceHeaderPointerEnter = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (event.pointerType !== 'mouse') {
-        return
-      }
-      clearWorkspaceBoardHoverClose()
-      if (workspaceBoardOpen) {
-        return
-      }
-      clearWorkspaceBoardHoverOpen()
-      workspaceBoardHoverOpenTimerRef.current = window.setTimeout(() => {
-        workspaceBoardHoverOpenTimerRef.current = null
-        setWorkspaceBoardOpen(true)
-      }, WORKSPACE_BOARD_HOVER_OPEN_DELAY_MS)
-    },
-    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen, workspaceBoardOpen]
-  )
-
-  const handleWorkspaceHeaderPointerLeave = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      clearWorkspaceBoardHoverOpen()
-      if (event.pointerType !== 'mouse' || workspaceBoardPinnedOpenRef.current) {
-        return
-      }
-      clearWorkspaceBoardHoverClose()
-      workspaceBoardHoverCloseTimerRef.current = window.setTimeout(() => {
-        workspaceBoardHoverCloseTimerRef.current = null
-        if (workspaceBoardPinnedOpenRef.current) {
-          return
-        }
-        setWorkspaceBoardOpen(false)
-      }, WORKSPACE_BOARD_HOVER_CLOSE_DELAY_MS)
-    },
-    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen]
-  )
-
-  const handleWorkspaceBoardPointerEnter = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (event.pointerType !== 'mouse') {
-        return
-      }
-      clearWorkspaceBoardHoverOpen()
-      clearWorkspaceBoardHoverClose()
-      setWorkspaceBoardPinned(true)
-      setWorkspaceBoardOpen(true)
-    },
-    [clearWorkspaceBoardHoverClose, clearWorkspaceBoardHoverOpen, setWorkspaceBoardPinned]
-  )
+    // Why: the workspace board is a non-modal companion panel, so focus may
+    // be outside the sheet when Escape should still dismiss it.
+    document.addEventListener('keydown', handleKeyDown, true)
+    return () => document.removeEventListener('keydown', handleKeyDown, true)
+  }, [workspaceBoardMenuOpen, workspaceBoardOpen])
 
   return (
     <>
-      <div
-        className="flex h-8 items-center justify-between px-2 gap-2"
-        onPointerEnter={handleWorkspaceHeaderPointerEnter}
-        onPointerLeave={handleWorkspaceHeaderPointerLeave}
-      >
+      <div className="mt-2 flex h-8 items-center justify-between px-2 gap-2">
         <div className="flex min-w-0 items-center gap-1">
-          <span className="px-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80 select-none">
+          <span className="pl-2 pr-0.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80 select-none">
             Workspaces
           </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={workspaceBoardOpen ? 'secondary' : 'ghost'}
+                size="icon-xs"
+                className="text-muted-foreground"
+                aria-label="Workspace board"
+                aria-pressed={workspaceBoardOpen}
+                data-workspace-board-trigger=""
+                onClick={handleWorkspaceBoardToggle}
+              >
+                <Kanban className="size-3.5" strokeWidth={2.25} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {workspaceBoardOpen ? 'Close workspace board' : 'Workspace board'}
+            </TooltipContent>
+          </Tooltip>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <SidebarFilter />
-          <DropdownMenu>
+          <SidebarFilter preserveWorkspaceBoardOpen onMenuOpenChange={setWorkspaceBoardMenuOpen} />
+          <DropdownMenu modal={false} onOpenChange={setWorkspaceBoardMenuOpen}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <DropdownMenuTrigger asChild>
@@ -188,6 +152,7 @@ const SidebarHeader = React.memo(function SidebarHeader() {
                     size="icon-xs"
                     className="text-muted-foreground"
                     aria-label="View options"
+                    data-workspace-board-preserve-open=""
                   >
                     <SlidersHorizontal className="size-3.5" strokeWidth={2.25} />
                   </Button>
@@ -197,7 +162,13 @@ const SidebarHeader = React.memo(function SidebarHeader() {
                 View options
               </TooltipContent>
             </Tooltip>
-            <DropdownMenuContent side="right" align="start" sideOffset={8} className="w-56 pb-2">
+            <DropdownMenuContent
+              side="right"
+              align="start"
+              sideOffset={8}
+              className="w-56 pb-2"
+              data-workspace-board-preserve-open=""
+            >
               <DropdownMenuLabel>Group by</DropdownMenuLabel>
               <div className="px-2 pt-0.5 pb-1">
                 <ToggleGroup
@@ -307,8 +278,9 @@ const SidebarHeader = React.memo(function SidebarHeader() {
       </div>
       <WorkspaceKanbanDrawer
         open={workspaceBoardOpen}
+        preserveOpenForMenu={workspaceBoardMenuOpen}
         onOpenChange={handleWorkspaceBoardOpenChange}
-        onPointerEnter={handleWorkspaceBoardPointerEnter}
+        onMenuOpenChange={setWorkspaceBoardMenuOpen}
       />
     </>
   )

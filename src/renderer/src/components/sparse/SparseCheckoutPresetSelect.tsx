@@ -214,7 +214,7 @@ export default function SparseCheckoutPresetSelect({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-2rem)] p-0"
+        className="popover-scroll-content max-h-[min(var(--radix-popover-content-available-height),24rem)] w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-2rem)] overflow-y-auto p-0"
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
         {draft ? (

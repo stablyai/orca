@@ -7,6 +7,7 @@ import type {
   HostedReviewForBranchArgs,
   HostedReviewInfo
 } from '../shared/hosted-review'
+import type { AppIdentity } from '../shared/app-identity'
 import type {
   BaseRefDefaultResult,
   BrowserCookieImportResult,
@@ -25,6 +26,7 @@ import type {
   GhosttyImportPreview,
   GlobalSettings,
   GitBranchCompareResult,
+  GitCommitCompareResult,
   GitConflictOperation,
   GitDiffResult,
   GitPushTarget,
@@ -94,6 +96,7 @@ import type {
   WorktreeStartupLaunch,
   WorkspaceSessionState
 } from '../shared/types'
+import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 import type {
@@ -145,6 +148,7 @@ import type {
   BrowserPopupEvent
 } from '../shared/browser-guest-events'
 import type { ElectronAPI } from '@electron-toolkit/preload'
+import type { BrowserSetAnnotationViewportBridgeArgs } from '../shared/browser-annotation-viewport-bridge'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { E2EConfig } from '../shared/e2e-config'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
@@ -158,6 +162,12 @@ import type {
   RuntimeTerminalDriverState
 } from '../shared/runtime-types'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
+import type { SkillDiscoveryResult } from '../shared/skills'
+import type {
+  CrashReportRecord,
+  CrashReportSubmitArgs,
+  CrashReportSubmitResult
+} from '../shared/crash-reporting'
 
 export type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
 
@@ -235,8 +245,12 @@ import type {
   AutomationCreateInput,
   AutomationDispatchRequest,
   AutomationDispatchResult,
+  ExternalAutomationCreateInput,
   ExternalAutomationActionInput,
   ExternalAutomationManager,
+  ExternalAutomationRunsInput,
+  ExternalAutomationRunsPage,
+  ExternalAutomationUpdateInput,
   AutomationRun,
   AutomationUpdateInput
 } from '../shared/automations-types'
@@ -262,6 +276,7 @@ export type BrowserApi = {
     browserPageId: string
     override: BrowserViewportOverride | null
   }) => Promise<boolean>
+  setAnnotationViewportBridge: (args: BrowserSetAnnotationViewportBridgeArgs) => Promise<boolean>
   onGuestLoadFailed: (
     callback: (args: { browserPageId: string; loadError: BrowserLoadError }) => void
   ) => () => void
@@ -338,6 +353,13 @@ export type PreflightStatus = {
    *  include it. Consumers gate on `glab?.installed` / `authenticated`. */
   glab?: { installed: boolean; authenticated: boolean }
   bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
+  azureDevOps?: {
+    configured: boolean
+    authenticated: boolean
+    account: string | null
+    baseUrl: string | null
+    tokenConfigured: boolean
+  }
   gitea?: {
     configured: boolean
     authenticated: boolean
@@ -485,6 +507,8 @@ export type OpenCodeUsageApi = {
 }
 
 export type AppApi = {
+  /** Returns the app identity currently exposed to native chrome and the titlebar. */
+  getIdentity: () => Promise<AppIdentity>
   /** Returns a URL base for feature-wall assets. In dev this is Vite /@fs;
    *  in packaged builds this is file:// resources. Renderer appends filenames. */
   getFeatureWallAssetBaseUrl: () => Promise<string>
@@ -686,6 +710,15 @@ export type PreloadApi = {
       githubEmail: string | null
     }) => Promise<{ ok: true } | { ok: false; status: number | null; error: string }>
   }
+  crashReports: {
+    getLatestPending: () => Promise<CrashReportRecord | null>
+    dismiss: (args: { reportId: string }) => Promise<CrashReportRecord | null>
+    copyLatestDiagnostics: (args?: {
+      reportId?: string
+      notes?: string
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    submit: (args: CrashReportSubmitArgs) => Promise<CrashReportSubmitResult>
+  }
   export: ExportApi
   gh: {
     viewer: () => Promise<GitHubViewer | null>
@@ -771,6 +804,14 @@ export type PreloadApi = {
       repoId?: string
       threadId: string
       resolve: boolean
+    }) => Promise<boolean>
+    setPRFileViewed: (args: {
+      repoPath: string
+      repoId?: string
+      prNumber: number
+      pullRequestId: string
+      path: string
+      viewed: boolean
     }) => Promise<boolean>
     updatePRTitle: (args: {
       repoPath: string
@@ -1079,9 +1120,13 @@ export type PreloadApi = {
     droidStatus: () => Promise<AgentHookInstallStatus>
     grokStatus: () => Promise<AgentHookInstallStatus>
     copilotStatus: () => Promise<AgentHookInstallStatus>
+    hermesStatus: () => Promise<AgentHookInstallStatus>
   }
   agentTrust: {
-    markTrusted: (args: { preset: 'cursor' | 'copilot'; workspacePath: string }) => Promise<void>
+    markTrusted: (args: {
+      preset: 'cursor' | 'copilot' | 'codex'
+      workspacePath: string
+    }) => Promise<void>
   }
   preflight: PreflightApi
   notifications: {
@@ -1116,7 +1161,7 @@ export type PreloadApi = {
   shell: {
     openPath: (path: string) => Promise<void>
     openInFileManager: (path: string) => Promise<ShellOpenLocalPathResult>
-    openInExternalEditor: (path: string) => Promise<ShellOpenLocalPathResult>
+    openInExternalEditor: (path: string, command?: string) => Promise<ShellOpenLocalPathResult>
     openUrl: (url: string) => Promise<void>
     openFilePath: (path: string) => Promise<void>
     openFileUri: (uri: string) => Promise<void>
@@ -1126,6 +1171,9 @@ export type PreloadApi = {
     pickAudio: () => Promise<string | null>
     pickDirectory: (args: { defaultPath?: string }) => Promise<string | null>
     copyFile: (args: { srcPath: string; destPath: string }) => Promise<void>
+  }
+  skills: {
+    discover: () => Promise<SkillDiscoveryResult>
   }
   pet: {
     import: () => Promise<CustomPet | null>
@@ -1307,7 +1355,14 @@ export type PreloadApi = {
     onFsChanged: (callback: (payload: FsChangedPayload) => void) => () => void
   }
   git: {
-    status: (args: { worktreePath: string; connectionId?: string }) => Promise<GitStatusResult>
+    status: (args: {
+      worktreePath: string
+      connectionId?: string
+      includeIgnored?: boolean
+    }) => Promise<GitStatusResult>
+    history: (
+      args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
+    ) => Promise<GitHistoryResult>
     conflictOperation: (args: {
       worktreePath: string
       connectionId?: string
@@ -1324,6 +1379,11 @@ export type PreloadApi = {
       baseRef: string
       connectionId?: string
     }) => Promise<GitBranchCompareResult>
+    commitCompare: (args: {
+      worktreePath: string
+      commitId: string
+      connectionId?: string
+    }) => Promise<GitCommitCompareResult>
     upstreamStatus: (args: {
       worktreePath: string
       connectionId?: string
@@ -1348,6 +1408,14 @@ export type PreloadApi = {
       oldPath?: string
       connectionId?: string
     }) => Promise<GitDiffResult>
+    commitDiff: (args: {
+      worktreePath: string
+      commitOid: string
+      parentOid?: string | null
+      filePath: string
+      oldPath?: string
+      connectionId?: string
+    }) => Promise<GitDiffResult>
     commit: (args: {
       worktreePath: string
       message: string
@@ -1361,6 +1429,25 @@ export type PreloadApi = {
       | { success: false; error: string; canceled?: boolean }
     >
     cancelGenerateCommitMessage: (args: {
+      worktreePath: string
+      connectionId?: string
+    }) => Promise<void>
+    generatePullRequestFields: (args: {
+      worktreePath: string
+      base: string
+      title: string
+      body: string
+      draft: boolean
+      connectionId?: string
+    }) => Promise<
+      | {
+          success: true
+          fields: { base: string; title: string; body: string; draft: boolean }
+          agentLabel?: string
+        }
+      | { success: false; error: string; canceled?: boolean }
+    >
+    cancelGeneratePullRequestFields: (args: {
       worktreePath: string
       connectionId?: string
     }) => Promise<void>
@@ -1406,6 +1493,7 @@ export type PreloadApi = {
     set: (args: Partial<PersistedUIState>) => Promise<void>
     onOpenSettings: (callback: () => void) => () => void
     onOpenFeatureTour: (callback: () => void) => () => void
+    onOpenCrashReport: (callback: () => void) => () => void
     onShowFeatureTourNudge: (callback: () => void) => () => void
     onToggleLeftSidebar: (callback: () => void) => () => void
     onToggleRightSidebar: (callback: () => void) => () => void
@@ -1442,6 +1530,8 @@ export type PreloadApi = {
     onSwitchTab: (callback: (direction: 1 | -1) => void) => () => void
     onSwitchTabAcrossAllTypes: (callback: (direction: 1 | -1) => void) => () => void
     onSwitchTerminalTab: (callback: (direction: 1 | -1) => void) => () => void
+    onCtrlTabKeyDown: (callback: (data: { shiftKey: boolean }) => void) => () => void
+    onCtrlTabKeyUp: (callback: () => void) => () => void
     onToggleStatusBar: (callback: () => void) => () => void
     onDictationKeyDown: (callback: () => void) => () => void
     onExportPdfRequested: (callback: () => void) => () => void
@@ -1472,6 +1562,7 @@ export type PreloadApi = {
         afterTabId?: string
         command?: string
         title?: string
+        activate?: boolean
       }) => void
     ) => () => void
     replyTerminalCreate: (reply: {
@@ -1513,8 +1604,10 @@ export type PreloadApi = {
     onSleepWorktree: (callback: (data: { worktreeId: string }) => void) => () => void
     onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
     readClipboardText: () => Promise<string>
+    readSelectionClipboardText: () => Promise<string>
     saveClipboardImageAsTempFile: () => Promise<string | null>
     writeClipboardText: (text: string) => Promise<void>
+    writeSelectionClipboardText: (text: string) => Promise<void>
     writeClipboardImage: (dataUrl: string) => Promise<void>
     onFileDrop: (
       callback: (
@@ -1672,12 +1765,16 @@ export type PreloadApi = {
     list: () => Promise<Automation[]>
     listRuns: (args?: { automationId?: string }) => Promise<AutomationRun[]>
     listExternalManagers: () => Promise<ExternalAutomationManager[]>
+    listExternalRuns: (input: ExternalAutomationRunsInput) => Promise<ExternalAutomationRunsPage>
+    createExternal: (input: ExternalAutomationCreateInput) => Promise<void>
+    updateExternal: (input: ExternalAutomationUpdateInput) => Promise<void>
     runExternalAction: (input: ExternalAutomationActionInput) => Promise<void>
     create: (input: AutomationCreateInput) => Promise<Automation>
     update: (args: { id: string; updates: AutomationUpdateInput }) => Promise<Automation>
     delete: (args: { id: string }) => Promise<void>
     runNow: (args: { id: string }) => Promise<AutomationRun>
     markDispatchResult: (result: AutomationDispatchResult) => Promise<AutomationRun>
+    snapshotWorkspaceName: (args: { workspaceId: string; displayName: string }) => Promise<number>
     rendererReady: () => Promise<void>
     onDispatchRequested: (callback: (request: AutomationDispatchRequest) => void) => () => void
   }

@@ -18,9 +18,9 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     expect(ids).toEqual(['claude', 'codex'])
   })
 
-  it('uses the smallest model as the default for each agent', () => {
-    expect(COMMIT_MESSAGE_AGENT_SPECS.claude?.defaultModelId).toBe('claude-haiku-4-5')
-    expect(COMMIT_MESSAGE_AGENT_SPECS.codex?.defaultModelId).toBe('gpt-5.4-mini')
+  it('uses the smartest model as the default for each agent', () => {
+    expect(COMMIT_MESSAGE_AGENT_SPECS.claude?.defaultModelId).toBe('claude-opus-4-7')
+    expect(COMMIT_MESSAGE_AGENT_SPECS.codex?.defaultModelId).toBe('gpt-5.5')
   })
 
   it('defaults the agent picker to Claude', () => {
@@ -86,7 +86,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     expect(codex).toMatchObject({
       id: 'codex',
       label: 'Codex',
-      defaultModelId: 'gpt-5.4-mini'
+      defaultModelId: 'gpt-5.5'
     })
     expect(codex).not.toHaveProperty('binary')
     expect(codex).not.toHaveProperty('buildArgs')

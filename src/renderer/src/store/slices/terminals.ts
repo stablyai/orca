@@ -31,6 +31,7 @@ import { normalizeTerminalLayoutSnapshot } from '@/components/terminal-pane/term
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 
 function getNextTerminalOrdinal(tabs: TerminalTab[]): number {
   const usedOrdinals = new Set<number>()
@@ -1084,7 +1085,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // Bump meaningful activity when a PTY exits, but skip if this exit
     // was triggered by an intentional shutdown (suppressed exits) OR by a
     // click-driven pane unmount (pendingActivationSpawn).
-    if (worktreeId && !wasActivationSpawn && !(ptyId && get().suppressedPtyExitIds[ptyId])) {
+    if (
+      worktreeId &&
+      !wasActivationSpawn &&
+      !hasWorktreeSleepIntent(worktreeId) &&
+      !(ptyId && get().suppressedPtyExitIds[ptyId])
+    ) {
       get().bumpWorktreeActivity(worktreeId)
     }
   },
@@ -1111,15 +1117,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // subsequent set must use a functional updater spreading
     // s.terminalLayoutsByTabId, not a captured snapshot). For SSH this is
     // load-bearing — the relay drops the remote PTY on kill so there's no
-    // on-disk history dir to cold-restore from. For local daemon it's
-    // defense-in-depth alongside the on-disk history dir preserved by
-    // keepHistory below.
+    // on-disk history dir to cold-restore from. Local daemon scrollback is
+    // intentionally skipped because the session payload prunes it and daemon
+    // history/checkpoints are authoritative.
     if (keepIdentifiers) {
       for (const tab of tabs) {
         const capture = shutdownBufferCaptures.get(tab.id)
         if (capture) {
           try {
-            capture()
+            capture({ includeLocalBuffers: false })
           } catch {
             // Don't let one tab's capture failure block the rest.
           }

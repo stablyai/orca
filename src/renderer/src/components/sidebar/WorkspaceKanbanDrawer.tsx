@@ -1,99 +1,168 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+/* eslint-disable max-lines -- Why: the board drawer owns shared board state, drag/drop, and settings callbacks that need one coordinated surface. */
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useAllWorktrees, useRepoMap } from '@/store/selectors'
-import { cn } from '@/lib/utils'
-import {
-  Sheet,
-  SheetClose,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle
-} from '@/components/ui/sheet'
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { LayoutList, Pin, Rows3, X } from 'lucide-react'
-import WorkspaceKanbanCard from './WorkspaceKanbanCard'
-import WorkspaceKanbanSettingsMenu from './WorkspaceKanbanSettingsMenu'
+import { Sheet, SheetContent } from '@/components/ui/sheet'
+import WorkspaceKanbanAreaSelectionOverlay from './WorkspaceKanbanAreaSelectionOverlay'
+import WorkspaceKanbanDrawerHeader from './WorkspaceKanbanDrawerHeader'
+import WorkspaceKanbanLaneGrid from './WorkspaceKanbanLaneGrid'
+import WorkspaceKanbanPinDropTarget from './WorkspaceKanbanPinDropTarget'
 import {
   getWorkspaceStatus,
   hasWorkspaceDragData,
-  readWorkspaceDragData,
-  getWorkspaceStatusVisualMeta
+  readWorkspaceDragDataIds
 } from './workspace-status'
 import { useWorkspaceStatusDocumentDrop } from './use-workspace-status-drop'
-import type { WorkspaceStatus, Worktree } from '../../../../shared/types'
+import { useWorkspaceKanbanAreaSelection } from './use-workspace-kanban-area-selection'
+import { useWorkspaceKanbanCardPointerDrag } from './use-workspace-kanban-card-pointer-drag'
+import { useWorkspaceKanbanColumnResize } from './use-workspace-kanban-column-resize'
+import { useWorkspaceKanbanCreateWorktree } from './use-workspace-kanban-create-worktree'
+import { useWorkspaceKanbanSelection } from './use-workspace-kanban-selection'
+import { useWorkspaceKanbanShiftWheelScroll } from './use-workspace-kanban-shift-wheel-scroll'
+import {
+  isWorkspaceBoardKeepOpenTarget,
+  useWorkspaceKanbanOutsideDismiss
+} from './use-workspace-kanban-outside-dismiss'
+import { useVisibleWorkspaceKanbanWorktreeIds } from './use-visible-workspace-kanban-worktree-ids'
+import { groupWorkspaceKanbanWorktrees } from './workspace-kanban-worktree-groups'
+import type { WorkspaceStatus } from '../../../../shared/types'
 import { makeWorkspaceStatusId } from '../../../../shared/workspace-statuses'
 
 type WorkspaceKanbanDrawerProps = {
   open: boolean
+  preserveOpenForMenu: boolean
   onOpenChange: (open: boolean) => void
-  onPointerEnter?: React.PointerEventHandler<HTMLDivElement>
-}
-
-function sortBoardWorktrees(a: Worktree, b: Worktree): number {
-  return b.lastActivityAt - a.lastActivityAt || a.displayName.localeCompare(b.displayName)
+  onMenuOpenChange: (open: boolean) => void
 }
 
 export default function WorkspaceKanbanDrawer({
   open,
+  preserveOpenForMenu,
   onOpenChange,
-  onPointerEnter
+  onMenuOpenChange
 }: WorkspaceKanbanDrawerProps): React.JSX.Element {
   const allWorktrees = useAllWorktrees()
   const repoMap = useRepoMap()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
+  const updateWorktreesMeta = useAppStore((s) => s.updateWorktreesMeta)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const setWorkspaceStatuses = useAppStore((s) => s.setWorkspaceStatuses)
   const workspaceBoardOpacity = useAppStore((s) => s.workspaceBoardOpacity)
   const setWorkspaceBoardOpacity = useAppStore((s) => s.setWorkspaceBoardOpacity)
   const workspaceBoardCompact = useAppStore((s) => s.workspaceBoardCompact)
   const setWorkspaceBoardCompact = useAppStore((s) => s.setWorkspaceBoardCompact)
+  const workspaceBoardColumnWidth = useAppStore((s) => s.workspaceBoardColumnWidth)
+  const setWorkspaceBoardColumnWidth = useAppStore((s) => s.setWorkspaceBoardColumnWidth)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const boardRef = useRef<HTMLDivElement>(null)
+  const laneScrollerRef = useRef<HTMLDivElement>(null)
+  const areaSelectionOverlayRef = useRef<HTMLDivElement>(null)
   const [dragOverStatus, setDragOverStatus] = useState<WorkspaceStatus | null>(null)
   const [pinDragOver, setPinDragOver] = useState(false)
-
+  const { canCreateWorktree, createWorktreeForStatus } = useWorkspaceKanbanCreateWorktree()
+  const visibleWorktreeIdSet = useVisibleWorkspaceKanbanWorktreeIds({
+    allWorktrees,
+    activeWorktreeId,
+    repoMap
+  })
   const worktreesByStatus = useMemo(() => {
-    const grouped = new Map<WorkspaceStatus, Worktree[]>(
-      workspaceStatuses.map((status) => [status.id, []])
-    )
-    for (const worktree of allWorktrees) {
-      if (worktree.isArchived) {
-        continue
-      }
-      grouped.get(getWorkspaceStatus(worktree, workspaceStatuses))!.push(worktree)
-    }
-    for (const items of grouped.values()) {
-      items.sort((a, b) => Number(b.isPinned) - Number(a.isPinned) || sortBoardWorktrees(a, b))
-    }
-    return grouped
-  }, [allWorktrees, workspaceStatuses])
-
+    return groupWorkspaceKanbanWorktrees({
+      worktrees: allWorktrees,
+      visibleWorktreeIds: visibleWorktreeIdSet,
+      workspaceStatuses
+    })
+  }, [allWorktrees, visibleWorktreeIdSet, workspaceStatuses])
+  const worktreeById = useMemo(
+    () => new Map(allWorktrees.map((worktree) => [worktree.id, worktree])),
+    [allWorktrees]
+  )
+  const boardWorktrees = useMemo(
+    () => workspaceStatuses.flatMap((status) => worktreesByStatus.get(status.id) ?? []),
+    [worktreesByStatus, workspaceStatuses]
+  )
+  const {
+    selectedWorktreeIds,
+    selectedWorktrees,
+    selectionAnchorId,
+    updateSelectionForGesture,
+    updateSelectionForArea,
+    selectForContextMenu
+  } = useWorkspaceKanbanSelection(open, boardWorktrees)
+  const { handleAreaSelectionPointerDown } = useWorkspaceKanbanAreaSelection({
+    open,
+    boardRef,
+    overlayRef: areaSelectionOverlayRef,
+    selectedWorktreeIds,
+    selectionAnchorId,
+    updateSelectionForArea
+  })
+  const { columnWidth, isResizingColumn, onColumnResizeStart, onColumnResizeKeyDown } =
+    useWorkspaceKanbanColumnResize(workspaceBoardColumnWidth, setWorkspaceBoardColumnWidth)
   const moveWorktreeToStatus = useCallback(
     (worktreeId: string, status: WorkspaceStatus) => {
-      const current = allWorktrees.find((worktree) => worktree.id === worktreeId)
+      const current = worktreeById.get(worktreeId)
       if (!current || getWorkspaceStatus(current, workspaceStatuses) === status) {
         return
       }
       void updateWorktreeMeta(worktreeId, { workspaceStatus: status })
     },
-    [allWorktrees, updateWorktreeMeta, workspaceStatuses]
+    [updateWorktreeMeta, workspaceStatuses, worktreeById]
   )
-
+  const moveWorktreesToStatus = useCallback(
+    (worktreeIds: readonly string[], status: WorkspaceStatus) => {
+      const updates = new Map<string, { workspaceStatus: WorkspaceStatus }>()
+      for (const worktreeId of worktreeIds) {
+        const current = worktreeById.get(worktreeId)
+        if (!current || getWorkspaceStatus(current, workspaceStatuses) === status) {
+          continue
+        }
+        updates.set(worktreeId, { workspaceStatus: status })
+      }
+      if (updates.size > 0) {
+        void updateWorktreesMeta(updates)
+      }
+    },
+    [updateWorktreesMeta, workspaceStatuses, worktreeById]
+  )
   const pinWorktree = useCallback(
     (worktreeId: string) => {
-      const current = allWorktrees.find((worktree) => worktree.id === worktreeId)
+      const current = worktreeById.get(worktreeId)
       if (!current || current.isPinned) {
         return
       }
       void updateWorktreeMeta(worktreeId, { isPinned: true })
     },
-    [allWorktrees, updateWorktreeMeta]
+    [updateWorktreeMeta, worktreeById]
   )
 
+  const pinWorktrees = useCallback(
+    (worktreeIds: readonly string[]) => {
+      const updates = new Map<string, { isPinned: true }>()
+      for (const worktreeId of worktreeIds) {
+        const current = worktreeById.get(worktreeId)
+        if (!current || current.isPinned) {
+          continue
+        }
+        updates.set(worktreeId, { isPinned: true })
+      }
+      if (updates.size > 0) {
+        void updateWorktreesMeta(updates)
+      }
+    },
+    [updateWorktreesMeta, worktreeById]
+  )
+  const { isPointerDragActiveRef, onCardPointerDownCapture } = useWorkspaceKanbanCardPointerDrag({
+    open,
+    boardRef,
+    selectedWorktreeIds,
+    selectedWorktrees,
+    onMoveWorktreesToStatus: moveWorktreesToStatus,
+    onPinWorktrees: pinWorktrees,
+    onDragTargetChange: setDragOverStatus,
+    onPinDragTargetChange: setPinDragOver
+  })
   const handleDragOver = useCallback((event: React.DragEvent, status: WorkspaceStatus) => {
     if (!hasWorkspaceDragData(event.dataTransfer)) {
       return
@@ -135,15 +204,15 @@ export default function WorkspaceKanbanDrawer({
 
   const handleDrop = useCallback(
     (event: React.DragEvent, status: WorkspaceStatus) => {
-      const worktreeId = readWorkspaceDragData(event.dataTransfer)
-      if (!worktreeId) {
+      const worktreeIds = readWorkspaceDragDataIds(event.dataTransfer)
+      if (worktreeIds.length === 0) {
         return
       }
       event.preventDefault()
       setDragOverStatus(null)
-      moveWorktreeToStatus(worktreeId, status)
+      moveWorktreesToStatus(worktreeIds, status)
     },
-    [moveWorktreeToStatus]
+    [moveWorktreesToStatus]
   )
 
   const handleWorktreeActivate = useCallback(() => {
@@ -239,36 +308,21 @@ export default function WorkspaceKanbanDrawer({
     moveWorktreeToStatus,
     pinWorktree,
     handleDragFinish,
-    open
+    open,
+    {
+      onMoveWorktreesToStatus: moveWorktreesToStatus,
+      onPinWorktrees: pinWorktrees
+    }
   )
 
-  useEffect(() => {
-    if (!open) {
-      return
-    }
-
-    const handlePointerDown = (event: PointerEvent): void => {
-      const content = boardRef.current?.closest<HTMLElement>('[data-slot="sheet-content"]')
-      if (!content) {
-        return
-      }
-      const target = event.target
-      if (target instanceof Node && content.contains(target)) {
-        return
-      }
-      const rect = content.getBoundingClientRect()
-      if (event.clientX > rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom) {
-        onOpenChange(false)
-      }
-    }
-
-    document.addEventListener('pointerdown', handlePointerDown, true)
-    return () => document.removeEventListener('pointerdown', handlePointerDown, true)
-  }, [onOpenChange, open])
+  useWorkspaceKanbanShiftWheelScroll(boardRef, laneScrollerRef, open, isPointerDragActiveRef)
+  useWorkspaceKanbanOutsideDismiss({ open, boardRef, preserveOpenForMenu, onOpenChange })
 
   const opacityPercent = Math.round(workspaceBoardOpacity * 100)
   const drawerLeft = sidebarOpen ? sidebarWidth : 0
-  const BoardModeIcon = workspaceBoardCompact ? Rows3 : LayoutList
+  const drawerLeftCss = sidebarOpen
+    ? `var(--workspace-sidebar-live-width, ${sidebarWidth}px)`
+    : '0px'
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
@@ -276,20 +330,19 @@ export default function WorkspaceKanbanDrawer({
         side="left"
         showCloseButton={false}
         className="workspace-kanban-sheet-content bg-sidebar p-0 sm:max-w-none"
-        overlayStyle={{ top: 36, left: drawerLeft, pointerEvents: 'none' }}
+        overlayStyle={{ top: 36, left: drawerLeftCss, pointerEvents: 'none' }}
         style={
           {
             // Why: the board is a companion to the workspace sidebar, so it
             // expands from the sidebar edge instead of covering the sidebar.
-            left: drawerLeft,
+            left: drawerLeftCss,
             top: 36,
             height: 'calc(100% - 36px)',
-            width: `min(calc(100vw - ${drawerLeft}px), 1180px)`,
+            width: `min(calc(100vw - ${drawerLeftCss}), 1294px)`,
             opacity: workspaceBoardOpacity
           } as React.CSSProperties
         }
         data-workspace-board-compact={workspaceBoardCompact ? 'true' : 'false'}
-        onPointerEnter={onPointerEnter}
         onOpenAutoFocus={(event) => {
           // Why: Radix focuses the first toolbar button on open, which opens
           // its tooltip without hover and makes the drawer feel noisy.
@@ -297,134 +350,81 @@ export default function WorkspaceKanbanDrawer({
         }}
         onInteractOutside={(event) => {
           const originalEvent = event.detail.originalEvent
-          if (originalEvent instanceof PointerEvent && originalEvent.clientX < drawerLeft) {
-            // Why: users need to scroll, click, and drag from the workspace
-            // sidebar while the companion board stays open.
+          const target = originalEvent.target
+          if (preserveOpenForMenu) {
+            // Why: the first outside click should close a board dropdown, not
+            // also dismiss the board that owns the dropdown.
+            event.preventDefault()
+            return
+          }
+          if (isWorkspaceBoardKeepOpenTarget(target)) {
+            event.preventDefault()
+            return
+          }
+          const liveDrawerLeft =
+            boardRef.current
+              ?.closest<HTMLElement>('[data-slot="sheet-content"]')
+              ?.getBoundingClientRect().left ?? drawerLeft
+          if (originalEvent instanceof PointerEvent && originalEvent.clientX < liveDrawerLeft) {
+            // Why: keep the workspace sidebar interactive while the companion board stays open.
             event.preventDefault()
           }
         }}
       >
-        <SheetHeader className="border-b border-sidebar-border px-4 py-3 pr-24">
-          <SheetTitle className="text-sm">Workspace board</SheetTitle>
-          <SheetDescription className="sr-only">
-            Organize workspaces by status and open workspace cards.
-          </SheetDescription>
-        </SheetHeader>
-
-        <div className="absolute right-3 top-2.5 flex items-center gap-1">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant={workspaceBoardCompact ? 'secondary' : 'ghost'}
-                size="icon-xs"
-                aria-pressed={workspaceBoardCompact}
-                aria-label={
-                  workspaceBoardCompact ? 'Compact workspace cards' : 'Detailed workspace cards'
-                }
-                onClick={() => setWorkspaceBoardCompact(!workspaceBoardCompact)}
-              >
-                <BoardModeIcon className="size-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              {workspaceBoardCompact ? 'Show detailed cards' : 'Show compact cards'}
-            </TooltipContent>
-          </Tooltip>
-          <WorkspaceKanbanSettingsMenu
-            opacityPercent={opacityPercent}
-            workspaceStatuses={workspaceStatuses}
-            onOpacityChange={handleOpacityChange}
-            onRenameStatus={handleRenameStatus}
-            onChangeStatusColor={handleChangeStatusColor}
-            onChangeStatusIcon={handleChangeStatusIcon}
-            onMoveStatus={handleMoveStatus}
-            onRemoveStatus={handleRemoveStatus}
-            onAddStatus={handleAddStatus}
-          />
-          <SheetClose asChild>
-            <Button variant="ghost" size="icon-xs" aria-label="Close">
-              <X className="size-3.5" />
-            </Button>
-          </SheetClose>
-        </div>
-
-        <div ref={boardRef} className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
-          <div
-            data-workspace-pin-drop-target=""
-            className={cn(
-              'mb-3 flex h-8 shrink-0 items-center gap-2 rounded-md border border-dashed border-sidebar-border bg-background/45 px-3 text-[12px] text-muted-foreground transition-colors',
-              pinDragOver && 'border-sidebar-ring bg-sidebar-accent text-foreground'
-            )}
+        <WorkspaceKanbanDrawerHeader
+          selectedCount={selectedWorktrees.length}
+          compact={workspaceBoardCompact}
+          opacityPercent={opacityPercent}
+          workspaceStatuses={workspaceStatuses}
+          onCompactChange={setWorkspaceBoardCompact}
+          onOpacityChange={handleOpacityChange}
+          onRenameStatus={handleRenameStatus}
+          onChangeStatusColor={handleChangeStatusColor}
+          onChangeStatusIcon={handleChangeStatusIcon}
+          onMoveStatus={handleMoveStatus}
+          onRemoveStatus={handleRemoveStatus}
+          onAddStatus={handleAddStatus}
+          onFilterMenuOpenChange={onMenuOpenChange}
+        />
+        <div
+          ref={boardRef}
+          className="relative flex min-h-0 flex-1 flex-col overflow-hidden p-3"
+          data-workspace-board-selection-surface=""
+          onPointerDownCapture={onCardPointerDownCapture}
+          onPointerDown={handleAreaSelectionPointerDown}
+        >
+          <WorkspaceKanbanAreaSelectionOverlay ref={areaSelectionOverlayRef} />
+          <WorkspaceKanbanPinDropTarget
+            isDragOver={pinDragOver}
             onDragOver={handlePinDragOver}
             onDragLeave={handlePinDragLeave}
+          />
+          <div
+            ref={laneScrollerRef}
+            className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden scrollbar-sleek"
           >
-            <Pin className="size-3.5" />
-            <span className="font-medium">Pinned</span>
-            <span className="truncate">Drop here to pin without changing status.</span>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden scrollbar-sleek">
-            <div
-              className="grid h-full min-h-0 min-w-full grid-rows-[minmax(0,1fr)] gap-3"
-              style={{
-                gridTemplateColumns: `repeat(${workspaceStatuses.length}, minmax(240px, 1fr))`
-              }}
-            >
-              {workspaceStatuses.map((status) => {
-                const meta = getWorkspaceStatusVisualMeta(status)
-                const items = worktreesByStatus.get(status.id) ?? []
-                const isDragTarget = dragOverStatus === status.id
-
-                return (
-                  <section
-                    key={status.id}
-                    data-workspace-status-drop-target=""
-                    data-workspace-status={status.id}
-                    className={cn(
-                      'flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-t-2 border-sidebar-border transition-colors',
-                      meta.border,
-                      meta.laneTint,
-                      isDragTarget && 'border-sidebar-ring bg-sidebar-accent/70'
-                    )}
-                    onDragOver={(event) => handleDragOver(event, status.id)}
-                    onDragLeave={handleDragLeave}
-                    onDrop={(event) => handleDrop(event, status.id)}
-                  >
-                    <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border/70 px-3">
-                      <meta.icon className={cn('size-3.5', meta.tone)} />
-                      <div className="min-w-0 flex-1 truncate text-[12px] font-semibold text-foreground">
-                        {status.label}
-                      </div>
-                      <div className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
-                        {items.length}
-                      </div>
-                    </div>
-
-                    <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-1.5 py-2 scrollbar-sleek">
-                      {items.length > 0 ? (
-                        <div className="space-y-2">
-                          {items.map((worktree) => (
-                            <WorkspaceKanbanCard
-                              key={worktree.id}
-                              worktree={worktree}
-                              repo={repoMap.get(worktree.repoId)}
-                              isActive={activeWorktreeId === worktree.id}
-                              compact={workspaceBoardCompact}
-                              onActivate={handleWorktreeActivate}
-                            />
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="flex h-20 items-center justify-center rounded-md border border-dashed border-border/70 text-[11px] text-muted-foreground">
-                          Empty
-                        </div>
-                      )}
-                    </div>
-                  </section>
-                )
-              })}
-            </div>
+            <WorkspaceKanbanLaneGrid
+              statuses={workspaceStatuses}
+              worktreesByStatus={worktreesByStatus}
+              repoMap={repoMap}
+              activeWorktreeId={activeWorktreeId}
+              compact={workspaceBoardCompact}
+              columnWidth={columnWidth}
+              isResizingColumn={isResizingColumn}
+              dragOverStatus={dragOverStatus}
+              canCreateWorktree={canCreateWorktree}
+              selectedWorktreeIds={selectedWorktreeIds}
+              selectedWorktrees={selectedWorktrees}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onActivate={handleWorktreeActivate}
+              onSelectionGesture={updateSelectionForGesture}
+              onContextMenuSelect={selectForContextMenu}
+              onCreateWorktree={createWorktreeForStatus}
+              onColumnResizeStart={onColumnResizeStart}
+              onColumnResizeKeyDown={onColumnResizeKeyDown}
+            />
           </div>
         </div>
       </SheetContent>

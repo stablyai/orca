@@ -5,6 +5,7 @@ import type {
   SetupDecision,
   TuiAgent,
   WorkspaceCreateTelemetrySource,
+  WorkspaceStatus,
   Worktree,
   WorktreeBaseStatusEvent,
   WorktreeLineage,
@@ -84,7 +85,8 @@ export type WorktreeSlice = {
     linkedPR?: number,
     pushTarget?: GitPushTarget,
     createdWithAgent?: TuiAgent,
-    linkedLinearIssue?: string
+    linkedLinearIssue?: string,
+    workspaceStatus?: WorkspaceStatus
   ) => Promise<CreateWorktreeResult>
   removeWorktree: (
     worktreeId: string,
@@ -92,6 +94,9 @@ export type WorktreeSlice = {
   ) => Promise<{ ok: true } | { ok: false; error: string }>
   clearWorktreeDeleteState: (worktreeId: string) => void
   updateWorktreeMeta: (worktreeId: string, updates: Partial<WorktreeMeta>) => Promise<void>
+  updateWorktreesMeta: (
+    updatesByWorktreeId: ReadonlyMap<string, Partial<WorktreeMeta>>
+  ) => Promise<void>
   markWorktreeUnread: (worktreeId: string) => void
   /** Clear the worktree's unread dot. Called on user interaction with any
    *  terminal pane inside the worktree (keystroke, click) — matches

@@ -8,24 +8,29 @@ import {
   useState,
   type MutableRefObject
 } from 'react'
-import { LazySection } from './LazySection'
-import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
+import { AlertCircle, RefreshCw } from 'lucide-react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { monaco } from '@/lib/monaco-setup'
-import { joinPath } from '@/lib/path'
 import { detectLanguage } from '@/lib/language-detect'
 import { useAppStore } from '@/store'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
-import { getDiffCommentPopoverTop } from '../diff-comments/diff-comment-popover-position'
+import {
+  getDiffCommentPopoverLeft,
+  getDiffCommentPopoverTop
+} from '../diff-comments/diff-comment-popover-position'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import { computeLineStats } from './diff-line-stats'
+import { DiffSectionHeader } from './DiffSectionHeader'
+import { getDiffSectionBodyHeight, isIntrinsicHeightImageDiff } from './diff-section-layout'
 import type { DiffSection } from './diff-section-types'
 import type { DiffComment } from '../../../../shared/types'
+import { cn } from '@/lib/utils'
 import { isDiffComment } from '@/lib/diff-comment-compat'
+import { Button } from '@/components/ui/button'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -38,9 +43,11 @@ export function DiffSectionItem({
   settings,
   sectionHeight,
   worktreeId,
-  worktreeRoot,
   loadSection,
+  retrySection,
   toggleSection,
+  openSection,
+  openSectionTitle,
   setSectionHeights,
   setSections,
   modifiedEditorsRef,
@@ -54,16 +61,16 @@ export function DiffSectionItem({
   settings: { terminalFontSize?: number; terminalFontFamily?: string } | null
   sectionHeight: number | undefined
   worktreeId: string
-  /** The worktree root directory — not a file path; used to resolve absolute paths for opening files. */
-  worktreeRoot: string
   loadSection: (index: number) => void
+  retrySection: (index: number) => void
   toggleSection: (index: number) => void
+  openSection: (index: number) => void
+  openSectionTitle: string
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
   modifiedEditorsRef: MutableRefObject<Map<number, monacoEditor.IStandaloneCodeEditor>>
   handleSectionSaveRef: MutableRefObject<(index: number) => Promise<void>>
 }): React.JSX.Element {
-  const openFile = useAppStore((s) => s.openFile)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
@@ -94,11 +101,13 @@ export function DiffSectionItem({
 
   const [modifiedEditor, setModifiedEditor] = useState<monacoEditor.ICodeEditor | null>(null)
   const diffEditorRef = useRef<monacoEditor.IStandaloneDiffEditor | null>(null)
+  const sectionBodyRef = useRef<HTMLDivElement | null>(null)
   const lineNumberOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
   const [popover, setPopover] = useState<{
     lineNumber: number
     startLine?: number
     top: number
+    left?: number
   } | null>(null)
 
   const disposeDiffModels = useCallback(() => {
@@ -138,7 +147,14 @@ export function DiffSectionItem({
     worktreeId,
     comments: diffComments,
     onAddCommentClick: ({ lineNumber, startLine, top }) =>
-      setPopover({ lineNumber, startLine, top }),
+      setPopover({
+        lineNumber,
+        startLine,
+        top,
+        left: modifiedEditor
+          ? (getDiffCommentPopoverLeft(modifiedEditor, sectionBodyRef.current) ?? undefined)
+          : undefined
+      }),
     onDeleteComment: (id) => void deleteDiffComment(worktreeId, id),
     onUpdateComment: (id, body) => updateDiffComment(worktreeId, id, body),
     pendingScrollCommentId: pendingScrollForThisSection,
@@ -159,13 +175,16 @@ export function DiffSectionItem({
         setPopover(null)
         return
       }
-      setPopover((prev) => (prev ? { ...prev, top } : prev))
+      const left = getDiffCommentPopoverLeft(modifiedEditor, sectionBodyRef.current)
+      setPopover((prev) => (prev ? { ...prev, top, left: left == null ? prev.left : left } : prev))
     }
     const scrollSub = modifiedEditor.onDidScrollChange(update)
     const contentSub = modifiedEditor.onDidContentSizeChange(update)
+    const layoutSub = modifiedEditor.onDidLayoutChange(update)
     return () => {
       scrollSub.dispose()
       contentSub.dispose()
+      layoutSub.dispose()
     }
     // Why: depend on popover.lineNumber (not the whole popover object) so the
     // effect doesn't re-subscribe on every top update it dispatches. The guard
@@ -212,23 +231,36 @@ export function DiffSectionItem({
 
   const lineStats = useMemo(
     () =>
-      section.loading
+      section.loading || section.error
         ? null
         : computeLineStats(section.originalContent, section.modifiedContent, section.status),
-    [section.loading, section.originalContent, section.modifiedContent, section.status]
+    [
+      section.error,
+      section.loading,
+      section.originalContent,
+      section.modifiedContent,
+      section.status
+    ]
   )
-
-  const handleOpenInEditor = (e: React.MouseEvent): void => {
-    e.stopPropagation()
-    const absolutePath = joinPath(worktreeRoot, section.path)
-    openFile({
-      filePath: absolutePath,
-      relativePath: section.path,
-      worktreeId,
-      language,
-      mode: 'edit'
-    })
-  }
+  const changedLineCount = useMemo(() => {
+    if (lineStats) {
+      return lineStats.added + lineStats.removed
+    }
+    if (section.added === undefined && section.removed === undefined) {
+      return undefined
+    }
+    return (section.added ?? 0) + (section.removed ?? 0)
+  }, [lineStats, section.added, section.removed])
+  // Why: image diffs need document-flow height in the combined view; the text
+  // fallback only knows line counts and would squash screenshots into one row.
+  const useIntrinsicImageHeight = isIntrinsicHeightImageDiff(section.diffResult)
+  const sectionBodyHeight = getDiffSectionBodyHeight({
+    measuredContentHeight: sectionHeight,
+    originalContent: section.originalContent,
+    modifiedContent: section.modifiedContent,
+    changedLineCount,
+    useIntrinsicImageHeight
+  })
 
   const handleMount: DiffOnMount = (editor, monaco) => {
     diffEditorRef.current = editor
@@ -236,6 +268,10 @@ export function DiffSectionItem({
     lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(editor, sideBySide)
     const modified = editor.getModifiedEditor()
 
+    // Why: measuring before Monaco computes hidden unchanged regions records
+    // full-file height, making virtualized combined diffs jump as rows remount.
+    let diffLayoutReady = false
+    let pendingHeightFrame: number | null = null
     const updateHeight = (): void => {
       const contentHeight = editor.getModifiedEditor().getContentHeight()
       setSectionHeights((prev) => {
@@ -245,8 +281,28 @@ export function DiffSectionItem({
         return { ...prev, [index]: contentHeight }
       })
     }
-    modified.onDidContentSizeChange(updateHeight)
-    updateHeight()
+    const requestHeightUpdate = (): void => {
+      if (pendingHeightFrame !== null) {
+        return
+      }
+      pendingHeightFrame = window.requestAnimationFrame(() => {
+        pendingHeightFrame = null
+        updateHeight()
+      })
+    }
+    const markDiffLayoutReady = (): void => {
+      diffLayoutReady = true
+      requestHeightUpdate()
+    }
+    const contentSizeSub = modified.onDidContentSizeChange(() => {
+      if (diffLayoutReady) {
+        requestHeightUpdate()
+      }
+    })
+    const diffUpdateSub = editor.onDidUpdateDiff(markDiffLayoutReady)
+    if (editor.getLineChanges() !== null) {
+      markDiffLayoutReady()
+    }
 
     setModifiedEditor(modified)
     // Why: Monaco disposes inner editors when the DiffEditor container is
@@ -255,9 +311,18 @@ export function DiffSectionItem({
     // methods on a disposed editor instance, and avoids `popover` pointing
     // at a line in an editor that no longer exists.
     modified.onDidDispose(() => {
+      contentSizeSub.dispose()
+      diffUpdateSub.dispose()
+      if (pendingHeightFrame !== null) {
+        window.cancelAnimationFrame(pendingHeightFrame)
+        pendingHeightFrame = null
+      }
       lineNumberOptionsSubRef.current?.dispose()
       lineNumberOptionsSubRef.current = null
       diffEditorRef.current = null
+      if (modifiedEditorsRef.current.get(index) === modified) {
+        modifiedEditorsRef.current.delete(index)
+      }
       setModifiedEditor(null)
       setPopover(null)
     })
@@ -272,94 +337,55 @@ export function DiffSectionItem({
     )
     modified.onDidChangeModelContent(() => {
       const current = modified.getValue()
-      setSections((prev) =>
-        prev.map((s, i) => (i === index ? { ...s, dirty: current !== s.modifiedContent } : s))
-      )
+      setSections((prev) => {
+        let changed = false
+        const next = prev.map((s, i) => {
+          if (i !== index) {
+            return s
+          }
+
+          const savedModifiedContent =
+            s.diffResult?.kind === 'text' ? s.diffResult.modifiedContent : s.modifiedContent
+          const dirty = current !== savedModifiedContent
+          if (s.modifiedContent === current && s.dirty === dirty) {
+            return s
+          }
+
+          changed = true
+          // Why: virtualized rows unmount when scrolled away, so the draft must
+          // live in section state instead of only in Monaco's mounted model.
+          return { ...s, modifiedContent: current, dirty }
+        })
+        return changed ? next : prev
+      })
     })
   }
 
+  useEffect(() => {
+    loadSection(index)
+  }, [index, loadSection])
+
   return (
-    <LazySection key={section.key} index={index} onVisible={loadSection}>
-      <div
-        className="sticky top-0 z-10 bg-background flex items-center w-full px-3 py-1.5 text-left text-xs hover:bg-accent transition-colors group cursor-pointer"
-        onClick={() => toggleSection(index)}
-      >
-        <span className="min-w-0 flex-1 truncate text-muted-foreground">
-          <span
-            role="button"
-            tabIndex={0}
-            className="cursor-copy hover:underline"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-            }}
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              // Why: stop both mouse-down and click on the path affordance so
-              // the parent section-toggle row cannot consume the interaction
-              // before the Electron clipboard write runs.
-              void window.api.ui.writeClipboardText(section.path).catch((err) => {
-                console.error('Failed to copy diff path:', err)
-              })
-            }}
-            onKeyDown={(e) => {
-              if (e.key !== 'Enter' && e.key !== ' ') {
-                return
-              }
-              e.preventDefault()
-              e.stopPropagation()
-              void window.api.ui.writeClipboardText(section.path).catch((err) => {
-                console.error('Failed to copy diff path:', err)
-              })
-            }}
-            title="Copy path"
-          >
-            {section.path}
-          </span>
-          {section.dirty && <span className="font-medium ml-1">M</span>}
-          {lineStats && (lineStats.added > 0 || lineStats.removed > 0) && (
-            <span className="tabular-nums ml-2">
-              {lineStats.added > 0 && (
-                <span className="text-green-600 dark:text-green-500">+{lineStats.added}</span>
-              )}
-              {lineStats.added > 0 && lineStats.removed > 0 && <span> </span>}
-              {lineStats.removed > 0 && <span className="text-red-500">-{lineStats.removed}</span>}
-            </span>
-          )}
-        </span>
-        <div className="flex items-center gap-1 shrink-0 ml-2">
-          <button
-            className="p-0.5 rounded text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-            onClick={handleOpenInEditor}
-            title="Open in editor"
-          >
-            <ExternalLink className="size-3.5" />
-          </button>
-          {section.collapsed ? (
-            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
-          ) : (
-            <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
-          )}
-        </div>
-      </div>
+    <div className="border-b border-border">
+      <DiffSectionHeader
+        path={section.path}
+        dirty={section.dirty}
+        collapsed={section.collapsed}
+        added={lineStats?.added ?? section.added ?? 0}
+        removed={lineStats?.removed ?? section.removed ?? 0}
+        onToggle={() => toggleSection(index)}
+        onOpenSection={(event) => {
+          event.stopPropagation()
+          openSection(index)
+        }}
+        openSectionTitle={openSectionTitle}
+      />
 
       {!section.collapsed && (
         <div
-          className="relative"
-          style={{
-            height: sectionHeight
-              ? sectionHeight + 19
-              : Math.max(
-                  60,
-                  Math.max(
-                    section.originalContent.split('\n').length,
-                    section.modifiedContent.split('\n').length
-                  ) *
-                    19 +
-                    19
-                )
-          }}
+          ref={sectionBodyRef}
+          className={cn('relative', useIntrinsicImageHeight && 'overflow-visible')}
+          style={sectionBodyHeight === undefined ? undefined : { height: sectionBodyHeight }}
         >
           {popover && (
             // Why: key by lineNumber so the popover remounts when the anchor
@@ -370,13 +396,35 @@ export function DiffSectionItem({
               lineNumber={popover.lineNumber}
               startLine={popover.startLine}
               top={popover.top}
+              left={popover.left}
               onCancel={() => setPopover(null)}
               onSubmit={handleSubmitComment}
             />
           )}
           {section.loading ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground text-xs">
-              Loading...
+            <div className="flex h-full items-center gap-2 bg-muted/10 px-3 text-[11px] text-muted-foreground">
+              <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
+              <span>Loading diff...</span>
+            </div>
+          ) : section.error ? (
+            <div className="flex h-full items-center justify-between gap-3 bg-muted/10 px-3 text-[11px] text-muted-foreground">
+              <div className="flex min-w-0 items-center gap-2">
+                <AlertCircle className="size-3.5 shrink-0 text-destructive" />
+                <span className="truncate">{section.error}</span>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                className="h-6 shrink-0 px-2 text-[11px]"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  retrySection(index)
+                }}
+              >
+                <RefreshCw className="size-3" />
+                Retry
+              </Button>
             </div>
           ) : section.diffResult?.kind === 'binary' ? (
             section.diffResult.isImage ? (
@@ -386,6 +434,7 @@ export function DiffSectionItem({
                 filePath={section.path}
                 mimeType={section.diffResult.mimeType}
                 sideBySide={sideBySide}
+                layout={useIntrinsicImageHeight ? 'intrinsic' : 'fill'}
               />
             ) : (
               <div className="flex h-full items-center justify-center px-6 text-center">
@@ -436,6 +485,6 @@ export function DiffSectionItem({
           )}
         </div>
       )}
-    </LazySection>
+    </div>
   )
 }

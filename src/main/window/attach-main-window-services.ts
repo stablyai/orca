@@ -1,9 +1,7 @@
 /* eslint-disable max-lines -- Why: this file is the central main-window IPC wiring point; splitting it during the mobile release compatibility rebase would increase release risk. */
-import fs from 'node:fs/promises'
-import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 
-import { app, clipboard, ipcMain, nativeImage, session } from 'electron'
+import { app, ipcMain, session } from 'electron'
 import type { BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import type { CreateWorktreeResult, WorktreeStartupLaunch } from '../../shared/types'
@@ -343,47 +341,6 @@ function registerFileDropRelay(mainWindow: BrowserWindow): void {
       mainWindow.webContents.send('terminal:file-drop', args)
     }
   )
-}
-
-export function registerClipboardHandlers(): void {
-  ipcMain.removeHandler('clipboard:readText')
-  ipcMain.removeHandler('clipboard:writeText')
-  ipcMain.removeHandler('clipboard:writeImage')
-  ipcMain.removeHandler('clipboard:saveImageAsTempFile')
-
-  ipcMain.handle('clipboard:readText', () => clipboard.readText())
-  // Why: terminals need to detect clipboard images to support tools like Claude
-  // Code that accept image input via paste. Writes the clipboard image to a
-  // temp file and returns the path, or null if the clipboard has no image.
-  ipcMain.handle('clipboard:saveImageAsTempFile', async () => {
-    const image = clipboard.readImage()
-    if (image.isEmpty()) {
-      return null
-    }
-    const tempPath = path.join(app.getPath('temp'), `orca-paste-${Date.now()}.png`)
-    await fs.writeFile(tempPath, image.toPNG())
-    return tempPath
-  })
-  ipcMain.handle('clipboard:writeText', (_event, text: string) => clipboard.writeText(text))
-  ipcMain.handle('clipboard:writeImage', (_event, dataUrl: string) => {
-    // Why: only accept validated PNG data URIs to prevent writing arbitrary
-    // data to the clipboard. The renderer already validates the prefix, but
-    // defense-in-depth applies here too.
-    const prefix = 'data:image/png;base64,'
-    if (typeof dataUrl !== 'string' || !dataUrl.startsWith(prefix)) {
-      return
-    }
-    // Why: use createFromBuffer instead of createFromDataURL — the latter
-    // silently returns an empty image on some macOS + Electron combinations
-    // when the data URL is large (>500KB). Decoding the base64 manually and
-    // using createFromBuffer is more reliable.
-    const buffer = Buffer.from(dataUrl.slice(prefix.length), 'base64')
-    const image = nativeImage.createFromBuffer(buffer)
-    if (image.isEmpty()) {
-      return
-    }
-    clipboard.writeImage(image)
-  })
 }
 
 export function registerUpdaterHandlers(_store: Store): void {

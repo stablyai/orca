@@ -5,18 +5,11 @@ import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
-import type { Worktree } from '../../../../shared/types'
 import { formatAutomationSchedule } from '../../../../shared/automation-schedules'
-import {
-  formatAutomationDateTime,
-  formatAutomationDateTimeWithRelative,
-  getAutomationRunStatusLabel,
-  getAutomationRunStatusVariant
-} from './automation-page-parts'
+import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
 import {
   formatAutomationCost,
   formatAutomationTokens,
-  getAutomationUsageStatusLabel,
   summarizeAutomationRunUsage
 } from './automation-usage-model'
 
@@ -26,10 +19,8 @@ type AutomationDetailProps = {
   projectName: string
   workspaceName: string
   projectDefaultBaseRef: string | null
-  worktreeMap: Map<string, Worktree>
   now: number
   onRunNow: (automation: Automation) => void
-  onOpenRunWorkspace: (run: AutomationRun) => void
   onEdit: (automation: Automation) => void
   onToggle: (automation: Automation) => void
   onDelete: (automation: Automation) => void
@@ -93,10 +84,8 @@ export function AutomationDetail({
   projectName,
   workspaceName,
   projectDefaultBaseRef,
-  worktreeMap,
   now,
   onRunNow,
-  onOpenRunWorkspace,
   onEdit,
   onToggle,
   onDelete
@@ -211,96 +200,6 @@ export function AutomationDetail({
               {automation.prompt}
             </p>
           </div>
-        </div>
-      </div>
-
-      <div className="rounded-md border border-border/50 bg-muted/20 shadow-sm">
-        <div className="flex items-center justify-between border-b border-border/50 px-3 py-2">
-          <div className="text-sm font-medium">Run history</div>
-          <div className="text-xs text-muted-foreground">{runs.length} runs</div>
-        </div>
-        <div className="grid grid-cols-[minmax(9rem,1fr)_minmax(11rem,1.2fr)_minmax(5rem,.55fr)_minmax(5rem,.55fr)_minmax(6rem,auto)] gap-3 border-b border-border/50 px-3 py-1.5 text-[11px] font-medium uppercase text-muted-foreground">
-          <div>Run</div>
-          <div>Workspace</div>
-          <div>Spend</div>
-          <div>Tokens</div>
-          <div>Status</div>
-        </div>
-        <div className="divide-y divide-border/50">
-          {runs.map((run) => {
-            const runWorktree = run.workspaceId ? (worktreeMap.get(run.workspaceId) ?? null) : null
-            const workspaceLabel = run.workspaceId
-              ? (runWorktree?.displayName ?? 'Missing workspace')
-              : 'Not launched'
-            const rowClassName =
-              'grid grid-cols-[minmax(9rem,1fr)_minmax(11rem,1.2fr)_minmax(5rem,.55fr)_minmax(5rem,.55fr)_minmax(6rem,auto)] items-center gap-3 px-3 py-2 text-left text-sm outline-none transition-colors'
-            const usageLabel = getAutomationUsageStatusLabel(run.usage)
-            const rowContent = (
-              <>
-                <div className="min-w-0">
-                  <div>{formatAutomationDateTime(run.scheduledFor)}</div>
-                  {run.error || run.usage?.status === 'unavailable' ? (
-                    <div className="mt-1 truncate text-xs text-muted-foreground">
-                      {run.error ?? run.usage?.unavailableMessage}
-                    </div>
-                  ) : null}
-                </div>
-                <div
-                  className={
-                    runWorktree
-                      ? 'min-w-0 truncate text-foreground'
-                      : 'min-w-0 truncate text-muted-foreground'
-                  }
-                >
-                  {workspaceLabel}
-                </div>
-                <div
-                  className={
-                    run.usage?.status === 'known'
-                      ? 'text-sm tabular-nums'
-                      : 'text-sm text-muted-foreground'
-                  }
-                  title={usageLabel}
-                >
-                  {formatAutomationCost(run.usage?.estimatedCostUsd)}
-                </div>
-                <div
-                  className={
-                    run.usage?.status === 'known'
-                      ? 'text-sm tabular-nums'
-                      : 'text-sm text-muted-foreground'
-                  }
-                  title={usageLabel}
-                >
-                  {run.usage?.status === 'known'
-                    ? formatAutomationTokens(run.usage.totalTokens)
-                    : 'n/a'}
-                </div>
-                <div className="flex justify-start">
-                  <Badge variant={getAutomationRunStatusVariant(run.status)}>
-                    {getAutomationRunStatusLabel(run.status)}
-                  </Badge>
-                </div>
-              </>
-            )
-            return runWorktree ? (
-              <button
-                key={run.id}
-                type="button"
-                className={`${rowClassName} w-full cursor-pointer hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50`}
-                onClick={() => onOpenRunWorkspace(run)}
-              >
-                {rowContent}
-              </button>
-            ) : (
-              <div key={run.id} className={rowClassName}>
-                {rowContent}
-              </div>
-            )
-          })}
-          {runs.length === 0 ? (
-            <div className="px-3 py-6 text-center text-sm text-muted-foreground">No runs yet.</div>
-          ) : null}
         </div>
       </div>
     </div>

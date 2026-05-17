@@ -71,6 +71,12 @@ const PullRequestFileContents = RepoSelector.extend({
   baseSha: requiredString('Missing base SHA')
 })
 
+const PullRequestFileViewed = RepoSelector.extend({
+  pullRequestId: requiredString('Missing pull request ID'),
+  path: requiredString('Missing file path'),
+  viewed: z.boolean()
+})
+
 const ReviewThread = RepoSelector.extend({
   threadId: requiredString('Missing thread ID'),
   resolve: z.boolean()
@@ -312,6 +318,16 @@ export const GITHUB_METHODS: RpcMethod[] = [
     params: ReviewThread,
     handler: async (params, { runtime }) =>
       runtime.resolveRepoReviewThread(params.repo, params.threadId, params.resolve)
+  }),
+  defineMethod({
+    name: 'github.setPRFileViewed',
+    params: PullRequestFileViewed,
+    handler: async (params, { runtime }) =>
+      runtime.setRepoPRFileViewed(params.repo, {
+        pullRequestId: params.pullRequestId,
+        path: params.path,
+        viewed: params.viewed
+      })
   }),
   defineMethod({
     name: 'github.updatePRTitle',

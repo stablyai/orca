@@ -11,13 +11,13 @@ test.describe('usage overview', () => {
   }) => {
     await orcaPage.evaluate(() => {
       const state = window.__store!.getState()
-      state.openSettingsTarget({ pane: 'stats' })
       state.openSettingsPage()
     })
 
     await expect
       .poll(async () => getStoreState<string>(orcaPage, 'activeView'), { timeout: 5_000 })
       .toBe('settings')
+    await orcaPage.getByRole('button', { name: 'Stats & Usage' }).click()
     await expect(orcaPage.getByRole('heading', { name: 'Usage Analytics' })).toBeVisible()
     const providerDropdown = orcaPage.getByTestId('usage-provider-select')
     await expect(providerDropdown).toHaveAttribute(

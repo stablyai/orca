@@ -28,6 +28,7 @@ function buildMenuOptions() {
     onCheckForUpdates: vi.fn(),
     onOpenSettings: vi.fn(),
     onOpenFeatureTour: vi.fn(),
+    onOpenCrashReport: vi.fn(),
     onZoomIn: vi.fn(),
     onZoomOut: vi.fn(),
     onZoomReset: vi.fn(),
@@ -172,7 +173,9 @@ describe('registerAppMenu', () => {
     expect(fileLabels).toEqual(expect.arrayContaining(['Export as PDF...', 'Settings', 'Exit']))
 
     const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
-    expect(helpLabels).toEqual(expect.arrayContaining(['Feature tour', 'Check for Updates...']))
+    expect(helpLabels).toEqual(
+      expect.arrayContaining(['Report Crash...', 'Feature tour', 'Check for Updates...'])
+    )
   })
 
   it.runIf(isMac)('keeps the macOS app-named menu with Settings and quit roles', () => {
@@ -188,7 +191,7 @@ describe('registerAppMenu', () => {
     expect(fileLabels).not.toContain('Settings')
     expect(fileLabels).not.toContain('Exit')
     const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
-    expect(helpLabels).toEqual(['Feature tour'])
+    expect(helpLabels).toEqual(['Report Crash...', undefined, 'Feature tour'])
   })
 
   it('routes Feature tour through its callback', () => {
@@ -205,6 +208,21 @@ describe('registerAppMenu', () => {
 
     expect(options.onOpenFeatureTour).toHaveBeenCalledTimes(1)
     expect(options.onOpenFeatureTour).toHaveBeenCalledWith(targetWindow)
+  })
+
+  it('routes Report Crash through its callback', () => {
+    const options = buildMenuOptions()
+    registerAppMenu(options)
+
+    const crashReportItem = getSubmenu(getTemplate(), 'Help').find(
+      (entry) => entry.label === 'Report Crash...'
+    )
+
+    const targetWindow = {} as Electron.BaseWindow
+    crashReportItem?.click?.({} as never, targetWindow, {} as Electron.KeyboardEvent)
+
+    expect(options.onOpenCrashReport).toHaveBeenCalledTimes(1)
+    expect(options.onOpenCrashReport).toHaveBeenCalledWith(targetWindow)
   })
 
   it('exposes an Appearance submenu under View with checkbox items reflecting state', () => {

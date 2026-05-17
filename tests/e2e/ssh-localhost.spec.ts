@@ -21,9 +21,9 @@ type LocalhostSshTarget = {
 
 const RUN_LOCALHOST_SSH = process.env.ORCA_E2E_SSH_LOCALHOST === '1'
 const RUN_REMOTE_HOOKS =
-  process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS !== undefined &&
-  process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS.trim() !== '' &&
-  process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS.trim() !== '0'
+  process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS === undefined ||
+  (process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS.trim() !== '' &&
+    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS.trim() !== '0')
 
 function parsePort(value: string | undefined): number {
   const parsed = Number(value ?? '22')
@@ -79,7 +79,7 @@ test.describe('Localhost SSH', () => {
   )
   test.skip(
     !RUN_REMOTE_HOOKS,
-    'Set ORCA_FEATURE_REMOTE_AGENT_HOOKS=1 so remote PTYs keep pane identity and forward hook events.'
+    'Unset ORCA_FEATURE_REMOTE_AGENT_HOOKS or set it to 1 so remote PTYs keep pane identity and forward hook events.'
   )
   test.skip(process.platform === 'win32', 'Localhost SSH hook E2E uses POSIX hook scripts.')
 

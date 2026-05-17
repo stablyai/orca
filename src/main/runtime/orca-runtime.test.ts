@@ -1,7 +1,15 @@
 /* eslint-disable max-lines -- Why: runtime behavior is stateful and cross-cutting, so these tests stay in one file to preserve the end-to-end invariants around handles, waits, and graph sync. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { EventEmitter } from 'events'
+import { mkdtemp, rm } from 'fs/promises'
 import type { WorktreeLineage, WorktreeMeta } from '../../shared/types'
-import { addWorktree, listWorktrees, removeWorktree } from '../git/worktree'
+import {
+  addWorktree,
+  assertWorktreeCleanForRemoval,
+  listWorktrees,
+  removeWorktree
+} from '../git/worktree'
+import * as gitRunner from '../git/runner'
 import {
   createSetupRunnerScript,
   getEffectiveHooks,
@@ -18,6 +26,7 @@ import {
   unregisterSshFilesystemProvider
 } from '../providers/ssh-filesystem-dispatch'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 
 const {
   MOCK_GIT_WORKTREES,
@@ -29,7 +38,9 @@ const {
   getSshGitProviderMock,
   registerSshGitProviderMock,
   unregisterSshGitProviderMock,
-  invalidateAuthorizedRootsCacheMock
+  invalidateAuthorizedRootsCacheMock,
+  createHostedReviewMock,
+  getHostedReviewCreationEligibilityMock
 } = vi.hoisted(() => {
   // Why: SSH runtime tests register providers through the public dispatcher API,
   // so the mock needs the same registry semantics as the real module.
@@ -57,12 +68,15 @@ const {
     unregisterSshGitProviderMock: vi.fn((connectionId: string) => {
       sshGitProviders.delete(connectionId)
     }),
-    invalidateAuthorizedRootsCacheMock: vi.fn()
+    invalidateAuthorizedRootsCacheMock: vi.fn(),
+    createHostedReviewMock: vi.fn(),
+    getHostedReviewCreationEligibilityMock: vi.fn()
   }
 })
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
+  assertWorktreeCleanForRemoval: vi.fn().mockResolvedValue(undefined),
   addWorktree: addWorktreeMock,
   removeWorktree: removeWorktreeMock
 }))
@@ -95,7 +109,14 @@ vi.mock('../ipc/worktree-logic', async (importOriginal) => {
 })
 
 vi.mock('../ipc/filesystem-auth', () => ({
-  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
+  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock,
+  isENOENT: (error: unknown) =>
+    Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
+}))
+
+vi.mock('../source-control/hosted-review-creation', () => ({
+  createHostedReview: createHostedReviewMock,
+  getHostedReviewCreationEligibility: getHostedReviewCreationEligibilityMock
 }))
 
 // Why: the CLI create-worktree path calls getDefaultBaseRef to resolve a
@@ -116,6 +137,8 @@ vi.mock('../git/repo', async (importOriginal) => {
 afterEach(() => {
   vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
   vi.mocked(addWorktree).mockReset()
+  vi.mocked(assertWorktreeCleanForRemoval).mockReset()
+  vi.mocked(assertWorktreeCleanForRemoval).mockResolvedValue(undefined)
   vi.mocked(removeWorktree).mockReset()
   sshGitProviders.clear()
   getSshGitProviderMock.mockReset()
@@ -143,6 +166,25 @@ afterEach(() => {
   computeWorktreePathMock.mockReset()
   ensurePathWithinWorkspaceMock.mockReset()
   invalidateAuthorizedRootsCacheMock.mockReset()
+  createHostedReviewMock.mockReset()
+  createHostedReviewMock.mockResolvedValue({
+    ok: true,
+    provider: 'github',
+    number: 1,
+    url: 'https://example.com/pull/1'
+  })
+  getHostedReviewCreationEligibilityMock.mockReset()
+  getHostedReviewCreationEligibilityMock.mockResolvedValue({
+    provider: 'github',
+    review: null,
+    canCreate: true,
+    blockedReason: null,
+    nextAction: null,
+    defaultBaseRef: 'main',
+    head: 'feature/foo',
+    title: null,
+    body: null
+  })
 })
 
 function syncSinglePty(runtime: OrcaRuntimeService, ptyId: string | null = 'pty-1'): void {
@@ -796,6 +838,73 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('rejects hosted review worktree selectors outside the selected repo', async () => {
+    vi.mocked(listWorktrees).mockImplementation(async (repoPath: string) => {
+      if (repoPath === '/tmp/repo-b') {
+        return [
+          {
+            path: '/tmp/worktree-b',
+            head: 'def',
+            branch: 'feature/bar',
+            isBare: false,
+            isMainWorktree: false
+          }
+        ]
+      }
+      return MOCK_GIT_WORKTREES
+    })
+    const repos = [
+      {
+        id: TEST_REPO_ID,
+        path: TEST_REPO_PATH,
+        displayName: 'repo',
+        badgeColor: 'blue',
+        addedAt: 1
+      },
+      {
+        id: 'repo-2',
+        path: '/tmp/repo-b',
+        displayName: 'repo-b',
+        badgeColor: 'green',
+        addedAt: 2
+      }
+    ]
+    const multiRepoStore = {
+      ...store,
+      getRepos: () => repos,
+      getRepo: (id: string) => repos.find((repo) => repo.id === id)
+    }
+    const runtime = new OrcaRuntimeService(multiRepoStore as never)
+
+    await expect(
+      runtime.getHostedReviewCreationEligibility({
+        repoSelector: 'id:repo-1',
+        worktreeSelector: 'id:repo-2::/tmp/worktree-b',
+        branch: 'feature/bar',
+        base: 'main',
+        hasUncommittedChanges: false,
+        hasUpstream: true,
+        ahead: 1,
+        behind: 0
+      })
+    ).rejects.toThrow('Access denied: worktree does not belong to repository')
+    await expect(
+      runtime.createHostedReview({
+        repoSelector: 'id:repo-1',
+        worktreeSelector: 'id:repo-2::/tmp/worktree-b',
+        provider: 'github',
+        base: 'main',
+        head: 'feature/bar',
+        title: 'Create PR',
+        body: '',
+        draft: false
+      })
+    ).rejects.toThrow('Access denied: worktree does not belong to repository')
+
+    expect(getHostedReviewCreationEligibilityMock).not.toHaveBeenCalled()
+    expect(createHostedReviewMock).not.toHaveBeenCalled()
+  })
+
   it('treats SSH worktree drift as unknown without local git probes', async () => {
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(getDefaultBaseRef).mockClear()
@@ -864,6 +973,136 @@ describe('OrcaRuntimeService', () => {
 
     expect(repo).toMatchObject({ id: 'repo-unc', path: '//Server/Share/Repo' })
     expect(added).toHaveLength(0)
+  })
+
+  it('defaults runtime addRepo badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
+    const added: Record<string, unknown>[] = []
+    const colorStore = {
+      ...store,
+      getRepos: () => [...added] as never,
+      addRepo: (repo: Record<string, unknown>) => {
+        added.push(repo)
+      },
+      getRepo: (id: string) => added.find((repo) => repo.id === id) as never
+    }
+    const runtime = new OrcaRuntimeService(colorStore as never)
+
+    const repo = await runtime.addRepo('/tmp/runtime-add-default', 'folder')
+
+    expect(repo.badgeColor).toBe(DEFAULT_REPO_BADGE_COLOR)
+    expect(added).toEqual([expect.objectContaining({ badgeColor: DEFAULT_REPO_BADGE_COLOR })])
+  })
+
+  it('defaults runtime createRepo badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
+    const added: Record<string, unknown>[] = []
+    const colorStore = {
+      ...store,
+      getRepos: () => [...added] as never,
+      addRepo: (repo: Record<string, unknown>) => {
+        added.push(repo)
+      },
+      getRepo: (id: string) => added.find((repo) => repo.id === id) as never
+    }
+    const runtime = new OrcaRuntimeService(colorStore as never)
+    const parentDir = await mkdtemp('/tmp/orca-runtime-create-')
+    try {
+      const result = await runtime.createRepo(parentDir, 'runtime-create-default', 'folder')
+      if ('error' in result) {
+        throw new Error(result.error)
+      }
+
+      expect(result).toHaveProperty('repo.badgeColor', DEFAULT_REPO_BADGE_COLOR)
+      expect(added).toEqual([expect.objectContaining({ badgeColor: DEFAULT_REPO_BADGE_COLOR })])
+    } finally {
+      await rm(parentDir, { recursive: true, force: true })
+    }
+  })
+
+  it('preserves existing badgeColor on runtime createRepo dedupe', async () => {
+    const existing = {
+      id: 'runtime-existing-create',
+      path: '/tmp/runtime-existing-create',
+      displayName: 'runtime-existing-create',
+      badgeColor: '#14b8a6',
+      addedAt: 1,
+      kind: 'folder' as const
+    }
+    const colorStore = {
+      ...store,
+      getRepos: () => [existing]
+    }
+    const runtime = new OrcaRuntimeService(colorStore as never)
+
+    const result = await runtime.createRepo('/tmp', 'runtime-existing-create', 'folder')
+
+    expect(result).toEqual({ repo: existing })
+    expect(result).toHaveProperty('repo.badgeColor', '#14b8a6')
+  })
+
+  it('defaults runtime cloneRepo badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
+    const spawnSpy = vi.spyOn(gitRunner, 'wslAwareSpawn')
+    const added: Record<string, unknown>[] = []
+    const colorStore = {
+      ...store,
+      getRepos: () => [...added] as never,
+      addRepo: (repo: Record<string, unknown>) => {
+        added.push(repo)
+      },
+      getRepo: (id: string) => added.find((repo) => repo.id === id) as never
+    }
+    spawnSpy.mockImplementation(() => {
+      const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
+      proc.stderr = new EventEmitter()
+      queueMicrotask(() => proc.emit('close', 0, null))
+      return proc as never
+    })
+    const runtime = new OrcaRuntimeService(colorStore as never)
+
+    try {
+      const repo = await runtime.cloneRepo('https://example.com/repo-badge-color.git', '/tmp')
+      expect(repo.badgeColor).toBe(DEFAULT_REPO_BADGE_COLOR)
+      expect(added).toEqual([expect.objectContaining({ badgeColor: DEFAULT_REPO_BADGE_COLOR })])
+    } finally {
+      spawnSpy.mockRestore()
+    }
+  })
+
+  it('preserves existing badgeColor on runtime cloneRepo folder->git dedupe upgrade', async () => {
+    const spawnSpy = vi.spyOn(gitRunner, 'wslAwareSpawn')
+    spawnSpy.mockImplementation(() => {
+      const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
+      proc.stderr = new EventEmitter()
+      queueMicrotask(() => proc.emit('close', 0, null))
+      return proc as never
+    })
+    const existing = {
+      id: 'runtime-folder-upgrade',
+      path: '/tmp/repo-badge-color',
+      displayName: 'repo-badge-color',
+      badgeColor: '#ec4899',
+      addedAt: 1,
+      kind: 'folder' as const
+    }
+    const updates: { id: string; updates: Record<string, unknown> }[] = []
+    const upgraded = { ...existing, kind: 'git' as const }
+    const colorStore = {
+      ...store,
+      getRepos: () => [existing],
+      updateRepo: (id: string, repoUpdates: Record<string, unknown>) => {
+        updates.push({ id, updates: repoUpdates })
+        return upgraded as never
+      }
+    }
+    const runtime = new OrcaRuntimeService(colorStore as never)
+
+    try {
+      const repo = await runtime.cloneRepo('https://example.com/repo-badge-color.git', '/tmp')
+      expect(updates).toEqual([{ id: existing.id, updates: { kind: 'git' } }])
+      expect(repo).toEqual(upgraded)
+      expect(repo.badgeColor).toBe('#ec4899')
+    } finally {
+      spawnSpy.mockRestore()
+    }
   })
 
   it('associates controller PTYs with mixed-case Windows and UNC cwd paths', async () => {
@@ -1472,6 +1711,49 @@ describe('OrcaRuntimeService', () => {
       expect(unread).toHaveLength(1)
       expect(unread[0].read).toBe(0)
       expect(unread[0].delivered_at).not.toBeNull()
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not replay an already-delivered message on a later idle transition', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new OrchestrationDb(':memory:')
+      const write = vi.fn().mockReturnValue(true)
+      runtime.setOrchestrationDb(db)
+      runtime.setPtyController({
+        write,
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
+      db.insertMessage({ from: 'term_sender', to: terminal.handle, subject: 'hello' })
+
+      runtime.deliverPendingMessagesForHandle(terminal.handle)
+      await vi.advanceTimersByTimeAsync(500)
+
+      const firstInjections = write.mock.calls.filter(
+        (c) => typeof c[1] === 'string' && c[1].includes('Subject: hello')
+      ).length
+      expect(firstInjections).toBe(1)
+
+      // Second idle transition: the row is still unread (no check caller has
+      // consumed it), but it has been delivered. Push-on-idle must skip it to
+      // avoid the replay bug.
+      runtime.deliverPendingMessagesForHandle(terminal.handle)
+      await vi.advanceTimersByTimeAsync(500)
+
+      const totalInjections = write.mock.calls.filter(
+        (c) => typeof c[1] === 'string' && c[1].includes('Subject: hello')
+      ).length
+      expect(totalInjections).toBe(1)
       db.close()
     } finally {
       vi.useRealTimers()
@@ -3641,6 +3923,73 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('fails dirty non-force deletes before PTY teardown', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const killSpy = vi.fn().mockReturnValue(true)
+    runtime.setPtyController({
+      write: () => true,
+      kill: (id) => killSpy(id),
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime, 'pty-1')
+    vi.mocked(getEffectiveHooks).mockReturnValue(null)
+    vi.mocked(assertWorktreeCleanForRemoval).mockRejectedValue(
+      Object.assign(new Error('Worktree has uncommitted or untracked changes.'), {
+        stdout: '?? scratch.txt\n'
+      })
+    )
+
+    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).rejects.toThrow(
+      `Failed to delete worktree at ${TEST_WORKTREE_PATH}. ?? scratch.txt`
+    )
+
+    expect(killSpy).not.toHaveBeenCalled()
+    expect(removeWorktree).not.toHaveBeenCalled()
+  })
+
+  it('formats preflight subprocess failures and skips PTY teardown', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const killSpy = vi.fn().mockReturnValue(true)
+    runtime.setPtyController({
+      write: () => true,
+      kill: (id) => killSpy(id),
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime, 'pty-1')
+    vi.mocked(getEffectiveHooks).mockReturnValue(null)
+    vi.mocked(assertWorktreeCleanForRemoval).mockRejectedValue(
+      Object.assign(new Error('status failed'), {
+        stderr: 'fatal: unable to read current working directory\n'
+      })
+    )
+
+    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).rejects.toThrow(
+      `Failed to delete worktree at ${TEST_WORKTREE_PATH}. fatal: unable to read current working directory`
+    )
+
+    expect(killSpy).not.toHaveBeenCalled()
+    expect(removeWorktree).not.toHaveBeenCalled()
+  })
+
+  it('falls through to orphan cleanup when preflight reports missing/non-repo worktree', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    vi.mocked(getEffectiveHooks).mockReturnValue(null)
+    vi.mocked(assertWorktreeCleanForRemoval).mockRejectedValue(
+      Object.assign(new Error('status failed'), {
+        stderr: 'fatal: not a git repository (or any of the parent directories): .git\n'
+      })
+    )
+    vi.mocked(removeWorktree).mockRejectedValue(
+      Object.assign(new Error('git worktree remove failed'), {
+        stderr: `fatal: '${TEST_WORKTREE_PATH}' is not a working tree`
+      })
+    )
+    vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({ stdout: '', stderr: '' })
+
+    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).resolves.toEqual({})
+    expect(removeWorktree).toHaveBeenCalledWith(TEST_REPO_PATH, TEST_WORKTREE_PATH, false)
+  })
+
   it('runs archive hooks for CLI worktree removal when hooks are explicitly enabled', async () => {
     const runtime = new OrcaRuntimeService(store)
     vi.mocked(getEffectiveHooks).mockReturnValue({
@@ -4049,6 +4398,9 @@ describe('OrcaRuntimeService', () => {
       const killSpy = vi.fn().mockReturnValue(true)
       const localProvider = createProviderStub(async () => [])
       const callOrder: string[] = []
+      vi.mocked(assertWorktreeCleanForRemoval).mockImplementation(async () => {
+        callOrder.push('preflight')
+      })
       vi.mocked(removeWorktree).mockImplementation(async () => {
         callOrder.push('git-removeWorktree')
       })
@@ -4074,8 +4426,11 @@ describe('OrcaRuntimeService', () => {
       expect(killSpy).toHaveBeenCalledWith('pty-1')
       // The provider-prefix sweep and the git removal must happen AFTER the
       // runtime-graph kill. Git removal must NOT happen before any kill.
+      const preflightIdx = callOrder.indexOf('preflight')
       const killIdx = callOrder.indexOf('kill:pty-1')
       const gitIdx = callOrder.indexOf('git-removeWorktree')
+      expect(preflightIdx).toBeGreaterThanOrEqual(0)
+      expect(killIdx).toBeGreaterThan(preflightIdx)
       expect(killIdx).toBeGreaterThanOrEqual(0)
       expect(gitIdx).toBeGreaterThan(killIdx)
     })

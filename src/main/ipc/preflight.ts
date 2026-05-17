@@ -5,8 +5,10 @@ import path from 'path'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import type { PathSource, ShellHydrationFailureReason } from '../../shared/types'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
+import { getAzureDevOpsAuthStatus } from '../azure-devops/client'
 import { getBitbucketAuthStatus } from '../bitbucket/client'
 import { getGiteaAuthStatus } from '../gitea/client'
+import { _resetKnownHostsCache } from '../gitlab/gl-utils'
 import { getActiveMultiplexer } from './ssh'
 
 const execFileAsync = promisify(execFile)
@@ -20,6 +22,13 @@ export type PreflightStatus = {
   // gate on `glab?.authenticated`.
   glab?: { installed: boolean; authenticated: boolean }
   bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
+  azureDevOps?: {
+    configured: boolean
+    authenticated: boolean
+    account: string | null
+    baseUrl: string | null
+    tokenConfigured: boolean
+  }
   gitea?: {
     configured: boolean
     authenticated: boolean
@@ -163,16 +172,27 @@ export async function runPreflightCheck(force = false): Promise<PreflightStatus>
     return cached
   }
 
+  if (force) {
+    // Why: the GitLab known-hosts cache (gl-utils) is populated lazily on the
+    // first GitLab request and never invalidated within a session. A user who
+    // runs `glab auth login` for a self-hosted host after Orca starts would
+    // otherwise see "No GitLab project found" until app relaunch. The Re-check
+    // path in IntegrationsPane forces preflight, so piggyback on that signal
+    // to refresh the host list too.
+    _resetKnownHostsCache()
+  }
+
   const [gitInstalled, ghInstalled, glabInstalled] = await Promise.all([
     isCommandAvailable('git'),
     isCommandAvailable('gh'),
     isCommandAvailable('glab')
   ])
 
-  const [ghAuthenticated, glabAuthenticated, bitbucket, gitea] = await Promise.all([
+  const [ghAuthenticated, glabAuthenticated, bitbucket, azureDevOps, gitea] = await Promise.all([
     ghInstalled ? isGhAuthenticated() : Promise.resolve(false),
     glabInstalled ? isGlabAuthenticated() : Promise.resolve(false),
     getBitbucketAuthStatus(),
+    getAzureDevOpsAuthStatus(),
     getGiteaAuthStatus()
   ])
 
@@ -181,6 +201,7 @@ export async function runPreflightCheck(force = false): Promise<PreflightStatus>
     gh: { installed: ghInstalled, authenticated: ghAuthenticated },
     glab: { installed: glabInstalled, authenticated: glabAuthenticated },
     bitbucket,
+    azureDevOps,
     gitea
   }
 

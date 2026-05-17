@@ -6,9 +6,12 @@ import type * as ChildProcess from 'child_process'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import {
-  applyOrcaAttribution,
+  cancelGenerateCommitMessageLocal,
+  cancelGeneratePullRequestFieldsLocal,
   generateCommitMessageFromContext,
-  resolveCommitMessageSettings
+  generatePullRequestFieldsFromContext,
+  resolveCommitMessageSettings,
+  trimGeneratedCommitMessage
 } from './commit-message-text-generation'
 
 vi.mock('child_process', async (importOriginal) => {
@@ -54,10 +57,25 @@ describe('resolveCommitMessageSettings', () => {
       ok: true,
       params: {
         agentId: 'codex',
-        model: 'gpt-5.4-mini',
+        model: 'gpt-5.5',
         thinkingLevel: 'low',
-        customPrompt: 'Use Conventional Commits.',
-        attributionEnabled: true
+        customPrompt: 'Use Conventional Commits.'
+      }
+    })
+  })
+
+  it("uses the user's default agent when the AI setting has no explicit agent", () => {
+    const settings = getDefaultSettings('/tmp')
+    settings.defaultTuiAgent = 'codex'
+
+    const result = resolveCommitMessageSettings(settings)
+
+    expect(result).toMatchObject({
+      ok: true,
+      params: {
+        agentId: 'codex',
+        model: 'gpt-5.5',
+        thinkingLevel: 'low'
       }
     })
   })
@@ -67,8 +85,8 @@ describe('resolveCommitMessageSettings', () => {
     settings.commitMessageAi = {
       enabled: true,
       agentId: 'codex',
-      selectedModelByAgent: { codex: 'gpt-5.5' },
-      selectedThinkingByModel: { 'gpt-5.5': 'turbo' },
+      selectedModelByAgent: { codex: 'gpt-5.4-mini' },
+      selectedThinkingByModel: { 'gpt-5.4-mini': 'turbo' },
       customPrompt: '',
       customAgentCommand: ''
     }
@@ -79,7 +97,7 @@ describe('resolveCommitMessageSettings', () => {
       ok: true,
       params: {
         agentId: 'codex',
-        model: 'gpt-5.5',
+        model: 'gpt-5.4-mini',
         thinkingLevel: 'low'
       }
     })
@@ -239,8 +257,7 @@ describe('generateCommitMessageFromContext', () => {
       {
         agentId: 'custom',
         model: '',
-        customAgentCommand: 'agent',
-        attributionEnabled: true
+        customAgentCommand: 'agent'
       },
       {
         kind: 'remote',
@@ -257,8 +274,7 @@ describe('generateCommitMessageFromContext', () => {
 
     expect(result).toEqual({
       success: true,
-      message:
-        'Update README\n\n- Explain the generated commit-message flow\n\nCo-authored-by: Orca <help@stably.ai>',
+      message: 'Update README\n\n- Explain the generated commit-message flow',
       agentLabel: 'agent'
     })
   })
@@ -377,6 +393,94 @@ describe('generateCommitMessageFromContext', () => {
     )
   })
 
+  it('keeps local commit-message and pull-request cancellation lanes separate', async () => {
+    const children: {
+      kill: ReturnType<typeof vi.fn>
+      listeners: Map<string, (value: unknown) => void>
+    }[] = []
+    spawnMock.mockImplementation(() => {
+      const listeners = new Map<string, (value: unknown) => void>()
+      const child = {
+        pid: 123 + children.length,
+        kill: vi.fn(),
+        stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
+        stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+        stdin: { end: vi.fn() },
+        on: vi.fn((event, callback) => listeners.set(event, callback))
+      }
+      children.push({ kill: child.kill, listeners })
+      return child as never
+    })
+
+    const commit = generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent'
+      },
+      {
+        kind: 'local',
+        cwd: '/repo'
+      }
+    )
+    const pullRequest = generatePullRequestFieldsFromContext(
+      {
+        branch: 'feature/pr-fields',
+        base: 'main',
+        currentTitle: '',
+        currentBody: '',
+        currentDraft: false,
+        commitSummary: '- feat: update README',
+        changeSummary: 'M\tREADME.md',
+        patch: '+hello'
+      },
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent'
+      },
+      {
+        kind: 'local',
+        cwd: '/repo'
+      }
+    )
+
+    cancelGenerateCommitMessageLocal('/repo')
+
+    expect(children[0]?.kill).toHaveBeenCalledWith('SIGKILL')
+    expect(children[1]?.kill).not.toHaveBeenCalled()
+
+    children[0]?.listeners.get('close')?.(null)
+    const pullRequestStdout = children[1]?.listeners.get('stdout:data')
+    pullRequestStdout?.(
+      Buffer.from('{"base":"main","title":"Update README","body":"Details","draft":false}')
+    )
+    children[1]?.listeners.get('close')?.(0)
+
+    await expect(commit).resolves.toEqual({
+      success: false,
+      error: 'Generation canceled.',
+      canceled: true
+    })
+    await expect(pullRequest).resolves.toMatchObject({
+      success: true,
+      fields: {
+        base: 'main',
+        title: 'Update README',
+        body: 'Details',
+        draft: false
+      }
+    })
+
+    cancelGeneratePullRequestFieldsLocal('/repo')
+    expect(children[1]?.kill).not.toHaveBeenCalled()
+  })
+
   it('routes Windows batch-script agent commands through cmd.exe', async () => {
     const originalComSpec = process.env.ComSpec
     process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe'
@@ -419,7 +523,7 @@ describe('generateCommitMessageFromContext', () => {
         })
         expect(spawnMock).toHaveBeenCalledWith(
           'C:\\Windows\\System32\\cmd.exe',
-          ['/d', '/s', '/c', '"C:/tools/agent.cmd"'],
+          ['/d', '/c', 'C:/tools/agent.cmd'],
           expect.objectContaining({
             cwd: 'C:\\repo',
             windowsHide: true
@@ -464,10 +568,10 @@ describe('generateCommitMessageFromContext', () => {
   })
 })
 
-describe('applyOrcaAttribution', () => {
-  it('does not duplicate the Orca trailer', () => {
-    const message = applyOrcaAttribution('Update docs', true)
+describe('trimGeneratedCommitMessage', () => {
+  it('removes trailing whitespace from generated messages', () => {
+    const message = trimGeneratedCommitMessage('Update docs\n\n')
 
-    expect(applyOrcaAttribution(message, true)).toBe(message)
+    expect(message).toBe('Update docs')
   })
 })

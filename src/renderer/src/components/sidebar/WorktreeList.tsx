@@ -1,6 +1,9 @@
 /* eslint-disable max-lines */
 import React, { useMemo, useCallback, useRef, useState, useEffect, useLayoutEffect } from 'react'
-import { useVirtualizer } from '@tanstack/react-virtual'
+import {
+  measureElement as measureVirtualElementSize,
+  useVirtualizer
+} from '@tanstack/react-virtual'
 import { ChevronDown, CircleX, Plus, Workflow } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
@@ -10,6 +13,7 @@ import {
   useWorktreeMap
 } from '@/store/selectors'
 import WorktreeCard from './WorktreeCard'
+import WorktreeCardAgents from './WorktreeCardAgents'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -44,7 +48,7 @@ import {
   getWorkspaceStatus,
   getWorkspaceStatusFromGroupKey,
   hasWorkspaceDragData,
-  readWorkspaceDragData
+  readWorkspaceDragDataIds
 } from './workspace-status'
 import { useWorkspaceStatusDocumentDrop } from './use-workspace-status-drop'
 import {
@@ -53,6 +57,11 @@ import {
   setVisibleWorktreeIds,
   sidebarHasActiveFilters
 } from './visible-worktrees'
+import {
+  VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT,
+  useVirtualizedScrollAnchor,
+  type VirtualizedScrollAnchor
+} from '@/hooks/useVirtualizedScrollAnchor'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useRepoHeaderDrag } from './repo-header-drag'
 import WorktreeContextMenu from './WorktreeContextMenu'
@@ -69,6 +78,11 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-cl
 // Prevents jarring position shifts when background events (AI starting work,
 // terminal title changes) trigger score recalculations.
 const SORT_SETTLE_MS = 3_000
+const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
+  // Why: TanStack Virtual owns scroll correction. Native browser anchoring can
+  // fight virtual row measurement/remounts and produce visible jumps.
+  overflowAnchor: 'none'
+}
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -102,6 +116,7 @@ type VirtualizedWorktreeViewportProps = {
   activeWorktreeId: string | null
   groupBy: WorktreeGroupBy
   showWorkspaceLineage: boolean
+  showInlineAgentCards: boolean
   repoGroupOrdering: RepoGroupOrdering
   toggleGroup: (key: string) => void
   collapsedGroups: Set<string>
@@ -112,9 +127,9 @@ type VirtualizedWorktreeViewportProps = {
   worktrees: Worktree[]
   selectedWorktreeIds: ReadonlySet<string>
   selectedWorktrees: readonly Worktree[]
-  onSelectionGesture: (event: React.MouseEvent<HTMLDivElement>, worktreeId: string) => boolean
+  onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
   onContextMenuSelect: (
-    event: React.MouseEvent<HTMLDivElement>,
+    event: React.MouseEvent<HTMLElement>,
     worktree: Worktree
   ) => readonly Worktree[]
   repoMap: Map<string, Repo>
@@ -130,14 +145,14 @@ type VirtualizedWorktreeViewportProps = {
   prCache: Record<string, unknown> | null
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   onMoveWorktreeToStatus: (worktreeId: string, status: WorkspaceStatus) => void
+  onMoveWorktreesToStatus: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
   onPinWorktree: (worktreeId: string) => void
-  // Why: the viewport remounts when the row structure changes (see
-  // viewportResetKey) so the virtualizer's measurementsCache cannot hold
-  // heights tied to shifted indices. A fresh virtualizer would otherwise
-  // start at scrollTop 0, which makes the sidebar snap to the top whenever
-  // a worktree is deleted. The parent persists the last observed scrollTop
-  // in a ref and seeds the new virtualizer via initialOffset.
+  onPinWorktrees: (worktreeIds: readonly string[]) => void
+  // Why: broad grouping changes still remount the viewport, while add/delete
+  // stays mounted for row-key anchoring and layout animation. These refs bridge
+  // both paths so the virtualizer never falls back to scrollTop 0.
   scrollOffsetRef: React.MutableRefObject<number>
+  scrollAnchorRef: React.MutableRefObject<VirtualizedScrollAnchor>
 }
 
 type WorktreeItemRow = Extract<Row, { type: 'item' }>
@@ -206,11 +221,32 @@ function getRenderRowKey(row: RenderRow): string {
   return `wt:${row.worktree.id}`
 }
 
+function getVirtualRowIndex(element: Element): number | null {
+  const index = parseInt(element.getAttribute('data-index') ?? '', 10)
+  return Number.isNaN(index) ? null : index
+}
+
+function getVirtualRowKey(element: Element): string | null {
+  return element.getAttribute('data-worktree-virtual-row-key')
+}
+
+function estimateRenderRowSize(row: RenderRow | undefined): number {
+  if (row?.type === 'lineage-group') {
+    return 100 + Math.max(0, row.rows.length - 1) * 96
+  }
+  return 116
+}
+
+function getVirtualRowTransform(start: number): string {
+  return `translateY(${start}px)`
+}
+
 const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewport({
   rows,
   activeWorktreeId,
   groupBy,
   showWorkspaceLineage,
+  showInlineAgentCards,
   repoGroupOrdering,
   toggleGroup,
   collapsedGroups,
@@ -232,8 +268,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   prCache,
   workspaceStatuses,
   onMoveWorktreeToStatus,
+  onMoveWorktreesToStatus,
   onPinWorktree,
-  scrollOffsetRef
+  onPinWorktrees,
+  scrollOffsetRef,
+  scrollAnchorRef
 }: VirtualizedWorktreeViewportProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [dragOverStatus, setDragOverStatus] = useState<WorkspaceStatus | null>(null)
@@ -255,78 +294,76 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     () => renderRows.findIndex((row) => renderRowContainsWorktree(row, activeWorktreeId)),
     [renderRows, activeWorktreeId]
   )
+  const renderRowsRef = useRef(renderRows)
+  renderRowsRef.current = renderRows
+  const getVirtualItemKey = useCallback(
+    (index: number) => {
+      const row = renderRows[index]
+      if (!row) {
+        return `__stale_${index}`
+      }
+      return getRenderRowKey(row)
+    },
+    [renderRows]
+  )
+  const getExpectedVirtualRowKey = useCallback((element: Element) => {
+    const index = getVirtualRowIndex(element)
+    const row = index === null ? undefined : renderRowsRef.current[index]
+    return row ? getRenderRowKey(row) : null
+  }, [])
+  const isCurrentVirtualRowElement = useCallback(
+    (element: Element) => {
+      const expectedKey = getExpectedVirtualRowKey(element)
+      return (
+        element.isConnected &&
+        expectedKey !== null &&
+        element.getAttribute('data-worktree-virtual-row-key') === expectedKey
+      )
+    },
+    [getExpectedVirtualRowKey]
+  )
+  const measureCurrentVirtualRowElement = useCallback(
+    (
+      element: HTMLDivElement,
+      entry: ResizeObserverEntry | undefined,
+      instance: Parameters<typeof measureVirtualElementSize<HTMLDivElement>>[2]
+    ) => {
+      if (!isCurrentVirtualRowElement(element)) {
+        const index = getVirtualRowIndex(element)
+        const measured = instance.getVirtualItems().find((item) => item.index === index)
+        // Why: TanStack's ResizeObserver can deliver a stale row after a
+        // collapse/delete/remount. Returning the current item size makes that
+        // observation a no-op instead of writing the stale element's height
+        // into whichever row now owns the old data-index.
+        return (
+          measured?.size ??
+          estimateRenderRowSize(index === null ? undefined : renderRowsRef.current[index])
+        )
+      }
+      return measureVirtualElementSize(element, entry, instance)
+    },
+    [isCurrentVirtualRowElement]
+  )
 
   const virtualizer = useVirtualizer({
     count: renderRows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: (index) => {
-      const row = renderRows[index]
-      if (row?.type === 'lineage-group') {
-        return 104 + Math.max(0, row.rows.length - 1) * 96
-      }
-      return 120
-    },
+    estimateSize: (index) => estimateRenderRowSize(renderRows[index]),
+    measureElement: measureCurrentVirtualRowElement,
     overscan: 10,
     gap: 6,
+    // Why: the sidebar rows are rich cards. Flushing their React render inside
+    // TanStack's native scroll listener can make wheel input wait on card work;
+    // overscan gives the async render enough runway to stay visually filled.
+    useFlushSync: false,
     // Why: tells the virtualizer to start its internal scrollOffset at the
     // ref value rather than 0, so the first getVirtualItems() call after
     // remount picks the correct window of rows. The sibling useLayoutEffect
     // mirrors this onto the actual scrollElement.scrollTop so the DOM and
     // virtualizer stay aligned across remounts.
     initialOffset: () => scrollOffsetRef.current,
-    getItemKey: (index) => {
-      const row = renderRows[index]
-      if (!row) {
-        return `__stale_${index}`
-      }
-      return getRenderRowKey(row)
-    }
+    getItemKey: getVirtualItemKey
   })
-
-  // Why: the viewport remounts when row structure changes (see
-  // viewportResetKey). The fresh DOM element starts at scrollTop=0, which
-  // snaps the sidebar back to the top every time a worktree is added or
-  // deleted. Restoring the last observed scrollTop from a ref before the
-  // browser paints keeps the user's scroll position stable across remounts.
-  //
-  // The saved offset is only captured via our scroll listener; we
-  // suppress saving during the initial restoration pass so that the
-  // browser's clamp-to-current-scrollHeight (temporarily smaller because
-  // the virtualizer has not yet measured every row) doesn't overwrite the
-  // user's intended offset with a clamped value.
-  useLayoutEffect(() => {
-    const el = scrollRef.current
-    if (!el) {
-      return
-    }
-    const targetOffset = scrollOffsetRef.current
-    let restoring = targetOffset > 0
-    if (restoring) {
-      el.scrollTop = targetOffset
-    }
-    const onScroll = (): void => {
-      if (restoring) {
-        // Virtualizer has not yet produced its final totalSize, so the
-        // browser may clamp our applied scrollTop to a lower value. Keep
-        // re-applying the target offset each tick until the DOM accepts
-        // it, then start recording user-driven scrolls.
-        if (el.scrollTop === targetOffset) {
-          restoring = false
-          return
-        }
-        if (el.scrollHeight - el.clientHeight >= targetOffset) {
-          el.scrollTop = targetOffset
-          if (el.scrollTop === targetOffset) {
-            restoring = false
-          }
-        }
-        return
-      }
-      scrollOffsetRef.current = el.scrollTop
-    }
-    el.addEventListener('scroll', onScroll, { passive: true })
-    return () => el.removeEventListener('scroll', onScroll)
-  }, [scrollOffsetRef])
 
   React.useEffect(() => {
     if (!pendingRevealWorktreeId) {
@@ -414,16 +451,67 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 
   const prCacheLen = useAppStore((s) => Object.keys(s.prCache).length)
   const issueCacheLen = useAppStore((s) => Object.keys(s.issueCache).length)
+  const renderRowKeySignature = useMemo(
+    () => renderRows.map(getRenderRowKey).join('\n'),
+    [renderRows]
+  )
+  const totalSize = virtualizer.getTotalSize()
+  const virtualItems = virtualizer.getVirtualItems()
 
-  useLayoutEffect(() => {
+  const measureMountedRows = useCallback(() => {
     virtualizer.elementsCache.forEach((element) => {
-      const idx = parseInt(element.getAttribute('data-index') ?? '', 10)
-      if (Number.isNaN(idx) || idx >= renderRows.length) {
+      if (!isCurrentVirtualRowElement(element)) {
         return
       }
       virtualizer.measureElement(element)
     })
-  }, [prCacheLen, issueCacheLen, virtualizer, renderRows.length])
+  }, [isCurrentVirtualRowElement, virtualizer])
+  const measureVirtualRowElement = useCallback(
+    (element: HTMLDivElement | null) => {
+      if (!element) {
+        virtualizer.measureElement(null)
+        return
+      }
+      if (!isCurrentVirtualRowElement(element)) {
+        return
+      }
+      virtualizer.measureElement(element)
+    },
+    [isCurrentVirtualRowElement, virtualizer]
+  )
+
+  useLayoutEffect(() => {
+    // Why: after delete/collapse, TanStack may briefly retain the removed row's
+    // cached element. Measuring that disconnected node reports 0px and corrupts
+    // the next row's slot, so measure only elements whose DOM key still matches
+    // the row currently rendered at that index.
+    measureMountedRows()
+    const frameId = window.requestAnimationFrame(measureMountedRows)
+    return () => window.cancelAnimationFrame(frameId)
+  }, [prCacheLen, issueCacheLen, measureMountedRows, renderRowKeySignature])
+
+  useVirtualizedScrollAnchor({
+    anchorRef: scrollAnchorRef,
+    getItemElementKey: getVirtualRowKey,
+    getRowKey: getRenderRowKey,
+    itemElementSelector: '[data-worktree-virtual-row]',
+    rows: renderRows,
+    scrollElementRef: scrollRef,
+    scrollOffsetRef,
+    totalSize,
+    virtualizer
+  })
+
+  const recordCurrentScrollAnchor = useCallback(() => {
+    scrollRef.current?.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))
+  }, [])
+  const toggleGroupWithScrollAnchor = useCallback(
+    (groupKey: string) => {
+      recordCurrentScrollAnchor()
+      toggleGroup(groupKey)
+    },
+    [recordCurrentScrollAnchor, toggleGroup]
+  )
 
   const navigateWorktree = useCallback(
     (direction: 'up' | 'down') => {
@@ -544,7 +632,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     [renderRows]
   )
 
-  const virtualItems = virtualizer.getVirtualItems()
   const activeDescendantId =
     activeWorktreeId != null &&
     activeWorktreeRowIndex !== -1 &&
@@ -554,7 +641,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 
   const hasWorkspaceDropTargets = useMemo(
     () =>
-      groupBy === 'none' ||
+      groupBy === 'workspace-status' ||
       rows.some((row) => row.type === 'header' && row.key === PINNED_GROUP_KEY),
     [groupBy, rows]
   )
@@ -603,15 +690,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 
   const handleWorkspaceStatusDrop = useCallback(
     (event: React.DragEvent, status: WorkspaceStatus) => {
-      const worktreeId = readWorkspaceDragData(event.dataTransfer)
-      if (!worktreeId) {
+      const worktreeIds = readWorkspaceDragDataIds(event.dataTransfer)
+      if (worktreeIds.length === 0) {
         return
       }
       event.preventDefault()
       setDragOverStatus(null)
-      onMoveWorktreeToStatus(worktreeId, status)
+      onMoveWorktreesToStatus(worktreeIds, status)
     },
-    [onMoveWorktreeToStatus]
+    [onMoveWorktreesToStatus]
   )
 
   useWorkspaceStatusDocumentDrop(
@@ -619,7 +706,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     onMoveWorktreeToStatus,
     onPinWorktree,
     handleWorkspaceStatusDragFinish,
-    hasWorkspaceDropTargets
+    hasWorkspaceDropTargets,
+    {
+      onMoveWorktreesToStatus,
+      onPinWorktrees
+    }
   )
 
   return (
@@ -634,6 +725,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       aria-activedescendant={activeDescendantId}
       onKeyDown={handleContainerKeyDown}
       className="worktree-sidebar-scrollbar flex-1 overflow-y-scroll overflow-x-hidden pl-1 scrollbar-sleek outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px"
+      style={WORKTREE_SIDEBAR_SCROLL_STYLE}
     >
       <div
         role="presentation"
@@ -663,16 +755,20 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               repoDrag.state.draggingRepoId !== null &&
               repoDrag.state.draggingRepoId === repoIdForHeader
             const headerWorkspaceStatus =
-              groupBy === 'none' ? getWorkspaceStatusFromGroupKey(row.key, workspaceStatuses) : null
+              groupBy === 'workspace-status'
+                ? getWorkspaceStatusFromGroupKey(row.key, workspaceStatuses)
+                : null
             const isPinnedHeader = row.key === PINNED_GROUP_KEY
             return (
               <div
                 key={vItem.key}
                 role="presentation"
+                data-worktree-virtual-row
+                data-worktree-virtual-row-key={String(vItem.key)}
                 data-index={vItem.index}
-                ref={virtualizer.measureElement}
+                ref={measureVirtualRowElement}
                 className="absolute left-0 right-0"
-                style={{ transform: `translateY(${vItem.start}px)` }}
+                style={{ transform: getVirtualRowTransform(vItem.start) }}
               >
                 <div
                   role="button"
@@ -695,7 +791,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     // First header sits directly under SidebarHeader, which already
                     // supplies its own spacing — only offset secondary group headers.
                     vItem.index !== firstHeaderIndex && 'mt-2',
-                    row.repo ? 'overflow-hidden' : row.tone
+                    row.repo && 'overflow-hidden'
                   )}
                   onDragOver={
                     isPinnedHeader
@@ -716,11 +812,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       ? (event) => handleWorkspaceStatusDrop(event, headerWorkspaceStatus)
                       : undefined
                   }
-                  onClick={() => toggleGroup(row.key)}
+                  onClick={() => toggleGroupWithScrollAnchor(row.key)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault()
-                      toggleGroup(row.key)
+                      toggleGroupWithScrollAnchor(row.key)
                     }
                   }}
                 >
@@ -733,10 +829,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       }
                       className={cn(
                         'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
-                        row.repo && 'text-muted-foreground'
+                        row.repo ? 'text-muted-foreground' : row.tone
                       )}
                     >
-                      <row.icon className="size-3.5" />
+                      <row.icon className={row.repo ? 'size-3.5' : 'size-3'} />
                     </div>
                   ) : null}
 
@@ -751,10 +847,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     </div>
                   </div>
 
-                  <div className="flex size-4 shrink-0 items-center justify-center text-muted-foreground/60 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex size-4 shrink-0 cursor-pointer items-center justify-center text-muted-foreground/60 opacity-0 transition-opacity group-hover:opacity-100">
                     <ChevronDown
                       className={cn(
-                        'size-3.5 transition-transform',
+                        'size-3.5 cursor-pointer transition-transform [&_path]:cursor-pointer',
                         collapsedGroups.has(row.key) && '-rotate-90'
                       )}
                     />
@@ -903,6 +999,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                           </Tooltip>
                         </div>
                       ) : null}
+                      {showInlineAgentCards ? (
+                        // Why: nested lineage children use this compact
+                        // renderer instead of WorktreeCard, so their inline
+                        // agent rows must be mounted here explicitly.
+                        <WorktreeCardAgents
+                          worktreeId={child.worktree.id}
+                          className="mt-1 divide-y-0"
+                        />
+                      ) : null}
                     </div>
                   </div>
                 </WorktreeContextMenu>
@@ -957,7 +1062,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       ? (event) => {
                           event.preventDefault()
                           event.stopPropagation()
-                          toggleGroup(lineageToggleGroupKey)
+                          toggleGroupWithScrollAnchor(lineageToggleGroupKey)
                         }
                       : undefined
                   }
@@ -973,10 +1078,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               <div
                 key={vItem.key}
                 role="presentation"
+                data-worktree-virtual-row
+                data-worktree-virtual-row-key={String(vItem.key)}
                 data-index={vItem.index}
-                ref={virtualizer.measureElement}
+                ref={measureVirtualRowElement}
                 className="absolute left-0 right-0"
-                style={{ transform: `translateY(${vItem.start}px)` }}
+                style={{ transform: getVirtualRowTransform(vItem.start) }}
               >
                 <div className="overflow-visible">
                   {parent
@@ -993,18 +1100,22 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           }
 
           const itemWorkspaceStatus =
-            groupBy === 'none' ? getWorkspaceStatus(row.worktree, workspaceStatuses) : null
+            groupBy === 'workspace-status'
+              ? getWorkspaceStatus(row.worktree, workspaceStatuses)
+              : null
 
           return (
             <div
               key={vItem.key}
               role="presentation"
+              data-worktree-virtual-row
+              data-worktree-virtual-row-key={String(vItem.key)}
               data-index={vItem.index}
-              ref={virtualizer.measureElement}
+              ref={measureVirtualRowElement}
               data-workspace-status-drop-target={itemWorkspaceStatus ? '' : undefined}
               data-workspace-status={itemWorkspaceStatus ?? undefined}
               className="absolute left-0 right-0"
-              style={{ transform: `translateY(${vItem.start}px)` }}
+              style={{ transform: getVirtualRowTransform(vItem.start) }}
               onDragOver={
                 itemWorkspaceStatus
                   ? (event) => handleWorkspaceStatusDragOver(event, itemWorkspaceStatus)
@@ -1026,10 +1137,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   )
 })
 
-const WorktreeList = React.memo(function WorktreeList() {
-  // Why: persists the sidebar scroll offset across the VirtualizedWorktreeViewport
-  // remount that row-structure changes trigger. See viewportResetKey.
-  const sidebarScrollOffsetRef = useRef(0)
+type WorktreeListProps = {
+  scrollOffsetRef: React.MutableRefObject<number>
+  scrollAnchorRef: React.MutableRefObject<VirtualizedScrollAnchor>
+}
+
+const WorktreeList = React.memo(function WorktreeList({
+  scrollOffsetRef,
+  scrollAnchorRef
+}: WorktreeListProps) {
   // ── Granular selectors (each is a primitive or shallow-stable ref) ──
   const allWorktrees = useAllWorktrees()
   const repoMap = useRepoMap()
@@ -1046,6 +1162,7 @@ const WorktreeList = React.memo(function WorktreeList() {
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const openModal = useAppStore((s) => s.openModal)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
+  const updateWorktreesMeta = useAppStore((s) => s.updateWorktreesMeta)
   const activeView = useAppStore((s) => s.activeView)
   const activeModal = useAppStore((s) => s.activeModal)
   const pendingRevealWorktreeId = useAppStore((s) => s.pendingRevealWorktreeId)
@@ -1379,22 +1496,17 @@ const WorktreeList = React.memo(function WorktreeList() {
       showWorkspaceLineage
     ]
   )
-  // Why: rows.length alone can stay the same when items migrate between
-  // groups (e.g., PR cache loads on restart and a collapsed group absorbs
-  // an item while its header is added — net row count unchanged). Including
-  // the header keys ensures the virtualizer remounts when group structure
-  // changes, preventing stale height measurements from causing overlap.
-  // We also key on rows.length so add/delete invalidates the virtualizer's
-  // per-index measurementsCache; scroll position is preserved across the
-  // remount via the ref below so deleting an off-screen worktree doesn't
-  // snap the sidebar back to the top.
+  // Why: header/mode changes can shift entire groups, so remount the
+  // virtualizer for those broad structure changes. Do not key on rows.length:
+  // add/delete must keep the same row DOM long enough for the remaining rows
+  // to animate upward and for the scroll anchor to hold the viewport steady.
   const viewportResetKey = useMemo(() => {
     const headers = rows
       .filter((r): r is GroupHeaderRow => r.type === 'header')
       .map((r) => r.key)
       .join(',')
-    return `${groupBy}:${rows.length}:${headers}`
-  }, [groupBy, rows])
+    return `${groupBy}:${showWorkspaceLineage ? 'lineage' : 'flat'}:${headers}`
+  }, [groupBy, rows, showWorkspaceLineage])
 
   // Why: derive the rendered item order from the post-buildRows() row list,
   // not the flat `worktrees` array, because grouping (groupBy: 'repo' or
@@ -1456,7 +1568,7 @@ const WorktreeList = React.memo(function WorktreeList() {
   }, [selectedWorktreeIds.size])
 
   const updateSelectionForGesture = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>, worktreeId: string): boolean => {
+    (event: React.MouseEvent<HTMLElement>, worktreeId: string): boolean => {
       const intent = getWorktreeSelectionIntent(event, navigator.userAgent.includes('Mac'))
       const result = updateWorktreeSelection({
         visibleIds: renderedWorktreeIds,
@@ -1475,7 +1587,7 @@ const WorktreeList = React.memo(function WorktreeList() {
   )
 
   const selectForContextMenu = useCallback(
-    (_event: React.MouseEvent<HTMLDivElement>, worktree: Worktree): readonly Worktree[] => {
+    (_event: React.MouseEvent<HTMLElement>, worktree: Worktree): readonly Worktree[] => {
       if (selectedWorktreeIds.has(worktree.id) && selectedWorktreeIds.size > 1) {
         return selectedWorktrees
       }
@@ -1517,6 +1629,23 @@ const WorktreeList = React.memo(function WorktreeList() {
     [updateWorktreeMeta, worktreeMap, workspaceStatuses]
   )
 
+  const moveWorktreesToStatus = useCallback(
+    (worktreeIds: readonly string[], status: WorkspaceStatus) => {
+      const updates = new Map<string, { workspaceStatus: WorkspaceStatus }>()
+      for (const worktreeId of worktreeIds) {
+        const current = worktreeMap.get(worktreeId)
+        if (!current || getWorkspaceStatus(current, workspaceStatuses) === status) {
+          continue
+        }
+        updates.set(worktreeId, { workspaceStatus: status })
+      }
+      if (updates.size > 0) {
+        void updateWorktreesMeta(updates)
+      }
+    },
+    [updateWorktreesMeta, worktreeMap, workspaceStatuses]
+  )
+
   const pinWorktree = useCallback(
     (worktreeId: string) => {
       const current = worktreeMap.get(worktreeId)
@@ -1526,6 +1655,23 @@ const WorktreeList = React.memo(function WorktreeList() {
       void updateWorktreeMeta(worktreeId, { isPinned: true })
     },
     [updateWorktreeMeta, worktreeMap]
+  )
+
+  const pinWorktrees = useCallback(
+    (worktreeIds: readonly string[]) => {
+      const updates = new Map<string, { isPinned: true }>()
+      for (const worktreeId of worktreeIds) {
+        const current = worktreeMap.get(worktreeId)
+        if (!current || current.isPinned) {
+          continue
+        }
+        updates.set(worktreeId, { isPinned: true })
+      }
+      if (updates.size > 0) {
+        void updateWorktreesMeta(updates)
+      }
+    },
+    [updateWorktreesMeta, worktreeMap]
   )
 
   // Why: hideDefaultBranchWorkspace is counted as a filter here so the
@@ -1581,6 +1727,7 @@ const WorktreeList = React.memo(function WorktreeList() {
       activeWorktreeId={selectedSidebarWorktreeId}
       groupBy={groupBy}
       showWorkspaceLineage={showWorkspaceLineage}
+      showInlineAgentCards={cardProps.includes('inline-agents')}
       repoGroupOrdering={repoGroupOrdering}
       toggleGroup={toggleGroup}
       collapsedGroups={collapsedGroups}
@@ -1604,8 +1751,11 @@ const WorktreeList = React.memo(function WorktreeList() {
       prCache={prCache}
       workspaceStatuses={workspaceStatuses}
       onMoveWorktreeToStatus={moveWorktreeToStatus}
+      onMoveWorktreesToStatus={moveWorktreesToStatus}
       onPinWorktree={pinWorktree}
-      scrollOffsetRef={sidebarScrollOffsetRef}
+      onPinWorktrees={pinWorktrees}
+      scrollOffsetRef={scrollOffsetRef}
+      scrollAnchorRef={scrollAnchorRef}
     />
   )
 })

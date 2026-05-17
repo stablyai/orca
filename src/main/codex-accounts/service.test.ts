@@ -67,6 +67,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     floatingTerminalCwd: '~',
     floatingTerminalTriggerLocation: 'floating-button',
     diffDefaultView: 'inline',
+    combinedDiffFileTreeVisibleByDefault: false,
     notifications: {
       enabled: true,
       agentTaskComplete: true,

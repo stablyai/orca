@@ -6,6 +6,7 @@ import { getRuntimeFileReadScope, readRuntimeFileContent } from '@/runtime/runti
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import {
   getRuntimeGitBranchDiff,
+  getRuntimeGitCommitDiff,
   getRuntimeGitDiff,
   getRuntimeGitScope
 } from '@/runtime/runtime-git-client'
@@ -50,7 +51,11 @@ function inFlightDiffKey(
     file.diffSource === 'branch' && file.branchCompare
       ? `${file.branchCompare.baseOid ?? ''}..${file.branchCompare.headOid ?? ''}::${file.branchOldPath ?? ''}`
       : ''
-  return `${connectionId ?? ''}::${file.diffSource ?? ''}::${compareAgainstHead ? 'head' : 'default'}::${file.filePath}::${branch}`
+  const commit =
+    file.diffSource === 'commit' && file.commitCompare
+      ? `${file.commitCompare.parentOid ?? 'empty-tree'}..${file.commitCompare.commitOid}::${file.branchOldPath ?? ''}`
+      : ''
+  return `${connectionId ?? ''}::${file.diffSource ?? ''}::${compareAgainstHead ? 'head' : 'default'}::${file.filePath}::${branch}::${commit}`
 }
 
 export function useEditorPanelContentState({
@@ -134,6 +139,7 @@ export function useEditorPanelContentState({
         file.branchCompare?.baseOid && file.branchCompare.headOid && file.branchCompare.mergeBase
           ? file.branchCompare
           : null
+      const commitCompare = file.commitCompare?.commitOid ? file.commitCompare : null
       const connectionId = getConnectionId(file.worktreeId) ?? undefined
       const activeSettings = useAppStore.getState().settings
       const fileSettings = settingsForRuntimeOwner(activeSettings, file.runtimeEnvironmentId)
@@ -149,38 +155,55 @@ export function useEditorPanelContentState({
       let pending = inFlightDiffReads.get(key)
       if (!pending) {
         pending = (
-          effectiveDiffSource === 'branch' && branchCompare
-            ? getRuntimeGitBranchDiff(
-                {
-                  settings: fileSettings,
-                  worktreeId: file.worktreeId,
-                  worktreePath,
-                  connectionId
-                },
-                {
-                  compare: {
-                    baseRef: branchCompare.baseRef,
-                    baseOid: branchCompare.baseOid!,
-                    headOid: branchCompare.headOid!,
-                    mergeBase: branchCompare.mergeBase!
+          effectiveDiffSource === 'commit'
+            ? commitCompare
+              ? getRuntimeGitCommitDiff(
+                  {
+                    settings: fileSettings,
+                    worktreeId: file.worktreeId,
+                    worktreePath,
+                    connectionId
                   },
-                  filePath: file.relativePath,
-                  oldPath: file.branchOldPath
-                }
-              )
-            : getRuntimeGitDiff(
-                {
-                  settings: fileSettings,
-                  worktreeId: file.worktreeId,
-                  worktreePath,
-                  connectionId
-                },
-                {
-                  filePath: file.relativePath,
-                  staged: effectiveDiffSource === 'staged',
-                  compareAgainstHead
-                }
-              )
+                  {
+                    commitOid: commitCompare.commitOid,
+                    parentOid: commitCompare.parentOid,
+                    filePath: file.relativePath,
+                    oldPath: file.branchOldPath
+                  }
+                )
+              : Promise.reject(new Error('Missing commit comparison for diff tab.'))
+            : effectiveDiffSource === 'branch' && branchCompare
+              ? getRuntimeGitBranchDiff(
+                  {
+                    settings: fileSettings,
+                    worktreeId: file.worktreeId,
+                    worktreePath,
+                    connectionId
+                  },
+                  {
+                    compare: {
+                      baseRef: branchCompare.baseRef,
+                      baseOid: branchCompare.baseOid!,
+                      headOid: branchCompare.headOid!,
+                      mergeBase: branchCompare.mergeBase!
+                    },
+                    filePath: file.relativePath,
+                    oldPath: file.branchOldPath
+                  }
+                )
+              : getRuntimeGitDiff(
+                  {
+                    settings: fileSettings,
+                    worktreeId: file.worktreeId,
+                    worktreePath,
+                    connectionId
+                  },
+                  {
+                    filePath: file.relativePath,
+                    staged: effectiveDiffSource === 'staged',
+                    compareAgainstHead
+                  }
+                )
         ) as Promise<DiffContent>
         inFlightDiffReads.set(key, pending)
         queueMicrotask(() => {
@@ -240,6 +263,7 @@ export function useEditorPanelContentState({
       activeFile.diffSource !== undefined &&
       activeFile.diffSource !== 'combined-uncommitted' &&
       activeFile.diffSource !== 'combined-branch' &&
+      activeFile.diffSource !== 'combined-commit' &&
       !diffContents[activeFile.id]
     ) {
       void loadDiffContent(activeFile)

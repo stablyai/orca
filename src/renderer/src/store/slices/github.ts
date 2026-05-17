@@ -1364,7 +1364,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const cached = get().checksCache[cacheKey]
     if (!options?.force && isFresh(cached, CHECKS_CACHE_TTL)) {
       const cachedChecks = cached.data ?? []
-      const prStatusUpdate = syncPRChecksStatus(get(), repoPath, branch, cachedChecks)
+      const prStatusUpdate = syncPRChecksStatus(get(), repoPath, repoId, branch, cachedChecks)
       if (prStatusUpdate) {
         set(prStatusUpdate)
         debouncedSaveCache(get())
@@ -1391,7 +1391,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             checksCache: { ...s.checksCache, [cacheKey]: { data: checks, fetchedAt: Date.now() } }
           }
 
-          const prStatusUpdate = syncPRChecksStatus(s, repoPath, branch, checks)
+          const prStatusUpdate = syncPRChecksStatus(s, repoPath, repoId, branch, checks)
           if (prStatusUpdate?.prCache) {
             nextState.prCache = prStatusUpdate.prCache
           }

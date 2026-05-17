@@ -1,11 +1,20 @@
 import { useState } from 'react'
-import { Loader2, MonitorSmartphone, Pencil, Server, ServerOff, Trash2 } from 'lucide-react'
+import {
+  CircleStop,
+  Loader2,
+  MonitorSmartphone,
+  Pencil,
+  Server,
+  ServerOff,
+  Trash2
+} from 'lucide-react'
 import type {
   SshTarget,
   SshConnectionState,
   SshConnectionStatus
 } from '../../../../shared/ssh-types'
 import { Button } from '../ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 
 // ── Shared status helpers ────────────────────────────────────────────
 
@@ -95,6 +104,70 @@ export function SshTargetCard({
     Promise.resolve(onTerminateSessions(target.id)).finally(() => setActionInFlight(null))
   }
 
+  const renderEndRemoteTerminalsButton = (): React.JSX.Element => (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleTerminateSessions}
+          className="size-7 text-muted-foreground hover:text-red-400"
+          disabled={actionInFlight !== null}
+          aria-label={
+            actionInFlight === 'terminate' ? 'Ending remote terminals' : 'End remote terminals'
+          }
+        >
+          {actionInFlight === 'terminate' ? (
+            <Loader2 className="size-3 animate-spin" />
+          ) : (
+            <CircleStop className="size-3" />
+          )}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        End remote terminals
+      </TooltipContent>
+    </Tooltip>
+  )
+
+  const renderSecondaryIconActions = (includeEndRemoteTerminals: boolean): React.JSX.Element => (
+    <div className="flex items-center gap-1">
+      {includeEndRemoteTerminals ? renderEndRemoteTerminalsButton() : null}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onEdit(target)}
+            className="size-7"
+            aria-label="Edit target"
+          >
+            <Pencil className="size-3" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4}>
+          Edit target
+        </TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onRemove(target.id)}
+            className="size-7 text-muted-foreground hover:text-red-400"
+            aria-label="Remove target"
+          >
+            <Trash2 className="size-3" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4}>
+          Remove target
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  )
+
   return (
     <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-card/40 px-4 py-3">
       <Server className="size-4 shrink-0 text-muted-foreground" />
@@ -117,6 +190,7 @@ export function SshTargetCard({
       <div className="flex shrink-0 items-center gap-1">
         {status === 'connected' ? (
           <>
+            {renderSecondaryIconActions(true)}
             <Button
               variant="ghost"
               size="xs"
@@ -127,42 +201,18 @@ export function SshTargetCard({
               <ServerOff className="size-3" />
               Disconnect
             </Button>
-            <Button
-              variant="ghost"
-              size="xs"
-              onClick={handleTerminateSessions}
-              className="gap-1.5 text-muted-foreground hover:text-red-400"
-              disabled={actionInFlight !== null}
-            >
-              {actionInFlight === 'terminate' ? (
-                <Loader2 className="size-3 animate-spin" />
-              ) : (
-                <Trash2 className="size-3" />
-              )}
-              Terminate
-            </Button>
           </>
         ) : isConnecting(status) ? (
-          <Button variant="ghost" size="xs" disabled className="gap-1.5">
-            <Loader2 className="size-3 animate-spin" />
-            Connecting
-          </Button>
+          <>
+            {renderSecondaryIconActions(false)}
+            <Button variant="ghost" size="xs" disabled className="gap-1.5">
+              <Loader2 className="size-3 animate-spin" />
+              Connecting
+            </Button>
+          </>
         ) : (
           <>
-            <Button
-              variant="ghost"
-              size="xs"
-              onClick={handleConnect}
-              className="gap-1.5"
-              disabled={actionInFlight !== null}
-            >
-              {actionInFlight === 'connect' ? (
-                <Loader2 className="size-3 animate-spin" />
-              ) : (
-                <Server className="size-3" />
-              )}
-              Connect
-            </Button>
+            {renderSecondaryIconActions(true)}
             <Button
               variant="ghost"
               size="xs"
@@ -180,38 +230,19 @@ export function SshTargetCard({
             <Button
               variant="ghost"
               size="xs"
-              onClick={handleTerminateSessions}
-              className="gap-1.5 text-muted-foreground hover:text-red-400"
+              onClick={handleConnect}
+              className="gap-1.5"
               disabled={actionInFlight !== null}
             >
-              {actionInFlight === 'terminate' ? (
+              {actionInFlight === 'connect' ? (
                 <Loader2 className="size-3 animate-spin" />
               ) : (
-                <Trash2 className="size-3" />
+                <Server className="size-3" />
               )}
-              Terminate
+              Connect
             </Button>
           </>
         )}
-
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => onEdit(target)}
-          className="size-7"
-          aria-label="Edit target"
-        >
-          <Pencil className="size-3" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => onRemove(target.id)}
-          className="size-7 text-muted-foreground hover:text-red-400"
-          aria-label="Remove target"
-        >
-          <Trash2 className="size-3" />
-        </Button>
       </div>
     </div>
   )

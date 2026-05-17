@@ -1896,7 +1896,20 @@ export default function SessionScreen() {
         if (!terminalGestureInputInFlightRef.current.has(handle)) {
           void flushTerminalGestureInput(handle)
         } else {
-          terminalGestureInputQueuesRef.current.delete(handle)
+          // Why: an RPC is in-flight and the new batch would overflow the
+          // pending-sequences cap. Appending preserves the already-queued
+          // bytes (which would otherwise be dropped) — the in-flight flush's
+          // finally block will pick up the merged queue. The cap is a soft
+          // guideline; brief overflow during in-flight is preferable to
+          // silently dropping user input.
+          current.bytes += bytes
+          current.sequenceCount += sequenceCount
+          current.lastUpdatedMs = now
+          current.timer = setTimeout(() => {
+            current.timer = null
+            void flushTerminalGestureInput(handle)
+          }, TERMINAL_GESTURE_INPUT_FLUSH_DELAY_MS)
+          return
         }
       }
 

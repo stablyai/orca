@@ -163,17 +163,19 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'worktree.sleep'
 ])
 
-// Why: a long-poll request is one whose handler blocks for an unbounded
-// amount of time waiting for an external event (today, only
-// `orchestration.check` with `wait === true`). This function is the single
-// place that classifies it — the long-poll counter, abort wiring, and
-// runtime_busy admission check all share this decision. See §3.1.
+// Why: a long-poll request is one whose handler blocks waiting for an external
+// event. This function is the single place that classifies it — the long-poll
+// counter, abort wiring, keepalives, and runtime_busy admission check all
+// share this decision. See §3.1.
 function isLongPollRequest(request: RpcRequest): boolean {
-  if (request.method !== 'orchestration.check') {
-    return false
+  if (request.method === 'terminal.wait') {
+    return true
   }
-  const params = request.params as { wait?: unknown } | undefined
-  return params?.wait === true
+  if (request.method === 'orchestration.check') {
+    const params = request.params as { wait?: unknown } | undefined
+    return params?.wait === true
+  }
+  return false
 }
 
 export class OrcaRuntimeRpcServer {
@@ -457,12 +459,14 @@ export class OrcaRuntimeRpcServer {
               }
             })
             channel.onMessage((plaintext, encryptedReply, encryptedBinaryReply) => {
+              const authenticatedDeviceToken = this.e2eeChannels.get(ws)?.deviceToken ?? null
               void this.handleWebSocketMessage(
                 plaintext,
                 encryptedReply,
                 encryptedBinaryReply,
                 wsTransport,
-                ws
+                ws,
+                authenticatedDeviceToken
               )
             })
             channel.onBinaryMessage((bytes) => this.handleWebSocketBinaryMessage(bytes, ws))
@@ -630,7 +634,8 @@ export class OrcaRuntimeRpcServer {
     reply: (response: string) => void,
     sendBinary: (response: Uint8Array<ArrayBufferLike>) => void,
     wsTransport?: WebSocketTransport,
-    ws?: WebSocket
+    ws?: WebSocket,
+    authenticatedDeviceToken?: string | null
   ): Promise<void> {
     let request: RpcRequest
     try {
@@ -649,10 +654,17 @@ export class OrcaRuntimeRpcServer {
       return
     }
 
-    const token =
+    const requestToken =
       typeof (request as Record<string, unknown>).deviceToken === 'string'
         ? ((request as Record<string, unknown>).deviceToken as string)
         : null
+    if (authenticatedDeviceToken && requestToken && requestToken !== authenticatedDeviceToken) {
+      reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Device token mismatch')))
+      return
+    }
+    // Why: E2EE already authenticated the WebSocket channel. Use that bound
+    // identity for authorization instead of trusting a repeated request field.
+    const token = authenticatedDeviceToken ?? requestToken
     if (!token) {
       reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Missing device token')))
       return

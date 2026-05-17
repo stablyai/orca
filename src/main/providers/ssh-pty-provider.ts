@@ -95,9 +95,8 @@ export class SshPtyProvider implements IPtyProvider {
         }
       } catch (err) {
         // Why: pty.attach fails when the relay grace window has elapsed.
-        // Do not silently replace the saved tab with a fresh shell; the
-        // renderer should show an expired-session state so users know the
-        // original remote process is gone.
+        // Surface the exact condition so the renderer can clear the stale
+        // binding before replacing the dead relay PTY in the same pane.
         console.warn(`[ssh-pty] pty.attach FAILED for ${opts.sessionId}:`, err)
         if (isSshPtyNotFoundError(err)) {
           throw new Error(`${SSH_SESSION_EXPIRED_ERROR}: ${opts.sessionId}`)

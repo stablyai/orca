@@ -37,6 +37,11 @@ export const AGENT_NAMES = [
 // must be token-matched so Android terminal titles do not become agent status.
 const DROID_AGENT_NAME_RE = /(?<![\w./\\-])droid(?![\w./\\-])/i
 
+// Why: Hermes is safe to token-match but unsafe to add to the legacy
+// substring list because cwd/path titles like `~/hermes/working` would
+// otherwise count as agent activity.
+const HERMES_AGENT_NAME_RE = /(?<![\w./\\-])hermes(?![\w./\\-])/i
+
 // Why: idle keywords used inside `detectAgentStatusFromTitle` to map titles
 // like "Codex done", "OpenCode ready", "Aider idle" to AgentStatus 'idle'.
 // `as const` so consumers receive literal-union types.
@@ -167,7 +172,11 @@ function containsLegacyAgentName(title: string): boolean {
 }
 
 function containsAgentName(title: string): boolean {
-  return containsLegacyAgentName(title) || DROID_AGENT_NAME_RE.test(title)
+  return (
+    containsLegacyAgentName(title) ||
+    DROID_AGENT_NAME_RE.test(title) ||
+    HERMES_AGENT_NAME_RE.test(title)
+  )
 }
 
 function containsAny(title: string, words: readonly string[]): boolean {
@@ -378,6 +387,11 @@ export function getAgentLabel(title: string): string | null {
   if (DROID_AGENT_NAME_RE.test(title)) {
     return 'Droid'
   }
+  // Why: synthesized "⠋ Hermes" working titles need to be matched before
+  // Claude's generic braille-spinner heuristic.
+  if (HERMES_AGENT_NAME_RE.test(title)) {
+    return 'Hermes'
+  }
   if (isClaudeAgent(title)) {
     return 'Claude Code'
   }
@@ -431,8 +445,9 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   }
 
   const hasDroidAgentName = DROID_AGENT_NAME_RE.test(title)
+  const hasHermesAgentName = HERMES_AGENT_NAME_RE.test(title)
   const hasLegacyAgentName = containsLegacyAgentName(title)
-  if (hasLegacyAgentName || hasDroidAgentName) {
+  if (hasLegacyAgentName || hasDroidAgentName || hasHermesAgentName) {
     if (containsAny(title, ['action required', 'permission', 'waiting'])) {
       return 'permission'
     }

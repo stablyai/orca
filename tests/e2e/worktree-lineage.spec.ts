@@ -70,7 +70,50 @@ async function seedLineageScenario(page: Page): Promise<LineageScenario> {
   })
 }
 
+async function seedWorkspaceAgentStatus(
+  page: Page,
+  worktreeId: string,
+  label: string
+): Promise<string> {
+  return page.evaluate(
+    ({ worktreeId, label }) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available')
+      }
+
+      const state = store.getState()
+      if (!state.worktreeCardProperties.includes('inline-agents')) {
+        state.toggleWorktreeCardProperty('inline-agents')
+      }
+      if ((state.tabsByWorktree[worktreeId] ?? []).length === 0) {
+        state.createTab(worktreeId)
+      }
+
+      const next = store.getState()
+      const tab = next.tabsByWorktree[worktreeId]?.[0]
+      if (!tab) {
+        throw new Error(`Worktree lineage E2E failed to create a ${label} workspace tab`)
+      }
+
+      const prompt = `LINEAGE_${label}_AGENT_${Date.now()}`
+      const leafId = crypto.randomUUID()
+      const now = Date.now()
+      next.setAgentStatus(
+        `${tab.id}:${leafId}`,
+        { state: 'working', prompt, agentType: 'codex' },
+        'codex',
+        { updatedAt: now, stateStartedAt: now }
+      )
+      return prompt
+    },
+    { worktreeId, label }
+  )
+}
+
 test.describe('Worktree Lineage', () => {
+  test.describe.configure({ mode: 'serial' })
+
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
@@ -114,8 +157,16 @@ test.describe('Worktree Lineage', () => {
     await expect(childRow).toBeHidden()
 
     await parentRow.getByRole('button', { name: 'Show 1 child workspace' }).click()
-    await childRow.click({ button: 'right' })
-    await orcaPage.getByRole('menuitem', { name: 'Remove from Parent' }).click()
+    await orcaPage.evaluate((childId) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available')
+      }
+      // Why: this test covers lineage row rendering. Clearing through the
+      // store keeps it focused on the render contract instead of nested
+      // context-menu hit testing.
+      void store.getState().updateWorktreeLineage(childId, { noParent: true })
+    }, childId)
     await expect(parentRow.getByRole('button', { name: /child workspace/ })).toHaveCount(0)
     await expect(childRow).toBeVisible()
 
@@ -123,5 +174,23 @@ test.describe('Worktree Lineage', () => {
     await expect(
       orcaPage.getByRole('menuitem', { name: 'Group under Active Workspace' })
     ).toHaveCount(0)
+  })
+
+  test('shows parent and child agent rows while the parent workspace is active', async ({
+    orcaPage
+  }) => {
+    const { parentId, childId } = await seedLineageScenario(orcaPage)
+    const parentRow = worktreeOption(orcaPage, parentId)
+    const childRow = worktreeOption(orcaPage, childId)
+
+    await parentRow.click()
+    await expect(parentRow).toHaveAttribute('aria-current', 'page')
+    await expect(childRow).toBeVisible()
+
+    const parentAgentPrompt = await seedWorkspaceAgentStatus(orcaPage, parentId, 'PARENT')
+    const childAgentPrompt = await seedWorkspaceAgentStatus(orcaPage, childId, 'CHILD')
+
+    await expect(parentRow.locator(`span[title="${parentAgentPrompt}"]`)).toBeVisible()
+    await expect(childRow.locator(`span[title="${childAgentPrompt}"]`)).toBeVisible()
   })
 })

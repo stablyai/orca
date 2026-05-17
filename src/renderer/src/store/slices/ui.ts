@@ -31,6 +31,8 @@ import {
   DEFAULT_WORKTREE_CARD_PROPERTIES
 } from '../../../../shared/constants'
 import {
+  WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT,
+  clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
   cloneDefaultWorkspaceStatuses,
   normalizeWorkspaceBoardCompact,
@@ -244,12 +246,13 @@ export type UISlice = {
   acknowledgedAgentsByPaneKey: Record<string, number>
   acknowledgeAgents: (paneKeys: string[]) => void
   unacknowledgeAgents: (paneKeys: string[]) => void
-  activeView: 'terminal' | 'settings' | 'tasks' | 'activity' | 'automations' | 'space'
-  previousViewBeforeTasks: 'terminal' | 'settings' | 'activity' | 'automations' | 'space'
-  previousViewBeforeSettings: 'terminal' | 'tasks' | 'activity' | 'automations' | 'space'
-  previousViewBeforeActivity: 'terminal' | 'settings' | 'tasks' | 'automations' | 'space'
-  previousViewBeforeAutomations: 'terminal' | 'settings' | 'tasks' | 'activity' | 'space'
-  previousViewBeforeSpace: 'terminal' | 'settings' | 'tasks' | 'activity' | 'automations'
+  activeView: 'terminal' | 'settings' | 'tasks' | 'activity' | 'automations' | 'space' | 'skills'
+  previousViewBeforeTasks: 'terminal' | 'settings' | 'activity' | 'automations' | 'space' | 'skills'
+  previousViewBeforeSettings: 'terminal' | 'tasks' | 'activity' | 'automations' | 'space' | 'skills'
+  previousViewBeforeActivity: 'terminal' | 'settings' | 'tasks' | 'automations' | 'space' | 'skills'
+  previousViewBeforeAutomations: 'terminal' | 'settings' | 'tasks' | 'activity' | 'space' | 'skills'
+  previousViewBeforeSpace: 'terminal' | 'settings' | 'tasks' | 'activity' | 'automations' | 'skills'
+  previousViewBeforeSkills: 'terminal' | 'settings' | 'tasks' | 'activity' | 'automations' | 'space'
   setActiveView: (view: UISlice['activeView']) => void
   taskPageData: {
     preselectedRepoId?: string
@@ -291,6 +294,8 @@ export type UISlice = {
   closeAutomationsPage: () => void
   openSpacePage: () => void
   closeSpacePage: () => void
+  openSkillsPage: () => void
+  closeSkillsPage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
   openSettingsPage: () => void
@@ -300,6 +305,7 @@ export type UISlice = {
       | 'general'
       | 'browser'
       | 'appearance'
+      | 'input'
       | 'tasks'
       | 'terminal'
       | 'computer-use'
@@ -346,7 +352,7 @@ export type UISlice = {
   ) => void
   markOrcaHookRepoAlwaysTrusted: (repoId: string) => void
   clearOrcaHookTrustForRepo: (repoId: string) => void
-  groupBy: 'none' | 'repo' | 'pr-status'
+  groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   setGroupBy: (g: UISlice['groupBy']) => void
   showWorkspaceLineage: boolean
   setShowWorkspaceLineage: (v: boolean) => void
@@ -368,6 +374,8 @@ export type UISlice = {
   setWorkspaceBoardOpacity: (opacity: number) => void
   workspaceBoardCompact: boolean
   setWorkspaceBoardCompact: (compact: boolean) => void
+  workspaceBoardColumnWidth: number
+  setWorkspaceBoardColumnWidth: (width: number) => void
   statusBarItems: StatusBarItem[]
   toggleStatusBarItem: (item: StatusBarItem) => void
   statusBarVisible: boolean
@@ -488,6 +496,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   previousViewBeforeActivity: 'terminal',
   previousViewBeforeAutomations: 'terminal',
   previousViewBeforeSpace: 'terminal',
+  previousViewBeforeSkills: 'terminal',
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
   taskResumeState: undefined,
@@ -614,6 +623,16 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   closeSpacePage: () =>
     set((state) => ({
       activeView: state.previousViewBeforeSpace
+    })),
+  openSkillsPage: () =>
+    set((state) => ({
+      activeView: 'skills',
+      previousViewBeforeSkills:
+        state.activeView === 'skills' ? state.previousViewBeforeSkills : state.activeView
+    })),
+  closeSkillsPage: () =>
+    set((state) => ({
+      activeView: state.previousViewBeforeSkills
     })),
   setNewWorkspaceDraft: (draft) => set({ newWorkspaceDraft: draft }),
   clearNewWorkspaceDraft: () => set({ newWorkspaceDraft: null }),
@@ -764,6 +783,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ workspaceBoardCompact: normalized })
   },
 
+  workspaceBoardColumnWidth: WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT,
+  setWorkspaceBoardColumnWidth: (width) => {
+    const clamped = clampWorkspaceBoardColumnWidth(width)
+    window.api.ui.set({ workspaceBoardColumnWidth: clamped }).catch(console.error)
+    set({ workspaceBoardColumnWidth: clamped })
+  },
+
   statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
   toggleStatusBarItem: (item) =>
     set((s) => {
@@ -907,6 +933,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
         workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
         workspaceBoardCompact: normalizeWorkspaceBoardCompact(ui.workspaceBoardCompact),
+        workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(ui.workspaceBoardColumnWidth),
         statusBarItems: migrateStatusBarItems(ui.statusBarItems),
         statusBarVisible: ui.statusBarVisible ?? true,
         // Why: absent → true so existing users see the pet the first time

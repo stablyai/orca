@@ -8,7 +8,13 @@ export type GiteaRepoRef = {
   webBaseUrl: string
 }
 
-const KNOWN_NON_GITEA_HOSTS = new Set(['github.com', 'gitlab.com', 'bitbucket.org'])
+const KNOWN_NON_GITEA_HOSTS = new Set([
+  'github.com',
+  'gitlab.com',
+  'bitbucket.org',
+  'dev.azure.com',
+  'ssh.dev.azure.com'
+])
 const repoRefCache = new Map<string, GiteaRepoRef | null>()
 
 /** @internal - exposed for tests only */
@@ -51,9 +57,13 @@ function apiBaseUrlFromWebBase(webBaseUrl: string): string {
   return `${webBaseUrl.replace(/\/+$/, '')}/api/v1`
 }
 
-function makeRepoRef(host: string, path: string, webBaseUrl: string): GiteaRepoRef | null {
+function makeRepoRef(host: string, path: string, webOrigin: string): GiteaRepoRef | null {
   const normalizedHost = host.toLowerCase()
-  if (!normalizedHost || KNOWN_NON_GITEA_HOSTS.has(normalizedHost)) {
+  if (
+    !normalizedHost ||
+    KNOWN_NON_GITEA_HOSTS.has(normalizedHost) ||
+    normalizedHost.endsWith('.visualstudio.com')
+  ) {
     return null
   }
 
@@ -62,6 +72,11 @@ function makeRepoRef(host: string, path: string, webBaseUrl: string): GiteaRepoR
     return null
   }
 
+  // Why: Gitea/Forgejo can be hosted below a URL subpath. SSH-style remotes
+  // carry that base path in the repo path, so derive the web/API base here.
+  const webBaseUrl = parsed.basePath
+    ? `${webOrigin.replace(/\/+$/, '')}/${parsed.basePath}`
+    : webOrigin
   return {
     host: normalizedHost,
     owner: parsed.owner,
@@ -98,8 +113,7 @@ export function parseGiteaRepoRef(remoteUrl: string): GiteaRepoRef | null {
       protocol === 'http:' || protocol === 'https:'
         ? `${protocol}//${url.host}`
         : `https://${url.hostname.toLowerCase()}`
-    const webBaseUrl = parsed.basePath ? `${webOrigin}/${parsed.basePath}` : webOrigin
-    return makeRepoRef(url.hostname, url.pathname, webBaseUrl)
+    return makeRepoRef(url.hostname, url.pathname, webOrigin)
   } catch {
     return null
   }

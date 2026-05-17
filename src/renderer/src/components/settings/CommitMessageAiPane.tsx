@@ -2,21 +2,21 @@
    model dropdown, thinking effort dropdown, custom command, custom prompt) is
    a SearchableSetting block, and splitting the pane across files would scatter
    the ~6 conditional render branches without making any of them clearer. */
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Terminal } from 'lucide-react'
 import type { CommitMessageAiSettings, GlobalSettings, TuiAgent } from '../../../../shared/types'
 import {
   CUSTOM_AGENT_ID,
-  DEFAULT_COMMIT_MESSAGE_AGENT_ID,
   getCommitMessageAgentCapability,
   isCustomAgentId,
   listCommitMessageAgentCapabilities,
-  type CommitMessageAgentChoice,
+  resolveCommitMessageAgentChoice,
   type CommitMessageAgentCapability,
   type CommitMessageModelCapability
 } from '../../../../shared/commit-message-agent-spec'
 import { CUSTOM_PROMPT_PLACEHOLDER } from '../../../../shared/commit-message-prompt'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
+import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { useAppStore } from '../../store'
@@ -25,7 +25,9 @@ import { matchesSettingsSearch } from './settings-search'
 
 type CommitMessageAiPaneProps = {
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void
+  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
+  onCustomPromptDirtyChange?: (dirty: boolean) => void
+  customPromptDiscardSignal?: number
 }
 
 const EMPTY_SETTINGS: CommitMessageAiSettings = {
@@ -36,6 +38,8 @@ const EMPTY_SETTINGS: CommitMessageAiSettings = {
   customPrompt: '',
   customAgentCommand: ''
 }
+
+const UNCONFIGURED_AGENT_SELECT_VALUE = ''
 
 function readSettings(settings: GlobalSettings): CommitMessageAiSettings {
   return settings.commitMessageAi ?? EMPTY_SETTINGS
@@ -76,15 +80,64 @@ function resolveSelectedThinking(
 
 export function CommitMessageAiPane({
   settings,
-  updateSettings
+  updateSettings,
+  onCustomPromptDirtyChange,
+  customPromptDiscardSignal
 }: CommitMessageAiPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const config = readSettings(settings)
+  const persistedCustomPrompt = config.customPrompt
+  const [customPromptDraft, setCustomPromptDraft] = useState(persistedCustomPrompt)
+  const [isSavingCustomPrompt, setIsSavingCustomPrompt] = useState(false)
+  const persistedCustomPromptRef = useRef(persistedCustomPrompt)
+  const isCustomPromptDirty = customPromptDraft !== persistedCustomPrompt
+
+  useEffect(() => {
+    persistedCustomPromptRef.current = persistedCustomPrompt
+  }, [persistedCustomPrompt])
+
+  useEffect(() => {
+    if (!isCustomPromptDirty) {
+      setCustomPromptDraft(persistedCustomPrompt)
+    }
+  }, [isCustomPromptDirty, persistedCustomPrompt])
+
+  useEffect(() => {
+    setCustomPromptDraft(persistedCustomPromptRef.current)
+    // Why: parent navigation guards use this signal after the user confirms
+    // they want to leave without saving the prompt draft.
+  }, [customPromptDiscardSignal])
+
+  useEffect(() => {
+    onCustomPromptDirtyChange?.(isCustomPromptDirty)
+  }, [isCustomPromptDirty, onCustomPromptDirtyChange])
+
+  useEffect(
+    () => () => {
+      onCustomPromptDirtyChange?.(false)
+    },
+    [onCustomPromptDirtyChange]
+  )
 
   const agentCapabilities = useMemo(listCommitMessageAgentCapabilities, [])
-  const activeAgentId: CommitMessageAgentChoice = config.agentId ?? DEFAULT_COMMIT_MESSAGE_AGENT_ID
-  const isCustom = isCustomAgentId(activeAgentId)
-  const activeCapability = isCustom ? undefined : getCommitMessageAgentCapability(activeAgentId)
+  const resolvedAgentId = resolveCommitMessageAgentChoice(config.agentId, settings.defaultTuiAgent)
+  const activeAgentSelectValue = resolvedAgentId ?? UNCONFIGURED_AGENT_SELECT_VALUE
+  const unsupportedDefaultAgent =
+    resolvedAgentId === null &&
+    !config.agentId &&
+    settings.defaultTuiAgent &&
+    settings.defaultTuiAgent !== 'blank'
+      ? settings.defaultTuiAgent
+      : null
+  const unsupportedDefaultAgentLabel = unsupportedDefaultAgent
+    ? (AGENT_CATALOG.find((a) => a.id === unsupportedDefaultAgent)?.label ??
+      unsupportedDefaultAgent)
+    : null
+  const isCustom = isCustomAgentId(resolvedAgentId)
+  const activeCapability =
+    resolvedAgentId && !isCustomAgentId(resolvedAgentId)
+      ? getCommitMessageAgentCapability(resolvedAgentId)
+      : undefined
   const activeModel = activeCapability ? resolveSelectedModel(config, activeCapability) : null
   const activeThinking = activeModel ? resolveSelectedThinking(config, activeModel) : undefined
 
@@ -99,11 +152,15 @@ export function CommitMessageAiPane({
       return
     }
     // Why: when the user enables the feature for the first time, hydrate the
-    // agent / model / thinking choices from provider capabilities so the
-    // Generate button works immediately without forcing them to pick first.
-    // If the user previously persisted 'custom', we keep that and let them
-    // re-edit the command — no implicit reset to a preset.
-    const seedAgentId: TuiAgent | 'custom' = config.agentId ?? DEFAULT_COMMIT_MESSAGE_AGENT_ID
+    // agent / model / thinking choices from their default agent when possible
+    // so Generate works without maintaining a second agent preference. If the
+    // user previously persisted 'custom', keep it and let them re-edit the
+    // command — no implicit reset to a preset.
+    const seedAgentId = resolveCommitMessageAgentChoice(config.agentId, settings.defaultTuiAgent)
+    if (!seedAgentId) {
+      writeConfig({ enabled: true, agentId: null })
+      return
+    }
     const seedCapability = isCustomAgentId(seedAgentId)
       ? undefined
       : getCommitMessageAgentCapability(seedAgentId)
@@ -127,6 +184,9 @@ export function CommitMessageAiPane({
   }
 
   const onAgentChange = (newAgentId: string): void => {
+    if (newAgentId === UNCONFIGURED_AGENT_SELECT_VALUE) {
+      return
+    }
     if (isCustomAgentId(newAgentId)) {
       writeConfig({ agentId: CUSTOM_AGENT_ID })
       return
@@ -197,8 +257,20 @@ export function CommitMessageAiPane({
     })
   }
 
-  const onCustomPromptChange = (value: string): void => {
-    writeConfig({ customPrompt: value })
+  const onSaveCustomPrompt = async (): Promise<void> => {
+    if (!isCustomPromptDirty || isSavingCustomPrompt) {
+      return
+    }
+    setIsSavingCustomPrompt(true)
+    try {
+      await updateSettings({ commitMessageAi: { ...config, customPrompt: customPromptDraft } })
+    } finally {
+      setIsSavingCustomPrompt(false)
+    }
+  }
+
+  const onDiscardCustomPrompt = (): void => {
+    setCustomPromptDraft(persistedCustomPrompt)
   }
 
   const sections: React.ReactNode[] = []
@@ -268,30 +340,38 @@ export function CommitMessageAiPane({
             worktrees, or the SSH host for remote ones.
           </p>
         </div>
-        <Select value={activeAgentId} onValueChange={onAgentChange}>
-          <SelectTrigger size="sm" className="h-8 text-xs w-[180px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {agentCapabilities.map((capability) => {
-              const id = capability.id
-              return (
-                <SelectItem key={id} value={id} className="cursor-pointer">
-                  <span className="flex items-center gap-2">
-                    <AgentIcon agent={id} size={14} />
-                    <span>{agentLabel(id, capability)}</span>
-                  </span>
-                </SelectItem>
-              )
-            })}
-            <SelectItem value={CUSTOM_AGENT_ID} className="cursor-pointer">
-              <span className="flex items-center gap-2">
-                <Terminal className="size-3.5" />
-                <span>Custom</span>
-              </span>
-            </SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex flex-col items-end gap-1">
+          <Select value={activeAgentSelectValue} onValueChange={onAgentChange}>
+            <SelectTrigger size="sm" className="h-8 text-xs w-[180px]">
+              <SelectValue placeholder="Not configured" />
+            </SelectTrigger>
+            <SelectContent>
+              {agentCapabilities.map((capability) => {
+                const id = capability.id
+                return (
+                  <SelectItem key={id} value={id} className="cursor-pointer">
+                    <span className="flex items-center gap-2">
+                      <AgentIcon agent={id} size={14} />
+                      <span>{agentLabel(id, capability)}</span>
+                    </span>
+                  </SelectItem>
+                )
+              })}
+              <SelectItem value={CUSTOM_AGENT_ID} className="cursor-pointer">
+                <span className="flex items-center gap-2">
+                  <Terminal className="size-3.5" />
+                  <span>Custom</span>
+                </span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          {unsupportedDefaultAgentLabel ? (
+            <p className="max-w-[260px] text-right text-[11px] text-muted-foreground">
+              Your default agent is {unsupportedDefaultAgentLabel}, which does not support commit
+              message generation yet. Choose Claude, Codex, or Custom.
+            </p>
+          ) : null}
+        </div>
       </SearchableSetting>
     )
   }
@@ -364,8 +444,8 @@ export function CommitMessageAiPane({
         <div className="space-y-0.5">
           <Label>Model</Label>
           <p className="text-xs text-muted-foreground">
-            Smaller models default to lower latency and cost. Pick a larger one if the diffs you
-            review tend to need more reasoning.
+            Defaults to the strongest available model for the selected agent. Pick a smaller one if
+            you prefer lower latency or cost.
           </p>
         </div>
         <Select value={activeModel.id} onValueChange={onModelChange}>
@@ -425,13 +505,14 @@ export function CommitMessageAiPane({
   }
 
   if (
-    config.enabled &&
-    matchesSettingsSearch(searchQuery, {
-      title: 'Custom prompt',
-      description:
-        'Optional instructions appended to the base prompt (e.g. Conventional Commits style).',
-      keywords: ['prompt', 'conventional commits', 'gitmoji', 'style']
-    })
+    (config.enabled || isCustomPromptDirty) &&
+    (isCustomPromptDirty ||
+      matchesSettingsSearch(searchQuery, {
+        title: 'Custom prompt',
+        description:
+          'Optional instructions appended to the base prompt (e.g. Conventional Commits style).',
+        keywords: ['prompt', 'conventional commits', 'gitmoji', 'style']
+      }))
   ) {
     sections.push(
       <SearchableSetting
@@ -439,6 +520,7 @@ export function CommitMessageAiPane({
         title="Custom prompt"
         description="Optional instructions appended to the base prompt (e.g. Conventional Commits style)."
         keywords={['prompt', 'conventional commits', 'gitmoji', 'style']}
+        forceVisible={isCustomPromptDirty}
         className="space-y-2 px-1 py-2"
       >
         <div className="space-y-0.5">
@@ -451,11 +533,38 @@ export function CommitMessageAiPane({
         <textarea
           id="commit-message-ai-custom-prompt"
           rows={4}
-          value={config.customPrompt}
-          onChange={(e) => onCustomPromptChange(e.target.value)}
+          value={customPromptDraft}
+          onChange={(e) => setCustomPromptDraft(e.target.value)}
           placeholder="Use Conventional Commits format (feat:, fix:, ...). Reference the ticket key when present."
           className="w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
         />
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[11px] text-muted-foreground">
+            {isCustomPromptDirty ? 'Unsaved changes' : 'Saved'}
+          </p>
+          <div className="flex items-center gap-2">
+            {isCustomPromptDirty ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                onClick={onDiscardCustomPrompt}
+                disabled={isSavingCustomPrompt}
+              >
+                Discard
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="secondary"
+              size="xs"
+              onClick={() => void onSaveCustomPrompt()}
+              disabled={!isCustomPromptDirty || isSavingCustomPrompt}
+            >
+              {isSavingCustomPrompt ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
+        </div>
       </SearchableSetting>
     )
   }

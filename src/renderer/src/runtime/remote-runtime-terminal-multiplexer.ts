@@ -63,9 +63,14 @@ type RemoteRuntimeMultiplexedTerminalState = {
   terminal: string
   callbacks: RemoteRuntimeMultiplexedTerminalCallbacks
   snapshotChunks: Uint8Array<ArrayBufferLike>[]
+  snapshotBytes: number
+  snapshotOverflowed: boolean
 }
 
 const CONTROL_STREAM_ID = 0
+const MAX_REMOTE_TERMINAL_SNAPSHOT_BYTES = 2 * 1024 * 1024
+const REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE =
+  'Remote terminal snapshot exceeded the 2 MiB replay limit; live output will continue.'
 
 class RemoteRuntimeTerminalMultiplexer {
   private readonly streams = new Map<number, RemoteRuntimeMultiplexedTerminalState>()
@@ -89,7 +94,9 @@ class RemoteRuntimeTerminalMultiplexer {
       streamId,
       terminal: args.terminal,
       callbacks: args.callbacks,
-      snapshotChunks: []
+      snapshotChunks: [],
+      snapshotBytes: 0,
+      snapshotOverflowed: false
     }
     this.streams.set(streamId, state)
 
@@ -216,10 +223,12 @@ class RemoteRuntimeTerminalMultiplexer {
       return
     }
     if (event.type === 'end') {
+      clearSnapshot(stream)
       this.streams.delete(event.streamId)
       stream.callbacks.onEnd?.()
       this.closeIfIdle()
     } else if (event.type === 'error') {
+      clearSnapshot(stream)
       stream.callbacks.onError?.(
         typeof event.message === 'string' ? event.message : 'Remote terminal stream failed.'
       )
@@ -258,20 +267,33 @@ class RemoteRuntimeTerminalMultiplexer {
       return
     }
     if (frame.opcode === TerminalStreamOpcode.SnapshotStart) {
-      stream.snapshotChunks = []
+      clearSnapshot(stream)
       return
     }
     if (frame.opcode === TerminalStreamOpcode.SnapshotChunk) {
+      if (stream.snapshotOverflowed) {
+        return
+      }
+      stream.snapshotBytes += frame.payload.byteLength
+      if (stream.snapshotBytes > MAX_REMOTE_TERMINAL_SNAPSHOT_BYTES) {
+        clearSnapshot(stream)
+        stream.snapshotOverflowed = true
+        stream.callbacks.onError?.(REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE)
+        return
+      }
       stream.snapshotChunks.push(frame.payload)
       return
     }
     if (frame.opcode === TerminalStreamOpcode.SnapshotEnd) {
-      stream.callbacks.onSnapshot(decodeTerminalStreamText(concatBytes(stream.snapshotChunks)))
-      stream.snapshotChunks = []
+      if (!stream.snapshotOverflowed) {
+        stream.callbacks.onSnapshot(decodeTerminalStreamText(concatBytes(stream.snapshotChunks)))
+      }
+      clearSnapshot(stream)
       stream.callbacks.onSubscribed?.()
       return
     }
     if (frame.opcode === TerminalStreamOpcode.Error) {
+      clearSnapshot(stream)
       stream.callbacks.onError?.(decodeTerminalStreamText(frame.payload))
     }
   }
@@ -318,6 +340,7 @@ class RemoteRuntimeTerminalMultiplexer {
     this.subscription = null
     this.streams.clear()
     for (const stream of streams) {
+      clearSnapshot(stream)
       stream.callbacks.onTransportClose?.()
       if (message) {
         stream.callbacks.onError?.(message)
@@ -362,6 +385,12 @@ function concatBytes(chunks: Uint8Array<ArrayBufferLike>[]): Uint8Array<ArrayBuf
     offset += chunk.byteLength
   }
   return out
+}
+
+function clearSnapshot(stream: RemoteRuntimeMultiplexedTerminalState): void {
+  stream.snapshotChunks = []
+  stream.snapshotBytes = 0
+  stream.snapshotOverflowed = false
 }
 
 function isTerminalDriverState(

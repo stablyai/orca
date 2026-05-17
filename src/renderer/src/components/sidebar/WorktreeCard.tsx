@@ -37,6 +37,7 @@ import {
 import { IssueSection, ReviewSection, CommentSection } from './WorktreeCardMeta'
 import { writeWorkspaceDragData } from './workspace-status'
 import { useWorktreeActivityStatus } from './use-worktree-activity-status'
+import { getWorktreeCardPrDisplay } from './worktree-card-pr-display'
 
 type WorktreeCardProps = {
   worktree: Worktree
@@ -45,6 +46,7 @@ type WorktreeCardProps = {
   isMultiSelected?: boolean
   selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
+  hideCiCheck?: boolean
   parentLabel?: string
   lineageState?: 'valid' | 'missing'
   lineageChildCount?: number
@@ -52,8 +54,9 @@ type WorktreeCardProps = {
   lineageChildren?: React.ReactNode
   onLineageToggle?: (event: React.MouseEvent<HTMLButtonElement>) => void
   onActivate?: () => void
-  onSelectionGesture?: (event: React.MouseEvent<HTMLDivElement>, worktreeId: string) => boolean
-  onContextMenuSelect?: (event: React.MouseEvent<HTMLDivElement>) => readonly Worktree[]
+  onSelectionGesture?: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
+  onContextMenuSelect?: (event: React.MouseEvent<HTMLElement>) => readonly Worktree[]
+  nativeDragEnabled?: boolean
 }
 
 function formatSparseDirectoryPreview(directories: string[]): string {
@@ -70,7 +73,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
   onActivate,
   onSelectionGesture,
   onContextMenuSelect,
+  nativeDragEnabled = true,
   hideRepoBadge,
+  hideCiCheck = false,
   parentLabel,
   lineageState,
   lineageChildCount = 0,
@@ -172,6 +177,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
   const hostedReview: HostedReviewInfo | null | undefined =
     hostedReviewEntry !== undefined ? hostedReviewEntry.data : undefined
+  const prDisplay = getWorktreeCardPrDisplay(hostedReview, worktree.linkedPR)
   const issue: IssueInfo | null | undefined = worktree.linkedIssue
     ? issueEntry !== undefined
       ? issueEntry.data
@@ -193,7 +199,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const status = useWorktreeActivityStatus(worktree.id)
 
   const showPR = cardProps.includes('pr')
-  const showCI = cardProps.includes('ci')
+  const showCI = !hideCiCheck && cardProps.includes('ci')
   const showIssue = cardProps.includes('issue')
 
   // Skip hosted-review fetches when the corresponding card sections are hidden.
@@ -207,7 +213,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
       fetchHostedReviewForBranch(repo.path, branch, {
         repoId: repo.id,
         linkedGitHubPR: worktree.linkedPR ?? null,
-        linkedGitLabMR: worktree.linkedGitLabMR ?? null
+        linkedGitLabMR: worktree.linkedGitLabMR ?? null,
+        staleWhileRevalidate: true
       })
     }
   }, [
@@ -320,9 +327,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
         event.preventDefault()
         return
       }
-      writeWorkspaceDragData(event.dataTransfer, worktree.id)
+      const dragIds =
+        isMultiSelected && selectedWorktrees && selectedWorktrees.length > 1
+          ? selectedWorktrees.map((item) => item.id)
+          : worktree.id
+      writeWorkspaceDragData(event.dataTransfer, dragIds)
     },
-    [isDeleting, worktree.id]
+    [isDeleting, isMultiSelected, selectedWorktrees, worktree.id]
   )
 
   // Why: the 'unread' card property is the user's opt-out. When off, we render
@@ -333,7 +344,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const cardBody = (
     <div
       className={cn(
-        'group relative flex items-start gap-1.5 px-2 py-2 cursor-pointer transition-all duration-200 outline-none select-none ml-1',
+        'group relative flex items-start gap-1.5 px-1.5 py-1.5 cursor-pointer transition-all duration-200 outline-none select-none ml-1',
         isMultiSelected ? 'rounded-sm' : 'rounded-lg',
         isActive
           ? 'bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] border border-black/[0.015] dark:bg-white/[0.10] dark:border-border/40 dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
@@ -341,13 +352,14 @@ const WorktreeCard = React.memo(function WorktreeCard({
             ? 'border border-sidebar-ring/35 bg-sidebar-accent/70 ring-1 ring-sidebar-ring/30'
             : 'border border-transparent hover:bg-sidebar-accent/40',
         isActive && isMultiSelected && 'ring-1 ring-sidebar-ring/35',
+        !nativeDragEnabled && !isDeleting && '!cursor-grab',
         isDeleting && 'opacity-50 grayscale cursor-not-allowed',
         isSshDisconnected && !isDeleting && 'opacity-60'
       )}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
-      draggable={!isDeleting}
-      onDragStart={handleDragStart}
+      draggable={nativeDragEnabled && !isDeleting}
+      onDragStart={nativeDragEnabled ? handleDragStart : undefined}
       aria-busy={isDeleting}
     >
       {isDeleting && (
@@ -483,7 +495,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
           <div className="flex items-center gap-1 shrink-0">
             {/* CI Checks & PR state on the right */}
-            {cardProps.includes('ci') && hostedReview && hostedReview.status !== 'neutral' && (
+            {showCI && hostedReview && hostedReview.status !== 'neutral' && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="inline-flex items-center opacity-80 hover:opacity-100 transition-opacity">
@@ -568,18 +580,14 @@ const WorktreeCard = React.memo(function WorktreeCard({
              Layout coupling: spacing here is used to derive size estimates in
              WorktreeList's estimateSize. Update that function if changing spacing. */}
         {((cardProps.includes('issue') && issueDisplay) ||
-          (cardProps.includes('pr') && hostedReview) ||
+          (cardProps.includes('pr') && prDisplay) ||
           (cardProps.includes('comment') && worktree.comment)) && (
           <div className="flex flex-col gap-[3px] mt-0.5">
             {cardProps.includes('issue') && issueDisplay && (
               <IssueSection issue={issueDisplay} onClick={handleEditIssue} />
             )}
-            {cardProps.includes('pr') && hostedReview && (
-              <ReviewSection
-                review={hostedReview}
-                onEdit={handleEditPr}
-                onRemove={handleRemovePr}
-              />
+            {cardProps.includes('pr') && prDisplay && (
+              <ReviewSection review={prDisplay} onEdit={handleEditPr} onRemove={handleRemovePr} />
             )}
             {cardProps.includes('comment') && worktree.comment && (
               <CommentSection comment={worktree.comment} onDoubleClick={handleEditComment} />

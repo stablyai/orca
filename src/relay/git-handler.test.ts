@@ -37,6 +37,7 @@ describe('GitHandler', () => {
   it('registers all expected handlers', () => {
     const methods = Array.from(dispatcher._requestHandlers.keys())
     expect(methods).toContain('git.status')
+    expect(methods).toContain('git.history')
     expect(methods).toContain('git.commit')
     expect(methods).toContain('git.diff')
     expect(methods).toContain('git.stage')
@@ -57,6 +58,33 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.removeWorktree')
     expect(methods).toContain('git.exec')
     expect(methods).toContain('git.isGitRepo')
+  })
+
+  describe('history', () => {
+    it('returns bounded git history for a repo', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'hello')
+      gitCommit(tmpDir, 'initial')
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'changed')
+      gitCommit(tmpDir, 'second')
+
+      const result = (await dispatcher.callRequest('git.history', {
+        worktreePath: tmpDir,
+        limit: 10
+      })) as {
+        items: { subject: string; displayId?: string }[]
+        currentRef?: { category?: string; revision?: string }
+        hasMore: boolean
+        limit: number
+      }
+
+      expect(result.items.map((item) => item.subject)).toEqual(['second', 'initial'])
+      expect(result.currentRef?.category).toBe('branches')
+      expect(result.currentRef?.revision).toMatch(/^[0-9a-f]{40}$/)
+      expect(result.items[0]?.displayId).toHaveLength(7)
+      expect(result.hasMore).toBe(false)
+      expect(result.limit).toBe(10)
+    })
   })
 
   describe('status', () => {
@@ -90,6 +118,30 @@ describe('GitHandler', () => {
       expect(untracked).toBeDefined()
       expect(untracked!.status).toBe('untracked')
       expect(untracked!.area).toBe('untracked')
+    })
+
+    it('returns ignored paths only when requested', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, '.gitignore'), 'dist/\n.env\n')
+      gitCommit(tmpDir, 'initial')
+      mkdirSync(path.join(tmpDir, 'dist'), { recursive: true })
+      writeFileSync(path.join(tmpDir, 'dist', 'bundle.js'), 'compiled')
+      writeFileSync(path.join(tmpDir, '.env'), 'TOKEN=secret')
+
+      const defaultResult = (await dispatcher.callRequest('git.status', {
+        worktreePath: tmpDir
+      })) as {
+        ignoredPaths?: string[]
+      }
+      const ignoredResult = (await dispatcher.callRequest('git.status', {
+        worktreePath: tmpDir,
+        includeIgnored: true
+      })) as {
+        ignoredPaths?: string[]
+      }
+
+      expect('ignoredPaths' in defaultResult).toBe(false)
+      expect(ignoredResult.ignoredPaths).toEqual(expect.arrayContaining(['dist/', '.env']))
     })
 
     it('detects modified files', async () => {

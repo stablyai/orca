@@ -532,6 +532,47 @@ describe('AgentHookServer listener replay', () => {
       server.stop()
     }
   })
+
+  it('accepts Hermes plugin hook posts on /hook/hermes', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/hermes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify(
+          buildBody({
+            hook_event_name: 'pre_llm_call',
+            user_message: 'verify Hermes route'
+          })
+        )
+      })
+      expect(response.status).toBe(204)
+
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          connectionId: null,
+          payload: expect.objectContaining({
+            state: 'working',
+            prompt: 'verify Hermes route',
+            agentType: 'hermes'
+          })
+        })
+      )
+    } finally {
+      server.stop()
+    }
+  })
 })
 
 describe('Claude hook normalization', () => {

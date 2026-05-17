@@ -40,6 +40,7 @@ export type TabDragItemData = {
    *  the dragged tab would be invisible once the cursor leaves its own
    *  group's strip. */
   label: string
+  iconPath?: string
   color?: string | null
 }
 
