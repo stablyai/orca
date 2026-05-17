@@ -2002,6 +2002,70 @@ describe('Copilot hook normalization', () => {
       rmSync(tmpDir, { recursive: true, force: true })
     }
   })
+
+  it('updates Grok Stop with final chat-history text after a non-blocking retry', async () => {
+    const server = new AgentHookServer()
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-grok-chat-history-retry-'))
+    const sessionId = '019e37f4-5135-7b63-a4ab-6d13aa6bf528'
+    const cwd = join(tmpDir, 'workspace')
+    const sessionDir = join(tmpDir, '.grok', 'sessions', encodeURIComponent(cwd), sessionId)
+    mkdirSync(sessionDir, { recursive: true })
+    writeFileSync(join(sessionDir, 'chat_history.jsonl'), '')
+    vi.stubEnv('HOME', tmpDir)
+    vi.stubEnv('USERPROFILE', tmpDir)
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/grok`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify(buildBody({ hookEventName: 'user_prompt_submit', prompt: 'hihi' }))
+      })
+      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/grok`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify(buildBody({ hookEventName: 'Stop', sessionId, cwd }))
+      })
+
+      expect(response.status).toBe(204)
+      expect(listener).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            state: 'done',
+            lastAssistantMessage: undefined
+          })
+        })
+      )
+
+      writeFileSync(
+        join(sessionDir, 'chat_history.jsonl'),
+        `${JSON.stringify({ type: 'assistant', content: 'Hi! How can I help you today?' })}\n`
+      )
+      await new Promise((resolve) => setTimeout(resolve, 120))
+
+      expect(listener).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            state: 'done',
+            lastAssistantMessage: 'Hi! How can I help you today?'
+          })
+        })
+      )
+    } finally {
+      server.stop()
+      vi.unstubAllEnvs()
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('Endpoint file lifecycle', () => {

@@ -22,6 +22,7 @@ import {
   clearPaneCacheState,
   createHookListenerState,
   getEndpointFileName,
+  hasPendingAgentResultText,
   HOOK_REQUEST_SLOWLORIS_MS,
   MAX_PANE_KEY_LEN,
   normalizeHookPayload,
@@ -75,8 +76,8 @@ type PaneKeyAliasEntry = {
 // the endpoint file in userData/agent-hooks/ so all hook-server-owned cross-
 // restart artifacts stay co-located.
 const LAST_STATUS_FILE_NAME = 'last-status.json'
-const COPILOT_TRANSCRIPT_RETRY_ATTEMPTS = 5
-const COPILOT_TRANSCRIPT_RETRY_MS = 50
+const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
+const ASSISTANT_MESSAGE_RETRY_MS = 50
 
 // Why: starts at 2 (not 1) because pre-merge dev iterations of this branch
 // wrote a v1 shape with no receivedAt / stateStartedAt. Bumping to 2 means a
@@ -201,34 +202,6 @@ function trackEmptyPaneKeyHook(body: unknown): void {
   track('agent_hook_unattributed', { reason: 'empty_pane_key' })
 }
 
-function hasPendingCopilotTranscript(source: AgentHookSource, body: unknown): boolean {
-  if (source !== 'copilot' || typeof body !== 'object' || body === null) {
-    return false
-  }
-  const rawPayload = (body as Record<string, unknown>).payload
-  const payload =
-    typeof rawPayload === 'string'
-      ? (() => {
-          try {
-            return JSON.parse(rawPayload) as unknown
-          } catch {
-            return null
-          }
-        })()
-      : rawPayload
-  if (typeof payload !== 'object' || payload === null) {
-    return false
-  }
-  const record = payload as Record<string, unknown>
-  const directMessage =
-    record.last_assistant_message ?? record.lastAssistantMessage ?? record.message
-  if (typeof directMessage === 'string' && directMessage.trim().length > 0) {
-    return false
-  }
-  const transcriptPath = record.transcript_path ?? record.transcriptPath
-  return typeof transcriptPath === 'string' && transcriptPath.trim().length > 0
-}
-
 export class AgentHookServer {
   private server: ReturnType<typeof createServer> | null = null
   private port = 0
@@ -262,7 +235,7 @@ export class AgentHookServer {
   // Why: trailing-edge debounce timer. Captured per-instance so multiple
   // server instances in the same process (tests) don't share state.
   private statusPersistTimer: ReturnType<typeof setTimeout> | null = null
-  private copilotTranscriptRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   // Why: identity check — skip writes when the JSON-stringified contents
   // exactly match the last successful disk write. Cheap protection against
   // re-firing trailing timers when nothing changed.
@@ -347,7 +320,7 @@ export class AgentHookServer {
 
   private applyNormalizedStatus(payload: AgentHookEventPayload): EnrichedAgentHookEventPayload {
     if (payload.payload.state !== 'done' || payload.payload.lastAssistantMessage) {
-      this.clearCopilotTranscriptRetry(payload.paneKey)
+      this.clearAssistantMessageRetry(payload.paneKey)
     }
     const enriched = this.attachStatusTiming(payload)
     this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
@@ -358,16 +331,16 @@ export class AgentHookServer {
     return enriched
   }
 
-  private clearCopilotTranscriptRetry(paneKey: string): void {
-    const timer = this.copilotTranscriptRetryTimers.get(paneKey)
+  private clearAssistantMessageRetry(paneKey: string): void {
+    const timer = this.assistantMessageRetryTimers.get(paneKey)
     if (!timer) {
       return
     }
     clearTimeout(timer)
-    this.copilotTranscriptRetryTimers.delete(paneKey)
+    this.assistantMessageRetryTimers.delete(paneKey)
   }
 
-  private scheduleCopilotTranscriptRetry(
+  private scheduleAssistantMessageRetry(
     source: AgentHookSource,
     body: unknown,
     original: EnrichedAgentHookEventPayload,
@@ -375,21 +348,21 @@ export class AgentHookServer {
   ): void {
     if (
       original.payload.lastAssistantMessage ||
-      !hasPendingCopilotTranscript(source, body) ||
-      attempt > COPILOT_TRANSCRIPT_RETRY_ATTEMPTS
+      !hasPendingAgentResultText(source, body) ||
+      attempt > ASSISTANT_MESSAGE_RETRY_ATTEMPTS
     ) {
       return
     }
-    this.clearCopilotTranscriptRetry(original.paneKey)
+    this.clearAssistantMessageRetry(original.paneKey)
     const timer = setTimeout(() => {
       try {
-        this.copilotTranscriptRetryTimers.delete(original.paneKey)
+        this.assistantMessageRetryTimers.delete(original.paneKey)
         const current = this.state.lastStatusByPaneKey.get(original.paneKey) as
           | EnrichedAgentHookEventPayload
           | undefined
         if (
           !current ||
-          current.payload.agentType !== 'copilot' ||
+          current.payload.agentType !== original.payload.agentType ||
           current.payload.prompt !== original.payload.prompt ||
           current.payload.lastAssistantMessage
         ) {
@@ -397,18 +370,17 @@ export class AgentHookServer {
         }
         const normalized = normalizeHookPayload(this.state, source, body, this.env)
         if (!normalized?.payload.lastAssistantMessage) {
-          this.scheduleCopilotTranscriptRetry(source, body, original, attempt + 1)
+          this.scheduleAssistantMessageRetry(source, body, original, attempt + 1)
           return
         }
-        // Why: Copilot can POST Stop before its transcript line is flushed. Retry
-        // from a timer so the hook request returns immediately and the main loop
-        // is not blocked by synchronous sleeps.
+        // Why: some agents POST Stop before their transcript/chat-history line
+        // is flushed. Retry from a timer so the hook request returns immediately.
         this.applyNormalizedStatus(normalized)
       } catch (err) {
-        console.error('[agent-hooks] copilot transcript retry failed:', err)
+        console.error('[agent-hooks] assistant message retry failed:', err)
       }
-    }, COPILOT_TRANSCRIPT_RETRY_MS)
-    this.copilotTranscriptRetryTimers.set(original.paneKey, timer)
+    }, ASSISTANT_MESSAGE_RETRY_MS)
+    this.assistantMessageRetryTimers.set(original.paneKey, timer)
     if (typeof timer.unref === 'function') {
       timer.unref()
     }
@@ -683,7 +655,7 @@ export class AgentHookServer {
         const normalized = normalizeHookPayload(this.state, source, aliasedBody, this.env)
         if (normalized) {
           const enriched = this.applyNormalizedStatus(normalized)
-          this.scheduleCopilotTranscriptRetry(source, aliasedBody, enriched)
+          this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
         }
 
         res.writeHead(204)
@@ -734,10 +706,10 @@ export class AgentHookServer {
     this.token = ''
     this.env = 'production'
     this.onAgentStatus = null
-    for (const timer of this.copilotTranscriptRetryTimers.values()) {
+    for (const timer of this.assistantMessageRetryTimers.values()) {
       clearTimeout(timer)
     }
-    this.copilotTranscriptRetryTimers.clear()
+    this.assistantMessageRetryTimers.clear()
     // Why: intentionally do NOT delete the endpoint file on stop(). A stale
     // file points at a dead port, which matches the fail-open policy. Unlink
     // would introduce a TOCTOU race vs. a concurrent Orca instance.
@@ -765,7 +737,7 @@ export class AgentHookServer {
       return
     }
     this.state.lastStatusByPaneKey.delete(resolvedPaneKey)
-    this.clearCopilotTranscriptRetry(resolvedPaneKey)
+    this.clearAssistantMessageRetry(resolvedPaneKey)
     this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
     this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()
@@ -778,7 +750,7 @@ export class AgentHookServer {
     // event does not change the on-disk file, and skipping the write avoids
     // re-stat'ing on every dead-pane teardown.
     const hadStatus = this.state.lastStatusByPaneKey.has(resolvedPaneKey)
-    this.clearCopilotTranscriptRetry(resolvedPaneKey)
+    this.clearAssistantMessageRetry(resolvedPaneKey)
     clearPaneCacheState(this.state, resolvedPaneKey)
     let clearedAlias = false
     for (const [legacyPaneKey, stablePaneKey] of this.legacyPaneKeyAliases) {

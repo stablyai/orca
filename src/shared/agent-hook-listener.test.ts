@@ -1,11 +1,12 @@
 /* eslint-disable max-lines -- Why: this fixture keeps cross-agent hook normalization and cache behavior together so regressions in shared listener state are visible. */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import {
   createHookListenerState,
   getEndpointFileName,
+  hasPendingAgentResultText,
   isShellSafeEndpointValue,
   normalizeHookPayload,
   parseFormEncodedBody,
@@ -23,6 +24,10 @@ describe('shared agent-hook-listener', () => {
 
   beforeEach(() => {
     state = createHookListenerState()
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
   it('parses form-encoded bodies', () => {
@@ -245,6 +250,8 @@ describe('shared agent-hook-listener', () => {
     const cwd = join(tmpDir, 'workspace')
     const sessionDir = join(tmpDir, '.grok', 'sessions', encodeURIComponent(cwd), sessionId)
     try {
+      vi.stubEnv('HOME', tmpDir)
+      vi.stubEnv('USERPROFILE', tmpDir)
       mkdirSync(sessionDir, { recursive: true })
       writeFileSync(
         join(sessionDir, 'chat_history.jsonl'),
@@ -266,7 +273,7 @@ describe('shared agent-hook-listener', () => {
         'grok',
         {
           paneKey: PANE_KEY,
-          payload: { hookEventName: 'Stop', sessionId, cwd, grokHome: join(tmpDir, '.grok') }
+          payload: { hookEventName: 'Stop', sessionId, cwd }
         },
         'production'
       )
@@ -276,6 +283,48 @@ describe('shared agent-hook-listener', () => {
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })
     }
+  })
+
+  it('does not let Grok sessionId escape the chat-history directory', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-grok-session-escape-'))
+    const cwd = join(tmpDir, 'workspace')
+    const escapedDir = join(tmpDir, '.grok', 'sessions', 'escaped')
+    try {
+      vi.stubEnv('HOME', tmpDir)
+      vi.stubEnv('USERPROFILE', tmpDir)
+      mkdirSync(escapedDir, { recursive: true })
+      writeFileSync(
+        join(escapedDir, 'chat_history.jsonl'),
+        `${JSON.stringify({ type: 'assistant', content: 'should not leak' })}\n`
+      )
+
+      const done = normalizeHookPayload(
+        state,
+        'grok',
+        {
+          paneKey: PANE_KEY,
+          payload: { hookEventName: 'Stop', sessionId: '../escaped', cwd }
+        },
+        'production'
+      )
+
+      expect(done?.payload.state).toBe('done')
+      expect(done?.payload.lastAssistantMessage).toBeUndefined()
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('treats Grok SessionEnd chat history as pending result text', () => {
+    expect(
+      hasPendingAgentResultText('grok', {
+        payload: {
+          hookEventName: 'SessionEnd',
+          sessionId: '019e37f4-5135-7b63-a4ab-6d13aa6bf528',
+          cwd: '/tmp/workspace'
+        }
+      })
+    ).toBe(true)
   })
 
   it('normalizes Hermes pre_llm_call to a working turn with prompt text', () => {

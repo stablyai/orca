@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: relay hook parsing, replay cache, endpoint
-   writing, and Copilot transcript retry state are one lifecycle unit; splitting
+   writing, and assistant-message retry state are one lifecycle unit; splitting
    them would obscure cleanup ordering across remote PTY reconnects. */
 // Why: relay-side adapter for the shared agent-hook listener pipeline. Hosts
 // a loopback HTTP server (same shape as Orca's main-process server: bind
@@ -22,6 +22,7 @@ import {
   clearPaneCacheState,
   createHookListenerState,
   getEndpointFileName,
+  hasPendingAgentResultText,
   HOOK_REQUEST_SLOWLORIS_MS,
   normalizeHookPayload,
   readRequestBody,
@@ -44,8 +45,8 @@ export type RelayHookForward = (envelope: AgentHookRelayEnvelope) => void
 // server is the only consumer.
 const RELAY_HOOKS_DIR_NAME = '.orca-relay'
 const RELAY_HOOKS_SUBDIR = 'agent-hooks'
-const COPILOT_TRANSCRIPT_RETRY_ATTEMPTS = 5
-const COPILOT_TRANSCRIPT_RETRY_MS = 50
+const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
+const ASSISTANT_MESSAGE_RETRY_MS = 50
 
 // Why: cap env/version metadata at 64 chars so a misbehaving agent CLI
 // cannot grow lastEnvelopeMetaByPaneKey unboundedly per pane via the cache
@@ -55,34 +56,6 @@ const MAX_HOOK_META_LEN = 64
 
 function defaultEndpointDir(): string {
   return join(homedir(), RELAY_HOOKS_DIR_NAME, RELAY_HOOKS_SUBDIR)
-}
-
-function hasPendingCopilotTranscript(source: AgentHookSource, body: unknown): boolean {
-  if (source !== 'copilot' || typeof body !== 'object' || body === null) {
-    return false
-  }
-  const rawPayload = (body as Record<string, unknown>).payload
-  const payload =
-    typeof rawPayload === 'string'
-      ? (() => {
-          try {
-            return JSON.parse(rawPayload) as unknown
-          } catch {
-            return null
-          }
-        })()
-      : rawPayload
-  if (typeof payload !== 'object' || payload === null) {
-    return false
-  }
-  const record = payload as Record<string, unknown>
-  const directMessage =
-    record.last_assistant_message ?? record.lastAssistantMessage ?? record.message
-  if (typeof directMessage === 'string' && directMessage.trim().length > 0) {
-    return false
-  }
-  const transcriptPath = record.transcript_path ?? record.transcriptPath
-  return typeof transcriptPath === 'string' && transcriptPath.trim().length > 0
 }
 
 export function endpointDirForRelaySocket(sockPath: string): string {
@@ -120,7 +93,7 @@ export class RelayAgentHookServer {
     string,
     { source: AgentHookSource; env?: string; version?: string }
   > = new Map()
-  private copilotTranscriptRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private forward: RelayHookForward
 
   constructor(options: RelayHookServerOptions) {
@@ -178,10 +151,10 @@ export class RelayAgentHookServer {
     this.port = 0
     this.token = ''
     this.endpointFileWritten = false
-    for (const timer of this.copilotTranscriptRetryTimers.values()) {
+    for (const timer of this.assistantMessageRetryTimers.values()) {
       clearTimeout(timer)
     }
-    this.copilotTranscriptRetryTimers.clear()
+    this.assistantMessageRetryTimers.clear()
     clearAllListenerCaches(this.state)
     this.lastEnvelopeMetaByPaneKey.clear()
   }
@@ -213,7 +186,7 @@ export class RelayAgentHookServer {
    *  resurfaces as a ghost event on a later reconnect. Symmetric with the
    *  local server's clearPaneState on PTY teardown. */
   clearPaneState(paneKey: string): void {
-    this.clearCopilotTranscriptRetry(paneKey)
+    this.clearAssistantMessageRetry(paneKey)
     clearPaneCacheState(this.state, paneKey)
     this.lastEnvelopeMetaByPaneKey.delete(paneKey)
   }
@@ -273,7 +246,7 @@ export class RelayAgentHookServer {
         const env = this.bodyEnv(body)
         const version = this.bodyVersion(body)
         this.applyEvent(event, source, env, version)
-        this.scheduleCopilotTranscriptRetry(source, body, event, env, version)
+        this.scheduleAssistantMessageRetry(source, body, event, env, version)
       }
       res.writeHead(204)
       res.end()
@@ -316,23 +289,23 @@ export class RelayAgentHookServer {
     version?: string
   ): void {
     if (event.payload.state !== 'done' || event.payload.lastAssistantMessage) {
-      this.clearCopilotTranscriptRetry(event.paneKey)
+      this.clearAssistantMessageRetry(event.paneKey)
     }
     this.state.lastStatusByPaneKey.set(event.paneKey, event)
     this.lastEnvelopeMetaByPaneKey.set(event.paneKey, { source, env, version })
     this.forwardEvent(event, source, env, version)
   }
 
-  private clearCopilotTranscriptRetry(paneKey: string): void {
-    const timer = this.copilotTranscriptRetryTimers.get(paneKey)
+  private clearAssistantMessageRetry(paneKey: string): void {
+    const timer = this.assistantMessageRetryTimers.get(paneKey)
     if (!timer) {
       return
     }
     clearTimeout(timer)
-    this.copilotTranscriptRetryTimers.delete(paneKey)
+    this.assistantMessageRetryTimers.delete(paneKey)
   }
 
-  private scheduleCopilotTranscriptRetry(
+  private scheduleAssistantMessageRetry(
     source: AgentHookSource,
     body: unknown,
     original: AgentHookEventPayload,
@@ -342,19 +315,19 @@ export class RelayAgentHookServer {
   ): void {
     if (
       original.payload.lastAssistantMessage ||
-      !hasPendingCopilotTranscript(source, body) ||
-      attempt > COPILOT_TRANSCRIPT_RETRY_ATTEMPTS
+      !hasPendingAgentResultText(source, body) ||
+      attempt > ASSISTANT_MESSAGE_RETRY_ATTEMPTS
     ) {
       return
     }
-    this.clearCopilotTranscriptRetry(original.paneKey)
+    this.clearAssistantMessageRetry(original.paneKey)
     const timer = setTimeout(() => {
       try {
-        this.copilotTranscriptRetryTimers.delete(original.paneKey)
+        this.assistantMessageRetryTimers.delete(original.paneKey)
         const current = this.state.lastStatusByPaneKey.get(original.paneKey)
         if (
           !current ||
-          current.payload.agentType !== 'copilot' ||
+          current.payload.agentType !== original.payload.agentType ||
           current.payload.prompt !== original.payload.prompt ||
           current.payload.lastAssistantMessage
         ) {
@@ -362,19 +335,19 @@ export class RelayAgentHookServer {
         }
         const event = normalizeHookPayload(this.state, source, body, this.env)
         if (!event?.payload.lastAssistantMessage) {
-          this.scheduleCopilotTranscriptRetry(source, body, original, env, version, attempt + 1)
+          this.scheduleAssistantMessageRetry(source, body, original, env, version, attempt + 1)
           return
         }
         // Why: the relay runs on SSH targets too; retry from a timer so a delayed
-        // Copilot transcript does not block the remote hook server's event loop.
+        // transcript/chat-history write does not block the remote hook server.
         this.applyEvent(event, source, env, version)
       } catch (err) {
         process.stderr.write(
-          `[relay-hook-server] copilot transcript retry failed: ${err instanceof Error ? err.message : String(err)}\n`
+          `[relay-hook-server] assistant message retry failed: ${err instanceof Error ? err.message : String(err)}\n`
         )
       }
-    }, COPILOT_TRANSCRIPT_RETRY_MS)
-    this.copilotTranscriptRetryTimers.set(original.paneKey, timer)
+    }, ASSISTANT_MESSAGE_RETRY_MS)
+    this.assistantMessageRetryTimers.set(original.paneKey, timer)
     if (typeof timer.unref === 'function') {
       timer.unref()
     }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
@@ -250,6 +250,64 @@ describe('RelayAgentHookServer', () => {
       )
     } finally {
       server.stop()
+    }
+  })
+
+  it('retries Grok chat history on the relay without blocking the hook POST', async () => {
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    const sessionId = '019e37f4-5135-7b63-a4ab-6d13aa6bf528'
+    const cwd = join(dir, 'workspace')
+    const sessionDir = join(dir, '.grok', 'sessions', encodeURIComponent(cwd), sessionId)
+    mkdirSync(sessionDir, { recursive: true })
+    writeFileSync(join(sessionDir, 'chat_history.jsonl'), '')
+    vi.stubEnv('HOME', dir)
+    vi.stubEnv('USERPROFILE', dir)
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      await fetch(`http://127.0.0.1:${port}/hook/grok`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: JSON.stringify({
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          env: 'remote',
+          version: '1',
+          payload: { hookEventName: 'user_prompt_submit', prompt: 'hihi' }
+        })
+      })
+      const response = await fetch(`http://127.0.0.1:${port}/hook/grok`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: JSON.stringify({
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          env: 'remote',
+          version: '1',
+          payload: { hookEventName: 'Stop', sessionId, cwd }
+        })
+      })
+
+      expect(response.status).toBe(204)
+      expect(forward.mock.calls.at(-1)?.[0].payload.lastAssistantMessage).toBeUndefined()
+
+      writeFileSync(
+        join(sessionDir, 'chat_history.jsonl'),
+        `${JSON.stringify({ type: 'assistant', content: 'Relay Grok reply.' })}\n`
+      )
+      await new Promise((resolve) => setTimeout(resolve, 120))
+
+      expect(forward.mock.calls.at(-1)?.[0].payload.lastAssistantMessage).toBe('Relay Grok reply.')
+    } finally {
+      server.stop()
+      vi.unstubAllEnvs()
     }
   })
 })
