@@ -1397,40 +1397,54 @@ const WorktreeList = React.memo(function WorktreeList({
     hasObservedSmartOnceRef.current = true
   }, [sortBy, sortedIds])
 
-  // Why fire only on user-visible sort-mode transitions: the distribution is
-  // useful context when someone chooses Smart, but a timer turns it into a
-  // heartbeat that can consume most of the telemetry session budget.
+  // Why retry on sortedIds changes: Smart can become active before attention
+  // hydrates. Fire once when class data exists, then stay quiet until the user
+  // leaves Smart so this never becomes a telemetry heartbeat.
+  const hasTrackedSmartDistributionRef = useRef(false)
+  useEffect(() => {
+    if (sortBy !== 'smart') {
+      hasTrackedSmartDistributionRef.current = false
+      return
+    }
+    if (hasTrackedSmartDistributionRef.current) {
+      return
+    }
+    const attention = lastAttentionByWorktreeRef.current
+    if (!attention || attention.size === 0) {
+      return
+    }
+    let class1 = 0
+    let class2 = 0
+    let class3 = 0
+    let class4 = 0
+    for (const info of attention.values()) {
+      if (info.cls === 1) {
+        class1++
+      } else if (info.cls === 2) {
+        class2++
+      } else if (info.cls === 3) {
+        class3++
+      } else {
+        class4++
+      }
+    }
+    track('smart_sort_class_distribution', {
+      class_1: class1,
+      class_2: class2,
+      class_3: class3,
+      class_4: class4,
+      total_worktrees: attention.size
+    })
+    hasTrackedSmartDistributionRef.current = true
+  }, [sortBy, sortedIds])
+
+  // Why fire on the transition: switching away from Smart is the user signal
+  // we care about (regression). Use a ref to compare against the previous
+  // value so we don't double-fire when sortBy momentarily round-trips.
   const prevSortByRef = useRef(sortBy)
   useEffect(() => {
     const prev = prevSortByRef.current
     prevSortByRef.current = sortBy
-    if (prev !== 'smart' && sortBy === 'smart') {
-      const attention = lastAttentionByWorktreeRef.current
-      if (attention) {
-        let class1 = 0
-        let class2 = 0
-        let class3 = 0
-        let class4 = 0
-        for (const info of attention.values()) {
-          if (info.cls === 1) {
-            class1++
-          } else if (info.cls === 2) {
-            class2++
-          } else if (info.cls === 3) {
-            class3++
-          } else {
-            class4++
-          }
-        }
-        track('smart_sort_class_distribution', {
-          class_1: class1,
-          class_2: class2,
-          class_3: class3,
-          class_4: class4,
-          total_worktrees: attention.size
-        })
-      }
-    }
     if (prev === 'smart' && sortBy === 'recent') {
       track('smart_to_recent_switch', {})
     }
