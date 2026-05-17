@@ -420,11 +420,6 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                 {worktree.isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
                 {worktree.isPinned ? 'Unpin' : 'Pin'}
               </DropdownMenuItem>
-              {/* Why: consolidated 'Rename'/'Link GH Issue'/'Add Comment' into single 'Update' (reuses Pencil edit icon + rename handler) for simplified workspace right-click menu */}
-              <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>
-                <Pencil className="size-3.5" />
-                Update
-              </DropdownMenuItem>
               <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
                 {worktree.isUnread ? (
                   <BellOff className="size-3.5" />
@@ -487,6 +482,12 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
               </DropdownMenuRadioGroup>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
+          {!isMultiContext && (
+            <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>
+              <Pencil className="size-3.5" />
+              Update
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           <Tooltip>
             <TooltipTrigger asChild>

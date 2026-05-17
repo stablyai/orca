@@ -8,6 +8,7 @@ import {
   Github,
   HardDrive,
   MessageSquareText,
+  School,
   Settings,
   Smartphone
 } from 'lucide-react'
@@ -31,6 +32,7 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { GitHubViewer } from '../../../../shared/types'
+import { showOnboardingFromRenderer } from '../onboarding/show-onboarding-event'
 
 const GITHUB_ISSUES_URL = 'https://github.com/stablyai/orca/issues/'
 const DISCORD_URL = 'https://discord.gg/fzjDKHxv8Q'
@@ -255,6 +257,16 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
   const openSkillsPage = useAppStore((s) => s.openSkillsPage)
   const openSpacePage = useAppStore((s) => s.openSpacePage)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const lastShowOnboardingAtRef = React.useRef(0)
+
+  const handleShowOnboarding = (): void => {
+    const now = Date.now()
+    if (now - lastShowOnboardingAtRef.current < 500) {
+      return
+    }
+    lastShowOnboardingAtRef.current = now
+    void showOnboardingFromRenderer()
+  }
 
   const openMobileSettings = (): void => {
     openSettingsTarget({ pane: 'mobile', repoId: null })
@@ -334,7 +346,15 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
                 Help
               </TooltipContent>
             </Tooltip>
-            <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-44">
+            <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-48">
+              <DropdownMenuItem
+                className="whitespace-nowrap"
+                onClick={handleShowOnboarding}
+                onSelect={handleShowOnboarding}
+              >
+                <School className="size-3.5" />
+                Show Onboarding
+              </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setFeedbackOpen(true)}>
                 <MessageSquareText className="size-3.5" />
                 Send feedback
