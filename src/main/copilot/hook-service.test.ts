@@ -64,10 +64,14 @@ describe('CopilotHookService', () => {
         'PermissionRequest',
         'PostToolUse',
         'PostToolUseFailure',
+        'PreCompact',
         'PreToolUse',
+        'SessionEnd',
         'SessionStart',
         'Stop',
-        'UserPromptSubmit'
+        'SubagentStop',
+        'UserPromptSubmit',
+        'subagentStart'
       ].sort()
     )
     const firstPromptHook = hooks.UserPromptSubmit[0] as Record<string, unknown>
@@ -135,6 +139,57 @@ describe('CopilotHookService', () => {
     expect(hooks.UserPromptSubmit).toHaveLength(2)
   })
 
+  it('forces version 1 in the dedicated Copilot hook file', () => {
+    const configPath = join(copilotHome, 'hooks', 'orca.json')
+    mkdirSync(join(copilotHome, 'hooks'), { recursive: true })
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        version: 99,
+        hooks: {}
+      })
+    )
+
+    const status = new CopilotHookService().install()
+    const config = readConfig()
+
+    expect(status.state).toBe('installed')
+    expect(config.version).toBe(1)
+  })
+
+  it('clears disableAllHooks in the dedicated Copilot hook file', () => {
+    const configPath = join(copilotHome, 'hooks', 'orca.json')
+    mkdirSync(join(copilotHome, 'hooks'), { recursive: true })
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        version: 1,
+        disableAllHooks: true,
+        hooks: {}
+      })
+    )
+
+    const status = new CopilotHookService().install()
+    const config = readConfig()
+
+    expect(status.state).toBe('installed')
+    expect(config.disableAllHooks).toBeUndefined()
+  })
+
+  it('reports partial when the dedicated Copilot hook file is disabled', () => {
+    const service = new CopilotHookService()
+    service.install()
+    const configPath = join(copilotHome, 'hooks', 'orca.json')
+    const config = readConfig()
+    config.disableAllHooks = true
+    writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`)
+
+    const status = service.getStatus()
+
+    expect(status.state).toBe('partial')
+    expect(status.detail).toBe('Managed Copilot hook file is disabled')
+  })
+
   it('remove deletes only Orca-managed Copilot hooks', () => {
     const service = new CopilotHookService()
     service.install()
@@ -157,6 +212,34 @@ describe('CopilotHookService', () => {
 
     expect(status.state).toBe('not_installed')
     expect(existsSync(join(copilotHome, 'hooks', 'orca.json'))).toBe(false)
+  })
+
+  it('remove leaves nested user hooks untouched when no managed hook is present', () => {
+    const configPath = join(copilotHome, 'hooks', 'orca.json')
+    mkdirSync(join(copilotHome, 'hooks'), { recursive: true })
+    const original = JSON.stringify(
+      {
+        version: 1,
+        hooks: {
+          UserPromptSubmit: [
+            {
+              hooks: [
+                { type: 'command', command: 'echo nested user hook' },
+                { type: 'command', command: 'echo another user hook' }
+              ]
+            }
+          ]
+        }
+      },
+      null,
+      2
+    )
+    writeFileSync(configPath, original)
+
+    const status = new CopilotHookService().remove()
+
+    expect(status.state).toBe('not_installed')
+    expect(readFileSync(configPath, 'utf-8')).toBe(original)
   })
 
   it('returns an error status for malformed JSON', () => {

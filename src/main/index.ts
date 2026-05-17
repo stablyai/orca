@@ -717,7 +717,7 @@ app.whenReady().then(async () => {
   // (e.g. corrupted ~/.claude/settings.json) cannot brick Orca startup.
   // The agent label travels with each installer so the catch can attribute
   // the failure in the `agent_hook_install_failed` telemetry event.
-  runManagedHookInstallers([
+  const managedHookInstallers = [
     ['claude', () => claudeHookService.install()],
     ['codex', () => codexHookService.install()],
     ['gemini', () => geminiHookService.install()],
@@ -725,7 +725,8 @@ app.whenReady().then(async () => {
     ['droid', () => droidHookService.install()],
     ['grok', () => grokHookService.install()],
     ['copilot', () => copilotHookService.install()]
-  ])
+  ] as const
+  runManagedHookInstallers(managedHookInstallers)
 
   registerAppMenu({
     onCheckForUpdates: (options) => checkForUpdatesFromMenu(options),

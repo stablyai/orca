@@ -1885,6 +1885,74 @@ describe('Copilot hook normalization', () => {
       server.stop()
     }
   })
+
+  it('updates Copilot Stop with final transcript text after a non-blocking retry', async () => {
+    const server = new AgentHookServer()
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-copilot-transcript-retry-'))
+    const transcriptPath = join(tmpDir, 'events.jsonl')
+    writeFileSync(transcriptPath, '')
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/copilot`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify(
+          buildBody({
+            hook_event_name: 'PostToolUse',
+            tool_result: { text_result_for_llm: 'stale tool output' }
+          })
+        )
+      })
+      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/copilot`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify(
+          buildBody({ hook_event_name: 'Stop', transcript_path: transcriptPath })
+        )
+      })
+
+      expect(response.status).toBe(204)
+      expect(listener).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            state: 'done',
+            lastAssistantMessage: undefined
+          })
+        })
+      )
+
+      writeFileSync(
+        transcriptPath,
+        `${JSON.stringify({
+          type: 'assistant.message',
+          data: { content: 'Done after transcript flush.' }
+        })}\n`
+      )
+      await new Promise((resolve) => setTimeout(resolve, 120))
+
+      expect(listener).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            state: 'done',
+            lastAssistantMessage: 'Done after transcript flush.'
+          })
+        })
+      )
+    } finally {
+      server.stop()
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('Endpoint file lifecycle', () => {

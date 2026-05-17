@@ -258,6 +258,7 @@ export type ToolSnapshot = {
   toolName?: string
   toolInput?: string
   lastAssistantMessage?: string
+  clearLastAssistantMessage?: boolean
 }
 
 function resolveToolState(
@@ -273,7 +274,9 @@ function resolveToolState(
   const merged: ToolSnapshot = {
     toolName: update.toolName ?? previous.toolName,
     toolInput: update.toolInput ?? previous.toolInput,
-    lastAssistantMessage: update.lastAssistantMessage ?? previous.lastAssistantMessage
+    lastAssistantMessage: update.clearLastAssistantMessage
+      ? undefined
+      : (update.lastAssistantMessage ?? previous.lastAssistantMessage)
   }
   state.lastToolByPaneKey.set(paneKey, merged)
   return merged
@@ -409,8 +412,6 @@ function extractToolResponseText(toolResponse: unknown): string | undefined {
 
 const TRANSCRIPT_CHUNK_BYTES = 64 * 1024
 const TRANSCRIPT_MAX_SCAN_BYTES = 4 * 1024 * 1024
-const TRANSCRIPT_READ_ATTEMPTS = 6
-const TRANSCRIPT_READ_RETRY_MS = 50
 
 function extractAssistantTextFromLine(line: string): string | undefined {
   let entry: unknown
@@ -458,24 +459,11 @@ function extractAssistantContentText(content: unknown): string | undefined {
   return undefined
 }
 
-function sleepSync(ms: number): void {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
-}
-
 function readLastAssistantFromTranscript(transcriptPath: unknown): string | undefined {
   if (typeof transcriptPath !== 'string' || transcriptPath.length === 0) {
     return undefined
   }
-  for (let attempt = 0; attempt < TRANSCRIPT_READ_ATTEMPTS; attempt += 1) {
-    const result = readLastAssistantFromTranscriptOnce(transcriptPath)
-    if (result || attempt === TRANSCRIPT_READ_ATTEMPTS - 1) {
-      return result
-    }
-    // Why: Copilot can invoke Stop while its events.jsonl assistant line is
-    // still being flushed. A short bounded wait preserves the final response.
-    sleepSync(TRANSCRIPT_READ_RETRY_MS)
-  }
-  return undefined
+  return readLastAssistantFromTranscriptOnce(transcriptPath)
 }
 
 function readLastAssistantFromTranscriptOnce(transcriptPath: string): string | undefined {
@@ -709,6 +697,9 @@ function normalizeCopilotEventName(eventName: unknown): unknown {
     preToolUse: 'PreToolUse',
     postToolUse: 'PostToolUse',
     postToolUseFailure: 'PostToolUseFailure',
+    subagentStart: 'SubagentStart',
+    subagentStop: 'SubagentStop',
+    preCompact: 'PreCompact',
     agentStop: 'Stop',
     stop: 'Stop',
     errorOccurred: 'ErrorOccurred',
@@ -860,6 +851,8 @@ function extractCopilotToolFields(
       )
       if (lastFromTranscript) {
         update.lastAssistantMessage = lastFromTranscript
+      } else {
+        update.clearLastAssistantMessage = true
       }
     }
   }

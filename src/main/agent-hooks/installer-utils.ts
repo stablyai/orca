@@ -103,8 +103,10 @@ export function removeManagedCommands(
     const directCommandKeys = ['command', 'bash', 'powershell'] as const
     const directManagedKeys = directCommandKeys.filter((key) => isManagedCommand(definition[key]))
     const hasNestedHooks = Array.isArray(definition.hooks)
+    const hasManagedNestedHook =
+      hasNestedHooks && definition.hooks!.some((hook) => isManagedCommand(hook.command))
 
-    if (directManagedKeys.length === 0 && !hasNestedHooks) {
+    if (directManagedKeys.length === 0 && !hasManagedNestedHook) {
       return [definition]
     }
 
@@ -113,7 +115,7 @@ export function removeManagedCommands(
       delete nextDefinition[key]
     }
 
-    if (hasNestedHooks) {
+    if (hasManagedNestedHook) {
       const filteredHooks = definition.hooks!.filter((hook) => !isManagedCommand(hook.command))
       if (filteredHooks.length > 0) {
         nextDefinition.hooks = filteredHooks

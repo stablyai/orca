@@ -1,6 +1,10 @@
+/* eslint-disable max-lines -- Why: local status/install/remove and SSH remote
+   install must share the same Copilot event list, script body, and
+   managed-command matching so local and remote hook behavior cannot drift. */
 import { existsSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
+import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
   createManagedCommandMatcher,
@@ -13,16 +17,28 @@ import {
   writeManagedScript,
   type HookDefinition
 } from '../agent-hooks/installer-utils'
+import {
+  readHooksJsonRemote,
+  writeHooksJsonRemote,
+  writeManagedScriptRemote
+} from '../agent-hooks/installer-utils-remote'
 
 // Why: Copilot's user-level hook files can use VS Code-compatible PascalCase
 // names, which match the event vocabulary already normalized by Orca's hook
 // server and avoid wrapper-side event remapping.
 const COPILOT_EVENTS = [
   'SessionStart',
+  'SessionEnd',
   'UserPromptSubmit',
   'PreToolUse',
   'PostToolUse',
   'PostToolUseFailure',
+  // Why: GitHub's current reference documents subagentStart with only the
+  // camelCase payload shape. The wrapper passes the event name separately, so
+  // Orca can normalize it without depending on a PascalCase payload.
+  'subagentStart',
+  'SubagentStop',
+  'PreCompact',
   'Stop',
   'ErrorOccurred',
   'PermissionRequest',
@@ -52,15 +68,18 @@ function quotePowerShellPath(path: string): string {
 
 function getManagedCommand(scriptPath: string, eventName: string): string {
   return process.platform === 'win32'
-    ? `$env:ORCA_COPILOT_HOOK_EVENT = '${eventName}'; & ${quotePowerShellPath(scriptPath)}`
+    ? `$env:ORCA_COPILOT_HOOK_EVENT = '${eventName}'; powershell.exe -NoProfile -ExecutionPolicy Bypass -File ${quotePowerShellPath(scriptPath)}`
     : wrapPosixHookCommand(scriptPath, { ORCA_COPILOT_HOOK_EVENT: eventName })
 }
 
-function getManagedHookDefinition(scriptPath: string, eventName: string): HookDefinition {
-  const command = getManagedCommand(scriptPath, eventName)
+function getManagedHookDefinition(command: string): HookDefinition {
   return process.platform === 'win32'
     ? { type: 'command', powershell: command, timeoutSec: 5 }
     : { type: 'command', bash: command, timeoutSec: 5 }
+}
+
+function getRemoteManagedHookDefinition(command: string): HookDefinition {
+  return { type: 'command', bash: command, timeoutSec: 5 }
 }
 
 function definitionHasCurrentCommand(definition: HookDefinition, command: string): boolean {
@@ -72,8 +91,15 @@ function definitionHasCurrentCommand(definition: HookDefinition, command: string
   )
 }
 
-function getManagedScript(): string {
-  if (process.platform === 'win32') {
+function definitionsChanged(before: HookDefinition[], after: HookDefinition[]): boolean {
+  return (
+    before.length !== after.length ||
+    after.some((definition, index) => definition !== before[index])
+  )
+}
+
+function getManagedScript(target: 'local' | 'posix' = 'local'): string {
+  if (target === 'local' && process.platform === 'win32') {
     return [
       "Write-Output '{}'",
       // Why: endpoint.cmd is cmd syntax, not PowerShell. Parse its `set KEY=...`
@@ -179,7 +205,10 @@ export class CopilotHookService {
     const managedHooksPresent = presentCount > 0 || staleManagedPresent
     let state: AgentHookInstallState
     let detail: string | null
-    if (missing.length === 0) {
+    if (config.disableAllHooks === true && managedHooksPresent) {
+      state = 'partial'
+      detail = 'Managed Copilot hook file is disabled'
+    } else if (missing.length === 0) {
       state = 'installed'
       detail = null
     } else if (presentCount === 0 && !staleManagedPresent) {
@@ -225,14 +254,89 @@ export class CopilotHookService {
     for (const eventName of COPILOT_EVENTS) {
       const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
       const cleaned = removeManagedCommands(current, isManagedCommand)
-      nextHooks[eventName] = [...cleaned, getManagedHookDefinition(scriptPath, eventName)]
+      nextHooks[eventName] = [
+        ...cleaned,
+        getManagedHookDefinition(getManagedCommand(scriptPath, eventName))
+      ]
     }
 
-    config.version = config.version ?? 1
+    config.version = 1
+    delete config.disableAllHooks
     config.hooks = nextHooks
     writeManagedScript(scriptPath, getManagedScript())
     writeHooksJson(configPath, config)
     return this.getStatus()
+  }
+
+  async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
+    const home = remoteHome.replace(/\/$/, '')
+    const remoteConfigPath = `${home}/.copilot/hooks/orca.json`
+    const remoteScriptPath = `${home}/.orca/agent-hooks/copilot-hook.sh`
+
+    try {
+      const config = await readHooksJsonRemote(sftp, remoteConfigPath)
+      if (!config) {
+        return {
+          agent: 'copilot',
+          state: 'error',
+          configPath: remoteConfigPath,
+          managedHooksPresent: false,
+          detail: 'Could not parse remote Copilot hooks/orca.json'
+        }
+      }
+
+      const nextHooks = { ...config.hooks }
+      const managedEvents = new Set<string>(COPILOT_EVENTS)
+      const isManagedCommand = createManagedCommandMatcher('copilot-hook.sh')
+
+      for (const [eventName, definitions] of Object.entries(nextHooks)) {
+        if (managedEvents.has(eventName) || !Array.isArray(definitions)) {
+          continue
+        }
+        const cleaned = removeManagedCommands(definitions, isManagedCommand)
+        if (cleaned.length === 0) {
+          delete nextHooks[eventName]
+        } else {
+          nextHooks[eventName] = cleaned
+        }
+      }
+
+      for (const eventName of COPILOT_EVENTS) {
+        const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
+        const cleaned = removeManagedCommands(current, isManagedCommand)
+        nextHooks[eventName] = [
+          ...cleaned,
+          getRemoteManagedHookDefinition(
+            wrapPosixHookCommand(remoteScriptPath, { ORCA_COPILOT_HOOK_EVENT: eventName })
+          )
+        ]
+      }
+
+      config.version = 1
+      delete config.disableAllHooks
+      config.hooks = nextHooks
+      // Why: SSH remotes use POSIX scripts regardless of Orca's local OS. Write
+      // the script before hooks/orca.json so a partial install cannot point
+      // Copilot at a missing managed command.
+      await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
+      await writeHooksJsonRemote(sftp, remoteConfigPath, config)
+
+      return {
+        agent: 'copilot',
+        state: 'installed',
+        configPath: remoteConfigPath,
+        managedHooksPresent: true,
+        detail: null
+      }
+    } catch (err) {
+      return {
+        agent: 'copilot',
+        state: 'error',
+        configPath: remoteConfigPath,
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
   }
 
   remove(): AgentHookInstallStatus {
@@ -253,16 +357,21 @@ export class CopilotHookService {
 
     const nextHooks = { ...config.hooks }
     const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
+    let changed = false
     for (const [eventName, definitions] of Object.entries(nextHooks)) {
       if (!Array.isArray(definitions)) {
         continue
       }
       const cleaned = removeManagedCommands(definitions, isManagedCommand)
+      changed = changed || definitionsChanged(definitions, cleaned)
       if (cleaned.length === 0) {
         delete nextHooks[eventName]
       } else {
         nextHooks[eventName] = cleaned
       }
+    }
+    if (!changed) {
+      return this.getStatus()
     }
     config.hooks = nextHooks
     writeHooksJson(configPath, config)
