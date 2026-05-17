@@ -9,6 +9,7 @@ import type { AppIdentity } from '../shared/app-identity'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type {
+  BaseRefSearchResult,
   BaseRefDefaultResult,
   BrowserViewportOverride,
   CreateWorktreeArgs,
@@ -415,7 +416,7 @@ const api = {
       repoId: string
       query: string
       limit?: number
-    }): Promise<unknown[]> => ipcRenderer.invoke('repos:searchBaseRefDetails', args),
+    }): Promise<BaseRefSearchResult[]> => ipcRenderer.invoke('repos:searchBaseRefDetails', args),
 
     onChanged: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()

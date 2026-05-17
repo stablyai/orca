@@ -672,6 +672,55 @@ describe('createWorktree base status merge', () => {
     )
   })
 
+  it('suffixes branchNameOverride when local IPC returns the SSH branch-exists error', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/feature-something-2',
+      repoId: 'repo1',
+      path: '/path/feature-something-2',
+      branch: 'feature/something-2'
+    })
+    mockApi.worktrees.create
+      .mockRejectedValueOnce(
+        new Error('Branch "feature/something" already exists. Pick a different worktree name.')
+      )
+      .mockResolvedValueOnce({ worktree: wt })
+
+    const result = await store
+      .getState()
+      .createWorktree(
+        'repo1',
+        'feature/something',
+        'origin/main',
+        'inherit',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'feature/something'
+      )
+
+    expect(result).toEqual({ worktree: wt })
+    expect(mockApi.worktrees.create).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        name: 'feature/something',
+        branchNameOverride: 'feature/something'
+      })
+    )
+    expect(mockApi.worktrees.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        name: 'feature/something-2',
+        branchNameOverride: 'feature/something-2'
+      })
+    )
+  })
+
   it('does not overwrite a newer reconcile status with the initial checking status', async () => {
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })

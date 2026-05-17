@@ -429,6 +429,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     const retryableConflictPatterns = [
       /already exists locally/i,
       /already exists on a remote/i,
+      /^Branch ".+" already exists\./i,
       /already has pr #\d+/i
     ]
     const nextCandidateName = (current: string, attempt: number): string =>

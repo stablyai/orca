@@ -1,4 +1,5 @@
 import type { BaseRefSearchResult, GlobalSettings } from '../../../shared/types'
+import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-result'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 
 export type RuntimeRepoBaseRefDefault = {
@@ -56,5 +57,5 @@ export async function searchRuntimeRepoBaseRefDetails(
     refDetails?: BaseRefSearchResult[]
     truncated: boolean
   }>(target, 'repo.searchRefs', { repo: repoId, query, limit }, { timeoutMs: 15_000 })
-  return result.refDetails ?? result.refs.map((refName) => ({ refName, localBranchName: refName }))
+  return result.refDetails ?? result.refs.map(legacyBaseRefSearchResult)
 }

@@ -631,7 +631,7 @@ export async function createLocalWorktree(
       settings,
       username
     )
-    lastBranchConflictKind = await getBranchConflictKind(repo.path, branchName)
+    lastBranchConflictKind = await getBranchConflictKind(repo.path, branchName, baseBranch)
     if (lastBranchConflictKind) {
       continue
     }

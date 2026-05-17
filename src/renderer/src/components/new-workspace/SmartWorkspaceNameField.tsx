@@ -588,7 +588,7 @@ export default function SmartWorkspaceNameField({
     const branchExactMatch =
       mode === 'branches' &&
       trimmed.length > 0 &&
-      branches.some((branch) => branch.refName === trimmed)
+      branches.some((branch) => branch.refName === trimmed || branch.localBranchName === trimmed)
     // Why: the "Use … as workspace name" row only makes sense in Smart
     // mode, where the user might be typing a free-form name. On dedicated
     // source tabs (GitHub/Linear/Branches) it's off-topic — the user is

@@ -603,7 +603,8 @@ export type BranchConflictKind = 'local' | 'remote'
 
 export async function getBranchConflictKind(
   path: string,
-  branchName: string
+  branchName: string,
+  allowedBaseRef?: string
 ): Promise<BranchConflictKind | null> {
   if (await hasGitRefAsync(path, `refs/heads/${branchName}`)) {
     return 'local'
@@ -618,7 +619,11 @@ export async function getBranchConflictKind(
     // first three segments so that e.g. "feature/dashboard" only matches
     // "refs/remotes/origin/feature/dashboard", not "refs/remotes/origin/other/feature/dashboard".
     const hasRemoteConflict = stdout.split('\n').some((ref) => {
-      const parts = ref.trim().split('/')
+      const trimmed = ref.trim()
+      if (isAllowedRemoteBaseRef(trimmed, allowedBaseRef)) {
+        return false
+      }
+      const parts = trimmed.split('/')
       return parts.slice(3).join('/') === branchName
     })
 
@@ -626,6 +631,16 @@ export async function getBranchConflictKind(
   } catch {
     return null
   }
+}
+
+function isAllowedRemoteBaseRef(refName: string, allowedBaseRef: string | undefined): boolean {
+  if (!allowedBaseRef) {
+    return false
+  }
+  const normalizedAllowedRef = allowedBaseRef.startsWith('refs/remotes/')
+    ? allowedBaseRef
+    : `refs/remotes/${allowedBaseRef}`
+  return refName === normalizedAllowedRef
 }
 
 /**

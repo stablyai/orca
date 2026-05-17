@@ -5223,7 +5223,18 @@ export class OrcaRuntimeService {
       username
     )
 
-    const branchConflictKind = await getBranchConflictKind(repo.path, branchName)
+    const baseBranch = args.baseBranch || repo.worktreeBaseRef || getDefaultBaseRef(repo.path)
+    if (!baseBranch) {
+      // Why: getDefaultBaseRef returns null when no suitable ref exists.
+      // Don't fabricate 'origin/main' — passing it to addWorktree would
+      // produce an opaque git failure. Surface a clear error so the CLI
+      // caller can pick an explicit --base ref.
+      throw new Error(
+        'Could not resolve a default base ref for this repo. Pass an explicit --base and try again.'
+      )
+    }
+
+    const branchConflictKind = await getBranchConflictKind(repo.path, branchName, baseBranch)
     if (branchConflictKind) {
       throw new Error(
         `Branch "${branchName}" already exists ${branchConflictKind === 'local' ? 'locally' : 'on a remote'}.`
@@ -5250,17 +5261,6 @@ export class OrcaRuntimeService {
     const wslHome = wslInfo ? getWslHome(wslInfo.distro) : null
     const workspaceRoot = wslHome ? join(wslHome, 'orca', 'workspaces') : settings.workspaceDir
     worktreePath = ensurePathWithinWorkspace(worktreePath, workspaceRoot)
-    const baseBranch = args.baseBranch || repo.worktreeBaseRef || getDefaultBaseRef(repo.path)
-    if (!baseBranch) {
-      // Why: getDefaultBaseRef returns null when no suitable ref exists.
-      // Don't fabricate 'origin/main' — passing it to addWorktree would
-      // produce an opaque git failure. Surface a clear error so the CLI
-      // caller can pick an explicit --base ref.
-      throw new Error(
-        'Could not resolve a default base ref for this repo. Pass an explicit --base and try again.'
-      )
-    }
-
     const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
     // Why (§3.3 Lifecycle): route through the shared fetch cache so back-to-back
     // CLI creates on the same repo don't each pay the round-trip, and so a

@@ -6,6 +6,7 @@ import path from 'path'
 
 import {
   getDefaultBaseRef,
+  getBranchConflictKind,
   getRemoteCount,
   parseAndFilterSearchRefDetails,
   searchBaseRefDetails,
@@ -130,6 +131,33 @@ describe('searchBaseRefs (widened glob)', () => {
       refName: 'feature/something',
       localBranchName: 'feature/something'
     })
+  })
+
+  it('allows creating a local branch from the selected matching remote base ref', async () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'origin/feature/something', sha)
+
+    const result = await getBranchConflictKind(
+      tmpDir,
+      'feature/something',
+      'origin/feature/something'
+    )
+
+    expect(result).toBeNull()
+  })
+
+  it('still reports a remote conflict for a different tracking ref with the same branch name', async () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'origin/feature/something', sha)
+    createRemoteRef(tmpDir, 'upstream/feature/something', sha)
+
+    const result = await getBranchConflictKind(
+      tmpDir,
+      'feature/something',
+      'origin/feature/something'
+    )
+
+    expect(result).toBe('remote')
   })
 
   it('uses the longest configured remote name when deriving local branch names', () => {

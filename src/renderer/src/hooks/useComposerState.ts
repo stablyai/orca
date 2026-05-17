@@ -74,6 +74,7 @@ import {
   type WorkspaceCreateErrorDisplay
 } from '@/lib/workspace-create-error-format'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
+import { resolveComposerBranchSelection } from './composer-branch-selection'
 
 export type UseComposerStateOptions = {
   initialRepoId?: string
@@ -1543,17 +1544,23 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const handleSmartBranchSelect = useCallback(
     (refName: string, localBranchName: string): void => {
-      setBaseBranch(refName)
+      const selection = resolveComposerBranchSelection({
+        refName,
+        localBranchName,
+        currentName: name,
+        lastAutoName: lastAutoNameRef.current
+      })
+      setBaseBranch(selection.baseBranch)
       setPushTarget(undefined)
       setStartFromResetHint(null)
-      if (!name.trim() || name === lastAutoNameRef.current) {
-        setName(localBranchName)
-        lastAutoNameRef.current = localBranchName
-        branchAutoNameRef.current = localBranchName
-        setBranchNameOverride(localBranchName)
+      if (selection.name !== undefined && selection.lastAutoName !== undefined) {
+        setName(selection.name)
+        lastAutoNameRef.current = selection.lastAutoName
+        branchAutoNameRef.current = selection.branchAutoName
+        setBranchNameOverride(selection.branchNameOverride)
       } else {
-        setBranchNameOverride(undefined)
-        branchAutoNameRef.current = ''
+        setBranchNameOverride(selection.branchNameOverride)
+        branchAutoNameRef.current = selection.branchAutoName
       }
     },
     [name]
