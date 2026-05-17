@@ -13,6 +13,8 @@ import {
   getHostedReviewCreationEligibility
 } from '../source-control/hosted-review-creation'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
+import { resolveRegisteredWorktreePath } from './filesystem-auth'
+import { listRepoWorktrees } from '../repo-worktrees'
 
 function assertRegisteredRepo(repoPath: string, store: Store, repoId?: string): Repo {
   if (repoId) {
@@ -28,6 +30,22 @@ function assertRegisteredRepo(repoPath: string, store: Store, repoId?: string): 
     throw new Error('Access denied: unknown repository path')
   }
   return repo
+}
+
+async function resolveHostedReviewWorktreePath(
+  repo: Repo,
+  store: Store,
+  worktreePath?: string
+): Promise<string> {
+  if (!worktreePath) {
+    return repo.path
+  }
+  const resolvedWorktreePath = await resolveRegisteredWorktreePath(worktreePath, store)
+  const repoWorktrees = await listRepoWorktrees(repo)
+  if (!repoWorktrees.some((worktree) => resolve(worktree.path) === resolvedWorktreePath)) {
+    throw new Error('Access denied: worktree does not belong to repository')
+  }
+  return resolvedWorktreePath
 }
 
 export function registerHostedReviewHandlers(store: Store, stats: StatsCollector): void {
@@ -71,7 +89,8 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
           body: null
         }
       }
-      return getHostedReviewCreationEligibility({ ...args, repoPath: repo.path })
+      const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
+      return getHostedReviewCreationEligibility({ ...args, repoPath: worktreePath })
     }
   )
 
@@ -84,7 +103,8 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
         error: 'Creating pull requests from SSH worktrees is not supported yet.'
       }
     }
-    const result = await createHostedReview(repo.path, {
+    const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
+    const result = await createHostedReview(worktreePath, {
       provider: args.provider,
       base: args.base,
       head: args.head,

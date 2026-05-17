@@ -134,6 +134,18 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().workspaceBoardCompact).toBe(false)
   })
 
+  it('clamps persisted workspace board column width', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        workspaceBoardColumnWidth: 900
+      })
+    )
+
+    expect(store.getState().workspaceBoardColumnWidth).toBe(520)
+  })
+
   it('hydrates a valid Kagi session link', () => {
     const store = createUIStore()
 

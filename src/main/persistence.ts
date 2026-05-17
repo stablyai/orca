@@ -20,6 +20,7 @@ import type {
   Automation,
   AutomationCreateInput,
   AutomationDispatchResult,
+  AutomationRunOutputSnapshot,
   AutomationRun,
   AutomationRunTrigger,
   AutomationUpdateInput
@@ -72,11 +73,13 @@ import {
 import { agentHookServer } from './agent-hooks/server'
 import { pruneLocalTerminalScrollbackBuffers } from '../shared/workspace-session-terminal-buffers'
 import { pruneWorkspaceSessionBrowserHistory } from '../shared/workspace-session-browser-history'
-import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
+import { getRepoIdFromWorktreeId, getWorktreePathBasenameFromId } from '../shared/worktree-id'
 import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
 import { normalizeVisibleTaskProviders } from '../shared/task-providers'
+import { normalizeOpenInApplications } from '../shared/open-in-applications'
 import {
   DEFAULT_WORKSPACE_STATUS_ID,
+  clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
   normalizeWorkspaceBoardCompact,
   normalizePersistedWorkspaceStatuses,
@@ -158,10 +161,15 @@ function backupPath(dataFile: string, index: number): string {
 }
 
 function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupBy'] {
-  if (groupBy === 'flat' || groupBy === 'none' || groupBy === 'repo' || groupBy === 'pr-status') {
+  if (
+    groupBy === 'none' ||
+    groupBy === 'workspace-status' ||
+    groupBy === 'repo' ||
+    groupBy === 'pr-status'
+  ) {
     return groupBy
   }
-  if (groupBy === 'workspace-status') {
+  if (groupBy === 'flat') {
     return 'none'
   }
   return getDefaultUIState().groupBy
@@ -172,6 +180,32 @@ function normalizeSortBy(sortBy: unknown): 'name' | 'smart' | 'recent' | 'repo' 
     return sortBy
   }
   return getDefaultUIState().sortBy
+}
+
+function normalizeAutomationRunWorkspaceDisplayName(value: string | null): string | null {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed : null
+}
+
+function normalizeAutomationRunOutputSnapshot(
+  value: AutomationRunOutputSnapshot | null | undefined
+): AutomationRunOutputSnapshot | null {
+  if (!value || value.format !== 'plain_text') {
+    return null
+  }
+  const content = typeof value.content === 'string' ? value.content : ''
+  if (!content.trim()) {
+    return null
+  }
+  return {
+    format: 'plain_text',
+    content,
+    capturedAt:
+      typeof value.capturedAt === 'number' && Number.isFinite(value.capturedAt)
+        ? value.capturedAt
+        : Date.now(),
+    truncated: value.truncated === true
+  }
 }
 
 // Why: old persisted targets predate configHost. Default to label-based lookup
@@ -1201,6 +1235,7 @@ export class Store {
             visibleTaskProviders: normalizeVisibleTaskProviders(
               parsed.settings?.visibleTaskProviders
             ),
+            openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications),
             notifications: {
               ...getDefaultNotificationSettings(),
               ...parsed.settings?.notifications
@@ -1222,6 +1257,11 @@ export class Store {
             const migrate = !parsed.ui?._sortBySmartMigrated && rawSort === 'recent'
             const workspaceStatusesDefaultOrderMigrated =
               parsed.ui?._workspaceStatusesDefaultOrderMigrated === true
+            // Why: the default workflow changed to Done -> Review -> Progress -> Todo.
+            // Only exact legacy default payloads are migrated; users who
+            // customized status labels, colors, icons, or order keep theirs.
+            const workspaceStatusesDefaultWorkflowMigrated =
+              parsed.ui?._workspaceStatusesDefaultWorkflowMigrated === true
             // Why: visual migration has its own guard so later user choices
             // of valid legacy color/icon IDs are preserved by runtime writes.
             const workspaceStatusesDefaultVisualsMigrated =
@@ -1229,12 +1269,14 @@ export class Store {
             const workspaceStatuses = normalizePersistedWorkspaceStatuses(
               parsed.ui?.workspaceStatuses,
               {
+                migrateDefaultWorkflowStatuses: !workspaceStatusesDefaultWorkflowMigrated,
                 repairReorderedDefaultStatuses: !workspaceStatusesDefaultOrderMigrated,
                 migrateLegacyDefaultStatusVisuals: !workspaceStatusesDefaultVisualsMigrated
               }
             )
             if (
               !workspaceStatusesDefaultOrderMigrated ||
+              !workspaceStatusesDefaultWorkflowMigrated ||
               !workspaceStatusesDefaultVisualsMigrated
             ) {
               this.loadNeedsSave = true
@@ -1288,6 +1330,7 @@ export class Store {
               sortBy: migrate ? ('smart' as const) : sort,
               workspaceStatuses,
               _workspaceStatusesDefaultOrderMigrated: true,
+              _workspaceStatusesDefaultWorkflowMigrated: true,
               _workspaceStatusesDefaultVisualsMigrated: true,
               _sortBySmartMigrated: true,
               ...(migratedCardProps !== undefined
@@ -1891,9 +1934,11 @@ export class Store {
       status: 'pending',
       trigger,
       workspaceId: automation.workspaceId,
+      workspaceDisplayName: this.getAutomationRunWorkspaceDisplayName(automation.workspaceId),
       sessionKind: 'terminal',
       chatSessionId: null,
       terminalSessionId: null,
+      outputSnapshot: null,
       usage: null,
       error: null,
       startedAt: null,
@@ -1912,11 +1957,22 @@ export class Store {
     }
     const now = Date.now()
     const current = this.state.automationRuns[index]
+    const workspaceId = result.workspaceId ?? current.workspaceId
+    const workspaceDisplayName = Object.hasOwn(result, 'workspaceDisplayName')
+      ? normalizeAutomationRunWorkspaceDisplayName(result.workspaceDisplayName ?? null)
+      : null
     const updated: AutomationRun = {
       ...current,
       status: result.status,
-      workspaceId: result.workspaceId ?? current.workspaceId,
+      workspaceId,
+      workspaceDisplayName:
+        workspaceDisplayName ??
+        normalizeAutomationRunWorkspaceDisplayName(current.workspaceDisplayName ?? null) ??
+        this.getAutomationRunWorkspaceDisplayName(workspaceId),
       terminalSessionId: result.terminalSessionId ?? current.terminalSessionId,
+      outputSnapshot: Object.hasOwn(result, 'outputSnapshot')
+        ? normalizeAutomationRunOutputSnapshot(result.outputSnapshot)
+        : normalizeAutomationRunOutputSnapshot(current.outputSnapshot),
       usage: Object.hasOwn(result, 'usage') ? (result.usage ?? null) : (current.usage ?? null),
       error: result.error ?? null,
       startedAt: current.startedAt ?? now,
@@ -1930,6 +1986,37 @@ export class Store {
     }
     this.flush()
     return updated
+  }
+
+  snapshotAutomationRunWorkspaceDisplayName(workspaceId: string, displayName: string): number {
+    const normalizedDisplayName = normalizeAutomationRunWorkspaceDisplayName(displayName)
+    if (!normalizedDisplayName) {
+      return 0
+    }
+    let updatedCount = 0
+    this.state.automationRuns = (this.state.automationRuns ?? []).map((run) => {
+      if (run.workspaceId !== workspaceId || run.workspaceDisplayName === normalizedDisplayName) {
+        return run
+      }
+      updatedCount += 1
+      return { ...run, workspaceDisplayName: normalizedDisplayName }
+    })
+    if (updatedCount > 0) {
+      this.flush()
+    }
+    return updatedCount
+  }
+
+  private getAutomationRunWorkspaceDisplayName(
+    workspaceId: string | null | undefined
+  ): string | null {
+    if (!workspaceId) {
+      return null
+    }
+    return normalizeAutomationRunWorkspaceDisplayName(
+      this.state.worktreeMeta[workspaceId]?.displayName ??
+        getWorktreePathBasenameFromId(workspaceId)
+    )
   }
 
   advanceAutomationNextRun(id: string, now = Date.now()): Automation {
@@ -2013,6 +2100,9 @@ export class Store {
         updates.visibleTaskProviders
       )
     }
+    if ('openInApplications' in updates) {
+      sanitizedUpdates.openInApplications = normalizeOpenInApplications(updates.openInApplications)
+    }
     // Why: `telemetry` is deep-merged for the same reason `notifications` is —
     // partial updates from the Privacy pane / consent flow (e.g., flipping
     // only `optedIn`) must not clobber sibling fields like `installId` or
@@ -2046,7 +2136,10 @@ export class Store {
       sortBy: normalizeSortBy(this.state.ui?.sortBy),
       workspaceStatuses: normalizeWorkspaceStatuses(this.state.ui?.workspaceStatuses),
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(this.state.ui?.workspaceBoardOpacity),
-      workspaceBoardCompact: normalizeWorkspaceBoardCompact(this.state.ui?.workspaceBoardCompact)
+      workspaceBoardCompact: normalizeWorkspaceBoardCompact(this.state.ui?.workspaceBoardCompact),
+      workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
+        this.state.ui?.workspaceBoardColumnWidth
+      )
     }
   }
 
@@ -2069,6 +2162,9 @@ export class Store {
       ),
       workspaceBoardCompact: normalizeWorkspaceBoardCompact(
         updates.workspaceBoardCompact ?? this.state.ui?.workspaceBoardCompact
+      ),
+      workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
+        updates.workspaceBoardColumnWidth ?? this.state.ui?.workspaceBoardColumnWidth
       )
     }
     this.scheduleSave()

@@ -2,7 +2,7 @@
    splitting individual settings into separate files would scatter related controls without a
    meaningful abstraction boundary. */
 import { useEffect, useRef, useState } from 'react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings, OpenInApplication } from '../../../../shared/types'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -16,6 +16,7 @@ import {
   MAX_EDITOR_AUTO_SAVE_DELAY_MS,
   MIN_EDITOR_AUTO_SAVE_DELAY_MS
 } from '../../../../shared/constants'
+import { OPEN_IN_APPLICATIONS_MAX } from '../../../../shared/open-in-applications'
 import { clampNumber } from '@/lib/terminal-theme'
 import {
   GENERAL_CACHE_TIMER_SEARCH_ENTRIES,
@@ -29,6 +30,30 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
+
+function createOpenInApplication(): OpenInApplication {
+  return {
+    id:
+      globalThis.crypto?.randomUUID?.() ??
+      `open-in-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
+    label: '',
+    command: ''
+  }
+}
+
+function createPresetOpenInApplication(label: string, command: string): OpenInApplication {
+  return {
+    ...createOpenInApplication(),
+    label,
+    command
+  }
+}
+
+export function shouldCommitOpenInApplicationsDraft(applications: OpenInApplication[]): boolean {
+  return applications.every((application) => {
+    return application.label.trim() !== '' && application.command.trim() !== ''
+  })
+}
 
 export { GENERAL_PANE_SEARCH_ENTRIES }
 
@@ -67,6 +92,9 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
   const [appVersion, setAppVersion] = useState<string | null>(null)
   const [autoSaveDelayDraft, setAutoSaveDelayDraft] = useState(
     String(settings.editorAutoSaveDelayMs)
+  )
+  const [openInApplicationsDraft, setOpenInApplicationsDraft] = useState<OpenInApplication[]>(
+    settings.openInApplications ?? []
   )
   // Why: the star state is derived from gh, not from settings, so it does not
   // live in the global settings store. 'hidden' covers the gh-unavailable and
@@ -121,6 +149,22 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
   useEffect(() => {
     setAutoSaveDelayDraft(String(settings.editorAutoSaveDelayMs))
   }, [settings.editorAutoSaveDelayMs])
+
+  useEffect(() => {
+    setOpenInApplicationsDraft(settings.openInApplications ?? [])
+  }, [settings.openInApplications])
+
+  const commitOpenInApplications = (applications: OpenInApplication[]): void => {
+    if (!shouldCommitOpenInApplicationsDraft(applications)) {
+      return
+    }
+    updateSettings({ openInApplications: applications })
+  }
+
+  const applyOpenInApplicationsDraft = (applications: OpenInApplication[]): void => {
+    setOpenInApplicationsDraft(applications)
+    commitOpenInApplications(applications)
+  }
 
   const handleBrowseWorkspace = async () => {
     const path = await window.api.repos.pickFolder()
@@ -300,6 +344,108 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
             </button>
           </SearchableSetting>
         </div>
+
+        <SearchableSetting
+          title="Open In Menu"
+          description="Add custom launchers to the worktree Open in menu."
+          keywords={['open in', 'editor', 'launcher', 'cursor', 'zed', 'command', 'vscode']}
+          className="space-y-3"
+        >
+          <div className="space-y-1">
+            <Label>Open In Menu</Label>
+            <p className="text-xs text-muted-foreground">
+              VS Code is always included first. Add executables to show extra entries in each
+              worktree&apos;s Open in menu.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Commands are not shell-parsed. Use only an executable command name. For flags, use a
+              wrapper script.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                applyOpenInApplicationsDraft([
+                  ...openInApplicationsDraft,
+                  createPresetOpenInApplication('Cursor', 'cursor')
+                ])
+              }
+            >
+              Add Cursor
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                applyOpenInApplicationsDraft([
+                  ...openInApplicationsDraft,
+                  createPresetOpenInApplication('Zed', 'zed')
+                ])
+              }
+            >
+              Add Zed
+            </Button>
+          </div>
+          <div className="space-y-2">
+            {openInApplicationsDraft.map((app, index) => (
+              <div key={app.id} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                <Input
+                  value={app.label}
+                  placeholder="Label"
+                  onChange={(event) => {
+                    const next = [...openInApplicationsDraft]
+                    next[index] = { ...app, label: event.target.value }
+                    setOpenInApplicationsDraft(next)
+                  }}
+                  onBlur={() => commitOpenInApplications(openInApplicationsDraft)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      commitOpenInApplications(openInApplicationsDraft)
+                    }
+                  }}
+                />
+                <Input
+                  value={app.command}
+                  placeholder="Executable command"
+                  onChange={(event) => {
+                    const next = [...openInApplicationsDraft]
+                    next[index] = { ...app, command: event.target.value }
+                    setOpenInApplicationsDraft(next)
+                  }}
+                  onBlur={() => commitOpenInApplications(openInApplicationsDraft)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      commitOpenInApplications(openInApplicationsDraft)
+                    }
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const next = openInApplicationsDraft.filter((entry) => entry.id !== app.id)
+                    setOpenInApplicationsDraft(next)
+                    commitOpenInApplications(next)
+                  }}
+                >
+                  Remove
+                </Button>
+              </div>
+            ))}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              setOpenInApplicationsDraft([...openInApplicationsDraft, createOpenInApplication()])
+            }
+            disabled={openInApplicationsDraft.length >= OPEN_IN_APPLICATIONS_MAX}
+          >
+            Add Custom Launcher
+          </Button>
+        </SearchableSetting>
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, GENERAL_EDITOR_SEARCH_ENTRIES) ? (
@@ -398,6 +544,41 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
                 }`}
               >
                 {option === 'inline' ? 'Inline' : 'Side-by-side'}
+              </button>
+            ))}
+          </div>
+        </SearchableSetting>
+
+        <SearchableSetting
+          title="Default Diff File Tree"
+          description="Show or hide the file tree when opening combined diff views."
+          keywords={['diff', 'tree', 'file tree', 'combined diff', 'sidebar']}
+          className="flex flex-col items-start gap-3 px-1 py-2 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="space-y-0.5">
+            <Label>Default Diff File Tree</Label>
+            <p className="text-xs text-muted-foreground">
+              Show or hide the file tree when opening combined diff views.
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center rounded-md border border-border/60 bg-background/50 p-0.5">
+            {[
+              { label: 'Shown', value: true },
+              { label: 'Hidden', value: false }
+            ].map((option) => (
+              <button
+                key={option.label}
+                type="button"
+                onClick={() =>
+                  updateSettings({ combinedDiffFileTreeVisibleByDefault: option.value })
+                }
+                className={`rounded-sm px-3 py-1 text-sm transition-colors ${
+                  settings.combinedDiffFileTreeVisibleByDefault === option.value
+                    ? 'bg-accent font-medium text-accent-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {option.label}
               </button>
             ))}
           </div>

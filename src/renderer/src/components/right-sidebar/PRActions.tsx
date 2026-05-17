@@ -177,7 +177,7 @@ export default function PRActions({
         type="button"
         variant="secondary"
         size="xs"
-        className="w-full cursor-pointer text-[11px] disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full cursor-pointer text-[11px] hover:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         onClick={handleDeleteWorktree}
         disabled={isDeletingWorktree}
       >

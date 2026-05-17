@@ -17,8 +17,6 @@ import {
   Copy,
   Bell,
   BellOff,
-  Link,
-  MessageSquare,
   Moon,
   Pencil,
   Pin,
@@ -36,6 +34,7 @@ import { isFolderRepo } from '../../../../shared/repo-kind'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import { getLineageRenderInfo } from './worktree-list-groups'
 import { getWorkspaceStatus, getWorkspaceStatusVisualMeta } from './workspace-status'
 import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
@@ -75,6 +74,68 @@ function shouldSuppressContextMenuFollowUpClick(contextMenuOpenedAt: number, now
   )
 }
 
+function findSidebarVirtualRowByKey(sidebar: Element, rowKey: string): HTMLElement | null {
+  return (
+    Array.from(sidebar.querySelectorAll<HTMLElement>('[data-worktree-virtual-row]')).find(
+      (element) => element.getAttribute('data-worktree-virtual-row-key') === rowKey
+    ) ?? null
+  )
+}
+
+function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => void {
+  const sidebar = scope?.closest('[data-worktree-sidebar]')
+  const row = scope?.closest('[data-worktree-virtual-row]')
+  if (!(sidebar instanceof HTMLElement) || !(row instanceof HTMLElement)) {
+    return () => {}
+  }
+  const rows = Array.from(
+    sidebar.querySelectorAll<HTMLElement>('[data-worktree-virtual-row]')
+  ).sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)
+  const rowIndex = rows.indexOf(row)
+  const anchorRow = rows[rowIndex + 1] ?? rows[rowIndex - 1] ?? null
+  const anchorKey = anchorRow?.getAttribute('data-worktree-virtual-row-key')
+  const rowKey = row.getAttribute('data-worktree-virtual-row-key')
+  if (!anchorKey || !rowKey) {
+    return () => {}
+  }
+  const previousScrollTop = sidebar.scrollTop
+  const previousScrollHeight = sidebar.scrollHeight
+  const desiredTop = row.getBoundingClientRect().top
+
+  return () => {
+    let attempts = 0
+    let stableFrames = 0
+    const restore = (): void => {
+      const currentSidebar = document.querySelector('[data-worktree-sidebar]')
+      if (!(currentSidebar instanceof HTMLElement)) {
+        return
+      }
+      const currentTarget = findSidebarVirtualRowByKey(currentSidebar, rowKey)
+      const currentAnchor = currentTarget ?? findSidebarVirtualRowByKey(currentSidebar, anchorKey)
+      if (currentAnchor) {
+        const delta = currentAnchor.getBoundingClientRect().top - desiredTop
+        if (Math.abs(delta) > 1) {
+          currentSidebar.scrollTop += delta
+          stableFrames = 0
+        } else {
+          stableFrames += 1
+        }
+      } else {
+        currentSidebar.scrollTop = Math.max(
+          0,
+          previousScrollTop + currentSidebar.scrollHeight - previousScrollHeight
+        )
+        stableFrames = 0
+      }
+      attempts += 1
+      if (attempts < 180 && (currentTarget || stableFrames < 6)) {
+        window.requestAnimationFrame(restore)
+      }
+    }
+    restore()
+  }
+}
+
 const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   worktree,
   children,
@@ -100,6 +161,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
   const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
   const deleteStateByWorktreeId = useAppStore((s) => s.deleteStateByWorktreeId)
+  const scopeRef = useRef<HTMLDivElement>(null)
   const contextMenuOpenedAtRef = useRef<number | null>(null)
   const activeContextWorktrees = menuOpen ? contextWorktrees : selectedWorktrees
   const isMultiContext = activeContextWorktrees.length > 1
@@ -203,69 +265,51 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     openModal
   ])
 
-  const handleLinkIssue = useCallback(() => {
-    openModal('edit-meta', {
-      worktreeId: worktree.id,
-      currentDisplayName: worktree.displayName,
-      currentIssue: worktree.linkedIssue,
-      currentPR: worktree.linkedPR,
-      currentComment: worktree.comment,
-      focus: 'issue'
-    })
-  }, [
-    worktree.id,
-    worktree.displayName,
-    worktree.linkedIssue,
-    worktree.linkedPR,
-    worktree.comment,
-    openModal
-  ])
-
-  const handleComment = useCallback(() => {
-    openModal('edit-meta', {
-      worktreeId: worktree.id,
-      currentDisplayName: worktree.displayName,
-      currentIssue: worktree.linkedIssue,
-      currentPR: worktree.linkedPR,
-      currentComment: worktree.comment,
-      focus: 'comment'
-    })
-  }, [
-    worktree.id,
-    worktree.displayName,
-    worktree.linkedIssue,
-    worktree.linkedPR,
-    worktree.comment,
-    openModal
-  ])
-
-  const handleCloseTerminals = useCallback(async () => {
-    await runSleepWorktrees(sleepableWorktrees.map((item) => item.id))
+  const handleCloseTerminals = useCallback(() => {
+    const worktreeIds = sleepableWorktrees.map((item) => item.id)
+    setMenuOpen(false)
+    // Why: Sleep can remount the sidebar when it clears the active workspace.
+    // Let Radix finish closing the menu first so its focus/portal teardown
+    // cannot scroll the virtualized list during that remount.
+    window.setTimeout(() => {
+      void runSleepWorktrees(worktreeIds)
+    }, 50)
   }, [sleepableWorktrees])
 
   const handleDelete = useCallback(() => {
     // Folder mode handled inline because it routes to a different modal;
     // standard delete delegates to the shared runWorktreeDelete helper.
+    const restoreSidebarPosition = preserveDeleteSiblingPosition(scopeRef.current)
+    scopeRef.current
+      ?.closest('[data-worktree-sidebar]')
+      ?.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))
     setMenuOpen(false)
-    if (isMultiContext) {
-      runWorktreeBatchDelete(batchDeleteWorktrees.map((item) => item.id))
-      return
-    }
-    if (isFolder) {
-      // Why: folder mode reuses the worktree row UI for a synthetic root entry,
-      // but users still expect "remove" to disconnect the folder from Orca,
-      // not to run git-style delete semantics against the real folder on disk.
-      openModal('confirm-remove-folder', {
-        repoId: worktree.repoId,
-        displayName: worktree.displayName
-      })
-      return
-    }
-    // Why delegate to runWorktreeDelete: keeps the skip-confirm vs. modal
-    // decision tree (and its rationale) in one place shared with the memory
-    // popover's inline Delete action. Folder mode short-circuits above
-    // because the confirm-remove-folder modal is unique to this caller.
-    runWorktreeDelete(worktree.id)
+    // Why: Delete can remove the active row and remount the sidebar. Run it
+    // after menu close for the same reason as Sleep above.
+    window.setTimeout(() => {
+      if (isMultiContext) {
+        runWorktreeBatchDelete(batchDeleteWorktrees.map((item) => item.id))
+        restoreSidebarPosition()
+        return
+      }
+      if (isFolder) {
+        // Why: folder mode reuses the worktree row UI for a synthetic root entry,
+        // but users still expect "remove" to disconnect the folder from Orca,
+        // not to run git-style delete semantics against the real folder on disk.
+        openModal('confirm-remove-folder', {
+          repoId: worktree.repoId,
+          displayName: worktree.displayName
+        })
+        restoreSidebarPosition()
+        return
+      }
+      // Why delegate to runWorktreeDelete: keeps the skip-confirm vs. modal
+      // decision tree (and its rationale) in one place shared with the memory
+      // popover's inline Delete action. Folder mode short-circuits above
+      // because the confirm-remove-folder modal is unique to this caller.
+      runWorktreeDelete(worktree.id)
+      restoreSidebarPosition()
+    }, 50)
   }, [
     batchDeleteWorktrees,
     isFolder,
@@ -308,8 +352,21 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     }
   }, [])
 
+  const handleCloseAutoFocus = useCallback((event: Event) => {
+    // Why: Radix otherwise restores focus to the hidden context-menu trigger.
+    // When Sleep/Delete clears the active workspace and remounts the sidebar,
+    // that focus restore can scroll the virtual list away from the row the
+    // user just acted on.
+    event.preventDefault()
+    const sidebar = scopeRef.current?.closest('[data-worktree-sidebar]')
+    if (sidebar instanceof HTMLElement) {
+      sidebar.focus({ preventScroll: true })
+    }
+  }, [])
+
   return (
     <div
+      ref={scopeRef}
       className="relative"
       {...{ [WORKTREE_CONTEXT_MENU_SCOPE_ATTR]: 'worktree' }}
       onContextMenuCapture={(event) => {
@@ -345,6 +402,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
           onPointerUpCapture={suppressOpeningPointerEvent}
           onMouseUpCapture={suppressOpeningPointerEvent}
           onClickCapture={suppressOpeningPointerEvent}
+          onCloseAutoFocus={handleCloseAutoFocus}
         >
           {!isMultiContext && (
             <>
@@ -362,10 +420,6 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                 {worktree.isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
                 {worktree.isPinned ? 'Unpin' : 'Pin'}
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>
-                <Pencil className="size-3.5" />
-                Rename
-              </DropdownMenuItem>
               <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
                 {worktree.isUnread ? (
                   <BellOff className="size-3.5" />
@@ -374,29 +428,24 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                 )}
                 {worktree.isUnread ? 'Mark Read' : 'Mark Unread'}
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={handleLinkIssue} disabled={isDeleting}>
-                <Link className="size-3.5" />
-                {worktree.linkedIssue ? 'Edit GH Issue' : 'Link GH Issue'}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={handleComment} disabled={isDeleting}>
-                <MessageSquare className="size-3.5" />
-                {worktree.comment ? 'Edit Comment' : 'Add Comment'}
-              </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={handleOpenParent}
-                disabled={isDeleting || !validParentWorktreeId}
-              >
-                <Workflow className="size-3.5" />
-                Open Parent Workspace
-              </DropdownMenuItem>
-              {lineage && (
-                <DropdownMenuItem onSelect={handleRemoveParentLink} disabled={isDeleting}>
-                  <Unlink className="size-3.5" />
-                  Remove from Parent
-                </DropdownMenuItem>
+              {(validParentWorktreeId || lineage) && (
+                <>
+                  {validParentWorktreeId && (
+                    <DropdownMenuItem onSelect={handleOpenParent} disabled={isDeleting}>
+                      <Workflow className="size-3.5" />
+                      Open Parent Workspace
+                    </DropdownMenuItem>
+                  )}
+                  {lineage && (
+                    <DropdownMenuItem onSelect={handleRemoveParentLink} disabled={isDeleting}>
+                      <Unlink className="size-3.5" />
+                      Remove from Parent
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                </>
               )}
-              <DropdownMenuSeparator />
             </>
           )}
           {isMultiContext && (
@@ -433,6 +482,12 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
               </DropdownMenuRadioGroup>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
+          {!isMultiContext && (
+            <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>
+              <Pencil className="size-3.5" />
+              Update
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           <Tooltip>
             <TooltipTrigger asChild>

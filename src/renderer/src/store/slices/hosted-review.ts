@@ -134,12 +134,16 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     const target = getActiveRuntimeTarget(settings)
     if (target.kind === 'environment') {
       const repo = get().repos.find((candidate) => candidate.path === args.repoPath)
-      const { repoPath: _repoPath, ...runtimeArgs } = args
+      const { repoPath: _repoPath, worktreePath, ...runtimeArgs } = args
       void _repoPath
       return callRuntimeRpc<HostedReviewCreationEligibility>(
         target,
         'hostedReview.getCreationEligibility',
-        { repo: repo?.id ?? args.repoPath, ...runtimeArgs },
+        {
+          repo: repo?.id ?? args.repoPath,
+          ...(worktreePath ? { worktree: `path:${worktreePath}` } : {}),
+          ...runtimeArgs
+        },
         { timeoutMs: 30_000 }
       )
     }
@@ -155,10 +159,15 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     const target = getActiveRuntimeTarget(settings)
     if (target.kind === 'environment') {
       const repo = get().repos.find((candidate) => candidate.path === repoPath)
+      const { worktreePath, ...runtimeInput } = input
       return callRuntimeRpc<CreateHostedReviewResult>(
         target,
         'hostedReview.create',
-        { repo: repo?.id ?? repoPath, ...input },
+        {
+          repo: repo?.id ?? repoPath,
+          ...(worktreePath ? { worktree: `path:${worktreePath}` } : {}),
+          ...runtimeInput
+        },
         { timeoutMs: 60_000 }
       )
     }

@@ -29,6 +29,8 @@ import { WorkspaceCombobox } from './WorkspaceCombobox'
 
 const PICKER_TRIGGER_CLASS =
   'border-input bg-input/30 shadow-xs hover:bg-accent/60 dark:bg-input/30 dark:hover:bg-input/50'
+const MODE_TOGGLE_ITEM_CLASS =
+  'w-full border-input bg-input/30 shadow-xs hover:bg-accent/60 data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary/90 dark:bg-input/30 dark:data-[state=on]:bg-primary dark:data-[state=on]:text-primary-foreground dark:data-[state=on]:hover:bg-primary/90'
 
 export type AutomationDraft = {
   name: string
@@ -46,17 +48,21 @@ export type AutomationDraft = {
   scheduleWarning: string | null
 }
 
+export type AutomationCreateTarget = 'orca' | 'hermes'
+
 type AutomationEditorDialogProps = {
   open: boolean
   isEditing: boolean
   isSaving: boolean
   canSave: boolean
+  createTarget: AutomationCreateTarget
   repos: Repo[]
   repoMap: Map<string, Repo>
   worktrees: Worktree[]
   settings: GlobalSettings | null
   draft: AutomationDraft
   onProjectChange: (projectId: string) => void
+  onCreateTargetChange: (target: AutomationCreateTarget) => void
   onOpenChange: (open: boolean) => void
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
   onApplyTemplate: (template: AutomationTemplate) => void
@@ -90,66 +96,97 @@ export function AutomationEditorDialog({
   isEditing,
   isSaving,
   canSave,
+  createTarget,
   repos,
   repoMap,
   worktrees,
   settings,
   draft,
   onProjectChange,
+  onCreateTargetChange,
   onOpenChange,
   onDraftChange,
   onApplyTemplate,
   onSave
 }: AutomationEditorDialogProps): React.JSX.Element {
   const [templateOpen, setTemplateOpen] = React.useState(false)
+  const isHermesCreate = !isEditing && createTarget === 'hermes'
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="flex max-h-[90vh] flex-col gap-0 p-0 sm:max-w-[920px]"
+        className="flex max-h-[90vh] flex-col gap-0 p-0 dark:border-border dark:bg-card dark:text-card-foreground sm:max-w-[920px]"
         onOpenAutoFocus={(event) => {
           event.preventDefault()
         }}
       >
-        <DialogHeader className="border-b border-border/50 px-5 py-4">
+        <DialogHeader className="border-b border-border/50 px-5 py-4 pr-12">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1 space-y-2">
               <DialogTitle className="text-sm font-medium">
-                {isEditing ? 'Edit automation' : 'Create automation'}
+                {isEditing
+                  ? 'Edit automation'
+                  : isHermesCreate
+                    ? 'Create Hermes cron'
+                    : 'Create automation'}
               </DialogTitle>
               <Input
                 value={draft.name}
                 placeholder="Weekday repo audit"
                 aria-label="Automation name"
-                className="h-10 border-0 bg-transparent px-0 text-lg font-semibold shadow-none focus-visible:ring-0"
+                className="h-10 max-w-md border-input bg-input/30 px-3 text-lg font-semibold text-foreground shadow-xs placeholder:text-muted-foreground dark:bg-input/30"
                 onChange={(event) =>
                   onDraftChange((current) => ({ ...current, name: event.target.value }))
                 }
               />
             </div>
             {!isEditing ? (
-              <Popover open={templateOpen} onOpenChange={setTemplateOpen}>
-                <PopoverTrigger asChild>
-                  <Button type="button" variant="outline" size="sm">
-                    <Sparkles className="size-4" />
-                    Use template
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="end" className="w-96 p-3">
-                  <div className="grid gap-2">
-                    {AUTOMATION_TEMPLATES.map((template) => (
-                      <AutomationTemplateCard
-                        key={template.id}
-                        template={template}
-                        onSelect={() => {
-                          onApplyTemplate(template)
-                          setTemplateOpen(false)
-                        }}
-                      />
-                    ))}
-                  </div>
-                </PopoverContent>
-              </Popover>
+              <div className="flex shrink-0 items-center gap-2">
+                <ToggleGroup
+                  type="single"
+                  value={createTarget}
+                  onValueChange={(value) =>
+                    value && onCreateTargetChange(value as AutomationCreateTarget)
+                  }
+                  variant="outline"
+                  size="sm"
+                  className="grid grid-cols-2"
+                >
+                  <ToggleGroupItem value="orca" className={MODE_TOGGLE_ITEM_CLASS}>
+                    Orca
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="hermes" className={MODE_TOGGLE_ITEM_CLASS}>
+                    Hermes
+                  </ToggleGroupItem>
+                </ToggleGroup>
+                <Popover open={templateOpen} onOpenChange={setTemplateOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className={PICKER_TRIGGER_CLASS}
+                    >
+                      <Sparkles className="size-4" />
+                      Use template
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-96 p-3">
+                    <div className="grid gap-2">
+                      {AUTOMATION_TEMPLATES.map((template) => (
+                        <AutomationTemplateCard
+                          key={template.id}
+                          template={template}
+                          onSelect={() => {
+                            onApplyTemplate(template)
+                            setTemplateOpen(false)
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
             ) : null}
           </div>
         </DialogHeader>
@@ -173,7 +210,13 @@ export function AutomationEditorDialog({
         </div>
 
         <div className="border-t border-border/50 px-5 py-4">
-          <div className="grid gap-3 lg:grid-cols-[minmax(9rem,1.1fr)_minmax(14rem,1.4fr)_minmax(12rem,1.2fr)_minmax(8rem,0.8fr)_minmax(9rem,1fr)]">
+          <div
+            className={
+              isHermesCreate
+                ? 'grid gap-3 lg:grid-cols-[minmax(9rem,1.1fr)_minmax(14rem,1.4fr)_minmax(12rem,1.2fr)]'
+                : 'grid gap-3 lg:grid-cols-[minmax(9rem,1.1fr)_minmax(14rem,1.4fr)_minmax(12rem,1.2fr)_minmax(8rem,0.8fr)_minmax(9rem,1fr)]'
+            }
+          >
             <Field label="Project">
               <RepoCombobox
                 repos={repos}
@@ -184,35 +227,39 @@ export function AutomationEditorDialog({
                 showStandaloneAddButton={false}
               />
             </Field>
-            <Field label={draft.workspaceMode === 'new_per_run' ? 'Start branch' : 'Workspace'}>
-              <ToggleGroup
-                type="single"
-                value={draft.workspaceMode}
-                onValueChange={(workspaceMode) =>
-                  workspaceMode &&
-                  onDraftChange((current) => ({
-                    ...current,
-                    workspaceMode: workspaceMode as AutomationWorkspaceMode
-                  }))
-                }
-                variant="outline"
-                size="sm"
-                className="mb-2 grid w-full grid-cols-2"
-              >
-                <ToggleGroupItem
-                  value="existing"
-                  className="w-full border-input bg-input/30 shadow-xs data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground dark:bg-input/30"
+            <Field
+              label={
+                isHermesCreate
+                  ? 'Workspace'
+                  : draft.workspaceMode === 'new_per_run'
+                    ? 'Start branch'
+                    : 'Workspace'
+              }
+            >
+              {isHermesCreate ? null : (
+                <ToggleGroup
+                  type="single"
+                  value={draft.workspaceMode}
+                  onValueChange={(workspaceMode) =>
+                    workspaceMode &&
+                    onDraftChange((current) => ({
+                      ...current,
+                      workspaceMode: workspaceMode as AutomationWorkspaceMode
+                    }))
+                  }
+                  variant="outline"
+                  size="sm"
+                  className="mb-2 grid w-full grid-cols-2"
                 >
-                  Workspace
-                </ToggleGroupItem>
-                <ToggleGroupItem
-                  value="new_per_run"
-                  className="w-full border-input bg-input/30 shadow-xs data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground dark:bg-input/30"
-                >
-                  New run
-                </ToggleGroupItem>
-              </ToggleGroup>
-              {draft.workspaceMode === 'existing' ? (
+                  <ToggleGroupItem value="existing" className={MODE_TOGGLE_ITEM_CLASS}>
+                    worktree
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="new_per_run" className={MODE_TOGGLE_ITEM_CLASS}>
+                    New run
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              )}
+              {draft.workspaceMode === 'existing' || isHermesCreate ? (
                 <WorkspaceCombobox
                   worktrees={worktrees}
                   value={draft.workspaceId}
@@ -234,17 +281,19 @@ export function AutomationEditorDialog({
                 />
               )}
             </Field>
-            <Field label="Agent">
-              <AgentCombobox
-                agents={AGENT_CATALOG}
-                value={draft.agentId}
-                onValueChange={(agentId) =>
-                  agentId && onDraftChange((current) => ({ ...current, agentId }))
-                }
-                defaultAgent={settings?.defaultTuiAgent ?? null}
-                triggerClassName={`h-9 w-full min-w-0 ${PICKER_TRIGGER_CLASS}`}
-              />
-            </Field>
+            {isHermesCreate ? null : (
+              <Field label="Agent">
+                <AgentCombobox
+                  agents={AGENT_CATALOG}
+                  value={draft.agentId}
+                  onValueChange={(agentId) =>
+                    agentId && onDraftChange((current) => ({ ...current, agentId }))
+                  }
+                  defaultAgent={settings?.defaultTuiAgent ?? null}
+                  triggerClassName={`h-9 w-full min-w-0 ${PICKER_TRIGGER_CLASS}`}
+                />
+              </Field>
+            )}
             <Field label="Schedule">
               <AutomationSchedulePicker
                 draft={draft}
@@ -252,49 +301,51 @@ export function AutomationEditorDialog({
                 onDraftChange={onDraftChange}
               />
             </Field>
-            <Field
-              label={
-                <span className="inline-flex items-center gap-1">
-                  Grace
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        aria-label="Missed-run grace help"
-                        className="rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                      >
-                        <Info className="size-3.5" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" sideOffset={6} className="max-w-72">
-                      If Orca or the execution host was unavailable at the scheduled time, Orca runs
-                      one missed occurrence when it becomes available within this window. Older
-                      missed runs are skipped.
-                    </TooltipContent>
-                  </Tooltip>
-                </span>
-              }
-            >
-              <Select
-                value={draft.missedRunGraceMinutes}
-                onValueChange={(missedRunGraceMinutes) =>
-                  onDraftChange((current) => ({ ...current, missedRunGraceMinutes }))
+            {isHermesCreate ? null : (
+              <Field
+                label={
+                  <span className="inline-flex items-center gap-1">
+                    Grace
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label="Missed-run grace help"
+                          className="rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                        >
+                          <Info className="size-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" sideOffset={6} className="max-w-72">
+                        If Orca or the execution host was unavailable at the scheduled time, Orca
+                        runs one missed occurrence when it becomes available within this window.
+                        Older missed runs are skipped.
+                      </TooltipContent>
+                    </Tooltip>
+                  </span>
                 }
               >
-                <SelectTrigger className={`w-full ${PICKER_TRIGGER_CLASS}`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
-                  <SelectItem value="0">No grace</SelectItem>
-                  <SelectItem value="30">30 minutes</SelectItem>
-                  <SelectItem value="60">1 hour</SelectItem>
-                  <SelectItem value="180">3 hours</SelectItem>
-                  <SelectItem value="720">12 hours</SelectItem>
-                  <SelectItem value="1440">24 hours</SelectItem>
-                  <SelectItem value="2880">48 hours</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
+                <Select
+                  value={draft.missedRunGraceMinutes}
+                  onValueChange={(missedRunGraceMinutes) =>
+                    onDraftChange((current) => ({ ...current, missedRunGraceMinutes }))
+                  }
+                >
+                  <SelectTrigger className={`w-full ${PICKER_TRIGGER_CLASS}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
+                    <SelectItem value="0">No grace</SelectItem>
+                    <SelectItem value="30">30 minutes</SelectItem>
+                    <SelectItem value="60">1 hour</SelectItem>
+                    <SelectItem value="180">3 hours</SelectItem>
+                    <SelectItem value="720">12 hours</SelectItem>
+                    <SelectItem value="1440">24 hours</SelectItem>
+                    <SelectItem value="2880">48 hours</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
           </div>
           <div className="mt-4 flex justify-end gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -306,8 +357,8 @@ export function AutomationEditorDialog({
               disabled={isSaving || repos.length === 0 || !canSave}
               className="border-foreground/25 bg-foreground/[0.04] text-foreground hover:bg-foreground/[0.08]"
             >
-              {isEditing ? null : <Plus className="size-4" />}
-              {isEditing ? 'Save Changes' : 'Save Automation'}
+              {isEditing || isHermesCreate || isSaving ? null : <Plus className="size-4" />}
+              {isEditing ? 'Save Changes' : isSaving || isHermesCreate ? 'Save' : 'Create'}
             </Button>
           </div>
         </div>

@@ -34,7 +34,18 @@ export function CrashReportDialog(): React.JSX.Element {
     setLoading(true)
     try {
       const pending = await window.api.crashReports.getLatestPending()
-      setReport(pending)
+      let displayedReport = pending
+      if (pending && promptIfPresent) {
+        try {
+          // Why: startup crash prompts are one-shot. The open dialog keeps the
+          // report data locally if the user chooses to send immediately.
+          await window.api.crashReports.dismiss({ reportId: pending.id })
+          displayedReport = { ...pending, status: 'dismissed' as const }
+        } catch (error) {
+          console.error('Failed to dismiss crash report after startup prompt:', error)
+        }
+      }
+      setReport(displayedReport)
       if (pending && promptIfPresent) {
         setOpen(true)
       }
@@ -70,10 +81,15 @@ export function CrashReportDialog(): React.JSX.Element {
     toast.success('Crash report copied.')
   }
 
-  const handleDismiss = async (): Promise<void> => {
+  const dismissReportIfNeeded = async (): Promise<void> => {
     if (report?.status === 'pending') {
       await window.api.crashReports.dismiss({ reportId: report.id })
+      setReport({ ...report, status: 'dismissed' })
     }
+  }
+
+  const handleDismiss = async (): Promise<void> => {
+    await dismissReportIfNeeded()
     setOpen(false)
   }
 
@@ -112,7 +128,11 @@ export function CrashReportDialog(): React.JSX.Element {
         if (submitting && !nextOpen) {
           return
         }
-        setOpen(nextOpen)
+        if (!nextOpen) {
+          void dismissReportIfNeeded().finally(() => setOpen(false))
+          return
+        }
+        setOpen(true)
       }}
     >
       <DialogContent className="sm:max-w-xl">

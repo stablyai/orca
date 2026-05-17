@@ -654,7 +654,7 @@ describe('CodexUsageStore', () => {
       sessions: [],
       dailyAggregates: [],
       scanState: {
-        enabled: false,
+        enabled: true,
         lastScanStartedAt: null,
         lastScanCompletedAt: null,
         lastScanError: null

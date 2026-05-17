@@ -205,4 +205,154 @@ test.describe('Tab visibility with closed sidebar', () => {
     // the tab.
     expect(centerIsTabOrDescendant).toBe(true)
   })
+
+  test('sidebar toggle and Back button stay separated after sidebar collapse', async ({
+    orcaPage
+  }) => {
+    await orcaPage.addInitScript(() => {
+      // Why: #2082 was reported against Windows-only titlebar chrome. Reloading
+      // with a Windows UA makes App.tsx take that renderer branch on any CI host.
+      const userAgent =
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/146 Safari/537.36'
+      Object.defineProperty(navigator, 'userAgent', {
+        get: () => userAgent,
+        configurable: true
+      })
+    })
+    await orcaPage.reload({ waitUntil: 'domcontentloaded' })
+    await orcaPage.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+
+    await expect
+      .poll(
+        async () =>
+          orcaPage.evaluate(() => ({
+            hasWindowsUserAgent: navigator.userAgent.includes('Windows'),
+            hasWindowsTitlebarChrome:
+              Boolean(document.querySelector('button[aria-label="Application menu"]')) &&
+              Boolean(document.querySelector('.window-controls'))
+          })),
+        {
+          timeout: 5_000,
+          message: 'Renderer did not switch to the Windows titlebar branch'
+        }
+      )
+      .toEqual({ hasWindowsUserAgent: true, hasWindowsTitlebarChrome: true })
+
+    await orcaPage.evaluate(() => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available — is the app in dev mode?')
+      }
+      store.getState().setSidebarOpen(true)
+    })
+
+    await expect
+      .poll(
+        async () =>
+          orcaPage.evaluate(() => {
+            const store = window.__store
+            if (!store) {
+              throw new Error('window.__store is not available — is the app in dev mode?')
+            }
+            const state = store.getState()
+            return { activeView: state.activeView, sidebarOpen: state.sidebarOpen }
+          }),
+        {
+          timeout: 5_000,
+          message: 'Expected default activeView=terminal and sidebarOpen=true at test start'
+        }
+      )
+      .toEqual({ activeView: 'terminal', sidebarOpen: true })
+
+    await orcaPage.evaluate(() => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available — is the app in dev mode?')
+      }
+      // Why: CI runs Electron hidden, where Playwright can wait forever for
+      // a titlebar button to be "stable". The regression is the collapsed
+      // geometry and hit target, so drive that state directly.
+      store.getState().setSidebarOpen(false)
+    })
+
+    await expect
+      .poll(
+        async () =>
+          orcaPage.evaluate(() => {
+            const store = window.__store
+            if (!store) {
+              throw new Error('window.__store is not available — is the app in dev mode?')
+            }
+            return store.getState().sidebarOpen
+          }),
+        {
+          timeout: 5_000,
+          message: 'Sidebar did not enter the collapsed state'
+        }
+      )
+      .toBe(false)
+
+    const measureControls = async (): Promise<{
+      titlebarIsCollapsed: boolean
+      toggleRight: number
+      backLeft: number
+      backCenterHitsBack: boolean
+    } | null> =>
+      orcaPage.evaluate(() => {
+        const titlebarLeft = document.querySelector<HTMLElement>('.titlebar-left')
+        const sidebarToggle = titlebarLeft?.querySelector<HTMLButtonElement>(
+          'button[aria-label="Toggle sidebar"]'
+        )
+        const backButton = titlebarLeft?.querySelector<HTMLButtonElement>(
+          'button[aria-label="Go back"]'
+        )
+        if (!titlebarLeft || !sidebarToggle || !backButton) {
+          return null
+        }
+        const titlebarIsCollapsed = getComputedStyle(titlebarLeft).position === 'absolute'
+        const toggleRect = sidebarToggle.getBoundingClientRect()
+        const backRect = backButton.getBoundingClientRect()
+        const backCenterX = backRect.left + backRect.width / 2
+        const backCenterY = backRect.top + backRect.height / 2
+        const elementAtBackCenter = document.elementFromPoint(backCenterX, backCenterY)
+        return {
+          titlebarIsCollapsed,
+          toggleRight: toggleRect.right,
+          backLeft: backRect.left,
+          backCenterHitsBack:
+            elementAtBackCenter !== null && backButton.contains(elementAtBackCenter)
+        }
+      })
+
+    let controls: {
+      titlebarIsCollapsed: boolean
+      toggleRight: number
+      backLeft: number
+      backCenterHitsBack: boolean
+    } | null = null
+    await expect
+      .poll(
+        async () => {
+          controls = await measureControls()
+          return controls?.titlebarIsCollapsed === true
+        },
+        {
+          timeout: 5_000,
+          message: 'Titlebar controls never reached a measurable collapsed-layout state'
+        }
+      )
+      .toBe(true)
+
+    expect(controls).not.toBeNull()
+    const { toggleRight, backLeft, backCenterHitsBack } = controls!
+
+    // Why: in the collapsed workspace header, ml-auto has no spare width to
+    // distribute, so this explicit gutter guards the Windows titlebar controls
+    // from visually merging with the Back button again.
+    expect(backLeft - toggleRight).toBeGreaterThanOrEqual(6)
+    expect(backCenterHitsBack).toBe(true)
+  })
 })

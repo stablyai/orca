@@ -32,6 +32,7 @@ const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
 const REMOTE_PTY_ID_PREFIX = 'remote:'
 const PTY_CONNECT_DIAG_LIMIT = 200
+const AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS = 250
 
 function recordPtyConnectDiagnostic(message: string): void {
   if (!e2eConfig.exposeStore) {
@@ -146,6 +147,7 @@ export function connectPanePty(
   let disposed = false
   let connectFrame: number | null = null
   let startupInjectTimer: ReturnType<typeof setTimeout> | null = null
+  let agentTaskCompleteNotificationTimer: ReturnType<typeof setTimeout> | null = null
   // Why: passphrase-gate waits register a teardown here so dispose() can
   // actively unsubscribe + resolve them. Without this, a pane disposed
   // mid-wait leaks its zustand subscriber and the surrounding async IIFE
@@ -316,12 +318,31 @@ export function connectPanePty(
     // events to fire. Dispatch is gated per-source in main; the main-process
     // dedupe also collapses concurrent BEL + task-complete for the same
     // worktree into a single notification.
-    deps.dispatchNotification({ source: 'agent-task-complete', terminalTitle: title })
+    // Why: title idle can beat the final hook status update by one event-loop
+    // turn; delay slightly so the notification can snapshot the richer status.
+    if (agentTaskCompleteNotificationTimer !== null) {
+      clearTimeout(agentTaskCompleteNotificationTimer)
+    }
+    agentTaskCompleteNotificationTimer = setTimeout(() => {
+      agentTaskCompleteNotificationTimer = null
+      if (disposed) {
+        return
+      }
+      deps.dispatchNotification({
+        source: 'agent-task-complete',
+        terminalTitle: title,
+        paneKey: cacheKey
+      })
+    }, AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS)
   }
   const onAgentBecameWorking = (): void => {
     // Why: a new API call refreshes the prompt-cache TTL, so clear any running
     // countdown. The timer will restart when the agent becomes idle again.
     deps.setCacheTimerStartedAt(cacheKey, null)
+    if (agentTaskCompleteNotificationTimer !== null) {
+      clearTimeout(agentTaskCompleteNotificationTimer)
+      agentTaskCompleteNotificationTimer = null
+    }
   }
   const onAgentExited = (): void => {
     // Why: when the terminal title reverts to a plain shell (e.g., "bash", "zsh"),
@@ -1284,6 +1305,10 @@ export function connectPanePty(
       if (startupInjectTimer !== null) {
         clearTimeout(startupInjectTimer)
         startupInjectTimer = null
+      }
+      if (agentTaskCompleteNotificationTimer !== null) {
+        clearTimeout(agentTaskCompleteNotificationTimer)
+        agentTaskCompleteNotificationTimer = null
       }
       discardTerminalOutput(pane.terminal)
       if (connectFrame !== null) {

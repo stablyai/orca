@@ -138,6 +138,7 @@ export default function ChecksPanel(): React.JSX.Element {
   // differs from the PR's head ref) resolve via the number-based fallback.
   const linkedPR = activeWorktree?.linkedPR ?? null
   const linkedGitLabMR = activeWorktree?.linkedGitLabMR ?? null
+  const activeWorktreePath = activeWorktree?.path ?? null
   const stateRequestKey = repo && branch ? checksPanelAsyncResultKey(repo.id, branch, prNumber) : ''
   asyncResultKeyRef.current = stateRequestKey
 
@@ -160,6 +161,7 @@ export default function ChecksPanel(): React.JSX.Element {
     let stale = false
     void getHostedReviewCreationEligibility({
       repoPath: repo.path,
+      ...(activeWorktreePath ? { worktreePath: activeWorktreePath } : {}),
       branch,
       base: repo.worktreeBaseRef ?? null,
       hasUncommittedChanges,
@@ -182,6 +184,7 @@ export default function ChecksPanel(): React.JSX.Element {
       stale = true
     }
   }, [
+    activeWorktreePath,
     branch,
     getHostedReviewCreationEligibility,
     hasUncommittedChanges,
@@ -738,16 +741,11 @@ export default function ChecksPanel(): React.JSX.Element {
     if (activeReviewClassification.readyToMerge) {
       badges.push('Ready to merge')
     }
-    if (activeReviewClassification.requested) {
-      badges.push('Review requested')
-    }
-    if (activeReviewClassification.state === 'mine') {
-      badges.push('My PR')
-    } else if (activeReviewClassification.state === 'agent') {
-      badges.push('AI PR')
-    } else {
-      badges.push('Teammate PR')
-    }
+    // Why: viewer/author/requestedReviewer signals are not wired into the
+    // ChecksPanel call site yet, so `state` and `requested` would mis-classify
+    // every PR (collapsing to 'teammate'). Suppress those badges until the
+    // inputs are available; needs-response / ready-to-merge work from PR
+    // metadata alone and remain accurate.
     return badges
   }, [activeReviewClassification])
 
@@ -797,6 +795,8 @@ export default function ChecksPanel(): React.JSX.Element {
             open={createPrDialogOpen}
             repoId={repo.id}
             repoPath={repo.path}
+            worktreeId={activeWorktreeId}
+            worktreePath={activeWorktreePath ?? repo.path}
             branch={branch}
             eligibility={hostedReviewCreation}
             pushBeforeCreate={createPrPushFirst}

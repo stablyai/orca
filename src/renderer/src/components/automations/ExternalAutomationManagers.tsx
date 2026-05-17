@@ -1,14 +1,19 @@
 import React from 'react'
-import { Pause, Play, RefreshCw, Trash2 } from 'lucide-react'
+import { Pause, Pencil, Play, RefreshCw, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type {
   ExternalAutomationAction,
   ExternalAutomationJob,
-  ExternalAutomationManager
+  ExternalAutomationManager,
+  ExternalAutomationRun
 } from '../../../../shared/automations-types'
 import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
+import {
+  ExternalAutomationRunTable,
+  type FetchExternalAutomationRuns
+} from './ExternalAutomationRunTable'
 
 type ExternalAutomationManagersProps = {
   managers: ExternalAutomationManager[]
@@ -19,6 +24,13 @@ type ExternalAutomationManagersProps = {
     job: ExternalAutomationJob,
     action: ExternalAutomationAction
   ) => void
+  onFetchRuns?: FetchExternalAutomationRuns
+  onOpenRun?: (
+    manager: ExternalAutomationManager,
+    job: ExternalAutomationJob,
+    run: ExternalAutomationRun
+  ) => void
+  onEdit?: (manager: ExternalAutomationManager, job: ExternalAutomationJob) => void
 }
 
 function formatExternalDate(value: string | null, now: number): string {
@@ -38,6 +50,14 @@ function actionKey(
   action: ExternalAutomationAction
 ): string {
   return `${manager.id}:${job.id}:${action}`
+}
+
+function getProviderLabel(manager: ExternalAutomationManager): string {
+  return manager.provider === 'hermes' ? 'Hermes' : 'OpenClaw'
+}
+
+function getTargetKindLabel(manager: ExternalAutomationManager): string {
+  return manager.target.type === 'ssh' ? 'Remote SSH' : 'Local'
 }
 
 function ExternalActionButton({
@@ -78,16 +98,21 @@ export function ExternalAutomationManagers({
   managers,
   now,
   runningActionKey,
-  onAction
+  onAction,
+  onFetchRuns,
+  onOpenRun,
+  onEdit
 }: ExternalAutomationManagersProps): React.JSX.Element {
+  const automationCount = managers.reduce((sum, manager) => sum + manager.jobs.length, 0)
+
   return (
-    <div className="mt-6 rounded-md border border-border/50 bg-muted/20 shadow-sm">
+    <div className="rounded-md border border-border/50 bg-muted/20 shadow-sm">
       <div className="flex items-center justify-between border-b border-border/50 px-3 py-2">
         <div>
-          <div className="text-sm font-medium">External managers</div>
+          <div className="text-sm font-medium">External automations</div>
         </div>
         <Badge variant="outline">
-          {managers.reduce((sum, manager) => sum + manager.jobs.length, 0)} jobs
+          {automationCount} {automationCount === 1 ? 'automation' : 'automations'}
         </Badge>
       </div>
       <div className="divide-y divide-border/50">
@@ -95,8 +120,9 @@ export function ExternalAutomationManagers({
           <div key={manager.id} className="px-3 py-3">
             <div className="mb-2 flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <div className="truncate text-sm font-medium">{manager.label}</div>
+                <div className="truncate text-sm font-medium">{manager.targetLabel}</div>
                 <div className="text-xs text-muted-foreground">
+                  {getProviderLabel(manager)} / {getTargetKindLabel(manager)} ·{' '}
                   {manager.status === 'available'
                     ? manager.canManage
                       ? 'Manageable'
@@ -121,11 +147,15 @@ export function ExternalAutomationManagers({
                       <Badge variant={job.enabled ? 'secondary' : 'outline'}>
                         {job.enabled ? 'Active' : 'Paused'}
                       </Badge>
-                      <Badge variant="outline">Usage unsupported</Badge>
                     </div>
                     <div className="mt-1 truncate text-xs text-muted-foreground">
                       {job.schedule} · next {formatExternalDate(job.nextRunAt, now)}
                     </div>
+                    {manager.provider === 'hermes' ? (
+                      <div className="mt-1 truncate text-xs text-muted-foreground">
+                        {job.runCount} {job.runCount === 1 ? 'run' : 'runs'} found
+                      </div>
+                    ) : null}
                     {job.promptPreview || job.lastError ? (
                       <div className="mt-1 truncate text-xs text-muted-foreground">
                         {job.lastError ?? job.promptPreview}
@@ -148,6 +178,15 @@ export function ExternalAutomationManagers({
                         <Play className="size-3.5" />
                       )}
                     </ExternalActionButton>
+                    {manager.provider === 'hermes' ? (
+                      <ExternalActionButton
+                        label="Edit external automation"
+                        disabled={!manager.canManage || runningActionKey !== null}
+                        onClick={() => onEdit?.(manager, job)}
+                      >
+                        <Pencil className="size-3.5" />
+                      </ExternalActionButton>
+                    ) : null}
                     <ExternalActionButton
                       label={
                         job.enabled ? 'Pause external automation' : 'Resume external automation'
@@ -177,6 +216,17 @@ export function ExternalAutomationManagers({
                       )}
                     </ExternalActionButton>
                   </div>
+                  {manager.provider === 'hermes' ? (
+                    <div className="col-span-3">
+                      <ExternalAutomationRunTable
+                        manager={manager}
+                        job={job}
+                        now={now}
+                        onFetchRuns={onFetchRuns}
+                        onOpenRun={(run) => onOpenRun?.(manager, job, run)}
+                      />
+                    </div>
+                  ) : null}
                 </div>
               ))}
               {manager.jobs.length === 0 ? (

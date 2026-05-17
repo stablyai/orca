@@ -29,6 +29,37 @@ describe('diff section layout', () => {
     ).toBe(76)
   })
 
+  it('uses changed-line count before Monaco reports collapsed diff height', () => {
+    const largeUnchangedFile = Array.from({ length: 10_000 }, (_, index) => `line ${index}`).join(
+      '\n'
+    )
+
+    expect(
+      getDiffSectionBodyHeight({
+        measuredContentHeight: undefined,
+        originalContent: largeUnchangedFile,
+        modifiedContent: `${largeUnchangedFile}\nchanged`,
+        changedLineCount: 1,
+        useIntrinsicImageHeight: false
+      })
+    ).toBe(266)
+  })
+
+  it('caps unmeasured text diffs without changed-line stats', () => {
+    const largeUnchangedFile = Array.from({ length: 10_000 }, (_, index) => `line ${index}`).join(
+      '\n'
+    )
+
+    expect(
+      getDiffSectionBodyHeight({
+        measuredContentHeight: undefined,
+        originalContent: largeUnchangedFile,
+        modifiedContent: `${largeUnchangedFile}\nchanged`,
+        useIntrinsicImageHeight: false
+      })
+    ).toBe(1539)
+  })
+
   it('keeps empty text sections visible', () => {
     expect(
       getDiffSectionBodyHeight({
@@ -93,9 +124,27 @@ describe('diff section layout', () => {
         measuredContentHeight: undefined,
         originalContent: 'one',
         modifiedContent: 'one\ntwo\nthree',
+        changedLineCount: 2,
         useIntrinsicImageHeight: false
       })
     ).toBe(104)
+  })
+
+  it('uses changed-line count for large virtualized expanded sections', () => {
+    const largeUnchangedFile = Array.from({ length: 10_000 }, (_, index) => `line ${index}`).join(
+      '\n'
+    )
+
+    expect(
+      getDiffSectionEstimatedHeight({
+        collapsed: false,
+        measuredContentHeight: undefined,
+        originalContent: largeUnchangedFile,
+        modifiedContent: `${largeUnchangedFile}\nchanged`,
+        changedLineCount: 1,
+        useIntrinsicImageHeight: false
+      })
+    ).toBe(294)
   })
 
   it('estimates collapsed virtualized sections as header-only rows', () => {

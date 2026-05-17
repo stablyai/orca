@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createDevDockBadgeLabel, getDevInstanceIdentity } from './dev-instance-identity'
+import { getDevInstanceIdentity } from './dev-instance-identity'
 
 describe('dev-instance-identity', () => {
   it('keeps packaged identity stable', () => {
@@ -26,8 +26,8 @@ describe('dev-instance-identity', () => {
       devWorktreeName: 'dev-indicator',
       devRepoRoot: '/repo/worktrees/dev-indicator'
     })
-    expect(identity.name).toMatch(/^Orca Dev \[DI[A-Z0-9]{2}\]: nwparker\/dev-indicator$/)
-    expect(identity.dockBadgeLabel).toMatch(/^DI[A-Z0-9]{2}$/)
+    expect(identity.name).toBe('Orca: nwparker/dev-indicator')
+    expect(identity.dockBadgeLabel).toBeNull()
     expect(identity.appUserModelId).toMatch(/^com\.stablyai\.orca\.dev\.[a-f0-9]{10}$/)
   })
 
@@ -39,8 +39,8 @@ describe('dev-instance-identity', () => {
     })
 
     expect(identity.devLabel).toBe('payment-ui @ feature/billing-shell')
-    expect(identity.name).toMatch(/^Orca Dev \[PU[A-Z0-9]{2}\]: feature\/billing-shell$/)
-    expect(identity.dockBadgeLabel).toMatch(/^PU[A-Z0-9]{2}$/)
+    expect(identity.name).toBe('Orca: feature/billing-shell')
+    expect(identity.dockBadgeLabel).toBeNull()
   })
 
   it('allows an explicit label override', () => {
@@ -51,16 +51,7 @@ describe('dev-instance-identity', () => {
     })
 
     expect(identity.devLabel).toBe('manual label')
-    expect(identity.name).toMatch(/^Orca Dev \[DI[A-Z0-9]{2}\]: feature\/other$/)
-    expect(identity.dockBadgeLabel).toMatch(/^DI[A-Z0-9]{2}$/)
-  })
-
-  it('creates compact alphanumeric Dock labels with stable collision suffixes', () => {
-    expect(createDevDockBadgeLabel('dev-indicator', '/repo/a')).toMatch(/^DI[A-Z0-9]{2}$/)
-    expect(createDevDockBadgeLabel('feature/singleword', '/repo/a')).toMatch(/^SI[A-Z0-9]{2}$/)
-    expect(createDevDockBadgeLabel('pr-123', '/repo/a')).toMatch(/^P1[A-Z0-9]{2}$/)
-    expect(createDevDockBadgeLabel('dev-indicator', '/repo/a')).not.toBe(
-      createDevDockBadgeLabel('dev-indicator', '/repo/b')
-    )
+    expect(identity.name).toBe('Orca: feature/other')
+    expect(identity.dockBadgeLabel).toBeNull()
   })
 })

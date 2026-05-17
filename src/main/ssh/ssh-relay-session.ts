@@ -17,6 +17,7 @@ import { SshPtyProvider, isSshPtyNotFoundError } from '../providers/ssh-pty-prov
 import { SshFilesystemProvider } from '../providers/ssh-filesystem-provider'
 import { SshGitProvider } from '../providers/ssh-git-provider'
 import { agentHookServer } from '../agent-hooks/server'
+import { installRemoteManagedAgentHooks } from '../agent-hooks/remote-managed-hook-installers'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_NOTIFICATION_METHOD,
@@ -432,6 +433,11 @@ export class SshRelaySession {
       return false
     }
 
+    await this.installManagedHooksOnRemote(mux)
+    if (shouldContinue && !shouldContinue()) {
+      return false
+    }
+
     await this.installPluginsOnRelay(mux)
     if (shouldContinue && !shouldContinue()) {
       return false
@@ -452,6 +458,52 @@ export class SshRelaySession {
     this.wireUpAgentHookEvents(mux)
     this.wireUpRemoteWorkspaceEvents(mux)
     return true
+  }
+
+  // Why: the relay can inject ORCA_AGENT_HOOK_* env into SSH PTYs, but
+  // hook-script agents (Claude/Codex/Gemini/etc.) still need their config
+  // files on the remote host to call Orca's managed script. Install those
+  // configs before registering the PTY provider so newly spawned agent panes
+  // report status from their first prompt.
+  private async installManagedHooksOnRemote(mux: SshChannelMultiplexer): Promise<void> {
+    if (!isRemoteAgentHooksEnabled()) {
+      return
+    }
+
+    let remoteHome: string
+    try {
+      const result = (await mux.request('session.resolveHome', { path: '~' })) as {
+        resolvedPath?: unknown
+      }
+      if (typeof result.resolvedPath !== 'string' || result.resolvedPath.length === 0) {
+        console.warn(
+          `[ssh-relay-session] skipped remote managed hook install for ${this.targetId}: could not resolve remote home`
+        )
+        return
+      }
+      remoteHome = result.resolvedPath
+    } catch (error) {
+      console.warn(
+        `[ssh-relay-session] skipped remote managed hook install for ${this.targetId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      )
+      return
+    }
+
+    let sftp: Awaited<ReturnType<SshConnection['sftp']>> | null = null
+    try {
+      sftp = await this.requireReadyConnection().sftp()
+      await installRemoteManagedAgentHooks(sftp, remoteHome)
+    } catch (error) {
+      console.warn(
+        `[ssh-relay-session] remote managed hook install failed for ${this.targetId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      )
+    } finally {
+      ;(sftp as { end?: () => void } | null)?.end?.()
+    }
   }
 
   // Why: ship the OpenCode plugin / Pi extension source bodies to the relay

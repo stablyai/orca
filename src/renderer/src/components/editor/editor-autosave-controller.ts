@@ -83,7 +83,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         // round-tripping back into a setContent that jumps the cursor to the
         // end (and, under round-trip drift, can drop keystrokes typed in the
         // debounce window). See editor-self-write-registry.
-        recordSelfWrite(liveFile.filePath)
+        recordSelfWrite(liveFile.filePath, contentToSave)
         try {
           await writeRuntimeFile(
             {

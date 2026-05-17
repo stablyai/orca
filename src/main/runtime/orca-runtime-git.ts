@@ -37,13 +37,18 @@ import { gitFetch, gitPull, gitPush } from '../git/remote'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import {
   cancelGenerateCommitMessageLocal,
+  cancelGeneratePullRequestFieldsLocal,
   generateCommitMessageFromContext,
+  generatePullRequestFieldsFromContext,
   resolveCommitMessageSettings,
-  type GenerateCommitMessageResult
+  type GenerateCommitMessageResult,
+  type GeneratePullRequestFieldsResult
 } from '../text-generation/commit-message-text-generation'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import { prepareLocalCommitMessageAgentEnv } from '../text-generation/commit-message-agent-environment'
+import { getPullRequestDraftContext } from '../text-generation/pull-request-context'
 import { normalizeRuntimeRelativePath } from './runtime-relative-paths'
+import { gitExecFileAsync } from '../git/runner'
 
 export type ResolvedRuntimeGitWorktree = Worktree & { git: GitWorktreeInfo }
 type RuntimeCommitMessageSettingsOverride = Partial<
@@ -376,6 +381,81 @@ export class RuntimeGitCommands {
       return { ok: true }
     }
     cancelGenerateCommitMessageLocal(target.worktree.path)
+    return { ok: true }
+  }
+
+  async generateRuntimePullRequestFields(
+    worktreeSelector: string,
+    input: { base: string; title: string; body: string; draft: boolean },
+    settingsOverride?: RuntimeCommitMessageSettingsOverride
+  ): Promise<GeneratePullRequestFieldsResult> {
+    const resolvedSettings = resolveCommitMessageSettings({
+      ...this.host.getRuntimeSettings(),
+      ...settingsOverride
+    })
+    if (!resolvedSettings.ok) {
+      return { success: false, error: resolvedSettings.error }
+    }
+
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId && !provider) {
+      return {
+        success: false,
+        error: `No git provider for connection "${target.connectionId}"`
+      }
+    }
+    const context = target.connectionId
+      ? await getPullRequestDraftContext((argv) => provider!.exec(argv, target.worktree.path), {
+          base: input.base,
+          currentTitle: input.title,
+          currentBody: input.body,
+          currentDraft: input.draft
+        })
+      : await getPullRequestDraftContext(
+          (argv, options) => gitExecFileAsync(argv, { cwd: target.worktree.path, ...options }),
+          {
+            base: input.base,
+            currentTitle: input.title,
+            currentBody: input.body,
+            currentDraft: input.draft
+          }
+        )
+    if (!context) {
+      return { success: false, error: 'No branch changes to summarize.' }
+    }
+
+    if (target.connectionId) {
+      return generatePullRequestFieldsFromContext(context, resolvedSettings.params, {
+        kind: 'remote',
+        cwd: target.worktree.path,
+        execute: (plan, cwd, timeoutMs) => provider!.executeCommitMessagePlan(plan, cwd, timeoutMs),
+        missingBinaryLocation: 'remote PATH'
+      })
+    }
+
+    const localEnv = await prepareLocalCommitMessageAgentEnv(
+      resolvedSettings.params.agentId,
+      this.host.getCommitMessageAgentEnvironment?.()
+    )
+    if (!localEnv.ok) {
+      return { success: false, error: localEnv.error }
+    }
+    return generatePullRequestFieldsFromContext(context, resolvedSettings.params, {
+      kind: 'local',
+      cwd: target.worktree.path,
+      ...(localEnv.env ? { env: localEnv.env } : {})
+    })
+  }
+
+  async cancelRuntimeGeneratePullRequestFields(worktreeSelector: string): Promise<{ ok: true }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      await provider?.cancelGenerateCommitMessage(target.worktree.path)
+      return { ok: true }
+    }
+    cancelGeneratePullRequestFieldsLocal(target.worktree.path)
     return { ok: true }
   }
 

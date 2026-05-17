@@ -1,6 +1,5 @@
 import { app } from 'electron'
 
-let idleDockBadgeLabel = ''
 let unreadCount = 0
 
 function applyDockBadge(): void {
@@ -8,15 +7,8 @@ function applyDockBadge(): void {
     return
   }
 
-  const label =
-    unreadCount === 0 ? idleDockBadgeLabel : unreadCount > 99 ? '99+' : String(unreadCount)
-
+  const label = unreadCount === 0 ? '' : unreadCount > 99 ? '99+' : String(unreadCount)
   app.dock?.setBadge(label)
-}
-
-export function setIdleDockBadgeLabel(label: string | null | undefined): void {
-  idleDockBadgeLabel = label ?? ''
-  applyDockBadge()
 }
 
 export function setUnreadDockBadgeCount(count: number): void {
@@ -26,7 +18,5 @@ export function setUnreadDockBadgeCount(count: number): void {
 
   unreadCount = Number.isFinite(count) ? Math.max(0, Math.trunc(count)) : 0
 
-  // Why: unread counts own the native badge while active; otherwise dev builds
-  // keep their worktree badge visible so parallel `pn dev` windows stay distinct.
   applyDockBadge()
 }

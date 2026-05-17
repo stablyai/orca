@@ -190,6 +190,21 @@ describe('resolveDropdownItems', () => {
     expect(byKind.publish.disabled).toBe(false)
   })
 
+  it('does not show Publish Branch when an unpublished branch has no commits ahead', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 0
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.publish.label).toBe('No Branch Changes')
+    expect(byKind.publish.title).toBe('Nothing to publish')
+    expect(byKind.publish.disabled).toBe(true)
+  })
+
   it('does not mention Publish Branch when the linked PR is already merged', () => {
     const items = resolveDropdownItems(
       inputs({

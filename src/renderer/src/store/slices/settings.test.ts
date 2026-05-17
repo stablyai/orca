@@ -83,6 +83,28 @@ beforeEach(() => {
 })
 
 describe('createSettingsSlice runtime switching', () => {
+  it('rebases local state to the authoritative settings:set response', async () => {
+    settingsSet.mockResolvedValueOnce({
+      openInApplications: [{ id: 'cursor', label: 'Cursor', command: 'cursor' }],
+      notifications: {}
+    })
+    const store = createTestStore()
+    store.setState({
+      settings: {
+        openInApplications: [],
+        notifications: {}
+      } as unknown as AppState['settings']
+    })
+
+    await store.getState().updateSettings({
+      openInApplications: [{ id: '  ', label: ' Cursor ', command: ' cursor ' }] as never
+    })
+
+    expect(store.getState().settings?.openInApplications).toEqual([
+      { id: 'cursor', label: 'Cursor', command: 'cursor' }
+    ])
+  })
+
   it('clears stale runtime-owned state before loading the selected environment', async () => {
     const store = createTestStore()
     store.setState({

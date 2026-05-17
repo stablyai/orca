@@ -65,7 +65,8 @@ export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry
     upstreamStatus,
     prState,
     isPRStateLoading,
-    hostedReviewCreation
+    hostedReviewCreation,
+    branchCommitsAhead
   } = inputs
 
   const hasStaged = stagedCount > 0
@@ -80,6 +81,7 @@ export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry
   const hasUpstream = upstreamStatus?.hasUpstream ?? false
   const publishBlockedByMergedPR = !hasUpstream && prState === 'merged'
   const publishBlockedByPRLoading = !hasUpstream && !!isPRStateLoading
+  const publishBlockedByNoBranchCommits = !hasUpstream && branchCommitsAhead === 0
   const ahead = upstreamStatus?.ahead ?? 0
   const behind = upstreamStatus?.behind ?? 0
 
@@ -229,22 +231,30 @@ export function resolveDropdownItems(inputs: PrimaryActionInputs): DropdownEntry
 
   const publishItem: DropdownItem = {
     kind: 'publish',
-    label: publishBlockedByMergedPR || publishBlockedByPRLoading ? 'PR Status' : 'Publish Branch',
+    label:
+      publishBlockedByMergedPR || publishBlockedByPRLoading
+        ? 'PR Status'
+        : publishBlockedByNoBranchCommits
+          ? 'No Branch Changes'
+          : 'Publish Branch',
     title: upstreamLoading
       ? 'Checking branch status…'
       : publishBlockedByPRLoading
         ? 'Checking PR status…'
         : publishBlockedByMergedPR
           ? 'PR is already merged'
-          : hasUpstream
-            ? 'Branch is already published'
-            : 'Publish this branch to origin',
+          : publishBlockedByNoBranchCommits
+            ? 'Nothing to publish'
+            : hasUpstream
+              ? 'Branch is already published'
+              : 'Publish this branch to origin',
     disabled:
       globalBusy ||
       upstreamLoading ||
       hasUpstream ||
       publishBlockedByPRLoading ||
-      publishBlockedByMergedPR
+      publishBlockedByMergedPR ||
+      publishBlockedByNoBranchCommits
   }
 
   const createBlockedHint = (() => {

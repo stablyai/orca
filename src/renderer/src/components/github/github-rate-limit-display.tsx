@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Gauge, RefreshCw } from 'lucide-react'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -43,33 +42,6 @@ export function toneForGitHubBucket(remaining: number, limit: number): 'ok' | 'w
     return 'warn'
   }
   return 'ok'
-}
-
-function worstGitHubRateLimitTone(snapshot: GitHubRateLimitSnapshot): 'ok' | 'warn' | 'crit' {
-  const tones = BUCKETS.map((b) =>
-    toneForGitHubBucket(snapshot[b.key].remaining, snapshot[b.key].limit)
-  )
-  if (tones.includes('crit')) {
-    return 'crit'
-  }
-  if (tones.includes('warn')) {
-    return 'warn'
-  }
-  return 'ok'
-}
-
-function tightestGitHubBucket(snapshot: GitHubRateLimitSnapshot): BucketMeta {
-  let worst = BUCKETS[0]
-  let worstPct = 1
-  for (const b of BUCKETS) {
-    const { remaining, limit } = snapshot[b.key]
-    const pct = limit > 0 ? remaining / limit : 1
-    if (pct < worstPct) {
-      worstPct = pct
-      worst = b
-    }
-  }
-  return worst
 }
 
 export function useGitHubRateLimitSnapshot(options?: { autoRefresh?: boolean }): {
@@ -169,64 +141,6 @@ function GitHubRateLimitRows({
         )
       })}
     </div>
-  )
-}
-
-export function GitHubRateLimitCompact({
-  className,
-  hideHealthy = true,
-  label = 'GitHub API budget',
-  tooltipSide = 'top'
-}: {
-  className?: string
-  hideHealthy?: boolean
-  label?: string
-  tooltipSide?: 'top' | 'right' | 'bottom' | 'left'
-}): React.JSX.Element | null {
-  const { snapshot, hasError, refresh } = useGitHubRateLimitSnapshot()
-  if (!snapshot || hasError) {
-    return null
-  }
-
-  const tone = worstGitHubRateLimitTone(snapshot)
-  if (hideHealthy && tone === 'ok') {
-    return null
-  }
-  const tight = tightestGitHubBucket(snapshot)
-  const tightBucket = snapshot[tight.key]
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          onClick={() => void refresh(true)}
-          aria-label={label}
-          className={cn(
-            'inline-flex h-6 min-w-0 items-center gap-1 rounded-md border px-1.5 text-[10px] font-medium transition',
-            tone === 'ok' && 'border-border bg-secondary text-secondary-foreground hover:bg-accent',
-            tone === 'crit' &&
-              'border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300 hover:bg-red-500/20',
-            tone === 'warn' &&
-              'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20',
-            className
-          )}
-        >
-          <Gauge className="size-3 shrink-0" />
-          <span className="truncate">
-            {tightBucket.remaining} {tight.label.toLowerCase()} left · resets in{' '}
-            {formatGitHubRateLimitReset(tightBucket.resetAt)}
-          </span>
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side={tooltipSide} sideOffset={6} className="text-xs">
-        <div className="font-medium">{label}</div>
-        <div className="mt-1">
-          <GitHubRateLimitRows snapshot={snapshot} />
-        </div>
-        <div className="mt-1 text-muted-foreground">Click to refresh</div>
-      </TooltipContent>
-    </Tooltip>
   )
 }
 

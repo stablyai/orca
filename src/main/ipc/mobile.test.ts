@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handleMock } = vi.hoisted(() => ({
-  handleMock: vi.fn()
+const { handleMock, networkInterfacesMock } = vi.hoisted(() => ({
+  handleMock: vi.fn(),
+  networkInterfacesMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -14,6 +15,10 @@ vi.mock('qrcode', () => ({
   }
 }))
 
+vi.mock('os', () => ({
+  networkInterfaces: networkInterfacesMock
+}))
+
 import { registerMobileHandlers } from './mobile'
 
 describe('registerMobileHandlers', () => {
@@ -22,8 +27,33 @@ describe('registerMobileHandlers', () => {
   beforeEach(() => {
     handlers.clear()
     handleMock.mockReset()
+    networkInterfacesMock.mockReset()
+    networkInterfacesMock.mockReturnValue({})
     handleMock.mockImplementation((channel: string, handler: (...args: unknown[]) => unknown) => {
       handlers.set(channel, handler)
+    })
+  })
+
+  it('re-reads system network interfaces on each request', () => {
+    networkInterfacesMock
+      .mockReturnValueOnce({
+        en0: [{ family: 'IPv4', internal: false, address: '192.168.1.24' }]
+      })
+      .mockReturnValueOnce({
+        en0: [{ family: 'IPv4', internal: false, address: '192.168.1.24' }],
+        tailscale0: [{ family: 'IPv4', internal: false, address: '100.64.1.20' }]
+      })
+
+    registerMobileHandlers({} as never)
+
+    expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
+      interfaces: [{ name: 'en0', address: '192.168.1.24' }]
+    })
+    expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
+      interfaces: [
+        { name: 'en0', address: '192.168.1.24' },
+        { name: 'tailscale0', address: '100.64.1.20' }
+      ]
     })
   })
 

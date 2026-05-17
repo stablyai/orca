@@ -23,25 +23,21 @@ describe('unread Dock badge', () => {
     vi.resetModules()
   })
 
-  it('shows the dev identity badge when unread count is zero', async () => {
+  it('clears the native badge when unread count is zero', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
-    const { setIdleDockBadgeLabel, setUnreadDockBadgeCount } = await import('./unread-badge')
-
-    setIdleDockBadgeLabel('DI')
-    expect(setBadgeMock).toHaveBeenLastCalledWith('DI')
+    const { setUnreadDockBadgeCount } = await import('./unread-badge')
 
     setUnreadDockBadgeCount(5)
     expect(setBadgeMock).toHaveBeenLastCalledWith('5')
 
     setUnreadDockBadgeCount(0)
-    expect(setBadgeMock).toHaveBeenLastCalledWith('DI')
+    expect(setBadgeMock).toHaveBeenLastCalledWith('')
   })
 
-  it('caps unread counts while preserving the idle badge', async () => {
+  it('caps unread counts', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
-    const { setIdleDockBadgeLabel, setUnreadDockBadgeCount } = await import('./unread-badge')
+    const { setUnreadDockBadgeCount } = await import('./unread-badge')
 
-    setIdleDockBadgeLabel('DI')
     setUnreadDockBadgeCount(104)
     expect(setBadgeMock).toHaveBeenLastCalledWith('99+')
   })

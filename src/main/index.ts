@@ -28,6 +28,7 @@ import { resolveConsent } from './telemetry/consent'
 import { triggerStartupNotificationRegistration } from './ipc/notifications'
 import { OrcaRuntimeService } from './runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
+import { awaitRuntimeFileWatcherUnsubscribes } from './runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from './runtime/runtime-metadata'
 import { registerAppMenu, rebuildAppMenu } from './menu/register-app-menu'
 import { checkForUpdatesFromMenu, isQuittingForUpdate } from './updater'
@@ -68,7 +69,7 @@ import {
 } from './ipc/pty'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { browserManager } from './browser/browser-manager'
-import { setIdleDockBadgeLabel, setUnreadDockBadgeCount } from './dock/unread-badge'
+import { setUnreadDockBadgeCount } from './dock/unread-badge'
 import { registerFeatureWallFirstAgentTour } from './feature-wall/first-agent-tour'
 import { AutomationService } from './automations/service'
 import { AgentAwakeService } from './agent-awake-service'
@@ -723,7 +724,6 @@ app.whenReady().then(async () => {
   if (process.platform === 'darwin' && is.dev) {
     const dockIcon = nativeImage.createFromPath(devIcon)
     app.dock?.setIcon(dockIcon)
-    setIdleDockBadgeLabel(devInstanceIdentity.dockBadgeLabel)
   }
 
   store = new Store()
@@ -1061,6 +1061,7 @@ app.on('will-quit', (e) => {
     const rpcStopAndClear = runtimeRpc
       ? runtimeRpc
           .stop()
+          .then(() => awaitRuntimeFileWatcherUnsubscribes())
           .then(() => {
             if (ownedRuntimeId) {
               clearRuntimeMetadataIfOwned(app.getPath('userData'), ownedPid, ownedRuntimeId)

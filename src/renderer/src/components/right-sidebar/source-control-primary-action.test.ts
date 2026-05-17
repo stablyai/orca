@@ -174,13 +174,25 @@ describe('resolvePrimaryAction', () => {
 
   it('returns Publish Branch on a clean tree when no upstream exists', () => {
     const result = resolvePrimaryAction(
-      inputs({ upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 } })
+      inputs({ upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }, branchCommitsAhead: 1 })
     )
     expect(result).toEqual({
       kind: 'publish',
       label: 'Publish Branch',
       title: 'Publish this branch to origin',
       disabled: false
+    })
+  })
+
+  it('does not offer Publish Branch when an unpublished branch has no commits ahead', () => {
+    const result = resolvePrimaryAction(
+      inputs({ upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }, branchCommitsAhead: 0 })
+    )
+    expect(result).toEqual({
+      kind: 'commit',
+      label: 'Commit',
+      title: 'Nothing to commit. Branch has no changes to publish.',
+      disabled: true
     })
   })
 

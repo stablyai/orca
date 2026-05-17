@@ -9,6 +9,7 @@ import {
 } from '@/runtime/runtime-terminal-stream'
 import { normalizeTerminalQuickCommands } from '../../../../shared/terminal-quick-commands'
 import { normalizeVisibleTaskProviders } from '../../../../shared/task-providers'
+import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
 
 export type SettingsSlice = {
   settings: GlobalSettings | null
@@ -22,6 +23,13 @@ export type SettingsSlice = {
 function normalizeRuntimeEnvironmentId(value: string | null | undefined): string | null {
   const trimmed = value?.trim()
   return trimmed ? trimmed : null
+}
+
+function createOpenInApplicationId(): string {
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    `open-in-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+  )
 }
 
 function runtimeScopedStateReset(): Partial<AppState> {
@@ -238,42 +246,16 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
           updates.visibleTaskProviders
         )
       }
-      await window.api.settings.set(sanitizedUpdates)
-      set((s) => {
-        if (!s.settings) {
-          return { settings: null }
-        }
-        // Deep-merge telemetry so partial writes do not clobber sibling
-        // fields like `installId`, `existedBeforeTelemetryRelease`, or
-        // `optedIn` in local renderer state until the next fetchSettings.
-        // Mirrors the main-side merge in src/main/persistence.ts:551-573.
-        // `telemetry` is optional on GlobalSettings, so guard against the case
-        // where both current and incoming telemetry are undefined — otherwise
-        // the spread would produce an empty object and we'd materialize a
-        // telemetry key that shouldn't exist.
-        const mergedTelemetry =
-          sanitizedUpdates.telemetry !== undefined
-            ? { ...s.settings.telemetry, ...sanitizedUpdates.telemetry }
-            : s.settings.telemetry
-        // Why: voice is optional and partially writable (e.g. only `selectedModelId`
-        // changes), so deep-merge sibling fields like `mode` and `holdShortcut`
-        // and avoid materializing a `voice` key when neither current nor incoming
-        // settings define one.
-        const mergedVoice =
-          updates.voice !== undefined ? { ...s.settings.voice, ...updates.voice } : s.settings.voice
-        return {
-          settings: {
-            ...s.settings,
-            ...sanitizedUpdates,
-            notifications: {
-              ...s.settings.notifications,
-              ...sanitizedUpdates.notifications
-            },
-            ...(mergedTelemetry !== undefined ? { telemetry: mergedTelemetry } : {}),
-            ...(mergedVoice !== undefined ? { voice: mergedVoice } : {})
+      if ('openInApplications' in updates) {
+        sanitizedUpdates.openInApplications = normalizeOpenInApplications(
+          updates.openInApplications,
+          {
+            createId: createOpenInApplicationId
           }
-        }
-      })
+        )
+      }
+      const nextSettings = await window.api.settings.set(sanitizedUpdates)
+      set((s) => ({ settings: (nextSettings as GlobalSettings | undefined) ?? s.settings }))
     } catch (err) {
       console.error('Failed to update settings:', err)
     }
@@ -296,10 +278,14 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       // clearing browser maps so the old server does not retain orphan pages.
       await closeRemoteTerminalsBeforeRuntimeSwitch(get(), previousId)
       await closeRemoteBrowserPagesBeforeRuntimeSwitch(get())
-      await window.api.settings.set({ activeRuntimeEnvironmentId: nextId })
+      const nextSettings = await window.api.settings.set({
+        activeRuntimeEnvironmentId: nextId
+      })
       set((s) => ({
         ...runtimeScopedStateReset(),
-        settings: s.settings ? { ...s.settings, activeRuntimeEnvironmentId: nextId } : null
+        settings:
+          (nextSettings as GlobalSettings | undefined) ??
+          (s.settings ? { ...s.settings, activeRuntimeEnvironmentId: nextId } : null)
       }))
       // Why: server-owned state is cleared before refetch so old worktree,
       // terminal, browser, and issue IDs cannot be used against the new server

@@ -956,6 +956,11 @@ export function registerPtyHandlers(
           console.warn(
             `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
           )
+          // Why: callers of controller.kill must observe a kill→exit pair so
+          // runtime tail buffers close and agents stop treating the pane as
+          // live. Preserve provider/lease state so a retry can still target
+          // the remote PTY if it survived the transient failure.
+          runtime?.onPtyExit(ptyId, -1)
         })
       return true
     },

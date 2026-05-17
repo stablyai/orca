@@ -13,6 +13,7 @@ import {
   mergeWorktree,
   parseWorktreeId,
   formatWorktreeRemovalError,
+  isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError,
   areWorktreePathsEqual
 } from './worktree-logic'
@@ -364,5 +365,37 @@ describe('isOrphanedWorktreeError', () => {
   it('returns false for non-Error input', () => {
     expect(isOrphanedWorktreeError('string error')).toBe(false)
     expect(isOrphanedWorktreeError(null)).toBe(false)
+  })
+})
+
+describe('isOrphanCompatiblePreflightError', () => {
+  it('matches not-a-working-tree errors', () => {
+    const error = Object.assign(new Error('git failed'), {
+      stderr: "fatal: '/some/path' is not a working tree"
+    })
+
+    expect(isOrphanCompatiblePreflightError(error)).toBe(true)
+  })
+
+  it('matches status failures from non-repo directories', () => {
+    const error = Object.assign(new Error('status failed'), {
+      stderr: 'fatal: not a git repository (or any of the parent directories): .git'
+    })
+
+    expect(isOrphanCompatiblePreflightError(error)).toBe(true)
+  })
+
+  it('matches missing directories by error code', () => {
+    const error = Object.assign(new Error('spawn git'), { code: 'ENOENT' })
+
+    expect(isOrphanCompatiblePreflightError(error)).toBe(true)
+  })
+
+  it('does not match unrelated subprocess failures', () => {
+    const error = Object.assign(new Error('status failed'), {
+      stderr: 'fatal: unable to read current working directory'
+    })
+
+    expect(isOrphanCompatiblePreflightError(error)).toBe(false)
   })
 })

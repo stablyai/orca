@@ -14,6 +14,7 @@ import { homedir, tmpdir } from 'os'
 import { join } from 'path'
 import { spawnSync } from 'child_process'
 import {
+  buildWindowsAgentHookPostCommand,
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
   wrapPosixHookCommand,
@@ -253,4 +254,17 @@ describe('wrapPosixHookCommand', () => {
       expect(result.status).toBe(7)
     }
   )
+})
+
+describe('buildWindowsAgentHookPostCommand', () => {
+  it('forces UTF-8 for redirected hook stdin and POST bodies', () => {
+    const command = buildWindowsAgentHookPostCommand('codex')
+
+    expect(command).toContain('[Console]::InputEncoding=$utf8')
+    expect(command).toContain('[Console]::OutputEncoding=$utf8')
+    expect(command).toContain('$bodyBytes=$utf8.GetBytes($body)')
+    expect(command).toContain("-ContentType 'application/json; charset=utf-8'")
+    expect(command).toContain('/hook/codex')
+    expect(command).not.toContain("'Content-Type'='application/json'")
+  })
 })

@@ -590,7 +590,8 @@ describe('createWorktree base status merge', () => {
       linkedIssue: 123,
       linkedPR: 456,
       createdWithAgent: 'codex',
-      linkedLinearIssue: 'ENG-123'
+      linkedLinearIssue: 'ENG-123',
+      workspaceStatus: 'in-review'
     })
     mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
 
@@ -608,7 +609,8 @@ describe('createWorktree base status merge', () => {
         456,
         undefined,
         'codex',
-        'ENG-123'
+        'ENG-123',
+        'in-review'
       )
 
     expect(mockApi.worktrees.create).toHaveBeenCalledWith(
@@ -618,14 +620,16 @@ describe('createWorktree base status merge', () => {
         linkedIssue: 123,
         linkedPR: 456,
         createdWithAgent: 'codex',
-        linkedLinearIssue: 'ENG-123'
+        linkedLinearIssue: 'ENG-123',
+        workspaceStatus: 'in-review'
       })
     )
     expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
       linkedIssue: 123,
       linkedPR: 456,
       createdWithAgent: 'codex',
-      linkedLinearIssue: 'ENG-123'
+      linkedLinearIssue: 'ENG-123',
+      workspaceStatus: 'in-review'
     })
   })
 

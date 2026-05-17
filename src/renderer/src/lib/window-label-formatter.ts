@@ -1,12 +1,12 @@
 /**
  * Returns a short human-readable label for a usage window duration.
  *
- * Why: 10080 minutes (7 days) is hard-coded as "wk" for backward
- * compatibility with the original StatusBar implementation.
+ * Why: the status bar uses duration labels, so the weekly bucket is shown as
+ * "7d" instead of a calendar-period label like "wk".
  */
 export function formatWindowLabel(windowMinutes: number): string {
   if (windowMinutes === 10080) {
-    return 'wk'
+    return '7d'
   }
   if (windowMinutes === 300) {
     return '5h'

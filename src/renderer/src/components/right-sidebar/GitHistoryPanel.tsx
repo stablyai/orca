@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import { ChevronDown, RefreshCw } from 'lucide-react'
+import { ChevronDown, CircleHelp, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -30,17 +30,26 @@ function GitHistoryRefBadge({
 }: {
   itemRef: NonNullable<GitHistoryResult['currentRef']>
 }): React.JSX.Element {
+  const refLabel = itemRef.category ? `${itemRef.name} (${itemRef.category})` : itemRef.name
+
   return (
-    <span
-      className="max-w-[8rem] truncate rounded-full border px-1.5 py-0.5 text-[10px] leading-none"
-      style={{
-        borderColor: itemRef.color ? graphColor(itemRef.color) : 'var(--border)',
-        color: itemRef.color ? graphColor(itemRef.color) : 'var(--muted-foreground)'
-      }}
-      title={itemRef.name}
-    >
-      {itemRef.name}
-    </span>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className="max-w-[8rem] truncate rounded-full border bg-sidebar px-1.5 py-0.5 text-[10px] leading-none"
+          style={{
+            borderColor: itemRef.color ? graphColor(itemRef.color) : 'var(--border)',
+            color: itemRef.color ? graphColor(itemRef.color) : 'var(--muted-foreground)'
+          }}
+          title={itemRef.name}
+        >
+          {itemRef.name}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
+        {refLabel}
+      </TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -56,16 +65,20 @@ function GitHistoryRow({
   const isBoundaryNode =
     viewModel.kind === 'incoming-changes' || viewModel.kind === 'outgoing-changes'
   const canOpenCommit = !isBoundaryNode && Boolean(onOpenCommit)
+  const refs = item.references ?? []
+  const visibleRefs = refs.slice(0, 2)
+  const hiddenRefs = refs.slice(2)
+  const rowTooltip = item.message || item.subject
 
   return (
     <button
       type="button"
       className={cn(
-        'flex h-[22px] w-full min-w-0 items-center gap-1.5 px-3 text-left text-xs leading-none transition-colors disabled:cursor-default disabled:opacity-100',
+        'grid min-h-[34px] w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-stretch gap-1.5 px-3 py-1 text-left text-xs transition-colors disabled:cursor-default disabled:opacity-100',
         canOpenCommit && 'cursor-pointer hover:bg-accent/40 focus-visible:bg-accent/40',
         isBoundaryNode && 'text-muted-foreground'
       )}
-      title={item.message || item.subject}
+      title={rowTooltip}
       data-testid="git-history-row"
       disabled={!canOpenCommit}
       onClick={() => {
@@ -75,22 +88,52 @@ function GitHistoryRow({
       }}
     >
       <GitHistoryGraphSvg viewModel={viewModel} />
-      <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
-        <span className="min-w-0 flex-1 truncate text-foreground">{item.subject}</span>
-        {item.references?.map((ref) => (
-          <GitHistoryRefBadge key={ref.id} itemRef={ref} />
-        ))}
-        {item.author && (
-          <span className="max-w-[5.5rem] shrink truncate text-[11px] text-muted-foreground">
-            {item.author}
-          </span>
-        )}
-        {timestamp && (
-          <span className="shrink-0 text-[11px] text-muted-foreground">{timestamp}</span>
+      <div className="flex min-w-0 flex-col justify-center overflow-hidden">
+        <div className="flex min-w-0 items-baseline gap-1.5">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="min-w-0 flex-1 truncate text-foreground" title={rowTooltip}>
+                {item.subject}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6} className="max-w-96 whitespace-pre-wrap">
+              {rowTooltip}
+            </TooltipContent>
+          </Tooltip>
+          {item.author && (
+            <span className="max-w-[5.5rem] shrink truncate text-[11px] text-muted-foreground">
+              {item.author}
+            </span>
+          )}
+          {timestamp && (
+            <span className="shrink-0 text-[11px] text-muted-foreground">{timestamp}</span>
+          )}
+        </div>
+        {refs.length > 0 && (
+          <div className="mt-0.5 flex h-3.5 min-w-0 items-center gap-1 overflow-hidden">
+            {visibleRefs.map((ref) => (
+              <GitHistoryRefBadge key={ref.id} itemRef={ref} />
+            ))}
+            {hiddenRefs.length > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className="shrink-0 text-[10px] leading-none text-muted-foreground"
+                    title={hiddenRefs.map((ref) => ref.name).join(', ')}
+                  >
+                    +{hiddenRefs.length}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
+                  {hiddenRefs.map((ref) => ref.name).join(', ')}
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
         )}
       </div>
       {item.displayId && !isBoundaryNode && (
-        <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+        <span className="mt-0.5 shrink-0 font-mono text-[10px] leading-none text-muted-foreground">
           {item.displayId}
         </span>
       )}
@@ -151,6 +194,26 @@ export function GitHistoryPanel({
             <span className="text-[11px] font-medium tabular-nums">{count}</span>
             {result?.hasMore && <span className="text-[11px] font-medium">+</span>}
           </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="h-auto w-auto p-0.5 text-muted-foreground hover:text-foreground"
+                aria-label="What are graph refs?"
+                onClick={(event) => {
+                  event.stopPropagation()
+                }}
+              >
+                <CircleHelp className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
+              Refs are branch or tag names pointing at that exact commit. They only appear where Git
+              has a named ref for the commit.
+            </TooltipContent>
+          </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
