@@ -1397,54 +1397,40 @@ const WorktreeList = React.memo(function WorktreeList({
     hasObservedSmartOnceRef.current = true
   }, [sortBy, sortedIds])
 
-  // Why a 30s timer owned by the component: the class-distribution event is
-  // a coarse health signal — we only need it often enough to see the steady
-  // state, not every render. Cancelling on unmount or sort switch keeps the
-  // timer from firing while the user is in Recent/Name/Repo modes.
-  useEffect(() => {
-    if (sortBy !== 'smart') {
-      return
-    }
-    const fire = () => {
-      const attention = lastAttentionByWorktreeRef.current
-      if (!attention) {
-        return
-      }
-      let class1 = 0
-      let class2 = 0
-      let class3 = 0
-      let class4 = 0
-      for (const info of attention.values()) {
-        if (info.cls === 1) {
-          class1++
-        } else if (info.cls === 2) {
-          class2++
-        } else if (info.cls === 3) {
-          class3++
-        } else {
-          class4++
-        }
-      }
-      track('smart_sort_class_distribution', {
-        class_1: class1,
-        class_2: class2,
-        class_3: class3,
-        class_4: class4,
-        total_worktrees: attention.size
-      })
-    }
-    fire()
-    const timer = setInterval(fire, 30_000)
-    return () => clearInterval(timer)
-  }, [sortBy])
-
-  // Why fire on the transition: switching away from Smart is the user signal
-  // we care about (regression). Use a ref to compare against the previous
-  // value so we don't double-fire when sortBy momentarily round-trips.
+  // Why fire only on user-visible sort-mode transitions: the distribution is
+  // useful context when someone chooses Smart, but a timer turns it into a
+  // heartbeat that can consume most of the telemetry session budget.
   const prevSortByRef = useRef(sortBy)
   useEffect(() => {
     const prev = prevSortByRef.current
     prevSortByRef.current = sortBy
+    if (prev !== 'smart' && sortBy === 'smart') {
+      const attention = lastAttentionByWorktreeRef.current
+      if (attention) {
+        let class1 = 0
+        let class2 = 0
+        let class3 = 0
+        let class4 = 0
+        for (const info of attention.values()) {
+          if (info.cls === 1) {
+            class1++
+          } else if (info.cls === 2) {
+            class2++
+          } else if (info.cls === 3) {
+            class3++
+          } else {
+            class4++
+          }
+        }
+        track('smart_sort_class_distribution', {
+          class_1: class1,
+          class_2: class2,
+          class_3: class3,
+          class_4: class4,
+          total_worktrees: attention.size
+        })
+      }
+    }
     if (prev === 'smart' && sortBy === 'recent') {
       track('smart_to_recent_switch', {})
     }
