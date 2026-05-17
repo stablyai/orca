@@ -3713,7 +3713,11 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
-    await expect(runtime.showManagedWorktree(`id:${childId}`)).rejects.toThrow('selector_not_found')
+    await expect(runtime.showManagedWorktree(`id:${childId}`)).resolves.toMatchObject({
+      id: childId,
+      parentWorktreeId: parentId,
+      lineage: lineageById[childId]
+    })
 
     expect(removeWorktreeLineage).not.toHaveBeenCalled()
     expect(runtimeStore.setWorktreeMeta).not.toHaveBeenCalled()

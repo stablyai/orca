@@ -243,7 +243,7 @@ export function createRemoteRuntimePtyTransport(
           tabId,
           leafId,
           focus: false,
-          activate: activate === true
+          ...(activate === true ? { activate: true } : {})
         })
         handle = created.terminal.handle
         ownsRemoteTerminal = true
