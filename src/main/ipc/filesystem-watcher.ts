@@ -62,6 +62,9 @@ const senderCleanupRegistered = new Set<number>()
 // Key: rootKey, Value: pending teardown timer.
 const WATCHER_TEARDOWN_GRACE_MS = 30_000
 const pendingTeardowns = new Map<string, ReturnType<typeof setTimeout>>()
+// Why: @parcel/watcher unsubscribe completes native async work. Sender-destroy
+// cleanup can start it before app shutdown, so will-quit must still await it.
+const pendingLocalUnsubscribes = new Set<Promise<void>>()
 
 // ── Path normalization ───────────────────────────────────────────────
 
@@ -324,13 +327,24 @@ function cleanupLocalWatchersForSender(senderId: number): void {
         if (watchedRoot.batch.timer) {
           clearTimeout(watchedRoot.batch.timer)
         }
-        void watchedRoot.subscription.unsubscribe().catch((err: unknown) => {
-          console.error(`[filesystem-watcher] unsubscribe error for ${key}:`, err)
-        })
+        trackLocalUnsubscribe(key, watchedRoot)
         watchedRoots.delete(key)
       }
     }
   }
+}
+
+function trackLocalUnsubscribe(rootKey: string, root: WatchedRoot): Promise<void> {
+  const unsubscribePromise = Promise.resolve()
+    .then(() => root.subscription.unsubscribe())
+    .catch((err: unknown) => {
+      console.error(`[filesystem-watcher] unsubscribe error for ${rootKey}:`, err)
+    })
+    .finally(() => {
+      pendingLocalUnsubscribes.delete(unsubscribePromise)
+    })
+  pendingLocalUnsubscribes.add(unsubscribePromise)
+  return unsubscribePromise
 }
 
 function registerSenderCleanup(sender: WebContents): void {
@@ -424,9 +438,7 @@ function unsubscribe(worktreePath: string, senderId: number): void {
       if (!currentRoot || currentRoot.listeners.size > 0) {
         return
       }
-      void currentRoot.subscription.unsubscribe().catch((err: unknown) => {
-        console.error(`[filesystem-watcher] unsubscribe error for ${rootKey}:`, err)
-      })
+      void trackLocalUnsubscribe(rootKey, currentRoot)
       watchedRoots.delete(rootKey)
     }, WATCHER_TEARDOWN_GRACE_MS)
 
@@ -729,13 +741,10 @@ export async function closeAllWatchers(): Promise<void> {
     if (root.batch.timer) {
       clearTimeout(root.batch.timer)
     }
-    try {
-      await root.subscription.unsubscribe()
-    } catch (err) {
-      console.error(`[filesystem-watcher] shutdown unsubscribe error for ${rootKey}:`, err)
-    }
+    await trackLocalUnsubscribe(rootKey, root)
   }
   watchedRoots.clear()
+  await Promise.allSettled(Array.from(pendingLocalUnsubscribes))
 
   // Why: remote watchers are tracked separately from local @parcel/watcher
   // subscriptions. Without cleaning them up here, their unwatch callbacks
