@@ -10,8 +10,8 @@ describe('formatWindowLabel', () => {
     expect(formatWindowLabel(60)).toBe('1h')
   })
 
-  it('returns "7d" for 10080 minutes (7 days)', () => {
-    expect(formatWindowLabel(10080)).toBe('7d')
+  it('returns "wk" for 10080 minutes (7 days)', () => {
+    expect(formatWindowLabel(10080)).toBe('wk')
   })
 
   it('returns "1d" for 1440 minutes (1 day)', () => {
