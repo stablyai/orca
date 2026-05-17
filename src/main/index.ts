@@ -275,6 +275,7 @@ function openMainWindow(): BrowserWindow {
         processType: 'renderer'
       })
     },
+    shouldRecoverRenderer: () => !isQuitting,
     deferLoad: true,
     title: devInstanceIdentity.name
   })
