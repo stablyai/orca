@@ -4,7 +4,7 @@ import {
   measureElement as measureVirtualElementSize,
   useVirtualizer
 } from '@tanstack/react-virtual'
-import { ChevronDown, CircleX, Plus, Workflow } from 'lucide-react'
+import { ChevronDown, CircleX, Ellipsis, Plus, Trash2, Workflow } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
   getAllWorktreesFromState,
@@ -16,6 +16,12 @@ import WorktreeCard from './WorktreeCard'
 import WorktreeCardAgents from './WorktreeCardAgents'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import type {
   Worktree,
@@ -105,6 +111,12 @@ function isEditableTarget(target: EventTarget | null): boolean {
   )
 }
 
+function stopRepoHeaderKeyboardToggle(event: React.KeyboardEvent<HTMLElement>): void {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.stopPropagation()
+  }
+}
+
 function getWorktreeOptionId(worktreeId: string): string {
   return `worktree-list-option-${encodeURIComponent(worktreeId)}`
 }
@@ -121,6 +133,7 @@ type VirtualizedWorktreeViewportProps = {
   toggleGroup: (key: string) => void
   collapsedGroups: Set<string>
   handleCreateForRepo: (repoId: string) => void
+  handleRemoveRepo: (repo: Repo) => void
   activeModal: string
   pendingRevealWorktreeId: string | null
   clearPendingRevealWorktreeId: () => void
@@ -251,6 +264,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   toggleGroup,
   collapsedGroups,
   handleCreateForRepo,
+  handleRemoveRepo,
   activeModal,
   pendingRevealWorktreeId,
   clearPendingRevealWorktreeId,
@@ -857,6 +871,50 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   </div>
 
                   {row.repo && groupBy === 'repo' ? (
+                    <DropdownMenu modal={false}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-xs"
+                              className="size-5 shrink-0 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+                              aria-label={`Project actions for ${row.label}`}
+                              onClick={(event) => event.stopPropagation()}
+                              onKeyDown={stopRepoHeaderKeyboardToggle}
+                              onPointerDown={(event) => event.stopPropagation()}
+                            >
+                              <Ellipsis className="size-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" sideOffset={6}>
+                          Project actions
+                        </TooltipContent>
+                      </Tooltip>
+                      <DropdownMenuContent
+                        align="end"
+                        side="bottom"
+                        sideOffset={6}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onSelect={() => {
+                            if (row.repo) {
+                              handleRemoveRepo(row.repo)
+                            }
+                          }}
+                        >
+                          <Trash2 className="size-3.5" />
+                          Remove Project
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : null}
+
+                  {row.repo && groupBy === 'repo' ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
@@ -865,6 +923,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                           size="icon-xs"
                           className="size-5 shrink-0 rounded-md text-muted-foreground hover:bg-accent/70 hover:text-foreground transition-opacity"
                           aria-label={`Create worktree for ${row.label}`}
+                          onKeyDown={stopRepoHeaderKeyboardToggle}
                           onClick={(event) => {
                             event.preventDefault()
                             event.stopPropagation()
@@ -1618,6 +1677,16 @@ const WorktreeList = React.memo(function WorktreeList({
     [openModal]
   )
 
+  const handleRemoveRepo = useCallback(
+    (repo: Repo) => {
+      openModal('confirm-remove-folder', {
+        repoId: repo.id,
+        displayName: repo.displayName
+      })
+    },
+    [openModal]
+  )
+
   const moveWorktreeToStatus = useCallback(
     (worktreeId: string, status: WorkspaceStatus) => {
       const current = worktreeMap.get(worktreeId)
@@ -1732,6 +1801,7 @@ const WorktreeList = React.memo(function WorktreeList({
       toggleGroup={toggleGroup}
       collapsedGroups={collapsedGroups}
       handleCreateForRepo={handleCreateForRepo}
+      handleRemoveRepo={handleRemoveRepo}
       activeModal={activeModal}
       pendingRevealWorktreeId={pendingRevealWorktreeId}
       clearPendingRevealWorktreeId={clearPendingRevealWorktreeId}
