@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Check, ChevronsUpDown, Loader2 } from 'lucide-react'
+import { Check, ChevronsUpDown, Loader2, Sparkles, Square, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -12,35 +12,28 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
-import {
-  getRuntimeRepoBaseRefDefault,
-  searchRuntimeRepoBaseRefs
-} from '@/runtime/runtime-repo-client'
 import type {
   CreateHostedReviewResult,
   HostedReviewCreationEligibility
 } from '../../../../shared/hosted-review'
-import {
-  normalizeHostedReviewBaseRef,
-  normalizeHostedReviewHeadRef
-} from '../../../../shared/hosted-review-refs'
+import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
+import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
 
 type CreatePullRequestDialogProps = {
   open: boolean
   repoId: string
   repoPath: string
+  worktreeId: string | null
+  worktreePath: string
   branch: string
   eligibility: HostedReviewCreationEligibility | null
   pushBeforeCreate: boolean
   onOpenChange: (open: boolean) => void
   onPushBeforeCreate: () => Promise<boolean>
   onCreated: (result: { number: number; url: string }) => Promise<void>
-}
-
-function stripBaseRef(ref: string): string {
-  return normalizeHostedReviewBaseRef(ref)
 }
 
 function formatCreateError(result: CreateHostedReviewResult, pushed: boolean): string {
@@ -57,6 +50,8 @@ export function CreatePullRequestDialog({
   open,
   repoId,
   repoPath,
+  worktreeId,
+  worktreePath,
   branch,
   eligibility,
   pushBeforeCreate,
@@ -67,93 +62,52 @@ export function CreatePullRequestDialog({
   const settings = useAppStore((s) => s.settings)
   const createHostedReview = useAppStore((s) => s.createHostedReview)
   const submitInFlightRef = useRef(false)
-  const initializedFromEligibilityRef = useRef<string | null>(null)
-  const [base, setBase] = useState('')
-  const [title, setTitle] = useState('')
-  const [body, setBody] = useState('')
-  const [draft, setDraft] = useState(false)
-  const [baseQuery, setBaseQuery] = useState('')
-  const [baseResults, setBaseResults] = useState<string[]>([])
-  const [baseSearchError, setBaseSearchError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const {
+    aiGenerationEnabled,
+    base,
+    setBase,
+    title,
+    setTitle,
+    body,
+    setBody,
+    draft,
+    setDraft,
+    baseQuery,
+    setBaseQuery,
+    baseResults,
+    setBaseResults,
+    baseSearchError,
+    generating,
+    generateError,
+    generateDisabled,
+    generateDisabledReason,
+    handleGenerate,
+    handleCancelGenerate
+  } = useCreatePullRequestDialogFields({
+    open,
+    repoId,
+    worktreeId,
+    worktreePath,
+    branch,
+    eligibility,
+    settings,
+    submitting
+  })
 
   useEffect(() => {
-    if (!open) {
-      submitInFlightRef.current = false
-      initializedFromEligibilityRef.current = null
-      setSubmitting(false)
-      setError(null)
+    if (open) {
       return
     }
-    if (!eligibility) {
-      return
-    }
-    const initializationKey = `${repoId}:${branch}`
-    if (initializedFromEligibilityRef.current === initializationKey) {
-      return
-    }
-    // Why: eligibility refreshes while the dialog is open; only seed fields
-    // once per branch so late refreshes (including populated→null transitions
-    // when a background eligibility fetch errors out) do not overwrite user edits.
-    initializedFromEligibilityRef.current = initializationKey
-    const initialBase = eligibility.defaultBaseRef ?? ''
-    setBase(stripBaseRef(initialBase))
-    setTitle(eligibility.title ?? '')
-    setBody(eligibility.body ?? '')
-    setDraft(false)
-    setBaseQuery('')
-    setBaseResults([])
-    setBaseSearchError(null)
-  }, [branch, eligibility, open, repoId])
-
-  useEffect(() => {
-    if (!open || base) {
-      return
-    }
-    let stale = false
-    void getRuntimeRepoBaseRefDefault(settings, repoId)
-      .then((result) => {
-        if (!stale && result.defaultBaseRef) {
-          setBase(stripBaseRef(result.defaultBaseRef))
-        }
-      })
-      .catch(() => undefined)
-    return () => {
-      stale = true
-    }
-  }, [base, open, repoId, settings])
-
-  useEffect(() => {
-    if (!open || baseQuery.trim().length < 2) {
-      setBaseResults([])
-      setBaseSearchError(null)
-      return
-    }
-    let stale = false
-    const timer = window.setTimeout(() => {
-      void searchRuntimeRepoBaseRefs(settings, repoId, baseQuery.trim(), 20)
-        .then((results) => {
-          if (!stale) {
-            setBaseResults(results.map(stripBaseRef))
-            setBaseSearchError(null)
-          }
-        })
-        .catch(() => {
-          if (!stale) {
-            setBaseResults([])
-            setBaseSearchError('Branch discovery failed.')
-          }
-        })
-    }, 200)
-    return () => {
-      stale = true
-      window.clearTimeout(timer)
-    }
-  }, [baseQuery, open, repoId, settings])
+    submitInFlightRef.current = false
+    setSubmitting(false)
+    setError(null)
+  }, [open])
 
   const submitDisabled =
     submitting ||
+    generating ||
     title.trim().length === 0 ||
     base.trim().length === 0 ||
     stripBaseRef(base).toLowerCase() === stripBaseRef(branch).toLowerCase()
@@ -181,7 +135,8 @@ export function CreatePullRequestDialog({
         head: normalizeHostedReviewHeadRef(branch),
         title: title.trim(),
         body,
-        draft
+        draft,
+        worktreePath
       })
       if (result.ok) {
         toast.success(`Pull request #${result.number} created`, {
@@ -228,7 +183,8 @@ export function CreatePullRequestDialog({
     pushBeforeCreate,
     repoPath,
     submitDisabled,
-    title
+    title,
+    worktreePath
   ])
 
   const handleOpenChange = useCallback(
@@ -247,7 +203,47 @@ export function CreatePullRequestDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Create Pull Request</DialogTitle>
+          <div className="flex min-w-0 items-center justify-between gap-2 pr-8">
+            <DialogTitle className="min-w-0 truncate">Create Pull Request</DialogTitle>
+            {aiGenerationEnabled ? (
+              <div className="shrink-0">
+                {generating ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCancelGenerate}
+                        title="Stop generating"
+                        aria-label="Stop generating pull request details"
+                      >
+                        <RefreshCw className="size-4 animate-spin" />
+                        Generating…
+                        <Square className="size-3 fill-current" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="left" sideOffset={6}>
+                      Generating PR details. Click to stop.
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={generateDisabled}
+                    onClick={() => void handleGenerate()}
+                    title={generateDisabledReason ?? 'Generate pull request details with AI'}
+                    aria-label="Generate pull request details with AI"
+                  >
+                    <Sparkles className="size-4" />
+                    Generate with AI
+                  </Button>
+                )}
+              </div>
+            ) : null}
+          </div>
           <DialogDescription>
             Confirm the target branch and PR details before creating the hosted review.
           </DialogDescription>
@@ -343,6 +339,7 @@ export function CreatePullRequestDialog({
               Choose a different base branch before creating a pull request.
             </p>
           ) : null}
+          {generateError ? <p className="text-xs text-destructive">{generateError}</p> : null}
           {error ? <p className="text-xs text-destructive">{error}</p> : null}
         </div>
 

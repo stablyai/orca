@@ -3,7 +3,7 @@ import { ipcMain, shell } from 'electron'
 import { readdir, readFile, writeFile, stat, lstat, open } from 'fs/promises'
 import { extname, join } from 'path'
 import type { ChildProcess } from 'child_process'
-import { wslAwareSpawn } from '../git/runner'
+import { gitExecFileAsync, wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
 import type { Store } from '../persistence'
 import type {
@@ -48,10 +48,14 @@ import {
 import { getHistory } from '../git/history'
 import {
   cancelGenerateCommitMessageLocal,
+  cancelGeneratePullRequestFieldsLocal,
   generateCommitMessageFromContext,
+  generatePullRequestFieldsFromContext,
   resolveCommitMessageSettings,
-  type GenerateCommitMessageResult
+  type GenerateCommitMessageResult,
+  type GeneratePullRequestFieldsResult
 } from '../text-generation/commit-message-text-generation'
+import { getPullRequestDraftContext } from '../text-generation/pull-request-context'
 import { getUpstreamStatus } from '../git/upstream'
 import { gitFetch, gitPull, gitPush } from '../git/remote'
 import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
@@ -688,6 +692,96 @@ export function registerFilesystemHandlers(
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       cancelGenerateCommitMessageLocal(worktreePath)
+    }
+  )
+
+  ipcMain.handle(
+    'git:generatePullRequestFields',
+    async (
+      _event,
+      args: {
+        worktreePath: string
+        base: string
+        title: string
+        body: string
+        draft: boolean
+        connectionId?: string
+      }
+    ): Promise<GeneratePullRequestFieldsResult> => {
+      const resolvedSettings = resolveCommitMessageSettings(store.getSettings())
+      if (!resolvedSettings.ok) {
+        return { success: false, error: resolvedSettings.error }
+      }
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          return {
+            success: false,
+            error: `No git provider for connection "${args.connectionId}"`
+          }
+        }
+        const context = await getPullRequestDraftContext(
+          (argv) => provider.exec(argv, args.worktreePath),
+          {
+            base: args.base,
+            currentTitle: args.title,
+            currentBody: args.body,
+            currentDraft: args.draft
+          }
+        )
+        if (!context) {
+          return { success: false, error: 'No branch changes to summarize.' }
+        }
+        return generatePullRequestFieldsFromContext(context, resolvedSettings.params, {
+          kind: 'remote',
+          cwd: args.worktreePath,
+          execute: (plan, cwd, timeoutMs) =>
+            provider.executeCommitMessagePlan(plan, cwd, timeoutMs),
+          missingBinaryLocation: 'remote PATH'
+        })
+      }
+
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const context = await getPullRequestDraftContext(
+        (argv, options) => gitExecFileAsync(argv, { cwd: worktreePath, ...options }),
+        {
+          base: args.base,
+          currentTitle: args.title,
+          currentBody: args.body,
+          currentDraft: args.draft
+        }
+      )
+      if (!context) {
+        return { success: false, error: 'No branch changes to summarize.' }
+      }
+      const localEnv = await prepareLocalCommitMessageAgentEnv(
+        resolvedSettings.params.agentId,
+        commitMessageAgentEnv
+      )
+      if (!localEnv.ok) {
+        return { success: false, error: localEnv.error }
+      }
+      return generatePullRequestFieldsFromContext(context, resolvedSettings.params, {
+        kind: 'local',
+        cwd: worktreePath,
+        ...(localEnv.env ? { env: localEnv.env } : {})
+      })
+    }
+  )
+
+  ipcMain.handle(
+    'git:cancelGeneratePullRequestFields',
+    async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          return
+        }
+        await provider.cancelGenerateCommitMessage(args.worktreePath)
+        return
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      cancelGeneratePullRequestFieldsLocal(worktreePath)
     }
   )
 

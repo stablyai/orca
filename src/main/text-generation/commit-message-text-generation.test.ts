@@ -6,7 +6,10 @@ import type * as ChildProcess from 'child_process'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import {
+  cancelGenerateCommitMessageLocal,
+  cancelGeneratePullRequestFieldsLocal,
   generateCommitMessageFromContext,
+  generatePullRequestFieldsFromContext,
   resolveCommitMessageSettings,
   trimGeneratedCommitMessage
 } from './commit-message-text-generation'
@@ -388,6 +391,94 @@ describe('generateCommitMessageFromContext', () => {
         env: expect.objectContaining({ CODEX_HOME: '/managed/codex-home' })
       })
     )
+  })
+
+  it('keeps local commit-message and pull-request cancellation lanes separate', async () => {
+    const children: {
+      kill: ReturnType<typeof vi.fn>
+      listeners: Map<string, (value: unknown) => void>
+    }[] = []
+    spawnMock.mockImplementation(() => {
+      const listeners = new Map<string, (value: unknown) => void>()
+      const child = {
+        pid: 123 + children.length,
+        kill: vi.fn(),
+        stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
+        stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+        stdin: { end: vi.fn() },
+        on: vi.fn((event, callback) => listeners.set(event, callback))
+      }
+      children.push({ kill: child.kill, listeners })
+      return child as never
+    })
+
+    const commit = generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent'
+      },
+      {
+        kind: 'local',
+        cwd: '/repo'
+      }
+    )
+    const pullRequest = generatePullRequestFieldsFromContext(
+      {
+        branch: 'feature/pr-fields',
+        base: 'main',
+        currentTitle: '',
+        currentBody: '',
+        currentDraft: false,
+        commitSummary: '- feat: update README',
+        changeSummary: 'M\tREADME.md',
+        patch: '+hello'
+      },
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent'
+      },
+      {
+        kind: 'local',
+        cwd: '/repo'
+      }
+    )
+
+    cancelGenerateCommitMessageLocal('/repo')
+
+    expect(children[0]?.kill).toHaveBeenCalledWith('SIGKILL')
+    expect(children[1]?.kill).not.toHaveBeenCalled()
+
+    children[0]?.listeners.get('close')?.(null)
+    const pullRequestStdout = children[1]?.listeners.get('stdout:data')
+    pullRequestStdout?.(
+      Buffer.from('{"base":"main","title":"Update README","body":"Details","draft":false}')
+    )
+    children[1]?.listeners.get('close')?.(0)
+
+    await expect(commit).resolves.toEqual({
+      success: false,
+      error: 'Generation canceled.',
+      canceled: true
+    })
+    await expect(pullRequest).resolves.toMatchObject({
+      success: true,
+      fields: {
+        base: 'main',
+        title: 'Update README',
+        body: 'Details',
+        draft: false
+      }
+    })
+
+    cancelGeneratePullRequestFieldsLocal('/repo')
+    expect(children[1]?.kill).not.toHaveBeenCalled()
   })
 
   it('routes Windows batch-script agent commands through cmd.exe', async () => {

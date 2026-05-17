@@ -8,6 +8,7 @@ import {
   CornerDownLeft,
   FolderPlus,
   LoaderCircle,
+  PlugZap,
   Settings2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -29,6 +30,7 @@ import SmartWorkspaceNameField, {
   type SmartWorkspaceNameSelection
 } from '@/components/new-workspace/SmartWorkspaceNameField'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
+import type { SshConnectionStatus } from '../../../shared/ssh-types'
 
 const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
 
@@ -67,10 +69,26 @@ type NewWorkspaceComposerCardProps = {
   shouldWaitForSetupCheck: boolean
   resolvedSetupDecision: 'run' | 'skip' | null
   createError: WorkspaceCreateErrorDisplay | null
+  selectedRepoConnectionId: string | null
+  selectedRepoSshStatus: SshConnectionStatus | null
+  selectedRepoRequiresConnection: boolean
+  selectedRepoConnectInProgress: boolean
+  onConnectSelectedRepo: () => Promise<void>
   canUseSparseCheckout: boolean
   sparsePresets: SparsePreset[]
   sparseSelectedPresetId: string | null
   onSparseSelectPreset: (preset: SparsePreset | null) => void
+}
+
+const SSH_STATUS_LABELS: Record<SshConnectionStatus, string> = {
+  disconnected: 'SSH not connected',
+  connecting: 'Connecting SSH...',
+  'auth-failed': 'SSH authentication failed',
+  'deploying-relay': 'Preparing SSH connection...',
+  connected: 'Connected',
+  reconnecting: 'Reconnecting SSH...',
+  'reconnection-failed': 'SSH reconnection failed',
+  error: 'SSH connection error'
 }
 
 function SetupCommandPreview({
@@ -213,6 +231,11 @@ export default function NewWorkspaceComposerCard({
   shouldWaitForSetupCheck,
   resolvedSetupDecision,
   createError,
+  selectedRepoConnectionId,
+  selectedRepoSshStatus,
+  selectedRepoRequiresConnection,
+  selectedRepoConnectInProgress,
+  onConnectSelectedRepo,
   canUseSparseCheckout,
   sparsePresets,
   sparseSelectedPresetId,
@@ -222,6 +245,17 @@ export default function NewWorkspaceComposerCard({
   const openModal = useAppStore((s) => s.openModal)
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const selectedRepoName = React.useMemo(() => {
+    const repo = eligibleRepos.find((candidate) => candidate.id === repoId)
+    return repo?.displayName ?? repo?.path ?? 'This repository'
+  }, [eligibleRepos, repoId])
+  const sshStatusLabel = selectedRepoSshStatus
+    ? SSH_STATUS_LABELS[selectedRepoSshStatus]
+    : 'Not connected'
+  const connectButtonLabel =
+    selectedRepoSshStatus === 'disconnected' || selectedRepoSshStatus === null
+      ? 'Connect'
+      : 'Reconnect'
 
   const handleSetDefaultAgent = React.useCallback(
     (next: TuiAgent | 'blank' | null) => {
@@ -303,6 +337,35 @@ export default function NewWorkspaceComposerCard({
             triggerClassName="h-9 w-full border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
             showStandaloneAddButton={false}
           />
+          {selectedRepoRequiresConnection && selectedRepoConnectionId ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className="flex items-center justify-between gap-3 rounded-md border border-border/70 bg-muted/35 px-3 py-2"
+            >
+              <div className="min-w-0">
+                <div className="truncate text-xs font-medium text-foreground">
+                  Connect {selectedRepoName}
+                </div>
+                <div className="mt-0.5 text-[11px] text-muted-foreground">{sshStatusLabel}</div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                onClick={() => void onConnectSelectedRepo()}
+                disabled={selectedRepoConnectInProgress}
+                className="shrink-0"
+              >
+                {selectedRepoConnectInProgress ? (
+                  <LoaderCircle className="size-3.5 animate-spin" />
+                ) : (
+                  <PlugZap className="size-3.5" />
+                )}
+                {selectedRepoConnectInProgress ? 'Connecting' : connectButtonLabel}
+              </Button>
+            </div>
+          ) : null}
         </div>
 
         <div className="min-w-0 space-y-1">
@@ -323,6 +386,8 @@ export default function NewWorkspaceComposerCard({
             onLinearIssueSelect={onSmartLinearIssueSelect}
             selectedSource={smartNameSelection}
             onClearSelectedSource={onClearSmartNameSelection}
+            disabled={selectedRepoRequiresConnection}
+            disabledPlaceholder="Connect this repo first"
             onPlainEnter={() => {
               // Why: Enter on the workspace name advances focus to the next
               // field (Agent combobox) rather than submitting, letting the user

@@ -28,6 +28,7 @@ import { resolveConsent } from './telemetry/consent'
 import { triggerStartupNotificationRegistration } from './ipc/notifications'
 import { OrcaRuntimeService } from './runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
+import { awaitRuntimeFileWatcherUnsubscribes } from './runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from './runtime/runtime-metadata'
 import { registerAppMenu, rebuildAppMenu } from './menu/register-app-menu'
 import { checkForUpdatesFromMenu, isQuittingForUpdate } from './updater'
@@ -1060,6 +1061,7 @@ app.on('will-quit', (e) => {
     const rpcStopAndClear = runtimeRpc
       ? runtimeRpc
           .stop()
+          .then(() => awaitRuntimeFileWatcherUnsubscribes())
           .then(() => {
             if (ownedRuntimeId) {
               clearRuntimeMetadataIfOwned(app.getPath('userData'), ownedPid, ownedRuntimeId)

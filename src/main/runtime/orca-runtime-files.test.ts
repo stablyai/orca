@@ -3,11 +3,14 @@ import type * as Fs from 'fs'
 import type * as FsPromises from 'fs/promises'
 import type * as FilesystemAuth from '../ipc/filesystem-auth'
 
-const { resolveAuthorizedPathMock, statMock, watchMock } = vi.hoisted(() => ({
-  resolveAuthorizedPathMock: vi.fn(),
-  statMock: vi.fn(),
-  watchMock: vi.fn()
-}))
+const { resolveAuthorizedPathMock, statMock, subscribeParcelWatcherMock, watchMock } = vi.hoisted(
+  () => ({
+    resolveAuthorizedPathMock: vi.fn(),
+    statMock: vi.fn(),
+    subscribeParcelWatcherMock: vi.fn(),
+    watchMock: vi.fn()
+  })
+)
 
 vi.mock('fs', async () => {
   const actual = await vi.importActual<typeof Fs>('fs')
@@ -25,6 +28,10 @@ vi.mock('fs/promises', async () => {
   }
 })
 
+vi.mock('@parcel/watcher', () => ({
+  subscribe: subscribeParcelWatcherMock
+}))
+
 vi.mock('../ipc/filesystem-auth', async () => {
   const actual = await vi.importActual<typeof FilesystemAuth>('../ipc/filesystem-auth')
   return {
@@ -37,7 +44,7 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   getSshFilesystemProvider: vi.fn()
 }))
 
-import { RuntimeFileCommands } from './orca-runtime-files'
+import { awaitRuntimeFileWatcherUnsubscribes, RuntimeFileCommands } from './orca-runtime-files'
 
 describe('RuntimeFileCommands', () => {
   const originalPlatform = process.platform
@@ -46,6 +53,7 @@ describe('RuntimeFileCommands', () => {
     vi.useFakeTimers()
     resolveAuthorizedPathMock.mockReset()
     statMock.mockReset()
+    subscribeParcelWatcherMock.mockReset()
     watchMock.mockReset()
     Object.defineProperty(process, 'platform', {
       configurable: true,
@@ -53,7 +61,8 @@ describe('RuntimeFileCommands', () => {
     })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await awaitRuntimeFileWatcherUnsubscribes()
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: originalPlatform
@@ -108,5 +117,47 @@ describe('RuntimeFileCommands', () => {
 
     unsubscribe()
     expect(close).toHaveBeenCalledTimes(1)
+  })
+
+  it('tracks native Parcel watcher unsubscribe work so shutdown can await it', async () => {
+    const store = { getRepo: vi.fn(() => undefined) }
+    resolveAuthorizedPathMock.mockResolvedValue('/repo')
+    statMock.mockResolvedValue({ isDirectory: () => true })
+    let resolveUnsubscribe: () => void = () => {}
+    const unsubscribeMock = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveUnsubscribe = resolve
+        })
+    )
+    subscribeParcelWatcherMock.mockResolvedValue({ unsubscribe: unsubscribeMock })
+
+    const commands = new RuntimeFileCommands({
+      getRuntimeId: () => 'runtime-1',
+      requireStore: () => store,
+      resolveWorktreeSelector: vi.fn(async () => ({
+        id: 'wt-1',
+        repoId: 'repo-1',
+        path: '/repo'
+      })),
+      resolveRuntimeGitTarget: vi.fn(),
+      openFile: vi.fn()
+    } as never)
+
+    const unsubscribe = await commands.watchFileExplorer('id:wt-1', vi.fn())
+    unsubscribe()
+
+    let drained = false
+    const drainPromise = awaitRuntimeFileWatcherUnsubscribes().then(() => {
+      drained = true
+    })
+    await Promise.resolve()
+
+    expect(unsubscribeMock).toHaveBeenCalledTimes(1)
+    expect(drained).toBe(false)
+
+    resolveUnsubscribe()
+    await drainPromise
+    expect(drained).toBe(true)
   })
 })

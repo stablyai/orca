@@ -1978,6 +1978,18 @@ const api = {
       worktreePath: string
       connectionId?: string
     }): Promise<void> => ipcRenderer.invoke('git:cancelGenerateCommitMessage', args),
+    generatePullRequestFields: (args: {
+      worktreePath: string
+      base: string
+      title: string
+      body: string
+      draft: boolean
+      connectionId?: string
+    }): Promise<unknown> => ipcRenderer.invoke('git:generatePullRequestFields', args),
+    cancelGeneratePullRequestFields: (args: {
+      worktreePath: string
+      connectionId?: string
+    }): Promise<void> => ipcRenderer.invoke('git:cancelGeneratePullRequestFields', args),
     stage: (args: {
       worktreePath: string
       filePath: string

@@ -1,112 +1,22 @@
-import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import type { GlobalSettings } from '../../../../shared/types'
-
-const WorktreeSelector = z.object({
-  worktree: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing worktree selector'))
-})
-
-const GitStatusParams = WorktreeSelector.extend({
-  includeIgnored: z.boolean().optional()
-})
-
-const GitFilePath = WorktreeSelector.extend({
-  filePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing file path'))
-})
-
-const GitDiff = GitFilePath.extend({
-  staged: z.boolean(),
-  compareAgainstHead: z.boolean().optional()
-})
-
-const GitBranchCompare = WorktreeSelector.extend({
-  baseRef: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(
-      z
-        .string()
-        .min(1, 'Missing base ref')
-        .refine((value) => !value.startsWith('-'), 'Base ref must not start with -')
-    )
-})
-
-const FullGitObjectId = z
-  .string()
-  .regex(/^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/, 'Expected a full git object id')
-
-const GitCommitCompare = WorktreeSelector.extend({
-  commitId: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(FullGitObjectId)
-})
-
-const GitHistory = WorktreeSelector.extend({
-  limit: z.number().int().min(1).max(200).optional(),
-  baseRef: z.string().nullable().optional()
-})
-
-const GitBranchDiff = GitFilePath.extend({
-  compare: z.object({
-    baseRef: z.string().optional(),
-    baseOid: FullGitObjectId.optional(),
-    headOid: FullGitObjectId,
-    mergeBase: FullGitObjectId
-  }),
-  oldPath: z.string().optional()
-})
-
-const GitCommitDiff = GitFilePath.extend({
-  commitOid: FullGitObjectId,
-  parentOid: FullGitObjectId.nullable().optional(),
-  oldPath: z.string().optional()
-})
-
-const GitCommit = WorktreeSelector.extend({
-  message: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing commit message'))
-})
-
-const CommitMessageAiSettings = z.object({
-  enabled: z.boolean(),
-  agentId: z.string().nullable(),
-  selectedModelByAgent: z.record(z.string(), z.string()),
-  selectedThinkingByModel: z.record(z.string(), z.string()),
-  customPrompt: z.string(),
-  customAgentCommand: z.string()
-})
-
-const GitGenerateCommitMessage = WorktreeSelector.extend({
-  commitMessageAi: CommitMessageAiSettings.optional(),
-  agentCmdOverrides: z.record(z.string(), z.string()).optional(),
-  enableGitHubAttribution: z.boolean().optional()
-})
-
-const GitBulkPaths = WorktreeSelector.extend({
-  filePaths: z.array(z.string().min(1, 'Missing file path'))
-})
-
-const GitPush = WorktreeSelector.extend({
-  publish: z.boolean().optional(),
-  pushTarget: z.unknown().optional()
-})
-
-const GitRemoteFileUrl = WorktreeSelector.extend({
-  relativePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing relative path')),
-  line: z.number().int().min(1)
-})
+import {
+  GitBranchCompare,
+  GitBranchDiff,
+  GitBulkPaths,
+  GitCommit,
+  GitCommitCompare,
+  GitCommitDiff,
+  GitDiff,
+  GitFilePath,
+  GitGenerateCommitMessage,
+  GitGeneratePullRequestFields,
+  GitHistory,
+  GitPush,
+  GitRemoteFileUrl,
+  GitStatusParams,
+  WorktreeSelector
+} from './git-params'
 
 export const GIT_METHODS: RpcMethod[] = [
   defineMethod({
@@ -234,6 +144,44 @@ export const GIT_METHODS: RpcMethod[] = [
     params: WorktreeSelector,
     handler: async (params, { runtime }) =>
       runtime.cancelRuntimeGenerateCommitMessage(params.worktree)
+  }),
+  defineMethod({
+    name: 'git.generatePullRequestFields',
+    params: GitGeneratePullRequestFields,
+    handler: async (params, { runtime }) => {
+      const input = {
+        base: params.base,
+        title: params.title,
+        body: params.body,
+        draft: params.draft
+      }
+      if (
+        params.commitMessageAi === undefined &&
+        params.agentCmdOverrides === undefined &&
+        params.enableGitHubAttribution === undefined
+      ) {
+        return runtime.generateRuntimePullRequestFields(params.worktree, input)
+      }
+      return runtime.generateRuntimePullRequestFields(params.worktree, input, {
+        ...(params.commitMessageAi !== undefined
+          ? { commitMessageAi: params.commitMessageAi as GlobalSettings['commitMessageAi'] }
+          : {}),
+        ...(params.agentCmdOverrides !== undefined
+          ? {
+              agentCmdOverrides: params.agentCmdOverrides as GlobalSettings['agentCmdOverrides']
+            }
+          : {}),
+        ...(params.enableGitHubAttribution !== undefined
+          ? { enableGitHubAttribution: params.enableGitHubAttribution }
+          : {})
+      })
+    }
+  }),
+  defineMethod({
+    name: 'git.cancelGeneratePullRequestFields',
+    params: WorktreeSelector,
+    handler: async (params, { runtime }) =>
+      runtime.cancelRuntimeGeneratePullRequestFields(params.worktree)
   }),
   defineMethod({
     name: 'git.stage',

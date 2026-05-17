@@ -14,6 +14,7 @@ const HostedReviewForBranch = z.object({
 
 const HostedReviewCreationEligibility = z.object({
   repo: requiredString('Missing repo selector'),
+  worktree: z.string().min(1, 'Missing worktree selector').optional(),
   branch: requiredString('Missing branch'),
   base: z.string().nullable().optional(),
   hasUncommittedChanges: z.boolean().optional(),
@@ -29,6 +30,7 @@ const HostedReviewCreationEligibility = z.object({
 
 const HostedReviewCreate = z.object({
   repo: requiredString('Missing repo selector'),
+  worktree: z.string().min(1, 'Missing worktree selector').optional(),
   provider: z.enum(['github', 'gitlab', 'bitbucket', 'azure-devops', 'gitea', 'unsupported']),
   base: requiredString('Missing base branch'),
   head: z.string().optional(),
@@ -58,6 +60,7 @@ export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) =>
       runtime.getHostedReviewCreationEligibility({
         repoSelector: params.repo,
+        worktreeSelector: params.worktree,
         branch: params.branch,
         base: params.base ?? null,
         hasUncommittedChanges: params.hasUncommittedChanges,
@@ -77,6 +80,7 @@ export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) =>
       runtime.createHostedReview({
         repoSelector: params.repo,
+        worktreeSelector: params.worktree,
         provider: params.provider,
         base: params.base,
         head: params.head,

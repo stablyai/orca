@@ -91,6 +91,7 @@ import {
 } from '@/components/ui/context-menu'
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -144,6 +145,7 @@ import {
   isCustomAgentId,
   resolveCommitMessageAgentChoice
 } from '../../../../shared/commit-message-agent-spec'
+import { hasExpandedCommitFailureDetails, summarizeCommitFailure } from './commit-failure-summary'
 
 type SourceControlScope = 'all' | 'uncommitted'
 type SourceControlViewMode = 'list' | 'tree'
@@ -698,6 +700,7 @@ function SourceControlInner(): React.JSX.Element {
     let stale = false
     void getHostedReviewCreationEligibility({
       repoPath: activeRepo.path,
+      ...(worktreePath ? { worktreePath } : {}),
       branch: branchName,
       base: effectiveBaseRef ?? null,
       hasUncommittedChanges: hasUncommittedEntries,
@@ -733,7 +736,8 @@ function SourceControlInner(): React.JSX.Element {
     linkedGitLabMR,
     remoteStatus?.ahead,
     remoteStatus?.behind,
-    remoteStatus?.hasUpstream
+    remoteStatus?.hasUpstream,
+    worktreePath
   ])
 
   const grouped = useMemo(() => {
@@ -1304,7 +1308,9 @@ function SourceControlInner(): React.JSX.Element {
         prState: hostedReview?.state ?? null,
         isPRStateLoading: isHostedReviewStateLoading,
         inFlightRemoteOpKind,
-        hostedReviewCreation
+        hostedReviewCreation,
+        branchCommitsAhead:
+          branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined
       }),
     [
       commitMessage,
@@ -1317,6 +1323,8 @@ function SourceControlInner(): React.JSX.Element {
       hostedReviewCreation,
       isHostedReviewStateLoading,
       hostedReview?.state,
+      branchSummary?.commitsAhead,
+      branchSummary?.status,
       remoteStatus,
       unresolvedConflicts.length
     ]
@@ -1336,7 +1344,9 @@ function SourceControlInner(): React.JSX.Element {
         prState: hostedReview?.state ?? null,
         isPRStateLoading: isHostedReviewStateLoading,
         inFlightRemoteOpKind,
-        hostedReviewCreation
+        hostedReviewCreation,
+        branchCommitsAhead:
+          branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined
       }),
     [
       commitMessage,
@@ -1349,6 +1359,8 @@ function SourceControlInner(): React.JSX.Element {
       hostedReviewCreation,
       isHostedReviewStateLoading,
       hostedReview?.state,
+      branchSummary?.commitsAhead,
+      branchSummary?.status,
       remoteStatus,
       unresolvedConflicts.length
     ]
@@ -2393,6 +2405,8 @@ function SourceControlInner(): React.JSX.Element {
         open={createPrDialogOpen}
         repoId={activeRepo.id}
         repoPath={activeRepo.path}
+        worktreeId={currentWorktreeId}
+        worktreePath={activeWorktree.path}
         branch={branchName}
         eligibility={hostedReviewCreation}
         pushBeforeCreate={createPrPushFirst}
@@ -2675,6 +2689,7 @@ function SourceControlInner(): React.JSX.Element {
               clears. */}
           {(scope === 'all' || scope === 'uncommitted') && (
             <CommitArea
+              worktreeId={activeWorktreeId}
               commitMessage={commitMessage}
               commitError={commitError}
               remoteActionError={remoteActionError?.message ?? null}
@@ -3128,6 +3143,7 @@ const SourceControl = React.memo(SourceControlInner)
 export default SourceControl
 
 type CommitAreaProps = {
+  worktreeId: string | null
   commitMessage: string
   commitError: string | null
   remoteActionError: string | null
@@ -3150,6 +3166,7 @@ type CommitAreaProps = {
 }
 
 export function CommitArea({
+  worktreeId,
   commitMessage,
   commitError,
   remoteActionError,
@@ -3195,6 +3212,38 @@ export function CommitArea({
   // while still leaving the menu reachable to read the disabled-row
   // tooltips.
   const showChevronSpinner = (isCommitting || isRemoteOperationActive) && !showSpinner
+  const commitFailureSummary = useMemo(
+    () => (commitError ? summarizeCommitFailure(commitError) : null),
+    [commitError]
+  )
+  const hasCommitFailureDetails = useMemo(
+    () =>
+      commitError && commitFailureSummary
+        ? hasExpandedCommitFailureDetails(commitError, commitFailureSummary)
+        : false,
+    [commitError, commitFailureSummary]
+  )
+  const commitFailureIdentity = `${worktreeId ?? 'no-worktree'}:${commitError ?? ''}`
+  const [commitFailureDialogState, setCommitFailureDialogState] = useState<{
+    identity: string
+    open: boolean
+  }>({ identity: commitFailureIdentity, open: false })
+  const isCommitFailureDialogOpen =
+    commitFailureDialogState.open && commitFailureDialogState.identity === commitFailureIdentity
+  const setCommitFailureDialogOpen = useCallback(
+    (open: boolean) => {
+      setCommitFailureDialogState({ identity: commitFailureIdentity, open })
+    },
+    [commitFailureIdentity]
+  )
+
+  useEffect(() => {
+    setCommitFailureDialogState((current) =>
+      current.identity === commitFailureIdentity
+        ? current
+        : { identity: commitFailureIdentity, open: false }
+    )
+  }, [commitFailureIdentity])
 
   // Why: most primary-kind labels are anchored by a directional icon so
   // the affirmative Commit (✓) reads distinctly from the remote-state
@@ -3376,14 +3425,50 @@ export function CommitArea({
         // Why: role="alert" + aria-live="polite" lets screen readers announce
         // commit failures; the id ties the message to the textarea via
         // aria-describedby so assistive tech associates the two.
-        <p
+        <div
           id="commit-area-error"
           role="alert"
           aria-live="polite"
-          className="mt-1 text-[11px] text-destructive"
+          className="mt-1 flex min-w-0 items-center gap-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1 text-[11px] text-destructive"
         >
-          {commitError}
-        </p>
+          <TriangleAlert className="size-3 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1 truncate">{commitFailureSummary}</span>
+          {hasCommitFailureDetails && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              className="h-5 shrink-0 px-1.5 text-[11px] text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => setCommitFailureDialogOpen(true)}
+            >
+              Details
+            </Button>
+          )}
+        </div>
+      )}
+      {commitError && commitFailureSummary && (
+        <Dialog
+          key={commitFailureIdentity}
+          open={isCommitFailureDialogOpen}
+          onOpenChange={setCommitFailureDialogOpen}
+        >
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Commit Failed</DialogTitle>
+              <DialogDescription>{commitFailureSummary}</DialogDescription>
+            </DialogHeader>
+            <pre className="max-h-[60vh] overflow-auto rounded-md border border-border bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap text-foreground">
+              {commitError}
+            </pre>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="outline" size="sm">
+                  Close
+                </Button>
+              </DialogClose>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
       {remoteActionError && (
         <p

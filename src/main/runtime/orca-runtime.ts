@@ -1257,6 +1257,10 @@ export class OrcaRuntimeService {
     this.gitCommands.generateRuntimeCommitMessage.bind(this.gitCommands)
   cancelRuntimeGenerateCommitMessage: RuntimeGitCommands['cancelRuntimeGenerateCommitMessage'] =
     this.gitCommands.cancelRuntimeGenerateCommitMessage.bind(this.gitCommands)
+  generateRuntimePullRequestFields: RuntimeGitCommands['generateRuntimePullRequestFields'] =
+    this.gitCommands.generateRuntimePullRequestFields.bind(this.gitCommands)
+  cancelRuntimeGeneratePullRequestFields: RuntimeGitCommands['cancelRuntimeGeneratePullRequestFields'] =
+    this.gitCommands.cancelRuntimeGeneratePullRequestFields.bind(this.gitCommands)
   stageRuntimeGitPath: RuntimeGitCommands['stageRuntimeGitPath'] =
     this.gitCommands.stageRuntimeGitPath.bind(this.gitCommands)
   unstageRuntimeGitPath: RuntimeGitCommands['unstageRuntimeGitPath'] =
@@ -4497,6 +4501,22 @@ export class OrcaRuntimeService {
     }
   }
 
+  private async resolveHostedReviewTarget(args: {
+    repoSelector: string
+    worktreeSelector?: string
+  }): Promise<{ repo: Repo; repoPath: string }> {
+    const repo = await this.resolveRepoSelector(args.repoSelector)
+    if (!args.worktreeSelector) {
+      return { repo, repoPath: repo.path }
+    }
+
+    const worktree = await this.resolveWorktreeSelector(args.worktreeSelector)
+    if (worktree.repoId !== repo.id) {
+      throw new Error('Access denied: worktree does not belong to repository')
+    }
+    return { repo, repoPath: worktree.path }
+  }
+
   async getRepoSlug(repoSelector: string): Promise<{ owner: string; repo: string } | null> {
     const repo = await this.resolveRepoSelector(repoSelector)
     this.assertHostIntegrationRepoIsLocal(repo, 'repo_slug')
@@ -4613,12 +4633,15 @@ export class OrcaRuntimeService {
   }
 
   async getHostedReviewCreationEligibility(
-    args: Omit<HostedReviewCreationEligibilityArgs, 'repoPath'> & { repoSelector: string }
+    args: Omit<HostedReviewCreationEligibilityArgs, 'repoPath'> & {
+      repoSelector: string
+      worktreeSelector?: string
+    }
   ): Promise<HostedReviewCreationEligibility> {
-    const repo = await this.resolveRepoSelector(args.repoSelector)
+    const { repo, repoPath } = await this.resolveHostedReviewTarget(args)
     this.assertHostIntegrationRepoIsLocal(repo, 'hosted_review')
     return getHostedReviewCreationEligibilityFromRepo({
-      repoPath: repo.path,
+      repoPath,
       branch: args.branch,
       base: args.base ?? null,
       hasUncommittedChanges: args.hasUncommittedChanges,
@@ -4634,11 +4657,11 @@ export class OrcaRuntimeService {
   }
 
   async createHostedReview(
-    args: CreateHostedReviewInput & { repoSelector: string }
+    args: CreateHostedReviewInput & { repoSelector: string; worktreeSelector?: string }
   ): Promise<CreateHostedReviewResult> {
-    const repo = await this.resolveRepoSelector(args.repoSelector)
+    const { repo, repoPath } = await this.resolveHostedReviewTarget(args)
     this.assertHostIntegrationRepoIsLocal(repo, 'hosted_review')
-    const result = await createHostedReviewFromRepo(repo.path, {
+    const result = await createHostedReviewFromRepo(repoPath, {
       provider: args.provider,
       base: args.base,
       head: args.head,

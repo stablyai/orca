@@ -18,6 +18,14 @@ export type RuntimeGenerateCommitMessageResult =
   | { success: true; message: string; agentLabel?: string }
   | { success: false; error: string; canceled?: boolean }
 
+export type RuntimeGeneratePullRequestFieldsResult =
+  | {
+      success: true
+      fields: { base: string; title: string; body: string; draft: boolean }
+      agentLabel?: string
+    }
+  | { success: false; error: string; canceled?: boolean }
+
 type RuntimeGitSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> &
   Partial<Pick<GlobalSettings, 'commitMessageAi' | 'agentCmdOverrides' | 'enableGitHubAttribution'>>
 
@@ -351,6 +359,49 @@ export async function cancelRuntimeGenerateCommitMessage(
   await callRuntimeRpc(
     target,
     'git.cancelGenerateCommitMessage',
+    { worktree: context.worktreeId },
+    { timeoutMs: 5_000 }
+  )
+}
+
+export async function generateRuntimePullRequestFields(
+  context: RuntimeGitContext,
+  input: { base: string; title: string; body: string; draft: boolean }
+): Promise<RuntimeGeneratePullRequestFieldsResult> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.generatePullRequestFields({
+      worktreePath: context.worktreePath,
+      connectionId: context.connectionId,
+      ...input
+    }) as Promise<RuntimeGeneratePullRequestFieldsResult>
+  }
+  return callRuntimeRpc<RuntimeGeneratePullRequestFieldsResult>(
+    target,
+    'git.generatePullRequestFields',
+    {
+      worktree: context.worktreeId,
+      ...input,
+      ...getRuntimeCommitMessageSettings(context.settings)
+    },
+    { timeoutMs: 75_000 }
+  )
+}
+
+export async function cancelRuntimeGeneratePullRequestFields(
+  context: RuntimeGitContext
+): Promise<void> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    await window.api.git.cancelGeneratePullRequestFields({
+      worktreePath: context.worktreePath,
+      connectionId: context.connectionId
+    })
+    return
+  }
+  await callRuntimeRpc(
+    target,
+    'git.cancelGeneratePullRequestFields',
     { worktree: context.worktreeId },
     { timeoutMs: 5_000 }
   )

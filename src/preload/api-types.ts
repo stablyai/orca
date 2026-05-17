@@ -1437,6 +1437,25 @@ export type PreloadApi = {
       worktreePath: string
       connectionId?: string
     }) => Promise<void>
+    generatePullRequestFields: (args: {
+      worktreePath: string
+      base: string
+      title: string
+      body: string
+      draft: boolean
+      connectionId?: string
+    }) => Promise<
+      | {
+          success: true
+          fields: { base: string; title: string; body: string; draft: boolean }
+          agentLabel?: string
+        }
+      | { success: false; error: string; canceled?: boolean }
+    >
+    cancelGeneratePullRequestFields: (args: {
+      worktreePath: string
+      connectionId?: string
+    }) => Promise<void>
     stage: (args: {
       worktreePath: string
       filePath: string

@@ -38,7 +38,9 @@ const {
   getSshGitProviderMock,
   registerSshGitProviderMock,
   unregisterSshGitProviderMock,
-  invalidateAuthorizedRootsCacheMock
+  invalidateAuthorizedRootsCacheMock,
+  createHostedReviewMock,
+  getHostedReviewCreationEligibilityMock
 } = vi.hoisted(() => {
   // Why: SSH runtime tests register providers through the public dispatcher API,
   // so the mock needs the same registry semantics as the real module.
@@ -66,7 +68,9 @@ const {
     unregisterSshGitProviderMock: vi.fn((connectionId: string) => {
       sshGitProviders.delete(connectionId)
     }),
-    invalidateAuthorizedRootsCacheMock: vi.fn()
+    invalidateAuthorizedRootsCacheMock: vi.fn(),
+    createHostedReviewMock: vi.fn(),
+    getHostedReviewCreationEligibilityMock: vi.fn()
   }
 })
 
@@ -108,6 +112,11 @@ vi.mock('../ipc/filesystem-auth', () => ({
   invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock,
   isENOENT: (error: unknown) =>
     Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
+}))
+
+vi.mock('../source-control/hosted-review-creation', () => ({
+  createHostedReview: createHostedReviewMock,
+  getHostedReviewCreationEligibility: getHostedReviewCreationEligibilityMock
 }))
 
 // Why: the CLI create-worktree path calls getDefaultBaseRef to resolve a
@@ -157,6 +166,25 @@ afterEach(() => {
   computeWorktreePathMock.mockReset()
   ensurePathWithinWorkspaceMock.mockReset()
   invalidateAuthorizedRootsCacheMock.mockReset()
+  createHostedReviewMock.mockReset()
+  createHostedReviewMock.mockResolvedValue({
+    ok: true,
+    provider: 'github',
+    number: 1,
+    url: 'https://example.com/pull/1'
+  })
+  getHostedReviewCreationEligibilityMock.mockReset()
+  getHostedReviewCreationEligibilityMock.mockResolvedValue({
+    provider: 'github',
+    review: null,
+    canCreate: true,
+    blockedReason: null,
+    nextAction: null,
+    defaultBaseRef: 'main',
+    head: 'feature/foo',
+    title: null,
+    body: null
+  })
 })
 
 function syncSinglePty(runtime: OrcaRuntimeService, ptyId: string | null = 'pty-1'): void {
@@ -808,6 +836,73 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.listRepoWorkItems('id:repo-1')).rejects.toThrow(
       'repo_work_items_unsupported_for_ssh_repo'
     )
+  })
+
+  it('rejects hosted review worktree selectors outside the selected repo', async () => {
+    vi.mocked(listWorktrees).mockImplementation(async (repoPath: string) => {
+      if (repoPath === '/tmp/repo-b') {
+        return [
+          {
+            path: '/tmp/worktree-b',
+            head: 'def',
+            branch: 'feature/bar',
+            isBare: false,
+            isMainWorktree: false
+          }
+        ]
+      }
+      return MOCK_GIT_WORKTREES
+    })
+    const repos = [
+      {
+        id: TEST_REPO_ID,
+        path: TEST_REPO_PATH,
+        displayName: 'repo',
+        badgeColor: 'blue',
+        addedAt: 1
+      },
+      {
+        id: 'repo-2',
+        path: '/tmp/repo-b',
+        displayName: 'repo-b',
+        badgeColor: 'green',
+        addedAt: 2
+      }
+    ]
+    const multiRepoStore = {
+      ...store,
+      getRepos: () => repos,
+      getRepo: (id: string) => repos.find((repo) => repo.id === id)
+    }
+    const runtime = new OrcaRuntimeService(multiRepoStore as never)
+
+    await expect(
+      runtime.getHostedReviewCreationEligibility({
+        repoSelector: 'id:repo-1',
+        worktreeSelector: 'id:repo-2::/tmp/worktree-b',
+        branch: 'feature/bar',
+        base: 'main',
+        hasUncommittedChanges: false,
+        hasUpstream: true,
+        ahead: 1,
+        behind: 0
+      })
+    ).rejects.toThrow('Access denied: worktree does not belong to repository')
+    await expect(
+      runtime.createHostedReview({
+        repoSelector: 'id:repo-1',
+        worktreeSelector: 'id:repo-2::/tmp/worktree-b',
+        provider: 'github',
+        base: 'main',
+        head: 'feature/bar',
+        title: 'Create PR',
+        body: '',
+        draft: false
+      })
+    ).rejects.toThrow('Access denied: worktree does not belong to repository')
+
+    expect(getHostedReviewCreationEligibilityMock).not.toHaveBeenCalled()
+    expect(createHostedReviewMock).not.toHaveBeenCalled()
   })
 
   it('treats SSH worktree drift as unknown without local git probes', async () => {

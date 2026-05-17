@@ -13,9 +13,28 @@ import {
 } from '../../shared/crash-reporting'
 
 const MAX_REPORTS = 5
+const RELATED_CRASH_WINDOW_MS = 5_000
 
 type CrashReportFile = {
   reports: CrashReportRecord[]
+}
+
+function isRelatedCrashEvent(anchor: CrashReportRecord, candidate: CrashReportRecord): boolean {
+  if (anchor.id === candidate.id || candidate.status !== 'pending') {
+    return false
+  }
+  const anchorTime = Date.parse(anchor.createdAt)
+  const candidateTime = Date.parse(candidate.createdAt)
+  if (!Number.isFinite(anchorTime) || !Number.isFinite(candidateTime)) {
+    return false
+  }
+  return (
+    Math.abs(anchorTime - candidateTime) <= RELATED_CRASH_WINDOW_MS &&
+    anchor.reason === candidate.reason &&
+    anchor.exitCode === candidate.exitCode &&
+    anchor.appVersion === candidate.appVersion &&
+    anchor.platform === candidate.platform
+  )
 }
 
 export class CrashReportStore {
@@ -90,8 +109,15 @@ export class CrashReportStore {
   ): Promise<CrashReportRecord | null> {
     return this.withWrite(async (reports) => {
       let result: CrashReportRecord | null = null
+      const anchor = reports.find((report) => report.id === id)
       const nextReports = reports.map((report) => {
         if (report.id !== id) {
+          // Why: one Electron crash can emit GPU/Network/renderer exits in a
+          // burst. Once one report is handled, sibling pending records should
+          // not re-open the crash prompt as separate crashes.
+          if (anchor && anchor.status === from && isRelatedCrashEvent(anchor, report)) {
+            return { ...report, status: 'dismissed' as const }
+          }
           return report
         }
         if (report.status !== from) {

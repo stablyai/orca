@@ -87,6 +87,35 @@ describe('CrashReportStore', () => {
     await expect(store.markSent(report.id)).resolves.toMatchObject({ status: 'dismissed' })
   })
 
+  it('dismisses sibling pending records from the same Electron crash event', async () => {
+    const { store } = await createStore()
+    await store.record(input())
+    await store.record(input())
+    const renderer = await store.record(input())
+
+    await expect(store.dismiss(renderer.id)).resolves.toMatchObject({ status: 'dismissed' })
+    await expect(store.getLatestPending()).resolves.toBeNull()
+  })
+
+  it('dismisses sibling pending records after one crash report is sent', async () => {
+    const { store } = await createStore()
+    await store.record(input())
+    await store.record(input())
+    const renderer = await store.record(input())
+
+    await expect(store.markSent(renderer.id)).resolves.toMatchObject({ status: 'sent' })
+
+    const reports = await store.listRecent()
+    expect(reports).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: renderer.id, status: 'sent' }),
+        expect.objectContaining({ status: 'dismissed' }),
+        expect.objectContaining({ status: 'dismissed' })
+      ])
+    )
+    await expect(store.getLatestPending()).resolves.toBeNull()
+  })
+
   it('persists a submitted dismissed report as sent', async () => {
     const { store, filePath } = await createStore()
     const report = await store.record(input())

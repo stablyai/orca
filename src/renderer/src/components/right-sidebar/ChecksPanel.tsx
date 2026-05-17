@@ -138,6 +138,7 @@ export default function ChecksPanel(): React.JSX.Element {
   // differs from the PR's head ref) resolve via the number-based fallback.
   const linkedPR = activeWorktree?.linkedPR ?? null
   const linkedGitLabMR = activeWorktree?.linkedGitLabMR ?? null
+  const activeWorktreePath = activeWorktree?.path ?? null
   const stateRequestKey = repo && branch ? checksPanelAsyncResultKey(repo.id, branch, prNumber) : ''
   asyncResultKeyRef.current = stateRequestKey
 
@@ -160,6 +161,7 @@ export default function ChecksPanel(): React.JSX.Element {
     let stale = false
     void getHostedReviewCreationEligibility({
       repoPath: repo.path,
+      ...(activeWorktreePath ? { worktreePath: activeWorktreePath } : {}),
       branch,
       base: repo.worktreeBaseRef ?? null,
       hasUncommittedChanges,
@@ -182,6 +184,7 @@ export default function ChecksPanel(): React.JSX.Element {
       stale = true
     }
   }, [
+    activeWorktreePath,
     branch,
     getHostedReviewCreationEligibility,
     hasUncommittedChanges,
@@ -792,6 +795,8 @@ export default function ChecksPanel(): React.JSX.Element {
             open={createPrDialogOpen}
             repoId={repo.id}
             repoPath={repo.path}
+            worktreeId={activeWorktreeId}
+            worktreePath={activeWorktreePath ?? repo.path}
             branch={branch}
             eligibility={hostedReviewCreation}
             pushBeforeCreate={createPrPushFirst}

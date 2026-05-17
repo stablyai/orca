@@ -56,6 +56,10 @@ export type PrimaryActionInputs = {
   // stale label that no longer matches what the slice is doing.
   inFlightRemoteOpKind?: RemoteOpKind | null
   hostedReviewCreation?: HostedReviewCreationEligibility | null
+  // Why: an unpublished branch is only worth publishing when it actually
+  // carries commits beyond the compare base. Undefined preserves the old
+  // behavior while the branch compare request is still unavailable/loading.
+  branchCommitsAhead?: number
 }
 
 const PRIMARY_LABEL_BY_KIND: Record<Exclude<PrimaryActionKind, 'commit'>, string> = {
@@ -112,7 +116,8 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
     prState,
     isPRStateLoading,
     inFlightRemoteOpKind,
-    hostedReviewCreation
+    hostedReviewCreation,
+    branchCommitsAhead
   } = inputs
 
   // 1. Commit in flight — lock the primary no matter what else is true.
@@ -245,6 +250,15 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
   }
 
   if (!upstreamStatus.hasUpstream) {
+    if (branchCommitsAhead === 0) {
+      return {
+        kind: 'commit',
+        label: 'Commit',
+        title: 'Nothing to commit. Branch has no changes to publish.',
+        disabled: true
+      }
+    }
+
     if (isPRStateLoading) {
       return {
         kind: 'commit',
