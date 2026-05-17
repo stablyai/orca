@@ -19,6 +19,7 @@ import { GITHUB_METHODS } from './github'
 import { HOSTED_REVIEW_METHODS } from './hosted-review'
 import { LINEAR_METHODS } from './linear'
 import { SPEECH_METHODS } from './speech'
+import { CLIENT_UI_METHODS } from './client-ui'
 
 // Why: a flat manifest keeps registration order explicit and provides one
 // grep-point for "what methods does the RPC server expose?" — useful when
@@ -43,5 +44,6 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...GITHUB_METHODS,
   ...HOSTED_REVIEW_METHODS,
   ...LINEAR_METHODS,
-  ...SPEECH_METHODS
+  ...SPEECH_METHODS,
+  ...CLIENT_UI_METHODS
 ]

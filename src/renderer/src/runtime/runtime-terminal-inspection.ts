@@ -57,6 +57,14 @@ export function sendRuntimePtyInput(
     return true
   }
 
-  void callRuntimeRpc(target, 'terminal.send', { terminal, text: data }, { timeoutMs: 15_000 })
+  void callRuntimeRpc(
+    target,
+    'terminal.send',
+    { terminal, text: data },
+    { timeoutMs: 15_000 }
+  ).catch(() => {
+    // Why: web session snapshots can retire a remote handle while xterm still
+    // flushes a final input event. The next host snapshot will reattach.
+  })
   return true
 }

@@ -496,7 +496,7 @@ describe('worktree lineage state', () => {
       selector: 'env-1',
       method: 'worktree.set',
       params: {
-        worktree: lineage.worktreeId,
+        worktree: `id:${lineage.worktreeId}`,
         parentWorktree: `id:${lineage.parentWorktreeId}`
       },
       timeoutMs: 15_000
@@ -535,7 +535,7 @@ describe('worktree lineage state', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'worktree.set',
-      params: { worktree: lineage.worktreeId, noParent: true },
+      params: { worktree: `id:${lineage.worktreeId}`, noParent: true },
       timeoutMs: 15_000
     })
     expect(store.getState().worktreeLineageById).toEqual({})
@@ -1254,7 +1254,7 @@ describe('worktree remote runtime mutations', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'worktree.set',
-      params: expect.objectContaining({ worktree: wt.id, comment: 'remote note' }),
+      params: expect.objectContaining({ worktree: `id:${wt.id}`, comment: 'remote note' }),
       timeoutMs: 15_000
     })
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
@@ -1283,7 +1283,10 @@ describe('worktree remote runtime mutations', () => {
       expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
         selector: 'env-1',
         method: 'worktree.set',
-        params: expect.objectContaining({ worktree: wt.id, lastActivityAt: expect.any(Number) }),
+        params: expect.objectContaining({
+          worktree: `id:${wt.id}`,
+          lastActivityAt: expect.any(Number)
+        }),
         timeoutMs: 15_000
       })
       expect(errorSpy).not.toHaveBeenCalled()

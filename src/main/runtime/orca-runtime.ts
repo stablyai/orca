@@ -21,6 +21,7 @@ import type {
   GitWorktreeInfo,
   GitHubOwnerRepo,
   GlobalSettings,
+  PersistedUIState,
   Repo,
   StatsSummary,
   Worktree,
@@ -314,6 +315,8 @@ type RuntimeStore = {
   removeWorktreeLineage?: Store['removeWorktreeLineage']
   getGitHubCache: Store['getGitHubCache']
   getWorkspaceSession?: Store['getWorkspaceSession']
+  getUI?: Store['getUI']
+  updateUI?: Store['updateUI']
   getSettings(): {
     workspaceDir: string
     nestWorkspaces: boolean
@@ -936,6 +939,21 @@ export class OrcaRuntimeService {
     return this.stats?.getSummary() ?? null
   }
 
+  getUIState(): PersistedUIState {
+    if (!this.store?.getUI) {
+      throw new Error('runtime_unavailable')
+    }
+    return this.store.getUI()
+  }
+
+  updateUIState(updates: Partial<PersistedUIState>): PersistedUIState {
+    if (!this.store?.getUI || !this.store.updateUI) {
+      throw new Error('runtime_unavailable')
+    }
+    this.store.updateUI(updates)
+    return this.store.getUI()
+  }
+
   // Why: lazy initialization — the DB path depends on Electron's userData
   // which may not be finalized until after app.ready. Also allows unit tests
   // to inject an in-memory DB without touching the filesystem.
@@ -1142,15 +1160,16 @@ export class OrcaRuntimeService {
     }
 
     if (tab.type === 'terminal') {
-      const targetTab =
+      const activeSibling =
         tab.id === tabId
-          ? tab
-          : (snapshot?.tabs.find(
-              (candidate) =>
+          ? null
+          : snapshot?.tabs.find(
+              (candidate): candidate is RuntimeMobileSessionTerminalTab =>
                 candidate.type === 'terminal' &&
                 candidate.parentTabId === tab.parentTabId &&
                 candidate.isActive
-            ) ?? tab)
+            )
+      const targetTab = activeSibling ?? tab
       this.notifier?.focusTerminal(targetTab.parentTabId, worktreeId, targetTab.leafId)
     } else if (tab.type === 'browser') {
       // Why: browser mobile tabs are renderer-owned unified tabs; focusing the

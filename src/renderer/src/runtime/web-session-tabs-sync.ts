@@ -8,6 +8,8 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionBrowserTab,
+  RuntimeMobileSessionFileTab,
+  RuntimeMobileSessionMarkdownTab,
   RuntimeMobileSessionTerminalClientTab
 } from '../../../shared/runtime-types'
 import type {
@@ -19,6 +21,7 @@ import type {
   TerminalPaneLayoutNode,
   TerminalTab
 } from '../../../shared/types'
+import type { OpenFile } from '../store/slices/editor'
 import { getRemoteRuntimePtyEnvironmentId, toRemoteRuntimePtyId } from './runtime-terminal-stream'
 import {
   createWebRuntimeSessionTerminal,
@@ -36,6 +39,7 @@ type SessionTabsStreamEvent =
 
 type ReadyTerminalSurface = RuntimeMobileSessionTerminalClientTab & { status: 'ready' }
 type ReadyBrowserSurface = RuntimeMobileSessionBrowserTab & { browserPageId: string }
+type ReadyEditorSurface = RuntimeMobileSessionMarkdownTab | RuntimeMobileSessionFileTab
 
 type MirroredTerminalTab = {
   tab: TerminalTab
@@ -50,11 +54,19 @@ type MirroredBrowserTab = {
   unifiedTab: Tab
 }
 
+type MirroredEditorTab = {
+  file: OpenFile
+  unifiedTab: Tab
+  hostTabId: string
+}
+
 export type WebSessionTabsSyncState = Pick<
   AppState,
   | 'activeBrowserTabId'
   | 'activeBrowserTabIdByWorktree'
   | 'activeGroupIdByWorktree'
+  | 'activeFileId'
+  | 'activeFileIdByWorktree'
   | 'activeTabId'
   | 'activeTabIdByWorktree'
   | 'activeTabType'
@@ -64,6 +76,7 @@ export type WebSessionTabsSyncState = Pick<
   | 'browserTabsByWorktree'
   | 'groupsByWorktree'
   | 'layoutByWorktree'
+  | 'openFiles'
   | 'ptyIdsByTabId'
   | 'remoteBrowserPageHandlesByPageId'
   | 'tabBarOrderByWorktree'
@@ -87,6 +100,23 @@ function isReadyBrowserTab(
   tab: RuntimeMobileSessionTabsResult['tabs'][number]
 ): tab is ReadyBrowserSurface {
   return tab.type === 'browser' && typeof tab.browserPageId === 'string' && tab.browserPageId !== ''
+}
+
+function isReadyEditorTab(
+  tab: RuntimeMobileSessionTabsResult['tabs'][number]
+): tab is ReadyEditorSurface {
+  return tab.type === 'markdown' || tab.type === 'file'
+}
+
+function localEditorFileId(tab: ReadyEditorSurface): string {
+  if (tab.type === 'markdown' && tab.mode === 'markdown-preview') {
+    return `markdown-preview::${tab.sourceFilePath}`
+  }
+  return tab.filePath
+}
+
+function editorSourceFileId(tab: ReadyEditorSurface): string | undefined {
+  return tab.type === 'markdown' && tab.mode === 'markdown-preview' ? tab.sourceFilePath : undefined
 }
 
 function isRuntimeTerminalTabForEnvironment(tab: TerminalTab, environmentId: string): boolean {
@@ -277,6 +307,90 @@ function buildBrowserUnifiedTab(tab: BrowserWorkspace, unifiedTabId: string, gro
     isPreview: false,
     isPinned: false
   }
+}
+
+function buildEditorUnifiedTab(
+  file: OpenFile,
+  hostTabId: string,
+  label: string,
+  groupId: string,
+  sortOrder: number,
+  createdAt: number
+): Tab {
+  return {
+    id: hostTabId,
+    entityId: file.id,
+    groupId,
+    worktreeId: file.worktreeId,
+    contentType: 'editor',
+    label,
+    customLabel: null,
+    color: null,
+    sortOrder,
+    createdAt,
+    isPreview: false,
+    isPinned: false
+  }
+}
+
+function findExistingEditorUnifiedTab(
+  state: WebSessionTabsSyncState,
+  worktreeId: string,
+  fileId: string,
+  hostTabId: string
+): Tab | null {
+  return (
+    (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
+      (tab) => tab.contentType === 'editor' && (tab.id === hostTabId || tab.entityId === fileId)
+    ) ?? null
+  )
+}
+
+function buildMirroredEditorTabs(
+  snapshot: RuntimeMobileSessionTabsResult,
+  environmentId: string,
+  state: WebSessionTabsSyncState,
+  groupId: string,
+  sortOffset: number,
+  now: number
+): MirroredEditorTab[] {
+  return snapshot.tabs.filter(isReadyEditorTab).map((tab, index) => {
+    const fileId = localEditorFileId(tab)
+    const existingFile = state.openFiles.find(
+      (file) => file.worktreeId === snapshot.worktree && file.id === fileId
+    )
+    const existingUnifiedTab = findExistingEditorUnifiedTab(
+      state,
+      snapshot.worktree,
+      fileId,
+      tab.id
+    )
+    const sourceFileId = editorSourceFileId(tab)
+    const file: OpenFile = {
+      ...existingFile,
+      id: fileId,
+      filePath: tab.filePath,
+      relativePath: tab.relativePath,
+      worktreeId: snapshot.worktree,
+      language: tab.language,
+      isDirty: tab.isDirty,
+      runtimeEnvironmentId: environmentId,
+      mode: tab.type === 'markdown' ? tab.mode : 'edit',
+      markdownPreviewSourceFileId: sourceFileId
+    }
+    return {
+      file,
+      hostTabId: tab.id,
+      unifiedTab: buildEditorUnifiedTab(
+        file,
+        tab.id,
+        tab.title.trim() || tab.relativePath || 'File',
+        groupId,
+        sortOffset + index,
+        existingUnifiedTab?.createdAt ?? now + sortOffset + index
+      )
+    }
+  })
 }
 
 function findBrowserWorkspaceForRemotePage(
@@ -583,6 +697,31 @@ function sameBrowserTabs(
   return left.every((tab, index) => browserWorkspaceEqual(tab, right[index]!))
 }
 
+function openFileEqual(a: OpenFile, b: OpenFile): boolean {
+  return (
+    a.id === b.id &&
+    a.filePath === b.filePath &&
+    a.relativePath === b.relativePath &&
+    a.worktreeId === b.worktreeId &&
+    a.language === b.language &&
+    a.isDirty === b.isDirty &&
+    a.runtimeEnvironmentId === b.runtimeEnvironmentId &&
+    a.markdownPreviewSourceFileId === b.markdownPreviewSourceFileId &&
+    a.markdownPreviewAnchor === b.markdownPreviewAnchor &&
+    a.isPreview === b.isPreview &&
+    a.isUntitled === b.isUntitled &&
+    a.externalMutation === b.externalMutation &&
+    a.mode === b.mode
+  )
+}
+
+function sameOpenFiles(a: readonly OpenFile[], b: readonly OpenFile[]): boolean {
+  if (a.length !== b.length) {
+    return false
+  }
+  return a.every((file, index) => openFileEqual(file, b[index]!))
+}
+
 function tabEqual(a: Tab, b: Tab): boolean {
   return (
     a.id === b.id &&
@@ -704,12 +843,53 @@ export function applyWebSessionTabsSnapshot(
     retainedBrowserTabs.length + mirroredBrowserTabs.length > 0
       ? [...retainedBrowserTabs, ...mirroredBrowserTabs.map((entry) => entry.workspace)]
       : null
+  const readyEditorTabs = snapshot.tabs.filter(isReadyEditorTab)
+  const mirroredEditorTabs = buildMirroredEditorTabs(
+    snapshot,
+    environmentId,
+    state,
+    targetGroupId,
+    mirroredTerminalTabEntries.length + mirroredBrowserTabs.length,
+    now
+  )
+  const mirroredEditorFileIds = new Set(mirroredEditorTabs.map((entry) => entry.file.id))
+  const mirroredEditorHostTabIds = new Set(mirroredEditorTabs.map((entry) => entry.hostTabId))
+  const removedEditorFileIds = new Set(
+    state.openFiles
+      .filter(
+        (file) =>
+          file.worktreeId === worktreeId &&
+          file.runtimeEnvironmentId === environmentId &&
+          (file.mode === 'edit' || file.mode === 'markdown-preview') &&
+          !mirroredEditorFileIds.has(file.id)
+      )
+      .map((file) => file.id)
+  )
+  const nextOpenFiles = (() => {
+    const retained = state.openFiles.filter(
+      (file) =>
+        !(
+          file.worktreeId === worktreeId &&
+          file.runtimeEnvironmentId === environmentId &&
+          (removedEditorFileIds.has(file.id) || mirroredEditorFileIds.has(file.id))
+        )
+    )
+    const next = [...retained, ...mirroredEditorTabs.map((entry) => entry.file)]
+    return sameOpenFiles(state.openFiles, next) ? state.openFiles : next
+  })()
   const currentUnifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
   const retainedUnifiedTabs = currentUnifiedTabs.filter((tab) => {
     if (tab.contentType === 'browser') {
       return (
         !removedBrowserWorkspaceIds.has(tab.entityId) &&
         !mirroredBrowserWorkspaceIds.has(tab.entityId)
+      )
+    }
+    if (tab.contentType === 'editor') {
+      return (
+        !removedEditorFileIds.has(tab.entityId) &&
+        !mirroredEditorFileIds.has(tab.entityId) &&
+        !mirroredEditorHostTabIds.has(tab.id)
       )
     }
     if (tab.contentType !== 'terminal') {
@@ -724,7 +904,12 @@ export function applyWebSessionTabsSnapshot(
     buildTerminalUnifiedTab(tab, targetGroupId)
   )
   const mirroredBrowserUnifiedTabs = mirroredBrowserTabs.map((entry) => entry.unifiedTab)
-  const mirroredUnifiedTabs = [...mirroredTerminalUnifiedTabs, ...mirroredBrowserUnifiedTabs]
+  const mirroredEditorUnifiedTabs = mirroredEditorTabs.map((entry) => entry.unifiedTab)
+  const mirroredUnifiedTabs = [
+    ...mirroredTerminalUnifiedTabs,
+    ...mirroredBrowserUnifiedTabs,
+    ...mirroredEditorUnifiedTabs
+  ]
   const nextUnifiedTabs =
     retainedUnifiedTabs.length + mirroredUnifiedTabs.length > 0
       ? [...retainedUnifiedTabs, ...mirroredUnifiedTabs]
@@ -752,6 +937,15 @@ export function applyWebSessionTabsSnapshot(
     : null
   const activeMirroredBrowserTabId = activeMirroredBrowser?.unifiedTab.id ?? null
   const activeMirroredBrowserWorkspaceId = activeMirroredBrowser?.workspace.id ?? null
+  const activeHostEditor =
+    readyEditorTabs.find((tab) => tab.id === snapshot.activeTabId) ??
+    readyEditorTabs.find((tab) => tab.isActive) ??
+    null
+  const activeMirroredEditor = activeHostEditor
+    ? (mirroredEditorTabs.find((entry) => entry.hostTabId === activeHostEditor.id) ?? null)
+    : null
+  const activeMirroredEditorFileId = activeMirroredEditor?.file.id ?? null
+  const activeMirroredEditorTabId = activeMirroredEditor?.unifiedTab.id ?? null
   const currentActiveTerminalStillExists =
     state.activeTabIdByWorktree[worktreeId] &&
     (nextTerminalTabs ?? []).some((tab) => tab.id === state.activeTabIdByWorktree[worktreeId])
@@ -774,13 +968,32 @@ export function applyWebSessionTabsSnapshot(
         mirroredBrowserTabs[0]?.workspace.id ??
         currentActiveBrowserStillExists)
       : (currentActiveBrowserStillExists ?? mirroredBrowserTabs[0]?.workspace.id ?? null)
+  const currentActiveEditorStillExists =
+    state.activeFileIdByWorktree[worktreeId] &&
+    nextOpenFiles.some(
+      (file) =>
+        file.worktreeId === worktreeId && file.id === state.activeFileIdByWorktree[worktreeId]
+    )
+      ? state.activeFileIdByWorktree[worktreeId]
+      : null
+  const nextActiveEditorFileId =
+    snapshot.activeTabType === 'markdown' || snapshot.activeTabType === 'file'
+      ? (activeMirroredEditorFileId ??
+        mirroredEditorTabs[0]?.file.id ??
+        currentActiveEditorStillExists)
+      : (currentActiveEditorStillExists ?? mirroredEditorTabs[0]?.file.id ?? null)
   const nextActiveUnifiedTabId =
     snapshot.activeTabType === 'browser'
       ? (activeMirroredBrowserTabId ??
         mirroredBrowserTabs[0]?.unifiedTab.id ??
         state.activeTabIdByWorktree[worktreeId] ??
         nextActiveTerminalId)
-      : nextActiveTerminalId
+      : snapshot.activeTabType === 'markdown' || snapshot.activeTabType === 'file'
+        ? (activeMirroredEditorTabId ??
+          mirroredEditorTabs[0]?.unifiedTab.id ??
+          state.activeTabIdByWorktree[worktreeId] ??
+          nextActiveTerminalId)
+        : nextActiveTerminalId
   const mirroredUnifiedIds = new Set(mirroredUnifiedTabs.map((tab) => tab.id))
 
   const currentGroups = state.groupsByWorktree[worktreeId] ?? []
@@ -987,16 +1200,28 @@ export function applyWebSessionTabsSnapshot(
     (state.activeBrowserTabIdByWorktree[worktreeId] ?? null) !== nextActiveBrowserWorkspaceId
       ? { ...state.activeBrowserTabIdByWorktree, [worktreeId]: nextActiveBrowserWorkspaceId }
       : state.activeBrowserTabIdByWorktree
+  const nextActiveFileIdByWorktree =
+    (state.activeFileIdByWorktree[worktreeId] ?? null) !== nextActiveEditorFileId
+      ? { ...state.activeFileIdByWorktree, [worktreeId]: nextActiveEditorFileId }
+      : state.activeFileIdByWorktree
   const isActiveWorktree = state.activeWorktreeId === worktreeId
   const snapshotVisibleTabType =
     snapshot.activeTabType === 'browser' && nextActiveBrowserWorkspaceId
       ? ('browser' as const)
       : snapshot.activeTabType === 'terminal' && nextActiveTerminalId
         ? ('terminal' as const)
-        : null
+        : (snapshot.activeTabType === 'markdown' || snapshot.activeTabType === 'file') &&
+            nextActiveEditorFileId
+          ? ('editor' as const)
+          : null
   const currentActiveTerminalStillValid =
     state.activeTabId && (nextTerminalTabs ?? []).some((tab) => tab.id === state.activeTabId)
       ? state.activeTabId
+      : null
+  const currentActiveEditorStillValid =
+    state.activeFileId &&
+    nextOpenFiles.some((file) => file.worktreeId === worktreeId && file.id === state.activeFileId)
+      ? state.activeFileId
       : null
   const nextActiveTabId = isActiveWorktree
     ? snapshot.activeTabType === 'terminal'
@@ -1006,6 +1231,11 @@ export function applyWebSessionTabsSnapshot(
   const nextActiveBrowserTabId = isActiveWorktree
     ? nextActiveBrowserWorkspaceId
     : state.activeBrowserTabId
+  const nextActiveFileId = isActiveWorktree
+    ? snapshot.activeTabType === 'markdown' || snapshot.activeTabType === 'file'
+      ? nextActiveEditorFileId
+      : (currentActiveEditorStillValid ?? nextActiveEditorFileId)
+    : state.activeFileId
   const nextActiveTabType =
     isActiveWorktree && snapshotVisibleTabType ? snapshotVisibleTabType : state.activeTabType
   const nextActiveTabTypeByWorktree =
@@ -1014,6 +1244,7 @@ export function applyWebSessionTabsSnapshot(
       : state.activeTabTypeByWorktree
 
   const patch: Partial<WebSessionTabsSyncState> = {
+    ...(nextOpenFiles !== state.openFiles ? { openFiles: nextOpenFiles } : {}),
     ...(nextTabsByWorktree !== state.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {}),
     ...(nextBrowserTabsByWorktree !== state.browserTabsByWorktree
       ? { browserTabsByWorktree: nextBrowserTabsByWorktree }
@@ -1052,10 +1283,14 @@ export function applyWebSessionTabsSnapshot(
     ...(nextActiveBrowserTabIdByWorktree !== state.activeBrowserTabIdByWorktree
       ? { activeBrowserTabIdByWorktree: nextActiveBrowserTabIdByWorktree }
       : {}),
+    ...(nextActiveFileIdByWorktree !== state.activeFileIdByWorktree
+      ? { activeFileIdByWorktree: nextActiveFileIdByWorktree }
+      : {}),
     ...(nextActiveTabId !== state.activeTabId ? { activeTabId: nextActiveTabId } : {}),
     ...(nextActiveBrowserTabId !== state.activeBrowserTabId
       ? { activeBrowserTabId: nextActiveBrowserTabId }
       : {}),
+    ...(nextActiveFileId !== state.activeFileId ? { activeFileId: nextActiveFileId } : {}),
     ...(nextActiveTabType !== state.activeTabType ? { activeTabType: nextActiveTabType } : {}),
     ...(nextActiveTabTypeByWorktree !== state.activeTabTypeByWorktree
       ? { activeTabTypeByWorktree: nextActiveTabTypeByWorktree }

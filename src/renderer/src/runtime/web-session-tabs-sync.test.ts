@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { BrowserPage, BrowserWorkspace, Tab, TerminalTab } from '../../../shared/types'
+import type { OpenFile } from '../store/slices/editor'
 import {
   applyWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshots,
@@ -27,6 +28,8 @@ function makeState(overrides: Partial<WebSessionTabsSyncState> = {}): WebSession
   return {
     activeBrowserTabId: null,
     activeBrowserTabIdByWorktree: {},
+    activeFileId: null,
+    activeFileIdByWorktree: {},
     activeGroupIdByWorktree: {},
     activeTabId: null,
     activeTabIdByWorktree: {},
@@ -37,6 +40,7 @@ function makeState(overrides: Partial<WebSessionTabsSyncState> = {}): WebSession
     browserTabsByWorktree: {},
     groupsByWorktree: {},
     layoutByWorktree: {},
+    openFiles: [],
     ptyIdsByTabId: {},
     remoteBrowserPageHandlesByPageId: {},
     tabBarOrderByWorktree: {},
@@ -595,6 +599,179 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.groupsByWorktree?.[WT]).toBeUndefined()
     expect(patch.activeBrowserTabId).toBeNull()
     expect(patch.activeBrowserTabIdByWorktree?.[WT]).toBeNull()
+  })
+
+  it('hydrates active host markdown tabs as remote editor tabs', () => {
+    const patch = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot(
+        [
+          {
+            type: 'terminal',
+            id: HOST_SURFACE_ID,
+            title: 'host shell',
+            parentTabId: 'host-tab-1',
+            leafId: LEAF_ID,
+            isActive: false,
+            status: 'ready',
+            terminal: 'terminal-1'
+          },
+          {
+            type: 'markdown',
+            id: 'host-readme-unified',
+            title: 'README.md',
+            filePath: '/repo/README.md',
+            relativePath: 'README.md',
+            language: 'markdown',
+            mode: 'edit',
+            isDirty: true,
+            isActive: true,
+            sourceFileId: '/repo/README.md',
+            sourceFilePath: '/repo/README.md',
+            sourceRelativePath: 'README.md',
+            documentVersion: 'draft:1'
+          }
+        ],
+        { activeTabId: 'host-readme-unified', activeTabType: 'markdown' }
+      ),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    const terminalId = patch.tabsByWorktree?.[WT]?.[0]?.id
+    expect(patch.openFiles).toMatchObject([
+      {
+        id: '/repo/README.md',
+        filePath: '/repo/README.md',
+        relativePath: 'README.md',
+        worktreeId: WT,
+        language: 'markdown',
+        isDirty: true,
+        runtimeEnvironmentId: ENV,
+        mode: 'edit'
+      }
+    ])
+    expect(patch.unifiedTabsByWorktree?.[WT]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'host-readme-unified',
+          entityId: '/repo/README.md',
+          contentType: 'editor',
+          label: 'README.md'
+        })
+      ])
+    )
+    expect(patch.groupsByWorktree?.[WT]?.[0]).toMatchObject({
+      activeTabId: 'host-readme-unified',
+      tabOrder: [terminalId, 'host-readme-unified']
+    })
+    expect(patch.activeFileId).toBe('/repo/README.md')
+    expect(patch.activeFileIdByWorktree?.[WT]).toBe('/repo/README.md')
+    expect(patch.activeTabType).toBe('editor')
+    expect(patch.activeTabTypeByWorktree?.[WT]).toBe('editor')
+  })
+
+  it('uses local markdown preview file ids while preserving the host unified tab id', () => {
+    const patch = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot(
+        [
+          {
+            type: 'markdown',
+            id: 'host-preview-unified',
+            title: 'README.md',
+            filePath: '/repo/README.md',
+            relativePath: 'README.md',
+            language: 'markdown',
+            mode: 'markdown-preview',
+            isDirty: false,
+            isActive: true,
+            sourceFileId: '/repo/README.md',
+            sourceFilePath: '/repo/README.md',
+            sourceRelativePath: 'README.md',
+            documentVersion: 'file:/repo/README.md'
+          }
+        ],
+        { activeTabId: 'host-preview-unified', activeTabType: 'markdown' }
+      ),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.openFiles).toMatchObject([
+      {
+        id: 'markdown-preview::/repo/README.md',
+        filePath: '/repo/README.md',
+        markdownPreviewSourceFileId: '/repo/README.md',
+        mode: 'markdown-preview'
+      }
+    ])
+    expect(patch.unifiedTabsByWorktree?.[WT]).toMatchObject([
+      {
+        id: 'host-preview-unified',
+        entityId: 'markdown-preview::/repo/README.md',
+        contentType: 'editor'
+      }
+    ])
+    expect(patch.activeFileId).toBe('markdown-preview::/repo/README.md')
+  })
+
+  it('removes mirrored editor tabs when the host closes the file', () => {
+    const openFile: OpenFile = {
+      id: '/repo/README.md',
+      filePath: '/repo/README.md',
+      relativePath: 'README.md',
+      worktreeId: WT,
+      language: 'markdown',
+      isDirty: false,
+      runtimeEnvironmentId: ENV,
+      mode: 'edit'
+    }
+    const unifiedTab: Tab = {
+      id: 'host-readme-unified',
+      entityId: openFile.id,
+      groupId: 'host-group-1',
+      worktreeId: WT,
+      contentType: 'editor',
+      label: 'README.md',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW - 10,
+      isPreview: false,
+      isPinned: false
+    }
+
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        activeFileId: openFile.id,
+        activeFileIdByWorktree: { [WT]: openFile.id },
+        activeTabType: 'editor',
+        activeTabTypeByWorktree: { [WT]: 'editor' },
+        openFiles: [openFile],
+        unifiedTabsByWorktree: { [WT]: [unifiedTab] },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              id: 'host-group-1',
+              worktreeId: WT,
+              activeTabId: unifiedTab.id,
+              tabOrder: [unifiedTab.id],
+              recentTabIds: [unifiedTab.id]
+            }
+          ]
+        }
+      }),
+      makeSnapshot([], { activeTabId: null, activeTabType: null }),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.openFiles).toEqual([])
+    expect(patch.unifiedTabsByWorktree?.[WT]).toBeUndefined()
+    expect(patch.groupsByWorktree?.[WT]).toBeUndefined()
+    expect(patch.activeFileId).toBeNull()
+    expect(patch.activeFileIdByWorktree?.[WT]).toBeNull()
   })
 
   it('ignores pending terminal handles so the web client does not spawn duplicates', () => {
