@@ -963,6 +963,51 @@
   text-underline-offset: 2px;
 }
 
+/* ── Git conflict decorations ───────────────────────────────────── */
+
+.monaco-editor .orca-conflict-marker-line {
+  background: color-mix(in srgb, var(--destructive) 12%, transparent);
+}
+
+.monaco-editor .orca-conflict-section-line {
+  border-left: 3px solid transparent;
+}
+
+.monaco-editor .orca-conflict-current-line {
+  background: color-mix(in srgb, var(--git-decoration-modified) 12%, transparent);
+  border-left-color: color-mix(in srgb, var(--git-decoration-modified) 72%, transparent);
+}
+
+.monaco-editor .orca-conflict-base-line {
+  background: color-mix(in srgb, var(--muted-foreground) 7%, transparent);
+  border-left-color: color-mix(in srgb, var(--muted-foreground) 36%, transparent);
+}
+
+.monaco-editor .orca-conflict-incoming-line {
+  background: color-mix(in srgb, var(--git-decoration-renamed) 11%, transparent);
+  border-left-color: color-mix(in srgb, var(--git-decoration-renamed) 68%, transparent);
+}
+
+.monaco-editor .orca-conflict-line-decoration {
+  width: 4px !important;
+  margin-left: 3px;
+  background: var(--destructive);
+  border-radius: 999px;
+}
+
+.monaco-editor .orca-conflict-margin {
+  background: color-mix(in srgb, var(--destructive) 8%, transparent);
+}
+
+.monaco-editor .orca-conflict-marker-label {
+  color: var(--destructive);
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: 11px;
+  font-weight: 600;
+  font-style: normal;
+  opacity: 0.92;
+}
+
 /* Why: Monaco's find-widget button tooltips (Close, Find in Selection, etc.)
    render inside a `.context-view` wrapper → `.workbench-hover-container` →
    `.workbench-hover.compact`, positioned above the target button. The wrapper's
