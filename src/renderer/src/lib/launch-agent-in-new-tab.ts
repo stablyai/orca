@@ -27,6 +27,7 @@ export type LaunchAgentInNewTabArgs = {
 export type LaunchAgentInNewTabResult = {
   tabId: string
   startupPlan: AgentStartupPlan
+  pasteDraftAfterLaunch: boolean
 } | null
 
 /**
@@ -178,5 +179,5 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   order.push(tab.id)
   fresh.setTabBarOrder(worktreeId, order)
 
-  return { tabId: tab.id, startupPlan }
+  return { tabId: tab.id, startupPlan, pasteDraftAfterLaunch: pasteDraftAfterLaunch !== null }
 }

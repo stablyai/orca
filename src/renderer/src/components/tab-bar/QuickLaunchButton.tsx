@@ -46,6 +46,29 @@ function orderAgents(
   return [defaultAgent, ...inCatalogOrder.filter((id) => id !== defaultAgent)]
 }
 
+export function shouldShowLaunchWatchdogTimeout({
+  launchSource,
+  prompt,
+  pasteDraftAfterLaunch,
+  hasPty
+}: {
+  launchSource?: LaunchSource
+  prompt?: string
+  pasteDraftAfterLaunch: boolean
+  hasPty: boolean
+}): boolean {
+  return !(
+    launchSource === 'notes_send' &&
+    (prompt?.trim().length ?? 0) > 0 &&
+    pasteDraftAfterLaunch &&
+    hasPty
+  )
+}
+
+function getLaunchWatchdogTimeoutMessage(label: string): string {
+  return `Couldn't launch ${label} — the terminal is still open.`
+}
+
 function QuickLaunchAgentMenuItemsInner({
   worktreeId,
   groupId,
@@ -114,7 +137,18 @@ function QuickLaunchAgentMenuItemsInner({
         if (state.activeWorktreeId !== worktreeId) {
           return
         }
-        toast.message(`Couldn't launch ${label} — the terminal is still open.`)
+        const hasPty = (state.ptyIdsByTabId[result.tabId]?.length ?? 0) > 0
+        if (
+          !shouldShowLaunchWatchdogTimeout({
+            launchSource,
+            prompt,
+            pasteDraftAfterLaunch: result.pasteDraftAfterLaunch,
+            hasPty
+          })
+        ) {
+          return
+        }
+        toast.message(getLaunchWatchdogTimeoutMessage(label))
       })
     },
     [worktreeId, groupId, onFocusTerminal, prompt, launchSource]
