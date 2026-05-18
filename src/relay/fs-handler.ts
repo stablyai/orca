@@ -2,6 +2,7 @@
    path expansion, file IO, search, streaming reads, Space scans, and watch lifecycle state. */
 import { readdir, writeFile, stat, lstat, mkdir, rename, cp, rm, realpath } from 'fs/promises'
 import { execFile } from 'child_process'
+import { tmpdir } from 'os'
 import { join } from 'path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { RelayContext } from './context'
@@ -64,6 +65,7 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.readDir', (p) => this.readDir(p))
     this.dispatcher.onRequest('fs.readFile', (p) => this.readFile(p))
     this.dispatcher.onRequest('fs.readFileStream', (p, c) => this.readFileStream(p, c))
+    this.dispatcher.onRequest('fs.tempDir', () => this.tempDir())
     this.dispatcher.onRequest('fs.writeFile', (p) => this.writeFile(p))
     this.dispatcher.onRequest('fs.stat', (p) => this.stat(p))
     this.dispatcher.onRequest('fs.deletePath', (p) => this.deletePath(p))
@@ -108,6 +110,10 @@ export class FsHandler {
     const filePath = expandTilde(params.filePath as string)
     const ctx = context ?? { clientId: 0, isStale: () => false }
     return readRelayFileStreamMetadata(filePath, this.dispatcher, this.streamRegistry, ctx)
+  }
+
+  private async tempDir(): Promise<string> {
+    return tmpdir()
   }
 
   private cancelStream(params: Record<string, unknown>): void {

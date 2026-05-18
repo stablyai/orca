@@ -744,7 +744,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     readClipboardText: () => navigator.clipboard?.readText?.() ?? Promise.resolve(''),
     readSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
-    saveClipboardImageAsTempFile: () => Promise.resolve(null),
+    saveClipboardImageAsTempFile: (_args?: { connectionId?: string | null }) =>
+      Promise.resolve(null),
     writeClipboardText: (text) => navigator.clipboard?.writeText?.(text) ?? Promise.resolve(),
     writeSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),

@@ -121,6 +121,7 @@ export type FileReadResult = {
 export type IFilesystemProvider = {
   readDir(dirPath: string): Promise<DirEntry[]>
   readFile(filePath: string): Promise<FileReadResult>
+  getTempDir?(): Promise<string>
   writeFile(filePath: string, content: string): Promise<void>
   writeFileBase64(filePath: string, contentBase64: string): Promise<void>
   writeFileBase64Chunk(filePath: string, contentBase64: string, append: boolean): Promise<void>

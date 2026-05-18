@@ -78,6 +78,11 @@ type TerminalPaneProps = {
   onCloseTab: () => void
 }
 
+function formatClipboardImagePasteError(error: unknown): string {
+  const detail = error instanceof Error ? error.message : String(error)
+  return `Image paste failed: ${detail}`
+}
+
 export default function TerminalPane({
   tabId,
   worktreeId,
@@ -843,12 +848,18 @@ export default function TerminalPane({
           // Why: clipboard has no text — check for an image. This is the
           // image-only clipboard case (e.g. screenshot) where Chromium's paste
           // event would never fire on a textarea. We save the image to a temp
-          // file and paste the path so the terminal process can access it.
-          return window.api.ui.saveClipboardImageAsTempFile().then((filePath) => {
-            if (filePath) {
-              pane.terminal.paste(filePath)
-            }
-          })
+          // file owned by the terminal host and paste that path.
+          const connectionId = getConnectionId(worktreeId) ?? null
+          return window.api.ui
+            .saveClipboardImageAsTempFile({ connectionId })
+            .then((filePath) => {
+              if (filePath) {
+                pane.terminal.paste(filePath)
+              }
+            })
+            .catch((error: unknown) => {
+              setTerminalError(formatClipboardImagePasteError(error))
+            })
         })
         .catch(() => {
           /* ignore clipboard failures */
@@ -912,7 +923,7 @@ export default function TerminalPane({
       container.removeEventListener('keydown', onKeyPaste, { capture: true })
       container.removeEventListener('paste', onPaste, { capture: true })
     }
-  }, [isActive])
+  }, [isActive, worktreeId])
 
   // Why: a click inside the terminal container is a deliberate interaction
   // with the pane — dismiss the bell indicator for this tab and worktree
@@ -1113,10 +1124,12 @@ export default function TerminalPane({
     managerRef,
     paneTransportsRef,
     paneCwdRef,
+    worktreeId,
     fallbackCwd: cwd ?? '',
     toggleExpandPane,
     onRequestClosePane: handleRequestClosePane,
     onSetTitle: handleStartRename,
+    onPasteError: setTerminalError,
     rightClickToPaste
   })
 

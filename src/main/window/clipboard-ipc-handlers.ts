@@ -1,7 +1,47 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 
 import { app, clipboard, ipcMain, nativeImage } from 'electron'
+import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
+
+type SaveClipboardImageAsTempFileArgs = {
+  connectionId?: string | null
+}
+
+const REMOTE_CLIPBOARD_IMAGE_TEMP_DIR = '/tmp'
+
+function joinRemotePath(basePath: string, fileName: string): string {
+  if (isWindowsAbsolutePathLike(basePath)) {
+    return path.win32.join(basePath, fileName)
+  }
+  return path.posix.join(basePath, fileName)
+}
+
+async function saveClipboardImageBufferAsTempFile(
+  buffer: Buffer,
+  args?: SaveClipboardImageAsTempFileArgs
+): Promise<string> {
+  const fileName = `orca-paste-${Date.now()}-${randomUUID()}.png`
+
+  if (args?.connectionId) {
+    const provider = getSshFilesystemProvider(args.connectionId)
+    if (!provider) {
+      throw new Error(`No filesystem provider for connection "${args.connectionId}"`)
+    }
+    const remoteTempDir = (await provider.getTempDir?.()) ?? REMOTE_CLIPBOARD_IMAGE_TEMP_DIR
+    const remotePath = joinRemotePath(remoteTempDir, fileName)
+    // Why: SSH terminal agents run on the remote host, so the pasted path must
+    // name a remote file. The provider's base64 path writes binary bytes via SFTP.
+    await provider.writeFileBase64(remotePath, buffer.toString('base64'))
+    return remotePath
+  }
+
+  const tempPath = path.join(app.getPath('temp'), fileName)
+  await fs.writeFile(tempPath, buffer)
+  return tempPath
+}
 
 export function registerClipboardHandlers(): void {
   ipcMain.removeHandler('clipboard:readText')
@@ -16,15 +56,16 @@ export function registerClipboardHandlers(): void {
   // Why: terminals need to detect clipboard images to support tools like Claude
   // Code that accept image input via paste. Writes the clipboard image to a
   // temp file and returns the path, or null if the clipboard has no image.
-  ipcMain.handle('clipboard:saveImageAsTempFile', async () => {
-    const image = clipboard.readImage()
-    if (image.isEmpty()) {
-      return null
+  ipcMain.handle(
+    'clipboard:saveImageAsTempFile',
+    async (_event, args?: SaveClipboardImageAsTempFileArgs) => {
+      const image = clipboard.readImage()
+      if (image.isEmpty()) {
+        return null
+      }
+      return saveClipboardImageBufferAsTempFile(image.toPNG(), args)
     }
-    const tempPath = path.join(app.getPath('temp'), `orca-paste-${Date.now()}.png`)
-    await fs.writeFile(tempPath, image.toPNG())
-    return tempPath
-  })
+  )
   ipcMain.handle('clipboard:writeText', (_event, text: string) => clipboard.writeText(text))
   ipcMain.handle('clipboard:writeSelectionText', (_event, text: string) =>
     clipboard.writeText(text, 'selection')
