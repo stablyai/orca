@@ -1,5 +1,11 @@
 import { useState } from 'react'
-import type { OrcaHooks, Repo, RepoHookSettings, SetupRunPolicy } from '../../../../shared/types'
+import type {
+  HookCommandSourcePolicy,
+  OrcaHooks,
+  Repo,
+  RepoHookSettings,
+  SetupRunPolicy
+} from '../../../../shared/types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import { REPO_COLORS } from '../../../../shared/constants'
 import { Button } from '../ui/button'
@@ -103,9 +109,14 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
             keywords: [repo.displayName, 'hooks', 'setup', 'archive', 'yaml']
           },
           {
-            title: 'Legacy Repo-Local Hooks',
-            description: 'Older setup and archive hook scripts stored in local repo settings.',
-            keywords: [repo.displayName, 'legacy', 'fallback', 'hooks']
+            title: 'Local Settings Commands',
+            description: 'Personal setup and archive commands stored locally on this machine.',
+            keywords: [repo.displayName, 'local', 'personal', 'fallback', 'hooks']
+          },
+          {
+            title: 'Command Source',
+            description: 'Choose whether Orca runs shared or local commands when both exist.',
+            keywords: [repo.displayName, 'local', 'orca.yaml', 'shared', 'both', 'source']
           },
           {
             title: 'When to Run Setup',
@@ -161,11 +172,11 @@ export function RepositoryPane({
   }
 
   const updateSelectedRepoHookSettings = (
-    updates: Partial<Pick<RepoHookSettings, 'setupRunPolicy'>>
+    updates: Partial<Pick<RepoHookSettings, 'setupRunPolicy' | 'commandSourcePolicy' | 'scripts'>>
   ) => {
-    // Why: persisted repos may still carry legacy UI hook fields from the old dual-source
-    // design. We preserve them when saving so existing local state stays loadable, but the
-    // product now treats `orca.yaml` as the only supported hook definition surface.
+    // Why: local Settings commands and shared `orca.yaml` commands resolve together.
+    // Preserve the full persisted hook shape when saving one field so changing a
+    // policy does not drop a user's local command drafts.
     const nextSettings: RepoHookSettings = {
       ...DEFAULT_REPO_HOOK_SETTINGS,
       ...repo.hookSettings,
@@ -215,7 +226,8 @@ export function RepositoryPane({
   const hooksEntries = allEntries.filter((entry) =>
     [
       'orca.yaml hooks',
-      'Legacy Repo-Local Hooks',
+      'Local Settings Commands',
+      'Command Source',
       'When to Run Setup',
       'Custom GitHub Issue Command'
     ].includes(entry.title)
@@ -341,6 +353,20 @@ export function RepositoryPane({
         copiedTemplate={copiedTemplate}
         onCopyTemplate={() => void handleCopyTemplate()}
         onClearLegacyHooks={handleClearLegacyHooks}
+        onUpdateLocalHookScript={(hookName, script) =>
+          updateSelectedRepoHookSettings({
+            scripts: {
+              ...DEFAULT_REPO_HOOK_SETTINGS.scripts,
+              ...repo.hookSettings?.scripts,
+              [hookName]: script
+            }
+          })
+        }
+        onUpdateCommandSourcePolicy={(policy) =>
+          updateSelectedRepoHookSettings({
+            commandSourcePolicy: policy as HookCommandSourcePolicy
+          })
+        }
         onUpdateSetupRunPolicy={(policy) =>
           updateSelectedRepoHookSettings({ setupRunPolicy: policy as SetupRunPolicy })
         }

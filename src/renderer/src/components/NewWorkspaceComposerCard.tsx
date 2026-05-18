@@ -30,6 +30,7 @@ import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPreset
 import SmartWorkspaceNameField, {
   type SmartWorkspaceNameSelection
 } from '@/components/new-workspace/SmartWorkspaceNameField'
+import type { SetupConfig } from '@/lib/new-workspace'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 
@@ -63,7 +64,7 @@ type NewWorkspaceComposerCardProps = {
   onCreate: () => void
   note: string
   onNoteChange: (value: string) => void
-  setupConfig: { source: 'yaml' | 'legacy'; command: string } | null
+  setupConfig: SetupConfig | null
   requiresExplicitSetupChoice: boolean
   setupDecision: 'run' | 'skip' | null
   onSetupDecisionChange: (value: 'run' | 'skip') => void
@@ -96,7 +97,7 @@ function SetupCommandPreview({
   setupConfig,
   headerAction
 }: {
-  setupConfig: { source: 'yaml' | 'legacy'; command: string }
+  setupConfig: SetupConfig
   headerAction?: React.ReactNode
 }): React.JSX.Element {
   if (setupConfig.source === 'yaml') {
@@ -117,7 +118,7 @@ function SetupCommandPreview({
     <div className="rounded-2xl border border-border/60 bg-muted/35 px-4 py-3 shadow-inner">
       <div className="mb-2 flex items-center justify-between gap-3">
         <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-          Legacy setup command
+          {setupConfig.source === 'both' ? 'Combined setup command' : 'Local setup command'}
         </div>
         {headerAction}
       </div>
@@ -519,7 +520,11 @@ export default function NewWorkspaceComposerCard({
                       Setup script
                     </label>
                     <span className="rounded-full border border-border/70 bg-muted/45 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-foreground/70">
-                      {setupConfig.source === 'yaml' ? 'orca.yaml' : 'legacy hooks'}
+                      {setupConfig.source === 'yaml'
+                        ? 'orca.yaml'
+                        : setupConfig.source === 'both'
+                          ? 'orca.yaml + local'
+                          : 'local settings'}
                     </span>
                   </div>
 

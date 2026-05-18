@@ -46,7 +46,8 @@ import {
   getWorkspaceSeedName,
   PER_REPO_FETCH_LIMIT,
   renderIssueCommandTemplate,
-  type LinkedWorkItemSummary
+  type LinkedWorkItemSummary,
+  type SetupConfig
 } from '@/lib/new-workspace'
 import {
   getFullComposerCreateDisabled,
@@ -181,7 +182,7 @@ export type ComposerCardProps = {
   /** Transient inline hint shown next to the Start-from trigger after a repo
    *  switch resets a prior selection (e.g. "was PR #8778"). Null when none. */
   startFromResetHint: string | null
-  setupConfig: { source: 'yaml' | 'legacy'; command: string } | null
+  setupConfig: SetupConfig | null
   requiresExplicitSetupChoice: boolean
   setupDecision: 'run' | 'skip' | null
   onSetupDecisionChange: (value: 'run' | 'skip') => void

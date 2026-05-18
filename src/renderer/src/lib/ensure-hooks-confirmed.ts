@@ -38,6 +38,10 @@ export async function ensureHooksConfirmed(
         }
         scriptContent = (result.sharedContent ?? '').trim()
       } else {
+        const repo = state.repos.find((r) => r.id === repoId)
+        if (repo?.hookSettings?.commandSourcePolicy === 'local-only') {
+          return 'run'
+        }
         const result = await checkRuntimeHooks(state.settings, repoId)
         const yamlHooks = (result.hooks as OrcaHooks | null) ?? null
         scriptContent = (yamlHooks?.scripts?.[scriptKind] ?? '').trim()

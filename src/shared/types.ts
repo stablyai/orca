@@ -94,6 +94,7 @@ export type Repo = {
 
 export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
 export type SetupDecision = 'inherit' | 'run' | 'skip'
+export type HookCommandSourcePolicy = 'shared-first' | 'local-only' | 'run-both'
 
 /**
  * Envelope returned by the `repos:getBaseRefDefault` IPC handler.
@@ -1049,11 +1050,11 @@ export type OrcaHooks = {
 }
 
 export type RepoHookSettings = {
-  // Why: legacy persisted data may still include the old UI-hook fields. Orca no longer
-  // treats them as an active config surface, but we keep them in the stored shape so
-  // existing local state can still be read without migrations.
+  // Why: persisted data may still include the old mode field from the earlier
+  // hook UI. Keep it in the shape so existing local state reads without a migration.
   mode: 'auto' | 'override'
   setupRunPolicy?: SetupRunPolicy
+  commandSourcePolicy?: HookCommandSourcePolicy
   scripts: {
     setup: string
     archive: string

@@ -61,6 +61,8 @@ export type LinkedWorkItemSummary = {
 // is the minimum viable instruction that always produces a coherent agent task.
 export const DEFAULT_ISSUE_COMMAND_TEMPLATE = 'Complete {{artifact_url}}'
 
+export type SetupConfig = { source: 'yaml' | 'local' | 'both'; command: string }
+
 /**
  * Substitute the issue-command template variables. Prefers `{{artifact_url}}`
  * and keeps `{{issue}}` working silently for repos that have not migrated
@@ -115,16 +117,33 @@ export function getAttachmentLabel(pathValue: string): string {
 }
 
 export function getSetupConfig(
-  repo: { hookSettings?: { scripts?: { setup?: string } } } | undefined,
+  repo:
+    | {
+        hookSettings?: {
+          commandSourcePolicy?: 'shared-first' | 'local-only' | 'run-both'
+          scripts?: { setup?: string }
+        }
+      }
+    | undefined,
   yamlHooks: OrcaHooks | null
-): { source: 'yaml' | 'legacy'; command: string } | null {
+): SetupConfig | null {
   const yamlSetup = yamlHooks?.scripts?.setup?.trim()
+  const localSetup = repo?.hookSettings?.scripts?.setup?.trim()
+  const sourcePolicy = repo?.hookSettings?.commandSourcePolicy ?? 'shared-first'
+
+  if (sourcePolicy === 'local-only') {
+    return localSetup ? { source: 'local', command: localSetup } : null
+  }
+
+  if (sourcePolicy === 'run-both' && yamlSetup && localSetup) {
+    return { source: 'both', command: `${yamlSetup}\n${localSetup}` }
+  }
+
   if (yamlSetup) {
     return { source: 'yaml', command: yamlSetup }
   }
-  const legacySetup = repo?.hookSettings?.scripts?.setup?.trim()
-  if (legacySetup) {
-    return { source: 'legacy', command: legacySetup }
+  if (localSetup) {
+    return { source: 'local', command: localSetup }
   }
   return null
 }
