@@ -8,10 +8,11 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { AlertTriangle, Check, LoaderCircle, Trash2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
-import { runWorktreeDeletesSequentially } from './delete-worktree-flow'
+import { runWorktreeDeletesInParallel } from './delete-worktree-flow'
 
 const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -50,14 +51,20 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     const selected = new Set(worktreeIds)
     return allWorktrees().filter((item) => selected.has(item.id))
   }, [allWorktrees, worktreeIds])
-  const deleteState = useAppStore((s) =>
-    worktreeId ? s.deleteStateByWorktreeId[worktreeId] : undefined
-  )
-  const isDeleting = deleteState?.isDeleting ?? false
-  const deleteError = deleteState?.error ?? null
-  const canForceDelete = deleteState?.canForceDelete ?? false
-  const confirmButtonRef = useRef<HTMLButtonElement>(null)
   const isBatchDelete = worktreeIds.length > 1
+  const deleteStateByWorktreeId = useAppStore((s) => s.deleteStateByWorktreeId)
+  const deleteStates = useMemo(
+    () =>
+      worktreeIds
+        .map((id) => deleteStateByWorktreeId[id])
+        .filter((state): state is NonNullable<typeof state> => state != null),
+    [deleteStateByWorktreeId, worktreeIds]
+  )
+  const deleteState = worktreeId ? deleteStateByWorktreeId[worktreeId] : undefined
+  const isDeleting = deleteStates.some((state) => state.isDeleting)
+  const deleteError = !isBatchDelete ? (deleteState?.error ?? null) : null
+  const canForceDelete = !isBatchDelete && (deleteState?.canForceDelete ?? false)
+  const confirmButtonRef = useRef<HTMLButtonElement>(null)
   const allowSkipConfirm = !isBatchDelete && modalData.allowSkipConfirm !== false
   // Why: the main worktree is the repo's original clone directory — `git worktree remove`
   // always rejects it. We block the delete button upfront so the user doesn't have to
@@ -77,7 +84,9 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
 
   useEffect(() => {
     if (isOpen && worktreeIds.length > 0 && worktrees.length === 0 && !isDeleting) {
-      clearWorktreeDeleteState(worktreeId)
+      for (const id of worktreeIds) {
+        clearWorktreeDeleteState(id)
+      }
       closeModal()
     }
   }, [
@@ -85,7 +94,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     closeModal,
     isDeleting,
     isOpen,
-    worktreeId,
+    worktreeIds,
     worktreeIds.length,
     worktrees.length
   ])
@@ -98,12 +107,19 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
       const currentState = worktreeId
         ? useAppStore.getState().deleteStateByWorktreeId[worktreeId]
         : undefined
-      if (worktreeId && !currentState?.isDeleting) {
+      if (isBatchDelete) {
+        const state = useAppStore.getState().deleteStateByWorktreeId
+        for (const id of worktreeIds) {
+          if (!state[id]?.isDeleting) {
+            clearWorktreeDeleteState(id)
+          }
+        }
+      } else if (worktreeId && !currentState?.isDeleting) {
         clearWorktreeDeleteState(worktreeId)
       }
       closeModal()
     },
-    [clearWorktreeDeleteState, closeModal, worktreeId]
+    [clearWorktreeDeleteState, closeModal, isBatchDelete, worktreeId, worktreeIds]
   )
 
   const persistDontAskAgainPreference = useCallback((): void => {
@@ -154,6 +170,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
               return
             }
             onDeleted?.([worktreeId])
+            closeModal()
           })
           .catch((err: unknown) => {
             toast.error('Failed to delete worktree', {
@@ -161,13 +178,16 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
             })
           })
       } else {
-        void runWorktreeDeletesSequentially(worktrees).then((deletedIds) => {
+        const targetCount = worktrees.length
+        void runWorktreeDeletesInParallel(worktrees).then((deletedIds) => {
           if (deletedIds.length > 0) {
             onDeleted?.(deletedIds)
           }
+          if (deletedIds.length === targetCount) {
+            closeModal()
+          }
         })
       }
-      closeModal()
     },
     [
       closeModal,
@@ -223,14 +243,36 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         </DialogHeader>
 
         {isBatchDelete ? (
-          <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs">
-            {worktrees.map((item) => (
-              <div key={item.id} className="min-w-0 border-b border-border/50 py-1 last:border-0">
-                <div className="break-all font-medium text-foreground">{item.displayName}</div>
-                <div className="mt-0.5 break-all text-muted-foreground">{item.path}</div>
-              </div>
-            ))}
-          </div>
+          <ScrollArea className="max-h-48 rounded-md border border-border/70 bg-muted/35 text-xs">
+            <div className="space-y-1 px-3 py-2">
+              {worktrees.map((item) => {
+                const itemDeleteState = deleteStateByWorktreeId[item.id]
+                return (
+                  <div
+                    key={item.id}
+                    className="min-w-0 border-b border-border/50 py-1 last:border-0"
+                  >
+                    <div className="flex min-w-0 items-start gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="break-all font-medium text-foreground">
+                          {item.displayName}
+                        </div>
+                        <div className="mt-0.5 break-all text-muted-foreground">{item.path}</div>
+                        {itemDeleteState?.error ? (
+                          <div className="mt-1 whitespace-pre-wrap break-all text-destructive">
+                            {itemDeleteState.error}
+                          </div>
+                        ) : null}
+                      </div>
+                      {itemDeleteState?.isDeleting ? (
+                        <LoaderCircle className="mt-0.5 size-3.5 shrink-0 animate-spin text-muted-foreground" />
+                      ) : null}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </ScrollArea>
         ) : worktree ? (
           <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs">
             <div className="break-all font-medium text-foreground">{worktree.displayName}</div>

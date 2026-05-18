@@ -22,19 +22,16 @@ function viewWorktreeDiff(worktreeId: string): void {
   state.setRightSidebarOpen(true)
 }
 
-export async function runWorktreeDeletesSequentially(
+export async function runWorktreeDeletesInParallel(
   targets: readonly Pick<Worktree, 'id' | 'displayName'>[]
 ): Promise<string[]> {
-  const deletedIds: string[] = []
-  for (const target of targets) {
-    // Why: git worktree removals for one repo contend on git lock files.
-    // Running the user-selected batch sequentially avoids partial lock races.
-    const deleted = await runWorktreeDeleteWithToast(target.id, target.displayName)
-    if (deleted) {
-      deletedIds.push(target.id)
-    }
-  }
-  return deletedIds
+  const results = await Promise.all(
+    targets.map(async (target) => ({
+      worktreeId: target.id,
+      deleted: await runWorktreeDeleteWithToast(target.id, target.displayName)
+    }))
+  )
+  return results.filter((result) => result.deleted).map((result) => result.worktreeId)
 }
 
 /**
@@ -181,7 +178,7 @@ export function runWorktreeBatchDelete(
     targets.length === 1 &&
     (state.settings?.skipDeleteWorktreeConfirm ?? false)
   if (skipConfirm) {
-    void runWorktreeDeletesSequentially(targets).then((deletedIds) => {
+    void runWorktreeDeletesInParallel(targets).then((deletedIds) => {
       if (deletedIds.length > 0) {
         options.onDeleted?.(deletedIds)
       }
