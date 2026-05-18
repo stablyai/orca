@@ -9,6 +9,42 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('session tab RPC methods', () => {
+  it('dispatches tab moves through the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      moveMobileSessionTab: vi.fn().mockResolvedValue({
+        worktree: 'wt-1',
+        publicationEpoch: 'epoch-2',
+        snapshotVersion: 2,
+        activeGroupId: 'group-right',
+        activeTabId: 'tab-1::leaf-1',
+        activeTabType: 'terminal',
+        tabs: []
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('session.tabs.move', {
+        worktree: 'id:wt-1',
+        tabId: 'tab-1::leaf-1',
+        targetGroupId: 'group-left',
+        index: 1,
+        splitDirection: 'right',
+        tabOrder: ['tab-2::leaf-1', 'tab-1::leaf-1']
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    expect(runtime.moveMobileSessionTab).toHaveBeenCalledWith('id:wt-1', {
+      tabId: 'tab-1::leaf-1',
+      targetGroupId: 'group-left',
+      index: 1,
+      splitDirection: 'right',
+      tabOrder: ['tab-2::leaf-1', 'tab-1::leaf-1']
+    })
+  })
+
   it('streams all known session tab snapshots and later updates', async () => {
     const unsubscribe = vi.fn()
     const listeners: ((snapshot: unknown) => void)[] = []

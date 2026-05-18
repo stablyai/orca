@@ -3,6 +3,7 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type {
   BrowserTabCreateResult,
   RuntimeMobileSessionCreateTerminalResult,
+  RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTabsResult,
   RuntimeTerminalSplit
 } from '../../../shared/runtime-types'
@@ -274,6 +275,48 @@ export async function closeWebRuntimeSessionTab(args: {
   environmentId?: string | null
 }): Promise<boolean> {
   return callWebRuntimeSessionTabMethod('session.tabs.close', args)
+}
+
+export async function moveWebRuntimeSessionTab(args: {
+  worktreeId: string
+  tabId: string
+  targetGroupId: string
+  environmentId?: string | null
+  index?: number
+  splitDirection?: RuntimeMobileSessionTabMove['splitDirection']
+  tabOrder?: string[]
+}): Promise<boolean> {
+  const environmentId =
+    args.environmentId?.trim() ??
+    useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() ??
+    null
+  if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
+    return false
+  }
+
+  try {
+    const response = await window.api.runtimeEnvironments.call({
+      selector: environmentId,
+      method: 'session.tabs.move',
+      params: {
+        worktree: `id:${args.worktreeId}`,
+        tabId: toHostSessionTabId(args.tabId),
+        targetGroupId: args.targetGroupId,
+        index: args.index,
+        splitDirection: args.splitDirection,
+        tabOrder: args.tabOrder?.map(toHostSessionTabId)
+      },
+      timeoutMs: 15_000
+    })
+    unwrapRuntimeRpcResult(response as RuntimeRpcResponse<RuntimeMobileSessionTabsResult>)
+    return true
+  } catch (error) {
+    console.warn(
+      '[web-runtime-session] failed to move tab:',
+      error instanceof Error ? error.message : String(error)
+    )
+    return false
+  }
 }
 
 async function callWebRuntimeSessionTabMethod(

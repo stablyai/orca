@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import {
   createWebRuntimeSessionBrowserTab,
-  createWebRuntimeSessionTerminal
+  createWebRuntimeSessionTerminal,
+  moveWebRuntimeSessionTab
 } from './web-runtime-session'
 
 const mocks = vi.hoisted(() => ({
@@ -384,5 +385,71 @@ describe('createWebRuntimeSessionTerminal', () => {
       snapshot,
       ENVIRONMENT_ID
     )
+  })
+})
+
+describe('moveWebRuntimeSessionTab', () => {
+  beforeEach(() => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    mocks.getState.mockReturnValue({
+      settings: {
+        activeRuntimeEnvironmentId: ENVIRONMENT_ID
+      }
+    })
+    mocks.setState.mockImplementation((updater: (state: unknown) => unknown) => {
+      updater({
+        state: 'before',
+        activeWorktreeId: WORKTREE_ID
+      })
+    })
+    mocks.applyFreshWebSessionTabsSnapshot.mockReturnValue({ state: 'after' })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('moves paired web tabs through the host session API without an eager stale refresh', async () => {
+    const snapshot = makeSnapshot()
+    const runtimeCall = vi.fn().mockResolvedValueOnce({
+      id: 'move',
+      ok: true,
+      result: snapshot
+    })
+
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          call: runtimeCall
+        }
+      }
+    })
+
+    await expect(
+      moveWebRuntimeSessionTab({
+        worktreeId: WORKTREE_ID,
+        tabId: 'web-terminal-host-tab-1%3A%3Aleaf-1',
+        targetGroupId: 'group-right',
+        splitDirection: 'right',
+        tabOrder: ['web-terminal-host-tab-2%3A%3Aleaf-1', 'web-terminal-host-tab-1%3A%3Aleaf-1']
+      })
+    ).resolves.toBe(true)
+
+    expect(runtimeCall).toHaveBeenNthCalledWith(1, {
+      selector: ENVIRONMENT_ID,
+      method: 'session.tabs.move',
+      params: {
+        worktree: `id:${WORKTREE_ID}`,
+        tabId: 'host-tab-1::leaf-1',
+        targetGroupId: 'group-right',
+        index: undefined,
+        splitDirection: 'right',
+        tabOrder: ['host-tab-2::leaf-1', 'host-tab-1::leaf-1']
+      },
+      timeoutMs: 15_000
+    })
+    expect(runtimeCall).toHaveBeenCalledTimes(1)
+    expect(mocks.applyFreshWebSessionTabsSnapshot).not.toHaveBeenCalled()
   })
 })

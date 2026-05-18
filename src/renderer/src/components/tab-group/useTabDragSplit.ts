@@ -17,6 +17,10 @@ import {
 } from '@dnd-kit/core'
 import type { TabGroup } from '../../../../shared/types'
 import { useAppStore } from '../../store'
+import {
+  isWebRuntimeSessionActive,
+  moveWebRuntimeSessionTab
+} from '../../runtime/web-runtime-session'
 import type { TabSplitDirection } from '../../store/slices/tabs'
 import {
   resolveTabInsertion,
@@ -53,6 +57,24 @@ export type TabPaneDropData = {
 export type HoveredTabDropTarget = {
   groupId: string
   zone: TabDropZone
+}
+
+function mirrorWebRuntimeTabMove(args: {
+  worktreeId: string
+  tabId: string
+  targetGroupId: string
+  index?: number
+  splitDirection?: TabSplitDirection
+  tabOrder?: string[]
+}): void {
+  const environmentId = useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() ?? null
+  if (!isWebRuntimeSessionActive(environmentId)) {
+    return
+  }
+  void moveWebRuntimeSessionTab({
+    ...args,
+    environmentId
+  })
 }
 
 export function canDropTabIntoPaneBody({
@@ -321,12 +343,27 @@ export function useTabDragSplit({
             const nextOrder = targetGroup.tabOrder.filter((id) => id !== activeData.unifiedTabId)
             nextOrder.splice(nextIndex, 0, activeData.unifiedTabId)
             reorderUnifiedTabs(overData.groupId, nextOrder)
+            mirrorWebRuntimeTabMove({
+              worktreeId,
+              tabId: activeData.unifiedTabId,
+              targetGroupId: overData.groupId,
+              tabOrder: nextOrder
+            })
           }
         } else {
-          dropUnifiedTab(activeData.unifiedTabId, {
+          const index = overIndex === -1 ? targetGroup.tabOrder.length : rawInsertIndex
+          const moved = dropUnifiedTab(activeData.unifiedTabId, {
             groupId: overData.groupId,
-            index: overIndex === -1 ? targetGroup.tabOrder.length : rawInsertIndex
+            index
           })
+          if (moved) {
+            mirrorWebRuntimeTabMove({
+              worktreeId,
+              tabId: activeData.unifiedTabId,
+              targetGroupId: overData.groupId,
+              index
+            })
+          }
         }
 
         clearDragState()
@@ -356,10 +393,18 @@ export function useTabDragSplit({
           // Skip the call in that case to avoid misleading the user via a
           // drop that silently does nothing.
           if (zone !== 'center' || activeData.groupId !== overData.groupId) {
-            dropUnifiedTab(activeData.unifiedTabId, {
+            const moved = dropUnifiedTab(activeData.unifiedTabId, {
               groupId: overData.groupId,
               splitDirection: zone === 'center' ? undefined : zone
             })
+            if (moved) {
+              mirrorWebRuntimeTabMove({
+                worktreeId,
+                tabId: activeData.unifiedTabId,
+                targetGroupId: overData.groupId,
+                splitDirection: zone === 'center' ? undefined : zone
+              })
+            }
           }
         }
       }

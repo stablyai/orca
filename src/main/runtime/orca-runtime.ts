@@ -76,6 +76,7 @@ import type {
   RuntimeMobileSessionCreateTerminalResult,
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionMarkdownTab,
+  RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTerminalTab,
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult,
@@ -445,6 +446,7 @@ type RuntimeNotifier = {
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
   focusEditorTab?(tabId: string, worktreeId: string): void
   closeSessionTab?(tabId: string, worktreeId: string): void
+  moveSessionTab?(worktreeId: string, move: RuntimeMobileSessionTabMove): void
   openFile?(worktreeId: string, filePath: string, relativePath: string): void
   openDiff?(worktreeId: string, filePath: string, relativePath: string, staged: boolean): void
   readMobileMarkdownTab?(worktreeId: string, tabId: string): Promise<RuntimeMarkdownReadTabResult>
@@ -1227,6 +1229,49 @@ export class OrcaRuntimeService {
       this.notifier?.closeSessionTab?.(tab.id, worktreeId)
     }
     return { closed: true }
+  }
+
+  async moveMobileSessionTab(
+    worktreeSelector: string,
+    move: RuntimeMobileSessionTabMove
+  ): Promise<RuntimeMobileSessionTabsResult> {
+    const explicitWorktreeId = getExplicitWorktreeIdSelector(worktreeSelector)
+    const worktreeId =
+      explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
+    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    const hostTabId = this.resolveMobileSessionHostTabId(snapshot, move.tabId)
+    if (!hostTabId) {
+      throw new Error('tab_not_found')
+    }
+
+    // Why: web clients address terminal surfaces as tab::leaf, while desktop
+    // tab grouping is owned by the outer terminal tab id.
+    this.notifier?.moveSessionTab?.(worktreeId, {
+      ...move,
+      tabId: hostTabId,
+      tabOrder: move.tabOrder
+        ?.map((tabId) => this.resolveMobileSessionHostTabId(snapshot, tabId))
+        .filter((tabId): tabId is string => Boolean(tabId))
+    })
+    return this.getMobileSessionTabsForWorktree(worktreeId)
+  }
+
+  private resolveMobileSessionHostTabId(
+    snapshot: RuntimeMobileSessionTabsSnapshot | undefined,
+    tabId: string
+  ): string | null {
+    const tab =
+      snapshot?.tabs.find((candidate) => candidate.id === tabId) ??
+      snapshot?.tabs.find(
+        (candidate) => candidate.type === 'terminal' && candidate.parentTabId === tabId
+      ) ??
+      snapshot?.tabs.find(
+        (candidate) => candidate.type === 'browser' && candidate.browserWorkspaceId === tabId
+      )
+    if (!tab) {
+      return null
+    }
+    return tab.type === 'terminal' ? tab.parentTabId : tab.id
   }
 
   async readMobileMarkdownTab(
@@ -8095,6 +8140,8 @@ export class OrcaRuntimeService {
       activeGroupId: snapshot.activeGroupId,
       activeTabId: active?.id ?? null,
       activeTabType: active?.type ?? null,
+      ...(snapshot.tabGroups ? { tabGroups: snapshot.tabGroups } : {}),
+      ...(snapshot.tabGroupLayout !== undefined ? { tabGroupLayout: snapshot.tabGroupLayout } : {}),
       tabs: normalizedTabs
     }
   }

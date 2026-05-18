@@ -7,6 +7,7 @@ import type {
   BrowserSessionProfileSource,
   GitWorktreeInfo,
   Repo,
+  TabGroupLayoutNode,
   TerminalLayoutSnapshot,
   Worktree,
   WorktreeLineage,
@@ -172,6 +173,21 @@ export type RuntimeMobileSessionClientTab =
   | RuntimeMobileSessionFileTab
   | RuntimeMobileSessionBrowserTab
 
+export type RuntimeMobileSessionTabGroup = {
+  id: string
+  activeTabId: string | null
+  tabOrder: string[]
+  recentTabIds?: string[]
+}
+
+export type RuntimeMobileSessionTabMove = {
+  tabId: string
+  targetGroupId: string
+  index?: number
+  splitDirection?: 'left' | 'right' | 'up' | 'down'
+  tabOrder?: string[]
+}
+
 export type RuntimeMobileSessionTabsSnapshot = {
   worktree: string
   publicationEpoch: string
@@ -179,6 +195,8 @@ export type RuntimeMobileSessionTabsSnapshot = {
   activeGroupId: string | null
   activeTabId: string | null
   activeTabType: 'terminal' | 'markdown' | 'file' | 'browser' | null
+  tabGroups?: RuntimeMobileSessionTabGroup[]
+  tabGroupLayout?: TabGroupLayoutNode | null
   tabs: RuntimeMobileSessionSnapshotTab[]
 }
 
@@ -189,6 +207,8 @@ export type RuntimeMobileSessionTabsResult = {
   activeGroupId: string | null
   activeTabId: string | null
   activeTabType: 'terminal' | 'markdown' | 'file' | 'browser' | null
+  tabGroups?: RuntimeMobileSessionTabGroup[]
+  tabGroupLayout?: TabGroupLayoutNode | null
   tabs: RuntimeMobileSessionClientTab[]
 }
 

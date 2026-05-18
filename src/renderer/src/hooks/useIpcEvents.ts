@@ -1039,6 +1039,23 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
+      window.api.ui.onMoveSessionTab(
+        ({ tabId, targetGroupId, index, splitDirection, tabOrder }) => {
+          const store = useAppStore.getState()
+          if (tabOrder) {
+            store.reorderUnifiedTabs(targetGroupId, tabOrder)
+            return
+          }
+          store.dropUnifiedTab(tabId, {
+            groupId: targetGroupId,
+            index,
+            splitDirection
+          })
+        }
+      )
+    )
+
+    unsubs.push(
       window.api.ui.onOpenFileFromMobile(({ worktreeId, filePath, relativePath }) => {
         const store = useAppStore.getState()
         const basename = relativePath.split(/[\\/]/).pop() || relativePath

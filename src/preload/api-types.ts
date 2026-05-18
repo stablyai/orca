@@ -161,6 +161,7 @@ import type {
 } from '../shared/agent-status-types'
 import type {
   RuntimeBrowserDriverState,
+  RuntimeMobileSessionTabMove,
   RuntimeStatus,
   RuntimeSyncWindowGraph,
   RuntimeTerminalDriverState
@@ -1637,6 +1638,9 @@ export type PreloadApi = {
     ) => () => void
     onCloseSessionTab: (
       callback: (data: { tabId: string; worktreeId: string }) => void
+    ) => () => void
+    onMoveSessionTab: (
+      callback: (data: { worktreeId: string } & RuntimeMobileSessionTabMove) => void
     ) => () => void
     onOpenFileFromMobile: (
       callback: (data: { worktreeId: string; filePath: string; relativePath: string }) => void

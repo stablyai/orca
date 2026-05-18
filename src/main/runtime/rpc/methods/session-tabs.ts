@@ -21,6 +21,20 @@ const CreateTerminalTab = WorktreeTabSelector.extend({
   activate: z.boolean().optional()
 })
 
+const MoveTab = WorktreeTabSelector.extend({
+  tabId: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(z.string().min(1, 'Missing tab id')),
+  targetGroupId: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(z.string().min(1, 'Missing target group id')),
+  index: z.number().int().nonnegative().optional(),
+  splitDirection: z.enum(['left', 'right', 'up', 'down']).optional(),
+  tabOrder: z.array(z.string()).optional()
+})
+
 const SaveMarkdownTab = ActivateTab.extend({
   baseVersion: z
     .unknown()
@@ -62,6 +76,18 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
         afterTabId: params.afterTabId,
         command: params.command,
         activate: params.activate
+      })
+  }),
+  defineMethod({
+    name: 'session.tabs.move',
+    params: MoveTab,
+    handler: async (params, { runtime }) =>
+      runtime.moveMobileSessionTab(params.worktree, {
+        tabId: params.tabId,
+        targetGroupId: params.targetGroupId,
+        index: params.index,
+        splitDirection: params.splitDirection,
+        tabOrder: params.tabOrder
       })
   }),
   defineStreamingMethod({

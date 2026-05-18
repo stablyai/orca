@@ -32,6 +32,7 @@ import type {
   RuntimeMarkdownReadTabResult,
   RuntimeMarkdownSaveTabResult
 } from '../../shared/mobile-markdown-document'
+import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
 import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
 
 export function attachMainWindowServices(
@@ -288,6 +289,8 @@ function registerRuntimeWindowLifecycle(
       send('ui:focusTerminal', { tabId, worktreeId, leafId }),
     focusEditorTab: (tabId, worktreeId) => send('ui:focusEditorTab', { tabId, worktreeId }),
     closeSessionTab: (tabId, worktreeId) => send('ui:closeSessionTab', { tabId, worktreeId }),
+    moveSessionTab: (worktreeId: string, move: RuntimeMobileSessionTabMove) =>
+      send('ui:moveSessionTab', { worktreeId, ...move }),
     openFile: (worktreeId, filePath, relativePath) =>
       send('ui:openFileFromMobile', { worktreeId, filePath, relativePath }),
     openDiff: (worktreeId, filePath, relativePath, staged) =>

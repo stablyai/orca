@@ -138,6 +138,82 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.activeTabIdByWorktree?.[WT]).toBe(mirroredId)
   })
 
+  it('hydrates host split tab groups with mirrored terminal tab ids', () => {
+    const rightLeafId = SECOND_LEAF_ID
+    const patch = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot(
+        [
+          {
+            type: 'terminal',
+            id: `host-left::${LEAF_ID}`,
+            title: 'left shell',
+            parentTabId: 'host-left',
+            leafId: LEAF_ID,
+            isActive: false,
+            status: 'ready',
+            terminal: 'terminal-left'
+          },
+          {
+            type: 'terminal',
+            id: `host-right::${rightLeafId}`,
+            title: 'right shell',
+            parentTabId: 'host-right',
+            leafId: rightLeafId,
+            isActive: true,
+            status: 'ready',
+            terminal: 'terminal-right'
+          }
+        ],
+        {
+          activeGroupId: 'group-right',
+          activeTabId: `host-right::${rightLeafId}`,
+          tabGroups: [
+            { id: 'group-left', activeTabId: 'host-left', tabOrder: ['host-left'] },
+            { id: 'group-right', activeTabId: 'host-right', tabOrder: ['host-right'] }
+          ],
+          tabGroupLayout: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', groupId: 'group-left' },
+            second: { type: 'leaf', groupId: 'group-right' }
+          }
+        }
+      ),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    const leftId = patch.tabsByWorktree?.[WT]?.find((tab) => tab.title === 'left shell')?.id
+    const rightId = patch.tabsByWorktree?.[WT]?.find((tab) => tab.title === 'right shell')?.id
+
+    expect(leftId).toBeTruthy()
+    expect(rightId).toBeTruthy()
+    expect(patch.groupsByWorktree?.[WT]).toEqual([
+      {
+        id: 'group-left',
+        worktreeId: WT,
+        activeTabId: leftId,
+        tabOrder: [leftId],
+        recentTabIds: [leftId]
+      },
+      {
+        id: 'group-right',
+        worktreeId: WT,
+        activeTabId: rightId,
+        tabOrder: [rightId],
+        recentTabIds: [rightId]
+      }
+    ])
+    expect(patch.layoutByWorktree?.[WT]).toEqual({
+      type: 'split',
+      direction: 'horizontal',
+      first: { type: 'leaf', groupId: 'group-left' },
+      second: { type: 'leaf', groupId: 'group-right' }
+    })
+    expect(patch.activeGroupIdByWorktree?.[WT]).toBe('group-right')
+  })
+
   it('preserves host pane titles without synthesizing them from tab titles', () => {
     const patch = applyWebSessionTabsSnapshot(
       makeState(),
