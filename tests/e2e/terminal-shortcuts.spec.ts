@@ -98,6 +98,7 @@ async function enableKittyKeyboardReporting(page: Page, flags: number): Promise<
 async function pressShiftedRussianLayoutKey(page: Page): Promise<{
   keydownDefaultPrevented: boolean
   keypressSent: boolean
+  keyupSent: boolean
 }> {
   return page.evaluate(() => {
     const textarea = document.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null
@@ -118,7 +119,7 @@ async function pressShiftedRussianLayoutKey(page: Page): Promise<{
     textarea.dispatchEvent(keydown)
 
     if (keydown.defaultPrevented) {
-      return { keydownDefaultPrevented: true, keypressSent: false }
+      return { keydownDefaultPrevented: true, keypressSent: false, keyupSent: false }
     }
 
     const keypress = new KeyboardEvent('keypress', {
@@ -133,7 +134,18 @@ async function pressShiftedRussianLayoutKey(page: Page): Promise<{
     Object.defineProperty(keypress, 'which', { get: () => 1060 })
     textarea.dispatchEvent(keypress)
 
-    return { keydownDefaultPrevented: false, keypressSent: true }
+    const keyup = new KeyboardEvent('keyup', {
+      key: 'Ф',
+      code: 'KeyA',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true
+    })
+    Object.defineProperty(keyup, 'keyCode', { get: () => 65 })
+    Object.defineProperty(keyup, 'which', { get: () => 65 })
+    textarea.dispatchEvent(keyup)
+
+    return { keydownDefaultPrevented: false, keypressSent: true, keyupSent: true }
   })
 }
 
@@ -345,13 +357,19 @@ test.describe('Terminal Shortcuts', () => {
 
     const dispatch = await pressShiftedRussianLayoutKey(orcaPage)
 
-    expect(dispatch).toEqual({ keydownDefaultPrevented: false, keypressSent: true })
+    expect(dispatch).toEqual({
+      keydownDefaultPrevented: false,
+      keypressSent: true,
+      keyupSent: true
+    })
     await expect
       .poll(async () => (await getPtyWrites(electronApp)).includes('Ф'), {
         timeout: 5_000,
         message: 'Shift+Russian layout text did not reach the PTY as Cyrillic'
       })
       .toBe(true)
-    expect(await getPtyWrites(electronApp)).not.toContain('\x1b[97:1060;2;1060u')
+    const writes = await getPtyWrites(electronApp)
+    expect(writes).not.toContain('\x1b[97:1060;2;1060u')
+    expect(writes).not.toContain('\x1b[97:1060;2:3u')
   })
 })

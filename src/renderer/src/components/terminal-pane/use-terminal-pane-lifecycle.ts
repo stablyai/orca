@@ -33,7 +33,7 @@ import {
 } from './terminal-appearance'
 import { parseOsc52 } from './osc52-clipboard'
 import { parseOsc7 } from './parse-osc7'
-import { shouldBypassXtermKeydown } from './xterm-bypass-policy'
+import { shouldBypassXtermKeyboardEvent } from './xterm-bypass-policy'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
@@ -472,20 +472,18 @@ export function useTerminalPaneLifecycle({
         })
         osc7DisposablesRef.current.set(pane.id, osc7Disposable)
 
-        // Why: let clipboard chords bypass xterm's kitty CSI-u encoder.
+        // Why: let host-handled keys bypass xterm's kitty CSI-u encoder.
         // With vtExtensions.kittyKeyboard on, a CLI that activates progressive
         // enhancement (Codex does, Claude Code does not) makes xterm encode
         // Cmd+C as a CSI-u sequence with cancel=true, which preventDefaults
         // the keydown and suppresses Chromium's native copy event — so the
-        // selection never reaches the clipboard. Returning false here short-
-        // circuits xterm's _keyDown before the encoder runs, letting the
-        // browser copy pipeline and Electron menu accelerators fire normally.
+        // selection never reaches the clipboard. The same hook also bypasses
+        // matching keyups so kitty release sequences do not leak after a
+        // bypassed press. Returning false here short-circuits xterm before the
+        // encoder runs, letting the browser and Electron paths fire normally.
         // See xterm-bypass-policy.ts for the rule derivation (Ghostty/VS Code).
         pane.terminal.attachCustomKeyEventHandler((e) => {
-          if (e.type !== 'keydown') {
-            return true
-          }
-          return !shouldBypassXtermKeydown(e, {
+          return !shouldBypassXtermKeyboardEvent(e, {
             isMac: navigator.userAgent.includes('Mac'),
             hasSelection: pane.terminal.hasSelection()
           })
