@@ -260,6 +260,10 @@ function getMtimeMs(filePath) {
   }
 }
 
+function getDevWebClientIndexPath() {
+  return path.join(repoRoot, 'out', 'web', 'web-index.html')
+}
+
 function latestMtimeMs(targetPath) {
   const stat = (() => {
     try {
@@ -285,7 +289,7 @@ function latestMtimeMs(targetPath) {
 }
 
 function isDevWebClientFresh() {
-  const outputMtime = getMtimeMs(path.join(repoRoot, 'out', 'web', 'web-index.html'))
+  const outputMtime = getMtimeMs(getDevWebClientIndexPath())
   if (outputMtime === 0) {
     return false
   }
@@ -300,6 +304,14 @@ function isDevWebClientFresh() {
 
 function prepareDevWebClient() {
   if (process.env.ORCA_SKIP_DEV_WEB_PREPARE === '1' || isHelpOrVersion) {
+    return
+  }
+  // Why: fresh worktrees should start Electron immediately; pairing already
+  // falls back to non-browser URLs when the optional web bundle is unavailable.
+  if (!existsSync(getDevWebClientIndexPath()) && process.env.ORCA_DEV_WEB_PREPARE !== '1') {
+    console.error(
+      '[orca-dev] Web client bundle missing; skipping pairing web build. Run `pnpm run build:web` or set ORCA_DEV_WEB_PREPARE=1 when you need browser pairing.'
+    )
     return
   }
   if (isDevWebClientFresh()) {
