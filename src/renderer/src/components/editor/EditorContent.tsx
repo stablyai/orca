@@ -36,6 +36,10 @@ const richMarkdownSizeEncoder = new TextEncoder()
 // Uint8Array on every render, reducing GC pressure for large files.
 const richMarkdownSizeBuffer = new Uint8Array(RICH_MARKDOWN_MAX_SIZE_BYTES + 1)
 
+export function getMarkdownSourceLineOffset(frontMatterRaw: string): number {
+  return (frontMatterRaw.match(/\r\n|\r|\n/g) ?? []).length
+}
+
 type FileContent = {
   content: string
   isBinary: boolean
@@ -162,7 +166,7 @@ export function EditorContent({
       onContentChange={handleContentChange}
       onSave={isMarkdown ? md.mdSave : handleSave}
       worktreeId={activeFile.worktreeId}
-      markdownAnnotationsEnabled={markdownReviewToolsEnabled && isMarkdown && mdViewMode !== 'rich'}
+      markdownAnnotationsEnabled={false}
       conflictDecorationsEnabled={activeFile.conflict?.conflictStatus === 'unresolved'}
       revealLine={
         pendingEditorReveal?.filePath === activeFile.filePath ? pendingEditorReveal.line : undefined
@@ -258,6 +262,10 @@ export function EditorContent({
                 markdownDocuments={md.markdownDocuments}
                 showTableOfContents={showMarkdownTableOfContents}
                 onCloseTableOfContents={onCloseMarkdownTableOfContents}
+                markdownAnnotationsEnabled={markdownReviewToolsEnabled}
+                markdownAnnotationFilePath={activeFile.relativePath}
+                markdownSourceLineOffset={fm ? getMarkdownSourceLineOffset(fm.raw) : 0}
+                markdownReviewContent={currentContent}
                 // Why: render the front-matter banner below the editor toolbar
                 // (inside the editor shell) so formatting controls remain at
                 // the top of the pane — the banner is read-only context, not
@@ -291,7 +299,7 @@ export function EditorContent({
               scrollCacheKey={`${editorViewStateKey}:preview`}
               showTableOfContents={showMarkdownTableOfContents}
               onCloseTableOfContents={onCloseMarkdownTableOfContents}
-              markdownAnnotationsEnabled={markdownReviewToolsEnabled && mdViewMode !== 'rich'}
+              markdownAnnotationsEnabled={false}
               {...md.previewProps}
             />
           </div>
@@ -381,7 +389,7 @@ export function EditorContent({
           initialAnchor={activeFile.markdownPreviewAnchor ?? null}
           showTableOfContents={showMarkdownTableOfContents}
           onCloseTableOfContents={onCloseMarkdownTableOfContents}
-          markdownAnnotationsEnabled={markdownReviewToolsEnabled && mdViewMode !== 'rich'}
+          markdownAnnotationsEnabled={false}
           {...md.previewProps}
         />
       </div>
@@ -525,7 +533,7 @@ export function EditorContent({
             scrollCacheKey={`${diffViewStateKey}:preview`}
             showTableOfContents={showMarkdownTableOfContents}
             onCloseTableOfContents={onCloseMarkdownTableOfContents}
-            markdownAnnotationsEnabled={markdownReviewToolsEnabled}
+            markdownAnnotationsEnabled={false}
             {...md.previewProps}
           />
         </div>

@@ -1107,6 +1107,7 @@ export default function CombinedDiffViewer({
                       groupId={activeGroupId ?? file.worktreeId}
                       onFocusTerminal={focusTerminalTabSurface}
                       prompt={diffCommentsPrompt}
+                      promptDelivery="draft"
                       launchSource="notes_send"
                     />
                   </DropdownMenuContent>

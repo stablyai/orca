@@ -65,6 +65,7 @@
   --color-git-graph-lane-3: var(--git-graph-lane-3);
   --color-git-graph-lane-4: var(--git-graph-lane-4);
   --color-git-graph-lane-5: var(--git-graph-lane-5);
+  --color-annotation-highlight: var(--annotation-highlight);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -131,6 +132,7 @@
   --git-graph-lane-3: #994f00;
   --git-graph-lane-4: #40b0a6;
   --git-graph-lane-5: #b66dff;
+  --annotation-highlight: #f59e0b;
 }
 
 /* ── Dark Mode ───────────────────────────────────────── */
@@ -184,6 +186,7 @@
   --git-graph-lane-3: #ce9178;
   --git-graph-lane-4: #40b0a6;
   --git-graph-lane-5: #b66dff;
+  --annotation-highlight: #fbbf24;
 }
 
 /* ── Base Layer ──────────────────────────────────────── */

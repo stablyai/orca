@@ -29,11 +29,18 @@ function normalizeDiffComment(comment: DiffComment): DiffComment {
     rawStartLine <= comment.lineNumber
       ? rawStartLine
       : undefined
+  const rawSelectedText = (comment as { selectedText?: unknown }).selectedText
+  const selectedText =
+    typeof rawSelectedText === 'string' && rawSelectedText.trim().length > 0
+      ? rawSelectedText.trim()
+      : undefined
 
   return {
     ...comment,
     ...(source !== undefined ? { source } : {}),
     ...(source === undefined ? { source: undefined } : {}),
+    ...(selectedText !== undefined ? { selectedText } : {}),
+    ...(selectedText === undefined ? { selectedText: undefined } : {}),
     ...(startLine !== undefined ? { startLine } : {}),
     ...(startLine === undefined ? { startLine: undefined } : {})
   }

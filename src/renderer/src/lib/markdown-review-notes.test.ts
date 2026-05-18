@@ -3,6 +3,7 @@ import type { DiffComment } from '../../../shared/types'
 import {
   formatMarkdownReviewNotes,
   getMarkdownReviewExcerpt,
+  getMarkdownReviewHighlightedText,
   sortMarkdownReviewNotes,
   type MarkdownReviewNote
 } from './markdown-review-notes'
@@ -42,6 +43,24 @@ describe('markdown review notes', () => {
     expect(excerpt).toBe('> two\n> three')
   })
 
+  it('prefers exact selected text for card highlights', () => {
+    const highlighted = getMarkdownReviewHighlightedText(
+      'one\ntwo broad line\nthree',
+      note({ selectedText: 'broad' })
+    )
+
+    expect(highlighted).toBe('broad')
+  })
+
+  it('falls back to unquoted line context for card highlights', () => {
+    const highlighted = getMarkdownReviewHighlightedText(
+      'one\ntwo\nthree',
+      note({ startLine: 2, lineNumber: 3 })
+    )
+
+    expect(highlighted).toBe('two\nthree')
+  })
+
   it('formats a deterministic prompt for terminal agents', () => {
     const formatted = formatMarkdownReviewNotes(
       [note({ startLine: 2, lineNumber: 3, body: 'replace "maybe"\nwith specifics' })],
@@ -59,5 +78,14 @@ describe('markdown review notes', () => {
         'User comment: "replace \\"maybe\\"\\nwith specifics"'
       ].join('\n')
     )
+  })
+
+  it('formats exact selected text when available', () => {
+    const formatted = formatMarkdownReviewNotes(
+      [note({ selectedText: 'specific phrase', lineNumber: 2, body: 'reword this' })],
+      'one\nspecific phrase in a longer line'
+    )
+
+    expect(formatted).toContain('Excerpt:\n> specific phrase')
   })
 })

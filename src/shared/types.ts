@@ -261,6 +261,8 @@ export type DiffComment = {
   filePath: string
   /** Undefined means a legacy diff note. */
   source?: DiffCommentSource
+  /** Exact text selected when creating a markdown note, when available. */
+  selectedText?: string
   /** Inclusive range start. Must be <= lineNumber when present. */
   startLine?: number
   lineNumber: number

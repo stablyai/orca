@@ -48,7 +48,6 @@ function EditorPanelInner({
   const editorDrafts = useAppStore((s) => s.editorDrafts)
   const setEditorDraft = useAppStore((s) => s.setEditorDraft)
   const settings = useAppStore((s) => s.settings)
-  const updateSettings = useAppStore((s) => s.updateSettings)
   const panelRef = useRef<HTMLDivElement>(null)
   const [copiedPathToast, setCopiedPathToast] = useState<{ fileId: string; token: number } | null>(
     null
@@ -254,9 +253,6 @@ function EditorPanelInner({
     }
     window.api.shell.openPath(activeFile.filePath)
   }
-  const handleToggleMarkdownReviewTools = (): void => {
-    void updateSettings({ markdownReviewToolsEnabled: !markdownReviewToolsEnabled })
-  }
   const disableRenameBrowse = Boolean(
     settingsForRuntimeOwner(
       settings,
@@ -290,7 +286,6 @@ function EditorPanelInner({
       onToggleSideBySide={() => setSideBySide((prev) => !prev)}
       onEditorToggleChange={handleEditorToggleChange}
       onToggleMarkdownTableOfContents={() => setShowMarkdownTableOfContents((shown) => !shown)}
-      onToggleMarkdownReviewTools={handleToggleMarkdownReviewTools}
       onExportMarkdownToPdf={() => void exportActiveMarkdownToPdf()}
       onContentChange={handleContentChange}
       onDirtyStateHint={handleDirtyStateHint}
