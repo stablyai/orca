@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
 import { getConnectionId } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
@@ -108,6 +109,7 @@ export function openFilePreviewToSide(params: {
     worktreeId
   })
   if (target.status === 'unsupported') {
+    toast.error(target.message)
     return
   }
 
