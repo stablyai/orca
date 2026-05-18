@@ -1,6 +1,10 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { buildAgentStartupPlan, type AgentStartupPlan } from '@/lib/tui-agent-startup'
+import {
+  buildAgentDraftLaunchPlan,
+  buildAgentStartupPlan,
+  type AgentStartupPlan
+} from '@/lib/tui-agent-startup'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
@@ -19,6 +23,9 @@ export type LaunchAgentInNewTabArgs = {
    *  `promptInjectionMode`: argv/flag agents auto-submit via the launch
    *  command; followup-path agents land the prompt as an unsent draft. */
   prompt?: string
+  /** Force prompt text to land as an editable draft instead of being embedded
+   *  into the shell launch command. Used for generated review-note context. */
+  promptDelivery?: 'auto-submit' | 'draft'
   /** Telemetry surface that initiated this launch. Defaults to the tab-bar
    *  quick-launch entry point so existing callers stay unchanged. */
   launchSource?: LaunchSource
@@ -27,6 +34,7 @@ export type LaunchAgentInNewTabArgs = {
 export type LaunchAgentInNewTabResult = {
   tabId: string
   startupPlan: AgentStartupPlan
+  pasteDraftAfterLaunch: boolean
 } | null
 
 /**
@@ -53,7 +61,7 @@ export type LaunchAgentInNewTabResult = {
  * surface that as a launch failure (see `QuickLaunchButton.runLaunch`).
  */
 export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentInNewTabResult {
-  const { agent, worktreeId, groupId, prompt, launchSource } = args
+  const { agent, worktreeId, groupId, prompt, promptDelivery = 'auto-submit', launchSource } = args
   const store = useAppStore.getState()
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
   const trimmedPrompt = prompt?.trim() ?? ''
@@ -70,7 +78,32 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   let startupPlan: AgentStartupPlan | null = null
   let pasteDraftAfterLaunch: string | null = null
 
-  if (hasPrompt && isFollowupPath) {
+  if (hasPrompt && promptDelivery === 'draft') {
+    const draftLaunchPlan = buildAgentDraftLaunchPlan({
+      agent,
+      draft: trimmedPrompt,
+      cmdOverrides,
+      platform: CLIENT_PLATFORM
+    })
+    if (draftLaunchPlan) {
+      startupPlan = {
+        agent: draftLaunchPlan.agent,
+        launchCommand: draftLaunchPlan.launchCommand,
+        expectedProcess: draftLaunchPlan.expectedProcess,
+        followupPrompt: null,
+        ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
+      }
+    } else {
+      startupPlan = buildAgentStartupPlan({
+        agent,
+        prompt: '',
+        cmdOverrides,
+        platform: CLIENT_PLATFORM,
+        allowEmptyPromptLaunch: true
+      })
+      pasteDraftAfterLaunch = trimmedPrompt
+    }
+  } else if (hasPrompt && isFollowupPath) {
     startupPlan = buildAgentStartupPlan({
       agent,
       prompt: '',
@@ -178,5 +211,5 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   order.push(tab.id)
   fresh.setTabBarOrder(worktreeId, order)
 
-  return { tabId: tab.id, startupPlan }
+  return { tabId: tab.id, startupPlan, pasteDraftAfterLaunch: pasteDraftAfterLaunch !== null }
 }

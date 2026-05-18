@@ -1,14 +1,36 @@
 /* eslint-disable max-lines -- Why: shared type definitions for all runtime RPC methods live in one file for discoverability and import simplicity. */
+import type { AgentStatusEntry } from './agent-status-types'
+import type {
+  BaseRefSearchResult,
+  BrowserCookieImportResult,
+  BrowserSessionProfile,
+  BrowserSessionProfileSource,
+  GitWorktreeInfo,
+  Repo,
+  TerminalLayoutSnapshot,
+  Worktree,
+  WorktreeLineage,
+  WorktreeLineageWarning
+} from './types'
 import type { TerminalPaneLayoutNode } from './types'
-import type { BrowserSessionProfile, GitWorktreeInfo, Repo } from './types'
 import type {
   RuntimeMarkdownReadTabResult,
   RuntimeMarkdownSaveTabResult
 } from './mobile-markdown-document'
+import type { RuntimeCapability } from './protocol-version'
 
 export type { RuntimeMarkdownReadTabResult, RuntimeMarkdownSaveTabResult }
 
 export type RuntimeGraphStatus = 'ready' | 'reloading' | 'unavailable'
+
+// Why: presence-lock driver state crosses main/preload/renderer IPC. Keep one
+// checked source so future variants cannot drift silently across layers.
+export type RuntimeTerminalDriverState =
+  | { kind: 'idle' }
+  | { kind: 'desktop' }
+  | { kind: 'mobile'; clientId: string }
+
+export type RuntimeBrowserDriverState = RuntimeTerminalDriverState
 
 export type RuntimeStatus = {
   runtimeId: string
@@ -17,9 +39,13 @@ export type RuntimeStatus = {
   authoritativeWindowId: number | null
   liveTabCount: number
   liveLeafCount: number
-  // Why: optional so mobile builds can read both new and pre-PR desktops.
-  // Absence is treated as 0 by mobile's compat evaluator. See
-  // src/shared/protocol-version.ts for bump discipline.
+  // Why: optional so clients can read both new and pre-contract runtimes.
+  // Absence is treated as protocol 0 by the compat evaluator.
+  runtimeProtocolVersion?: number
+  minCompatibleRuntimeClientVersion?: number
+  capabilities?: RuntimeCapability[]
+  // COMPAT(runtimeStatusMobileAliases): added 2026-05-15 for mobile builds
+  // that still read these names; new desktop/CLI code uses the fields above.
   protocolVersion?: number
   minCompatibleMobileVersion?: number
 }
@@ -76,6 +102,9 @@ export type RuntimeMobileSessionTerminalTab = {
   title: string
   parentTabId: string
   leafId: string
+  ptyId?: string | null
+  agentStatus?: AgentStatusEntry | null
+  parentLayout?: TerminalLayoutSnapshot
   isActive: boolean
 }
 
@@ -102,7 +131,22 @@ export type RuntimeMobileSessionFileTab = {
   filePath: string
   relativePath: string
   language: string
+  mode?: 'edit' | 'diff'
+  diffSource?: 'staged' | 'unstaged'
   isDirty: boolean
+  isActive: boolean
+}
+
+export type RuntimeMobileSessionBrowserTab = {
+  type: 'browser'
+  id: string
+  title: string
+  browserWorkspaceId: string
+  browserPageId: string | null
+  url: string
+  loading: boolean
+  canGoBack: boolean
+  canGoForward: boolean
   isActive: boolean
 }
 
@@ -110,6 +154,7 @@ export type RuntimeMobileSessionSnapshotTab =
   | RuntimeMobileSessionTerminalTab
   | RuntimeMobileSessionMarkdownTab
   | RuntimeMobileSessionFileTab
+  | RuntimeMobileSessionBrowserTab
 
 export type RuntimeMobileSessionTerminalClientTab =
   | (RuntimeMobileSessionTerminalTab & {
@@ -125,6 +170,7 @@ export type RuntimeMobileSessionClientTab =
   | RuntimeMobileSessionTerminalClientTab
   | RuntimeMobileSessionMarkdownTab
   | RuntimeMobileSessionFileTab
+  | RuntimeMobileSessionBrowserTab
 
 export type RuntimeMobileSessionTabsSnapshot = {
   worktree: string
@@ -132,7 +178,7 @@ export type RuntimeMobileSessionTabsSnapshot = {
   snapshotVersion: number
   activeGroupId: string | null
   activeTabId: string | null
-  activeTabType: 'terminal' | 'markdown' | 'file' | null
+  activeTabType: 'terminal' | 'markdown' | 'file' | 'browser' | null
   tabs: RuntimeMobileSessionSnapshotTab[]
 }
 
@@ -142,7 +188,7 @@ export type RuntimeMobileSessionTabsResult = {
   snapshotVersion: number
   activeGroupId: string | null
   activeTabId: string | null
-  activeTabType: 'terminal' | 'markdown' | 'file' | null
+  activeTabType: 'terminal' | 'markdown' | 'file' | 'browser' | null
   tabs: RuntimeMobileSessionClientTab[]
 }
 
@@ -187,6 +233,13 @@ export type RuntimeFileReadResult = {
   content: string
   truncated: boolean
   byteLength: number
+}
+
+export type RuntimeFilePreviewResult = {
+  content: string
+  isBinary: boolean
+  isImage?: boolean
+  mimeType?: string
 }
 
 export type RuntimeTerminalSummary = {
@@ -278,6 +331,8 @@ export type RuntimeWorktreePsSummary = {
   repo: string
   path: string
   branch: string
+  parentWorktreeId: string | null
+  childWorktreeIds: string[]
   displayName: string
   linkedIssue: number | null
   linkedPR: { number: number; state: string } | null
@@ -292,15 +347,18 @@ export type RuntimeWorktreePsSummary = {
 
 export type RuntimeWorktreeStatus = 'active' | 'working' | 'permission' | 'done' | 'inactive'
 
-export type RuntimeWorktreeRecord = {
-  id: string
-  repoId: string
-  path: string
-  branch: string
-  linkedIssue: number | null
+export type RuntimeWorktreeRecord = Worktree & {
+  parentWorktreeId: string | null
+  childWorktreeIds: string[]
+  lineage: WorktreeLineage | null
   git: GitWorktreeInfo
-  displayName: string
-  comment: string
+}
+
+export type RuntimeWorktreeCreateResult = {
+  worktree: RuntimeWorktreeRecord
+  lineage: WorktreeLineage | null
+  warnings: WorktreeLineageWarning[]
+  warning?: string
 }
 
 export type RuntimeWorktreePsResult = {
@@ -315,6 +373,7 @@ export type RuntimeRepoList = {
 
 export type RuntimeRepoSearchRefs = {
   refs: string[]
+  refDetails?: BaseRefSearchResult[]
   truncated: boolean
 }
 
@@ -380,6 +439,41 @@ export type BrowserScreenshotResult = {
   format: 'png' | 'jpeg'
 }
 
+export type BrowserScreencastReadyResult = {
+  type: 'ready'
+  subscriptionId: string
+  browserPageId: string
+  format: 'jpeg' | 'png'
+  tab: BrowserTabInfo
+}
+
+export type BrowserScreencastEndResult = {
+  type: 'end'
+  subscriptionId: string
+}
+
+export type BrowserScreencastDialogResult = {
+  type: 'dialog'
+  dialogType: string
+  message: string
+}
+
+export type BrowserScreencastDialogClosedResult = {
+  type: 'dialogClosed'
+}
+
+export type BrowserScreencastErrorResult = {
+  type: 'error'
+  message: string
+}
+
+export type BrowserScreencastResult =
+  | BrowserScreencastReadyResult
+  | BrowserScreencastEndResult
+  | BrowserScreencastDialogResult
+  | BrowserScreencastDialogClosedResult
+  | BrowserScreencastErrorResult
+
 export type BrowserEvalResult = {
   result: string
   origin: string
@@ -444,6 +538,28 @@ export type BrowserProfileCreateResult = {
 export type BrowserProfileDeleteResult = {
   deleted: boolean
   profileId: string
+}
+
+export type BrowserDetectedProfileInfo = {
+  name: string
+  directory: string
+}
+
+export type BrowserDetectedInfo = {
+  family: BrowserSessionProfileSource['browserFamily']
+  label: string
+  profiles: BrowserDetectedProfileInfo[]
+  selectedProfile: string
+}
+
+export type BrowserDetectProfilesResult = {
+  browsers: BrowserDetectedInfo[]
+}
+
+export type BrowserProfileImportFromBrowserResult = BrowserCookieImportResult
+
+export type BrowserProfileClearDefaultCookiesResult = {
+  cleared: boolean
 }
 
 export type BrowserHoverResult = {

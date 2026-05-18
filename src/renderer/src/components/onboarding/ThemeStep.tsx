@@ -211,7 +211,7 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
       <div className="flex items-center gap-2 px-1 text-[12px] text-muted-foreground">
         <Settings2 className="size-3.5" />
         <span>
-          More terminal options — font, cursor, palette — in{' '}
+          More terminal options, including font, cursor, and palette, in{' '}
           <span className="font-medium text-foreground">Settings → Terminal</span>
         </span>
       </div>
@@ -367,7 +367,7 @@ function humanFields(diff: Partial<GlobalSettings>): string[] {
   // Why: chip labels are a friendly summary, not a strict 1:1 of mapper keys.
   // Group related diff keys (font weight + family + size → "Font") so the row
   // stays tidy. Anything in the diff that doesn't match a label still gets
-  // imported — it just isn't surfaced as a chip.
+  // imported; it just isn't surfaced as a chip.
   const groups: { label: string; keys: (keyof GlobalSettings)[] }[] = [
     { label: 'Font', keys: ['terminalFontFamily', 'terminalFontSize', 'terminalFontWeight'] },
     {

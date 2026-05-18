@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getWorktreeSelectionIntent,
   pruneWorktreeSelection,
+  updateWorktreeAreaSelection,
   updateWorktreeSelection
 } from './worktree-multi-selection'
 
@@ -77,5 +78,44 @@ describe('worktree multi selection', () => {
 
     expect([...result.selectedIds]).toEqual(['wt-3'])
     expect(result.anchorId).toBe('wt-3')
+  })
+
+  it('replaces selection from an area in visible order', () => {
+    const result = updateWorktreeAreaSelection({
+      visibleIds,
+      previousSelectedIds: new Set(['wt-4']),
+      previousAnchorId: 'wt-4',
+      areaIds: ['wt-3', 'wt-1'],
+      additive: false
+    })
+
+    expect([...result.selectedIds]).toEqual(['wt-1', 'wt-3'])
+    expect(result.anchorId).toBe('wt-3')
+  })
+
+  it('adds area selection to the existing batch with modifier keys', () => {
+    const result = updateWorktreeAreaSelection({
+      visibleIds,
+      previousSelectedIds: new Set(['wt-4']),
+      previousAnchorId: 'wt-4',
+      areaIds: ['wt-1', 'wt-2'],
+      additive: true
+    })
+
+    expect([...result.selectedIds]).toEqual(['wt-4', 'wt-1', 'wt-2'])
+    expect(result.anchorId).toBe('wt-2')
+  })
+
+  it('does not clear the existing batch for an empty additive area', () => {
+    const result = updateWorktreeAreaSelection({
+      visibleIds,
+      previousSelectedIds: new Set(['wt-2']),
+      previousAnchorId: 'wt-2',
+      areaIds: [],
+      additive: true
+    })
+
+    expect([...result.selectedIds]).toEqual(['wt-2'])
+    expect(result.anchorId).toBe('wt-2')
   })
 })

@@ -10,15 +10,37 @@ export function resetTerminalWebglSuggestion(): void {
   suggestedRendererType = undefined
 }
 
-function shouldUseWebgl(pane: ManagedPaneInternal): boolean {
+function isLinuxRenderer(): boolean {
+  if (typeof navigator === 'undefined') {
+    return false
+  }
+  return navigator.platform.includes('Linux') || navigator.userAgent.includes('Linux')
+}
+
+export function shouldUseTerminalWebgl(pane: ManagedPaneInternal): boolean {
   if (pane.terminalGpuAcceleration === 'on') {
     return true
+  }
+  if (isLinuxRenderer()) {
+    // Why: multiple Linux/Wayland GPU stacks corrupt xterm's WebGL glyph atlas
+    // without raising context loss; tab switching only masks it by rebuilding WebGL.
+    return false
   }
   return (
     pane.terminalGpuAcceleration === 'auto' &&
     suggestedRendererType === undefined &&
     !pane.hasComplexScriptOutput
   )
+}
+
+function refreshTerminalAfterWebglAttach(pane: ManagedPaneInternal): void {
+  try {
+    // Why: a newly attached WebGL canvas starts empty; repaint immediately so
+    // resume/reparent/settings toggles do not look frozen until new output.
+    pane.terminal.refresh(0, pane.terminal.rows - 1)
+  } catch {
+    /* ignore — pane may have been disposed in the meantime */
+  }
 }
 
 export function disposeWebgl(
@@ -61,7 +83,7 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
   if (
     !ENABLE_WEBGL_RENDERER ||
     !pane.gpuRenderingEnabled ||
-    !shouldUseWebgl(pane) ||
+    !shouldUseTerminalWebgl(pane) ||
     pane.webglAttachmentDeferred ||
     pane.webglDisabledAfterContextLoss
   ) {
@@ -84,6 +106,7 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
     })
     pane.terminal.loadAddon(webglAddon)
     pane.webglAddon = webglAddon
+    refreshTerminalAfterWebglAttach(pane)
   } catch (err) {
     if (pane.terminalGpuAcceleration === 'auto') {
       // Why: mirrors VS Code's `terminal.integrated.gpuAcceleration=auto`

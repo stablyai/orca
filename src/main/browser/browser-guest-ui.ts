@@ -12,8 +12,10 @@ import {
 } from '../../shared/window-shortcut-policy'
 import { resolveKeybindingAction } from '../../shared/keybindings/effective-keymap'
 import type { EffectiveKeymap, KeybindingCommand } from '../../shared/keybindings/keybinding-types'
+import { readGuestNavigationState } from './browser-guest-navigation-state'
 
 type ResolveRenderer = (browserTabId: string) => Electron.WebContents | null
+type ShouldForwardDictationShortcut = () => boolean
 
 function isTerminalTabSwitchChord(input: Electron.Input): boolean {
   return (
@@ -23,6 +25,14 @@ function isTerminalTabSwitchChord(input: Electron.Input): boolean {
     !input.shift &&
     (input.code === 'PageDown' || input.code === 'PageUp')
   )
+}
+
+function isCtrlTabSwitchKey(input: Electron.Input): boolean {
+  return input.code === 'Tab' && input.control && !input.meta && !input.alt
+}
+
+function isControlKeyRelease(input: Electron.Input): boolean {
+  return input.type === 'keyUp' && (input.code === 'ControlLeft' || input.code === 'ControlRight')
 }
 
 type BrowserGuestShortcutForward =
@@ -241,6 +251,7 @@ export function setupGuestContextMenu(args: {
     // immune to guest/renderer coordinate space mismatches) and fall back to
     // guest coords if the screen API is unavailable.
     const cursor = screen.getCursorScreenPoint()
+    const navigationState = readGuestNavigationState(guest)
     renderer.send('browser:context-menu-requested', {
       browserPageId: browserTabId,
       x: params.x,
@@ -249,8 +260,7 @@ export function setupGuestContextMenu(args: {
       screenY: cursor.y,
       pageUrl,
       linkUrl,
-      canGoBack: guest.canGoBack(),
-      canGoForward: guest.canGoForward()
+      ...navigationState
     })
   }
 
@@ -409,20 +419,64 @@ export function setupGuestShortcutForwarding(args: {
   guest: Electron.WebContents
   resolveRenderer: ResolveRenderer
   getEffectiveKeymap?: () => EffectiveKeymap
+  shouldForwardDictationShortcut?: ShouldForwardDictationShortcut
 }): () => void {
-  const { browserTabId, guest, resolveRenderer, getEffectiveKeymap } = args
+  const {
+    browserTabId,
+    guest,
+    resolveRenderer,
+    getEffectiveKeymap,
+    shouldForwardDictationShortcut
+  } = args
+  let ctrlTabSwitching = false
   const handler = (event: Electron.Event, input: Electron.Input): void => {
+    if (isCtrlTabSwitchKey(input)) {
+      event.preventDefault()
+      if (input.type === 'keyDown') {
+        ctrlTabSwitching = true
+        const renderer = resolveRenderer(browserTabId)
+        renderer?.send('ui:ctrlTabKeyDown', { shiftKey: input.shift === true })
+      }
+      return
+    }
+
+    if (ctrlTabSwitching && isControlKeyRelease(input)) {
+      event.preventDefault()
+      ctrlTabSwitching = false
+      const renderer = resolveRenderer(browserTabId)
+      renderer?.send('ui:ctrlTabKeyUp')
+      return
+    }
+
     if (input.type !== 'keyDown') {
       return
     }
-    const forward = resolveBrowserGuestShortcut(input, getEffectiveKeymap?.())
-    if (!forward) {
+    const keymap = getEffectiveKeymap?.()
+    const forward = resolveBrowserGuestShortcut(input, keymap)
+    const fallbackAction = forward ? null : resolveWindowShortcutAction(input, process.platform)
+    if (input.isAutoRepeat) {
+      if (fallbackAction?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) {
+        event.preventDefault()
+      }
       return
     }
-    // Why: preventDefault stops the guest page from also processing the chord
-    // (e.g. Cmd+T opening a browser-internal new-tab page).
-    event.preventDefault()
-    sendBrowserGuestShortcut(resolveRenderer(browserTabId), forward)
+
+    if (forward) {
+      // Why: preventDefault stops the guest page from also processing the chord
+      // (e.g. Cmd+T opening a browser-internal new-tab page).
+      event.preventDefault()
+      sendBrowserGuestShortcut(resolveRenderer(browserTabId), forward)
+      return
+    }
+
+    if (fallbackAction?.type === 'dictationKeyDown') {
+      if (!shouldForwardDictationShortcut?.()) {
+        return
+      }
+      event.preventDefault()
+      const renderer = resolveRenderer(browserTabId)
+      renderer?.send('ui:dictationKeyDown')
+    }
   }
 
   guest.on('before-input-event', handler)

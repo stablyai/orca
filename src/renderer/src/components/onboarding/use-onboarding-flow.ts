@@ -8,10 +8,19 @@ import { applyDocumentTheme } from '@/lib/document-theme'
 import { track } from '@/lib/telemetry'
 import { buildAgentPickedPayload } from './agent-picked-payload'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import type { GlobalSettings, OnboardingState, TuiAgent } from '../../../../shared/types'
+import type { GlobalSettings, OnboardingState, Repo, TuiAgent } from '../../../../shared/types'
 import type { NotificationDraft } from './NotificationStep'
+import {
+  DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION,
+  ONBOARDING_FEATURE_SETUP_IDS,
+  hasSelectedOnboardingFeatureSetup,
+  onboardingFeatureSetupTelemetryFeature,
+  type OnboardingFeatureSetupSelection
+} from './onboarding-feature-setup'
 import { STEPS, type StepNumber } from './use-onboarding-flow-types'
 import { persistStep, useCloseWith, usePersistCurrentStep } from './use-onboarding-flow-persistence'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { buildOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
 
 export { STEPS } from './use-onboarding-flow-types'
 export type { StepId, StepNumber } from './use-onboarding-flow-types'
@@ -20,8 +29,10 @@ export type OnboardingFlowController = ReturnType<typeof useOnboardingFlow>
 
 export function useOnboardingFlow(
   onboarding: OnboardingState,
-  onOnboardingChange: (state: OnboardingState) => void
+  onOnboardingChange: (state: OnboardingState) => void,
+  options: { onSettingsDetourStart?: () => void } = {}
 ) {
+  const { onSettingsDetourStart } = options
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
@@ -31,7 +42,10 @@ export function useOnboardingFlow(
   const pathFailureReason = useAppStore((s) => s.pathFailureReason)
   const fetchRepos = useAppStore((s) => s.fetchRepos)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
+  const addRepoPath = useAppStore((s) => s.addRepoPath)
   const openModal = useAppStore((s) => s.openModal)
+  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
+  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
 
   const initialStep = Math.min(Math.max(onboarding.lastCompletedStep, 0), STEPS.length - 1)
   const [stepIndex, setStepIndex] = useState(initialStep)
@@ -52,7 +66,18 @@ export function useOnboardingFlow(
     terminalBell: true,
     notifyWhenFocused: true
   })
+  const [featureSetupSelection, setFeatureSetupSelection] =
+    useState<OnboardingFeatureSetupSelection>(DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION)
+  const [featureSetupTerminalCommand, setFeatureSetupTerminalCommand] = useState<string | null>(
+    null
+  )
+  // Why: terminal telemetry must describe the selection that produced the
+  // command, even if the checklist changes while async setup is finishing.
+  const [featureSetupTerminalSelection, setFeatureSetupTerminalSelection] =
+    useState<OnboardingFeatureSetupSelection | null>(null)
   const [cloneUrl, setCloneUrl] = useState('')
+  const [serverPath, setServerPath] = useState('')
+  const [cloneDestination, setCloneDestination] = useState('')
   const [busyLabel, setBusyLabel] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -244,7 +269,10 @@ export function useOnboardingFlow(
       await fetchWorktrees(repoId)
       const worktree = useAppStore.getState().worktreesByRepo[repoId]?.[0]
       if (worktree) {
-        activateAndRevealWorktree(worktree.id)
+        // Why: onboarding asks for a default agent immediately before this step.
+        // Non-git folders skip the composer, so seed their first terminal here.
+        const startup = isGit ? undefined : buildOnboardingFolderAgentStartup(settings)
+        activateAndRevealWorktree(worktree.id, startup ? { startup } : undefined)
       }
       // Why: next() short-circuits step 4, so emit step_completed here once the
       // repo is successfully added to keep the funnel consistent. Gate on
@@ -275,7 +303,7 @@ export function useOnboardingFlow(
         })
       }
     },
-    [closeWith, consumeStepDurationMs, fetchRepos, fetchWorktrees, openModal]
+    [closeWith, consumeStepDurationMs, fetchRepos, fetchWorktrees, openModal, settings]
   )
 
   const persistCurrentStep = usePersistCurrentStep({
@@ -283,12 +311,30 @@ export function useOnboardingFlow(
     selectedAgent,
     theme,
     notifications,
+    featureSetupSelection,
     settings,
     updateSettings,
     onboardingChecklist: onboarding.checklist,
     onOnboardingChange,
     setError
   })
+  const hasSelectedFeatureSetup = hasSelectedOnboardingFeatureSetup(featureSetupSelection)
+  const setFeatureSetupSelectionInteractive = useCallback(
+    (value: OnboardingFeatureSetupSelection) => {
+      for (const id of ONBOARDING_FEATURE_SETUP_IDS) {
+        if (value[id] !== featureSetupSelection[id]) {
+          track('onboarding_feature_setup_toggled', {
+            feature: onboardingFeatureSetupTelemetryFeature(id),
+            selected: value[id]
+          })
+        }
+      }
+      setFeatureSetupSelection(value)
+      setFeatureSetupTerminalCommand(null)
+      setFeatureSetupTerminalSelection(null)
+    },
+    [featureSetupSelection]
+  )
 
   // Why: synchronous re-entry latch. `busyLabel` is React state and only
   // commits after the awaited persistCurrentStep round-trip resolves, so a
@@ -296,24 +342,54 @@ export function useOnboardingFlow(
   // the first call's setStepIndex has run, advancing twice and skipping a
   // step. A ref flips synchronously so re-entries bail immediately.
   const nextInFlightRef = useRef(false)
+  const notificationsStepCompletedTrackedRef = useRef(false)
   const next = useCallback(
     async (advancedVia: 'button' | 'keyboard' = 'button') => {
       if (nextInFlightRef.current || busyLabel || currentStep.id === 'repo') {
         return
       }
+      if (currentStep.id === 'notifications' && featureSetupTerminalCommand) {
+        setStepIndex((idx) => Math.min(idx + 1, STEPS.length - 1))
+        return
+      }
       nextInFlightRef.current = true
+      if (currentStep.id === 'notifications' && hasSelectedFeatureSetup) {
+        setBusyLabel('Setting up features…')
+      }
       try {
-        const ok = await persistCurrentStep()
-        if (ok) {
+        const trackCurrentStepCompleted = (): void => {
+          if (currentStep.id === 'notifications') {
+            if (notificationsStepCompletedTrackedRef.current) {
+              return
+            }
+            // Why: feature setup can keep the user on this already-persisted
+            // step to review a terminal command; later checklist edits must
+            // not double-count the same step completion.
+            notificationsStepCompletedTrackedRef.current = true
+          }
           track('onboarding_step_completed', {
             step: currentStep.stepNumber,
             value_kind: currentStep.valueKind,
             duration_ms: consumeStepDurationMs(),
             advanced_via: advancedVia
           })
+        }
+        const result = await persistCurrentStep()
+        const nextCommand = result.featureSetupResult?.skillInstallCommand ?? null
+        if (currentStep.id === 'notifications' && nextCommand) {
+          trackCurrentStepCompleted()
+          setFeatureSetupTerminalSelection(featureSetupSelection)
+          setFeatureSetupTerminalCommand(nextCommand)
+          return
+        }
+        if (result.ok) {
+          trackCurrentStepCompleted()
           setStepIndex((idx) => Math.min(idx + 1, STEPS.length - 1))
         }
       } finally {
+        if (currentStep.id === 'notifications') {
+          setBusyLabel(null)
+        }
         nextInFlightRef.current = false
       }
     },
@@ -323,39 +399,69 @@ export function useOnboardingFlow(
       currentStep.id,
       currentStep.stepNumber,
       currentStep.valueKind,
+      featureSetupSelection,
+      featureSetupTerminalCommand,
+      hasSelectedFeatureSetup,
       persistCurrentStep
     ]
   )
 
-  const openFolder = useCallback(async () => {
-    // Why: re-entry guard — rapid Cmd+Enter must not launch duplicate pickers.
-    if (busyLabel !== null) {
-      return
-    }
-    setError(null)
-    track('onboarding_step4_path_clicked', { path: 'open_folder' })
-    const path = await window.api.repos.pickFolder()
-    if (!path) {
-      track('onboarding_step4_path_failed', { path: 'open_folder', reason: 'cancelled' })
-      return
-    }
-    setBusyLabel('Opening project…')
-    try {
-      let result = await window.api.repos.add({ path })
-      if ('error' in result && result.error.includes('Not a valid git repository')) {
-        result = await window.api.repos.add({ path, kind: 'folder' })
+  const openFolder = useCallback(
+    async (kind: 'git' | 'folder' = 'git') => {
+      // Why: re-entry guard — rapid Cmd+Enter must not launch duplicate pickers.
+      if (busyLabel !== null) {
+        return
       }
-      if ('error' in result) {
-        throw new Error(result.error)
+      setError(null)
+      if (settings?.activeRuntimeEnvironmentId?.trim()) {
+        const path = serverPath.trim()
+        if (!path) {
+          const message = 'Enter a server path.'
+          setError(message)
+          return
+        }
+        track('onboarding_step4_path_clicked', { path: 'open_folder' })
+        setBusyLabel(kind === 'git' ? 'Opening project…' : 'Opening folder…')
+        try {
+          const repo = await addRepoPath(path, kind)
+          if (!repo) {
+            track('onboarding_step4_path_failed', { path: 'open_folder', reason: 'invalid_path' })
+            return
+          }
+          await completeRepo(repo.id, isGitRepoKind(repo), 'open_folder')
+        } catch (err) {
+          setError(err instanceof Error ? err.message : String(err))
+          track('onboarding_step4_path_failed', { path: 'open_folder', reason: 'invalid_path' })
+        } finally {
+          setBusyLabel(null)
+        }
+        return
       }
-      await completeRepo(result.repo.id, isGitRepoKind(result.repo), 'open_folder')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-      track('onboarding_step4_path_failed', { path: 'open_folder', reason: 'invalid_path' })
-    } finally {
-      setBusyLabel(null)
-    }
-  }, [busyLabel, completeRepo])
+      track('onboarding_step4_path_clicked', { path: 'open_folder' })
+      const path = await window.api.repos.pickFolder()
+      if (!path) {
+        track('onboarding_step4_path_failed', { path: 'open_folder', reason: 'cancelled' })
+        return
+      }
+      setBusyLabel('Opening project…')
+      try {
+        let result = await window.api.repos.add({ path })
+        if ('error' in result && result.error.includes('Not a valid git repository')) {
+          result = await window.api.repos.add({ path, kind: 'folder' })
+        }
+        if ('error' in result) {
+          throw new Error(result.error)
+        }
+        await completeRepo(result.repo.id, isGitRepoKind(result.repo), 'open_folder')
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+        track('onboarding_step4_path_failed', { path: 'open_folder', reason: 'invalid_path' })
+      } finally {
+        setBusyLabel(null)
+      }
+    },
+    [addRepoPath, busyLabel, completeRepo, serverPath, settings?.activeRuntimeEnvironmentId]
+  )
 
   const clone = useCallback(async () => {
     // Why: re-entry guard — prevents Enter spamming from triggering duplicate clones.
@@ -368,12 +474,30 @@ export function useOnboardingFlow(
     }
     setError(null)
     track('onboarding_step4_path_clicked', { path: 'clone_url' })
+    const target = getActiveRuntimeTarget(settings)
+    const destination =
+      target.kind === 'environment' ? cloneDestination.trim() : settings.workspaceDir
+    if (!destination) {
+      const message = 'Enter a server path for the clone destination.'
+      setError(message)
+      return
+    }
     setBusyLabel('Cloning repo…')
     try {
-      const repo = await window.api.repos.clone({
-        url: trimmed,
-        destination: settings.workspaceDir
-      })
+      const repo =
+        target.kind === 'environment'
+          ? (
+              await callRuntimeRpc<{ repo: Repo }>(
+                target,
+                'repo.clone',
+                { url: trimmed, destination },
+                { timeoutMs: 10 * 60_000 }
+              )
+            ).repo
+          : await window.api.repos.clone({
+              url: trimmed,
+              destination
+            })
       await completeRepo(repo.id, true, 'clone_url')
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -384,56 +508,94 @@ export function useOnboardingFlow(
     } finally {
       setBusyLabel(null)
     }
-  }, [busyLabel, cloneUrl, completeRepo, settings])
+  }, [busyLabel, cloneDestination, cloneUrl, completeRepo, settings])
 
-  const skip = useCallback(async () => {
+  const skipToRepo = useCallback(async () => {
     if (busyLabel) {
       return
     }
-    // Why: skip has no keyboard path today, so `advanced_via` is always
-    // `'button'`. Including the field keeps the shape uniform with the
-    // completed/dismissed events and lets a future keyboard-skip arrive
-    // without a schema migration.
+    setError(null)
+    const repoStepIndex = STEPS.findIndex((step) => step.id === 'repo')
+    const repoStep = STEPS[repoStepIndex]
+    if (currentStep.id === 'repo' || !repoStep) {
+      return
+    }
     const durationMs = consumeStepDurationMs()
-    track('onboarding_step_skipped', {
-      step: currentStep.stepNumber,
-      duration_ms: durationMs,
-      advanced_via: 'button'
-    })
     // Why: theme step previews on the document without persisting. On skip,
     // revert to the saved theme before advancing so the preview doesn't leak.
     if (currentStep.id === 'theme' && settings) {
       setTheme(settings.theme)
       applyDocumentTheme(settings.theme)
     }
-    if (currentStep.id === 'repo') {
-      await closeWith('dismissed', {}, currentStep.stepNumber, undefined, {
-        advancedVia: 'button',
-        durationMs
-      })
-      return
+    // Why: the repo step seeds folder terminals from saved settings. Preserve
+    // the visible agent choice when optional preferences are skipped.
+    if (currentStep.id === 'agent' && selectedAgent) {
+      await updateSettings({ defaultTuiAgent: selectedAgent })
     }
-    // Why: persistence-only path — does NOT trigger requestPermission, so
-    // skipping step 3 never fires the OS permission prompt.
     try {
-      onOnboardingChange(await persistStep(currentStep.stepNumber))
+      const nextState = await persistStep(repoStep.stepNumber - 1)
+      onOnboardingChange(nextState)
+      // Why: users can skip optional preferences, but onboarding remains open
+      // because Orca needs a project before the app has a useful first state.
+      track('onboarding_step_skipped', {
+        step: currentStep.stepNumber,
+        duration_ms: durationMs,
+        advanced_via: 'button'
+      })
+      setStepIndex(repoStepIndex)
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-      return
+      const message = err instanceof Error ? err.message : String(err)
+      setError(message)
+      toast.error('Could not skip to Add Project', { description: message })
     }
-    setStepIndex((idx) => Math.min(idx + 1, STEPS.length - 1))
   }, [
     busyLabel,
-    closeWith,
     consumeStepDurationMs,
     currentStep.id,
     currentStep.stepNumber,
     onOnboardingChange,
-    settings
+    selectedAgent,
+    settings,
+    updateSettings
+  ])
+
+  const openSshSettings = useCallback(async () => {
+    if (busyLabel || currentStep.id !== 'repo') {
+      return
+    }
+    setError(null)
+    try {
+      onOnboardingChange(await persistStep(3))
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setError(message)
+      toast.error('Could not open SSH settings', { description: message })
+      return
+    }
+    // Why: Settings renders behind the fullscreen onboarding layer; SSH users
+    // need a temporary detour without marking required repo setup dismissed.
+    onSettingsDetourStart?.()
+    openSettingsPage()
+    // Why: Settings consumes navigation targets from its mounted view; defer
+    // until the view switch has committed so the SSH pane scroll is reliable.
+    window.setTimeout(() => {
+      openSettingsTarget({ pane: 'ssh', repoId: null, sectionId: 'ssh' })
+    }, 0)
+  }, [
+    busyLabel,
+    currentStep.id,
+    onOnboardingChange,
+    onSettingsDetourStart,
+    openSettingsPage,
+    openSettingsTarget
   ])
 
   const back = useCallback(() => {
     setStepIndex((idx) => Math.max(idx - 1, 0))
+  }, [])
+
+  const jumpToStep = useCallback((idx: number) => {
+    setStepIndex(Math.min(Math.max(idx, 0), STEPS.length - 1))
   }, [])
 
   return {
@@ -447,16 +609,27 @@ export function useOnboardingFlow(
     setTheme: setThemeInteractive,
     notifications,
     setNotifications,
+    featureSetupSelection,
+    setFeatureSetupSelection: setFeatureSetupSelectionInteractive,
+    featureSetupTerminalCommand,
+    featureSetupTerminalSelection,
+    hasSelectedFeatureSetup,
     cloneUrl,
     setCloneUrl,
+    serverPath,
+    setServerPath,
+    cloneDestination,
+    setCloneDestination,
     busyLabel,
     error,
     detectedSet,
     isDetectingAgents,
     next,
-    skip,
+    skipToRepo,
     back,
+    jumpToStep,
     openFolder,
+    openSshSettings,
     clone
   }
 }

@@ -12,24 +12,84 @@ import type {
   CodexUsageSessionRow,
   CodexUsageSummary
 } from '../../shared/codex-usage-types'
+import type { AutomationRunUsage } from '../../shared/automations-types'
 import type { Store } from '../persistence'
 import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-worktree-metadata'
 import type { CodexUsagePersistedState } from './types'
 import { createWorktreeRefs, scanCodexUsageFiles } from './scanner'
 
-const SCHEMA_VERSION = 2
+const SCHEMA_VERSION = 3
 const STALE_MS = 5 * 60_000
+const AUTOMATION_ATTRIBUTION_WINDOW_MS = 5 * 60_000
 
 let _codexUsageFile: string | null = null
 
-const MODEL_PRICING: Record<string, { input: number; cachedInput: number; output: number }> = {
+type TieredPrice = { threshold: number; price: number }
+type CodexModelPricing = {
+  input: number
+  cachedInput: number
+  output: number
+  inputTiers?: TieredPrice[]
+  cachedInputTiers?: TieredPrice[]
+  outputTiers?: TieredPrice[]
+}
+
+type AutomationUsageLookupInput = {
+  worktreeId: string | null
+  terminalSessionId: string | null
+  startedAt: number | null
+  completedAt: number | null
+}
+
+const LONG_CONTEXT_THRESHOLD_TOKENS = 272_000
+
+const MODEL_PRICING: Record<string, CodexModelPricing> = {
   'gpt-5': { input: 1.25, cachedInput: 0.125, output: 10 },
   'gpt-5.1': { input: 1.25, cachedInput: 0.125, output: 10 },
+  'gpt-5.1-codex': { input: 1.25, cachedInput: 0.125, output: 10 },
+  'gpt-5.1-codex-max': { input: 1.25, cachedInput: 0.125, output: 10 },
   'gpt-5.2': { input: 1.75, cachedInput: 0.175, output: 14 },
+  'gpt-5.2-codex': { input: 1.75, cachedInput: 0.175, output: 14 },
+  'gpt-5.3': { input: 1.75, cachedInput: 0.175, output: 14 },
   'gpt-5.3-codex': { input: 1.75, cachedInput: 0.175, output: 14 },
-  'gpt-5.4': { input: 2.5, cachedInput: 0.25, output: 15 },
-  'gpt-5.5': { input: 5, cachedInput: 0.5, output: 30 }
+  'gpt-5.3-codex-spark': { input: 1.75, cachedInput: 0.175, output: 14 },
+  'gpt-5.4-mini': { input: 0.75, cachedInput: 0.075, output: 4.5 },
+  'gpt-5.4-nano': { input: 0.2, cachedInput: 0.02, output: 1.25 },
+  'gpt-5.4-pro': {
+    input: 30,
+    cachedInput: 30,
+    output: 180,
+    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 60 }],
+    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 60 }],
+    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 270 }]
+  },
+  'gpt-5.4': {
+    input: 2.5,
+    cachedInput: 0.25,
+    output: 15,
+    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 5 }],
+    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 0.5 }],
+    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 22.5 }]
+  },
+  'gpt-5.5-pro': {
+    input: 30,
+    cachedInput: 30,
+    output: 180,
+    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 60 }],
+    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 60 }],
+    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 270 }]
+  },
+  'gpt-5.5': {
+    input: 5,
+    cachedInput: 0.5,
+    output: 30,
+    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 10 }],
+    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 1 }],
+    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 45 }]
+  }
 }
+
+const REASONING_TIER_SUFFIXES = ['minimal', 'low', 'medium', 'high', 'xhigh', 'auto', 'none']
 
 function getDefaultState(): CodexUsagePersistedState {
   return {
@@ -53,7 +113,16 @@ export function normalizePersistedState(state: CodexUsagePersistedState): CodexU
     // Reusing an older cache would silently serve wrong model/session rows
     // until the next forced rescan, so schema changes must invalidate stale
     // persisted analytics instead of best-effort patching partial data.
-    return getDefaultState()
+    // Preserve scanState.enabled so existing users keep tracking on across
+    // schema bumps; the next refresh will repopulate the analytics.
+    const defaults = getDefaultState()
+    return {
+      ...defaults,
+      scanState: {
+        ...defaults.scanState,
+        enabled: state.scanState?.enabled ?? defaults.scanState.enabled
+      }
+    }
   }
   return {
     ...state,
@@ -75,31 +144,102 @@ function getCodexUsageFile(): string {
   return _codexUsageFile
 }
 
+function stripParenthesizedReasoningTier(model: string): string | null {
+  const match = model.match(/^(.*)\(([^()]*)\)$/)
+  if (!match) {
+    return model
+  }
+  const tier = match[2].trim().toLowerCase()
+  if (!REASONING_TIER_SUFFIXES.includes(tier)) {
+    return null
+  }
+  return match[1]
+}
+
+function stripDashReasoningTiers(model: string): string {
+  let current = model
+  for (let index = 0; index < 4; index++) {
+    const suffix = REASONING_TIER_SUFFIXES.find((tier) => current.endsWith(`-${tier}`))
+    if (!suffix) {
+      return current
+    }
+    current = current.slice(0, -suffix.length - 1)
+  }
+  return current
+}
+
 function normalizeModelForPricing(model: string | null): string | null {
   if (!model) {
     return null
   }
 
-  const lower = model.toLowerCase()
-  if (lower === 'gpt-5' || lower === 'gpt-5-codex') {
+  const lower = stripParenthesizedReasoningTier(model.toLowerCase().trim())
+  if (!lower) {
+    return null
+  }
+
+  const normalized = stripDashReasoningTiers(lower)
+  if (normalized === 'gpt-5' || normalized === 'gpt-5-codex') {
     return 'gpt-5'
   }
-  if (lower.startsWith('gpt-5.1')) {
+  if (normalized === 'gpt-5.1-codex-max' || normalized.startsWith('gpt-5.1-codex-max-')) {
+    return 'gpt-5.1-codex-max'
+  }
+  if (normalized === 'gpt-5.1-codex' || normalized.startsWith('gpt-5.1-codex-')) {
+    return 'gpt-5.1-codex'
+  }
+  if (normalized === 'gpt-5.1' || normalized.startsWith('gpt-5.1-')) {
     return 'gpt-5.1'
   }
-  if (lower.startsWith('gpt-5.2')) {
+  if (normalized === 'gpt-5.2-codex' || normalized.startsWith('gpt-5.2-codex-')) {
+    return 'gpt-5.2-codex'
+  }
+  if (normalized === 'gpt-5.2' || normalized.startsWith('gpt-5.2-')) {
     return 'gpt-5.2'
   }
-  if (lower.startsWith('gpt-5.3-codex')) {
+  if (normalized === 'gpt-5.3-codex-spark' || normalized.startsWith('gpt-5.3-codex-spark-')) {
+    return 'gpt-5.3-codex-spark'
+  }
+  if (normalized === 'gpt-5.3-codex' || normalized.startsWith('gpt-5.3-codex-')) {
     return 'gpt-5.3-codex'
   }
-  if (lower.startsWith('gpt-5.4')) {
+  if (normalized === 'gpt-5.3' || normalized.startsWith('gpt-5.3-')) {
+    return 'gpt-5.3'
+  }
+  if (normalized === 'gpt-5.4-mini' || normalized.startsWith('gpt-5.4-mini-')) {
+    return 'gpt-5.4-mini'
+  }
+  if (normalized === 'gpt-5.4-nano' || normalized.startsWith('gpt-5.4-nano-')) {
+    return 'gpt-5.4-nano'
+  }
+  if (normalized === 'gpt-5.4-pro' || normalized.startsWith('gpt-5.4-pro-')) {
+    return 'gpt-5.4-pro'
+  }
+  if (normalized === 'gpt-5.4' || normalized.startsWith('gpt-5.4-')) {
     return 'gpt-5.4'
   }
-  if (lower.startsWith('gpt-5.5')) {
+  if (normalized === 'gpt-5.5-pro' || normalized.startsWith('gpt-5.5-pro-')) {
+    return 'gpt-5.5-pro'
+  }
+  if (normalized === 'gpt-5.5' || normalized.startsWith('gpt-5.5-')) {
     return 'gpt-5.5'
   }
   return null
+}
+
+function calculateTieredCost(tokens: number, basePrice: number, tiers: TieredPrice[] = []): number {
+  let cost = 0
+  let lowerBound = 0
+  let activePrice = basePrice
+  for (const tier of tiers) {
+    if (tokens <= tier.threshold) {
+      return cost + Math.max(tokens - lowerBound, 0) * activePrice
+    }
+    cost += (tier.threshold - lowerBound) * activePrice
+    lowerBound = tier.threshold
+    activePrice = tier.price
+  }
+  return cost + Math.max(tokens - lowerBound, 0) * activePrice
 }
 
 function estimateCostUsd(
@@ -119,9 +259,9 @@ function estimateCostUsd(
   // price and again at cache-read price.
   const nonCachedInputTokens = Math.max(inputTokens - clampedCached, 0)
   return (
-    (nonCachedInputTokens * pricing.input +
-      clampedCached * pricing.cachedInput +
-      outputTokens * pricing.output) /
+    (calculateTieredCost(nonCachedInputTokens, pricing.input, pricing.inputTiers) +
+      calculateTieredCost(clampedCached, pricing.cachedInput, pricing.cachedInputTiers) +
+      calculateTieredCost(outputTokens, pricing.output, pricing.outputTiers)) /
     1_000_000
   )
 }
@@ -511,6 +651,154 @@ export class CodexUsageStore {
           hasInferredPricing: session.hasInferredPricing || totals.hasInferredPricing
         }
       })
+  }
+
+  async getAutomationRunUsage(input: AutomationUsageLookupInput): Promise<AutomationRunUsage> {
+    const collectedAt = Date.now()
+    const unavailable = (
+      unavailableReason: AutomationRunUsage['unavailableReason'],
+      unavailableMessage: string
+    ): AutomationRunUsage => ({
+      status: 'unavailable',
+      provider: 'codex',
+      model: null,
+      inputTokens: null,
+      outputTokens: null,
+      cacheReadTokens: null,
+      cacheWriteTokens: null,
+      reasoningOutputTokens: null,
+      totalTokens: null,
+      estimatedCostUsd: null,
+      estimatedCostSource: null,
+      providerSessionId: null,
+      attribution: null,
+      collectedAt,
+      unavailableReason,
+      unavailableMessage
+    })
+
+    if (!this.state.scanState.enabled) {
+      return unavailable('usage_not_enabled', 'Codex usage tracking is not enabled.')
+    }
+    if (!input.worktreeId || !input.startedAt || !input.completedAt) {
+      return unavailable('no_matching_session', 'Run session metadata is incomplete.')
+    }
+
+    const scanState = await this.refresh(true)
+    if (scanState.lastScanError) {
+      return unavailable('scan_failed', scanState.lastScanError)
+    }
+
+    const windowStart = input.startedAt - AUTOMATION_ATTRIBUTION_WINDOW_MS
+    const windowEnd = input.completedAt + AUTOMATION_ATTRIBUTION_WINDOW_MS
+    const candidates = this.state.sessions.filter((session) => {
+      const first = new Date(session.firstTimestamp).getTime()
+      const last = new Date(session.lastTimestamp).getTime()
+      if (!Number.isFinite(first) || !Number.isFinite(last)) {
+        return false
+      }
+      if (session.sessionId === input.terminalSessionId) {
+        return true
+      }
+      if (first < windowStart || first > windowEnd || last > windowEnd) {
+        return false
+      }
+      return session.locationBreakdown.some((entry) => entry.worktreeId === input.worktreeId)
+    })
+
+    if (candidates.length === 0) {
+      return unavailable('no_matching_session', 'No Codex usage session matched this run.')
+    }
+    if (candidates.length > 1) {
+      return unavailable(
+        'ambiguous_session',
+        'Multiple Codex usage sessions matched this run window.'
+      )
+    }
+
+    const session = candidates[0]
+    const scopedLocations = session.locationBreakdown.filter(
+      (entry) => entry.worktreeId === input.worktreeId
+    )
+    const locations = scopedLocations.length > 0 ? scopedLocations : session.locationBreakdown
+    const totals = locations.reduce(
+      (acc, entry) => {
+        acc.events += entry.eventCount
+        acc.inputTokens += entry.inputTokens
+        acc.cachedInputTokens += entry.cachedInputTokens
+        acc.outputTokens += entry.outputTokens
+        acc.reasoningOutputTokens += entry.reasoningOutputTokens
+        acc.totalTokens += entry.totalTokens
+        return acc
+      },
+      {
+        events: 0,
+        inputTokens: 0,
+        cachedInputTokens: 0,
+        outputTokens: 0,
+        reasoningOutputTokens: 0,
+        totalTokens: 0
+      }
+    )
+    const scopedModelRows = session.locationModelBreakdown.filter(
+      (entry) => entry.worktreeId === input.worktreeId
+    )
+    const modelRows = scopedModelRows.length > 0 ? scopedModelRows : session.modelBreakdown
+    const modelLabels = [...new Set(modelRows.map((entry) => entry.modelLabel))]
+    let estimatedCostUsd = 0
+    let hasKnownCost = false
+    if (scopedModelRows.length > 0) {
+      for (const modelRow of scopedModelRows) {
+        const cost = estimateCostUsd(
+          modelRow.modelKey,
+          modelRow.inputTokens,
+          modelRow.cachedInputTokens,
+          modelRow.outputTokens
+        )
+        if (cost !== null) {
+          hasKnownCost = true
+          estimatedCostUsd += cost
+        }
+      }
+    } else if (!session.hasMixedModels) {
+      const cost = estimateCostUsd(
+        session.primaryModel,
+        totals.inputTokens,
+        totals.cachedInputTokens,
+        totals.outputTokens
+      )
+      if (cost !== null) {
+        hasKnownCost = true
+        estimatedCostUsd += cost
+      }
+    }
+
+    return {
+      status: 'known',
+      provider: 'codex',
+      model:
+        modelLabels.length === 1
+          ? modelLabels[0]
+          : session.hasMixedModels
+            ? 'Mixed models'
+            : session.primaryModel,
+      inputTokens: totals.inputTokens,
+      outputTokens: totals.outputTokens,
+      cacheReadTokens: totals.cachedInputTokens,
+      cacheWriteTokens: null,
+      reasoningOutputTokens: totals.reasoningOutputTokens,
+      totalTokens: totals.totalTokens,
+      estimatedCostUsd: hasKnownCost ? estimatedCostUsd : null,
+      estimatedCostSource: hasKnownCost ? 'api_equivalent' : null,
+      providerSessionId: session.sessionId,
+      // Why: Orca terminal tab ids and Codex usage session ids are different
+      // systems today, so attribution is intentionally limited to one local
+      // provider session in the run's worktree/time window.
+      attribution: 'provider_session_time_window',
+      collectedAt,
+      unavailableReason: null,
+      unavailableMessage: null
+    }
   }
 
   private getFilteredDaily(scope: CodexUsageScope, range: CodexUsageRange) {

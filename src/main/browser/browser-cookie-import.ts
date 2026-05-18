@@ -2,12 +2,13 @@
    that must stay together so the encryption, schema, and staging steps remain in sync. */
 import { app, type BrowserWindow, dialog, session } from 'electron'
 import { execFileSync } from 'node:child_process'
-import { createDecipheriv, pbkdf2Sync } from 'node:crypto'
+import { createDecipheriv, pbkdf2Sync, randomUUID } from 'node:crypto'
 import {
   appendFileSync,
   copyFileSync,
   existsSync,
   mkdtempSync,
+  mkdirSync,
   readFileSync,
   readdirSync,
   rmSync,
@@ -113,6 +114,15 @@ const CHROMIUM_BROWSERS: ChromiumBrowserDef[] = [
     macRoot: 'BraveSoftware/Brave-Browser',
     winRoot: 'BraveSoftware/Brave-Browser/User Data',
     linuxRoot: 'BraveSoftware/Brave-Browser'
+  },
+  {
+    family: 'comet',
+    label: 'Comet',
+    keychainService: 'Comet Safe Storage',
+    keychainAccount: 'Comet',
+    macRoot: 'Comet',
+    winRoot: 'Comet/User Data'
+    // linuxRoot intentionally omitted — Comet does not ship a Linux build as of 2026-05-15
   }
 ]
 
@@ -658,7 +668,7 @@ export async function importCookiesFromFile(
 // Why: Google and other services bind auth cookies to the User-Agent that
 // created them. We read the source browser's real version from its plist
 // and construct a matching UA string so imported sessions aren't invalidated.
-function getUserAgentForBrowser(
+export function getUserAgentForBrowser(
   family: BrowserSessionProfileSource['browserFamily']
 ): string | null {
   // Why: UA spoofing uses macOS-specific plist reading. On other platforms,
@@ -701,6 +711,12 @@ function getUserAgentForBrowser(
     }
     case 'chromium': {
       const v = readBrowserVersion('/Applications/Brave Browser.app')
+      return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
+    }
+    case 'comet': {
+      // Why: Comet is Chromium-based and ships a Chrome-shaped version in its plist.
+      // Use the same UA shape as Chrome itself so Google-bound auth cookies survive import.
+      const v = readBrowserVersion('/Applications/Comet.app')
       return v ? `Mozilla/5.0 (${platform}) ${chromeBase} Chrome/${v} Safari/537.36` : null
     }
     default:
@@ -1343,8 +1359,14 @@ export async function importCookiesFromBrowser(
     return { ok: false, reason: 'Target cookie database not found. Open a browser tab first.' }
   }
 
-  const stagingCookiesPath = join(app.getPath('userData'), 'Cookies-staged')
+  const stagingDir = join(app.getPath('userData'), 'cookie-import-staging')
+  const partitionSegment = partitionName.replace(/[^a-zA-Z0-9_-]/g, '_')
+  const stagingCookiesPath = join(
+    stagingDir,
+    `Cookies-${partitionSegment}-${Date.now()}-${randomUUID()}`
+  )
   try {
+    mkdirSync(stagingDir, { recursive: true })
     copyFileSync(liveCookiesPath, stagingCookiesPath)
   } catch {
     rmSync(tmpDir, { recursive: true, force: true })
@@ -1565,7 +1587,7 @@ export async function importCookiesFromBrowser(
       // Why: some cookies couldn't be loaded via cookies.set() (non-ASCII values
       // or other validation failures). Keep the staging DB so the next cold start
       // picks them up from SQLite where CookieMonster reads them without validation.
-      browserSessionRegistry.setPendingCookieImport(stagingCookiesPath)
+      browserSessionRegistry.setPendingCookieImport(targetPartition, stagingCookiesPath)
       diag(`  staged at ${stagingCookiesPath} for ${memoryFailed} cookies that need restart`)
     } else {
       try {
@@ -1580,7 +1602,7 @@ export async function importCookiesFromBrowser(
     if (ua) {
       targetSession.setUserAgent(ua)
       setupClientHintsOverride(targetSession, ua)
-      browserSessionRegistry.persistUserAgent(ua)
+      browserSessionRegistry.persistUserAgent(targetPartition, ua)
       diag(`  set UA for partition: ${ua.substring(0, 80)}...`)
     }
 

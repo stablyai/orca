@@ -6,7 +6,8 @@ const { handleMock, previewGhosttyImportMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({
-  ipcMain: { handle: handleMock }
+  ipcMain: { handle: handleMock },
+  nativeTheme: { themeSource: 'system' }
 }))
 
 vi.mock('../ghostty/index', () => ({
@@ -26,6 +27,8 @@ describe('registerSettingsHandlers', () => {
   beforeEach(() => {
     handleMock.mockClear()
     previewGhosttyImportMock.mockClear()
+    store.getSettings.mockReset()
+    store.updateSettings.mockReset()
   })
 
   it('registers settings:previewGhosttyImport handler', () => {
@@ -46,5 +49,37 @@ describe('registerSettingsHandlers', () => {
     const result = await handler!(null, {})
     expect(result).toEqual(expected)
     expect(previewGhosttyImportMock).toHaveBeenCalledWith(store)
+  })
+
+  it('updates the agent awake service when the keep-awake setting changes', () => {
+    const agentAwakeService = { setEnabled: vi.fn() }
+    store.getSettings.mockReturnValue({ keepComputerAwakeWhileAgentsRun: false })
+    store.updateSettings.mockReturnValue({ keepComputerAwakeWhileAgentsRun: true })
+    registerSettingsHandlers(store as never, agentAwakeService as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => unknown
+
+    handler(null, { keepComputerAwakeWhileAgentsRun: true })
+
+    expect(agentAwakeService.setEnabled).toHaveBeenCalledWith(true)
+  })
+
+  it('does not notify the agent awake service for unrelated setting changes', () => {
+    const agentAwakeService = { setEnabled: vi.fn() }
+    store.getSettings.mockReturnValue({ keepComputerAwakeWhileAgentsRun: false })
+    store.updateSettings.mockReturnValue({ keepComputerAwakeWhileAgentsRun: false })
+    registerSettingsHandlers(store as never, agentAwakeService as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => unknown
+
+    handler(null, { defaultTuiAgent: 'codex' })
+
+    expect(agentAwakeService.setEnabled).not.toHaveBeenCalled()
   })
 })

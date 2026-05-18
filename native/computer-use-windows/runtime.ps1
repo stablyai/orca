@@ -4,6 +4,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+[Console]::InputEncoding = $utf8NoBom
+[Console]::OutputEncoding = $utf8NoBom
+$OutputEncoding = $utf8NoBom
 
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
@@ -46,6 +50,12 @@ public static class OrcaDesktopWin32 {
 
     [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    public static extern bool SetCursorPos(int x, int y);
+
+    [DllImport("user32.dll")]
+    public static extern void mouse_event(uint dwFlags, uint dx, uint dy, int dwData, UIntPtr dwExtraInfo);
 }
 "@
 
@@ -75,6 +85,16 @@ $WindowsMessages = @{
     Wheel = 0x020A
 }
 
+$MouseEvents = @{
+    LeftDown = 0x0002
+    LeftUp = 0x0004
+    RightDown = 0x0008
+    RightUp = 0x0010
+    MiddleDown = 0x0020
+    MiddleUp = 0x0040
+    Wheel = 0x0800
+}
+
 function Write-OrcaJson($Payload) {
     $Payload | ConvertTo-Json -Depth 100 -Compress
 }
@@ -85,7 +105,7 @@ function New-OrcaFrame([double]$X, [double]$Y, [double]$Width, [double]$Height) 
 }
 
 function Read-OrcaOperation([string]$Path) {
-    Get-Content -Raw -Path $Path | ConvertFrom-Json
+    Get-Content -Raw -Encoding UTF8 -Path $Path | ConvertFrom-Json
 }
 
 function ConvertTo-OrcaLParam([int]$X, [int]$Y) {
@@ -108,10 +128,10 @@ function Find-OrcaProcess([string]$Query) {
         $needle = $needle.Substring(4)
     }
 
-    $pid = 0
+    $parsedProcessId = 0
     $processes = Get-OrcaWindowProcesses
-    if ([int]::TryParse($needle, [ref]$pid)) {
-        $match = $processes | Where-Object { $_.Id -eq $pid } | Select-Object -First 1
+    if ([int]::TryParse($needle, [ref]$parsedProcessId)) {
+        $match = $processes | Where-Object { $_.Id -eq $parsedProcessId } | Select-Object -First 1
         if ($null -ne $match) {
             Assert-OrcaProcessAllowed $match
             return $match
@@ -172,6 +192,22 @@ function Get-OrcaWindowFrame($Process, $RootElement) {
 
 function Get-OrcaWindowId($Process) {
     [int64]$Process.MainWindowHandle
+}
+
+function Get-OrcaAppName($Process) {
+    if ($Process.ProcessName -eq "ApplicationFrameHost" -and -not [string]::IsNullOrWhiteSpace($Process.MainWindowTitle)) {
+        return [string]$Process.MainWindowTitle
+    }
+    [string]$Process.ProcessName
+}
+
+function New-OrcaAppRecord($Process) {
+    [pscustomobject]@{
+        name = Get-OrcaAppName $Process
+        bundleIdentifier = $Process.ProcessName
+        bundleId = $Process.ProcessName
+        pid = [int]$Process.Id
+    }
 }
 
 function Assert-OrcaWindowTarget($Process, $WindowId, $WindowIndex) {
@@ -446,12 +482,7 @@ function New-OrcaSnapshot([string]$Query, [bool]$IncludeScreenshot, $WindowId = 
 
     [pscustomobject]@{
         snapshotId = [guid]::NewGuid().ToString()
-        app = [pscustomobject]@{
-            name = $process.ProcessName
-            bundleIdentifier = $process.ProcessName
-            bundleId = $process.ProcessName
-            pid = [int]$process.Id
-        }
+        app = New-OrcaAppRecord $process
         windowTitle = $process.MainWindowTitle
         windowId = Get-OrcaWindowId $process
         windowBounds = $windowFrame
@@ -468,12 +499,7 @@ function New-OrcaSnapshot([string]$Query, [bool]$IncludeScreenshot, $WindowId = 
 
 function Get-OrcaAppList {
     @(Get-OrcaWindowProcesses | ForEach-Object {
-        [pscustomobject]@{
-            name = $_.ProcessName
-            bundleIdentifier = $_.ProcessName
-            bundleId = $_.ProcessName
-            pid = [int]$_.Id
-        }
+        New-OrcaAppRecord $_
     })
 }
 
@@ -491,12 +517,7 @@ function Get-OrcaWindowList([string]$Query) {
         $width = [int][Math]::Max(0, [Math]::Round($windowFrame.width))
         $height = [int][Math]::Max(0, [Math]::Round($windowFrame.height))
     }
-    $app = [pscustomobject]@{
-        name = $process.ProcessName
-        bundleIdentifier = $process.ProcessName
-        bundleId = $process.ProcessName
-        pid = [int]$process.Id
-    }
+    $app = New-OrcaAppRecord $process
     [pscustomobject]@{
         app = $app
         windows = @([pscustomobject]@{
@@ -643,60 +664,56 @@ function Get-OrcaElementScreenPoint($Element) {
 }
 
 function Send-OrcaMouseClick([IntPtr]$WindowHandle, [int]$ScreenX, [int]$ScreenY, [string]$Button, [int]$Count) {
-    $point = New-Object OrcaDesktopWin32+POINT
-    $point.X = $ScreenX
-    $point.Y = $ScreenY
-    [void][OrcaDesktopWin32]::ScreenToClient($WindowHandle, [ref]$point)
-
-    $down = $WindowsMessages.LeftDown
-    $up = $WindowsMessages.LeftUp
-    $flag = 1
+    [void][OrcaDesktopWin32]::SetForegroundWindow($WindowHandle)
+    [void][OrcaDesktopWin32]::SetCursorPos($ScreenX, $ScreenY)
+    $down = $MouseEvents.LeftDown
+    $up = $MouseEvents.LeftUp
     if ($Button -eq "right") {
-        $down = $WindowsMessages.RightDown
-        $up = $WindowsMessages.RightUp
-        $flag = 2
+        $down = $MouseEvents.RightDown
+        $up = $MouseEvents.RightUp
     } elseif ($Button -eq "middle") {
-        $down = $WindowsMessages.MiddleDown
-        $up = $WindowsMessages.MiddleUp
-        $flag = 16
+        $down = $MouseEvents.MiddleDown
+        $up = $MouseEvents.MiddleUp
     }
 
-    $position = ConvertTo-OrcaLParam $point.X $point.Y
     for ($i = 0; $i -lt [Math]::Max(1, $Count); $i++) {
-        [void][OrcaDesktopWin32]::PostMessage($WindowHandle, $WindowsMessages.MouseMove, [IntPtr]::Zero, $position)
-        [void][OrcaDesktopWin32]::PostMessage($WindowHandle, $down, [IntPtr]$flag, $position)
+        [OrcaDesktopWin32]::mouse_event($down, 0, 0, 0, [UIntPtr]::Zero)
         Start-Sleep -Milliseconds 35
-        [void][OrcaDesktopWin32]::PostMessage($WindowHandle, $up, [IntPtr]::Zero, $position)
+        [OrcaDesktopWin32]::mouse_event($up, 0, 0, 0, [UIntPtr]::Zero)
     }
 }
 
 function Send-OrcaDrag([IntPtr]$WindowHandle, $From, $To) {
-    $start = New-Object OrcaDesktopWin32+POINT
-    $start.X = [int]$From.x
-    $start.Y = [int]$From.y
-    [void][OrcaDesktopWin32]::ScreenToClient($WindowHandle, [ref]$start)
-
-    $end = New-Object OrcaDesktopWin32+POINT
-    $end.X = [int]$To.x
-    $end.Y = [int]$To.y
-    [void][OrcaDesktopWin32]::ScreenToClient($WindowHandle, [ref]$end)
-
-    [void][OrcaDesktopWin32]::PostMessage($WindowHandle, $WindowsMessages.MouseMove, [IntPtr]::Zero, (ConvertTo-OrcaLParam $start.X $start.Y))
-    [void][OrcaDesktopWin32]::PostMessage($WindowHandle, $WindowsMessages.LeftDown, [IntPtr]1, (ConvertTo-OrcaLParam $start.X $start.Y))
+    [void][OrcaDesktopWin32]::SetForegroundWindow($WindowHandle)
+    $startX = [int]$From.x
+    $startY = [int]$From.y
+    $endX = [int]$To.x
+    $endY = [int]$To.y
+    [void][OrcaDesktopWin32]::SetCursorPos($startX, $startY)
+    [OrcaDesktopWin32]::mouse_event($MouseEvents.LeftDown, 0, 0, 0, [UIntPtr]::Zero)
     for ($step = 1; $step -le 12; $step++) {
-        $x = [int][Math]::Round($start.X + (($end.X - $start.X) * $step / 12))
-        $y = [int][Math]::Round($start.Y + (($end.Y - $start.Y) * $step / 12))
-        [void][OrcaDesktopWin32]::PostMessage($WindowHandle, $WindowsMessages.MouseMove, [IntPtr]1, (ConvertTo-OrcaLParam $x $y))
+        $x = [int][Math]::Round($startX + (($endX - $startX) * $step / 12))
+        $y = [int][Math]::Round($startY + (($endY - $startY) * $step / 12))
+        [void][OrcaDesktopWin32]::SetCursorPos($x, $y)
         Start-Sleep -Milliseconds 20
     }
-    [void][OrcaDesktopWin32]::PostMessage($WindowHandle, $WindowsMessages.LeftUp, [IntPtr]::Zero, (ConvertTo-OrcaLParam $end.X $end.Y))
+    [OrcaDesktopWin32]::mouse_event($MouseEvents.LeftUp, 0, 0, 0, [UIntPtr]::Zero)
 }
 
 function Send-OrcaText([IntPtr]$WindowHandle, [string]$Text) {
+    [void][OrcaDesktopWin32]::SetForegroundWindow($WindowHandle)
+    $hasNonAscii = $false
     foreach ($character in $Text.ToCharArray()) {
-        [void][OrcaDesktopWin32]::PostMessage($WindowHandle, $WindowsMessages.Char, [IntPtr][int][char]$character, [IntPtr]::Zero)
-        Start-Sleep -Milliseconds 8
+        if ([int][char]$character -gt 0x7F) { $hasNonAscii = $true; break }
     }
+    if ($hasNonAscii) {
+        foreach ($character in $Text.ToCharArray()) {
+            [void][OrcaDesktopWin32]::PostMessage($WindowHandle, $WindowsMessages.Char, [IntPtr][int][char]$character, [IntPtr]::Zero)
+            Start-Sleep -Milliseconds 8
+        }
+        return
+    }
+    [System.Windows.Forms.SendKeys]::SendWait((ConvertTo-OrcaSendKeysText $Text))
 }
 
 function Get-OrcaVirtualKey([string]$Key) {
@@ -712,10 +729,8 @@ function Get-OrcaVirtualKey([string]$Key) {
 }
 
 function Send-OrcaKey([IntPtr]$WindowHandle, [string]$Key) {
-    $virtualKey = Get-OrcaVirtualKey $Key
-    [void][OrcaDesktopWin32]::PostMessage($WindowHandle, $WindowsMessages.KeyDown, [IntPtr]$virtualKey, [IntPtr]::Zero)
-    Start-Sleep -Milliseconds 25
-    [void][OrcaDesktopWin32]::PostMessage($WindowHandle, $WindowsMessages.KeyUp, [IntPtr]$virtualKey, [IntPtr]::Zero)
+    [void][OrcaDesktopWin32]::SetForegroundWindow($WindowHandle)
+    [System.Windows.Forms.SendKeys]::SendWait((ConvertTo-OrcaSendKeysKey $Key))
 }
 
 function Get-OrcaModifierVirtualKey([string]$Modifier) {
@@ -732,16 +747,58 @@ function Send-OrcaHotkey([IntPtr]$WindowHandle, [string]$KeySpec) {
     $parts = @($KeySpec.Split("+") | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     if ($parts.Count -eq 0) { throw "Unsupported key: $KeySpec" }
     $key = $parts[$parts.Count - 1]
-    $modifiers = @()
+    $prefix = ""
     if ($parts.Count -gt 1) {
-        $modifiers = @($parts[0..($parts.Count - 2)] | ForEach-Object { Get-OrcaModifierVirtualKey $_ })
+        foreach ($modifier in $parts[0..($parts.Count - 2)]) {
+            $prefix += ConvertTo-OrcaSendKeysModifier $modifier
+        }
     }
-    foreach ($modifier in $modifiers) {
-        [void][OrcaDesktopWin32]::PostMessage($WindowHandle, $WindowsMessages.KeyDown, [IntPtr]$modifier, [IntPtr]::Zero)
+    [void][OrcaDesktopWin32]::SetForegroundWindow($WindowHandle)
+    [System.Windows.Forms.SendKeys]::SendWait($prefix + (ConvertTo-OrcaSendKeysKey $key))
+}
+
+function ConvertTo-OrcaSendKeysText([string]$Text) {
+    $builder = New-Object System.Text.StringBuilder
+    foreach ($character in $Text.ToCharArray()) {
+        $value = [string]$character
+        if ($value -eq "`r") { continue }
+        if ($value -eq "`n") { [void]$builder.Append("{ENTER}"); continue }
+        if ("+^%~(){}[]".Contains($value)) {
+            [void]$builder.Append("{").Append($value).Append("}")
+        } else {
+            [void]$builder.Append($value)
+        }
     }
-    Send-OrcaKey $WindowHandle $key
-    for ($i = $modifiers.Count - 1; $i -ge 0; $i--) {
-        [void][OrcaDesktopWin32]::PostMessage($WindowHandle, $WindowsMessages.KeyUp, [IntPtr]$modifiers[$i], [IntPtr]::Zero)
+    $builder.ToString()
+}
+
+function ConvertTo-OrcaSendKeysKey([string]$Key) {
+    switch ($Key.ToLowerInvariant()) {
+        { $_ -in @("return", "enter") } { return "{ENTER}" }
+        "tab" { return "{TAB}" }
+        { $_ -in @("escape", "esc") } { return "{ESC}" }
+        "backspace" { return "{BACKSPACE}" }
+        "delete" { return "{DELETE}" }
+        "space" { return " " }
+        "left" { return "{LEFT}" }
+        "up" { return "{UP}" }
+        "right" { return "{RIGHT}" }
+        "down" { return "{DOWN}" }
+        "home" { return "{HOME}" }
+        "end" { return "{END}" }
+        default {
+            if ($Key.Length -eq 1) { return (ConvertTo-OrcaSendKeysText $Key) }
+            throw "Unsupported key: $Key"
+        }
+    }
+}
+
+function ConvertTo-OrcaSendKeysModifier([string]$Modifier) {
+    switch ($Modifier.ToLowerInvariant()) {
+        { $_ -in @("ctrl", "control", "cmdorctrl", "commandorcontrol") } { return "^" }
+        "shift" { return "+" }
+        { $_ -in @("alt", "option") } { return "%" }
+        default { throw "Unsupported modifier: $Modifier" }
     }
 }
 
@@ -755,9 +812,9 @@ function Send-OrcaPasteText([IntPtr]$WindowHandle, [string]$Text) {
         Send-OrcaHotkey $WindowHandle "Ctrl+v"
     } finally {
         if ($hadPrevious) {
-            [System.Windows.Forms.Clipboard]::SetDataObject($previous, $true)
+            try { [System.Windows.Forms.Clipboard]::SetDataObject($previous, $true) } catch {}
         } else {
-            [System.Windows.Forms.Clipboard]::Clear()
+            try { [System.Windows.Forms.Clipboard]::Clear() } catch {}
         }
     }
 }
@@ -819,7 +876,9 @@ function Invoke-OrcaOperation($Operation) {
             if ($Operation.direction -eq "down" -or $Operation.direction -eq "right") { $delta = -1 * $delta }
             $point = Get-OrcaElementScreenPoint $element
             if ($null -eq $point) { $point = Get-OrcaScreenPoint $Operation $windowFrame }
-            [void][OrcaDesktopWin32]::PostMessage($handle, $WindowsMessages.Wheel, (ConvertTo-OrcaWheelParam $delta), (ConvertTo-OrcaLParam $point.x $point.y))
+            [void][OrcaDesktopWin32]::SetForegroundWindow($handle)
+            [void][OrcaDesktopWin32]::SetCursorPos([int]$point.x, [int]$point.y)
+            [OrcaDesktopWin32]::mouse_event($MouseEvents.Wheel, 0, 0, $delta, [UIntPtr]::Zero)
             $action = [pscustomobject]@{ path = "synthetic"; actionName = "scroll"; fallbackReason = $null }
         }
         "drag" {

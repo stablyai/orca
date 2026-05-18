@@ -27,11 +27,13 @@ vi.mock('fs', () => ({
 
 import {
   bulkStageFiles,
+  bulkDiscardChanges,
   bulkUnstageFiles,
   detectConflictOperation,
   discardChanges,
   getBranchCompare,
   getDiff,
+  getStagedCommitContext,
   getStatus,
   isWithinWorktree
 } from './status'
@@ -98,6 +100,7 @@ describe('discardChanges', () => {
 describe('bulk git helpers', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
+    rmMock.mockReset()
   })
 
   it('chunks bulk stage requests to avoid oversized argv payloads', async () => {
@@ -138,6 +141,48 @@ describe('bulk git helpers', () => {
       }
     )
   })
+
+  it('discards tracked and untracked paths in bulk', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'src/file.ts\0docs/readme.md\0' })
+      .mockResolvedValueOnce({ stdout: '' })
+
+    await bulkDiscardChanges('/repo', ['src/file.ts', 'src/new-file.ts', 'docs', 'scratch'])
+
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      ['ls-files', '-z', '--', 'src/file.ts', 'src/new-file.ts', 'docs', 'scratch'],
+      {
+        cwd: '/repo'
+      }
+    )
+    // Why: a pathspec is tracked if git reports either the exact path or a
+    // tracked descendant, which keeps directory pathspecs on the restore path.
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      ['restore', '--worktree', '--source=HEAD', '--', 'src/file.ts', 'docs'],
+      {
+        cwd: '/repo'
+      }
+    )
+    expect(rmMock).toHaveBeenCalledWith(path.resolve('/repo', 'src', 'new-file.ts'), {
+      force: true,
+      recursive: true
+    })
+    expect(rmMock).toHaveBeenCalledWith(path.resolve('/repo', 'scratch'), {
+      force: true,
+      recursive: true
+    })
+  })
+
+  it('rejects bulk discard paths that traverse outside the worktree', async () => {
+    await expect(bulkDiscardChanges('/repo', ['src/file.ts', '../outside.txt'])).rejects.toThrow(
+      'resolves outside the worktree'
+    )
+
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(rmMock).not.toHaveBeenCalled()
+  })
 })
 
 describe('getDiff', () => {
@@ -176,10 +221,14 @@ describe('getDiff', () => {
 
     const result = await getDiff('/repo', 'src/file.ts', false)
 
-    expect(gitExecFileAsyncBufferMock).toHaveBeenNthCalledWith(2, ['show', 'HEAD:src/file.ts'], {
-      cwd: '/repo',
-      maxBuffer: 10 * 1024 * 1024
-    })
+    expect(gitExecFileAsyncBufferMock).toHaveBeenNthCalledWith(
+      2,
+      ['show', '--end-of-options', 'HEAD:src/file.ts'],
+      {
+        cwd: '/repo',
+        maxBuffer: 10 * 1024 * 1024
+      }
+    )
     expect(result.originalContent).toBe('head-content\n')
     expect(result.modifiedContent).toBe('working-tree-content')
   })
@@ -309,6 +358,30 @@ describe('getStatus', () => {
     ])
   })
 
+  it('omits ignored files by default and parses them when requested', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: '! dist/\n! generated/file.js\n'
+    })
+
+    const result = await getStatus('/repo', { includeIgnored: true })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        '-c',
+        'core.quotePath=false',
+        'status',
+        '--porcelain=v2',
+        '--branch',
+        '--untracked-files=all',
+        '--ignored=matching'
+      ],
+      { cwd: '/repo' }
+    )
+    expect(result.ignoredPaths).toEqual(['dist/', 'generated/file.js'])
+  })
+
   it('parses branch identity from porcelain v2 branch headers', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     existsSyncMock.mockReturnValue(false)
@@ -323,6 +396,117 @@ describe('getStatus', () => {
       head: 'abcdef1234567890',
       branch: 'refs/heads/feature/prompts'
     })
+  })
+
+  it('folds upstream ahead/behind from porcelain v2 into the status result', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout:
+        '# branch.oid abcdef1234567890\n# branch.head feature/prompts\n# branch.upstream origin/feature/prompts\n# branch.ab +2 -3\n'
+    })
+
+    const result = await getStatus('/repo')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(result.upstreamStatus).toEqual({
+      hasUpstream: true,
+      upstreamName: 'origin/feature/prompts',
+      ahead: 2,
+      behind: 3
+    })
+  })
+
+  it('reports no upstream from porcelain v2 status without an extra git call', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: '# branch.oid abcdef1234567890\n# branch.head feature/prompts\n'
+    })
+
+    const result = await getStatus('/repo')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(result.upstreamStatus).toEqual({ hasUpstream: false, ahead: 0, behind: 0 })
+  })
+
+  it('omits --ignored and ignoredPaths when includeIgnored is not requested', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
+
+    const result = await getStatus('/repo')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        '-c',
+        'core.quotePath=false',
+        'status',
+        '--porcelain=v2',
+        '--branch',
+        '--untracked-files=all'
+      ],
+      { cwd: '/repo' }
+    )
+    expect('ignoredPaths' in result).toBe(false)
+  })
+
+  it('parses ! porcelain v2 records into ignoredPaths when includeIgnored is true', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: '! dist/\n! .env\n! coverage/\n'
+    })
+
+    const result = await getStatus('/repo', { includeIgnored: true })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        '-c',
+        'core.quotePath=false',
+        'status',
+        '--porcelain=v2',
+        '--branch',
+        '--untracked-files=all',
+        '--ignored=matching'
+      ],
+      { cwd: '/repo' }
+    )
+    expect(result.ignoredPaths).toEqual(['dist/', '.env', 'coverage/'])
+    expect(result.entries).toEqual([])
+  })
+})
+
+describe('getStagedCommitContext', () => {
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+  })
+
+  it('uses explicit large buffers before prompt truncation', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature/ai\n' })
+      .mockResolvedValueOnce({ stdout: 'M\tREADME.md\n' })
+      .mockResolvedValueOnce({ stdout: 'diff --git a/README.md b/README.md\n+hello\n' })
+
+    const result = await getStagedCommitContext('/repo')
+
+    expect(result).toEqual({
+      branch: 'feature/ai',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: 'diff --git a/README.md b/README.md\n+hello\n'
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['diff', '--cached', '--name-status'], {
+      cwd: '/repo',
+      maxBuffer: 10 * 1024 * 1024
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
+      3,
+      ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
+      {
+        cwd: '/repo',
+        maxBuffer: 10 * 1024 * 1024
+      }
+    )
   })
 })
 
@@ -375,6 +559,10 @@ describe('getBranchCompare', () => {
       .mockResolvedValueOnce({
         stdout: 'M\tfile-a.ts\nR100\told-name.ts\tnew-name.ts\nC100\told-copy.ts\tnew-copy.ts\n'
       })
+      .mockResolvedValueOnce({
+        stdout:
+          '10\t2\tfile-a.ts\n1\t1\told-name.ts => new-name.ts\n3\t0\told-copy.ts => new-copy.ts\n'
+      })
       .mockResolvedValueOnce({ stdout: '7\n' })
 
     const result = await getBranchCompare('/repo', 'origin/main')
@@ -390,9 +578,9 @@ describe('getBranchCompare', () => {
       status: 'ready'
     })
     expect(result.entries).toEqual([
-      { path: 'file-a.ts', status: 'modified' },
-      { path: 'new-name.ts', oldPath: 'old-name.ts', status: 'renamed' },
-      { path: 'new-copy.ts', oldPath: 'old-copy.ts', status: 'copied' }
+      { path: 'file-a.ts', status: 'modified', added: 10, removed: 2 },
+      { path: 'new-name.ts', oldPath: 'old-name.ts', status: 'renamed', added: 1, removed: 1 },
+      { path: 'new-copy.ts', oldPath: 'old-copy.ts', status: 'copied', added: 3, removed: 0 }
     ])
   })
 
@@ -442,6 +630,7 @@ describe('getBranchCompare', () => {
       .mockResolvedValueOnce({ stdout: 'base-oid\n' })
       .mockResolvedValueOnce({ stdout: 'merge-base-oid\n' })
       .mockResolvedValueOnce({ stdout: 'M\tdocs/日本語/sample.md\n' })
+      .mockResolvedValueOnce({ stdout: '2\t1\tdocs/日本語/sample.md\n' })
       .mockResolvedValueOnce({ stdout: '1\n' })
 
     const result = await getBranchCompare('/repo', 'origin/main')
@@ -460,6 +649,8 @@ describe('getBranchCompare', () => {
       ],
       expect.objectContaining({ cwd: '/repo' })
     )
-    expect(result.entries).toEqual([{ path: 'docs/日本語/sample.md', status: 'modified' }])
+    expect(result.entries).toEqual([
+      { path: 'docs/日本語/sample.md', status: 'modified', added: 2, removed: 1 }
+    ])
   })
 })

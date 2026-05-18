@@ -2,12 +2,8 @@ import { BrowserWindow, Menu, app } from 'electron'
 import { keybindingCatalog } from '../../shared/keybindings/keybinding-catalog'
 import { buildEffectiveKeymap } from '../../shared/keybindings/effective-keymap'
 import { getPrimaryChordLabel } from '../../shared/keybindings/keybinding-display'
-import type {
-  CanonicalChord,
-  EffectiveKeymap,
-  KeybindingActionId,
-  KeybindingPlatform
-} from '../../shared/keybindings/keybinding-types'
+import type { EffectiveKeymap, KeybindingPlatform } from '../../shared/keybindings/keybinding-types'
+import { getElectronAccelerators } from './keybinding-menu-accelerators'
 
 export type AppearanceMenuState = {
   showTasksButton: boolean
@@ -19,6 +15,8 @@ export type AppearanceMenuKey = keyof AppearanceMenuState
 
 type RegisterAppMenuOptions = {
   onOpenSettings: () => void
+  onOpenFeatureTour: (window?: Electron.BaseWindow | null) => void
+  onOpenCrashReport: (window?: Electron.BaseWindow | null) => void
   onCheckForUpdates: (options: { includePrerelease: boolean }) => void
   onZoomIn: () => void
   onZoomOut: () => void
@@ -30,66 +28,11 @@ type RegisterAppMenuOptions = {
   getEffectiveKeymap?: () => EffectiveKeymap
 }
 
-function getElectronAccelerators(keymap: EffectiveKeymap, actionId: KeybindingActionId): string[] {
-  const binding = keymap.bindings.find((candidate) => candidate.id === actionId)
-  return binding?.chords.map(chordToElectronAccelerator).filter((value) => value !== null) ?? []
-}
-
-function chordToElectronAccelerator(chord: CanonicalChord): string | null {
-  const parts: string[] = []
-  if (chord.cmd) {
-    parts.push('Cmd')
-  }
-  if (chord.ctrl) {
-    parts.push('Ctrl')
-  }
-  if (chord.alt) {
-    parts.push('Alt')
-  }
-  if (chord.shift) {
-    parts.push('Shift')
-  }
-
-  const key = chordKeyToElectronAcceleratorKey(chord.key)
-  if (!key) {
-    return null
-  }
-  parts.push(key)
-  return parts.join('+')
-}
-
-function chordKeyToElectronAcceleratorKey(key: string): string | null {
-  switch (key) {
-    case 'arrowleft':
-      return 'Left'
-    case 'arrowright':
-      return 'Right'
-    case 'arrowup':
-      return 'Up'
-    case 'arrowdown':
-      return 'Down'
-    case 'escape':
-      return 'Esc'
-    case 'enter':
-      return 'Enter'
-    case 'backspace':
-      return 'Backspace'
-    case 'delete':
-      return 'Delete'
-    case 'insert':
-      return 'Insert'
-    case 'space':
-      return 'Space'
-    case '+':
-      return 'Plus'
-    default:
-      return key.length === 1 ? key.toUpperCase() : key
-  }
-}
-
 function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   const {
     onOpenSettings,
+    onOpenFeatureTour,
+    onOpenCrashReport,
     onCheckForUpdates,
     onZoomIn,
     onZoomOut,
@@ -150,6 +93,16 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     label: 'Settings',
     accelerator: 'CmdOrCtrl+,',
     click: () => onOpenSettings()
+  }
+
+  const featureTourItem: Electron.MenuItemConstructorOptions = {
+    label: 'Feature tour',
+    click: (_menuItem, window) => onOpenFeatureTour(window)
+  }
+
+  const crashReportItem: Electron.MenuItemConstructorOptions = {
+    label: 'Report Crash...',
+    click: (_menuItem, window) => onOpenCrashReport(window)
   }
 
   const exportPdfItem: Electron.MenuItemConstructorOptions = {
@@ -330,13 +283,23 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     submenu: [{ role: 'minimize' }, { role: 'zoom' }]
   }
 
-  // Why: Windows/Linux have no app-named menu, so About + Check for Updates
-  // go into a Help menu — the standard place for those entries on those
-  // platforms. On macOS the system "About Orca" and "Check for Updates"
-  // already sit under the app menu, so we don't duplicate them here.
+  // Why: the feature tour is product education, so it belongs under Help on
+  // every platform. macOS still keeps About/Updates in the app menu, while
+  // Windows/Linux keep those entries here because they have no app menu.
   const helpMenu: Electron.MenuItemConstructorOptions = {
     label: 'Help',
-    submenu: [{ role: 'about' }, checkForUpdatesItem]
+    submenu: [
+      crashReportItem,
+      { type: 'separator' },
+      featureTourItem,
+      ...(isMac
+        ? []
+        : ([
+            { type: 'separator' },
+            { role: 'about' },
+            checkForUpdatesItem
+          ] satisfies Electron.MenuItemConstructorOptions[]))
+    ]
   }
 
   const template: Electron.MenuItemConstructorOptions[] = [
@@ -345,7 +308,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     editMenu,
     viewMenu,
     windowMenu,
-    ...(isMac ? [] : [helpMenu])
+    helpMenu
   ]
 
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))

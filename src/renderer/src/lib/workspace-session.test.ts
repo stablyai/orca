@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  buildWorkspaceSessionPayload,
-  SESSION_RELEVANT_FIELDS,
-  type WorkspaceSessionSnapshot
-} from './workspace-session'
+import { buildWorkspaceSessionPayload } from './workspace-session'
 import type { AppState } from '../store'
-import { FLOATING_TERMINAL_WORKTREE_ID } from './floating-terminal'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
 function createSnapshot(overrides: Partial<AppState> = {}): AppState {
   return {
@@ -15,6 +11,10 @@ function createSnapshot(overrides: Partial<AppState> = {}): AppState {
     tabsByWorktree: {
       'wt-1': [{ id: 'tab-1', title: 'shell', ptyId: 'pty-1', worktreeId: 'wt-1' }],
       'wt-2': [{ id: 'tab-2', title: 'editor', ptyId: null, worktreeId: 'wt-2' }]
+    },
+    ptyIdsByTabId: {
+      'tab-1': ['pty-1'],
+      'tab-2': []
     },
     terminalLayoutsByTabId: {
       'tab-1': { root: null, activeLeafId: null, expandedLeafId: null }
@@ -82,8 +82,20 @@ function createSnapshot(overrides: Partial<AppState> = {}): AppState {
         }
       ]
     },
+    browserUrlHistory: [],
     ...overrides
   } as AppState
+}
+
+function createRepo(id: string, connectionId: string | null): AppState['repos'][number] {
+  return {
+    id,
+    path: `/${id}`,
+    displayName: id,
+    badgeColor: '#fff',
+    addedAt: 1,
+    connectionId
+  }
 }
 
 describe('buildWorkspaceSessionPayload', () => {
@@ -107,17 +119,29 @@ describe('buildWorkspaceSessionPayload', () => {
           ]
         },
         terminalLayoutsByTabId: {
-          'floating-tab-1': { root: null, activeLeafId: null, expandedLeafId: null }
+          'floating-tab-1': {
+            root: null,
+            activeLeafId: null,
+            expandedLeafId: null,
+            buffersByLeafId: { 'pane:1': 'floating-scrollback' },
+            ptyIdsByLeafId: { 'pane:1': 'floating-pty-1' }
+          }
         },
         activeTabIdByWorktree: {
           [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-tab-1'
+        },
+        ptyIdsByTabId: {
+          'floating-tab-1': ['floating-pty-1']
         }
       })
     )
 
     expect(payload.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toHaveLength(1)
     expect(payload.activeTabIdByWorktree?.[FLOATING_TERMINAL_WORKTREE_ID]).toBe('floating-tab-1')
-    expect(payload.terminalLayoutsByTabId['floating-tab-1']).toBeDefined()
+    expect(payload.terminalLayoutsByTabId['floating-tab-1'].buffersByLeafId).toBeUndefined()
+    expect(payload.terminalLayoutsByTabId['floating-tab-1'].ptyIdsByLeafId).toEqual({
+      'pane:1': 'floating-pty-1'
+    })
     expect(payload.activeWorktreeIdsOnShutdown).toEqual([FLOATING_TERMINAL_WORKTREE_ID])
   })
 
@@ -138,15 +162,94 @@ describe('buildWorkspaceSessionPayload', () => {
     expect(payload.browserTabsByWorktree?.['wt-1'][0].loading).toBe(false)
   })
 
-  it('uses lastKnownRelayPtyIdByTabId fallback for SSH worktrees with null ptyIds', () => {
+  it('drops local terminal scrollback buffers from session payloads', () => {
+    const localWorktreeId = 'repo-1::/local/worktree'
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        tabsByWorktree: {
+          [localWorktreeId]: [
+            {
+              id: 'tab-local',
+              title: 'shell',
+              ptyId: 'pty-1',
+              worktreeId: localWorktreeId
+            } as never
+          ]
+        },
+        ptyIdsByTabId: {
+          'tab-local': ['pty-1']
+        },
+        terminalLayoutsByTabId: {
+          'tab-local': {
+            root: null,
+            activeLeafId: null,
+            expandedLeafId: null,
+            buffersByLeafId: { 'pane:1': 'serialized-local-scrollback' },
+            ptyIdsByLeafId: { 'pane:1': 'pty-1' },
+            titlesByLeafId: { 'pane:1': 'build' }
+          }
+        },
+        repos: [createRepo('repo-1', null)]
+      })
+    )
+
+    expect(payload.terminalLayoutsByTabId['tab-local']).toEqual({
+      root: null,
+      activeLeafId: null,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { 'pane:1': 'pty-1' },
+      titlesByLeafId: { 'pane:1': 'build' }
+    })
+  })
+
+  it('preserves SSH terminal scrollback buffers because relay teardown has no local history', () => {
+    const sshWorktreeId = 'repo-ssh::/remote/worktree'
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        tabsByWorktree: {
+          [sshWorktreeId]: [
+            {
+              id: 'tab-ssh',
+              title: 'remote',
+              ptyId: 'relay-pty-1',
+              worktreeId: sshWorktreeId
+            } as never
+          ]
+        },
+        ptyIdsByTabId: {
+          'tab-ssh': ['relay-pty-1']
+        },
+        terminalLayoutsByTabId: {
+          'tab-ssh': {
+            root: null,
+            activeLeafId: null,
+            expandedLeafId: null,
+            buffersByLeafId: { 'pane:1': 'serialized-remote-scrollback' },
+            ptyIdsByLeafId: { 'pane:1': 'relay-pty-1' }
+          }
+        },
+        repos: [createRepo('repo-ssh', 'conn-1')]
+      })
+    )
+
+    expect(payload.terminalLayoutsByTabId['tab-ssh'].buffersByLeafId).toEqual({
+      'pane:1': 'serialized-remote-scrollback'
+    })
+  })
+
+  it('uses lastKnownRelayPtyIdByTabId fallback for disconnected SSH worktrees', () => {
     const payload = buildWorkspaceSessionPayload(
       createSnapshot({
         tabsByWorktree: {
           'wt-1': [{ id: 'tab-1', title: 'shell', ptyId: 'pty-1', worktreeId: 'wt-1' } as never],
           'wt-ssh': [{ id: 'tab-ssh', title: 'remote', ptyId: null, worktreeId: 'wt-ssh' } as never]
         },
+        ptyIdsByTabId: {
+          'tab-1': ['pty-1'],
+          'tab-ssh': []
+        },
         lastKnownRelayPtyIdByTabId: { 'tab-ssh': 'relay-sess-42' },
-        repos: [{ id: 'repo-ssh', connectionId: 'conn-1' } as never],
+        repos: [createRepo('repo-ssh', 'conn-1')],
         worktreesByRepo: {
           'repo-ssh': [{ id: 'wt-ssh', repoId: 'repo-ssh' } as never]
         },
@@ -171,51 +274,5 @@ describe('buildWorkspaceSessionPayload', () => {
 
     expect(payload.activeFileIdByWorktree).toEqual({})
     expect(payload.activeTabTypeByWorktree).toEqual({ 'wt-2': 'terminal' })
-  })
-})
-
-describe('SESSION_RELEVANT_FIELDS', () => {
-  // Why: this list gates the App-level session-write debounce subscriber.
-  // If a future field is added to WorkspaceSessionSnapshot but not to the
-  // gate, the subscriber would silently stop noticing changes to that field
-  // and persist stale data. Listing every key here as a fixture and asserting
-  // the gate covers them catches the drift at test time. The compile-time
-  // _exhaustive check in workspace-session.ts is the primary line of defense;
-  // this test is the runtime backstop.
-  const fixture: Record<keyof WorkspaceSessionSnapshot, true> = {
-    activeRepoId: true,
-    activeWorktreeId: true,
-    activeTabId: true,
-    tabsByWorktree: true,
-    terminalLayoutsByTabId: true,
-    activeTabIdByWorktree: true,
-    openFiles: true,
-    activeFileIdByWorktree: true,
-    activeTabTypeByWorktree: true,
-    browserTabsByWorktree: true,
-    browserPagesByWorkspace: true,
-    activeBrowserTabIdByWorktree: true,
-    browserUrlHistory: true,
-    unifiedTabsByWorktree: true,
-    groupsByWorktree: true,
-    layoutByWorktree: true,
-    activeGroupIdByWorktree: true,
-    sshConnectionStates: true,
-    repos: true,
-    worktreesByRepo: true,
-    lastKnownRelayPtyIdByTabId: true,
-    lastVisitedAtByWorktreeId: true
-  }
-
-  it('contains every key of WorkspaceSessionSnapshot', () => {
-    const fixtureKeys = Object.keys(fixture)
-    expect(
-      fixtureKeys.every((k) => (SESSION_RELEVANT_FIELDS as readonly string[]).includes(k))
-    ).toBe(true)
-    expect(SESSION_RELEVANT_FIELDS.length).toBe(fixtureKeys.length)
-  })
-
-  it('has no duplicate entries', () => {
-    expect(new Set(SESSION_RELEVANT_FIELDS).size).toBe(SESSION_RELEVANT_FIELDS.length)
   })
 })

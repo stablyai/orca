@@ -162,6 +162,7 @@ function TabBarInner({
     void window.api.pwsh.isAvailable().then(setPwshAvailable)
   }, [])
   const resolvedGroupId = groupId ?? worktreeId
+
   const statusByRelativePath = useMemo(
     () => buildStatusMap(gitStatusByWorktree[worktreeId] ?? []),
     [worktreeId, gitStatusByWorktree]
@@ -224,6 +225,7 @@ function TabBarInner({
           unifiedTabId: browserTab.tabId ?? browserTab.id,
           data: browserTab
         })
+        continue
       }
     }
     return items
@@ -381,6 +383,7 @@ function TabBarInner({
               visibleTabId: item.id,
               tabType: item.type,
               label: getTabDragLabel(item),
+              iconPath: item.type === 'editor' ? item.data.filePath : undefined,
               color: item.type === 'terminal' ? (item.data.color ?? null) : null
             }
             if (item.type === 'terminal') {

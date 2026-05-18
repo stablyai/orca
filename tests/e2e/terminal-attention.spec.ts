@@ -12,6 +12,7 @@ import {
   waitForActiveWorktree,
   waitForSessionReady
 } from './helpers/store'
+import { getRendererTitleLog, installRendererTitleLog } from './helpers/terminal-title-log'
 import { POST_REPLAY_MODE_RESET } from '../../src/renderer/src/components/terminal-pane/layout-serialization'
 
 test.describe.configure({ mode: 'serial' })
@@ -78,11 +79,13 @@ async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
 }
 
 async function emitBell(page: Page, ptyId: string): Promise<void> {
-  // Why: `tput bel` is the canonical way to emit BEL from the shell — this is
-  // the exact command the user will run to reproduce the attention path. Prefer
-  // it over `node -e` so the test exercises the same PTY byte stream a real
-  // user sees.
-  await execInTerminal(page, ptyId, `tput bel`)
+  // Why: `printf '\a'` emits a raw BEL byte without depending on terminfo or
+  // PATH-resolved binaries. CI shells can launch with a stripped PATH that
+  // excludes `/usr/bin`, breaking `tput` and silently emitting nothing —
+  // the `bash: groups: command not found` startup output in failure
+  // snapshots is the same symptom. printf is a shell builtin, so it works
+  // even when the PATH is broken.
+  await execInTerminal(page, ptyId, `printf '\\a'`)
 }
 
 async function proveShellReadyWithSingleWrite(page: Page, ptyId: string): Promise<void> {
@@ -175,6 +178,7 @@ test.describe('Terminal attention', () => {
     }
     const activePtyId = await waitForActivePanePtyId(orcaPage)
     await proveShellReadyWithSingleWrite(orcaPage, activePtyId)
+    await installRendererTitleLog(orcaPage)
 
     // Emit the BEL, then a deterministic OSC title marker. When the marker
     // title lands, all prior PTY bytes (including the BEL) have been
@@ -182,29 +186,15 @@ test.describe('Terminal attention', () => {
     // async PTY pipeline.
     await emitBell(orcaPage, activePtyId)
     const MARKER_TITLE = 'focused-tab-bell-marker'
-    await execInTerminal(
-      orcaPage,
-      activePtyId,
-      `node -e "process.stdout.write('\\u001b]0;${MARKER_TITLE}\\u0007')"`
-    )
+    // Why: printf is a shell builtin so it works even when CI launches the
+    // shell with a stripped PATH (no /usr/bin → no `node` resolvable).
+    await execInTerminal(orcaPage, activePtyId, `printf '\\033]0;${MARKER_TITLE}\\007'`)
 
     await expect
-      .poll(
-        async () =>
-          orcaPage.evaluate((want) => {
-            const store = window.__store
-            if (!store) {
-              return false
-            }
-            return Object.values(store.getState().tabsByWorktree ?? {})
-              .flat()
-              .some((tab) => tab.title === want)
-          }, MARKER_TITLE),
-        {
-          timeout: 10_000,
-          message: 'Marker title did not land — byte stream may not have been flushed'
-        }
-      )
+      .poll(async () => (await getRendererTitleLog(orcaPage)).includes(MARKER_TITLE), {
+        timeout: 10_000,
+        message: 'Marker title did not land — byte stream may not have been flushed'
+      })
       .toBe(true)
 
     // The focused tab is now unread — the bell persists until the user

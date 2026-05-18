@@ -248,20 +248,26 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     listWorktreesMock.mockResolvedValueOnce([worktreeEntry]).mockResolvedValueOnce([worktreeEntry])
     store.setWorktreeMeta.mockReturnValue({
       lastActivityAt: 123,
-      displayName: 'Improve Dashboard'
+      displayName: 'Improve Dashboard',
+      linkedIssue: 123,
+      linkedPR: 456
     })
     store.getWorktreeMeta.mockImplementation((worktreeId: string) =>
       worktreeId === 'repo-1::C:/workspaces/improve-dashboard'
         ? {
             lastActivityAt: 123,
-            displayName: 'Improve Dashboard'
+            displayName: 'Improve Dashboard',
+            linkedIssue: 123,
+            linkedPR: 456
           }
         : undefined
     )
 
     await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
-      name: 'Improve Dashboard'
+      name: 'Improve Dashboard',
+      linkedIssue: 123,
+      linkedPR: 456
     })
     const listed = await handlers['worktrees:list'](null, {
       repoId: 'repo-1'
@@ -271,6 +277,8 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       {
         id: 'repo-1::C:/workspaces/improve-dashboard',
         displayName: 'Improve Dashboard',
+        linkedIssue: 123,
+        linkedPR: 456,
         lastActivityAt: 123
       }
     ])

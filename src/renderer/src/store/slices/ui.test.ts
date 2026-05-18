@@ -116,6 +116,55 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().hideDefaultBranchWorkspace).toBe(true)
   })
 
+  it('restores retired card properties during hydration', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        worktreeCardProperties: ['inline-agents']
+      })
+    )
+
+    expect(store.getState().worktreeCardProperties).toEqual([
+      'status',
+      'unread',
+      'issue',
+      'pr',
+      'comment',
+      'inline-agents'
+    ])
+  })
+
+  it('restores compact workspace board mode only from an explicit true', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        workspaceBoardCompact: true
+      })
+    )
+    expect(store.getState().workspaceBoardCompact).toBe(true)
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        workspaceBoardCompact: 'yes' as unknown as boolean
+      })
+    )
+    expect(store.getState().workspaceBoardCompact).toBe(false)
+  })
+
+  it('clamps persisted workspace board column width', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        workspaceBoardColumnWidth: 900
+      })
+    )
+
+    expect(store.getState().workspaceBoardColumnWidth).toBe(520)
+  })
+
   it('hydrates a valid Kagi session link', () => {
     const store = createUIStore()
 
@@ -388,6 +437,19 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().taskResumeState).toEqual(expected)
     expect(setUI).toHaveBeenCalledWith({ taskResumeState: expected })
   })
+
+  it('keeps retired card properties enabled when toggling Agent activity', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.setState({ worktreeCardProperties: ['inline-agents'] })
+    store.getState().toggleWorktreeCardProperty('inline-agents')
+
+    const expected = ['status', 'unread', 'issue', 'pr', 'comment']
+    expect(store.getState().worktreeCardProperties).toEqual(expected)
+    expect(setUI).toHaveBeenCalledWith({ worktreeCardProperties: expected })
+  })
 })
 
 describe('createUISlice settings navigation', () => {
@@ -415,6 +477,63 @@ describe('createUISlice settings navigation', () => {
     expect(store.getState().previousViewBeforeSettings).toBe('tasks')
 
     store.getState().closeSettingsPage()
+
+    expect(store.getState().activeView).toBe('tasks')
+  })
+})
+
+describe('createUISlice feature tour nudge', () => {
+  it('shows and dismisses the feature tour nudge', () => {
+    const store = createUIStore()
+
+    store.getState().showFeatureTourNudge()
+    expect(store.getState().featureTourNudgeVisible).toBe(true)
+
+    store.getState().dismissFeatureTourNudge()
+    expect(store.getState().featureTourNudgeVisible).toBe(false)
+  })
+
+  it('keeps the nudge hidden while the full feature tour is open', () => {
+    const store = createUIStore()
+
+    store.getState().openModal('feature-wall')
+    store.getState().showFeatureTourNudge()
+    expect(store.getState().featureTourNudgeVisible).toBe(false)
+
+    store.getState().closeModal()
+    store.getState().showFeatureTourNudge()
+    expect(store.getState().featureTourNudgeVisible).toBe(true)
+
+    store.getState().openModal('feature-wall')
+    expect(store.getState().featureTourNudgeVisible).toBe(false)
+  })
+})
+
+describe('createUISlice space navigation', () => {
+  it('returns to the tasks page after opening Space from an in-progress draft', () => {
+    const store = createUIStore()
+
+    store.getState().openTaskPage({ preselectedRepoId: 'repo-1' })
+    store.getState().openSpacePage()
+
+    expect(store.getState().activeView).toBe('space')
+    expect(store.getState().previousViewBeforeSpace).toBe('tasks')
+
+    store.getState().closeSpacePage()
+
+    expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('keeps the original return target when Space is reopened while already visible', () => {
+    const store = createUIStore()
+
+    store.getState().openTaskPage()
+    store.getState().openSpacePage()
+    store.getState().openSpacePage()
+
+    expect(store.getState().previousViewBeforeSpace).toBe('tasks')
+
+    store.getState().closeSpacePage()
 
     expect(store.getState().activeView).toBe('tasks')
   })

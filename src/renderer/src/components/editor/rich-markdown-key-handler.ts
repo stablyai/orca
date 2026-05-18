@@ -31,6 +31,7 @@ export type KeyHandlerContext = {
   filteredDocLinkRowsRef: MutableRefObject<DocLinkMenuRow[]>
   selectedDocLinkIndexRef: MutableRefObject<number>
   handleLocalImagePickRef: MutableRefObject<() => void>
+  handleEmojiPickRef: MutableRefObject<(menu: SlashMenuState) => void>
   typedEmptyOrderedListMarkerRef: MutableRefObject<boolean>
   flushPendingSerialization: () => void
   openSearchRef: MutableRefObject<() => void>
@@ -38,7 +39,7 @@ export type KeyHandlerContext = {
   setLinkBubble: (bubble: LinkBubbleState | null) => void
   setSelectedCommandIndex: Dispatch<SetStateAction<number>>
   setSelectedDocLinkIndex: Dispatch<SetStateAction<number>>
-  setSlashMenu: (menu: SlashMenuState | null) => void
+  setSlashMenu: Dispatch<SetStateAction<SlashMenuState | null>>
   setDocLinkMenu: (menu: DocLinkMenuState | null) => void
 }
 
@@ -232,6 +233,13 @@ export function createRichMarkdownKeyHandler(
     }
 
     const currentFilteredSlashCommands = ctx.filteredSlashCommandsRef.current
+
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      ctx.setSlashMenu(null)
+      return true
+    }
+
     if (currentFilteredSlashCommands.length === 0) {
       return false
     }
@@ -265,18 +273,16 @@ export function createRichMarkdownKeyHandler(
       // mirrors the latest highlighted slash-menu item for keyboard picks.
       const selectedCommand = currentFilteredSlashCommands[ctx.selectedCommandIndexRef.current]
       if (selectedCommand) {
-        runSlashCommand(activeEditor, currentSlashMenu, selectedCommand, () =>
-          ctx.handleLocalImagePickRef.current()
+        runSlashCommand(
+          activeEditor,
+          currentSlashMenu,
+          selectedCommand,
+          () => ctx.handleLocalImagePickRef.current(),
+          () => ctx.handleEmojiPickRef.current(currentSlashMenu)
         )
       }
       return true
     }
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      ctx.setSlashMenu(null)
-      return true
-    }
-
     return false
   }
 }

@@ -32,7 +32,12 @@ vi.mock('fs/promises', async () => {
   return { ...actual, stat: statMock }
 })
 
-import { addSparseWorktree, listWorktrees, removeWorktree } from './worktree'
+import {
+  addSparseWorktree,
+  assertWorktreeCleanForRemoval,
+  listWorktrees,
+  removeWorktree
+} from './worktree'
 
 type MockResult = {
   error?: Error
@@ -292,6 +297,46 @@ branch refs/heads/main
   })
 })
 
+describe('assertWorktreeCleanForRemoval', () => {
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+  })
+
+  it('returns without checking git status for force removals', async () => {
+    await expect(assertWorktreeCleanForRemoval('/repo-feature', true)).resolves.toBeUndefined()
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('passes when git status output is empty', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await expect(assertWorktreeCleanForRemoval('/repo-feature')).resolves.toBeUndefined()
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['status', '--porcelain', '--untracked-files=all'],
+      { cwd: '/repo-feature' }
+    )
+  })
+
+  it('throws a dedicated dirty/untracked error when status output is non-empty', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '?? scratch.txt\n', stderr: '' })
+
+    await expect(assertWorktreeCleanForRemoval('/repo-feature')).rejects.toMatchObject({
+      message: 'Worktree has uncommitted or untracked changes.',
+      stdout: '?? scratch.txt\n'
+    })
+  })
+
+  it('rethrows preflight subprocess failures as-is', async () => {
+    const error = Object.assign(new Error('fatal: not a git repository'), {
+      stderr: 'fatal: not a git repository (or any of the parent directories): .git\n'
+    })
+    gitExecFileAsyncMock.mockRejectedValueOnce(error)
+
+    await expect(assertWorktreeCleanForRemoval('/repo-feature')).rejects.toBe(error)
+  })
+})
+
 describe('listWorktrees', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
@@ -359,6 +404,25 @@ describe('listWorktrees', () => {
     expect(warnSpy).toHaveBeenCalledWith(
       '[git/worktree] repo path missing; skipping worktree list: /workspace/deleted-repo'
     )
+    warnSpy.mockRestore()
+  })
+
+  it('returns no worktrees when the path exists but is not a git repo', async () => {
+    const warnSpy = vi.spyOn(console, 'warn')
+    gitExecFileAsyncMock.mockRejectedValueOnce(
+      Object.assign(new Error('Command failed: git worktree list --porcelain'), {
+        code: 128,
+        stdout: '',
+        stderr: 'fatal: not a git repository (or any of the parent directories): .git\n'
+      })
+    )
+
+    await expect(listWorktrees('/private/tmp/orca-issue-1582-test/my-repo')).resolves.toEqual([])
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain'], {
+      cwd: '/private/tmp/orca-issue-1582-test/my-repo'
+    })
+    expect(warnSpy).not.toHaveBeenCalled()
     warnSpy.mockRestore()
   })
 

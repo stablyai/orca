@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useState } from 'react'
-import { Activity, Check, GitBranch, ListFilter, FolderPlus, Server, X } from 'lucide-react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { Activity, Check, FolderPlus, GitBranch, ListFilter, Server } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import {
@@ -9,13 +9,30 @@ import {
   CommandItem,
   CommandList
 } from '@/components/ui/command'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import RepoDotLabel from '@/components/repo/RepoDotLabel'
 import { searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
 
-const SidebarFilter = React.memo(function SidebarFilter() {
+type SidebarFilterProps = {
+  preserveWorkspaceBoardOpen?: boolean
+  tooltipSide?: 'top' | 'right' | 'bottom' | 'left'
+  contentSide?: 'top' | 'right' | 'bottom' | 'left'
+  onMenuOpenChange?: (open: boolean) => void
+}
+
+const SidebarFilter = React.memo(function SidebarFilter({
+  preserveWorkspaceBoardOpen = false,
+  tooltipSide = 'bottom',
+  contentSide = 'right',
+  onMenuOpenChange
+}: SidebarFilterProps) {
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
   const setShowActiveOnly = useAppStore((s) => s.setShowActiveOnly)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
@@ -29,12 +46,22 @@ const SidebarFilter = React.memo(function SidebarFilter() {
   const [query, setQuery] = useState('')
   const [commandValue, setCommandValue] = useState('')
 
-  const handleOpenChange = useCallback((next: boolean) => {
-    setOpen(next)
-    if (!next) {
-      setQuery('')
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      setOpen(next)
+      onMenuOpenChange?.(next)
+      if (!next) {
+        setQuery('')
+      }
+    },
+    [onMenuOpenChange]
+  )
+
+  useEffect(() => {
+    return () => {
+      onMenuOpenChange?.(false)
     }
-  }, [])
+  }, [onMenuOpenChange])
 
   const handleToggleRepo = useCallback(
     (repoId: string) => {
@@ -66,6 +93,16 @@ const SidebarFilter = React.memo(function SidebarFilter() {
     (showActiveOnly ? 1 : 0) + (hideDefaultBranchWorkspace ? 1 : 0) + selectedCount
 
   const filteredRepos = useMemo(() => searchRepos(repos, query), [repos, query])
+
+  // Why: with shouldFilter={false} cmdk won't auto-highlight a row, so Enter
+  // has no target. Keep the highlighted value pinned to the first filtered
+  // repo whenever the query changes.
+  useEffect(() => {
+    const first = filteredRepos[0]
+    if (first && !filteredRepos.some((r) => r.id === commandValue)) {
+      setCommandValue(first.id)
+    }
+  }, [filteredRepos, commandValue])
   const allSelected = canFilterRepos && selectedCount === repos.length
 
   const clearAll = useCallback(() => {
@@ -83,10 +120,10 @@ const SidebarFilter = React.memo(function SidebarFilter() {
   const clearRepos = useCallback(() => setFilterRepoIds([]), [setFilterRepoIds])
 
   return (
-    <Popover open={open} onOpenChange={handleOpenChange}>
+    <DropdownMenu modal={false} open={open} onOpenChange={handleOpenChange}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <PopoverTrigger asChild>
+          <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               size="icon-xs"
@@ -95,6 +132,7 @@ const SidebarFilter = React.memo(function SidebarFilter() {
                 hasAnyFilter ? `Edit filters (${activeFilterCount} active)` : 'Filter workspaces'
               }
               className="relative text-muted-foreground"
+              data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
             >
               <ListFilter className="size-3.5" strokeWidth={2.25} />
               {hasAnyFilter && (
@@ -108,70 +146,60 @@ const SidebarFilter = React.memo(function SidebarFilter() {
                 </span>
               )}
             </Button>
-          </PopoverTrigger>
+          </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={6}>
+        <TooltipContent side={tooltipSide} sideOffset={6}>
           {hasAnyFilter ? 'Edit filters' : 'Filter workspaces'}
         </TooltipContent>
       </Tooltip>
-      <PopoverContent align="end" className="w-72 p-0">
-        <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-xs font-medium text-foreground">Filters</span>
-          {hasAnyFilter ? (
-            <button
-              type="button"
-              onClick={clearAll}
-              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
-            >
-              <X className="size-3" />
-              Clear all
-            </button>
-          ) : null}
-        </div>
-
-        <div className="border-t border-border/60">
-          <ToggleRow
-            icon={<Activity className="size-3.5" />}
-            label="Active only"
-            checked={showActiveOnly}
-            onClick={() => setShowActiveOnly(!showActiveOnly)}
-          />
-          <ToggleRow
-            icon={<GitBranch className="size-3.5" />}
-            label="Hide default branch"
-            checked={hideDefaultBranchWorkspace}
-            onClick={() => setHideDefaultBranchWorkspace(!hideDefaultBranchWorkspace)}
-          />
-        </div>
+      <DropdownMenuContent
+        side={contentSide}
+        align="start"
+        sideOffset={8}
+        className="w-72"
+        data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
+      >
+        <FilterToggleRow
+          icon={<Activity className="size-3.5" />}
+          label="Active only"
+          checked={showActiveOnly}
+          onChange={setShowActiveOnly}
+        />
+        <FilterToggleRow
+          icon={<GitBranch className="size-3.5" />}
+          label="Hide default branch"
+          checked={hideDefaultBranchWorkspace}
+          onChange={setHideDefaultBranchWorkspace}
+        />
 
         {canFilterRepos && (
-          <div className="border-t border-border/60">
-            <div className="flex items-center justify-between px-3 pt-2 pb-1">
-              <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          <>
+            <DropdownMenuSeparator />
+            <div className="flex items-center justify-between px-2 py-1">
+              <span className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground">
                 Repositories
                 {hasRepoFilter && (
-                  <span className="ml-1.5 text-foreground normal-case tracking-normal">
-                    {selectedCount} selected
+                  <span className="ml-1.5 normal-case tracking-normal font-medium text-foreground">
+                    · {selectedCount}
                   </span>
                 )}
               </span>
-              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+              <div className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={selectAllRepos}
-                  className="hover:text-foreground disabled:opacity-40"
+                  className="rounded-full px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-40 disabled:hover:bg-transparent"
                   disabled={allSelected}
                 >
-                  All
+                  Select all
                 </button>
-                <span className="text-border">·</span>
                 <button
                   type="button"
                   onClick={clearRepos}
-                  className="hover:text-foreground disabled:opacity-40"
+                  className="rounded-full px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-40 disabled:hover:bg-transparent"
                   disabled={!hasRepoFilter}
                 >
-                  None
+                  Clear
                 </button>
               </div>
             </div>
@@ -187,11 +215,12 @@ const SidebarFilter = React.memo(function SidebarFilter() {
                 placeholder="Search repos..."
                 value={query}
                 onValueChange={setQuery}
+                onKeyDown={(event) => event.stopPropagation()}
                 className="h-8 py-2 text-xs"
-                wrapperClassName="px-3"
+                wrapperClassName="mx-1 rounded-[7px] border border-border/70 px-2"
                 iconClassName="h-3.5 w-3.5"
               />
-              <CommandList className="max-h-64">
+              <CommandList className="max-h-64 py-1">
                 <CommandEmpty className="py-4 text-[11px]">No repos match</CommandEmpty>
                 {filteredRepos.map((r) => {
                   const checked = selectedRepoIdSet.has(r.id)
@@ -200,14 +229,8 @@ const SidebarFilter = React.memo(function SidebarFilter() {
                       key={r.id}
                       value={r.id}
                       onSelect={() => handleToggleRepo(r.id)}
-                      className="items-center gap-2 px-3 py-1.5 text-xs"
+                      className="mx-1 my-0.5 items-center gap-2 rounded-[7px] px-2 py-1 text-[12px] leading-5 font-medium data-[selected=true]:bg-black/8 dark:data-[selected=true]:bg-white/14"
                     >
-                      <Check
-                        className={cn(
-                          'size-3 shrink-0 text-muted-foreground',
-                          checked ? 'opacity-100' : 'opacity-0'
-                        )}
-                      />
                       <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
                         <RepoDotLabel
                           name={r.displayName}
@@ -221,61 +244,84 @@ const SidebarFilter = React.memo(function SidebarFilter() {
                           </span>
                         )}
                       </span>
+                      {checked && (
+                        <Check className="size-3 shrink-0 text-primary" strokeWidth={3} />
+                      )}
                     </CommandItem>
                   )
                 })}
               </CommandList>
             </Command>
-          </div>
+          </>
         )}
 
-        {/* Why: per design, "Add project" stays visible regardless of repo
-            count so users can recover from the 0/1-repo state where the
-            repo section is hidden. */}
-        <div className="border-t border-border/60">
+        <DropdownMenuSeparator />
+        {/* Why: "Add repo" stays visible regardless of repo count so users
+            can recover from the 0/1-repo state where the repo section is
+            hidden. Reset sits beside it only when a filter is active. */}
+        <div className="flex items-center justify-between gap-1 px-1 py-1">
+          {hasAnyFilter ? (
+            <button
+              type="button"
+              onClick={clearAll}
+              className="rounded-[5px] px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              Reset filters
+            </button>
+          ) : (
+            <span />
+          )}
           <button
             type="button"
             onClick={() => addRepo()}
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            className="inline-flex items-center gap-1.5 rounded-[5px] px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <FolderPlus className="size-3.5" />
-            Add project
+            Add repo
           </button>
         </div>
-      </PopoverContent>
-    </Popover>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 })
 
-type ToggleRowProps = {
+function FilterToggleRow({
+  icon,
+  label,
+  checked,
+  onChange
+}: {
   icon: React.ReactNode
   label: string
   checked: boolean
-  onClick: () => void
-}
-
-function ToggleRow({ icon, label, checked, onClick }: ToggleRowProps) {
-  // Why: the popover is not a true menu, so we use a plain button with
-  // aria-pressed rather than role="menuitemcheckbox". The visible checkmark
-  // carries the state for sighted users.
+  onChange: (next: boolean) => void
+}) {
   return (
     <button
       type="button"
-      onClick={onClick}
-      aria-pressed={checked}
-      className={cn(
-        'flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground',
-        checked ? 'text-foreground' : 'text-muted-foreground'
-      )}
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className="flex w-full items-center justify-between gap-2 rounded-[5px] px-2 py-1.5 text-[12px] font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
     >
-      <Check
+      <span className="inline-flex items-center gap-2 text-foreground">
+        <span className="text-muted-foreground">{icon}</span>
+        {label}
+      </span>
+      <span
+        aria-hidden
         className={cn(
-          'size-3 shrink-0 text-muted-foreground',
-          checked ? 'opacity-100' : 'opacity-0'
+          'relative h-3.5 w-6 shrink-0 rounded-full transition-colors',
+          checked ? 'bg-primary' : 'bg-muted-foreground/30'
         )}
-      />
-      <span className="text-muted-foreground">{icon}</span>
-      <span className={cn(checked && 'text-foreground')}>{label}</span>
+      >
+        <span
+          className={cn(
+            'absolute top-0.5 left-0.5 size-2.5 rounded-full bg-background shadow-sm transition-transform',
+            checked && 'translate-x-2.5'
+          )}
+        />
+      </span>
     </button>
   )
 }

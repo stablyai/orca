@@ -10,6 +10,7 @@ let linuxTempDir: string | null = null
 let windowsTempDir: string | null = null
 let geditProcess: ChildProcess | null = null
 let notepadProcess: ChildProcess | null = null
+let notepadAppSelector: string | null = null
 
 export type CliResult = {
   stdout: string
@@ -18,8 +19,14 @@ export type CliResult = {
 
 export async function runOrcaCli(args: string[]): Promise<CliResult> {
   const devCli = join(process.cwd(), 'config/scripts/orca-dev')
-  const command = process.env.ORCA_COMPUTER_CLI ?? devCli
-  const cliArgs = process.env.ORCA_COMPUTER_CLI ? args : args
+  const builtCli = join(process.cwd(), 'out/cli/index.js')
+  const command =
+    process.env.ORCA_COMPUTER_CLI ?? (process.platform === 'win32' ? process.execPath : devCli)
+  const cliArgs = process.env.ORCA_COMPUTER_CLI
+    ? args
+    : process.platform === 'win32'
+      ? [builtCli, ...args]
+      : args
   try {
     const result = await execFileAsync(command, cliArgs, {
       maxBuffer: 20 * 1024 * 1024
@@ -83,26 +90,41 @@ export async function killGedit(): Promise<void> {
 export async function ensureNotepadLaunched(): Promise<void> {
   await killNotepad()
   windowsTempDir = await mkdtemp(join(tmpdir(), 'orca-computer-windows-e2e-'))
-  const filePath = join(windowsTempDir, 'notepad-target.txt')
+  const filePath = join(windowsTempDir, `orca-notepad-${Date.now()}.txt`)
   await writeFile(filePath, 'seed', 'utf8')
-  notepadProcess = spawn('notepad.exe', [filePath], { detached: true, stdio: 'ignore' })
-  notepadProcess.unref()
-  await delay(2500)
+  await execFileAsync('powershell.exe', [
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+    `Start-Process notepad.exe -ArgumentList ${powerShellSingleQuoted(filePath)}`
+  ])
+  notepadAppSelector = `pid:${await findNotepadWindowPid(filePath)}`
 }
 
 export async function killNotepad(): Promise<void> {
-  if (notepadProcess?.pid) {
+  const notepadPid = notepadAppSelector?.startsWith('pid:')
+    ? Number.parseInt(notepadAppSelector.slice(4), 10)
+    : notepadProcess?.pid
+  if (notepadPid) {
     try {
-      await execFileAsync('taskkill.exe', ['/PID', String(notepadProcess.pid), '/T', '/F'])
+      await execFileAsync('taskkill.exe', ['/PID', String(notepadPid), '/T', '/F'])
     } catch {
       // The test-owned Notepad process may already be closed.
     }
     notepadProcess = null
+    notepadAppSelector = null
   }
   if (windowsTempDir) {
     await rm(windowsTempDir, { force: true, recursive: true })
     windowsTempDir = null
   }
+}
+
+export function getNotepadAppSelector(): string {
+  if (!notepadAppSelector) {
+    throw new Error('Notepad has not been launched')
+  }
+  return notepadAppSelector
 }
 
 export function findRoleIndex(treeText: string, role: string | RegExp): number {
@@ -120,6 +142,41 @@ export function parseJsonOutput<T>(stdout: string): T {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function findNotepadWindowPid(filePath: string): Promise<number> {
+  const targetName = filePath.split(/[\\/]/).at(-1) ?? filePath
+  const script = [
+    `$targetName = ${powerShellSingleQuoted(targetName)}`,
+    '$deadline = (Get-Date).AddSeconds(15)',
+    '$target = $null',
+    'while ((Get-Date) -lt $deadline -and $null -eq $target) {',
+    '  Start-Sleep -Milliseconds 250',
+    '  $target = Get-Process Notepad -ErrorAction SilentlyContinue |',
+    '    Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -like "*$targetName*" } |',
+    '    Sort-Object StartTime -Descending |',
+    '    Select-Object -First 1',
+    '}',
+    'if ($null -eq $target) {',
+    '  $target = Get-Process Notepad -ErrorAction SilentlyContinue |',
+    '    Where-Object { $_.MainWindowHandle -ne 0 } |',
+    '    Sort-Object StartTime -Descending |',
+    '    Select-Object -First 1',
+    '}',
+    'if ($null -eq $target) { throw "No visible Notepad window found for $targetName" }',
+    'Write-Output $target.Id'
+  ].join('\n')
+  const result = await execFileAsync('powershell.exe', [
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+    script
+  ])
+  return Number.parseInt(result.stdout.trim(), 10)
+}
+
+function powerShellSingleQuoted(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`
 }
 
 function escapeRegExp(input: string): string {

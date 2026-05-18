@@ -4,11 +4,13 @@ import {
   Eye,
   FileText,
   GitCompareArrows,
+  NotebookText,
   Pencil,
   Table as TableIcon,
   type LucideIcon
 } from 'lucide-react'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { MarkdownViewMode } from '@/store/slices/editor'
 
 // Why: 'changes' is not a MarkdownViewMode in the store — it lives on the
@@ -60,6 +62,13 @@ export const CSV_VIEW_MODE_METADATA: Partial<Record<MarkdownViewMode, ViewModeMe
   }
 }
 
+export const NOTEBOOK_VIEW_MODE_METADATA: Partial<Record<MarkdownViewMode, ViewModeMetadata>> = {
+  rich: {
+    label: 'Notebook',
+    icon: NotebookText
+  }
+}
+
 type EditorViewToggleProps = {
   value: EditorToggleValue
   modes: readonly EditorToggleValue[]
@@ -74,39 +83,48 @@ export default function EditorViewToggle({
   metadataOverride
 }: EditorViewToggleProps): React.JSX.Element {
   return (
-    <ToggleGroup
-      type="single"
-      size="sm"
-      className="h-6 [&_[data-slot=toggle-group-item]]:h-7 [&_[data-slot=toggle-group-item]]:min-w-5 [&_[data-slot=toggle-group-item]]:px-2.5"
-      variant="outline"
-      value={value}
-      onValueChange={(v) => {
-        if (v) {
-          onChange(v as EditorToggleValue)
-        }
-      }}
-    >
-      {modes.map((viewMode) => {
-        // Why: metadataOverride is keyed by MarkdownViewMode (source/rich/preview)
-        // because only those slots have language-specific presentation variants
-        // (e.g. CSV's "Table" label on the 'rich' slot). 'edit'/'changes' are
-        // orthogonal toggle values and always use the default metadata.
-        const override = (
-          metadataOverride as Partial<Record<EditorToggleValue, ViewModeMetadata>> | undefined
-        )?.[viewMode]
-        const metadata = override ?? DEFAULT_VIEW_MODE_METADATA[viewMode]
-        const Icon = metadata.icon
-        return (
-          <ToggleGroupItem
-            key={viewMode}
-            value={viewMode}
-            aria-label={metadata.label}
-            title={metadata.title ?? metadata.label}
-          >
-            <Icon className="h-3 w-3" />
-          </ToggleGroupItem>
-        )
-      })}
-    </ToggleGroup>
+    <TooltipProvider delayDuration={300}>
+      <ToggleGroup
+        type="single"
+        size="sm"
+        className="h-[23px] [&_[data-slot=toggle-group-item]]:h-[23px] [&_[data-slot=toggle-group-item]]:min-w-[24px] [&_[data-slot=toggle-group-item]]:px-2"
+        variant="outline"
+        value={value}
+        onValueChange={(v) => {
+          if (v) {
+            onChange(v as EditorToggleValue)
+          }
+        }}
+      >
+        {modes.map((viewMode) => {
+          // Why: metadataOverride is keyed by MarkdownViewMode (source/rich/preview)
+          // because only those slots have language-specific presentation variants
+          // (e.g. CSV's "Table" label on the 'rich' slot). 'edit'/'changes' are
+          // orthogonal toggle values and always use the default metadata.
+          const override = (
+            metadataOverride as Partial<Record<EditorToggleValue, ViewModeMetadata>> | undefined
+          )?.[viewMode]
+          const metadata = override ?? DEFAULT_VIEW_MODE_METADATA[viewMode]
+          const Icon = metadata.icon
+          const tooltipLabel = metadata.title ?? metadata.label
+          return (
+            <Tooltip key={viewMode}>
+              <TooltipTrigger asChild>
+                <ToggleGroupItem
+                  value={viewMode}
+                  aria-label={metadata.label}
+                  className="h-[23px] min-w-[24px] px-2 aria-[checked=true]:border-foreground/20 aria-[checked=true]:bg-foreground/10 aria-[checked=true]:text-foreground aria-[checked=true]:shadow-xs aria-[checked=true]:hover:bg-foreground/15 aria-[checked=true]:hover:text-foreground data-[state=on]:border-foreground/20 data-[state=on]:bg-foreground/10 data-[state=on]:text-foreground data-[state=on]:shadow-xs data-[state=on]:hover:bg-foreground/15 data-[state=on]:hover:text-foreground"
+                >
+                  <Icon className="size-3.5" />
+                </ToggleGroupItem>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {tooltipLabel}
+              </TooltipContent>
+            </Tooltip>
+          )
+        })}
+      </ToggleGroup>
+    </TooltipProvider>
   )
 }

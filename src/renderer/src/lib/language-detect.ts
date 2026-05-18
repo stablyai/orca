@@ -20,6 +20,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.cjs': 'javascript',
   '.json': 'json',
   '.jsonc': 'json',
+  '.ipynb': 'notebook',
   '.md': 'markdown',
   '.mdx': 'markdown',
   '.mmd': 'mermaid',

@@ -105,6 +105,26 @@ export function clampGrabPayload(raw: unknown): BrowserGrabPayload | null {
     return filtered
   }
 
+  const safeMetadataStr = (value: unknown, max: number): string => {
+    const strValue = safeStr(value, max)
+    return strValue && containsSecret(strValue) ? '[redacted]' : strValue
+  }
+
+  const safeNullableMetadataStr = (value: unknown, max: number): string | null =>
+    safeMetadataStr(value, max) || null
+
+  const safeMetadataArray = (
+    arr: unknown,
+    maxEntries: number,
+    maxEntryLength: number
+  ): string[] => {
+    const items = Array.isArray(arr) ? arr : []
+    return items
+      .slice(0, maxEntries)
+      .map((item) => safeMetadataStr(item, maxEntryLength))
+      .filter(Boolean)
+  }
+
   const safeRect = (r: unknown): BrowserGrabRect => {
     if (!r || typeof r !== 'object') {
       return { x: 0, y: 0, width: 0, height: 0 }
@@ -136,15 +156,30 @@ export function clampGrabPayload(raw: unknown): BrowserGrabPayload | null {
     },
     target: {
       tagName: safeStr(target.tagName, 50),
-      selector: safeStr(target.selector, 500),
+      selector: safeStr(target.selector, GRAB_BUDGET.selectorMaxLength),
+      elementPath: safeMetadataStr(target.elementPath, GRAB_BUDGET.pathMaxLength),
+      fullPath: safeMetadataStr(target.fullPath, GRAB_BUDGET.pathMaxLength),
+      cssClasses: safeMetadataStr(target.cssClasses, GRAB_BUDGET.cssClassesMaxLength),
+      nearbyElements: safeMetadataArray(
+        target.nearbyElements,
+        GRAB_BUDGET.nearbyElementsMaxEntries,
+        GRAB_BUDGET.nearbyElementMaxLength
+      ),
+      selectedText: safeMetadataStr(target.selectedText, GRAB_BUDGET.selectedTextMaxLength) || null,
+      isFixed: target.isFixed === true,
+      reactComponents: safeNullableMetadataStr(
+        target.reactComponents,
+        GRAB_BUDGET.reactComponentsMaxLength
+      ),
+      sourceFile: safeNullableMetadataStr(target.sourceFile, GRAB_BUDGET.sourceFileMaxLength),
       textSnippet: clampStr(target.textSnippet, GRAB_BUDGET.textSnippetMaxLength),
       htmlSnippet: clampStr(target.htmlSnippet, GRAB_BUDGET.htmlSnippetMaxLength),
       attributes: safeAttributes(target.attributes),
       accessibility: {
-        role: safeStr(accessibility?.role) || null,
-        accessibleName: safeStr(accessibility?.accessibleName) || null,
-        ariaLabel: safeStr(accessibility?.ariaLabel) || null,
-        ariaLabelledBy: safeStr(accessibility?.ariaLabelledBy) || null
+        role: safeNullableMetadataStr(accessibility?.role, 500),
+        accessibleName: safeNullableMetadataStr(accessibility?.accessibleName, 500),
+        ariaLabel: safeNullableMetadataStr(accessibility?.ariaLabel, 500),
+        ariaLabelledBy: safeNullableMetadataStr(accessibility?.ariaLabelledBy, 500)
       },
       rectViewport: safeRect(target.rectViewport),
       rectPage: safeRect(target.rectPage),

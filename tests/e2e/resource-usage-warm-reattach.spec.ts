@@ -178,7 +178,7 @@ test.describe('Resource Usage warm-reattach', () => {
       if (firstApp) {
         await session.close(firstApp)
       }
-      session.dispose()
+      await session.dispose()
     }
   })
 })

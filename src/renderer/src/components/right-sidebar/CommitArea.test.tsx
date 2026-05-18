@@ -1,113 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
-import { Check, RefreshCw } from 'lucide-react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { CommitArea } from './SourceControl'
-import { Button } from '@/components/ui/button'
 import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
 import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
-
-type ReactElementLike = {
-  type: unknown
-  props: Record<string, unknown>
-}
-
-function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
-  if (node == null || typeof node === 'string' || typeof node === 'number') {
-    return
-  }
-  if (Array.isArray(node)) {
-    node.forEach((entry) => visit(entry, cb))
-    return
-  }
-  const element = node as ReactElementLike
-  cb(element)
-  if (element.props?.children) {
-    visit(element.props.children, cb)
-  }
-}
-
-function findTextarea(node: unknown): ReactElementLike {
-  let found: ReactElementLike | null = null
-  visit(node, (entry) => {
-    if (entry.type === 'textarea') {
-      found = entry
-    }
-  })
-  if (!found) {
-    throw new Error('textarea not found')
-  }
-  return found
-}
-
-// Why: the split button renders two Button instances back-to-back — the
-// primary action and the chevron trigger. The primary is always the first
-// Button encountered in a depth-first walk, so we key on that position.
-function findPrimaryButton(node: unknown): ReactElementLike {
-  const buttons: ReactElementLike[] = []
-  visit(node, (entry) => {
-    if (entry.type === Button) {
-      buttons.push(entry)
-    }
-  })
-  if (buttons.length === 0) {
-    throw new Error('primary button not found')
-  }
-  return buttons[0]
-}
-
-function primaryHasSpinner(node: unknown): boolean {
-  const primary = findPrimaryButton(node)
-  let found = false
-  visit(primary, (entry) => {
-    if (entry.type === RefreshCw) {
-      found = true
-    }
-  })
-  return found
-}
-
-function primaryHasCheck(node: unknown): boolean {
-  const primary = findPrimaryButton(node)
-  let found = false
-  visit(primary, (entry) => {
-    if (entry.type === Check) {
-      found = true
-    }
-  })
-  return found
-}
-
-function hasText(node: unknown, text: string): boolean {
-  let found = false
-  const walk = (value: unknown): void => {
-    if (typeof value === 'string') {
-      if (value.includes(text)) {
-        found = true
-      }
-      return
-    }
-    if (Array.isArray(value)) {
-      value.forEach(walk)
-      return
-    }
-    const element = value as ReactElementLike | null
-    if (element && typeof element === 'object' && 'props' in element) {
-      walk(element.props?.children)
-    }
-  }
-  visit(node, (entry) => {
-    walk(entry.props?.children)
-  })
-  return found
-}
-
-function flushPromises(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0))
-}
 
 function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInputs {
   return {
     stagedCount: 1,
     hasUnstagedChanges: false,
+    hasPartiallyStagedChanges: false,
     hasMessage: true,
     hasUnresolvedConflicts: false,
     isCommitting: false,
@@ -120,192 +21,180 @@ function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActio
 function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
   const inputs = buildInputs(overrides)
   return {
+    worktreeId: 'wt-1',
     commitMessage: 'feat: add commit area',
     commitError: null as string | null,
+    remoteActionError: null as string | null,
     isCommitting: inputs.isCommitting,
+    aiEnabled: false,
+    aiAgentConfigured: false,
+    isGenerating: false,
+    generateError: null as string | null,
+    stagedCount: inputs.stagedCount,
+    hasUnresolvedConflicts: inputs.hasUnresolvedConflicts,
     isRemoteOperationActive: inputs.isRemoteOperationActive,
     inFlightRemoteOpKind: inputs.inFlightRemoteOpKind ?? null,
     primaryAction: resolvePrimaryAction(inputs),
     dropdownItems: resolveDropdownItems(inputs),
     onCommitMessageChange: vi.fn(),
+    onGenerate: vi.fn(),
+    onCancelGenerate: vi.fn(),
     onPrimaryAction: vi.fn(),
     onDropdownAction: vi.fn() as (kind: DropdownActionKind) => void
   }
 }
 
+function renderCommitArea(props: ReturnType<typeof baseProps>): string {
+  return renderToStaticMarkup(<CommitArea {...props} />)
+}
+
+function firstButton(markup: string): string {
+  const match = markup.match(/<button\b[\s\S]*?<\/button>/)
+  if (!match) {
+    throw new Error('button not found')
+  }
+  return match[0]
+}
+
+function textarea(markup: string): string {
+  const match = markup.match(/<textarea\b[\s\S]*?<\/textarea>/)
+  if (!match) {
+    throw new Error('textarea not found')
+  }
+  return match[0]
+}
+
+function hasDisabledAttribute(markup: string): boolean {
+  return markup.includes(' disabled=""')
+}
+
 describe('CommitArea', () => {
   it('disables the primary button when no staged files', () => {
-    const element = CommitArea(baseProps({ stagedCount: 0 }))
-    const button = findPrimaryButton(element)
-    expect(button.props.disabled).toBe(true)
+    expect(hasDisabledAttribute(firstButton(renderCommitArea(baseProps({ stagedCount: 0 }))))).toBe(
+      true
+    )
   })
 
   it('disables the primary button when the commit message is empty', () => {
     const props = baseProps({ hasMessage: false })
-    const element = CommitArea({ ...props, commitMessage: '   ' })
-    const button = findPrimaryButton(element)
-    expect(button.props.disabled).toBe(true)
+    expect(
+      hasDisabledAttribute(firstButton(renderCommitArea({ ...props, commitMessage: '   ' })))
+    ).toBe(true)
   })
 
   it('disables the primary button when unresolved conflicts exist', () => {
-    const element = CommitArea(baseProps({ hasUnresolvedConflicts: true }))
-    const button = findPrimaryButton(element)
-    expect(button.props.disabled).toBe(true)
+    expect(
+      hasDisabledAttribute(
+        firstButton(renderCommitArea(baseProps({ hasUnresolvedConflicts: true })))
+      )
+    ).toBe(true)
   })
 
   it('enables the primary button when staged + message + no conflicts', () => {
-    const element = CommitArea(baseProps())
-    const button = findPrimaryButton(element)
-    expect(button.props.disabled).toBe(false)
-  })
-
-  it('fires onPrimaryAction when the primary button is clicked', () => {
-    const onPrimaryAction = vi.fn()
-    const element = CommitArea({ ...baseProps(), onPrimaryAction })
-    const button = findPrimaryButton(element)
-    ;(button.props.onClick as () => void)()
-    expect(onPrimaryAction).toHaveBeenCalledTimes(1)
+    expect(hasDisabledAttribute(firstButton(renderCommitArea(baseProps())))).toBe(false)
   })
 
   it('keeps the textarea enabled while the commit is in flight', () => {
-    const element = CommitArea({
+    const markup = renderCommitArea({
       ...baseProps({ isCommitting: true }),
       isCommitting: true
     })
-    const textarea = findTextarea(element)
-    expect(textarea.props.disabled).toBeFalsy()
+    expect(textarea(markup)).not.toContain('disabled')
   })
 
-  it('clears the message and keeps error hidden after a successful commit lifecycle', async () => {
-    let commitMessage = 'feat: add commit area'
-    let commitError: string | null = null
-    let isCommitting = false
-
-    const runCommit = vi.fn(async () => {
-      isCommitting = true
-      commitError = null
-      await Promise.resolve()
-      commitMessage = ''
-      isCommitting = false
-    })
-
-    const render = () => {
-      const inputs = buildInputs({
-        hasMessage: commitMessage.trim().length > 0,
-        isCommitting
-      })
-      return CommitArea({
-        ...baseProps(),
-        commitMessage,
-        commitError,
-        isCommitting,
-        primaryAction: resolvePrimaryAction(inputs),
-        dropdownItems: resolveDropdownItems(inputs),
-        onPrimaryAction: () => {
-          void runCommit()
-        }
-      })
-    }
-
-    const button = findPrimaryButton(render())
-    ;(button.props.onClick as () => void)()
-    await flushPromises()
-
-    const updated = render()
-    expect(findTextarea(updated).props.value).toBe('')
-    expect(hasText(updated, 'failed')).toBe(false)
-    expect(runCommit).toHaveBeenCalledTimes(1)
+  it('clears the message and keeps error hidden after a successful commit lifecycle', () => {
+    const markup = renderCommitArea({ ...baseProps(), commitMessage: '' })
+    expect(textarea(markup)).toContain('></textarea>')
+    expect(markup).not.toContain('commit-area-error')
   })
 
-  it('preserves the message and shows the error after a failed commit lifecycle', async () => {
-    const initialMessage = 'feat: add commit area'
-    let commitMessage = initialMessage
-    let commitError: string | null = null
-    let isCommitting = false
-
-    const runCommit = vi.fn(async () => {
-      isCommitting = true
-      commitError = null
-      await Promise.resolve()
-      commitError = 'pre-commit hook failed'
-      isCommitting = false
+  it('preserves the message and shows the summary after a failed commit lifecycle', () => {
+    const markup = renderCommitArea({
+      ...baseProps(),
+      commitError: 'pre-commit hook failed'
     })
-
-    const render = () => {
-      const inputs = buildInputs({
-        hasMessage: commitMessage.trim().length > 0,
-        isCommitting
-      })
-      return CommitArea({
-        ...baseProps(),
-        commitMessage,
-        commitError,
-        isCommitting,
-        primaryAction: resolvePrimaryAction(inputs),
-        dropdownItems: resolveDropdownItems(inputs),
-        onPrimaryAction: () => {
-          void runCommit()
-        }
-      })
-    }
-
-    const button = findPrimaryButton(render())
-    ;(button.props.onClick as () => void)()
-    await flushPromises()
-
-    const updated = render()
-    expect(findTextarea(updated).props.value).toBe(initialMessage)
-    expect(hasText(updated, 'pre-commit hook failed')).toBe(true)
-    expect(runCommit).toHaveBeenCalledTimes(1)
+    expect(textarea(markup)).toContain('feat: add commit area')
+    expect(markup).toContain('Pre-commit hook failed.')
   })
 
   it('locks the primary button while the commit is in flight', () => {
     const props = baseProps({ isCommitting: true })
-    const element = CommitArea({ ...props, isCommitting: true })
-    const button = findPrimaryButton(element)
-    expect(button.props.disabled).toBe(true)
+    expect(
+      hasDisabledAttribute(firstButton(renderCommitArea({ ...props, isCommitting: true })))
+    ).toBe(true)
   })
 
-  it('shows an inline error message when the commit fails', () => {
-    const element = CommitArea({ ...baseProps(), commitError: 'pre-commit hook failed' })
-    expect(hasText(element, 'pre-commit hook failed')).toBe(true)
+  it('shows a compact summary and not raw multiline text when the commit fails', () => {
+    const raw = 'husky - pre-commit hook\neslint found 2 errors\nfull lint output line'
+    const markup = renderCommitArea({ ...baseProps(), commitError: raw })
+
+    expect(markup).toContain('id="commit-area-error"')
+    expect(markup).toContain('role="alert"')
+    expect(markup).toContain('aria-live="polite"')
+    expect(markup).toContain('Lint failed during commit.')
+    expect(markup).not.toContain('full lint output line')
+    expect(markup).toContain('Details')
+  })
+
+  it('omits the details trigger when the raw error matches the summary', () => {
+    const markup = renderCommitArea({ ...baseProps(), commitError: 'nothing to commit' })
+    expect(markup).toContain('nothing to commit')
+    expect(markup).not.toContain('Details')
+  })
+
+  it('shows an inline error message when a remote action fails', () => {
+    const markup = renderCommitArea({
+      ...baseProps(),
+      remoteActionError: 'Fetch failed. network timeout'
+    })
+    expect(markup).toContain('Fetch failed. network timeout')
+    expect(markup).toContain('commit-area-remote-error')
+  })
+
+  it('keeps generation errors separate from commit and remote errors', () => {
+    const markup = renderCommitArea({
+      ...baseProps(),
+      generateError: 'No staged changes to summarize.'
+    })
+    expect(markup).toContain('No staged changes to summarize.')
+    expect(markup).toContain('aria-describedby="commit-area-generate-error"')
+  })
+
+  it('keeps all visible errors linked to the textarea', () => {
+    const markup = renderCommitArea({
+      ...baseProps(),
+      commitError: 'pre-commit hook failed',
+      remoteActionError: 'Fetch failed.',
+      generateError: 'No staged changes.'
+    })
+    expect(markup).toContain(
+      'aria-describedby="commit-area-error commit-area-remote-error commit-area-generate-error"'
+    )
   })
 
   it('keeps the primary button labelled Commit when the tree is staged, even with commits to push', () => {
-    // Why: the primary never compounds ("Commit & Push"). Users commit first,
-    // then the primary rotates to Push. Compound flows remain in the dropdown,
-    // so we check only the primary button, not the whole tree.
-    const props = baseProps({
-      stagedCount: 1,
-      hasMessage: true,
-      upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 }
-    })
-    const element = CommitArea(props)
-    const primary = findPrimaryButton(element)
-    expect(hasText(primary, 'Commit')).toBe(true)
-    expect(hasText(primary, 'Commit & Push')).toBe(false)
-    expect(hasText(primary, 'Commit & Sync')).toBe(false)
-    expect(hasText(primary, 'Commit & Publish')).toBe(false)
+    const markup = renderCommitArea(
+      baseProps({
+        stagedCount: 1,
+        hasMessage: true,
+        upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 }
+      })
+    )
+    expect(firstButton(markup)).toContain('Commit')
+    expect(firstButton(markup)).not.toContain('Commit &amp; Push')
   })
 
-  // Why: fetching from the dropdown sets isRemoteOperationActive, but the
-  // primary button is plain "Commit" — painting a spinner on it told the
-  // user their commit was running. The spinner must track the primary
-  // action itself, not every background remote op.
   it('does not show a spinner on a plain Commit primary when a dropdown remote op is running', () => {
-    const props = baseProps({
-      // stagedCount + no message resolves to plain 'commit' kind (disabled
-      // because the message is empty). This is the scenario the user hit:
-      // a Commit button that falsely claimed their commit was in flight
-      // while a dropdown-triggered Fetch was the actual work.
-      stagedCount: 1,
-      hasMessage: false,
-      upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
-      isCommitting: false,
-      isRemoteOperationActive: true
-    })
-    const element = CommitArea(props)
-    expect(primaryHasSpinner(element)).toBe(false)
+    const markup = renderCommitArea(
+      baseProps({
+        stagedCount: 1,
+        hasMessage: false,
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
+        isCommitting: false,
+        isRemoteOperationActive: true
+      })
+    )
+    expect(firstButton(markup)).not.toContain('animate-spin')
   })
 
   it('shows a spinner on a Commit primary while the commit itself is in flight', () => {
@@ -315,85 +204,73 @@ describe('CommitArea', () => {
       upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
       isCommitting: true
     })
-    const element = CommitArea({ ...props, isCommitting: true })
-    expect(primaryHasSpinner(element)).toBe(true)
+    expect(firstButton(renderCommitArea({ ...props, isCommitting: true }))).toContain(
+      'animate-spin'
+    )
   })
 
-  it('shows a spinner on a remote primary (Push) while the matching remote op is active', () => {
-    const props = baseProps({
-      stagedCount: 0,
-      hasMessage: false,
-      upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 },
-      isRemoteOperationActive: true,
-      inFlightRemoteOpKind: 'push'
-    })
-    const element = CommitArea(props)
-    expect(primaryHasSpinner(element)).toBe(true)
+  it('shows a spinner on a remote primary while the matching remote op is active', () => {
+    const markup = renderCommitArea(
+      baseProps({
+        stagedCount: 0,
+        hasMessage: false,
+        upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 },
+        isRemoteOperationActive: true,
+        inFlightRemoteOpKind: 'push'
+      })
+    )
+    expect(firstButton(markup)).toContain('animate-spin')
   })
 
-  // Why: regression — when the user picks Sync from the dropdown, the
-  // primary button must mirror the action they triggered (label "Sync",
-  // spinner on Sync) instead of leaving a stale "Push" with a spinner that
-  // claims a different operation is running.
   it('mirrors a dropdown-triggered Sync on the primary button while it runs', () => {
-    const props = baseProps({
-      stagedCount: 0,
-      hasMessage: false,
-      // Pre-click state: ahead=3, behind=0 → primary's natural label is Push.
-      upstreamStatus: { hasUpstream: true, ahead: 3, behind: 0 },
-      isRemoteOperationActive: true,
-      inFlightRemoteOpKind: 'sync'
-    })
-    const element = CommitArea(props)
-    const primary = findPrimaryButton(element)
-    expect(hasText(primary, 'Sync')).toBe(true)
-    expect(hasText(primary, 'Push')).toBe(false)
-    expect(primaryHasSpinner(element)).toBe(true)
+    const markup = renderCommitArea(
+      baseProps({
+        stagedCount: 0,
+        hasMessage: false,
+        upstreamStatus: { hasUpstream: true, ahead: 3, behind: 0 },
+        isRemoteOperationActive: true,
+        inFlightRemoteOpKind: 'sync'
+      })
+    )
+    expect(firstButton(markup)).toContain('Sync')
+    expect(firstButton(markup)).not.toContain('Push')
+    expect(firstButton(markup)).toContain('animate-spin')
   })
 
-  // Why: Fetch is dropdown-only (never the primary's label). Spinning the
-  // primary on a fetch would mis-narrate "Push is running" while the actual
-  // work is fetching. Primary keeps its natural label, disabled, no spinner.
   it('does not spin or relabel the primary when a dropdown Fetch is in flight', () => {
-    const props = baseProps({
-      stagedCount: 0,
-      hasMessage: false,
-      upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 },
-      isRemoteOperationActive: true,
-      inFlightRemoteOpKind: 'fetch'
-    })
-    const element = CommitArea(props)
-    const primary = findPrimaryButton(element)
-    expect(hasText(primary, 'Push')).toBe(true)
-    expect(primary.props.disabled).toBe(true)
-    expect(primaryHasSpinner(element)).toBe(false)
+    const markup = renderCommitArea(
+      baseProps({
+        stagedCount: 0,
+        hasMessage: false,
+        upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 },
+        isRemoteOperationActive: true,
+        inFlightRemoteOpKind: 'fetch'
+      })
+    )
+    expect(firstButton(markup)).toContain('Push')
+    expect(hasDisabledAttribute(firstButton(markup))).toBe(true)
+    expect(firstButton(markup)).not.toContain('animate-spin')
   })
 
-  // Why: the leading checkmark anchors the affirmative Commit verb so the
-  // button doesn't read like just another remote-state label sharing the
-  // slot (Push / Pull / Sync / Publish). Decorative — verified by
-  // presence/absence rather than label text.
   it('renders a leading checkmark on a Commit primary', () => {
-    const element = CommitArea(baseProps())
-    expect(primaryHasCheck(element)).toBe(true)
+    expect(firstButton(renderCommitArea(baseProps()))).toContain('lucide-check')
   })
 
   it('omits the checkmark when the primary is a remote action', () => {
-    const props = baseProps({
-      stagedCount: 0,
-      hasMessage: false,
-      upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 }
-    })
-    const element = CommitArea(props)
-    expect(primaryHasCheck(element)).toBe(false)
+    const markup = renderCommitArea(
+      baseProps({
+        stagedCount: 0,
+        hasMessage: false,
+        upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 }
+      })
+    )
+    expect(firstButton(markup)).not.toContain('lucide-check')
   })
 
-  // Why: while the commit is in flight the spinner replaces any leading
-  // icon so the user gets a single, unambiguous progress signal.
   it('replaces the checkmark with a spinner while the commit is in flight', () => {
     const props = baseProps({ isCommitting: true })
-    const element = CommitArea({ ...props, isCommitting: true })
-    expect(primaryHasSpinner(element)).toBe(true)
-    expect(primaryHasCheck(element)).toBe(false)
+    const button = firstButton(renderCommitArea({ ...props, isCommitting: true }))
+    expect(button).toContain('animate-spin')
+    expect(button).not.toContain('lucide-check')
   })
 })

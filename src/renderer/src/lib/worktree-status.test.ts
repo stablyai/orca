@@ -86,6 +86,7 @@ describe('resolveWorktreeStatus', () => {
       // Slept: live-pty array empty; tab.ptyId would be the wake-hint sessionId.
       ptyIdsByTabId: { 'tab-1': [] },
       hasPermission: false,
+      hasLiveWorking: false,
       hasLiveDone: false,
       hasRetainedDone: false
     })
@@ -99,11 +100,26 @@ describe('resolveWorktreeStatus', () => {
       browserTabs: [],
       ptyIdsByTabId: { 'tab-1': [] },
       hasPermission: false,
+      hasLiveWorking: false,
       hasLiveDone: false,
       hasRetainedDone: true
     })
 
     expect(status).toBe('done')
+  })
+
+  it('treats paired web host terminal mirrors as active while their stream handle is pending', () => {
+    const status = resolveWorktreeStatus({
+      tabs: [{ id: 'web-terminal-host-tab-1', title: 'Terminal 1' }],
+      browserTabs: [],
+      ptyIdsByTabId: {},
+      hasPermission: false,
+      hasLiveWorking: false,
+      hasLiveDone: false,
+      hasRetainedDone: false
+    })
+
+    expect(status).toBe('active')
   })
 
   it('promotes to permission when an explicit agent row needs input, even without a live pty', () => {
@@ -112,6 +128,7 @@ describe('resolveWorktreeStatus', () => {
       browserTabs: [],
       ptyIdsByTabId: { 'tab-1': [] },
       hasPermission: true,
+      hasLiveWorking: false,
       hasLiveDone: false,
       hasRetainedDone: false
     })
@@ -125,11 +142,26 @@ describe('resolveWorktreeStatus', () => {
       browserTabs: [],
       ptyIdsByTabId: livePtyMap('tab-1'),
       hasPermission: true,
+      hasLiveWorking: false,
       hasLiveDone: false,
       hasRetainedDone: false
     })
 
     expect(status).toBe('permission')
+  })
+
+  it('promotes to working from a fresh explicit agent row before pane titles restore', () => {
+    const status = resolveWorktreeStatus({
+      tabs: [{ id: 'tab-1', title: 'bash' }],
+      browserTabs: [],
+      ptyIdsByTabId: livePtyMap('tab-1'),
+      hasPermission: false,
+      hasLiveWorking: true,
+      hasLiveDone: false,
+      hasRetainedDone: false
+    })
+
+    expect(status).toBe('working')
   })
 
   it('lets heuristic working beat hasLiveDone (newer in-progress signal wins)', () => {
@@ -138,6 +170,7 @@ describe('resolveWorktreeStatus', () => {
       browserTabs: [],
       ptyIdsByTabId: livePtyMap('tab-1'),
       hasPermission: false,
+      hasLiveWorking: false,
       hasLiveDone: true,
       hasRetainedDone: false
     })
@@ -156,6 +189,7 @@ describe('resolveWorktreeStatus', () => {
       browserTabs: [],
       ptyIdsByTabId: livePtyMap('tab-1'),
       hasPermission: false,
+      hasLiveWorking: false,
       hasLiveDone: true,
       hasRetainedDone: false
     })
@@ -169,6 +203,7 @@ describe('resolveWorktreeStatus', () => {
       browserTabs: [],
       ptyIdsByTabId: livePtyMap('tab-1'),
       hasPermission: false,
+      hasLiveWorking: false,
       hasLiveDone: false,
       hasRetainedDone: true
     })
@@ -182,6 +217,7 @@ describe('resolveWorktreeStatus', () => {
       browserTabs: [],
       ptyIdsByTabId: livePtyMap('tab-1'),
       hasPermission: false,
+      hasLiveWorking: false,
       hasLiveDone: false,
       hasRetainedDone: false
     })

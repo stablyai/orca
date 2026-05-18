@@ -118,6 +118,22 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
+  it('launches Grok first and injects the prompt after startup', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'grok',
+        prompt: 'Trace the failing test',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'grok',
+      launchCommand: 'grok',
+      expectedProcess: 'grok',
+      followupPrompt: 'Trace the failing test'
+    })
+  })
+
   it('returns null when there is no prompt to inject', () => {
     expect(
       buildAgentStartupPlan({

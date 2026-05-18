@@ -2,16 +2,48 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { DiffComment, Worktree } from '../../../../shared/types'
 import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export type DiffCommentsSlice = {
   getDiffComments: (worktreeId: string | null | undefined) => DiffComment[]
   addDiffComment: (input: Omit<DiffComment, 'id' | 'createdAt'>) => Promise<DiffComment | null>
   updateDiffComment: (worktreeId: string, commentId: string, body: string) => Promise<boolean>
   deleteDiffComment: (worktreeId: string, commentId: string) => Promise<void>
+  clearDiffComments: (worktreeId: string) => Promise<boolean>
+  clearDiffCommentsForFile: (worktreeId: string, filePath: string) => Promise<boolean>
 }
 
 function generateId(): string {
-  return globalThis.crypto.randomUUID()
+  return createBrowserUuid()
+}
+
+function normalizeDiffComment(comment: DiffComment): DiffComment {
+  const rawSource = (comment as { source?: unknown }).source
+  const source = rawSource === 'markdown' || rawSource === 'diff' ? rawSource : undefined
+  const rawStartLine = (comment as { startLine?: unknown }).startLine
+  const startLine =
+    Number.isInteger(rawStartLine) &&
+    typeof rawStartLine === 'number' &&
+    rawStartLine >= 1 &&
+    rawStartLine <= comment.lineNumber
+      ? rawStartLine
+      : undefined
+  const rawSelectedText = (comment as { selectedText?: unknown }).selectedText
+  const selectedText =
+    typeof rawSelectedText === 'string' && rawSelectedText.trim().length > 0
+      ? rawSelectedText.trim()
+      : undefined
+
+  return {
+    ...comment,
+    ...(source !== undefined ? { source } : {}),
+    ...(source === undefined ? { source: undefined } : {}),
+    ...(selectedText !== undefined ? { selectedText } : {}),
+    ...(selectedText === undefined ? { selectedText: undefined } : {}),
+    ...(startLine !== undefined ? { startLine } : {}),
+    ...(startLine === undefined ? { startLine: undefined } : {})
+  }
 }
 
 // Why: return a stable reference when no comments exist so selectors don't
@@ -22,11 +54,25 @@ function generateId(): string {
 // the sentinel from being corrupted globally.
 const EMPTY_COMMENTS: readonly DiffComment[] = Object.freeze([])
 
-async function persist(worktreeId: string, diffComments: DiffComment[]): Promise<void> {
-  await window.api.worktrees.updateMeta({
-    worktreeId,
-    updates: { diffComments }
-  })
+async function persist(
+  settings: AppState['settings'],
+  worktreeId: string,
+  diffComments: DiffComment[]
+): Promise<void> {
+  const target = getActiveRuntimeTarget(settings)
+  if (target.kind === 'local') {
+    await window.api.worktrees.updateMeta({
+      worktreeId,
+      updates: { diffComments }
+    })
+    return
+  }
+  await callRuntimeRpc(
+    target,
+    'worktree.set',
+    { worktree: worktreeId, diffComments },
+    { timeoutMs: 15_000 }
+  )
 }
 
 // Why: IPC writes from `persist` are not ordered with respect to each other.
@@ -54,8 +100,8 @@ function enqueuePersist(worktreeId: string, get: () => AppState): Promise<void> 
     const repoId = getRepoIdFromWorktreeId(worktreeId)
     const repoList = get().worktreesByRepo[repoId]
     const target = repoList?.find((w) => w.id === worktreeId)
-    const latest = target?.diffComments ?? []
-    await persist(worktreeId, latest)
+    const latest = (target?.diffComments ?? []).map(normalizeDiffComment)
+    await persist(get().settings, worktreeId, latest)
   }
   const next = prior.then(run, run)
   persistQueueByWorktree.set(worktreeId, next)
@@ -180,11 +226,11 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
   },
 
   addDiffComment: async (input) => {
-    const comment: DiffComment = {
+    const comment: DiffComment = normalizeDiffComment({
       ...input,
       id: generateId(),
       createdAt: Date.now()
-    }
+    })
     const result = mutateComments(set, input.worktreeId, (existing) => [...existing, comment])
     if (!result) {
       return null
@@ -277,6 +323,41 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     } catch (err) {
       console.error('Failed to persist diff comments:', err)
       rollback(set, worktreeId, result.previous, result.next)
+    }
+  },
+
+  clearDiffComments: async (worktreeId) => {
+    const result = mutateComments(set, worktreeId, (existing) =>
+      existing.length === 0 ? null : []
+    )
+    if (!result) {
+      return true
+    }
+    try {
+      await enqueuePersist(worktreeId, get)
+      return true
+    } catch (err) {
+      console.error('Failed to persist diff comments:', err)
+      rollback(set, worktreeId, result.previous, result.next)
+      return false
+    }
+  },
+
+  clearDiffCommentsForFile: async (worktreeId, filePath) => {
+    const result = mutateComments(set, worktreeId, (existing) => {
+      const next = existing.filter((c) => c.filePath !== filePath)
+      return next.length === existing.length ? null : next
+    })
+    if (!result) {
+      return true
+    }
+    try {
+      await enqueuePersist(worktreeId, get)
+      return true
+    } catch (err) {
+      console.error('Failed to persist diff comments:', err)
+      rollback(set, worktreeId, result.previous, result.next)
+      return false
     }
   }
 })

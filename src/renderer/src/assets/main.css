@@ -57,6 +57,33 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-terminal-pane-title-on-dark-fg: var(--terminal-pane-title-on-dark-fg);
+  --color-terminal-pane-title-on-dark-input-fg: var(--terminal-pane-title-on-dark-input-fg);
+  --color-terminal-pane-title-on-dark-placeholder: var(--terminal-pane-title-on-dark-placeholder);
+  --color-terminal-pane-title-on-dark-button-fg: var(--terminal-pane-title-on-dark-button-fg);
+  --color-terminal-pane-title-on-dark-button-hover-fg: var(
+    --terminal-pane-title-on-dark-button-hover-fg
+  );
+  --color-terminal-pane-title-on-dark-input-bg: var(--terminal-pane-title-on-dark-input-bg);
+  --color-terminal-pane-title-on-dark-separator: var(--terminal-pane-title-on-dark-separator);
+  --color-terminal-pane-title-on-light-fg: var(--terminal-pane-title-on-light-fg);
+  --color-terminal-pane-title-on-light-input-fg: var(--terminal-pane-title-on-light-input-fg);
+  --color-terminal-pane-title-on-light-placeholder: var(--terminal-pane-title-on-light-placeholder);
+  --color-terminal-pane-title-on-light-button-fg: var(--terminal-pane-title-on-light-button-fg);
+  --color-terminal-pane-title-on-light-button-hover-fg: var(
+    --terminal-pane-title-on-light-button-hover-fg
+  );
+  --color-terminal-pane-title-on-light-input-bg: var(--terminal-pane-title-on-light-input-bg);
+  --color-terminal-pane-title-on-light-separator: var(--terminal-pane-title-on-light-separator);
+  --color-git-graph-ref: var(--git-graph-ref);
+  --color-git-graph-remote-ref: var(--git-graph-remote-ref);
+  --color-git-graph-base-ref: var(--git-graph-base-ref);
+  --color-git-graph-lane-1: var(--git-graph-lane-1);
+  --color-git-graph-lane-2: var(--git-graph-lane-2);
+  --color-git-graph-lane-3: var(--git-graph-lane-3);
+  --color-git-graph-lane-4: var(--git-graph-lane-4);
+  --color-git-graph-lane-5: var(--git-graph-lane-5);
+  --color-annotation-highlight: var(--annotation-highlight);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -95,6 +122,7 @@
   --border: #e5e5e5;
   --input: #e5e5e5;
   --ring: #a1a1a1;
+  --terminal-pane-locate: var(--color-blue-600);
   --chart-1: var(--color-blue-300);
   --chart-2: var(--color-blue-500);
   --chart-3: var(--color-blue-600);
@@ -108,12 +136,36 @@
   --sidebar-accent-foreground: #171717;
   --sidebar-border: #e5e5e5;
   --sidebar-ring: #a1a1a1;
+  --terminal-pane-title-on-dark-fg: rgb(255 255 255 / 0.52);
+  --terminal-pane-title-on-dark-input-fg: rgb(255 255 255 / 0.7);
+  --terminal-pane-title-on-dark-placeholder: rgb(255 255 255 / 0.38);
+  --terminal-pane-title-on-dark-button-fg: rgb(255 255 255 / 0.3);
+  --terminal-pane-title-on-dark-button-hover-fg: rgb(255 255 255 / 0.8);
+  --terminal-pane-title-on-dark-input-bg: rgb(255 255 255 / 0.04);
+  --terminal-pane-title-on-dark-separator: rgb(255 255 255 / 0.06);
+  --terminal-pane-title-on-light-fg: rgb(24 24 27 / 0.64);
+  --terminal-pane-title-on-light-input-fg: rgb(24 24 27 / 0.82);
+  --terminal-pane-title-on-light-placeholder: rgb(24 24 27 / 0.48);
+  --terminal-pane-title-on-light-button-fg: rgb(24 24 27 / 0.42);
+  --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27 / 0.82);
+  --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
+  --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
   --git-decoration-added: #587c0c;
   --git-decoration-modified: #895503;
   --git-decoration-deleted: #ad0707;
   --git-decoration-renamed: #007acc;
   --git-decoration-untracked: #007100;
   --git-decoration-copied: #007acc;
+  --git-decoration-ignored: #8c8c8c;
+  --git-graph-ref: #007acc;
+  --git-graph-remote-ref: #b66dff;
+  --git-graph-base-ref: #ea5c00;
+  --git-graph-lane-1: #ffb000;
+  --git-graph-lane-2: #dc267f;
+  --git-graph-lane-3: #994f00;
+  --git-graph-lane-4: #40b0a6;
+  --git-graph-lane-5: #b66dff;
+  --annotation-highlight: #f59e0b;
 }
 
 /* ── Dark Mode ───────────────────────────────────────── */
@@ -139,6 +191,7 @@
   --border: rgb(255 255 255 / 0.07);
   --input: rgb(255 255 255 / 0.15);
   --ring: #737373;
+  --terminal-pane-locate: var(--color-blue-400);
   --chart-1: var(--color-blue-300);
   --chart-2: var(--color-blue-500);
   --chart-3: var(--color-blue-600);
@@ -152,12 +205,36 @@
   --sidebar-accent-foreground: #fafafa;
   --sidebar-border: rgb(255 255 255 / 0.07);
   --sidebar-ring: #525252;
+  --terminal-pane-title-on-dark-fg: rgb(255 255 255 / 0.52);
+  --terminal-pane-title-on-dark-input-fg: rgb(255 255 255 / 0.7);
+  --terminal-pane-title-on-dark-placeholder: rgb(255 255 255 / 0.38);
+  --terminal-pane-title-on-dark-button-fg: rgb(255 255 255 / 0.3);
+  --terminal-pane-title-on-dark-button-hover-fg: rgb(255 255 255 / 0.8);
+  --terminal-pane-title-on-dark-input-bg: rgb(255 255 255 / 0.04);
+  --terminal-pane-title-on-dark-separator: rgb(255 255 255 / 0.06);
+  --terminal-pane-title-on-light-fg: rgb(24 24 27 / 0.64);
+  --terminal-pane-title-on-light-input-fg: rgb(24 24 27 / 0.82);
+  --terminal-pane-title-on-light-placeholder: rgb(24 24 27 / 0.48);
+  --terminal-pane-title-on-light-button-fg: rgb(24 24 27 / 0.42);
+  --terminal-pane-title-on-light-button-hover-fg: rgb(24 24 27 / 0.82);
+  --terminal-pane-title-on-light-input-bg: rgb(24 24 27 / 0.05);
+  --terminal-pane-title-on-light-separator: rgb(24 24 27 / 0.1);
   --git-decoration-added: #81b88b;
   --git-decoration-modified: #e2c08d;
   --git-decoration-deleted: #c74e39;
   --git-decoration-renamed: #73c991;
   --git-decoration-untracked: #73c991;
   --git-decoration-copied: #73c991;
+  --git-decoration-ignored: #6e6e6e;
+  --git-graph-ref: #3794ff;
+  --git-graph-remote-ref: #b66dff;
+  --git-graph-base-ref: #ea5c00;
+  --git-graph-lane-1: #ffb000;
+  --git-graph-lane-2: #dc267f;
+  --git-graph-lane-3: #ce9178;
+  --git-graph-lane-4: #40b0a6;
+  --git-graph-lane-5: #b66dff;
+  --annotation-highlight: #fbbf24;
 }
 
 /* ── Base Layer ──────────────────────────────────────── */
@@ -192,11 +269,11 @@
     list-style: none;
   }
 
-  button:not(:disabled) {
+  :where(button:not(:disabled)) {
     cursor: pointer;
   }
 
-  button:disabled {
+  :where(button:disabled) {
     cursor: default;
   }
 }
@@ -241,7 +318,7 @@
 /* Keep the sidebar gutter reserved; only the thumb fades in on hover. */
 .worktree-sidebar-scrollbar {
   /* Why: the scrollbar itself owns the gutter; padding is only the card-to-gutter gap. */
-  padding-right: 9px;
+  padding-right: 6px;
   scrollbar-gutter: stable;
   scrollbar-color: transparent transparent;
 }
@@ -320,6 +397,18 @@
 }
 
 .terminal-tab-strip::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.project-view-tab-strip {
+  /* Why: project views load after the table shell; keeping the row stable
+     prevents the list below from jumping when the tabs arrive. */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.project-view-tab-strip::-webkit-scrollbar {
   width: 0;
   height: 0;
 }
@@ -470,6 +559,15 @@
   width: var(--window-controls-width, 0px);
 }
 
+.right-sidebar-header-drag {
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.right-sidebar-header-no-drag {
+  -webkit-app-region: no-drag;
+}
+
 /* Why: the right sidebar header extends to the window's right edge. On Windows
    the fixed-position window-controls overlay sits on top of that edge, so we
    add matching padding-right so the header's close button (pr-1) isn't hidden
@@ -542,7 +640,9 @@
   -webkit-app-region: no-drag;
   display: inline-flex;
   align-items: center;
+  gap: 4px;
   height: 24px;
+  max-width: min(280px, 32vw);
   margin-left: 2px;
   margin-right: 4px;
   padding: 0 6px;
@@ -552,7 +652,12 @@
   font-weight: 600;
   line-height: 24px;
   white-space: nowrap;
+  overflow: hidden;
   cursor: pointer;
+}
+
+.titlebar-app-name-main {
+  flex: 0 0 auto;
 }
 
 .titlebar-icon-button {
@@ -728,6 +833,123 @@
   overflow: hidden;
 }
 
+/* Why: the workspace board is offset to the sidebar edge. The generic left
+   sheet translates by its full width, which makes an offset board fly in from
+   far offscreen; this reveals it from the sidebar boundary instead. */
+.workspace-kanban-sheet-content[data-state='open'] {
+  animation-name: workspace-kanban-sheet-in;
+  animation-duration: 300ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.workspace-kanban-sheet-content[data-state='closed'] {
+  animation-name: workspace-kanban-sheet-out;
+  animation-duration: 200ms;
+  animation-timing-function: cubic-bezier(0.7, 0, 0.84, 0);
+}
+
+@keyframes workspace-kanban-sheet-in {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes workspace-kanban-sheet-out {
+  from {
+    clip-path: inset(0 0 0 0);
+  }
+
+  to {
+    clip-path: inset(0 100% 0 0);
+  }
+}
+
+/* Why: board-origin cards use pointer drag so Shift+scroll can keep firing;
+   these replace the native drag cursor and ghost affordance. */
+[data-workspace-board-pointer-draggable='true'] {
+  cursor: grab;
+}
+
+[data-workspace-board-card-pointer-dragging='true'] {
+  outline: 1px solid var(--sidebar-ring);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 36%, transparent);
+}
+
+[data-workspace-board-card-pointer-dragging='true'],
+[data-workspace-board-card-pointer-dragging='true'] *,
+:root[data-workspace-board-pointer-dragging] * {
+  cursor: grabbing !important;
+}
+
+[data-workspace-board-card-drag-preview='true'] {
+  z-index: 2147483647;
+  overflow: visible;
+  border-radius: var(--radius);
+  outline: 1px solid var(--sidebar-ring);
+  outline-offset: 1px;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--foreground) 16%, transparent);
+  opacity: 0.96;
+  will-change: transform;
+}
+
+[data-workspace-board-card-drag-preview='true'][data-workspace-board-card-drag-stack='true'] {
+  isolation: isolate;
+}
+
+[data-workspace-board-card-drag-card='true'] {
+  width: 100%;
+  height: 100%;
+}
+
+[data-workspace-board-card-drag-preview='true'][data-workspace-board-card-drag-stack='true']::before,
+[data-workspace-board-card-drag-preview='true'][data-workspace-board-card-drag-stack='true']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--sidebar-ring) 44%, transparent);
+  background: var(--sidebar);
+}
+
+[data-workspace-board-card-drag-preview='true'][data-workspace-board-card-drag-stack='true']::before {
+  transform: translate(4px, 4px);
+  opacity: 0.72;
+}
+
+[data-workspace-board-card-drag-preview='true'][data-workspace-board-card-drag-stack='true']::after {
+  transform: translate(8px, 8px);
+  opacity: 0.44;
+}
+
+[data-workspace-board-card-drag-preview='true'] * {
+  cursor: grabbing !important;
+}
+
+[data-workspace-board-card-drag-count='true'] {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  z-index: 2;
+  display: flex;
+  min-width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid var(--sidebar-border);
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
+
 .sidebar-header {
   padding: 12px 16px 8px;
   font-size: 11px;
@@ -886,6 +1108,51 @@
   text-underline-offset: 2px;
 }
 
+/* ── Git conflict decorations ───────────────────────────────────── */
+
+.monaco-editor .orca-conflict-marker-line {
+  background: color-mix(in srgb, var(--destructive) 12%, transparent);
+}
+
+.monaco-editor .orca-conflict-section-line {
+  border-left: 3px solid transparent;
+}
+
+.monaco-editor .orca-conflict-current-line {
+  background: color-mix(in srgb, var(--git-decoration-modified) 12%, transparent);
+  border-left-color: color-mix(in srgb, var(--git-decoration-modified) 72%, transparent);
+}
+
+.monaco-editor .orca-conflict-base-line {
+  background: color-mix(in srgb, var(--muted-foreground) 7%, transparent);
+  border-left-color: color-mix(in srgb, var(--muted-foreground) 36%, transparent);
+}
+
+.monaco-editor .orca-conflict-incoming-line {
+  background: color-mix(in srgb, var(--git-decoration-renamed) 11%, transparent);
+  border-left-color: color-mix(in srgb, var(--git-decoration-renamed) 68%, transparent);
+}
+
+.monaco-editor .orca-conflict-line-decoration {
+  width: 4px !important;
+  margin-left: 3px;
+  background: var(--destructive);
+  border-radius: 999px;
+}
+
+.monaco-editor .orca-conflict-margin {
+  background: color-mix(in srgb, var(--destructive) 8%, transparent);
+}
+
+.monaco-editor .orca-conflict-marker-label {
+  color: var(--destructive);
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: 11px;
+  font-weight: 600;
+  font-style: normal;
+  opacity: 0.92;
+}
+
 /* Why: Monaco's find-widget button tooltips (Close, Find in Selection, etc.)
    render inside a `.context-view` wrapper → `.workbench-hover-container` →
    `.workbench-hover.compact`, positioned above the target button. The wrapper's
@@ -967,23 +1234,26 @@
   align-items: center;
   justify-content: center;
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--foreground) 22%, var(--border));
   border-radius: 4px;
-  background: var(--background);
-  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, var(--editor-surface));
+  color: color-mix(in srgb, var(--foreground) 78%, var(--muted-foreground));
   cursor: pointer;
   z-index: 5;
-  opacity: 0.7;
+  opacity: 1;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 12%, transparent);
   transition:
-    opacity 100ms ease,
     color 100ms ease,
-    background-color 100ms ease;
+    background-color 100ms ease,
+    border-color 100ms ease,
+    box-shadow 100ms ease;
 }
 
 .orca-diff-comment-add-btn:hover {
-  opacity: 1;
   color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 52%, var(--border));
   background: color-mix(in srgb, var(--primary) 12%, var(--background));
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--foreground) 16%, transparent);
 }
 
 .orca-diff-comment-add-btn:focus-visible {
@@ -1001,10 +1271,9 @@
 
 .orca-diff-comment-inline {
   width: 100%;
-  /* Why: match the popover's horizontal inset so the saved card lines up with
-     the new-comment popover that preceded it. Both anchor at `left: 56px` and
-     cap at 420px wide. */
-  padding: 4px 24px 6px 56px;
+  /* Why: Monaco's view-zone node already starts after the diff gutter. Avoid
+     adding a second left inset so saved notes sit flush with the code column. */
+  padding: 4px 24px 6px 0;
   box-sizing: border-box;
 }
 

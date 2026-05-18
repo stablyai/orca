@@ -8,6 +8,7 @@ function inputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInpu
   return {
     stagedCount: 0,
     hasUnstagedChanges: false,
+    hasPartiallyStagedChanges: false,
     hasMessage: false,
     hasUnresolvedConflicts: false,
     isCommitting: false,
@@ -33,6 +34,8 @@ describe('resolveDropdownItems', () => {
       'commit_sync',
       'separator',
       'push',
+      'create_pr',
+      'push_create_pr',
       'pull',
       'sync',
       'fetch',
@@ -50,6 +53,25 @@ describe('resolveDropdownItems', () => {
     expect(byKind.commit.disabled).toBe(true)
     expect(byKind.commit_push.disabled).toBe(true)
     expect(byKind.commit_sync.disabled).toBe(true)
+  })
+
+  it('disables commit actions when staged files also have unstaged changes', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        stagedCount: 1,
+        hasUnstagedChanges: true,
+        hasPartiallyStagedChanges: true,
+        hasMessage: true,
+        upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 }
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.commit.disabled).toBe(true)
+    expect(byKind.commit_push.disabled).toBe(true)
+    expect(byKind.commit_sync.disabled).toBe(true)
+    expect(byKind.commit.title).toBe('Stage all changes before committing partially staged files')
   })
 
   it('disables push actions but keeps Fetch enabled when branch has no upstream', () => {
@@ -168,6 +190,54 @@ describe('resolveDropdownItems', () => {
     expect(byKind.publish.disabled).toBe(false)
   })
 
+  it('does not show Publish Branch when an unpublished branch has no commits ahead', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 0
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.publish.label).toBe('No Branch Changes')
+    expect(byKind.publish.title).toBe('Nothing to publish')
+    expect(byKind.publish.disabled).toBe(true)
+  })
+
+  it('does not mention Publish Branch when the linked PR is already merged', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        prState: 'merged'
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.push.title).toBe('PR is already merged')
+    expect(byKind.pull.title).toBe('PR is already merged')
+    expect(byKind.sync.title).toBe('PR is already merged')
+    expect(byKind.publish.label).toBe('PR Status')
+    expect(byKind.publish.title).toBe('PR is already merged')
+    expect(byKind.publish.disabled).toBe(true)
+  })
+
+  it('waits for linked PR state before showing a publish prompt', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        isPRStateLoading: true
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.publish.label).toBe('PR Status')
+    expect(byKind.publish.title).toBe('Checking PR status…')
+    expect(byKind.publish.disabled).toBe(true)
+  })
+
   it('omits counts from compound commit labels even when ahead/behind are nonzero', () => {
     // Why: the commit itself changes ahead/behind, so pre-commit counts would
     // be stale the moment the action fires. Plain Push/Pull/Sync continue to
@@ -187,5 +257,26 @@ describe('resolveDropdownItems', () => {
     // Sanity check: plain counterparts still carry counts.
     expect(byKind.push.label).toBe('Push (2)')
     expect(byKind.sync.label).toBe('Sync (↓3 ↑2)')
+  })
+
+  it('enables Push & Create PR when review creation is only blocked by unpushed commits', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 },
+        hostedReviewCreation: {
+          provider: 'github',
+          review: null,
+          canCreate: false,
+          blockedReason: 'needs_push',
+          nextAction: 'push'
+        }
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.create_pr.disabled).toBe(true)
+    expect(byKind.create_pr.hint).toBe('Push first')
+    expect(byKind.push_create_pr.disabled).toBe(false)
   })
 })

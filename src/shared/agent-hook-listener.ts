@@ -12,6 +12,7 @@
 // docs/design/agent-status-over-ssh.md §3 ("relay normalizes; Orca routes").
 import type { IncomingMessage } from 'http'
 import { randomUUID } from 'crypto'
+import { homedir } from 'os'
 import {
   chmodSync,
   closeSync,
@@ -28,7 +29,8 @@ import { join } from 'path'
 
 import { parseAgentStatusPayload, type ParsedAgentStatusPayload } from './agent-status-types'
 import { ORCA_HOOK_PROTOCOL_VERSION } from './agent-hook-types'
-import type { AgentHookSource } from './agent-hook-relay'
+import { REMOTE_AGENT_HOOK_ENV, type AgentHookSource } from './agent-hook-relay'
+import { parsePaneKey } from './stable-pane-id'
 
 /** Maximum request body size accepted by the listener (1 MB). */
 export const HOOK_REQUEST_MAX_BYTES = 1_000_000
@@ -41,8 +43,10 @@ const MAX_WARNED_KEYS = 32
 /** Slowloris cap: drop requests that have not finished sending after 5 s. */
 export const HOOK_REQUEST_SLOWLORIS_MS = 5_000
 
-/** Bound paneKey size — `${tabId}:${paneId}` is well under 200 chars in
- *  practice; cap defends per-pane caches against pathological input. */
+/** Bound paneKey size — `${tabId}:${leafUuid}` is well under 200 chars in
+ *  practice; cap defends per-pane caches against pathological input.
+ *  Exported so non-HTTP ingest paths (e.g. Orca's `ingestRemote`) can apply
+ *  the same cap as defense-in-depth. */
 export const MAX_PANE_KEY_LEN = 200
 
 /** Per-listener-instance state that holds caches needing per-PTY teardown
@@ -72,12 +76,52 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.lastStatusByPaneKey.delete(paneKey)
 }
 
+function clearPaneTurnCacheState(state: HookListenerState, paneKey: string): void {
+  state.lastPromptByPaneKey.delete(paneKey)
+  state.lastToolByPaneKey.delete(paneKey)
+}
+
 export function clearAllListenerCaches(state: HookListenerState): void {
   state.lastPromptByPaneKey.clear()
   state.lastToolByPaneKey.clear()
   state.lastStatusByPaneKey.clear()
   state.warnedVersions.clear()
   state.warnedEnvs.clear()
+}
+
+/** Emit warn-once diagnostics for cross-build (`version`) and dev-vs-prod
+ *  (`env`) mismatches. Shared between the local HTTP path
+ *  (`normalizeHookPayload`) and the relay-forwarded path
+ *  (`AgentHookServer.ingestRemote`) so a remote-sourced event triggers the
+ *  same diagnostic noise as a local one. The relay's "remote" marker is a
+ *  location tag, not a build env, so it must not look like stale local hooks. */
+export function warnOnHookEnvOrVersionMismatch(
+  state: HookListenerState,
+  fields: { version?: string; env?: string; expectedEnv: string }
+): void {
+  const { version, env, expectedEnv } = fields
+  if (
+    version &&
+    version !== ORCA_HOOK_PROTOCOL_VERSION &&
+    !state.warnedVersions.has(version) &&
+    state.warnedVersions.size < MAX_WARNED_KEYS
+  ) {
+    state.warnedVersions.add(version)
+    console.warn(
+      `[agent-hooks] received hook v${version}; server expects v${ORCA_HOOK_PROTOCOL_VERSION}. ` +
+        'Reinstall agent hooks from Settings to upgrade the managed script.'
+    )
+  }
+  if (env && env !== REMOTE_AGENT_HOOK_ENV && env !== expectedEnv) {
+    const key = `${env}->${expectedEnv}`
+    if (!state.warnedEnvs.has(key) && state.warnedEnvs.size < MAX_WARNED_KEYS) {
+      state.warnedEnvs.add(key)
+      console.warn(
+        `[agent-hooks] received ${env} hook on ${expectedEnv} server. ` +
+          'Likely a stale terminal from another Orca install.'
+      )
+    }
+  }
 }
 
 export type AgentHookEventPayload = {
@@ -174,7 +218,15 @@ export function readRequestBody(req: IncomingMessage): Promise<unknown> {
 // ─── Per-pane field caches + extractors ─────────────────────────────
 
 function extractPromptText(hookPayload: Record<string, unknown>): string {
-  const candidateKeys = ['prompt', 'user_prompt', 'userPrompt', 'message']
+  const candidateKeys = [
+    'prompt',
+    'user_prompt',
+    'userPrompt',
+    'initial_prompt',
+    'initialPrompt',
+    'user_message',
+    'message'
+  ]
   for (const key of candidateKeys) {
     const value = hookPayload[key]
     if (typeof value === 'string' && value.trim().length > 0) {
@@ -193,6 +245,13 @@ function extractPromptText(hookPayload: Record<string, unknown>): string {
     }
   }
   return ''
+}
+
+function stripGrokUserQueryWrapper(promptText: string): string {
+  const match = promptText.match(/^<user_query>([\s\S]*?)(?:<\/user_query>)?$/)
+  // Why: Grok emits the submitted prompt wrapped in its internal
+  // `<user_query>` envelope; the status cache should hold the user text.
+  return match ? match[1].trim() : promptText
 }
 
 function resolvePrompt(
@@ -215,6 +274,7 @@ export type ToolSnapshot = {
   toolName?: string
   toolInput?: string
   lastAssistantMessage?: string
+  clearLastAssistantMessage?: boolean
 }
 
 function resolveToolState(
@@ -230,7 +290,9 @@ function resolveToolState(
   const merged: ToolSnapshot = {
     toolName: update.toolName ?? previous.toolName,
     toolInput: update.toolInput ?? previous.toolInput,
-    lastAssistantMessage: update.lastAssistantMessage ?? previous.lastAssistantMessage
+    lastAssistantMessage: update.clearLastAssistantMessage
+      ? undefined
+      : (update.lastAssistantMessage ?? previous.lastAssistantMessage)
   }
   state.lastToolByPaneKey.set(paneKey, merged)
   return merged
@@ -239,7 +301,9 @@ function resolveToolState(
 const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   Read: ['file_path', 'filePath', 'path'],
   Write: ['file_path', 'filePath', 'path'],
+  Create: ['file_path', 'filePath', 'path'],
   Edit: ['file_path', 'filePath', 'path'],
+  Execute: ['command'],
   MultiEdit: ['file_path', 'filePath', 'path'],
   NotebookEdit: ['file_path', 'filePath', 'path'],
   Bash: ['command'],
@@ -247,6 +311,7 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   Grep: ['pattern'],
   WebFetch: ['url'],
   WebSearch: ['query'],
+  FetchUrl: ['url'],
   read_file: ['file_path', 'path'],
   write_file: ['file_path', 'path'],
   read_many_files: ['file_path', 'paths', 'path'],
@@ -259,16 +324,50 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   google_web_search: ['query'],
   exec_command: ['cmd', 'command'],
   shell_command: ['cmd', 'command'],
+  run_terminal_cmd: ['command'],
+  execute_code: ['code', 'command', 'cmd'],
   apply_patch: ['path', 'file_path'],
   view_image: ['path', 'file_path'],
+  AskUser: ['question', 'prompt', 'message'],
+  ask_user: ['question', 'prompt', 'message'],
   bash: ['command'],
+  powershell: ['command'],
+  create: ['path', 'file_path'],
   read: ['path', 'file_path'],
   write: ['path', 'file_path'],
   edit: ['path', 'file_path'],
+  view: ['path', 'file_path'],
   grep: ['pattern'],
   web_search: ['query'],
-  fetch_content: ['url']
+  fetch_content: ['url'],
+  terminal: ['command'],
+  patch: ['path', 'file_path'],
+  search_files: ['query', 'pattern', 'path'],
+  browser_navigate: ['url'],
+  browser_click: ['target', 'selector', 'text'],
+  browser_type: ['text', 'target', 'selector'],
+  session_search: ['query'],
+  skill_manage: ['action', 'name', 'file_path'],
+  delegate_task: ['task', 'prompt', 'description']
 }
+
+const FALLBACK_TOOL_INPUT_KEYS = [
+  'command',
+  'cmd',
+  'code',
+  'query',
+  'pattern',
+  'url',
+  'path',
+  'file_path',
+  'filePath',
+  'target',
+  'selector',
+  'text',
+  'action',
+  'name',
+  'description'
+] as const
 
 function deriveToolInputPreview(
   toolName: string | undefined,
@@ -297,9 +396,53 @@ function deriveToolInputPreview(
   return undefined
 }
 
+function deriveFallbackToolInputPreview(toolInput: unknown): string | undefined {
+  if (typeof toolInput === 'string') {
+    return toolInput
+  }
+  if (typeof toolInput !== 'object' || toolInput === null) {
+    return undefined
+  }
+  const record = toolInput as Record<string, unknown>
+  for (const key of FALLBACK_TOOL_INPUT_KEYS) {
+    const value = record[key]
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value
+    }
+  }
+  return undefined
+}
+
 function readString(record: Record<string, unknown>, key: string): string | undefined {
   const value = record[key]
   return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+function readFirstString(
+  record: Record<string, unknown>,
+  keys: readonly string[]
+): string | undefined {
+  for (const key of keys) {
+    const value = readString(record, key)
+    if (value) {
+      return value
+    }
+  }
+  return undefined
+}
+
+function parseJsonObjectString(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return undefined
+  }
+  try {
+    const parsed = JSON.parse(value) as unknown
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : undefined
+  } catch {
+    return undefined
+  }
 }
 
 function extractToolResponseText(toolResponse: unknown): string | undefined {
@@ -310,6 +453,10 @@ function extractToolResponseText(toolResponse: unknown): string | undefined {
     return undefined
   }
   const record = toolResponse as Record<string, unknown>
+  const directText = readFirstString(record, ['text_result_for_llm', 'textResultForLlm', 'text'])
+  if (directText) {
+    return directText
+  }
   const content = record.content
   if (Array.isArray(content)) {
     for (const part of content) {
@@ -321,15 +468,13 @@ function extractToolResponseText(toolResponse: unknown): string | undefined {
       }
     }
   }
-  const text = record.text
-  if (typeof text === 'string' && text.trim().length > 0) {
-    return text
-  }
   return undefined
 }
 
 const TRANSCRIPT_CHUNK_BYTES = 64 * 1024
 const TRANSCRIPT_MAX_SCAN_BYTES = 4 * 1024 * 1024
+const GROK_SESSION_ID_MAX_LENGTH = 128
+const GROK_SESSION_CWD_MAX_LENGTH = 4096
 
 function extractAssistantTextFromLine(line: string): string | undefined {
   let entry: unknown
@@ -342,12 +487,26 @@ function extractAssistantTextFromLine(line: string): string | undefined {
     return undefined
   }
   const record = entry as Record<string, unknown>
+  if (record.type === 'assistant.message') {
+    const data = record.data
+    if (typeof data === 'object' && data !== null) {
+      const text = extractAssistantContentText((data as Record<string, unknown>).content)
+      if (text) {
+        return text
+      }
+    }
+  }
   const nestedMessage = record.message as Record<string, unknown> | undefined
-  const role = record.role ?? nestedMessage?.role
+  const role =
+    record.role ?? nestedMessage?.role ?? (record.type === 'assistant' ? 'assistant' : undefined)
   if (role !== 'assistant') {
     return undefined
   }
   const content = (nestedMessage ?? record).content
+  return extractAssistantContentText(content)
+}
+
+function extractAssistantContentText(content: unknown): string | undefined {
   if (typeof content === 'string' && content.trim().length > 0) {
     return content
   }
@@ -368,6 +527,100 @@ function readLastAssistantFromTranscript(transcriptPath: unknown): string | unde
   if (typeof transcriptPath !== 'string' || transcriptPath.length === 0) {
     return undefined
   }
+  return readLastAssistantFromTranscriptOnce(transcriptPath)
+}
+
+function parseHookBodyPayloadRecord(body: unknown): Record<string, unknown> | null {
+  if (typeof body !== 'object' || body === null) {
+    return null
+  }
+  const rawPayload = (body as Record<string, unknown>).payload
+  const payload =
+    typeof rawPayload === 'string'
+      ? (() => {
+          try {
+            return JSON.parse(rawPayload) as unknown
+          } catch {
+            return null
+          }
+        })()
+      : rawPayload
+  return typeof payload === 'object' && payload !== null
+    ? (payload as Record<string, unknown>)
+    : null
+}
+
+function readBoundedString(
+  record: Record<string, unknown>,
+  keys: readonly string[],
+  maxLength: number
+): string | undefined {
+  const value = readFirstString(record, keys)
+  return value && value.length <= maxLength ? value : undefined
+}
+
+function isSafeGrokSessionId(sessionId: string): boolean {
+  return /^[A-Za-z0-9_-]+$/.test(sessionId) && sessionId.length <= GROK_SESSION_ID_MAX_LENGTH
+}
+
+function getGrokChatHistoryPath(hookPayload: Record<string, unknown>): string | undefined {
+  const sessionId = readBoundedString(
+    hookPayload,
+    ['sessionId', 'session_id'],
+    GROK_SESSION_ID_MAX_LENGTH
+  )
+  const cwd = readBoundedString(
+    hookPayload,
+    ['cwd', 'workspaceRoot', 'workspace_root'],
+    GROK_SESSION_CWD_MAX_LENGTH
+  )
+  if (!sessionId || !cwd || !isSafeGrokSessionId(sessionId)) {
+    return undefined
+  }
+  return join(
+    homedir(),
+    '.grok',
+    'sessions',
+    encodeURIComponent(cwd),
+    sessionId,
+    'chat_history.jsonl'
+  )
+}
+
+function readLastAssistantFromGrokChatHistory(
+  hookPayload: Record<string, unknown>
+): string | undefined {
+  const chatHistoryPath = getGrokChatHistoryPath(hookPayload)
+  if (!chatHistoryPath) {
+    return undefined
+  }
+  return readLastAssistantFromTranscriptOnce(chatHistoryPath)
+}
+
+export function hasPendingAgentResultText(source: AgentHookSource, body: unknown): boolean {
+  const record = parseHookBodyPayloadRecord(body)
+  if (!record) {
+    return false
+  }
+  const directMessage =
+    record.last_assistant_message ?? record.lastAssistantMessage ?? record.message
+  if (typeof directMessage === 'string' && directMessage.trim().length > 0) {
+    return false
+  }
+  if (source === 'copilot') {
+    const transcriptPath = record.transcript_path ?? record.transcriptPath
+    return typeof transcriptPath === 'string' && transcriptPath.trim().length > 0
+  }
+  if (
+    source === 'grok' &&
+    isGrokEvent(record.hookEventName ?? record.hook_event_name, 'stop', 'session_end')
+  ) {
+    return getGrokChatHistoryPath(record) !== undefined
+  }
+  return false
+}
+
+function readLastAssistantFromTranscriptOnce(transcriptPath: string): string | undefined {
   try {
     const stats = statSync(transcriptPath)
     const size = stats.size
@@ -481,7 +734,11 @@ function extractCodexToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>
 ): ToolSnapshot {
-  if (eventName === 'PreToolUse' || eventName === 'PostToolUse') {
+  if (
+    eventName === 'PreToolUse' ||
+    eventName === 'PermissionRequest' ||
+    eventName === 'PostToolUse'
+  ) {
     const toolName = readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
     const toolInput =
       deriveToolInputPreview(toolName, hookPayload.tool_input) ??
@@ -582,6 +839,180 @@ function extractCursorToolFields(
   return {}
 }
 
+function normalizeCopilotEventName(eventName: unknown): unknown {
+  if (typeof eventName !== 'string') {
+    return eventName
+  }
+  const eventMap: Record<string, string> = {
+    sessionStart: 'SessionStart',
+    sessionEnd: 'SessionEnd',
+    userPromptSubmitted: 'UserPromptSubmit',
+    userPromptSubmit: 'UserPromptSubmit',
+    preToolUse: 'PreToolUse',
+    postToolUse: 'PostToolUse',
+    postToolUseFailure: 'PostToolUseFailure',
+    subagentStart: 'SubagentStart',
+    subagentStop: 'SubagentStop',
+    preCompact: 'PreCompact',
+    agentStop: 'Stop',
+    stop: 'Stop',
+    errorOccurred: 'ErrorOccurred',
+    permissionRequest: 'PermissionRequest',
+    notification: 'Notification'
+  }
+  return eventMap[eventName] ?? eventName
+}
+
+function resolveCopilotEventName(
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): unknown {
+  const explicit =
+    eventName ??
+    readFirstString(hookPayload, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType'])
+  if (explicit) {
+    return explicit
+  }
+  if (readFirstString(hookPayload, ['initial_prompt', 'initialPrompt'])) {
+    return 'SessionStart'
+  }
+  if (readString(hookPayload, 'prompt')) {
+    return 'UserPromptSubmit'
+  }
+  if (readFirstString(hookPayload, ['notification_type', 'notificationType'])) {
+    return 'Notification'
+  }
+  if (
+    readFirstString(hookPayload, ['transcript_path', 'transcriptPath', 'stop_reason', 'stopReason'])
+  ) {
+    return 'Stop'
+  }
+  if (hookPayload.error || readFirstString(hookPayload, ['error_context', 'errorContext'])) {
+    return 'ErrorOccurred'
+  }
+  if (
+    Array.isArray(hookPayload.toolCalls) ||
+    readFirstString(hookPayload, ['tool_name', 'toolName', 'name'])
+  ) {
+    if (
+      hookPayload.tool_result ||
+      hookPayload.toolResult ||
+      hookPayload.tool_response ||
+      hookPayload.toolResponse
+    ) {
+      return 'PostToolUse'
+    }
+    return 'PreToolUse'
+  }
+  return eventName
+}
+
+function readCopilotToolCall(hookPayload: Record<string, unknown>): {
+  toolName?: string
+  toolInputSource?: unknown
+} {
+  const toolCalls = hookPayload.toolCalls
+  if (!Array.isArray(toolCalls) || toolCalls.length === 0) {
+    return {}
+  }
+  const first = toolCalls[0]
+  if (typeof first !== 'object' || first === null) {
+    return {}
+  }
+  const record = first as Record<string, unknown>
+  return {
+    toolName: readFirstString(record, ['name', 'toolName', 'tool_name']),
+    toolInputSource:
+      parseJsonObjectString(record.args) ??
+      record.args ??
+      parseJsonObjectString(record.arguments) ??
+      record.arguments
+  }
+}
+
+function isAskUserTool(toolName: string | undefined): boolean {
+  return toolName?.replaceAll(/[^a-z0-9]/gi, '').toLowerCase() === 'askuser'
+}
+
+function extractCopilotToolFields(
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): ToolSnapshot {
+  const update: ToolSnapshot = {}
+  if (
+    eventName === 'PreToolUse' ||
+    eventName === 'PostToolUse' ||
+    eventName === 'PostToolUseFailure' ||
+    eventName === 'PermissionRequest'
+  ) {
+    const copilotToolCall = readCopilotToolCall(hookPayload)
+    const toolName =
+      readFirstString(hookPayload, ['tool_name', 'toolName', 'name']) ?? copilotToolCall.toolName
+    const toolInput =
+      deriveToolInputPreview(toolName, hookPayload.tool_input) ??
+      deriveToolInputPreview(toolName, hookPayload.toolInput) ??
+      deriveToolInputPreview(toolName, hookPayload.toolArgs) ??
+      deriveToolInputPreview(toolName, hookPayload.input) ??
+      deriveToolInputPreview(toolName, hookPayload.arguments) ??
+      deriveToolInputPreview(toolName, copilotToolCall.toolInputSource)
+    update.toolName = toolName
+    update.toolInput = toolInput
+    if (isAskUserTool(toolName) && toolInput) {
+      update.lastAssistantMessage = toolInput
+    }
+  }
+  if (eventName === 'PostToolUse') {
+    const responseText =
+      extractToolResponseText(hookPayload.tool_result) ??
+      extractToolResponseText(hookPayload.toolResult) ??
+      extractToolResponseText(hookPayload.tool_response) ??
+      extractToolResponseText(hookPayload.toolResponse)
+    if (responseText) {
+      update.lastAssistantMessage = responseText
+    }
+  }
+  if (eventName === 'PostToolUseFailure' || eventName === 'ErrorOccurred') {
+    const errorText =
+      extractToolResponseText(hookPayload.tool_result) ??
+      extractToolResponseText(hookPayload.toolResult) ??
+      extractToolResponseText(hookPayload.tool_response) ??
+      extractToolResponseText(hookPayload.toolResponse) ??
+      readFirstString(hookPayload, ['error_message', 'errorMessage', 'error', 'message'])
+    if (errorText) {
+      update.lastAssistantMessage = errorText
+    }
+  }
+  if (eventName === 'Notification') {
+    const notificationType = readFirstString(hookPayload, ['notification_type', 'notificationType'])
+    if (notificationType === 'permission_prompt' || notificationType === 'elicitation_dialog') {
+      const message = readFirstString(hookPayload, ['message', 'body', 'text', 'title'])
+      if (message) {
+        update.lastAssistantMessage = message
+      }
+    }
+  }
+  if (eventName === 'Stop') {
+    const direct = readFirstString(hookPayload, [
+      'last_assistant_message',
+      'lastAssistantMessage',
+      'message'
+    ])
+    if (direct) {
+      update.lastAssistantMessage = direct
+    } else {
+      const lastFromTranscript = readLastAssistantFromTranscript(
+        hookPayload.transcript_path ?? hookPayload.transcriptPath
+      )
+      if (lastFromTranscript) {
+        update.lastAssistantMessage = lastFromTranscript
+      } else {
+        update.clearLastAssistantMessage = true
+      }
+    }
+  }
+  return update
+}
+
 function extractPiToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>
@@ -604,8 +1035,244 @@ function extractPiToolFields(
   return {}
 }
 
+function isDroidPermissionNotification(message: string | undefined): boolean {
+  if (!message) {
+    return false
+  }
+  const lower = message.toLowerCase()
+  // Why: 'confirm' is excluded — it false-positives on benign messages like
+  // "Confirmed configuration loaded" / "task confirmed" that aren't permission prompts.
+  return lower.includes('permission') || lower.includes('approve') || lower.includes('approval')
+}
+
+function isDroidIdleNotification(message: string | undefined): boolean {
+  if (!message) {
+    return false
+  }
+  const lower = message.toLowerCase()
+  return lower.includes('waiting for your input') || lower.includes('waiting for input')
+}
+
+function isDroidAskUserTool(toolName: string | undefined): boolean {
+  if (!toolName) {
+    return false
+  }
+  return toolName.replaceAll(/[^a-z0-9]/gi, '').toLowerCase() === 'askuser'
+}
+
+function readDroidToolRiskLevel(hookPayload: Record<string, unknown>): string | undefined {
+  const directRisk = readString(hookPayload, 'riskLevel') ?? readString(hookPayload, 'risk_level')
+  if (directRisk) {
+    return directRisk
+  }
+
+  for (const key of ['tool_input', 'input', 'arguments'] as const) {
+    const value = hookPayload[key]
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      continue
+    }
+    const record = value as Record<string, unknown>
+    const nestedRisk = readString(record, 'riskLevel') ?? readString(record, 'risk_level')
+    if (nestedRisk) {
+      return nestedRisk
+    }
+  }
+  return undefined
+}
+
+function isDroidHighRiskToolUse(hookPayload: Record<string, unknown>): boolean {
+  return readDroidToolRiskLevel(hookPayload)?.trim().toLowerCase() === 'high'
+}
+
+function extractDroidToolFields(
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): ToolSnapshot {
+  if (
+    eventName === 'PreToolUse' ||
+    eventName === 'PostToolUse' ||
+    eventName === 'PermissionRequest'
+  ) {
+    const toolName = readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
+    const toolInput =
+      deriveToolInputPreview(toolName, hookPayload.tool_input) ??
+      deriveToolInputPreview(toolName, hookPayload.input) ??
+      deriveToolInputPreview(toolName, hookPayload.arguments)
+    const update: ToolSnapshot = { toolName, toolInput }
+    if (eventName === 'PostToolUse') {
+      const responseText =
+        extractToolResponseText(hookPayload.tool_response) ??
+        extractToolResponseText(hookPayload.tool_output)
+      if (responseText) {
+        update.lastAssistantMessage = responseText
+      }
+    }
+    return update
+  }
+  if (eventName === 'Stop') {
+    const direct = readString(hookPayload, 'last_assistant_message')
+    if (direct) {
+      return { lastAssistantMessage: direct }
+    }
+    const fromTranscript = readLastAssistantFromTranscript(hookPayload.transcript_path)
+    if (fromTranscript) {
+      return { lastAssistantMessage: fromTranscript }
+    }
+  }
+  return {}
+}
+
+function normalizeHookEventName(value: unknown): string {
+  if (typeof value !== 'string') {
+    return ''
+  }
+  return value
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/[-\s]+/g, '_')
+    .toLowerCase()
+}
+
+function isGrokEvent(eventName: unknown, ...expected: readonly string[]): boolean {
+  const normalized = normalizeHookEventName(eventName)
+  return expected.includes(normalized)
+}
+
+function extractGrokToolFields(
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): ToolSnapshot {
+  if (isGrokEvent(eventName, 'pre_tool_use', 'post_tool_use', 'post_tool_use_failure')) {
+    const toolName =
+      readString(hookPayload, 'toolName') ??
+      readString(hookPayload, 'tool_name') ??
+      readString(hookPayload, 'name')
+    const toolInput =
+      deriveToolInputPreview(toolName, hookPayload.toolInput) ??
+      deriveToolInputPreview(toolName, hookPayload.tool_input) ??
+      deriveToolInputPreview(toolName, hookPayload.input) ??
+      deriveToolInputPreview(toolName, hookPayload.arguments)
+    const update: ToolSnapshot = { toolName, toolInput }
+    if (isGrokEvent(eventName, 'post_tool_use', 'post_tool_use_failure')) {
+      const responseText =
+        extractToolResponseText(hookPayload.toolResponse) ??
+        extractToolResponseText(hookPayload.tool_response) ??
+        extractToolResponseText(hookPayload.toolOutput) ??
+        extractToolResponseText(hookPayload.tool_output) ??
+        readString(hookPayload, 'error') ??
+        readString(hookPayload, 'message')
+      if (responseText) {
+        update.lastAssistantMessage = responseText
+      }
+    }
+    return update
+  }
+  if (isGrokEvent(eventName, 'stop', 'session_end')) {
+    const direct =
+      readString(hookPayload, 'lastAssistantMessage') ??
+      readString(hookPayload, 'last_assistant_message')
+    if (direct) {
+      return { lastAssistantMessage: direct }
+    }
+    const fromTranscript = readLastAssistantFromTranscript(
+      hookPayload.transcriptPath ?? hookPayload.transcript_path
+    )
+    if (fromTranscript) {
+      return { lastAssistantMessage: fromTranscript }
+    }
+    const fromChatHistory = readLastAssistantFromGrokChatHistory(hookPayload)
+    if (fromChatHistory) {
+      return { lastAssistantMessage: fromChatHistory }
+    }
+  }
+  return {}
+}
+
+function extractHermesToolFields(
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): ToolSnapshot {
+  if (
+    eventName === 'pre_tool_call' ||
+    eventName === 'post_tool_call' ||
+    eventName === 'pre_approval_request' ||
+    eventName === 'post_approval_response'
+  ) {
+    const toolName =
+      readString(hookPayload, 'tool_name') ??
+      readString(hookPayload, 'name') ??
+      (eventName === 'pre_approval_request' || eventName === 'post_approval_response'
+        ? 'approval'
+        : undefined)
+    const toolInput =
+      deriveToolInputPreview(toolName, hookPayload.tool_input) ??
+      deriveToolInputPreview(toolName, hookPayload.args) ??
+      deriveToolInputPreview(toolName, hookPayload.input) ??
+      // Why: Hermes exposes many first-party/plugin tool names. When a new
+      // name appears, still show the obvious argument instead of a blank row.
+      deriveFallbackToolInputPreview(hookPayload.tool_input) ??
+      deriveFallbackToolInputPreview(hookPayload.args) ??
+      deriveFallbackToolInputPreview(hookPayload.input) ??
+      readString(hookPayload, 'command') ??
+      readString(hookPayload, 'description')
+    const update: ToolSnapshot = { toolName, toolInput }
+    if (eventName === 'post_tool_call') {
+      const responseText =
+        extractToolResponseText(hookPayload.result) ??
+        extractToolResponseText(hookPayload.tool_response) ??
+        extractToolResponseText(hookPayload.output)
+      if (responseText) {
+        update.lastAssistantMessage = responseText
+      }
+    }
+    return update
+  }
+  if (eventName === 'post_llm_call') {
+    const message =
+      readString(hookPayload, 'last_assistant_message') ??
+      readString(hookPayload, 'assistant_response') ??
+      readString(hookPayload, 'response_text')
+    if (message) {
+      return { lastAssistantMessage: message }
+    }
+  }
+  return {}
+}
+
+function isGrokPermissionNotification(message: string | undefined): boolean {
+  if (!message) {
+    return false
+  }
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('permission') ||
+    lower.includes('approval') ||
+    lower.includes('approve') ||
+    lower.includes('allow') ||
+    lower.includes('confirm') ||
+    lower.includes('needs your') ||
+    lower.includes('requires your') ||
+    lower.includes('feedback') ||
+    lower.includes('clarify') ||
+    lower.includes('question')
+  )
+}
+
+function isGrokIdleNotification(message: string | undefined): boolean {
+  if (!message) {
+    return false
+  }
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('type your message') ||
+    lower.includes('enter send') ||
+    lower.includes('shift-tab normal') ||
+    lower.includes('ask a side question')
+  )
+}
+
 function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
-  // Why: exhaustive switch so adding a 7th source to AgentHookSource fails
+  // Why: exhaustive switch so adding a source to AgentHookSource fails
   // typecheck here instead of silently falling through to `false`.
   switch (source) {
     case 'claude':
@@ -620,6 +1287,16 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
       return eventName === 'beforeSubmitPrompt' || eventName === 'sessionStart'
     case 'pi':
       return eventName === 'before_agent_start'
+    case 'droid':
+      return eventName === 'UserPromptSubmit'
+    case 'grok':
+      return isGrokEvent(eventName, 'user_prompt_submit')
+    case 'copilot': {
+      const normalizedEventName = normalizeCopilotEventName(eventName)
+      return normalizedEventName === 'SessionStart' || normalizedEventName === 'UserPromptSubmit'
+    }
+    case 'hermes':
+      return eventName === 'pre_llm_call' || eventName === 'on_session_start'
     default: {
       const _exhaustive: never = source
       void _exhaustive
@@ -633,7 +1310,7 @@ function extractToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>
 ): ToolSnapshot {
-  // Why: exhaustive switch so adding a 7th source to AgentHookSource fails
+  // Why: exhaustive switch so adding a source to AgentHookSource fails
   // typecheck here instead of silently routing through OpenCode's extractor.
   switch (source) {
     case 'claude':
@@ -648,6 +1325,14 @@ function extractToolFields(
       return extractCursorToolFields(eventName, hookPayload)
     case 'pi':
       return extractPiToolFields(eventName, hookPayload)
+    case 'droid':
+      return extractDroidToolFields(eventName, hookPayload)
+    case 'grok':
+      return extractGrokToolFields(eventName, hookPayload)
+    case 'copilot':
+      return extractCopilotToolFields(normalizeCopilotEventName(eventName), hookPayload)
+    case 'hermes':
+      return extractHermesToolFields(eventName, hookPayload)
     default: {
       const _exhaustive: never = source
       void _exhaustive
@@ -759,9 +1444,11 @@ function normalizeCodexEvent(
     eventName === 'PreToolUse' ||
     eventName === 'PostToolUse'
       ? 'working'
-      : eventName === 'Stop'
-        ? 'done'
-        : null
+      : eventName === 'PermissionRequest'
+        ? 'waiting'
+        : eventName === 'Stop'
+          ? 'done'
+          : null
 
   if (!stateName) {
     return null
@@ -883,6 +1570,69 @@ function normalizeCursorEvent(
   )
 }
 
+// Why: PermissionRequest fires before Copilot's allow/ask/deny checks, so a
+// generic PermissionRequest stays working. `ask_user` itself is a user-input
+// boundary, and notification prompts are the async user-visible blocked signal.
+function normalizeCopilotEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  const normalizedEventName = normalizeCopilotEventName(
+    resolveCopilotEventName(eventName, hookPayload)
+  )
+  const notificationType = readFirstString(hookPayload, ['notification_type', 'notificationType'])
+  const isBlockingNotification =
+    normalizedEventName === 'Notification' &&
+    (notificationType === 'permission_prompt' || notificationType === 'elicitation_dialog')
+  const toolSnapshot = extractToolFields('copilot', normalizedEventName, hookPayload)
+  const isAskUserPrompt =
+    (normalizedEventName === 'PreToolUse' || normalizedEventName === 'PermissionRequest') &&
+    isAskUserTool(toolSnapshot.toolName)
+  const stateName =
+    normalizedEventName === 'SessionStart' ||
+    normalizedEventName === 'UserPromptSubmit' ||
+    normalizedEventName === 'PostToolUse' ||
+    normalizedEventName === 'PostToolUseFailure'
+      ? 'working'
+      : isBlockingNotification || isAskUserPrompt
+        ? 'blocked'
+        : normalizedEventName === 'PreToolUse' || normalizedEventName === 'PermissionRequest'
+          ? 'working'
+          : normalizedEventName === 'Stop' || normalizedEventName === 'SessionEnd'
+            ? 'done'
+            : normalizedEventName === 'ErrorOccurred'
+              ? hookPayload.recoverable === true
+                ? 'working'
+                : 'done'
+              : null
+
+  if (!stateName) {
+    return null
+  }
+
+  const snapshot = resolveToolState(state, paneKey, toolSnapshot, {
+    resetOnNewTurn: isNewTurnEvent('copilot', normalizedEventName)
+  })
+
+  const effectivePrompt = normalizedEventName === 'Notification' ? '' : promptText
+
+  return parseAgentStatusPayload(
+    JSON.stringify({
+      state: stateName,
+      prompt: resolvePrompt(state, paneKey, effectivePrompt, {
+        resetOnNewTurn: isNewTurnEvent('copilot', normalizedEventName)
+      }),
+      agentType: 'copilot',
+      toolName: snapshot.toolName,
+      toolInput: snapshot.toolInput,
+      lastAssistantMessage: snapshot.lastAssistantMessage
+    })
+  )
+}
+
 function normalizePiEvent(
   state: HookListenerState,
   eventName: unknown,
@@ -927,6 +1677,196 @@ function normalizePiEvent(
   )
 }
 
+function normalizeDroidEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  if (eventName === 'SessionStart') {
+    // Why: Droid emits SessionStart when the TUI opens/resumes while still idle.
+    // Only UserPromptSubmit or tool activity should create a visible working row.
+    clearPaneTurnCacheState(state, paneKey)
+    return null
+  }
+
+  const notificationMessage = readString(hookPayload, 'message')
+  const droidToolName = readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
+  let stateName: 'working' | 'waiting' | 'done' | null = null
+  if (
+    eventName === 'PreToolUse' &&
+    (isDroidAskUserTool(droidToolName) || isDroidHighRiskToolUse(hookPayload))
+  ) {
+    // Why: Droid surfaces both AskUser and high-risk approval prompts as
+    // PreToolUse events; the observed approval path emits no Notification hook.
+    stateName = 'waiting'
+  } else if (
+    eventName === 'UserPromptSubmit' ||
+    eventName === 'PreToolUse' ||
+    eventName === 'PostToolUse'
+  ) {
+    stateName = 'working'
+  } else if (eventName === 'Stop') {
+    stateName = 'done'
+  } else if (eventName === 'PermissionRequest') {
+    stateName = 'waiting'
+  } else if (eventName === 'Notification' && isDroidPermissionNotification(notificationMessage)) {
+    stateName = 'waiting'
+  } else if (eventName === 'Notification' && isDroidIdleNotification(notificationMessage)) {
+    // Why: Factory does not emit Stop when the user interrupts Droid, but it
+    // does emit an idle notification when Droid is ready for input again.
+    stateName = 'done'
+  }
+  if (!stateName) {
+    return null
+  }
+
+  const snapshot = resolveToolState(
+    state,
+    paneKey,
+    extractToolFields('droid', eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent('droid', eventName) }
+  )
+
+  // Why: Droid's Notification.message contains status text (e.g. "Droid is
+  // waiting for your input"), not the user's prompt. Pass '' so resolvePrompt
+  // falls back to the cached UserPromptSubmit value instead of overwriting it.
+  const effectivePrompt = eventName === 'Notification' ? '' : promptText
+
+  return parseAgentStatusPayload(
+    JSON.stringify({
+      state: stateName,
+      prompt: resolvePrompt(state, paneKey, effectivePrompt, {
+        resetOnNewTurn: isNewTurnEvent('droid', eventName)
+      }),
+      agentType: 'droid',
+      toolName: snapshot.toolName,
+      toolInput: snapshot.toolInput,
+      lastAssistantMessage: snapshot.lastAssistantMessage
+    })
+  )
+}
+
+function normalizeGrokEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  if (isGrokEvent(eventName, 'session_start')) {
+    // Why: Grok emits SessionStart when the TUI opens/resumes. It should reset
+    // stale per-turn details without creating a visible "working" row before a
+    // user prompt or tool event exists.
+    clearPaneTurnCacheState(state, paneKey)
+    return null
+  }
+
+  const notificationMessage = readString(hookPayload, 'message')
+  let stateName: 'working' | 'waiting' | 'done' | null = null
+  if (
+    isGrokEvent(
+      eventName,
+      'user_prompt_submit',
+      'pre_tool_use',
+      'post_tool_use',
+      'post_tool_use_failure'
+    )
+  ) {
+    stateName = 'working'
+  } else if (isGrokEvent(eventName, 'stop', 'session_end')) {
+    stateName = 'done'
+  } else if (
+    isGrokEvent(eventName, 'notification') &&
+    isGrokPermissionNotification(notificationMessage)
+  ) {
+    stateName = 'waiting'
+  } else if (
+    isGrokEvent(eventName, 'notification') &&
+    isGrokIdleNotification(notificationMessage)
+  ) {
+    stateName = 'done'
+  }
+  if (!stateName) {
+    return null
+  }
+
+  const snapshot = resolveToolState(
+    state,
+    paneKey,
+    extractToolFields('grok', eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent('grok', eventName) }
+  )
+
+  // Why: Grok Notification.message is status UI text, not necessarily the
+  // user's prompt. Preserve the cached UserPromptSubmit prompt for the row.
+  const effectivePrompt = isGrokEvent(eventName, 'notification')
+    ? ''
+    : stripGrokUserQueryWrapper(promptText)
+
+  return parseAgentStatusPayload(
+    JSON.stringify({
+      state: stateName,
+      prompt: resolvePrompt(state, paneKey, effectivePrompt, {
+        resetOnNewTurn: isNewTurnEvent('grok', eventName)
+      }),
+      agentType: 'grok',
+      toolName: snapshot.toolName,
+      toolInput: snapshot.toolInput,
+      lastAssistantMessage: snapshot.lastAssistantMessage
+    })
+  )
+}
+
+function normalizeHermesEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  const stateName =
+    eventName === 'pre_approval_request'
+      ? 'waiting'
+      : eventName === 'post_llm_call' ||
+          eventName === 'on_session_end' ||
+          eventName === 'on_session_finalize' ||
+          eventName === 'on_session_reset'
+        ? 'done'
+        : eventName === 'on_session_start' ||
+            eventName === 'pre_llm_call' ||
+            eventName === 'pre_tool_call' ||
+            eventName === 'post_tool_call' ||
+            eventName === 'post_approval_response'
+          ? 'working'
+          : null
+
+  if (!stateName) {
+    return null
+  }
+
+  const snapshot = resolveToolState(
+    state,
+    paneKey,
+    extractToolFields('hermes', eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent('hermes', eventName) }
+  )
+
+  return parseAgentStatusPayload(
+    JSON.stringify({
+      state: stateName,
+      prompt: resolvePrompt(state, paneKey, promptText, {
+        resetOnNewTurn: isNewTurnEvent('hermes', eventName)
+      }),
+      agentType: 'hermes',
+      toolName: snapshot.toolName,
+      toolInput: snapshot.toolInput,
+      lastAssistantMessage: snapshot.lastAssistantMessage
+    })
+  )
+}
+
 function readStringField(record: Record<string, unknown>, key: string): string | undefined {
   const value = record[key]
   if (typeof value !== 'string') {
@@ -948,6 +1888,7 @@ export function normalizeHookPayload(
 
   const record = body as Record<string, unknown>
   const paneKey = typeof record.paneKey === 'string' ? record.paneKey.trim() : ''
+  const parsedPaneKey = parsePaneKey(paneKey)
   const rawPayload = record.payload
   const hookPayload =
     typeof rawPayload === 'string'
@@ -962,45 +1903,32 @@ export function normalizeHookPayload(
   if (
     !paneKey ||
     paneKey.length > MAX_PANE_KEY_LEN ||
+    !parsedPaneKey ||
     typeof hookPayload !== 'object' ||
     hookPayload === null
   ) {
     return null
   }
 
-  const version = readStringField(record, 'version')
-  if (
-    version &&
-    version !== ORCA_HOOK_PROTOCOL_VERSION &&
-    !state.warnedVersions.has(version) &&
-    state.warnedVersions.size < MAX_WARNED_KEYS
-  ) {
-    state.warnedVersions.add(version)
-    console.warn(
-      `[agent-hooks] received hook v${version}; server expects v${ORCA_HOOK_PROTOCOL_VERSION}. ` +
-        'Reinstall agent hooks from Settings to upgrade the managed script.'
-    )
-  }
-
-  const clientEnv = readStringField(record, 'env')
-  if (clientEnv && clientEnv !== expectedEnv) {
-    const key = `${clientEnv}->${expectedEnv}`
-    if (!state.warnedEnvs.has(key) && state.warnedEnvs.size < MAX_WARNED_KEYS) {
-      state.warnedEnvs.add(key)
-      console.warn(
-        `[agent-hooks] received ${clientEnv} hook on ${expectedEnv} server. ` +
-          'Likely a stale terminal from another Orca install.'
-      )
-    }
-  }
+  warnOnHookEnvOrVersionMismatch(state, {
+    version: readStringField(record, 'version'),
+    env: readStringField(record, 'env'),
+    expectedEnv
+  })
 
   const tabId = readStringField(record, 'tabId')
+  if (tabId && tabId !== parsedPaneKey.tabId) {
+    return null
+  }
   const worktreeId = readStringField(record, 'worktreeId')
 
-  const eventName = (hookPayload as Record<string, unknown>).hook_event_name
-  const promptText = extractPromptText(hookPayload as Record<string, unknown>)
   const hookPayloadRecord = hookPayload as Record<string, unknown>
-  // Why: exhaustive switch so adding a 7th source to AgentHookSource fails
+  const eventName =
+    readFirstString(record, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType']) ??
+    hookPayloadRecord.hook_event_name ??
+    hookPayloadRecord.hookEventName
+  const promptText = extractPromptText(hookPayload as Record<string, unknown>)
+  // Why: exhaustive switch so adding a source to AgentHookSource fails
   // typecheck here instead of silently routing through OpenCode's normalizer.
   let payload: ParsedAgentStatusPayload | null
   switch (source) {
@@ -1021,6 +1949,18 @@ export function normalizeHookPayload(
       break
     case 'pi':
       payload = normalizePiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
+    case 'droid':
+      payload = normalizeDroidEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
+    case 'grok':
+      payload = normalizeGrokEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
+    case 'copilot':
+      payload = normalizeCopilotEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
+    case 'hermes':
+      payload = normalizeHermesEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
     default: {
       const _exhaustive: never = source
@@ -1044,7 +1984,11 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/gemini': 'gemini',
   '/hook/opencode': 'opencode',
   '/hook/cursor': 'cursor',
-  '/hook/pi': 'pi'
+  '/hook/pi': 'pi',
+  '/hook/droid': 'droid',
+  '/hook/grok': 'grok',
+  '/hook/copilot': 'copilot',
+  '/hook/hermes': 'hermes'
 })
 
 export function resolveHookSource(pathname: string): AgentHookSource | null {

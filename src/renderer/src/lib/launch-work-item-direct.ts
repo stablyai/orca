@@ -12,6 +12,7 @@ import {
   getWorkspaceSeedName
 } from '@/lib/new-workspace'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
+import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import type {
   OrcaHooks,
@@ -91,7 +92,7 @@ async function resolveSetupDecision(
 ): Promise<{ kind: 'decided'; decision: SetupDecision } | { kind: 'needs-modal' }> {
   let yamlHooks: OrcaHooks | null = null
   try {
-    const result = await window.api.hooks.check({ repoId })
+    const result = await checkRuntimeHooks(useAppStore.getState().settings, repoId)
     yamlHooks = (result.hooks as OrcaHooks | null) ?? null
   } catch {
     yamlHooks = null
@@ -220,36 +221,26 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       finalSetupDecision,
       undefined,
       telemetrySource,
-      item.title
+      item.title,
+      item.type === 'issue' && item.number ? item.number : undefined,
+      item.type === 'pr' && item.number ? item.number : undefined,
+      undefined,
+      undefined,
+      item.linearIdentifier
     )
     worktreeId = result.worktree.id
     const worktreePath = result.worktree.path
-    const meta: {
-      linkedIssue?: number
-      linkedPR?: number
-      linkedLinearIssue?: string
-    } = {}
-    if (item.type === 'issue' && item.number) {
-      meta.linkedIssue = item.number
-    } else if (item.type === 'pr' && item.number) {
-      meta.linkedPR = item.number
-    }
-    if (item.linearIdentifier) {
-      meta.linkedLinearIssue = item.linearIdentifier
-    }
-    if (Object.keys(meta).length > 0) {
-      // Why: the Project direct-launch path activates the new workspace
-      // immediately. Persist the link first so the first sidebar render can
-      // show the issue/PR association instead of briefly looking unlinked.
-      // Best-effort: the worktree is already created on disk, so a meta
-      // write failure must not abort activation and orphan it.
-      void store.updateWorktreeMeta(worktreeId, meta).catch(() => {
-        // Non-critical: continue into activation without the link metadata.
-      })
-    }
 
     const detectedIds = new Set(await detectedAgentsPromise)
     effectiveAgent = pickAgent(settings?.defaultTuiAgent, detectedIds)
+    if (effectiveAgent) {
+      // Why: direct task launch creates and starts the workspace in separate
+      // steps so agent detection can overlap git worktree creation. Persist
+      // the chosen agent once known so empty-worktree reopen can recreate it.
+      void store.updateWorktreeMeta(worktreeId, { createdWithAgent: effectiveAgent }).catch(() => {
+        // Non-critical: activation still has the explicit startup below.
+      })
+    }
     const draftContent = item.pasteContent ?? item.url
 
     // Why: agents that gate first-launch behind a "Do you trust this folder?"

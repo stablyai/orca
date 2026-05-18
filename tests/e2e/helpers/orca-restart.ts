@@ -16,9 +16,10 @@ import {
   type TestInfo
 } from '@stablyai/playwright-test'
 import { execSync } from 'child_process'
-import { existsSync, mkdtempSync, rmSync } from 'fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import os from 'os'
 import path from 'path'
+import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
 
 type LaunchedOrca = {
   app: ElectronApplication
@@ -31,7 +32,7 @@ type RestartSession = {
   /** Gracefully close a launch, letting beforeunload flush session state. */
   close: (app: ElectronApplication) => Promise<void>
   /** Remove the shared userDataDir after the test is done. */
-  dispose: () => void
+  dispose: () => Promise<void>
 }
 
 function shouldLaunchHeadful(testInfo: TestInfo): boolean {
@@ -61,6 +62,31 @@ export function createRestartSession(testInfo: TestInfo): RestartSession {
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-restart-'))
   const headful = shouldLaunchHeadful(testInfo)
 
+  // Why: this helper bypasses the shared `electronApp` fixture, so it must
+  // seed the same dismissed onboarding state or the full-screen overlay covers
+  // both launches and obscures restart failures.
+  writeFileSync(
+    path.join(userDataDir, 'orca-data.json'),
+    `${JSON.stringify(
+      {
+        settings: {
+          telemetry: {
+            optedIn: true,
+            installId: '00000000-0000-4000-8000-000000000000',
+            existedBeforeTelemetryRelease: false
+          }
+        },
+        onboarding: {
+          closedAt: 1,
+          outcome: 'completed',
+          lastCompletedStep: 4
+        }
+      },
+      null,
+      2
+    )}\n`
+  )
+
   const launch = async (): Promise<LaunchedOrca> => {
     const app = await electron.launch({
       args: [mainPath],
@@ -73,29 +99,11 @@ export function createRestartSession(testInfo: TestInfo): RestartSession {
   }
 
   const close = async (app: ElectronApplication): Promise<void> => {
-    // Why: mirror the shared fixture's shutdown race — give Electron 10s to run
-    // before-quit/will-quit (which drives the beforeunload → session.setSync
-    // flush this suite relies on) and only then fall back to SIGKILL.
-    const proc = app.process()
-    try {
-      await Promise.race([
-        app.close(),
-        new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Timed out closing Electron app')), 10_000)
-        })
-      ])
-    } catch {
-      if (proc) {
-        try {
-          proc.kill('SIGKILL')
-        } catch {
-          /* already dead */
-        }
-      }
-    }
+    await closeElectronAppForE2E(app)
   }
 
-  const dispose = (): void => {
+  const dispose = async (): Promise<void> => {
+    await cleanupE2EDaemons(userDataDir)
     if (existsSync(userDataDir)) {
       rmSync(userDataDir, { recursive: true, force: true })
     }
@@ -167,7 +175,7 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
     )
     .toBe(true)
 
-  const repoBasename = repoPath.split('/').filter(Boolean).pop() ?? ''
+  const repoBasename = path.basename(repoPath)
   const worktreeId = await page.evaluate((repoBasename: string) => {
     const store = window.__store
     if (!store) {
@@ -180,7 +188,13 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
     // and will not match this suffix. This gives us the primary deterministically
     // without depending on boolean fields on the worktree record.
     const primary =
-      allWorktrees.find((worktree) => worktree.path.endsWith(`/${repoBasename}`)) ?? allWorktrees[0]
+      allWorktrees.find(
+        (worktree) =>
+          worktree.path
+            .split(/[\\/]+/)
+            .filter(Boolean)
+            .pop() === repoBasename
+      ) ?? allWorktrees[0]
     if (!primary) {
       return null
     }

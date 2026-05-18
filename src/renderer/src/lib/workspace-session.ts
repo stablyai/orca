@@ -5,8 +5,27 @@ import type {
   WorkspaceSessionState,
   WorkspaceVisibleTabType
 } from '../../../shared/types'
+import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
+import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-session-browser-history'
 import type { AppState } from '../store'
 import type { OpenFile } from '../store/slices/editor'
+
+/** Why (issue #1158): the debounced + shutdown session writers share this
+ *  gate so a hydration failure cannot overwrite orca-data.json with the
+ *  empty in-memory state the error path leaves behind.
+ *
+ *  - workspaceSessionReady gates the UI mount; it flips true even in the
+ *    error path so users aren't locked out of a crashed session.
+ *  - hydrationSucceeded only flips true after a clean load; it stays false
+ *    forever if hydration ever threw, which is what keeps the writer a
+ *    no-op for the rest of that process lifetime.
+ *
+ *  Both must be true to persist. */
+export function shouldPersistWorkspaceSession(
+  state: Pick<AppState, 'workspaceSessionReady' | 'hydrationSucceeded'>
+): boolean {
+  return state.workspaceSessionReady && state.hydrationSucceeded
+}
 
 export type WorkspaceSessionSnapshot = Pick<
   AppState,
@@ -14,6 +33,7 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'activeWorktreeId'
   | 'activeTabId'
   | 'tabsByWorktree'
+  | 'ptyIdsByTabId'
   | 'terminalLayoutsByTabId'
   | 'activeTabIdByWorktree'
   | 'openFiles'
@@ -45,6 +65,7 @@ export const SESSION_RELEVANT_FIELDS = [
   'activeWorktreeId',
   'activeTabId',
   'tabsByWorktree',
+  'ptyIdsByTabId',
   'terminalLayoutsByTabId',
   'activeTabIdByWorktree',
   'openFiles',
@@ -92,7 +113,8 @@ export function buildEditorSessionData(
       relativePath: f.relativePath,
       worktreeId: f.worktreeId,
       language: f.language,
-      isPreview: f.isPreview || undefined
+      isPreview: f.isPreview || undefined,
+      runtimeEnvironmentId: f.runtimeEnvironmentId
     })
     const ids =
       editFileIdsByWorktree[f.worktreeId] ?? (editFileIdsByWorktree[f.worktreeId] = new Set())
@@ -176,16 +198,24 @@ export function buildWorkspaceSessionPayload(
   const groupsByWorktree = snapshot.groupsByWorktree
   const layoutByWorktree = snapshot.layoutByWorktree
   const activeGroupIdByWorktree = snapshot.activeGroupIdByWorktree
-  const terminalLayoutsByTabId = snapshot.terminalLayoutsByTabId
 
-  // Why: lastKnownRelayPtyIdByTabId preserves session IDs across relay
-  // disconnect/reconnect cycles. tab.ptyId is cleared on disconnect, but
-  // the relay keeps the PTY alive — using the lastKnown fallback ensures
-  // the session save captures the ID even when the mux is temporarily down.
+  // Why: ptyIdsByTabId is the live-PTY map. tab.ptyId is only a wake hint that
+  // sleep intentionally preserves, so using it as liveness would revive slept
+  // worktrees as active after restart.
+  const ptyIdsByTabId = snapshot.ptyIdsByTabId
+  const hasLivePty = (tabId: string): boolean => (ptyIdsByTabId[tabId]?.length ?? 0) > 0
+
+  // Why: lastKnownRelayPtyIdByTabId preserves remote session IDs across relay
+  // disconnect/reconnect cycles, where clearTabPtyId(null) clears tab.ptyId
+  // but keeps the relay PTY alive. Sleep is different: it preserves tab.ptyId
+  // as a wake hint after clearing ptyIdsByTabId, so that shape must not count
+  // as active on restart.
   const lastKnown = snapshot.lastKnownRelayPtyIdByTabId
+  const hasReconnectableSession = (tab: { id: string; ptyId: string | null }): boolean =>
+    hasLivePty(tab.id) || (!tab.ptyId && Boolean(lastKnown[tab.id]))
 
   const activeWorktreeIdsOnShutdown = Object.entries(tabsByWorktree)
-    .filter(([, tabs]) => tabs.some((tab) => tab.ptyId || lastKnown[tab.id]))
+    .filter(([, tabs]) => tabs.some(hasReconnectableSession))
     .map(([worktreeId]) => worktreeId)
 
   // Why: sshConnectionStates is a Map<string, SshConnectionState>, not a plain
@@ -194,20 +224,31 @@ export function buildWorkspaceSessionPayload(
     .filter(([, state]) => state.status === 'connected')
     .map(([targetId]) => targetId)
 
+  const worktreeById = new Map(
+    Object.values(snapshot.worktreesByRepo)
+      .flat()
+      .map((worktree) => [worktree.id, worktree])
+  )
+  const repoById = new Map(snapshot.repos.map((repo) => [repo.id, repo]))
+
   // Why: the renderer already has tab.ptyId for every terminal tab and knows
   // which worktrees are SSH-backed via repo.connectionId. Deriving the map
   // here avoids a sync IPC round-trip during beforeunload, which is fragile
   // (can be dropped by Chromium under shutdown time pressure).
+  // Why: this builder runs from the session-write debounce and beforeunload.
+  // Pre-index repo/worktree identity once so large workspaces don't rescan all
+  // repos/worktrees for every terminal tab while the renderer is trying to quit.
   const remoteSessionIdsByTabId: Record<string, string> = {}
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    const worktree = Object.values(snapshot.worktreesByRepo)
-      .flat()
-      .find((w) => w.id === worktreeId)
-    const repo = worktree ? snapshot.repos.find((r) => r.id === worktree.repoId) : null
+    const worktree = worktreeById.get(worktreeId)
+    const repo = worktree ? repoById.get(worktree.repoId) : null
     if (!repo?.connectionId) {
       continue
     }
     for (const tab of tabs) {
+      if (!hasReconnectableSession(tab)) {
+        continue
+      }
       const sessionId = tab.ptyId || lastKnown[tab.id]
       if (sessionId) {
         remoteSessionIdsByTabId[tab.id] = sessionId
@@ -235,12 +276,12 @@ export function buildWorkspaceSessionPayload(
     ])
   )
 
-  return {
+  const payload = {
     activeRepoId: snapshot.activeRepoId,
     activeWorktreeId: snapshot.activeWorktreeId,
     activeTabId: snapshot.activeTabId,
     tabsByWorktree: sanitizedTabsByWorktree,
-    terminalLayoutsByTabId,
+    terminalLayoutsByTabId: snapshot.terminalLayoutsByTabId,
     // Why: session:set fully replaces the persisted object, so every write path
     // must carry forward which worktrees still had live PTYs. Dropping this
     // field silently disables eager terminal reconnect on the next restart.
@@ -256,7 +297,10 @@ export function buildWorkspaceSessionPayload(
       snapshot.browserPagesByWorkspace,
       snapshot.activeBrowserTabIdByWorktree
     ),
-    browserUrlHistory: snapshot.browserUrlHistory,
+    // Why: browser history is user-lifetime state. Enforce the storage cap at
+    // the payload boundary so stale renderer state cannot make every session
+    // write stringify an oversized legacy history array.
+    browserUrlHistory: normalizeBrowserHistoryEntries(snapshot.browserUrlHistory),
     unifiedTabs: unifiedTabsByWorktree,
     tabGroups: groupsByWorktree,
     tabGroupLayouts: layoutByWorktree,
@@ -274,4 +318,6 @@ export function buildWorkspaceSessionPayload(
         ? snapshot.lastVisitedAtByWorktreeId
         : undefined
   }
+
+  return pruneLocalTerminalScrollbackBuffers(payload, snapshot.repos)
 }

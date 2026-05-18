@@ -1,5 +1,7 @@
+/* eslint-disable max-lines */
 import { describe, expect, it } from 'vitest'
 import {
+  buildMobileSessionTabSnapshots,
   getRuntimeMobileSessionSyncKey,
   runtimeMobileSessionSyncKeysEqual
 } from './sync-runtime-graph'
@@ -8,12 +10,17 @@ import type { AppState } from '../store/types'
 function makeState(overrides: Partial<AppState> = {}): AppState {
   return {
     tabsByWorktree: {},
+    terminalLayoutsByTabId: {} as AppState['terminalLayoutsByTabId'],
+    runtimePaneTitlesByTabId: {} as AppState['runtimePaneTitlesByTabId'],
     groupsByWorktree: {},
     activeGroupIdByWorktree: {},
     unifiedTabsByWorktree: {},
     tabBarOrderByWorktree: {},
     activeFileId: null,
     activeFileIdByWorktree: {},
+    activeBrowserTabIdByWorktree: {},
+    browserTabsByWorktree: {},
+    browserPagesByWorkspace: {},
     openFiles: [],
     editorDrafts: {},
     activeTabId: null,
@@ -24,11 +31,12 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
 // Why: the comparator at `runtimeMobileSessionSyncKeysEqual` checks
 // `terminalLayoutsByTabId`, `runtimePaneTitlesByTabId`, `groupsByWorktree`,
 // `activeGroupIdByWorktree`, `unifiedTabsByWorktree`, `tabBarOrderByWorktree`,
-// and `activeFileIdByWorktree` by reference. `makeState`'s defaults allocate
-// fresh `{}` for each, so two unrelated `makeState({...})` calls trivially
-// diverge. Tests that want to isolate a single field must share every other
-// reference-checked map between the two states; this factory produces one
-// `Partial<AppState>` whose fields can be spread into both `makeState` calls.
+// and `activeFileIdByWorktree` by reference, and checks `activeTabId` by scalar
+// equality. `makeState`'s defaults allocate fresh `{}` for each map, so two
+// unrelated `makeState({...})` calls trivially diverge. Tests that want to
+// isolate a single field must share every other reference-checked map between
+// the two states; this factory produces one `Partial<AppState>` whose fields
+// can be spread into both `makeState` calls.
 function makeSharedOverrides(): Partial<AppState> {
   return {
     tabsByWorktree: {},
@@ -38,7 +46,10 @@ function makeSharedOverrides(): Partial<AppState> {
     activeGroupIdByWorktree: {},
     unifiedTabsByWorktree: {},
     tabBarOrderByWorktree: {},
-    activeFileIdByWorktree: {}
+    activeFileIdByWorktree: {},
+    activeBrowserTabIdByWorktree: {},
+    browserTabsByWorktree: {},
+    browserPagesByWorkspace: {}
   }
 }
 
@@ -227,5 +238,192 @@ describe('getRuntimeMobileSessionSyncKey', () => {
     )
 
     expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
+  })
+
+  it('changes when explicit agent status changes', () => {
+    const sharedOverrides = makeSharedOverrides()
+    const before = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...sharedOverrides,
+        agentStatusByPaneKey: {}
+      })
+    )
+    const after = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...sharedOverrides,
+        agentStatusByPaneKey: {
+          'term-1:11111111-1111-4111-8111-111111111111': {
+            state: 'working',
+            prompt: 'fix parity',
+            updatedAt: 1_700_000_000_000,
+            stateStartedAt: 1_699_999_999_000,
+            agentType: 'codex',
+            paneKey: 'term-1:11111111-1111-4111-8111-111111111111',
+            terminalTitle: 'codex [working]',
+            stateHistory: []
+          }
+        }
+      })
+    )
+
+    expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
+  })
+})
+
+describe('buildMobileSessionTabSnapshots', () => {
+  it('preserves source-control diff metadata for mobile file tabs', () => {
+    const diffId = 'wt-1::diff::unstaged::src/app.ts'
+    const state = makeState({
+      browserTabsByWorktree: {},
+      tabBarOrderByWorktree: { 'wt-1': [diffId] },
+      openFiles: [
+        {
+          id: diffId,
+          filePath: '/repo/src/app.ts',
+          relativePath: 'src/app.ts',
+          worktreeId: 'wt-1',
+          language: 'typescript',
+          mode: 'diff',
+          diffSource: 'unstaged',
+          isDirty: false
+        }
+      ]
+    })
+
+    const snapshot = buildMobileSessionTabSnapshots(state)[0]
+
+    expect(snapshot?.tabs).toMatchObject([
+      {
+        type: 'file',
+        id: diffId,
+        mode: 'diff',
+        diffSource: 'unstaged',
+        relativePath: 'src/app.ts'
+      }
+    ])
+  })
+
+  it('omits unsupported branch and commit diff metadata from mobile file tabs', () => {
+    const diffId = 'wt-1::diff::branch::src/app.ts'
+    const state = makeState({
+      browserTabsByWorktree: {},
+      tabBarOrderByWorktree: { 'wt-1': [diffId] },
+      openFiles: [
+        {
+          id: diffId,
+          filePath: '/repo/src/app.ts',
+          relativePath: 'src/app.ts',
+          worktreeId: 'wt-1',
+          language: 'typescript',
+          mode: 'diff',
+          diffSource: 'branch',
+          isDirty: false
+        }
+      ]
+    })
+
+    const snapshot = buildMobileSessionTabSnapshots(state)[0]
+    const tab = snapshot?.tabs[0]
+
+    expect(tab).toMatchObject({ type: 'file', mode: 'diff', relativePath: 'src/app.ts' })
+    expect(tab).not.toHaveProperty('diffSource')
+  })
+
+  it('keeps duplicate file ids scoped to their worktree', () => {
+    const sharedRemotePath = '/home/dev/project/README.md'
+    const previewId = `markdown-preview::${sharedRemotePath}`
+    const state = makeState({
+      browserTabsByWorktree: {},
+      tabBarOrderByWorktree: {
+        'wt-1': [sharedRemotePath, previewId],
+        'wt-2': [sharedRemotePath]
+      },
+      openFiles: [
+        {
+          id: sharedRemotePath,
+          filePath: sharedRemotePath,
+          relativePath: 'docs/wt-one.md',
+          worktreeId: 'wt-1',
+          language: 'markdown',
+          mode: 'edit',
+          isDirty: true
+        },
+        {
+          id: sharedRemotePath,
+          filePath: sharedRemotePath,
+          relativePath: 'docs/wt-two.md',
+          worktreeId: 'wt-2',
+          language: 'markdown',
+          mode: 'edit',
+          isDirty: false
+        },
+        {
+          id: previewId,
+          filePath: sharedRemotePath,
+          relativePath: 'docs/wt-one.md',
+          worktreeId: 'wt-1',
+          language: 'markdown',
+          mode: 'markdown-preview',
+          markdownPreviewSourceFileId: sharedRemotePath,
+          isDirty: false
+        }
+      ]
+    })
+
+    const snapshotsByWorktree = new Map(
+      buildMobileSessionTabSnapshots(state).map((snapshot) => [snapshot.worktree, snapshot])
+    )
+
+    expect(snapshotsByWorktree.get('wt-1')?.tabs).toMatchObject([
+      { type: 'markdown', title: 'wt-one.md', sourceRelativePath: 'docs/wt-one.md' },
+      { type: 'markdown', title: 'wt-one.md', sourceRelativePath: 'docs/wt-one.md' }
+    ])
+    expect(snapshotsByWorktree.get('wt-2')?.tabs).toMatchObject([
+      { type: 'markdown', title: 'wt-two.md', sourceRelativePath: 'docs/wt-two.md' }
+    ])
+  })
+
+  it('publishes terminal pane agent status', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const paneKey = `term-1:${leafId}`
+    const state = makeState({
+      tabBarOrderByWorktree: { 'wt-1': ['term-1'] },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'term-1', title: 'codex [working]', customTitle: null, ptyId: 'pty-1' }]
+      } as unknown as AppState['tabsByWorktree'],
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: { type: 'leaf', leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: 'pty-1' }
+        }
+      } as AppState['terminalLayoutsByTabId'],
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          state: 'working',
+          prompt: 'fix parity',
+          updatedAt: 1_700_000_000_000,
+          stateStartedAt: 1_699_999_999_000,
+          agentType: 'codex',
+          paneKey,
+          terminalTitle: 'codex [working]',
+          stateHistory: []
+        }
+      }
+    })
+
+    expect(buildMobileSessionTabSnapshots(state)[0]?.tabs).toMatchObject([
+      {
+        type: 'terminal',
+        id: `term-1::${leafId}`,
+        agentStatus: {
+          state: 'working',
+          prompt: 'fix parity',
+          agentType: 'codex',
+          paneKey
+        }
+      }
+    ])
   })
 })

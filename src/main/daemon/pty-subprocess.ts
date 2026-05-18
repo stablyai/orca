@@ -11,12 +11,15 @@ import {
 import { isValidPtySize, normalizePtySize } from './daemon-pty-size'
 import {
   ensureNodePtySpawnHelperExecutable,
-  getNodePtySpawnHelperCandidates
+  getNodePtySpawnHelperCandidates,
+  validateWorkingDirectory
 } from '../providers/local-pty-utils'
 import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
 import { resolveEffectiveWindowsPowerShell } from '../providers/windows-powershell'
 import { isPwshAvailable } from '../pwsh'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
+
+const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
 
 export type PtySubprocessOptions = {
   sessionId: string
@@ -47,6 +50,17 @@ function getDefaultCwd(): string {
     return `${process.env.HOMEDRIVE}${process.env.HOMEPATH}`
   }
   return 'C:\\'
+}
+
+function removeUnspecifiedPaneIdentityEnv(
+  env: Record<string, string>,
+  explicitEnv: Record<string, string> | undefined
+): void {
+  for (const key of PANE_IDENTITY_ENV_KEYS) {
+    if (!explicitEnv || !Object.hasOwn(explicitEnv, key)) {
+      delete env[key]
+    }
+  }
 }
 
 function formatMissingDaemonPathError(kind: 'helper' | 'cwd', path: string): DaemonProtocolError {
@@ -97,6 +111,36 @@ function preflightMacNodePtySpawnEnvironment(): void {
   throw formatMissingDaemonPathError('helper', candidates[0] ?? '<unresolved>')
 }
 
+function isNativeWindowsPath(path: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(path) || path.startsWith('\\\\')
+}
+
+function preflightWindowsPtySpawnEnvironment(args: {
+  validationCwd: string
+  cwdWasExplicit: boolean
+}): void {
+  if (process.platform !== 'win32' || !args.cwdWasExplicit) {
+    return
+  }
+
+  if (!isNativeWindowsPath(args.validationCwd)) {
+    return
+  }
+
+  validateWorkingDirectory(args.validationCwd)
+}
+
+function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string): Error {
+  const message = err instanceof Error ? err.message : String(err)
+  const formatted = new DaemonProtocolError(
+    `Daemon failed to spawn shell "${shellPath}" with cwd "${spawnCwd}": ${message}`
+  )
+  if (err instanceof Error && err.stack) {
+    formatted.stack = err.stack
+  }
+  return formatted
+}
+
 export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandle {
   const size = normalizePtySize(opts.cols, opts.rows)
   const env: Record<string, string> = {
@@ -118,6 +162,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     // restores clickable refs like `owner/repo#123` / `PR#123`.
     FORCE_HYPERLINK: '1'
   } as Record<string, string>
+  // Why: the daemon is forked from Electron and can inherit the pane identity
+  // of the terminal that launched `pn dev`; each PTY must opt into its own.
+  removeUnspecifiedPaneIdentityEnv(env, opts.env)
   removeInheritedNoColor(env)
 
   env.LANG ??= 'en_US.UTF-8'
@@ -129,6 +176,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let shellPath = opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
   let spawnCwd = opts.cwd || getDefaultCwd()
+  let validationCwd = spawnCwd
 
   if (process.platform === 'win32') {
     const normalizedShellFamily = pathWin32.basename(shellPath).toLowerCase()
@@ -160,6 +208,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     const resolved = resolveWindowsShellLaunchArgs(shellPath, spawnCwd, getDefaultCwd())
     shellArgs = resolved.shellArgs
     spawnCwd = resolved.effectiveCwd
+    validationCwd = resolved.validationCwd
   } else {
     // Why: any Orca-injected overlay env that user rc files can clobber
     // needs the wrapper so the post-rc restore line runs.
@@ -181,14 +230,26 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   // runs in a separate forked process with its own code path.
   ensureNodePtySpawnHelperExecutable()
   preflightMacNodePtySpawnEnvironment()
-
-  const proc = pty.spawn(shellPath, shellArgs, {
-    name: 'xterm-256color',
-    cols: size.cols,
-    rows: size.rows,
-    cwd: spawnCwd,
-    env
+  preflightWindowsPtySpawnEnvironment({
+    validationCwd,
+    cwdWasExplicit: opts.cwd !== undefined
   })
+
+  let proc: pty.IPty
+  try {
+    proc = pty.spawn(shellPath, shellArgs, {
+      name: 'xterm-256color',
+      cols: size.cols,
+      rows: size.rows,
+      cwd: spawnCwd,
+      env
+    })
+  } catch (err) {
+    if (process.platform === 'win32') {
+      throw formatPtySpawnError(err, shellPath, spawnCwd)
+    }
+    throw err
+  }
 
   let onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: this suite covers the SSH git provider's one-RPC-per-method contract; splitting it would duplicate the shared mux fixture. */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { SshGitProvider } from './ssh-git-provider'
 
@@ -41,6 +42,57 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(statusResult)
   })
 
+  it('getStatus forwards includeIgnored only when requested', async () => {
+    const statusResult = { entries: [], conflictOperation: 'unknown', ignoredPaths: ['dist/'] }
+    mux.request.mockResolvedValue(statusResult)
+
+    await provider.getStatus('/home/user/repo', { includeIgnored: true })
+    await provider.getStatus('/home/user/repo', { includeIgnored: false })
+
+    expect(mux.request).toHaveBeenNthCalledWith(1, 'git.status', {
+      worktreePath: '/home/user/repo',
+      includeIgnored: true
+    })
+    expect(mux.request).toHaveBeenNthCalledWith(2, 'git.status', {
+      worktreePath: '/home/user/repo'
+    })
+  })
+
+  it('checkIgnoredPaths sends git.checkIgnored request', async () => {
+    mux.request.mockResolvedValue(['dist/bundle.js'])
+
+    const result = await provider.checkIgnoredPaths('/home/user/repo', ['dist/bundle.js'])
+
+    expect(mux.request).toHaveBeenCalledWith('git.checkIgnored', {
+      worktreePath: '/home/user/repo',
+      paths: ['dist/bundle.js']
+    })
+    expect(result).toEqual(['dist/bundle.js'])
+  })
+
+  it('getHistory sends git.history request', async () => {
+    const historyResult = {
+      items: [],
+      hasIncomingChanges: false,
+      hasOutgoingChanges: false,
+      hasMore: false,
+      limit: 50
+    }
+    mux.request.mockResolvedValue(historyResult)
+
+    const result = await provider.getHistory('/home/user/repo', {
+      limit: 25,
+      baseRef: 'origin/main'
+    })
+
+    expect(mux.request).toHaveBeenCalledWith('git.history', {
+      worktreePath: '/home/user/repo',
+      limit: 25,
+      baseRef: 'origin/main'
+    })
+    expect(result).toEqual(historyResult)
+  })
+
   it('commit sends git.commit request', async () => {
     const commitResult = { success: true }
     mux.request.mockResolvedValue(commitResult)
@@ -52,6 +104,82 @@ describe('SshGitProvider', () => {
       message: 'feat: add source control commit'
     })
     expect(result).toEqual(commitResult)
+  })
+
+  it('getStagedCommitContext reads branch, staged summary, and staged patch remotely', async () => {
+    mux.request.mockImplementation(async (method, payload) => {
+      expect(method).toBe('git.exec')
+      if (payload.args[1] === '--show-current') {
+        return { stdout: 'feature/ai-commit\n' }
+      }
+      if (payload.args[2] === '--name-status') {
+        return { stdout: 'M\tREADME.md\n' }
+      }
+      if (payload.args[2] === '--patch') {
+        return { stdout: 'diff --git a/README.md b/README.md\n+hello' }
+      }
+      throw new Error(`unexpected args: ${payload.args.join(' ')}`)
+    })
+
+    const result = await provider.getStagedCommitContext('/home/user/repo')
+
+    expect(result).toEqual({
+      branch: 'feature/ai-commit',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: 'diff --git a/README.md b/README.md\n+hello'
+    })
+    expect(mux.request).toHaveBeenCalledWith('git.exec', {
+      args: ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
+      cwd: '/home/user/repo'
+    })
+  })
+
+  it('getStagedCommitContext returns null when nothing is staged', async () => {
+    mux.request.mockImplementation(async (_method, payload) => {
+      if (payload.args[1] === '--show-current') {
+        return { stdout: 'main\n' }
+      }
+      return { stdout: '' }
+    })
+
+    await expect(provider.getStagedCommitContext('/home/user/repo')).resolves.toBeNull()
+    expect(mux.request).toHaveBeenCalledTimes(2)
+  })
+
+  it('executeCommitMessagePlan delegates the prepared plan to the relay', async () => {
+    const execResult = {
+      stdout: 'Update docs',
+      stderr: '',
+      exitCode: 0,
+      timedOut: false
+    }
+    mux.request.mockResolvedValue(execResult)
+
+    const result = await provider.executeCommitMessagePlan(
+      {
+        binary: 'codex',
+        args: ['exec', 'PROMPT'],
+        stdinPayload: null,
+        label: 'Codex'
+      },
+      '/home/user/repo',
+      60_000
+    )
+
+    expect(mux.request).toHaveBeenCalledWith('agent.execNonInteractive', {
+      binary: 'codex',
+      args: ['exec', 'PROMPT'],
+      cwd: '/home/user/repo',
+      stdin: null,
+      timeoutMs: 60_000
+    })
+    expect(result).toEqual(execResult)
+  })
+
+  it('cancelGenerateCommitMessage sends best-effort relay cancellation', async () => {
+    await provider.cancelGenerateCommitMessage('/home/user/repo')
+
+    expect(mux.request).toHaveBeenCalledWith('agent.cancelExec', { cwd: '/home/user/repo' })
   })
 
   it('getDiff sends git.diff request', async () => {
@@ -107,6 +235,14 @@ describe('SshGitProvider', () => {
     })
   })
 
+  it('bulkDiscardChanges sends git.bulkDiscard request', async () => {
+    await provider.bulkDiscardChanges('/home/user/repo', ['a.ts', 'b.ts'])
+    expect(mux.request).toHaveBeenCalledWith('git.bulkDiscard', {
+      worktreePath: '/home/user/repo',
+      filePaths: ['a.ts', 'b.ts']
+    })
+  })
+
   it('detectConflictOperation sends git.conflictOperation request', async () => {
     mux.request.mockResolvedValue('rebase')
     const result = await provider.detectConflictOperation('/home/user/repo')
@@ -139,11 +275,18 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(upstreamResult)
   })
 
-  it('pushBranch sends git.push request and forwards publish mode', async () => {
-    await provider.pushBranch('/home/user/repo', true)
+  it('pushBranch sends git.push request and forwards publish mode and target', async () => {
+    await provider.pushBranch('/home/user/repo', true, {
+      remoteName: 'pr-fork-orca',
+      branchName: 'contributor/fix'
+    })
     expect(mux.request).toHaveBeenCalledWith('git.push', {
       worktreePath: '/home/user/repo',
-      publish: true
+      publish: true,
+      pushTarget: {
+        remoteName: 'pr-fork-orca',
+        branchName: 'contributor/fix'
+      }
     })
   })
 
@@ -185,8 +328,13 @@ describe('SshGitProvider', () => {
     ]
     mux.request.mockResolvedValue(worktrees)
 
-    const result = await provider.listWorktrees('/home/user/repo')
-    expect(mux.request).toHaveBeenCalledWith('git.listWorktrees', { repoPath: '/home/user/repo' })
+    const controller = new AbortController()
+    const result = await provider.listWorktrees('/home/user/repo', { signal: controller.signal })
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.listWorktrees',
+      { repoPath: '/home/user/repo' },
+      { signal: controller.signal }
+    )
     expect(result).toEqual(worktrees)
   })
 

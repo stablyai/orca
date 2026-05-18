@@ -650,7 +650,7 @@ function RichCardContent({
         Read the full release notes
       </button>
 
-      <Button variant="default" size="sm" onClick={onUpdate} className="w-full">
+      <Button variant="default" size="sm" onClick={onUpdate} className="w-full cursor-pointer">
         Update
       </Button>
     </div>
@@ -698,7 +698,12 @@ function SimpleCardContent({
         Release notes
       </button>
 
-      <Button variant="default" size="sm" onClick={onUpdate} className="mt-0.5 w-full">
+      <Button
+        variant="default"
+        size="sm"
+        onClick={onUpdate}
+        className="mt-0.5 w-full cursor-pointer"
+      >
         Update
       </Button>
     </div>

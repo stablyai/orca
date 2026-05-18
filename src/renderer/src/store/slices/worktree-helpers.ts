@@ -1,13 +1,18 @@
 import type {
   CreateWorktreeResult,
   CreateSparseCheckoutRequest,
+  GitPushTarget,
   SetupDecision,
+  TuiAgent,
   WorkspaceCreateTelemetrySource,
+  WorkspaceStatus,
   Worktree,
   WorktreeBaseStatusEvent,
+  WorktreeLineage,
   WorktreeRemoteBranchConflictEvent,
   WorktreeMeta
 } from '../../../../shared/types'
+export { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 
 export type WorktreeDeleteState = {
   isDeleting: boolean
@@ -17,6 +22,7 @@ export type WorktreeDeleteState = {
 
 export type WorktreeSlice = {
   worktreesByRepo: Record<string, Worktree[]>
+  worktreeLineageById: Record<string, WorktreeLineage>
   activeWorktreeId: string | null
   deleteStateByWorktreeId: Record<string, WorktreeDeleteState>
   baseStatusByWorktreeId: Record<string, WorktreeBaseStatusEvent>
@@ -59,6 +65,11 @@ export type WorktreeSlice = {
   hasHydratedWorktreePurge: boolean
   fetchWorktrees: (repoId: string) => Promise<void>
   fetchAllWorktrees: () => Promise<void>
+  fetchWorktreeLineage: () => Promise<void>
+  updateWorktreeLineage: (
+    worktreeId: string,
+    args: { parentWorktreeId?: string; noParent?: boolean }
+  ) => Promise<void>
   createWorktree: (
     repoId: string,
     name: string,
@@ -69,7 +80,14 @@ export type WorktreeSlice = {
      *  so existing callers default to `unknown`; specify when the surface
      *  matters for the activation funnel. */
     telemetrySource?: WorkspaceCreateTelemetrySource,
-    displayName?: string
+    displayName?: string,
+    linkedIssue?: number,
+    linkedPR?: number,
+    pushTarget?: GitPushTarget,
+    createdWithAgent?: TuiAgent,
+    linkedLinearIssue?: string,
+    branchNameOverride?: string,
+    workspaceStatus?: WorkspaceStatus
   ) => Promise<CreateWorktreeResult>
   removeWorktree: (
     worktreeId: string,
@@ -77,6 +95,9 @@ export type WorktreeSlice = {
   ) => Promise<{ ok: true } | { ok: false; error: string }>
   clearWorktreeDeleteState: (worktreeId: string) => void
   updateWorktreeMeta: (worktreeId: string, updates: Partial<WorktreeMeta>) => Promise<void>
+  updateWorktreesMeta: (
+    updatesByWorktreeId: ReadonlyMap<string, Partial<WorktreeMeta>>
+  ) => Promise<void>
   markWorktreeUnread: (worktreeId: string) => void
   /** Clear the worktree's unread dot. Called on user interaction with any
    *  terminal pane inside the worktree (keystroke, click) — matches
@@ -160,9 +181,4 @@ export function applyWorktreeUpdates(
   }
 
   return changed ? next : worktreesByRepo
-}
-
-export function getRepoIdFromWorktreeId(worktreeId: string): string {
-  const sepIdx = worktreeId.indexOf('::')
-  return sepIdx === -1 ? worktreeId : worktreeId.slice(0, sepIdx)
 }

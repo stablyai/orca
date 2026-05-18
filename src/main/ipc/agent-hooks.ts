@@ -1,11 +1,22 @@
 import { ipcMain } from 'electron'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type {
+  AgentStatusIpcPayload,
+  MigrationUnsupportedPtyEntry
+} from '../../shared/agent-status-types'
 import { agentHookServer, isValidPaneKey } from '../agent-hooks/server'
+import {
+  clearMigrationUnsupportedPtysForPaneKey,
+  getMigrationUnsupportedPtySnapshot
+} from '../agent-hooks/migration-unsupported-pty-state'
 import { claudeHookService } from '../claude/hook-service'
 import { codexHookService } from '../codex/hook-service'
 import { geminiHookService } from '../gemini/hook-service'
 import { cursorHookService } from '../cursor/hook-service'
+import { droidHookService } from '../droid/hook-service'
+import { grokHookService } from '../grok/hook-service'
+import { copilotHookService } from '../copilot/hook-service'
+import { hermesHookService } from '../hermes/hook-service'
 
 // Why: install/remove are intentionally not exposed to the renderer. Orca
 // auto-installs managed hooks at app startup (see src/main/index.ts), so a
@@ -22,7 +33,12 @@ export function registerAgentHookHandlers(): void {
   ipcMain.removeHandler('agentHooks:codexStatus')
   ipcMain.removeHandler('agentHooks:geminiStatus')
   ipcMain.removeHandler('agentHooks:cursorStatus')
+  ipcMain.removeHandler('agentHooks:droidStatus')
+  ipcMain.removeHandler('agentHooks:grokStatus')
+  ipcMain.removeHandler('agentHooks:copilotStatus')
+  ipcMain.removeHandler('agentHooks:hermesStatus')
   ipcMain.removeHandler('agentStatus:getSnapshot')
+  ipcMain.removeHandler('agentStatus:getMigrationUnsupportedSnapshot')
   // Why: agentStatus:drop is sent fire-and-forget from the renderer via
   // ipcRenderer.send(); we listen with ipcMain.on (not handle) so we don't
   // round-trip a response. Removing first keeps re-registration safe even
@@ -38,6 +54,7 @@ export function registerAgentHookHandlers(): void {
       // wipe the per-pane prompt/tool caches, which the next hook event for that
       // (still-alive) pane needs to render a coherent row.
       agentHookServer.dropStatusEntry(paneKey)
+      clearMigrationUnsupportedPtysForPaneKey(paneKey)
     } catch (err) {
       console.warn('[agent-hooks] dropStatusEntry failed:', err)
     }
@@ -47,6 +64,10 @@ export function registerAgentHookHandlers(): void {
     // lose replayed statuses while its local store is still empty.
     return agentHookServer.getStatusSnapshot()
   })
+  ipcMain.handle(
+    'agentStatus:getMigrationUnsupportedSnapshot',
+    (): MigrationUnsupportedPtyEntry[] => getMigrationUnsupportedPtySnapshot()
+  )
 
   // Why: errors from getStatus() (fs permission denied, homedir resolution
   // failure, etc.) must be reported inline via state:'error' so the sidebar can
@@ -98,6 +119,58 @@ export function registerAgentHookHandlers(): void {
     } catch (err) {
       return {
         agent: 'cursor',
+        state: 'error',
+        configPath: '',
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  })
+  ipcMain.handle('agentHooks:droidStatus', (): AgentHookInstallStatus => {
+    try {
+      return droidHookService.getStatus()
+    } catch (err) {
+      return {
+        agent: 'droid',
+        state: 'error',
+        configPath: '',
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  })
+  ipcMain.handle('agentHooks:grokStatus', (): AgentHookInstallStatus => {
+    try {
+      return grokHookService.getStatus()
+    } catch (err) {
+      return {
+        agent: 'grok',
+        state: 'error',
+        configPath: '',
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  })
+  ipcMain.handle('agentHooks:copilotStatus', (): AgentHookInstallStatus => {
+    try {
+      return copilotHookService.getStatus()
+    } catch (err) {
+      return {
+        agent: 'copilot',
+        state: 'error',
+        configPath: '',
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  })
+  ipcMain.handle('agentHooks:hermesStatus', (): AgentHookInstallStatus => {
+    try {
+      return hermesHookService.getStatus()
+    } catch (err) {
+      return {
+        agent: 'hermes',
         state: 'error',
         configPath: '',
         managedHooksPresent: false,

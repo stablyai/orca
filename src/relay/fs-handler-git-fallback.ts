@@ -21,12 +21,13 @@ import {
   ingestGitGrepLine,
   SEARCH_TIMEOUT_MS
 } from '../shared/text-search'
+import { buildRelayCommandEnv } from './relay-command-env'
 
 /**
  * List files using `git ls-files`. Fallback when rg is not installed.
  *
  * Why both passes: primary surfaces tracked + untracked-non-ignored;
- * envPass surfaces gitignored .env* files that users frequently Quick Open.
+ * ignoredPass surfaces gitignored files that users frequently Quick Open.
  * Exclude pathspecs are prepended by the shared builder so nested linked
  * worktrees are pruned by git directly; post-filtering remains as a
  * correctness backstop.
@@ -36,7 +37,7 @@ export function listFilesWithGit(
   excludePathPrefixes: readonly string[] = []
 ): Promise<string[]> {
   const files = new Set<string>()
-  const { primary, envPass } = buildGitLsFilesArgsForQuickOpen(excludePathPrefixes)
+  const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen(excludePathPrefixes)
 
   const runGitLsFiles = (args: string[]): Promise<void> => {
     return new Promise((resolve, reject) => {
@@ -60,6 +61,7 @@ export function listFilesWithGit(
 
       const child = spawn('git', ['ls-files', ...args], {
         cwd: rootPath,
+        env: buildRelayCommandEnv(),
         stdio: ['ignore', 'pipe', 'pipe']
       })
       child.stdout!.setEncoding('utf-8')
@@ -112,7 +114,9 @@ export function listFilesWithGit(
     })
   }
 
-  return Promise.all([runGitLsFiles(primary), runGitLsFiles(envPass)]).then(() => Array.from(files))
+  return Promise.all([runGitLsFiles(primary), runGitLsFiles(ignoredPass)]).then(() =>
+    Array.from(files)
+  )
 }
 
 /**
@@ -148,6 +152,7 @@ export function searchWithGitGrep(
 
     const child = spawn('git', gitArgs, {
       cwd: rootPath,
+      env: buildRelayCommandEnv(),
       stdio: ['ignore', 'pipe', 'pipe']
     })
     child.stdout!.setEncoding('utf-8')

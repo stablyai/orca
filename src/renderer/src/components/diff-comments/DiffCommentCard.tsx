@@ -1,6 +1,7 @@
 import { CornerDownLeft, Pencil, Trash } from 'lucide-react'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
+import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
 
 // Why: the saved-note card lives inside a Monaco view zone's DOM node.
 // useDiffCommentDecorator creates a React root per zone and renders this
@@ -14,6 +15,8 @@ import { Button } from '@/components/ui/button'
 
 type Props = {
   lineNumber: number
+  startLine?: number
+  label?: string
   body: string
   onDelete: () => void
   // Why: Monaco view zones have a fixed `heightInPx` set at insertion time
@@ -22,14 +25,18 @@ type Props = {
   // it re-syncs the zone height. Without this the editor inputs would clip.
   onContentResize?: () => void
   onSubmitEdit?: (body: string) => Promise<boolean>
+  headerActions?: ReactNode
 }
 
 export function DiffCommentCard({
   lineNumber,
+  startLine,
+  label,
   body,
   onDelete,
   onContentResize,
-  onSubmitEdit
+  onSubmitEdit,
+  headerActions
 }: Props): React.JSX.Element {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(body)
@@ -123,8 +130,11 @@ export function DiffCommentCard({
   return (
     <div className="orca-diff-comment-card">
       <div className="orca-diff-comment-header">
-        <span className="orca-diff-comment-meta">Note · line {lineNumber}</span>
+        <span className="orca-diff-comment-meta">
+          Note · {label ?? getDiffCommentLineLabel({ lineNumber, startLine }).toLowerCase()}
+        </span>
         <div className="orca-diff-comment-actions">
+          {!editing && headerActions}
           {onSubmitEdit && !editing && (
             <button
               type="button"

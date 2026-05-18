@@ -29,7 +29,9 @@ export const AGENTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'qwen',
       'rovo',
       'hermes',
+      'openclaw',
       'copilot',
+      'grok',
       'github',
       'github copilot',
       'command',
@@ -37,5 +39,11 @@ export const AGENTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'install',
       'detected'
     ]
+  },
+  {
+    title: 'Keep computer awake while agents are working',
+    description:
+      'Keeps this computer awake while agents are working. The display can still turn off.',
+    keywords: ['awake', 'sleep', 'power', 'agent', 'running', 'working']
   }
 ]

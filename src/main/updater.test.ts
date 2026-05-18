@@ -48,6 +48,7 @@ const {
     autoUpdaterMock.downloadUpdate.mockReset()
     autoUpdaterMock.quitAndInstall.mockReset()
     autoUpdaterMock.setFeedURL.mockClear()
+    autoUpdaterMock.updateConfigPath = undefined
     autoUpdaterMock.allowPrerelease = false
     delete (autoUpdaterMock as Record<string, unknown>).verifyUpdateCodeSignature
   }
@@ -61,6 +62,7 @@ const {
     downloadUpdate: vi.fn(),
     quitAndInstall: vi.fn(),
     setFeedURL: vi.fn(),
+    updateConfigPath: undefined as string | undefined,
     emit,
     reset
   }
@@ -98,6 +100,10 @@ vi.mock('electron-updater', () => ({
   autoUpdater: autoUpdaterMock
 }))
 
+vi.mock('./electron-updater-loader', () => ({
+  loadElectronAutoUpdater: () => autoUpdaterMock
+}))
+
 vi.mock('@electron-toolkit/utils', () => ({
   is: isMock
 }))
@@ -120,12 +126,12 @@ vi.mock('./updater-nudge', () => ({
   shouldApplyNudge: shouldApplyNudgeMock
 }))
 
-const { fetchNewerReleaseTagMock } = vi.hoisted(() => ({
-  fetchNewerReleaseTagMock: vi.fn()
+const { fetchNewerReleaseTagsMock } = vi.hoisted(() => ({
+  fetchNewerReleaseTagsMock: vi.fn()
 }))
 
 vi.mock('./updater-prerelease-feed', () => ({
-  fetchNewerReleaseTag: fetchNewerReleaseTagMock,
+  fetchNewerReleaseTags: fetchNewerReleaseTagsMock,
   getReleaseDownloadUrl: (tag: string) =>
     `https://github.com/stablyai/orca/releases/download/${tag}`
 }))
@@ -146,9 +152,25 @@ describe('updater', () => {
     powerMonitorOnMock.mockReset()
     fetchNudgeMock.mockReset().mockResolvedValue(null)
     shouldApplyNudgeMock.mockReset().mockReturnValue(false)
-    fetchNewerReleaseTagMock.mockReset().mockResolvedValue(null)
+    fetchNewerReleaseTagsMock.mockReset().mockResolvedValue([])
     vi.unstubAllGlobals()
     vi.useRealTimers()
+  })
+
+  it('does not load or configure electron-updater during dev setup', async () => {
+    isMock.dev = true
+    const mainWindow = { webContents: { send: vi.fn() } }
+
+    const { setupAutoUpdater } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never)
+
+    // Why: E2E launches use dev mode and Electron's direct script runner, whose
+    // default app version makes electron-updater throw during module load.
+    expect(autoUpdaterMock.updateConfigPath).toBeUndefined()
+    expect(autoUpdaterMock.setFeedURL).not.toHaveBeenCalled()
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+    expect(powerMonitorOnMock).not.toHaveBeenCalled()
   })
 
   it('deduplicates identical check errors from the event and rejected promise', async () => {
@@ -224,6 +246,8 @@ describe('updater', () => {
   })
 
   it('opts into the RC channel when checkForUpdatesFromMenu is called with includePrerelease', async () => {
+    appMock.getVersion.mockReturnValue('1.3.17')
+    fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.18-rc.1'])
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
     const mainWindow = { webContents: { send: vi.fn() } }
 
@@ -238,13 +262,17 @@ describe('updater', () => {
 
     checkForUpdatesFromMenu({ includePrerelease: true })
 
+    await vi.waitFor(() => {
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith('1.3.17', 2, {
+        includePrerelease: true
+      })
+      expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
+        provider: 'generic',
+        url: 'https://github.com/stablyai/orca/releases/download/v1.3.18-rc.1'
+      })
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
     expect(autoUpdaterMock.allowPrerelease).toBe(true)
-    const newCalls = autoUpdaterMock.setFeedURL.mock.calls.slice(setupFeedUrlCalls)
-    expect(newCalls).toEqual([[{ provider: 'github', owner: 'stablyai', repo: 'orca' }]])
-    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
-
-    // Second RC-mode invocation should not re-set the feed URL.
-    checkForUpdatesFromMenu({ includePrerelease: true })
     expect(autoUpdaterMock.setFeedURL.mock.calls.length).toBe(setupFeedUrlCalls + 1)
   })
 
@@ -309,7 +337,9 @@ describe('updater', () => {
       setLastUpdateCheckAt
     })
 
-    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
     expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
   })
 
@@ -349,11 +379,13 @@ describe('updater', () => {
 
     expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
 
-    vi.advanceTimersByTime(59 * 60 * 1000)
+    await vi.advanceTimersByTimeAsync(59 * 60 * 1000)
     expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
 
-    vi.advanceTimersByTime(60 * 1000)
-    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(60 * 1000)
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
     expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
   })
 
@@ -373,7 +405,9 @@ describe('updater', () => {
     appMock.emit('browser-window-focus')
     appMock.emit('browser-window-focus')
 
-    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
   })
 
   it('does not persist lastUpdateCheckAt when a focus-triggered check fails benignly', async () => {
@@ -432,14 +466,17 @@ describe('updater', () => {
       setLastUpdateCheckAt: vi.fn()
     })
 
-    await vi.runAllTicks()
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+
+    await vi.advanceTimersByTimeAsync(59 * 60 * 1000)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
 
-    vi.advanceTimersByTime(59 * 60 * 1000)
-    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
-
-    vi.advanceTimersByTime(60 * 1000)
-    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(60 * 1000)
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+    })
   })
 
   it('reschedules the next automatic check 24 hours after finding an available update', async () => {
@@ -465,10 +502,11 @@ describe('updater', () => {
       setLastUpdateCheckAt
     })
 
-    await vi.runAllTicks()
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
     await vi.advanceTimersByTimeAsync(0)
 
-    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
     expect(setLastUpdateCheckAt).toHaveBeenCalledTimes(1)
     expect(sendMock).toHaveBeenCalledWith('updater:status', {
       state: 'available',
@@ -476,11 +514,13 @@ describe('updater', () => {
       changelog: null
     })
 
-    vi.advanceTimersByTime(23 * 60 * 60 * 1000 + 59 * 60 * 1000)
+    await vi.advanceTimersByTimeAsync(23 * 60 * 60 * 1000 + 59 * 60 * 1000)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
 
-    vi.advanceTimersByTime(60 * 1000)
-    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(60 * 1000)
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+    })
   })
 
   it('does not leak a nudge marker into a later ordinary update cycle', async () => {
@@ -516,11 +556,13 @@ describe('updater', () => {
     sendMock.mockClear()
     checkForUpdatesFromMenu()
 
-    const statusCalls = sendMock.mock.calls
-      .filter(([channel]) => channel === 'updater:status')
-      .map(([, status]) => status)
+    await vi.waitFor(() => {
+      const statusCalls = sendMock.mock.calls
+        .filter(([channel]) => channel === 'updater:status')
+        .map(([, status]) => status)
 
-    expect(statusCalls).toContainEqual({ state: 'checking', userInitiated: true })
+      expect(statusCalls).toContainEqual({ state: 'checking', userInitiated: true })
+    })
 
     autoUpdaterMock.emit('update-available', { version: '1.0.62' })
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -777,7 +819,7 @@ describe('updater', () => {
   // releases for RC users, trapping them on the RC channel.
   it('repins the generic feed to the newest RC tag for a prerelease user', async () => {
     appMock.getVersion.mockReturnValue('1.3.17-rc.1')
-    fetchNewerReleaseTagMock.mockResolvedValue('v1.3.17-rc.2')
+    fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.17-rc.2'])
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
@@ -795,7 +837,9 @@ describe('updater', () => {
     checkForUpdatesFromMenu()
 
     await vi.waitFor(() => {
-      expect(fetchNewerReleaseTagMock).toHaveBeenCalledWith('1.3.17-rc.1')
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith('1.3.17-rc.1', 2, {
+        includePrerelease: true
+      })
       expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
         provider: 'generic',
         url: 'https://github.com/stablyai/orca/releases/download/v1.3.17-rc.2'
@@ -809,7 +853,7 @@ describe('updater', () => {
   // prerelease user so the 'update-available' event fires against it.
   it('repins the generic feed to a newer stable tag for a prerelease user', async () => {
     appMock.getVersion.mockReturnValue('1.3.19-rc.6')
-    fetchNewerReleaseTagMock.mockResolvedValue('v1.3.19')
+    fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.19'])
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
@@ -833,7 +877,7 @@ describe('updater', () => {
   // can still complete and report "not-available" (rather than error out).
   it('falls back to /releases/latest/download when the atom resolver returns null', async () => {
     appMock.getVersion.mockReturnValue('1.3.19-rc.6')
-    fetchNewerReleaseTagMock.mockResolvedValue(null)
+    fetchNewerReleaseTagsMock.mockResolvedValue([])
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
@@ -852,8 +896,653 @@ describe('updater', () => {
     })
   })
 
-  it('does not invoke the atom-feed resolver for a stable user', async () => {
+  it('retries a prerelease check once against the previous feed tag when the manifest is missing', async () => {
+    appMock.getVersion.mockReturnValue('1.3.51-rc.6')
+    fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.51-rc.7', 'v1.3.51-rc.6'])
+
+    const missingManifest = new Error(
+      'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
+    )
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      if (autoUpdaterMock.checkForUpdates.mock.calls.length === 1) {
+        queueMicrotask(() => {
+          autoUpdaterMock.emit('error', missingManifest)
+        })
+        return Promise.reject(missingManifest)
+      }
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('update-not-available')
+      })
+      return Promise.resolve(undefined)
+    })
+
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+      expect(autoUpdaterMock.setFeedURL).toHaveBeenCalledWith({
+        provider: 'generic',
+        url: 'https://github.com/stablyai/orca/releases/download/v1.3.51-rc.7'
+      })
+      expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
+        provider: 'generic',
+        url: 'https://github.com/stablyai/orca/releases/download/v1.3.51-rc.6'
+      })
+    })
+
+    const statuses = sendMock.mock.calls
+      .filter(([channel]) => channel === 'updater:status')
+      .map(([, status]) => status)
+    expect(statuses).toContainEqual({ state: 'not-available', userInitiated: true })
+    expect(statuses).not.toContainEqual(expect.objectContaining({ state: 'error' }))
+  })
+
+  it('surfaces a promise-only prerelease fallback failure after the primary error event', async () => {
+    appMock.getVersion.mockReturnValue('1.3.51-rc.6')
+    fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.51-rc.7', 'v1.3.51-rc.6'])
+
+    const missingManifest = new Error(
+      'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
+    )
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      if (autoUpdaterMock.checkForUpdates.mock.calls.length === 1) {
+        queueMicrotask(() => {
+          autoUpdaterMock.emit('error', missingManifest)
+        })
+        return new Promise(() => {})
+      }
+      return Promise.reject(missingManifest)
+    })
+
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+      const statuses = sendMock.mock.calls
+        .filter(([channel]) => channel === 'updater:status')
+        .map(([, status]) => status)
+      expect(statuses).toContainEqual({
+        state: 'error',
+        message: "Couldn't reach the update server. Try again in a few minutes.",
+        userInitiated: true
+      })
+    })
+  })
+
+  it('allows the short background retry to launch after a promise-only prerelease fallback failure', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-03T12:00:00Z'))
+    appMock.getVersion.mockReturnValue('1.3.51-rc.6')
+    fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.51-rc.7', 'v1.3.51-rc.6'])
+
+    const missingManifest = new Error(
+      'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
+    )
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      const callCount = autoUpdaterMock.checkForUpdates.mock.calls.length
+      if (callCount === 1) {
+        autoUpdaterMock.emit('checking-for-update')
+        queueMicrotask(() => {
+          autoUpdaterMock.emit('error', missingManifest)
+        })
+        return new Promise(() => {})
+      }
+      if (callCount === 2) {
+        return Promise.reject(missingManifest)
+      }
+      return new Promise(() => {})
+    })
+
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => null })
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+      const statuses = sendMock.mock.calls
+        .filter(([channel]) => channel === 'updater:status')
+        .map(([, status]) => status)
+      expect(statuses).toContainEqual({ state: 'idle' })
+    })
+
+    await vi.advanceTimersByTimeAsync(59 * 60 * 1000)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+
+    await vi.advanceTimersByTimeAsync(60 * 1000)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(3)
+  })
+
+  it('does not let user-initiated promise-only fallback failures taint the next background check', async () => {
+    let lastUpdateCheckAt = Date.now()
+    appMock.getVersion.mockReturnValue('1.3.51-rc.6')
+    fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.51-rc.7', 'v1.3.51-rc.6'])
+
+    const missingManifest = new Error(
+      'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
+    )
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      const callCount = autoUpdaterMock.checkForUpdates.mock.calls.length
+      if (callCount === 1) {
+        autoUpdaterMock.emit('checking-for-update')
+        queueMicrotask(() => {
+          autoUpdaterMock.emit('error', missingManifest)
+        })
+        return new Promise(() => {})
+      }
+      if (callCount === 2) {
+        return Promise.reject(missingManifest)
+      }
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('update-not-available')
+      })
+      return Promise.resolve(undefined)
+    })
+
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => lastUpdateCheckAt })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      const statuses = sendMock.mock.calls
+        .filter(([channel]) => channel === 'updater:status')
+        .map(([, status]) => status)
+      expect(statuses).toContainEqual({
+        state: 'error',
+        message: "Couldn't reach the update server. Try again in a few minutes.",
+        userInitiated: true
+      })
+    })
+
+    sendMock.mockClear()
+    lastUpdateCheckAt = Date.now() - 25 * 60 * 60 * 1000
+    appMock.emit('browser-window-focus')
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(3)
+      const statuses = sendMock.mock.calls
+        .filter(([channel]) => channel === 'updater:status')
+        .map(([, status]) => status)
+      expect(statuses).toContainEqual({ state: 'not-available' })
+      expect(statuses).not.toContainEqual({ state: 'checking', userInitiated: true })
+      expect(statuses).not.toContainEqual({ state: 'not-available', userInitiated: true })
+    })
+  })
+
+  it('preserves user-initiated state for delayed prerelease fallback not-available', async () => {
+    vi.useFakeTimers()
+    appMock.getVersion.mockReturnValue('1.3.51-rc.6')
+    fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.51-rc.7', 'v1.3.51-rc.6'])
+
+    const missingManifest = new Error(
+      'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
+    )
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      const callCount = autoUpdaterMock.checkForUpdates.mock.calls.length
+      if (callCount === 1) {
+        autoUpdaterMock.emit('checking-for-update')
+        queueMicrotask(() => {
+          autoUpdaterMock.emit('error', missingManifest)
+        })
+        return Promise.reject(missingManifest)
+      }
+      setTimeout(() => {
+        autoUpdaterMock.emit('update-not-available')
+      }, 10)
+      return Promise.resolve(undefined)
+    })
+
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+    })
+    await vi.advanceTimersByTimeAsync(10)
+
+    const statuses = sendMock.mock.calls
+      .filter(([channel]) => channel === 'updater:status')
+      .map(([, status]) => status)
+    expect(statuses).toContainEqual({ state: 'not-available', userInitiated: true })
+  })
+
+  it('ignores a delayed primary error after a promise-launched prerelease fallback', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-03T12:00:00Z'))
+    appMock.getVersion.mockReturnValue('1.3.51-rc.6')
+    fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.51-rc.7', 'v1.3.51-rc.6'])
+
+    const missingManifest = new Error(
+      'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
+    )
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      const callCount = autoUpdaterMock.checkForUpdates.mock.calls.length
+      autoUpdaterMock.emit('checking-for-update')
+      if (callCount === 1) {
+        setTimeout(() => {
+          autoUpdaterMock.emit('error', missingManifest)
+        }, 10)
+        return Promise.reject(missingManifest)
+      }
+      if (callCount === 2) {
+        setTimeout(() => {
+          autoUpdaterMock.emit('update-not-available')
+        }, 20)
+        return Promise.resolve(undefined)
+      }
+      return new Promise(() => {})
+    })
+
+    const sendMock = vi.fn()
+    const setLastUpdateCheckAt = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => null,
+      setLastUpdateCheckAt
+    })
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+    })
+    await vi.advanceTimersByTimeAsync(30)
+
+    const statuses = sendMock.mock.calls
+      .filter(([channel]) => channel === 'updater:status')
+      .map(([, status]) => status)
+    expect(statuses).toContainEqual({ state: 'not-available' })
+    expect(statuses).not.toContainEqual(expect.objectContaining({ state: 'error' }))
+    expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(59 * 60 * 1000)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+
+    await vi.advanceTimersByTimeAsync(60 * 1000)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(3)
+  })
+
+  it('handles an event-only fallback error after a promise-only primary failure', async () => {
+    appMock.getVersion.mockReturnValue('1.3.51-rc.6')
+    fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.51-rc.7', 'v1.3.51-rc.6'])
+
+    const missingManifestMessage =
+      'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
+    const primaryMissingManifest = new Error(missingManifestMessage)
+    const fallbackMissingManifest = new Error(missingManifestMessage)
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      const callCount = autoUpdaterMock.checkForUpdates.mock.calls.length
+      autoUpdaterMock.emit('checking-for-update')
+      if (callCount === 1) {
+        return Promise.reject(primaryMissingManifest)
+      }
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('error', fallbackMissingManifest)
+      })
+      return new Promise(() => {})
+    })
+
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+      const statuses = sendMock.mock.calls
+        .filter(([channel]) => channel === 'updater:status')
+        .map(([, status]) => status)
+      expect(statuses.at(-1)).toEqual({
+        state: 'error',
+        message: "Couldn't reach the update server. Try again in a few minutes.",
+        userInitiated: true
+      })
+    })
+  })
+
+  it('suppresses a delayed background fallback error after the fallback promise handled it', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-03T12:00:00Z'))
+    appMock.getVersion.mockReturnValue('1.3.51-rc.6')
+    fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.51-rc.7', 'v1.3.51-rc.6'])
+
+    const missingManifest = new Error(
+      'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
+    )
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      const callCount = autoUpdaterMock.checkForUpdates.mock.calls.length
+      autoUpdaterMock.emit('checking-for-update')
+      if (callCount === 1) {
+        queueMicrotask(() => {
+          autoUpdaterMock.emit('error', missingManifest)
+        })
+        return new Promise(() => {})
+      }
+      if (callCount === 2) {
+        setTimeout(() => {
+          autoUpdaterMock.emit('error', missingManifest)
+        }, 10)
+        return Promise.reject(missingManifest)
+      }
+      return new Promise(() => {})
+    })
+
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => null })
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+      const statuses = sendMock.mock.calls
+        .filter(([channel]) => channel === 'updater:status')
+        .map(([, status]) => status)
+      expect(statuses).toContainEqual({ state: 'idle' })
+    })
+
+    sendMock.mockClear()
+    await vi.advanceTimersByTimeAsync(10)
+
+    const statusesAfterLateError = sendMock.mock.calls
+      .filter(([channel]) => channel === 'updater:status')
+      .map(([, status]) => status)
+    expect(statusesAfterLateError).not.toContainEqual(
+      expect.objectContaining({ state: 'error', message: missingManifest.message })
+    )
+
+    await vi.advanceTimersByTimeAsync(59 * 60 * 1000)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+
+    await vi.advanceTimersByTimeAsync(60 * 1000)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(3)
+  })
+
+  it('suppresses a delayed user fallback error after the fallback promise handled it', async () => {
+    vi.useFakeTimers()
+    appMock.getVersion.mockReturnValue('1.3.51-rc.6')
+    fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.51-rc.7', 'v1.3.51-rc.6'])
+
+    const missingManifest = new Error(
+      'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
+    )
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      const callCount = autoUpdaterMock.checkForUpdates.mock.calls.length
+      autoUpdaterMock.emit('checking-for-update')
+      if (callCount === 1) {
+        queueMicrotask(() => {
+          autoUpdaterMock.emit('error', missingManifest)
+        })
+        return new Promise(() => {})
+      }
+      setTimeout(() => {
+        autoUpdaterMock.emit('error', missingManifest)
+      }, 10)
+      return Promise.reject(missingManifest)
+    })
+
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      const statuses = sendMock.mock.calls
+        .filter(([channel]) => channel === 'updater:status')
+        .map(([, status]) => status)
+      expect(statuses).toContainEqual({
+        state: 'error',
+        message: "Couldn't reach the update server. Try again in a few minutes.",
+        userInitiated: true
+      })
+    })
+
+    sendMock.mockClear()
+    await vi.advanceTimersByTimeAsync(10)
+
+    const statusesAfterLateError = sendMock.mock.calls
+      .filter(([channel]) => channel === 'updater:status')
+      .map(([, status]) => status)
+    expect(statusesAfterLateError).not.toContainEqual(
+      expect.objectContaining({ state: 'error', message: missingManifest.message })
+    )
+  })
+
+  it('keeps background prerelease fallback not-available on the short retry cadence', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-03T12:00:00Z'))
+    appMock.getVersion.mockReturnValue('1.3.51-rc.6')
+    fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.51-rc.7', 'v1.3.51-rc.6'])
+
+    const missingManifest = new Error(
+      'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
+    )
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      if (autoUpdaterMock.checkForUpdates.mock.calls.length === 1) {
+        queueMicrotask(() => {
+          autoUpdaterMock.emit('error', missingManifest)
+        })
+        return new Promise(() => {})
+      }
+      if (autoUpdaterMock.checkForUpdates.mock.calls.length === 2) {
+        queueMicrotask(() => {
+          autoUpdaterMock.emit('update-not-available')
+        })
+        return Promise.resolve(undefined)
+      }
+      return new Promise(() => {})
+    })
+
+    const sendMock = vi.fn()
+    const setLastUpdateCheckAt = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => null,
+      setLastUpdateCheckAt
+    })
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+      const statuses = sendMock.mock.calls
+        .filter(([channel]) => channel === 'updater:status')
+        .map(([, status]) => status)
+      expect(statuses).toContainEqual({ state: 'not-available' })
+    })
+
+    expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(59 * 60 * 1000)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+
+    await vi.advanceTimersByTimeAsync(60 * 1000)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(3)
+  })
+
+  it('keeps user prerelease fallback not-available on the short retry cadence', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-03T12:00:00Z'))
+    appMock.getVersion.mockReturnValue('1.3.51-rc.6')
+    fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.51-rc.7', 'v1.3.51-rc.6'])
+
+    const missingManifest = new Error(
+      'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
+    )
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      const callCount = autoUpdaterMock.checkForUpdates.mock.calls.length
+      autoUpdaterMock.emit('checking-for-update')
+      if (callCount === 1) {
+        queueMicrotask(() => {
+          autoUpdaterMock.emit('error', missingManifest)
+        })
+        return new Promise(() => {})
+      }
+      if (callCount === 2) {
+        queueMicrotask(() => {
+          autoUpdaterMock.emit('update-not-available')
+        })
+        return Promise.resolve(undefined)
+      }
+      return new Promise(() => {})
+    })
+
+    const sendMock = vi.fn()
+    const setLastUpdateCheckAt = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      setLastUpdateCheckAt
+    })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+      const statuses = sendMock.mock.calls
+        .filter(([channel]) => channel === 'updater:status')
+        .map(([, status]) => status)
+      expect(statuses).toContainEqual({ state: 'not-available', userInitiated: true })
+    })
+
+    expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(59 * 60 * 1000)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+
+    await vi.advanceTimersByTimeAsync(60 * 1000)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(3)
+  })
+
+  it('keeps user prerelease fallback available on the short retry cadence', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-03T12:00:00Z'))
+    appMock.getVersion.mockReturnValue('1.3.51-rc.5')
+    fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.51-rc.7', 'v1.3.51-rc.6'])
+
+    const missingManifest = new Error(
+      'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
+    )
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      const callCount = autoUpdaterMock.checkForUpdates.mock.calls.length
+      autoUpdaterMock.emit('checking-for-update')
+      if (callCount === 1) {
+        queueMicrotask(() => {
+          autoUpdaterMock.emit('error', missingManifest)
+        })
+        return new Promise(() => {})
+      }
+      if (callCount === 2) {
+        queueMicrotask(() => {
+          autoUpdaterMock.emit('update-available', { version: '1.3.51-rc.6' })
+        })
+        return Promise.resolve(undefined)
+      }
+      return new Promise(() => {})
+    })
+
+    const sendMock = vi.fn()
+    const setLastUpdateCheckAt = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      setLastUpdateCheckAt
+    })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+      const statuses = sendMock.mock.calls
+        .filter(([channel]) => channel === 'updater:status')
+        .map(([, status]) => status)
+      expect(statuses).toContainEqual({
+        state: 'available',
+        version: '1.3.51-rc.6',
+        changelog: null
+      })
+    })
+
+    expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(59 * 60 * 1000)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+
+    await vi.advanceTimersByTimeAsync(60 * 1000)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(3)
+  })
+
+  it('surfaces the failure when the bounded prerelease fallback also misses its manifest', async () => {
+    appMock.getVersion.mockReturnValue('1.3.51-rc.6')
+    fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.51-rc.7', 'v1.3.51-rc.6'])
+
+    const missingManifest = new Error(
+      'Cannot find channel "latest-mac.yml" update info: HttpError: 404'
+    )
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('error', missingManifest)
+      })
+      return Promise.reject(missingManifest)
+    })
+
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+    })
+    await vi.waitFor(() => {
+      const statuses = sendMock.mock.calls
+        .filter(([channel]) => channel === 'updater:status')
+        .map(([, status]) => status)
+      expect(statuses).toContainEqual({
+        state: 'error',
+        message: "Couldn't reach the update server. Try again in a few minutes.",
+        userInitiated: true
+      })
+    })
+  })
+
+  // Why: /releases/latest/download is a moving redirect. If a new stable
+  // release publishes between check and manual download, a relative ZIP URL
+  // from the old manifest can resolve against the new release and 404.
+  it('pins the generic feed to a concrete stable tag for a stable user', async () => {
     appMock.getVersion.mockReturnValue('1.3.17')
+    fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.18'])
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
@@ -864,20 +1553,23 @@ describe('updater', () => {
     checkForUpdatesFromMenu()
 
     await vi.waitFor(() => {
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith('1.3.17', 1, {
+        includePrerelease: false
+      })
       expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
     })
-    expect(fetchNewerReleaseTagMock).not.toHaveBeenCalled()
-    expect(autoUpdaterMock.setFeedURL).toHaveBeenCalledWith({
+    expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
       provider: 'generic',
-      url: 'https://github.com/stablyai/orca/releases/latest/download'
+      url: 'https://github.com/stablyai/orca/releases/download/v1.3.18'
     })
   })
 
-  // Why: once the user Shift-clicks to opt into RC channel, we switch to the
-  // native github provider. The atom-feed resolver must NOT run after that,
-  // or it would clobber the provider switch with a generic feed URL.
-  it('does not run the atom resolver after a Shift-click RC opt-in', async () => {
+  // Why: Shift-click opts into RC updates, but the native GitHub provider can
+  // still select cancelled prerelease tags with missing manifests. Keep the
+  // manifest-probed generic feed path so those tags are skipped.
+  it('uses the manifest-probed generic feed after a Shift-click RC opt-in', async () => {
     appMock.getVersion.mockReturnValue('1.3.17')
+    fetchNewerReleaseTagsMock.mockResolvedValue(['v1.3.18-rc.1'])
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
 
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
@@ -888,14 +1580,15 @@ describe('updater', () => {
     checkForUpdatesFromMenu({ includePrerelease: true })
 
     await vi.waitFor(() => {
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith('1.3.17', 2, {
+        includePrerelease: true
+      })
       expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
     })
-    expect(fetchNewerReleaseTagMock).not.toHaveBeenCalled()
     expect(autoUpdaterMock.allowPrerelease).toBe(true)
     expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
-      provider: 'github',
-      owner: 'stablyai',
-      repo: 'orca'
+      provider: 'generic',
+      url: 'https://github.com/stablyai/orca/releases/download/v1.3.18-rc.1'
     })
   })
 })

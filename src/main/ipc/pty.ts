@@ -36,7 +36,19 @@ import {
   launchSourceSchema,
   requestKindSchema
 } from '../../shared/telemetry-events'
+import { isRemoteAgentHooksEnabled } from '../../shared/agent-hook-relay'
+import { createTerminalSessionStateSaveFailureMessage } from '../../shared/terminal-session-state-save-failure'
 import { readShellStartupEnvVar } from '../pty/shell-startup-env'
+import {
+  isTerminalLeafId,
+  makePaneKey,
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../shared/stable-pane-id'
+import {
+  clearMigrationUnsupportedPty,
+  clearMigrationUnsupportedPtysForPaneKey
+} from '../agent-hooks/migration-unsupported-pty-state'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId. null = local provider.
@@ -101,8 +113,25 @@ const ptyPendingGenByPtyId = new Map<string, number>()
 // and cleared on PTY teardown.
 const rendererSerializerByPtyId = new Set<string>()
 
+function parseValidPaneKey(paneKey: unknown): ReturnType<typeof parsePaneKey> {
+  if (typeof paneKey !== 'string' || paneKey.length > 256) {
+    return null
+  }
+  return parsePaneKey(paneKey)
+}
+
 function isValidPaneKey(paneKey: unknown): paneKey is string {
-  return typeof paneKey === 'string' && paneKey.length > 0 && paneKey.length <= 256
+  return parseValidPaneKey(paneKey) !== null
+}
+
+function rememberPaneKeyForPty(ptyId: string, paneKey: unknown): string | null {
+  const normalizedPaneKey = typeof paneKey === 'string' ? paneKey.trim() : ''
+  if (!isValidPaneKey(normalizedPaneKey)) {
+    return null
+  }
+  ptyPaneKey.set(ptyId, normalizedPaneKey)
+  paneKeyPtyId.set(normalizedPaneKey, ptyId)
+  return normalizedPaneKey
 }
 
 function declarePendingPaneSerializer(paneKey: string): number {
@@ -199,6 +228,10 @@ export type BuildPtyHostEnvOptions = {
   userDataPath: string
   selectedCodexHomePath: string | null
   githubAttributionEnabled: boolean
+}
+
+function readInheritedPath(baseEnv: Record<string, string>): string {
+  return baseEnv.PATH ?? process.env.PATH ?? process.env.Path ?? ''
 }
 
 /**
@@ -309,11 +342,12 @@ export function buildPtyHostEnv(
   if (!opts.isPackaged) {
     baseEnv.ORCA_USER_DATA_PATH ??= opts.userDataPath
     const devCliBin = join(opts.userDataPath, 'cli', 'bin')
+    const inheritedPath = readInheritedPath(baseEnv)
     // Why: avoid a trailing delimiter when PATH is empty — some shells
     // treat an empty segment as `.`, which would let commands resolve from
     // the current working directory (a foot-gun we don't want to create
     // for dev terminals).
-    baseEnv.PATH = baseEnv.PATH ? `${devCliBin}${delimiter}${baseEnv.PATH}` : devCliBin
+    baseEnv.PATH = inheritedPath ? `${devCliBin}${delimiter}${inheritedPath}` : devCliBin
   }
 
   // Why: GitHub attribution should only affect commands launched from
@@ -416,20 +450,36 @@ export function clearProviderPtyState(id: string): void {
   openCodeHookService.clearPty(id)
   piTitlebarExtensionService.clearPty(id)
   ptySizes.delete(id)
+  const paneKey = ptyPaneKey.get(id)
+  const stillOwnsPaneKey = paneKey ? paneKeyPtyId.get(paneKey) === id : false
   // Why: drop the memory-collector registration so a dead PTY does not keep
   // trying to resolve its (now-dead) pid on every snapshot. Safe no-op for
   // PTYs that were never registered (SSH-owned).
   unregisterPty(id)
+  clearMigrationUnsupportedPty(id)
+  agentHookServer.clearPaneKeyAliasesForPty(id, {
+    shouldClearStablePaneKey: (stablePaneKey) => {
+      // Why: when this PTY never rebuilt ptyPaneKey after restart, alias
+      // ownership is our only proof. Once a newer PTY owns the same stable
+      // paneKey, alias teardown must not erase that newer status.
+      const stablePaneOwner = paneKeyPtyId.get(stablePaneKey)
+      if (stablePaneOwner && stablePaneOwner !== id) {
+        return false
+      }
+      return !paneKey || (stillOwnsPaneKey && stablePaneKey === paneKey)
+    }
+  })
   rendererSerializerByPtyId.delete(id)
   // Why: the hook server's per-paneKey caches (lastPrompt / lastTool) would
   // otherwise accumulate entries for dead panes over the process lifetime.
   // Use the spawn-time paneKey mapping since the server has no other way to
   // correlate a ptyId back to its paneKey.
-  const paneKey = ptyPaneKey.get(id)
   if (paneKey) {
-    agentHookServer.clearPaneState(paneKey)
+    if (stillOwnsPaneKey) {
+      agentHookServer.clearPaneState(paneKey)
+      paneKeyPtyId.delete(paneKey)
+    }
     ptyPaneKey.delete(id)
-    paneKeyPtyId.delete(paneKey)
     // Why: drop the pre-signal pending entry only if it still belongs to THIS
     // PTY's spawn generation. If a remount for the same paneKey has already
     // pre-signaled a new gen, this teardown must NOT touch it — otherwise
@@ -441,14 +491,16 @@ export function clearProviderPtyState(id: string): void {
       settlePendingPaneSerializer(paneKey, ownedGen)
     }
     ptyPendingGenByPtyId.delete(id)
-    // Why: notify registered consumers AFTER we've dropped the paneKey↔ptyId
-    // entries so a listener that re-reads the map sees the post-teardown
-    // state. Wrap each call so one throwing listener cannot block the rest.
-    for (const listener of paneKeyTeardownListeners) {
-      try {
-        listener(paneKey)
-      } catch (err) {
-        console.error('[pty] paneKey teardown listener threw', err)
+    if (stillOwnsPaneKey) {
+      // Why: notify registered consumers AFTER we've dropped the paneKey↔ptyId
+      // entries so a listener that re-reads the map sees the post-teardown
+      // state. Wrap each call so one throwing listener cannot block the rest.
+      for (const listener of paneKeyTeardownListeners) {
+        try {
+          listener(paneKey)
+        } catch (err) {
+          console.error('[pty] paneKey teardown listener threw', err)
+        }
       }
     }
   }
@@ -848,12 +900,16 @@ export function registerPtyHandlers(
       if (isClaudeLaunch) {
         markClaudePtySpawned(result.id)
       }
+      // Why: runtime-owned CLI PTYs bypass the renderer `pty:spawn` handler,
+      // so record their spawn-time paneKey here too. Synthetic hook titles and
+      // paneKey-scoped cache cleanup both depend on this reverse lookup.
+      const paneKey = rememberPaneKeyForPty(result.id, env?.ORCA_PANE_KEY)
       if (!args.connectionId) {
         registerPty({
           ptyId: result.id,
           worktreeId: args.worktreeId ?? null,
           sessionId: sessionId ?? null,
-          paneKey: null,
+          paneKey,
           pid:
             typeof result.pid === 'number' && Number.isFinite(result.pid) && result.pid > 0
               ? result.pid
@@ -906,6 +962,11 @@ export function registerPtyHandlers(
           console.warn(
             `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
           )
+          // Why: callers of controller.kill must observe a kill→exit pair so
+          // runtime tail buffers close and agents stop treating the pane as
+          // live. Preserve provider/lease state so a retry can still target
+          // the remote PTY if it survived the transient failure.
+          runtime?.onPtyExit(ptyId, -1)
         })
       return true
     },
@@ -914,6 +975,13 @@ export function registerPtyHandlers(
         return await getProviderForPty(ptyId).getForegroundProcess(ptyId)
       } catch {
         return null
+      }
+    },
+    hasChildProcesses: async (ptyId) => {
+      try {
+        return await getProviderForPty(ptyId).hasChildProcesses(ptyId)
+      } catch {
+        return false
       }
     },
     clearBuffer: async (ptyId) => {
@@ -1045,7 +1113,72 @@ export function registerPtyHandlers(
       const isMintedSessionId = args.sessionId === undefined && isDaemonHostSpawn
       const effectiveSessionId =
         args.sessionId ?? (isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined)
-      const baseEnv = claudeAuth ? { ...args.env, ...claudeAuth.envPatch } : args.env
+      // Why: the renderer sets pane env for SSH too. Only forward it to the
+      // remote when the relay hook path is enabled; otherwise a newer relay
+      // could emit statuses this Orca build is not prepared to route.
+      let sshSourceEnv = args.env
+      if (args.connectionId && !isRemoteAgentHooksEnabled()) {
+        if (
+          sshSourceEnv &&
+          ('ORCA_PANE_KEY' in sshSourceEnv ||
+            'ORCA_TAB_ID' in sshSourceEnv ||
+            'ORCA_WORKTREE_ID' in sshSourceEnv)
+        ) {
+          const stripped = { ...sshSourceEnv }
+          delete stripped.ORCA_PANE_KEY
+          delete stripped.ORCA_TAB_ID
+          delete stripped.ORCA_WORKTREE_ID
+          sshSourceEnv = stripped
+        }
+      }
+      const baseEnvWithAuth = claudeAuth
+        ? { ...sshSourceEnv, ...claudeAuth.envPatch }
+        : sshSourceEnv
+      const spawnPaneKey = baseEnvWithAuth?.ORCA_PANE_KEY
+      const parsedSpawnPaneKey = parseValidPaneKey(spawnPaneKey)
+      const verifiedPaneKey =
+        parsedSpawnPaneKey &&
+        typeof args.tabId === 'string' &&
+        args.tabId === parsedSpawnPaneKey.tabId &&
+        args.leafId === parsedSpawnPaneKey.leafId
+          ? makePaneKey(parsedSpawnPaneKey.tabId, parsedSpawnPaneKey.leafId)
+          : null
+      const verifiedLeafId =
+        verifiedPaneKey && parsedSpawnPaneKey ? parsedSpawnPaneKey.leafId : null
+      const metadataLeafId =
+        typeof args.leafId === 'string' && isTerminalLeafId(args.leafId) ? args.leafId : null
+      const legacySpawnPaneKey = verifiedPaneKey ? null : parseLegacyNumericPaneKey(spawnPaneKey)
+      const migrationUnsupportedPaneKey =
+        legacySpawnPaneKey &&
+        typeof args.tabId === 'string' &&
+        args.tabId === legacySpawnPaneKey.tabId &&
+        typeof args.leafId === 'string' &&
+        isTerminalLeafId(args.leafId)
+          ? makePaneKey(args.tabId, args.leafId)
+          : null
+      const stablePaneKey = verifiedPaneKey ?? migrationUnsupportedPaneKey
+      const baseEnv = baseEnvWithAuth ? { ...baseEnvWithAuth } : undefined
+      if (baseEnv && stablePaneKey) {
+        baseEnv.ORCA_PANE_KEY = stablePaneKey
+        if (typeof args.tabId === 'string') {
+          baseEnv.ORCA_TAB_ID = args.tabId
+        } else if (!args.connectionId) {
+          delete baseEnv.ORCA_TAB_ID
+        }
+        if (typeof args.worktreeId === 'string') {
+          baseEnv.ORCA_WORKTREE_ID = args.worktreeId
+        } else if (!args.connectionId) {
+          delete baseEnv.ORCA_WORKTREE_ID
+        }
+      } else if (baseEnv) {
+        // Why: ORCA_PANE_KEY crosses into shells and hook registries. Only the
+        // key proven to match this spawn's tab+leaf may leave the IPC boundary.
+        delete baseEnv.ORCA_PANE_KEY
+        delete baseEnv.ORCA_TAB_ID
+        delete baseEnv.ORCA_WORKTREE_ID
+      }
+      const validatedPaneKey = stablePaneKey
+      const validatedLeafId = verifiedLeafId ?? metadataLeafId
       let env: Record<string, string> | undefined = baseEnv
       const preAllocatedHandle =
         runtime && !(provider instanceof LocalPtyProvider)
@@ -1217,7 +1350,7 @@ export function registerPtyHandlers(
           ptyId: result.id,
           ...(typeof args.worktreeId === 'string' ? { worktreeId: args.worktreeId } : {}),
           ...(typeof args.tabId === 'string' ? { tabId: args.tabId } : {}),
-          ...(typeof args.leafId === 'string' ? { leafId: args.leafId } : {}),
+          ...(validatedLeafId ? { leafId: validatedLeafId } : {}),
           state: 'attached',
           lastAttachedAt: Date.now()
         })
@@ -1235,16 +1368,33 @@ export function registerPtyHandlers(
       if (
         (isDaemonHostSpawn || args.connectionId) &&
         store &&
-        args.worktreeId !== undefined &&
-        args.tabId !== undefined &&
-        args.leafId !== undefined
+        typeof args.worktreeId === 'string' &&
+        typeof args.tabId === 'string' &&
+        validatedLeafId !== null
       ) {
-        store.persistPtyBinding({
-          worktreeId: args.worktreeId,
-          tabId: args.tabId,
-          leafId: args.leafId,
-          ptyId: result.id
-        })
+        try {
+          store.persistPtyBinding({
+            worktreeId: args.worktreeId,
+            tabId: args.tabId,
+            leafId: validatedLeafId,
+            ptyId: result.id
+          })
+        } catch (err) {
+          console.error('[pty] failed to persist PTY binding after spawn:', err)
+          if (!result.isReattach) {
+            try {
+              await provider.shutdown(result.id, { immediate: true })
+            } catch (shutdownErr) {
+              console.warn('[pty] failed to clean up PTY after persistence failure:', shutdownErr)
+            }
+            clearProviderPtyState(result.id)
+            deletePtyOwnership(result.id)
+          }
+          if (!result.isReattach && args.connectionId && store) {
+            store.removeSshRemotePtyLease(args.connectionId, result.id)
+          }
+          throw new Error(createTerminalSessionStateSaveFailureMessage())
+        }
       }
       // Why: pre-signal cooperation gate — when the renderer has declared it
       // will own the serializer for this paneKey, suppress the daemon-snapshot
@@ -1252,16 +1402,13 @@ export function registerPtyHandlers(
       // is the sole authority. The pre-signal is keyed on paneKey because at
       // spawn time the renderer doesn't yet know the new ptyId. See
       // docs/mobile-prefer-renderer-scrollback.md.
-      const spawnPaneKey = args.env?.ORCA_PANE_KEY
-      const rendererPreSignaled = isValidPaneKey(spawnPaneKey)
-        ? pendingByPaneKey.has(spawnPaneKey)
-        : false
+      const rendererPreSignaled = validatedPaneKey ? pendingByPaneKey.has(validatedPaneKey) : false
       const rendererAlreadyRegistered = rendererSerializerByPtyId.has(result.id)
       // Why: capture the pending gen at spawn time so teardown for THIS PTY
       // only settles its own generation. A remount that replaces the entry
       // with a new gen must not be stomped by the old PTY's teardown.
-      if (isValidPaneKey(spawnPaneKey) && rendererPreSignaled) {
-        const gen = pendingByPaneKey.get(spawnPaneKey)
+      if (validatedPaneKey && rendererPreSignaled) {
+        const gen = pendingByPaneKey.get(validatedPaneKey)
         if (gen !== undefined) {
           ptyPendingGenByPtyId.set(result.id, gen)
         }
@@ -1311,10 +1458,20 @@ export function registerPtyHandlers(
       // Record<string, string> type is not actually enforced at the boundary.
       // Narrow to a bounded string so malformed or oversized values cannot
       // pollute ptyPaneKey or the downstream clearPaneState call.
-      const paneKey = args.env?.ORCA_PANE_KEY
-      if (typeof paneKey === 'string' && paneKey.length > 0 && paneKey.length <= 256) {
-        ptyPaneKey.set(result.id, paneKey)
-        paneKeyPtyId.set(paneKey, result.id)
+      const rememberedPaneKey = validatedPaneKey
+        ? rememberPaneKeyForPty(result.id, validatedPaneKey)
+        : null
+      if (legacySpawnPaneKey && migrationUnsupportedPaneKey) {
+        agentHookServer.registerPaneKeyAlias(
+          legacySpawnPaneKey.paneKey,
+          migrationUnsupportedPaneKey,
+          result.id
+        )
+        clearMigrationUnsupportedPtysForPaneKey(migrationUnsupportedPaneKey)
+      } else if (validatedPaneKey) {
+        if (!result.isReattach) {
+          clearMigrationUnsupportedPtysForPaneKey(validatedPaneKey)
+        }
       }
       // Why: register local PTYs (connectionId falsy) with the memory
       // collector so it can walk each PTY's process subtree and attribute
@@ -1346,7 +1503,7 @@ export function registerPtyHandlers(
             args.sessionId.length <= 256
               ? args.sessionId
               : null,
-          paneKey: typeof paneKey === 'string' ? paneKey : null,
+          paneKey: rememberedPaneKey,
           pid:
             typeof spawnedPid === 'number' && Number.isFinite(spawnedPid) && spawnedPid > 0
               ? spawnedPid
@@ -1582,6 +1739,34 @@ export function registerPtyHandlers(
       }
       settlePendingPaneSerializer(args.paneKey, args.gen)
     }
+  )
+}
+
+export function registerHeadlessPtyRuntime(
+  runtime: OrcaRuntimeService,
+  getSelectedCodexHomePath?: () => string | null,
+  getSettings?: () => GlobalSettings,
+  prepareClaudeAuth?: () => Promise<ClaudeRuntimeAuthPreparation>,
+  store?: Store
+): void {
+  // Why: headless `orca serve` has no renderer window, but the runtime still
+  // needs the same PTY controller and provider listeners as desktop so remote
+  // clients can create, stream, inspect, and stop terminals.
+  const headlessWindow = {
+    isDestroyed: () => true,
+    webContents: {
+      send: () => {},
+      on: () => {},
+      removeListener: () => {}
+    }
+  } as unknown as BrowserWindow
+  registerPtyHandlers(
+    headlessWindow,
+    runtime,
+    getSelectedCodexHomePath,
+    getSettings,
+    prepareClaudeAuth,
+    store
   )
 }
 

@@ -81,7 +81,8 @@ const InboxParams = z.object({
 const TaskCreateParams = z.object({
   spec: requiredString('Missing --spec'),
   deps: OptionalString,
-  parent: OptionalString
+  parent: OptionalString,
+  callerTerminalHandle: OptionalString
 })
 
 const TaskListParams = z.object({
@@ -241,6 +242,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         return { messages, count: messages.length }
       }
 
+      if (signal?.aborted) {
+        return { messages: [], count: 0 }
+      }
       const result = readAndReturn()
       if (result.count > 0 || !params.wait) {
         return result
@@ -257,6 +261,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         timeoutMs: params.timeoutMs ?? undefined,
         signal
       })
+      if (signal?.aborted) {
+        return { messages: [], count: 0 }
+      }
       return readAndReturn()
     }
   }),
@@ -322,7 +329,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const task = db.createTask({
         spec: params.spec,
         deps,
-        parentId: params.parent
+        parentId: params.parent,
+        createdByTerminalHandle: params.callerTerminalHandle
       })
       return { task }
     }

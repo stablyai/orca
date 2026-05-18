@@ -65,6 +65,10 @@ function getDaemonEntryPath(): string {
   // execute it from disk. In packaged apps app.getAppPath() points at
   // app.asar, so redirect to the unpacked sibling before joining the script.
   const basePath = app.isPackaged ? appPath.replace('app.asar', 'app.asar.unpacked') : appPath
+  const directEntryPath = join(basePath, 'daemon-entry.js')
+  if (existsSync(directEntryPath)) {
+    return directEntryPath
+  }
   return join(basePath, 'out', 'main', 'daemon-entry.js')
 }
 

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Terminal pane E2E is a serial coverage matrix for split, close, remake, move, resize, and retention flows. */
 /**
  * E2E tests for terminal pane splitting, state retention, resizing, and closing.
  *
@@ -8,14 +9,19 @@
  * - closing panes works
  */
 
+import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import {
+  UUID_RE,
   discoverActivePtyId,
   execInTerminal,
   closeActiveTerminalPane,
   countVisibleTerminalPanes,
   focusLastTerminalPane,
+  moveTerminalPaneByLeafId,
+  readTerminalPaneDomLeafOrder,
   splitActiveTerminalPane,
+  waitForPaneIdentitySnapshot,
   waitForActiveTerminalManager,
   waitForTerminalOutput,
   waitForPaneCount,
@@ -25,6 +31,7 @@ import {
   waitForSessionReady,
   waitForActiveWorktree,
   getActiveWorktreeId,
+  getActiveTabId,
   getActiveTabType,
   getWorktreeTabs,
   getAllWorktreeIds,
@@ -33,6 +40,76 @@ import {
   ensureTerminalVisible
 } from './helpers/store'
 import { pressShortcut } from './helpers/shortcuts'
+
+async function setPaneTitleFromTerminalMenu(page: Page, title: string): Promise<void> {
+  const modifiers: ('Alt' | 'Control' | 'Meta' | 'Shift')[] =
+    process.platform === 'win32' ? ['Control'] : []
+  await page
+    .locator('.xterm:visible')
+    .first()
+    .click({ button: 'right', position: { x: 40, y: 40 }, modifiers })
+  await page.getByText('Set Title…', { exact: true }).click()
+  const titleInput = page.locator('.pane-title-input').first()
+  await expect(titleInput).toBeVisible()
+  await titleInput.fill(title)
+  await titleInput.press('Enter')
+  // Why: CI can dispatch Enter before React has committed the filled value;
+  // blurring exercises the same submit path and makes the helper deterministic.
+  try {
+    await expect(titleInput).toHaveCount(0, { timeout: 500 })
+  } catch {
+    await titleInput.evaluateAll(([input]) => (input as HTMLElement | undefined)?.blur())
+  }
+  await expect(titleInput).toHaveCount(0)
+}
+
+async function getTabCustomTitle(
+  page: Page,
+  worktreeId: string,
+  tabId: string
+): Promise<string | null> {
+  return page.evaluate(
+    ({ targetWorktreeId, targetTabId }) => {
+      const state = window.__store!.getState()
+      const tab = (state.tabsByWorktree[targetWorktreeId] ?? []).find(
+        (entry) => entry.id === targetTabId
+      )
+      return tab?.customTitle ?? null
+    },
+    { targetWorktreeId: worktreeId, targetTabId: tabId }
+  )
+}
+
+async function expectTabCustomTitle(
+  page: Page,
+  worktreeId: string,
+  tabId: string,
+  expected: string | null
+): Promise<void> {
+  await expect
+    .poll(() => getTabCustomTitle(page, worktreeId, tabId), { timeout: 3_000 })
+    .toBe(expected)
+}
+
+async function expectSavedLayoutNotToContainTitle(
+  page: Page,
+  tabId: string,
+  title: string
+): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          ({ targetTabId, title }) => {
+            const layout = window.__store!.getState().terminalLayoutsByTabId[targetTabId]
+            return Object.values(layout?.titlesByLeafId ?? {}).includes(title)
+          },
+          { targetTabId: tabId, title }
+        ),
+      { timeout: 3_000 }
+    )
+    .toBe(false)
+}
 
 // Why: only the pointer-drag resize test needs a visible window (pointer
 // capture requires a real pointer id). Every other pane operation here is
@@ -91,6 +168,213 @@ test.describe('Terminal Panes', () => {
 
     const paneCountAfter = await countVisibleTerminalPanes(orcaPage)
     expect(paneCountAfter).toBe(paneCountBefore + 1)
+  })
+
+  test('split panes persist PTY bindings by stable UUID leaf id', async ({ orcaPage }) => {
+    const paneCountBefore = await countVisibleTerminalPanes(orcaPage)
+
+    await splitActiveTerminalPane(orcaPage, 'vertical')
+    await waitForPaneCount(orcaPage, paneCountBefore + 1)
+
+    const snapshot = await waitForPaneIdentitySnapshot(orcaPage, paneCountBefore + 1)
+    const leafIds = snapshot.panes.map((pane) => pane.leafId)
+    const ptyIds = snapshot.panes.map((pane) => pane.ptyId)
+
+    expect(new Set(leafIds).size).toBe(leafIds.length)
+    expect(new Set(ptyIds).size).toBe(ptyIds.length)
+    expect(Object.keys(snapshot.ptyIdsByLeafId).sort()).toEqual([...leafIds].sort())
+    expect(Object.keys(snapshot.ptyIdsByLeafId).every((leafId) => UUID_RE.test(leafId))).toBe(true)
+    expect(
+      snapshot.panes.some(
+        (pane) =>
+          String(pane.numericPaneId) === pane.leafId || `pane:${pane.numericPaneId}` === pane.leafId
+      )
+    ).toBe(false)
+  })
+
+  test('terminal process receives ORCA_PANE_KEY with the active UUID leaf id', async ({
+    orcaPage
+  }) => {
+    const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    const activeLeafId = snapshot.activeLeafId ?? snapshot.panes[0]?.leafId
+    if (!activeLeafId) {
+      throw new Error('No active pane leaf id found')
+    }
+
+    const expectedPaneKey = `${snapshot.tabId}:${activeLeafId}`
+    const ptyId = await discoverActivePtyId(orcaPage)
+    const marker = `ORCA_PANE_KEY_E2E_${Date.now()}`
+
+    await execInTerminal(orcaPage, ptyId, `printf '${marker}=%s\\n' "$ORCA_PANE_KEY"`)
+    await waitForTerminalOutput(orcaPage, `${marker}=${expectedPaneKey}`)
+
+    expect(activeLeafId).toMatch(UUID_RE)
+  })
+
+  test('Set Title stays pane-local during agent title churn', async ({ orcaPage }) => {
+    const worktreeId = (await getActiveWorktreeId(orcaPage))!
+    const tabId = (await getActiveTabId(orcaPage))!
+    const paneTitle = `Codex pane ${Date.now()}`
+    const removeButtonTitle = `Remove button label ${Date.now()}`
+    const splitTitle = `Split label ${Date.now()}`
+    const runtimeTitle = '⠋ Codex working'
+
+    await setPaneTitleFromTerminalMenu(orcaPage, paneTitle)
+    await expect(orcaPage.locator('.pane-title-text', { hasText: paneTitle })).toBeVisible()
+    await expectTabCustomTitle(orcaPage, worktreeId, tabId, null)
+
+    await orcaPage.getByRole('button', { name: `Edit pane title: ${paneTitle}` }).focus()
+    await orcaPage.keyboard.press('Enter')
+    const paneTitleInput = orcaPage.getByRole('textbox', { name: 'Pane title' })
+    await expect(paneTitleInput).toBeVisible()
+    await expect(paneTitleInput).toBeFocused()
+    await orcaPage.keyboard.press('Escape')
+    await expect(paneTitleInput).toHaveCount(0)
+    await expect(orcaPage.locator('.pane-title-text', { hasText: paneTitle })).toBeVisible()
+
+    await orcaPage.evaluate(
+      ({ targetTabId, title }) => {
+        window.__store!.getState().updateTabTitle(targetTabId, title)
+      },
+      { targetTabId: tabId, title: runtimeTitle }
+    )
+
+    // Why: active agents continuously write OSC titles. Set Title is Orca's
+    // pane-local overlay and must remain visible while the tab runtime title
+    // continues to follow the active PTY.
+    await expect(orcaPage.locator('.pane-title-text', { hasText: paneTitle })).toBeVisible()
+    await expect(
+      orcaPage.locator(`[data-testid="sortable-tab"][data-tab-id="${tabId}"]`)
+    ).toHaveAttribute('data-tab-title', runtimeTitle)
+    await expectTabCustomTitle(orcaPage, worktreeId, tabId, null)
+
+    await setPaneTitleFromTerminalMenu(orcaPage, '')
+    await expect(orcaPage.locator('.pane-title-text', { hasText: paneTitle })).toBeHidden()
+    await expectSavedLayoutNotToContainTitle(orcaPage, tabId, paneTitle)
+
+    await setPaneTitleFromTerminalMenu(orcaPage, removeButtonTitle)
+    await orcaPage.locator('.pane-title-bar', { hasText: removeButtonTitle }).hover()
+    await orcaPage.getByRole('button', { name: `Remove pane title: ${removeButtonTitle}` }).click()
+    await expect(orcaPage.locator('.pane-title-text', { hasText: removeButtonTitle })).toBeHidden()
+    await expectSavedLayoutNotToContainTitle(orcaPage, tabId, removeButtonTitle)
+
+    await setPaneTitleFromTerminalMenu(orcaPage, splitTitle)
+    await expectTabCustomTitle(orcaPage, worktreeId, tabId, null)
+
+    await splitActiveTerminalPane(orcaPage, 'vertical')
+    await waitForPaneCount(orcaPage, 2)
+    await expect(orcaPage.locator('.pane-title-text', { hasText: splitTitle })).toBeVisible()
+
+    await orcaPage.evaluate(
+      ({ targetTabId, title }) => {
+        window.__store!.getState().updateTabTitle(targetTabId, title)
+      },
+      { targetTabId: tabId, title: runtimeTitle }
+    )
+    await expect(
+      orcaPage.locator(`[data-testid="sortable-tab"][data-tab-id="${tabId}"]`)
+    ).toHaveAttribute('data-tab-title', runtimeTitle)
+  })
+
+  test('closing a split pane prunes its leaf-keyed PTY binding without remapping siblings', async ({
+    orcaPage
+  }) => {
+    await splitActiveTerminalPane(orcaPage, 'vertical')
+    await waitForPaneCount(orcaPage, 2)
+    await splitActiveTerminalPane(orcaPage, 'horizontal')
+    await waitForPaneCount(orcaPage, 3)
+
+    const beforeClose = await waitForPaneIdentitySnapshot(orcaPage, 3)
+    const closedLeafId = beforeClose.activeLeafId ?? beforeClose.panes.at(-1)?.leafId
+    if (!closedLeafId) {
+      throw new Error('No active split pane leaf id found before close')
+    }
+    const survivingLeafIds = beforeClose.panes
+      .map((pane) => pane.leafId)
+      .filter((leafId) => leafId !== closedLeafId)
+
+    await closeActiveTerminalPane(orcaPage)
+    await waitForPaneCount(orcaPage, 2)
+
+    const afterClose = await waitForPaneIdentitySnapshot(orcaPage, 2)
+    expect(afterClose.panes.map((pane) => pane.leafId).sort()).toEqual(survivingLeafIds.sort())
+    expect(Object.keys(afterClose.ptyIdsByLeafId).sort()).toEqual(survivingLeafIds.sort())
+    expect(afterClose.ptyIdsByLeafId[closedLeafId]).toBeUndefined()
+  })
+
+  test('closing and remaking right/down splits keeps surviving leaf-keyed bindings stable', async ({
+    orcaPage
+  }) => {
+    await splitActiveTerminalPane(orcaPage, 'vertical')
+    await waitForPaneCount(orcaPage, 2)
+    await splitActiveTerminalPane(orcaPage, 'horizontal')
+    await waitForPaneCount(orcaPage, 3)
+
+    const beforeClose = await waitForPaneIdentitySnapshot(orcaPage, 3)
+    const closedLeafId = beforeClose.activeLeafId ?? beforeClose.panes.at(-1)?.leafId
+    if (!closedLeafId) {
+      throw new Error('No active split pane leaf id found before close/remake')
+    }
+    const survivingBindings = Object.fromEntries(
+      beforeClose.panes
+        .filter((pane) => pane.leafId !== closedLeafId)
+        .map((pane) => [pane.leafId, pane.ptyId])
+    )
+
+    await closeActiveTerminalPane(orcaPage)
+    await waitForPaneCount(orcaPage, 2)
+
+    const afterClose = await waitForPaneIdentitySnapshot(orcaPage, 2)
+    expect(Object.keys(afterClose.ptyIdsByLeafId).sort()).toEqual(
+      Object.keys(survivingBindings).sort()
+    )
+    for (const [leafId, ptyId] of Object.entries(survivingBindings)) {
+      expect(afterClose.ptyIdsByLeafId[leafId]).toBe(ptyId)
+    }
+    expect(afterClose.ptyIdsByLeafId[closedLeafId]).toBeUndefined()
+
+    await splitActiveTerminalPane(orcaPage, 'horizontal')
+    await waitForPaneCount(orcaPage, 3)
+
+    const afterRemake = await waitForPaneIdentitySnapshot(orcaPage, 3)
+    const remadeLeafIds = afterRemake.panes.map((pane) => pane.leafId)
+    expect(remadeLeafIds).not.toContain(closedLeafId)
+    for (const [leafId, ptyId] of Object.entries(survivingBindings)) {
+      expect(afterRemake.ptyIdsByLeafId[leafId]).toBe(ptyId)
+    }
+    expect(new Set(remadeLeafIds).size).toBe(3)
+  })
+
+  test('moving panes through the drag-drop handler preserves leaf-keyed PTY bindings', async ({
+    orcaPage
+  }) => {
+    await splitActiveTerminalPane(orcaPage, 'vertical')
+    await waitForPaneCount(orcaPage, 2)
+    await splitActiveTerminalPane(orcaPage, 'horizontal')
+    await waitForPaneCount(orcaPage, 3)
+
+    const beforeMove = await waitForPaneIdentitySnapshot(orcaPage, 3)
+    const beforeOrder = await readTerminalPaneDomLeafOrder(orcaPage)
+    const source = beforeMove.panes.at(-1)
+    const target = beforeMove.panes[0]
+    if (!source || !target) {
+      throw new Error('Need source and target panes for move test')
+    }
+    const bindingsBefore = { ...beforeMove.ptyIdsByLeafId }
+
+    await moveTerminalPaneByLeafId(orcaPage, source.leafId, target.leafId, 'left')
+
+    await expect
+      .poll(async () => readTerminalPaneDomLeafOrder(orcaPage), {
+        timeout: 10_000,
+        message: 'Pane drag-drop move did not update DOM order'
+      })
+      .not.toEqual(beforeOrder)
+
+    const afterMove = await waitForPaneIdentitySnapshot(orcaPage, 3)
+    const afterLeafIds = afterMove.panes.map((pane) => pane.leafId).sort()
+    expect(afterLeafIds).toEqual(beforeMove.panes.map((pane) => pane.leafId).sort())
+    expect(afterMove.ptyIdsByLeafId).toEqual(bindingsBefore)
   })
 
   /**
@@ -278,6 +562,52 @@ test.describe('Terminal Panes', () => {
         { timeout: 5_000, message: 'Pane widths did not change after dragging divider' }
       )
       .toBe(true)
+  })
+
+  test('@headful dragging terminal panes around preserves leaf-keyed PTY bindings', async ({
+    orcaPage
+  }) => {
+    await splitActiveTerminalPane(orcaPage, 'vertical')
+    await waitForPaneCount(orcaPage, 2)
+    await splitActiveTerminalPane(orcaPage, 'horizontal')
+    await waitForPaneCount(orcaPage, 3)
+
+    const beforeDrag = await waitForPaneIdentitySnapshot(orcaPage, 3)
+    const beforeOrder = await readTerminalPaneDomLeafOrder(orcaPage)
+    const source = beforeDrag.panes.at(-1)
+    const target = beforeDrag.panes[0]
+    if (!source || !target) {
+      throw new Error('Need source and target panes for drag test')
+    }
+
+    const sourceHandle = orcaPage.locator(
+      `.pane[data-leaf-id="${source.leafId}"] .pane-drag-handle`
+    )
+    await expect(sourceHandle).toBeVisible({ timeout: 3_000 })
+    const sourceBox = await sourceHandle.boundingBox()
+    const targetBox = await orcaPage.locator(`.pane[data-leaf-id="${target.leafId}"]`).boundingBox()
+    expect(sourceBox).not.toBeNull()
+    expect(targetBox).not.toBeNull()
+
+    await orcaPage.mouse.move(sourceBox!.x + sourceBox!.width / 2, sourceBox!.y + 4)
+    await orcaPage.mouse.down()
+    await orcaPage.mouse.move(targetBox!.x + 8, targetBox!.y + targetBox!.height / 2, {
+      steps: 20
+    })
+    await orcaPage.mouse.up()
+
+    await expect
+      .poll(async () => readTerminalPaneDomLeafOrder(orcaPage), {
+        timeout: 10_000,
+        message: 'Real pane drag did not update DOM order'
+      })
+      .not.toEqual(beforeOrder)
+
+    const afterDrag = await waitForPaneIdentitySnapshot(orcaPage, 3)
+    expect(afterDrag.panes.map((pane) => pane.leafId).sort()).toEqual(
+      beforeDrag.panes.map((pane) => pane.leafId).sort()
+    )
+    expect(afterDrag.ptyIdsByLeafId).toEqual(beforeDrag.ptyIdsByLeafId)
   })
 
   /**

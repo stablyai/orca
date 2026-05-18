@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: the WebSocket transport owns connection
+   admission, heartbeat, pre-auth timeout, and client-id cleanup together; those
+   invariants are easier to audit in one transport boundary. */
 // Why: the WebSocket transport enables mobile clients to connect to the Orca
 // runtime over the local network. When TLS cert/key are provided it uses wss://
 // to prevent passive sniffing; otherwise it falls back to plain ws://. Per-device
@@ -7,9 +10,11 @@ import { createServer as createHttpsServer, type Server as HttpsServer } from 'h
 import { createServer as createHttpServer, type Server as HttpServer } from 'http'
 import { WebSocketServer, type WebSocket } from 'ws'
 import type { RpcTransport } from './transport'
+import { createStaticWebClientHandler } from './static-web-client-handler'
 
 const MAX_WS_MESSAGE_BYTES = 1024 * 1024
 const MAX_WS_CONNECTIONS = 32
+const PRE_AUTH_TIMEOUT_MS = 10_000
 type WebSocketMessagePayload = string | Uint8Array<ArrayBufferLike>
 type WebSocketMessageHandler = {
   bivarianceHack(
@@ -38,6 +43,11 @@ export type WebSocketTransportOptions = {
   tlsKey?: string
   // Why: test-only override. Production uses HEARTBEAT_INTERVAL_MS.
   heartbeatIntervalMs?: number
+  // Why: test-only override. Production uses PRE_AUTH_TIMEOUT_MS.
+  preAuthTimeoutMs?: number
+  // Why: the pairing server can also serve the browser client, so users do
+  // not need a second dev/static server once the web bundle is built.
+  staticRoot?: string
 }
 
 export class WebSocketTransport implements RpcTransport {
@@ -46,6 +56,8 @@ export class WebSocketTransport implements RpcTransport {
   private readonly tlsCert: string | undefined
   private readonly tlsKey: string | undefined
   private readonly heartbeatIntervalMs: number
+  private readonly preAuthTimeoutMs: number
+  private readonly staticRoot: string | undefined
   private httpServer: HttpsServer | HttpServer | null = null
   private wss: WebSocketServer | null = null
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null
@@ -55,18 +67,29 @@ export class WebSocketTransport implements RpcTransport {
   private wsAlive = new WeakSet<WebSocket>()
   private messageHandler: WebSocketMessageHandler | null = null
   private connectionCloseHandler:
-    | ((clientId: string, ws: WebSocket, hasOtherConnections: boolean) => void)
+    | ((clientId: string | null, ws: WebSocket, hasOtherConnections: boolean) => void)
     | null = null
   // Why: maps each WebSocket to the clientId (deviceToken) that authenticated it,
   // so ws.on('close') can notify the runtime which mobile client disconnected.
   private wsClientIds = new Map<WebSocket, string>()
+  private preAuthTimers = new WeakMap<WebSocket, ReturnType<typeof setTimeout>>()
 
-  constructor({ host, port, tlsCert, tlsKey, heartbeatIntervalMs }: WebSocketTransportOptions) {
+  constructor({
+    host,
+    port,
+    tlsCert,
+    tlsKey,
+    heartbeatIntervalMs,
+    preAuthTimeoutMs,
+    staticRoot
+  }: WebSocketTransportOptions) {
     this.host = host
     this.port = port
     this.tlsCert = tlsCert
     this.tlsKey = tlsKey
     this.heartbeatIntervalMs = heartbeatIntervalMs ?? HEARTBEAT_INTERVAL_MS
+    this.preAuthTimeoutMs = preAuthTimeoutMs ?? PRE_AUTH_TIMEOUT_MS
+    this.staticRoot = staticRoot
   }
 
   onMessage(handler: WebSocketMessageHandler): void {
@@ -80,13 +103,26 @@ export class WebSocketTransport implements RpcTransport {
   // so client-scoped teardown (mobile-fit overrides, etc.) only fires on the
   // last disconnect.
   onConnectionClose(
-    handler: (clientId: string, ws: WebSocket, hasOtherConnections: boolean) => void
+    handler: (clientId: string | null, ws: WebSocket, hasOtherConnections: boolean) => void
   ): void {
     this.connectionCloseHandler = handler
   }
 
   setClientId(ws: WebSocket, clientId: string): void {
     this.wsClientIds.set(ws, clientId)
+    this.clearPreAuthTimer(ws)
+  }
+
+  terminateClientConnections(clientId: string): number {
+    const sockets = Array.from(this.wsClientIds.entries())
+      .filter(([, candidateClientId]) => candidateClientId === clientId)
+      .map(([ws]) => ws)
+    for (const ws of sockets) {
+      // Why: revocation is a security boundary; terminate skips the close
+      // handshake so a revoked mobile stream stops immediately.
+      ws.terminate()
+    }
+    return sockets.length
   }
 
   // Why: when port 0 is passed the OS assigns a random available port. The
@@ -124,9 +160,12 @@ export class WebSocketTransport implements RpcTransport {
   }
 
   private createHttpServer(): HttpServer | HttpsServer {
+    const requestListener = this.staticRoot
+      ? createStaticWebClientHandler(this.staticRoot)
+      : undefined
     return this.tlsCert && this.tlsKey
-      ? createHttpsServer({ cert: this.tlsCert, key: this.tlsKey })
-      : createHttpServer()
+      ? createHttpsServer({ cert: this.tlsCert, key: this.tlsKey }, requestListener)
+      : createHttpServer(requestListener)
   }
 
   // Why: the WebSocketServer is attached only after listen succeeds. If we
@@ -235,6 +274,33 @@ export class WebSocketTransport implements RpcTransport {
   // connection via the RPC `id` field. The transport delegates all auth
   // and dispatch logic to the message handler set by OrcaRuntimeRpcServer.
   private handleConnection(ws: WebSocket): void {
+    let finalized = false
+    const finalizeConnection = (): void => {
+      if (finalized) {
+        return
+      }
+      finalized = true
+      this.clearPreAuthTimer(ws)
+      const clientId = this.wsClientIds.get(ws) ?? null
+      this.wsClientIds.delete(ws)
+      const hasOtherConnections =
+        clientId !== null && Array.from(this.wsClientIds.values()).includes(clientId)
+      this.connectionCloseHandler?.(clientId, ws, hasOtherConnections)
+    }
+
+    const preAuthTimer = setTimeout(() => {
+      if (!this.wsClientIds.has(ws)) {
+        // Why: a silent client that only auto-pongs can otherwise occupy one
+        // of the finite mobile WebSocket slots forever without ever starting
+        // the E2EE handshake.
+        ws.terminate()
+      }
+    }, this.preAuthTimeoutMs)
+    if (typeof preAuthTimer.unref === 'function') {
+      preAuthTimer.unref()
+    }
+    this.preAuthTimers.set(ws, preAuthTimer)
+
     // Why: seed alive=true so the first heartbeat tick after connect doesn't
     // treat a fresh socket as dead. Subsequent pongs (or any inbound traffic)
     // re-arm it.
@@ -272,23 +338,22 @@ export class WebSocketTransport implements RpcTransport {
     // Why: mobile clients disconnect when the phone locks, loses wifi, or
     // backgrounds the app. The runtime must clean up connection-scoped state
     // (e.g., mobile-fit overrides) to prevent orphaned phone-fit on desktop.
-    ws.on('close', () => {
-      const clientId = this.wsClientIds.get(ws)
-      this.wsClientIds.delete(ws)
-      if (clientId) {
-        // Why: a paired device may have multiple concurrent sockets open
-        // (e.g. one per app screen). Per-client teardown must only fire when
-        // the last socket for this token closes — otherwise closing the
-        // accounts-screen socket would clobber the host-screen socket's
-        // state and strand it in a non-functional state until re-paired.
-        const hasOtherConnections = Array.from(this.wsClientIds.values()).includes(clientId)
-        this.connectionCloseHandler?.(clientId, ws, hasOtherConnections)
-      }
-    })
+    ws.on('close', finalizeConnection)
 
     ws.on('error', () => {
+      // Why: close is not guaranteed after every ws error path; finalize here
+      // too so pre-auth E2EE channels and connection ids cannot leak.
+      finalizeConnection()
       ws.close()
     })
+  }
+
+  private clearPreAuthTimer(ws: WebSocket): void {
+    const timer = this.preAuthTimers.get(ws)
+    if (timer) {
+      clearTimeout(timer)
+      this.preAuthTimers.delete(ws)
+    }
   }
 }
 

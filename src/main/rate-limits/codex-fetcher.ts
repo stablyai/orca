@@ -44,7 +44,10 @@ function buildRpcMessage(id: number, method: string, params?: unknown): string {
   return `${JSON.stringify({ jsonrpc: '2.0', id, method, params: params ?? {} })}\n`
 }
 
-function mapRpcWindow(raw: RpcRateWindow | undefined): RateLimitWindow | null {
+function mapRpcWindow(
+  raw: RpcRateWindow | undefined,
+  expectedWindowMinutes: number
+): RateLimitWindow | null {
   if (!raw || typeof raw.usedPercent !== 'number') {
     return null
   }
@@ -70,7 +73,9 @@ function mapRpcWindow(raw: RpcRateWindow | undefined): RateLimitWindow | null {
 
   return {
     usedPercent: Math.min(100, Math.max(0, raw.usedPercent)),
-    windowMinutes: raw.windowDurationMins ?? 300,
+    // Why: Codex currently reports remaining minutes in `windowDurationMins`.
+    // Orca's UI needs the fixed bucket duration so labels stay "5h" / "wk".
+    windowMinutes: expectedWindowMinutes,
     resetsAt,
     resetDescription
   }
@@ -199,8 +204,8 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
 
             const wrapper = msg.result as RpcRateLimitsResponse | undefined
             const result = wrapper?.rateLimits
-            const session = mapRpcWindow(result?.primary)
-            const weekly = mapRpcWindow(result?.secondary)
+            const session = mapRpcWindow(result?.primary, 300)
+            const weekly = mapRpcWindow(result?.secondary, 10080)
 
             resolve({
               provider: 'codex',
@@ -428,7 +433,12 @@ export async function fetchCodexRateLimits(
 ): Promise<ProviderRateLimits> {
   // Path A: try RPC first
   try {
-    return await fetchViaRpc(options)
+    const rpcResult = await fetchViaRpc(options)
+    if (rpcResult.status === 'ok' || rpcResult.status === 'unavailable') {
+      return rpcResult
+    }
+    // Why: app-server can fail independently of the interactive CLI. Keep the
+    // status-bar useful by trying the older /status PTY reader on RPC errors.
   } catch {
     // RPC failed — fall through to PTY
   }

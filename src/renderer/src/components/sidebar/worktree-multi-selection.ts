@@ -5,6 +5,11 @@ export type WorktreeSelectionResult = {
   anchorId: string
 }
 
+export type WorktreeAreaSelectionResult = {
+  selectedIds: Set<string>
+  anchorId: string | null
+}
+
 export function getWorktreeSelectionIntent(
   event: Pick<MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey'>,
   isMac: boolean
@@ -72,6 +77,34 @@ export function pruneWorktreeSelection(
   return {
     selectedIds: next,
     anchorId: anchorId && visible.has(anchorId) ? anchorId : (next.values().next().value ?? null)
+  }
+}
+
+export function updateWorktreeAreaSelection(params: {
+  visibleIds: readonly string[]
+  previousSelectedIds: ReadonlySet<string>
+  previousAnchorId: string | null
+  areaIds: readonly string[]
+  additive: boolean
+}): WorktreeAreaSelectionResult {
+  const { visibleIds, previousSelectedIds, previousAnchorId, areaIds, additive } = params
+  const areaIdSet = new Set(areaIds)
+  const orderedAreaIds = visibleIds.filter((id) => areaIdSet.has(id))
+
+  if (additive) {
+    const selectedIds = new Set(previousSelectedIds)
+    for (const id of orderedAreaIds) {
+      selectedIds.add(id)
+    }
+    return {
+      selectedIds,
+      anchorId: orderedAreaIds.at(-1) ?? previousAnchorId
+    }
+  }
+
+  return {
+    selectedIds: new Set(orderedAreaIds),
+    anchorId: orderedAreaIds.at(-1) ?? null
   }
 }
 

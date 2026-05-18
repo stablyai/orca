@@ -1,8 +1,8 @@
 // Why: Pi (PI_CODING_AGENT_DIR) and OpenCode (OPENCODE_CONFIG_DIR) both inject
 // Orca-owned files into per-PTY overlay directories that mirror a user-owned
-// source dir via symlinks/junctions. The safety guarantees here — never
+// source dir via symlinks/junctions. The safety guarantees here -- never
 // descend into a symlink/junction during teardown, refuse to operate outside
-// the overlay root, lstat-not-stat to avoid following links — are the result
+// the overlay root, lstat-not-stat to avoid following links -- are the result
 // of debugging issue #1083 (Windows directory junctions causing fs.rmSync to
 // delete the user's real Pi state). Shared in one module so a new overlay
 // consumer cannot accidentally diverge from the audited cleanup behavior.
@@ -42,7 +42,7 @@ export function mirrorEntry(sourcePath: string, targetPath: string): void {
 // Exported for tests. A "descend candidate" is an entry whose children we
 // should recurse into when tearing down the overlay. Anything that is a
 // symlink (including a Windows directory junction) must NOT be a candidate
-// even if it also reports isDirectory() — following it would walk into the
+// even if it also reports isDirectory() -- following it would walk into the
 // link target and delete user data, which is the bug in #1083.
 export function isSafeDescendCandidate(stats: {
   isSymbolicLink(): boolean
@@ -56,7 +56,7 @@ export function isSafeDescendCandidate(stats: {
 
 // Why: the overlay tree contains symlinks/junctions that point back into the
 // user's real state dir. fs.rmSync with { recursive: true } has repeatedly
-// regressed on Windows when walking NTFS junctions — it can follow them and
+// regressed on Windows when walking NTFS junctions -- it can follow them and
 // delete the *target*, destroying the user's data. Never descend into a
 // symlink/junction here: for any non-real-directory entry we unlink the link
 // itself; only entries that are truly directories on disk are recursed into.
@@ -70,7 +70,7 @@ export function safeRemoveTree(path: string): void {
 
   // On Windows, lstat on a directory junction can report BOTH
   // isSymbolicLink() === true AND isDirectory() === true, so we MUST check
-  // isSymbolicLink first — otherwise a junction enters the recursive branch
+  // isSymbolicLink first -- otherwise a junction enters the recursive branch
   // and readdirSync enumerates the link's target, the exact bug in #1083.
   if (!isSafeDescendCandidate(stat)) {
     try {
@@ -98,7 +98,7 @@ export function safeRemoveTree(path: string): void {
     try {
       unlinkSync(child)
     } catch {
-      // best-effort, see above
+      // Best-effort, see above.
     }
   }
 

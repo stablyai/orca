@@ -1,17 +1,34 @@
+/* eslint-disable max-lines -- Why: import tests cover local copy, SSH routing,
+symlink safety, and runtime-upload staging against one shared IPC fixture. */
 import path from 'path'
+import { constants } from 'fs'
+import { Readable, Writable } from 'stream'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown>>()
-const { handleMock, lstatMock, mkdirMock, realpathMock, copyFileMock, readdirMock } = vi.hoisted(
-  () => ({
-    handleMock: vi.fn(),
-    lstatMock: vi.fn(),
-    mkdirMock: vi.fn(),
-    realpathMock: vi.fn(),
-    copyFileMock: vi.fn(),
-    readdirMock: vi.fn()
-  })
-)
+const {
+  handleMock,
+  lstatMock,
+  mkdirMock,
+  realpathMock,
+  copyFileMock,
+  openMock,
+  readFileMock,
+  readdirMock,
+  rmMock,
+  unlinkMock
+} = vi.hoisted(() => ({
+  handleMock: vi.fn(),
+  lstatMock: vi.fn(),
+  mkdirMock: vi.fn(),
+  realpathMock: vi.fn(),
+  copyFileMock: vi.fn(),
+  openMock: vi.fn(),
+  readFileMock: vi.fn(),
+  readdirMock: vi.fn(),
+  rmMock: vi.fn(),
+  unlinkMock: vi.fn()
+}))
 
 vi.mock('electron', () => ({
   ipcMain: { handle: handleMock }
@@ -20,11 +37,15 @@ vi.mock('electron', () => ({
 vi.mock('fs/promises', () => ({
   lstat: lstatMock,
   mkdir: mkdirMock,
+  open: openMock,
   rename: vi.fn(),
   writeFile: vi.fn(),
   realpath: realpathMock,
   copyFile: copyFileMock,
-  readdir: readdirMock
+  readFile: readFileMock,
+  readdir: readdirMock,
+  rm: rmMock,
+  unlink: unlinkMock
 }))
 
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
@@ -50,7 +71,14 @@ describe('fs:importExternalPaths', () => {
     const resolvedPath = path.resolve(filePath)
     lstatMock.mockImplementation(async (p: string) => {
       if (p === resolvedPath) {
-        return { isFile: () => true, isDirectory: () => false, isSymbolicLink: () => false }
+        return {
+          size: 12,
+          ino: 1,
+          dev: 1,
+          isFile: () => true,
+          isDirectory: () => false,
+          isSymbolicLink: () => false
+        }
       }
       throw enoent()
     })
@@ -61,6 +89,17 @@ describe('fs:importExternalPaths', () => {
     lstatMock.mockImplementation(async (p: string) => {
       if (p === resolvedDir) {
         return { isFile: () => false, isDirectory: () => true, isSymbolicLink: () => false }
+      }
+      const entry = entries.find((e) => path.join(resolvedDir, e.name) === p)
+      if (entry) {
+        return {
+          size: entry.isDir ? 0 : 12,
+          ino: entry.isDir ? 2 : 3,
+          dev: 1,
+          isFile: () => !entry.isDir,
+          isDirectory: () => entry.isDir,
+          isSymbolicLink: () => false
+        }
       }
       throw enoent()
     })
@@ -84,6 +123,35 @@ describe('fs:importExternalPaths', () => {
     })
   }
 
+  function mockLocalCopyOpenSuccess(content = Buffer.from('file-content')): void {
+    openMock.mockImplementation(async (_p: string, flags: unknown) => {
+      if (flags === 'wx') {
+        const written: Buffer[] = []
+        return {
+          createWriteStream: () =>
+            new Writable({
+              write(chunk, _encoding, callback) {
+                written.push(Buffer.from(chunk))
+                callback()
+              }
+            }),
+          close: vi.fn().mockResolvedValue(undefined),
+          written
+        }
+      }
+      return {
+        stat: vi.fn().mockResolvedValue({
+          size: content.byteLength,
+          ino: 1,
+          dev: 1,
+          isFile: () => true
+        }),
+        createReadStream: () => Readable.from([content]),
+        close: vi.fn().mockResolvedValue(undefined)
+      }
+    })
+  }
+
   beforeEach(() => {
     handlers.clear()
     handleMock.mockReset()
@@ -91,7 +159,11 @@ describe('fs:importExternalPaths', () => {
     mkdirMock.mockReset()
     realpathMock.mockReset()
     copyFileMock.mockReset()
+    openMock.mockReset()
+    readFileMock.mockReset()
     readdirMock.mockReset()
+    rmMock.mockReset()
+    unlinkMock.mockReset()
 
     handleMock.mockImplementation((channel: string, handler: never) => {
       handlers.set(channel, handler)
@@ -101,7 +173,11 @@ describe('fs:importExternalPaths', () => {
     lstatMock.mockRejectedValue(enoent())
     mkdirMock.mockResolvedValue(undefined)
     copyFileMock.mockResolvedValue(undefined)
+    mockLocalCopyOpenSuccess()
+    readFileMock.mockResolvedValue(Buffer.from('file-content'))
     readdirMock.mockResolvedValue([])
+    rmMock.mockResolvedValue(undefined)
+    unlinkMock.mockResolvedValue(undefined)
 
     registerFilesystemMutationHandlers(store as never)
   })
@@ -122,10 +198,44 @@ describe('fs:importExternalPaths', () => {
       renamed: false,
       destPath: path.join(destDir, 'logo.png')
     })
-    expect(copyFileMock).toHaveBeenCalledWith(
+    expect(openMock).toHaveBeenCalledWith(
       path.resolve(sourcePath),
-      path.join(destDir, 'logo.png')
+      constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0)
     )
+    expect(openMock).toHaveBeenCalledWith(path.join(destDir, 'logo.png'), 'wx')
+    expect(copyFileMock).not.toHaveBeenCalled()
+  })
+
+  it('fails local import instead of clobbering when the chosen destination appears late', async () => {
+    const sourcePath = '/tmp/dropped/logo.png'
+    mockSourceFile(sourcePath)
+    openMock.mockImplementation(async (_p: string, flags: unknown) => {
+      if (flags === 'wx') {
+        throw Object.assign(new Error('EEXIST'), { code: 'EEXIST' })
+      }
+      return {
+        stat: vi.fn().mockResolvedValue({
+          size: 12,
+          ino: 1,
+          dev: 1,
+          isFile: () => true
+        }),
+        createReadStream: () => Readable.from([Buffer.from('file-content')]),
+        close: vi.fn().mockResolvedValue(undefined)
+      }
+    })
+
+    const result = (await handlers.get('fs:importExternalPaths')!(null, {
+      sourcePaths: [sourcePath],
+      destDir
+    })) as { results: { status: string; reason?: string }[] }
+
+    expect(result.results[0]).toMatchObject({ status: 'failed', reason: 'EEXIST' })
+    expect(openMock).toHaveBeenCalledWith(
+      path.resolve(sourcePath),
+      constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0)
+    )
+    expect(openMock).toHaveBeenCalledWith(path.join(destDir, 'logo.png'), 'wx')
   })
 
   it('imports multiple files in one batch', async () => {
@@ -276,6 +386,44 @@ describe('fs:importExternalPaths', () => {
     expect(copyFileMock).not.toHaveBeenCalled()
   })
 
+  it('fails and removes output if a local directory entry becomes a symlink after pre-scan', async () => {
+    const sourcePath = '/tmp/dropped/mixeddir'
+    const resolvedSource = path.resolve(sourcePath)
+    const childPath = path.join(resolvedSource, 'normal.txt')
+    lstatMock.mockImplementation(async (p: string) => {
+      if (p === resolvedSource) {
+        return { isFile: () => false, isDirectory: () => true, isSymbolicLink: () => false }
+      }
+      if (p === childPath) {
+        return { isFile: () => false, isDirectory: () => false, isSymbolicLink: () => true }
+      }
+      throw enoent()
+    })
+    readdirMock.mockResolvedValue([
+      {
+        name: 'normal.txt',
+        isDirectory: () => false,
+        isSymbolicLink: () => false,
+        isFile: () => true
+      }
+    ])
+
+    const result = (await handlers.get('fs:importExternalPaths')!(null, {
+      sourcePaths: [sourcePath],
+      destDir
+    })) as { results: { status: string; reason?: string }[] }
+
+    expect(result.results[0]).toMatchObject({
+      status: 'failed',
+      reason: "Symlink not allowed in 'normal.txt'"
+    })
+    expect(openMock).not.toHaveBeenCalledWith(childPath, expect.anything())
+    expect(rmMock).toHaveBeenCalledWith(path.join(destDir, 'mixeddir'), {
+      recursive: true,
+      force: true
+    })
+  })
+
   it('rejects unauthorized destinations', async () => {
     const sourcePath = '/tmp/dropped/file.txt'
     mockSourceFile(sourcePath)
@@ -326,6 +474,120 @@ describe('fs:importExternalPaths', () => {
       sourcePath: sources[1],
       status: 'skipped',
       reason: 'missing'
+    })
+  })
+
+  it('stages external files for runtime upload without copying into the local worktree', async () => {
+    const sourcePath = '/tmp/dropped/logo.png'
+    const resolvedPath = path.resolve(sourcePath)
+    lstatMock.mockImplementation(async (p: string) => {
+      if (p === resolvedPath) {
+        return {
+          size: 4,
+          ino: 1,
+          dev: 1,
+          isFile: () => true,
+          isDirectory: () => false,
+          isSymbolicLink: () => false
+        }
+      }
+      throw enoent()
+    })
+    const closeMock = vi.fn().mockResolvedValue(undefined)
+    const readFileHandleMock = vi.fn().mockResolvedValue(Buffer.from('png'))
+    openMock.mockResolvedValue({
+      stat: vi.fn().mockResolvedValue({
+        size: 4,
+        ino: 1,
+        dev: 1,
+        isFile: () => true
+      }),
+      readFile: readFileHandleMock,
+      close: closeMock
+    })
+
+    const result = (await handlers.get('fs:stageExternalPathsForRuntimeUpload')!(null, {
+      sourcePaths: [sourcePath]
+    })) as { sources: unknown[] }
+
+    expect(result.sources).toEqual([
+      {
+        sourcePath,
+        status: 'staged',
+        name: 'logo.png',
+        kind: 'file',
+        entries: [{ relativePath: '', kind: 'file', contentBase64: 'cG5n' }]
+      }
+    ])
+    expect(copyFileMock).not.toHaveBeenCalled()
+    expect(readFileHandleMock).toHaveBeenCalled()
+    expect(closeMock).toHaveBeenCalled()
+  })
+
+  it('fails runtime upload staging when a file changes between lstat and open', async () => {
+    const sourcePath = '/tmp/dropped/logo.png'
+    const resolvedPath = path.resolve(sourcePath)
+    lstatMock.mockImplementation(async (p: string) => {
+      if (p === resolvedPath) {
+        return {
+          size: 4,
+          ino: 1,
+          dev: 1,
+          isFile: () => true,
+          isDirectory: () => false,
+          isSymbolicLink: () => false
+        }
+      }
+      throw enoent()
+    })
+    const readFileHandleMock = vi.fn().mockResolvedValue(Buffer.from('png'))
+    openMock.mockResolvedValue({
+      stat: vi.fn().mockResolvedValue({
+        size: 4,
+        ino: 2,
+        dev: 1,
+        isFile: () => true
+      }),
+      readFile: readFileHandleMock,
+      close: vi.fn().mockResolvedValue(undefined)
+    })
+
+    const result = (await handlers.get('fs:stageExternalPathsForRuntimeUpload')!(null, {
+      sourcePaths: [sourcePath]
+    })) as { sources: { status: string; reason?: string }[] }
+
+    expect(result.sources[0]).toMatchObject({
+      status: 'failed',
+      reason: "File changed during upload staging: ''"
+    })
+    expect(readFileHandleMock).not.toHaveBeenCalled()
+  })
+
+  it('fails runtime upload staging when a checked directory resolves outside the upload root', async () => {
+    const sourcePath = '/tmp/dropped/assets'
+    const resolvedPath = path.resolve(sourcePath)
+    lstatMock.mockImplementation(async (p: string) => {
+      if (p === resolvedPath) {
+        return {
+          isFile: () => false,
+          isDirectory: () => true,
+          isSymbolicLink: () => false
+        }
+      }
+      throw enoent()
+    })
+    readdirMock.mockResolvedValue([])
+    realpathMock
+      .mockResolvedValueOnce(resolvedPath)
+      .mockResolvedValueOnce(path.resolve('/private/assets'))
+
+    const result = (await handlers.get('fs:stageExternalPathsForRuntimeUpload')!(null, {
+      sourcePaths: [sourcePath]
+    })) as { sources: { status: string; reason?: string }[] }
+
+    expect(result.sources[0]).toMatchObject({
+      status: 'failed',
+      reason: "Path escaped upload root during staging: ''"
     })
   })
 })

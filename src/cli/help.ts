@@ -8,7 +8,14 @@ Usage: orca <command> [options]
 
 Startup:
   open                      Launch Orca and wait for the runtime to be reachable
+  serve                     Start a headless Orca runtime server
   status                    Show app/runtime/graph readiness
+
+Environments:
+  environment add           Save a remote Orca runtime from a pairing code
+  environment list          List saved remote Orca runtimes
+  environment show          Show one saved remote Orca runtime
+  environment rm            Remove a saved remote Orca runtime
 
 Repos:
   repo list                 List repos registered in Orca
@@ -138,12 +145,17 @@ Browser Automation:
 
 Common Commands:
   orca open [--json]
+  orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--json]
   orca status [--json]
+  orca environment add --name <name> --pairing-code <code> [--json]
+  orca environment list [--json]
+  orca environment show --environment <selector> [--json]
+  orca environment rm --environment <selector> [--json]
   orca worktree list [--repo <selector>] [--limit <n>] [--json]
-  orca worktree create --repo <selector> --name <name> [--base-branch <ref>] [--issue <number>] [--comment <text>] [--run-hooks] [--activate] [--json]
+  orca worktree create --repo <selector> --name <name> [--base-branch <ref>] [--issue <number>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]
   orca worktree show --worktree <selector> [--json]
   orca worktree current [--json]
-  orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--comment <text>] [--json]
+  orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--comment <text>] [--parent-worktree <selector>|--no-parent] [--json]
   orca worktree rm --worktree <selector> [--force] [--run-hooks] [--json]
   orca worktree ps [--limit <n>] [--json]
   orca terminal list [--worktree <selector>] [--limit <n>] [--json]
@@ -166,6 +178,8 @@ Selectors:
   --repo <selector>         Registered repo selector such as id:<id>, name:<name>, or path:<path>
   --worktree <selector>     Worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current
   --terminal <handle>       Runtime-issued terminal handle returned by \`orca terminal list --json\`
+  --parent-worktree <selector> Parent worktree selector; create infers one from the Orca terminal or current directory by default
+  --no-parent               Force worktree creation/update to have no parent lineage
 
 Terminal Send Options:
   --text <text>             Text to send to the terminal
@@ -178,10 +192,13 @@ Wait Options:
 
 Output Options:
   --json                    Emit machine-readable JSON instead of human text
+  --pairing-code <code>      Connect to a remote Orca runtime using an orca://pair#... code
+  --environment <selector>   Connect using a saved environment id or name
   --help                    Show this help message
 
 Behavior:
   Most commands require a running Orca runtime. If Orca is not open yet, run \`orca open\` first.
+  Remote runtime access can also be supplied with ORCA_PAIRING_CODE or ORCA_ENVIRONMENT.
   Use selectors for discovery and handles for repeated live terminal operations.
 
 Browser Workflow:
@@ -329,8 +346,11 @@ export function formatFlagHelp(flag: string): string {
     limit: '--limit <n>            Maximum number of rows to return',
     'mouse-button': '--mouse-button <btn>   Mouse button: left, right, or middle',
     name: '--name <name>          Name for the new worktree',
+    'no-parent': '--no-parent            Force no parent lineage',
     'no-screenshot': '--no-screenshot       Skip screenshot capture after the operation',
     pages: '--pages <n>           Number of scroll pages',
+    'parent-worktree':
+      '--parent-worktree <selector> Parent worktree selector; create infers one by default',
     path: '--path <path>          Filesystem path to the repo',
     query: '--query <text>        Search text for matching refs',
     ref: '--ref <ref>            Base ref to persist for the repo',

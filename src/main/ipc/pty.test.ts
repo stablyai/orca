@@ -2,6 +2,7 @@
 one focused file because the registration helper is stateful and each spawn-path
 assertion reuses the same mocked IPC and node-pty harness. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { delimiter, join } from 'node:path'
 
 const {
   handleMock,
@@ -20,11 +21,19 @@ const {
   openCodeBuildPtyEnvMock,
   openCodeClearPtyMock,
   buildAgentHookEnvMock,
+  clearAgentHookPaneStateMock,
+  registerPaneKeyAliasMock,
   piBuildPtyEnvMock,
   piClearPtyMock,
   isPwshAvailableMock,
   trackMock,
-  classifyErrorMock
+  classifyErrorMock,
+  registerPtyMock,
+  unregisterPtyMock,
+  setMigrationUnsupportedPtyMock,
+  clearMigrationUnsupportedPtyMock,
+  clearMigrationUnsupportedPtysForPaneKeyMock,
+  clearPaneKeyAliasesForPtyMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   onMock: vi.fn(),
@@ -43,10 +52,18 @@ const {
   isPwshAvailableMock: vi.fn(),
   openCodeClearPtyMock: vi.fn(),
   buildAgentHookEnvMock: vi.fn(),
+  clearAgentHookPaneStateMock: vi.fn(),
+  registerPaneKeyAliasMock: vi.fn(),
   piBuildPtyEnvMock: vi.fn(),
   piClearPtyMock: vi.fn(),
   trackMock: vi.fn(),
-  classifyErrorMock: vi.fn()
+  classifyErrorMock: vi.fn(),
+  registerPtyMock: vi.fn(),
+  unregisterPtyMock: vi.fn(),
+  setMigrationUnsupportedPtyMock: vi.fn(),
+  clearMigrationUnsupportedPtyMock: vi.fn(),
+  clearMigrationUnsupportedPtysForPaneKeyMock: vi.fn(),
+  clearPaneKeyAliasesForPtyMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -88,7 +105,10 @@ vi.mock('../opencode/hook-service', () => ({
 
 vi.mock('../agent-hooks/server', () => ({
   agentHookServer: {
-    buildPtyEnv: buildAgentHookEnvMock
+    buildPtyEnv: buildAgentHookEnvMock,
+    clearPaneState: clearAgentHookPaneStateMock,
+    registerPaneKeyAlias: registerPaneKeyAliasMock,
+    clearPaneKeyAliasesForPty: clearPaneKeyAliasesForPtyMock
   }
 }))
 
@@ -110,19 +130,41 @@ vi.mock('../telemetry/client', () => ({
 vi.mock('../telemetry/classify-error', () => ({
   classifyError: classifyErrorMock
 }))
+
+vi.mock('../memory/pty-registry', () => ({
+  registerPty: registerPtyMock,
+  unregisterPty: unregisterPtyMock
+}))
+
+vi.mock('../agent-hooks/migration-unsupported-pty-state', () => ({
+  setMigrationUnsupportedPty: setMigrationUnsupportedPtyMock,
+  clearMigrationUnsupportedPty: clearMigrationUnsupportedPtyMock,
+  clearMigrationUnsupportedPtysForPaneKey: clearMigrationUnsupportedPtysForPaneKeyMock
+}))
 import { LocalPtyProvider } from '../providers/local-pty-provider'
+import { makePaneKey } from '../../shared/stable-pane-id'
 import {
   registerPtyHandlers,
   registerSshPtyProvider,
+  clearProviderPtyState,
   deletePtyOwnership,
+  getPtyIdForPaneKey,
   setPtyOwnership,
   setLocalPtyProvider,
   unregisterSshPtyProvider
 } from './pty'
+import { hasLiveClaudePtys } from '../claude-accounts/live-pty-gate'
+import {
+  encodePowerShellCommand,
+  getPowerShellOsc133Bootstrap
+} from '../powershell-osc133-bootstrap'
 
-const POWERSHELL_PROFILE_COMMAND = expect.stringMatching(
-  /\. \$PROFILE[\s\S]*ORCA_OPENCODE_CONFIG_DIR[\s\S]*ORCA_PI_CODING_AGENT_DIR[\s\S]*UTF8/
-)
+const POWERSHELL_OSC133_ARGS = [
+  '-NoLogo',
+  '-NoExit',
+  '-EncodedCommand',
+  encodePowerShellCommand(getPowerShellOsc133Bootstrap())
+]
 
 function makeDisposable() {
   return { dispose: vi.fn() }
@@ -170,11 +212,19 @@ describe('registerPtyHandlers', () => {
     openCodeBuildPtyEnvMock.mockReset()
     openCodeClearPtyMock.mockReset()
     buildAgentHookEnvMock.mockReset()
+    clearAgentHookPaneStateMock.mockReset()
+    registerPaneKeyAliasMock.mockReset()
     piBuildPtyEnvMock.mockReset()
     piClearPtyMock.mockReset()
     isPwshAvailableMock.mockReset()
     trackMock.mockReset()
     classifyErrorMock.mockReset()
+    registerPtyMock.mockReset()
+    unregisterPtyMock.mockReset()
+    setMigrationUnsupportedPtyMock.mockReset()
+    clearMigrationUnsupportedPtyMock.mockReset()
+    clearMigrationUnsupportedPtysForPaneKeyMock.mockReset()
+    clearPaneKeyAliasesForPtyMock.mockReset()
     mainWindow.webContents.on.mockReset()
     mainWindow.webContents.send.mockReset()
 
@@ -343,6 +393,29 @@ describe('registerPtyHandlers', () => {
   }
 
   describe('spawn environment', () => {
+    it('marks local Claude launches live until the PTY is killed', async () => {
+      const prepareClaudeAuth = vi.fn(async () => ({
+        configDir: '/tmp/claude',
+        envPatch: {},
+        stripAuthEnv: false,
+        provenance: 'managed:account-1'
+      }))
+      registerPtyHandlers(mainWindow as never, undefined, undefined, undefined, prepareClaudeAuth)
+
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        command: 'claude'
+      })) as { id: string }
+
+      expect(prepareClaudeAuth).toHaveBeenCalledTimes(1)
+      expect(hasLiveClaudePtys()).toBe(true)
+
+      await handlers.get('pty:kill')!(null, { id: spawnResult.id })
+
+      expect(hasLiveClaudePtys()).toBe(false)
+    })
+
     it('defaults LANG to en_US.UTF-8 when not inherited from process.env', async () => {
       const env = await spawnAndGetEnv(undefined, { LANG: undefined })
       expect(env.LANG).toBe('en_US.UTF-8')
@@ -708,7 +781,25 @@ describe('registerPtyHandlers', () => {
         try {
           const env = await daemonSpawnAndGetEnv({ PATH: '/usr/bin' })
           expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
-          expect(env.PATH).toContain('/tmp/orca-user-data/cli/bin')
+          expect(env.PATH).toContain(join('/tmp/orca-user-data', 'cli', 'bin'))
+        } finally {
+          mockedApp.isPackaged = prev
+        }
+      })
+
+      it('preserves the inherited PATH when dev-mode daemon env omits PATH', async () => {
+        const { app } = await import('electron')
+        const mockedApp = app as unknown as { isPackaged: boolean }
+        const prev = mockedApp.isPackaged
+        mockedApp.isPackaged = false
+        try {
+          const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
+            PATH: '/system/bin'
+          })
+          expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
+          expect(env.PATH).toBe(
+            `${join('/tmp/orca-user-data', 'cli', 'bin')}${delimiter}/system/bin`
+          )
         } finally {
           mockedApp.isPackaged = prev
         }
@@ -925,14 +1016,15 @@ describe('registerPtyHandlers', () => {
           undefined,
           store as never
         )
+        const leafId = '11111111-1111-4111-8111-111111111111'
         await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
-          env: { FOO: 'bar' },
+          env: { FOO: 'bar', ORCA_PANE_KEY: makePaneKey('tab-1', leafId) },
           connectionId: 'ssh-1',
           worktreeId: 'wt-1',
           tabId: 'tab-1',
-          leafId: 'leaf-1'
+          leafId
         })
         const env = sshSpawn.mock.calls.at(-1)![0].env
         // Why: every host-local var must be absent over SSH — the hook
@@ -941,6 +1033,7 @@ describe('registerPtyHandlers', () => {
         // shipping any of them to a remote shell is at best useless and at
         // worst a credential leak.
         expect(env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
+        expect(env.ORCA_AGENT_HOOK_TOKEN).toBeUndefined()
         expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
         expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
         expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
@@ -958,16 +1051,32 @@ describe('registerPtyHandlers', () => {
             ptyId: 'ssh-pty',
             worktreeId: 'wt-1',
             tabId: 'tab-1',
-            leafId: 'leaf-1',
+            leafId,
             state: 'attached'
           })
         )
         expect(store.persistPtyBinding).toHaveBeenCalledWith({
           worktreeId: 'wt-1',
           tabId: 'tab-1',
-          leafId: 'leaf-1',
+          leafId,
           ptyId: 'ssh-pty'
         })
+
+        store.upsertSshRemotePtyLease.mockClear()
+        store.persistPtyBinding.mockClear()
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          env: { ORCA_PANE_KEY: 'tab-1:pane:1' },
+          connectionId: 'ssh-1',
+          worktreeId: 'wt-1',
+          tabId: 'tab-1',
+          leafId: 'pane:1'
+        })
+        expect(store.upsertSshRemotePtyLease).toHaveBeenCalledTimes(1)
+        expect(sshSpawn.mock.calls.at(-1)?.[0].env.ORCA_PANE_KEY).toBeUndefined()
+        expect(store.upsertSshRemotePtyLease.mock.calls[0]?.[0]).not.toHaveProperty('leafId')
+        expect(store.persistPtyBinding).not.toHaveBeenCalled()
       })
 
       it('marks a caller-supplied SSH session expired when remote reattach is gone', async () => {
@@ -1211,6 +1320,7 @@ describe('registerPtyHandlers', () => {
         try {
           expect(controller.kill('remote-pty')).toBe(true)
           await Promise.resolve()
+          await Promise.resolve()
         } finally {
           warnSpy.mockRestore()
           deletePtyOwnership('remote-pty')
@@ -1221,7 +1331,131 @@ describe('registerPtyHandlers', () => {
           'remote-pty',
           'terminated'
         )
-        expect(runtime.onPtyExit).not.toHaveBeenCalled()
+        expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1)
+      })
+
+      it('strips ORCA_PANE_KEY/TAB_ID/WORKTREE_ID from SSH spawn env when remote agent hooks are disabled', async () => {
+        const sshSpawn = vi.fn(async (_opts: { env: Record<string, string> }) => ({
+          id: 'ssh-pty'
+        }))
+        registerSshPtyProvider('ssh-1', {
+          spawn: sshSpawn,
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown: vi.fn(),
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never)
+        const prevFlag = process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+        process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '0'
+        try {
+          await handlers.get('pty:spawn')!(null, {
+            cols: 80,
+            rows: 24,
+            env: {
+              FOO: 'bar',
+              ORCA_PANE_KEY: 'tab-1:0',
+              ORCA_TAB_ID: 'tab-1',
+              ORCA_WORKTREE_ID: 'wt-1'
+            },
+            connectionId: 'ssh-1'
+          })
+          const env = sshSpawn.mock.calls.at(-1)![0].env
+          expect(env.FOO).toBe('bar')
+          expect(env.ORCA_PANE_KEY).toBeUndefined()
+          expect(env.ORCA_TAB_ID).toBeUndefined()
+          expect(env.ORCA_WORKTREE_ID).toBeUndefined()
+          expect(env.ORCA_AGENT_HOOK_TOKEN).toBeUndefined()
+          // Why: the local hook server's userData-relative endpoint file path
+          // is meaningless on the remote box; assert it does not leak.
+          expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+        } finally {
+          if (prevFlag === undefined) {
+            delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+          } else {
+            process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = prevFlag
+          }
+        }
+      })
+
+      it('forwards ORCA_PANE_KEY/TAB_ID/WORKTREE_ID over SSH by default', async () => {
+        const sshSpawn = vi.fn(async (_opts: { env: Record<string, string> }) => ({
+          id: 'ssh-pty'
+        }))
+        registerSshPtyProvider('ssh-1', {
+          spawn: sshSpawn,
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown: vi.fn(),
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never)
+        const prevFlag = process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+        delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+        try {
+          const leafId = '22222222-2222-4222-8222-222222222222'
+          const paneKey = makePaneKey('tab-2', leafId)
+          await handlers.get('pty:spawn')!(null, {
+            cols: 80,
+            rows: 24,
+            env: {
+              FOO: 'bar',
+              ORCA_PANE_KEY: paneKey,
+              ORCA_TAB_ID: 'tab-2',
+              ORCA_WORKTREE_ID: 'wt-2'
+            },
+            connectionId: 'ssh-1',
+            tabId: 'tab-2',
+            leafId
+          })
+          const env = sshSpawn.mock.calls.at(-1)![0].env
+          expect(env.ORCA_PANE_KEY).toBe(paneKey)
+          expect(env.ORCA_TAB_ID).toBe('tab-2')
+          expect(env.ORCA_WORKTREE_ID).toBe('wt-2')
+          // Local hook server coords still must NOT cross the wire — the
+          // relay is the source of truth for those.
+          expect(env.ORCA_AGENT_HOOK_TOKEN).toBeUndefined()
+          expect(env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
+          expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+        } finally {
+          if (prevFlag === undefined) {
+            delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+          } else {
+            process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = prevFlag
+          }
+        }
       })
     })
   })
@@ -1461,6 +1695,47 @@ describe('registerPtyHandlers', () => {
     )
   })
 
+  it('maps runtime-owned spawn paneKeys for renderer serializer settlement', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        worktreeId?: string
+        env?: Record<string, string>
+      }): Promise<{ id: string }>
+      hasRendererSerializer?(ptyId: string): boolean
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const paneKey = makePaneKey('tab-cli', '11111111-1111-4111-8111-111111111111')
+    const gen = (await handlers.get('pty:declarePendingPaneSerializer')!(null, {
+      paneKey
+    })) as number
+    const spawnController = controller as unknown as RuntimeSpawnController
+    const result = await spawnController.spawn({
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      env: { ORCA_PANE_KEY: ` ${paneKey} ` }
+    })
+
+    expect(spawnController.hasRendererSerializer?.(result.id)).toBe(false)
+    await handlers.get('pty:settlePaneSerializer')!(null, { paneKey, gen })
+    expect(spawnController.hasRendererSerializer?.(result.id)).toBe(true)
+  })
+
   it('ignores renderer-provided ORCA_TERMINAL_HANDLE for local PTY spawns', async () => {
     const runtime = {
       setPtyController: vi.fn(),
@@ -1531,7 +1806,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
-        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
+        POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
     })
@@ -1544,7 +1819,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
-        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
+        POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
     })
@@ -1603,7 +1878,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'powershell.exe',
-        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
+        POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
     })
@@ -1625,7 +1900,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'powershell.exe',
-        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
+        POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
     })
@@ -1646,11 +1921,7 @@ describe('registerPtyHandlers', () => {
       )
       handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
-      expect(spawnMock).toHaveBeenCalledWith(
-        'pwsh.exe',
-        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
-        expect.any(Object)
-      )
+      expect(spawnMock).toHaveBeenCalledWith('pwsh.exe', POWERSHELL_OSC133_ARGS, expect.any(Object))
     })
 
     it('falls back to powershell.exe when PowerShell 7 is selected but unavailable', () => {
@@ -1671,7 +1942,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'powershell.exe',
-        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
+        POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
     })
@@ -1694,7 +1965,7 @@ describe('registerPtyHandlers', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'powershell.exe',
-        ['-NoExit', '-Command', POWERSHELL_PROFILE_COMMAND],
+        POWERSHELL_OSC133_ARGS,
         expect.any(Object)
       )
     })
@@ -2081,6 +2352,123 @@ describe('registerPtyHandlers', () => {
         process.env.SHELL = originalShell
       }
     }
+  })
+
+  it('upgrades legacy numeric pane keys when the spawn metadata proves the stable leaf', async () => {
+    registerPtyHandlers(mainWindow as never)
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const stablePaneKey = makePaneKey('tab-1', leafId)
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId,
+      env: { ORCA_PANE_KEY: 'tab-1:0' }
+    })
+
+    expect(registerPtyMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        paneKey: stablePaneKey
+      })
+    )
+    expect(registerPaneKeyAliasMock).toHaveBeenCalledWith(
+      'tab-1:0',
+      stablePaneKey,
+      expect.any(String)
+    )
+    expect(clearMigrationUnsupportedPtysForPaneKeyMock).toHaveBeenCalledWith(stablePaneKey)
+    expect(setMigrationUnsupportedPtyMock).not.toHaveBeenCalled()
+
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId,
+      env: { ORCA_PANE_KEY: stablePaneKey }
+    })
+
+    expect(registerPtyMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        paneKey: stablePaneKey
+      })
+    )
+    expect(clearMigrationUnsupportedPtysForPaneKeyMock).toHaveBeenCalledWith(stablePaneKey)
+
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId,
+      env: { ORCA_PANE_KEY: makePaneKey('tab-2', leafId) }
+    })
+
+    expect(registerPtyMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        paneKey: null
+      })
+    )
+  })
+
+  it('does not let an old PTY teardown clear a newer pane-key owner', async () => {
+    registerPtyHandlers(mainWindow as never)
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const stablePaneKey = makePaneKey('tab-1', leafId)
+
+    const first = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId,
+      env: { ORCA_PANE_KEY: stablePaneKey }
+    })) as { id: string }
+    const second = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId,
+      env: { ORCA_PANE_KEY: stablePaneKey }
+    })) as { id: string }
+
+    expect(getPtyIdForPaneKey(stablePaneKey)).toBe(second.id)
+    clearAgentHookPaneStateMock.mockClear()
+    clearProviderPtyState(first.id)
+
+    expect(getPtyIdForPaneKey(stablePaneKey)).toBe(second.id)
+    expect(clearAgentHookPaneStateMock).not.toHaveBeenCalledWith(stablePaneKey)
+
+    clearProviderPtyState(second.id)
+    expect(getPtyIdForPaneKey(stablePaneKey)).toBeUndefined()
+    expect(clearAgentHookPaneStateMock).toHaveBeenCalledWith(stablePaneKey)
+  })
+
+  it('does not let restart-era alias cleanup clear a newer pane-key owner', async () => {
+    registerPtyHandlers(mainWindow as never)
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const stablePaneKey = makePaneKey('tab-1', leafId)
+
+    const current = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId,
+      env: { ORCA_PANE_KEY: stablePaneKey }
+    })) as { id: string }
+
+    expect(getPtyIdForPaneKey(stablePaneKey)).toBe(current.id)
+    clearPaneKeyAliasesForPtyMock.mockClear()
+
+    clearProviderPtyState('old-pty-without-forward-pane-key')
+
+    const cleanupOptions = clearPaneKeyAliasesForPtyMock.mock.calls.find(
+      ([ptyId]) => ptyId === 'old-pty-without-forward-pane-key'
+    )?.[1]
+    expect(cleanupOptions?.shouldClearStablePaneKey(stablePaneKey)).toBe(false)
   })
 
   it('prefers args.env.SHELL and normalizes the child env after fallback', async () => {

@@ -5,8 +5,10 @@ import {
   Maximize2,
   Minimize2,
   PanelBottomClose,
+  PanelsTopLeft,
   PanelRightClose,
   Pencil,
+  SquareTerminal,
   X
 } from 'lucide-react'
 import {
@@ -15,9 +17,13 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-menu-dismiss'
+import type { TerminalQuickCommand } from '../../../../shared/types'
 
 type TerminalContextMenuProps = {
   open: boolean
@@ -31,8 +37,12 @@ type TerminalContextMenuProps = {
   onPaste: () => void
   onSplitRight: () => void
   onSplitDown: () => void
+  canEqualizePaneSizes: boolean
+  onEqualizePaneSizes: () => void
   onClosePane: () => void
   onClearScreen: () => void
+  quickCommands: TerminalQuickCommand[]
+  onQuickCommand: (command: TerminalQuickCommand) => void
   onToggleExpand: () => void
   onSetTitle: () => void
 }
@@ -49,8 +59,12 @@ export default function TerminalContextMenu({
   onPaste,
   onSplitRight,
   onSplitDown,
+  canEqualizePaneSizes,
+  onEqualizePaneSizes,
   onClosePane,
   onClearScreen,
+  quickCommands,
+  onQuickCommand,
   onToggleExpand,
   onSetTitle
 }: TerminalContextMenuProps): React.JSX.Element {
@@ -112,6 +126,24 @@ export default function TerminalContextMenu({
           Paste
           <DropdownMenuShortcut>{mod}V</DropdownMenuShortcut>
         </DropdownMenuItem>
+        {quickCommands.length > 0 ? (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <SquareTerminal />
+              Quick Commands
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-60">
+              {quickCommands.map((command) => (
+                <DropdownMenuItem key={command.id} onSelect={() => onQuickCommand(command)}>
+                  <span className="truncate">{command.label}</span>
+                  {!command.appendEnter ? (
+                    <DropdownMenuShortcut className="shrink-0">Insert</DropdownMenuShortcut>
+                  ) : null}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onSplitRight}>
           <PanelRightClose />
@@ -127,6 +159,12 @@ export default function TerminalContextMenu({
               Ctrl+Shift+D is taken by split-right (#586). */}
           <DropdownMenuShortcut>{isMac ? `${mod}${shift}D` : `Alt+${shift}D`}</DropdownMenuShortcut>
         </DropdownMenuItem>
+        {canEqualizePaneSizes && (
+          <DropdownMenuItem onSelect={onEqualizePaneSizes}>
+            <PanelsTopLeft />
+            Equalize Pane Sizes
+          </DropdownMenuItem>
+        )}
         {canExpandPane && (
           <DropdownMenuItem onSelect={onToggleExpand}>
             {menuPaneIsExpanded ? <Minimize2 /> : <Maximize2 />}

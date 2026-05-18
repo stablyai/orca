@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo } from 'react'
 import { ExternalLink, FolderOpen, RefreshCw } from 'lucide-react'
+import type { CtrlTabOrderMode } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 import { Button } from '../ui/button'
+import { Label } from '../ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { formatCanonicalChordLabel } from '../../../../shared/keybindings/keybinding-display'
 import { keybindingCatalog } from '../../../../shared/keybindings/keybinding-catalog'
 import type {
@@ -44,6 +47,14 @@ const KEYBINDINGS_TOML_EXAMPLE = `[keybindings.linux]
 [keybindings.windows]
 "terminal.paste" = "ctrl+shift+v"`
 
+const CTRL_TAB_BEHAVIOR_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'Ctrl+Tab Order',
+    description: 'Choose recent or sequential tab switching.',
+    keywords: ['shortcut', 'tab', 'ctrl', 'control', 'recent', 'mru', 'sequential', 'switch']
+  }
+]
+
 function groupTitleForAction(id: KeybindingActionId): string {
   return KEYBINDING_GROUPS.find((group) => group.matches(id))?.title ?? 'Other'
 }
@@ -60,15 +71,20 @@ function searchEntryForBinding(
   }
 }
 
-export const SHORTCUTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = keybindingCatalog.map((entry) =>
-  searchEntryForBinding(entry.id, entry.title, groupTitleForAction(entry.id))
-)
+export const SHORTCUTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  ...keybindingCatalog.map((entry) =>
+    searchEntryForBinding(entry.id, entry.title, groupTitleForAction(entry.id))
+  ),
+  ...CTRL_TAB_BEHAVIOR_SEARCH_ENTRIES
+]
 
 export function ShortcutsPane(): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const keybindingSnapshot = useAppStore((state) => state.keybindingSnapshot)
   const fetchKeybindings = useAppStore((state) => state.fetchKeybindings)
   const reloadKeybindings = useAppStore((state) => state.reloadKeybindings)
+  const ctrlTabOrderMode = useAppStore((state) => state.settings?.ctrlTabOrderMode ?? 'mru')
+  const updateSettings = useAppStore((state) => state.updateSettings)
 
   const effectiveBindings = useMemo<EffectiveBindingView[]>(
     () =>
@@ -114,6 +130,9 @@ export function ShortcutsPane(): React.JSX.Element {
       <section className="space-y-4">
         <div className="space-y-1">
           <h2 className="text-sm font-semibold">Keyboard Shortcuts</h2>
+          <p className="text-xs text-muted-foreground">
+            View common hotkeys, configure custom keybindings, and choose tab switching behavior.
+          </p>
         </div>
 
         <div className="space-y-3 rounded-md border border-border/60 p-3">
@@ -175,6 +194,36 @@ export function ShortcutsPane(): React.JSX.Element {
             </pre>
           </div>
         </div>
+
+        {matchesSettingsSearch(searchQuery, CTRL_TAB_BEHAVIOR_SEARCH_ENTRIES) ? (
+          <SearchableSetting
+            title="Ctrl+Tab Order"
+            description="Choose recent or sequential tab switching."
+            keywords={CTRL_TAB_BEHAVIOR_SEARCH_ENTRIES[0].keywords}
+            className="flex items-center justify-between gap-4 px-1 py-2"
+          >
+            <div className="space-y-0.5">
+              <Label>Ctrl+Tab Order</Label>
+              <p className="text-xs text-muted-foreground">
+                Choose whether Ctrl+Tab follows recent use or the tab strip order.
+              </p>
+            </div>
+            <Select
+              value={ctrlTabOrderMode}
+              onValueChange={(value) =>
+                void updateSettings({ ctrlTabOrderMode: value as CtrlTabOrderMode })
+              }
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mru">Most recent</SelectItem>
+                <SelectItem value="sequential">Tab strip order</SelectItem>
+              </SelectContent>
+            </Select>
+          </SearchableSetting>
+        ) : null}
 
         <div className="grid gap-8">
           {groupedBindings

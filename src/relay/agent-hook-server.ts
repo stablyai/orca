@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: relay hook parsing, replay cache, endpoint
+   writing, and assistant-message retry state are one lifecycle unit; splitting
+   them would obscure cleanup ordering across remote PTY reconnects. */
 // Why: relay-side adapter for the shared agent-hook listener pipeline. Hosts
 // a loopback HTTP server (same shape as Orca's main-process server: bind
 // 127.0.0.1:0, bearer-token auth, /hook/<source> routing) and forwards every
@@ -10,7 +13,7 @@
 // request-driven replay) for the rationale.
 import { createServer, type IncomingMessage, type ServerResponse } from 'http'
 import { randomUUID } from 'crypto'
-import { join } from 'path'
+import { basename, dirname, join } from 'path'
 import { homedir } from 'os'
 
 import { ORCA_HOOK_PROTOCOL_VERSION } from '../shared/agent-hook-types'
@@ -19,6 +22,7 @@ import {
   clearPaneCacheState,
   createHookListenerState,
   getEndpointFileName,
+  hasPendingAgentResultText,
   HOOK_REQUEST_SLOWLORIS_MS,
   normalizeHookPayload,
   readRequestBody,
@@ -27,7 +31,11 @@ import {
   type AgentHookEventPayload,
   type HookListenerState
 } from '../shared/agent-hook-listener'
-import type { AgentHookRelayEnvelope, AgentHookSource } from '../shared/agent-hook-relay'
+import {
+  REMOTE_AGENT_HOOK_ENV,
+  type AgentHookRelayEnvelope,
+  type AgentHookSource
+} from '../shared/agent-hook-relay'
 
 export type RelayHookForward = (envelope: AgentHookRelayEnvelope) => void
 
@@ -37,16 +45,28 @@ export type RelayHookForward = (envelope: AgentHookRelayEnvelope) => void
 // server is the only consumer.
 const RELAY_HOOKS_DIR_NAME = '.orca-relay'
 const RELAY_HOOKS_SUBDIR = 'agent-hooks'
+const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
+const ASSISTANT_MESSAGE_RETRY_MS = 50
+
+// Why: cap env/version metadata at 64 chars so a misbehaving agent CLI
+// cannot grow lastEnvelopeMetaByPaneKey unboundedly per pane via the cache
+// + replay path. Canonical values are short ('production'/'development',
+// '1'/'999'); anything longer is treated as absent.
+const MAX_HOOK_META_LEN = 64
 
 function defaultEndpointDir(): string {
   return join(homedir(), RELAY_HOOKS_DIR_NAME, RELAY_HOOKS_SUBDIR)
 }
 
+export function endpointDirForRelaySocket(sockPath: string): string {
+  return join(dirname(sockPath), RELAY_HOOKS_SUBDIR, basename(sockPath))
+}
+
 export type RelayHookServerOptions = {
   /** Where to put endpoint.env / endpoint.cmd. Defaults to `$HOME/.orca-relay/agent-hooks`. */
   endpointDir?: string
-  /** Env tag forwarded into hook payloads (warn-once cross-build diagnostic).
-   *  Defaults to "remote" — distinct from Orca's local 'production'/'development'. */
+  /** Env tag forwarded into hook payloads. Defaults to "remote", a relay
+   *  location marker that main excludes from dev-vs-prod mismatch warnings. */
   env?: string
   /** Called once per parsed payload. The relay wires this to
    *  `dispatcher.notify('agent.hook', envelope)`. */
@@ -73,10 +93,11 @@ export class RelayAgentHookServer {
     string,
     { source: AgentHookSource; env?: string; version?: string }
   > = new Map()
+  private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private forward: RelayHookForward
 
   constructor(options: RelayHookServerOptions) {
-    this.env = options.env ?? 'remote'
+    this.env = options.env ?? REMOTE_AGENT_HOOK_ENV
     this.endpointDir = options.endpointDir ?? defaultEndpointDir()
     this.endpointFilePath = join(this.endpointDir, getEndpointFileName())
     this.forward = options.forward
@@ -92,6 +113,11 @@ export class RelayAgentHookServer {
     await new Promise<void>((resolve, reject) => {
       const onStartupError = (err: Error): void => {
         this.server?.off('listening', onListening)
+        // Why: null the server reference on bind failure so a subsequent
+        // start() can retry. Without this, a failed bind (e.g. EMFILE) leaves
+        // this.server populated and the early-return at the top of start()
+        // wedges the relay into a permanently broken state until stop() runs.
+        this.server = null
         reject(err)
       }
       const onListening = (): void => {
@@ -125,6 +151,10 @@ export class RelayAgentHookServer {
     this.port = 0
     this.token = ''
     this.endpointFileWritten = false
+    for (const timer of this.assistantMessageRetryTimers.values()) {
+      clearTimeout(timer)
+    }
+    this.assistantMessageRetryTimers.clear()
     clearAllListenerCaches(this.state)
     this.lastEnvelopeMetaByPaneKey.clear()
   }
@@ -156,6 +186,7 @@ export class RelayAgentHookServer {
    *  resurfaces as a ghost event on a later reconnect. Symmetric with the
    *  local server's clearPaneState on PTY teardown. */
   clearPaneState(paneKey: string): void {
+    this.clearAssistantMessageRetry(paneKey)
     clearPaneCacheState(this.state, paneKey)
     this.lastEnvelopeMetaByPaneKey.delete(paneKey)
   }
@@ -210,19 +241,23 @@ export class RelayAgentHookServer {
       }
       const event = normalizeHookPayload(this.state, source, body, this.env)
       if (event) {
-        this.state.lastStatusByPaneKey.set(event.paneKey, event)
         // TODO: once normalizeHookPayload returns validated env/version, drop
         // bodyEnv/bodyVersion and source those from the listener result instead.
         const env = this.bodyEnv(body)
         const version = this.bodyVersion(body)
-        this.lastEnvelopeMetaByPaneKey.set(event.paneKey, { source, env, version })
-        this.forwardEvent(event, source, env, version)
+        this.applyEvent(event, source, env, version)
+        this.scheduleAssistantMessageRetry(source, body, event, env, version)
       }
       res.writeHead(204)
       res.end()
-    } catch {
+    } catch (err) {
       // Why: agent hooks must fail open — return success on parse / size /
       // timeout errors so a buggy agent script never blocks the agent run.
+      // Log the swallowed error to stderr so future programmer bugs are not
+      // invisible (the 204 response would otherwise mask them entirely).
+      process.stderr.write(
+        `[relay-hook-server] hook request failed: ${err instanceof Error ? err.message : String(err)}\n`
+      )
       res.writeHead(204)
       res.end()
     }
@@ -247,12 +282,86 @@ export class RelayAgentHookServer {
     this.forward(envelope)
   }
 
+  private applyEvent(
+    event: AgentHookEventPayload,
+    source: AgentHookSource,
+    env?: string,
+    version?: string
+  ): void {
+    if (event.payload.state !== 'done' || event.payload.lastAssistantMessage) {
+      this.clearAssistantMessageRetry(event.paneKey)
+    }
+    this.state.lastStatusByPaneKey.set(event.paneKey, event)
+    this.lastEnvelopeMetaByPaneKey.set(event.paneKey, { source, env, version })
+    this.forwardEvent(event, source, env, version)
+  }
+
+  private clearAssistantMessageRetry(paneKey: string): void {
+    const timer = this.assistantMessageRetryTimers.get(paneKey)
+    if (!timer) {
+      return
+    }
+    clearTimeout(timer)
+    this.assistantMessageRetryTimers.delete(paneKey)
+  }
+
+  private scheduleAssistantMessageRetry(
+    source: AgentHookSource,
+    body: unknown,
+    original: AgentHookEventPayload,
+    env?: string,
+    version?: string,
+    attempt = 1
+  ): void {
+    if (
+      original.payload.lastAssistantMessage ||
+      !hasPendingAgentResultText(source, body) ||
+      attempt > ASSISTANT_MESSAGE_RETRY_ATTEMPTS
+    ) {
+      return
+    }
+    this.clearAssistantMessageRetry(original.paneKey)
+    const timer = setTimeout(() => {
+      try {
+        this.assistantMessageRetryTimers.delete(original.paneKey)
+        const current = this.state.lastStatusByPaneKey.get(original.paneKey)
+        if (
+          !current ||
+          current.payload.agentType !== original.payload.agentType ||
+          current.payload.prompt !== original.payload.prompt ||
+          current.payload.lastAssistantMessage
+        ) {
+          return
+        }
+        const event = normalizeHookPayload(this.state, source, body, this.env)
+        if (!event?.payload.lastAssistantMessage) {
+          this.scheduleAssistantMessageRetry(source, body, original, env, version, attempt + 1)
+          return
+        }
+        // Why: the relay runs on SSH targets too; retry from a timer so a delayed
+        // transcript/chat-history write does not block the remote hook server.
+        this.applyEvent(event, source, env, version)
+      } catch (err) {
+        process.stderr.write(
+          `[relay-hook-server] assistant message retry failed: ${err instanceof Error ? err.message : String(err)}\n`
+        )
+      }
+    }, ASSISTANT_MESSAGE_RETRY_MS)
+    this.assistantMessageRetryTimers.set(original.paneKey, timer)
+    if (typeof timer.unref === 'function') {
+      timer.unref()
+    }
+  }
+
   private bodyEnv(body: unknown): string | undefined {
     if (typeof body !== 'object' || body === null) {
       return undefined
     }
     const v = (body as Record<string, unknown>).env
-    return typeof v === 'string' && v.length > 0 ? v : undefined
+    if (typeof v !== 'string' || v.length === 0 || v.length > MAX_HOOK_META_LEN) {
+      return undefined
+    }
+    return v
   }
 
   private bodyVersion(body: unknown): string | undefined {
@@ -260,6 +369,9 @@ export class RelayAgentHookServer {
       return undefined
     }
     const v = (body as Record<string, unknown>).version
-    return typeof v === 'string' && v.length > 0 ? v : undefined
+    if (typeof v !== 'string' || v.length === 0 || v.length > MAX_HOOK_META_LEN) {
+      return undefined
+    }
+    return v
   }
 }

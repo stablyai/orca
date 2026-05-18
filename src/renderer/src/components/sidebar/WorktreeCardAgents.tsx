@@ -1,5 +1,4 @@
 import React, { useCallback, useMemo } from 'react'
-import { ChevronDown } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
@@ -8,6 +7,8 @@ import { useNow } from '@/components/dashboard/useNow'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { cn } from '@/lib/utils'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { dismissStaleAgentRowByKey } from '../terminal-pane/stale-agent-row'
 
 type Props = {
   worktreeId: string
@@ -52,13 +53,6 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
 }: BodyProps) {
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
   const dismissRetainedAgent = useAppStore((s) => s.dismissRetainedAgent)
-  const acknowledgeAgents = useAppStore((s) => s.acknowledgeAgents)
-
-  // Why: per-worktree collapse is session-only UI state. Single-primitive
-  // subscription so the card only re-renders when THIS worktree's collapsed
-  // flag flips — not on any other worktree's toggle.
-  const isCollapsed = useAppStore((s) => s.collapsedInlineAgentsByWorktreeId[worktreeId] === true)
-  const toggleInlineAgentsCollapsed = useAppStore((s) => s.toggleInlineAgentsCollapsed)
 
   // Why: subscribe to the ack map reference (Object.is equality) and derive
   // per-agent unvisited flags locally. Keeps the inline list's bold/mute
@@ -86,18 +80,21 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
 
   const handleActivateAgentTab = useCallback(
     (tabId: string, paneKey: string) => {
-      acknowledgeAgents([paneKey])
-      const colon = paneKey.indexOf(':')
-      const tail = colon > 0 ? paneKey.slice(colon + 1) : ''
-      const parsed = /^\d+$/.test(tail) ? Number.parseInt(tail, 10) : NaN
-      let paneId: number | null = null
-      if (Number.isFinite(parsed) && parsed > 0) {
-        paneId = parsed
-      } else {
-        // Why: paneKey for sidebar agent rows is always ${tabId}:${paneId}
-        // with a positive integer paneId; anything else (empty, zero,
-        // non-numeric) means upstream row construction drifted.
+      const parsed = parsePaneKey(paneKey)
+      if (!parsed) {
+        // Why: malformed or legacy numeric keys cannot be resolved safely after
+        // pane replay/remount, so drop the stale row instead of guessing.
         console.warn('[WorktreeCardAgents] malformed paneKey, skipping pane focus', paneKey)
+        dismissStaleAgentRowByKey(paneKey)
+        return
+      }
+      if (parsed.tabId !== tabId) {
+        console.warn('[WorktreeCardAgents] paneKey tabId mismatch, dismissing row', {
+          tabId,
+          paneKey
+        })
+        dismissStaleAgentRowByKey(paneKey)
+        return
       }
       // Why: route through activateAndRevealWorktree so cross-repo clicks also
       // set activeRepoId, record a nav-history entry, clear sidebar filters,
@@ -109,22 +106,15 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       activateAndRevealWorktree(worktreeId)
       const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
       if (tabs.some((t) => t.id === tabId)) {
-        activateTabAndFocusPane(tabId, paneId)
+        activateTabAndFocusPane(tabId, parsed.leafId, {
+          ackPaneKeyOnSuccess: paneKey,
+          flashFocusedPane: true
+        })
+      } else {
+        dismissStaleAgentRowByKey(paneKey)
       }
     },
-    [worktreeId, acknowledgeAgents]
-  )
-
-  const handleToggleCollapsed = useCallback(
-    (e: React.MouseEvent) => {
-      // Why: the header is inside WorktreeCard, whose outer click handler
-      // activates the worktree. Stop propagation so expanding/collapsing the
-      // list doesn't also navigate away — the user's intent is clearly the
-      // toggle, not a worktree switch.
-      e.stopPropagation()
-      toggleInlineAgentsCollapsed(worktreeId)
-    },
-    [toggleInlineAgentsCollapsed, worktreeId]
+    [worktreeId]
   )
 
   // Why: own one 30s tick per non-empty inline list. Cards with zero agents
@@ -132,55 +122,44 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   // don't pay any timer cost.
   const now = useNow(30_000)
 
+  const stopBubble = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+  }, [])
+
   return (
+    // Why: swallow bubbling so clicks on the gutter around the agent rows
+    // don't reach WorktreeCard's activate / edit-meta handlers.
     <div
-      className={cn('flex flex-col mt-1', className)}
-      onClick={(e) => e.stopPropagation()}
-      onDoubleClick={(e) => e.stopPropagation()}
+      className={cn('flex flex-col mt-1 divide-y divide-border/30', className)}
+      onClick={stopBubble}
+      onDoubleClick={stopBubble}
+      role="group"
+      aria-label="Agents"
     >
-      {/* Why: clickable header toggles the section open/closed. Using a real
-          <button> keeps keyboard + a11y semantics correct (Enter/Space
-          activate, proper focus ring, aria-expanded for screen readers). */}
-      <button
-        type="button"
-        onClick={handleToggleCollapsed}
-        aria-expanded={!isCollapsed}
-        aria-label={isCollapsed ? 'Expand agent activity' : 'Collapse agent activity'}
-        className="flex items-center gap-1 mb-0.5 px-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
-      >
-        <ChevronDown
-          className={cn('size-2.5 transition-transform duration-150', isCollapsed && '-rotate-90')}
-        />
-        <span>Agents ({agents.length})</span>
-      </button>
-      {!isCollapsed && (
-        <div className="flex flex-col divide-y divide-border/30">
-          {agents.map((agent) => (
-            <div key={agent.paneKey} className="py-0.5">
-              <DashboardAgentRow
-                agent={agent}
-                onDismiss={handleDismissAgent}
-                onActivate={handleActivateAgentTab}
-                now={now}
-                // Why: bold an agent row until the user has visited its tab.
-                // useAutoAckViewedAgent acks automatically when the user
-                // focuses the agent's tab, which mutes the row in lockstep.
-                isUnvisited={unvisitedByPaneKey[agent.paneKey] ?? false}
-                // Why: inline rows pack tighter than a full-panel layout;
-                // 'md' reads as a second ~12px glyph users confuse with the
-                // agent identity icon right next to it. 'sm' keeps the two
-                // distinguishable at a glance.
-                stateDotSize="sm"
-                // Why: in the per-card inline list clicking the row jumps
-                // directly to the agent, so the expand chevron is redundant.
-                // Keep the identity glyph (Claude/Gemini/…) so users can tell
-                // agents apart at a glance within a worktree.
-                hideExpand
-              />
-            </div>
-          ))}
+      {agents.map((agent) => (
+        <div key={agent.paneKey} className="py-0.5">
+          <DashboardAgentRow
+            agent={agent}
+            onDismiss={handleDismissAgent}
+            onActivate={handleActivateAgentTab}
+            now={now}
+            // Why: bold an agent row until the user has visited its tab.
+            // useAutoAckViewedAgent acks automatically when the user
+            // focuses the agent's tab, which mutes the row in lockstep.
+            isUnvisited={unvisitedByPaneKey[agent.paneKey] ?? false}
+            // Why: inline rows pack tighter than a full-panel layout;
+            // 'md' reads as a second ~12px glyph users confuse with the
+            // agent identity icon right next to it. 'sm' keeps the two
+            // distinguishable at a glance.
+            stateDotSize="sm"
+            // Why: in the per-card inline list clicking the row jumps
+            // directly to the agent, so the expand chevron is redundant.
+            // Keep the identity glyph (Claude/Gemini/…) so users can tell
+            // agents apart at a glance within a worktree.
+            hideExpand
+          />
         </div>
-      )}
+      ))}
     </div>
   )
 })

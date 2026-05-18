@@ -33,6 +33,7 @@ All changes must consider the SSH use case. Don't assume local-only execution.
 ## GitHub CLI Usage
 
 Be mindful of the user's `gh` CLI API rate limit — batch requests where possible and avoid unnecessary calls. All code, commands, and scripts must be compatible with macOS, Linux, and Windows.
+Never commit PR evidence images; attach them to the PR conversation instead.
 
 ## Type Declarations: Prefer `.ts` Over `.d.ts`
 

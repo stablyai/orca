@@ -20,10 +20,22 @@ import {
   decodeTerminalStreamJson,
   decodeTerminalStreamText
 } from './terminal-stream-protocol'
+import {
+  decodeBrowserScreencastFrame,
+  type BrowserScreencastFrame
+} from './browser-screencast-protocol'
 
 type PendingRequest = {
   resolve: (response: RpcResponse) => void
   reject: (error: Error) => void
+}
+
+type SendRequestOptions = {
+  timeoutMs?: number
+}
+
+type SubscribeOptions = {
+  onBinaryFrame?: (frame: BrowserScreencastFrame) => void
 }
 
 type StreamingListener = (result: unknown) => void
@@ -32,6 +44,10 @@ type StreamRequest = {
   method: string
   params: unknown
   listener: StreamingListener
+  onBinaryFrame?: (frame: BrowserScreencastFrame) => void
+  subscriptionId?: string
+  cancelled?: boolean
+  sent?: boolean
 }
 
 type TerminalSnapshotState = {
@@ -41,8 +57,17 @@ type TerminalSnapshotState = {
 }
 
 export type RpcClient = {
-  sendRequest: (method: string, params?: unknown) => Promise<RpcResponse>
-  subscribe: (method: string, params: unknown, onData: StreamingListener) => () => void
+  sendRequest: (
+    method: string,
+    params?: unknown,
+    options?: SendRequestOptions
+  ) => Promise<RpcResponse>
+  subscribe: (
+    method: string,
+    params: unknown,
+    onData: StreamingListener,
+    options?: SubscribeOptions
+  ) => () => void
   getState: () => ConnectionState
   // Why: UI escalates "Reconnecting…" to "Can't connect" once attempts cross
   // a threshold. 0 means never failed; counter is reset on successful open.
@@ -160,6 +185,8 @@ export function connect(
   const terminalStreamListeners = new Map<number, StreamingListener>()
   const terminalStreamIdsByRequest = new Map<string, Set<number>>()
   const terminalSnapshots = new Map<number, TerminalSnapshotState>()
+  let activeBrowserScreencastRequestId: string | null = null
+  let pendingBrowserScreencastRequestId: string | null = null
   const stateListeners = new Set<(state: ConnectionState) => void>()
   const connectWaiters: Array<{ resolve: () => void; reject: (e: Error) => void }> = []
 
@@ -358,7 +385,22 @@ export function connect(
             emitLog('success', 'Authenticated', 'Channel ready for RPC')
             startActivityProbe()
             for (const [id, stream] of streamListeners) {
-              sendEncrypted({ id, deviceToken, method: stream.method, params: stream.params })
+              if (stream.cancelled) {
+                removeStreamListener(id)
+                continue
+              }
+              if (stream.method === 'browser.screencast') {
+                pendingBrowserScreencastRequestId = id
+                activeBrowserScreencastRequestId = null
+              }
+              if (
+                sendEncrypted({ id, deviceToken, method: stream.method, params: stream.params })
+              ) {
+                stream.sent = true
+              } else {
+                emitStreamError(stream, 'Connection interrupted')
+                removeStreamListener(id)
+              }
             }
           } else if (msg.type === 'e2ee_error' || (!msg.ok && msg.error?.code === 'unauthorized')) {
             console.log('[net] e2ee auth FAILED', { msgType: msg.type, error: msg.error })
@@ -370,6 +412,8 @@ export function connect(
             intentionallyClosed = true
             ws?.close()
             ws = null
+            activeBrowserScreencastRequestId = null
+            pendingBrowserScreencastRequestId = null
             setState('auth-failed')
             rejectAllPending('Unauthorized — pairing may be revoked')
           }
@@ -394,7 +438,7 @@ export function connect(
         if (!plaintextBytes) {
           return
         }
-        handleTerminalBinaryFrame(plaintextBytes)
+        handleBinaryFrame(plaintextBytes)
         return
       }
 
@@ -416,6 +460,8 @@ export function connect(
         intentionallyClosed = true
         ws?.close()
         ws = null
+        activeBrowserScreencastRequestId = null
+        pendingBrowserScreencastRequestId = null
         setState('auth-failed')
         rejectAllPending('Unauthorized — pairing may be revoked')
         return
@@ -427,6 +473,26 @@ export function connect(
         const stream = streamListeners.get(response.id)
         if (stream && response.ok) {
           const result = (response as RpcSuccess).result
+          if (isBrowserScreencastReadyResult(result)) {
+            stream.subscriptionId = result.subscriptionId
+            if (stream.cancelled) {
+              sendBrowserScreencastUnsubscribe(result.subscriptionId)
+              removeStreamListener(response.id)
+              return
+            }
+            if (stream.method === 'browser.screencast') {
+              if (
+                pendingBrowserScreencastRequestId !== response.id &&
+                activeBrowserScreencastRequestId !== response.id
+              ) {
+                sendBrowserScreencastUnsubscribe(result.subscriptionId)
+                removeStreamListener(response.id)
+                return
+              }
+              pendingBrowserScreencastRequestId = null
+              activeBrowserScreencastRequestId = response.id
+            }
+          }
           if (isTerminalSubscribedResult(result)) {
             let ids = terminalStreamIdsByRequest.get(response.id)
             if (!ids) {
@@ -436,7 +502,9 @@ export function connect(
             ids.add(result.streamId)
             terminalStreamListeners.set(result.streamId, stream.listener)
           }
-          stream.listener(result)
+          if (!stream.cancelled) {
+            stream.listener(result)
+          }
         }
         return
       }
@@ -446,8 +514,10 @@ export function connect(
         if (result && result.type === 'end') {
           const stream = streamListeners.get(response.id)
           if (stream) {
-            stream.listener(result)
-            streamListeners.delete(response.id)
+            if (!stream.cancelled) {
+              stream.listener(result)
+            }
+            removeStreamListener(response.id)
             return
           }
         }
@@ -458,6 +528,17 @@ export function connect(
             return
           }
         }
+      }
+
+      const stream = streamListeners.get(response.id)
+      if (stream) {
+        if (!response.ok) {
+          emitStreamError(stream, response.error.message, response.error)
+        } else {
+          emitStreamError(stream, 'Streaming request ended before it was ready.')
+        }
+        removeStreamListener(response.id)
+        return
       }
 
       const req = pending.get(response.id)
@@ -578,6 +659,8 @@ export function connect(
     clearConnectTimer()
     ws = null
     sharedKey = null
+    activeBrowserScreencastRequestId = null
+    pendingBrowserScreencastRequestId = null
     if (handshakeTimer) {
       clearTimeout(handshakeTimer)
       handshakeTimer = null
@@ -700,6 +783,79 @@ export function connect(
     }
   }
 
+  function removeStreamListener(id: string): void {
+    const stream = streamListeners.get(id)
+    streamListeners.delete(id)
+    if (activeBrowserScreencastRequestId === id) {
+      activeBrowserScreencastRequestId = null
+    }
+    if (pendingBrowserScreencastRequestId === id) {
+      pendingBrowserScreencastRequestId = null
+    }
+    const terminalStreamIds = terminalStreamIdsByRequest.get(id)
+    if (terminalStreamIds) {
+      for (const streamId of terminalStreamIds) {
+        terminalStreamListeners.delete(streamId)
+        terminalSnapshots.delete(streamId)
+      }
+      terminalStreamIdsByRequest.delete(id)
+    }
+    if (stream?.method === 'browser.screencast') {
+      stream.cancelled = true
+    }
+  }
+
+  function emitStreamError(stream: StreamRequest, message: string, error?: unknown): void {
+    if (stream.cancelled) {
+      return
+    }
+    stream.listener({ type: 'error', message, error })
+  }
+
+  function disposeBrowserScreencastStream(id: string): void {
+    const stream = streamListeners.get(id)
+    if (!stream || stream.method !== 'browser.screencast') {
+      return
+    }
+    stream.cancelled = true
+    if (activeBrowserScreencastRequestId === id) {
+      activeBrowserScreencastRequestId = null
+    }
+    if (pendingBrowserScreencastRequestId === id) {
+      pendingBrowserScreencastRequestId = null
+    }
+    if (stream.subscriptionId) {
+      sendBrowserScreencastUnsubscribe(stream.subscriptionId)
+      removeStreamListener(id)
+      return
+    }
+    // Why: sent streams may still reply with `ready`; keep a tombstone so we
+    // can immediately unsubscribe. Queued streams never reached desktop.
+    if (!stream.sent) {
+      removeStreamListener(id)
+    }
+  }
+
+  function handleBinaryFrame(bytes: Uint8Array) {
+    const browserFrame = decodeBrowserScreencastFrame(bytes)
+    if (browserFrame) {
+      handleBrowserBinaryFrame(browserFrame)
+      return
+    }
+    handleTerminalBinaryFrame(bytes)
+  }
+
+  function handleBrowserBinaryFrame(frame: BrowserScreencastFrame) {
+    if (!activeBrowserScreencastRequestId) {
+      return
+    }
+    const stream = streamListeners.get(activeBrowserScreencastRequestId)
+    if (!stream || stream.cancelled || stream.method !== 'browser.screencast') {
+      return
+    }
+    stream.onBinaryFrame?.(frame)
+  }
+
   function handleTerminalBinaryFrame(bytes: Uint8Array) {
     const frame = decodeTerminalStreamFrame(bytes)
     if (!frame) {
@@ -794,10 +950,23 @@ export function connect(
     return false
   }
 
+  function sendBrowserScreencastUnsubscribe(subscriptionId: string): void {
+    sendEncrypted({
+      id: nextId(),
+      deviceToken,
+      method: 'browser.screencast.unsubscribe',
+      params: { subscriptionId }
+    })
+  }
+
   openConnection()
 
   return {
-    async sendRequest(method: string, params?: unknown): Promise<RpcResponse> {
+    async sendRequest(
+      method: string,
+      params?: unknown,
+      options?: SendRequestOptions
+    ): Promise<RpcResponse> {
       const waitStart = Date.now()
       const wasConnected = state === 'connected'
       await waitForConnected()
@@ -810,15 +979,16 @@ export function connect(
 
       return new Promise((resolve, reject) => {
         const id = nextId()
+        const timeoutMs = options?.timeoutMs ?? REQUEST_TIMEOUT_MS
         const timeout = setTimeout(() => {
           pending.delete(id)
           console.log('[net] sendRequest TIMEOUT', {
             method,
-            timeoutMs: REQUEST_TIMEOUT_MS,
+            timeoutMs,
             state
           })
           reject(new Error(`Request timed out: ${method}`))
-        }, REQUEST_TIMEOUT_MS)
+        }, timeoutMs)
 
         pending.set(id, {
           resolve: (response) => {
@@ -839,12 +1009,41 @@ export function connect(
       })
     },
 
-    subscribe(method: string, params: unknown, onData: StreamingListener): () => void {
+    subscribe(
+      method: string,
+      params: unknown,
+      onData: StreamingListener,
+      options?: SubscribeOptions
+    ): () => void {
       const id = nextId()
-      streamListeners.set(id, { method, params, listener: onData })
+      const stream: StreamRequest = {
+        method,
+        params,
+        listener: onData,
+        onBinaryFrame: options?.onBinaryFrame
+      }
+      streamListeners.set(id, stream)
+      if (method === 'browser.screencast') {
+        if (activeBrowserScreencastRequestId && activeBrowserScreencastRequestId !== id) {
+          disposeBrowserScreencastStream(activeBrowserScreencastRequestId)
+        }
+        if (pendingBrowserScreencastRequestId && pendingBrowserScreencastRequestId !== id) {
+          disposeBrowserScreencastStream(pendingBrowserScreencastRequestId)
+        }
+        // Why: browser screencast frames are connection-scoped and carry no
+        // stream id. Wait for the replacement stream's ready response before
+        // routing frames, so in-flight old-page pixels are dropped.
+        pendingBrowserScreencastRequestId = id
+        activeBrowserScreencastRequestId = null
+      }
 
       if (state === 'connected') {
-        sendEncrypted({ id, deviceToken, method, params })
+        if (sendEncrypted({ id, deviceToken, method, params })) {
+          stream.sent = true
+        } else {
+          emitStreamError(stream, 'Connection interrupted')
+          removeStreamListener(id)
+        }
       } else {
         // Stream is registered but the actual outbound subscribe will be
         // sent (or re-sent) when the channel reaches 'connected'. Useful
@@ -854,14 +1053,9 @@ export function connect(
 
       return () => {
         const stream = streamListeners.get(id)
-        streamListeners.delete(id)
-        const terminalStreamIds = terminalStreamIdsByRequest.get(id)
-        if (terminalStreamIds) {
-          for (const streamId of terminalStreamIds) {
-            terminalStreamListeners.delete(streamId)
-            terminalSnapshots.delete(streamId)
-          }
-          terminalStreamIdsByRequest.delete(id)
+        if (stream?.method === 'browser.screencast') {
+          disposeBrowserScreencastStream(id)
+          return
         }
         if (
           stream?.method === 'terminal.subscribe' &&
@@ -906,6 +1100,7 @@ export function connect(
             params: { worktree: (stream.params as { worktree: string }).worktree }
           })
         }
+        removeStreamListener(id)
       }
     },
 
@@ -957,6 +1152,17 @@ function isTerminalSubscribedResult(
     typeof value === 'object' &&
     (value as { type?: unknown }).type === 'subscribed' &&
     typeof (value as { streamId?: unknown }).streamId === 'number'
+  )
+}
+
+function isBrowserScreencastReadyResult(
+  value: unknown
+): value is { type: 'ready'; subscriptionId: string } {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    (value as { type?: unknown }).type === 'ready' &&
+    typeof (value as { subscriptionId?: unknown }).subscriptionId === 'string'
   )
 }
 

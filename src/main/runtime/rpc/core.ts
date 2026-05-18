@@ -3,6 +3,7 @@
 // CLI-facing contract greppable and lets the dispatcher verify every payload
 // against the same shape the handler consumed during development.
 import { ZodError, type ZodType } from 'zod'
+import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
 import type { OrcaRuntimeService } from '../orca-runtime'
 
 export type RpcEnvelopeMeta = {
@@ -52,10 +53,20 @@ export type RpcContext = {
   // server reap all subscriptions for a closing socket, even when other
   // sockets for the same deviceToken stay alive (multi-screen mobile).
   connectionId?: string
+  // Why: WebSocket RPCs authenticate by mobile device token. State-owning
+  // handlers use this to clean up when that paired device disconnects.
+  clientId?: string
   // Why: mobile terminal traffic is byte-oriented and bypasses JSON streaming
   // responses after the binary terminal cutover. Undefined on Unix/socket
   // transports and non-E2EE WebSocket paths.
-  sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
+  sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
+  // Why: binary terminal input/resize frames arrive outside JSON-RPC after a
+  // stream is established. The WebSocket transport owns the connection-scoped
+  // stream table; handlers register only the stream IDs they created.
+  registerBinaryStreamHandler?: (
+    streamId: number,
+    handler: (frame: TerminalStreamFrame) => void
+  ) => () => void
 }
 
 export type RpcHandler<TParams> = (params: TParams, ctx: RpcContext) => Promise<unknown> | unknown

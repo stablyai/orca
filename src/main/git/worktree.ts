@@ -14,6 +14,24 @@ function getErrorCode(error: unknown): string | undefined {
     : undefined
 }
 
+function getErrorText(error: unknown): string {
+  if (typeof error === 'object' && error !== null) {
+    const parts: string[] = []
+    if ('message' in error && typeof error.message === 'string') {
+      parts.push(error.message)
+    }
+    if ('stderr' in error && typeof error.stderr === 'string') {
+      parts.push(error.stderr)
+    }
+    return parts.join('\n')
+  }
+  return String(error)
+}
+
+function isNotGitRepositoryError(error: unknown): boolean {
+  return /not a git repository/i.test(getErrorText(error))
+}
+
 function normalizeLocalBranchRef(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
@@ -121,6 +139,9 @@ export async function listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]
           return []
         }
       }
+    }
+    if (isNotGitRepositoryError(err)) {
+      return []
     }
     // Why: a silent catch turned issue #1453's underlying
     // "git: unknown switch -z" into the opaque "not found in listing" toast.
@@ -355,6 +376,29 @@ export async function removeWorktree(
       error
     )
   }
+}
+
+/**
+ * Assert a worktree is clean enough for non-force removal.
+ */
+export async function assertWorktreeCleanForRemoval(
+  worktreePath: string,
+  force = false
+): Promise<void> {
+  if (force) {
+    return
+  }
+
+  const { stdout } = await gitExecFileAsync(['status', '--porcelain', '--untracked-files=all'], {
+    cwd: worktreePath
+  })
+  if (!stdout.trim()) {
+    return
+  }
+
+  const error = new Error('Worktree has uncommitted or untracked changes.')
+  ;(error as Error & { stdout?: string }).stdout = stdout
+  throw error
 }
 
 function translateWorktreePath(worktreePath: string, repoPath: string): string {

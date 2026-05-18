@@ -45,6 +45,7 @@ function createContext(editor: Editor, typedMarker: boolean): KeyHandlerContext 
     filteredDocLinkRowsRef: { current: [] },
     selectedDocLinkIndexRef: { current: 0 },
     handleLocalImagePickRef: { current: vi.fn() },
+    handleEmojiPickRef: { current: vi.fn() },
     typedEmptyOrderedListMarkerRef: { current: typedMarker },
     flushPendingSerialization: vi.fn(),
     openSearchRef: { current: vi.fn() },
@@ -113,6 +114,55 @@ describe('rich markdown key handler', () => {
       expect(createRichMarkdownKeyHandler(createContext(editor, true))(null, event)).toBe(false)
       expect(event.preventDefault).not.toHaveBeenCalled()
       expect(editor.state.doc.toJSON()).toEqual(emptyTopLevelOrderedList())
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('lets slash-menu filter input fall through to document input', () => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: '/' }] }]
+    })
+
+    try {
+      editor.commands.setTextSelection(2)
+      let slashMenu = { query: '', from: 1, to: 2, left: 0, top: 0 }
+      const ctx = createContext(editor, false)
+      ctx.slashMenuRef.current = slashMenu
+      ctx.filteredSlashCommandsRef.current = [{ id: 'heading-1' } as never]
+      ctx.setSlashMenu = vi.fn((next) => {
+        slashMenu = typeof next === 'function' ? next(slashMenu) : next
+        ctx.slashMenuRef.current = slashMenu
+      })
+      const event = keyEvent('h')
+
+      expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(false)
+      expect(event.preventDefault).not.toHaveBeenCalled()
+      expect(editor.getText()).toBe('/')
+      expect(ctx.slashMenuRef.current?.query).toBe('')
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('dismisses the slash menu on Escape even when search has no matches', () => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: '/zzz' }] }]
+    })
+
+    try {
+      editor.commands.setTextSelection(5)
+      const ctx = createContext(editor, false)
+      ctx.slashMenuRef.current = { query: 'zzz', from: 1, to: 5, left: 0, top: 0 }
+      ctx.filteredSlashCommandsRef.current = []
+      ctx.setSlashMenu = vi.fn()
+      const event = keyEvent('Escape')
+
+      expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(true)
+      expect(event.preventDefault).toHaveBeenCalled()
+      expect(ctx.setSlashMenu).toHaveBeenCalledWith(null)
     } finally {
       editor.destroy()
     }

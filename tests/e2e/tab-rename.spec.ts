@@ -64,6 +64,17 @@ test.describe('Tab Rename (Inline)', () => {
     return page.locator(`[data-testid="sortable-tab"][data-tab-title="${escaped}"]`).first()
   }
 
+  async function dispatchMiddleClickSequence(
+    locator: ReturnType<Parameters<typeof getActiveTabId>[0]['locator']>
+  ): Promise<void> {
+    await locator.evaluate((element) => {
+      const eventInit = { bubbles: true, cancelable: true, button: 1 }
+      element.dispatchEvent(new MouseEvent('mousedown', { ...eventInit, buttons: 4 }))
+      element.dispatchEvent(new MouseEvent('mouseup', eventInit))
+      element.dispatchEvent(new MouseEvent('auxclick', eventInit))
+    })
+  }
+
   async function getActiveCustomTitle(
     page: Parameters<typeof getActiveTabId>[0],
     worktreeId: string
@@ -287,7 +298,7 @@ test.describe('Tab Rename (Inline)', () => {
       const state = store.getState()
       const existing = (state.tabsByWorktree[targetWorktreeId] ?? []).length
       for (let i = existing; i < 15; i++) {
-        state.createTab(targetWorktreeId)
+        state.createTab(targetWorktreeId, undefined, undefined, { activate: false })
       }
     }, worktreeId)
 
@@ -295,19 +306,25 @@ test.describe('Tab Rename (Inline)', () => {
       .poll(async () => (await getWorktreeTabs(orcaPage, worktreeId)).length, { timeout: 5_000 })
       .toBeGreaterThanOrEqual(15)
 
-    const activeTitle = await getActiveTabTitle(orcaPage, worktreeId)
-    const tabLocator = tabLocatorByTitle(orcaPage, activeTitle)
-    await tabLocator.dblclick()
+    const targetTitle = await getActiveTabTitle(orcaPage, worktreeId)
+    const tabLocator = tabLocatorByTitle(orcaPage, targetTitle)
+    await tabLocator.scrollIntoViewIfNeeded()
+    await expect(tabLocator).toBeVisible()
+    // Why: once 15 tabs are packed into the strip, the tab center can overlap
+    // the close affordance. Target the visible title text, which is the rename
+    // hit area users aim for.
+    const tabTitle = tabLocator.getByText(targetTitle, { exact: true })
+    await expect(tabTitle).toBeVisible()
+    await tabTitle.dblclick()
 
     const renameInput = orcaPage.getByRole('textbox', {
-      name: `Rename tab ${activeTitle}`,
+      name: `Rename tab ${targetTitle}`,
       exact: true
     })
     await expect(renameInput).toBeVisible()
 
-    const box = await renameInput.boundingBox()
-    expect(box).not.toBeNull()
-    expect(box!.width).toBeGreaterThanOrEqual(60)
+    const width = await renameInput.evaluate((element) => element.getBoundingClientRect().width)
+    expect(width).toBeGreaterThanOrEqual(60)
   })
 
   test('middle-clicking inside the rename input does not close the tab', async ({ orcaPage }) => {
@@ -327,10 +344,12 @@ test.describe('Tab Rename (Inline)', () => {
     // Why: the outer tab's middle-click handler closes the tab. The rename
     // input stops propagation + preventDefaults middle-click so the tab
     // isn't closed while the user is editing.
-    await renameInput.click({ button: 'middle' })
+    await dispatchMiddleClickSequence(renameInput)
 
     // The tab must still exist — no regression where editing-then-middle-click
     // accidentally closes the tab out from under the input.
+    await expect(renameInput).toBeVisible()
+    await expect(tabLocatorByTitle(orcaPage, originalTitle)).toBeVisible()
     expect((await getWorktreeTabs(orcaPage, worktreeId)).length).toBe(tabsBefore)
   })
 })

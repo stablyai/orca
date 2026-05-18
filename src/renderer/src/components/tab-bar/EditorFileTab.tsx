@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import {
   X,
-  FileCode,
   GitCompareArrows,
   Copy,
   Eye,
@@ -22,7 +21,8 @@ import { basename, normalizeRelativePath } from '@/lib/path'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { renameFileOnDisk } from '@/lib/rename-file'
 import { detectLanguage } from '@/lib/language-detect'
-import { useWorktreeById } from '@/store/selectors'
+import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { useRepoById, useWorktreeById } from '@/store/selectors'
 import { useAppStore } from '@/store'
 import { STATUS_COLORS, STATUS_LABELS } from '../right-sidebar/status-display'
 import type { GitFileStatus } from '../../../../shared/types'
@@ -35,6 +35,8 @@ import {
   type DropIndicator
 } from './drop-indicator'
 import { canOpenMarkdownPreview } from '@/components/editor/markdown-preview-controls'
+import { showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
+import { shouldBlockEditorTabLocalOpen } from './editor-tab-local-open-guard'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -74,6 +76,8 @@ export default function EditorFileTab({
   dropIndicator?: DropIndicator
 }): React.JSX.Element {
   const worktree = useWorktreeById(file.worktreeId)
+  const repo = useRepoById(worktree?.repoId ?? null)
+  const FileIcon = getFileTypeIcon(file.filePath)
   // Why: no transform/transition/isDragging styling — the drag design is
   // that tabs stay visually anchored; only the blue insertion bar moves.
   const { attributes, listeners, setNodeRef } = useSortable({
@@ -248,7 +252,7 @@ export default function EditorFileTab({
               className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
             />
           ) : (
-            <FileCode
+            <FileIcon
               className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
             />
           )}
@@ -379,6 +383,7 @@ export default function EditorFileTab({
                     filePath: file.filePath,
                     relativePath: file.relativePath,
                     worktreeId: file.worktreeId,
+                    runtimeEnvironmentId: file.runtimeEnvironmentId,
                     language: resolvedLanguage
                   })
                 }}
@@ -407,6 +412,16 @@ export default function EditorFileTab({
           <DropdownMenuSeparator />
           <DropdownMenuItem
             onSelect={() => {
+              if (
+                shouldBlockEditorTabLocalOpen(
+                  useAppStore.getState().settings,
+                  file.runtimeEnvironmentId,
+                  repo?.connectionId ?? null
+                )
+              ) {
+                showLocalPathOpenBlockedToast()
+                return
+              }
               window.api.shell.openPath(file.filePath)
             }}
           >

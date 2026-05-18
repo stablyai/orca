@@ -11,6 +11,8 @@ const {
   getOwnerRepoForRemoteMock,
   resolveIssueSourceMock,
   gitExecFileAsyncMock,
+  rateLimitGuardMock,
+  noteRateLimitSpendMock,
   acquireMock,
   releaseMock
 } = vi.hoisted(() => ({
@@ -21,6 +23,8 @@ const {
   getOwnerRepoForRemoteMock: vi.fn(),
   resolveIssueSourceMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
+  rateLimitGuardMock: vi.fn(() => ({ blocked: false })),
+  noteRateLimitSpendMock: vi.fn(),
   acquireMock: vi.fn(),
   releaseMock: vi.fn()
 }))
@@ -28,6 +32,11 @@ const {
 vi.mock('./gh-utils', () => ({
   execFileAsync: execFileAsyncMock,
   ghExecFileAsync: ghExecFileAsyncMock,
+  githubRepoContext: (repoPath: string, connectionId?: string | null) => ({
+    repoPath,
+    connectionId: connectionId ?? null
+  }),
+  ghRepoExecOptions: (context: { repoPath: string }) => ({ cwd: context.repoPath }),
   getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: getIssueOwnerRepoMock,
   getOwnerRepoForRemote: getOwnerRepoForRemoteMock,
@@ -43,6 +52,11 @@ vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
+vi.mock('./rate-limit', () => ({
+  rateLimitGuard: rateLimitGuardMock,
+  noteRateLimitSpend: noteRateLimitSpendMock
+}))
+
 import { listWorkItems, _resetOwnerRepoCache } from './client'
 
 describe('listWorkItems', () => {
@@ -54,6 +68,9 @@ describe('listWorkItems', () => {
     getOwnerRepoForRemoteMock.mockReset()
     resolveIssueSourceMock.mockReset()
     gitExecFileAsyncMock.mockReset()
+    rateLimitGuardMock.mockReset()
+    rateLimitGuardMock.mockReturnValue({ blocked: false })
+    noteRateLimitSpendMock.mockReset()
     acquireMock.mockReset()
     releaseMock.mockReset()
     acquireMock.mockResolvedValue(undefined)
@@ -138,6 +155,10 @@ describe('listWorkItems', () => {
       ],
       { cwd: '/repo-root' }
     )
+    const prListFields = ghExecFileAsyncMock.mock.calls[1][0].join(',')
+    expect(prListFields).not.toContain('statusCheckRollup')
+    expect(prListFields).not.toContain('reviewRequests')
+    expect(prListFields).not.toContain('mergeStateStatus')
     expect(items).toEqual([
       {
         id: 'issue:12',
@@ -326,6 +347,47 @@ describe('listWorkItems', () => {
         author: 'octocat',
         branchName: 'feature/open-pr',
         baseRefName: 'main'
+      }
+    ])
+  })
+
+  it('marks fork PRs as cross-repository when REST payload only includes head.label', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
+      stdout: JSON.stringify([
+        {
+          number: 1849,
+          title: 'Fork PR with missing head repo',
+          state: 'open',
+          html_url: 'https://github.com/stablyai/orca/pull/1849',
+          updated_at: '2026-04-01T00:00:00Z',
+          user: { login: 'contributor' },
+          head: {
+            ref: 'feat/onboarding-model-choice-782',
+            repo: null,
+            label: 'contributor:feat/onboarding-model-choice-782'
+          },
+          base: { ref: 'main' }
+        }
+      ])
+    })
+
+    const { items } = await listWorkItems('/repo-root', 10)
+    expect(items).toEqual([
+      {
+        id: 'pr:1849',
+        type: 'pr',
+        number: 1849,
+        title: 'Fork PR with missing head repo',
+        state: 'open',
+        url: 'https://github.com/stablyai/orca/pull/1849',
+        labels: [],
+        updatedAt: '2026-04-01T00:00:00Z',
+        author: 'contributor',
+        branchName: 'feat/onboarding-model-choice-782',
+        baseRefName: 'main',
+        isCrossRepository: true
       }
     ])
   })

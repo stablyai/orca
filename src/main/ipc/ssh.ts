@@ -36,6 +36,15 @@ let portForwardManager: SshPortForwardManager | null = null
 // scattered Maps/Sets that previously tracked this state independently.
 const activeSessions = new Map<string, SshRelaySession>()
 
+function relayGracePeriodForTarget(target: SshTarget | null | undefined): number | undefined {
+  if (!target?.remoteWorkspaceSyncEnabled) {
+    return target?.relayGracePeriodSeconds
+  }
+  // Why: cross-device sync should survive transient app closes, but an
+  // unset value must not mean "keep remote PTYs forever" after disconnect.
+  return target.remoteWorkspaceSyncGracePeriodSeconds ?? 300
+}
+
 // Why: multiple renderer tabs for the same SSH target can fire ssh:connect
 // concurrently. Without serialization, the second call interleaves with the
 // first — both see no existing session, both create one, and the first one
@@ -260,7 +269,7 @@ export function registerSshHandlers(
         const target = sshStore?.getTarget(targetId)
         const conn = connectionManager?.getConnection(targetId)
         if (conn) {
-          void session.reconnect(conn, target?.relayGracePeriodSeconds)
+          void session.reconnect(conn, relayGracePeriodForTarget(target))
         }
       }
     }
@@ -495,7 +504,7 @@ export function registerSshHandlers(
           if (!liveConn || !activeSessions.has(tid)) {
             return
           }
-          void s.reconnect(liveConn, t?.relayGracePeriodSeconds)
+          void s.reconnect(liveConn, relayGracePeriodForTarget(t))
         }, delay)
         relayLostBackoff.set(tid, state)
         console.warn(
@@ -523,7 +532,7 @@ export function registerSshHandlers(
         void restorePortForwards(tid, getMainWindow)
       })
 
-      await session.establish(conn, target.relayGracePeriodSeconds)
+      await session.establish(conn, relayGracePeriodForTarget(target))
 
       // Why: we manually pushed `deploying-relay` above, so the renderer's
       // state is stuck there. Send `connected` directly to the renderer

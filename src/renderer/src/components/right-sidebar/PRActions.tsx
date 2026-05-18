@@ -28,6 +28,9 @@ export default function PRActions({
 }): React.JSX.Element | null {
   const openModal = useAppStore((s) => s.openModal)
   const skipDeleteConfirm = useAppStore((s) => s.settings?.skipDeleteWorktreeConfirm ?? false)
+  const isDeletingWorktree = useAppStore(
+    (s) => s.deleteStateByWorktreeId[worktree.id]?.isDeleting ?? false
+  )
   const [merging, setMerging] = useState(false)
   const [mergeError, setMergeError] = useState<string | null>(null)
   const [mergeMenuOpen, setMergeMenuOpen] = useState(false)
@@ -41,8 +44,10 @@ export default function PRActions({
       try {
         const result = await window.api.gh.mergePR({
           repoPath: repo.path,
+          repoId: repo.id,
           prNumber: pr.number,
-          method
+          method,
+          prRepo: pr.prRepo ?? null
         })
         if (!result.ok) {
           setMergeError(result.error)
@@ -55,7 +60,7 @@ export default function PRActions({
         setMerging(false)
       }
     },
-    [repo.path, pr.number, onRefreshPR]
+    [repo.id, repo.path, pr.number, pr.prRepo, onRefreshPR]
   )
 
   useEffect(() => {
@@ -173,11 +178,16 @@ export default function PRActions({
         type="button"
         variant="secondary"
         size="xs"
-        className="w-full text-[11px]"
+        className="w-full cursor-pointer text-[11px] hover:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         onClick={handleDeleteWorktree}
+        disabled={isDeletingWorktree}
       >
-        <Trash2 className="size-3.5" />
-        Delete Worktree
+        {isDeletingWorktree ? (
+          <LoaderCircle className="size-3.5 animate-spin" />
+        ) : (
+          <Trash2 className="size-3.5" />
+        )}
+        {isDeletingWorktree ? 'Deleting…' : 'Delete Worktree'}
       </Button>
     )
   }

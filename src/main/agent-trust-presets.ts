@@ -2,10 +2,12 @@ import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
+import { upsertProjectTrustLevel } from './codex/config-toml-trust'
 
 /**
- * Pre-mark a workspace as trusted for cursor-agent / GitHub Copilot CLI so
- * the agent's "Do you trust this folder?" menu does not fire on first launch.
+ * Pre-mark a workspace as trusted for cursor-agent, GitHub Copilot CLI, or
+ * Codex so the agent's "Do you trust this folder?" menu does not fire on
+ * first launch.
  *
  * Why: Orca's "drop URL into agent input as a draft" flow injects the URL
  * via bracketed-paste once the TUI is up. If the trust menu intercepts the
@@ -18,6 +20,8 @@ import { writeFileAtomically } from './codex-accounts/fs-utils'
  * Side note: a `--trust`-style CLI flag exists in cursor-agent but only
  * applies in `--print/headless` mode (per its --help). Copilot has no
  * documented flag at all (verified against @github/copilot 1.0.32 bundle).
+ * Codex's `--dangerously-bypass-approvals-and-sandbox` would also change
+ * approval/sandbox policy, so it is not equivalent to "trust this project".
  */
 
 /**
@@ -91,6 +95,20 @@ export function markCopilotFolderTrusted(workspacePath: string): void {
     mkdirSync(configDir, { recursive: true })
   }
   writeFileAtomically(configPath, `${JSON.stringify(config, null, 2)}\n`)
+}
+
+/**
+ * Codex stores project trust in ~/.codex/config.toml under:
+ *   [projects."<realpath>"]
+ *   trust_level = "trusted"
+ *
+ * Verified against codex-rs/tui/src/onboarding/trust_directory.rs and
+ * codex-rs/core/src/config/config_tests.rs in the Codex CLI source.
+ */
+export function markCodexProjectTrusted(workspacePath: string): void {
+  const absPath = canonicalize(workspacePath)
+  const configPath = join(homedir(), '.codex', 'config.toml')
+  upsertProjectTrustLevel(configPath, absPath, 'trusted')
 }
 
 function canonicalize(p: string): string {

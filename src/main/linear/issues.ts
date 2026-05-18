@@ -1,49 +1,286 @@
-import type { LinearIssue, LinearIssueUpdate, LinearComment } from '../../shared/types'
-import { acquire, release, getClient, isAuthError, clearToken } from './client'
+/* eslint-disable max-lines -- Why: Linear issue reads and mutations share the
+   same workspace fan-out/error handling, so keeping them together avoids
+   drifting auth-clearing behavior between operations. */
+import type {
+  LinearIssue,
+  LinearIssueUpdate,
+  LinearComment,
+  LinearWorkspaceSelection
+} from '../../shared/types'
+import {
+  acquire,
+  release,
+  getClients,
+  isAuthError,
+  clearToken,
+  type LinearClientForWorkspace
+} from './client'
 import { mapLinearIssue } from './mappers'
 
-export async function getIssue(id: string): Promise<LinearIssue | null> {
-  const client = getClient()
-  if (!client) {
-    return null
-  }
+type LinearIssueNode = {
+  id: string
+  identifier: string
+  title: string
+  description?: string | null
+  url: string
+  estimate?: number | null
+  priority: number
+  updatedAt: string
+  labelIds?: string[] | null
+  state?: {
+    name?: string | null
+    type?: string | null
+    color?: string | null
+  } | null
+  team?: {
+    id?: string | null
+    name?: string | null
+    key?: string | null
+  } | null
+  assignee?: {
+    id: string
+    displayName: string
+    avatarUrl?: string | null
+  } | null
+  labels?: {
+    nodes?: { id: string; name: string }[]
+  } | null
+}
 
-  await acquire()
-  try {
-    const issue = await client.issue(id)
-    return await mapLinearIssue(issue)
-  } catch (error) {
-    if (isAuthError(error)) {
-      clearToken()
-      throw error
-    }
-    console.warn('[linear] getIssue failed:', error)
-    return null
-  } finally {
-    release()
+type LinearIssueConnectionResponse = {
+  searchIssues?: { nodes?: LinearIssueNode[] }
+  issues?: { nodes?: LinearIssueNode[] }
+  viewer?: {
+    assignedIssues?: { nodes?: LinearIssueNode[] }
+    createdIssues?: { nodes?: LinearIssueNode[] }
   }
 }
 
-export async function searchIssues(query: string, limit = 20): Promise<LinearIssue[]> {
-  const client = getClient()
-  if (!client) {
+type LinearRawVariables = Record<string, unknown>
+
+const LINEAR_ISSUE_NODE_FIELDS = `
+  id
+  identifier
+  title
+  description
+  url
+  priority
+  estimate
+  updatedAt
+  labelIds
+  state {
+    name
+    type
+    color
+  }
+  team {
+    id
+    name
+    key
+  }
+  assignee {
+    id
+    displayName
+    avatarUrl
+  }
+  labels(first: 50) {
+    nodes {
+      id
+      name
+    }
+  }
+`
+
+const SEARCH_ISSUES_QUERY = `
+  query OrcaLinearIssueSearch($term: String!, $first: Int) {
+    searchIssues(term: $term, first: $first) {
+      nodes {
+        ${LINEAR_ISSUE_NODE_FIELDS}
+      }
+    }
+  }
+`
+
+const ALL_ISSUES_QUERY = `
+  query OrcaLinearIssues($first: Int, $filter: IssueFilter, $orderBy: PaginationOrderBy) {
+    issues(first: $first, filter: $filter, orderBy: $orderBy) {
+      nodes {
+        ${LINEAR_ISSUE_NODE_FIELDS}
+      }
+    }
+  }
+`
+
+const VIEWER_ASSIGNED_ISSUES_QUERY = `
+  query OrcaLinearViewerAssignedIssues(
+    $first: Int,
+    $filter: IssueFilter,
+    $orderBy: PaginationOrderBy
+  ) {
+    viewer {
+      assignedIssues(first: $first, filter: $filter, orderBy: $orderBy) {
+        nodes {
+          ${LINEAR_ISSUE_NODE_FIELDS}
+        }
+      }
+    }
+  }
+`
+
+const VIEWER_CREATED_ISSUES_QUERY = `
+  query OrcaLinearViewerCreatedIssues(
+    $first: Int,
+    $filter: IssueFilter,
+    $orderBy: PaginationOrderBy
+  ) {
+    viewer {
+      createdIssues(first: $first, filter: $filter, orderBy: $orderBy) {
+        nodes {
+          ${LINEAR_ISSUE_NODE_FIELDS}
+        }
+      }
+    }
+  }
+`
+
+async function mapIssueForWorkspace(
+  entry: LinearClientForWorkspace,
+  issue: Parameters<typeof mapLinearIssue>[0],
+  options?: Parameters<typeof mapLinearIssue>[1]
+): Promise<LinearIssue> {
+  const mapped = await mapLinearIssue(issue, options)
+  return {
+    ...mapped,
+    workspaceId: entry.workspace.id,
+    workspaceName: entry.workspace.organizationName
+  }
+}
+
+function sortAndLimitIssues(issues: LinearIssue[], limit: number): LinearIssue[] {
+  return issues
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .slice(0, limit)
+}
+
+function mapRawIssueForWorkspace(
+  entry: LinearClientForWorkspace,
+  issue: LinearIssueNode
+): LinearIssue {
+  const labelNodes = issue.labels?.nodes ?? []
+  return {
+    id: issue.id,
+    identifier: issue.identifier,
+    title: issue.title,
+    description: issue.description ?? undefined,
+    url: issue.url,
+    state: {
+      name: issue.state?.name ?? '',
+      type: issue.state?.type ?? '',
+      color: issue.state?.color ?? ''
+    },
+    team: {
+      id: issue.team?.id ?? '',
+      name: issue.team?.name ?? '',
+      key: issue.team?.key ?? ''
+    },
+    labels: labelNodes.map((label) => label.name),
+    // Why: labelIds drives full-replace updates. Keep Linear's complete id
+    // list even when display label nodes are paginated.
+    labelIds: issue.labelIds ?? labelNodes.map((label) => label.id),
+    assignee: issue.assignee
+      ? {
+          id: issue.assignee.id,
+          displayName: issue.assignee.displayName,
+          avatarUrl: issue.assignee.avatarUrl ?? undefined
+        }
+      : undefined,
+    estimate: issue.estimate ?? null,
+    priority: issue.priority,
+    updatedAt: issue.updatedAt,
+    workspaceId: entry.workspace.id,
+    workspaceName: entry.workspace.organizationName
+  }
+}
+
+function shouldThrowAuthError(selection: LinearWorkspaceSelection | null | undefined): boolean {
+  return selection !== 'all'
+}
+
+export async function getIssue(
+  id: string,
+  workspaceId?: LinearWorkspaceSelection | null
+): Promise<LinearIssue | null> {
+  const entries = getClients(workspaceId)
+  if (entries.length === 0) {
+    return null
+  }
+
+  for (const entry of entries) {
+    await acquire()
+    try {
+      const issue = await entry.client.issue(id)
+      return await mapIssueForWorkspace(entry, issue, {
+        includeChildren: true,
+        includeProject: true
+      })
+    } catch (error) {
+      if (isAuthError(error)) {
+        clearToken(entry.workspace.id)
+        if (shouldThrowAuthError(workspaceId)) {
+          throw error
+        }
+      } else {
+        console.warn('[linear] getIssue failed:', error)
+      }
+    } finally {
+      release()
+    }
+  }
+  return null
+}
+
+export async function searchIssues(
+  query: string,
+  limit = 20,
+  workspaceId?: LinearWorkspaceSelection | null
+): Promise<LinearIssue[]> {
+  const entries = getClients(workspaceId)
+  if (entries.length === 0) {
     return []
   }
 
-  await acquire()
-  try {
-    const result = await client.searchIssues(query, { first: limit })
-    return await Promise.all(result.nodes.map(mapLinearIssue))
-  } catch (error) {
-    if (isAuthError(error)) {
-      clearToken()
-      throw error
-    }
-    console.warn('[linear] searchIssues failed:', error)
-    return []
-  } finally {
-    release()
+  const results = await Promise.all(
+    entries.map(async (entry) => {
+      await acquire()
+      try {
+        const result = await entry.client.client.rawRequest<
+          LinearIssueConnectionResponse,
+          LinearRawVariables
+        >(SEARCH_ISSUES_QUERY, { term: query, first: limit })
+        const nodes = result.data?.searchIssues?.nodes ?? []
+        return nodes.map((issue) => mapRawIssueForWorkspace(entry, issue))
+      } catch (error) {
+        if (isAuthError(error)) {
+          clearToken(entry.workspace.id)
+          if (shouldThrowAuthError(workspaceId)) {
+            throw error
+          }
+        } else {
+          console.warn('[linear] searchIssues failed:', error)
+        }
+        return []
+      } finally {
+        release()
+      }
+    })
+  )
+  // Why: searchIssues returns Linear's relevance ranking. Re-sorting by
+  // updatedAt would discard relevance order for single-workspace results,
+  // diverging from Linear's web UI and pre-PR behavior.
+  if (entries.length === 1) {
+    return results.flat().slice(0, limit)
   }
+  return sortAndLimitIssues(results.flat(), limit)
 }
 
 export type LinearListFilter = 'assigned' | 'created' | 'all' | 'completed'
@@ -53,84 +290,100 @@ const COMPLETED_STATE_FILTER = { state: { type: { in: ['completed', 'canceled'] 
 
 export async function listIssues(
   filter: LinearListFilter = 'assigned',
-  limit = 20
+  limit = 20,
+  workspaceId?: LinearWorkspaceSelection | null
 ): Promise<LinearIssue[]> {
-  const client = getClient()
-  if (!client) {
+  const entries = getClients(workspaceId)
+  if (entries.length === 0) {
     return []
   }
 
-  await acquire()
-  try {
-    const orderBy = 'updatedAt' as never
+  const results = await Promise.all(
+    entries.map(async (entry) => {
+      await acquire()
+      try {
+        const orderBy = 'updatedAt'
+        const variables = { first: limit, orderBy }
 
-    if (filter === 'assigned') {
-      const viewer = await client.viewer
-      const connection = await viewer.assignedIssues({
-        first: limit,
-        orderBy,
-        filter: ACTIVE_STATE_FILTER
-      })
-      return await Promise.all(connection.nodes.map(mapLinearIssue))
-    }
+        if (filter === 'assigned') {
+          const result = await entry.client.client.rawRequest<
+            LinearIssueConnectionResponse,
+            LinearRawVariables
+          >(VIEWER_ASSIGNED_ISSUES_QUERY, { ...variables, filter: ACTIVE_STATE_FILTER })
+          return (result.data?.viewer?.assignedIssues?.nodes ?? []).map((issue) =>
+            mapRawIssueForWorkspace(entry, issue)
+          )
+        }
 
-    if (filter === 'created') {
-      const viewer = await client.viewer
-      const connection = await viewer.createdIssues({
-        first: limit,
-        orderBy,
-        filter: ACTIVE_STATE_FILTER
-      })
-      return await Promise.all(connection.nodes.map(mapLinearIssue))
-    }
+        if (filter === 'created') {
+          const result = await entry.client.client.rawRequest<
+            LinearIssueConnectionResponse,
+            LinearRawVariables
+          >(VIEWER_CREATED_ISSUES_QUERY, { ...variables, filter: ACTIVE_STATE_FILTER })
+          return (result.data?.viewer?.createdIssues?.nodes ?? []).map((issue) =>
+            mapRawIssueForWorkspace(entry, issue)
+          )
+        }
 
-    if (filter === 'completed') {
-      const viewer = await client.viewer
-      const connection = await viewer.assignedIssues({
-        first: limit,
-        orderBy,
-        filter: COMPLETED_STATE_FILTER
-      })
-      return await Promise.all(connection.nodes.map(mapLinearIssue))
-    }
+        if (filter === 'completed') {
+          const result = await entry.client.client.rawRequest<
+            LinearIssueConnectionResponse,
+            LinearRawVariables
+          >(VIEWER_ASSIGNED_ISSUES_QUERY, { ...variables, filter: COMPLETED_STATE_FILTER })
+          return (result.data?.viewer?.assignedIssues?.nodes ?? []).map((issue) =>
+            mapRawIssueForWorkspace(entry, issue)
+          )
+        }
 
-    // 'all' — all active issues across the workspace
-    const connection = await client.issues({
-      first: limit,
-      orderBy,
-      filter: ACTIVE_STATE_FILTER
+        // 'all' — all active issues across the workspace
+        const result = await entry.client.client.rawRequest<
+          LinearIssueConnectionResponse,
+          LinearRawVariables
+        >(ALL_ISSUES_QUERY, { ...variables, filter: ACTIVE_STATE_FILTER })
+        return (result.data?.issues?.nodes ?? []).map((issue) =>
+          mapRawIssueForWorkspace(entry, issue)
+        )
+      } catch (error) {
+        if (isAuthError(error)) {
+          clearToken(entry.workspace.id)
+          if (shouldThrowAuthError(workspaceId)) {
+            throw error
+          }
+        } else {
+          console.warn('[linear] listIssues failed:', error)
+        }
+        return []
+      } finally {
+        release()
+      }
     })
-    return await Promise.all(connection.nodes.map(mapLinearIssue))
-  } catch (error) {
-    if (isAuthError(error)) {
-      clearToken()
-      throw error
-    }
-    console.warn('[linear] listIssues failed:', error)
-    return []
-  } finally {
-    release()
-  }
+  )
+  return sortAndLimitIssues(results.flat(), limit)
 }
 
 export async function createIssue(
   teamId: string,
   title: string,
-  description?: string
+  description?: string,
+  workspaceId?: string | null,
+  options?: { parentId?: string; projectId?: string | null }
 ): Promise<
-  { ok: true; id: string; identifier: string; url: string } | { ok: false; error: string }
+  | { ok: true; id: string; identifier: string; title: string; url: string }
+  | { ok: false; error: string }
 > {
-  const client = getClient()
-  if (!client) {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
     return { ok: false, error: 'Not connected to Linear' }
   }
 
   await acquire()
   try {
-    const result = await client.createIssue({
+    const result = await entry.client.createIssue({
       teamId,
       title,
-      ...(description ? { description } : {})
+      ...(description ? { description } : {}),
+      ...(options?.parentId ? { parentId: options.parentId } : {}),
+      ...(options?.projectId ? { projectId: options.projectId } : {})
     })
     if (!result.success) {
       return { ok: false, error: 'Linear create failed' }
@@ -139,10 +392,16 @@ export async function createIssue(
     if (!issue) {
       return { ok: false, error: 'Issue was created but could not be retrieved' }
     }
-    return { ok: true, id: issue.id, identifier: issue.identifier, url: issue.url }
+    return {
+      ok: true,
+      id: issue.id,
+      identifier: issue.identifier,
+      title: issue.title,
+      url: issue.url
+    }
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken()
+      clearToken(entry.workspace.id)
       throw error
     }
     const message = error instanceof Error ? error.message : String(error)
@@ -154,10 +413,11 @@ export async function createIssue(
 
 export async function updateIssue(
   id: string,
-  updates: LinearIssueUpdate
+  updates: LinearIssueUpdate,
+  workspaceId?: string | null
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const client = getClient()
-  if (!client) {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
     return { ok: false, error: 'Not connected to Linear' }
   }
 
@@ -179,21 +439,27 @@ export async function updateIssue(
     if (updates.assigneeId !== undefined) {
       payload.assigneeId = updates.assigneeId
     }
+    if (updates.estimate !== undefined) {
+      payload.estimate = updates.estimate
+    }
     if (updates.priority !== undefined) {
       payload.priority = updates.priority
     }
     if (resolvedLabelIds !== undefined) {
       payload.labelIds = resolvedLabelIds
     }
+    if (updates.projectId !== undefined) {
+      payload.projectId = updates.projectId
+    }
 
-    const result = await client.updateIssue(id, payload)
+    const result = await entry.client.updateIssue(id, payload)
     if (!result.success) {
       return { ok: false, error: 'Linear update failed' }
     }
     return { ok: true }
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken()
+      clearToken(entry.workspace.id)
       throw error
     }
     const message = error instanceof Error ? error.message : String(error)
@@ -205,16 +471,17 @@ export async function updateIssue(
 
 export async function addIssueComment(
   issueId: string,
-  body: string
+  body: string,
+  workspaceId?: string | null
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
-  const client = getClient()
-  if (!client) {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
     return { ok: false, error: 'Not connected to Linear' }
   }
 
   await acquire()
   try {
-    const result = await client.createComment({ issueId, body })
+    const result = await entry.client.createComment({ issueId, body })
     if (!result.success) {
       return { ok: false, error: 'Failed to create comment' }
     }
@@ -222,7 +489,7 @@ export async function addIssueComment(
     return { ok: true, id: comment?.id ?? '' }
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken()
+      clearToken(entry.workspace.id)
       throw error
     }
     const message = error instanceof Error ? error.message : String(error)
@@ -232,15 +499,18 @@ export async function addIssueComment(
   }
 }
 
-export async function getIssueComments(issueId: string): Promise<LinearComment[]> {
-  const client = getClient()
-  if (!client) {
+export async function getIssueComments(
+  issueId: string,
+  workspaceId?: string | null
+): Promise<LinearComment[]> {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
     return []
   }
 
   await acquire()
   try {
-    const issue = await client.issue(issueId)
+    const issue = await entry.client.issue(issueId)
     const comments = await issue.comments()
     const results: LinearComment[] = []
     for (const c of comments.nodes) {
@@ -257,7 +527,7 @@ export async function getIssueComments(issueId: string): Promise<LinearComment[]
     return results
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken()
+      clearToken(entry.workspace.id)
       throw error
     }
     console.warn('[linear] getIssueComments failed:', error)

@@ -1,3 +1,4 @@
+import type React from 'react'
 import type { GlobalSettings, StatusBarItem } from '../../../../shared/types'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
@@ -14,6 +15,35 @@ type AppearancePaneProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
   applyTheme: (theme: 'system' | 'dark' | 'light') => void
   fontSuggestions: string[]
+}
+
+function ToggleSwitchButton({
+  checked,
+  onToggle,
+  ariaLabel
+}: {
+  checked: boolean
+  onToggle: () => void
+  ariaLabel?: string
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={ariaLabel}
+      onClick={onToggle}
+      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+        checked ? 'bg-foreground' : 'bg-muted-foreground/30'
+      }`}
+    >
+      <span
+        className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+          checked ? 'translate-x-4' : 'translate-x-0.5'
+        }`}
+      />
+    </button>
+  )
 }
 
 const STATUS_BAR_TOGGLES: readonly {
@@ -61,23 +91,11 @@ const STATUS_BAR_TOGGLES: readonly {
   },
   {
     id: 'resource-usage',
-    title: 'Resource Usage',
-    description: 'Show CPU, memory, and terminal session indicators in the status bar.',
-    keywords: [
-      'status bar',
-      'resource',
-      'usage',
-      'memory',
-      'ram',
-      'cpu',
-      'terminal',
-      'sessions',
-      'pty',
-      'monitoring',
-      'performance'
-    ],
+    title: 'Resource Manager',
+    description: 'Show CPU, memory, terminal sessions, and workspace disk usage in the status bar.',
+    keywords: ['status bar', 'resource', 'manager', 'memory', 'cpu', 'terminal', 'disk', 'space'],
     toggleDescription:
-      'Show CPU, memory, and terminal session counts. Click it for a per-workspace breakdown and daemon controls.'
+      'Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.'
   }
 ]
 
@@ -110,6 +128,11 @@ const LAYOUT_ENTRIES: SettingsSearchEntry[] = [
     title: 'Open Right Sidebar by Default',
     description: 'Automatically expand the file explorer panel when creating a new worktree.',
     keywords: ['layout', 'file explorer', 'sidebar']
+  },
+  {
+    title: 'Show Git-Ignored Files',
+    description: 'Dim files matched by .gitignore in the file explorer.',
+    keywords: ['git', 'gitignore', 'ignored', 'file explorer', 'sidebar', 'hide']
   }
 ]
 
@@ -260,24 +283,32 @@ export function AppearancePane({
               Automatically expand the file explorer panel when creating a new worktree.
             </p>
           </div>
-          <button
-            role="switch"
-            aria-checked={settings.rightSidebarOpenByDefault}
-            onClick={() =>
-              updateSettings({
-                rightSidebarOpenByDefault: !settings.rightSidebarOpenByDefault
-              })
+          <ToggleSwitchButton
+            checked={settings.rightSidebarOpenByDefault}
+            onToggle={() =>
+              updateSettings({ rightSidebarOpenByDefault: !settings.rightSidebarOpenByDefault })
             }
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-              settings.rightSidebarOpenByDefault ? 'bg-foreground' : 'bg-muted-foreground/30'
-            }`}
-          >
-            <span
-              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                settings.rightSidebarOpenByDefault ? 'translate-x-4' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
+          />
+        </SearchableSetting>
+
+        <SearchableSetting
+          title="Show Git-Ignored Files"
+          description="Show files matched by .gitignore in the file explorer."
+          keywords={['git', 'gitignore', 'ignored', 'file explorer', 'sidebar', 'hide']}
+          className="flex items-center justify-between gap-4 px-1 py-2"
+        >
+          <div className="space-y-0.5">
+            <Label>Show Git-Ignored Files</Label>
+            <p className="text-xs text-muted-foreground">
+              Turn off to hide files matched by .gitignore from the file explorer.
+            </p>
+          </div>
+          <ToggleSwitchButton
+            checked={settings.showGitIgnoredFiles ?? true}
+            onToggle={() =>
+              updateSettings({ showGitIgnoredFiles: !(settings.showGitIgnoredFiles ?? true) })
+            }
+          />
         </SearchableSetting>
       </section>
     ) : null,
@@ -300,24 +331,10 @@ export function AppearancePane({
             <Label>Titlebar App Name</Label>
             <p className="text-xs text-muted-foreground">Show Orca in the titlebar.</p>
           </div>
-          <button
-            role="switch"
-            aria-checked={settings.showTitlebarAppName}
-            onClick={() =>
-              updateSettings({
-                showTitlebarAppName: !settings.showTitlebarAppName
-              })
-            }
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-              settings.showTitlebarAppName ? 'bg-foreground' : 'bg-muted-foreground/30'
-            }`}
-          >
-            <span
-              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                settings.showTitlebarAppName ? 'translate-x-4' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
+          <ToggleSwitchButton
+            checked={settings.showTitlebarAppName}
+            onToggle={() => updateSettings({ showTitlebarAppName: !settings.showTitlebarAppName })}
+          />
         </SearchableSetting>
       </section>
     ) : null,
@@ -345,22 +362,11 @@ export function AppearancePane({
                 <Label>{toggle.title}</Label>
                 <p className="text-xs text-muted-foreground">{toggle.toggleDescription}</p>
               </div>
-              <button
-                type="button"
-                role="switch"
-                aria-label={toggle.title}
-                aria-checked={enabled}
-                onClick={() => toggleStatusBarItem(toggle.id)}
-                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-                  enabled ? 'bg-foreground' : 'bg-muted-foreground/30'
-                }`}
-              >
-                <span
-                  className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                    enabled ? 'translate-x-4' : 'translate-x-0.5'
-                  }`}
-                />
-              </button>
+              <ToggleSwitchButton
+                checked={enabled}
+                onToggle={() => toggleStatusBarItem(toggle.id)}
+                ariaLabel={toggle.title}
+              />
             </SearchableSetting>
           )
         })}
@@ -384,24 +390,10 @@ export function AppearancePane({
               Show the Tasks button at the top of the left sidebar.
             </p>
           </div>
-          <button
-            role="switch"
-            aria-checked={settings.showTasksButton}
-            onClick={() =>
-              updateSettings({
-                showTasksButton: !settings.showTasksButton
-              })
-            }
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-              settings.showTasksButton ? 'bg-foreground' : 'bg-muted-foreground/30'
-            }`}
-          >
-            <span
-              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                settings.showTasksButton ? 'translate-x-4' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
+          <ToggleSwitchButton
+            checked={settings.showTasksButton}
+            onToggle={() => updateSettings({ showTasksButton: !settings.showTasksButton })}
+          />
         </SearchableSetting>
       </section>
     ) : null

@@ -35,8 +35,10 @@ import { SshStatusSegment } from './SshStatusSegment'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { ResourceUsageStatusSegment } from './ResourceUsageStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
+import { shouldOpenStatusBarContextMenu } from './status-bar-context-menu-policy'
 import { PetStatusSegment } from './PetStatusSegment'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
+import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/FloatingTerminalIconContextMenu'
 
 type StatusBarProps = {
   floatingTerminalOpen: boolean
@@ -827,13 +829,16 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
-  const floatingTerminalActionLabel = floatingTerminalOpen ? 'Hide Terminal' : 'Show Terminal'
+  const floatingTerminalActionLabel = floatingTerminalOpen ? 'Minimize Terminal' : 'Show Terminal'
 
   return (
     <div
       ref={containerRefCallback}
       className="flex items-center h-6 min-h-[24px] px-3 gap-4 border-t border-border bg-[var(--bg-titlebar,var(--card))] text-xs select-none shrink-0 relative"
       onContextMenuCapture={(event) => {
+        if (!shouldOpenStatusBarContextMenu(event.target)) {
+          return
+        }
         // Why: mirror the right-click pattern used across the app
         // (WorktreeContextMenu, TerminalContextMenu, tab bar) — dispatch the
         // global close event so peer menus dismiss, then place a hidden
@@ -893,36 +898,33 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
       <div className="flex items-center gap-3">
         <UpdateStatusSegment compact={compact} iconOnly={iconOnly} />
         {petEnabled && <PetStatusSegment />}
-        {showFloatingTerminalToggle && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                aria-label={floatingTerminalActionLabel}
-                onClick={() => {
-                  window.dispatchEvent(new CustomEvent(TOGGLE_FLOATING_TERMINAL_EVENT))
-                }}
-              >
-                <TerminalSquare className="size-3.5" />
-                {!iconOnly && (
-                  <span className="inline-block w-[86px] whitespace-nowrap text-left">
-                    {floatingTerminalActionLabel}
-                  </span>
-                )}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={6}>
-              {floatingTerminalActionLabel} (
-              {typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
-                ? '⌘⌥T'
-                : 'Ctrl+Alt+T'}
-              )
-            </TooltipContent>
-          </Tooltip>
-        )}
         {showResourceUsage && <ResourceUsageStatusSegment compact={compact} iconOnly={iconOnly} />}
         {showSsh && <SshStatusSegment compact={compact} iconOnly={iconOnly} />}
+        {showFloatingTerminalToggle && (
+          <FloatingTerminalIconContextMenu currentLocation="status-bar" className="relative">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex size-5 cursor-pointer items-center justify-center rounded border border-border bg-secondary text-secondary-foreground shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground"
+                  aria-label={floatingTerminalActionLabel}
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent(TOGGLE_FLOATING_TERMINAL_EVENT))
+                  }}
+                >
+                  <TerminalSquare className="size-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={6}>
+                {floatingTerminalActionLabel} (
+                {typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
+                  ? '⌘⌥T'
+                  : 'Ctrl+Alt+T'}
+                )
+              </TooltipContent>
+            </Tooltip>
+          </FloatingTerminalIconContextMenu>
+        )}
       </div>
 
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
@@ -981,7 +983,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             onCheckedChange={() => toggleStatusBarItem('resource-usage')}
           >
             <Activity className="size-3.5" />
-            Resource Usage
+            Resource Manager
           </DropdownMenuCheckboxItem>
         </DropdownMenuContent>
       </DropdownMenu>

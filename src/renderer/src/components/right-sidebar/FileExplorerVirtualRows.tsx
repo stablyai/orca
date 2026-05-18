@@ -4,8 +4,9 @@ import { dirname, normalizeRelativePath } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import type { GitFileStatus } from '../../../../shared/types'
 import { FileExplorerRow, InlineInputRow, type InlineInput } from './FileExplorerRow'
-import { STATUS_COLORS } from './status-display'
+import { shouldShowIgnoredDecoration, STATUS_COLORS } from './status-display'
 import type { DirCache, TreeNode } from './file-explorer-types'
+import { countVisibleFileExplorerSelections } from './file-explorer-selection'
 
 type FileExplorerVirtualRowsProps = {
   virtualizer: Virtualizer<HTMLDivElement, Element>
@@ -16,19 +17,22 @@ type FileExplorerVirtualRowsProps = {
   dismissInlineInput: () => void
   folderStatusByRelativePath: Map<string, GitFileStatus | null>
   statusByRelativePath: Map<string, GitFileStatus>
+  ignoredByRelativePath: Set<string>
   expanded: Set<string>
   dirCache: Record<string, DirCache>
-  selectedPath: string | null
+  selectedPaths: Set<string>
   activeFileId: string | null
   flashingPath: string | null
   deleteShortcutLabel: string
-  onClick: (node: TreeNode) => void
+  onClick: (node: TreeNode, event: React.MouseEvent<HTMLButtonElement>) => void
   onDoubleClick: (node: TreeNode) => void
-  onSelectPath: (path: string) => void
+  onContextMenuSelect: (node: TreeNode) => void
+  onCopyPaths: (node: TreeNode, pathKind: 'absolute' | 'relative') => void
   onStartNew: (type: 'file' | 'folder', parentPath: string, depth: number) => void
   onStartRename: (node: TreeNode) => void
   onDuplicate: (node: TreeNode) => void
   onRequestDelete: (node: TreeNode) => void
+  onCollapseFolderSubtree: (node: TreeNode) => void
   onMoveDrop: (sourcePath: string, destDir: string) => void
   onDragTargetChange: (dir: string | null) => void
   onDragSourceChange: (path: string | null) => void
@@ -50,19 +54,22 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     dismissInlineInput,
     folderStatusByRelativePath,
     statusByRelativePath,
+    ignoredByRelativePath,
     expanded,
     dirCache,
-    selectedPath,
+    selectedPaths,
     activeFileId,
     flashingPath,
     deleteShortcutLabel,
     onClick,
     onDoubleClick,
-    onSelectPath,
+    onContextMenuSelect,
+    onCopyPaths,
     onStartNew,
     onStartRename,
     onDuplicate,
     onRequestDelete,
+    onCollapseFolderSubtree,
     onMoveDrop,
     onDragTargetChange,
     onDragSourceChange,
@@ -73,6 +80,8 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     dragSourcePath,
     nativeDropTargetDir
   } = props
+
+  const visibleSelectionCount = countVisibleFileExplorerSelections(flatRows, selectedPaths)
 
   return (
     <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
@@ -116,6 +125,11 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
         const nodeStatus = n.isDirectory
           ? (folderStatusByRelativePath.get(normalizedRelativePath) ?? null)
           : (statusByRelativePath.get(normalizedRelativePath) ?? null)
+        const isIgnored = shouldShowIgnoredDecoration(
+          nodeStatus,
+          ignoredByRelativePath,
+          normalizedRelativePath
+        )
 
         const rowParentDir = n.isDirectory ? n.path : dirname(n.path)
         const sourceParentDir = dragSourcePath ? dirname(dragSourcePath) : null
@@ -136,20 +150,24 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               node={n}
               isExpanded={expanded.has(n.path)}
               isLoading={n.isDirectory && Boolean(dirCache[n.path]?.loading)}
-              isSelected={selectedPath === n.path || activeFileId === n.path}
+              isSelected={selectedPaths.has(n.path) || activeFileId === n.path}
               isFlashing={flashingPath === n.path}
               nodeStatus={nodeStatus}
               statusColor={nodeStatus ? STATUS_COLORS[nodeStatus] : null}
+              isIgnored={isIgnored}
               deleteShortcutLabel={deleteShortcutLabel}
               targetDir={n.isDirectory ? n.path : dirname(n.path)}
               targetDepth={n.isDirectory ? n.depth + 1 : n.depth}
-              onClick={() => onClick(n)}
+              selectionSize={selectedPaths.has(n.path) ? visibleSelectionCount : 1}
+              onClick={(event) => onClick(n, event)}
               onDoubleClick={() => onDoubleClick(n)}
-              onSelect={() => onSelectPath(n.path)}
+              onContextMenuSelect={() => onContextMenuSelect(n)}
+              onCopyPaths={(pathKind) => onCopyPaths(n, pathKind)}
               onStartNew={onStartNew}
               onStartRename={onStartRename}
               onDuplicate={onDuplicate}
               onRequestDelete={() => onRequestDelete(n)}
+              onCollapseFolderSubtree={() => onCollapseFolderSubtree(n)}
               onMoveDrop={onMoveDrop}
               onDragTargetChange={onDragTargetChange}
               onDragSourceChange={onDragSourceChange}

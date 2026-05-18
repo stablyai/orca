@@ -1,10 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'fs'
+/* eslint-disable max-lines -- Why: this fixture keeps cross-agent hook normalization and cache behavior together so regressions in shared listener state are visible. */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import {
   createHookListenerState,
   getEndpointFileName,
+  hasPendingAgentResultText,
   isShellSafeEndpointValue,
   normalizeHookPayload,
   parseFormEncodedBody,
@@ -12,12 +14,20 @@ import {
   writeEndpointFile,
   type HookListenerState
 } from './agent-hook-listener'
+import { makePaneKey } from './stable-pane-id'
+
+const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
 
 describe('shared agent-hook-listener', () => {
   let state: HookListenerState
 
   beforeEach(() => {
     state = createHookListenerState()
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
   it('parses form-encoded bodies', () => {
@@ -29,6 +39,8 @@ describe('shared agent-hook-listener', () => {
   it('routes pathnames to a known source or null', () => {
     expect(resolveHookSource('/hook/claude')).toBe('claude')
     expect(resolveHookSource('/hook/cursor')).toBe('cursor')
+    expect(resolveHookSource('/hook/grok')).toBe('grok')
+    expect(resolveHookSource('/hook/hermes')).toBe('hermes')
     expect(resolveHookSource('/hook/unknown')).toBeNull()
     expect(resolveHookSource('/')).toBeNull()
   })
@@ -47,7 +59,7 @@ describe('shared agent-hook-listener', () => {
       state,
       'claude',
       {
-        paneKey: 'tab-1:0',
+        paneKey: PANE_KEY,
         tabId: 'tab-1',
         worktreeId: 'wt',
         env: 'production',
@@ -57,7 +69,7 @@ describe('shared agent-hook-listener', () => {
       'production'
     )
     expect(event).not.toBeNull()
-    expect(event!.paneKey).toBe('tab-1:0')
+    expect(event!.paneKey).toBe(PANE_KEY)
     expect(event!.connectionId).toBeNull()
     expect(event!.payload.state).toBe('working')
     expect(event!.payload.prompt).toBe('hello')
@@ -69,7 +81,7 @@ describe('shared agent-hook-listener', () => {
       state,
       'claude',
       {
-        paneKey: 'tab-1:0',
+        paneKey: PANE_KEY,
         payload: { hook_event_name: 'UserPromptSubmit', prompt: '   hi   ' }
       },
       'production'
@@ -97,7 +109,7 @@ describe('shared agent-hook-listener', () => {
     normalizeHookPayload(
       a,
       'claude',
-      { paneKey: 'p', payload: { hook_event_name: 'UserPromptSubmit', prompt: 'first' } },
+      { paneKey: PANE_KEY, payload: { hook_event_name: 'UserPromptSubmit', prompt: 'first' } },
       'production'
     )
     // The second listener has no cached prompt for this paneKey, so a tool
@@ -106,7 +118,7 @@ describe('shared agent-hook-listener', () => {
       b,
       'claude',
       {
-        paneKey: 'p',
+        paneKey: PANE_KEY,
         payload: {
           hook_event_name: 'PreToolUse',
           tool_name: 'Read',
@@ -117,6 +129,338 @@ describe('shared agent-hook-listener', () => {
     )
     expect(event).not.toBeNull()
     expect(event!.payload.prompt).toBe('')
+  })
+
+  it('normalizes Grok hookEventName payloads and keeps prompt across tool events', () => {
+    const prompt = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        payload: { hookEventName: 'user_prompt_submit', prompt: 'run the check' }
+      },
+      'production'
+    )
+    expect(prompt).not.toBeNull()
+    expect(prompt!.payload).toMatchObject({
+      state: 'working',
+      prompt: 'run the check',
+      agentType: 'grok'
+    })
+
+    const tool = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        payload: {
+          hookEventName: 'pre_tool_use',
+          toolName: 'run_terminal_cmd',
+          toolInput: { command: 'pnpm test' }
+        }
+      },
+      'production'
+    )
+    expect(tool).not.toBeNull()
+    expect(tool!.payload).toMatchObject({
+      state: 'working',
+      prompt: 'run the check',
+      agentType: 'grok',
+      toolName: 'run_terminal_cmd',
+      toolInput: 'pnpm test'
+    })
+  })
+
+  it('strips Grok internal user_query wrapper before caching the prompt', () => {
+    const prompt = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'user_prompt_submit',
+          prompt: '<user_query>\nFind recent PR\n</user_query>'
+        }
+      },
+      'production'
+    )
+    expect(prompt?.payload.prompt).toBe('Find recent PR')
+
+    const tool = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'pre_tool_use',
+          toolName: 'web_search',
+          toolInput: { query: 'recent PR' }
+        }
+      },
+      'production'
+    )
+    expect(tool?.payload.prompt).toBe('Find recent PR')
+  })
+
+  it('strips Grok opening user_query wrapper even when the closing tag is absent', () => {
+    const event = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: { hookEventName: 'user_prompt_submit', prompt: '<user_query>Find recent PR' }
+      },
+      'production'
+    )
+    expect(event?.payload.prompt).toBe('Find recent PR')
+  })
+
+  it('maps Grok feedback notifications to waiting without overwriting the prompt', () => {
+    normalizeHookPayload(
+      state,
+      'grok',
+      { paneKey: PANE_KEY, payload: { hookEventName: 'UserPromptSubmit', prompt: 'ship it' } },
+      'production'
+    )
+
+    const event = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: { hookEventName: 'Notification', message: 'Grok needs your feedback to proceed' }
+      },
+      'production'
+    )
+
+    expect(event).not.toBeNull()
+    expect(event!.payload).toMatchObject({
+      state: 'waiting',
+      prompt: 'ship it',
+      agentType: 'grok'
+    })
+  })
+
+  it('reads Grok final assistant text from chat history on Stop', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-grok-session-'))
+    const sessionId = '019e37f4-5135-7b63-a4ab-6d13aa6bf528'
+    const cwd = join(tmpDir, 'workspace')
+    const sessionDir = join(tmpDir, '.grok', 'sessions', encodeURIComponent(cwd), sessionId)
+    try {
+      vi.stubEnv('HOME', tmpDir)
+      vi.stubEnv('USERPROFILE', tmpDir)
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'chat_history.jsonl'),
+        `${[
+          JSON.stringify({ type: 'user', content: [{ type: 'text', text: 'hihi' }] }),
+          JSON.stringify({ type: 'assistant', content: 'Hi! How can I help you today?' })
+        ].join('\n')}\n`
+      )
+
+      normalizeHookPayload(
+        state,
+        'grok',
+        { paneKey: PANE_KEY, payload: { hookEventName: 'user_prompt_submit', prompt: 'hihi' } },
+        'production'
+      )
+
+      const done = normalizeHookPayload(
+        state,
+        'grok',
+        {
+          paneKey: PANE_KEY,
+          payload: { hookEventName: 'Stop', sessionId, cwd }
+        },
+        'production'
+      )
+
+      expect(done?.payload.state).toBe('done')
+      expect(done?.payload.lastAssistantMessage).toBe('Hi! How can I help you today?')
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not let Grok sessionId escape the chat-history directory', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-grok-session-escape-'))
+    const cwd = join(tmpDir, 'workspace')
+    const escapedDir = join(tmpDir, '.grok', 'sessions', 'escaped')
+    try {
+      vi.stubEnv('HOME', tmpDir)
+      vi.stubEnv('USERPROFILE', tmpDir)
+      mkdirSync(escapedDir, { recursive: true })
+      writeFileSync(
+        join(escapedDir, 'chat_history.jsonl'),
+        `${JSON.stringify({ type: 'assistant', content: 'should not leak' })}\n`
+      )
+
+      const done = normalizeHookPayload(
+        state,
+        'grok',
+        {
+          paneKey: PANE_KEY,
+          payload: { hookEventName: 'Stop', sessionId: '../escaped', cwd }
+        },
+        'production'
+      )
+
+      expect(done?.payload.state).toBe('done')
+      expect(done?.payload.lastAssistantMessage).toBeUndefined()
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('treats Grok SessionEnd chat history as pending result text', () => {
+    expect(
+      hasPendingAgentResultText('grok', {
+        payload: {
+          hookEventName: 'SessionEnd',
+          sessionId: '019e37f4-5135-7b63-a4ab-6d13aa6bf528',
+          cwd: '/tmp/workspace'
+        }
+      })
+    ).toBe(true)
+  })
+
+  it('normalizes Hermes pre_llm_call to a working turn with prompt text', () => {
+    const event = normalizeHookPayload(
+      state,
+      'hermes',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'pre_llm_call',
+          user_message: 'ship the Hermes support'
+        }
+      },
+      'production'
+    )
+    expect(event).not.toBeNull()
+    expect(event!.payload.state).toBe('working')
+    expect(event!.payload.prompt).toBe('ship the Hermes support')
+    expect(event!.payload.agentType).toBe('hermes')
+  })
+
+  it('normalizes Hermes tool calls and approval hooks', () => {
+    normalizeHookPayload(
+      state,
+      'hermes',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'pre_llm_call',
+          user_message: 'run tests'
+        }
+      },
+      'production'
+    )
+    const tool = normalizeHookPayload(
+      state,
+      'hermes',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'pre_tool_call',
+          tool_name: 'terminal',
+          args: { command: 'pnpm test' }
+        }
+      },
+      'production'
+    )
+    expect(tool?.payload.state).toBe('working')
+    expect(tool?.payload.toolName).toBe('terminal')
+    expect(tool?.payload.toolInput).toBe('pnpm test')
+    expect(tool?.payload.prompt).toBe('run tests')
+
+    const approval = normalizeHookPayload(
+      state,
+      'hermes',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'pre_approval_request',
+          command: 'rm -rf build',
+          description: 'Remove stale build output'
+        }
+      },
+      'production'
+    )
+    expect(approval?.payload.state).toBe('waiting')
+    expect(approval?.payload.toolName).toBe('approval')
+    expect(approval?.payload.toolInput).toBe('rm -rf build')
+  })
+
+  it('normalizes Hermes first-party tool argument previews', () => {
+    const execute = normalizeHookPayload(
+      state,
+      'hermes',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'pre_tool_call',
+          tool_name: 'execute_code',
+          args: { code: 'print("ok")' }
+        }
+      },
+      'production'
+    )
+    expect(execute?.payload.toolName).toBe('execute_code')
+    expect(execute?.payload.toolInput).toBe('print("ok")')
+
+    const pluginTool = normalizeHookPayload(
+      state,
+      'hermes',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'pre_tool_call',
+          tool_name: 'custom_plugin_tool',
+          args: { query: 'agent hooks' }
+        }
+      },
+      'production'
+    )
+    expect(pluginTool?.payload.toolName).toBe('custom_plugin_tool')
+    expect(pluginTool?.payload.toolInput).toBe('agent hooks')
+  })
+
+  it('normalizes Hermes post_llm_call to done with assistant text', () => {
+    normalizeHookPayload(
+      state,
+      'hermes',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'pre_llm_call',
+          user_message: 'summarize'
+        }
+      },
+      'production'
+    )
+    const done = normalizeHookPayload(
+      state,
+      'hermes',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'post_llm_call',
+          assistant_response: 'Hermes is wired up.'
+        }
+      },
+      'production'
+    )
+    expect(done?.payload.state).toBe('done')
+    expect(done?.payload.prompt).toBe('summarize')
+    expect(done?.payload.lastAssistantMessage).toBe('Hermes is wired up.')
   })
 
   describe('writeEndpointFile', () => {

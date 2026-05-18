@@ -49,6 +49,7 @@ export function subscribeToPtyData(ptyId: string, watcher: (data: string) => voi
  *  guard and suppress xterm auto-replies during replay. */
 export const ptyReplayHandlers = new Map<string, (data: string) => void>()
 export const ptyExitHandlers = new Map<string, (code: number) => void>()
+const ptyExitSidecars = new Map<string, Set<(code: number) => void>>()
 /** Per-PTY teardown callbacks registered by each transport to clear closure
  *  state (stale-title timer, agent tracker) that would otherwise fire after
  *  the data handler is removed. */
@@ -101,7 +102,35 @@ export function ensurePtyDispatcher(): void {
   })
   window.api.pty.onExit((payload) => {
     ptyExitHandlers.get(payload.id)?.(payload.code)
+    const sidecars = ptyExitSidecars.get(payload.id)
+    if (sidecars && sidecars.size > 0) {
+      const snapshot = Array.from(sidecars)
+      ptyExitSidecars.delete(payload.id)
+      for (const sidecar of snapshot) {
+        sidecar(payload.code)
+      }
+    }
   })
+}
+
+export function subscribeToPtyExit(ptyId: string, watcher: (code: number) => void): () => void {
+  ensurePtyDispatcher()
+  let set = ptyExitSidecars.get(ptyId)
+  if (!set) {
+    set = new Set()
+    ptyExitSidecars.set(ptyId, set)
+  }
+  set.add(watcher)
+  return () => {
+    const current = ptyExitSidecars.get(ptyId)
+    if (!current) {
+      return
+    }
+    current.delete(watcher)
+    if (current.size === 0) {
+      ptyExitSidecars.delete(ptyId)
+    }
+  }
 }
 
 // ─── Eager PTY buffer for reconnection on restart ────────────────────
@@ -262,6 +291,8 @@ export type IpcPtyTransportOptions = {
    *  these from the calling pane's (tabId, leafId). */
   tabId?: string
   leafId?: string
+  /** Whether renderer-backed runtime reveal should focus the created tab. */
+  activate?: boolean
   /** Why: mirrors PtySpawnOptions.shellOverride — see types.ts for rationale. */
   shellOverride?: string
   /** Telemetry metadata for the `agent_started` event. Forwarded verbatim

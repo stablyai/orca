@@ -4,12 +4,17 @@ import type {
   GitStatusResult,
   GitDiffResult,
   GitBranchCompareResult,
+  GitCommitCompareResult,
   GitConflictOperation,
+  GitPushTarget,
   GitUpstreamStatus,
   GitWorktreeInfo,
   SearchOptions,
   SearchResult
 } from '../../shared/types'
+import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
+import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 
 // ─── PTY Provider ───────────────────────────────────────────────────
 
@@ -116,24 +121,35 @@ export type FileReadResult = {
 export type IFilesystemProvider = {
   readDir(dirPath: string): Promise<DirEntry[]>
   readFile(filePath: string): Promise<FileReadResult>
+  getTempDir?(): Promise<string>
   writeFile(filePath: string, content: string): Promise<void>
+  writeFileBase64(filePath: string, contentBase64: string): Promise<void>
+  writeFileBase64Chunk(filePath: string, contentBase64: string, append: boolean): Promise<void>
   stat(filePath: string): Promise<FileStat>
   deletePath(targetPath: string, recursive?: boolean): Promise<void>
   createFile(filePath: string): Promise<void>
   createDir(dirPath: string): Promise<void>
+  createDirNoClobber(dirPath: string): Promise<void>
   rename(oldPath: string, newPath: string): Promise<void>
   copy(source: string, destination: string): Promise<void>
   realpath(filePath: string): Promise<string>
   search(opts: SearchOptions): Promise<SearchResult>
   listFiles(rootPath: string, options?: { excludePaths?: string[] }): Promise<string[]>
+  scanWorkspaceSpace?(
+    rootPath: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<WorkspaceSpaceDirectoryScanResult>
   watch(rootPath: string, callback: (events: FsChangeEvent[]) => void): Promise<() => void>
 }
 
 // ─── Git Provider ───────────────────────────────────────────────────
 
 export type IGitProvider = {
-  getStatus(worktreePath: string): Promise<GitStatusResult>
+  getStatus(worktreePath: string, options?: { includeIgnored?: boolean }): Promise<GitStatusResult>
+  checkIgnoredPaths(worktreePath: string, relativePaths: string[]): Promise<string[]>
+  getHistory(worktreePath: string, options?: GitHistoryOptions): Promise<GitHistoryResult>
   commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>
+  getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null>
   getDiff(
     worktreePath: string,
     filePath: string,
@@ -145,10 +161,12 @@ export type IGitProvider = {
   bulkStageFiles(worktreePath: string, filePaths: string[]): Promise<void>
   bulkUnstageFiles(worktreePath: string, filePaths: string[]): Promise<void>
   discardChanges(worktreePath: string, filePath: string): Promise<void>
+  bulkDiscardChanges(worktreePath: string, filePaths: string[]): Promise<void>
   detectConflictOperation(worktreePath: string): Promise<GitConflictOperation>
   getBranchCompare(worktreePath: string, baseRef: string): Promise<GitBranchCompareResult>
+  getCommitCompare(worktreePath: string, commitId: string): Promise<GitCommitCompareResult>
   getUpstreamStatus(worktreePath: string): Promise<GitUpstreamStatus>
-  pushBranch(worktreePath: string, publish?: boolean): Promise<void>
+  pushBranch(worktreePath: string, publish?: boolean, pushTarget?: GitPushTarget): Promise<void>
   pullBranch(worktreePath: string): Promise<void>
   fetchRemote(worktreePath: string): Promise<void>
   getBranchDiff(
@@ -156,7 +174,11 @@ export type IGitProvider = {
     baseRef: string,
     options?: { includePatch?: boolean; filePath?: string; oldPath?: string }
   ): Promise<GitDiffResult[]>
-  listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]>
+  getCommitDiff(
+    worktreePath: string,
+    args: { commitOid: string; parentOid?: string | null; filePath: string; oldPath?: string }
+  ): Promise<GitDiffResult>
+  listWorktrees(repoPath: string, options?: { signal?: AbortSignal }): Promise<GitWorktreeInfo[]>
   addWorktree(
     repoPath: string,
     branchName: string,

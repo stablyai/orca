@@ -1,11 +1,10 @@
 /* eslint-disable max-lines */
-import path from 'node:path'
 import { app, BrowserWindow, powerMonitor } from 'electron'
-import { autoUpdater } from 'electron-updater'
 import type { NsisUpdater } from 'electron-updater'
 import { is } from '@electron-toolkit/utils'
 import type { UpdateStatus } from '../shared/types'
 import { killAllPty } from './ipc/pty'
+import { loadElectronAutoUpdater, type ElectronAutoUpdater } from './electron-updater-loader'
 import {
   beginMacUpdateDownload,
   deferMacQuitUntilInstallerReady,
@@ -15,11 +14,16 @@ import { registerAutoUpdaterHandlers } from './updater-events'
 import {
   compareVersions,
   isBenignCheckFailure,
+  isMissingUpdateManifestFailure,
   isPrereleaseVersion,
   statusesEqual
 } from './updater-fallback'
-import { fetchNewerReleaseTag, getReleaseDownloadUrl } from './updater-prerelease-feed'
+import { fetchNewerReleaseTags, getReleaseDownloadUrl } from './updater-prerelease-feed'
 import { fetchNudge, shouldApplyNudge } from './updater-nudge'
+
+type CheckFailureSource = 'event' | 'promise' | 'fallback-promise'
+type MissingManifestPrereleaseFallbackResult = { userInitiated: boolean }
+type PrimaryEventSuppression = { failureKey: string; error: unknown }
 
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
@@ -33,12 +37,8 @@ let userInitiatedCheck = false
 let onBeforeQuitCleanup: (() => void) | null = null
 let autoUpdaterInitialized = false
 // Why: Shift-clicking "Check for Updates" opts the user into the RC release
-// channel for the rest of this process. We switch to the GitHub provider
-// with allowPrerelease=true so both the check AND any follow-up download
-// resolve against the same (possibly prerelease) release manifest.
-// Resetting only after the check would leave a downloaded RC pointing at a
-// feed URL that no longer advertises it. See design comment in
-// enableIncludePrerelease.
+// channel for the rest of this process. The generic feed still gets pinned to
+// a concrete tag on every check so cancelled RCs without manifests are skipped.
 let includePrereleaseActive = false
 let availableVersion: string | null = null
 let availableReleaseUrl: string | null = null
@@ -54,6 +54,20 @@ let activeUpdateNudgeId: string | null = null
 let awaitingNudgeCheckOutcome = false
 let nudgeCheckInFlight = false
 let lastNudgeCheckAt = 0
+let pendingPrereleaseFallback: {
+  primaryTag: string
+  fallbackTag: string
+  // Why: the primary promise cleanup can run after fallback starts; fallback
+  // events need the attempt-scoped initiation state, not the mutable global.
+  userInitiated: boolean
+  suppressedPrimaryPromiseFailureKey: string | null
+  suppressedPrimaryEventFailure: PrimaryEventSuppression | null
+  suppressedFallbackPromiseFailureKey: string | null
+  suppressedFallbackEventFailureKey: string | null
+  fallbackResultHandled: boolean
+  fallbackCheckingForUpdateSeen: boolean
+  retryLaunched: boolean
+} | null = null
 
 let _getPendingUpdateNudgeId: (() => string | null) | null = null
 let _getDismissedUpdateNudgeId: (() => string | null) | null = null
@@ -66,10 +80,22 @@ let downloadInFlight = false
 /** Guards against the macOS `activate` handler re-opening the old version
  *  while Squirrel's ShipIt is replacing the .app bundle. */
 let quittingForUpdate = false
+let autoUpdater: ElectronAutoUpdater | null = null
+
+function getAutoUpdater(): ElectronAutoUpdater {
+  if (!autoUpdater) {
+    autoUpdater = loadElectronAutoUpdater()
+  }
+  return autoUpdater
+}
 
 function clearAvailableUpdateContext(): void {
   availableVersion = null
   availableReleaseUrl = null
+}
+
+function clearPrereleaseFallbackContext(): void {
+  pendingPrereleaseFallback = null
 }
 
 function clearPendingUpdateNudge(): void {
@@ -168,6 +194,22 @@ function getPendingInstallVersion(): string {
   return ''
 }
 
+function getCheckFailureKey(message: string, userInitiated?: boolean): string {
+  return `${userInitiated ? 'user' : 'auto'}:${message}`
+}
+
+function clearPrereleaseFallbackContextIfSettled(): void {
+  if (
+    pendingPrereleaseFallback?.fallbackResultHandled &&
+    !pendingPrereleaseFallback.suppressedPrimaryPromiseFailureKey &&
+    !pendingPrereleaseFallback.suppressedPrimaryEventFailure &&
+    !pendingPrereleaseFallback.suppressedFallbackPromiseFailureKey &&
+    !pendingPrereleaseFallback.suppressedFallbackEventFailureKey
+  ) {
+    clearPrereleaseFallbackContext()
+  }
+}
+
 function performQuitAndInstall(): void {
   if (pendingQuitAndInstallTimer) {
     clearTimeout(pendingQuitAndInstallTimer)
@@ -191,11 +233,45 @@ function performQuitAndInstall(): void {
     win.removeAllListeners('close')
   }
 
-  autoUpdater.quitAndInstall(false, true)
+  getAutoUpdater().quitAndInstall(false, true)
 }
 
-async function sendCheckFailureStatus(message: string, userInitiated?: boolean): Promise<void> {
-  const failureKey = `${userInitiated ? 'user' : 'auto'}:${message}`
+async function sendCheckFailureStatus(
+  message: string,
+  userInitiated?: boolean,
+  source: CheckFailureSource = 'promise',
+  sourceError?: unknown
+): Promise<void> {
+  const failureKey = getCheckFailureKey(message, userInitiated)
+  if (
+    source === 'promise' &&
+    pendingPrereleaseFallback?.suppressedPrimaryPromiseFailureKey === failureKey
+  ) {
+    pendingPrereleaseFallback.suppressedPrimaryPromiseFailureKey = null
+    clearPrereleaseFallbackContextIfSettled()
+    return
+  }
+  if (
+    source === 'fallback-promise' &&
+    pendingPrereleaseFallback?.suppressedFallbackPromiseFailureKey === failureKey
+  ) {
+    pendingPrereleaseFallback.suppressedFallbackPromiseFailureKey = null
+    clearPrereleaseFallbackContextIfSettled()
+    return
+  }
+
+  if (
+    retryPrereleaseFallbackAfterMissingManifest(
+      message,
+      userInitiated,
+      source,
+      failureKey,
+      sourceError
+    )
+  ) {
+    return
+  }
+
   if (pendingCheckFailureKey === failureKey && pendingCheckFailurePromise) {
     return pendingCheckFailurePromise
   }
@@ -263,42 +339,188 @@ function recordCompletedUpdateCheck(): void {
   persistLastUpdateCheckAt?.(Date.now())
 }
 
-function shouldResolvePrereleaseFeed(): boolean {
-  // Why: if the user Shift-clicked the menu to opt into RC this process, we've
-  // already switched to the native github provider — leave that alone. The
-  // atom-feed resolver only applies to users *running* a prerelease build on
-  // the default generic feed.
-  return !includePrereleaseActive && isPrereleaseVersion(app.getVersion())
+function getMissingManifestPrereleaseFallbackUserInitiated(): boolean | null {
+  if (
+    !pendingPrereleaseFallback?.retryLaunched ||
+    pendingPrereleaseFallback.fallbackResultHandled
+  ) {
+    return null
+  }
+  return pendingPrereleaseFallback.userInitiated
 }
 
-async function pinPrereleaseFeed(): Promise<void> {
-  // Why: for prerelease users we mine the atom feed ourselves and pin the
-  // generic feed at /releases/download/<tag>/ so the follow-up manifest fetch
-  // resolves against exactly that release. This handles BOTH RC→newer-RC and
-  // RC→stable, which is what a prerelease user wants. We avoid the native
-  // github provider because GitHubProvider.getLatestVersion() filters the feed
-  // by channel — when currentChannel is "rc", stable releases get skipped and
-  // the user never sees the GA (trapping them on the RC channel).
+function markMissingManifestPrereleaseFallbackChecking(): void {
+  if (
+    !pendingPrereleaseFallback?.retryLaunched ||
+    pendingPrereleaseFallback.fallbackResultHandled
+  ) {
+    return
+  }
+  pendingPrereleaseFallback.fallbackCheckingForUpdateSeen = true
+}
+
+function consumeMissingManifestPrereleaseFallbackResult(): MissingManifestPrereleaseFallbackResult | null {
+  if (
+    !pendingPrereleaseFallback?.retryLaunched ||
+    pendingPrereleaseFallback.fallbackResultHandled
+  ) {
+    return null
+  }
+  const result = { userInitiated: pendingPrereleaseFallback.userInitiated }
+  pendingPrereleaseFallback.fallbackResultHandled = true
+  clearPrereleaseFallbackContextIfSettled()
+  return result
+}
+
+function suppressMissingManifestPrereleaseFallbackPromiseFailure(message: string): void {
+  if (
+    !pendingPrereleaseFallback?.retryLaunched ||
+    pendingPrereleaseFallback.fallbackResultHandled
+  ) {
+    return
+  }
+  pendingPrereleaseFallback.suppressedFallbackPromiseFailureKey = getCheckFailureKey(
+    message,
+    pendingPrereleaseFallback.userInitiated
+  )
+}
+
+function shouldSuppressMissingManifestPrereleaseFallbackEvent(
+  message: string,
+  error: unknown
+): boolean {
+  if (!pendingPrereleaseFallback?.retryLaunched) {
+    return false
+  }
+  const failureKey = getCheckFailureKey(message, pendingPrereleaseFallback.userInitiated)
+  const primaryEventSuppression = pendingPrereleaseFallback.suppressedPrimaryEventFailure
+  if (primaryEventSuppression?.failureKey === failureKey) {
+    const isPrimaryPromisePair = primaryEventSuppression.error === error
+    // Why: after fallback checking starts, same-message errors may belong to
+    // the fallback attempt, so message matching alone is not safe.
+    if (isPrimaryPromisePair || !pendingPrereleaseFallback.fallbackCheckingForUpdateSeen) {
+      pendingPrereleaseFallback.suppressedPrimaryEventFailure = null
+      clearPrereleaseFallbackContextIfSettled()
+      return true
+    }
+  }
+  if (pendingPrereleaseFallback.suppressedFallbackEventFailureKey === failureKey) {
+    pendingPrereleaseFallback.suppressedFallbackEventFailureKey = null
+    clearPrereleaseFallbackContextIfSettled()
+    return true
+  }
+  return false
+}
+
+function markMissingManifestPrereleaseFallbackPromiseHandled(message: string): void {
+  if (
+    !pendingPrereleaseFallback?.retryLaunched ||
+    pendingPrereleaseFallback.fallbackResultHandled
+  ) {
+    return
+  }
+  pendingPrereleaseFallback.suppressedFallbackEventFailureKey = getCheckFailureKey(
+    message,
+    pendingPrereleaseFallback.userInitiated
+  )
+}
+
+async function pinDefaultReleaseFeed(): Promise<void> {
+  const autoUpdater = getAutoUpdater()
+  // Why: the /releases/latest/download/ redirect can move between the update
+  // check and the later manual download click. Pinning to the concrete tag
+  // keeps the manifest and ZIP asset on the same release.
   //
-  // If the resolver returns null (no newer release, or fetch failed), we fall
-  // back to the default /releases/latest/download/ URL. In the "no newer"
-  // case that feed will report the latest stable and compareVersions in the
-  // 'update-available' handler will correctly mark it as not-available.
+  // Prerelease users still need any-channel resolution so they can move to a
+  // newer RC or the next stable. Stable users should only resolve stable tags.
   const currentVersion = app.getVersion()
-  const newerTag = await fetchNewerReleaseTag(currentVersion)
+  const includePrerelease = includePrereleaseActive || isPrereleaseVersion(currentVersion)
+  const releaseTags = await fetchNewerReleaseTags(currentVersion, includePrerelease ? 2 : 1, {
+    includePrerelease
+  })
+  const newerTag = releaseTags[0] ?? null
+  const fallbackTag = includePrerelease ? (releaseTags[1] ?? null) : null
+  pendingPrereleaseFallback =
+    includePrerelease && newerTag && fallbackTag
+      ? {
+          primaryTag: newerTag,
+          fallbackTag,
+          userInitiated: false,
+          suppressedPrimaryPromiseFailureKey: null,
+          suppressedPrimaryEventFailure: null,
+          suppressedFallbackPromiseFailureKey: null,
+          suppressedFallbackEventFailureKey: null,
+          fallbackResultHandled: false,
+          fallbackCheckingForUpdateSeen: false,
+          retryLaunched: false
+        }
+      : null
   // Why: console.info goes to stdout and is captured by Console.app on macOS
   // and by --enable-logging elsewhere. This is the only window we have into
-  // the updater on a user's machine when something goes wrong (issue: RC user
-  // not offered newer stable). Cheap to keep, invaluable when triaging.
+  // the updater on a user's machine when something goes wrong. Cheap to keep,
+  // invaluable when triaging.
   if (newerTag) {
     const url = getReleaseDownloadUrl(newerTag)
-    console.info(`[updater] prerelease feed pinned: current=${currentVersion} → ${url}`)
+    console.info(
+      `[updater] release feed pinned: current=${currentVersion} includePrerelease=${includePrerelease} → ${url}`
+    )
     autoUpdater.setFeedURL({ provider: 'generic', url })
   } else {
+    clearPrereleaseFallbackContext()
     const url = 'https://github.com/stablyai/orca/releases/latest/download'
-    console.info(`[updater] prerelease feed fallback: current=${currentVersion} → ${url}`)
+    console.info(
+      `[updater] release feed fallback: current=${currentVersion} includePrerelease=${includePrerelease} → ${url}`
+    )
     autoUpdater.setFeedURL({ provider: 'generic', url })
   }
+}
+
+function retryPrereleaseFallbackAfterMissingManifest(
+  message: string,
+  userInitiated: boolean | undefined,
+  source: CheckFailureSource,
+  failureKey: string,
+  sourceError?: unknown
+): boolean {
+  if (
+    !pendingPrereleaseFallback ||
+    pendingPrereleaseFallback.retryLaunched ||
+    !isMissingUpdateManifestFailure(message)
+  ) {
+    return false
+  }
+
+  // Why: a published tag can briefly point at a missing platform manifest
+  // during GitHub release transitions. Walk back once to the previous feed
+  // entry so users on the last good build see a normal not-available result.
+  pendingPrereleaseFallback.retryLaunched = true
+  pendingPrereleaseFallback.userInitiated = Boolean(userInitiated)
+  pendingPrereleaseFallback.suppressedPrimaryPromiseFailureKey =
+    source === 'event' ? failureKey : null
+  pendingPrereleaseFallback.suppressedPrimaryEventFailure =
+    source === 'promise' ? { failureKey, error: sourceError } : null
+  pendingPrereleaseFallback.fallbackCheckingForUpdateSeen = false
+  const { primaryTag, fallbackTag } = pendingPrereleaseFallback
+  const url = getReleaseDownloadUrl(fallbackTag)
+  console.info(
+    `[updater] prerelease manifest missing for ${primaryTag}; retrying once against ${url}`
+  )
+  const autoUpdater = getAutoUpdater()
+  autoUpdater.setFeedURL({ provider: 'generic', url })
+  userInitiatedCheck = Boolean(userInitiated)
+  backgroundCheckLaunchPending = !userInitiated
+  void autoUpdater.checkForUpdates().catch((err) => {
+    const message = String(err?.message ?? err)
+    if (userInitiated) {
+      userInitiatedCheck = false
+    } else {
+      backgroundCheckLaunchPending = false
+    }
+    markMissingManifestPrereleaseFallbackPromiseHandled(message)
+    consumeMissingManifestPrereleaseFallbackResult()
+    void sendCheckFailureStatus(message, userInitiated, 'fallback-promise', err)
+  })
+  return true
 }
 
 function runBackgroundUpdateCheck(
@@ -324,11 +546,12 @@ function runBackgroundUpdateCheck(
   backgroundCheckLaunchPending = true
   // Don't send 'checking' here — the 'checking-for-update' event handler does it,
   // and sending it from both places causes duplicate notifications (issue #35).
+  const autoUpdater = getAutoUpdater()
   const launch = (): Promise<unknown> => autoUpdater.checkForUpdates()
-  const run = shouldResolvePrereleaseFeed() ? pinPrereleaseFeed().then(launch) : launch()
+  const run = pinDefaultReleaseFeed().then(launch)
   void Promise.resolve(run).catch((err) => {
     backgroundCheckLaunchPending = false
-    void sendCheckFailureStatus(String(err?.message ?? err))
+    void sendCheckFailureStatus(String(err?.message ?? err), undefined, 'promise', err)
   })
 }
 
@@ -340,18 +563,11 @@ function enableIncludePrerelease(): void {
   if (includePrereleaseActive) {
     return
   }
-  // Why: the default feed points at GitHub's /releases/latest/download/
-  // manifest, which is scoped to the most recent non-prerelease release.
-  // Switch to the native github provider with allowPrerelease so latest.yml
-  // is sourced from the newest release on the repo regardless of the
-  // prerelease flag. Staying on this feed for the rest of the process
-  // keeps the download manifest consistent with the check result.
-  autoUpdater.allowPrerelease = true
-  autoUpdater.setFeedURL({
-    provider: 'github',
-    owner: 'stablyai',
-    repo: 'orca'
-  })
+  // Why: generic-provider checks still need this flag so electron-updater will
+  // accept a prerelease manifest for users who intentionally Shift-clicked.
+  // We keep using the manifest-probed generic feed instead of the native
+  // GitHub provider because cancelled RC releases can appear without assets.
+  getAutoUpdater().allowPrerelease = true
   includePrereleaseActive = true
 }
 
@@ -363,6 +579,7 @@ export function checkForUpdatesFromMenu(options?: { includePrerelease?: boolean 
   }
 
   if (options?.includePrerelease) {
+    clearPrereleaseFallbackContext()
     enableIncludePrerelease()
   }
 
@@ -374,11 +591,12 @@ export function checkForUpdatesFromMenu(options?: { includePrerelease?: boolean 
   // Don't send 'checking' here — the 'checking-for-update' event handler does it,
   // and sending it from both places causes duplicate notifications (issue #35).
 
+  const autoUpdater = getAutoUpdater()
   const launch = (): Promise<unknown> => autoUpdater.checkForUpdates()
-  const run = shouldResolvePrereleaseFeed() ? pinPrereleaseFeed().then(launch) : launch()
+  const run = pinDefaultReleaseFeed().then(launch)
   void Promise.resolve(run).catch((err) => {
     userInitiatedCheck = false
-    void sendCheckFailureStatus(String(err?.message ?? err), true)
+    void sendCheckFailureStatus(String(err?.message ?? err), true, 'promise', err)
   })
 }
 
@@ -501,14 +719,10 @@ export function setupAutoUpdater(
     return
   }
   if (is.dev) {
-    // Why: dev-app-update.yml lives at config/dev-app-update.yml (not repo root)
-    // so the root directory stays short. electron-updater only reads it when
-    // the dev-mode early-return below is temporarily disabled to exercise the
-    // update flow locally — point it at the new path up-front so that works.
-    autoUpdater.updateConfigPath = path.join(app.getAppPath(), 'config', 'dev-app-update.yml')
     return
   }
 
+  const autoUpdater = getAutoUpdater()
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
 
@@ -542,19 +756,15 @@ export function setupAutoUpdater(
     ;(autoUpdater as NsisUpdater).verifyUpdateCodeSignature = () => Promise.resolve(null)
   }
 
-  // Use the generic provider with GitHub's /releases/latest/download/ URL so
-  // electron-updater always fetches the manifest (latest-mac.yml, latest.yml,
-  // latest-linux.yml) from the latest non-prerelease release. This sidesteps
-  // the broken /releases/latest API endpoint (returns 406) and automatically
-  // excludes RC/prerelease versions without client-side filtering.
+  // Use the generic provider with GitHub's /releases/latest/download/ URL as
+  // the startup fallback so electron-updater can fetch the manifest
+  // (latest-mac.yml, latest.yml, latest-linux.yml) from the latest
+  // non-prerelease release.
   //
-  // Why: for users already running a prerelease (e.g. 1.3.19-rc.6) we repin
-  // this URL to a specific /releases/download/<tag>/ before each check — see
-  // ensurePrereleaseFeedReady. That handles both RC→newer-RC AND RC→stable.
-  // We keep the generic provider (rather than switching to electron-updater's
-  // native github provider + allowPrerelease) because GitHubProvider filters
-  // the atom feed by channel and would silently skip stable releases when the
-  // running build is an RC — trapping the user on the RC channel.
+  // Why: before each default-channel check we repin this URL to a concrete
+  // /releases/download/<tag>/ URL. Keeping the generic provider avoids the
+  // native GitHub provider's RC channel filtering, and pinning avoids the
+  // moving /latest redirect changing between check and download.
   autoUpdater.setFeedURL({
     provider: 'generic',
     url: 'https://github.com/stablyai/orca/releases/latest/download'
@@ -566,7 +776,10 @@ export function setupAutoUpdater(
   autoUpdaterInitialized = true
 
   registerAutoUpdaterHandlers({
+    autoUpdater,
     clearAvailableUpdateContext,
+    consumeMissingManifestPrereleaseFallbackResult,
+    getMissingManifestPrereleaseFallbackUserInitiated,
     getCurrentStatus: () => currentStatus,
     getKnownReleaseUrl,
     getPendingInstallVersion,
@@ -575,6 +788,9 @@ export function setupAutoUpdater(
     performQuitAndInstall,
     sendCheckFailureStatus,
     sendErrorStatus,
+    markMissingManifestPrereleaseFallbackChecking,
+    shouldSuppressMissingManifestPrereleaseFallbackEvent,
+    suppressMissingManifestPrereleaseFallbackPromiseFailure,
     recordCompletedUpdateCheck,
     sendStatus,
     scheduleAutomaticUpdateCheck,
@@ -641,8 +857,10 @@ export function downloadUpdate(): void {
   }
   downloadInFlight = true
   beginMacUpdateDownload()
-  autoUpdater.downloadUpdate().catch((err) => {
-    downloadInFlight = false
-    sendErrorStatus(String(err?.message ?? err))
-  })
+  getAutoUpdater()
+    .downloadUpdate()
+    .catch((err) => {
+      downloadInFlight = false
+      sendErrorStatus(String(err?.message ?? err))
+    })
 }

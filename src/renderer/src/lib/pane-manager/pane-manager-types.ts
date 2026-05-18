@@ -8,22 +8,29 @@ import type { WebLinksAddon } from '@xterm/addon-web-links'
 import type { WebglAddon } from '@xterm/addon-webgl'
 import type { SerializeAddon } from '@xterm/addon-serialize'
 import type { GlobalSettings } from '../../../../shared/types'
+import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 
 // ---------------------------------------------------------------------------
 // Public interfaces
 // ---------------------------------------------------------------------------
 
 /** Hints forwarded from splitPane() into onPaneCreated for a single split.
- *  Currently only carries the resolved cwd for the new pane's PTY spawn.
+ *  Carries one-shot PTY spawn/adoption data for the new pane.
  *  Kept as a separate parameter (rather than extending ManagedPane) so the
  *  hint is scoped to pane creation and does not live on the pane afterwards. */
 export type PaneSpawnHints = {
   cwd?: string
+  ptyId?: string
+}
+
+export type ClosedPaneInfo = {
+  paneId: number
+  leafId: TerminalLeafId
 }
 
 export type PaneManagerOptions = {
   onPaneCreated?: (pane: ManagedPane, spawnHints?: PaneSpawnHints) => void | Promise<void>
-  onPaneClosed?: (paneId: number) => void
+  onPaneClosed?: (paneId: number, closedPane?: ClosedPaneInfo) => void
   onActivePaneChange?: (pane: ManagedPane) => void
   onLayoutChanged?: () => void
   terminalOptions?: (paneId: number) => Partial<ITerminalOptions>
@@ -54,6 +61,11 @@ export type PaneStyleOptions = {
 
 export type ManagedPane = {
   id: number
+  /** Durable terminal layout leaf UUID. Use this for paneKey/ORCA_PANE_KEY and
+   *  persisted leaf-keyed state; `id` is only the live renderer handle. */
+  leafId: TerminalLeafId
+  /** Compatibility alias while callers migrate from the older stablePaneId name. */
+  stablePaneId: TerminalLeafId
   terminal: Terminal
   container: HTMLElement // the .pane element
   linkTooltip: HTMLElement
@@ -67,6 +79,7 @@ export type ManagedPane = {
 // ---------------------------------------------------------------------------
 
 export type ScrollState = {
+  bufferType: 'normal' | 'alternate'
   wasAtBottom: boolean
   firstVisibleLineContent: string
   viewportY: number

@@ -1,5 +1,14 @@
 /* oxlint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  TerminalStreamOpcode,
+  decodeTerminalStreamFrame,
+  decodeTerminalStreamJson,
+  encodeTerminalStreamFrame,
+  encodeTerminalStreamJson,
+  encodeTerminalStreamText
+} from '../../../../shared/terminal-stream-protocol'
+import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/terminal-session-state-save-failure'
 
 describe('createIpcPtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
@@ -90,6 +99,25 @@ describe('createIpcPtyTransport', () => {
     expect(onTitleChange).toHaveBeenCalledWith('* Claude done', '* Claude done')
     expect(onBell).not.toHaveBeenCalled()
     expect(onAgentBecameIdle).not.toHaveBeenCalled()
+  })
+
+  it('keeps exit sidecars after eager-buffered PTYs attach to a terminal', async () => {
+    const { createIpcPtyTransport, registerEagerPtyBuffer, subscribeToPtyExit } =
+      await import('./pty-transport')
+    const eagerExit = vi.fn()
+    const sidecarExit = vi.fn()
+
+    registerEagerPtyBuffer('pty-restored', eagerExit)
+    subscribeToPtyExit('pty-restored', sidecarExit)
+
+    createIpcPtyTransport().attach({
+      existingPtyId: 'pty-restored',
+      callbacks: {}
+    })
+    onExit?.({ id: 'pty-restored', code: 0 })
+
+    expect(eagerExit).not.toHaveBeenCalled()
+    expect(sidecarExit).toHaveBeenCalledWith(0)
   })
 
   it('fires onBell for bare BELs but ignores BELs inside OSC sequences', async () => {
@@ -505,6 +533,39 @@ describe('createIpcPtyTransport', () => {
     expect(onError).toHaveBeenCalledWith('ENOENT: spawn /bin/nope not found')
   })
 
+  it('surfaces terminal session state save failures without the Electron IPC wrapper', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const wrappedMessage = `Error invoking remote method 'pty:spawn': Error: ${createTerminalSessionStateSaveFailureMessage()}`
+    const spawnMock = vi.fn().mockRejectedValue(new Error(wrappedMessage))
+
+    ;(globalThis as { window: typeof window }).window = {
+      ...originalWindow,
+      api: {
+        ...originalWindow?.api,
+        pty: {
+          ...originalWindow?.api?.pty,
+          spawn: spawnMock,
+          write: vi.fn(),
+          resize: vi.fn(),
+          kill: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {})
+        }
+      }
+    } as unknown as typeof window
+
+    const transport = createIpcPtyTransport()
+    const onError = vi.fn()
+
+    await transport.connect({
+      url: '',
+      callbacks: { onError }
+    })
+
+    expect(onError).toHaveBeenCalledWith(createTerminalSessionStateSaveFailureMessage())
+  })
+
   it('keeps the exit observer alive after detach so remounts do not reuse dead PTYs', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const onPtyExit = vi.fn()
@@ -532,5 +593,219 @@ describe('createIpcPtyTransport', () => {
 
     expect(onPtyExit).toHaveBeenCalledWith('pty-detached')
     expect(transport.getPtyId()).toBeNull()
+  })
+})
+
+describe('createRemoteRuntimePtyTransport', () => {
+  const originalWindow = (globalThis as { window?: typeof window }).window
+  const runtimeCall = vi.fn()
+  const runtimeSubscribe = vi.fn()
+  let subscriptionCallbacks: {
+    onResponse: (response: unknown) => void
+    onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
+    onError?: (error: { code: string; message: string }) => void
+    onClose?: () => void
+  } | null = null
+  let unsubscribe: {
+    unsubscribe: () => void
+    sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => void
+  } | null = null
+  let unsubscribeFn: ReturnType<typeof vi.fn<() => void>> | null = null
+
+  beforeEach(() => {
+    vi.resetModules()
+    runtimeCall.mockReset()
+    runtimeSubscribe.mockReset()
+    subscriptionCallbacks = null
+    unsubscribeFn = vi.fn<() => void>()
+    unsubscribe = {
+      unsubscribe: unsubscribeFn,
+      sendBinary: vi.fn()
+    }
+    runtimeCall.mockResolvedValue({
+      id: 'rpc-create',
+      ok: true,
+      result: {
+        terminal: {
+          handle: 'term-remote',
+          worktreeId: 'repo1::/remote/wt',
+          title: null,
+          surface: 'background'
+        }
+      },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    runtimeSubscribe.mockImplementation(
+      async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
+        subscriptionCallbacks = callbacks
+        queueMicrotask(() => {
+          subscriptionCallbacks?.onResponse({
+            id: 'rpc-multiplex',
+            ok: true,
+            result: { type: 'ready' },
+            _meta: { runtimeId: 'runtime-remote' }
+          })
+        })
+        return unsubscribe
+      }
+    )
+
+    ;(globalThis as { window: typeof window }).window = {
+      ...originalWindow,
+      api: {
+        ...originalWindow?.api,
+        runtimeEnvironments: {
+          ...originalWindow?.api?.runtimeEnvironments,
+          call: runtimeCall,
+          subscribe: runtimeSubscribe
+        }
+      }
+    } as unknown as typeof window
+  })
+
+  afterEach(() => {
+    if (originalWindow) {
+      ;(globalThis as { window: typeof window }).window = originalWindow
+    } else {
+      delete (globalThis as { window?: typeof window }).window
+    }
+  })
+
+  function latestRemoteSubscribePayload(): { streamId: number } {
+    const send = unsubscribe?.sendBinary as unknown as
+      | { mock: { calls: [Uint8Array<ArrayBufferLike>][] } }
+      | undefined
+    const frames =
+      send?.mock.calls
+        .map((call) => decodeTerminalStreamFrame(call[0]))
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Subscribe) ?? []
+    const frame = frames.at(-1)
+    if (!frame) {
+      throw new Error('missing remote terminal subscribe frame')
+    }
+    const payload = decodeTerminalStreamJson<{ streamId: number }>(frame.payload)
+    if (!payload) {
+      throw new Error('invalid remote terminal subscribe frame')
+    }
+    return payload
+  }
+
+  it('creates and subscribes to a terminal on the active remote runtime', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onReplayData = vi.fn()
+    const onData = vi.fn()
+    const onConnect = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      command: 'claude',
+      env: { ORCA_TAB_ID: 'tab-1' },
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
+
+    const result = await transport.connect({
+      url: '',
+      callbacks: { onReplayData, onData, onConnect }
+    })
+
+    expect(result).toEqual({ id: 'remote:env-1@@term-remote', replay: '' })
+    expect(runtimeCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'terminal.create',
+      params: {
+        worktree: 'repo1::/remote/wt',
+        command: 'claude',
+        env: { ORCA_TAB_ID: 'tab-1' },
+        tabId: 'tab-1',
+        leafId: '11111111-1111-4111-8111-111111111111',
+        focus: false
+      },
+      timeoutMs: 15_000
+    })
+    expect(runtimeSubscribe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'terminal.multiplex',
+        params: {}
+      }),
+      expect.any(Object)
+    )
+    const { streamId } = latestRemoteSubscribePayload()
+
+    subscriptionCallbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.SnapshotStart,
+        streamId,
+        seq: 1,
+        payload: encodeTerminalStreamJson({ kind: 'scrollback' })
+      })
+    )
+    subscriptionCallbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.SnapshotChunk,
+        streamId,
+        seq: 2,
+        payload: encodeTerminalStreamText('hello')
+      })
+    )
+    subscriptionCallbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.SnapshotEnd,
+        streamId,
+        seq: 3,
+        payload: new Uint8Array()
+      })
+    )
+    subscriptionCallbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.Output,
+        streamId,
+        seq: 4,
+        payload: encodeTerminalStreamText(' world')
+      })
+    )
+
+    expect(onReplayData).toHaveBeenCalledWith('hello')
+    expect(onConnect).toHaveBeenCalled()
+    expect(onData).toHaveBeenCalledWith(' world')
+  })
+
+  it('forwards input and cleanup through runtime RPC', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'repo1::/remote/wt',
+        tabId: 'tab-1',
+        leafId: 'pane:1'
+      })
+
+      await transport.connect({ url: '', callbacks: {} })
+      const { streamId } = latestRemoteSubscribePayload()
+      runtimeCall.mockClear()
+      const send = unsubscribe?.sendBinary as unknown as {
+        mockClear: () => void
+        mock: { calls: [Uint8Array<ArrayBufferLike>][] }
+      }
+      send.mockClear()
+
+      expect(transport.sendInput('ls\r')).toBe(true)
+      await vi.runOnlyPendingTimersAsync()
+      expect(runtimeCall).not.toHaveBeenCalled()
+      const inputFrame = decodeTerminalStreamFrame(send.mock.calls[0][0])
+      expect(inputFrame?.opcode).toBe(TerminalStreamOpcode.Input)
+      expect(inputFrame?.streamId).toBe(streamId)
+
+      transport.disconnect()
+      expect(unsubscribeFn).toHaveBeenCalled()
+      expect(runtimeCall).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'terminal.close',
+        params: { terminal: 'term-remote' },
+        timeoutMs: 15_000
+      })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

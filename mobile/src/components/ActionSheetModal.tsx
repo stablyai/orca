@@ -1,4 +1,4 @@
-import { View, Text, Pressable, StyleSheet } from 'react-native'
+import { ActivityIndicator, View, Text, Pressable, StyleSheet } from 'react-native'
 import { Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
@@ -7,6 +7,9 @@ export type ActionSheetAction = {
   label: string
   icon?: LucideIcon
   destructive?: boolean
+  disabled?: boolean
+  hint?: string
+  loading?: boolean
   skipAutoClose?: boolean
   onPress: () => void
 }
@@ -53,7 +56,12 @@ export function ActionSheetContent({ title, message, actions, onClose }: Content
             <View key={action.label}>
               {i > 0 && <View style={styles.separator} />}
               <Pressable
-                style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
+                style={({ pressed }) => [
+                  styles.action,
+                  action.disabled && styles.actionDisabled,
+                  pressed && !action.disabled && !action.loading && styles.actionPressed
+                ]}
+                disabled={action.disabled || action.loading}
                 onPress={() => {
                   action.onPress()
                   if (!action.skipAutoClose && onClose) {
@@ -65,11 +73,21 @@ export function ActionSheetContent({ title, message, actions, onClose }: Content
                   size={16}
                   color={action.destructive ? colors.statusRed : colors.textSecondary}
                 />
-                <Text
-                  style={[styles.actionText, action.destructive && styles.actionTextDestructive]}
-                >
-                  {action.label}
-                </Text>
+                <View style={styles.actionTextBlock}>
+                  <Text
+                    style={[
+                      styles.actionText,
+                      action.destructive && styles.actionTextDestructive,
+                      action.disabled && styles.actionTextDisabled
+                    ]}
+                  >
+                    {action.label}
+                  </Text>
+                  {action.hint ? <Text style={styles.actionHint}>{action.hint}</Text> : null}
+                </View>
+                {action.loading ? (
+                  <ActivityIndicator size="small" color={colors.textSecondary} />
+                ) : null}
               </Pressable>
             </View>
           )
@@ -81,7 +99,7 @@ export function ActionSheetContent({ title, message, actions, onClose }: Content
 
 export function ActionSheetModal({ visible, title, message, actions, onClose }: Props) {
   return (
-    <BottomDrawer visible={visible} onClose={onClose}>
+    <BottomDrawer visible={visible} onClose={onClose} dragContentToDismiss>
       <ActionSheetContent title={title} message={message} actions={actions} onClose={onClose} />
     </BottomDrawer>
   )
@@ -119,15 +137,30 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md + 2
   },
+  actionDisabled: {
+    opacity: 0.58
+  },
   actionPressed: {
     backgroundColor: colors.bgRaised
+  },
+  actionTextBlock: {
+    flex: 1,
+    minWidth: 0
   },
   actionText: {
     fontSize: typography.bodySize,
     fontWeight: '500',
     color: colors.textPrimary
   },
+  actionTextDisabled: {
+    color: colors.textSecondary
+  },
   actionTextDestructive: {
     color: colors.statusRed
+  },
+  actionHint: {
+    marginTop: 2,
+    fontSize: typography.metaSize,
+    color: colors.textMuted
   }
 })

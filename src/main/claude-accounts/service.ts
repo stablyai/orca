@@ -2,18 +2,9 @@
 for login, credential capture, Keychain storage, selection, and rate-limit refresh. */
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative, resolve, sep } from 'node:path'
-import { app } from 'electron'
 import type {
   ClaudeManagedAccount,
   ClaudeManagedAccountSummary,
@@ -21,13 +12,20 @@ import type {
 } from '../../shared/types'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
-import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
+import {
+  getClaudeManagedAccountsRoot,
+  readClaudeManagedAuthFile,
+  resolveOwnedClaudeManagedAuthPath,
+  writeClaudeManagedAuthFile
+} from './managed-auth-path'
 import {
   deleteActiveClaudeKeychainCredentialsStrict,
   deleteManagedClaudeKeychainCredentials,
   readActiveClaudeKeychainCredentials,
+  readActiveClaudeKeychainCredentialsStrict,
+  readManagedClaudeKeychainCredentials,
   writeActiveClaudeKeychainCredentials,
   writeManagedClaudeKeychainCredentials
 } from './keychain'
@@ -47,6 +45,11 @@ type CapturedClaudeAuth = {
   credentialsJson: string
   oauthAccount: unknown
   identity: ClaudeIdentity
+}
+
+type ManagedClaudeAuthSnapshot = {
+  credentialsJson: string | null
+  oauthAccountJson: string | null
 }
 
 export class ClaudeAccountService {
@@ -129,38 +132,72 @@ export class ClaudeAccountService {
 
   private async doReauthenticateAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
     const account = this.requireAccount(accountId)
-    const managedAuthPath = this.assertManagedAuthPath(account.managedAuthPath)
+    const managedAuthPath = this.assertManagedAuthPath(account.managedAuthPath, accountId)
     const previousSettings = this.store.getSettings()
+    const previousManagedAuth = await this.readManagedAuthSnapshot(accountId, managedAuthPath)
     const captured = await this.runClaudeLoginAndCapture()
     if (!captured.identity.email) {
       throw new Error('Claude login completed, but Orca could not resolve the account email.')
     }
-    await this.writeManagedAuth(accountId, managedAuthPath, captured)
 
     const settings = this.store.getSettings()
     const now = Date.now()
-    this.store.updateSettings({
-      claudeManagedAccounts: settings.claudeManagedAccounts.map((entry) =>
-        entry.id === accountId
-          ? {
-              ...entry,
-              email: captured.identity.email!,
-              organizationUuid: captured.identity.organizationUuid,
-              organizationName: captured.identity.organizationName,
-              updatedAt: now,
-              lastAuthenticatedAt: now
-            }
-          : entry
-      )
-    })
+    const reauthenticatedAccounts = settings.claudeManagedAccounts.map((entry) =>
+      entry.id === accountId
+        ? {
+            ...entry,
+            email: captured.identity.email!,
+            organizationUuid: captured.identity.organizationUuid,
+            organizationName: captured.identity.organizationName,
+            updatedAt: now,
+            lastAuthenticatedAt: now
+          }
+        : entry
+    )
+    let wroteManagedCredentials = false
     try {
+      await this.writeManagedOauthAccount(accountId, managedAuthPath, captured.oauthAccount)
+      await this.writeManagedCredentials(accountId, managedAuthPath, captured.credentialsJson)
+      wroteManagedCredentials = true
+      this.store.updateSettings({ claudeManagedAccounts: reauthenticatedAccounts })
       this.runtimeAuth.clearLastWrittenCredentialsJson(accountId)
+      this.rateLimits.evictInactiveClaudeCache(accountId)
       await this.syncRuntimeAuthWithLivePtyGate()
       await this.rateLimits.refreshForClaudeAccountChange()
       return this.getSnapshot()
     } catch (error) {
-      this.restoreClaudeSettings(previousSettings)
-      await this.runtimeAuth.forceMaterializeCurrentSelectionForRollback()
+      let restoredManagedCredentials = false
+      try {
+        await this.restoreManagedCredentialsSnapshot(
+          accountId,
+          managedAuthPath,
+          previousManagedAuth
+        )
+        restoredManagedCredentials = true
+      } catch (rollbackError) {
+        console.warn(
+          '[claude-accounts] Failed to restore managed credentials during rollback:',
+          rollbackError
+        )
+      }
+      if (restoredManagedCredentials || !wroteManagedCredentials) {
+        try {
+          this.restoreManagedOauthSnapshot(accountId, managedAuthPath, previousManagedAuth)
+        } catch (rollbackError) {
+          console.warn(
+            '[claude-accounts] Failed to restore managed oauth metadata during rollback:',
+            rollbackError
+          )
+        }
+      }
+      if (restoredManagedCredentials) {
+        this.restoreClaudeSettings(previousSettings)
+        await this.runtimeAuth.forceMaterializeCurrentSelectionForRollback()
+      } else if (wroteManagedCredentials) {
+        this.store.updateSettings({ claudeManagedAccounts: reauthenticatedAccounts })
+      } else {
+        this.restoreClaudeSettings(previousSettings)
+      }
       throw error
     }
   }
@@ -174,19 +211,21 @@ export class ClaudeAccountService {
         ? null
         : settings.activeClaudeManagedAccountId
 
-    this.store.updateSettings({
-      claudeManagedAccounts: nextAccounts,
-      activeClaudeManagedAccountId: nextActiveId
-    })
     try {
-      await this.syncRuntimeAuthWithLivePtyGate()
+      if (settings.activeClaudeManagedAccountId === accountId) {
+        this.store.updateSettings({ activeClaudeManagedAccountId: null })
+        await this.syncRuntimeAuthWithLivePtyGate()
+        this.store.updateSettings({ claudeManagedAccounts: nextAccounts })
+      } else {
+        this.store.updateSettings({
+          claudeManagedAccounts: nextAccounts,
+          activeClaudeManagedAccountId: nextActiveId
+        })
+        await this.syncRuntimeAuthWithLivePtyGate()
+      }
       await this.safeRemoveManagedAuth(accountId, account.managedAuthPath)
       this.rateLimits.evictInactiveClaudeCache(accountId)
-      await this.rateLimits.refreshForClaudeAccountChange(
-        settings.activeClaudeManagedAccountId === accountId
-          ? settings.activeClaudeManagedAccountId
-          : undefined
-      )
+      await this.rateLimits.refreshForClaudeAccountChange()
       return this.getSnapshot()
     } catch (error) {
       this.restoreClaudeSettings(settings)
@@ -277,7 +316,10 @@ export class ClaudeAccountService {
 
   private async runClaudeLoginAndCapture(): Promise<CapturedClaudeAuth> {
     const tempConfigDir = mkdtempSync(join(tmpdir(), 'orca-claude-login-'))
-    const previousActiveKeychain = await readActiveClaudeKeychainCredentials()
+    const previousLegacyKeychain = await readActiveClaudeKeychainCredentials()
+    let captured: CapturedClaudeAuth | null = null
+    let captureError: unknown = null
+    let cleanupError: unknown = null
     try {
       await this.runClaudeCommand(['auth', 'login', '--claudeai'], tempConfigDir, LOGIN_TIMEOUT_MS)
       const status = await this.runClaudeCommand(
@@ -286,25 +328,45 @@ export class ClaudeAccountService {
         STATUS_TIMEOUT_MS,
         { allowFailure: true }
       )
-      return await this.captureAuthFromConfigDir(tempConfigDir, status)
+      captured = await this.captureAuthFromConfigDir(tempConfigDir, status, previousLegacyKeychain)
+    } catch (error) {
+      captureError = error
     } finally {
-      if (process.platform === 'darwin' && previousActiveKeychain) {
-        // Why: Claude login writes the global active Keychain item even when
-        // CLAUDE_CONFIG_DIR points elsewhere. Restore it so adding an account
-        // does not switch the user's external Claude CLI out from under them.
-        await writeActiveClaudeKeychainCredentials(previousActiveKeychain)
-      } else if (process.platform === 'darwin') {
-        await deleteActiveClaudeKeychainCredentialsStrict()
+      if (process.platform === 'darwin') {
+        try {
+          await deleteActiveClaudeKeychainCredentialsStrict(tempConfigDir)
+        } catch (error) {
+          console.warn('[claude-accounts] Failed to clean temporary Claude Keychain item:', error)
+        }
+      }
+      if (process.platform === 'darwin') {
+        try {
+          // Why: older Claude versions ignored CLAUDE_CONFIG_DIR and wrote the
+          // legacy active Keychain item. Preserve that external CLI state.
+          await (previousLegacyKeychain
+            ? writeActiveClaudeKeychainCredentials(previousLegacyKeychain)
+            : deleteActiveClaudeKeychainCredentialsStrict())
+        } catch (error) {
+          cleanupError = error
+        }
       }
       rmSync(tempConfigDir, { recursive: true, force: true })
     }
+    if (captureError) {
+      throw captureError
+    }
+    if (cleanupError) {
+      throw cleanupError
+    }
+    return captured!
   }
 
   private async captureAuthFromConfigDir(
     configDir: string,
-    statusOutput: string
+    statusOutput: string,
+    previousLegacyKeychain: string | null
   ): Promise<CapturedClaudeAuth> {
-    const credentialsJson = await this.readCapturedCredentials(configDir)
+    const credentialsJson = await this.readCapturedCredentials(configDir, previousLegacyKeychain)
     if (!credentialsJson) {
       throw new Error('Claude login completed, but no OAuth credentials were captured.')
     }
@@ -313,9 +375,19 @@ export class ClaudeAccountService {
     return { credentialsJson, oauthAccount, identity }
   }
 
-  private async readCapturedCredentials(configDir: string): Promise<string | null> {
+  private async readCapturedCredentials(
+    configDir: string,
+    previousLegacyKeychain: string | null
+  ): Promise<string | null> {
     if (process.platform === 'darwin') {
-      return readActiveClaudeKeychainCredentials()
+      const scopedCredentialsJson = await readActiveClaudeKeychainCredentialsStrict(configDir)
+      if (scopedCredentialsJson) {
+        return scopedCredentialsJson
+      }
+      const legacyCredentialsJson = await readActiveClaudeKeychainCredentialsStrict()
+      if (legacyCredentialsJson && legacyCredentialsJson !== previousLegacyKeychain) {
+        return legacyCredentialsJson
+      }
     }
     const credentialsPath = join(configDir, '.credentials.json')
     return existsSync(credentialsPath) ? readFileSync(credentialsPath, 'utf-8') : null
@@ -372,63 +444,120 @@ export class ClaudeAccountService {
     managedAuthPath: string,
     captured: CapturedClaudeAuth
   ): Promise<void> {
-    const trustedPath = this.assertManagedAuthPath(managedAuthPath)
+    await this.writeManagedCredentials(accountId, managedAuthPath, captured.credentialsJson)
+    await this.writeManagedOauthAccount(accountId, managedAuthPath, captured.oauthAccount)
+  }
+
+  private async writeManagedCredentials(
+    accountId: string,
+    managedAuthPath: string,
+    credentialsJson: string
+  ): Promise<void> {
+    const trustedPath = this.assertManagedAuthPath(managedAuthPath, accountId)
     if (process.platform === 'darwin') {
-      await writeManagedClaudeKeychainCredentials(accountId, captured.credentialsJson)
+      await writeManagedClaudeKeychainCredentials(accountId, credentialsJson)
     } else {
-      writeFileAtomically(join(trustedPath, '.credentials.json'), captured.credentialsJson, {
-        mode: 0o600
-      })
+      writeClaudeManagedAuthFile(trustedPath, '.credentials.json', credentialsJson)
     }
-    writeFileAtomically(
-      join(trustedPath, 'oauth-account.json'),
-      `${JSON.stringify(captured.oauthAccount, null, 2)}\n`,
-      { mode: 0o600 }
+  }
+
+  private async writeManagedOauthAccount(
+    accountId: string,
+    managedAuthPath: string,
+    oauthAccount: unknown
+  ): Promise<void> {
+    const trustedPath = this.assertManagedAuthPath(managedAuthPath, accountId)
+    writeClaudeManagedAuthFile(
+      trustedPath,
+      'oauth-account.json',
+      `${JSON.stringify(oauthAccount, null, 2)}\n`
     )
+  }
+
+  private async readManagedAuthSnapshot(
+    accountId: string,
+    managedAuthPath: string
+  ): Promise<ManagedClaudeAuthSnapshot> {
+    const trustedPath = this.assertManagedAuthPath(managedAuthPath, accountId)
+    return {
+      credentialsJson:
+        process.platform === 'darwin'
+          ? await readManagedClaudeKeychainCredentials(accountId)
+          : readClaudeManagedAuthFile(trustedPath, '.credentials.json'),
+      oauthAccountJson: readClaudeManagedAuthFile(trustedPath, 'oauth-account.json')
+    }
+  }
+
+  private async restoreManagedCredentialsSnapshot(
+    accountId: string,
+    managedAuthPath: string,
+    snapshot: ManagedClaudeAuthSnapshot
+  ): Promise<void> {
+    const trustedPath = this.assertManagedAuthPath(managedAuthPath, accountId)
+    const credentialsPath = join(trustedPath, '.credentials.json')
+    if (process.platform === 'darwin') {
+      await (snapshot.credentialsJson !== null
+        ? writeManagedClaudeKeychainCredentials(accountId, snapshot.credentialsJson)
+        : deleteManagedClaudeKeychainCredentials(accountId))
+    } else if (snapshot.credentialsJson !== null) {
+      writeClaudeManagedAuthFile(trustedPath, '.credentials.json', snapshot.credentialsJson)
+    } else {
+      rmSync(credentialsPath, { force: true })
+    }
+  }
+
+  private restoreManagedOauthSnapshot(
+    accountId: string,
+    managedAuthPath: string,
+    snapshot: ManagedClaudeAuthSnapshot
+  ): void {
+    const trustedPath = this.assertManagedAuthPath(managedAuthPath, accountId)
+    const oauthPath = join(trustedPath, 'oauth-account.json')
+    if (snapshot.oauthAccountJson !== null) {
+      writeClaudeManagedAuthFile(trustedPath, 'oauth-account.json', snapshot.oauthAccountJson)
+    } else {
+      rmSync(oauthPath, { force: true })
+    }
   }
 
   private createManagedAuthDir(accountId: string): string {
     const managedAuthPath = join(this.getManagedAccountsRoot(), accountId, 'auth')
     mkdirSync(managedAuthPath, { recursive: true })
     writeFileSync(join(managedAuthPath, '.orca-managed-claude-auth'), `${accountId}\n`, 'utf-8')
-    return this.assertManagedAuthPath(managedAuthPath)
+    return this.assertManagedAuthPath(managedAuthPath, accountId)
   }
 
   private getManagedAccountsRoot(): string {
-    const root = join(app.getPath('userData'), 'claude-accounts')
+    const root = getClaudeManagedAccountsRoot()
     mkdirSync(root, { recursive: true })
     return root
   }
 
-  private assertManagedAuthPath(candidatePath: string): string {
-    const rootPath = this.getManagedAccountsRoot()
-    const resolvedCandidate = resolve(candidatePath)
-    const resolvedRoot = resolve(rootPath)
-    if (!existsSync(resolvedCandidate)) {
+  private assertManagedAuthPath(candidatePath: string, expectedAccountId?: string): string {
+    this.getManagedAccountsRoot()
+    const accountId = expectedAccountId ?? this.readManagedAuthAccountIdFromPath(candidatePath)
+    if (!accountId || (expectedAccountId && accountId !== expectedAccountId)) {
       throw new Error('Managed Claude auth directory does not exist on disk.')
     }
-    const canonicalCandidate = realpathSync(resolvedCandidate)
-    const canonicalRoot = realpathSync(resolvedRoot)
-    if (
-      canonicalCandidate !== canonicalRoot &&
-      !canonicalCandidate.startsWith(canonicalRoot + sep)
-    ) {
-      throw new Error(
-        `Managed Claude auth is outside current storage root (expected under ${canonicalRoot}).`
-      )
-    }
-    const relativePath = relative(canonicalRoot, canonicalCandidate)
-    const escaped =
-      relativePath === '' || relativePath.startsWith('..') || relativePath.includes(`..${sep}`)
-    if (escaped || !existsSync(join(canonicalCandidate, '.orca-managed-claude-auth'))) {
+    const trustedPath = resolveOwnedClaudeManagedAuthPath(accountId, candidatePath, {
+      adoptLegacyMarker: true
+    })
+    if (!trustedPath) {
       throw new Error('Managed Claude auth storage is not owned by Orca.')
     }
-    return canonicalCandidate
+    return trustedPath
+  }
+
+  private readManagedAuthAccountIdFromPath(candidatePath: string): string | null {
+    const rootPath = this.getManagedAccountsRoot()
+    const relativePath = relative(resolve(rootPath), resolve(candidatePath))
+    const parts = relativePath.split(sep)
+    return parts.length === 2 && parts[1] === 'auth' ? parts[0] : null
   }
 
   private async safeRemoveManagedAuth(accountId: string, candidatePath: string): Promise<void> {
     try {
-      const managedAuthPath = this.assertManagedAuthPath(candidatePath)
+      const managedAuthPath = this.assertManagedAuthPath(candidatePath, accountId)
       rmSync(resolve(managedAuthPath, '..'), { recursive: true, force: true })
     } catch (error) {
       console.warn('[claude-accounts] Refusing to remove untrusted managed auth:', error)

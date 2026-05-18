@@ -8,8 +8,10 @@ import { useAppStore } from '@/store'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { detectLanguage } from '@/lib/language-detect'
 import { getConnectionId } from '@/lib/connection-context'
+import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
+import { renameRuntimePath } from '@/runtime/runtime-file-client'
 
 function extractIpcErrorMessage(err: unknown, fallback: string): string {
   if (!(err instanceof Error)) {
@@ -55,11 +57,40 @@ type UseFileExplorerDragDropResult = {
   clearNativeDragState: () => void
 }
 
-const ORCA_PATH_MIME = 'text/x-orca-file-path'
-
 // Native drag auto-scroll uses a very thin band; a wider zone matches IDE-style
 // tree dragging so users need not hug the scrollbar.
 const DRAG_EDGE_ZONE_PX = 48
+
+export function getDragEdgeScrollTarget({
+  scrollTop,
+  scrollHeight,
+  clientHeight,
+  localY,
+  edgeZonePx = DRAG_EDGE_ZONE_PX
+}: {
+  scrollTop: number
+  scrollHeight: number
+  clientHeight: number
+  localY: number
+  edgeZonePx?: number
+}): number | null {
+  let delta = 0
+  if (localY < edgeZonePx) {
+    const strength = (edgeZonePx - localY) / edgeZonePx
+    delta = -(1.25 + strength * 9)
+  } else if (localY > clientHeight - edgeZonePx) {
+    const strength = (localY - (clientHeight - edgeZonePx)) / edgeZonePx
+    delta = 1.25 + strength * 9
+  }
+
+  if (delta === 0) {
+    return null
+  }
+
+  const maxScroll = Math.max(0, scrollHeight - clientHeight)
+  const nextScrollTop = Math.max(0, Math.min(maxScroll, scrollTop + delta))
+  return nextScrollTop === scrollTop ? null : nextScrollTop
+}
 
 export function useFileExplorerDragDrop({
   worktreePath,
@@ -94,6 +125,40 @@ export function useFileExplorerDragDrop({
 
   useEffect(() => () => stopDragEdgeScroll(), [stopDragEdgeScroll])
 
+  const clearDragState = useCallback(() => {
+    rootDragCounterRef.current = 0
+    nativeRootDragCounterRef.current = 0
+    setIsRootDragOver(false)
+    setDropTargetDir(null)
+    setDragSourcePath(null)
+    setIsNativeDragOver(false)
+    setNativeDropTargetDir(null)
+  }, [])
+
+  const stopAndClearDragState = useCallback(() => {
+    clearDragState()
+    stopDragEdgeScroll()
+  }, [clearDragState, stopDragEdgeScroll])
+
+  useEffect(() => {
+    const handleGlobalDragFinish = (): void => {
+      // Why: native OS drops are consumed by preload in the capture phase, so
+      // React root onDrop may never run. A document-level capture listener keeps
+      // the edge-scroll loop from surviving rejected, cancelled, or row drops.
+      stopAndClearDragState()
+    }
+
+    document.addEventListener('drop', handleGlobalDragFinish, true)
+    document.addEventListener('dragend', handleGlobalDragFinish, true)
+    window.addEventListener('blur', handleGlobalDragFinish)
+
+    return () => {
+      document.removeEventListener('drop', handleGlobalDragFinish, true)
+      document.removeEventListener('dragend', handleGlobalDragFinish, true)
+      window.removeEventListener('blur', handleGlobalDragFinish)
+    }
+  }, [stopAndClearDragState])
+
   // requestAnimationFrame + small per-frame deltas avoids choppy jumps from irregular dragover events
   const tickDragEdgeScroll = useCallback(() => {
     edgeScrollRafRef.current = null
@@ -104,21 +169,18 @@ export function useFileExplorerDragDrop({
     }
     const rect = viewport.getBoundingClientRect()
     const y = clientY - rect.top
-    const h = rect.height
     const zone = DRAG_EDGE_ZONE_PX
 
-    let delta = 0
-    if (y < zone) {
-      const strength = (zone - y) / zone
-      delta = -(1.25 + strength * 9)
-    } else if (y > h - zone) {
-      const strength = (y - (h - zone)) / zone
-      delta = 1.25 + strength * 9
-    }
+    const nextScrollTop = getDragEdgeScrollTarget({
+      scrollTop: viewport.scrollTop,
+      scrollHeight: viewport.scrollHeight,
+      clientHeight: viewport.clientHeight,
+      localY: y,
+      edgeZonePx: zone
+    })
 
-    if (delta !== 0) {
-      const maxScroll = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
-      viewport.scrollTop = Math.max(0, Math.min(maxScroll, viewport.scrollTop + delta))
+    if (nextScrollTop !== null) {
+      viewport.scrollTop = nextScrollTop
       edgeScrollRafRef.current = requestAnimationFrame(tickDragEdgeScroll)
     }
   }, [scrollRef])
@@ -219,16 +281,22 @@ export function useFileExplorerDragDrop({
 
         try {
           const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-          await window.api.fs.rename({ oldPath: sourcePath, newPath, connectionId })
+          const fileContext = {
+            settings: useAppStore.getState().settings,
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId
+          }
+          await renameRuntimePath(fileContext, sourcePath, newPath)
 
           commitFileExplorerOp({
             undo: async () => {
-              await window.api.fs.rename({ oldPath: newPath, newPath: sourcePath, connectionId })
+              await renameRuntimePath(fileContext, newPath, sourcePath)
               await Promise.all([refreshDir(destDir), refreshDir(sourceDir)])
               remapOpenTabsForMovedPath(newPath, sourcePath)
             },
             redo: async () => {
-              await window.api.fs.rename({ oldPath: sourcePath, newPath, connectionId })
+              await renameRuntimePath(fileContext, sourcePath, newPath)
               await Promise.all([refreshDir(sourceDir), refreshDir(destDir)])
               remapOpenTabsForMovedPath(sourcePath, newPath)
             }
@@ -246,20 +314,17 @@ export function useFileExplorerDragDrop({
   )
 
   const clearNativeDragState = useCallback(() => {
-    nativeRootDragCounterRef.current = 0
-    setIsNativeDragOver(false)
-    setNativeDropTargetDir(null)
     // Why: for native OS file drops the preload intercepts the drop event and
     // stops propagation, so React's onDrop (which calls stopDragEdgeScroll)
     // never fires. Without this, the edge-scroll rAF loop keeps running with
     // the last recorded cursor Y, continuously overriding the user's scroll.
-    stopDragEdgeScroll()
-  }, [stopDragEdgeScroll])
+    stopAndClearDragState()
+  }, [stopAndClearDragState])
 
   const rootDragHandlers = {
     onDragOver: useCallback(
       (e: React.DragEvent) => {
-        const isInternal = e.dataTransfer.types.includes(ORCA_PATH_MIME)
+        const isInternal = e.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)
         const isNative = e.dataTransfer.types.includes('Files')
         if (!isInternal && !isNative) {
           return
@@ -274,7 +339,7 @@ export function useFileExplorerDragDrop({
       [tickDragEdgeScroll]
     ),
     onDragEnter: useCallback((e: React.DragEvent) => {
-      const isInternal = e.dataTransfer.types.includes(ORCA_PATH_MIME)
+      const isInternal = e.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)
       const isNative = !isInternal && e.dataTransfer.types.includes('Files')
       if (!isInternal && !isNative) {
         return
@@ -323,7 +388,7 @@ export function useFileExplorerDragDrop({
         // not the React drop handler. We only clear native drag visual state
         // here; the actual import is triggered from onFileDrop.
         clearNativeDragState()
-        const sourcePath = e.dataTransfer.getData(ORCA_PATH_MIME)
+        const sourcePath = e.dataTransfer.getData(WORKSPACE_FILE_PATH_MIME)
         if (sourcePath && worktreePath) {
           handleMoveDrop(sourcePath, worktreePath)
         }

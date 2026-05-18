@@ -1,6 +1,7 @@
 import { Image as ImageIcon, RotateCcw, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { type JSX, useEffect, useMemo, useState } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { cn } from '@/lib/utils'
 import PdfViewer from './PdfViewer'
 
 const FALLBACK_IMAGE_MIME_TYPE = 'image/png'
@@ -12,12 +13,14 @@ type ImageViewerProps = {
   content: string
   filePath: string
   mimeType?: string
+  layout?: 'fill' | 'intrinsic'
 }
 
 export default function ImageViewer({
   content,
   filePath,
-  mimeType = FALLBACK_IMAGE_MIME_TYPE
+  mimeType = FALLBACK_IMAGE_MIME_TYPE,
+  layout = 'fill'
 }: ImageViewerProps): JSX.Element {
   const [imageError, setImageError] = useState(false)
   const [isPopupOpen, setIsPopupOpen] = useState(false)
@@ -29,6 +32,7 @@ export default function ImageViewer({
   const filename = useMemo(() => filePath.split(/[/\\]/).pop() || filePath, [filePath])
   const cleanedContent = useMemo(() => content.replace(/\s/g, ''), [content])
   const isPdf = mimeType === 'application/pdf'
+  const isIntrinsicLayout = layout === 'intrinsic'
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const estimatedSize = useMemo(() => {
     const bytes = Math.floor((cleanedContent.length * 3) / 4)
@@ -70,7 +74,12 @@ export default function ImageViewer({
 
   if (imageError) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 bg-muted/20 p-8 text-sm text-muted-foreground">
+      <div
+        className={cn(
+          'flex flex-col items-center justify-center gap-3 bg-muted/20 p-8 text-sm text-muted-foreground',
+          isIntrinsicLayout ? 'min-h-64' : 'h-full'
+        )}
+      >
         <ImageIcon size={40} />
         <div>Failed to load file preview</div>
         <div className="max-w-md break-all text-center text-xs">{filename}</div>
@@ -80,7 +89,12 @@ export default function ImageViewer({
 
   if (!previewUrl) {
     return (
-      <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+      <div
+        className={cn(
+          'flex items-center justify-center text-muted-foreground text-sm',
+          isIntrinsicLayout ? 'min-h-64' : 'h-full'
+        )}
+      >
         Loading preview...
       </div>
     )
@@ -88,20 +102,29 @@ export default function ImageViewer({
 
   return (
     <>
-      <div className="flex h-full min-h-0 flex-col">
+      <div className={cn('flex min-h-0 flex-col', isIntrinsicLayout ? 'h-auto' : 'h-full')}>
         <div
-          className="flex flex-1 items-center justify-center overflow-auto bg-muted/20 p-4 cursor-pointer"
+          className={cn(
+            'flex justify-center bg-muted/20 p-4 cursor-pointer',
+            isIntrinsicLayout ? 'items-start overflow-visible' : 'flex-1 items-center overflow-auto'
+          )}
           onClick={() => setIsPopupOpen(true)}
           title="Open image in popup"
         >
           <div
-            className="flex items-center justify-center"
+            className={cn(
+              'flex justify-center',
+              isIntrinsicLayout ? 'max-w-full items-start' : 'items-center'
+            )}
             style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
           >
             <img
               src={previewUrl}
               alt={filename}
-              className="max-h-full max-w-full object-contain"
+              className={cn(
+                'max-w-full object-contain',
+                isIntrinsicLayout ? 'block h-auto max-h-none' : 'max-h-full'
+              )}
               onLoad={(event) => {
                 const img = event.currentTarget
                 setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight })

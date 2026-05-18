@@ -31,6 +31,8 @@ import {
 } from './local-pty-shell-ready'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 
+const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
+
 let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
 const ptyShellName = new Map<string, string>()
@@ -64,6 +66,17 @@ function getDefaultCwd(): string {
     return `${process.env.HOMEDRIVE}${process.env.HOMEPATH}`
   }
   return 'C:\\'
+}
+
+function removeUnspecifiedPaneIdentityEnv(
+  env: Record<string, string>,
+  explicitEnv: Record<string, string> | undefined
+): void {
+  for (const key of PANE_IDENTITY_ENV_KEYS) {
+    if (!explicitEnv || !Object.hasOwn(explicitEnv, key)) {
+      delete env[key]
+    }
+  }
 }
 
 function disposePtyListeners(id: string): void {
@@ -236,6 +249,9 @@ export class LocalPtyProvider implements IPtyProvider {
       // restores clickable refs like `owner/repo#123` / `PR#123`.
       FORCE_HYPERLINK: '1'
     } as Record<string, string>
+    // Why: Orca can be launched from an Orca terminal while developing. Pane
+    // identity belongs to the child PTY, not the parent shell that spawned app.
+    removeUnspecifiedPaneIdentityEnv(spawnEnv, args.env)
     removeInheritedNoColor(spawnEnv)
     for (const key of args.envToDelete ?? []) {
       delete spawnEnv[key]

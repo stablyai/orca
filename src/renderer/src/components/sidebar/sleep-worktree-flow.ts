@@ -1,5 +1,7 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { clearWorktreeSleepIntent, markWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 
 /**
  * Shared "sleep worktree" flow (close all panels to free memory / CPU)
@@ -18,6 +20,66 @@ export async function runSleepWorktree(worktreeId: string): Promise<void> {
   await runSleepWorktrees([worktreeId])
 }
 
+function findSidebarWorktreeRow(worktreeId: string): HTMLElement | null {
+  const rowKey = `wt:${worktreeId}`
+  return (
+    Array.from(document.querySelectorAll<HTMLElement>('[data-worktree-virtual-row]')).find(
+      (element) => element.getAttribute('data-worktree-virtual-row-key') === rowKey
+    ) ?? null
+  )
+}
+
+function preserveSidebarWorktreePosition(worktreeId: string): () => void {
+  if (typeof document === 'undefined') {
+    return () => {}
+  }
+  const getScroller = (): HTMLElement | null =>
+    document.querySelector<HTMLElement>('[data-worktree-sidebar]')
+  const scroller = getScroller()
+  const row = findSidebarWorktreeRow(worktreeId)
+  if (!scroller || !row) {
+    return () => {}
+  }
+  scroller.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))
+  const previousScrollTop = scroller.scrollTop
+  const previousScrollHeight = scroller.scrollHeight
+  const previousTop = row.getBoundingClientRect().top
+
+  return () => {
+    let attempts = 0
+    const restore = (): void => {
+      const currentScroller = getScroller()
+      if (!currentScroller) {
+        attempts += 1
+        if (attempts < 12) {
+          window.requestAnimationFrame(restore)
+        }
+        return
+      }
+      const nextRow = findSidebarWorktreeRow(worktreeId)
+      if (!nextRow) {
+        // Why: a remount can first render the wrong virtual window. Put the
+        // scroller near the same content after height changes so the row
+        // mounts, then retry and correct by actual DOM position.
+        currentScroller.scrollTop = Math.max(
+          0,
+          previousScrollTop + currentScroller.scrollHeight - previousScrollHeight
+        )
+      } else {
+        const delta = nextRow.getBoundingClientRect().top - previousTop
+        if (Math.abs(delta) > 1) {
+          currentScroller.scrollTop += delta
+        }
+      }
+      attempts += 1
+      if (attempts < 12) {
+        window.requestAnimationFrame(restore)
+      }
+    }
+    window.requestAnimationFrame(restore)
+  }
+}
+
 export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise<void> {
   if (worktreeIds.length === 0) {
     return
@@ -28,28 +90,48 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
     shutdownWorktreeBrowsers,
     shutdownWorktreeTerminals
   } = useAppStore.getState()
+  let activeSleepIntentWorktreeId: string | null = null
   if (activeWorktreeId && worktreeIds.includes(activeWorktreeId)) {
+    const restoreSidebarPosition = preserveSidebarWorktreePosition(activeWorktreeId)
+    // Why: clearing the active workspace can unmount TerminalPanes before
+    // shutdownWorktreeTerminals writes PTY suppressions. Use a non-rendering
+    // intent marker so those exits do not stamp activity, without inserting an
+    // extra Zustand update that can disturb the sidebar's scroll restoration.
+    markWorktreeSleepIntent(activeWorktreeId)
+    activeSleepIntentWorktreeId = activeWorktreeId
     setActiveWorktree(null)
+    restoreSidebarPosition()
   }
   const errors: string[] = []
-  for (const worktreeId of worktreeIds) {
-    try {
-      // Why: sleep mirrors removeWorktree's shutdown sequence — browsers first
-      // so destroyPersistentWebview unregisters the Chromium guests before any
-      // other teardown runs, terminals second so the PTY kill uses the same
-      // ordering on both paths. Without the browser thunk here, sleep leaks
-      // browserPagesByWorkspace entries and live webviews for the slept worktree.
-      await shutdownWorktreeBrowsers(worktreeId)
-      // Why: sleep is reversible — the tab record stays in tabsByWorktree, the
-      // layout stays in terminalLayoutsByTabId, only the live PTY processes are
-      // released. keepIdentifiers preserves tab.ptyId / ptyIdsByLeafId /
-      // lastKnownRelayPtyIdByTabId so wake re-spawns against the same on-disk
-      // history dir (local) or relay session id (SSH); it also captures
-      // serializer buffers into buffersByLeafId for SSH wake to reseed
-      // scrollback. See DESIGN_DOC_TERMINAL_HISTORY_FIX_V2.md §3.3.c.
-      await shutdownWorktreeTerminals(worktreeId, { keepIdentifiers: true })
-    } catch (err) {
-      errors.push(err instanceof Error ? err.message : String(err))
+  try {
+    for (const worktreeId of worktreeIds) {
+      try {
+        // Why: sleep mirrors removeWorktree's shutdown sequence — browsers first
+        // so destroyPersistentWebview unregisters the Chromium guests before any
+        // other teardown runs, terminals second so the PTY kill uses the same
+        // ordering on both paths. Without the browser thunk here, sleep leaks
+        // browserPagesByWorkspace entries and live webviews for the slept worktree.
+        await shutdownWorktreeBrowsers(worktreeId)
+      } catch (err) {
+        errors.push(err instanceof Error ? err.message : String(err))
+        continue
+      }
+      try {
+        // Why: sleep is reversible — the tab record stays in tabsByWorktree, the
+        // layout stays in terminalLayoutsByTabId, only the live PTY processes are
+        // released. keepIdentifiers preserves tab.ptyId / ptyIdsByLeafId /
+        // lastKnownRelayPtyIdByTabId so wake re-spawns against the same on-disk
+        // history dir (local) or relay session id (SSH); it also captures
+        // serializer buffers into buffersByLeafId for SSH wake to reseed
+        // scrollback. See DESIGN_DOC_TERMINAL_HISTORY_FIX_V2.md §3.3.c.
+        await shutdownWorktreeTerminals(worktreeId, { keepIdentifiers: true })
+      } catch (err) {
+        errors.push(err instanceof Error ? err.message : String(err))
+      }
+    }
+  } finally {
+    if (activeSleepIntentWorktreeId) {
+      clearWorktreeSleepIntent(activeSleepIntentWorktreeId)
     }
   }
   if (errors.length > 0) {

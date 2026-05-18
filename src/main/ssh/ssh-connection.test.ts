@@ -8,6 +8,7 @@ let connectErrorMessage = ''
 type MockSshClient = {
   setNoDelay: ReturnType<typeof vi.fn>
   _sock: Socket | undefined
+  lastExecCommand?: string
 }
 let clientInstances: MockSshClient[] = []
 
@@ -18,6 +19,7 @@ vi.mock('ssh2', () => {
     // to decide which log line to emit. A real Socket instance lets the test
     // exercise the "enabled" branch instead of the "skipped (proxy socket)" branch.
     _sock: Socket | undefined = new Socket()
+    lastExecCommand?: string
     constructor() {
       clientInstances.push(this)
     }
@@ -35,7 +37,10 @@ vi.mock('ssh2', () => {
     }
     end() {}
     destroy() {}
-    exec() {}
+    exec(cmd: string, cb: (err: Error | undefined, channel: unknown) => void) {
+      this.lastExecCommand = cmd
+      cb(undefined, {})
+    }
     sftp() {}
   }
   return { Client: MockSshClient }
@@ -204,6 +209,17 @@ describe('SshConnection', () => {
     await conn.connect()
 
     expect(resolveWithSshG).toHaveBeenCalledWith('ssh-alias')
+  })
+
+  it('wraps exec commands in /bin/sh so non-POSIX login shells do not parse relay snippets', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+
+    await conn.exec("cd '/tmp' && ('/usr/bin/node' -e 'console.log(1)' || echo MISSING)")
+
+    expect(clientInstances[0].lastExecCommand).toBe(
+      "exec /bin/sh -c 'cd '\\''/tmp'\\'' && ('\\''/usr/bin/node'\\'' -e '\\''console.log(1)'\\'' || echo MISSING)'"
+    )
   })
 })
 

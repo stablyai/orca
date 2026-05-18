@@ -1,10 +1,12 @@
 /* eslint-disable max-lines -- Why: getStatus + install + remove all share the managed-command and trust-key derivation. Splitting would hide that the three operations must agree on group index, event label, and command bytes. */
 import { homedir } from 'os'
 import { join } from 'path'
-import { app } from 'electron'
+import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
   createManagedCommandMatcher,
+  buildWindowsAgentHookPostCommand,
+  getSharedManagedScriptPath,
   readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
@@ -13,11 +15,19 @@ import {
   type HookDefinition
 } from '../agent-hooks/installer-utils'
 import {
+  readHooksJsonRemote,
+  readTextFileRemote,
+  writeHooksJsonRemote,
+  writeManagedScriptRemote,
+  writeTextFileRemoteAtomic
+} from '../agent-hooks/installer-utils-remote'
+import {
   computeTrustKey,
   computeTrustedHash,
   parseTrustKey,
   readHookTrustEntries,
   removeHookTrustEntries,
+  upsertHookTrustEntriesInContent,
   upsertHookTrustEntries,
   type CodexEventLabel,
   type CodexHookTrustState,
@@ -26,15 +36,14 @@ import {
 
 // Why: PreToolUse/PostToolUse give the dashboard a live readout of the
 // in-flight tool (name + input preview) between UserPromptSubmit and Stop.
-// Without them, a long-running Codex turn looks like a silent gap after the
-// prompt is submitted. We keep both events mapped to `working` (see
-// normalizeCodexEvent); they do NOT mean "approval needed" — Codex's real
-// approval signal flows through its separate `notify` callback (different
-// install surface, different payload shape) and is deferred as a follow-up.
+// PermissionRequest is the human-input boundary: the managed script exits
+// without a decision so Codex still shows its normal approval UI, while Orca
+// can flip the pane to the red waiting state.
 const CODEX_EVENTS = [
   'SessionStart',
   'UserPromptSubmit',
   'PreToolUse',
+  'PermissionRequest',
   'PostToolUse',
   'Stop'
 ] as const
@@ -55,6 +64,7 @@ const CODEX_EVENT_LABEL: Record<(typeof CODEX_EVENTS)[number], CodexEventLabel> 
   SessionStart: 'session_start',
   UserPromptSubmit: 'user_prompt_submit',
   PreToolUse: 'pre_tool_use',
+  PermissionRequest: 'permission_request',
   PostToolUse: 'post_tool_use',
   Stop: 'stop'
 }
@@ -64,15 +74,15 @@ function getManagedScriptFileName(): string {
 }
 
 function getManagedScriptPath(): string {
-  return join(app.getPath('userData'), 'agent-hooks', getManagedScriptFileName())
+  return getSharedManagedScriptPath(getManagedScriptFileName())
 }
 
 function getManagedCommand(scriptPath: string): string {
   return process.platform === 'win32' ? scriptPath : wrapPosixHookCommand(scriptPath)
 }
 
-function getManagedScript(): string {
-  if (process.platform === 'win32') {
+function getManagedScript(target: 'local' | 'posix' = 'local'): string {
+  if (target === 'local' && process.platform === 'win32') {
     return [
       '@echo off',
       'setlocal',
@@ -84,7 +94,7 @@ function getManagedScript(): string {
       'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0',
       'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
       'if "%ORCA_PANE_KEY%"=="" exit /b 0',
-      `powershell -NoProfile -ExecutionPolicy Bypass -Command "$inputData=[Console]::In.ReadToEnd(); if ([string]::IsNullOrWhiteSpace($inputData)) { exit 0 }; try { $body=@{ paneKey=$env:ORCA_PANE_KEY; tabId=$env:ORCA_TAB_ID; worktreeId=$env:ORCA_WORKTREE_ID; env=$env:ORCA_AGENT_HOOK_ENV; version=$env:ORCA_AGENT_HOOK_VERSION; payload=($inputData | ConvertFrom-Json) } | ConvertTo-Json -Depth 100; Invoke-WebRequest -UseBasicParsing -Method Post -Uri ('http://127.0.0.1:' + $env:ORCA_AGENT_HOOK_PORT + '/hook/codex') -Headers @{ 'Content-Type'='application/json'; 'X-Orca-Agent-Hook-Token'=$env:ORCA_AGENT_HOOK_TOKEN } -Body $body | Out-Null } catch {}"`,
+      buildWindowsAgentHookPostCommand('codex'),
       'exit /b 0',
       ''
     ].join('\r\n')
@@ -327,6 +337,99 @@ export class CodexHookService {
       }
     }
     return this.getStatus()
+  }
+
+  async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
+    const remoteConfigPath = `${remoteHome.replace(/\/$/, '')}/.codex/hooks.json`
+    const remoteTomlPath = `${remoteHome.replace(/\/$/, '')}/.codex/config.toml`
+    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/codex-hook.sh`
+    try {
+      const config = await readHooksJsonRemote(sftp, remoteConfigPath)
+      if (!config) {
+        return {
+          agent: 'codex',
+          state: 'error',
+          configPath: remoteConfigPath,
+          managedHooksPresent: false,
+          detail: 'Could not parse remote Codex hooks.json'
+        }
+      }
+
+      const command = wrapPosixHookCommand(remoteScriptPath)
+      const nextHooks = { ...config.hooks }
+      const managedEvents = new Set<string>(CODEX_EVENTS)
+      const isManagedCommand = createManagedCommandMatcher('codex-hook.sh')
+
+      for (const [eventName, definitions] of Object.entries(nextHooks)) {
+        if (managedEvents.has(eventName) || !Array.isArray(definitions)) {
+          continue
+        }
+        const cleaned = removeManagedCommands(definitions, isManagedCommand)
+        if (cleaned.length === 0) {
+          delete nextHooks[eventName]
+        } else {
+          nextHooks[eventName] = cleaned
+        }
+      }
+
+      const trustEntries: CodexTrustEntry[] = []
+      for (const eventName of CODEX_EVENTS) {
+        const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
+        const cleaned = removeManagedCommands(current, isManagedCommand)
+        const definition: HookDefinition = {
+          hooks: [{ type: 'command', command }]
+        }
+        nextHooks[eventName] = [...cleaned, definition]
+        trustEntries.push({
+          sourcePath: remoteConfigPath,
+          eventLabel: CODEX_EVENT_LABEL[eventName],
+          groupIndex: cleaned.length,
+          handlerIndex: 0,
+          command
+        })
+      }
+
+      config.hooks = nextHooks
+      // Why: script/settings first, trust TOML last. A partial trust write
+      // leaves Codex asking for approval rather than executing a missing script.
+      // Why: SSH remotes use POSIX `.sh` hook paths even when Orca itself is
+      // running on Windows; never derive remote script syntax from local OS.
+      await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
+      await writeHooksJsonRemote(sftp, remoteConfigPath, config)
+      try {
+        const existingToml = (await readTextFileRemote(sftp, remoteTomlPath)) ?? ''
+        const updatedToml = upsertHookTrustEntriesInContent(existingToml, trustEntries)
+        if (updatedToml !== existingToml) {
+          await writeTextFileRemoteAtomic(sftp, remoteTomlPath, updatedToml)
+        }
+      } catch (error) {
+        return {
+          agent: 'codex',
+          state: 'error',
+          configPath: remoteConfigPath,
+          managedHooksPresent: true,
+          detail: `Hooks installed but trust entries could not be written: ${
+            error instanceof Error ? error.message : String(error)
+          }. Run /hooks in Codex on the remote host to approve.`
+        }
+      }
+
+      return {
+        agent: 'codex',
+        state: 'installed',
+        configPath: remoteConfigPath,
+        managedHooksPresent: true,
+        detail: null
+      }
+    } catch (err) {
+      return {
+        agent: 'codex',
+        state: 'error',
+        configPath: remoteConfigPath,
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
   }
 
   remove(): AgentHookInstallStatus {

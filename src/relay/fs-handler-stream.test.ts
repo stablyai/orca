@@ -242,12 +242,29 @@ describe('FsHandler readFileStream', () => {
     }
 
     const isStale = () => false
-    for (let i = 0; i < 16; i++) {
-      await dispatcher.callRequest('fs.readFileStream', { filePath: paths[i] }, { isStale })
+    const queuedPumps: (() => void)[] = []
+    // Why: the concurrency cap is about registered active streams. Hold the
+    // scheduled pumps so fast CI machines cannot finish early streams before
+    // the 17th request checks the registry size.
+    const setImmediateSpy = vi
+      .spyOn(globalThis, 'setImmediate')
+      .mockImplementation((callback: (...args: unknown[]) => void, ...args: unknown[]) => {
+        queuedPumps.push(() => callback(...args))
+        return {} as NodeJS.Immediate
+      })
+    try {
+      for (let i = 0; i < 16; i++) {
+        await dispatcher.callRequest('fs.readFileStream', { filePath: paths[i] }, { isStale })
+      }
+      await expect(
+        dispatcher.callRequest('fs.readFileStream', { filePath: paths[16] }, { isStale })
+      ).rejects.toThrow(/Too many concurrent streams/)
+    } finally {
+      setImmediateSpy.mockRestore()
     }
-    await expect(
-      dispatcher.callRequest('fs.readFileStream', { filePath: paths[16] }, { isStale })
-    ).rejects.toThrow(/Too many concurrent streams/)
+    for (const runPump of queuedPumps) {
+      runPump()
+    }
     await flush(50)
   }, 20_000)
 })

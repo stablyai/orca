@@ -3,20 +3,23 @@ import { ipcMain, shell } from 'electron'
 import { readdir, readFile, writeFile, stat, lstat, open } from 'fs/promises'
 import { extname, join } from 'path'
 import type { ChildProcess } from 'child_process'
-import { wslAwareSpawn } from '../git/runner'
+import { gitExecFileAsync, wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
 import type { Store } from '../persistence'
 import type {
   DirEntry,
   GitBranchCompareResult,
+  GitCommitCompareResult,
   GitConflictOperation,
   GitDiffResult,
+  GitPushTarget,
   GitUpstreamStatus,
   GitStatusResult,
   MarkdownDocument,
   SearchOptions,
   SearchResult
 } from '../../shared/types'
+import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import {
   buildRgArgs,
   createAccumulator,
@@ -34,12 +37,30 @@ import {
   unstageFile,
   bulkStageFiles,
   bulkUnstageFiles,
+  bulkDiscardChanges,
   discardChanges,
+  getStagedCommitContext,
   getBranchCompare,
-  getBranchDiff
+  getBranchDiff,
+  getCommitCompare,
+  getCommitDiff
 } from '../git/status'
+import { getHistory } from '../git/history'
+import {
+  cancelGenerateCommitMessageLocal,
+  cancelGeneratePullRequestFieldsLocal,
+  generateCommitMessageFromContext,
+  generatePullRequestFieldsFromContext,
+  resolveCommitMessageSettings,
+  type GenerateCommitMessageResult,
+  type GeneratePullRequestFieldsResult
+} from '../text-generation/commit-message-text-generation'
+import { getPullRequestDraftContext } from '../text-generation/pull-request-context'
 import { getUpstreamStatus } from '../git/upstream'
 import { gitFetch, gitPull, gitPush } from '../git/remote'
+import { checkIgnoredPaths } from '../git/check-ignored-paths'
+import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
+import { validateGitPushTarget } from '../git/push-target-validation'
 import { getRemoteFileUrl } from '../git/repo'
 import {
   resolveAuthorizedPath,
@@ -55,11 +76,16 @@ import { listMarkdownDocuments, markdownDocumentsFromRelativePaths } from './mar
 import { checkRgAvailable } from './rg-availability'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import {
+  prepareLocalCommitMessageAgentEnv,
+  type CommitMessageAgentEnvironmentResolvers
+} from '../text-generation/commit-message-agent-environment'
 
 // Why: Monaco has large-file optimizations like VS Code; blocking at 5MB makes
 // ordinary JSON/log files inaccessible before the editor can degrade features.
 const MAX_TEXT_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 const BINARY_PROBE_BYTES = 8192
+const FULL_GIT_OBJECT_ID_PATTERN = /^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/
 // Why: previewable binaries (PDFs, images) are rendered by the viewer as
 // base64 blobs, not parsed as text — 5MB is tight for real-world PDFs, and
 // raising this cap only affects binary preview, not text/search paths.
@@ -78,6 +104,13 @@ const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
   '.pdf': 'application/pdf'
+}
+
+function validateFullGitObjectId(value: string, label: string): string {
+  if (!FULL_GIT_OBJECT_ID_PATTERN.test(value)) {
+    throw new Error(`${label} must be a full git object id`)
+  }
+  return value
 }
 
 /**
@@ -125,7 +158,10 @@ async function isDirectoryEntry(
   }
 }
 
-export function registerFilesystemHandlers(store: Store): void {
+export function registerFilesystemHandlers(
+  store: Store,
+  commitMessageAgentEnv?: CommitMessageAgentEnvironmentResolvers
+): void {
   const activeTextSearches = new Map<string, ChildProcess>()
 
   // ─── Filesystem ─────────────────────────────────────────
@@ -466,17 +502,57 @@ export function registerFilesystemHandlers(store: Store): void {
     'git:status',
     async (
       _event,
-      args: { worktreePath: string; connectionId?: string }
+      args: { worktreePath: string; connectionId?: string; includeIgnored?: boolean }
     ): Promise<GitStatusResult> => {
+      const options = { includeIgnored: args.includeIgnored ?? false }
       if (args.connectionId) {
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
           throw new Error(`No git provider for connection "${args.connectionId}"`)
         }
-        return provider.getStatus(args.worktreePath)
+        return provider.getStatus(args.worktreePath, options)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      return getStatus(worktreePath)
+      return getStatus(worktreePath, options)
+    }
+  )
+
+  ipcMain.handle(
+    'git:checkIgnored',
+    async (
+      _event,
+      args: { worktreePath: string; paths: string[]; connectionId?: string }
+    ): Promise<string[]> => {
+      if (args.connectionId) {
+        const paths = args.paths.map((p) => validateGitRelativeFilePath(args.worktreePath, p))
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No git provider for connection "${args.connectionId}"`)
+        }
+        return provider.checkIgnoredPaths(args.worktreePath, paths)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const paths = args.paths.map((p) => validateGitRelativeFilePath(worktreePath, p))
+      return checkIgnoredPaths(worktreePath, paths)
+    }
+  )
+
+  ipcMain.handle(
+    'git:history',
+    async (
+      _event,
+      args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
+    ): Promise<GitHistoryResult> => {
+      const options: GitHistoryOptions = { limit: args.limit, baseRef: args.baseRef }
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No git provider for connection "${args.connectionId}"`)
+        }
+        return provider.getHistory(args.worktreePath, options)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      return getHistory(worktreePath, options)
     }
   )
 
@@ -554,6 +630,183 @@ export function registerFilesystemHandlers(store: Store): void {
   )
 
   ipcMain.handle(
+    'git:generateCommitMessage',
+    async (
+      _event,
+      args: {
+        worktreePath: string
+        connectionId?: string
+      }
+    ): Promise<GenerateCommitMessageResult> => {
+      const resolvedSettings = resolveCommitMessageSettings(store.getSettings())
+      if (!resolvedSettings.ok) {
+        return { success: false, error: resolvedSettings.error }
+      }
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          return {
+            success: false,
+            error: `No git provider for connection "${args.connectionId}"`
+          }
+        }
+        let context
+        try {
+          context = await provider.getStagedCommitContext(args.worktreePath)
+        } catch (error) {
+          console.error('[filesystem] Failed to read remote staged commit context:', error)
+          return {
+            success: false,
+            error: 'Failed to read staged changes.'
+          }
+        }
+        if (!context) {
+          return { success: false, error: 'No staged changes to summarize.' }
+        }
+        return generateCommitMessageFromContext(context, resolvedSettings.params, {
+          kind: 'remote',
+          cwd: args.worktreePath,
+          execute: (plan, cwd, timeoutMs) =>
+            provider.executeCommitMessagePlan(plan, cwd, timeoutMs),
+          missingBinaryLocation: 'remote PATH'
+        })
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      let context
+      try {
+        context = await getStagedCommitContext(worktreePath)
+      } catch (error) {
+        console.error('[filesystem] Failed to read staged commit context:', error)
+        return {
+          success: false,
+          error: 'Failed to read staged changes.'
+        }
+      }
+      if (!context) {
+        return { success: false, error: 'No staged changes to summarize.' }
+      }
+      const localEnv = await prepareLocalCommitMessageAgentEnv(
+        resolvedSettings.params.agentId,
+        commitMessageAgentEnv
+      )
+      if (!localEnv.ok) {
+        return { success: false, error: localEnv.error }
+      }
+      return generateCommitMessageFromContext(context, resolvedSettings.params, {
+        kind: 'local',
+        cwd: worktreePath,
+        ...(localEnv.env ? { env: localEnv.env } : {})
+      })
+    }
+  )
+
+  ipcMain.handle(
+    'git:cancelGenerateCommitMessage',
+    async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          return
+        }
+        await provider.cancelGenerateCommitMessage(args.worktreePath)
+        return
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      cancelGenerateCommitMessageLocal(worktreePath)
+    }
+  )
+
+  ipcMain.handle(
+    'git:generatePullRequestFields',
+    async (
+      _event,
+      args: {
+        worktreePath: string
+        base: string
+        title: string
+        body: string
+        draft: boolean
+        connectionId?: string
+      }
+    ): Promise<GeneratePullRequestFieldsResult> => {
+      const resolvedSettings = resolveCommitMessageSettings(store.getSettings())
+      if (!resolvedSettings.ok) {
+        return { success: false, error: resolvedSettings.error }
+      }
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          return {
+            success: false,
+            error: `No git provider for connection "${args.connectionId}"`
+          }
+        }
+        const context = await getPullRequestDraftContext(
+          (argv) => provider.exec(argv, args.worktreePath),
+          {
+            base: args.base,
+            currentTitle: args.title,
+            currentBody: args.body,
+            currentDraft: args.draft
+          }
+        )
+        if (!context) {
+          return { success: false, error: 'No branch changes to summarize.' }
+        }
+        return generatePullRequestFieldsFromContext(context, resolvedSettings.params, {
+          kind: 'remote',
+          cwd: args.worktreePath,
+          execute: (plan, cwd, timeoutMs) =>
+            provider.executeCommitMessagePlan(plan, cwd, timeoutMs),
+          missingBinaryLocation: 'remote PATH'
+        })
+      }
+
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const context = await getPullRequestDraftContext(
+        (argv, options) => gitExecFileAsync(argv, { cwd: worktreePath, ...options }),
+        {
+          base: args.base,
+          currentTitle: args.title,
+          currentBody: args.body,
+          currentDraft: args.draft
+        }
+      )
+      if (!context) {
+        return { success: false, error: 'No branch changes to summarize.' }
+      }
+      const localEnv = await prepareLocalCommitMessageAgentEnv(
+        resolvedSettings.params.agentId,
+        commitMessageAgentEnv
+      )
+      if (!localEnv.ok) {
+        return { success: false, error: localEnv.error }
+      }
+      return generatePullRequestFieldsFromContext(context, resolvedSettings.params, {
+        kind: 'local',
+        cwd: worktreePath,
+        ...(localEnv.env ? { env: localEnv.env } : {})
+      })
+    }
+  )
+
+  ipcMain.handle(
+    'git:cancelGeneratePullRequestFields',
+    async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          return
+        }
+        await provider.cancelGenerateCommitMessage(args.worktreePath)
+        return
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      cancelGeneratePullRequestFieldsLocal(worktreePath)
+    }
+  )
+
+  ipcMain.handle(
     'git:branchCompare',
     async (
       _event,
@@ -568,6 +821,25 @@ export function registerFilesystemHandlers(store: Store): void {
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       return getBranchCompare(worktreePath, args.baseRef)
+    }
+  )
+
+  ipcMain.handle(
+    'git:commitCompare',
+    async (
+      _event,
+      args: { worktreePath: string; commitId: string; connectionId?: string }
+    ): Promise<GitCommitCompareResult> => {
+      const commitId = validateFullGitObjectId(args.commitId, 'commitId')
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No git provider for connection "${args.connectionId}"`)
+        }
+        return provider.getCommitCompare(args.worktreePath, commitId)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      return getCommitCompare(worktreePath, commitId)
     }
   )
 
@@ -608,21 +880,32 @@ export function registerFilesystemHandlers(store: Store): void {
     'git:push',
     async (
       _event,
-      args: { worktreePath: string; publish?: boolean; connectionId?: string }
+      args: {
+        worktreePath: string
+        publish?: boolean
+        connectionId?: string
+        pushTarget?: GitPushTarget
+      }
     ): Promise<void> => {
       // Why: coerce to strict boolean at the IPC boundary so a malformed
       // renderer payload (e.g. string 'false') can't silently enable
       // --set-upstream mode. Mirrors the relay handler in src/relay/git-handler.ts.
       const publish = args.publish === true
       if (args.connectionId) {
+        if (args.pushTarget) {
+          assertGitPushTargetShape(args.pushTarget)
+        }
         const provider = getSshGitProvider(args.connectionId)
         if (!provider) {
           throw new Error(`No git provider for connection "${args.connectionId}"`)
         }
-        return provider.pushBranch(args.worktreePath, publish)
+        return provider.pushBranch(args.worktreePath, publish, args.pushTarget)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      await gitPush(worktreePath, publish)
+      if (args.pushTarget) {
+        await validateGitPushTarget(worktreePath, args.pushTarget)
+      }
+      await gitPush(worktreePath, publish, args.pushTarget)
     }
   )
 
@@ -693,6 +976,47 @@ export function registerFilesystemHandlers(store: Store): void {
   )
 
   ipcMain.handle(
+    'git:commitDiff',
+    async (
+      _event,
+      args: {
+        worktreePath: string
+        commitOid: string
+        parentOid?: string | null
+        filePath: string
+        oldPath?: string
+        connectionId?: string
+      }
+    ): Promise<GitDiffResult> => {
+      const commitOid = validateFullGitObjectId(args.commitOid, 'commitOid')
+      const parentOid = args.parentOid ? validateFullGitObjectId(args.parentOid, 'parentOid') : null
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No git provider for connection "${args.connectionId}"`)
+        }
+        return provider.getCommitDiff(args.worktreePath, {
+          commitOid,
+          parentOid,
+          filePath: args.filePath,
+          oldPath: args.oldPath
+        })
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
+      const oldPath = args.oldPath
+        ? validateGitRelativeFilePath(worktreePath, args.oldPath)
+        : undefined
+      return getCommitDiff(worktreePath, {
+        commitOid,
+        parentOid,
+        filePath,
+        oldPath
+      })
+    }
+  )
+
+  ipcMain.handle(
     'git:stage',
     async (
       _event,
@@ -746,6 +1070,25 @@ export function registerFilesystemHandlers(store: Store): void {
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
       await discardChanges(worktreePath, filePath)
+    }
+  )
+
+  ipcMain.handle(
+    'git:bulkDiscard',
+    async (
+      _event,
+      args: { worktreePath: string; filePaths: string[]; connectionId?: string }
+    ): Promise<void> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(`No git provider for connection "${args.connectionId}"`)
+        }
+        return provider.bulkDiscardChanges(args.worktreePath, args.filePaths)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const filePaths = args.filePaths.map((p) => validateGitRelativeFilePath(worktreePath, p))
+      await bulkDiscardChanges(worktreePath, filePaths)
     }
   )
 

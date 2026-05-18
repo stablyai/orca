@@ -53,6 +53,17 @@ export function isGitHubReleaseTransitionFailure(normalizedMessage: string): boo
   )
 }
 
+export function isMissingUpdateManifestFailure(message: string): boolean {
+  const normalizedMessage = message.toLowerCase()
+  return (
+    normalizedMessage.includes('404') &&
+    (normalizedMessage.includes('cannot find channel') ||
+      normalizedMessage.includes('latest.yml') ||
+      normalizedMessage.includes('latest-mac.yml') ||
+      normalizedMessage.includes('latest-linux.yml'))
+  )
+}
+
 /** Identifies update-check failures that are transient or infrastructure-related
  *  (e.g. network blips, GitHub release transitions) and should NOT be surfaced
  *  to the user as errors. */

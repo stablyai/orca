@@ -364,9 +364,11 @@ describe('orca computer CLI handlers', () => {
     expect(parsed.result.screenshot).toMatchObject({
       dataOmitted: true,
       format: 'png',
-      expiresAt: expect.any(String),
-      path: expect.stringContaining('orca-computer-use/req_state-screenshot.png')
+      expiresAt: expect.any(String)
     })
+    expect(String(parsed.result.screenshot.path).replaceAll('\\', '/')).toContain(
+      'orca-computer-use/req_state-screenshot.png'
+    )
   })
 
   it('shows coordinate space and truncation in pretty state output', async () => {

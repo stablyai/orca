@@ -10,6 +10,7 @@ import {
 } from '@/lib/terminal-theme'
 import { buildFontFamily } from './layout-serialization'
 import { captureScrollState, restoreScrollState, safeFit } from '@/lib/pane-manager/pane-tree-ops'
+import { resolveTerminalCursorInactiveStyle } from '@/lib/pane-manager/pane-terminal-options'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import type { PtyTransport } from './pty-transport'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
@@ -78,9 +79,9 @@ export function installMode2031Handlers(deps: Mode2031HandlerDeps): IDisposable[
         // scrollback (`SerializeAddon.serialize()`) never contain `?2031`:
         // SerializeAddon's _serializeModes whitelists only ?1h/?66h/?2004h/
         // [4h/?6h/?45h/?1004h/?7l/mouse modes/?25l, and buildRehydrateSequences
-        // emits only ?2004h/?1h/?1049h. If xterm ever adds ?2031 to that
-        // whitelist, this guard would start suppressing legitimate
-        // subscribes during snapshot reattach — revisit then.
+        // emits only ?1049h/?2004h/?1h/mouse reporting modes. If xterm ever
+        // adds ?2031 to that whitelist, this guard would start suppressing
+        // legitimate subscribes during snapshot reattach — revisit then.
         if (deps.isReplaying()) {
           return false
         }
@@ -199,7 +200,9 @@ export function applyTerminalAppearance(
     // bleeding in from a prior opacity setting that has since been reset.
     pane.terminal.options.allowTransparency =
       settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
-    pane.terminal.options.cursorStyle = settings.terminalCursorStyle
+    const cursorStyle = settings.terminalCursorStyle ?? 'bar'
+    pane.terminal.options.cursorStyle = cursorStyle
+    pane.terminal.options.cursorInactiveStyle = resolveTerminalCursorInactiveStyle(cursorStyle)
     pane.terminal.options.cursorBlink = settings.terminalCursorBlink
     const paneSize = paneFontSizes.get(pane.id)
     pane.terminal.options.fontSize = paneSize ?? settings.terminalFontSize

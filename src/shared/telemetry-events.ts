@@ -14,6 +14,7 @@
 // re-check string length.
 
 import { z } from 'zod'
+import { FEATURE_WALL_MAX_DWELL_MS } from './feature-wall-telemetry'
 
 import { AGENT_HOOK_TARGETS } from './agent-hook-types'
 import { ONBOARDING_FINAL_STEP } from './constants'
@@ -57,7 +58,9 @@ export const AGENT_KIND_VALUES = [
   'qwen-code',
   'rovo',
   'hermes',
+  'openclaw',
   'copilot',
+  'grok',
   'other'
 ] as const
 export const agentKindSchema = z.enum(AGENT_KIND_VALUES)
@@ -132,12 +135,32 @@ export const launchSourceSchema = z.enum([
   'shortcut',
   'onboarding',
   'diff_notes_send',
+  'notes_send',
   'unknown'
 ])
 export type LaunchSource = z.infer<typeof launchSourceSchema>
 
 export const requestKindSchema = z.enum(['new', 'resume', 'followup'])
 export type RequestKind = z.infer<typeof requestKindSchema>
+
+export const featureWallTileIdSchema = z.enum([
+  'tile-01',
+  'tile-02',
+  'tile-03',
+  'tile-04',
+  'tile-05',
+  'tile-06',
+  'tile-07',
+  'tile-08',
+  'tile-09',
+  'tile-10',
+  'tile-11',
+  'tile-12'
+])
+export type FeatureWallTileIdTelemetry = z.infer<typeof featureWallTileIdSchema>
+
+export const featureWallOpenSourceSchema = z.enum(['help_menu', 'popup', 'unknown'])
+export type FeatureWallOpenSourceTelemetry = z.infer<typeof featureWallOpenSourceSchema>
 
 // `env_var` is deliberately absent — env-var and CI paths override consent at
 // runtime only (see consent.ts); they never mutate `optedIn` and therefore
@@ -242,6 +265,27 @@ const settingsChangedSchema = z
 const telemetryOptedInSchema = z.object({ via: optInViaSchema }).strict()
 const telemetryOptedOutSchema = z.object({ via: optInViaSchema }).strict()
 
+const featureWallOpenedSchema = z
+  .object({
+    source: featureWallOpenSourceSchema
+  })
+  .strict()
+const featureWallClosedSchema = z
+  .object({
+    dwell_ms: z.number().int().min(0).max(FEATURE_WALL_MAX_DWELL_MS)
+  })
+  .strict()
+const featureWallTileFocusedSchema = z
+  .object({
+    tile_id: featureWallTileIdSchema
+  })
+  .strict()
+const featureWallTileClickedSchema = z
+  .object({
+    tile_id: featureWallTileIdSchema
+  })
+  .strict()
+
 const addRepoSetupStepActionEventSchema = z
   .object({ action: addRepoSetupStepActionSchema, nth_repo_added: nthRepoAddedSchema })
   .strict()
@@ -259,12 +303,13 @@ const workspaceCreateFailedSchema = z
   .strict()
 
 // Managed-hook installer per-agent label. Distinct from `AGENT_KIND_VALUES`:
-// hook installation only targets these four agents and the labels here match
-// the `*HookService.install()` call sites in `src/main/index.ts`. `claude`
-// (not `claude-code`) is intentional — the failure is about Claude Code's
-// `~/.claude/settings.json`, not the broader product taxonomy. Sourced from
-// `AGENT_HOOK_TARGETS` so the wire enum and the IPC `AgentHookTarget` type
-// cannot drift if a fifth hook-install agent is added.
+// hook installation only targets the agents in `AGENT_HOOK_TARGETS` and the
+// labels here match the `*HookService.install()` call sites in
+// `src/main/index.ts`. `claude` (not `claude-code`) is intentional — the
+// failure is about Claude Code's `~/.claude/settings.json`, not the broader
+// product taxonomy. Sourced from `AGENT_HOOK_TARGETS` so the wire enum and
+// the IPC `AgentHookTarget` type cannot drift as new hook-install agents
+// are added.
 export const hookInstallAgentSchema = z.enum(AGENT_HOOK_TARGETS)
 export type HookInstallAgent = z.infer<typeof hookInstallAgentSchema>
 
@@ -277,6 +322,19 @@ const agentHookInstallFailedSchema = z
     agent: hookInstallAgentSchema,
     error_message: z.string().max(200)
   })
+  .strict()
+
+// Why: regression signal for paneKey attribution. A hook event whose paneKey
+// does not correspond to any tab in `tabsByWorktree` indicates the renderer
+// could not route the event to a pane. Pre-fix this fired routinely for
+// CLI-spawned terminals (empty paneKey); post-fix it should be near-zero in
+// normal use. The lone `reason` field reflects what the producer can observe
+// at emission time: an empty paneKey on the wire (pre-fix CLI shape) vs. any
+// non-empty paneKey that fails to resolve to a known tab in `tabsByWorktree`
+// (stale tab id, malformed value, or wrong-worktree id all bucket here).
+// See docs/cli-terminal-hook-pane-key.md.
+const agentHookUnattributedSchema = z
+  .object({ reason: z.enum(['empty_pane_key', 'unknown_tab_id']) })
   .strict()
 
 // ── Onboarding ──────────────────────────────────────────────────────────
@@ -313,6 +371,31 @@ const onboardingChecklistItemSchema = z.enum([
   'openedFile',
   'ranAgentOnFile'
 ])
+const onboardingFeatureSetupFeatureSchema = z.enum(['browser_use', 'computer_use', 'orchestration'])
+const onboardingFeatureSetupSelectionSchema = {
+  browser_use: z.boolean(),
+  computer_use: z.boolean(),
+  orchestration: z.boolean(),
+  selected_count: z.number().int().min(0).max(3)
+} as const
+type OnboardingFeatureSetupSelectionTelemetry = {
+  browser_use: boolean
+  computer_use: boolean
+  orchestration: boolean
+  selected_count: number
+}
+const onboardingFeatureSetupSelectedCountRefinement = {
+  path: ['selected_count'],
+  message: 'selected_count must match selected feature flags'
+}
+
+function hasMatchingOnboardingFeatureSetupSelectedCount(
+  props: OnboardingFeatureSetupSelectionTelemetry
+): boolean {
+  const selectedCount =
+    (props.browser_use ? 1 : 0) + (props.computer_use ? 1 : 0) + (props.orchestration ? 1 : 0)
+  return props.selected_count === selectedCount
+}
 
 // Why: compile-time guard that the enum above stays in lockstep with the
 // activation keys of OnboardingChecklistState (everything except the UI-only
@@ -495,6 +578,35 @@ const onboardingGhosttyDiscoveredSchema = z
   })
   .strict()
 const onboardingGhosttyImportClickedSchema = z.object({ cohort: cohortSchema }).strict()
+
+// Why: smart-sort telemetry. The class distribution event tells us whether
+// real users have meaningful Class 1/2/3 populations (signal that the
+// redesign is doing work) or whether everyone collapses to Class 4 (signal
+// that hook coverage is too low). The Class 1 promotion event distinguishes
+// hook-driven attention from the title-heuristic fallback so we can tell
+// whether Edge case 9 is carrying weight. The smart→recent switch event is
+// our regression signal: users abandoning Smart for Recent.
+const smartSortClassDistributionSchema = z
+  .object({
+    class_1: z.number().int().nonnegative(),
+    class_2: z.number().int().nonnegative(),
+    class_3: z.number().int().nonnegative(),
+    class_4: z.number().int().nonnegative(),
+    total_worktrees: z.number().int().nonnegative()
+  })
+  .strict()
+const smartSortClass1PromotionSchema = z
+  .object({
+    cause: z.enum(['blocked', 'waiting', 'title-heuristic'])
+  })
+  .strict()
+// Why a placeholder field instead of `z.object({})`: an empty zod object
+// infers as TS `{}` (which in TS means "anything non-null/undefined"). That
+// upsets the `keyof EventMap[N]` probes used by COHORT_EXTENDED_SET and
+// ONBOARDING_COHORT_SET, breaking their compile-time roster sync checks.
+// Carrying a single optional `_v` discriminator dodges the issue and
+// preserves room to add future fields without renaming the event.
+const smartToRecentSwitchSchema = z.object({ _v: z.literal(1).optional() }).strict()
 const onboardingGhosttyImportFailedSchema = z
   .object({
     // `'no_config'` is reserved for a future explicit "preview returned
@@ -503,6 +615,51 @@ const onboardingGhosttyImportFailedSchema = z
     reason: z.enum(['no_config', 'empty_diff', 'unknown']),
     cohort: cohortSchema
   })
+  .strict()
+const onboardingFeatureSetupToggledSchema = z
+  .object({
+    feature: onboardingFeatureSetupFeatureSchema,
+    selected: z.boolean(),
+    cohort: cohortSchema
+  })
+  .strict()
+const onboardingFeatureSetupRunSchema = z
+  .object({
+    ...onboardingFeatureSetupSelectionSchema,
+    cli_touched: z.boolean(),
+    skill_commands_copied: z.boolean(),
+    skill_install_command_prepared: z.boolean(),
+    computer_use_permissions_opened: z.boolean(),
+    warning_count: z.number().int().nonnegative(),
+    cohort: cohortSchema
+  })
+  // Why: selected_count is derived analytics data; validate the relationship
+  // at the untrusted IPC boundary instead of trusting renderer callers.
+  .refine(
+    hasMatchingOnboardingFeatureSetupSelectedCount,
+    onboardingFeatureSetupSelectedCountRefinement
+  )
+  .strict()
+const onboardingFeatureSetupTerminalOpenedSchema = z
+  .object({
+    ...onboardingFeatureSetupSelectionSchema,
+    cohort: cohortSchema
+  })
+  .refine(
+    hasMatchingOnboardingFeatureSetupSelectedCount,
+    onboardingFeatureSetupSelectedCountRefinement
+  )
+  .strict()
+const onboardingFeatureSetupTerminalInteractedSchema = z
+  .object({
+    ...onboardingFeatureSetupSelectionSchema,
+    method: z.enum(['keyboard', 'pointer']),
+    cohort: cohortSchema
+  })
+  .refine(
+    hasMatchingOnboardingFeatureSetupSelectedCount,
+    onboardingFeatureSetupSelectedCountRefinement
+  )
   .strict()
 
 // ── Event registry: the one record the validator consumes ───────────────
@@ -529,11 +686,17 @@ export const eventSchemas = {
   agent_started: agentStartedSchema,
   agent_error: agentErrorSchema,
   agent_hook_install_failed: agentHookInstallFailedSchema,
+  agent_hook_unattributed: agentHookUnattributedSchema,
 
   settings_changed: settingsChangedSchema,
 
   telemetry_opted_in: telemetryOptedInSchema,
   telemetry_opted_out: telemetryOptedOutSchema,
+
+  feature_wall_opened: featureWallOpenedSchema,
+  feature_wall_closed: featureWallClosedSchema,
+  feature_wall_tile_focused: featureWallTileFocusedSchema,
+  feature_wall_tile_clicked: featureWallTileClickedSchema,
 
   onboarding_started: onboardingStartedSchema,
   onboarding_step_viewed: onboardingStepViewedSchema,
@@ -547,7 +710,15 @@ export const eventSchemas = {
   onboarding_ghostty_discovered: onboardingGhosttyDiscoveredSchema,
   onboarding_ghostty_import_clicked: onboardingGhosttyImportClickedSchema,
   onboarding_ghostty_import_failed: onboardingGhosttyImportFailedSchema,
-  activation_checklist_item_completed: activationChecklistItemCompletedSchema
+  onboarding_feature_setup_toggled: onboardingFeatureSetupToggledSchema,
+  onboarding_feature_setup_run: onboardingFeatureSetupRunSchema,
+  onboarding_feature_setup_terminal_opened: onboardingFeatureSetupTerminalOpenedSchema,
+  onboarding_feature_setup_terminal_interacted: onboardingFeatureSetupTerminalInteractedSchema,
+  activation_checklist_item_completed: activationChecklistItemCompletedSchema,
+
+  smart_sort_class_distribution: smartSortClassDistributionSchema,
+  smart_sort_class_1_promotion: smartSortClass1PromotionSchema,
+  smart_to_recent_switch: smartToRecentSwitchSchema
 } as const
 
 export type EventMap = { [N in keyof typeof eventSchemas]: z.infer<(typeof eventSchemas)[N]> }
@@ -593,8 +764,12 @@ type _CohortExtendedRoster =
   | 'workspace_create_failed'
   | 'agent_started'
   | 'agent_error'
+// Why: `z.object({}).strict()` infers a string index signature, which would
+// make every key appear present. Ignore index-signature-only keys here so
+// strict empty event payloads do not get pulled into keyed telemetry rosters.
+type _KnownPayloadKeys<T> = string extends keyof T ? never : keyof T
 type _DerivedCohortExtendedEvents = {
-  [N in EventName]: 'nth_repo_added' extends keyof EventMap[N] ? N : never
+  [N in EventName]: 'nth_repo_added' extends _KnownPayloadKeys<EventMap[N]> ? N : never
 }[EventName]
 type _CohortExtendedRosterSync = _CohortExtendedRoster extends _DerivedCohortExtendedEvents
   ? _DerivedCohortExtendedEvents extends _CohortExtendedRoster
@@ -641,8 +816,12 @@ type _OnboardingCohortRoster =
   | 'onboarding_ghostty_discovered'
   | 'onboarding_ghostty_import_clicked'
   | 'onboarding_ghostty_import_failed'
+  | 'onboarding_feature_setup_toggled'
+  | 'onboarding_feature_setup_run'
+  | 'onboarding_feature_setup_terminal_opened'
+  | 'onboarding_feature_setup_terminal_interacted'
 type _DerivedOnboardingCohortEvents = {
-  [N in EventName]: 'cohort' extends keyof EventMap[N] ? N : never
+  [N in EventName]: 'cohort' extends _KnownPayloadKeys<EventMap[N]> ? N : never
 }[EventName]
 type _OnboardingCohortRosterSync = _OnboardingCohortRoster extends _DerivedOnboardingCohortEvents
   ? _DerivedOnboardingCohortEvents extends _OnboardingCohortRoster

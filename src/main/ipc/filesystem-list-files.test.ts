@@ -43,6 +43,10 @@ function createMockProcess(): ChildProcess {
   return p
 }
 
+function isIgnoredRgPass(args: string[]): boolean {
+  return args.includes('--no-ignore-vcs')
+}
+
 describe('filesystem-list-files', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -50,12 +54,12 @@ describe('filesystem-list-files', () => {
     checkRgAvailableMock.mockResolvedValue(true)
   })
 
-  it('merges normal files and env files and filters correctly', async () => {
+  it('merges normal files and ignored files and filters correctly', async () => {
     const p1 = createMockProcess()
     const p2 = createMockProcess()
 
     spawnMock.mockImplementation((_cmd, args: string[]) => {
-      if (args.includes('**/.env*')) {
+      if (isIgnoredRgPass(args)) {
         return p2
       }
       return p1
@@ -74,15 +78,23 @@ describe('filesystem-list-files', () => {
       ;(p1.stdout as unknown as EventEmitter).emit('data', 'file2.js\n')
       p1.emit('close', 0, null)
 
-      // Simulate stdout output for env files
+      // Simulate stdout output for ignored files
       ;(p2.stdout as unknown as EventEmitter).emit('data', '.env.local\n')
+      ;(p2.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\n')
       ;(p2.stdout as unknown as EventEmitter).emit('data', 'file1.ts\n') // Duplicate
+      ;(p2.stdout as unknown as EventEmitter).emit('data', 'node_modules/ignored.js\n')
       p2.emit('close', 0, null)
     }, 10)
 
     const result = await promise
 
-    expect(result).toEqual(['file1.ts', '.github/workflows/ci.yml', 'dir1/file2.js', '.env.local'])
+    expect(result).toEqual([
+      'file1.ts',
+      '.github/workflows/ci.yml',
+      'dir1/file2.js',
+      '.env.local',
+      'dist/generated.js'
+    ])
   })
 
   it('rejects rg failures instead of resolving a false-empty list', async () => {
@@ -90,7 +102,7 @@ describe('filesystem-list-files', () => {
     const p2 = createMockProcess()
 
     spawnMock.mockImplementation((_cmd, args: string[]) => {
-      if (args.includes('**/.env*')) {
+      if (isIgnoredRgPass(args)) {
         return p2
       }
       return p1
@@ -112,7 +124,7 @@ describe('filesystem-list-files', () => {
     const p2 = createMockProcess()
 
     spawnMock.mockImplementation((_cmd, args: string[]) => {
-      if (args.includes('**/.env*')) {
+      if (isIgnoredRgPass(args)) {
         return p2
       }
       return p1
@@ -135,7 +147,7 @@ describe('filesystem-list-files', () => {
     const p2 = createMockProcess()
 
     spawnMock.mockImplementation((_cmd, args: string[]) => {
-      if (args.includes('**/.env*')) {
+      if (isIgnoredRgPass(args)) {
         return p2
       }
       return p1
@@ -158,7 +170,7 @@ describe('filesystem-list-files', () => {
     const p2 = createMockProcess()
 
     spawnMock.mockImplementation((_cmd, args: string[]) => {
-      if (args.includes('**/.env*')) {
+      if (isIgnoredRgPass(args)) {
         return p2
       }
       return p1
@@ -176,7 +188,7 @@ describe('filesystem-list-files', () => {
       ;(p1.stdout as unknown as EventEmitter).emit('data', 'valid.ts\n')
       p1.emit('close', 0, null)
 
-      // Empty env result
+      // Empty ignored result
       p2.emit('close', 0, null)
     }, 10)
 
@@ -211,6 +223,7 @@ describe('filesystem-list-files', () => {
         gitP1.emit('close', 0, null)
 
         ;(gitP2.stdout as unknown as EventEmitter).emit('data', '.env.local\n')
+        ;(gitP2.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\n')
         gitP2.emit('close', 0, null)
       }, 10)
 
@@ -229,6 +242,7 @@ describe('filesystem-list-files', () => {
       expect(result).toContain('src/index.ts')
       expect(result).toContain('package.json')
       expect(result).toContain('.env.local')
+      expect(result).toContain('dist/generated.js')
       expect(result).not.toContain('node_modules/dep/index.js')
     })
 
@@ -272,7 +286,7 @@ describe('filesystem-list-files', () => {
       const p2 = createMockProcess()
 
       spawnMock.mockImplementation((_cmd, args: string[]) => {
-        if (args.includes('**/.env*')) {
+        if (isIgnoredRgPass(args)) {
           return p2
         }
         return p1

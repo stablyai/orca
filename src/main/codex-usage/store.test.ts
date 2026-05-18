@@ -233,15 +233,79 @@ describe('CodexUsageStore', () => {
     const summary = await store.getSummary('orca', '30d')
     const breakdown = await store.getBreakdown('orca', '30d', 'model')
 
-    expect(summary.estimatedCostUsd).toBeCloseTo(85.1)
+    expect(summary.estimatedCostUsd).toBeCloseTo(107.486)
     expect(breakdown.find((row) => row.key === 'gpt-5.2-codex')?.estimatedCostUsd).toBeCloseTo(
       15.925
     )
     expect(breakdown.find((row) => row.key === 'gpt-5.3-codex')?.estimatedCostUsd).toBeCloseTo(
       15.925
     )
-    expect(breakdown.find((row) => row.key === 'gpt-5.4')?.estimatedCostUsd).toBeCloseTo(17.75)
-    expect(breakdown.find((row) => row.key === 'gpt-5.5')?.estimatedCostUsd).toBeCloseTo(35.5)
+    expect(breakdown.find((row) => row.key === 'gpt-5.4')?.estimatedCostUsd).toBeCloseTo(25.212)
+    expect(breakdown.find((row) => row.key === 'gpt-5.5')?.estimatedCostUsd).toBeCloseTo(50.424)
+  })
+
+  it('normalizes Codex model variants and reasoning suffixes before pricing', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: [
+        {
+          day: '2026-04-09',
+          model: 'gpt-5.4-mini-high',
+          projectKey: 'worktree:repo-1::/workspace/repo',
+          projectLabel: 'Repo',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo',
+          eventCount: 1,
+          inputTokens: 1_000_000,
+          cachedInputTokens: 500_000,
+          outputTokens: 1_000_000,
+          reasoningOutputTokens: 100_000,
+          totalTokens: 2_000_000,
+          hasInferredPricing: false
+        },
+        {
+          day: '2026-04-09',
+          model: 'gpt-5.3-codex-spark-xhigh',
+          projectKey: 'worktree:repo-1::/workspace/repo',
+          projectLabel: 'Repo',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo',
+          eventCount: 1,
+          inputTokens: 2_000_000,
+          cachedInputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          reasoningOutputTokens: 100_000,
+          totalTokens: 3_000_000,
+          hasInferredPricing: false
+        },
+        {
+          day: '2026-04-09',
+          model: 'gpt-5.5(xhigh)',
+          projectKey: 'worktree:repo-1::/workspace/repo',
+          projectLabel: 'Repo',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo',
+          eventCount: 1,
+          inputTokens: 100_000,
+          cachedInputTokens: 50_000,
+          outputTokens: 25_000,
+          reasoningOutputTokens: 5_000,
+          totalTokens: 125_000,
+          hasInferredPricing: false
+        }
+      ]
+    })
+
+    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+
+    expect(breakdown.find((row) => row.key === 'gpt-5.4-mini-high')?.estimatedCostUsd).toBeCloseTo(
+      4.9125
+    )
+    expect(
+      breakdown.find((row) => row.key === 'gpt-5.3-codex-spark-xhigh')?.estimatedCostUsd
+    ).toBeCloseTo(15.925)
+    expect(breakdown.find((row) => row.key === 'gpt-5.5(xhigh)')?.estimatedCostUsd).toBeCloseTo(
+      1.025
+    )
   })
 
   it('keeps cached input out of the full-price input bucket for GPT-5.5 totals', async () => {
@@ -267,7 +331,7 @@ describe('CodexUsageStore', () => {
 
     const summary = await store.getSummary('orca', '30d')
 
-    expect(summary.estimatedCostUsd).toBeCloseTo(446.840002)
+    expect(summary.estimatedCostUsd).toBeCloseTo(858.929724)
   })
 
   it('counts mixed-model sessions once for each real model row in the breakdown', async () => {
@@ -584,17 +648,114 @@ describe('CodexUsageStore', () => {
     } as unknown as CodexUsagePersistedState)
 
     expect(normalized).toEqual({
-      schemaVersion: 2,
+      schemaVersion: 3,
       worktreeFingerprint: null,
       processedFiles: [],
       sessions: [],
       dailyAggregates: [],
       scanState: {
-        enabled: false,
+        enabled: true,
         lastScanStartedAt: null,
         lastScanCompletedAt: null,
         lastScanError: null
       }
     })
+  })
+
+  it('returns automation usage for a single matching worktree session', async () => {
+    const worktreeId = 'repo-1::/workspace/repo'
+    const store = createStoreWithState({
+      scanState: {
+        enabled: true,
+        lastScanStartedAt: 1,
+        lastScanCompletedAt: 2,
+        lastScanError: null
+      },
+      sessions: [
+        {
+          sessionId: 'session-1',
+          firstTimestamp: '2026-04-10T15:00:00.000Z',
+          lastTimestamp: '2026-04-10T15:05:00.000Z',
+          primaryModel: 'gpt-5',
+          hasMixedModels: false,
+          primaryProjectLabel: 'Repo',
+          hasMixedLocations: false,
+          primaryWorktreeId: worktreeId,
+          primaryRepoId: 'repo-1',
+          eventCount: 1,
+          totalInputTokens: 1000,
+          totalCachedInputTokens: 400,
+          totalOutputTokens: 250,
+          totalReasoningOutputTokens: 100,
+          totalTokens: 1250,
+          hasInferredPricing: false,
+          locationBreakdown: [
+            {
+              locationKey: `worktree:${worktreeId}`,
+              projectLabel: 'Repo',
+              repoId: 'repo-1',
+              worktreeId,
+              eventCount: 1,
+              inputTokens: 1000,
+              cachedInputTokens: 400,
+              outputTokens: 250,
+              reasoningOutputTokens: 100,
+              totalTokens: 1250,
+              hasInferredPricing: false
+            }
+          ],
+          modelBreakdown: [
+            {
+              modelKey: 'gpt-5',
+              modelLabel: 'gpt-5',
+              eventCount: 1,
+              inputTokens: 1000,
+              cachedInputTokens: 400,
+              outputTokens: 250,
+              reasoningOutputTokens: 100,
+              totalTokens: 1250,
+              hasInferredPricing: false
+            }
+          ],
+          locationModelBreakdown: [
+            {
+              locationKey: `worktree:${worktreeId}`,
+              modelKey: 'gpt-5',
+              modelLabel: 'gpt-5',
+              repoId: 'repo-1',
+              worktreeId,
+              eventCount: 1,
+              inputTokens: 1000,
+              cachedInputTokens: 400,
+              outputTokens: 250,
+              reasoningOutputTokens: 100,
+              totalTokens: 1250,
+              hasInferredPricing: false
+            }
+          ]
+        }
+      ]
+    })
+    ;(store as unknown as { refresh: typeof store.refresh }).refresh = vi.fn().mockResolvedValue({
+      enabled: true,
+      isScanning: false,
+      lastScanStartedAt: 1,
+      lastScanCompletedAt: 2,
+      lastScanError: null,
+      hasAnyCodexData: true
+    })
+
+    const usage = await store.getAutomationRunUsage({
+      worktreeId,
+      terminalSessionId: 'tab-1',
+      startedAt: new Date('2026-04-10T14:59:00.000Z').getTime(),
+      completedAt: new Date('2026-04-10T15:06:00.000Z').getTime()
+    })
+
+    expect(usage.status).toBe('known')
+    expect(usage.providerSessionId).toBe('session-1')
+    expect(usage.cacheReadTokens).toBe(400)
+    expect(usage.reasoningOutputTokens).toBe(100)
+    expect(usage.estimatedCostUsd).toBeCloseTo(0.0033)
   })
 })

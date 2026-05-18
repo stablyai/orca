@@ -1,6 +1,16 @@
 /* eslint-disable max-lines -- Why: the preload contract is intentionally centralized in one declaration file so renderer and preload stay in lockstep when IPC surfaces change. */
 import type {
+  CreateHostedReviewArgs,
+  CreateHostedReviewResult,
+  HostedReviewCreationEligibility,
+  HostedReviewCreationEligibilityArgs,
+  HostedReviewForBranchArgs,
+  HostedReviewInfo
+} from '../shared/hosted-review'
+import type { AppIdentity } from '../shared/app-identity'
+import type {
   BaseRefDefaultResult,
+  BaseRefSearchResult,
   BrowserCookieImportResult,
   BrowserLoadError,
   BrowserSessionProfile,
@@ -17,8 +27,10 @@ import type {
   GhosttyImportPreview,
   GlobalSettings,
   GitBranchCompareResult,
+  GitCommitCompareResult,
   GitConflictOperation,
   GitDiffResult,
+  GitPushTarget,
   GitStatusResult,
   GitUpstreamStatus,
   GitHubAssignableUser,
@@ -26,19 +38,34 @@ import type {
   GitHubPRFileContents,
   GitHubPRReviewCommentInput,
   GitHubCommentResult,
+  GitHubOwnerRepo,
   GitHubWorkItem,
   GitHubWorkItemDetails,
   GitHubViewer,
+  GitLabAssignableUser,
+  GitLabCommentResult,
+  GitLabIssueInfo,
+  GitLabIssueUpdate,
+  GitLabProjectRef,
+  GitLabTodo,
+  GitLabViewer,
+  GitLabWorkItem,
+  GitLabWorkItemDetails,
+  ListMergeRequestsResult,
+  MRInfo,
+  MRListState,
   ListWorkItemsResult,
   IssueInfo,
   LinearViewer,
   LinearConnectionStatus,
+  LinearWorkspaceSelection,
   LinearIssue,
   LinearIssueUpdate,
   LinearComment,
   LinearWorkflowState,
   LinearLabel,
   LinearMember,
+  LinearProjectSummary,
   LinearTeam,
   MarkdownDocument,
   FloatingTerminalCwdRequest,
@@ -65,12 +92,17 @@ import type {
   UpdateStatus,
   Worktree,
   WorktreeBaseStatusEvent,
+  WorktreeLineage,
   WorktreeMeta,
   WorktreeRemoteBranchConflictEvent,
   WorktreeSetupLaunch,
   WorktreeStartupLaunch,
   WorkspaceSessionState
 } from '../shared/types'
+import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
+import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
+import type { RuntimeAccessGrant } from '../shared/runtime-access-grants'
+import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
 import type {
   AddIssueCommentBySlugArgs,
   ClearProjectItemFieldArgs,
@@ -120,11 +152,34 @@ import type {
   BrowserPopupEvent
 } from '../shared/browser-guest-events'
 import type { ElectronAPI } from '@electron-toolkit/preload'
+import type { BrowserSetAnnotationViewportBridgeArgs } from '../shared/browser-annotation-viewport-bridge'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { E2EConfig } from '../shared/e2e-config'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
-import type { AgentStatusIpcPayload } from '../shared/agent-status-types'
-import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../shared/runtime-types'
+import type {
+  AgentStatusIpcPayload,
+  MigrationUnsupportedPtyEntry
+} from '../shared/agent-status-types'
+import type {
+  RuntimeBrowserDriverState,
+  RuntimeStatus,
+  RuntimeSyncWindowGraph,
+  RuntimeTerminalDriverState
+} from '../shared/runtime-types'
+import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
+import type { SkillDiscoveryResult } from '../shared/skills'
+import type {
+  CrashReportRecord,
+  CrashReportSubmitArgs,
+  CrashReportSubmitResult
+} from '../shared/crash-reporting'
+
+export type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
+
+type RuntimeEnvironmentSubscriptionHandle = {
+  unsubscribe: () => void
+  sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => void
+}
 import type {
   RuntimeMobileMarkdownRequest,
   RuntimeMobileMarkdownResponse
@@ -150,6 +205,11 @@ import type {
   ClaudeUsageSummary
 } from '../shared/claude-usage-types'
 import type { RateLimitState } from '../shared/rate-limit-types'
+import type { SpeechModelManifest, SpeechModelState } from '../shared/speech-types'
+import type {
+  WorkspaceSpaceAnalyzeResult,
+  WorkspaceSpaceScanProgress
+} from '../shared/workspace-space-types'
 import type { GhAuthDiagnostic } from '../shared/github-auth-types'
 import type {
   SshConnectionState,
@@ -167,9 +227,46 @@ import type {
   CodexUsageSessionRow,
   CodexUsageSummary
 } from '../shared/codex-usage-types'
+import type {
+  OpenCodeUsageBreakdownKind,
+  OpenCodeUsageBreakdownRow,
+  OpenCodeUsageDailyPoint,
+  OpenCodeUsageRange,
+  OpenCodeUsageScanState,
+  OpenCodeUsageScope,
+  OpenCodeUsageSessionRow,
+  OpenCodeUsageSummary
+} from '../shared/opencode-usage-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import type { KeybindingSnapshot } from '../shared/keybindings/keybinding-types'
+import type {
+  RemoteWorkspaceChangedEvent,
+  RemoteWorkspaceConnectedClient,
+  RemoteWorkspacePatchResult,
+  RemoteWorkspaceSnapshot
+} from '../shared/remote-workspace-types'
+import type {
+  Automation,
+  AutomationCreateInput,
+  AutomationDispatchRequest,
+  AutomationDispatchResult,
+  ExternalAutomationCreateInput,
+  ExternalAutomationActionInput,
+  ExternalAutomationManager,
+  ExternalAutomationRunsInput,
+  ExternalAutomationRunsPage,
+  ExternalAutomationUpdateInput,
+  AutomationRun,
+  AutomationUpdateInput
+} from '../shared/automations-types'
+import type {
+  WorkspaceCleanupDismissArgs,
+  WorkspaceCleanupLocalProcessArgs,
+  WorkspaceCleanupLocalProcessResult,
+  WorkspaceCleanupScanArgs,
+  WorkspaceCleanupScanResult
+} from '../shared/workspace-cleanup'
 
 export type BrowserApi = {
   registerGuest: (args: {
@@ -185,6 +282,7 @@ export type BrowserApi = {
     browserPageId: string
     override: BrowserViewportOverride | null
   }) => Promise<boolean>
+  setAnnotationViewportBridge: (args: BrowserSetAnnotationViewportBridgeArgs) => Promise<boolean>
   onGuestLoadFailed: (
     callback: (args: { browserPageId: string; loadError: BrowserLoadError }) => void
   ) => () => void
@@ -257,6 +355,24 @@ export type DetectedBrowserInfo = {
 export type PreflightStatus = {
   git: { installed: boolean }
   gh: { installed: boolean; authenticated: boolean }
+  /** Optional — older preload payloads predating GitLab support don't
+   *  include it. Consumers gate on `glab?.installed` / `authenticated`. */
+  glab?: { installed: boolean; authenticated: boolean }
+  bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
+  azureDevOps?: {
+    configured: boolean
+    authenticated: boolean
+    account: string | null
+    baseUrl: string | null
+    tokenConfigured: boolean
+  }
+  gitea?: {
+    configured: boolean
+    authenticated: boolean
+    account: string | null
+    baseUrl: string | null
+    tokenConfigured: boolean
+  }
 }
 
 export type RefreshAgentsResult = {
@@ -275,9 +391,9 @@ export type RefreshAgentsResult = {
 }
 
 export type PreflightApi = {
-  check: (args?: { force?: boolean }) => Promise<PreflightStatus>
-  detectAgents: () => Promise<string[]>
-  refreshAgents: () => Promise<RefreshAgentsResult>
+  check: (args?: { force?: boolean; wslDistro?: string | null }) => Promise<PreflightStatus>
+  detectAgents: (args?: { wslDistro?: string | null }) => Promise<string[]>
+  refreshAgents: (args?: { wslDistro?: string | null }) => Promise<RefreshAgentsResult>
   detectRemoteAgents: (args: { connectionId: string }) => Promise<string[]>
 }
 
@@ -372,7 +488,36 @@ export type CodexUsageApi = {
   }) => Promise<CodexUsageSessionRow[]>
 }
 
+export type OpenCodeUsageApi = {
+  getScanState: () => Promise<OpenCodeUsageScanState>
+  setEnabled: (args: { enabled: boolean }) => Promise<OpenCodeUsageScanState>
+  refresh: (args?: { force?: boolean }) => Promise<OpenCodeUsageScanState>
+  getSummary: (args: {
+    scope: OpenCodeUsageScope
+    range: OpenCodeUsageRange
+  }) => Promise<OpenCodeUsageSummary>
+  getDaily: (args: {
+    scope: OpenCodeUsageScope
+    range: OpenCodeUsageRange
+  }) => Promise<OpenCodeUsageDailyPoint[]>
+  getBreakdown: (args: {
+    scope: OpenCodeUsageScope
+    range: OpenCodeUsageRange
+    kind: OpenCodeUsageBreakdownKind
+  }) => Promise<OpenCodeUsageBreakdownRow[]>
+  getRecentSessions: (args: {
+    scope: OpenCodeUsageScope
+    range: OpenCodeUsageRange
+    limit?: number
+  }) => Promise<OpenCodeUsageSessionRow[]>
+}
+
 export type AppApi = {
+  /** Returns the app identity currently exposed to native chrome and the titlebar. */
+  getIdentity: () => Promise<AppIdentity>
+  /** Returns a URL base for feature-wall assets. In dev this is Vite /@fs;
+   *  in packaged builds this is file:// resources. Renderer appends filenames. */
+  getFeatureWallAssetBaseUrl: () => Promise<string>
   /** Relaunches the app via Electron's app.relaunch() + app.exit(0). Used
    *  by settings panes that need a full restart to apply changes (e.g. the
    *  terminal-window blur setting in TerminalWindowSection). */
@@ -438,6 +583,11 @@ export type PreloadApi = {
     getGitUsername: (args: { repoId: string }) => Promise<string>
     getBaseRefDefault: (args: { repoId: string }) => Promise<BaseRefDefaultResult>
     searchBaseRefs: (args: { repoId: string; query: string; limit?: number }) => Promise<string[]>
+    searchBaseRefDetails: (args: {
+      repoId: string
+      query: string
+      limit?: number
+    }) => Promise<BaseRefSearchResult[]>
     onChanged: (callback: () => void) => () => void
   }
   sparsePresets: {
@@ -460,15 +610,43 @@ export type PreloadApi = {
       prNumber: number
       headRefName?: string
       isCrossRepository?: boolean
+    }) => Promise<{ baseBranch: string; pushTarget?: GitPushTarget } | { error: string }>
+    /** GitLab parallel of resolvePrBase. For same-project MRs returns
+     *  `<remote>/<source_branch>`; for fork MRs fetches
+     *  refs/merge-requests/<iid>/head and returns the SHA. */
+    resolveMrBase: (args: {
+      repoId: string
+      mrIid: number
+      sourceBranch?: string
+      isCrossRepository?: boolean
     }) => Promise<{ baseBranch: string } | { error: string }>
     remove: (args: { worktreeId: string; force?: boolean; skipArchive?: boolean }) => Promise<void>
     updateMeta: (args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => Promise<Worktree>
+    listLineage: () => Promise<Record<string, WorktreeLineage>>
+    updateLineage: (args: {
+      worktreeId: string
+      parentWorktreeId?: string
+      noParent?: boolean
+    }) => Promise<WorktreeLineage | null>
     persistSortOrder: (args: { orderedIds: string[] }) => Promise<void>
     onChanged: (callback: (data: { repoId: string }) => void) => () => void
     onBaseStatus: (callback: (data: WorktreeBaseStatusEvent) => void) => () => void
     onRemoteBranchConflict: (
       callback: (data: WorktreeRemoteBranchConflictEvent) => void
     ) => () => void
+  }
+  workspaceCleanup: {
+    scan: (args?: WorkspaceCleanupScanArgs) => Promise<WorkspaceCleanupScanResult>
+    dismiss: (args: WorkspaceCleanupDismissArgs) => Promise<void>
+    clearDismissals: () => Promise<void>
+    hasKillableLocalProcesses: (
+      args: WorkspaceCleanupLocalProcessArgs
+    ) => Promise<WorkspaceCleanupLocalProcessResult>
+  }
+  workspaceSpace: {
+    analyze: () => Promise<WorkspaceSpaceAnalyzeResult>
+    cancel: () => Promise<boolean>
+    onProgress: (callback: (progress: WorkspaceSpaceScanProgress) => void) => () => void
   }
   pty: {
     spawn: (opts: {
@@ -543,23 +721,42 @@ export type PreloadApi = {
       githubEmail: string | null
     }) => Promise<{ ok: true } | { ok: false; status: number | null; error: string }>
   }
+  crashReports: {
+    getLatestPending: () => Promise<CrashReportRecord | null>
+    dismiss: (args: { reportId: string }) => Promise<CrashReportRecord | null>
+    copyLatestDiagnostics: (args?: {
+      reportId?: string
+      notes?: string
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    submit: (args: CrashReportSubmitArgs) => Promise<CrashReportSubmitResult>
+  }
   export: ExportApi
   gh: {
     viewer: () => Promise<GitHubViewer | null>
-    repoSlug: (args: { repoPath: string }) => Promise<{ owner: string; repo: string } | null>
+    repoSlug: (args: {
+      repoPath: string
+      repoId?: string
+    }) => Promise<{ owner: string; repo: string } | null>
     prForBranch: (args: {
       repoPath: string
+      repoId?: string
       branch: string
       linkedPRNumber?: number | null
     }) => Promise<PRInfo | null>
-    issue: (args: { repoPath: string; number: number }) => Promise<IssueInfo | null>
+    issue: (args: {
+      repoPath: string
+      repoId?: string
+      number: number
+    }) => Promise<IssueInfo | null>
     workItem: (args: {
       repoPath: string
+      repoId?: string
       number: number
       type?: 'issue' | 'pr'
     }) => Promise<Omit<GitHubWorkItem, 'repoId'> | null>
     workItemByOwnerRepo: (args: {
       repoPath: string
+      repoId?: string
       owner: string
       repo: string
       number: number
@@ -567,11 +764,13 @@ export type PreloadApi = {
     }) => Promise<Omit<GitHubWorkItem, 'repoId'> | null>
     workItemDetails: (args: {
       repoPath: string
+      repoId?: string
       number: number
       type?: 'issue' | 'pr'
     }) => Promise<GitHubWorkItemDetails | null>
     prFileContents: (args: {
       repoPath: string
+      repoId?: string
       prNumber: number
       path: string
       oldPath?: string
@@ -579,48 +778,96 @@ export type PreloadApi = {
       headSha: string
       baseSha: string
     }) => Promise<GitHubPRFileContents>
-    listIssues: (args: { repoPath: string; limit?: number }) => Promise<IssueInfo[]>
+    listIssues: (args: {
+      repoPath: string
+      repoId?: string
+      limit?: number
+    }) => Promise<IssueInfo[]>
     createIssue: (args: {
       repoPath: string
+      repoId?: string
       title: string
       body: string
     }) => Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }>
-    countWorkItems: (args: { repoPath: string; query?: string }) => Promise<number>
+    countWorkItems: (args: { repoPath: string; repoId?: string; query?: string }) => Promise<number>
     listWorkItems: (args: {
       repoPath: string
+      repoId?: string
       limit?: number
       query?: string
       before?: string
     }) => Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>
     prChecks: (args: {
       repoPath: string
+      repoId?: string
       prNumber: number
       headSha?: string
+      prRepo?: GitHubOwnerRepo | null
       noCache?: boolean
     }) => Promise<PRCheckDetail[]>
+    rerunPRChecks: (args: {
+      repoPath: string
+      repoId?: string
+      prNumber: number
+      headSha?: string
+      failedOnly?: boolean
+    }) => Promise<{ ok: true; count: number } | { ok: false; error: string }>
     prComments: (args: {
       repoPath: string
+      repoId?: string
       prNumber: number
+      prRepo?: GitHubOwnerRepo | null
       noCache?: boolean
     }) => Promise<PRComment[]>
     resolveReviewThread: (args: {
       repoPath: string
+      repoId?: string
       threadId: string
       resolve: boolean
     }) => Promise<boolean>
-    updatePRTitle: (args: { repoPath: string; prNumber: number; title: string }) => Promise<boolean>
+    setPRFileViewed: (args: {
+      repoPath: string
+      repoId?: string
+      prNumber: number
+      pullRequestId: string
+      path: string
+      viewed: boolean
+    }) => Promise<boolean>
+    updatePRTitle: (args: {
+      repoPath: string
+      repoId?: string
+      prNumber: number
+      title: string
+      prRepo?: GitHubOwnerRepo | null
+    }) => Promise<boolean>
     mergePR: (args: {
       repoPath: string
+      repoId?: string
       prNumber: number
       method?: 'merge' | 'squash' | 'rebase'
+      prRepo?: GitHubOwnerRepo | null
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    updatePRState: (args: {
+      repoPath: string
+      repoId?: string
+      prNumber: number
+      updates: { state: 'open' | 'closed' }
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    requestPRReviewers: (args: {
+      repoPath: string
+      repoId?: string
+      prNumber: number
+      reviewers: string[]
     }) => Promise<{ ok: true } | { ok: false; error: string }>
     updateIssue: (args: {
       repoPath: string
+      repoId?: string
       number: number
       updates: GitHubIssueUpdate
     }) => Promise<{ ok: true } | { ok: false; error: string }>
     addIssueComment: (args: {
       repoPath: string
+      repoId?: string
       number: number
       body: string
       /** Why: GitHub stores PR conversation comments under `/issues/N/comments`
@@ -632,6 +879,7 @@ export type PreloadApi = {
     }) => Promise<GitHubCommentResult>
     addPRReviewCommentReply: (args: {
       repoPath: string
+      repoId?: string
       prNumber: number
       commentId: number
       body: string
@@ -639,16 +887,26 @@ export type PreloadApi = {
       path?: string
       line?: number
     }) => Promise<GitHubCommentResult>
-    addPRReviewComment: (args: GitHubPRReviewCommentInput) => Promise<GitHubCommentResult>
-    listLabels: (args: { repoPath: string }) => Promise<string[]>
-    listAssignableUsers: (args: { repoPath: string }) => Promise<GitHubAssignableUser[]>
+    addPRReviewComment: (
+      args: GitHubPRReviewCommentInput & { repoId?: string }
+    ) => Promise<GitHubCommentResult>
+    listLabels: (args: { repoPath: string; repoId?: string }) => Promise<string[]>
+    listAssignableUsers: (args: {
+      repoPath: string
+      repoId?: string
+    }) => Promise<GitHubAssignableUser[]>
     /**
      * Subscribe to local-mutation broadcasts. Used by the work-item-drawer
      * cache to invalidate entries across windows after a successful mutation.
      * Returns an unsubscribe function.
      */
     onWorkItemMutated: (
-      callback: (payload: { repoPath: string; type: 'issue' | 'pr'; number: number }) => void
+      callback: (payload: {
+        repoPath: string
+        repoId?: string
+        type: 'issue' | 'pr'
+        number: number
+      }) => void
     ) => () => void
     checkOrcaStarred: () => Promise<boolean | null>
     starOrca: () => Promise<boolean>
@@ -698,39 +956,147 @@ export type PreloadApi = {
     listIssueTypesBySlug: (args: ListIssueTypesBySlugArgs) => Promise<ListIssueTypesBySlugResult>
     updateIssueTypeBySlug: (args: UpdateIssueTypeBySlugArgs) => Promise<GitHubProjectMutationResult>
   }
+  hostedReview: {
+    forBranch: (args: HostedReviewForBranchArgs) => Promise<HostedReviewInfo | null>
+    getCreationEligibility: (
+      args: HostedReviewCreationEligibilityArgs
+    ) => Promise<HostedReviewCreationEligibility>
+    create: (args: CreateHostedReviewArgs) => Promise<CreateHostedReviewResult>
+  }
+  // ── GitLab — parallel to gh, MR/issue surface only in v1 ────────
+  // Shapes mirror gh.* one-to-one where the data matches; diverge
+  // where GitLab's API differs (MR state values, project path with
+  // host, paginated envelope from `glab api -i`).
+  gl: {
+    viewer: () => Promise<GitLabViewer | null>
+    projectSlug: (args: { repoPath: string }) => Promise<GitLabProjectRef | null>
+    mrForBranch: (args: {
+      repoPath: string
+      branch: string
+      linkedMRIid?: number | null
+    }) => Promise<MRInfo | null>
+    mr: (args: { repoPath: string; iid: number }) => Promise<MRInfo | null>
+    listMRs: (args: {
+      repoPath: string
+      state?: MRListState
+      page?: number
+      perPage?: number
+    }) => Promise<ListMergeRequestsResult>
+    /** Combined MR + issue list filtered by state. Issues are skipped
+     *  when state is 'merged' (issues don't merge). */
+    listWorkItems: (args: {
+      repoPath: string
+      state?: MRListState
+      page?: number
+      perPage?: number
+    }) => Promise<ListMergeRequestsResult>
+    issue: (args: { repoPath: string; number: number }) => Promise<GitLabIssueInfo | null>
+    listIssues: (args: { repoPath: string; limit?: number }) => Promise<GitLabIssueInfo[]>
+    createIssue: (args: {
+      repoPath: string
+      title: string
+      body: string
+    }) => Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }>
+    updateIssue: (args: {
+      repoPath: string
+      number: number
+      updates: GitLabIssueUpdate
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    addIssueComment: (args: {
+      repoPath: string
+      number: number
+      body: string
+    }) => Promise<GitLabCommentResult>
+    listLabels: (args: { repoPath: string }) => Promise<string[]>
+    listAssignableUsers: (args: { repoPath: string }) => Promise<GitLabAssignableUser[]>
+    /** Cross-project user-scoped todos (gitlab.com/dashboard/todos). */
+    todos: (args: { repoPath: string }) => Promise<GitLabTodo[]>
+    /** Aggregated dialog payload — body + discussions + pipeline jobs. */
+    workItemDetails: (args: {
+      repoPath: string
+      iid: number
+      type: 'issue' | 'mr'
+    }) => Promise<GitLabWorkItemDetails | null>
+    closeMR: (args: {
+      repoPath: string
+      iid: number
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    reopenMR: (args: {
+      repoPath: string
+      iid: number
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    mergeMR: (args: {
+      repoPath: string
+      iid: number
+      method?: 'merge' | 'squash' | 'rebase'
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    addMRComment: (args: {
+      repoPath: string
+      iid: number
+      body: string
+    }) => Promise<GitLabCommentResult>
+    workItemByPath: (args: {
+      repoPath: string
+      host: string
+      path: string
+      iid: number
+      type: 'issue' | 'mr'
+    }) => Promise<Omit<GitLabWorkItem, 'repoId'> | null>
+  }
   linear: {
     connect: (args: {
       apiKey: string
     }) => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>
-    disconnect: () => Promise<void>
+    disconnect: (args?: { workspaceId?: string }) => Promise<void>
+    selectWorkspace: (args: {
+      workspaceId: LinearWorkspaceSelection
+    }) => Promise<LinearConnectionStatus>
     status: () => Promise<LinearConnectionStatus>
-    testConnection: () => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>
-    searchIssues: (args: { query: string; limit?: number }) => Promise<LinearIssue[]>
+    testConnection: (args?: {
+      workspaceId?: string
+    }) => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>
+    searchIssues: (args: {
+      query: string
+      limit?: number
+      workspaceId?: LinearWorkspaceSelection
+    }) => Promise<LinearIssue[]>
     listIssues: (args?: {
       filter?: 'assigned' | 'created' | 'all' | 'completed'
       limit?: number
+      workspaceId?: LinearWorkspaceSelection
     }) => Promise<LinearIssue[]>
     createIssue: (args: {
       teamId: string
       title: string
       description?: string
+      workspaceId?: string
+      parentIssueId?: string
+      projectId?: string | null
     }) => Promise<
-      { ok: true; id: string; identifier: string; url: string } | { ok: false; error: string }
+      | { ok: true; id: string; identifier: string; title: string; url: string }
+      | { ok: false; error: string }
     >
-    getIssue: (args: { id: string }) => Promise<LinearIssue | null>
+    getIssue: (args: { id: string; workspaceId?: string }) => Promise<LinearIssue | null>
     updateIssue: (args: {
       id: string
       updates: LinearIssueUpdate
+      workspaceId?: string
     }) => Promise<{ ok: true } | { ok: false; error: string }>
     addIssueComment: (args: {
       issueId: string
       body: string
+      workspaceId?: string
     }) => Promise<{ ok: true; id: string } | { ok: false; error: string }>
-    issueComments: (args: { issueId: string }) => Promise<LinearComment[]>
-    listTeams: () => Promise<LinearTeam[]>
-    teamStates: (args: { teamId: string }) => Promise<LinearWorkflowState[]>
-    teamLabels: (args: { teamId: string }) => Promise<LinearLabel[]>
-    teamMembers: (args: { teamId: string }) => Promise<LinearMember[]>
+    issueComments: (args: { issueId: string; workspaceId?: string }) => Promise<LinearComment[]>
+    listTeams: (args?: { workspaceId?: LinearWorkspaceSelection }) => Promise<LinearTeam[]>
+    listProjects: (args?: {
+      query?: string
+      limit?: number
+      workspaceId?: LinearWorkspaceSelection
+    }) => Promise<LinearProjectSummary[]>
+    teamStates: (args: { teamId: string; workspaceId?: string }) => Promise<LinearWorkflowState[]>
+    teamLabels: (args: { teamId: string; workspaceId?: string }) => Promise<LinearLabel[]>
+    teamMembers: (args: { teamId: string; workspaceId?: string }) => Promise<LinearMember[]>
   }
   starNag: {
     onShow: (callback: () => void) => () => void
@@ -800,9 +1166,16 @@ export type PreloadApi = {
     codexStatus: () => Promise<AgentHookInstallStatus>
     geminiStatus: () => Promise<AgentHookInstallStatus>
     cursorStatus: () => Promise<AgentHookInstallStatus>
+    droidStatus: () => Promise<AgentHookInstallStatus>
+    grokStatus: () => Promise<AgentHookInstallStatus>
+    copilotStatus: () => Promise<AgentHookInstallStatus>
+    hermesStatus: () => Promise<AgentHookInstallStatus>
   }
   agentTrust: {
-    markTrusted: (args: { preset: 'cursor' | 'copilot'; workspacePath: string }) => Promise<void>
+    markTrusted: (args: {
+      preset: 'cursor' | 'copilot' | 'codex'
+      workspacePath: string
+    }) => Promise<void>
   }
   preflight: PreflightApi
   notifications: {
@@ -836,6 +1209,8 @@ export type PreloadApi = {
   }
   shell: {
     openPath: (path: string) => Promise<void>
+    openInFileManager: (path: string) => Promise<ShellOpenLocalPathResult>
+    openInExternalEditor: (path: string, command?: string) => Promise<ShellOpenLocalPathResult>
     openUrl: (url: string) => Promise<void>
     openFilePath: (path: string) => Promise<void>
     openFileUri: (uri: string) => Promise<void>
@@ -845,6 +1220,9 @@ export type PreloadApi = {
     pickAudio: () => Promise<string | null>
     pickDirectory: (args: { defaultPath?: string }) => Promise<string | null>
     copyFile: (args: { srcPath: string; destPath: string }) => Promise<void>
+  }
+  skills: {
+    discover: () => Promise<SkillDiscoveryResult>
   }
   pet: {
     import: () => Promise<CustomPet | null>
@@ -888,6 +1266,19 @@ export type PreloadApi = {
     set: (args: WorkspaceSessionState) => Promise<void>
     setSync: (args: WorkspaceSessionState) => void
   }
+  remoteWorkspace: {
+    get: (args: { targetId: string }) => Promise<RemoteWorkspaceSnapshot | null>
+    setForConnectedTargets: (args: {
+      session: WorkspaceSessionState
+      hydratedTargetIds?: string[]
+    }) => Promise<{ targetId: string; result: RemoteWorkspacePatchResult }[]>
+    listEnabledConnectedTargets: () => Promise<string[]>
+    listConnectedClients: (args?: {
+      targetIds?: string[]
+    }) => Promise<{ targetId: string; clients: RemoteWorkspaceConnectedClient[] }[]>
+    clientId: () => Promise<string>
+    onChanged: (callback: (event: RemoteWorkspaceChangedEvent) => void) => () => void
+  }
   updater: {
     getVersion: () => Promise<string>
     getStatus: () => Promise<UpdateStatus>
@@ -898,10 +1289,19 @@ export type PreloadApi = {
     onStatus: (callback: (status: UpdateStatus) => void) => () => void
     onClearDismissal: (callback: () => void) => () => void
   }
+  notebook: {
+    runPythonCell: (args: {
+      filePath: string
+      code: string
+      preamble?: string
+      connectionId?: string | null
+    }) => Promise<{ stdout: string; stderr: string; exitCode: number | null; error?: string }>
+  }
   stats: StatsApi
   memory: MemoryApi
   claudeUsage: ClaudeUsageApi
   codexUsage: CodexUsageApi
+  openCodeUsage: OpenCodeUsageApi
   fs: {
     readDir: (args: { dirPath: string; connectionId?: string }) => Promise<DirEntry[]>
     readFile: (args: {
@@ -916,6 +1316,11 @@ export type PreloadApi = {
     createFile: (args: { filePath: string; connectionId?: string }) => Promise<void>
     createDir: (args: { dirPath: string; connectionId?: string }) => Promise<void>
     rename: (args: { oldPath: string; newPath: string; connectionId?: string }) => Promise<void>
+    copy: (args: {
+      sourcePath: string
+      destinationPath: string
+      connectionId?: string
+    }) => Promise<void>
     deletePath: (args: {
       targetPath: string
       connectionId?: string
@@ -936,6 +1341,7 @@ export type PreloadApi = {
       sourcePaths: string[]
       destDir: string
       connectionId?: string
+      ensureDir?: boolean
     }) => Promise<{
       results: (
         | {
@@ -944,6 +1350,30 @@ export type PreloadApi = {
             destPath: string
             kind: 'file' | 'directory'
             renamed: boolean
+          }
+        | {
+            sourcePath: string
+            status: 'skipped'
+            reason: 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
+          }
+        | {
+            sourcePath: string
+            status: 'failed'
+            reason: string
+          }
+      )[]
+    }>
+    stageExternalPathsForRuntimeUpload: (args: { sourcePaths: string[] }) => Promise<{
+      sources: (
+        | {
+            sourcePath: string
+            status: 'staged'
+            name: string
+            kind: 'file' | 'directory'
+            entries: (
+              | { relativePath: string; kind: 'directory' }
+              | { relativePath: string; kind: 'file'; contentBase64: string }
+            )[]
           }
         | {
             sourcePath: string
@@ -974,7 +1404,19 @@ export type PreloadApi = {
     onFsChanged: (callback: (payload: FsChangedPayload) => void) => () => void
   }
   git: {
-    status: (args: { worktreePath: string; connectionId?: string }) => Promise<GitStatusResult>
+    status: (args: {
+      worktreePath: string
+      connectionId?: string
+      includeIgnored?: boolean
+    }) => Promise<GitStatusResult>
+    checkIgnored: (args: {
+      worktreePath: string
+      paths: string[]
+      connectionId?: string
+    }) => Promise<string[]>
+    history: (
+      args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
+    ) => Promise<GitHistoryResult>
     conflictOperation: (args: {
       worktreePath: string
       connectionId?: string
@@ -991,6 +1433,11 @@ export type PreloadApi = {
       baseRef: string
       connectionId?: string
     }) => Promise<GitBranchCompareResult>
+    commitCompare: (args: {
+      worktreePath: string
+      commitId: string
+      connectionId?: string
+    }) => Promise<GitCommitCompareResult>
     upstreamStatus: (args: {
       worktreePath: string
       connectionId?: string
@@ -1000,6 +1447,7 @@ export type PreloadApi = {
       worktreePath: string
       publish?: boolean
       connectionId?: string
+      pushTarget?: GitPushTarget
     }) => Promise<void>
     pull: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
     branchDiff: (args: {
@@ -1014,11 +1462,49 @@ export type PreloadApi = {
       oldPath?: string
       connectionId?: string
     }) => Promise<GitDiffResult>
+    commitDiff: (args: {
+      worktreePath: string
+      commitOid: string
+      parentOid?: string | null
+      filePath: string
+      oldPath?: string
+      connectionId?: string
+    }) => Promise<GitDiffResult>
     commit: (args: {
       worktreePath: string
       message: string
       connectionId?: string
     }) => Promise<{ success: boolean; error?: string }>
+    generateCommitMessage: (args: {
+      worktreePath: string
+      connectionId?: string
+    }) => Promise<
+      | { success: true; message: string; agentLabel?: string }
+      | { success: false; error: string; canceled?: boolean }
+    >
+    cancelGenerateCommitMessage: (args: {
+      worktreePath: string
+      connectionId?: string
+    }) => Promise<void>
+    generatePullRequestFields: (args: {
+      worktreePath: string
+      base: string
+      title: string
+      body: string
+      draft: boolean
+      connectionId?: string
+    }) => Promise<
+      | {
+          success: true
+          fields: { base: string; title: string; body: string; draft: boolean }
+          agentLabel?: string
+        }
+      | { success: false; error: string; canceled?: boolean }
+    >
+    cancelGeneratePullRequestFields: (args: {
+      worktreePath: string
+      connectionId?: string
+    }) => Promise<void>
     stage: (args: {
       worktreePath: string
       filePath: string
@@ -1044,6 +1530,11 @@ export type PreloadApi = {
       filePath: string
       connectionId?: string
     }) => Promise<void>
+    bulkDiscard: (args: {
+      worktreePath: string
+      filePaths: string[]
+      connectionId?: string
+    }) => Promise<void>
     remoteFileUrl: (args: {
       worktreePath: string
       relativePath: string
@@ -1055,6 +1546,9 @@ export type PreloadApi = {
     get: () => Promise<PersistedUIState>
     set: (args: Partial<PersistedUIState>) => Promise<void>
     onOpenSettings: (callback: () => void) => () => void
+    onOpenFeatureTour: (callback: () => void) => () => void
+    onOpenCrashReport: (callback: () => void) => () => void
+    onShowFeatureTourNudge: (callback: () => void) => () => void
     onToggleLeftSidebar: (callback: () => void) => () => void
     onToggleRightSidebar: (callback: () => void) => () => void
     onToggleWorktreePalette: (callback: () => void) => () => void
@@ -1090,7 +1584,10 @@ export type PreloadApi = {
     onSwitchTab: (callback: (direction: 1 | -1) => void) => () => void
     onSwitchTabAcrossAllTypes: (callback: (direction: 1 | -1) => void) => () => void
     onSwitchTerminalTab: (callback: (direction: 1 | -1) => void) => () => void
+    onCtrlTabKeyDown: (callback: (data: { shiftKey: boolean }) => void) => () => void
+    onCtrlTabKeyUp: (callback: () => void) => () => void
     onToggleStatusBar: (callback: () => void) => () => void
+    onDictationKeyDown: (callback: () => void) => () => void
     onExportPdfRequested: (callback: () => void) => () => void
     onActivateWorktree: (
       callback: (data: {
@@ -1108,6 +1605,10 @@ export type PreloadApi = {
         title?: string
         ptyId?: string
         activate?: boolean
+        tabId?: string
+        leafId?: string
+        splitFromLeafId?: string
+        splitDirection?: 'horizontal' | 'vertical'
       }) => void
     ) => () => void
     onRequestTerminalCreate: (
@@ -1117,6 +1618,7 @@ export type PreloadApi = {
         afterTabId?: string
         command?: string
         title?: string
+        activate?: boolean
       }) => void
     ) => () => void
     replyTerminalCreate: (reply: {
@@ -1148,6 +1650,14 @@ export type PreloadApi = {
     onOpenFileFromMobile: (
       callback: (data: { worktreeId: string; filePath: string; relativePath: string }) => void
     ) => () => void
+    onOpenDiffFromMobile: (
+      callback: (data: {
+        worktreeId: string
+        filePath: string
+        relativePath: string
+        staged: boolean
+      }) => void
+    ) => () => void
     onMobileMarkdownRequest: (
       callback: (request: RuntimeMobileMarkdownRequest) => void
     ) => () => void
@@ -1158,14 +1668,18 @@ export type PreloadApi = {
     onSleepWorktree: (callback: (data: { worktreeId: string }) => void) => () => void
     onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
     readClipboardText: () => Promise<string>
-    saveClipboardImageAsTempFile: () => Promise<string | null>
+    readSelectionClipboardText: () => Promise<string>
+    saveClipboardImageAsTempFile: (args?: {
+      connectionId?: string | null
+    }) => Promise<string | null>
     writeClipboardText: (text: string) => Promise<void>
+    writeSelectionClipboardText: (text: string) => Promise<void>
     writeClipboardImage: (dataUrl: string) => Promise<void>
     onFileDrop: (
       callback: (
         data:
           | { paths: string[]; target: 'editor' }
-          | { paths: string[]; target: 'terminal' }
+          | { paths: string[]; target: 'terminal'; tabId?: string }
           | { paths: string[]; target: 'composer' }
           | { paths: string[]; target: 'file-explorer'; destinationDir: string }
       ) => void
@@ -1190,10 +1704,24 @@ export type PreloadApi = {
   runtime: {
     syncWindowGraph: (graph: RuntimeSyncWindowGraph) => Promise<RuntimeStatus>
     getStatus: () => Promise<RuntimeStatus>
+    call: (args: { method: string; params?: unknown }) => Promise<RuntimeRpcResponse<unknown>>
     getTerminalFitOverrides: () => Promise<
       { ptyId: string; mode: 'mobile-fit'; cols: number; rows: number }[]
     >
+    getTerminalDrivers: () => Promise<
+      {
+        ptyId: string
+        driver: RuntimeTerminalDriverState
+      }[]
+    >
+    getBrowserDrivers: () => Promise<
+      {
+        browserPageId: string
+        driver: RuntimeBrowserDriverState
+      }[]
+    >
     restoreTerminalFit: (ptyId: string) => Promise<{ restored: boolean }>
+    reclaimBrowserForDesktop: (browserPageId: string) => Promise<{ reclaimed: boolean }>
     onTerminalFitOverrideChanged: (
       callback: (event: {
         ptyId: string
@@ -1203,11 +1731,44 @@ export type PreloadApi = {
       }) => void
     ) => () => void
     onTerminalDriverChanged: (
-      callback: (event: {
-        ptyId: string
-        driver: { kind: 'idle' } | { kind: 'desktop' } | { kind: 'mobile'; clientId: string }
-      }) => void
+      callback: (event: { ptyId: string; driver: RuntimeTerminalDriverState }) => void
     ) => () => void
+    onBrowserDriverChanged: (
+      callback: (event: { browserPageId: string; driver: RuntimeBrowserDriverState }) => void
+    ) => () => void
+  }
+  runtimeEnvironments: {
+    list: () => Promise<PublicKnownRuntimeEnvironment[]>
+    addFromPairingCode: (args: {
+      name: string
+      pairingCode: string
+    }) => Promise<{ environment: PublicKnownRuntimeEnvironment }>
+    resolve: (args: { selector: string }) => Promise<PublicKnownRuntimeEnvironment>
+    remove: (args: { selector: string }) => Promise<{ removed: PublicKnownRuntimeEnvironment }>
+    getStatus: (args: {
+      selector: string
+      timeoutMs?: number
+    }) => Promise<RuntimeRpcResponse<RuntimeStatus>>
+    call: (args: {
+      selector: string
+      method: string
+      params?: unknown
+      timeoutMs?: number
+    }) => Promise<RuntimeRpcResponse<unknown>>
+    subscribe: (
+      args: {
+        selector: string
+        method: string
+        params?: unknown
+        timeoutMs?: number
+      },
+      callbacks: {
+        onResponse: (response: RuntimeRpcResponse<unknown>) => void
+        onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
+        onError?: (error: { code: string; message: string }) => void
+        onClose?: () => void
+      }
+    ) => Promise<RuntimeEnvironmentSubscriptionHandle>
   }
   rateLimits: {
     get: () => Promise<RateLimitState>
@@ -1276,6 +1837,23 @@ export type PreloadApi = {
     onCredentialResolved: (callback: (data: { requestId: string }) => void) => () => void
     submitCredential: (args: { requestId: string; value: string | null }) => Promise<void>
   }
+  automations: {
+    list: () => Promise<Automation[]>
+    listRuns: (args?: { automationId?: string }) => Promise<AutomationRun[]>
+    listExternalManagers: () => Promise<ExternalAutomationManager[]>
+    listExternalRuns: (input: ExternalAutomationRunsInput) => Promise<ExternalAutomationRunsPage>
+    createExternal: (input: ExternalAutomationCreateInput) => Promise<void>
+    updateExternal: (input: ExternalAutomationUpdateInput) => Promise<void>
+    runExternalAction: (input: ExternalAutomationActionInput) => Promise<void>
+    create: (input: AutomationCreateInput) => Promise<Automation>
+    update: (args: { id: string; updates: AutomationUpdateInput }) => Promise<Automation>
+    delete: (args: { id: string }) => Promise<void>
+    runNow: (args: { id: string }) => Promise<AutomationRun>
+    markDispatchResult: (result: AutomationDispatchResult) => Promise<AutomationRun>
+    snapshotWorkspaceName: (args: { workspaceId: string; displayName: string }) => Promise<number>
+    rendererReady: () => Promise<void>
+    onDispatchRequested: (callback: (request: AutomationDispatchRequest) => void) => () => void
+  }
   wsl: {
     isAvailable: () => Promise<boolean>
   }
@@ -1287,6 +1865,11 @@ export type PreloadApi = {
     onSet: (callback: (data: AgentStatusIpcPayload) => void) => () => void
     /** Return the current main-process hook cache after renderer hydration. */
     getSnapshot: () => Promise<AgentStatusIpcPayload[]>
+    /** Listen for PTYs that still use a legacy numeric pane key but have
+     *  registry-backed UUID pane proof. */
+    onMigrationUnsupported: (callback: (entry: MigrationUnsupportedPtyEntry) => void) => () => void
+    onMigrationUnsupportedClear: (callback: (data: { ptyId: string }) => void) => () => void
+    getMigrationUnsupportedSnapshot: () => Promise<MigrationUnsupportedPtyEntry[]>
     /** Drop a paneKey from the main-process hook cache and the on-disk
      *  last-status file. Fire-and-forget. */
     drop: (paneKey: string) => void
@@ -1305,11 +1888,41 @@ export type PreloadApi = {
           deviceId: string
         }
     >
+    getRuntimePairingUrl: (args?: { address?: string; rotate?: boolean }) => Promise<
+      | { available: false }
+      | {
+          available: true
+          pairingUrl: string
+          webClientUrl: string | null
+          endpoint: string
+          deviceId: string
+        }
+    >
     listDevices: () => Promise<{
       devices: { deviceId: string; name: string; pairedAt: number; lastSeenAt: number }[]
     }>
     revokeDevice: (args: { deviceId: string }) => Promise<{ revoked: boolean }>
+    listRuntimeAccessGrants: () => Promise<{ grants: RuntimeAccessGrant[] }>
+    revokeRuntimeAccess: (args: { deviceId: string }) => Promise<{ revoked: boolean }>
     isWebSocketReady: () => Promise<{ ready: boolean; endpoint: string | null }>
+  }
+  speech: {
+    getCatalog: () => Promise<SpeechModelManifest[]>
+    getModelStates: () => Promise<SpeechModelState[]>
+    downloadModel: (modelId: string) => Promise<void>
+    cancelDownload: (modelId: string) => Promise<void>
+    deleteModel: (modelId: string) => Promise<void>
+    startDictation: (modelId: string, hotwords?: string[]) => Promise<void>
+    feedAudio: (samples: Float32Array, sampleRate: number) => Promise<void>
+    stopDictation: () => Promise<void>
+    onPartialTranscript: (callback: (text: string) => void) => () => void
+    onFinalTranscript: (callback: (text: string) => void) => () => void
+    onDownloadProgress: (
+      callback: (data: { modelId: string; progress: number }) => void
+    ) => () => void
+    onReady: (callback: () => void) => () => void
+    onStopped: (callback: () => void) => () => void
+    onError: (callback: (error: string) => void) => () => void
   }
 }
 

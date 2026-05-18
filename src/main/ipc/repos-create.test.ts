@@ -10,6 +10,7 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 
 const {
   handleMock,
@@ -87,7 +88,7 @@ type CreateResult =
   | { error: string }
 
 describe('repos:create', () => {
-  const handlers = new Map<string, (event: unknown, args: CreateArgs) => Promise<CreateResult>>()
+  const handlers = new Map<string, (event: unknown, args: unknown) => Promise<unknown>>()
   const mockWindow = {
     isDestroyed: () => false,
     webContents: { send: vi.fn() }
@@ -98,14 +99,14 @@ describe('repos:create', () => {
     if (!handler) {
       throw new Error('repos:create handler was never registered')
     }
-    return handler(null, args)
+    return handler(null, args) as Promise<CreateResult>
   }
 
   beforeEach(() => {
     handlers.clear()
     handleMock.mockReset()
     handleMock.mockImplementation((channel: string, handler: (...a: unknown[]) => unknown) => {
-      handlers.set(channel, handler as (event: unknown, args: CreateArgs) => Promise<CreateResult>)
+      handlers.set(channel, handler as (event: unknown, args: unknown) => Promise<unknown>)
     })
     removeHandlerMock.mockReset()
     mockStore.getRepos.mockReset().mockReturnValue([])
@@ -216,6 +217,15 @@ describe('repos:create', () => {
       })
     )
     expect(result).toHaveProperty('repo.kind', 'folder')
+  })
+
+  it('defaults repos:create badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
+    const result = await callCreate({ parentPath: '/tmp', name: 'default-color', kind: 'folder' })
+
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({ badgeColor: DEFAULT_REPO_BADGE_COLOR })
+    )
+    expect(result).toHaveProperty('repo.badgeColor', DEFAULT_REPO_BADGE_COLOR)
   })
 
   // ── git repo happy path ───────────────────────────────────────────
@@ -374,6 +384,23 @@ describe('repos:create', () => {
     // Short-circuit before any fs or git work.
     expect(mkdirMock).not.toHaveBeenCalled()
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('returns existing badgeColor unchanged on repos:create dedupe', async () => {
+    const existing = {
+      id: 'abc',
+      path: '/tmp/dupe-color',
+      displayName: 'dupe-color',
+      kind: 'git',
+      badgeColor: '#ef4444'
+    }
+    mockStore.getRepos.mockReturnValue([existing])
+
+    const result = await callCreate({ parentPath: '/tmp', name: 'dupe-color', kind: 'git' })
+
+    expect(result).toEqual({ repo: existing })
+    expect(result).toHaveProperty('repo.badgeColor', '#ef4444')
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 })

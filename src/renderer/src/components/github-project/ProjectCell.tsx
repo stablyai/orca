@@ -4,19 +4,22 @@
 // through to `fieldValuesByFieldId[field.id].kind` as a safety net so a
 // fetched value is never silently dropped.
 import React, { useState } from 'react'
-import { CircleDot, FileText, GitPullRequest, Lock } from 'lucide-react'
+import { CircleDot, FileText, GitPullRequest, Lock, Plus } from 'lucide-react'
 import { TYPE_FIELD_DATA_TYPE } from './columns'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import type { GitHubAssignableUser } from '../../../../shared/types'
+import { useRepoAssigneesBySlug, useRepoLabelsBySlug } from '@/hooks/useGitHubSlugMetadata'
+import { useAppStore } from '@/store'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type {
   GitHubIssueType,
   GitHubProjectField,
   GitHubProjectFieldMutationValue,
   GitHubProjectLabel,
   GitHubProjectRow,
-  GitHubProjectUser
+  GitHubProjectUser,
+  ListIssueTypesBySlugResult
 } from '../../../../shared/github-project-types'
 
 type Props = {
@@ -107,6 +110,7 @@ export default function ProjectCell({
       <TextCell
         value={text}
         editable={editable && !isRedacted}
+        placeholder="Add text"
         onCommit={(next) => {
           if (next === '') {
             onEditField?.(field.id, null)
@@ -124,6 +128,7 @@ export default function ProjectCell({
         value={num}
         editable={editable && !isRedacted}
         numeric
+        placeholder="Add number"
         onCommit={(next) => {
           if (next === '') {
             onEditField?.(field.id, null)
@@ -264,6 +269,7 @@ function IssueTypeCell({
   const [open, setOpen] = useState(false)
   const [options, setOptions] = useState<GitHubIssueType[]>([])
   const [loading, setLoading] = useState(false)
+  const settings = useAppStore((s) => s.settings)
   const [owner, repo] = (row.content.repository ?? '').split('/')
 
   React.useEffect(() => {
@@ -272,8 +278,17 @@ function IssueTypeCell({
     }
     let cancelled = false
     setLoading(true)
-    window.api.gh
-      .listIssueTypesBySlug({ owner, repo })
+    const target = getActiveRuntimeTarget(settings)
+    const request =
+      target.kind === 'environment'
+        ? callRuntimeRpc<ListIssueTypesBySlugResult>(
+            target,
+            'github.project.listIssueTypesBySlug',
+            { owner, repo },
+            { timeoutMs: 30_000 }
+          )
+        : window.api.gh.listIssueTypesBySlug({ owner, repo })
+    request
       .then((res) => {
         if (cancelled) {
           return
@@ -290,7 +305,7 @@ function IssueTypeCell({
     return () => {
       cancelled = true
     }
-  }, [open, owner, repo])
+  }, [open, owner, repo, settings])
 
   const trigger = (
     <span className="inline-flex items-center gap-1 text-xs">
@@ -404,7 +419,10 @@ function SingleSelectCell({
           const colors = singleSelectChipColors(value.color)
           return (
             <span
-              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium leading-none text-[var(--github-project-chip-fg-light)] dark:text-[var(--github-project-chip-fg-dark)]"
+              className={cn(
+                'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium leading-none text-[var(--github-project-chip-fg-light)] dark:text-[var(--github-project-chip-fg-dark)]',
+                editable && 'cursor-pointer'
+              )}
               style={chipStyle(colors)}
             >
               {value.name}
@@ -423,7 +441,7 @@ function SingleSelectCell({
           aria-label={field.name}
           className="flex h-full w-full cursor-pointer items-center px-1 text-left"
         >
-          {label}
+          {label ?? <EmptyCellPrompt label="Select" />}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-56 p-1">
@@ -492,7 +510,7 @@ function IterationCell({
           aria-label={field.name}
           className="flex h-full w-full cursor-pointer items-center px-1 text-left"
         >
-          {label}
+          {label ?? <EmptyCellPrompt label="Select" />}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1">
@@ -566,11 +584,13 @@ function TextCell({
   value,
   editable,
   numeric,
+  placeholder,
   onCommit
 }: {
   value: string
   editable: boolean
   numeric?: boolean
+  placeholder: string
   onCommit: (next: string) => void
 }): React.JSX.Element {
   const [editing, setEditing] = useState(false)
@@ -588,7 +608,7 @@ function TextCell({
         }}
         className="flex h-full w-full cursor-pointer items-center px-1 text-left text-xs hover:underline"
       >
-        {value}
+        {value || <EmptyCellPrompt label={placeholder} />}
       </button>
     )
   }
@@ -713,8 +733,7 @@ function AssigneesCell({
 }): React.JSX.Element {
   const assignees = row.content.assignees
   const [open, setOpen] = useState(false)
-  const [options, setOptions] = useState<GitHubAssignableUser[]>([])
-  const [loading, setLoading] = useState(false)
+  const settings = useAppStore((s) => s.settings)
 
   const [owner, repo] = (row.content.repository ?? '').split('/')
 
@@ -732,37 +751,12 @@ function AssigneesCell({
     [assignees]
   )
 
-  // Why: only hit the slug-addressed user list when the popover actually
-  // opens — the assignable-users query can be expensive for large repos.
-  React.useEffect(() => {
-    if (!open || !owner || !repo) {
-      return
-    }
-    let cancelled = false
-    setLoading(true)
-    window.api.gh
-      .listAssignableUsersBySlug({
-        owner,
-        repo,
-        seedLogins: seedKey ? seedKey.split(',') : []
-      })
-      .then((res) => {
-        if (cancelled) {
-          return
-        }
-        if (res.ok) {
-          setOptions(res.users)
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [open, owner, repo, seedKey])
+  const metadata = useRepoAssigneesBySlug(
+    open ? owner : null,
+    open ? repo : null,
+    seedKey ? seedKey.split(',') : [],
+    settings
+  )
 
   const labelContent =
     assignees.length === 0 ? null : assignees.map((u) => <UserChip key={u.login} user={u} />)
@@ -785,16 +779,16 @@ function AssigneesCell({
             'flex h-full w-full flex-wrap items-center gap-1 cursor-pointer px-1 text-xs text-muted-foreground hover:text-foreground'
           )}
         >
-          {labelContent}
+          {labelContent ?? <EmptyCellPrompt label="Add assignee" />}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1">
         {!owner || !repo ? (
           <div className="px-2 py-1 text-xs text-muted-foreground">Row has no repo slug.</div>
-        ) : loading ? (
+        ) : metadata.loading ? (
           <div className="px-2 py-1 text-xs text-muted-foreground">Loading…</div>
         ) : (
-          options.map((u) => {
+          metadata.data.map((u) => {
             const isOn = assignees.some((a) => a.login === u.login)
             return (
               <button
@@ -839,38 +833,10 @@ function LabelsCell({
 }): React.JSX.Element {
   const labels = row.content.labels
   const [open, setOpen] = useState(false)
-  const [options, setOptions] = useState<string[]>([])
-  const [loading, setLoading] = useState(false)
+  const settings = useAppStore((s) => s.settings)
 
   const [owner, repo] = (row.content.repository ?? '').split('/')
-
-  // Why: only fetch the slug-addressed labels list when the popover actually
-  // opens — listing labels is cheap but still a network round-trip per row.
-  React.useEffect(() => {
-    if (!open || !owner || !repo) {
-      return
-    }
-    let cancelled = false
-    setLoading(true)
-    window.api.gh
-      .listLabelsBySlug({ owner, repo })
-      .then((res) => {
-        if (cancelled) {
-          return
-        }
-        if (res.ok) {
-          setOptions(res.labels)
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [open, owner, repo])
+  const metadata = useRepoLabelsBySlug(open ? owner : null, open ? repo : null, settings)
 
   const labelContent =
     labels.length === 0 ? null : labels.map((l) => <LabelChip key={l.name} label={l} />)
@@ -887,18 +853,18 @@ function LabelsCell({
           aria-label="Labels"
           className={cn('flex h-full w-full flex-wrap items-center gap-1 cursor-pointer px-1')}
         >
-          {labelContent}
+          {labelContent ?? <EmptyCellPrompt label="Add label" />}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1">
         {!owner || !repo ? (
           <div className="px-2 py-1 text-xs text-muted-foreground">Row has no repo slug.</div>
-        ) : loading ? (
+        ) : metadata.loading ? (
           <div className="px-2 py-1 text-xs text-muted-foreground">Loading…</div>
-        ) : options.length === 0 ? (
+        ) : metadata.data.length === 0 ? (
           <div className="px-2 py-1 text-xs text-muted-foreground">No labels in this repo.</div>
         ) : (
-          options.map((name) => {
+          metadata.data.map((name) => {
             const isOn = labels.some((l) => l.name === name)
             return (
               <button
@@ -926,6 +892,15 @@ function LabelsCell({
         )}
       </PopoverContent>
     </Popover>
+  )
+}
+
+function EmptyCellPrompt({ label }: { label: string }): React.JSX.Element {
+  return (
+    <span className="inline-flex h-6 max-w-full items-center gap-1 rounded-md border border-dashed border-border/70 bg-input/30 px-2 text-xs text-muted-foreground/80 shadow-xs hover:border-border hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:hover:bg-input/50">
+      <Plus className="size-3 shrink-0" />
+      <span className="truncate">{label}</span>
+    </span>
   )
 }
 

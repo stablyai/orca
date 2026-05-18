@@ -135,6 +135,14 @@ describe('ActionButton', () => {
     expect(button.props.className).not.toContain('opacity-50')
   })
 
+  it('keeps the full icon button box as the hover and click target', () => {
+    const element = ActionButton({ ...baseProps, onClick: vi.fn() })
+    const button = findInnerButton(element)
+    expect(button.props.className).not.toContain('h-auto')
+    expect(button.props.className).not.toContain('w-auto')
+    expect(button.props.className).toContain('hover:bg-background/70')
+  })
+
   it('swallows clicks and calls preventDefault when disabled', () => {
     const onClick = vi.fn()
     const element = ActionButton({ ...baseProps, onClick, disabled: true })

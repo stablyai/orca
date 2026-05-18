@@ -33,6 +33,7 @@ import type {
   RuntimeWorktreePsResult,
   RuntimeWorktreeRecord
 } from '../shared/runtime-types'
+import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
 import type { RuntimeRpcFailure, RuntimeRpcSuccess } from './runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
 
@@ -58,6 +59,18 @@ export function formatCliError(error: unknown): string {
     error.response.error.code === 'runtime_unavailable'
   ) {
     return `${message}\nOrca is not running. Run 'orca open' first.`
+  }
+  if (error instanceof RuntimeRpcFailureError) {
+    const data = error.response.error.data
+    const nextSteps =
+      data && typeof data === 'object' && Array.isArray((data as { nextSteps?: unknown }).nextSteps)
+        ? (data as { nextSteps: unknown[] }).nextSteps.filter(
+            (step): step is string => typeof step === 'string'
+          )
+        : []
+    if (nextSteps.length > 0) {
+      return `${message}\n${nextSteps.map((step) => `Next step: ${step}`).join('\n')}`
+    }
   }
   return message
 }
@@ -98,6 +111,33 @@ export function formatCliStatus(status: CliStatusResult): string {
 
 export function formatStatus(status: CliStatusResult): string {
   return formatCliStatus(status)
+}
+
+export function formatEnvironmentList(result: {
+  environments: PublicKnownRuntimeEnvironment[]
+}): string {
+  if (result.environments.length === 0) {
+    return 'No saved environments.'
+  }
+  return result.environments
+    .map(
+      (environment) =>
+        `${environment.id}  ${environment.name}  ${environment.endpoints[0]?.endpoint ?? 'no-endpoint'}`
+    )
+    .join('\n')
+}
+
+export function formatEnvironment(environment: PublicKnownRuntimeEnvironment): string {
+  return [
+    `id: ${environment.id}`,
+    `name: ${environment.name}`,
+    `runtimeId: ${environment.runtimeId ?? 'unknown'}`,
+    `lastUsedAt: ${environment.lastUsedAt ?? 'never'}`,
+    `preferredEndpointId: ${environment.preferredEndpointId}`,
+    ...environment.endpoints.map(
+      (endpoint) => `endpoint: ${endpoint.id} ${endpoint.kind} ${endpoint.endpoint}`
+    )
+  ].join('\n')
 }
 
 export function formatTerminalList(result: RuntimeTerminalListResult): string {
@@ -222,10 +262,10 @@ export function formatWorktreeList(result: RuntimeWorktreeListResult): string {
     return 'No worktrees found.'
   }
   const body = result.worktrees
-    .map(
-      (worktree) =>
-        `${String(worktree.id)}  ${String(worktree.branch)}  ${String(worktree.path)}\ndisplayName: ${String(worktree.displayName ?? '')}\nlinkedIssue: ${String(worktree.linkedIssue ?? 'null')}\ncomment: ${String(worktree.comment ?? '')}`
-    )
+    .map((worktree) => {
+      const childCount = worktree.childWorktreeIds?.length ?? 0
+      return `${String(worktree.id)}  ${String(worktree.branch)}  ${String(worktree.path)}\ndisplayName: ${String(worktree.displayName ?? '')}\nparentWorktreeId: ${String(worktree.parentWorktreeId ?? 'null')}\nchildWorktreeIds: ${childCount > 0 ? worktree.childWorktreeIds.join(',') : '[]'}\nlinkedIssue: ${String(worktree.linkedIssue ?? 'null')}\ncomment: ${String(worktree.comment ?? '')}`
+    })
     .join('\n\n')
   return result.truncated
     ? `${body}\n\ntruncated: showing ${result.worktrees.length} of ${result.totalCount}`

@@ -67,15 +67,29 @@ design-docs/
 .context/
 .atl/
 
-# Local-only design/planning docs (not checked in)
-docs/*.md
-!docs/README*.md
+# Machine-local agent hook endpoint files may contain auth tokens.
+/agent-hooks/
+
+# Local-only design/planning docs (not checked in).
+# Durable docs must live in one of the allow-listed locations below.
+docs/**
+!docs/
+!docs/assets/
+!docs/assets/**
+!docs/readme/
+!docs/readme/**
+!docs/reference/
+!docs/reference/**
+!docs/STYLEGUIDE.md
+!docs/configurable-open-in-menu.md
+!docs/task-provider-availability.md
 
 # Stably CLI (only docs/ are tracked)
 .stably/*
 !.stably/docs/
 .playwright-cli
 .validate-ui-screenshots/
+validation-screenshots/
 .stably-browser
 
 # Playwright
@@ -86,3 +100,6 @@ playwright-report/
 /.claude/skills/
 /.agents/skills/
 /skills-lock.json
+
+# Agent hook runtime endpoints (machine-local secrets)
+/agent-hooks/

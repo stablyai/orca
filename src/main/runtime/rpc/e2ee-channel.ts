@@ -8,6 +8,7 @@ type ChannelState = 'awaiting_hello' | 'awaiting_auth' | 'ready'
 
 const HANDSHAKE_TIMEOUT_MS = 10_000
 const MAX_CONSECUTIVE_DECRYPT_FAILURES = 5
+const MAX_BINARY_BUFFERED_AMOUNT = 8 * 1024 * 1024
 
 type E2EEHello = {
   type: 'e2ee_hello'
@@ -43,9 +44,10 @@ export class E2EEChannel {
     | ((
         plaintext: string,
         encryptedReply: (response: string) => void,
-        encryptedBinaryReply: (response: Uint8Array<ArrayBufferLike>) => void
+        encryptedBinaryReply: (response: Uint8Array<ArrayBufferLike>) => boolean | void
       ) => void)
     | null = null
+  private binaryMessageHandler: ((plaintext: Uint8Array<ArrayBufferLike>) => void) | null = null
 
   deviceToken: string | null = null
 
@@ -65,10 +67,14 @@ export class E2EEChannel {
     handler: (
       plaintext: string,
       encryptedReply: (response: string) => void,
-      encryptedBinaryReply: (response: Uint8Array<ArrayBufferLike>) => void
+      encryptedBinaryReply: (response: Uint8Array<ArrayBufferLike>) => boolean | void
     ) => void
   ): void {
     this.messageHandler = handler
+  }
+
+  onBinaryMessage(handler: (plaintext: Uint8Array<ArrayBufferLike>) => void): void {
+    this.binaryMessageHandler = handler
   }
 
   handleRawMessage(raw: string | Uint8Array<ArrayBufferLike>): void {
@@ -89,7 +95,14 @@ export class E2EEChannel {
       const plaintextBytes = decryptBytes(raw, this.sharedKey)
       if (plaintextBytes === null) {
         this.trackDecryptFailure()
+        return
       }
+      this.consecutiveFailures = 0
+      if (this.state !== 'ready') {
+        this.onError(4001, 'Invalid binary message before authentication')
+        return
+      }
+      this.binaryMessageHandler?.(plaintextBytes)
       return
     }
 
@@ -117,11 +130,15 @@ export class E2EEChannel {
       }
       this.ws.send(encrypt(response, this.sharedKey))
     }
-    const encryptedBinaryReply = (response: Uint8Array<ArrayBufferLike>) => {
+    const encryptedBinaryReply = (response: Uint8Array<ArrayBufferLike>): boolean => {
       if (!this.sharedKey || this.ws.readyState !== this.ws.OPEN) {
-        return
+        return false
+      }
+      if (this.ws.bufferedAmount > MAX_BINARY_BUFFERED_AMOUNT) {
+        return false
       }
       this.ws.send(Buffer.from(encryptBytes(response, this.sharedKey)), { binary: true })
+      return true
     }
     this.messageHandler?.(plaintext, encryptedReply, encryptedBinaryReply)
   }
@@ -211,5 +228,6 @@ export class E2EEChannel {
     }
     this.sharedKey = null
     this.messageHandler = null
+    this.binaryMessageHandler = null
   }
 }

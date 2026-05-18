@@ -135,6 +135,15 @@ describe('openComputerUsePermissions', () => {
     expect(() => openComputerUsePermissions()).toThrow('Orca Computer Use.app was not found')
   })
 
+  it('throws when the helper executable is missing during setup', () => {
+    resolveHelperAppPathMock.mockReturnValue('/Applications/Orca Computer Use.app')
+    resolveHelperExecutablePathMock.mockReturnValue(null)
+
+    expect(() => openComputerUsePermissions('accessibility')).toThrow(
+      '/Applications/Orca Computer Use.app/Contents/MacOS/orca-computer-use-macos was not found'
+    )
+  })
+
   it('reads permission status through the helper app executable', async () => {
     const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
     resolveHelperAppPathMock.mockReturnValue('/Applications/Orca Computer Use.app')
@@ -142,6 +151,8 @@ describe('openComputerUsePermissions', () => {
 
     expect(getComputerUsePermissionStatus()).toEqual({
       platform: 'darwin',
+      helperAppPath: '/Applications/Orca Computer Use.app',
+      helperUnavailableReason: null,
       permissions: [
         { id: 'accessibility', status: 'granted' },
         { id: 'screenshots', status: 'not-granted' }
@@ -152,6 +163,22 @@ describe('openComputerUsePermissions', () => {
       ['--permission-status'],
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
     )
+  })
+
+  it('returns unavailable permission status when the helper app is missing on macOS', async () => {
+    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
+    resolveHelperAppPathMock.mockReturnValue(null)
+
+    expect(getComputerUsePermissionStatus()).toEqual({
+      platform: 'darwin',
+      helperAppPath: null,
+      helperUnavailableReason: 'Orca Computer Use.app was not found',
+      permissions: [
+        { id: 'accessibility', status: 'not-granted' },
+        { id: 'screenshots', status: 'not-granted' }
+      ]
+    })
+    expect(execFileSync).not.toHaveBeenCalled()
   })
 })
 

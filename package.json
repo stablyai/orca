@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.3.51-rc.8",
+  "version": "1.4.5",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -13,27 +13,38 @@
     "format": "oxfmt --write .",
     "lint": "oxlint",
     "prepare": "husky",
-    "test": "vitest run --config config/vitest.config.ts",
-    "tc:node": "tsgo --noEmit -p config/tsconfig.node.json",
-    "tc:cli": "tsgo --noEmit -p config/tsconfig.tc.cli.json",
-    "tc:web": "tsgo --noEmit -p config/tsconfig.tc.web.json",
-    "tc": "tsgo --noEmit -p config/tsconfig.node.json && tsgo --noEmit -p config/tsconfig.tc.cli.json && tsgo --noEmit -p config/tsconfig.tc.web.json",
-    "typecheck:node": "tsc --noEmit -p config/tsconfig.node.json --composite false",
-    "typecheck:cli": "tsc --noEmit -p config/tsconfig.cli.json --composite false",
-    "typecheck:web": "tsc --noEmit -p config/tsconfig.web.json --composite false",
-    "typecheck": "tsc --noEmit -p config/tsconfig.node.json --composite false && tsc --noEmit -p config/tsconfig.cli.json --composite false && tsc --noEmit -p config/tsconfig.web.json --composite false",
-    "start": "electron-vite preview",
-    "dev": "node config/scripts/run-electron-vite-dev.mjs",
+    "test": "node config/scripts/ensure-native-runtime.mjs --runtime=node && vitest run --config config/vitest.config.ts",
+    "check:feature-wall-assets": "node config/scripts/check-feature-wall-assets.mjs",
+    "verify:macos-entitlements": "node config/scripts/verify-macos-entitlements.mjs",
+    "vendor:feature-wall-assets": "node config/scripts/vendor-feature-wall-assets.mjs",
+    "tc:node": "pnpm run typecheck:node",
+    "tc:cli": "pnpm run typecheck:cli",
+    "tc:web": "pnpm run typecheck:web",
+    "tc": "pnpm run typecheck",
+    "typecheck:node": "tsgo --noEmit -p config/tsconfig.node.json",
+    "typecheck:cli": "tsgo --noEmit -p config/tsconfig.tc.cli.json",
+    "typecheck:web": "tsgo --noEmit -p config/tsconfig.tc.web.json",
+    "typecheck": "tsgo --noEmit -p config/tsconfig.node.json && tsgo --noEmit -p config/tsconfig.tc.cli.json && tsgo --noEmit -p config/tsconfig.tc.web.json",
+    "typecheck:tsc:node": "tsc --noEmit -p config/tsconfig.node.json --composite false",
+    "typecheck:tsc:cli": "tsc --noEmit -p config/tsconfig.cli.json --composite false",
+    "typecheck:tsc:web": "tsc --noEmit -p config/tsconfig.web.json --composite false",
+    "typecheck:tsc": "tsc --noEmit -p config/tsconfig.node.json --composite false && tsc --noEmit -p config/tsconfig.cli.json --composite false && tsc --noEmit -p config/tsconfig.web.json --composite false",
+    "start": "node config/scripts/ensure-native-runtime.mjs --runtime=electron && electron-vite preview",
+    "dev": "node config/scripts/ensure-native-runtime.mjs --runtime=electron && node config/scripts/run-electron-vite-dev.mjs",
+    "dev-stable-name": "node config/scripts/ensure-native-runtime.mjs --runtime=electron && node config/scripts/run-electron-vite-dev.mjs --stable-name",
+    "dev:web": "vite --config vite.web.config.ts --host 127.0.0.1",
     "build:relay": "node config/scripts/build-relay.mjs",
     "build:computer-macos": "node config/scripts/build-computer-macos.mjs",
     "smoke:computer": "node config/scripts/computer-use-smoke.mjs",
     "verify:computer-native": "node config/scripts/verify-computer-native.mjs",
     "build:cli": "tsc -p config/tsconfig.cli.json --outDir out --composite false --incremental false && node config/scripts/install-dev-cli.mjs",
     "build:electron-vite": "node config/scripts/run-electron-vite-build.mjs",
-    "build": "pnpm run typecheck && pnpm run build:relay && pnpm run build:computer-macos && pnpm run build:electron-vite && pnpm run build:cli",
-    "build:release": "pnpm run build:relay && pnpm run build:computer-macos && pnpm run verify:computer-native && pnpm run build:electron-vite && pnpm run build:cli",
+    "build:web": "vite build --config vite.web.config.ts && node config/scripts/verify-web-build.mjs",
+    "build": "pnpm run typecheck && pnpm run build:relay && pnpm run build:computer-macos && pnpm run build:electron-vite && pnpm run build:web && pnpm run build:cli",
+    "build:release": "pnpm run build:relay && pnpm run build:computer-macos && pnpm run verify:computer-native && pnpm run build:electron-vite && pnpm run build:web && pnpm run build:cli",
     "postinstall": "pnpm rebuild electron && node config/scripts/rebuild-native-deps.mjs",
     "rebuild:electron": "node config/scripts/rebuild-native-deps.mjs",
+    "rebuild:node": "pnpm rebuild better-sqlite3 node-pty",
     "build:unpack": "pnpm run build && electron-builder --config config/electron-builder.config.cjs --dir",
     "build:win": "pnpm run build && electron-builder --config config/electron-builder.config.cjs --win",
     "build:icons": "bash resources/icon-source/generate.sh",
@@ -57,6 +68,7 @@
     "@tiptap/extension-code-block-lowlight": "^3.22.5",
     "@tiptap/extension-image": "^3.22.5",
     "@tiptap/extension-link": "^3.22.5",
+    "@tiptap/extension-mathematics": "3.22.5",
     "@tiptap/extension-placeholder": "^3.22.5",
     "@tiptap/extension-table": "3.22.4",
     "@tiptap/extension-table-cell": "3.22.4",
@@ -84,13 +96,16 @@
     "cmdk": "^1.1.1",
     "dompurify": "^3.4.2",
     "electron-updater": "^6.8.3",
+    "emoji-picker-react": "^4.19.1",
+    "entities": "^6.0.1",
     "github-slugger": "^2.0.0",
     "hosted-git-info": "^9.0.3",
     "html-to-image": "^1.11.13",
     "katex": "^0.16.45",
     "lowlight": "^3.3.0",
     "lucide-react": "^0.577.0",
-    "mermaid": "^11.14.0",
+    "mdast-util-to-string": "^4.0.0",
+    "mermaid": "^11.15.0",
     "monaco-editor": "^0.55.1",
     "node-pty": "^1.1.0",
     "pdfjs-dist": "^5.7.284",
@@ -107,7 +122,9 @@
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
+    "remark-parse": "^11.0.0",
     "shadcn": "^4.7.0",
+    "sherpa-onnx": "1.12.37",
     "simple-git": "^3.36.0",
     "smol-toml": "1.6.1",
     "sonner": "^2.0.7",
@@ -115,7 +132,9 @@
     "tailwind-merge": "^3.5.0",
     "tw-animate-css": "^1.4.0",
     "tweetnacl": "^1.0.3",
+    "unified": "^11.0.5",
     "ws": "^8.20.0",
+    "yaml": "^2.8.4",
     "zod": "~4.4.3",
     "zustand": "^5.0.13"
   },
@@ -132,7 +151,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/ssh2": "^1.15.5",
     "@types/ws": "^8.18.1",
-    "@typescript/native-preview": "7.0.0-dev.20260406.1",
+    "@typescript/native-preview": "7.0.0-dev.20260421.2",
     "@vitejs/plugin-react": "^5.2.0",
     "electron": "^41.5.0",
     "electron-builder": "^26.8.1",
@@ -149,6 +168,13 @@
     "vite": "^7.3.2",
     "vitest": "^4.1.5"
   },
+  "optionalDependencies": {
+    "sherpa-onnx-darwin-arm64": "1.12.37",
+    "sherpa-onnx-darwin-x64": "1.12.37",
+    "sherpa-onnx-linux-arm64": "1.12.37",
+    "sherpa-onnx-linux-x64": "1.12.37",
+    "sherpa-onnx-win-x64": "1.12.37"
+  },
   "lint-staged": {
     "*.{ts,tsx,js,jsx,mts,cts}": [
       "oxlint",
@@ -163,17 +189,32 @@
   },
   "packageManager": "pnpm@10.24.0+sha512.01ff8ae71b4419903b65c60fb2dc9d34cf8bb6e06d03bde112ef38f7a34d6904c424ba66bea5cdcf12890230bf39f9580473140ed9c946fef328b6e5238a345a",
   "pnpm": {
+    "supportedArchitectures": {
+      "os": [
+        "current",
+        "darwin",
+        "linux",
+        "win32"
+      ],
+      "cpu": [
+        "current",
+        "x64",
+        "arm64"
+      ]
+    },
     "onlyBuiltDependencies": [
       "@parcel/watcher",
       "better-sqlite3",
       "cpu-features",
       "electron",
       "esbuild",
-      "node-pty"
+      "node-pty",
+      "sherpa-onnx"
     ],
     "patchedDependencies": {
       "node-pty@1.1.0": "config/patches/node-pty@1.1.0.patch",
-      "@xterm/addon-ligatures@0.11.0-beta.216": "config/patches/@xterm__addon-ligatures@0.11.0-beta.216.patch"
+      "@xterm/addon-ligatures@0.11.0-beta.216": "config/patches/@xterm__addon-ligatures@0.11.0-beta.216.patch",
+      "@xterm/addon-webgl@0.20.0-beta.215": "config/patches/@xterm__addon-webgl@0.20.0-beta.215.patch"
     }
   }
 }

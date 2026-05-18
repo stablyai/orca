@@ -7,6 +7,16 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 
+function stopRightButtonMenuSelection(event: React.PointerEvent): void {
+  if (event.button !== 2) {
+    return
+  }
+  // Why: the synthetic trigger sits at the cursor; the right-button release
+  // can otherwise land on "New File" and select it immediately.
+  event.preventDefault()
+  event.stopPropagation()
+}
+
 export function FileExplorerBackgroundMenu({
   open,
   onOpenChange,
@@ -34,6 +44,7 @@ export function FileExplorerBackgroundMenu({
         className="w-48"
         sideOffset={0}
         align="start"
+        onPointerUpCapture={stopRightButtonMenuSelection}
         onCloseAutoFocus={(e) => e.preventDefault()}
       >
         <DropdownMenuItem onSelect={() => onStartNew('file', worktreePath, 0)}>

@@ -13,6 +13,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { SerializeAddon } from '@xterm/addon-serialize'
 
 import type { PaneManagerOptions, ManagedPaneInternal } from './pane-manager-types'
+import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { DragReorderState } from './pane-drag-reorder'
 import type { DragReorderCallbacks } from './pane-drag-reorder'
 import { attachPaneDrag } from './pane-drag-reorder'
@@ -36,6 +37,7 @@ function getTerminalUrlOpenHint(): string {
 
 export function createPaneDOM(
   id: number,
+  leafId: TerminalLeafId,
   options: PaneManagerOptions,
   dragState: DragReorderState,
   dragCallbacks: DragReorderCallbacks,
@@ -46,6 +48,7 @@ export function createPaneDOM(
   const container = document.createElement('div')
   container.className = 'pane'
   container.dataset.paneId = String(id)
+  container.dataset.leafId = leafId
 
   // Create .xterm-container — baseline layout (position, width, height, margin)
   // is CSS-driven (see main.css .xterm-container) so that the data-has-title
@@ -102,6 +105,8 @@ export function createPaneDOM(
 
   const pane: ManagedPaneInternal = {
     id,
+    leafId,
+    stablePaneId: leafId,
     terminal,
     container,
     xtermContainer,

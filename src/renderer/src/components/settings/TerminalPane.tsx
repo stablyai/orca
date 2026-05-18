@@ -44,6 +44,7 @@ import {
   TERMINAL_MAC_OPTION_SEARCH_ENTRIES,
   TERMINAL_FLOATING_SEARCH_ENTRIES,
   TERMINAL_PANE_STYLE_SEARCH_ENTRIES,
+  TERMINAL_QUICK_COMMANDS_SEARCH_ENTRIES,
   TERMINAL_RENDERING_SEARCH_ENTRIES,
   TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES,
   TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES,
@@ -61,6 +62,7 @@ import { TerminalWindowSection } from './TerminalWindowSection'
 import { GhosttyImportModal } from './GhosttyImportModal'
 import type { UseGhosttyImportReturn } from './useGhosttyImport'
 import { ManageSessionsSection } from './ManageSessionsSection'
+import { TerminalQuickCommandsSection } from './TerminalQuickCommandsSection'
 
 type TerminalPaneProps = {
   settings: GlobalSettings
@@ -269,6 +271,28 @@ export function TerminalPane({
         </SearchableSetting>
       </section>
     ) : null,
+    matchesSettingsSearch(searchQuery, TERMINAL_QUICK_COMMANDS_SEARCH_ENTRIES) ? (
+      <section key="quick-commands" className="space-y-4">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">Quick Commands</h3>
+          <p className="text-xs text-muted-foreground">
+            Save terminal input snippets for the terminal right-click menu.
+          </p>
+        </div>
+
+        <SearchableSetting
+          title="Quick Commands"
+          description="Create, edit, and remove terminal command snippets for the right-click menu."
+          keywords={['terminal', 'command', 'snippet', 'quick command', 'send', 'context menu']}
+          className="space-y-3"
+        >
+          <TerminalQuickCommandsSection
+            commands={settings.terminalQuickCommands ?? []}
+            onChange={(terminalQuickCommands) => updateSettings({ terminalQuickCommands })}
+          />
+        </SearchableSetting>
+      </section>
+    ) : null,
     matchesSettingsSearch(searchQuery, TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES) ? (
       <section key="typography" className="space-y-4">
         <div className="space-y-1">
@@ -453,7 +477,7 @@ export function TerminalPane({
 
         <SearchableSetting
           title="GPU Acceleration"
-          description="Controls whether the terminal uses xterm.js WebGL rendering. Auto mirrors VS Code: try GPU and fall back to DOM if WebGL fails."
+          description="Controls whether the terminal uses xterm.js WebGL rendering. Auto uses DOM on Linux to avoid driver glyph corruption, and otherwise tries WebGL with DOM fallback."
           keywords={[
             'terminal',
             'gpu',
@@ -489,7 +513,7 @@ export function TerminalPane({
               ? 'WebGL is disabled; xterm uses the DOM renderer for maximum compatibility.'
               : settings.terminalGpuAcceleration === 'on'
                 ? 'WebGL is always attempted for terminal panes.'
-                : 'Auto tries WebGL for performance and falls back to the DOM renderer if WebGL fails, matching VS Code.'}
+                : 'Auto uses the DOM renderer on Linux to avoid GPU glyph corruption, and otherwise tries WebGL with DOM fallback.'}
           </p>
         </SearchableSetting>
       </section>

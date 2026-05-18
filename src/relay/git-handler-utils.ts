@@ -8,25 +8,6 @@
 import * as path from 'path'
 import { existsSync } from 'fs'
 
-// ─── Status parsing ──────────────────────────────────────────────────
-
-export function parseStatusChar(char: string): string {
-  switch (char) {
-    case 'M':
-      return 'modified'
-    case 'A':
-      return 'added'
-    case 'D':
-      return 'deleted'
-    case 'R':
-      return 'renamed'
-    case 'C':
-      return 'copied'
-    default:
-      return 'modified'
-  }
-}
-
 export function parseBranchStatusChar(char: string): string {
   switch (char) {
     case 'M':
@@ -63,89 +44,6 @@ export function parseConflictKind(xy: string): string | null {
     default:
       return null
   }
-}
-
-/**
- * Parse `git status --porcelain=v2` output into structured entries.
- * Does NOT handle unmerged entries (those require worktree access).
- */
-export function parseStatusOutput(stdout: string): {
-  entries: Record<string, unknown>[]
-  unmergedLines: string[]
-  head?: string
-  branch?: string
-} {
-  const entries: Record<string, unknown>[] = []
-  const unmergedLines: string[] = []
-  let head: string | undefined
-  let branch: string | undefined
-
-  for (const line of stdout.split(/\r?\n/)) {
-    if (!line) {
-      continue
-    }
-
-    if (line.startsWith('# branch.oid ')) {
-      head = line.slice('# branch.oid '.length).trim()
-      continue
-    }
-
-    if (line.startsWith('# branch.head ')) {
-      const branchHead = line.slice('# branch.head '.length).trim()
-      branch = branchHead && branchHead !== '(detached)' ? `refs/heads/${branchHead}` : ''
-      continue
-    }
-
-    if (line.startsWith('1 ') || line.startsWith('2 ')) {
-      const parts = line.split(' ')
-      const xy = parts[1]
-      const indexStatus = xy[0]
-      const worktreeStatus = xy[1]
-
-      if (line.startsWith('2 ')) {
-        // Why: porcelain v2 type-2 format is `2 XY sub mH mI mW hH hI Xscore path\torigPath`.
-        // The new path is the last space-delimited token before the tab; origPath follows the tab.
-        const tabParts = line.split('\t')
-        const spaceParts = tabParts[0].split(' ')
-        const filePath = spaceParts.at(-1)!
-        const oldPath = tabParts[1]
-        if (indexStatus !== '.') {
-          entries.push({
-            path: filePath,
-            status: parseStatusChar(indexStatus),
-            area: 'staged',
-            oldPath
-          })
-        }
-        if (worktreeStatus !== '.') {
-          entries.push({
-            path: filePath,
-            status: parseStatusChar(worktreeStatus),
-            area: 'unstaged',
-            oldPath
-          })
-        }
-      } else {
-        const filePath = parts.slice(8).join(' ')
-        if (indexStatus !== '.') {
-          entries.push({ path: filePath, status: parseStatusChar(indexStatus), area: 'staged' })
-        }
-        if (worktreeStatus !== '.') {
-          entries.push({
-            path: filePath,
-            status: parseStatusChar(worktreeStatus),
-            area: 'unstaged'
-          })
-        }
-      }
-    } else if (line.startsWith('? ')) {
-      entries.push({ path: line.slice(2), status: 'untracked', area: 'untracked' })
-    } else if (line.startsWith('u ')) {
-      unmergedLines.push(line)
-    }
-  }
-
-  return { entries, unmergedLines, head, branch }
 }
 
 /**
@@ -202,7 +100,52 @@ export function parseUnmergedEntry(
 /**
  * Parse `git diff --name-status` output into structured change entries.
  */
-export function parseBranchDiff(stdout: string): Record<string, unknown>[] {
+export type BranchDiffLineStats = {
+  added?: number
+  removed?: number
+}
+
+function parseNumstatCount(value: string): number | undefined {
+  if (value === '-') {
+    return undefined
+  }
+  const count = Number.parseInt(value, 10)
+  return Number.isFinite(count) ? count : undefined
+}
+
+function normalizeNumstatPath(path: string): string {
+  const bracedRename = /^(.*)\{(.+) => (.+)\}(.*)$/.exec(path)
+  if (bracedRename) {
+    return `${bracedRename[1]}${bracedRename[3]}${bracedRename[4]}`
+  }
+  const renameMarker = ' => '
+  const markerIndex = path.lastIndexOf(renameMarker)
+  return markerIndex === -1 ? path : path.slice(markerIndex + renameMarker.length)
+}
+
+export function parseBranchDiffNumstat(stdout: string): Map<string, BranchDiffLineStats> {
+  const stats = new Map<string, BranchDiffLineStats>()
+  for (const line of stdout.split(/\r?\n/)) {
+    if (!line) {
+      continue
+    }
+    const parts = line.split('\t')
+    const rawPath = parts.slice(2).join('\t')
+    if (!rawPath) {
+      continue
+    }
+    stats.set(normalizeNumstatPath(rawPath), {
+      added: parseNumstatCount(parts[0] ?? ''),
+      removed: parseNumstatCount(parts[1] ?? '')
+    })
+  }
+  return stats
+}
+
+export function parseBranchDiff(
+  stdout: string,
+  statsByPath: Map<string, BranchDiffLineStats> = new Map()
+): Record<string, unknown>[] {
   const entries: Record<string, unknown>[] = []
   for (const line of stdout.split(/\r?\n/)) {
     if (!line) {
@@ -216,12 +159,12 @@ export function parseBranchDiff(stdout: string): Record<string, unknown>[] {
       const oldPath = parts[1]
       const filePath = parts[2]
       if (filePath) {
-        entries.push({ path: filePath, oldPath, status })
+        entries.push({ path: filePath, oldPath, status, ...statsByPath.get(filePath) })
       }
     } else {
       const filePath = parts[1]
       if (filePath) {
-        entries.push({ path: filePath, status })
+        entries.push({ path: filePath, status, ...statsByPath.get(filePath) })
       }
     }
   }
