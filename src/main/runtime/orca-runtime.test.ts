@@ -19,7 +19,8 @@ import {
   shouldRunSetupForCreate
 } from '../hooks'
 import { getBranchConflictKind, getDefaultBaseRef } from '../git/repo'
-import { OrchestrationDb } from './orchestration/db'
+import type { OrchestrationDb } from './orchestration/db'
+import type { MessagePriority, MessageRow, MessageType } from './orchestration/types'
 import { OrcaRuntimeService } from './orca-runtime'
 import {
   registerSshFilesystemProvider,
@@ -241,6 +242,77 @@ const TEST_REPO_PATH = '/tmp/repo'
 const TEST_WORKTREE_PATH = '/tmp/worktree-a'
 const TEST_WORKTREE_ID = `${TEST_REPO_ID}::${TEST_WORKTREE_PATH}`
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+
+// Why: these runtime feature tests only need message-queue semantics; using
+// SQLite here makes them fail on unrelated better-sqlite3 native ABI drift.
+class InMemoryOrchestrationMessages {
+  private sequence = 0
+
+  private messages: MessageRow[] = []
+
+  insertMessage(msg: {
+    from: string
+    to: string
+    subject: string
+    body?: string
+    type?: MessageType
+    priority?: MessagePriority
+    threadId?: string
+    payload?: string
+  }): MessageRow {
+    this.sequence += 1
+    const row: MessageRow = {
+      id: `msg_${this.sequence}`,
+      from_handle: msg.from,
+      to_handle: msg.to,
+      subject: msg.subject,
+      body: msg.body ?? '',
+      type: msg.type ?? 'status',
+      priority: msg.priority ?? 'normal',
+      thread_id: msg.threadId ?? null,
+      payload: msg.payload ?? null,
+      read: 0,
+      sequence: this.sequence,
+      created_at: '1970-01-01 00:00:00',
+      delivered_at: null
+    }
+    this.messages.push(row)
+    return row
+  }
+
+  getUnreadMessages(toHandle: string, types?: MessageType[]): MessageRow[] {
+    return this.messages
+      .filter(
+        (message) =>
+          message.to_handle === toHandle &&
+          message.read === 0 &&
+          (!types || types.length === 0 || types.includes(message.type))
+      )
+      .sort((a, b) => a.sequence - b.sequence)
+  }
+
+  getUndeliveredUnreadMessages(toHandle: string, types?: MessageType[]): MessageRow[] {
+    return this.getUnreadMessages(toHandle, types).filter((message) => !message.delivered_at)
+  }
+
+  markAsDelivered(ids: string[]): void {
+    const deliveredIds = new Set(ids)
+    for (const message of this.messages) {
+      if (deliveredIds.has(message.id)) {
+        message.delivered_at = '1970-01-01 00:00:00'
+      }
+    }
+  }
+
+  close(): void {}
+}
+
+function setInMemoryOrchestrationMessages(
+  runtime: OrcaRuntimeService,
+  db: InMemoryOrchestrationMessages
+): void {
+  runtime.setOrchestrationDb(db as unknown as OrchestrationDb)
+}
 
 function expectStablePaneKeyEnv(env: Record<string, string>): string {
   expect(env.ORCA_TAB_ID).toMatch(UUID_RE)
@@ -1929,9 +2001,9 @@ describe('OrcaRuntimeService', () => {
     vi.useFakeTimers()
     try {
       const runtime = new OrcaRuntimeService(store)
-      const db = new OrchestrationDb(':memory:')
+      const db = new InMemoryOrchestrationMessages()
       const write = vi.fn().mockReturnValue(true)
-      runtime.setOrchestrationDb(db)
+      setInMemoryOrchestrationMessages(runtime, db)
       runtime.setPtyController({
         write,
         kill: vi.fn(),
@@ -1971,9 +2043,9 @@ describe('OrcaRuntimeService', () => {
     vi.useFakeTimers()
     try {
       const runtime = new OrcaRuntimeService(store)
-      const db = new OrchestrationDb(':memory:')
+      const db = new InMemoryOrchestrationMessages()
       const write = vi.fn().mockReturnValue(true)
-      runtime.setOrchestrationDb(db)
+      setInMemoryOrchestrationMessages(runtime, db)
       runtime.setPtyController({
         write,
         kill: vi.fn(),
@@ -3336,9 +3408,9 @@ describe('OrcaRuntimeService', () => {
 
   it('keeps already-idle status after tui-idle wait for immediate message delivery', async () => {
     const runtime = new OrcaRuntimeService(store)
-    const db = new OrchestrationDb(':memory:')
+    const db = new InMemoryOrchestrationMessages()
     const write = vi.fn().mockReturnValue(true)
-    runtime.setOrchestrationDb(db)
+    setInMemoryOrchestrationMessages(runtime, db)
     runtime.setPtyController({
       write,
       kill: vi.fn(),
