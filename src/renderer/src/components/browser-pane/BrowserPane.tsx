@@ -2983,6 +2983,9 @@ function BrowserPagePane({
   }, [])
 
   useEffect(() => {
+    if (!isActive) {
+      return
+    }
     if (!consumeAddressBarFocusRequest(browserTab.id)) {
       return
     }
@@ -3013,7 +3016,7 @@ function BrowserPagePane({
       cancelled = true
       window.cancelAnimationFrame(frameId)
     }
-  }, [browserTab.id, consumeAddressBarFocusRequest, focusAddressBarNow])
+  }, [browserTab.id, consumeAddressBarFocusRequest, focusAddressBarNow, isActive])
 
   useEffect(() => {
     if (!isActive) {
