@@ -91,7 +91,7 @@ import type {
   TaskViewPresetId
 } from '../../../shared/types'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
-import { linearCreateIssue, linearGetIssue, linearListTeams } from '@/runtime/runtime-linear-client'
+import { linearCreateIssue, linearGetIssue } from '@/runtime/runtime-linear-client'
 import {
   normalizeVisibleTaskProviders,
   resolveVisibleTaskProvider
@@ -532,6 +532,9 @@ export default function TaskPage(): React.JSX.Element {
   const selectLinearWorkspace = useAppStore((s) => s.selectLinearWorkspace)
   const searchLinearIssues = useAppStore((s) => s.searchLinearIssues)
   const listLinearIssues = useAppStore((s) => s.listLinearIssues)
+  const getCachedLinearIssues = useAppStore((s) => s.getCachedLinearIssues)
+  const getCachedLinearTeams = useAppStore((s) => s.getCachedLinearTeams)
+  const listLinearTeams = useAppStore((s) => s.listLinearTeams)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
 
@@ -890,6 +893,7 @@ export default function TaskPage(): React.JSX.Element {
   const [appliedLinearSearch, setAppliedLinearSearch] = useState('')
   const [activeLinearPreset, setActiveLinearPreset] = useState<LinearPresetId>('all')
   const [linearRefreshNonce, setLinearRefreshNonce] = useState(0)
+  const lastLinearRequestRef = useRef<{ nonce: number; signature: string } | null>(null)
 
   useEffect(() => {
     if (taskResumeAppliedRef.current || !persistedUIReady || !settings) {
@@ -954,10 +958,12 @@ export default function TaskPage(): React.JSX.Element {
       return
     }
     let cancelled = false
+    const cachedTeams = getCachedLinearTeams(selectedLinearWorkspaceId)
     // Why: workspace switches must not leave the prior workspace's teams
-    // available for new-issue creation while the replacement fetch is pending.
-    setAvailableTeams([])
-    void linearListTeams(settings, selectedLinearWorkspaceId)
+    // available for new-issue creation while the replacement fetch is pending,
+    // but a workspace-scoped cache can keep the selector usable immediately.
+    setAvailableTeams(cachedTeams ?? [])
+    void listLinearTeams(selectedLinearWorkspaceId)
       .then((teams) => {
         if (!cancelled) {
           setAvailableTeams(teams)
@@ -972,7 +978,14 @@ export default function TaskPage(): React.JSX.Element {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings, taskSource, linearStatus.connected, selectedLinearWorkspaceId, taskResumeApplied])
+  }, [
+    taskSource,
+    linearStatus.connected,
+    selectedLinearWorkspaceId,
+    taskResumeApplied,
+    getCachedLinearTeams,
+    listLinearTeams
+  ])
 
   // Why: stable key for `selectedRepos` so the GitLab fetch effect below
   // doesn't re-run on every parent re-render just because the array
@@ -1133,10 +1146,22 @@ export default function TaskPage(): React.JSX.Element {
     [linearIssues, linearCacheSnapshot.issueCache, linearCacheSnapshot.searchCache]
   )
 
-  const filteredLinearIssues = useMemo(
-    () => displayedLinearIssues.filter((issue) => linearTeamSelection.has(issue.team.id)),
-    [displayedLinearIssues, linearTeamSelection]
-  )
+  const filteredLinearIssues = useMemo(() => {
+    if (
+      displayedLinearIssues.length > 0 &&
+      availableTeams.length === 0 &&
+      !defaultLinearTeamSelection &&
+      linearTeamSelection.size === 0
+    ) {
+      return displayedLinearIssues
+    }
+    return displayedLinearIssues.filter((issue) => linearTeamSelection.has(issue.team.id))
+  }, [
+    availableTeams.length,
+    defaultLinearTeamSelection,
+    displayedLinearIssues,
+    linearTeamSelection
+  ])
   // New Linear issue dialog state
   const [newLinearIssueOpen, setNewLinearIssueOpen] = useState(false)
   const [newLinearIssueTitle, setNewLinearIssueTitle] = useState('')
@@ -1802,14 +1827,37 @@ export default function TaskPage(): React.JSX.Element {
     }
 
     let cancelled = false
-    setLinearLoading(true)
     setLinearError(null)
 
     const trimmed = appliedLinearSearch.trim()
-    const request =
+    const readArgs =
       trimmed.length > 0
-        ? searchLinearIssues(trimmed, LINEAR_ITEM_LIMIT)
-        : listLinearIssues(activeLinearPreset, LINEAR_ITEM_LIMIT)
+        ? ({ kind: 'search', query: trimmed, limit: LINEAR_ITEM_LIMIT } as const)
+        : ({ kind: 'list', filter: activeLinearPreset, limit: LINEAR_ITEM_LIMIT } as const)
+    const cachedIssues = getCachedLinearIssues(readArgs)
+    if (cachedIssues) {
+      setLinearIssues(cachedIssues)
+    }
+
+    const requestSignature =
+      trimmed.length > 0
+        ? `${selectedLinearWorkspaceId ?? 'default'}::search::${trimmed}`
+        : `${selectedLinearWorkspaceId ?? 'default'}::list::${activeLinearPreset}`
+    const previousRequest = lastLinearRequestRef.current
+    const forceRefresh =
+      linearRefreshNonce > 0 &&
+      previousRequest?.nonce !== linearRefreshNonce &&
+      previousRequest?.signature === requestSignature
+    lastLinearRequestRef.current = { nonce: linearRefreshNonce, signature: requestSignature }
+
+    // Why: cached rows should remain visible on navigation. Only an explicit
+    // refresh or a true cache miss needs the blocking loading state.
+    setLinearLoading(forceRefresh || cachedIssues === null)
+
+    const request =
+      readArgs.kind === 'search'
+        ? searchLinearIssues(readArgs.query, LINEAR_ITEM_LIMIT, { force: forceRefresh })
+        : listLinearIssues(readArgs.filter, LINEAR_ITEM_LIMIT, { force: forceRefresh })
 
     void request
       .then((issues) => {
@@ -1840,7 +1888,8 @@ export default function TaskPage(): React.JSX.Element {
     appliedLinearSearch,
     activeLinearPreset,
     linearRefreshNonce,
-    taskResumeApplied
+    taskResumeApplied,
+    getCachedLinearIssues
   ])
 
   useEffect(() => {

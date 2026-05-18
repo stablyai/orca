@@ -17,6 +17,130 @@ import {
 } from './client'
 import { mapLinearIssue } from './mappers'
 
+type LinearIssueNode = {
+  id: string
+  identifier: string
+  title: string
+  description?: string | null
+  url: string
+  priority: number
+  updatedAt: string
+  labelIds?: string[] | null
+  state?: {
+    name?: string | null
+    type?: string | null
+    color?: string | null
+  } | null
+  team?: {
+    id?: string | null
+    name?: string | null
+    key?: string | null
+  } | null
+  assignee?: {
+    id: string
+    displayName: string
+    avatarUrl?: string | null
+  } | null
+  labels?: {
+    nodes?: { id: string; name: string }[]
+  } | null
+}
+
+type LinearIssueConnectionResponse = {
+  searchIssues?: { nodes?: LinearIssueNode[] }
+  issues?: { nodes?: LinearIssueNode[] }
+  viewer?: {
+    assignedIssues?: { nodes?: LinearIssueNode[] }
+    createdIssues?: { nodes?: LinearIssueNode[] }
+  }
+}
+
+type LinearRawVariables = Record<string, unknown>
+
+const LINEAR_ISSUE_NODE_FIELDS = `
+  id
+  identifier
+  title
+  description
+  url
+  priority
+  updatedAt
+  labelIds
+  state {
+    name
+    type
+    color
+  }
+  team {
+    id
+    name
+    key
+  }
+  assignee {
+    id
+    displayName
+    avatarUrl
+  }
+  labels(first: 50) {
+    nodes {
+      id
+      name
+    }
+  }
+`
+
+const SEARCH_ISSUES_QUERY = `
+  query OrcaLinearIssueSearch($term: String!, $first: Int) {
+    searchIssues(term: $term, first: $first) {
+      nodes {
+        ${LINEAR_ISSUE_NODE_FIELDS}
+      }
+    }
+  }
+`
+
+const ALL_ISSUES_QUERY = `
+  query OrcaLinearIssues($first: Int, $filter: IssueFilter, $orderBy: PaginationOrderBy) {
+    issues(first: $first, filter: $filter, orderBy: $orderBy) {
+      nodes {
+        ${LINEAR_ISSUE_NODE_FIELDS}
+      }
+    }
+  }
+`
+
+const VIEWER_ASSIGNED_ISSUES_QUERY = `
+  query OrcaLinearViewerAssignedIssues(
+    $first: Int,
+    $filter: IssueFilter,
+    $orderBy: PaginationOrderBy
+  ) {
+    viewer {
+      assignedIssues(first: $first, filter: $filter, orderBy: $orderBy) {
+        nodes {
+          ${LINEAR_ISSUE_NODE_FIELDS}
+        }
+      }
+    }
+  }
+`
+
+const VIEWER_CREATED_ISSUES_QUERY = `
+  query OrcaLinearViewerCreatedIssues(
+    $first: Int,
+    $filter: IssueFilter,
+    $orderBy: PaginationOrderBy
+  ) {
+    viewer {
+      createdIssues(first: $first, filter: $filter, orderBy: $orderBy) {
+        nodes {
+          ${LINEAR_ISSUE_NODE_FIELDS}
+        }
+      }
+    }
+  }
+`
+
 async function mapIssueForWorkspace(
   entry: LinearClientForWorkspace,
   issue: Parameters<typeof mapLinearIssue>[0]
@@ -33,6 +157,45 @@ function sortAndLimitIssues(issues: LinearIssue[], limit: number): LinearIssue[]
   return issues
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, limit)
+}
+
+function mapRawIssueForWorkspace(
+  entry: LinearClientForWorkspace,
+  issue: LinearIssueNode
+): LinearIssue {
+  const labelNodes = issue.labels?.nodes ?? []
+  return {
+    id: issue.id,
+    identifier: issue.identifier,
+    title: issue.title,
+    description: issue.description ?? undefined,
+    url: issue.url,
+    state: {
+      name: issue.state?.name ?? '',
+      type: issue.state?.type ?? '',
+      color: issue.state?.color ?? ''
+    },
+    team: {
+      id: issue.team?.id ?? '',
+      name: issue.team?.name ?? '',
+      key: issue.team?.key ?? ''
+    },
+    labels: labelNodes.map((label) => label.name),
+    // Why: labelIds drives full-replace updates. Keep Linear's complete id
+    // list even when display label nodes are paginated.
+    labelIds: issue.labelIds ?? labelNodes.map((label) => label.id),
+    assignee: issue.assignee
+      ? {
+          id: issue.assignee.id,
+          displayName: issue.assignee.displayName,
+          avatarUrl: issue.assignee.avatarUrl ?? undefined
+        }
+      : undefined,
+    priority: issue.priority,
+    updatedAt: issue.updatedAt,
+    workspaceId: entry.workspace.id,
+    workspaceName: entry.workspace.organizationName
+  }
 }
 
 function shouldThrowAuthError(selection: LinearWorkspaceSelection | null | undefined): boolean {
@@ -83,8 +246,12 @@ export async function searchIssues(
     entries.map(async (entry) => {
       await acquire()
       try {
-        const result = await entry.client.searchIssues(query, { first: limit })
-        return await Promise.all(result.nodes.map((issue) => mapIssueForWorkspace(entry, issue)))
+        const result = await entry.client.client.rawRequest<
+          LinearIssueConnectionResponse,
+          LinearRawVariables
+        >(SEARCH_ISSUES_QUERY, { term: query, first: limit })
+        const nodes = result.data?.searchIssues?.nodes ?? []
+        return nodes.map((issue) => mapRawIssueForWorkspace(entry, issue))
       } catch (error) {
         if (isAuthError(error)) {
           clearToken(entry.workspace.id)
@@ -128,52 +295,46 @@ export async function listIssues(
     entries.map(async (entry) => {
       await acquire()
       try {
-        const orderBy = 'updatedAt' as never
+        const orderBy = 'updatedAt'
+        const variables = { first: limit, orderBy }
 
         if (filter === 'assigned') {
-          const viewer = await entry.client.viewer
-          const connection = await viewer.assignedIssues({
-            first: limit,
-            orderBy,
-            filter: ACTIVE_STATE_FILTER
-          })
-          return await Promise.all(
-            connection.nodes.map((issue) => mapIssueForWorkspace(entry, issue))
+          const result = await entry.client.client.rawRequest<
+            LinearIssueConnectionResponse,
+            LinearRawVariables
+          >(VIEWER_ASSIGNED_ISSUES_QUERY, { ...variables, filter: ACTIVE_STATE_FILTER })
+          return (result.data?.viewer?.assignedIssues?.nodes ?? []).map((issue) =>
+            mapRawIssueForWorkspace(entry, issue)
           )
         }
 
         if (filter === 'created') {
-          const viewer = await entry.client.viewer
-          const connection = await viewer.createdIssues({
-            first: limit,
-            orderBy,
-            filter: ACTIVE_STATE_FILTER
-          })
-          return await Promise.all(
-            connection.nodes.map((issue) => mapIssueForWorkspace(entry, issue))
+          const result = await entry.client.client.rawRequest<
+            LinearIssueConnectionResponse,
+            LinearRawVariables
+          >(VIEWER_CREATED_ISSUES_QUERY, { ...variables, filter: ACTIVE_STATE_FILTER })
+          return (result.data?.viewer?.createdIssues?.nodes ?? []).map((issue) =>
+            mapRawIssueForWorkspace(entry, issue)
           )
         }
 
         if (filter === 'completed') {
-          const viewer = await entry.client.viewer
-          const connection = await viewer.assignedIssues({
-            first: limit,
-            orderBy,
-            filter: COMPLETED_STATE_FILTER
-          })
-          return await Promise.all(
-            connection.nodes.map((issue) => mapIssueForWorkspace(entry, issue))
+          const result = await entry.client.client.rawRequest<
+            LinearIssueConnectionResponse,
+            LinearRawVariables
+          >(VIEWER_ASSIGNED_ISSUES_QUERY, { ...variables, filter: COMPLETED_STATE_FILTER })
+          return (result.data?.viewer?.assignedIssues?.nodes ?? []).map((issue) =>
+            mapRawIssueForWorkspace(entry, issue)
           )
         }
 
         // 'all' — all active issues across the workspace
-        const connection = await entry.client.issues({
-          first: limit,
-          orderBy,
-          filter: ACTIVE_STATE_FILTER
-        })
-        return await Promise.all(
-          connection.nodes.map((issue) => mapIssueForWorkspace(entry, issue))
+        const result = await entry.client.client.rawRequest<
+          LinearIssueConnectionResponse,
+          LinearRawVariables
+        >(ALL_ISSUES_QUERY, { ...variables, filter: ACTIVE_STATE_FILTER })
+        return (result.data?.issues?.nodes ?? []).map((issue) =>
+          mapRawIssueForWorkspace(entry, issue)
         )
       } catch (error) {
         if (isAuthError(error)) {

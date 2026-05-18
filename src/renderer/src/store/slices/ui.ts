@@ -94,6 +94,7 @@ const MAX_LEFT_SIDEBAR_WIDTH = 500
 // cap on wide displays. Use a large hard ceiling purely as a safety net for
 // corrupted/manually-edited values rather than as a product limit.
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
+const LINEAR_TASK_PREFETCH_LIMIT = 36
 // Why: bound disk growth for acknowledgedAgentsByPaneKey across hard quits —
 // in-session cleanup (agent-status.ts) prunes on pane lifecycle, but crash/
 // forced-kill paths leave entries pinned. Mirrors HYDRATE_MAX_AGE_MS in
@@ -556,6 +557,19 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           : presetToQuery(resume?.githubItemsPreset ?? defaultPreset)
       for (const repo of selectedRepos) {
         state.prefetchWorkItems(repo.id, repo.path, PER_REPO_FETCH_LIMIT, query)
+      }
+    }
+    if (resolvedSource === 'linear' && typeof state.prefetchLinearIssues === 'function') {
+      const resume = state.taskResumeState
+      const query = (resume?.linearQuery ?? '').trim()
+      if (query) {
+        state.prefetchLinearIssues({ kind: 'search', query, limit: LINEAR_TASK_PREFETCH_LIMIT })
+      } else {
+        state.prefetchLinearIssues({
+          kind: 'list',
+          filter: resume?.linearPreset ?? 'all',
+          limit: LINEAR_TASK_PREFETCH_LIMIT
+        })
       }
     }
   },

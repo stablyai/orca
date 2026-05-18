@@ -117,7 +117,8 @@ function runtimeScopedStateReset(): Partial<AppState> {
     linearStatus: { connected: false, viewer: null },
     linearStatusChecked: false,
     linearIssueCache: {},
-    linearSearchCache: {}
+    linearSearchCache: {},
+    linearTeamCache: {}
   }
 }
 
