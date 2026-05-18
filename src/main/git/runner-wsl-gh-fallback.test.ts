@@ -1,15 +1,23 @@
+/* eslint-disable max-lines -- Why: WSL fallback, retry safety, and glab parity share mocks. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as WslModule from '../wsl'
 
-const { execFileMock, execFileSyncMock, spawnMock } = vi.hoisted(() => ({
+const { execFileMock, execFileSyncMock, spawnMock, getDefaultWslDistroMock } = vi.hoisted(() => ({
   execFileMock: vi.fn(),
   execFileSyncMock: vi.fn(),
-  spawnMock: vi.fn()
+  spawnMock: vi.fn(),
+  getDefaultWslDistroMock: vi.fn()
 }))
 
 vi.mock('child_process', () => ({
   execFile: execFileMock,
   execFileSync: execFileSyncMock,
   spawn: spawnMock
+}))
+
+vi.mock('../wsl', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslModule>()),
+  getDefaultWslDistro: getDefaultWslDistroMock
 }))
 
 import { ghExecFileAsync, glabExecFileAsync } from './runner'
@@ -19,6 +27,8 @@ describe('ghExecFileAsync WSL fallback', () => {
 
   beforeEach(() => {
     execFileMock.mockReset()
+    getDefaultWslDistroMock.mockReset()
+    getDefaultWslDistroMock.mockReturnValue(null)
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: 'win32'
@@ -257,6 +267,30 @@ describe('ghExecFileAsync WSL fallback', () => {
     expect(execFileMock).toHaveBeenCalledTimes(1)
   })
 
+  it('retries cwd-less gh calls through the default WSL distro when host gh is missing', async () => {
+    getDefaultWslDistroMock.mockReturnValue('Ubuntu')
+    execFileMock
+      .mockImplementationOnce((_binary, _args, _options, callback) => {
+        callback(Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT' }))
+      })
+      .mockImplementationOnce((_binary, _args, _options, callback) => {
+        callback(null, { stdout: '{"resources":{}}', stderr: '' })
+      })
+
+    await expect(ghExecFileAsync(['api', 'rate_limit'])).resolves.toEqual({
+      stdout: '{"resources":{}}',
+      stderr: ''
+    })
+
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      2,
+      'wsl.exe',
+      ['-d', 'Ubuntu', '--', 'bash', '-c', "gh 'api' 'rate_limit'"],
+      expect.objectContaining({ cwd: undefined }),
+      expect.any(Function)
+    )
+  })
+
   it('does not retry non-idempotent glab transient failures', async () => {
     execFileMock.mockImplementation((_binary, _args, _options, callback) => {
       callback(
@@ -293,6 +327,30 @@ describe('ghExecFileAsync WSL fallback', () => {
     ).rejects.toThrow('HTTP 502 Bad Gateway')
 
     expect(execFileMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries cwd-less glab calls through the default WSL distro when host glab is missing', async () => {
+    getDefaultWslDistroMock.mockReturnValue('Ubuntu')
+    execFileMock
+      .mockImplementationOnce((_binary, _args, _options, callback) => {
+        callback(Object.assign(new Error('spawn glab ENOENT'), { code: 'ENOENT' }))
+      })
+      .mockImplementationOnce((_binary, _args, _options, callback) => {
+        callback(null, { stdout: '[]', stderr: '' })
+      })
+
+    await expect(glabExecFileAsync(['api', 'projects'])).resolves.toEqual({
+      stdout: '[]',
+      stderr: ''
+    })
+
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      2,
+      'wsl.exe',
+      ['-d', 'Ubuntu', '--', 'bash', '-c', "glab 'api' 'projects'"],
+      expect.objectContaining({ cwd: undefined }),
+      expect.any(Function)
+    )
   })
 
   it('still retries idempotent glab transient failures', async () => {
