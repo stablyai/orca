@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: the renderer Linear client mirrors the
+   preload/RPC Linear namespace so local and remote runtime routing stays in
+   one auditable boundary. */
 import type {
   GlobalSettings,
   LinearComment,
@@ -6,6 +9,7 @@ import type {
   LinearIssueUpdate,
   LinearLabel,
   LinearMember,
+  LinearProjectSummary,
   LinearTeam,
   LinearViewer,
   LinearWorkspaceSelection,
@@ -21,7 +25,7 @@ export type RuntimeLinearSettings =
 export type LinearIssueFilter = 'assigned' | 'created' | 'all' | 'completed'
 export type LinearConnectResult = { ok: true; viewer: LinearViewer } | { ok: false; error: string }
 export type LinearCreateIssueResult =
-  | { ok: true; id: string; identifier: string; url: string }
+  | { ok: true; id: string; identifier: string; title: string; url: string }
   | { ok: false; error: string }
 export type LinearMutationResult = { ok: true } | { ok: false; error: string }
 export type LinearCommentResult = { ok: true; id: string } | { ok: false; error: string }
@@ -143,7 +147,14 @@ export async function linearListIssues(
 
 export async function linearCreateIssue(
   settings: RuntimeLinearSettings,
-  args: { teamId: string; title: string; description?: string; workspaceId?: string }
+  args: {
+    teamId: string
+    title: string
+    description?: string
+    workspaceId?: string
+    parentIssueId?: string
+    projectId?: string | null
+  }
 ): Promise<LinearCreateIssueResult> {
   const target = getActiveRuntimeTarget(settings)
   return target.kind === 'environment'
@@ -151,6 +162,20 @@ export async function linearCreateIssue(
         timeoutMs: 30_000
       })
     : window.api.linear.createIssue(args)
+}
+
+export async function linearCreateSubIssue(
+  settings: RuntimeLinearSettings,
+  args: {
+    parentIssueId: string
+    teamId: string
+    title: string
+    description?: string
+    workspaceId?: string
+    projectId?: string | null
+  }
+): Promise<LinearCreateIssueResult> {
+  return linearCreateIssue(settings, args)
 }
 
 export async function linearGetIssue(
@@ -232,6 +257,25 @@ export async function linearListTeams(
         { timeoutMs: 30_000 }
       )
     : window.api.linear.listTeams(workspaceId ? { workspaceId } : undefined)
+}
+
+export async function linearListProjects(
+  settings: RuntimeLinearSettings,
+  query?: string,
+  limit?: number,
+  workspaceId?: LinearWorkspaceSelection | null
+): Promise<LinearProjectSummary[]> {
+  const target = getActiveRuntimeTarget(settings)
+  return target.kind === 'environment'
+    ? callRuntimeRpc<LinearProjectSummary[]>(
+        target,
+        'linear.listProjects',
+        { query, limit, workspaceId: workspaceId ?? undefined },
+        { timeoutMs: 30_000 }
+      )
+    : typeof window.api.linear.listProjects === 'function'
+      ? window.api.linear.listProjects({ query, limit, workspaceId: workspaceId ?? undefined })
+      : []
 }
 
 export async function linearTeamStates(

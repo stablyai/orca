@@ -145,6 +145,7 @@ import {
   updateIssue as updateLinearIssue,
   type LinearListFilter
 } from '../linear/issues'
+import { listProjects as listLinearProjects } from '../linear/projects'
 import {
   getTeamLabels as getLinearTeamLabels,
   getTeamMembers as getLinearTeamMembers,
@@ -8308,9 +8309,14 @@ export class OrcaRuntimeService {
     teamId: string,
     title: string,
     description?: string,
-    workspaceId?: string
+    workspaceId?: string,
+    parentIssueId?: string,
+    projectId?: string | null
   ): ReturnType<typeof createLinearIssue> {
-    return createLinearIssue(teamId, title, description, workspaceId)
+    return createLinearIssue(teamId, title, description, workspaceId, {
+      parentId: parentIssueId,
+      projectId
+    })
   }
 
   linearGetIssue(id: string, workspaceId?: string): ReturnType<typeof getLinearIssue> {
@@ -8342,6 +8348,14 @@ export class OrcaRuntimeService {
 
   linearListTeams(workspaceId?: LinearWorkspaceSelection): ReturnType<typeof listLinearTeams> {
     return listLinearTeams(workspaceId)
+  }
+
+  linearListProjects(
+    query?: string,
+    limit = 20,
+    workspaceId?: LinearWorkspaceSelection
+  ): ReturnType<typeof listLinearProjects> {
+    return listLinearProjects(query, Math.min(Math.max(1, limit), 50), workspaceId)
   }
 
   linearTeamStates(teamId: string, workspaceId?: string): ReturnType<typeof getLinearTeamStates> {

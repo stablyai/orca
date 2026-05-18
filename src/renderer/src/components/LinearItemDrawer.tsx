@@ -1,6 +1,17 @@
 /* eslint-disable max-lines -- Why: the Linear drawer co-locates read-only preview, edit controls, and comment input so the full issue surface stays in one file. */
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowRight, ExternalLink, LoaderCircle, Send, X } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowRight,
+  ChevronDown,
+  Circle,
+  ExternalLink,
+  LoaderCircle,
+  Send,
+  Tag,
+  UserRound,
+  X
+} from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -18,6 +29,10 @@ import {
   useTeamMembers,
   useImmediateMutation
 } from '@/hooks/useIssueMetadata'
+import {
+  getLinearStateMarkerStyle,
+  getLinearStatePillStyle
+} from '@/components/linear-state-pill-style'
 import type { LinearIssue, LinearComment } from '../../../shared/types'
 import {
   linearAddIssueComment,
@@ -44,6 +59,29 @@ const PRIORITY_LABELS: Record<number, string> = {
   4: 'Low'
 }
 
+const LINEAR_EDIT_CHIP_CLASS =
+  'inline-flex h-6 min-w-0 max-w-[14rem] cursor-pointer items-center gap-1.5 rounded-full border border-border/70 bg-background/70 px-2.5 text-[11px] font-medium leading-none text-muted-foreground shadow-xs transition-[background-color,border-color,color,box-shadow] hover:border-border hover:bg-accent hover:text-accent-foreground hover:[--linear-state-pill-current-background:var(--linear-state-pill-hover-background)] hover:[--linear-state-pill-current-border:var(--linear-state-pill-hover-border)] hover:[--linear-state-pill-current-foreground:var(--linear-state-pill-hover-foreground)] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-80'
+
+const LINEAR_EDIT_MENU_ITEM_CLASS =
+  'flex w-full cursor-pointer items-center rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent'
+
+const LINEAR_EDIT_MENU_ITEM_WITH_ICON_CLASS =
+  'flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent'
+
+function LinearEditChipAdornment({
+  loading,
+  pending
+}: {
+  loading?: boolean
+  pending?: boolean
+}): React.JSX.Element {
+  if (loading || pending) {
+    return <LoaderCircle className="size-3 shrink-0 animate-spin opacity-70" />
+  }
+
+  return <ChevronDown className="size-3 shrink-0 opacity-55" />
+}
+
 function formatRelativeTime(input: string): string {
   const date = new Date(input)
   if (Number.isNaN(date.getTime())) {
@@ -61,16 +99,6 @@ function formatRelativeTime(input: string): string {
   }
   const diffDays = Math.round(diffHours / 24)
   return formatter.format(diffDays, 'day')
-}
-
-// Why: derive pill border/background/text from the actual Linear state color
-// so the pill always matches the colored dot, regardless of state type.
-function statePillStyle(color: string): React.CSSProperties {
-  return {
-    borderColor: `color-mix(in srgb, ${color} 30%, transparent)`,
-    backgroundColor: `color-mix(in srgb, ${color} 10%, transparent)`,
-    color
-  }
 }
 
 type LinearItemDrawerProps = {
@@ -91,12 +119,14 @@ type EditSectionProps = {
   issue: LinearIssue
   editState: LinearEditState
   onEditStateChange: (patch: Partial<LinearEditState>) => void
+  layout?: 'chips' | 'properties'
 }
 
 export function LinearIssueEditSection({
   issue,
   editState,
-  onEditStateChange
+  onEditStateChange,
+  layout = 'chips'
 }: EditSectionProps): React.JSX.Element {
   const [labelPopoverOpen, setLabelPopoverOpen] = useState(false)
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
@@ -246,6 +276,16 @@ export function LinearIssueEditSection({
   const currentStateId = states.data.find(
     (s) => s.name === localState.name && s.type === localState.type
   )?.id
+  const statePending = isPending('state')
+  const priorityPending = isPending('priority')
+  const assigneePending = isPending('assignee')
+  const labelsPending = isPending('labels')
+  const labelSummary =
+    localLabels.length === 0
+      ? '+ Label'
+      : localLabels.length === 1
+        ? localLabels[0]
+        : `${localLabels[0]} +${localLabels.length - 1}`
 
   const checkIcon = (
     <svg className="size-2.5" viewBox="0 0 12 12" fill="none">
@@ -259,6 +299,263 @@ export function LinearIssueEditSection({
     </svg>
   )
 
+  if (layout === 'properties') {
+    const propertyRowClass =
+      'flex min-h-9 w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-80'
+    const propertyIconClass = 'size-4 shrink-0 text-muted-foreground'
+
+    return (
+      <div className="space-y-3">
+        <section className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-xs">
+          <div className="flex h-10 items-center gap-1 border-b border-border/50 px-4 text-sm font-medium text-muted-foreground">
+            <span>Properties</span>
+            <ChevronDown className="size-3.5" />
+          </div>
+          <div className="space-y-1 p-3">
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  disabled={statePending}
+                  className={propertyRowClass}
+                  aria-busy={statePending || states.loading}
+                >
+                  <span
+                    className="inline-block size-2.5 shrink-0 rounded-full"
+                    style={getLinearStateMarkerStyle(localState.color)}
+                  />
+                  <span className="min-w-0 flex-1 truncate">{localState.name}</span>
+                  <LinearEditChipAdornment loading={states.loading} pending={statePending} />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="popover-scroll-content scrollbar-sleek w-48 p-1"
+                align="start"
+              >
+                {states.error ? (
+                  <div className="px-2 py-3 text-center text-[12px] text-destructive">
+                    {states.error}
+                  </div>
+                ) : states.loading ? (
+                  <div className="flex items-center gap-2 px-2 py-3 text-[12px] text-muted-foreground">
+                    <LoaderCircle className="size-3 animate-spin" />
+                    Loading states
+                  </div>
+                ) : states.data.length > 0 ? (
+                  <div>
+                    {states.data.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => handleStateChange(s.id)}
+                        className={cn(
+                          LINEAR_EDIT_MENU_ITEM_WITH_ICON_CLASS,
+                          currentStateId === s.id && 'bg-accent/50'
+                        )}
+                      >
+                        <span
+                          className="inline-block size-2 rounded-full"
+                          style={{ backgroundColor: s.color }}
+                        />
+                        {s.name}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="px-2 py-3 text-center text-[12px] text-muted-foreground">
+                    No states found
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  disabled={priorityPending}
+                  className={propertyRowClass}
+                  aria-busy={priorityPending}
+                >
+                  {localPriority === 1 ? (
+                    <AlertTriangle className="size-4 shrink-0 text-destructive" />
+                  ) : (
+                    <Circle className={propertyIconClass} />
+                  )}
+                  <span className="min-w-0 flex-1 truncate">
+                    {PRIORITY_LABELS[localPriority] ?? `P${localPriority}`}
+                  </span>
+                  <LinearEditChipAdornment pending={priorityPending} />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-36 p-1" align="start">
+                {[0, 1, 2, 3, 4].map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => handlePriorityChange(String(p))}
+                    className={cn(
+                      LINEAR_EDIT_MENU_ITEM_CLASS,
+                      localPriority === p && 'bg-accent/50'
+                    )}
+                  >
+                    {PRIORITY_LABELS[p]}
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  disabled={assigneePending}
+                  className={propertyRowClass}
+                  aria-busy={assigneePending || members.loading}
+                >
+                  {localAssignee?.avatarUrl ? (
+                    <img
+                      src={localAssignee.avatarUrl}
+                      alt=""
+                      className="size-4 shrink-0 rounded-full"
+                    />
+                  ) : (
+                    <UserRound className={propertyIconClass} />
+                  )}
+                  <span className="min-w-0 flex-1 truncate">
+                    {localAssignee ? localAssignee.displayName : 'Unassigned'}
+                  </span>
+                  <LinearEditChipAdornment loading={members.loading} pending={assigneePending} />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="popover-scroll-content scrollbar-sleek w-48 p-1"
+                align="start"
+              >
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => handleAssigneeChange('__unassign__')}
+                    className={cn(LINEAR_EDIT_MENU_ITEM_CLASS, !localAssignee && 'bg-accent/50')}
+                  >
+                    Unassigned
+                  </button>
+                  {members.error ? (
+                    <div className="px-2 py-3 text-center text-[12px] text-destructive">
+                      {members.error}
+                    </div>
+                  ) : members.loading ? (
+                    <div className="flex items-center gap-2 px-2 py-3 text-[12px] text-muted-foreground">
+                      <LoaderCircle className="size-3 animate-spin" />
+                      Loading members
+                    </div>
+                  ) : (
+                    members.data.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => handleAssigneeChange(m.id)}
+                        className={cn(
+                          LINEAR_EDIT_MENU_ITEM_CLASS,
+                          localAssignee?.id === m.id && 'bg-accent/50'
+                        )}
+                      >
+                        {m.displayName}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            <button
+              type="button"
+              className="flex min-h-9 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground"
+              disabled
+            >
+              <AlertTriangle className={propertyIconClass} />
+              <span className="min-w-0 flex-1 truncate">Set estimate</span>
+            </button>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-xs">
+          <div className="flex h-10 items-center gap-1 border-b border-border/50 px-4 text-sm font-medium text-muted-foreground">
+            <span>Labels</span>
+            <ChevronDown className="size-3.5" />
+          </div>
+          <div className="p-3">
+            <Popover open={labelPopoverOpen} onOpenChange={setLabelPopoverOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  disabled={labelsPending}
+                  className={propertyRowClass}
+                  aria-label={
+                    localLabels.length ? `Labels: ${localLabels.join(', ')}` : 'Add label'
+                  }
+                  aria-busy={labelsPending || labels.loading}
+                >
+                  <Tag className={propertyIconClass} />
+                  <span className="min-w-0 flex-1 truncate">
+                    {localLabels.length ? labelSummary : 'Add label'}
+                  </span>
+                  <LinearEditChipAdornment loading={labels.loading} pending={labelsPending} />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="popover-scroll-content scrollbar-sleek w-52 p-1"
+                align="start"
+              >
+                {labels.error ? (
+                  <div className="px-2 py-3 text-center text-[12px] text-destructive">
+                    {labels.error}
+                  </div>
+                ) : labels.loading ? (
+                  <div className="flex items-center gap-2 px-2 py-3 text-[12px] text-muted-foreground">
+                    <LoaderCircle className="size-3 animate-spin" />
+                    Loading labels
+                  </div>
+                ) : labels.data.length > 0 ? (
+                  <div>
+                    {labels.data.map((label) => (
+                      <button
+                        key={label.id}
+                        type="button"
+                        onClick={() => handleLabelToggle(label.id)}
+                        className={LINEAR_EDIT_MENU_ITEM_WITH_ICON_CLASS}
+                      >
+                        <span
+                          className={cn(
+                            'flex size-3.5 items-center justify-center rounded-sm border',
+                            localLabelIds.includes(label.id)
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-input'
+                          )}
+                        >
+                          {localLabelIds.includes(label.id) && checkIcon}
+                        </span>
+                        <span
+                          className="inline-block size-2 rounded-full"
+                          style={{ backgroundColor: label.color }}
+                        />
+                        {label.name}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="px-2 py-3 text-center text-[12px] text-muted-foreground">
+                    No labels found
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+          </div>
+        </section>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/60 px-4 py-2.5">
       {/* Status */}
@@ -266,38 +563,52 @@ export function LinearIssueEditSection({
         <PopoverTrigger asChild>
           <button
             type="button"
-            disabled={isPending('state') || states.loading}
-            className="flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium transition hover:opacity-80 disabled:opacity-50"
-            style={statePillStyle(localState.color)}
+            disabled={statePending}
+            className={LINEAR_EDIT_CHIP_CLASS}
+            style={getLinearStatePillStyle(localState.color)}
+            aria-busy={statePending || states.loading}
           >
             <span
-              className="inline-block size-2 rounded-full"
-              style={{ backgroundColor: localState.color }}
+              className="inline-block size-2 shrink-0 rounded-full"
+              style={getLinearStateMarkerStyle(localState.color)}
             />
-            {localState.name}
-            {isPending('state') && <LoaderCircle className="size-3 animate-spin" />}
+            <span className="truncate">{localState.name}</span>
+            <LinearEditChipAdornment loading={states.loading} pending={statePending} />
           </button>
         </PopoverTrigger>
         <PopoverContent className="popover-scroll-content scrollbar-sleek w-48 p-1" align="start">
-          <div>
-            {states.data.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => handleStateChange(s.id)}
-                className={cn(
-                  'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent',
-                  currentStateId === s.id && 'bg-accent/50'
-                )}
-              >
-                <span
-                  className="inline-block size-2 rounded-full"
-                  style={{ backgroundColor: s.color }}
-                />
-                {s.name}
-              </button>
-            ))}
-          </div>
+          {states.error ? (
+            <div className="px-2 py-3 text-center text-[12px] text-destructive">{states.error}</div>
+          ) : states.loading ? (
+            <div className="flex items-center gap-2 px-2 py-3 text-[12px] text-muted-foreground">
+              <LoaderCircle className="size-3 animate-spin" />
+              Loading states
+            </div>
+          ) : states.data.length > 0 ? (
+            <div>
+              {states.data.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => handleStateChange(s.id)}
+                  className={cn(
+                    LINEAR_EDIT_MENU_ITEM_WITH_ICON_CLASS,
+                    currentStateId === s.id && 'bg-accent/50'
+                  )}
+                >
+                  <span
+                    className="inline-block size-2 rounded-full"
+                    style={{ backgroundColor: s.color }}
+                  />
+                  {s.name}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="px-2 py-3 text-center text-[12px] text-muted-foreground">
+              No states found
+            </div>
+          )}
         </PopoverContent>
       </Popover>
 
@@ -306,11 +617,14 @@ export function LinearIssueEditSection({
         <PopoverTrigger asChild>
           <button
             type="button"
-            disabled={isPending('priority')}
-            className="rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition hover:bg-muted/40 disabled:opacity-50"
+            disabled={priorityPending}
+            className={LINEAR_EDIT_CHIP_CLASS}
+            aria-busy={priorityPending}
           >
-            {PRIORITY_LABELS[localPriority] ?? `P${localPriority}`}
-            {isPending('priority') && <LoaderCircle className="ml-1 inline size-3 animate-spin" />}
+            <span className="truncate">
+              {PRIORITY_LABELS[localPriority] ?? `P${localPriority}`}
+            </span>
+            <LinearEditChipAdornment pending={priorityPending} />
           </button>
         </PopoverTrigger>
         <PopoverContent className="w-36 p-1" align="start">
@@ -319,10 +633,7 @@ export function LinearIssueEditSection({
               key={p}
               type="button"
               onClick={() => handlePriorityChange(String(p))}
-              className={cn(
-                'flex w-full items-center rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent',
-                localPriority === p && 'bg-accent/50'
-              )}
+              className={cn(LINEAR_EDIT_MENU_ITEM_CLASS, localPriority === p && 'bg-accent/50')}
             >
               {PRIORITY_LABELS[p]}
             </button>
@@ -335,17 +646,14 @@ export function LinearIssueEditSection({
         <PopoverTrigger asChild>
           <button
             type="button"
-            disabled={isPending('assignee') || members.loading}
-            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition hover:bg-muted/40 disabled:opacity-50"
+            disabled={assigneePending}
+            className={LINEAR_EDIT_CHIP_CLASS}
+            aria-busy={assigneePending || members.loading}
           >
-            {localAssignee ? (
-              <span className="text-muted-foreground">{localAssignee.displayName}</span>
-            ) : (
-              <span className="text-muted-foreground">+ Assignee</span>
-            )}
-            {isPending('assignee') && (
-              <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
-            )}
+            <span className="truncate">
+              {localAssignee ? localAssignee.displayName : '+ Assignee'}
+            </span>
+            <LinearEditChipAdornment loading={members.loading} pending={assigneePending} />
           </button>
         </PopoverTrigger>
         <PopoverContent className="popover-scroll-content scrollbar-sleek w-48 p-1" align="start">
@@ -353,26 +661,34 @@ export function LinearIssueEditSection({
             <button
               type="button"
               onClick={() => handleAssigneeChange('__unassign__')}
-              className={cn(
-                'flex w-full items-center rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent',
-                !localAssignee && 'bg-accent/50'
-              )}
+              className={cn(LINEAR_EDIT_MENU_ITEM_CLASS, !localAssignee && 'bg-accent/50')}
             >
               Unassigned
             </button>
-            {members.data.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => handleAssigneeChange(m.id)}
-                className={cn(
-                  'flex w-full items-center rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent',
-                  localAssignee?.id === m.id && 'bg-accent/50'
-                )}
-              >
-                {m.displayName}
-              </button>
-            ))}
+            {members.error ? (
+              <div className="px-2 py-3 text-center text-[12px] text-destructive">
+                {members.error}
+              </div>
+            ) : members.loading ? (
+              <div className="flex items-center gap-2 px-2 py-3 text-[12px] text-muted-foreground">
+                <LoaderCircle className="size-3 animate-spin" />
+                Loading members
+              </div>
+            ) : (
+              members.data.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => handleAssigneeChange(m.id)}
+                  className={cn(
+                    LINEAR_EDIT_MENU_ITEM_CLASS,
+                    localAssignee?.id === m.id && 'bg-accent/50'
+                  )}
+                >
+                  {m.displayName}
+                </button>
+              ))
+            )}
           </div>
         </PopoverContent>
       </Popover>
@@ -382,37 +698,31 @@ export function LinearIssueEditSection({
         <PopoverTrigger asChild>
           <button
             type="button"
-            disabled={isPending('labels') || labels.loading}
-            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition hover:bg-muted/40 disabled:opacity-50"
+            disabled={labelsPending}
+            className={LINEAR_EDIT_CHIP_CLASS}
+            aria-label={localLabels.length ? `Labels: ${localLabels.join(', ')}` : 'Add label'}
+            aria-busy={labelsPending || labels.loading}
           >
-            {localLabelIds.length === 0 ? (
-              <span className="text-muted-foreground">+ Label</span>
-            ) : (
-              localLabels.map((name) => (
-                <span
-                  key={name}
-                  className="rounded-full border border-border/50 bg-background/60 px-1.5 py-0.5 text-[10px] text-muted-foreground"
-                >
-                  {name}
-                </span>
-              ))
-            )}
-            {isPending('labels') && (
-              <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
-            )}
+            <span className="truncate">{labelSummary}</span>
+            <LinearEditChipAdornment loading={labels.loading} pending={labelsPending} />
           </button>
         </PopoverTrigger>
         <PopoverContent className="popover-scroll-content scrollbar-sleek w-52 p-1" align="start">
           {labels.error ? (
             <div className="px-2 py-3 text-center text-[12px] text-destructive">{labels.error}</div>
-          ) : (
+          ) : labels.loading ? (
+            <div className="flex items-center gap-2 px-2 py-3 text-[12px] text-muted-foreground">
+              <LoaderCircle className="size-3 animate-spin" />
+              Loading labels
+            </div>
+          ) : labels.data.length > 0 ? (
             <div>
               {labels.data.map((label) => (
                 <button
                   key={label.id}
                   type="button"
                   onClick={() => handleLabelToggle(label.id)}
-                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
+                  className={LINEAR_EDIT_MENU_ITEM_WITH_ICON_CLASS}
                 >
                   <span
                     className={cn(
@@ -432,6 +742,10 @@ export function LinearIssueEditSection({
                 </button>
               ))}
             </div>
+          ) : (
+            <div className="px-2 py-3 text-center text-[12px] text-muted-foreground">
+              No labels found
+            </div>
           )}
         </PopoverContent>
       </Popover>
@@ -444,11 +758,13 @@ export type LinearLocalComment = { id: string; body: string; createdAt: string }
 export function LinearIssueCommentFooter({
   issueId,
   workspaceId,
-  onCommentAdded
+  onCommentAdded,
+  variant = 'compact'
 }: {
   issueId: string
   workspaceId?: string | null
   onCommentAdded: (comment: LinearLocalComment) => void
+  variant?: 'compact' | 'linear-page'
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const [body, setBody] = useState('')
@@ -500,6 +816,42 @@ export function LinearIssueCommentFooter({
     },
     [handleSubmit]
   )
+
+  if (variant === 'linear-page') {
+    return (
+      <div className="rounded-xl border border-border/70 bg-background shadow-xs">
+        <textarea
+          ref={textareaRef}
+          value={body}
+          onChange={(e) => {
+            setBody(e.target.value)
+            autoGrow()
+          }}
+          onKeyDown={handleKeyDown}
+          placeholder="Leave a comment..."
+          rows={3}
+          className="scrollbar-sleek min-h-24 max-h-40 w-full resize-none overflow-y-auto rounded-t-xl bg-transparent px-5 py-4 text-sm placeholder:text-muted-foreground focus-visible:outline-none"
+        />
+        <div className="flex items-center justify-between px-4 pb-3">
+          <span className="text-[11px] text-muted-foreground">
+            {IS_MAC ? '⌘' : 'Ctrl'} Enter to comment
+          </span>
+          <Button
+            size="icon-sm"
+            onClick={handleSubmit}
+            disabled={!body.trim() || submitting}
+            aria-label="Send comment"
+          >
+            {submitting ? (
+              <LoaderCircle className="size-3.5 animate-spin" />
+            ) : (
+              <Send className="size-3.5" />
+            )}
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex items-end gap-2 border-t border-border/60 bg-background/40 px-4 py-3">
