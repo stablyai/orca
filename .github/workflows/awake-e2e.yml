@@ -3,7 +3,7 @@ name: Awake E2E
 on:
   push:
     branches:
-      - keep-awake-while-lid-closed
+      - brennanb2025/keep-awake-while-lid-closed
   pull_request:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
@@ -17,7 +17,7 @@ jobs:
   awake:
     # Why: temporary PR validation for the keep-awake branch. Keep it out of
     # unrelated PRs until the cross-platform coverage graduates into normal CI.
-    if: github.event_name != 'pull_request' || github.head_ref == 'keep-awake-while-lid-closed'
+    if: github.event_name != 'pull_request' || github.head_ref == 'brennanb2025/keep-awake-while-lid-closed'
     name: awake e2e ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
