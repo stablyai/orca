@@ -195,6 +195,7 @@ export default function OnboardingFlow({
               onOpenFolder={() => void flow.openFolder()}
               onOpenServerFolder={(kind) => void flow.openFolder(kind)}
               onClone={() => void flow.clone()}
+              onOpenSshSettings={() => void flow.openSshSettings()}
               serverPath={flow.serverPath}
               onServerPathChange={flow.setServerPath}
               cloneDestination={flow.cloneDestination}

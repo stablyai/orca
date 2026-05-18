@@ -348,6 +348,9 @@ test.describe('Onboarding flow', () => {
     await expect(onboardingFooterButton(orcaPage, /^Skip$/i)).toHaveCount(0)
     await expect(onboardingFooterButton(orcaPage, /Skip all onboarding/i)).toHaveCount(0)
     await expect(orcaPage.getByRole('button', { name: /Open a folder/i })).toBeVisible()
+    await expect(
+      orcaPage.getByRole('button', { name: /SSH\? Set hosts up in Settings/i })
+    ).toBeVisible()
 
     await expect
       .poll(
@@ -378,6 +381,48 @@ test.describe('Onboarding flow', () => {
     await expect(orcaPage.getByText('4 of 4')).toBeVisible()
     await expect(onboardingFooterButton(orcaPage, /^Skip$/i)).toHaveCount(0)
     expect((await getOnboardingState(orcaPage)).closedAt).toBeNull()
+  })
+
+  test('SSH settings link dismisses onboarding and opens the SSH settings pane', async ({
+    orcaPage
+  }) => {
+    await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
+      timeout: 15_000
+    })
+
+    await onboardingFooterButton(orcaPage, /^Skip$/i).click()
+    await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
+
+    await orcaPage.getByRole('button', { name: /SSH\? Set hosts up in Settings/i }).click()
+
+    await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toHaveCount(0)
+    await expect(
+      orcaPage
+        .locator('[data-settings-section="ssh"]')
+        .getByRole('heading', { name: 'SSH', exact: true })
+    ).toBeInViewport({ timeout: 10_000 })
+    await expect(
+      orcaPage.locator('[data-settings-section="ssh"]').getByRole('button', { name: /Add Target/i })
+    ).toBeVisible()
+    await expect
+      .poll(
+        async () => {
+          const state = await getOnboardingState(orcaPage)
+          return {
+            closedAt: state.closedAt === null ? null : 'set',
+            outcome: state.outcome,
+            dismissed: state.checklist.dismissed,
+            lastCompletedStep: state.lastCompletedStep
+          }
+        },
+        { timeout: 5_000 }
+      )
+      .toEqual({
+        closedAt: 'set',
+        outcome: 'dismissed',
+        dismissed: true,
+        lastCompletedStep: -1
+      })
   })
 
   test('Skip from theme reverts preview without saving the skipped choice', async ({

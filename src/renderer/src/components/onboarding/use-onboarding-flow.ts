@@ -41,6 +41,8 @@ export function useOnboardingFlow(
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const addRepoPath = useAppStore((s) => s.addRepoPath)
   const openModal = useAppStore((s) => s.openModal)
+  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
+  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
 
   const initialStep = Math.min(Math.max(onboarding.lastCompletedStep, 0), STEPS.length - 1)
   const [stepIndex, setStepIndex] = useState(initialStep)
@@ -544,6 +546,35 @@ export function useOnboardingFlow(
     settings
   ])
 
+  const openSshSettings = useCallback(async () => {
+    if (busyLabel || currentStep.id !== 'repo') {
+      return
+    }
+    setError(null)
+    // Why: Settings renders behind the fullscreen onboarding layer; SSH users
+    // need this repo-step escape hatch to reveal the target settings pane.
+    const closed = await closeWith('dismissed', {}, 4, undefined, {
+      advancedVia: 'button',
+      durationMs: consumeStepDurationMs()
+    })
+    if (!closed) {
+      return
+    }
+    openSettingsPage()
+    // Why: Settings consumes navigation targets from its mounted view; defer
+    // until the view switch has committed so the SSH pane scroll is reliable.
+    window.setTimeout(() => {
+      openSettingsTarget({ pane: 'ssh', repoId: null, sectionId: 'ssh' })
+    }, 0)
+  }, [
+    busyLabel,
+    closeWith,
+    consumeStepDurationMs,
+    currentStep.id,
+    openSettingsPage,
+    openSettingsTarget
+  ])
+
   const back = useCallback(() => {
     setStepIndex((idx) => Math.max(idx - 1, 0))
   }, [])
@@ -583,6 +614,7 @@ export function useOnboardingFlow(
     back,
     jumpToStep,
     openFolder,
+    openSshSettings,
     clone
   }
 }
