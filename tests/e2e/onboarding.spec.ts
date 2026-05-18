@@ -383,9 +383,7 @@ test.describe('Onboarding flow', () => {
     expect((await getOnboardingState(orcaPage)).closedAt).toBeNull()
   })
 
-  test('SSH settings link dismisses onboarding and opens the SSH settings pane', async ({
-    orcaPage
-  }) => {
+  test('SSH settings link opens settings without dismissing onboarding', async ({ orcaPage }) => {
     await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
       timeout: 15_000
     })
@@ -418,11 +416,15 @@ test.describe('Onboarding flow', () => {
         { timeout: 5_000 }
       )
       .toEqual({
-        closedAt: 'set',
-        outcome: 'dismissed',
-        dismissed: true,
-        lastCompletedStep: -1
+        closedAt: null,
+        outcome: null,
+        dismissed: false,
+        lastCompletedStep: 3
       })
+
+    await orcaPage.keyboard.press('Escape')
+    await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
+    await expect(orcaPage.getByText('4 of 4')).toBeVisible()
   })
 
   test('Skip from theme reverts preview without saving the skipped choice', async ({

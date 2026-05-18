@@ -28,8 +28,10 @@ export type OnboardingFlowController = ReturnType<typeof useOnboardingFlow>
 
 export function useOnboardingFlow(
   onboarding: OnboardingState,
-  onOnboardingChange: (state: OnboardingState) => void
+  onOnboardingChange: (state: OnboardingState) => void,
+  options: { onSettingsDetourStart?: () => void } = {}
 ) {
+  const { onSettingsDetourStart } = options
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
@@ -551,15 +553,17 @@ export function useOnboardingFlow(
       return
     }
     setError(null)
-    // Why: Settings renders behind the fullscreen onboarding layer; SSH users
-    // need this repo-step escape hatch to reveal the target settings pane.
-    const closed = await closeWith('dismissed', {}, 4, undefined, {
-      advancedVia: 'button',
-      durationMs: consumeStepDurationMs()
-    })
-    if (!closed) {
+    try {
+      onOnboardingChange(await persistStep(3))
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setError(message)
+      toast.error('Could not open SSH settings', { description: message })
       return
     }
+    // Why: Settings renders behind the fullscreen onboarding layer; SSH users
+    // need a temporary detour without marking required repo setup dismissed.
+    onSettingsDetourStart?.()
     openSettingsPage()
     // Why: Settings consumes navigation targets from its mounted view; defer
     // until the view switch has committed so the SSH pane scroll is reliable.
@@ -568,9 +572,9 @@ export function useOnboardingFlow(
     }, 0)
   }, [
     busyLabel,
-    closeWith,
-    consumeStepDurationMs,
     currentStep.id,
+    onOnboardingChange,
+    onSettingsDetourStart,
     openSettingsPage,
     openSettingsTarget
   ])

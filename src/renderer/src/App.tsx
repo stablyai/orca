@@ -361,6 +361,7 @@ function App(): React.JSX.Element {
   const [collapsedSidebarHeaderWidth, setCollapsedSidebarHeaderWidth] = useState(0)
   const [mountedLazyModalIds, setMountedLazyModalIds] = useState(() => new Set<string>())
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
+  const [onboardingSettingsDetour, setOnboardingSettingsDetour] = useState(false)
 
   // Subscribe to IPC push events
   useIpcEvents()
@@ -390,6 +391,16 @@ function App(): React.JSX.Element {
 
   useEffect(() => {
     return onOnboardingReopened(setOnboarding)
+  }, [])
+
+  useEffect(() => {
+    if (activeView !== 'settings' || !shouldShowOnboarding(onboarding)) {
+      setOnboardingSettingsDetour(false)
+    }
+  }, [activeView, onboarding])
+
+  const beginOnboardingSettingsDetour = useCallback(() => {
+    setOnboardingSettingsDetour(true)
   }, [])
 
   // Why: sidebar open/close flips width instantaneously. useLayoutEffect
@@ -1517,9 +1528,13 @@ function App(): React.JSX.Element {
         <SshPassphraseDialog />
         <DeleteWorktreeDialog />
         <CrashReportDialog />
-        {onboarding && shouldShowOnboarding(onboarding) ? (
+        {onboarding && shouldShowOnboarding(onboarding) && !onboardingSettingsDetour ? (
           <Suspense fallback={null}>
-            <OnboardingFlow onboarding={onboarding} onOnboardingChange={setOnboarding} />
+            <OnboardingFlow
+              onboarding={onboarding}
+              onOnboardingChange={setOnboarding}
+              onSettingsDetourStart={beginOnboardingSettingsDetour}
+            />
           </Suspense>
         ) : null}
         <DictationController />
