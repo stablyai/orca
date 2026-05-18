@@ -661,6 +661,7 @@ export function ResourceUsageStatusSegment({
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
+  const setActiveView = useAppStore((s) => s.setActiveView)
   const openModal = useAppStore((s) => s.openModal)
   const openSpacePage = useAppStore((s) => s.openSpacePage)
   const activeView = useAppStore((s) => s.activeView)
@@ -966,11 +967,12 @@ export function ResourceUsageStatusSegment({
       navigateResourceSessionToTab(tabId, paneKey, {
         tabsByWorktree,
         setOpen,
+        setActiveView,
         activateAndRevealWorktree,
         activateTabAndFocusPane
       })
     },
-    [tabsByWorktree]
+    [tabsByWorktree, setActiveView]
   )
 
   const deleteWorktree = useCallback((worktreeId: string): void => {

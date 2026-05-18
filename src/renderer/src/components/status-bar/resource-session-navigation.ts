@@ -5,6 +5,7 @@ type TabLookup = Record<string, { id: string }[]>
 export type ResourceSessionNavigationDeps = {
   tabsByWorktree: TabLookup
   setOpen: (open: boolean) => void
+  setActiveView: (view: 'terminal') => void
   activateAndRevealWorktree: (worktreeId: string) => unknown
   activateTabAndFocusPane: (
     tabId: string,
@@ -30,6 +31,12 @@ export function navigateResourceSessionToTab(
       break
     }
   }
+
+  // Why: stale tabsByWorktree mappings skip activateAndRevealWorktree (which
+  // owns the view flip), so flip to terminal here too — otherwise a click
+  // from Space/Tasks/Settings updates activeTab but leaves the user on the
+  // non-terminal view and the click appears to do nothing.
+  deps.setActiveView('terminal')
 
   // Why: paneKey suffixes are stable UUID leaf ids after replay/reload.
   // Legacy numeric keys degrade to tab-only activation instead of guessing.

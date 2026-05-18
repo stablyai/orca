@@ -16,6 +16,7 @@ function makeDeps(events: string[] = []): ResourceSessionNavigationDeps {
       'wt-2': [{ id: OTHER_TAB_ID }]
     },
     setOpen: vi.fn((open: boolean) => events.push(`open:${open}`)),
+    setActiveView: vi.fn((view: 'terminal') => events.push(`view:${view}`)),
     activateAndRevealWorktree: vi.fn((worktreeId: string) => {
       events.push(`worktree:${worktreeId}`)
     }),
@@ -32,7 +33,12 @@ describe('resource session navigation', () => {
 
     navigateResourceSessionToTab(TAB_ID, `${TAB_ID}:${LEAF_ID}`, deps)
 
-    expect(events).toEqual([`open:false`, 'worktree:wt-1', `tab:${TAB_ID}:${LEAF_ID}`])
+    expect(events).toEqual([
+      `open:false`,
+      'worktree:wt-1',
+      'view:terminal',
+      `tab:${TAB_ID}:${LEAF_ID}`
+    ])
     expect(deps.activateTabAndFocusPane).toHaveBeenCalledWith(TAB_ID, LEAF_ID, {
       flashFocusedPane: true
     })
@@ -52,13 +58,14 @@ describe('resource session navigation', () => {
     })
   })
 
-  it('still activates the tab when the worktree mapping is stale', () => {
+  it('still activates the tab and switches to terminal when the worktree mapping is stale', () => {
     const deps = makeDeps()
     deps.tabsByWorktree = {}
 
     navigateResourceSessionToTab(TAB_ID, `${TAB_ID}:${LEAF_ID}`, deps)
 
     expect(deps.activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(deps.setActiveView).toHaveBeenCalledWith('terminal')
     expect(deps.activateTabAndFocusPane).toHaveBeenCalledWith(TAB_ID, LEAF_ID, {
       flashFocusedPane: true
     })
