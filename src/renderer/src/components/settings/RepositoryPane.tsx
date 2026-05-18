@@ -108,8 +108,17 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
           },
           {
             title: 'Command Source',
-            description: 'Choose whether Orca runs shared or local commands when both exist.',
-            keywords: [repo.displayName, 'local', 'orca.yaml', 'shared', 'both', 'source']
+            description: 'Choose whether repo commands, local commands, or both are authoritative.',
+            keywords: [
+              repo.displayName,
+              'local',
+              'orca.yaml',
+              'shared',
+              'both',
+              'source',
+              'fallback',
+              'authoritative'
+            ]
           },
           {
             title: 'When to Run Setup',

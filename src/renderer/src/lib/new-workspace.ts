@@ -120,7 +120,7 @@ export function getSetupConfig(
   repo:
     | {
         hookSettings?: {
-          commandSourcePolicy?: 'shared-first' | 'local-only' | 'run-both'
+          commandSourcePolicy?: 'shared-only' | 'shared-first' | 'local-only' | 'run-both'
           scripts?: { setup?: string }
         }
       }
@@ -129,7 +129,7 @@ export function getSetupConfig(
 ): SetupConfig | null {
   const yamlSetup = yamlHooks?.scripts?.setup?.trim()
   const localSetup = repo?.hookSettings?.scripts?.setup?.trim()
-  const sourcePolicy = repo?.hookSettings?.commandSourcePolicy ?? 'shared-first'
+  const sourcePolicy = repo?.hookSettings?.commandSourcePolicy ?? 'shared-only'
 
   if (sourcePolicy === 'local-only') {
     return localSetup ? { source: 'local', command: localSetup } : null
@@ -142,7 +142,7 @@ export function getSetupConfig(
   if (yamlSetup) {
     return { source: 'yaml', command: yamlSetup }
   }
-  if (localSetup) {
+  if (sourcePolicy === 'shared-first' && localSetup) {
     return { source: 'local', command: localSetup }
   }
   return null

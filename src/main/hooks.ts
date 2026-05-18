@@ -279,14 +279,18 @@ function getEffectiveHookScript(
     return [shared, local].filter(Boolean).join('\n') || undefined
   }
 
-  return shared || local || undefined
+  if (policy === 'shared-first') {
+    return shared || local || undefined
+  }
+
+  return shared || undefined
 }
 
 export function getEffectiveHooks(repo: Repo, worktreePath?: string): OrcaHooks | null {
   const yamlHooks = loadHooks(worktreePath ?? repo.path)
   const localSetup = repo.hookSettings?.scripts.setup
   const localArchive = repo.hookSettings?.scripts.archive
-  const policy = repo.hookSettings?.commandSourcePolicy ?? 'shared-first'
+  const policy = repo.hookSettings?.commandSourcePolicy ?? 'shared-only'
   const setup = getEffectiveHookScript(yamlHooks?.scripts.setup, localSetup, policy)
   const archive = getEffectiveHookScript(yamlHooks?.scripts.archive, localArchive, policy)
 
@@ -295,8 +299,8 @@ export function getEffectiveHooks(repo: Repo, worktreePath?: string): OrcaHooks 
   }
 
   // Why: committed `orca.yaml` and local Settings commands can intentionally
-  // coexist. Resolve per hook so users can keep personal setup for gaps while
-  // still letting repo-owned commands win, or choose a repo-specific override.
+  // coexist, but the source policy defines whether the committed file is an
+  // authoritative boundary, a fallback source, or one half of a combined run.
   return {
     scripts: {
       ...(setup ? { setup } : {}),
@@ -331,7 +335,7 @@ export function getSetupCommandSource(
 ): { source: 'yaml' | 'local' | 'both'; command: string } | null {
   const yamlSetup = loadHooks(worktreePath ?? repo.path)?.scripts.setup?.trim()
   const localSetup = repo.hookSettings?.scripts.setup?.trim()
-  const policy = repo.hookSettings?.commandSourcePolicy ?? 'shared-first'
+  const policy = repo.hookSettings?.commandSourcePolicy ?? 'shared-only'
 
   if (policy === 'local-only') {
     return localSetup ? { source: 'local', command: localSetup } : null
@@ -345,7 +349,11 @@ export function getSetupCommandSource(
     return { source: 'yaml', command: yamlSetup }
   }
 
-  return localSetup ? { source: 'local', command: localSetup } : null
+  if (policy === 'shared-first') {
+    return localSetup ? { source: 'local', command: localSetup } : null
+  }
+
+  return null
 }
 
 function getSetupEnvVars(repo: Repo, worktreePath: string): Record<string, string> {

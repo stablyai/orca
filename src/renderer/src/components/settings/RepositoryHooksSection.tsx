@@ -47,14 +47,19 @@ const SETUP_RUN_POLICY_OPTIONS: PolicyOption<SetupRunPolicy>[] = [
 
 const COMMAND_SOURCE_POLICY_OPTIONS: PolicyOption<HookCommandSourcePolicy>[] = [
   {
-    policy: 'shared-first',
-    label: 'Use orca.yaml',
-    description: 'Run shared commands when present; local commands fill gaps.'
+    policy: 'shared-only',
+    label: 'Use orca.yaml only',
+    description: 'Run only committed repo commands; ignore local Settings commands.'
   },
   {
     policy: 'local-only',
     label: 'Use local only',
     description: 'Ignore repo commands and run only your local Settings commands.'
+  },
+  {
+    policy: 'shared-first',
+    label: 'Use local fallback',
+    description: 'Run local commands only when orca.yaml has no command.'
   },
   {
     policy: 'run-both',
@@ -287,7 +292,7 @@ export function RepositoryHooksSection({
   const selectedSetupRunPolicy: SetupRunPolicy =
     hookSettingsDraft.setupRunPolicy ?? 'run-by-default'
   const selectedCommandSourcePolicy: HookCommandSourcePolicy =
-    hookSettingsDraft.commandSourcePolicy ?? 'shared-first'
+    hookSettingsDraft.commandSourcePolicy ?? 'shared-only'
   const [issueCommandDraft, setIssueCommandDraft] = useState('')
   const localCommandsRepoIdRef = useRef(repo.id)
   const [hasSharedIssueCommand, setHasSharedIssueCommand] = useState(false)
@@ -688,15 +693,15 @@ export function RepositoryHooksSection({
 
       <SearchableSetting
         title="Command Source"
-        description="Choose whether Orca runs shared or local commands when both exist."
-        keywords={['command source', 'local', 'shared', 'orca.yaml', 'both']}
+        description="Choose whether repo commands, local commands, or both are authoritative."
+        keywords={['command source', 'local', 'shared', 'orca.yaml', 'both', 'fallback']}
       >
         <div className="space-y-3 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm">
           <div className="space-y-1">
             <h5 className="text-sm font-semibold">Command Source</h5>
             <p className="text-xs text-muted-foreground">
-              When both `orca.yaml` and local Settings define the same lifecycle command, choose
-              which source runs.
+              Choose whether `orca.yaml` is authoritative, local Settings are authoritative, or both
+              sources can run.
             </p>
           </div>
 
@@ -704,7 +709,7 @@ export function RepositoryHooksSection({
             options={COMMAND_SOURCE_POLICY_OPTIONS}
             selected={selectedCommandSourcePolicy}
             onSelect={(policy) => updateHookSettingsPolicyDraft({ commandSourcePolicy: policy })}
-            columns="md:grid-cols-3"
+            columns="md:grid-cols-4"
           />
         </div>
       </SearchableSetting>

@@ -94,7 +94,7 @@ export type Repo = {
 
 export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
 export type SetupDecision = 'inherit' | 'run' | 'skip'
-export type HookCommandSourcePolicy = 'shared-first' | 'local-only' | 'run-both'
+export type HookCommandSourcePolicy = 'shared-only' | 'shared-first' | 'local-only' | 'run-both'
 
 /**
  * Envelope returned by the `repos:getBaseRefDefault` IPC handler.

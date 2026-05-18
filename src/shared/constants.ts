@@ -299,7 +299,7 @@ export function getDefaultRepoHookSettings(): RepoHookSettings {
   return {
     mode: 'auto',
     setupRunPolicy: 'run-by-default',
-    commandSourcePolicy: 'shared-first',
+    commandSourcePolicy: 'shared-only',
     scripts: {
       setup: '',
       archive: ''
