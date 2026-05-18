@@ -30,6 +30,11 @@ export function useFileExplorerTree(
   const [rootError, setRootError] = useState<string | null>(null)
   const dirCacheRef = useRef(dirCache)
   dirCacheRef.current = dirCache
+  // Why: directory reads can overlap during worktree switches and manual
+  // refreshes. Ignore stale completions so an older snapshot cannot overwrite
+  // a newer tree response and hide entries until the next reload.
+  const treeLoadSessionRef = useRef(0)
+  const dirLoadRevisionRef = useRef<Record<string, number>>({})
 
   const loadDir = useCallback(
     async (dirPath: string, depth: number, options?: { force?: boolean }) => {
@@ -37,6 +42,15 @@ export function useFileExplorerTree(
       if (!options?.force && (cache[dirPath]?.children.length > 0 || cache[dirPath]?.loading)) {
         return
       }
+
+      const loadSession = treeLoadSessionRef.current
+      const loadRevision = (dirLoadRevisionRef.current[dirPath] ?? 0) + 1
+      dirLoadRevisionRef.current[dirPath] = loadRevision
+
+      const isLatestLoad = (): boolean =>
+        treeLoadSessionRef.current === loadSession &&
+        (dirLoadRevisionRef.current[dirPath] ?? 0) === loadRevision
+
       // Why: when force-reloading a directory (e.g. after a file is created,
       // duplicated, or deleted), keep the previous children visible while the
       // fresh listing loads. Clearing to [] would momentarily shrink flatRows,
@@ -59,6 +73,9 @@ export function useFileExplorerTree(
           },
           dirPath
         )
+        if (!isLatestLoad()) {
+          return
+        }
         if (depth === -1) {
           setRootError(null)
         }
@@ -75,6 +92,9 @@ export function useFileExplorerTree(
           }))
         setDirCache((prev) => ({ ...prev, [dirPath]: { children, loading: false } }))
       } catch (error) {
+        if (!isLatestLoad()) {
+          return
+        }
         if (depth === -1) {
           // Why: the old implementation collapsed root read failures into an
           // empty tree, which made authorization/path bugs look like a real
@@ -144,6 +164,8 @@ export function useFileExplorerTree(
   const rootCache = worktreePath ? dirCache[worktreePath] : undefined
 
   const resetAndLoad = useCallback(() => {
+    treeLoadSessionRef.current += 1
+    dirLoadRevisionRef.current = {}
     setDirCache({})
     setRootError(null)
     if (worktreePath) {
