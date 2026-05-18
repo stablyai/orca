@@ -30,7 +30,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RemoteFetchResult, RemoteTrackingBase } from '../runtime/orca-runtime'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
 import { createSetupRunnerScript, getEffectiveHooks, shouldRunSetupForCreate } from '../hooks'
-import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getActiveMultiplexer } from './ssh'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
 import { isTuiAgent } from '../../shared/tui-agent-config'
@@ -319,10 +319,7 @@ export async function createRemoteWorktree(
     throw new Error('Sparse checkout is not supported for remote SSH repos yet.')
   }
 
-  const provider = getSshGitProvider(repo.connectionId!) as SshGitProvider | undefined
-  if (!provider) {
-    throw new Error(`No git provider for connection "${repo.connectionId}"`)
-  }
+  const provider = requireSshGitProvider(repo.connectionId!)
 
   const settings = store.getSettings()
   const requestedName = args.name

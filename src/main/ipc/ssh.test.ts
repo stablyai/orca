@@ -26,6 +26,7 @@ const {
   mockConnectionManager: {
     connect: vi.fn(),
     disconnect: vi.fn(),
+    getConnection: vi.fn(),
     getState: vi.fn(),
     disconnectAll: vi.fn()
   },
@@ -188,6 +189,7 @@ describe('SSH IPC handlers', () => {
 
     mockConnectionManager.connect.mockReset()
     mockConnectionManager.disconnect.mockReset()
+    mockConnectionManager.getConnection.mockReset()
     mockConnectionManager.getState.mockReset()
     mockConnectionManager.disconnectAll.mockReset()
 
@@ -321,6 +323,72 @@ describe('SSH IPC handlers', () => {
     await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
 
     expect(mockConnectionManager.connect).toHaveBeenCalledWith(target)
+  })
+
+  it('surfaces relay channel loss while the SSH connection remains alive', async () => {
+    vi.useFakeTimers()
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const conn = {}
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue(conn)
+    mockConnectionManager.getConnection.mockReturnValue(conn)
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    try {
+      await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
+      const onDispose = mockMux.onDispose.mock.calls[0]?.[0] as
+        | ((reason: 'shutdown' | 'connection_lost') => void)
+        | undefined
+
+      onDispose?.('connection_lost')
+
+      expect(mockWindow.webContents.send).toHaveBeenCalledWith('ssh:state-changed', {
+        targetId: 'ssh-1',
+        state: {
+          targetId: 'ssh-1',
+          status: 'reconnecting',
+          error: 'Relay channel lost. Reconnecting...',
+          reconnectAttempt: 1
+        }
+      })
+      expect(handlers.get('ssh:getState')!(null, { targetId: 'ssh-1' })).toEqual({
+        targetId: 'ssh-1',
+        status: 'reconnecting',
+        error: 'Relay channel lost. Reconnecting...',
+        reconnectAttempt: 1
+      })
+
+      await vi.advanceTimersByTimeAsync(500)
+
+      expect(mockWindow.webContents.send).toHaveBeenCalledWith('ssh:state-changed', {
+        targetId: 'ssh-1',
+        state: {
+          targetId: 'ssh-1',
+          status: 'connected',
+          error: null,
+          reconnectAttempt: 0
+        }
+      })
+      expect(handlers.get('ssh:getState')!(null, { targetId: 'ssh-1' })).toEqual({
+        targetId: 'ssh-1',
+        status: 'connected',
+        error: null,
+        reconnectAttempt: 0
+      })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('forwards remote PTY events into the runtime', async () => {

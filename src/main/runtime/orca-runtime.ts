@@ -269,7 +269,7 @@ import { killAllProcessesForWorktree } from './worktree-teardown'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import type { IFilesystemProvider, IPtyProvider } from '../providers/types'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
-import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import { getSshGitProvider, requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { CodexAccountService } from '../codex-accounts/service'
 import type { RateLimitService } from '../rate-limits/service'
@@ -6242,10 +6242,7 @@ export class OrcaRuntimeService {
       throw new Error('Folder mode does not support deleting worktrees.')
     }
     if (repo.connectionId) {
-      const provider = getSshGitProvider(repo.connectionId)
-      if (!provider) {
-        throw new Error(`No git provider for connection "${repo.connectionId}"`)
-      }
+      const provider = requireSshGitProvider(repo.connectionId)
       await provider.removeWorktree(worktree.path, force)
       this.clearOptimisticReconcileToken(worktree.id)
       this.store.removeWorktreeMeta(worktree.id)

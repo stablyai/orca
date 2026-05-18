@@ -87,6 +87,17 @@ vi.mock('../git/worktree', () => ({
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock,
+  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE:
+    'Remote connection dropped. Click Reconnect on the SSH target before retrying.',
+  requireSshGitProvider: (connectionId: string) => {
+    const provider = getSshGitProviderMock(connectionId)
+    if (!provider) {
+      throw new Error(
+        'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
+      )
+    }
+    return provider
+  },
   registerSshGitProvider: registerSshGitProviderMock,
   unregisterSshGitProvider: unregisterSshGitProviderMock
 }))

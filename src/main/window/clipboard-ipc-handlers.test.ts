@@ -54,7 +54,16 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: getSshFilesystemProviderMock
+  getSshFilesystemProvider: getSshFilesystemProviderMock,
+  requireSshFilesystemProvider: (connectionId: string) => {
+    const provider = getSshFilesystemProviderMock(connectionId)
+    if (!provider) {
+      throw new Error(
+        'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
+      )
+    }
+    return provider
+  }
 }))
 
 import { registerClipboardHandlers } from './clipboard-ipc-handlers'

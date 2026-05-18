@@ -25,7 +25,7 @@ import { resolveGitHubPrStartPoint } from '../github/pr-start-point'
 import { getProjectRef as getGlabProjectRef, getGlabKnownHosts } from '../gitlab/gl-utils'
 import { getWorkItemByProjectRef as getGitLabWorkItemByProjectRef } from '../gitlab/client'
 import { listRepoWorktrees, createFolderWorktree } from '../repo-worktrees'
-import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import { getSshGitProvider, requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import {
   createIssueCommandRunnerScript,
   getEffectiveHooks,
@@ -585,10 +585,7 @@ export function registerWorktreeHandlers(
 
       // Why: the renderer-supplied worktreeId contains a filesystem path.
       // Re-derive the canonical path from git before any destructive action.
-      const provider = repo.connectionId ? getSshGitProvider(repo.connectionId) : null
-      if (repo.connectionId && !provider) {
-        throw new Error(`No git provider for connection "${repo.connectionId}"`)
-      }
+      const provider = repo.connectionId ? requireSshGitProvider(repo.connectionId) : null
       const registeredWorktrees = repo.connectionId
         ? await provider!.listWorktrees(repo.path)
         : await listGitWorktrees(repo.path)

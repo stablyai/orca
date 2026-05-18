@@ -106,11 +106,24 @@ vi.mock('../git/worktree', () => ({
 }))
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: getSshFilesystemProviderMock
+  getSshFilesystemProvider: getSshFilesystemProviderMock,
+  SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE:
+    'Remote connection dropped. Click Reconnect on the SSH target before retrying.',
+  requireSshFilesystemProvider: (connectionId: string) => {
+    const provider = getSshFilesystemProviderMock(connectionId)
+    if (!provider) {
+      throw new Error(
+        'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
+      )
+    }
+    return provider
+  }
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock
+  getSshGitProvider: getSshGitProviderMock,
+  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE:
+    'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
 }))
 
 vi.mock('../text-generation/commit-message-text-generation', () => ({
@@ -228,6 +241,16 @@ describe('registerFilesystemHandlers', () => {
       close: vi.fn()
     })
     lstatMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+  })
+
+  it('returns an actionable reconnect error when the SSH filesystem provider is unavailable', async () => {
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:readDir')!(null, { dirPath: '/remote/repo', connectionId: 'ssh-1' })
+    ).rejects.toThrow(
+      'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
+    )
   })
 
   it('rejects readFile when the real path escapes allowed roots', async () => {

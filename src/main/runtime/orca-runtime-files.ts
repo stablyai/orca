@@ -49,7 +49,10 @@ import {
   SEARCH_TIMEOUT_MS
 } from '../../shared/text-search'
 import type { Store } from '../persistence'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import {
+  getSshFilesystemProvider,
+  SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE
+} from '../providers/ssh-filesystem-dispatch'
 import { joinWorktreeRelativePath, normalizeRuntimeRelativePath } from './runtime-relative-paths'
 
 const MOBILE_FILE_LIST_LIMIT = 5000
@@ -225,7 +228,7 @@ export class RuntimeFileCommands {
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
-        throw new Error('remote_filesystem_unavailable')
+        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
       return provider.readDir(target.path)
     }
@@ -258,7 +261,7 @@ export class RuntimeFileCommands {
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
-        throw new Error('remote_filesystem_unavailable')
+        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
       return provider.watch(target.path, callback)
     }
@@ -323,7 +326,7 @@ export class RuntimeFileCommands {
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
-        throw new Error('remote_filesystem_unavailable')
+        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
       const fileStats = await provider.stat(target.path)
       if (fileStats.size > RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES) {
@@ -368,7 +371,7 @@ export class RuntimeFileCommands {
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
-        throw new Error('remote_filesystem_unavailable')
+        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
       await provider.writeFile(target.path, content)
       return { ok: true }
@@ -399,7 +402,7 @@ export class RuntimeFileCommands {
     const content = Buffer.from(contentBase64, 'base64')
     if (target.connectionId) {
       if (!provider) {
-        throw new Error('remote_filesystem_unavailable')
+        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
       await provider.writeFileBase64(target.path, contentBase64)
       return { ok: true }
@@ -422,7 +425,7 @@ export class RuntimeFileCommands {
     const content = Buffer.from(contentBase64, 'base64')
     if (target.connectionId) {
       if (!provider) {
-        throw new Error('remote_filesystem_unavailable')
+        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
       await provider.writeFileBase64Chunk(target.path, contentBase64, append)
       return { ok: true }
@@ -442,7 +445,7 @@ export class RuntimeFileCommands {
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
-        throw new Error('remote_filesystem_unavailable')
+        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
       await provider.createFile(target.path)
       return { ok: true }
@@ -466,7 +469,7 @@ export class RuntimeFileCommands {
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
-        throw new Error('remote_filesystem_unavailable')
+        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
       await provider.createDir(target.path)
       return { ok: true }
@@ -486,7 +489,7 @@ export class RuntimeFileCommands {
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
-        throw new Error('remote_filesystem_unavailable')
+        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
       await provider.createDirNoClobber(target.path)
       return { ok: true }
@@ -509,7 +512,7 @@ export class RuntimeFileCommands {
       : null
     if (tempTarget.connectionId) {
       if (!provider) {
-        throw new Error('remote_filesystem_unavailable')
+        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
       await provider.copy(tempTarget.path, finalTarget.path)
       await provider.deletePath(tempTarget.path, false).catch(() => {})
@@ -537,7 +540,7 @@ export class RuntimeFileCommands {
       : null
     if (oldTarget.connectionId) {
       if (!provider) {
-        throw new Error('remote_filesystem_unavailable')
+        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
       await provider.rename(oldTarget.path, newTarget.path)
       return { ok: true }
@@ -566,7 +569,7 @@ export class RuntimeFileCommands {
       : null
     if (sourceTarget.connectionId) {
       if (!provider) {
-        throw new Error('remote_filesystem_unavailable')
+        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
       await provider.copy(sourceTarget.path, destinationTarget.path)
       return { ok: true }
@@ -595,7 +598,7 @@ export class RuntimeFileCommands {
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
-        throw new Error('remote_filesystem_unavailable')
+        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
       await provider.deletePath(target.path, recursive)
       return { ok: true }
@@ -620,7 +623,7 @@ export class RuntimeFileCommands {
     const searchOptions = { ...options, rootPath }
     if (target.connectionId) {
       if (!provider) {
-        throw new Error('remote_filesystem_unavailable')
+        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
       return provider.search(searchOptions)
     }
@@ -647,7 +650,7 @@ export class RuntimeFileCommands {
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
-        throw new Error('remote_filesystem_unavailable')
+        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
       const relativePaths = await provider.listFiles(target.worktree.path)
       return markdownDocumentsFromRelativePaths(target.worktree.path, relativePaths)
@@ -663,7 +666,7 @@ export class RuntimeFileCommands {
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
-        throw new Error('remote_filesystem_unavailable')
+        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
       const fileStat = await provider.stat(target.path)
       return {
@@ -790,7 +793,7 @@ export class RuntimeFileCommands {
   private async readRemoteMobileFile(filePath: string, connectionId: string): Promise<string> {
     const provider = getSshFilesystemProvider(connectionId)
     if (!provider) {
-      throw new Error('remote_filesystem_unavailable')
+      throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
     }
     const fileStat = await provider.stat(filePath)
     // Why: the SSH filesystem API does not expose ranged reads here, so reject

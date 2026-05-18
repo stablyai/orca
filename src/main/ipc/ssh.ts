@@ -72,6 +72,7 @@ type RelayLostBackoffState = {
   pendingTimer: ReturnType<typeof setTimeout> | null
 }
 const relayLostBackoff = new Map<string, RelayLostBackoffState>()
+const relayStateOverrides = new Map<string, SshConnectionState>()
 const RELAY_LOST_MAX_ATTEMPTS = 6
 const RELAY_LOST_BASE_DELAY_MS = 500
 const RELAY_LOST_MAX_DELAY_MS = 15_000
@@ -89,6 +90,37 @@ function clearRelayLostBackoff(targetId: string): void {
     clearTimeout(state.pendingTimer)
   }
   relayLostBackoff.delete(targetId)
+}
+
+function broadcastSshState(
+  getMainWindow: () => BrowserWindow | null,
+  targetId: string,
+  state: SshConnectionState
+): void {
+  const win = getMainWindow()
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('ssh:state-changed', { targetId, state })
+  }
+}
+
+function publishRelayOverride(
+  getMainWindow: () => BrowserWindow | null,
+  targetId: string,
+  status: SshConnectionStatus,
+  error: string | null,
+  reconnectAttempt: number
+): void {
+  const state: SshConnectionState = { targetId, status, error, reconnectAttempt }
+  relayStateOverrides.set(targetId, state)
+  broadcastSshState(getMainWindow, targetId, state)
+}
+
+function clearRelayStateOverride(targetId: string): void {
+  relayStateOverrides.delete(targetId)
+}
+
+function getPublicSshState(targetId: string): SshConnectionState | undefined {
+  return relayStateOverrides.get(targetId) ?? connectionManager!.getState(targetId) ?? undefined
 }
 
 function broadcastPortForwards(getMainWindow: () => BrowserWindow | null, targetId: string): void {
@@ -243,16 +275,33 @@ export function registerSshHandlers(
         return
       }
 
-      const win = getMainWindow()
-      if (win && !win.isDestroyed()) {
-        win.webContents.send('ssh:state-changed', { targetId, state })
-      }
-
       // Why: when SSH reconnects after a network blip, we must re-deploy the
       // relay and rebuild the full provider stack. The session's state machine
       // ensures this only triggers when appropriate — 'deploying' state from
       // an explicit ssh:connect is not 'ready', so this branch won't fire.
       const session = activeSessions.get(targetId)
+      const sessionState = session?.getState()
+      const shouldReconnectRelay =
+        session !== undefined &&
+        state.status === 'connected' &&
+        state.reconnectAttempt === 0 &&
+        (sessionState === 'ready' || sessionState === 'reconnecting')
+
+      if (shouldReconnectRelay) {
+        // Why: SSH is connected before the relay providers are rebuilt. Keep
+        // renderer actions gated until SshRelaySession reaches ready again.
+        publishRelayOverride(
+          getMainWindow,
+          targetId,
+          'reconnecting',
+          'Relay channel reconnecting...',
+          state.reconnectAttempt
+        )
+      } else {
+        clearRelayStateOverride(targetId)
+        broadcastSshState(getMainWindow, targetId, state)
+      }
+
       if (!session) {
         return
       }
@@ -260,12 +309,7 @@ export function registerSshHandlers(
       // 'reconnecting' (previous reconnect attempt failed, e.g. relay deploy
       // error on a working SSH connection). Without the 'reconnecting' check,
       // a failed relay deploy would permanently brick the session.
-      const sessionState = session.getState()
-      if (
-        state.status === 'connected' &&
-        state.reconnectAttempt === 0 &&
-        (sessionState === 'ready' || sessionState === 'reconnecting')
-      ) {
+      if (shouldReconnectRelay) {
         const target = sshStore?.getTarget(targetId)
         const conn = connectionManager?.getConnection(targetId)
         if (conn) {
@@ -305,6 +349,7 @@ export function registerSshHandlers(
       session.dispose()
       activeSessions.delete(args.id)
       clearRelayLostBackoff(args.id)
+      clearRelayStateOverride(args.id)
     }
     try {
       await connectionManager!.disconnect(args.id)
@@ -342,6 +387,7 @@ export function registerSshHandlers(
   })
 
   async function doConnect(targetId: string): Promise<SshConnectionState> {
+    clearRelayStateOverride(targetId)
     const target = sshStore!.getTarget(targetId)
     if (!target) {
       throw new Error(`SSH target "${targetId}" not found`)
@@ -360,6 +406,7 @@ export function registerSshHandlers(
       existingSession.detach()
       activeSessions.delete(targetId)
       clearRelayLostBackoff(targetId)
+      clearRelayStateOverride(targetId)
     }
 
     // Why: create the session early so onStateChange sees it in 'deploying'
@@ -392,18 +439,13 @@ export function registerSshHandlers(
       credentialRequestedForTarget.delete(targetId)
       activeSessions.delete(targetId)
       clearRelayLostBackoff(targetId)
-      const win = getMainWindow()
-      if (win && !win.isDestroyed()) {
-        win.webContents.send('ssh:state-changed', {
-          targetId,
-          state: {
-            targetId,
-            status,
-            error: errObj.message,
-            reconnectAttempt: 0
-          }
-        })
-      }
+      clearRelayStateOverride(targetId)
+      broadcastSshState(getMainWindow, targetId, {
+        targetId,
+        status,
+        error: errObj.message,
+        reconnectAttempt: 0
+      })
       throw err
     }
 
@@ -432,18 +474,7 @@ export function registerSshHandlers(
         console.warn(
           `[ssh] Terminal relay error for ${tid}: ${err.message}; skipping reconnect backoff.`
         )
-        const win = getMainWindow()
-        if (win && !win.isDestroyed()) {
-          win.webContents.send('ssh:state-changed', {
-            targetId: tid,
-            state: {
-              targetId: tid,
-              status: 'error',
-              error: err.message,
-              reconnectAttempt: 0
-            }
-          })
-        }
+        publishRelayOverride(getMainWindow, tid, 'error', err.message, 0)
       })
 
       session.setOnRelayLost((tid) => {
@@ -477,18 +508,13 @@ export function registerSshHandlers(
           // Why: surface the failure so the renderer can prompt the user.
           // A still-live SSH connection with a dead relay is otherwise an
           // invisible failure — typing in remote terminals just stops working.
-          const win = getMainWindow()
-          if (win && !win.isDestroyed()) {
-            win.webContents.send('ssh:state-changed', {
-              targetId: tid,
-              state: {
-                targetId: tid,
-                status: 'error',
-                error: 'Relay channel kept dropping. Please reconnect.',
-                reconnectAttempt: 0
-              }
-            })
-          }
+          publishRelayOverride(
+            getMainWindow,
+            tid,
+            'error',
+            'Relay channel kept dropping. Click Reconnect on the SSH target before retrying.',
+            0
+          )
           return
         }
         const delay = Math.min(
@@ -496,6 +522,13 @@ export function registerSshHandlers(
           RELAY_LOST_MAX_DELAY_MS
         )
         state.attempts += 1
+        publishRelayOverride(
+          getMainWindow,
+          tid,
+          'reconnecting',
+          'Relay channel lost. Reconnecting...',
+          state.attempts
+        )
         state.pendingTimer = setTimeout(() => {
           state.pendingTimer = null
           state.lastAttemptStartedAt = Date.now()
@@ -529,6 +562,15 @@ export function registerSshHandlers(
             relayLostBackoff.delete(tid)
           }
         }
+        clearRelayStateOverride(tid)
+        if (!testingTargets.has(tid)) {
+          broadcastSshState(getMainWindow, tid, {
+            targetId: tid,
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0
+          })
+        }
         void restorePortForwards(tid, getMainWindow)
       })
 
@@ -540,6 +582,7 @@ export function registerSshHandlers(
       // trigger the reconnection logic.
       const win = getMainWindow()
       if (win && !win.isDestroyed()) {
+        clearRelayStateOverride(targetId)
         win.webContents.send('ssh:state-changed', {
           targetId,
           state: {
@@ -566,7 +609,7 @@ export function registerSshHandlers(
     credentialRequestedForTarget.delete(targetId)
     sshStore!.updateTarget(targetId, { lastRequiredPassphrase: requiredPassphrase })
 
-    return connectionManager!.getState(targetId)!
+    return getPublicSshState(targetId)!
   }
 
   ipcMain.handle('ssh:disconnect', async (_event, args: { targetId: string }) => {
@@ -579,6 +622,7 @@ export function registerSshHandlers(
       session.detach()
       activeSessions.delete(args.targetId)
       clearRelayLostBackoff(args.targetId)
+      clearRelayStateOverride(args.targetId)
     }
     await connectionManager!.disconnect(args.targetId)
   })
@@ -625,12 +669,13 @@ export function registerSshHandlers(
       session.dispose()
       activeSessions.delete(args.targetId)
       clearRelayLostBackoff(args.targetId)
+      clearRelayStateOverride(args.targetId)
     }
     await connectionManager!.disconnect(args.targetId)
   })
 
   ipcMain.handle('ssh:getState', (_event, args: { targetId: string }) => {
-    return connectionManager!.getState(args.targetId)
+    return getPublicSshState(args.targetId)
   })
 
   // Why: callers that want to auto-connect (Cmd+J jump, terminal reattach) need

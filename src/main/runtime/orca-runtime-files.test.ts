@@ -41,7 +41,9 @@ vi.mock('../ipc/filesystem-auth', async () => {
 })
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: vi.fn()
+  getSshFilesystemProvider: vi.fn(),
+  SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE:
+    'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
 }))
 
 import { awaitRuntimeFileWatcherUnsubscribes, RuntimeFileCommands } from './orca-runtime-files'

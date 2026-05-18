@@ -32,7 +32,6 @@ import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition
 } from '../../../../shared/types'
-import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { buildWorktreeComparator } from './smart-sort'
 import {
   buildAttentionByWorktree,
@@ -81,6 +80,7 @@ import {
 } from './worktree-multi-selection'
 import { branchDisplayName } from './WorktreeCardHelpers'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { getRepoHeaderCreateState } from './repo-header-create-state'
 
 // How long to wait after a sortEpoch bump before actually re-sorting.
 // Prevents jarring position shifts when background events (AI starting work,
@@ -341,6 +341,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const activeLineageChildTargetLabel = useAppStore((s) =>
     activeLineageChildConnectionId ? s.sshTargetLabels.get(activeLineageChildConnectionId) : null
   )
+  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const activeLineageChildSshDisconnected =
     activeLineageChildSshStatus !== null && activeLineageChildSshStatus !== 'connected'
   const renderRowsRef = useRef(renderRows)
@@ -854,6 +855,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 ? getWorkspaceStatusFromGroupKey(row.key, workspaceStatuses)
                 : null
             const isPinnedHeader = row.key === PINNED_GROUP_KEY
+            const createState = row.repo
+              ? getRepoHeaderCreateState({
+                  repo: row.repo,
+                  label: row.label,
+                  sshStatus: row.repo.connectionId
+                    ? (sshConnectionStates.get(row.repo.connectionId)?.status ?? null)
+                    : null
+                })
+              : null
             return (
               <div
                 key={vItem.key}
@@ -998,29 +1008,50 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   {row.repo && groupBy === 'repo' ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          className="size-5 shrink-0 rounded-md text-muted-foreground hover:bg-accent/70 hover:text-foreground transition-opacity"
-                          aria-label={`Create worktree for ${row.label}`}
-                          onKeyDown={stopRepoHeaderKeyboardToggle}
-                          onClick={(event) => {
-                            event.preventDefault()
-                            event.stopPropagation()
-                            if (row.repo && isGitRepoKind(row.repo)) {
-                              handleCreateForRepo(row.repo.id)
+                        {createState?.disabled ? (
+                          <span
+                            className="inline-flex cursor-not-allowed"
+                            tabIndex={0}
+                            aria-label={createState.ariaLabel}
+                            onKeyDown={stopRepoHeaderKeyboardToggle}
+                            onClick={(event) => event.stopPropagation()}
+                            onPointerDown={(event) => event.stopPropagation()}
+                          >
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-xs"
+                              className="pointer-events-none size-5 shrink-0 rounded-md text-muted-foreground transition-opacity opacity-60"
+                              aria-label={createState.ariaLabel}
+                              disabled
+                            >
+                              <Plus className="size-3" />
+                            </Button>
+                          </span>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            className="size-5 shrink-0 rounded-md text-muted-foreground hover:bg-accent/70 hover:text-foreground transition-opacity"
+                            aria-label={
+                              createState?.ariaLabel ?? `Create worktree for ${row.label}`
                             }
-                          }}
-                          disabled={row.repo ? !isGitRepoKind(row.repo) : false}
-                        >
-                          <Plus className="size-3" />
-                        </Button>
+                            onKeyDown={stopRepoHeaderKeyboardToggle}
+                            onClick={(event) => {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              if (row.repo) {
+                                handleCreateForRepo(row.repo.id)
+                              }
+                            }}
+                          >
+                            <Plus className="size-3" />
+                          </Button>
+                        )}
                       </TooltipTrigger>
                       <TooltipContent side="bottom" sideOffset={6}>
-                        {row.repo && !isGitRepoKind(row.repo)
-                          ? `${row.label} is opened as a folder`
-                          : `Create worktree for ${row.label}`}
+                        {createState?.tooltip ?? `Create worktree for ${row.label}`}
                       </TooltipContent>
                     </Tooltip>
                   ) : null}
