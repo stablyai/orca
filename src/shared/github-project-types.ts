@@ -374,7 +374,7 @@ export type UpdatePullRequestBySlugArgs = {
   owner: string
   repo: string
   number: number
-  updates: { title?: string; body?: string }
+  updates: { title?: string; body?: string; state?: 'open' | 'closed' }
 }
 
 export type AddIssueCommentBySlugArgs = {

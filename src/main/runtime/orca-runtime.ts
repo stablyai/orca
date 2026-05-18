@@ -94,6 +94,7 @@ import {
   listWorkItems,
   countWorkItems,
   getPRChecks,
+  rerunPRChecks,
   getPRComments,
   getIssue,
   resolveReviewThread,
@@ -101,6 +102,8 @@ import {
   getWorkItemByOwnerRepo,
   updatePRTitle,
   mergePR,
+  updatePRState,
+  requestPRReviewers,
   createIssue,
   updateIssue,
   addIssueComment,
@@ -113,6 +116,7 @@ import { getWorkItemDetails, getPRFileContents } from '../github/work-item-detai
 import { getRateLimit } from '../github/rate-limit'
 import type {
   GitHubIssueUpdate,
+  GitHubPullRequestStateUpdate,
   GitHubPRFile,
   GitHubPRReviewCommentInput
 } from '../../shared/types'
@@ -4670,6 +4674,16 @@ export class OrcaRuntimeService {
     return getPRChecks(repo.path, prNumber, headSha, options)
   }
 
+  async rerunRepoPRChecks(
+    repoSelector: string,
+    prNumber: number,
+    options?: { headSha?: string; failedOnly?: boolean }
+  ): Promise<Awaited<ReturnType<typeof rerunPRChecks>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_checks_rerun')
+    return rerunPRChecks(repo.path, prNumber, options)
+  }
+
   async getRepoPRComments(
     repoSelector: string,
     prNumber: number,
@@ -4737,6 +4751,26 @@ export class OrcaRuntimeService {
     const repo = await this.resolveRepoSelector(repoSelector)
     this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_merge')
     return mergePR(repo.path, prNumber, method)
+  }
+
+  async updateRepoPRState(
+    repoSelector: string,
+    prNumber: number,
+    updates: GitHubPullRequestStateUpdate
+  ): Promise<Awaited<ReturnType<typeof updatePRState>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_state')
+    return updatePRState(repo.path, prNumber, updates)
+  }
+
+  async requestRepoPRReviewers(
+    repoSelector: string,
+    prNumber: number,
+    reviewers: string[]
+  ): Promise<Awaited<ReturnType<typeof requestPRReviewers>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_reviewers')
+    return requestPRReviewers(repo.path, prNumber, reviewers)
   }
 
   async createRepoIssue(

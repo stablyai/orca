@@ -12,7 +12,9 @@ import type {
   GitHubPRReviewCommentInput,
   PRComment,
   GitHubViewer,
-  GitHubWorkItem
+  GitHubWorkItem,
+  GitHubPullRequestStateUpdate,
+  GitHubRerunPRChecksResult
 } from '../../shared/types'
 import type { CreateHostedReviewInput, CreateHostedReviewResult } from '../../shared/hosted-review'
 import {
@@ -226,6 +228,15 @@ export async function getAuthenticatedViewer(): Promise<GitHubViewer | null> {
 // single-repo and cross-repo items are uniform downstream.
 type MainWorkItem = Omit<GitHubWorkItem, 'repoId'>
 
+const WORK_ITEM_PR_LIST_JSON_FIELDS =
+  'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRepositoryOwner'
+
+// Why: these fields are intentionally excluded from `gh pr list` because
+// statusCheckRollup/review/merge metadata fan out into expensive GraphQL work
+// across every row. Fetch them only for single-PR detail surfaces.
+const WORK_ITEM_PR_DETAIL_JSON_FIELDS =
+  'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRepositoryOwner,additions,deletions,changedFiles,reviewDecision,reviewRequests,latestReviews,assignees,statusCheckRollup,mergeable,mergeStateStatus,maintainerCanModify'
+
 function mapIssueWorkItem(item: Record<string, unknown>): MainWorkItem {
   return {
     id: `issue:${String(item.number)}`,
@@ -277,6 +288,142 @@ function extractHeadOwnerLogin(item: Record<string, unknown>): string | null {
   return null
 }
 
+function userFromUnknown(
+  value: unknown
+): { login: string; name: string | null; avatarUrl: string } | null {
+  if (typeof value === 'string') {
+    const login = value.trim()
+    return login ? { login, name: null, avatarUrl: '' } : null
+  }
+  if (typeof value !== 'object' || value === null) {
+    return null
+  }
+  const raw = value as Record<string, unknown>
+  const login = typeof raw.login === 'string' ? raw.login.trim() : ''
+  if (!login) {
+    return null
+  }
+  return {
+    login,
+    name: typeof raw.name === 'string' ? raw.name : null,
+    avatarUrl: typeof raw.avatarUrl === 'string' ? raw.avatarUrl : ''
+  }
+}
+
+function usersFromUnknown(
+  value: unknown
+): { login: string; name: string | null; avatarUrl: string }[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const users: { login: string; name: string | null; avatarUrl: string }[] = []
+  for (const entry of value) {
+    const direct = userFromUnknown(entry)
+    if (direct) {
+      users.push(direct)
+      continue
+    }
+    if (typeof entry === 'object' && entry !== null) {
+      const raw = entry as Record<string, unknown>
+      const nested = userFromUnknown(raw.requestedReviewer ?? raw.user ?? raw.author)
+      if (nested) {
+        users.push(nested)
+      }
+    }
+  }
+  return users
+}
+
+function latestReviewsFromUnknown(value: unknown): NonNullable<GitHubWorkItem['latestReviews']> {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const reviews: NonNullable<GitHubWorkItem['latestReviews']> = []
+  for (const entry of value) {
+    if (typeof entry !== 'object' || entry === null) {
+      continue
+    }
+    const raw = entry as Record<string, unknown>
+    const author = userFromUnknown(raw.author)
+    if (!author) {
+      continue
+    }
+    reviews.push({
+      login: author.login,
+      state: typeof raw.state === 'string' ? raw.state : null,
+      avatarUrl: author.avatarUrl
+    })
+  }
+  return reviews
+}
+
+function numberFromUnknown(value: unknown): number | undefined {
+  const number = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(number) ? number : undefined
+}
+
+function normalizePRMergeable(value: unknown): PRMergeableState | undefined {
+  const raw = typeof value === 'string' ? value.toUpperCase() : ''
+  if (raw === 'MERGEABLE' || raw === 'CONFLICTING' || raw === 'UNKNOWN') {
+    return raw
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'MERGEABLE' : 'CONFLICTING'
+  }
+  return undefined
+}
+
+function checkRollupEntries(value: unknown): unknown[] {
+  if (Array.isArray(value)) {
+    return value
+  }
+  if (typeof value !== 'object' || value === null) {
+    return []
+  }
+  const raw = value as Record<string, unknown>
+  const nodes = (raw.contexts as { nodes?: unknown } | undefined)?.nodes
+  return Array.isArray(nodes) ? nodes : []
+}
+
+function deriveWorkItemCheckSummary(value: unknown): GitHubWorkItem['checksSummary'] {
+  const entries = checkRollupEntries(value)
+  if (entries.length === 0) {
+    return { state: 'none', total: 0, passed: 0, failed: 0, pending: 0 }
+  }
+  let passed = 0
+  let failed = 0
+  let pending = 0
+  for (const entry of entries) {
+    if (typeof entry !== 'object' || entry === null) {
+      pending += 1
+      continue
+    }
+    const raw = entry as Record<string, unknown>
+    const conclusion = String(raw.conclusion ?? raw.state ?? '').toUpperCase()
+    const status = String(raw.status ?? '').toUpperCase()
+    if (['SUCCESS', 'NEUTRAL', 'SKIPPED'].includes(conclusion)) {
+      passed += 1
+    } else if (
+      ['FAILURE', 'ERROR', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED', 'STARTUP_FAILURE'].includes(
+        conclusion
+      )
+    ) {
+      failed += 1
+    } else if (status === 'COMPLETED' && conclusion) {
+      failed += 1
+    } else {
+      pending += 1
+    }
+  }
+  return {
+    state: failed > 0 ? 'failure' : pending > 0 ? 'pending' : 'success',
+    total: entries.length,
+    passed,
+    failed,
+    pending
+  }
+}
+
 function mapPullRequestWorkItem(
   item: Record<string, unknown>,
   baseOwnerLogin: string | null = null
@@ -291,13 +438,22 @@ function mapPullRequestWorkItem(
   // of falsely claiming "not a fork".
   const isCrossRepository =
     headOwnerLogin !== null && baseOwnerLogin !== null ? headOwnerLogin !== baseOwnerLogin : null
+  const state = String(item.state ?? '').toLowerCase()
+  const additions = numberFromUnknown(item.additions)
+  const deletions = numberFromUnknown(item.deletions)
+  const changedFiles = numberFromUnknown(
+    item.changedFiles ??
+      item.changed_files ??
+      (item.files as { totalCount?: unknown } | undefined)?.totalCount
+  )
+  const mergeable = normalizePRMergeable(item.mergeable)
   return {
     id: `pr:${String(item.number)}`,
     type: 'pr',
     number: Number(item.number),
     title: String(item.title ?? ''),
     state:
-      item.state === 'closed'
+      state === 'closed'
         ? item.merged_at || item.mergedAt
           ? 'merged'
           : 'closed'
@@ -329,6 +485,31 @@ function mapPullRequestWorkItem(
       typeof item.base === 'object' && item.base !== null && 'ref' in item.base
         ? String((item.base as { ref?: unknown }).ref ?? '')
         : String(item.baseRefName ?? ''),
+    ...(additions !== undefined ? { additions } : {}),
+    ...(deletions !== undefined ? { deletions } : {}),
+    ...(changedFiles !== undefined ? { changedFiles } : {}),
+    ...('reviewDecision' in item
+      ? { reviewDecision: typeof item.reviewDecision === 'string' ? item.reviewDecision : null }
+      : {}),
+    ...(item.reviewRequests !== undefined || item.requested_reviewers !== undefined
+      ? { reviewRequests: usersFromUnknown(item.reviewRequests ?? item.requested_reviewers) }
+      : {}),
+    ...(item.latestReviews !== undefined
+      ? { latestReviews: latestReviewsFromUnknown(item.latestReviews) }
+      : {}),
+    ...(item.assignees !== undefined ? { assignees: usersFromUnknown(item.assignees) } : {}),
+    ...(item.statusCheckRollup !== undefined
+      ? { checksSummary: deriveWorkItemCheckSummary(item.statusCheckRollup) }
+      : {}),
+    ...(mergeable ? { mergeable } : {}),
+    ...('mergeStateStatus' in item
+      ? {
+          mergeStateStatus: typeof item.mergeStateStatus === 'string' ? item.mergeStateStatus : null
+        }
+      : {}),
+    ...(typeof item.maintainerCanModify === 'boolean'
+      ? { maintainerCanModify: item.maintainerCanModify }
+      : {}),
     ...(isCrossRepository !== null ? { isCrossRepository } : {})
   }
 }
@@ -375,13 +556,7 @@ async function fetchPullRequestWorkItem(
   }
 
   const { stdout } = await ghExecFileAsync(
-    [
-      'pr',
-      'view',
-      String(number),
-      '--json',
-      'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRepositoryOwner'
-    ],
+    ['pr', 'view', String(number), '--json', WORK_ITEM_PR_DETAIL_JSON_FIELDS],
     ghOptions
   )
   return mapPullRequestWorkItem(JSON.parse(stdout) as Record<string, unknown>)
@@ -398,7 +573,7 @@ function buildWorkItemListArgs(args: {
   const fields =
     kind === 'issue'
       ? 'number,title,state,url,labels,updatedAt,author'
-      : 'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRepositoryOwner'
+      : WORK_ITEM_PR_LIST_JSON_FIELDS
   const command = kind === 'issue' ? ['issue', 'list'] : ['pr', 'list']
   const out = [...command, '--limit', String(limit), '--json', fields]
 
@@ -520,7 +695,7 @@ async function listRecentWorkItems(
               '--state',
               'open',
               '--json',
-              'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRepositoryOwner'
+              WORK_ITEM_PR_LIST_JSON_FIELDS
             ],
             ghOptions
           )
@@ -604,7 +779,7 @@ async function listRecentWorkItems(
         '--state',
         'open',
         '--json',
-        'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRepositoryOwner'
+        WORK_ITEM_PR_LIST_JSON_FIELDS
       ],
       ghOptions
     )
@@ -1513,6 +1688,21 @@ export async function getPRChecks(
 ): Promise<PRCheckDetail[]> {
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
   const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+  const fallbackToPRChecks = async (): Promise<PRCheckDetail[]> => {
+    const fallbackArgs = ['pr', 'checks', String(prNumber), '--json', 'name,state,link']
+    if (ownerRepo) {
+      fallbackArgs.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
+    }
+    const { stdout } = await ghExecFileAsync(fallbackArgs, ghOptions)
+    const data = JSON.parse(stdout) as { name: string; state: string; link: string }[]
+    return data.map((d) => ({
+      name: d.name,
+      status: mapCheckStatus(d.state),
+      conclusion: mapCheckConclusion(d.state),
+      url: d.link || null,
+      workflowRunId: parseActionsRunId(d.link)
+    }))
+  }
   await acquire()
   try {
     if (ownerRepo && headSha) {
@@ -1530,6 +1720,7 @@ export async function getPRChecks(
         )
         const data = JSON.parse(stdout) as {
           check_runs: {
+            id?: number
             name: string
             status: string
             conclusion: string | null
@@ -1537,11 +1728,16 @@ export async function getPRChecks(
             details_url: string | null
           }[]
         }
+        if (data.check_runs.length === 0) {
+          return fallbackToPRChecks()
+        }
         return data.check_runs.map((d) => ({
           name: d.name,
           status: mapCheckRunRESTStatus(d.status),
           conclusion: mapCheckRunRESTConclusion(d.status, d.conclusion),
-          url: d.details_url || d.html_url || null
+          url: d.details_url || d.html_url || null,
+          ...(typeof d.id === 'number' ? { checkRunId: d.id } : {}),
+          workflowRunId: parseActionsRunId(d.details_url || d.html_url || null)
         }))
       } catch (err) {
         // Why: a PR can outlive the cached head SHA after force-pushes or remote
@@ -1550,22 +1746,103 @@ export async function getPRChecks(
         console.warn('getPRChecks via head SHA failed, falling back to gh pr checks:', err)
       }
     }
-    // Fallback: no branch provided or non-GitHub remote
-    const fallbackArgs = ['pr', 'checks', String(prNumber), '--json', 'name,state,link']
-    if (ownerRepo) {
-      fallbackArgs.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
-    }
-    const { stdout } = await ghExecFileAsync(fallbackArgs, ghOptions)
-    const data = JSON.parse(stdout) as { name: string; state: string; link: string }[]
-    return data.map((d) => ({
-      name: d.name,
-      status: mapCheckStatus(d.state),
-      conclusion: mapCheckConclusion(d.state),
-      url: d.link || null
-    }))
+    // Fallback: no branch provided, empty check-runs, or non-GitHub remote.
+    return fallbackToPRChecks()
   } catch (err) {
     console.warn('getPRChecks failed:', err)
     return []
+  } finally {
+    release()
+  }
+}
+
+function parseActionsRunId(url: string | null | undefined): number | undefined {
+  if (!url) {
+    return undefined
+  }
+  const match = /\/actions\/runs\/(\d+)(?:\/|$)/.exec(url)
+  if (!match) {
+    return undefined
+  }
+  const id = Number(match[1])
+  return Number.isSafeInteger(id) ? id : undefined
+}
+
+export async function rerunPRChecks(
+  repoPath: string,
+  prNumber: number,
+  options: { headSha?: string; failedOnly?: boolean } = {},
+  connectionId?: string | null
+): Promise<GitHubRerunPRChecksResult> {
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
+  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+  if (!ownerRepo) {
+    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+  }
+
+  const checks = await getPRChecks(
+    repoPath,
+    prNumber,
+    options.headSha,
+    { noCache: true },
+    connectionId
+  )
+  const candidates = options.failedOnly
+    ? checks.filter((check) =>
+        ['failure', 'cancelled', 'timed_out'].includes(check.conclusion ?? '')
+      )
+    : checks
+  const workflowRunIds = new Set(
+    candidates
+      .map((check) => check.workflowRunId ?? parseActionsRunId(check.url))
+      .filter((id): id is number => typeof id === 'number')
+  )
+  const checkRunIds = new Set(
+    candidates
+      .filter((check) => !check.workflowRunId && !parseActionsRunId(check.url))
+      .map((check) => check.checkRunId)
+      .filter((id): id is number => typeof id === 'number')
+  )
+
+  if (workflowRunIds.size === 0 && checkRunIds.size === 0) {
+    return {
+      ok: false,
+      error: options.failedOnly
+        ? 'No failed GitHub Actions checks to rerun.'
+        : 'No rerunnable checks found.'
+    }
+  }
+
+  let count = 0
+  await acquire()
+  try {
+    for (const runId of workflowRunIds) {
+      const endpoint = options.failedOnly
+        ? `repos/${ownerRepo.owner}/${ownerRepo.repo}/actions/runs/${runId}/rerun-failed-jobs`
+        : `repos/${ownerRepo.owner}/${ownerRepo.repo}/actions/runs/${runId}/rerun`
+      await ghExecFileAsync(['api', '-X', 'POST', endpoint], {
+        ...ghOptions,
+        env: { ...process.env, GH_PROMPT_DISABLED: '1' }
+      })
+      count += 1
+    }
+    for (const checkRunId of checkRunIds) {
+      await ghExecFileAsync(
+        [
+          'api',
+          '-X',
+          'POST',
+          `repos/${ownerRepo.owner}/${ownerRepo.repo}/check-runs/${checkRunId}/rerequest`
+        ],
+        { ...ghOptions, env: { ...process.env, GH_PROMPT_DISABLED: '1' } }
+      )
+      count += 1
+    }
+    return { ok: true, count }
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
+    return { ok: false, error: classifyGhError(message).message }
   } finally {
     release()
   }
@@ -2078,6 +2355,74 @@ export async function mergePR(
     // fails when the user's worktree is checked out on it. Branch cleanup
     // is handled by worktree deletion (local) and GitHub's auto-delete setting (remote).
     const args = ['pr', 'merge', String(prNumber), `--${method}`]
+    if (ownerRepo) {
+      args.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
+    }
+    await ghExecFileAsync(args, {
+      ...ghOptions,
+      env: { ...process.env, GH_PROMPT_DISABLED: '1' }
+    })
+    return { ok: true }
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
+    return { ok: false, error: message }
+  } finally {
+    release()
+  }
+}
+
+export async function updatePRState(
+  repoPath: string,
+  prNumber: number,
+  updates: GitHubPullRequestStateUpdate,
+  connectionId?: string | null
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const context = githubRepoContext(repoPath, connectionId)
+  const ghOptions = ghRepoExecOptions(context)
+  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+  if (!ownerRepo) {
+    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+  }
+
+  await acquire()
+  try {
+    await ghExecFileAsync(
+      [
+        'api',
+        '-X',
+        'PATCH',
+        `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${prNumber}`,
+        '--raw-field',
+        `state=${updates.state}`
+      ],
+      ghOptions
+    )
+    return { ok: true }
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
+    return { ok: false, error: classifyGhError(message).message }
+  } finally {
+    release()
+  }
+}
+
+export async function requestPRReviewers(
+  repoPath: string,
+  prNumber: number,
+  reviewers: string[],
+  connectionId?: string | null
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const logins = reviewers.map((reviewer) => reviewer.trim()).filter(Boolean)
+  if (logins.length === 0) {
+    return { ok: false, error: 'Enter at least one reviewer login' }
+  }
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
+  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+  await acquire()
+  try {
+    const args = ['pr', 'edit', String(prNumber), '--add-reviewer', logins.join(',')]
     if (ownerRepo) {
       args.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
     }

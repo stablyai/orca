@@ -56,6 +56,7 @@ function clampPetSize(size: number): number {
 // openTaskPage warm exactly the cache key the page will read on mount.
 function presetToQuery(presetId: TaskViewPresetId | null): string {
   switch (presetId) {
+    case 'all':
     case 'issues':
       return 'is:issue is:open'
     case 'my-issues':
@@ -67,7 +68,7 @@ function presetToQuery(presetId: TaskViewPresetId | null): string {
     case 'my-prs':
       return 'author:@me is:pr is:open'
     default:
-      return 'is:open'
+      return 'is:issue is:open'
   }
 }
 
@@ -548,10 +549,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       const resume = state.taskResumeState
       const defaultPreset = state.settings?.defaultTaskViewPreset ?? 'all'
       // Why: must match the exact query TaskPage's resume effect mounts with,
-      // otherwise the warm cache key (e.g. 'is:open') misses the page's actual
-      // fetch key (e.g. '') and the prefetch is wasted. When the user has an
-      // explicit cleared custom search (preset === null), preserve the empty
-      // query so both sides agree.
+      // otherwise the warm cache key (e.g. 'is:issue is:open') misses the
+      // page's actual fetch key and the prefetch is wasted. When the user has
+      // an explicit custom search (preset === null), preserve it so both sides
+      // agree.
       const query =
         resume?.githubItemsPreset === null
           ? (resume.githubItemsQuery ?? '').trim()

@@ -62,6 +62,11 @@ const PullRequestChecks = PullRequest.extend({
   headSha: OptionalString
 })
 
+const RerunPullRequestChecks = PullRequest.extend({
+  headSha: OptionalString,
+  failedOnly: z.boolean().optional()
+})
+
 const PullRequestFileContents = RepoSelector.extend({
   prNumber: z.number().int().positive(),
   path: requiredString('Missing file path'),
@@ -90,6 +95,18 @@ const UpdatePrTitle = RepoSelector.extend({
 const MergePr = RepoSelector.extend({
   prNumber: z.number().int().positive(),
   method: z.enum(['merge', 'squash', 'rebase']).optional()
+})
+
+const UpdatePrState = RepoSelector.extend({
+  prNumber: z.number().int().positive(),
+  updates: z.object({
+    state: z.enum(['open', 'closed'])
+  })
+})
+
+const RequestPrReviewers = RepoSelector.extend({
+  prNumber: z.number().int().positive(),
+  reviewers: z.array(z.string()).min(1)
 })
 
 const CreateIssue = RepoSelector.extend({
@@ -188,6 +205,7 @@ const SlugPullRequestUpdate = z.object({
   repo: requiredString('Missing repo'),
   number: z.number().int().positive(),
   updates: z.object({
+    state: z.enum(['open', 'closed']).optional(),
     title: OptionalString,
     body: OptionalString
   })
@@ -295,6 +313,15 @@ export const GITHUB_METHODS: RpcMethod[] = [
       })
   }),
   defineMethod({
+    name: 'github.rerunPRChecks',
+    params: RerunPullRequestChecks,
+    handler: async (params, { runtime }) =>
+      runtime.rerunRepoPRChecks(params.repo, params.prNumber, {
+        headSha: params.headSha,
+        failedOnly: params.failedOnly
+      })
+  }),
+  defineMethod({
     name: 'github.prComments',
     params: PullRequest,
     handler: async (params, { runtime }) =>
@@ -340,6 +367,18 @@ export const GITHUB_METHODS: RpcMethod[] = [
     params: MergePr,
     handler: async (params, { runtime }) =>
       runtime.mergeRepoPR(params.repo, params.prNumber, params.method)
+  }),
+  defineMethod({
+    name: 'github.updatePRState',
+    params: UpdatePrState,
+    handler: async (params, { runtime }) =>
+      runtime.updateRepoPRState(params.repo, params.prNumber, params.updates)
+  }),
+  defineMethod({
+    name: 'github.requestPRReviewers',
+    params: RequestPrReviewers,
+    handler: async (params, { runtime }) =>
+      runtime.requestRepoPRReviewers(params.repo, params.prNumber, params.reviewers)
   }),
   defineMethod({
     name: 'github.createIssue',

@@ -4,7 +4,7 @@
 // through to `fieldValuesByFieldId[field.id].kind` as a safety net so a
 // fetched value is never silently dropped.
 import React, { useState } from 'react'
-import { CircleDot, FileText, GitPullRequest, Lock } from 'lucide-react'
+import { CircleDot, FileText, GitPullRequest, Lock, Plus } from 'lucide-react'
 import { TYPE_FIELD_DATA_TYPE } from './columns'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Input } from '@/components/ui/input'
@@ -110,6 +110,7 @@ export default function ProjectCell({
       <TextCell
         value={text}
         editable={editable && !isRedacted}
+        placeholder="Add text"
         onCommit={(next) => {
           if (next === '') {
             onEditField?.(field.id, null)
@@ -127,6 +128,7 @@ export default function ProjectCell({
         value={num}
         editable={editable && !isRedacted}
         numeric
+        placeholder="Add number"
         onCommit={(next) => {
           if (next === '') {
             onEditField?.(field.id, null)
@@ -436,7 +438,7 @@ function SingleSelectCell({
           aria-label={field.name}
           className="flex h-full w-full cursor-pointer items-center px-1 text-left"
         >
-          {label}
+          {label ?? <EmptyCellPrompt label="Select" />}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-56 p-1">
@@ -505,7 +507,7 @@ function IterationCell({
           aria-label={field.name}
           className="flex h-full w-full cursor-pointer items-center px-1 text-left"
         >
-          {label}
+          {label ?? <EmptyCellPrompt label="Select" />}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1">
@@ -579,11 +581,13 @@ function TextCell({
   value,
   editable,
   numeric,
+  placeholder,
   onCommit
 }: {
   value: string
   editable: boolean
   numeric?: boolean
+  placeholder: string
   onCommit: (next: string) => void
 }): React.JSX.Element {
   const [editing, setEditing] = useState(false)
@@ -601,7 +605,7 @@ function TextCell({
         }}
         className="flex h-full w-full cursor-pointer items-center px-1 text-left text-xs hover:underline"
       >
-        {value}
+        {value || <EmptyCellPrompt label={placeholder} />}
       </button>
     )
   }
@@ -772,7 +776,7 @@ function AssigneesCell({
             'flex h-full w-full flex-wrap items-center gap-1 cursor-pointer px-1 text-xs text-muted-foreground hover:text-foreground'
           )}
         >
-          {labelContent}
+          {labelContent ?? <EmptyCellPrompt label="Add assignee" />}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1">
@@ -846,7 +850,7 @@ function LabelsCell({
           aria-label="Labels"
           className={cn('flex h-full w-full flex-wrap items-center gap-1 cursor-pointer px-1')}
         >
-          {labelContent}
+          {labelContent ?? <EmptyCellPrompt label="Add label" />}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1">
@@ -885,6 +889,15 @@ function LabelsCell({
         )}
       </PopoverContent>
     </Popover>
+  )
+}
+
+function EmptyCellPrompt({ label }: { label: string }): React.JSX.Element {
+  return (
+    <span className="inline-flex h-6 max-w-full items-center gap-1 rounded-md border border-dashed border-border/70 bg-input/30 px-2 text-xs text-muted-foreground/80 shadow-xs hover:border-border hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:hover:bg-input/50">
+      <Plus className="size-3 shrink-0" />
+      <span className="truncate">{label}</span>
+    </span>
   )
 }
 

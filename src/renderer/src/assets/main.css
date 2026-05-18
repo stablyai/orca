@@ -350,6 +350,18 @@
   height: 0;
 }
 
+.project-view-tab-strip {
+  /* Why: project views load after the table shell; keeping the row stable
+     prevents the list below from jumping when the tabs arrive. */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.project-view-tab-strip::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
 /* Tab activity affordance (amber wash) is rendered as a React DOM child in
    SortableTab.tsx rather than via ::after here, so the drop-indicator
    ::before/::after pseudo-elements stay free for drag-and-drop feedback. See

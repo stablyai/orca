@@ -594,7 +594,11 @@ export type PRCheckDetail = {
     | 'pending'
     | null
   url: string | null
+  checkRunId?: number
+  workflowRunId?: number
 }
+
+export type GitHubRerunPRChecksResult = { ok: true; count: number } | { ok: false; error: string }
 
 export type GitHubReactionContent =
   | '+1'
@@ -659,6 +663,20 @@ export type GitHubAssignableUser = {
   avatarUrl: string
 }
 
+export type GitHubPRCheckSummary = {
+  state: 'success' | 'failure' | 'pending' | 'none'
+  total: number
+  passed: number
+  failed: number
+  pending: number
+}
+
+export type GitHubPRReviewSummary = {
+  login: string
+  state?: string | null
+  avatarUrl?: string | null
+}
+
 export type GitHubPRFileViewedState = 'DISMISSED' | 'VIEWED' | 'UNVIEWED'
 
 export type GitHubWorkItem = {
@@ -673,6 +691,17 @@ export type GitHubWorkItem = {
   author: string | null
   branchName?: string
   baseRefName?: string
+  additions?: number
+  deletions?: number
+  changedFiles?: number
+  reviewDecision?: string | null
+  reviewRequests?: GitHubAssignableUser[]
+  latestReviews?: GitHubPRReviewSummary[]
+  assignees?: GitHubAssignableUser[]
+  checksSummary?: GitHubPRCheckSummary
+  mergeable?: PRMergeableState
+  mergeStateStatus?: string | null
+  maintainerCanModify?: boolean
   // Why: true when a PR's head lives on a fork (headRepositoryOwner !== selected repo owner).
   // The Start-from picker passes this to resolvePrBase so fork heads use
   // refs/pull/<N>/head for creation and a separate PR-head push target.
@@ -809,6 +838,10 @@ export type GitHubIssueUpdate = {
   removeLabels?: string[]
   addAssignees?: string[]
   removeAssignees?: string[]
+}
+
+export type GitHubPullRequestStateUpdate = {
+  state: 'open' | 'closed'
 }
 
 export type LinearIssueUpdate = {

@@ -46,7 +46,7 @@ vi.mock('./rate-limit', () => ({
   noteRateLimitSpend: noteRateLimitSpendMock
 }))
 
-import { getPRChecks, _resetOwnerRepoCache } from './client'
+import { getPRChecks, rerunPRChecks, _resetOwnerRepoCache } from './client'
 
 describe('getPRChecks', () => {
   beforeEach(() => {
@@ -91,7 +91,36 @@ describe('getPRChecks', () => {
         name: 'build',
         status: 'completed',
         conclusion: 'success',
-        url: 'https://github.com/acme/widgets/actions/runs/1'
+        url: 'https://github.com/acme/widgets/actions/runs/1',
+        workflowRunId: 1
+      }
+    ])
+  })
+
+  it('falls back to gh pr checks when the head SHA has no check runs', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: JSON.stringify({ check_runs: [] }) })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          { name: 'verify', state: 'PENDING', link: 'https://example.com/verify' }
+        ])
+      })
+
+    const checks = await getPRChecks('/repo-root', 42, 'head-oid')
+
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      ['pr', 'checks', '42', '--json', 'name,state,link', '--repo', 'acme/widgets'],
+      { cwd: '/repo-root' }
+    )
+    expect(checks).toEqual([
+      {
+        name: 'verify',
+        status: 'queued',
+        conclusion: 'pending',
+        url: 'https://example.com/verify',
+        workflowRunId: undefined
       }
     ])
   })
@@ -116,8 +145,33 @@ describe('getPRChecks', () => {
         name: 'lint',
         status: 'completed',
         conclusion: 'success',
-        url: 'https://example.com/lint'
+        url: 'https://example.com/lint',
+        workflowRunId: undefined
       }
     ])
+  })
+
+  it('reruns GitHub Actions checks for a PR', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            name: 'lint',
+            state: 'FAIL',
+            link: 'https://github.com/acme/widgets/actions/runs/77/job/88'
+          }
+        ])
+      })
+      .mockResolvedValueOnce({ stdout: '' })
+
+    const result = await rerunPRChecks('/repo-root', 42, { failedOnly: true })
+
+    expect(result).toEqual({ ok: true, count: 1 })
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      ['api', '-X', 'POST', 'repos/acme/widgets/actions/runs/77/rerun-failed-jobs'],
+      { cwd: '/repo-root', env: { ...process.env, GH_PROMPT_DISABLED: '1' } }
+    )
   })
 })

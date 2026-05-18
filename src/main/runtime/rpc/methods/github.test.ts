@@ -281,6 +281,25 @@ describe('github RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: { ok: true } })
   })
 
+  it('updates PR state on the runtime server', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateRepoPRState: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('github.updatePRState', {
+        repo: 'repo-1',
+        prNumber: 7,
+        updates: { state: 'closed' }
+      })
+    )
+
+    expect(runtime.updateRepoPRState).toHaveBeenCalledWith('repo-1', 7, { state: 'closed' })
+    expect(response).toMatchObject({ ok: true, result: { ok: true } })
+  })
+
   it('creates issues on the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

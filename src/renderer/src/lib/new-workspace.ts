@@ -18,6 +18,7 @@ export { PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT } from '../../../shared/
 
 export function getTaskPresetQuery(presetId: TaskViewPresetId | null): string {
   switch (presetId) {
+    case 'all':
     case 'issues':
       return 'is:issue is:open'
     case 'my-issues':
@@ -29,7 +30,7 @@ export function getTaskPresetQuery(presetId: TaskViewPresetId | null): string {
     case 'review':
       return 'review-requested:@me is:pr is:open'
     default:
-      return 'is:open'
+      return 'is:issue is:open'
   }
 }
 
