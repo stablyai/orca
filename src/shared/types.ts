@@ -1754,6 +1754,7 @@ export type NotificationPermissionStatusResult = {
 export type WorktreeCardProperty =
   | 'status'
   | 'unread'
+  // Legacy persisted preference. CI status is now represented by linked PR metadata.
   | 'ci'
   | 'issue'
   | 'pr'

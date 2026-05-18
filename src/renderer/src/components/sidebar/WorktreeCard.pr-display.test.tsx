@@ -1,10 +1,12 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { Repo, Worktree, WorktreeCardProperty } from '../../../../shared/types'
 
 const fetchHostedReviewForBranch = vi.fn()
 const fetchIssue = vi.fn()
+const fetchLinearIssue = vi.fn()
 const openModal = vi.fn()
 const updateWorktreeMeta = vi.fn()
 
@@ -17,9 +19,11 @@ vi.mock('@/store', () => ({
       deleteStateByWorktreeId: {},
       fetchHostedReviewForBranch,
       fetchIssue,
+      fetchLinearIssue,
       gitConflictOperationByWorktree: {},
       hostedReviewCache,
       issueCache: {},
+      linearIssueCache: {},
       openModal,
       remoteBranchConflictByWorktreeId: {},
       settings: null,
@@ -89,6 +93,20 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
   }
 }
 
+function makeHostedReview(overrides: Partial<HostedReviewInfo> = {}): HostedReviewInfo {
+  return {
+    provider: 'github',
+    number: 456,
+    title: 'Fix stale GH PR',
+    state: 'open',
+    url: 'https://github.com/acme/orca/pull/456',
+    status: 'success',
+    updatedAt: '2026-05-17T00:00:00.000Z',
+    mergeable: 'MERGEABLE',
+    ...overrides
+  }
+}
+
 describe('WorktreeCard linked PR display', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -96,14 +114,60 @@ describe('WorktreeCard linked PR display', () => {
     hostedReviewCache = {}
   })
 
-  it('keeps the linked GH PR visible before hosted review details are cached', async () => {
+  it('keeps an icon-only linked GH PR badge visible before hosted review details are cached', async () => {
     const { default: WorktreeCard } = await import('./WorktreeCard')
 
     const markup = renderToStaticMarkup(
       <WorktreeCard worktree={makeWorktree({ linkedPR: 456 })} repo={makeRepo()} isActive={false} />
     )
 
-    expect(markup).toContain('PR #456')
-    expect(markup).toContain('Loading PR')
+    expect(markup).toContain('Linked PR #456')
+    expect(markup).not.toContain('Loading PR')
+  })
+
+  it('renders issue, Linear issue, PR, and notes as icon-only metadata in the closed card', async () => {
+    worktreeCardProperties = ['issue', 'pr', 'comment']
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          linkedIssue: 123,
+          linkedLinearIssue: 'ENG-123',
+          linkedPR: 456,
+          comment: 'Reviewer handoff note'
+        })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Linked issue #123')
+    expect(markup).toContain('Linked Linear ENG-123')
+    expect(markup).toContain('Linked PR #456')
+    expect(markup).toContain('Workspace notes')
+    expect(markup).not.toContain('data-slot="badge"')
+    expect(markup).not.toContain('Loading issue')
+    expect(markup).not.toContain('Loading PR')
+    expect(markup).not.toContain('Reviewer handoff note')
+  })
+
+  it('does not render the standalone CI badge and colors a failing linked PR icon red', async () => {
+    worktreeCardProperties = ['pr', 'ci']
+    hostedReviewCache = {
+      'local::repo-1::feature/local-branch': {
+        data: makeHostedReview({ status: 'failure' }),
+        fetchedAt: Date.now()
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree({ linkedPR: 456 })} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).toContain('Linked PR #456')
+    expect(markup).toContain('text-rose-500/85')
+    expect(markup).not.toContain('CI checks')
   })
 })

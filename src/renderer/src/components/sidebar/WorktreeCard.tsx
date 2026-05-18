@@ -11,8 +11,6 @@ import {
   ChevronDown,
   GitMerge,
   LoaderCircle,
-  CircleCheck,
-  CircleX,
   Server,
   ServerOff,
   Workflow
@@ -27,14 +25,13 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { getWorktreeStatusLabel } from '@/lib/worktree-status'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { Worktree, Repo, IssueInfo } from '../../../../shared/types'
+import type { Worktree, Repo, IssueInfo, LinearIssue } from '../../../../shared/types'
+import { branchDisplayName, CONFLICT_OPERATION_LABELS, FilledBellIcon } from './WorktreeCardHelpers'
 import {
-  branchDisplayName,
-  checksLabel,
-  CONFLICT_OPERATION_LABELS,
-  FilledBellIcon
-} from './WorktreeCardHelpers'
-import { IssueSection, ReviewSection, CommentSection } from './WorktreeCardMeta'
+  WorktreeCardDetailsHover,
+  WorktreeCardMetaBadges,
+  hasWorktreeCardDetails
+} from './WorktreeCardMeta'
 import { writeWorkspaceDragData } from './workspace-status'
 import { useWorktreeActivityStatus } from './use-worktree-activity-status'
 import { getWorktreeCardPrDisplay } from './worktree-card-pr-display'
@@ -46,7 +43,6 @@ type WorktreeCardProps = {
   isMultiSelected?: boolean
   selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
-  hideCiCheck?: boolean
   parentLabel?: string
   lineageState?: 'valid' | 'missing'
   lineageChildCount?: number
@@ -75,7 +71,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
   onContextMenuSelect,
   nativeDragEnabled = true,
   hideRepoBadge,
-  hideCiCheck = false,
   parentLabel,
   lineageState,
   lineageChildCount = 0,
@@ -88,6 +83,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
   const settings = useAppStore((s) => s.settings)
   const fetchIssue = useAppStore((s) => s.fetchIssue)
+  const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
   const handleEditIssue = useCallback(
     (e: React.MouseEvent) => {
@@ -118,21 +114,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
     },
     [worktree, openModal]
   )
-
-  const handleEditPr = useCallback(() => {
-    openModal('edit-meta', {
-      worktreeId: worktree.id,
-      currentDisplayName: worktree.displayName,
-      currentIssue: worktree.linkedIssue,
-      currentPR: worktree.linkedPR,
-      currentComment: worktree.comment,
-      focus: 'pr'
-    })
-  }, [worktree, openModal])
-
-  const handleRemovePr = useCallback(() => {
-    updateWorktreeMeta(worktree.id, { linkedPR: null })
-  }, [worktree.id, updateWorktreeMeta])
 
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const conflictOperation = useAppStore((s) => s.gitConflictOperationByWorktree[worktree.id])
@@ -168,12 +149,21 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const hostedReviewCacheKey =
     repo && branch ? getHostedReviewCacheKey(repo.path, branch, settings, repo.id) : ''
   const issueCacheKey = repo && worktree.linkedIssue ? `${repo.id}::${worktree.linkedIssue}` : ''
+  const linearIssueCacheKey = worktree.linkedLinearIssue
+    ? `selected::${worktree.linkedLinearIssue}`
+    : ''
 
   // Subscribe to ONLY the specific cache entry, not entire review/issue caches.
   const hostedReviewEntry = useAppStore((s) =>
     hostedReviewCacheKey ? s.hostedReviewCache[hostedReviewCacheKey] : undefined
   )
   const issueEntry = useAppStore((s) => (issueCacheKey ? s.issueCache[issueCacheKey] : undefined))
+  const linearIssueEntry = useAppStore((s) =>
+    linearIssueCacheKey ? s.linearIssueCache[linearIssueCacheKey] : undefined
+  )
+  const linearIssueFallbackEntry = useAppStore((s) =>
+    worktree.linkedLinearIssue ? s.linearIssueCache[worktree.linkedLinearIssue] : undefined
+  )
 
   const hostedReview: HostedReviewInfo | null | undefined =
     hostedReviewEntry !== undefined ? hostedReviewEntry.data : undefined
@@ -194,19 +184,39 @@ const WorktreeCard = React.memo(function WorktreeCard({
           title: issue === null ? 'Issue details unavailable' : 'Loading issue...'
         }
       : null)
+  const linearIssue: LinearIssue | null | undefined = worktree.linkedLinearIssue
+    ? (linearIssueEntry?.data ?? linearIssueFallbackEntry?.data)
+    : null
+  const linearIssueDisplay = worktree.linkedLinearIssue
+    ? linearIssue
+      ? {
+          identifier: linearIssue.identifier,
+          title: linearIssue.title,
+          url: linearIssue.url,
+          stateName: linearIssue.state?.name,
+          labels: linearIssue.labels
+        }
+      : {
+          identifier: worktree.linkedLinearIssue,
+          title:
+            linearIssueEntry || linearIssueFallbackEntry
+              ? 'Linear issue details unavailable'
+              : 'Loading Linear issue...'
+        }
+    : null
   const isDeleting = deleteState?.isDeleting ?? false
 
   const status = useWorktreeActivityStatus(worktree.id)
 
   const showPR = cardProps.includes('pr')
-  const showCI = !hideCiCheck && cardProps.includes('ci')
   const showIssue = cardProps.includes('issue')
+  const showComment = cardProps.includes('comment')
 
   // Skip hosted-review fetches when the corresponding card sections are hidden.
   // This preference is purely presentational, so background refreshes would
   // spend rate limit budget on data the user cannot see.
   useEffect(() => {
-    if (repo && !isFolder && !worktree.isBare && hostedReviewCacheKey && (showPR || showCI)) {
+    if (repo && !isFolder && !worktree.isBare && hostedReviewCacheKey && showPR) {
       // Why: pass linkedPR so worktrees created from a PR (whose new local
       // branch differs from the remote head ref) still resolve their PR/MR via
       // a number-based fallback in the main process.
@@ -226,8 +236,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     fetchHostedReviewForBranch,
     branch,
     hostedReviewCacheKey,
-    showPR,
-    showCI
+    showPR
   ])
 
   // Same rationale for issues: once that section is hidden, polling only burns
@@ -246,6 +255,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
     return () => clearInterval(interval)
   }, [repo, isFolder, worktree.linkedIssue, fetchIssue, issueCacheKey, showIssue])
+
+  useEffect(() => {
+    if (!worktree.linkedLinearIssue || !showIssue) {
+      return
+    }
+    void fetchLinearIssue(worktree.linkedLinearIssue)
+  }, [worktree.linkedLinearIssue, fetchLinearIssue, showIssue])
 
   // Stable click handler – ignore clicks that are really text selections.
   const handleClick = useCallback(
@@ -349,6 +365,16 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // as if the workspace is read so bold emphasis never appears. The persisted
   // `worktree.isUnread` flag is unchanged; only the rendering changes.
   const showUnreadEmphasis = cardProps.includes('unread') && worktree.isUnread
+  const metaIssue = showIssue ? issueDisplay : null
+  const metaLinearIssue = showIssue ? linearIssueDisplay : null
+  const metaReview = showPR ? prDisplay : null
+  const metaComment = showComment ? worktree.comment : null
+  const hasDetails = hasWorktreeCardDetails({
+    issue: metaIssue,
+    linearIssue: metaLinearIssue,
+    review: metaReview,
+    comment: metaComment
+  })
 
   const cardBody = (
     <div
@@ -422,7 +448,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
 
       {/* Content area */}
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-        {/* Header row: Title and Checks */}
+        {/* Header row: Title */}
         <div className="flex items-center justify-between min-w-0 gap-2">
           <div className="flex items-center gap-1.5 min-w-0">
             {repo?.connectionId && (
@@ -503,108 +529,77 @@ const WorktreeCard = React.memo(function WorktreeCard({
               </Tooltip>
             )}
           </div>
-
-          <div className="flex items-center gap-1 shrink-0">
-            {/* CI Checks & PR state on the right */}
-            {showCI && hostedReview && hostedReview.status !== 'neutral' && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="inline-flex items-center opacity-80 hover:opacity-100 transition-opacity">
-                    {hostedReview.status === 'success' && (
-                      <CircleCheck className="size-3.5 text-emerald-500" />
-                    )}
-                    {hostedReview.status === 'failure' && (
-                      <CircleX className="size-3.5 text-rose-500" />
-                    )}
-                    {hostedReview.status === 'pending' && (
-                      <LoaderCircle className="size-3.5 text-amber-500 animate-spin" />
-                    )}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="right" sideOffset={8}>
-                  <span>CI checks {checksLabel(hostedReview.status).toLowerCase()}</span>
-                </TooltipContent>
-              </Tooltip>
-            )}
-          </div>
         </div>
 
         {/* Subtitle row: Repo badge + Branch */}
         <div className="flex items-center gap-1.5 min-w-0">
-          {repo && !hideRepoBadge && (
-            <div className="flex items-center gap-1.5 shrink-0 px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
-              <div className="size-1.5 rounded-full" style={{ backgroundColor: repo.badgeColor }} />
-              <span className="text-[10px] font-semibold text-foreground truncate max-w-[6rem] leading-none lowercase">
-                {repo.displayName}
-              </span>
-            </div>
-          )}
-
-          {isFolder ? (
-            <Badge
-              variant="secondary"
-              className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 text-muted-foreground bg-accent border border-border dark:bg-accent/80 dark:border-border/50 leading-none"
-            >
-              {repo ? getRepoKindLabel(repo) : 'Folder'}
-            </Badge>
-          ) : (
-            <span className="text-[11px] text-muted-foreground truncate leading-none">
-              {branch}
-            </span>
-          )}
-
-          {/* Why: the conflict operation (merge/rebase/cherry-pick) is the
-               only signal that the worktree is in an incomplete operation state.
-               Showing it on the card lets the user spot worktrees that need
-               attention without switching to them first. */}
-          {conflictOperation && conflictOperation !== 'unknown' && (
-            <Badge
-              variant="outline"
-              className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 gap-1 text-amber-600 border-amber-500/30 bg-amber-500/5 dark:text-amber-400 dark:border-amber-400/30 dark:bg-amber-400/5 leading-none"
-            >
-              <GitMerge className="size-2.5" />
-              {CONFLICT_OPERATION_LABELS[conflictOperation]}
-            </Badge>
-          )}
-
-          <CacheTimer worktreeId={worktree.id} />
-
-          {parentLabel && (
-            <Badge
-              variant="outline"
-              className={cn(
-                'h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 gap-1 leading-none',
-                lineageState === 'missing'
-                  ? 'text-muted-foreground border-border bg-muted/40'
-                  : 'text-muted-foreground border-border bg-accent/50'
-              )}
-            >
-              <Workflow className="size-2.5" />
-              <span className="max-w-[7rem] truncate">
-                {lineageState === 'missing' ? 'Missing parent' : `from ${parentLabel}`}
-              </span>
-            </Badge>
-          )}
-        </div>
-
-        {/* Meta section: Issue / hosted review / Comment
-             Layout coupling: spacing here is used to derive size estimates in
-             WorktreeList's estimateSize. Update that function if changing spacing. */}
-        {((cardProps.includes('issue') && issueDisplay) ||
-          (cardProps.includes('pr') && prDisplay) ||
-          (cardProps.includes('comment') && worktree.comment)) && (
-          <div className="flex flex-col gap-[3px] mt-0.5">
-            {cardProps.includes('issue') && issueDisplay && (
-              <IssueSection issue={issueDisplay} onClick={handleEditIssue} />
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            {repo && !hideRepoBadge && (
+              <div className="flex items-center gap-1.5 shrink-0 px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
+                <div
+                  className="size-1.5 rounded-full"
+                  style={{ backgroundColor: repo.badgeColor }}
+                />
+                <span className="text-[10px] font-semibold text-foreground truncate max-w-[6rem] leading-none lowercase">
+                  {repo.displayName}
+                </span>
+              </div>
             )}
-            {cardProps.includes('pr') && prDisplay && (
-              <ReviewSection review={prDisplay} onEdit={handleEditPr} onRemove={handleRemovePr} />
+
+            {isFolder ? (
+              <Badge
+                variant="secondary"
+                className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 text-muted-foreground bg-accent border border-border dark:bg-accent/80 dark:border-border/50 leading-none"
+              >
+                {repo ? getRepoKindLabel(repo) : 'Folder'}
+              </Badge>
+            ) : (
+              <span className="min-w-0 text-[11px] text-muted-foreground truncate leading-none">
+                {branch}
+              </span>
             )}
-            {cardProps.includes('comment') && worktree.comment && (
-              <CommentSection comment={worktree.comment} onDoubleClick={handleEditComment} />
+
+            {/* Why: the conflict operation (merge/rebase/cherry-pick) is the
+                 only signal that the worktree is in an incomplete operation state.
+                 Showing it on the card lets the user spot worktrees that need
+                 attention without switching to them first. */}
+            {conflictOperation && conflictOperation !== 'unknown' && (
+              <Badge
+                variant="outline"
+                className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 gap-1 text-amber-600 border-amber-500/30 bg-amber-500/5 dark:text-amber-400 dark:border-amber-400/30 dark:bg-amber-400/5 leading-none"
+              >
+                <GitMerge className="size-2.5" />
+                {CONFLICT_OPERATION_LABELS[conflictOperation]}
+              </Badge>
+            )}
+
+            <CacheTimer worktreeId={worktree.id} />
+
+            {parentLabel && (
+              <Badge
+                variant="outline"
+                className={cn(
+                  'h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 gap-1 leading-none',
+                  lineageState === 'missing'
+                    ? 'text-muted-foreground border-border bg-muted/40'
+                    : 'text-muted-foreground border-border bg-accent/50'
+                )}
+              >
+                <Workflow className="size-2.5" />
+                <span className="max-w-[7rem] truncate">
+                  {lineageState === 'missing' ? 'Missing parent' : `from ${parentLabel}`}
+                </span>
+              </Badge>
             )}
           </div>
-        )}
+
+          <WorktreeCardMetaBadges
+            issue={metaIssue}
+            linearIssue={metaLinearIssue}
+            review={metaReview}
+            comment={metaComment}
+          />
+        </div>
 
         {remoteBranchConflict && (
           <div className="mt-0.5 flex items-start gap-1.5 rounded border border-amber-500/25 bg-amber-500/5 px-1.5 py-1 text-[10.5px] leading-snug text-amber-700 dark:text-amber-300">
@@ -667,7 +662,20 @@ const WorktreeCard = React.memo(function WorktreeCard({
         selectedWorktrees={selectedWorktrees}
         onContextMenuSelect={onContextMenuSelect}
       >
-        {cardBody}
+        {hasDetails ? (
+          <WorktreeCardDetailsHover
+            issue={metaIssue}
+            linearIssue={metaLinearIssue}
+            review={metaReview}
+            comment={metaComment}
+            onEditIssue={handleEditIssue}
+            onEditComment={handleEditComment}
+          >
+            {cardBody}
+          </WorktreeCardDetailsHover>
+        ) : (
+          cardBody
+        )}
       </WorktreeContextMenu>
 
       {repo?.connectionId && (

@@ -29,7 +29,6 @@ const GROUP_BY_OPTIONS = [
 const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
   { id: 'status', label: 'Terminal status' },
   { id: 'unread', label: 'Unread indicator' },
-  { id: 'ci', label: 'CI checks' },
   { id: 'issue', label: 'Linked issue' },
   { id: 'pr', label: 'Linked PR' },
   { id: 'comment', label: 'Comment' },
