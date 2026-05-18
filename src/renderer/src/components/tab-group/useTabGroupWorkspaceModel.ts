@@ -582,6 +582,7 @@ export function useTabGroupWorkspaceModel({
           if (
             await createWebRuntimeSessionTerminal({
               worktreeId,
+              targetGroupId: groupId,
               activate: true
             })
           ) {
@@ -598,6 +599,7 @@ export function useTabGroupWorkspaceModel({
           if (
             await createWebRuntimeSessionTerminal({
               worktreeId,
+              targetGroupId: groupId,
               command: shellOverride,
               activate: true
             })

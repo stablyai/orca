@@ -6706,7 +6706,7 @@ export class OrcaRuntimeService {
 
   async createMobileSessionTerminal(
     worktreeSelector: string,
-    opts: { afterTabId?: string; command?: string; activate?: boolean } = {}
+    opts: { afterTabId?: string; targetGroupId?: string; command?: string; activate?: boolean } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     this.assertGraphReady()
     const worktreeId = (await this.resolveWorktreeSelector(worktreeSelector)).id
@@ -6756,6 +6756,7 @@ export class OrcaRuntimeService {
         requestId,
         worktreeId,
         afterTabId: afterDesktopTabId,
+        targetGroupId: opts.targetGroupId,
         command: opts.command
       })
     })

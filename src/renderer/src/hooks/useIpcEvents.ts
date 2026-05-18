@@ -904,7 +904,7 @@ export function useIpcEvents(): void {
           }
           const tab = store.createTab(
             worktreeId,
-            undefined,
+            data.targetGroupId,
             undefined,
             shouldActivate ? undefined : { activate: false }
           )

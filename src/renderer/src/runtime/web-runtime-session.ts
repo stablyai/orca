@@ -35,6 +35,7 @@ export async function createWebRuntimeSessionTerminal(args: {
   worktreeId: string
   environmentId?: string | null
   afterTabId?: string
+  targetGroupId?: string
   command?: string
   activate?: boolean
 }): Promise<boolean> {
@@ -54,6 +55,7 @@ export async function createWebRuntimeSessionTerminal(args: {
       params: {
         worktree: `id:${args.worktreeId}`,
         afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
+        targetGroupId: args.targetGroupId,
         command: args.command,
         activate: args.activate !== false
       },

@@ -362,6 +362,7 @@ describe('createWebRuntimeSessionTerminal', () => {
       createWebRuntimeSessionTerminal({
         worktreeId: WORKTREE_ID,
         afterTabId: 'web-terminal-host-tab-1%3A%3Aleaf-1',
+        targetGroupId: 'group-left',
         command: 'zsh',
         activate: true
       })
@@ -373,6 +374,7 @@ describe('createWebRuntimeSessionTerminal', () => {
       params: {
         worktree: `id:${WORKTREE_ID}`,
         afterTabId: 'host-tab-1::leaf-1',
+        targetGroupId: 'group-left',
         command: 'zsh',
         activate: true
       },

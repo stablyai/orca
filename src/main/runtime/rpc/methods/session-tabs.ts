@@ -17,6 +17,7 @@ const ActivateTab = WorktreeTabSelector.extend({
 
 const CreateTerminalTab = WorktreeTabSelector.extend({
   afterTabId: z.string().optional(),
+  targetGroupId: z.string().optional(),
   command: z.string().optional(),
   activate: z.boolean().optional()
 })
@@ -96,6 +97,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
     handler: async (params, { runtime }) =>
       runtime.createMobileSessionTerminal(params.worktree, {
         afterTabId: params.afterTabId,
+        targetGroupId: params.targetGroupId,
         command: params.command,
         activate: params.activate
       })

@@ -2324,6 +2324,7 @@ const api = {
         requestId: string
         worktreeId?: string
         afterTabId?: string
+        targetGroupId?: string
         command?: string
         title?: string
         activate?: boolean
@@ -2335,6 +2336,7 @@ const api = {
           requestId: string
           worktreeId?: string
           afterTabId?: string
+          targetGroupId?: string
           command?: string
           title?: string
           activate?: boolean
