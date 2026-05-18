@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings, SourceControlGroupOrder } from '../../../../shared/types'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { useAppStore } from '../../store'
@@ -14,6 +14,15 @@ type GitPaneProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
   displayedGitUsername: string
 }
+
+const SOURCE_CONTROL_GROUP_ORDER_OPTIONS: readonly {
+  value: SourceControlGroupOrder
+  label: string
+}[] = [
+  { value: 'changes-first', label: 'Changes First' },
+  { value: 'staged-first', label: 'Staged First' },
+  { value: 'untracked-first', label: 'Untracked First' }
+]
 
 export function GitPane({
   settings,
@@ -109,6 +118,49 @@ export function GitPane({
             }`}
           />
         </button>
+      </SearchableSetting>
+    ) : null,
+    matchesSettingsSearch(searchQuery, {
+      title: 'Source Control Group Order',
+      description: 'Choose how uncommitted file groups are ordered.',
+      keywords: ['source control', 'staged', 'changes', 'untracked', 'group order', 'commit']
+    }) ? (
+      <SearchableSetting
+        key="source-control-group-order"
+        title="Source Control Group Order"
+        description="Choose how uncommitted file groups are ordered."
+        keywords={['source control', 'staged', 'changes', 'untracked', 'group order', 'commit']}
+        className="space-y-3"
+      >
+        <div className="space-y-0.5">
+          <Label>Source Control Group Order</Label>
+          <p className="text-xs text-muted-foreground">
+            Choose how uncommitted file groups are ordered. Conflicts stay pinned at the top.
+          </p>
+        </div>
+        <div className="flex w-fit gap-1 rounded-md border border-border/50 p-1">
+          {SOURCE_CONTROL_GROUP_ORDER_OPTIONS.map((option) => {
+            const isActive = settings.sourceControlGroupOrder === option.value
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  if (!isActive) {
+                    updateSettings({ sourceControlGroupOrder: option.value })
+                  }
+                }}
+                className={`rounded-sm px-3 py-1 text-sm transition-colors ${
+                  isActive
+                    ? 'bg-accent font-medium text-accent-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {option.label}
+              </button>
+            )
+          })}
+        </div>
       </SearchableSetting>
     ) : null,
     matchesSettingsSearch(searchQuery, {

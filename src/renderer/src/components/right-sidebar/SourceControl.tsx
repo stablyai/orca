@@ -74,6 +74,7 @@ import {
   collectSourceControlTreeFileEntries,
   compactSourceControlTree,
   flattenSourceControlTree,
+  namespaceSourceControlTreeDirectoryKeys,
   type SourceControlTreeNode
 } from './source-control-tree'
 import {
@@ -146,6 +147,15 @@ import {
   resolveCommitMessageAgentChoice
 } from '../../../../shared/commit-message-agent-spec'
 import { hasExpandedCommitFailureDetails, summarizeCommitFailure } from './commit-failure-summary'
+import {
+  buildSourceControlDisplaySectionsFromSplit,
+  getConflictReviewEntries,
+  resolveSourceControlGroupOrder,
+  splitPinnedSourceControlConflicts,
+  SOURCE_CONTROL_AREAS,
+  type SourceControlDisplaySectionId,
+  type SourceControlSectionArea
+} from './source-control-section-order'
 
 type SourceControlScope = 'all' | 'uncommitted'
 type SourceControlViewMode = 'list' | 'tree'
@@ -172,12 +182,8 @@ const PRIMARY_ICONS: Partial<
   create_pr: GitPullRequestArrow
 }
 
-// Why: unstaged ("Changes") is listed first so that conflict files — which
-// are assigned area:'unstaged' by the parser — appear above "Staged Changes".
-// This keeps unresolved conflicts visible at the top of the list where the
-// user won't miss them.
-const SECTION_ORDER = ['unstaged', 'staged', 'untracked'] as const
-const SECTION_LABELS: Record<(typeof SECTION_ORDER)[number], string> = {
+const SECTION_LABELS: Record<SourceControlDisplaySectionId, string> = {
+  conflicts: 'Conflicts',
   staged: 'Staged Changes',
   unstaged: 'Changes',
   untracked: 'Untracked Files'
@@ -210,7 +216,7 @@ type PendingDiscardConfirmation =
 
 type GitStatusSourceControlTreeNode = SourceControlTreeNode<
   GitStatusEntry,
-  (typeof SECTION_ORDER)[number]
+  SourceControlSectionArea
 >
 type SourceControlTreeDirectoryNode = Extract<GitStatusSourceControlTreeNode, { type: 'directory' }>
 type BranchSourceControlTreeNode = SourceControlTreeNode<GitBranchChangeEntry, 'branch'>
@@ -749,12 +755,20 @@ function SourceControlInner(): React.JSX.Element {
     for (const entry of entries) {
       groups[entry.area].push(entry)
     }
-    for (const area of SECTION_ORDER) {
+    for (const area of SOURCE_CONTROL_AREAS) {
       groups[area].sort(compareGitStatusEntries)
     }
     return groups
   }, [entries])
 
+  const sourceControlSectionOrder = useMemo(
+    () => resolveSourceControlGroupOrder(settings?.sourceControlGroupOrder),
+    [settings?.sourceControlGroupOrder]
+  )
+  const actionGrouped = useMemo(
+    () => splitPinnedSourceControlConflicts(grouped).normalGroups,
+    [grouped]
+  )
   const normalizedFilter = filterQuery.toLowerCase()
 
   const filteredGrouped = useMemo(() => {
@@ -775,40 +789,55 @@ function SourceControlInner(): React.JSX.Element {
     return branchEntries.filter((e) => e.path.toLowerCase().includes(normalizedFilter))
   }, [branchEntries, normalizedFilter])
 
+  const filteredSplit = useMemo(
+    () => splitPinnedSourceControlConflicts(filteredGrouped),
+    [filteredGrouped]
+  )
+
+  const displaySections = useMemo(
+    () => buildSourceControlDisplaySectionsFromSplit(filteredSplit, sourceControlSectionOrder),
+    [filteredSplit, sourceControlSectionOrder]
+  )
+
   const flatEntries = useMemo(() => {
     const arr: FlatEntry[] = []
-    for (const area of SECTION_ORDER) {
-      if (!collapsedSections.has(area)) {
-        for (const entry of filteredGrouped[area]) {
-          arr.push({ key: `${area}::${entry.path}`, entry, area })
+    for (const section of displaySections) {
+      if (!collapsedSections.has(section.id)) {
+        for (const entry of section.items) {
+          arr.push({ key: `${entry.area}::${entry.path}`, entry, area: entry.area })
         }
       }
     }
     return arr
-  }, [filteredGrouped, collapsedSections])
+  }, [collapsedSections, displaySections])
 
-  const treeRootsByArea = useMemo(
-    () => ({
+  const treeRootsBySection = useMemo(() => {
+    const { pinnedConflicts, normalGroups } = filteredSplit
+    return {
+      conflicts: namespaceSourceControlTreeDirectoryKeys(
+        compactSourceControlTree(buildGitStatusSourceControlTree('unstaged', pinnedConflicts)),
+        'conflicts'
+      ),
       staged: compactSourceControlTree(
-        buildGitStatusSourceControlTree('staged', filteredGrouped.staged)
+        buildGitStatusSourceControlTree('staged', normalGroups.staged)
       ),
       unstaged: compactSourceControlTree(
-        buildGitStatusSourceControlTree('unstaged', filteredGrouped.unstaged)
+        buildGitStatusSourceControlTree('unstaged', normalGroups.unstaged)
       ),
       untracked: compactSourceControlTree(
-        buildGitStatusSourceControlTree('untracked', filteredGrouped.untracked)
+        buildGitStatusSourceControlTree('untracked', normalGroups.untracked)
       )
-    }),
-    [filteredGrouped]
-  )
+    }
+  }, [filteredSplit])
 
-  const visibleTreeRowsByArea = useMemo(
+  const visibleTreeRowsBySection = useMemo(
     () => ({
-      staged: flattenSourceControlTree(treeRootsByArea.staged, collapsedTreeDirs),
-      unstaged: flattenSourceControlTree(treeRootsByArea.unstaged, collapsedTreeDirs),
-      untracked: flattenSourceControlTree(treeRootsByArea.untracked, collapsedTreeDirs)
+      conflicts: flattenSourceControlTree(treeRootsBySection.conflicts, collapsedTreeDirs),
+      staged: flattenSourceControlTree(treeRootsBySection.staged, collapsedTreeDirs),
+      unstaged: flattenSourceControlTree(treeRootsBySection.unstaged, collapsedTreeDirs),
+      untracked: flattenSourceControlTree(treeRootsBySection.untracked, collapsedTreeDirs)
     }),
-    [collapsedTreeDirs, treeRootsByArea]
+    [collapsedTreeDirs, treeRootsBySection]
   )
 
   const branchTreeRoots = useMemo(
@@ -826,18 +855,24 @@ function SourceControlInner(): React.JSX.Element {
     }
 
     const arr: FlatEntry[] = []
-    for (const area of SECTION_ORDER) {
-      if (collapsedSections.has(area)) {
+    for (const section of displaySections) {
+      if (collapsedSections.has(section.id)) {
         continue
       }
-      for (const node of visibleTreeRowsByArea[area]) {
+      for (const node of visibleTreeRowsBySection[section.id]) {
         if (node.type === 'file') {
           arr.push({ key: node.key, entry: node.entry, area: node.area })
         }
       }
     }
     return arr
-  }, [collapsedSections, flatEntries, sourceControlViewMode, visibleTreeRowsByArea])
+  }, [
+    collapsedSections,
+    displaySections,
+    flatEntries,
+    sourceControlViewMode,
+    visibleTreeRowsBySection
+  ])
 
   const [isExecutingBulk, setIsExecutingBulk] = useState(false)
   const pendingDiscardCopy = useMemo<DiscardConfirmationCopy | null>(() => {
@@ -1625,47 +1660,6 @@ function SourceControlInner(): React.JSX.Element {
     ]
   )
 
-  // Why: "Stage all" on the Changes section intentionally skips unresolved
-  // conflict rows. `git add` on a conflicted file silently clears the `u`
-  // record — the only live signal we have — before the user has reviewed it,
-  // which mirrors the per-row Stage suppression above.
-  const handleStageAllInArea = useCallback(
-    async (area: 'unstaged' | 'untracked') => {
-      if (!worktreePath || isExecutingBulk) {
-        return
-      }
-      const paths = getStageAllPaths(grouped[area], area)
-      if (paths.length === 0) {
-        return
-      }
-      setIsExecutingBulk(true)
-      try {
-        const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-        await bulkStageRuntimeGitPaths(
-          {
-            settings: useAppStore.getState().settings,
-            worktreeId: activeWorktreeId,
-            worktreePath,
-            connectionId
-          },
-          paths
-        )
-        await refreshActiveGitStatusAfterMutation()
-        clearSelection()
-      } finally {
-        setIsExecutingBulk(false)
-      }
-    },
-    [
-      worktreePath,
-      grouped,
-      activeWorktreeId,
-      isExecutingBulk,
-      clearSelection,
-      refreshActiveGitStatusAfterMutation
-    ]
-  )
-
   // Why: 'stage' primary stages every unstaged + untracked path in one
   // bulkStage call. It bypasses handleActionInvoke because that handler is
   // typed to DropdownActionKind and 'stage' is intentionally not in the
@@ -1733,40 +1727,6 @@ function SourceControlInner(): React.JSX.Element {
       }
     }
   }, [handleActionInvoke, handleStageAllPrimary, primaryAction.kind])
-
-  const handleUnstageAll = useCallback(async () => {
-    if (!worktreePath || isExecutingBulk) {
-      return
-    }
-    const paths = getUnstageAllPaths(grouped.staged)
-    if (paths.length === 0) {
-      return
-    }
-    setIsExecutingBulk(true)
-    try {
-      const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-      await bulkUnstageRuntimeGitPaths(
-        {
-          settings: useAppStore.getState().settings,
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          connectionId
-        },
-        paths
-      )
-      await refreshActiveGitStatusAfterMutation()
-      clearSelection()
-    } finally {
-      setIsExecutingBulk(false)
-    }
-  }, [
-    worktreePath,
-    grouped.staged,
-    activeWorktreeId,
-    isExecutingBulk,
-    clearSelection,
-    refreshActiveGitStatusAfterMutation
-  ])
 
   const refreshBranchCompare = useCallback(async () => {
     if (!activeWorktreeId || !worktreePath || !effectiveBaseRef || isFolder) {
@@ -2337,20 +2297,6 @@ function SourceControlInner(): React.JSX.Element {
     ]
   )
 
-  const requestDiscardAllInArea = useCallback(
-    (area: DiscardAllArea): void => {
-      if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
-        return
-      }
-      const paths = getDiscardAllPaths(grouped[area], area)
-      if (paths.length === 0) {
-        return
-      }
-      setPendingDiscard({ kind: 'area', area, paths })
-    },
-    [activeWorktreeId, grouped, isExecutingBulk, worktreePath]
-  )
-
   const requestDiscardEntry = useCallback(
     (entry: GitStatusEntry): void => {
       if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
@@ -2389,10 +2335,7 @@ function SourceControlInner(): React.JSX.Element {
     )
   }
 
-  const hasFilteredUncommittedEntries =
-    filteredGrouped.staged.length > 0 ||
-    filteredGrouped.unstaged.length > 0 ||
-    filteredGrouped.untracked.length > 0
+  const hasFilteredUncommittedEntries = displaySections.length > 0
   const hasFilteredBranchEntries = filteredBranchEntries.length > 0
   const showGenericEmptyState =
     !hasUncommittedEntries && branchSummary?.status === 'ready' && branchEntries.length === 0
@@ -2731,42 +2674,36 @@ function SourceControlInner(): React.JSX.Element {
 
           {(scope === 'all' || scope === 'uncommitted') && hasFilteredUncommittedEntries && (
             <>
-              {SECTION_ORDER.map((area) => {
-                const items = filteredGrouped[area]
-                if (items.length === 0) {
-                  return null
-                }
-                const isCollapsed = collapsedSections.has(area)
+              {displaySections.map((section) => {
+                const { id, area, items } = section
+                const isCollapsed = collapsedSections.has(id)
+                const actionItems = id === 'conflicts' ? items : actionGrouped[area]
+                const conflictReviewEntries =
+                  id === 'conflicts' ? getConflictReviewEntries(items) : []
                 // Why: "Stage all"/"Unstage all" operate on the *unfiltered*
                 // group for the area — acting on just the filter-visible subset
                 // would surprise users who don't realize a filter is active.
                 // The +/- is hidden when the filter is active to avoid that
                 // mismatch between what's shown and what would be staged.
-                // Why: visibility and execution both resolve paths through the
-                // same helpers (`getStageAllPaths`/`getUnstageAllPaths`/
-                // `getDiscardAllPaths`) so the button can never show for a set
-                // the handler would then filter to empty.
                 const stageAllPaths =
                   area === 'unstaged' || area === 'untracked'
-                    ? getStageAllPaths(grouped[area], area)
+                    ? getStageAllPaths(actionItems, area)
                     : []
                 const canStageAll = !normalizedFilter && stageAllPaths.length > 0
-                const canUnstageAll =
-                  !normalizedFilter &&
-                  area === 'staged' &&
-                  getUnstageAllPaths(grouped.staged).length > 0
-                const canRevertAll =
-                  !normalizedFilter && getDiscardAllPaths(grouped[area], area).length > 0
+                const unstageAllPaths = area === 'staged' ? getUnstageAllPaths(actionItems) : []
+                const canUnstageAll = !normalizedFilter && unstageAllPaths.length > 0
+                const discardAllPaths = getDiscardAllPaths(actionItems, area)
+                const canRevertAll = !normalizedFilter && discardAllPaths.length > 0
                 return (
-                  <div key={area}>
+                  <div key={id}>
                     <SectionHeader
-                      label={SECTION_LABELS[area]}
+                      label={SECTION_LABELS[id]}
                       count={items.length}
                       conflictCount={
                         items.filter((entry) => entry.conflictStatus === 'unresolved').length
                       }
                       isCollapsed={isCollapsed}
-                      onToggle={() => toggleSection(area)}
+                      onToggle={() => toggleSection(id)}
                       actions={
                         <>
                           {/* Why: bulk action buttons are hover-only on
@@ -2792,7 +2729,7 @@ function SourceControlInner(): React.JSX.Element {
                                 }
                                 onClick={(event) => {
                                   event.stopPropagation()
-                                  requestDiscardAllInArea(area)
+                                  setPendingDiscard({ kind: 'area', area, paths: discardAllPaths })
                                 }}
                                 disabled={isExecutingBulk}
                               />
@@ -2803,9 +2740,7 @@ function SourceControlInner(): React.JSX.Element {
                                 title="Stage all"
                                 onClick={(event) => {
                                   event.stopPropagation()
-                                  if (area === 'unstaged' || area === 'untracked') {
-                                    void handleStageAllInArea(area)
-                                  }
+                                  void handleStageAllPaths(stageAllPaths)
                                 }}
                                 disabled={isExecutingBulk}
                               />
@@ -2816,13 +2751,13 @@ function SourceControlInner(): React.JSX.Element {
                                 title="Unstage all"
                                 onClick={(event) => {
                                   event.stopPropagation()
-                                  void handleUnstageAll()
+                                  void handleUnstagePaths(unstageAllPaths)
                                 }}
                                 disabled={isExecutingBulk}
                               />
                             )}
                           </div>
-                          {items.some((entry) => entry.conflictStatus === 'unresolved') ? (
+                          {id === 'conflicts' && conflictReviewEntries.length > 0 ? (
                             <Button
                               type="button"
                               variant="ghost"
@@ -2831,13 +2766,18 @@ function SourceControlInner(): React.JSX.Element {
                               onClick={(e) => {
                                 e.stopPropagation()
                                 if (activeWorktreeId && worktreePath) {
-                                  openAllDiffs(activeWorktreeId, worktreePath, undefined, area)
+                                  openConflictReview(
+                                    activeWorktreeId,
+                                    worktreePath,
+                                    conflictReviewEntries,
+                                    'live-summary'
+                                  )
                                 }
                               }}
                             >
-                              View all
+                              Review all
                             </Button>
-                          ) : (
+                          ) : id === 'conflicts' ? null : (
                             <Button
                               type="button"
                               variant="ghost"
@@ -2858,7 +2798,7 @@ function SourceControlInner(): React.JSX.Element {
                     />
                     {!isCollapsed &&
                       (sourceControlViewMode === 'tree'
-                        ? visibleTreeRowsByArea[area].map((node) => {
+                        ? visibleTreeRowsBySection[id].map((node) => {
                             if (node.type === 'directory') {
                               return (
                                 <SourceControlTreeDirectoryRow

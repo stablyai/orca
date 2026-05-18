@@ -5,7 +5,8 @@ import {
   buildSourceControlTree,
   collectSourceControlTreeFileEntries,
   compactSourceControlTree,
-  flattenSourceControlTree
+  flattenSourceControlTree,
+  namespaceSourceControlTreeDirectoryKeys
 } from './source-control-tree'
 
 function entry(partial: Partial<GitStatusEntry> & { path: string }): GitStatusEntry {
@@ -137,5 +138,26 @@ describe('buildSourceControlTree', () => {
       'directory:src/renderer',
       'file:src/renderer/index.ts'
     ])
+  })
+
+  it('can namespace directory keys without changing file entry areas', () => {
+    const tree = compactSourceControlTree(
+      buildGitStatusSourceControlTree('unstaged', [
+        entry({
+          path: 'src/conflict.ts',
+          conflictKind: 'both_modified',
+          conflictStatus: 'unresolved'
+        })
+      ])
+    )
+
+    const namespaced = namespaceSourceControlTreeDirectoryKeys(tree, 'conflicts')
+    const rows = flattenSourceControlTree(namespaced, new Set())
+    const directory = rows.find((node) => node.type === 'directory')
+    const file = rows.find((node) => node.type === 'file')
+
+    expect(directory?.key).toBe('dir::conflicts::src')
+    expect(file?.key).toBe('unstaged::src/conflict.ts')
+    expect(file?.area).toBe('unstaged')
   })
 })

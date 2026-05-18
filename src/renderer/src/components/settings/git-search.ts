@@ -12,6 +12,11 @@ export const GIT_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     keywords: ['main', 'master', 'origin/main', 'git diff', 'base ref', 'worktree']
   },
   {
+    title: 'Source Control Group Order',
+    description: 'Choose how uncommitted file groups are ordered.',
+    keywords: ['source control', 'staged', 'changes', 'untracked', 'group order', 'commit']
+  },
+  {
     title: 'GitHub API Budget',
     description: 'Current GitHub CLI REST, Search, and GraphQL rate limits.',
     keywords: ['github', 'gh', 'graphql', 'rate limit', 'api budget']

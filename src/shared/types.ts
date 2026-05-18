@@ -1230,6 +1230,8 @@ export type SetupScriptLaunchMode = 'split-vertical' | 'split-horizontal' | 'new
 /** Direction used when the setup script launch mode is a split. */
 export type SetupSplitDirection = 'vertical' | 'horizontal'
 
+export type SourceControlGroupOrder = 'changes-first' | 'staged-first' | 'untracked-first'
+
 export type TerminalColorOverrides = {
   foreground?: string
   background?: string
@@ -1369,6 +1371,8 @@ export type GlobalSettings = {
   openLinksInApp: boolean
   /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */
   openInApplications?: OpenInApplication[]
+  /** Source Control uncommitted group order. Conflicts stay pinned above normal groups. */
+  sourceControlGroupOrder?: SourceControlGroupOrder
   rightSidebarOpenByDefault: boolean
   showGitIgnoredFiles?: boolean
   /** Whether to show the Orca app name in the titlebar. */

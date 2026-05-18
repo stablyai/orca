@@ -17,6 +17,10 @@ describe('getDefaultSettings', () => {
       selectedModelByAgent: {}
     })
   })
+
+  it('keeps Source Control groups in the current order by default', () => {
+    expect(getDefaultSettings('/tmp').sourceControlGroupOrder).toBe('changes-first')
+  })
 })
 
 describe('getDefaultPrimarySelectionMiddleClickPaste', () => {
