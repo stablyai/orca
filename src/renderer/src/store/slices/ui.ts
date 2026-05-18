@@ -28,7 +28,8 @@ import {
 } from '../../../../shared/task-providers'
 import {
   DEFAULT_STATUS_BAR_ITEMS,
-  DEFAULT_WORKTREE_CARD_PROPERTIES
+  DEFAULT_WORKTREE_CARD_PROPERTIES,
+  normalizeWorktreeCardProperties
 } from '../../../../shared/constants'
 import {
   WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT,
@@ -764,10 +765,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
   toggleWorktreeCardProperty: (prop) =>
     set((s) => {
-      const current = s.worktreeCardProperties || DEFAULT_WORKTREE_CARD_PROPERTIES
-      const updated = current.includes(prop)
-        ? current.filter((p) => p !== prop)
-        : [...current, prop]
+      const current = normalizeWorktreeCardProperties(s.worktreeCardProperties)
+      const next = current.includes(prop) ? current.filter((p) => p !== prop) : [...current, prop]
+      // Why: retired property toggles no longer exist, so their fields must
+      // stay visible even if an older saved preference hid them.
+      const updated = normalizeWorktreeCardProperties(next)
       window.api.ui.set({ worktreeCardProperties: updated }).catch(console.error)
       return { worktreeCardProperties: updated }
     }),
@@ -938,7 +940,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         collapsedGroups: new Set(ui.collapsedGroups ?? []),
         uiZoomLevel: ui.uiZoomLevel ?? 0,
         editorFontZoomLevel: ui.editorFontZoomLevel ?? 0,
-        worktreeCardProperties: ui.worktreeCardProperties ?? [...DEFAULT_WORKTREE_CARD_PROPERTIES],
+        worktreeCardProperties: normalizeWorktreeCardProperties(ui.worktreeCardProperties),
         workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
         workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
         workspaceBoardCompact: normalizeWorkspaceBoardCompact(ui.workspaceBoardCompact),

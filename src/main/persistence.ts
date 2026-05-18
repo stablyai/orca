@@ -57,6 +57,7 @@ import {
   getDefaultUIState,
   getDefaultRepoHookSettings,
   getDefaultWorkspaceSession,
+  normalizeWorktreeCardProperties,
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
@@ -1320,10 +1321,25 @@ export class Store {
               !deliberateUncheck &&
               Array.isArray(rawCardProps) &&
               !rawCardProps.includes('inline-agents')
-            const migratedCardProps =
-              needsInlineAgentsMigration && Array.isArray(rawCardProps)
+            const migratedCardProps = (() => {
+              if (!Array.isArray(rawCardProps)) {
+                return undefined
+              }
+              const candidate = needsInlineAgentsMigration
                 ? [...rawCardProps, 'inline-agents' as const]
-                : undefined
+                : rawCardProps
+              // Why: only Agent activity remains configurable; older hidden
+              // card fields must be restored because users can no longer
+              // toggle them back on from the sidebar menu.
+              const normalized = normalizeWorktreeCardProperties(candidate)
+              const changed =
+                normalized.length !== rawCardProps.length ||
+                normalized.some((property, index) => property !== rawCardProps[index])
+              return changed ? normalized : undefined
+            })()
+            if (migratedCardProps !== undefined || !inlineAgentsMigrated) {
+              this.loadNeedsSave = true
+            }
             return {
               ...defaults.ui,
               ...parsed.ui,
@@ -2134,6 +2150,9 @@ export class Store {
       ...this.state.ui,
       groupBy: normalizeGroupBy(this.state.ui?.groupBy),
       sortBy: normalizeSortBy(this.state.ui?.sortBy),
+      worktreeCardProperties: normalizeWorktreeCardProperties(
+        this.state.ui?.worktreeCardProperties
+      ),
       workspaceStatuses: normalizeWorkspaceStatuses(this.state.ui?.workspaceStatuses),
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(this.state.ui?.workspaceBoardOpacity),
       workspaceBoardCompact: normalizeWorkspaceBoardCompact(this.state.ui?.workspaceBoardCompact),
@@ -2153,6 +2172,10 @@ export class Store {
       sortBy: updates.sortBy
         ? normalizeSortBy(updates.sortBy)
         : normalizeSortBy(this.state.ui?.sortBy),
+      worktreeCardProperties:
+        updates.worktreeCardProperties !== undefined
+          ? normalizeWorktreeCardProperties(updates.worktreeCardProperties)
+          : normalizeWorktreeCardProperties(this.state.ui?.worktreeCardProperties),
       workspaceStatuses:
         updates.workspaceStatuses !== undefined
           ? normalizeWorkspaceStatuses(updates.workspaceStatuses)

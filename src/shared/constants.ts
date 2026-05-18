@@ -6,8 +6,7 @@ import type {
   PersistedState,
   PersistedUIState,
   RepoHookSettings,
-  WorkspaceSessionState,
-  WorktreeCardProperty
+  WorkspaceSessionState
 } from './types'
 import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
@@ -15,8 +14,14 @@ import { getDefaultTerminalQuickCommands } from './terminal-quick-commands'
 import type { VoiceSettings } from './speech-types'
 import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
 import { TASK_PROVIDERS } from './task-providers'
+import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree-card-properties'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
+export {
+  ALWAYS_VISIBLE_WORKTREE_CARD_PROPERTIES,
+  DEFAULT_WORKTREE_CARD_PROPERTIES,
+  normalizeWorktreeCardProperties
+} from './worktree-card-properties'
 
 export const SCHEMA_VERSION = 1
 export const DEFAULT_APP_FONT_FAMILY = 'Geist'
@@ -82,19 +87,6 @@ export const MAX_EDITOR_AUTO_SAVE_DELAY_MS = 10_000
 // without starring — e.g. 35 → 70 → 140 → 280. Past dismissals are encoded
 // in starNagNextThreshold, so this constant is only the first-time seed.
 export const STAR_NAG_INITIAL_THRESHOLD = 35
-
-export const DEFAULT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
-  'status',
-  'unread',
-  'issue',
-  'pr',
-  'comment',
-  // Why: agent activity is the primary reason users opt into the feature, so
-  // show it inline on each card by default. Unchecking this from the
-  // Workspaces view options hides the inline list entirely — there is no
-  // alternative agent-activity surface in the sidebar.
-  'inline-agents'
-]
 
 /** Synthetic worktree id used by the memory collector to bucket PTYs that
  *  are not associated with any worktree. Shared across main and renderer so

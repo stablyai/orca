@@ -1118,6 +1118,20 @@ describe('Store', () => {
     expect(ui.dismissedUpdateVersion).toBeNull()
   })
 
+  it('updateUI restores retired card properties from direct UI writes', async () => {
+    const store = await createStore()
+    store.updateUI({ worktreeCardProperties: ['inline-agents'] })
+
+    expect(store.getUI().worktreeCardProperties).toEqual([
+      'status',
+      'unread',
+      'issue',
+      'pr',
+      'comment',
+      'inline-agents'
+    ])
+  })
+
   it('persists updater reminder metadata in UI state', async () => {
     const store = await createStore()
     store.updateUI({ dismissedUpdateVersion: '1.0.99', lastUpdateCheckAt: 1234 })
@@ -1569,6 +1583,53 @@ describe('Store', () => {
     const props = store.getUI().worktreeCardProperties
     expect(props.filter((p) => p === 'inline-agents')).toHaveLength(1)
     expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
+  })
+
+  it('restores retired card properties when loading old user choices', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {
+        worktreeCardProperties: ['inline-agents'],
+        _inlineAgentsDefaultedForAllUsers: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getUI().worktreeCardProperties).toEqual([
+      'status',
+      'unread',
+      'issue',
+      'pr',
+      'comment',
+      'inline-agents'
+    ])
+  })
+
+  it('keeps Agent activity opt-out while restoring retired card properties', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {
+        worktreeCardProperties: [],
+        _inlineAgentsDefaultedForAllUsers: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getUI().worktreeCardProperties).toEqual([
+      'status',
+      'unread',
+      'issue',
+      'pr',
+      'comment'
+    ])
   })
 
   it('preserves a deliberate uncheck from the experimental-toggle era (Case B)', async () => {
