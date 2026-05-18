@@ -102,7 +102,7 @@ function onboardingFooter(page: Page) {
   return page
     .locator('footer')
     .filter({
-      has: page.getByRole('button', { name: /Back|Continue|Set up|Skip to Add Project/i })
+      has: page.getByRole('button', { name: /Back|Continue|Set up|Skip/i })
     })
     .first()
 }
@@ -138,7 +138,7 @@ test.describe('Onboarding flow', () => {
     })
     await expect(orcaPage.getByText('1 of 4')).toBeVisible()
     await expect(onboardingFooterButton(orcaPage, /^Continue\b/)).toBeVisible()
-    await expect(onboardingFooterButton(orcaPage, /Skip to Add Project/i)).toBeVisible()
+    await expect(onboardingFooterButton(orcaPage, /^Skip$/i)).toBeVisible()
     // Why: Back is not rendered on the first step (was previously rendered-but-
     // disabled with `disabled:invisible`, now conditionally mounted).
     await expect(orcaPage.getByRole('button', { name: 'Back', exact: true })).toHaveCount(0)
@@ -325,9 +325,7 @@ test.describe('Onboarding flow', () => {
       .toBe(1)
   })
 
-  test('Skip to Add Project jumps to the repo step without dismissing onboarding', async ({
-    orcaPage
-  }) => {
+  test('Skip jumps to the repo step without dismissing onboarding', async ({ orcaPage }) => {
     await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
       timeout: 15_000
     })
@@ -343,11 +341,11 @@ test.describe('Onboarding flow', () => {
     }
     await codexButton.click()
 
-    await onboardingFooterButton(orcaPage, /Skip to Add Project/i).click()
+    await onboardingFooterButton(orcaPage, /^Skip$/i).click()
 
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
     await expect(orcaPage.getByText('4 of 4')).toBeVisible()
-    await expect(onboardingFooterButton(orcaPage, /Skip to Add Project/i)).toHaveCount(0)
+    await expect(onboardingFooterButton(orcaPage, /^Skip$/i)).toHaveCount(0)
     await expect(onboardingFooterButton(orcaPage, /Skip all onboarding/i)).toHaveCount(0)
     await expect(orcaPage.getByRole('button', { name: /Open a folder/i })).toBeVisible()
 
@@ -378,11 +376,11 @@ test.describe('Onboarding flow', () => {
     await waitForSessionReady(orcaPage)
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
     await expect(orcaPage.getByText('4 of 4')).toBeVisible()
-    await expect(onboardingFooterButton(orcaPage, /Skip to Add Project/i)).toHaveCount(0)
+    await expect(onboardingFooterButton(orcaPage, /^Skip$/i)).toHaveCount(0)
     expect((await getOnboardingState(orcaPage)).closedAt).toBeNull()
   })
 
-  test('Skip to Add Project from theme reverts preview without saving the skipped choice', async ({
+  test('Skip from theme reverts preview without saving the skipped choice', async ({
     orcaPage
   }) => {
     await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
@@ -405,7 +403,7 @@ test.describe('Onboarding flow', () => {
       .poll(async () => getDocumentThemeClass(orcaPage), { timeout: 5_000 })
       .toBe(oppositeTheme)
 
-    await onboardingFooterButton(orcaPage, /Skip to Add Project/i).click()
+    await onboardingFooterButton(orcaPage, /^Skip$/i).click()
 
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
     await expect
@@ -416,7 +414,7 @@ test.describe('Onboarding flow', () => {
       .toBe(startingTheme)
   })
 
-  test('Skip to Add Project preserves runtime server project setup UI', async ({ orcaPage }) => {
+  test('Skip preserves runtime server project setup UI', async ({ orcaPage }) => {
     await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
       timeout: 15_000
     })
@@ -429,7 +427,7 @@ test.describe('Onboarding flow', () => {
       })
       .toBe('env-e2e')
 
-    await onboardingFooterButton(orcaPage, /Skip to Add Project/i).click()
+    await onboardingFooterButton(orcaPage, /^Skip$/i).click()
 
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
     await expect(orcaPage.getByText('Runtime server', { exact: true })).toBeVisible()
@@ -442,11 +440,11 @@ test.describe('Onboarding flow', () => {
       .getByPlaceholder('git@github.com:org/repo.git')
       .fill('git@github.com:org/repo.git')
     await expect(orcaPage.getByRole('button', { name: /^Clone$/i })).toBeDisabled()
-    await expect(onboardingFooterButton(orcaPage, /Skip to Add Project/i)).toHaveCount(0)
+    await expect(onboardingFooterButton(orcaPage, /^Skip$/i)).toHaveCount(0)
     expect((await getOnboardingState(orcaPage)).closedAt).toBeNull()
   })
 
-  test('Skip to Add Project from notifications does not persist notification or feature setup', async ({
+  test('Skip from notifications does not persist notification or feature setup', async ({
     orcaPage
   }) => {
     await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
@@ -470,7 +468,7 @@ test.describe('Onboarding flow', () => {
     await bellSwitch.click()
     await expect(bellSwitch).toHaveAttribute('aria-checked', 'false')
 
-    await onboardingFooterButton(orcaPage, /Skip to Add Project/i).click()
+    await onboardingFooterButton(orcaPage, /^Skip$/i).click()
 
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
     await expect
@@ -738,7 +736,7 @@ test.describe('Onboarding flow', () => {
     await continueOnboarding(orcaPage)
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
 
-    await expect(onboardingFooterButton(orcaPage, /Skip to Add Project/i)).toHaveCount(0)
+    await expect(onboardingFooterButton(orcaPage, /^Skip$/i)).toHaveCount(0)
     await expect(onboardingFooterButton(orcaPage, /Skip all onboarding/i)).toHaveCount(0)
     const final = await getOnboardingState(orcaPage)
     expect(final.closedAt).toBeNull()
