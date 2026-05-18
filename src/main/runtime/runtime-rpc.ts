@@ -298,6 +298,15 @@ export class OrcaRuntimeRpcServer {
     return true
   }
 
+  revokeRuntimeAccess(deviceId: string): boolean {
+    const device = this.deviceRegistry?.getDevice(deviceId)
+    if (device?.scope !== 'runtime' || !this.deviceRegistry?.removeDevice(deviceId)) {
+      return false
+    }
+    this.wsTransport?.terminateClientConnections(device.token)
+    return true
+  }
+
   getWebSocketEndpoint(): string | null {
     const ws = this.transports.find((t) => t.kind === 'websocket')
     return ws?.endpoint ?? null

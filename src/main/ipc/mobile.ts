@@ -1,6 +1,8 @@
 import { ipcMain } from 'electron'
 import { networkInterfaces } from 'os'
 import QRCode from 'qrcode'
+import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
+import type { DeviceEntry } from '../runtime/device-registry'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 
 export type NetworkInterface = {
@@ -31,6 +33,15 @@ function getNetworkInterfaces(): NetworkInterface[] {
 function getLanAddress(): string | null {
   const ifaces = getNetworkInterfaces()
   return ifaces.length > 0 ? ifaces[0]!.address : null
+}
+
+function toRuntimeAccessGrant(device: DeviceEntry): RuntimeAccessGrant {
+  return {
+    deviceId: device.deviceId,
+    name: device.name,
+    createdAt: device.pairedAt,
+    lastSeenAt: device.lastSeenAt > 0 ? device.lastSeenAt : null
+  }
 }
 
 // Why: the mobile IPC handlers provide the renderer with QR code pairing data,
@@ -137,12 +148,36 @@ export function registerMobileHandlers(rpcServer: OrcaRuntimeRpcServer): void {
     }
   })
 
+  ipcMain.handle('mobile:listRuntimeAccessGrants', () => {
+    const registry = rpcServer.getDeviceRegistry()
+    if (!registry) {
+      return { grants: [] }
+    }
+    // Why: generated web/runtime links are bearer credentials even before a
+    // client first connects, so pending runtime grants must stay revocable.
+    return {
+      grants: registry
+        .listDevices()
+        .filter((d) => d.scope === 'runtime')
+        .sort((a, b) => b.pairedAt - a.pairedAt)
+        .map(toRuntimeAccessGrant)
+    }
+  })
+
   ipcMain.handle('mobile:revokeDevice', (_event, args: { deviceId: string }) => {
     const registry = rpcServer.getDeviceRegistry()
     if (!registry) {
       return { revoked: false }
     }
     return { revoked: rpcServer.revokeMobileDevice(args.deviceId) }
+  })
+
+  ipcMain.handle('mobile:revokeRuntimeAccess', (_event, args: { deviceId: string }) => {
+    const registry = rpcServer.getDeviceRegistry()
+    if (!registry) {
+      return { revoked: false }
+    }
+    return { revoked: rpcServer.revokeRuntimeAccess(args.deviceId) }
   })
 
   ipcMain.handle('mobile:isWebSocketReady', () => {
