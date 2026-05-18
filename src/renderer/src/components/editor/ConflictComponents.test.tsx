@@ -56,6 +56,8 @@ describe('ConflictReviewPanel', () => {
           createLiveEntry('src/renderer/src/store/slices/linear.ts')
         ]}
         onOpenEntry={vi.fn()}
+        selectedFile={null}
+        selectedContent={null}
         onDismiss={vi.fn()}
         onRefreshSnapshot={vi.fn()}
         onReturnToSourceControl={vi.fn()}

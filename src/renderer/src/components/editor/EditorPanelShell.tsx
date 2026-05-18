@@ -20,6 +20,7 @@ type EditorPanelShellProps = {
   showMarkdownTableOfContents: boolean
   markdownReviewToolsEnabled: boolean
   sideBySide: boolean
+  openFiles: OpenFile[]
   fileContents: Record<string, FileContent>
   diffContents: Record<string, DiffContent>
   editorDrafts: Record<string, string>
@@ -38,8 +39,10 @@ type EditorPanelShellProps = {
   onToggleMarkdownReviewTools: () => void
   onExportMarkdownToPdf: () => void
   onContentChange: (content: string) => void
+  onContentChangeForFile: (file: OpenFile, content: string) => void
   onDirtyStateHint: (dirty: boolean) => void
   onSave: (content: string) => Promise<void>
+  onSaveForFile: (file: OpenFile, content: string) => Promise<void>
   onReloadFileContent: (file: OpenFile) => void
   onCloseMarkdownTableOfContents: () => void
   onCloseRenameDialog: () => void
@@ -55,6 +58,7 @@ export function EditorPanelShell({
   showMarkdownTableOfContents,
   markdownReviewToolsEnabled,
   sideBySide,
+  openFiles,
   fileContents,
   diffContents,
   editorDrafts,
@@ -73,8 +77,10 @@ export function EditorPanelShell({
   onToggleMarkdownReviewTools,
   onExportMarkdownToPdf,
   onContentChange,
+  onContentChangeForFile,
   onDirtyStateHint,
   onSave,
+  onSaveForFile,
   onReloadFileContent,
   onCloseMarkdownTableOfContents,
   onCloseRenameDialog,
@@ -123,6 +129,7 @@ export function EditorPanelShell({
           fileContents={fileContents}
           diffContents={diffContents}
           editBuffers={editorDrafts}
+          openFiles={openFiles}
           worktreeEntries={model.worktreeEntries}
           resolvedLanguage={model.resolvedLanguage}
           isMarkdown={model.isMarkdown}
@@ -134,8 +141,10 @@ export function EditorPanelShell({
           sideBySide={sideBySide}
           pendingEditorReveal={pendingEditorReveal}
           handleContentChange={onContentChange}
+          handleContentChangeForFile={onContentChangeForFile}
           handleDirtyStateHint={onDirtyStateHint}
           handleSave={onSave}
+          handleSaveForFile={onSaveForFile}
           reloadFileContent={onReloadFileContent}
           showMarkdownTableOfContents={showMarkdownTableOfContents}
           markdownReviewToolsEnabled={markdownReviewToolsEnabled}

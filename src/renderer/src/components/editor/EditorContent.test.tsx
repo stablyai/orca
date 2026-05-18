@@ -32,6 +32,7 @@ describe('EditorContent', () => {
         }}
         diffContents={{}}
         editBuffers={{}}
+        openFiles={[activeFile]}
         worktreeEntries={[]}
         resolvedLanguage="notebook"
         isMarkdown={false}
@@ -43,8 +44,10 @@ describe('EditorContent', () => {
         sideBySide={false}
         pendingEditorReveal={null}
         handleContentChange={vi.fn()}
+        handleContentChangeForFile={vi.fn()}
         handleDirtyStateHint={vi.fn()}
         handleSave={vi.fn()}
+        handleSaveForFile={vi.fn()}
         reloadFileContent={vi.fn()}
       />
     )

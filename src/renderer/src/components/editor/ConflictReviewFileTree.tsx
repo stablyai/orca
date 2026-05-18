@@ -36,11 +36,13 @@ export function ConflictReviewFileTree({
   entries,
   collapsed,
   onCollapsedChange,
+  selectedPath,
   onOpenEntry
 }: {
   entries: readonly ConflictReviewTreeEntry[]
   collapsed: boolean
   onCollapsedChange: (collapsed: boolean) => void
+  selectedPath: string | null
   onOpenEntry: (entry: GitStatusEntry) => void
 }): React.JSX.Element | null {
   const [collapsedDirectoryKeys, setCollapsedDirectoryKeys] = React.useState<Set<string>>(
@@ -96,6 +98,7 @@ export function ConflictReviewFileTree({
               key={node.key}
               node={node}
               isCollapsed={collapsedDirectoryKeys.has(node.key)}
+              isSelected={node.type === 'file' && node.entry.path === selectedPath}
               onToggleDirectory={toggleDirectory}
               onOpenEntry={onOpenEntry}
             />
@@ -109,11 +112,13 @@ export function ConflictReviewFileTree({
 function ConflictReviewFileTreeRow({
   node,
   isCollapsed,
+  isSelected,
   onToggleDirectory,
   onOpenEntry
 }: {
   node: ConflictReviewTreeNode
   isCollapsed: boolean
+  isSelected: boolean
   onToggleDirectory: (key: string) => void
   onOpenEntry: (entry: GitStatusEntry) => void
 }): React.JSX.Element {
@@ -151,7 +156,10 @@ function ConflictReviewFileTreeRow({
   return (
     <button
       type="button"
-      className="group flex w-full min-w-0 cursor-pointer items-center gap-1 py-1 pr-3 text-left text-xs transition-colors hover:bg-accent/40 disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
+      className={cn(
+        'group flex w-full min-w-0 cursor-pointer items-center gap-1 py-1 pr-3 text-left text-xs transition-colors hover:bg-accent/40 disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent',
+        isSelected && 'bg-accent/60 text-accent-foreground hover:bg-accent/70'
+      )}
       style={{
         paddingLeft: `${node.depth * CONFLICT_REVIEW_TREE_INDENT_PX + CONFLICT_REVIEW_FILE_PADDING_PX}px`
       }}

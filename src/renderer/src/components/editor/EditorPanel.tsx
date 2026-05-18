@@ -101,28 +101,35 @@ function EditorPanelInner({
     return () => window.clearTimeout(timeout)
   }, [copiedPathToast])
 
-  const handleContentChange = useCallback(
-    (content: string) => {
-      if (!activeFile) {
+  const handleContentChangeForFile = useCallback(
+    (file: typeof activeFile, content: string) => {
+      if (!file) {
         return
       }
-      setEditorDraft(activeFile.id, content)
+      setEditorDraft(file.id, content)
       const normalize =
-        activeFile.language === 'markdown'
+        file.language === 'markdown'
           ? (value: string): string => value.trimEnd()
           : (value: string): string => value
-      if (activeFile.mode === 'edit') {
+      if (file.mode === 'edit') {
         markFileDirty(
-          activeFile.id,
-          normalize(content) !== normalize(fileContents[activeFile.id]?.content ?? '')
+          file.id,
+          normalize(content) !== normalize(fileContents[file.id]?.content ?? '')
         )
         return
       }
-      const diffContent = diffContents[activeFile.id]
+      const diffContent = diffContents[file.id]
       const original = diffContent?.kind === 'text' ? diffContent.modifiedContent : ''
-      markFileDirty(activeFile.id, normalize(content) !== normalize(original))
+      markFileDirty(file.id, normalize(content) !== normalize(original))
     },
-    [activeFile, diffContents, fileContents, markFileDirty, setEditorDraft]
+    [diffContents, fileContents, markFileDirty, setEditorDraft]
+  )
+
+  const handleContentChange = useCallback(
+    (content: string) => {
+      handleContentChangeForFile(activeFile, content)
+    },
+    [activeFile, handleContentChangeForFile]
   )
 
   const handleDirtyStateHint = useCallback(
@@ -134,18 +141,18 @@ function EditorPanelInner({
     [activeFile, markFileDirty]
   )
 
-  const handleSave = useCallback(
-    async (content: string) => {
-      if (!activeFile) {
+  const handleSaveForFile = useCallback(
+    async (file: typeof activeFile, content: string) => {
+      if (!file) {
         return
       }
       const saveTargetFile =
-        activeFile.mode === 'markdown-preview'
+        file.mode === 'markdown-preview'
           ? (openFiles.find(
               (openFile) =>
-                openFile.id === activeFile.markdownPreviewSourceFileId && openFile.mode === 'edit'
+                openFile.id === file.markdownPreviewSourceFileId && openFile.mode === 'edit'
             ) ?? null)
-          : activeFile
+          : file
       if (!saveTargetFile) {
         return
       }
@@ -157,7 +164,14 @@ function EditorPanelInner({
         await requestEditorFileSave({ fileId: saveTargetFile.id, fallbackContent: content })
       } catch {}
     },
-    [activeFile, openFiles, requestRenameForFile]
+    [openFiles, requestRenameForFile]
+  )
+
+  const handleSave = useCallback(
+    async (content: string) => {
+      await handleSaveForFile(activeFile, content)
+    },
+    [activeFile, handleSaveForFile]
   )
   useEditorCmdSaveRequest({ activeFile, openFiles, fileContents, handleSave })
 
@@ -275,6 +289,7 @@ function EditorPanelInner({
       showMarkdownTableOfContents={showMarkdownTableOfContents}
       markdownReviewToolsEnabled={markdownReviewToolsEnabled}
       sideBySide={sideBySide}
+      openFiles={openFiles}
       fileContents={fileContents}
       diffContents={diffContents}
       editorDrafts={editorDrafts}
@@ -293,8 +308,10 @@ function EditorPanelInner({
       onToggleMarkdownReviewTools={handleToggleMarkdownReviewTools}
       onExportMarkdownToPdf={() => void exportActiveMarkdownToPdf()}
       onContentChange={handleContentChange}
+      onContentChangeForFile={handleContentChangeForFile}
       onDirtyStateHint={handleDirtyStateHint}
       onSave={handleSave}
+      onSaveForFile={handleSaveForFile}
       onReloadFileContent={reloadFileContent}
       onCloseMarkdownTableOfContents={() => setShowMarkdownTableOfContents(false)}
       onCloseRenameDialog={closeRenameDialog}

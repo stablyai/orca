@@ -108,6 +108,8 @@ export function ConflictReviewPanel({
   file,
   liveEntries,
   onOpenEntry,
+  selectedFile,
+  selectedContent,
   onDismiss,
   onRefreshSnapshot,
   onReturnToSourceControl
@@ -115,6 +117,8 @@ export function ConflictReviewPanel({
   file: OpenFile
   liveEntries: GitStatusEntry[]
   onOpenEntry: (entry: GitStatusEntry) => void
+  selectedFile: OpenFile | null
+  selectedContent: React.ReactNode
   onDismiss: () => void
   onRefreshSnapshot: () => void
   onReturnToSourceControl: () => void
@@ -177,6 +181,7 @@ export function ConflictReviewPanel({
         entries={treeEntries}
         collapsed={fileTreeCollapsed}
         onCollapsedChange={setFileTreeCollapsed}
+        selectedPath={selectedFile?.relativePath ?? null}
         onOpenEntry={onOpenEntry}
       />
       <div className="flex min-w-0 flex-1 flex-col">
@@ -214,33 +219,42 @@ export function ConflictReviewPanel({
             Refresh
           </Button>
         </div>
-        <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
-          <div className="max-w-md space-y-3">
-            <div className="mx-auto flex size-10 items-center justify-center rounded-md border border-border bg-card text-muted-foreground">
-              <GitMerge className="size-4" />
-            </div>
-            <div className="text-sm font-medium text-foreground">
-              Select a conflict from the file tree
-            </div>
-            <div className="text-xs text-muted-foreground">
-              Open each unresolved file, edit the conflict markers, then refresh this snapshot.
-            </div>
-            {resolvedCount > 0 && (
-              <div className="text-xs text-muted-foreground">
-                {resolvedCount} conflict{resolvedCount === 1 ? '' : 's'} no longer live in Git.
+        <div className="min-h-0 flex-1">
+          {selectedContent ?? (
+            <div className="flex h-full min-h-0 items-center justify-center px-6 text-center">
+              <div className="max-w-md space-y-3">
+                <div className="mx-auto flex size-10 items-center justify-center rounded-md border border-border bg-card text-muted-foreground">
+                  <GitMerge className="size-4" />
+                </div>
+                <div className="text-sm font-medium text-foreground">
+                  Select a conflict from the file tree
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Open each unresolved file, edit the conflict markers, then refresh this snapshot.
+                </div>
+                {resolvedCount > 0 && (
+                  <div className="text-xs text-muted-foreground">
+                    {resolvedCount} conflict{resolvedCount === 1 ? '' : 's'} no longer live in Git.
+                  </div>
+                )}
+                <div className="flex items-center justify-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={onReturnToSourceControl}
+                  >
+                    <GitMerge className="size-3.5" />
+                    Source Control
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={onDismiss}>
+                    <X className="size-3.5" />
+                    Dismiss
+                  </Button>
+                </div>
               </div>
-            )}
-            <div className="flex items-center justify-center gap-2">
-              <Button type="button" size="sm" variant="outline" onClick={onReturnToSourceControl}>
-                <GitMerge className="size-3.5" />
-                Source Control
-              </Button>
-              <Button type="button" size="sm" variant="ghost" onClick={onDismiss}>
-                <X className="size-3.5" />
-                Dismiss
-              </Button>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

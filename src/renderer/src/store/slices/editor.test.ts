@@ -833,6 +833,47 @@ describe('createEditorSlice conflict status reconciliation', () => {
     ])
   })
 
+  it('keeps the conflict review active when selecting a conflict from its tree', () => {
+    const store = createEditorStore()
+
+    store
+      .getState()
+      .openConflictReview(
+        'wt-1',
+        '/repo',
+        [{ path: 'src/conflict.ts', conflictKind: 'both_modified' }],
+        'live-summary'
+      )
+    store.getState().openConflictReviewFile(
+      'wt-1::conflict-review',
+      'wt-1',
+      '/repo',
+      {
+        path: 'src/conflict.ts',
+        status: 'modified',
+        area: 'unstaged',
+        conflictKind: 'both_modified',
+        conflictStatus: 'unresolved',
+        conflictStatusSource: 'git'
+      },
+      'typescript'
+    )
+
+    const reviewFile = store
+      .getState()
+      .openFiles.find((file) => file.id === 'wt-1::conflict-review')
+
+    expect(store.getState().activeFileId).toBe('wt-1::conflict-review')
+    expect(reviewFile?.conflictReview?.selectedFileId).toBe('/repo/src/conflict.ts')
+    expect(store.getState().openFiles).toContainEqual(
+      expect.objectContaining({
+        id: '/repo/src/conflict.ts',
+        mode: 'edit',
+        conflict: expect.objectContaining({ conflictStatus: 'unresolved' })
+      })
+    )
+  })
+
   it('marks tracked conflicts as resolved locally after live conflict state disappears', () => {
     const store = createEditorStore()
 
