@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/types'
 import { useAppStore } from '../../store'
+import { getAgentAwakeDescription } from './agent-awake-copy'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import { AgentsPane, AGENTS_PANE_SEARCH_ENTRIES } from './AgentsPane'
 import { matchesSettingsSearch } from './settings-search'
@@ -65,9 +66,15 @@ describe('AgentsPane', () => {
 
     expect(markup).toContain('Keep computer awake while agents are working')
     expect(markup).toContain(
-      'Keeps this computer and display awake while agents are working. On macOS, Orca also asks the system to stay awake when the lid is closed, but closed-lid support still depends on OS and hardware power policy.'
+      'Keeps this computer and display awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.'
     )
     expect(markup).toContain('aria-checked="false"')
+  })
+
+  it('describes Windows lid behavior according to the device', () => {
+    expect(getAgentAwakeDescription('Windows')).toBe(
+      "Keeps this computer and display awake while agents are working. Lid-close behavior follows this device's power settings."
+    )
   })
 
   it('toggles the keep-awake setting with the next value', () => {

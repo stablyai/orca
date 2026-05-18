@@ -1,5 +1,6 @@
 import { powerMonitor, powerSaveBlocker } from 'electron'
 import type { AgentStatusState } from '../shared/agent-status-types'
+import { LinuxLidSleepAssertion } from './linux-lid-sleep-assertion'
 import { MacosSystemSleepAssertion } from './macos-system-sleep-assertion'
 
 export const AGENT_AWAKE_STATUS_STALE_AFTER_MS = 2 * 60 * 60 * 1000
@@ -31,6 +32,7 @@ type Logger = Pick<Console, 'debug' | 'warn'>
 
 type AgentAwakeServiceOptions = {
   blocker?: PowerSaveBlocker
+  linuxAssertion?: PlatformAwakeAssertion
   logger?: Logger
   macosAssertion?: PlatformAwakeAssertion
   now?: () => number
@@ -43,6 +45,7 @@ export class AgentAwakeService {
   private blockerId: number | null = null
   private staleTimer: ReturnType<typeof setTimeout> | null = null
   private readonly blocker: PowerSaveBlocker
+  private readonly linuxAssertion: PlatformAwakeAssertion
   private readonly logger: Logger
   private readonly macosAssertion: PlatformAwakeAssertion
   private readonly now: () => number
@@ -52,6 +55,15 @@ export class AgentAwakeService {
     this.blocker = options.blocker ?? powerSaveBlocker
     this.logger = options.logger ?? console
     this.now = options.now ?? Date.now
+    // Windows lid close is intentionally not modeled as an assertion here:
+    // keeping it awake requires mutating the user's global power plan.
+    this.linuxAssertion =
+      options.linuxAssertion ??
+      new LinuxLidSleepAssertion({
+        logger: this.logger,
+        now: this.now,
+        onUnexpectedFailure: (reason) => this.refresh(reason)
+      })
     this.macosAssertion =
       options.macosAssertion ??
       new MacosSystemSleepAssertion({
@@ -87,6 +99,7 @@ export class AgentAwakeService {
     this.unsubscribeResume?.()
     this.stopBlocker('dispose')
     this.macosAssertion.dispose()
+    this.linuxAssertion.dispose()
   }
 
   private refresh(reason: string): void {
@@ -96,9 +109,11 @@ export class AgentAwakeService {
     if (shouldBlock) {
       this.startBlocker(reason, runningStatusCount)
       this.startMacosAssertion(reason)
+      this.startLinuxAssertion(reason)
     } else {
       this.stopBlocker(reason, runningStatusCount)
       this.stopMacosAssertion(reason)
+      this.stopLinuxAssertion(reason)
     }
   }
 
@@ -186,11 +201,35 @@ export class AgentAwakeService {
     }
   }
 
+  private startLinuxAssertion(reason: string): void {
+    try {
+      this.linuxAssertion.start(reason)
+    } catch (err) {
+      this.logger.warn('[agent-awake] failed to start Linux lid sleep assertion', {
+        reason,
+        enabled: this.enabled,
+        error: err
+      })
+    }
+  }
+
   private stopMacosAssertion(reason: string): void {
     try {
       this.macosAssertion.stop(reason)
     } catch (err) {
       this.logger.warn('[agent-awake] failed to stop macOS system sleep assertion', {
+        reason,
+        enabled: this.enabled,
+        error: err
+      })
+    }
+  }
+
+  private stopLinuxAssertion(reason: string): void {
+    try {
+      this.linuxAssertion.stop(reason)
+    } catch (err) {
+      this.logger.warn('[agent-awake] failed to stop Linux lid sleep assertion', {
         reason,
         enabled: this.enabled,
         error: err

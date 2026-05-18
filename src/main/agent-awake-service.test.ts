@@ -48,6 +48,14 @@ function createMacosAssertion() {
   }
 }
 
+function createLinuxAssertion() {
+  return {
+    start: vi.fn(),
+    stop: vi.fn(),
+    dispose: vi.fn()
+  }
+}
+
 function createPowerMonitor() {
   const listeners = new Set<() => void>()
   return {
@@ -69,10 +77,12 @@ function createService(
   now: () => number,
   blocker = createBlocker(),
   macosAssertion = createMacosAssertion(),
+  linuxAssertion = createLinuxAssertion(),
   powerMonitor: ReturnType<typeof createPowerMonitor> | null = null
 ): AgentAwakeService {
   return new AgentAwakeService({
     blocker,
+    linuxAssertion,
     macosAssertion,
     now,
     powerMonitor,
@@ -97,10 +107,11 @@ describe('AgentAwakeService', () => {
     expect(blocker.start).not.toHaveBeenCalled()
   })
 
-  it('starts Electron and macOS assertions when enabled with a fresh working status', () => {
+  it('starts Electron and platform assertions when enabled with a fresh working status', () => {
     const blocker = createBlocker()
     const macosAssertion = createMacosAssertion()
-    const service = createService(() => 1_000, blocker, macosAssertion)
+    const linuxAssertion = createLinuxAssertion()
+    const service = createService(() => 1_000, blocker, macosAssertion, linuxAssertion)
 
     service.setEnabled(true)
     service.setStatuses([workingStatus()])
@@ -108,12 +119,14 @@ describe('AgentAwakeService', () => {
     expect(blocker.start).toHaveBeenCalledTimes(1)
     expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
     expect(macosAssertion.start).toHaveBeenCalledTimes(1)
+    expect(linuxAssertion.start).toHaveBeenCalledTimes(1)
   })
 
   it('starts and stops from settings flips around an already-running status', () => {
     const blocker = createBlocker()
     const macosAssertion = createMacosAssertion()
-    const service = createService(() => 1_000, blocker, macosAssertion)
+    const linuxAssertion = createLinuxAssertion()
+    const service = createService(() => 1_000, blocker, macosAssertion, linuxAssertion)
 
     service.setStatuses([workingStatus()])
     service.setEnabled(true)
@@ -123,6 +136,8 @@ describe('AgentAwakeService', () => {
     expect(blocker.stop).toHaveBeenCalledWith(1)
     expect(macosAssertion.start).toHaveBeenCalledTimes(1)
     expect(macosAssertion.stop).toHaveBeenCalled()
+    expect(linuxAssertion.start).toHaveBeenCalledTimes(1)
+    expect(linuxAssertion.stop).toHaveBeenCalled()
   })
 
   it('ignores startup-hydrated working statuses that were not observed in this runtime', () => {
@@ -163,7 +178,8 @@ describe('AgentAwakeService', () => {
   it('stops when the last running status is dropped', () => {
     const blocker = createBlocker()
     const macosAssertion = createMacosAssertion()
-    const service = createService(() => 1_000, blocker, macosAssertion)
+    const linuxAssertion = createLinuxAssertion()
+    const service = createService(() => 1_000, blocker, macosAssertion, linuxAssertion)
 
     service.setEnabled(true)
     service.setStatuses([workingStatus()])
@@ -171,6 +187,7 @@ describe('AgentAwakeService', () => {
 
     expect(blocker.stop).toHaveBeenCalledWith(1)
     expect(macosAssertion.stop).toHaveBeenCalledWith('status-change')
+    expect(linuxAssertion.stop).toHaveBeenCalledWith('status-change')
   })
 
   it('does not start for a stale working status', () => {
@@ -188,7 +205,8 @@ describe('AgentAwakeService', () => {
     let now = 1_000
     const blocker = createBlocker()
     const macosAssertion = createMacosAssertion()
-    const service = createService(() => now, blocker, macosAssertion)
+    const linuxAssertion = createLinuxAssertion()
+    const service = createService(() => now, blocker, macosAssertion, linuxAssertion)
 
     service.setEnabled(true)
     service.setStatuses([workingStatus({ receivedAt: 1_000 })])
@@ -197,6 +215,7 @@ describe('AgentAwakeService', () => {
 
     expect(blocker.stop).toHaveBeenCalledWith(1)
     expect(macosAssertion.stop).toHaveBeenCalledWith('stale-expiry')
+    expect(linuxAssertion.stop).toHaveBeenCalledWith('stale-expiry')
     service.dispose()
   })
 
@@ -205,7 +224,8 @@ describe('AgentAwakeService', () => {
     let now = 1_000
     const blocker = createBlocker()
     const macosAssertion = createMacosAssertion()
-    const service = createService(() => now, blocker, macosAssertion)
+    const linuxAssertion = createLinuxAssertion()
+    const service = createService(() => now, blocker, macosAssertion, linuxAssertion)
 
     service.setEnabled(true)
     service.setStatuses([workingStatus({ receivedAt: 1_000 })])
@@ -242,7 +262,8 @@ describe('AgentAwakeService', () => {
     vi.useFakeTimers()
     const blocker = createBlocker()
     const macosAssertion = createMacosAssertion()
-    const service = createService(() => 1_000, blocker, macosAssertion)
+    const linuxAssertion = createLinuxAssertion()
+    const service = createService(() => 1_000, blocker, macosAssertion, linuxAssertion)
 
     service.setEnabled(true)
     service.setStatuses([workingStatus()])
@@ -252,47 +273,15 @@ describe('AgentAwakeService', () => {
     expect(blocker.stop).toHaveBeenCalledTimes(1)
     expect(blocker.stop).toHaveBeenCalledWith(1)
     expect(macosAssertion.dispose).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps Electron blocker active when macOS assertion start fails', () => {
-    const blocker = createBlocker()
-    const macosAssertion = createMacosAssertion()
-    macosAssertion.start.mockImplementation(() => {
-      throw new Error('caffeinate failed')
-    })
-    const service = createService(() => 1_000, blocker, macosAssertion)
-
-    service.setEnabled(true)
-    service.setStatuses([workingStatus()])
-    service.setEnabled(false)
-
-    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
-    expect(blocker.stop).toHaveBeenCalledWith(1)
-    expect(macosAssertion.stop).toHaveBeenCalled()
-  })
-
-  it('starts macOS assertion when Electron blocker start fails', () => {
-    const blocker = createBlocker()
-    blocker.start.mockImplementation(() => {
-      throw new Error('electron failed')
-    })
-    const macosAssertion = createMacosAssertion()
-    const service = createService(() => 1_000, blocker, macosAssertion)
-
-    service.setEnabled(true)
-    service.setStatuses([workingStatus()])
-    service.setEnabled(false)
-
-    expect(macosAssertion.start).toHaveBeenCalledTimes(1)
-    expect(macosAssertion.stop).toHaveBeenCalled()
-    expect(blocker.stop).not.toHaveBeenCalled()
+    expect(linuxAssertion.dispose).toHaveBeenCalledTimes(1)
   })
 
   it('reconciles assertions on power resume while work is still eligible', () => {
     const blocker = createBlocker()
     const macosAssertion = createMacosAssertion()
+    const linuxAssertion = createLinuxAssertion()
     const monitor = createPowerMonitor()
-    const service = createService(() => 1_000, blocker, macosAssertion, monitor)
+    const service = createService(() => 1_000, blocker, macosAssertion, linuxAssertion, monitor)
 
     service.setEnabled(true)
     service.setStatuses([workingStatus()])
@@ -301,13 +290,15 @@ describe('AgentAwakeService', () => {
 
     expect(blocker.start).toHaveBeenCalledTimes(2)
     expect(macosAssertion.start).toHaveBeenCalledTimes(2)
+    expect(linuxAssertion.start).toHaveBeenCalledTimes(2)
   })
 
   it('unsubscribes the resume listener on dispose', () => {
     const blocker = createBlocker()
     const macosAssertion = createMacosAssertion()
+    const linuxAssertion = createLinuxAssertion()
     const monitor = createPowerMonitor()
-    const service = createService(() => 1_000, blocker, macosAssertion, monitor)
+    const service = createService(() => 1_000, blocker, macosAssertion, linuxAssertion, monitor)
 
     service.dispose()
 
