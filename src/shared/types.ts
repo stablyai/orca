@@ -1332,11 +1332,21 @@ export type TerminalColorOverrides = {
   bold?: string
 }
 
+export type TerminalQuickCommandScope =
+  | {
+      type: 'global'
+    }
+  | {
+      type: 'repo'
+      repoId: string
+    }
+
 export type TerminalQuickCommand = {
   id: string
   label: string
   command: string
   appendEnter: boolean
+  scope?: TerminalQuickCommandScope
 }
 
 export type OpenInApplication = {

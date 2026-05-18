@@ -8,6 +8,7 @@ import {
   PanelsTopLeft,
   PanelRightClose,
   Pencil,
+  Plus,
   SquareTerminal,
   X
 } from 'lucide-react'
@@ -15,6 +16,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuSub,
@@ -41,8 +43,11 @@ type TerminalContextMenuProps = {
   onEqualizePaneSizes: () => void
   onClosePane: () => void
   onClearScreen: () => void
-  quickCommands: TerminalQuickCommand[]
+  repoQuickCommands: TerminalQuickCommand[]
+  globalQuickCommands: TerminalQuickCommand[]
+  quickCommandRepoLabel: string | null
   onQuickCommand: (command: TerminalQuickCommand) => void
+  onAddQuickCommand: () => void
   onToggleExpand: () => void
   onSetTitle: () => void
 }
@@ -63,14 +68,18 @@ export default function TerminalContextMenu({
   onEqualizePaneSizes,
   onClosePane,
   onClearScreen,
-  quickCommands,
+  repoQuickCommands,
+  globalQuickCommands,
+  quickCommandRepoLabel,
   onQuickCommand,
+  onAddQuickCommand,
   onToggleExpand,
   onSetTitle
 }: TerminalContextMenuProps): React.JSX.Element {
   const isMac = navigator.userAgent.includes('Mac')
   const mod = isMac ? '⌘' : 'Ctrl+'
   const shift = isMac ? '⇧' : 'Shift+'
+  const hasQuickCommands = repoQuickCommands.length > 0 || globalQuickCommands.length > 0
 
   return (
     <DropdownMenu
@@ -126,24 +135,65 @@ export default function TerminalContextMenu({
           Paste
           <DropdownMenuShortcut>{mod}V</DropdownMenuShortcut>
         </DropdownMenuItem>
-        {quickCommands.length > 0 ? (
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <SquareTerminal />
-              Quick Commands
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="w-60">
-              {quickCommands.map((command) => (
-                <DropdownMenuItem key={command.id} onSelect={() => onQuickCommand(command)}>
-                  <span className="truncate">{command.label}</span>
-                  {!command.appendEnter ? (
-                    <DropdownMenuShortcut className="shrink-0">Insert</DropdownMenuShortcut>
-                  ) : null}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-        ) : null}
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <SquareTerminal />
+            Quick Commands
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="w-60">
+            {hasQuickCommands ? (
+              <>
+                {quickCommandRepoLabel && repoQuickCommands.length > 0 ? (
+                  <>
+                    <DropdownMenuLabel className="truncate">
+                      {quickCommandRepoLabel}
+                    </DropdownMenuLabel>
+                    {repoQuickCommands.map((command) => (
+                      <DropdownMenuItem key={command.id} onSelect={() => onQuickCommand(command)}>
+                        <span className="truncate">{command.label}</span>
+                        {!command.appendEnter ? (
+                          <DropdownMenuShortcut className="shrink-0">Insert</DropdownMenuShortcut>
+                        ) : null}
+                      </DropdownMenuItem>
+                    ))}
+                  </>
+                ) : null}
+                {globalQuickCommands.length > 0 ? (
+                  <>
+                    {repoQuickCommands.length > 0 ? <DropdownMenuSeparator /> : null}
+                    {repoQuickCommands.length > 0 ? (
+                      <DropdownMenuLabel>Global</DropdownMenuLabel>
+                    ) : null}
+                    {globalQuickCommands.map((command) => (
+                      <DropdownMenuItem key={command.id} onSelect={() => onQuickCommand(command)}>
+                        <span className="truncate">{command.label}</span>
+                        {!command.appendEnter ? (
+                          <DropdownMenuShortcut className="shrink-0">Insert</DropdownMenuShortcut>
+                        ) : null}
+                      </DropdownMenuItem>
+                    ))}
+                  </>
+                ) : null}
+              </>
+            ) : (
+              <DropdownMenuItem disabled className="text-muted-foreground">
+                No quick commands
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={() => {
+                // Why: the dropdown sits above dialogs; force-close before
+                // opening the add modal even during the open-gesture guard.
+                onOpenChange(false)
+                onAddQuickCommand()
+              }}
+            >
+              <Plus />
+              Add Quick Command…
+            </DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onSplitRight}>
           <PanelRightClose />

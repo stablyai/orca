@@ -60,6 +60,17 @@ import {
   isSyntheticSinglePaneTitle,
   sanitizeTerminalLayoutPaneTitles
 } from '@/lib/terminal-pane-title-sanitization'
+import type { TerminalQuickCommand, TerminalQuickCommandScope } from '../../../../shared/types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import {
+  getTerminalQuickCommandScope,
+  terminalQuickCommandMatchesRepo
+} from '../../../../shared/terminal-quick-commands'
+import {
+  createTerminalQuickCommandDraft,
+  TerminalQuickCommandDialog
+} from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 
 // Why: registry lives in a leaf module so the store slice can import it
 // without re-entering the `slice → TerminalPane → store → slice` cycle
@@ -148,6 +159,10 @@ export default function TerminalPane({
   searchOpenRef.current = searchOpen
   const searchStateRef = useRef<SearchState>({ query: '', caseSensitive: false, regex: false })
   const [closeConfirmPaneId, setCloseConfirmPaneId] = useState<number | null>(null)
+  const [quickCommandEditorOpen, setQuickCommandEditorOpen] = useState(false)
+  // Why: the terminal menu can be the first quick-command entry point, so each
+  // Add action starts with a fresh draft instead of reusing cancelled text.
+  const [quickCommandDraft, setQuickCommandDraft] = useState(createTerminalQuickCommandDraft)
   const [terminalError, setTerminalError] = useState<string | null>(null)
   const [sessionStateSaveFailureOpen, setSessionStateSaveFailureOpen] = useState(false)
   // Why: override state lives in a plain Map for perf (safeFit reads it on
@@ -291,6 +306,8 @@ export default function TerminalPane({
   const openSpacePage = useAppStore((store) => store.openSpacePage)
   const refreshWorkspaceSpace = useAppStore((store) => store.refreshWorkspaceSpace)
   const settings = useAppStore((store) => store.settings)
+  const repos = useAppStore((store) => store.repos)
+  const updateSettings = useAppStore((store) => store.updateSettings)
   // Why: Windows is the only platform where bare right-click is repurposed as
   // a paste gesture; on macOS/Linux the terminal still owns right-click for the
   // context menu. The settings default keeps the Windows shortcut feeling native
@@ -318,6 +335,38 @@ export default function TerminalPane({
       console.warn('Failed to refresh Space Analyzer after terminal session save failure:', err)
     })
   }, [openSpacePage, refreshWorkspaceSpace])
+
+  const quickCommandRepoId =
+    worktreeId === FLOATING_TERMINAL_WORKTREE_ID ? null : getRepoIdFromWorktreeId(worktreeId)
+  const quickCommandRepo = repos.find((repo) => repo.id === quickCommandRepoId) ?? null
+  const quickCommandRepoLabel = quickCommandRepo
+    ? quickCommandRepo.displayName || quickCommandRepo.path
+    : quickCommandRepoId
+      ? 'This Repo'
+      : null
+  const validQuickCommands = (settings?.terminalQuickCommands ?? []).filter(
+    (command) => command.label.trim() && command.command.trimEnd()
+  )
+  const repoQuickCommands = validQuickCommands.filter((command) => {
+    const scope = getTerminalQuickCommandScope(command)
+    return scope.type === 'repo' && terminalQuickCommandMatchesRepo(command, quickCommandRepoId)
+  })
+  const globalQuickCommands = validQuickCommands.filter(
+    (command) => getTerminalQuickCommandScope(command).type === 'global'
+  )
+
+  const openQuickCommandEditor = useCallback((scope: TerminalQuickCommandScope): void => {
+    setQuickCommandDraft(createTerminalQuickCommandDraft(scope))
+    setQuickCommandEditorOpen(true)
+  }, [])
+
+  const saveQuickCommand = useCallback(
+    (command: TerminalQuickCommand): void => {
+      const currentCommands = useAppStore.getState().settings?.terminalQuickCommands ?? []
+      void updateSettings({ terminalQuickCommands: [...currentCommands, command] })
+    },
+    [updateSettings]
+  )
 
   useEffect(() => {
     if (setupSplit) {
@@ -1383,12 +1432,25 @@ export default function TerminalPane({
         onEqualizePaneSizes={contextMenu.onEqualizePaneSizes}
         onClosePane={contextMenu.onClosePane}
         onClearScreen={contextMenu.onClearScreen}
-        quickCommands={(settings?.terminalQuickCommands ?? []).filter(
-          (command) => command.label.trim() && command.command.trimEnd()
-        )}
+        repoQuickCommands={repoQuickCommands}
+        globalQuickCommands={globalQuickCommands}
+        quickCommandRepoLabel={quickCommandRepoLabel}
         onQuickCommand={contextMenu.onQuickCommand}
+        onAddQuickCommand={
+          quickCommandRepoId
+            ? () => openQuickCommandEditor({ type: 'repo', repoId: quickCommandRepoId })
+            : () => openQuickCommandEditor({ type: 'global' })
+        }
         onToggleExpand={contextMenu.onToggleExpand}
         onSetTitle={contextMenu.onSetTitle}
+      />
+      <TerminalQuickCommandDialog
+        open={quickCommandEditorOpen}
+        mode="add"
+        command={quickCommandDraft}
+        repos={repos}
+        onOpenChange={setQuickCommandEditorOpen}
+        onSave={saveQuickCommand}
       />
       {/* Title bar overlays — portaled into each pane container that has a title
           or is currently being renamed (so the inline input appears even for
