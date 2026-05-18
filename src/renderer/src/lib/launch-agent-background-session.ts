@@ -90,7 +90,9 @@ export async function launchAgentBackgroundSession(
   // tabs never mount a TerminalPane to inject this env for us.
   const leafId = globalThis.crypto.randomUUID()
   const paneKey = makePaneKey(tab.id, leafId)
-  store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, undefined, title))
+  // Why: `title` labels the tab/worktree entry. Pane titles render as an
+  // in-terminal title row, so background sessions must not persist it there.
+  store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId))
   const paneEnv = {
     ...startupPlan.env,
     ORCA_PANE_KEY: paneKey,
@@ -142,7 +144,7 @@ export async function launchAgentBackgroundSession(
     throw error
   }
   store.updateTabPtyId(tab.id, ptyId)
-  store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId, title))
+  store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId))
   let exitHandled = false
   let unsubscribeExit = (): void => {}
   let unsubscribeData = (): void => {}

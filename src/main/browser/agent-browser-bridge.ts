@@ -86,6 +86,10 @@ type AgentBrowserExecOptions = {
   timeoutError?: BrowserError
 }
 
+type AgentBrowserBridgeOptions = {
+  onTabsChanged?: (worktreeId?: string) => void
+}
+
 function agentBrowserNativeName(): string {
   const ext = process.platform === 'win32' ? '.exe' : ''
   return `agent-browser-${platform()}-${arch()}${ext}`
@@ -403,7 +407,10 @@ export class AgentBrowserBridge {
   private readonly pendingSessionDestruction = new Map<string, Promise<void>>()
   private readonly cancelledProcesses = new WeakSet<ChildProcess>()
 
-  constructor(private readonly browserManager: BrowserManager) {
+  constructor(
+    private readonly browserManager: BrowserManager,
+    private readonly options: AgentBrowserBridgeOptions = {}
+  ) {
     this.agentBrowserBin = resolveAgentBrowserBinary()
   }
 
@@ -414,6 +421,7 @@ export class AgentBrowserBridge {
     if (worktreeId) {
       this.activeWebContentsPerWorktree.set(worktreeId, webContentsId)
     }
+    this.options.onTabsChanged?.(worktreeId)
   }
 
   private selectFallbackActiveWebContents(
@@ -462,6 +470,7 @@ export class AgentBrowserBridge {
     if (worktreeId) {
       this.activeWebContentsPerWorktree.set(worktreeId, webContentsId)
     }
+    this.options.onTabsChanged?.(worktreeId)
   }
 
   async onTabClosed(webContentsId: number): Promise<void> {
@@ -485,6 +494,7 @@ export class AgentBrowserBridge {
     if (browserPageId) {
       await this.destroySession(`orca-tab-${browserPageId}`)
     }
+    this.options.onTabsChanged?.(owningWorktreeId)
   }
 
   async onProcessSwap(
@@ -514,6 +524,7 @@ export class AgentBrowserBridge {
     ) {
       this.activeWebContentsPerWorktree.set(owningWorktreeId, newWebContentsId)
     }
+    this.options.onTabsChanged?.(owningWorktreeId ?? undefined)
   }
 
   // ── Worktree-scoped tab queries ──
@@ -614,6 +625,7 @@ export class AgentBrowserBridge {
       if (owningWorktreeId) {
         this.activeWebContentsPerWorktree.set(owningWorktreeId, wcId)
       }
+      this.options.onTabsChanged?.(owningWorktreeId ?? undefined)
       return { switched: switchedIndex, browserPageId: tabId }
     })
   }
@@ -804,59 +816,64 @@ export class AgentBrowserBridge {
     browserPageId?: string,
     radius?: number
   ): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (_sessionName, target) => {
-      const wc = this.getWebContents(target.webContentsId)
-      if (!wc || wc.isDestroyed()) {
-        throw new BrowserError(
-          'browser_tab_not_found',
-          `Browser page ${target.browserPageId} is no longer available`
-        )
-      }
-      const cdpButton = normalizeCdpMouseButton(button)
-      const buttons = cdpMouseButtonMask(cdpButton)
-      const lease = acquireElectronDebugger(wc)
-      try {
-        wc.focus()
-        const point =
-          cdpButton === 'left'
-            ? await resolveMobileTouchClickPoint(wc.debugger, x, y, radius)
-            : { x, y, adjusted: false, handled: false }
-        // Why: mobile taps should land as one atomic input operation. Sending
-        // move/down/up through separate CLI calls visibly hovers targets and can
-        // miss small controls before the click lands.
-        // Runtime may already activate DOM controls because mobile-emulated
-        // BrowserViews can ignore CDP mouse clicks for regular page taps.
-        if (!point.handled) {
-          await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
-            type: 'mousePressed',
-            x: point.x,
-            y: point.y,
-            button: cdpButton,
-            buttons,
-            clickCount: 1
-          })
-          await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
-            type: 'mouseReleased',
-            x: point.x,
-            y: point.y,
-            button: cdpButton,
-            buttons: 0,
-            clickCount: 1
-          })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (_sessionName, target) => {
+        const wc = this.getWebContents(target.webContentsId)
+        if (!wc || wc.isDestroyed()) {
+          throw new BrowserError(
+            'browser_tab_not_found',
+            `Browser page ${target.browserPageId} is no longer available`
+          )
         }
-        return {
-          clicked: {
-            x: point.x,
-            y: point.y,
-            button: cdpButton,
-            adjusted: point.adjusted,
-            handled: point.handled
+        const cdpButton = normalizeCdpMouseButton(button)
+        const buttons = cdpMouseButtonMask(cdpButton)
+        const lease = acquireElectronDebugger(wc)
+        try {
+          wc.focus()
+          const point =
+            cdpButton === 'left'
+              ? await resolveMobileTouchClickPoint(wc.debugger, x, y, radius)
+              : { x, y, adjusted: false, handled: false }
+          // Why: mobile taps should land as one atomic input operation. Sending
+          // move/down/up through separate CLI calls visibly hovers targets and can
+          // miss small controls before the click lands.
+          // Runtime may already activate DOM controls because mobile-emulated
+          // BrowserViews can ignore CDP mouse clicks for regular page taps.
+          if (!point.handled) {
+            await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
+              type: 'mousePressed',
+              x: point.x,
+              y: point.y,
+              button: cdpButton,
+              buttons,
+              clickCount: 1
+            })
+            await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
+              type: 'mouseReleased',
+              x: point.x,
+              y: point.y,
+              button: cdpButton,
+              buttons: 0,
+              clickCount: 1
+            })
           }
+          return {
+            clicked: {
+              x: point.x,
+              y: point.y,
+              button: cdpButton,
+              adjusted: point.adjusted,
+              handled: point.handled
+            }
+          }
+        } finally {
+          lease.release()
         }
-      } finally {
-        lease.release()
-      }
-    })
+      },
+      { ensureSession: false }
+    )
   }
 
   async mouseUp(button?: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
@@ -1494,6 +1511,11 @@ export class AgentBrowserBridge {
         deviceScaleFactor: scale,
         mobile
       })
+      // Why: BrowserView's compositor surface can keep the previous host size
+      // after metrics-only resize, which crops remote screencast clients.
+      await Promise.resolve(dbg.sendCommand('Emulation.setVisibleSize', { width, height })).catch(
+        () => {}
+      )
 
       return {
         width,
@@ -1677,12 +1699,15 @@ export class AgentBrowserBridge {
   private async enqueueTargetedCommand<T>(
     worktreeId: string | undefined,
     browserPageId: string | undefined,
-    execute: (sessionName: string, target: ResolvedBrowserCommandTarget) => Promise<T>
+    execute: (sessionName: string, target: ResolvedBrowserCommandTarget) => Promise<T>,
+    options: { ensureSession?: boolean } = {}
   ): Promise<T> {
     const target = this.resolveCommandTarget(worktreeId, browserPageId)
     const sessionName = `orca-tab-${target.browserPageId}`
 
-    await this.ensureSession(sessionName, target.browserPageId, target.webContentsId)
+    if (options.ensureSession !== false) {
+      await this.ensureSession(sessionName, target.browserPageId, target.webContentsId)
+    }
 
     return new Promise<T>((resolve, reject) => {
       let queue = this.commandQueues.get(sessionName)

@@ -365,6 +365,50 @@ describe('startBrowserScreencast', () => {
     }
   })
 
+  it('does not ack a live frame until the binary sender accepts it', async () => {
+    vi.useFakeTimers()
+    const webContents = createMockWebContents()
+    let sendAttempts = 0
+    const onFrame = vi.fn(() => {
+      sendAttempts += 1
+      return sendAttempts > 1
+    })
+
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 1440,
+      maxHeight: 1200,
+      everyNthFrame: 1,
+      minFrameIntervalMs: 0,
+      onFrame
+    })
+
+    try {
+      webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
+        data: Buffer.from('backpressured-frame').toString('base64'),
+        sessionId: 42,
+        metadata: { deviceWidth: 800, deviceHeight: 600 }
+      })
+
+      expect(onFrame).toHaveBeenCalledTimes(1)
+      expect(webContents.debugger.sendCommand).not.toHaveBeenCalledWith('Page.screencastFrameAck', {
+        sessionId: 42
+      })
+
+      await vi.advanceTimersByTimeAsync(50)
+
+      expect(onFrame).toHaveBeenCalledTimes(2)
+      expect(webContents.debugger.sendCommand).toHaveBeenCalledWith('Page.screencastFrameAck', {
+        sessionId: 42
+      })
+    } finally {
+      session.stop()
+      await session.done
+      vi.useRealTimers()
+    }
+  })
+
   it('drops pending and late screencast frames after stop is requested', async () => {
     vi.useFakeTimers()
     const webContents = createMockWebContents()
@@ -424,10 +468,10 @@ describe('startBrowserScreencast', () => {
     }
   })
 
-  it('enriches live frame metadata with viewport and image dimensions', async () => {
+  it('enriches viewport-sized live frames with requested viewport dimensions', async () => {
     const webContents = createMockWebContents()
     const onFrame = vi.fn()
-    const image = jpegWithSize(900, 500)
+    const image = jpegWithSize(390, 720)
 
     const session = await startBrowserScreencast(webContents as never, {
       format: 'jpeg',
@@ -452,18 +496,164 @@ describe('startBrowserScreencast', () => {
     expect(frame?.metadata).toMatchObject({
       deviceWidth: 390,
       deviceHeight: 720,
-      imageWidth: 900,
-      imageHeight: 500
+      imageWidth: 390,
+      imageHeight: 720
     })
 
     session.stop()
     await session.done
   })
 
-  it('keeps client viewport dimensions when CDP reports DPR-sized live metadata', async () => {
+  it('keeps requested viewport dimensions for DPR-sized live frames without CDP metadata', async () => {
     const webContents = createMockWebContents()
     const onFrame = vi.fn()
-    const image = jpegWithSize(900, 500)
+    const image = jpegWithSize(780, 1440)
+
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 1440,
+      maxHeight: 1200,
+      viewportWidth: 390,
+      viewportHeight: 720,
+      deviceScaleFactor: 2,
+      everyNthFrame: 2,
+      minFrameIntervalMs: 0,
+      onFrame
+    })
+
+    webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
+      data: image.toString('base64'),
+      sessionId: 42,
+      metadata: {}
+    })
+
+    await vi.waitFor(() => expect(onFrame).toHaveBeenCalledTimes(1))
+    const frame = decodeBrowserScreencastFrame(onFrame.mock.calls[0][0])
+    expect(frame?.metadata).toMatchObject({
+      deviceWidth: 390,
+      deviceHeight: 720,
+      imageWidth: 780,
+      imageHeight: 1440
+    })
+
+    session.stop()
+    await session.done
+  })
+
+  it('keeps requested viewport dimensions for CSS-sized high-DPI live frames', async () => {
+    const webContents = createMockWebContents()
+    const onFrame = vi.fn()
+    const image = jpegWithSize(390, 720)
+
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 1440,
+      maxHeight: 1200,
+      viewportWidth: 390,
+      viewportHeight: 720,
+      deviceScaleFactor: 2,
+      everyNthFrame: 2,
+      minFrameIntervalMs: 0,
+      onFrame
+    })
+
+    webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
+      data: image.toString('base64'),
+      sessionId: 42,
+      metadata: {}
+    })
+
+    await vi.waitFor(() => expect(onFrame).toHaveBeenCalledTimes(1))
+    const frame = decodeBrowserScreencastFrame(onFrame.mock.calls[0][0])
+    expect(frame?.metadata).toMatchObject({
+      deviceWidth: 390,
+      deviceHeight: 720,
+      imageWidth: 390,
+      imageHeight: 720
+    })
+
+    session.stop()
+    await session.done
+  })
+
+  it('keeps requested viewport dimensions for max-size-scaled high-DPI live frames', async () => {
+    const webContents = createMockWebContents()
+    const onFrame = vi.fn()
+    const image = jpegWithSize(3240, 2160)
+
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 3840,
+      maxHeight: 2160,
+      viewportWidth: 3000,
+      viewportHeight: 2000,
+      deviceScaleFactor: 2,
+      everyNthFrame: 2,
+      minFrameIntervalMs: 0,
+      onFrame
+    })
+
+    webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
+      data: image.toString('base64'),
+      sessionId: 42,
+      metadata: {}
+    })
+
+    await vi.waitFor(() => expect(onFrame).toHaveBeenCalledTimes(1))
+    const frame = decodeBrowserScreencastFrame(onFrame.mock.calls[0][0])
+    expect(frame?.metadata).toMatchObject({
+      deviceWidth: 3000,
+      deviceHeight: 2000,
+      imageWidth: 3240,
+      imageHeight: 2160
+    })
+
+    session.stop()
+    await session.done
+  })
+
+  it('drops host-sized live frames when a client viewport was requested', async () => {
+    const webContents = createMockWebContents()
+    const onFrame = vi.fn()
+    const image = jpegWithSize(2266, 1309)
+
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 3840,
+      maxHeight: 2160,
+      viewportWidth: 958,
+      viewportHeight: 609,
+      deviceScaleFactor: 1,
+      everyNthFrame: 2,
+      minFrameIntervalMs: 0,
+      onFrame
+    })
+
+    webContents.debugger.emit('message', {}, 'Page.screencastFrame', {
+      data: image.toString('base64'),
+      sessionId: 42,
+      metadata: {}
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(onFrame).not.toHaveBeenCalled()
+    expect(webContents.debugger.sendCommand).toHaveBeenCalledWith('Page.screencastFrameAck', {
+      sessionId: 42
+    })
+
+    session.stop()
+    await session.done
+  })
+
+  it('keeps requested viewport dimensions over CDP-reported live dimensions', async () => {
+    const webContents = createMockWebContents()
+    const onFrame = vi.fn()
+    const image = jpegWithSize(390, 720)
 
     const session = await startBrowserScreencast(webContents as never, {
       format: 'jpeg',
@@ -488,8 +678,8 @@ describe('startBrowserScreencast', () => {
     expect(frame?.metadata).toMatchObject({
       deviceWidth: 390,
       deviceHeight: 720,
-      imageWidth: 900,
-      imageHeight: 500
+      imageWidth: 390,
+      imageHeight: 720
     })
 
     session.stop()
@@ -555,6 +745,27 @@ describe('startBrowserScreencast', () => {
     const methods = webContents.debugger.sendCommand.mock.calls.map((call) => call[0])
     expect(methods.indexOf('Emulation.setDeviceMetricsOverride')).toBeLessThan(
       methods.indexOf('Page.startScreencast')
+    )
+
+    session.stop()
+    await session.done
+  })
+
+  it('does not clear an existing viewport override for size-neutral streams', async () => {
+    const webContents = createMockWebContents()
+
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 1440,
+      maxHeight: 1200,
+      everyNthFrame: 2,
+      minFrameIntervalMs: 0,
+      onFrame: vi.fn()
+    })
+
+    expect(webContents.debugger.sendCommand).not.toHaveBeenCalledWith(
+      'Emulation.clearDeviceMetricsOverride'
     )
 
     session.stop()

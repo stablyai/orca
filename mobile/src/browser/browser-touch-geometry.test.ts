@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  clampBrowserZoomState,
   computeBrowserFrameGeometry,
   mapScreenToBrowserPoint,
   readLocalTouchPoint
@@ -52,5 +53,23 @@ describe('browser touch geometry', () => {
 
   it('rejects page-level touch coordinates instead of mixing coordinate spaces', () => {
     expect(readLocalTouchPoint({ pageX: 120, pageY: 240 })).toBeNull()
+  })
+
+  it('clamps zoom offsets after the viewport geometry changes', () => {
+    const nextGeometry = computeBrowserFrameGeometry(
+      { width: 390, height: 700 },
+      { deviceWidth: 1280, deviceHeight: 720 }
+    )!
+
+    const clamped = clampBrowserZoomState(
+      { scale: 3.5, offsetX: 300, offsetY: 500 },
+      nextGeometry,
+      1,
+      3.5
+    )
+
+    expect(clamped.scale).toBe(3.5)
+    expect(clamped.offsetX).toBe(300)
+    expect(clamped.offsetY).toBeCloseTo(33.90625)
   })
 })

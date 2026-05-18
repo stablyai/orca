@@ -129,7 +129,7 @@ export function decodeBrowserScreencastFrame(bytes: Uint8Array): BrowserScreenca
   if (imageStart > bytes.byteLength) {
     return null
   }
-  const metadata = decodeFrameMetadata(bytes.slice(payloadStart, imageStart))
+  const metadata = decodeFrameMetadata(bytes.subarray(payloadStart, imageStart))
   if (!metadata) {
     return null
   }
@@ -138,6 +138,6 @@ export function decodeBrowserScreencastFrame(bytes: Uint8Array): BrowserScreenca
     seq,
     format,
     metadata,
-    image: bytes.slice(imageStart)
+    image: bytes.subarray(imageStart)
   }
 }

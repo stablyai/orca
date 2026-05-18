@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Why: shared type definitions for all runtime RPC methods live in one file for discoverability and import simplicity. */
+import type { AgentStatusEntry } from './agent-status-types'
 import type {
   BaseRefSearchResult,
   BrowserCookieImportResult,
@@ -102,6 +103,7 @@ export type RuntimeMobileSessionTerminalTab = {
   parentTabId: string
   leafId: string
   ptyId?: string | null
+  agentStatus?: AgentStatusEntry | null
   parentLayout?: TerminalLayoutSnapshot
   isActive: boolean
 }

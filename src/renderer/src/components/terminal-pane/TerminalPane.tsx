@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: terminal pane component co-locates title state, layout serialization, and portal rendering to keep pane lifecycle consistent. */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import type { IDisposable } from '@xterm/xterm'
@@ -56,6 +56,10 @@ import {
 import { isPrimarySelectionEnabled, readPrimarySelectionText } from '@/lib/primary-selection'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { isTerminalSessionStateSaveFailure } from '../../../../shared/terminal-session-state-save-failure'
+import {
+  isSyntheticSinglePaneTitle,
+  sanitizeTerminalLayoutPaneTitles
+} from '@/lib/terminal-pane-title-sanitization'
 
 // Why: registry lives in a leaf module so the store slice can import it
 // without re-entering the `slice → TerminalPane → store → slice` cycle
@@ -261,8 +265,15 @@ export default function TerminalPane({
   )
   const clearCodexRestartNotice = useAppStore((store) => store.clearCodexRestartNotice)
   const savedLayout = useAppStore((store) => store.terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT)
+  const terminalTab = useAppStore(
+    (store) => (store.tabsByWorktree[worktreeId] ?? []).find((tab) => tab.id === tabId) ?? null
+  )
   const setTabLayout = useAppStore((store) => store.setTabLayout)
-  const initialLayoutRef = useRef(savedLayout)
+  const restoredLayout = useMemo(
+    () => (terminalTab ? sanitizeTerminalLayoutPaneTitles(savedLayout, terminalTab) : savedLayout),
+    [savedLayout, terminalTab]
+  )
+  const initialLayoutRef = useRef(restoredLayout)
   const updateTabTitle = useAppStore((store) => store.updateTabTitle)
   const setRuntimePaneTitle = useAppStore((store) => store.setRuntimePaneTitle)
   const clearRuntimePaneTitle = useAppStore((store) => store.clearRuntimePaneTitle)
@@ -414,6 +425,47 @@ export default function TerminalPane({
     }
     setTabLayout(tabId, layout)
   }, [tabId, setTabLayout])
+
+  useEffect(() => {
+    if (!terminalTab) {
+      return
+    }
+    const sanitized = sanitizeTerminalLayoutPaneTitles(savedLayout, terminalTab)
+    if (sanitized !== savedLayout) {
+      setTabLayout(tabId, sanitized)
+    }
+  }, [savedLayout, setTabLayout, tabId, terminalTab])
+
+  useEffect(() => {
+    if (!terminalTab) {
+      return
+    }
+    const manager = managerRef.current
+    if (!manager) {
+      return
+    }
+    const panes = manager.getPanes()
+    if (panes.length !== 1) {
+      return
+    }
+    const paneId = panes[0].id
+    const currentTitle = paneTitlesRef.current[paneId]
+    if (!currentTitle || !isSyntheticSinglePaneTitle(currentTitle, terminalTab)) {
+      return
+    }
+    const nextTitles = { ...paneTitlesRef.current }
+    delete nextTitles[paneId]
+    paneTitlesRef.current = nextTitles
+    setPaneTitles((prev) => {
+      if (!prev[paneId] || !isSyntheticSinglePaneTitle(prev[paneId], terminalTab)) {
+        return prev
+      }
+      const next = { ...prev }
+      delete next[paneId]
+      return next
+    })
+    persistLayoutSnapshot()
+  }, [paneCount, paneTitles, persistLayoutSnapshot, terminalTab])
 
   const syncPanePtyLayoutBinding = useCallback(
     (paneId: number, ptyId: string | null): void => {

@@ -54,6 +54,7 @@ import {
 } from '../../../../src/terminal/TerminalWebView'
 import { countTerminalGestureInputSequences } from '../../../../src/terminal/terminal-gesture-input'
 import { MobileBrowserPane, type MobileBrowserTab } from '../../../../src/browser/MobileBrowserPane'
+import { isBlankBrowserUrl, normalizeBrowserUrl } from '../../../../src/browser/browser-url'
 import { StatusDot } from '../../../../src/components/StatusDot'
 import { ActionSheetModal } from '../../../../src/components/ActionSheetModal'
 import { TextInputModal } from '../../../../src/components/TextInputModal'
@@ -247,11 +248,6 @@ function getActiveTabIdForHandle(
   )
 }
 
-function isBlankBrowserUrl(value: string | null | undefined): boolean {
-  const trimmed = value?.trim() ?? ''
-  return !trimmed || trimmed === 'about:blank' || trimmed.startsWith('data:text/html')
-}
-
 function getMobileSessionTabTitle(tab: MobileSessionTab): string {
   if (tab.type === 'browser') {
     const title = tab.title.trim()
@@ -270,27 +266,6 @@ function getMobileSessionTabTitle(tab: MobileSessionTab): string {
     return tab.title || 'File'
   }
   return tab.title || 'Terminal'
-}
-
-function normalizeCreateBrowserUrl(value: string): string | null {
-  const trimmed = value.trim()
-  if (isBlankBrowserUrl(trimmed)) {
-    return 'about:blank'
-  }
-  try {
-    const parsed = new URL(trimmed)
-    return parsed.protocol === 'http:' ||
-      parsed.protocol === 'https:' ||
-      parsed.protocol === 'file:'
-      ? parsed.toString()
-      : null
-  } catch {
-    try {
-      return new URL(`https://${trimmed}`).toString()
-    } catch {
-      return null
-    }
-  }
 }
 
 type TerminalCreateResult = {
@@ -2480,7 +2455,7 @@ export default function SessionScreen() {
       showToast('Desktop update required for mobile browser streaming', 1600)
       return false
     }
-    const url = normalizeCreateBrowserUrl(rawUrl)
+    const url = normalizeBrowserUrl(rawUrl)
     if (!url) {
       const message = 'Enter a valid URL'
       setCreateError(message)

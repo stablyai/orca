@@ -38,6 +38,7 @@ import {
   type BrowserTouchLayout,
   type BrowserZoomState
 } from './browser-touch-geometry'
+import { displayBrowserUrl, normalizeBrowserUrl } from './browser-url'
 
 export type MobileBrowserTab = {
   type: 'browser'
@@ -91,7 +92,7 @@ const TOUCH_CLICK_RADIUS_DIP = 14
 const MIN_ZOOM = 1
 const MAX_ZOOM = 3.5
 const DEFAULT_ZOOM: BrowserZoomState = { scale: 1, offsetX: 0, offsetY: 0 }
-const BROWSER_FRAME_CACHE_LIMIT = 8
+const BROWSER_FRAME_CACHE_LIMIT = 4
 
 type BrowserFrameCacheEntry = {
   uri: string
@@ -99,6 +100,19 @@ type BrowserFrameCacheEntry = {
 }
 
 const browserFrameCache = new Map<string, BrowserFrameCacheEntry>()
+
+type BrowserPageParams = {
+  worktree: string
+  page: string
+}
+
+type PendingWheelCommand = {
+  base: BrowserPageParams
+  point: BrowserPoint
+  gestureId: number
+  dx: number
+  dy: number
+}
 
 export function MobileBrowserPane({
   client,
@@ -109,8 +123,9 @@ export function MobileBrowserPane({
   bottomInset,
   onToast
 }: MobileBrowserPaneProps) {
-  const cachedInitialFrame = peekCachedBrowserFrame(tab.browserPageId)
-  const [addressValue, setAddressValue] = useState(displayMobileBrowserUrl(tab.url))
+  const cacheKey = makeBrowserFrameCacheKey(worktreeId, tab.browserPageId)
+  const cachedInitialFrame = peekCachedBrowserFrame(cacheKey)
+  const [addressValue, setAddressValue] = useState(displayBrowserUrl(tab.url))
   const [addressFocused, setAddressFocused] = useState(false)
   const [keyboardValue, setKeyboardValue] = useState('')
   const [frameUri, setFrameUri] = useState<string | null>(cachedInitialFrame?.uri ?? null)
@@ -149,6 +164,9 @@ export function MobileBrowserPane({
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const rightClickSentRef = useRef(false)
   const lastWheelRef = useRef<{ dx: number; dy: number; at: number }>({ dx: 0, dy: 0, at: 0 })
+  const wheelGestureIdRef = useRef(0)
+  const pendingWheelCommandRef = useRef<PendingWheelCommand | null>(null)
+  const wheelCommandInFlightRef = useRef(false)
   const zoomRef = useRef<BrowserZoomState>(DEFAULT_ZOOM)
   const pinchRef = useRef<PinchGesture | null>(null)
   const panRef = useRef<PanGesture | null>(null)
@@ -174,16 +192,20 @@ export function MobileBrowserPane({
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
-      setAppActive(nextState === 'active')
+      const active = nextState === 'active'
+      if (!active) {
+        clearCachedBrowserFramesForWorktree(worktreeId)
+      }
+      setAppActive(active)
     })
     return () => {
       subscription.remove()
     }
-  }, [])
+  }, [worktreeId])
 
   useEffect(() => {
     if (!addressFocused) {
-      setAddressValue(displayMobileBrowserUrl(tab.url))
+      setAddressValue(displayBrowserUrl(tab.url))
     }
   }, [addressFocused, tab.url])
 
@@ -307,12 +329,32 @@ export function MobileBrowserPane({
   )
 
   useEffect(() => {
+    if (!frameGeometry) {
+      return
+    }
+    setZoom((current) => {
+      const next = clampBrowserZoomState(current, frameGeometry, MIN_ZOOM, MAX_ZOOM)
+      if (
+        next.scale === current.scale &&
+        next.offsetX === current.offsetX &&
+        next.offsetY === current.offsetY
+      ) {
+        return current
+      }
+      // Why: rotation/layout changes can shrink the legal pan range while the
+      // current zoom state still points at the previous viewport geometry.
+      zoomRef.current = next
+      return next
+    })
+  }, [frameGeometry])
+
+  useEffect(() => {
     streamGenerationRef.current += 1
     const generation = streamGenerationRef.current
     const samePage = Boolean(tab.browserPageId) && lastStreamPageIdRef.current === tab.browserPageId
     lastStreamPageIdRef.current = tab.browserPageId
     if (!samePage || !frameUriRef.current) {
-      const cachedFrame = getCachedBrowserFrame(tab.browserPageId)
+      const cachedFrame = getCachedBrowserFrame(cacheKey)
       if (cachedFrame) {
         frameUriRef.current = cachedFrame.uri
         frameMountedRef.current = true
@@ -402,7 +444,7 @@ export function MobileBrowserPane({
             setBusy(false)
           }
           if (typeof event.tab?.url === 'string') {
-            setAddressValue(displayMobileBrowserUrl(event.tab.url))
+            setAddressValue(displayBrowserUrl(event.tab.url))
             if (event.tab.url !== lastZoomResetUrlRef.current) {
               lastZoomResetUrlRef.current = event.tab.url
               resetBrowserZoomState()
@@ -445,8 +487,8 @@ export function MobileBrowserPane({
         onBinaryFrame: (frame) => {
           if (streamGenerationRef.current !== generation) return
           clearStartupTimer()
-          if (tab.browserPageId) {
-            applyFrameThrottled(frame, tab.browserPageId)
+          if (cacheKey) {
+            applyFrameThrottled(frame, cacheKey)
           }
         }
       }
@@ -464,6 +506,7 @@ export function MobileBrowserPane({
     resetBrowserZoomState,
     screencastSupported,
     streamRequest,
+    cacheKey,
     tab.browserPageId,
     worktreeId
   ])
@@ -510,7 +553,7 @@ export function MobileBrowserPane({
   )
 
   const navigateToAddress = useCallback(async () => {
-    const url = normalizeMobileBrowserUrl(addressValue)
+    const url = normalizeBrowserUrl(addressValue)
     if (!url) {
       setError('Enter a valid URL.')
       return
@@ -521,11 +564,50 @@ export function MobileBrowserPane({
       { showBusy: true, timeoutMs: 30_000 }
     )) as { url?: string } | null
     if (typeof result?.url === 'string') {
-      setAddressValue(displayMobileBrowserUrl(result.url))
+      setAddressValue(displayBrowserUrl(result.url))
       lastZoomResetUrlRef.current = result.url
       resetBrowserZoomState()
     }
   }, [addressValue, resetBrowserZoomState, sendBrowserRequest])
+
+  const flushPendingWheelCommand = useCallback(() => {
+    if (wheelCommandInFlightRef.current) {
+      return
+    }
+    const pending = pendingWheelCommandRef.current
+    if (!pending || !client) {
+      return
+    }
+    pendingWheelCommandRef.current = null
+    wheelCommandInFlightRef.current = true
+    void (async () => {
+      try {
+        assertRpcOk(
+          await client.sendRequest('browser.mouseMove', {
+            ...pending.base,
+            x: pending.point.x,
+            y: pending.point.y
+          }),
+          'Browser pointer move failed'
+        )
+        assertRpcOk(
+          await client.sendRequest('browser.mouseWheel', {
+            ...pending.base,
+            dx: pending.dx,
+            dy: pending.dy
+          }),
+          'Browser scroll failed'
+        )
+        setError(null)
+      } catch {
+        // Scroll bursts commonly race page reload/navigation. Avoid replacing
+        // the live browser with transient command errors like selector_not_found.
+      } finally {
+        wheelCommandInFlightRef.current = false
+        flushPendingWheelCommand()
+      }
+    })()
+  }, [client])
 
   const sendPointerClick = useCallback(
     async (point: BrowserPoint, button: 'left' | 'right') => {
@@ -593,24 +675,22 @@ export function MobileBrowserPane({
       if (Math.abs(delta.dx) < 1 && Math.abs(delta.dy) < 1) {
         return
       }
-      void (async () => {
-        try {
-          assertRpcOk(
-            await client.sendRequest('browser.mouseMove', { ...base, x: point.x, y: point.y }),
-            'Browser pointer move failed'
-          )
-          assertRpcOk(
-            await client.sendRequest('browser.mouseWheel', { ...base, dx: delta.dx, dy: delta.dy }),
-            'Browser scroll failed'
-          )
-          setError(null)
-        } catch {
-          // Scroll bursts commonly race page reload/navigation. Avoid replacing
-          // the live browser with transient command errors like selector_not_found.
-        }
-      })()
+      const pending = pendingWheelCommandRef.current
+      pendingWheelCommandRef.current =
+        pending &&
+        pending.base.page === base.page &&
+        pending.gestureId === wheelGestureIdRef.current
+          ? {
+              base,
+              point,
+              gestureId: wheelGestureIdRef.current,
+              dx: pending.dx + delta.dx,
+              dy: pending.dy + delta.dy
+            }
+          : { base, point, gestureId: wheelGestureIdRef.current, ...delta }
+      flushPendingWheelCommand()
     },
-    [client, pageParams]
+    [client, flushPendingWheelCommand, pageParams]
   )
 
   useEffect(() => () => clearLongPressTimer(), [clearLongPressTimer])
@@ -642,6 +722,7 @@ export function MobileBrowserPane({
       startPointRef.current = { x: startPoint.x, y: startPoint.y, t: Date.now() }
       rightClickSentRef.current = false
       scrollingRef.current = false
+      wheelGestureIdRef.current += 1
       lastWheelRef.current = { dx: 0, dy: 0, at: 0 }
       panRef.current =
         zoomRef.current.scale > MIN_ZOOM
@@ -907,7 +988,8 @@ export function MobileBrowserPane({
     }
     void sendBrowserRequest('browser.reload', {}, { suppressError: true })
   }, [controlsDisabled, sendBrowserRequest])
-  const initialFrameSource = useMemo(() => (frameUri ? { uri: frameUri } : null), [frameUri])
+  const renderedFrameSource =
+    frameUriRef.current || frameUri ? { uri: frameUriRef.current ?? frameUri! } : null
   const frameLayerStyle = useCallback((layer: FrameLayer) => {
     return [
       styles.browserImageLayer,
@@ -989,7 +1071,7 @@ export function MobileBrowserPane({
         }}
         {...panResponder.panHandlers}
       >
-        {initialFrameSource ? (
+        {renderedFrameSource ? (
           <View style={styles.browserImageHost}>
             {frameGeometry ? (
               <View
@@ -1022,7 +1104,7 @@ export function MobileBrowserPane({
                     >
                       <Image
                         ref={frameLayerRef(layer)}
-                        source={initialFrameSource}
+                        source={renderedFrameSource}
                         resizeMode="stretch"
                         fadeDuration={0}
                         onLoad={frameLayerLoadHandler(layer)}
@@ -1049,7 +1131,7 @@ export function MobileBrowserPane({
                 >
                   <Image
                     ref={frameLayerRef(layer)}
-                    source={initialFrameSource}
+                    source={renderedFrameSource}
                     resizeMode="contain"
                     fadeDuration={0}
                     onLoad={frameLayerLoadHandler(layer)}
@@ -1061,7 +1143,7 @@ export function MobileBrowserPane({
             )}
           </View>
         ) : null}
-        {!initialFrameSource || busy || error ? (
+        {!renderedFrameSource || busy || error ? (
           <View pointerEvents="none" style={styles.overlay}>
             {busy || (!ready && !error) ? (
               <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -1187,26 +1269,42 @@ function createBrowserFrameDataUri(frame: BrowserScreencastFrame): string {
   return `data:image/${frame.format};base64,${Buffer.from(frame.image).toString('base64')}`
 }
 
-function getCachedBrowserFrame(browserPageId: string | null): BrowserFrameCacheEntry | null {
-  if (!browserPageId) {
+function makeBrowserFrameCacheKey(worktreeId: string, browserPageId: string | null): string | null {
+  return browserPageId ? `${worktreeId}:${browserPageId}` : null
+}
+
+function clearCachedBrowserFramesForWorktree(worktreeId: string): void {
+  const prefix = `${worktreeId}:`
+  for (const key of browserFrameCache.keys()) {
+    if (key.startsWith(prefix)) {
+      browserFrameCache.delete(key)
+    }
+  }
+}
+
+function getCachedBrowserFrame(cacheKey: string | null): BrowserFrameCacheEntry | null {
+  if (!cacheKey) {
     return null
   }
-  const cached = browserFrameCache.get(browserPageId)
+  const cached = browserFrameCache.get(cacheKey)
   if (!cached) {
     return null
   }
-  browserFrameCache.delete(browserPageId)
-  browserFrameCache.set(browserPageId, cached)
+  browserFrameCache.delete(cacheKey)
+  browserFrameCache.set(cacheKey, cached)
   return cached
 }
 
-function peekCachedBrowserFrame(browserPageId: string | null): BrowserFrameCacheEntry | null {
-  return browserPageId ? (browserFrameCache.get(browserPageId) ?? null) : null
+function peekCachedBrowserFrame(cacheKey: string | null): BrowserFrameCacheEntry | null {
+  return cacheKey ? (browserFrameCache.get(cacheKey) ?? null) : null
 }
 
-function cacheBrowserFrame(browserPageId: string, entry: BrowserFrameCacheEntry): void {
-  browserFrameCache.delete(browserPageId)
-  browserFrameCache.set(browserPageId, entry)
+function cacheBrowserFrame(cacheKey: string | null, entry: BrowserFrameCacheEntry): void {
+  if (!cacheKey) {
+    return
+  }
+  browserFrameCache.delete(cacheKey)
+  browserFrameCache.set(cacheKey, entry)
   while (browserFrameCache.size > BROWSER_FRAME_CACHE_LIMIT) {
     const oldestKey = browserFrameCache.keys().next().value
     if (typeof oldestKey !== 'string') {
@@ -1239,36 +1337,6 @@ function assertRpcOk(
   if (!response.ok) {
     throw new Error(response.error.message || fallbackMessage)
   }
-}
-
-function normalizeMobileBrowserUrl(value: string): string | null {
-  const trimmed = value.trim()
-  if (!trimmed || isBlankMobileBrowserUrl(trimmed)) {
-    return 'about:blank'
-  }
-  try {
-    const parsed = new URL(trimmed)
-    return parsed.protocol === 'http:' ||
-      parsed.protocol === 'https:' ||
-      parsed.protocol === 'file:'
-      ? parsed.toString()
-      : null
-  } catch {
-    try {
-      return new URL(`https://${trimmed}`).toString()
-    } catch {
-      return null
-    }
-  }
-}
-
-function displayMobileBrowserUrl(value: string | null | undefined): string {
-  const trimmed = value?.trim() ?? ''
-  return isBlankMobileBrowserUrl(trimmed) ? 'about:blank' : trimmed
-}
-
-function isBlankMobileBrowserUrl(value: string): boolean {
-  return !value || value === 'about:blank' || value.startsWith('data:text/html')
 }
 
 function browserFrameMetadataEqual(

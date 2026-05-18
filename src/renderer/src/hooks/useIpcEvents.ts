@@ -64,7 +64,8 @@ import type { AppState } from '../store/types'
 import {
   closeWebRuntimeSessionTab,
   createWebRuntimeSessionBrowserTab,
-  createWebRuntimeSessionTerminal
+  createWebRuntimeSessionTerminal,
+  isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
 
 export { resolveZoomTarget } from './resolve-zoom-target'
@@ -471,6 +472,10 @@ export function resolveBrowserSessionTabTarget(
 
 function isRuntimeEnvironmentActive(): boolean {
   return Boolean(useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim())
+}
+
+function getActiveRuntimeEnvironmentId(): string | null {
+  return useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
 }
 
 export function useIpcEvents(): void {
@@ -1213,12 +1218,23 @@ export function useIpcEvents(): void {
         const worktreeId = store.activeWorktreeId
         if (worktreeId) {
           if (isRuntimeEnvironmentActive()) {
-            // Why: paired web browser tabs are host-owned and arrive through
-            // session.tabs. A local web-only tab cannot be streamed or controlled.
-            void createWebRuntimeSessionBrowserTab({
-              worktreeId,
-              url: store.browserDefaultUrl ?? 'about:blank'
-            })
+            const environmentId = getActiveRuntimeEnvironmentId()
+            if (!isWebRuntimeSessionActive(environmentId)) {
+              store.createBrowserTab(worktreeId, store.browserDefaultUrl ?? 'about:blank', {
+                title: 'New Browser Tab',
+                focusAddressBar: true
+              })
+              return
+            }
+            void (async () => {
+              // Why: paired web browser tabs are host-owned and arrive through
+              // session.tabs. On RPC failure we leave local state unchanged so
+              // the next host snapshot remains authoritative.
+              await createWebRuntimeSessionBrowserTab({
+                worktreeId,
+                url: store.browserDefaultUrl ?? 'about:blank'
+              })
+            })()
             return
           }
           store.createBrowserTab(worktreeId, store.browserDefaultUrl ?? 'about:blank', {
@@ -1444,10 +1460,17 @@ export function useIpcEvents(): void {
         const store = useAppStore.getState()
         if (store.activeTabType === 'browser' && store.activeBrowserTabId) {
           if (isRuntimeEnvironmentActive() && store.activeWorktreeId) {
-            void closeWebRuntimeSessionTab({
-              worktreeId: store.activeWorktreeId,
-              tabId: store.activeBrowserTabId
-            })
+            const environmentId = getActiveRuntimeEnvironmentId()
+            if (!isWebRuntimeSessionActive(environmentId)) {
+              store.closeBrowserTab(store.activeBrowserTabId)
+              return
+            }
+            void (async () => {
+              await closeWebRuntimeSessionTab({
+                worktreeId: store.activeWorktreeId!,
+                tabId: store.activeBrowserTabId!
+              })
+            })()
             return
           }
           store.closeBrowserTab(store.activeBrowserTabId)

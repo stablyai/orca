@@ -40,6 +40,7 @@ import { isFolderRepo } from '../../shared/repo-kind'
 import { buildSetupRunnerCommand } from '../../shared/setup-runner-command'
 import { FIRST_PANE_ID } from '../../shared/pane-key'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
+import { isValidHostTerminalTabId } from '../../shared/terminal-tab-id'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
@@ -83,6 +84,7 @@ import type {
   RuntimeTerminalDriverState,
   RuntimeSyncWindowGraph,
   RuntimeWorktreeListResult,
+  BrowserTabInfo,
   BrowserScreencastResult
 } from '../../shared/runtime-types'
 import { RuntimeBrowserCommands } from './orca-runtime-browser'
@@ -693,11 +695,11 @@ export class OrcaRuntimeService {
   private subscriptionConnectionByEntry = new Map<string, string>()
   private activeBrowserScreencastsByConnection = new Map<
     string,
-    { cancel: () => void; done: Promise<void> }
+    { cancel: (emitEnd?: boolean) => void; done: Promise<void>; connectionKey: string }
   >()
   private activeBrowserScreencastsByPage = new Map<
     string,
-    { cancel: () => void; done: Promise<void> }
+    { cancel: (emitEnd?: boolean) => void; done: Promise<void>; connectionKey: string }
   >()
   // Why: mobile clients subscribe to desktop notifications via
   // notifications.subscribe. This set enables fan-out — each connected
@@ -1126,6 +1128,7 @@ export class OrcaRuntimeService {
 
   async listMobileSessionTabs(worktreeSelector: string): Promise<RuntimeMobileSessionTabsResult> {
     const explicitWorktreeId = getExplicitWorktreeIdSelector(worktreeSelector)
+    await this.refreshMobileSessionPtyRecords()
     if (explicitWorktreeId) {
       return this.getMobileSessionTabsForWorktree(explicitWorktreeId)
     }
@@ -1133,10 +1136,19 @@ export class OrcaRuntimeService {
     return this.getMobileSessionTabsForWorktree(worktree.id)
   }
 
-  listAllMobileSessionTabs(): RuntimeMobileSessionTabsResult[] {
+  async listAllMobileSessionTabs(): Promise<RuntimeMobileSessionTabsResult[]> {
+    await this.refreshMobileSessionPtyRecords()
     return [...this.mobileSessionTabsByWorktree.values()].map((snapshot) =>
       this.toMobileSessionTabsResult(snapshot)
     )
+  }
+
+  private async refreshMobileSessionPtyRecords(): Promise<void> {
+    if (!this.ptyController?.listProcesses) {
+      return
+    }
+    const resolvedWorktrees = await this.listResolvedWorktrees()
+    await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
   }
 
   async activateMobileSessionTab(
@@ -2384,7 +2396,7 @@ export class OrcaRuntimeService {
 
   reclaimBrowserForDesktop(browserPageId: string): boolean {
     this.setBrowserDriver(browserPageId, { kind: 'desktop' })
-    this.activeBrowserScreencastsByPage.get(browserPageId)?.cancel()
+    this.activeBrowserScreencastsByPage.get(browserPageId)?.cancel(true)
     return true
   }
 
@@ -6460,8 +6472,7 @@ export class OrcaRuntimeService {
       const hintedTabId = opts.tabId?.trim()
       const canAdoptPaneIdentity =
         hintedTabId !== undefined &&
-        hintedTabId.length > 0 &&
-        !hintedTabId.includes(':') &&
+        isValidHostTerminalTabId(hintedTabId) &&
         opts.leafId !== undefined &&
         isTerminalLeafId(opts.leafId)
       const tabId = canAdoptPaneIdentity ? (hintedTabId as string) : randomUUID()
@@ -7924,6 +7935,26 @@ export class OrcaRuntimeService {
     }
   }
 
+  notifyMobileSessionTabsChanged(worktreeId?: string): void {
+    if (!worktreeId) {
+      this.notifyMobileSessionTabSnapshots()
+      return
+    }
+    if (this.mobileSessionTabListeners.size === 0) {
+      return
+    }
+    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    if (!snapshot) {
+      return
+    }
+    // Why: browser bridge lifecycle events are already scoped by worktree; avoid
+    // fanning out every active workspace snapshot during navigation/tab churn.
+    const result = this.toMobileSessionTabsResult(snapshot)
+    for (const listener of this.mobileSessionTabListeners) {
+      listener(result)
+    }
+  }
+
   private notifyMobileSessionTabSnapshots(): void {
     if (this.mobileSessionTabListeners.size === 0) {
       return
@@ -7970,12 +8001,39 @@ export class OrcaRuntimeService {
     return worktreeId
   }
 
+  private getLiveBrowserTabsByPageId(worktreeId: string): Map<string, BrowserTabInfo> {
+    if (!this.agentBrowserBridge?.tabList) {
+      return new Map()
+    }
+    const liveTabs = this.agentBrowserBridge.tabList(worktreeId).tabs
+    return new Map(liveTabs.map((tab) => [tab.browserPageId, tab]))
+  }
+
   private toMobileSessionTabsResult(
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsResult {
     const tabs: RuntimeMobileSessionClientTab[] = []
+    const liveBrowserTabsByPageId = this.getLiveBrowserTabsByPageId(snapshot.worktree)
     for (const tab of snapshot.tabs) {
-      if (tab.type === 'markdown' || tab.type === 'file' || tab.type === 'browser') {
+      if (tab.type === 'browser') {
+        const liveTab = tab.browserPageId
+          ? liveBrowserTabsByPageId.get(tab.browserPageId)
+          : undefined
+        if (!liveTab) {
+          continue
+        }
+        // Why: renderer session snapshots can lag behind BrowserView teardown or
+        // process swaps. Pairing clients should only see browser pages the main
+        // browser bridge can still route commands and screencasts to.
+        tabs.push({
+          ...tab,
+          title: liveTab.title || tab.title,
+          url: liveTab.url || tab.url,
+          isActive: liveTab.active
+        })
+        continue
+      }
+      if (tab.type === 'markdown' || tab.type === 'file') {
         tabs.push(tab)
         continue
       }
@@ -8008,6 +8066,8 @@ export class OrcaRuntimeService {
         parentTabId: tab.parentTabId,
         leafId: tab.leafId,
         title: leaf?.paneTitle ?? syncedTab?.title ?? pty?.title ?? tab.title,
+        ...(tab.ptyId ? { ptyId: tab.ptyId } : {}),
+        ...(tab.agentStatus ? { agentStatus: tab.agentStatus } : {}),
         ...(tab.parentLayout ? { parentLayout: tab.parentLayout } : {}),
         isActive: tab.isActive,
         ...(terminalHandle
@@ -8831,7 +8891,7 @@ export class OrcaRuntimeService {
     params: Parameters<RuntimeBrowserCommands['browserScreencast']>[0],
     options: {
       connectionId?: string
-      sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
+      sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
       signal?: AbortSignal
       emit: (result: BrowserScreencastResult) => void
     }
@@ -8844,6 +8904,20 @@ export class OrcaRuntimeService {
     }
 
     const connectionKey = options.connectionId ?? 'local'
+    const requestedPageId = typeof params.page === 'string' ? params.page : null
+    let existingPageStream = requestedPageId
+      ? this.activeBrowserScreencastsByPage.get(requestedPageId)
+      : undefined
+    while (existingPageStream) {
+      // Why: CDP only supports one screencast per browser page. A stale paired
+      // web/mobile stream should not leave the next tab activation stuck on an
+      // already-active error or old viewport dimensions.
+      existingPageStream.cancel(existingPageStream.connectionKey !== connectionKey)
+      await existingPageStream.done
+      existingPageStream = requestedPageId
+        ? this.activeBrowserScreencastsByPage.get(requestedPageId)
+        : undefined
+    }
     let existingStream = this.activeBrowserScreencastsByConnection.get(connectionKey)
     while (existingStream) {
       existingStream.cancel()
@@ -8859,6 +8933,7 @@ export class OrcaRuntimeService {
     let activeBrowserPageId: string | null = null
     let ended = false
     let cancelledBeforeStart = false
+    let readyEmitted = false
     let resolveActiveDone!: () => void
     const activeDone = new Promise<void>((resolve) => {
       resolveActiveDone = resolve
@@ -8873,22 +8948,36 @@ export class OrcaRuntimeService {
         options.emit({ type: 'end', subscriptionId: screencast.subscriptionId })
       }
     }
-    const cancel = (): void => {
+    const cancel = (emitEnd = false): void => {
       if (!screencast) {
         cancelledBeforeStart = true
         return
       }
-      end(false)
+      end(emitEnd)
+    }
+    const abortScreencast = (): void => cancel()
+    const sendBinaryAfterReady = (bytes: Uint8Array<ArrayBufferLike>): boolean | void => {
+      if (!readyEmitted) {
+        // Why: binary screencast frames are connection-scoped; clients learn the
+        // owning subscription from `ready`, so CDP frames must remain unacked
+        // until the stream's JSON ready event has been delivered.
+        return false
+      }
+      return options.sendBinary?.(bytes)
     }
 
     // Why: a phone can rotate before the first stream reaches `ready`, so it
     // has no subscriptionId to unsubscribe. A same-socket replacement cancels
     // and waits here instead of racing the active connection/page gates.
-    this.activeBrowserScreencastsByConnection.set(connectionKey, { cancel, done: activeDone })
-    options.signal?.addEventListener('abort', cancel, { once: true })
+    this.activeBrowserScreencastsByConnection.set(connectionKey, {
+      cancel,
+      done: activeDone,
+      connectionKey
+    })
+    options.signal?.addEventListener('abort', abortScreencast, { once: true })
     try {
       screencast = await this.browserCommands.browserScreencast(params, {
-        sendBinary: options.sendBinary,
+        sendBinary: sendBinaryAfterReady,
         emit: options.emit
       })
       if (cancelledBeforeStart || options.signal?.aborted) {
@@ -8899,7 +8988,8 @@ export class OrcaRuntimeService {
       activeBrowserPageId = screencast.ready.browserPageId
       this.activeBrowserScreencastsByPage.set(activeBrowserPageId, {
         cancel,
-        done: activeDone
+        done: activeDone,
+        connectionKey
       })
       this.setBrowserDriver(activeBrowserPageId, { kind: 'mobile', clientId: connectionKey })
 
@@ -8913,11 +9003,12 @@ export class OrcaRuntimeService {
       )
       registeredSubscriptionId = screencast.subscriptionId
       options.emit(screencast.ready)
+      readyEmitted = true
       await screencast.session.done
       end(true)
       this.cleanupSubscription(screencast.subscriptionId)
     } finally {
-      options.signal?.removeEventListener('abort', cancel)
+      options.signal?.removeEventListener('abort', abortScreencast)
       if (!ended) {
         end(false)
       }

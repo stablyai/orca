@@ -513,14 +513,16 @@ export function useTabGroupWorkspaceModel({
           if (
             await createWebRuntimeSessionBrowserTab({
               worktreeId,
-              url: defaultUrl
+              url: defaultUrl,
+              targetGroupId: groupId
             })
           ) {
             return
           }
           createBrowserTab(worktreeId, defaultUrl, {
             title: 'New Browser Tab',
-            focusAddressBar: true
+            focusAddressBar: true,
+            targetGroupId: groupId
           })
         })()
       },
@@ -536,14 +538,16 @@ export function useTabGroupWorkspaceModel({
             await createWebRuntimeSessionBrowserTab({
               worktreeId,
               url: source.url,
-              profileId: source.sessionProfileId
+              profileId: source.sessionProfileId,
+              targetGroupId: groupId
             })
           ) {
             return
           }
           createBrowserTab(worktreeId, source.url, {
             title: source.title,
-            sessionProfileId: source.sessionProfileId
+            sessionProfileId: source.sessionProfileId,
+            targetGroupId: groupId
           })
         })()
       },

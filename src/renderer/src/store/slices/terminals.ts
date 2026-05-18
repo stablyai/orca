@@ -9,7 +9,7 @@ import type {
   WorkspaceSessionState
 } from '../../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
+import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../../../shared/worktree-id'
 import type { AgentStartedTelemetry } from '../../lib/worktree-activation'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
@@ -34,6 +34,7 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-cl
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
 
 function getNextTerminalOrdinal(tabs: TerminalTab[]): number {
   const usedOrdinals = new Set<number>()
@@ -415,7 +416,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // otherwise be persisted as a real tab id and break paneKey routing
       // (`${tabId}:${leafId}` would inherit the bad tab segment).
       const trimmedHint = typeof options?.id === 'string' ? options.id.trim() : ''
-      const hintedId = trimmedHint.length > 0 ? trimmedHint : undefined
+      const hintedId =
+        trimmedHint.length > 0 && isValidHostTerminalTabId(trimmedHint) ? trimmedHint : undefined
       const idCollides =
         hintedId !== undefined &&
         Object.values(s.tabsByWorktree).some((tabs) => tabs.some((entry) => entry.id === hintedId))
@@ -1815,7 +1817,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
             .map(([tabId, layout]) => {
               // Why: old sessions can contain renderer-local pane:1-style leaf
               // ids. Normalize during hydration before runtime/mobile surfaces read them.
-              return [tabId, normalizeTerminalLayoutSnapshot(layout).snapshot]
+              const normalized = normalizeTerminalLayoutSnapshot(layout).snapshot
+              const tab = Object.values(tabsByWorktree)
+                .flat()
+                .find((entry) => entry.id === tabId)
+              return [tabId, tab ? sanitizeTerminalLayoutPaneTitles(normalized, tab) : normalized]
             })
         )
       }

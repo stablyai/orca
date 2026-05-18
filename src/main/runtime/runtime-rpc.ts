@@ -727,7 +727,7 @@ export class OrcaRuntimeRpcServer {
   private async handleWebSocketMessage(
     rawMessage: string,
     reply: (response: string) => void,
-    sendBinary: (response: Uint8Array<ArrayBufferLike>) => void,
+    sendBinary: (response: Uint8Array<ArrayBufferLike>) => boolean | void,
     wsTransport?: WebSocketTransport,
     ws?: WebSocket,
     authenticatedDeviceToken?: string | null

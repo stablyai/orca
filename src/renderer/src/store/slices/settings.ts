@@ -125,6 +125,10 @@ function hasUnsavedEditorState(state: AppState): boolean {
   return state.openFiles.some((file) => file.isDirty || state.editorDrafts[file.id] !== undefined)
 }
 
+function isPairedWebClient(): boolean {
+  return Boolean((globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__)
+}
+
 async function closeRemoteBrowserPagesBeforeRuntimeSwitch(state: AppState): Promise<void> {
   const worktreeIdByPageId = new Map<string, string>()
   for (const pages of Object.values(state.browserPagesByWorkspace)) {
@@ -273,10 +277,13 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
     try {
       clearRuntimeCompatibilityCache(nextId)
       await verifyRuntimeEnvironmentReachable(nextId)
-      // Why: remote browser tabs live on their owning server. Close them before
-      // clearing browser maps so the old server does not retain orphan pages.
-      await closeRemoteTerminalsBeforeRuntimeSwitch(get(), previousId)
-      await closeRemoteBrowserPagesBeforeRuntimeSwitch(get())
+      if (!isPairedWebClient()) {
+        // Why: desktop-created remote resources live on their owning server.
+        // Paired web clients only mirror host-owned tabs/PTYs, so switching
+        // pairings must detach local state without killing the host session.
+        await closeRemoteTerminalsBeforeRuntimeSwitch(get(), previousId)
+        await closeRemoteBrowserPagesBeforeRuntimeSwitch(get())
+      }
       const nextSettings = await window.api.settings.set({
         activeRuntimeEnvironmentId: nextId
       })

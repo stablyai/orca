@@ -12,6 +12,7 @@ import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-
 import { readBrowserScreencastImageSize } from './browser-screencast-image-size'
 
 const DEBUGGER_COMMAND_TIMEOUT_MS = 8_000
+const BACKPRESSURE_RETRY_MS = 50
 
 export type BrowserScreencastOptions = {
   format: BrowserScreencastFormat
@@ -24,7 +25,7 @@ export type BrowserScreencastOptions = {
   mobile?: boolean
   everyNthFrame: number
   minFrameIntervalMs: number
-  onFrame: (bytes: Uint8Array<ArrayBufferLike>) => void
+  onFrame: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
   onEvent?: (event: BrowserScreencastEvent) => void
   onError?: (message: string) => void
 }
@@ -39,6 +40,11 @@ type PendingScreencastFrame = {
   metadata: BrowserScreencastFrameMetadata
   image: Uint8Array
   sessionId?: number
+}
+
+type ScreencastImageSize = {
+  width: number
+  height: number
 }
 
 function finiteNumber(value: unknown): number | undefined {
@@ -60,22 +66,97 @@ function readFrameMetadata(raw: unknown): BrowserScreencastFrameMetadata {
   }
 }
 
+function isNear(value: number, expected: number): boolean {
+  return Math.abs(value - expected) <= Math.max(2, expected * 0.02)
+}
+
+function scaleToFit(
+  width: number,
+  height: number,
+  maxWidth: number,
+  maxHeight: number
+): {
+  width: number
+  height: number
+} {
+  const scale = Math.min(1, maxWidth / width, maxHeight / height)
+  return {
+    width: Math.round(width * scale),
+    height: Math.round(height * scale)
+  }
+}
+
+function isNearSize(
+  actual: { width: number; height: number },
+  expected: { width: number; height: number }
+): boolean {
+  return isNear(actual.width, expected.width) && isNear(actual.height, expected.height)
+}
+
+function selectFrameDeviceSize(
+  reportedSize: number | undefined,
+  requestedCssSize: number | null,
+  imageSize: number | undefined
+): number | undefined {
+  if (requestedCssSize) {
+    // Why: paired clients own the remote browser viewport. If Chromium briefly
+    // reports the host BrowserView size, publishing that size makes the client
+    // compensate with crop/contain math and exposes blank compositor space.
+    return requestedCssSize
+  }
+  return reportedSize ?? imageSize
+}
+
+function isLiveFrameCompatibleWithViewport(
+  imageSize: ScreencastImageSize | null,
+  options: BrowserScreencastOptions
+): boolean {
+  const viewportWidth = positiveInteger(options.viewportWidth)
+  const viewportHeight = positiveInteger(options.viewportHeight)
+  if (!viewportWidth || !viewportHeight) {
+    return true
+  }
+  if (!imageSize) {
+    return true
+  }
+  const deviceScaleFactor = positiveNumber(options.deviceScaleFactor) ?? 1
+  const cssViewport = { width: viewportWidth, height: viewportHeight }
+  const deviceViewport = {
+    width: Math.round(viewportWidth * deviceScaleFactor),
+    height: Math.round(viewportHeight * deviceScaleFactor)
+  }
+  const scaledDeviceViewport = scaleToFit(
+    deviceViewport.width,
+    deviceViewport.height,
+    options.maxWidth,
+    options.maxHeight
+  )
+  // Why: Chromium can stream CSS-sized, DPR-sized, or maxWidth/maxHeight-scaled
+  // bitmaps for the same emulated viewport. All are client-authoritative; stale
+  // host BrowserView frames are the incompatible ones we need to drop.
+  return (
+    isNearSize(imageSize, cssViewport) ||
+    isNearSize(imageSize, deviceViewport) ||
+    isNearSize(imageSize, scaledDeviceViewport)
+  )
+}
+
 function enrichFrameMetadata(
   metadata: BrowserScreencastFrameMetadata,
-  image: Uint8Array,
+  imageSize: ScreencastImageSize | null,
   options: BrowserScreencastOptions
 ): BrowserScreencastFrameMetadata {
   const viewportWidth = positiveInteger(options.viewportWidth)
   const viewportHeight = positiveInteger(options.viewportHeight)
-  const imageSize =
-    metadata.imageWidth && metadata.imageHeight
-      ? { width: metadata.imageWidth, height: metadata.imageHeight }
-      : readBrowserScreencastImageSize(image, options.format)
   const enriched: BrowserScreencastFrameMetadata = { ...metadata }
-  const deviceWidth = viewportWidth ?? enriched.deviceWidth ?? imageSize?.width
-  const deviceHeight = viewportHeight ?? enriched.deviceHeight ?? imageSize?.height
-  const imageWidth = enriched.imageWidth ?? imageSize?.width
-  const imageHeight = enriched.imageHeight ?? imageSize?.height
+  const deviceWidth = selectFrameDeviceSize(enriched.deviceWidth, viewportWidth, imageSize?.width)
+  const deviceHeight = selectFrameDeviceSize(
+    enriched.deviceHeight,
+    viewportHeight,
+    imageSize?.height
+  )
+  const imageWidth = imageSize?.width ?? enriched.imageWidth
+  const imageHeight = imageSize?.height ?? enriched.imageHeight
   if (deviceWidth !== undefined) {
     enriched.deviceWidth = deviceWidth
   }
@@ -182,12 +263,12 @@ export async function startBrowserScreencast(
     }
   }
 
-  const emitFrame = (frame: PendingScreencastFrame): void => {
+  const emitFrame = (frame: PendingScreencastFrame): boolean => {
     if (closed || stopping) {
-      return
+      return false
     }
     lastFrameSentAt = Date.now()
-    options.onFrame(
+    const accepted = options.onFrame(
       encodeBrowserScreencastFrame({
         opcode: BrowserScreencastOpcode.Frame,
         seq: seq++,
@@ -198,6 +279,27 @@ export async function startBrowserScreencast(
         image: frame.image
       })
     )
+    return accepted !== false
+  }
+
+  const schedulePendingFrameRetry = (): void => {
+    if (pendingFrameTimer || closed || stopping) {
+      return
+    }
+    pendingFrameTimer = setTimeout(() => {
+      pendingFrameTimer = null
+      const latest = pendingFrame
+      pendingFrame = null
+      if (closed || stopping || !latest) {
+        return
+      }
+      if (emitFrame(latest)) {
+        ackScreencastFrame(latest.sessionId)
+      } else {
+        pendingFrame = latest
+        schedulePendingFrameRetry()
+      }
+    }, BACKPRESSURE_RETRY_MS)
   }
 
   const queueFrame = (frame: PendingScreencastFrame): void => {
@@ -212,8 +314,12 @@ export async function startBrowserScreencast(
       elapsed >= options.minFrameIntervalMs
     ) {
       clearPendingFrameTimer(true)
-      emitFrame(frame)
-      ackScreencastFrame(frame.sessionId)
+      if (emitFrame(frame)) {
+        ackScreencastFrame(frame.sessionId)
+      } else {
+        pendingFrame = frame
+        schedulePendingFrameRetry()
+      }
       return
     }
 
@@ -235,8 +341,12 @@ export async function startBrowserScreencast(
         if (closed || stopping || !latest) {
           return
         }
-        emitFrame(latest)
-        ackScreencastFrame(latest.sessionId)
+        if (emitFrame(latest)) {
+          ackScreencastFrame(latest.sessionId)
+        } else {
+          pendingFrame = latest
+          schedulePendingFrameRetry()
+        }
       },
       Math.max(0, options.minFrameIntervalMs - elapsed)
     )
@@ -320,10 +430,21 @@ export async function startBrowserScreencast(
 
     try {
       const image = new Uint8Array(Buffer.from(data, 'base64'))
+      // Why: image dimension parsing happens for every live frame; share the
+      // result between stale-frame rejection and metadata enrichment.
+      const imageSize = readBrowserScreencastImageSize(image, options.format)
+      if (!isLiveFrameCompatibleWithViewport(imageSize, options)) {
+        // Why: after tab switches/navigation Chromium can briefly stream the
+        // host surface instead of the requested client viewport. Dropping that
+        // frame keeps the client from rendering server-sized blank gutters.
+        ackScreencastFrame(sessionId)
+        scheduleNavigationFrameCapture()
+        return
+      }
       snapshotGeneration += 1
       clearNavigationCaptureTimer()
       queueFrame({
-        metadata: enrichFrameMetadata(readFrameMetadata(payload.metadata), image, options),
+        metadata: enrichFrameMetadata(readFrameMetadata(payload.metadata), imageSize, options),
         image,
         sessionId
       })
@@ -461,11 +582,6 @@ export async function startBrowserScreencast(
         height: viewportHeight
       }).catch(() => {})
       deviceMetricsOverridden = true
-    } else {
-      // Why: older mobile streams briefly set page metrics from phone geometry.
-      // Clear any stale override before a size-neutral stream starts so the host
-      // browser does not stay stuck in a phone-width layout.
-      await clearDeviceMetricsOverride().catch(() => {})
     }
     await sendDebuggerCommand(dbg, 'Page.startScreencast', {
       format: options.format,

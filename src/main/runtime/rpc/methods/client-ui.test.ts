@@ -53,4 +53,66 @@ describe('client UI RPC methods', () => {
     })
     expect(response).toMatchObject({ ok: true, result: { ui: updated } })
   })
+
+  it('accepts persisted literal UI arrays and nested UI state', async () => {
+    const updated: PersistedUIState = {
+      ...getDefaultUIState(),
+      worktreeCardProperties: ['status', 'inline-agents'],
+      statusBarItems: ['codex'],
+      taskResumeState: {
+        githubMode: 'items',
+        githubItemsQuery: 'is:open'
+      },
+      workspaceCleanup: {
+        dismissals: {
+          'repo::/worktree': {
+            worktreeId: 'repo::/worktree',
+            dismissedAt: 123,
+            fingerprint: 'abc',
+            classifierVersion: 2
+          }
+        }
+      }
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateUIState: vi.fn(() => updated)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const payload = {
+      worktreeCardProperties: ['status', 'inline-agents'],
+      statusBarItems: ['codex'],
+      taskResumeState: { githubMode: 'items', githubItemsQuery: 'is:open' },
+      workspaceCleanup: {
+        dismissals: {
+          'repo::/worktree': {
+            worktreeId: 'repo::/worktree',
+            dismissedAt: 123,
+            fingerprint: 'abc',
+            classifierVersion: 2
+          }
+        }
+      }
+    }
+    const response = await dispatcher.dispatch(makeRequest('ui.set', payload))
+
+    expect(runtime.updateUIState).toHaveBeenCalledWith(payload)
+    expect(response).toMatchObject({ ok: true, result: { ui: updated } })
+  })
+
+  it('rejects unknown and malformed UI update fields', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateUIState: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('ui.set', { showActiveOnly: 'yes', unknownField: true })
+    )
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(runtime.updateUIState).not.toHaveBeenCalled()
+  })
 })

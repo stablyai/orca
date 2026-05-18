@@ -37,7 +37,9 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'session.tabs.listAll',
     params: null,
-    handler: async (_params, { runtime }) => ({ snapshots: runtime.listAllMobileSessionTabs() })
+    handler: async (_params, { runtime }) => ({
+      snapshots: await runtime.listAllMobileSessionTabs()
+    })
   }),
   defineMethod({
     name: 'session.tabs.activate',
@@ -67,22 +69,33 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       let subscribedWorktree: string | null = null
       let unsubscribe = (): void => {}
       let closed = false
+      // Why: initial list errors should return one RPC error, not a leaked
+      // subscription cleanup that later emits a stray end frame.
+      let initialized = false
       const subscriptionId = `session.tabs:${connectionId ?? 'local'}:${params.worktree}`
       runtime.registerSubscriptionCleanup(
         subscriptionId,
         () => {
           closed = true
           unsubscribe()
-          emit({ type: 'end' })
+          if (initialized) {
+            emit({ type: 'end' })
+          }
         },
         connectionId
       )
-      const initial = await runtime.listMobileSessionTabs(params.worktree)
+      const initial = await Promise.resolve(runtime.listMobileSessionTabs(params.worktree)).catch(
+        (error) => {
+          runtime.cleanupSubscription(subscriptionId)
+          throw error
+        }
+      )
       if (closed) {
         return
       }
       subscribedWorktree = initial.worktree
       emit({ type: 'snapshot', ...initial })
+      initialized = true
 
       unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
         if (snapshot.worktree === subscribedWorktree) {
@@ -107,13 +120,18 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
     handler: async (_params, { runtime, connectionId }, emit) => {
       let unsubscribe = (): void => {}
       let closed = false
+      // Why: initial listAll errors should return one RPC error, not a leaked
+      // subscription cleanup that later emits a stray end frame.
+      let initialized = false
       const subscriptionId = `session.tabs:${connectionId ?? 'local'}:*`
       runtime.registerSubscriptionCleanup(
         subscriptionId,
         () => {
           closed = true
           unsubscribe()
-          emit({ type: 'end' })
+          if (initialized) {
+            emit({ type: 'end' })
+          }
         },
         connectionId
       )
@@ -121,7 +139,15 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       if (closed) {
         return
       }
-      emit({ type: 'snapshots', snapshots: runtime.listAllMobileSessionTabs() })
+      const snapshots = await Promise.resolve(runtime.listAllMobileSessionTabs()).catch((error) => {
+        runtime.cleanupSubscription(subscriptionId)
+        throw error
+      })
+      if (closed) {
+        return
+      }
+      emit({ type: 'snapshots', snapshots })
+      initialized = true
 
       if (closed) {
         return

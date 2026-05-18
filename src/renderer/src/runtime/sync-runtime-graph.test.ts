@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { describe, expect, it } from 'vitest'
 import {
   buildMobileSessionTabSnapshots,
@@ -238,6 +239,35 @@ describe('getRuntimeMobileSessionSyncKey', () => {
 
     expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
   })
+
+  it('changes when explicit agent status changes', () => {
+    const sharedOverrides = makeSharedOverrides()
+    const before = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...sharedOverrides,
+        agentStatusByPaneKey: {}
+      })
+    )
+    const after = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...sharedOverrides,
+        agentStatusByPaneKey: {
+          'term-1:11111111-1111-4111-8111-111111111111': {
+            state: 'working',
+            prompt: 'fix parity',
+            updatedAt: 1_700_000_000_000,
+            stateStartedAt: 1_699_999_999_000,
+            agentType: 'codex',
+            paneKey: 'term-1:11111111-1111-4111-8111-111111111111',
+            terminalTitle: 'codex [working]',
+            stateHistory: []
+          }
+        }
+      })
+    )
+
+    expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
+  })
 })
 
 describe('buildMobileSessionTabSnapshots', () => {
@@ -350,6 +380,50 @@ describe('buildMobileSessionTabSnapshots', () => {
     ])
     expect(snapshotsByWorktree.get('wt-2')?.tabs).toMatchObject([
       { type: 'markdown', title: 'wt-two.md', sourceRelativePath: 'docs/wt-two.md' }
+    ])
+  })
+
+  it('publishes terminal pane agent status', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const paneKey = `term-1:${leafId}`
+    const state = makeState({
+      tabBarOrderByWorktree: { 'wt-1': ['term-1'] },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'term-1', title: 'codex [working]', customTitle: null, ptyId: 'pty-1' }]
+      } as unknown as AppState['tabsByWorktree'],
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: { type: 'leaf', leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: 'pty-1' }
+        }
+      } as AppState['terminalLayoutsByTabId'],
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          state: 'working',
+          prompt: 'fix parity',
+          updatedAt: 1_700_000_000_000,
+          stateStartedAt: 1_699_999_999_000,
+          agentType: 'codex',
+          paneKey,
+          terminalTitle: 'codex [working]',
+          stateHistory: []
+        }
+      }
+    })
+
+    expect(buildMobileSessionTabSnapshots(state)[0]?.tabs).toMatchObject([
+      {
+        type: 'terminal',
+        id: `term-1::${leafId}`,
+        agentStatus: {
+          state: 'working',
+          prompt: 'fix parity',
+          agentType: 'codex',
+          paneKey
+        }
+      }
     ])
   })
 })

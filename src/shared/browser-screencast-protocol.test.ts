@@ -119,4 +119,18 @@ describe('browser screencast binary protocol', () => {
       scrollOffsetX: 15
     })
   })
+
+  it('decodes image bytes as a view over the original frame buffer', () => {
+    const encoded = encodeBrowserScreencastFrame({
+      opcode: BrowserScreencastOpcode.Frame,
+      seq: 1,
+      format: 'jpeg',
+      metadata: {},
+      image: new Uint8Array([7, 8, 9])
+    })
+
+    const decoded = decodeBrowserScreencastFrame(encoded)
+
+    expect(decoded?.image.buffer).toBe(encoded.buffer)
+  })
 })

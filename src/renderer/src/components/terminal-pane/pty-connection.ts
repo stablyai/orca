@@ -28,6 +28,7 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 import { e2eConfig } from '@/lib/e2e-config'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -1370,9 +1371,11 @@ export function connectPanePty(
               // produced a usable PTY ID, the remounted pane must issue its own
               // spawn instead of staying attached to a completed-but-empty
               // promise and rendering a dead terminal surface.
-              console.warn(
-                `Pending PTY spawn for tab ${deps.tabId} resolved without a PTY id, retrying fresh spawn`
-              )
+              if (!isWebTerminalSurfaceTabId(deps.tabId)) {
+                console.warn(
+                  `Pending PTY spawn for tab ${deps.tabId} resolved without a PTY id, retrying fresh spawn`
+                )
+              }
               startFreshSpawn()
               return
             }

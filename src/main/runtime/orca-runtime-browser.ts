@@ -99,6 +99,11 @@ type BrowserScreencastStartResult = {
   session: BrowserScreencastSession
 }
 
+type ActiveBrowserScreencastPage = {
+  stop: () => void
+  done: Promise<void>
+}
+
 function clampInteger(
   value: number | undefined,
   min: number,
@@ -142,6 +147,7 @@ export type RuntimeBrowserCommandHost = {
 
 export class RuntimeBrowserCommands {
   private readonly activeScreencastPageIds = new Set<string>()
+  private readonly activeScreencastsByPageId = new Map<string, ActiveBrowserScreencastPage>()
   private readonly stoppingScreencastPageIds = new Map<string, Promise<void>>()
 
   constructor(private readonly host: RuntimeBrowserCommandHost) {}
@@ -428,7 +434,7 @@ export class RuntimeBrowserCommands {
   async browserScreencast(
     params: BrowserScreencastParams,
     stream: {
-      sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => void
+      sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
       emit?: (event: BrowserScreencastResult) => void
     }
   ): Promise<BrowserScreencastStartResult> {
@@ -437,17 +443,43 @@ export class RuntimeBrowserCommands {
       target.worktreeId,
       target.browserPageId
     )
-    const stopping = this.stoppingScreencastPageIds.get(browserPageId)
+    let stopping = this.stoppingScreencastPageIds.get(browserPageId)
     if (stopping) {
       await stopping
     }
-    if (this.activeScreencastPageIds.has(browserPageId)) {
-      throw new BrowserError('browser_error', 'Browser screencast is already active for this tab.')
+    let active = this.activeScreencastsByPageId.get(browserPageId)
+    while (active) {
+      // Why: CDP only allows one Page.startScreencast per page. Treat a new
+      // subscriber as taking over from a stale/hidden paired client instead of
+      // surfacing an already-active error in the browser pane.
+      active.stop()
+      await active.done
+      stopping = this.stoppingScreencastPageIds.get(browserPageId)
+      if (stopping) {
+        await stopping
+      }
+      active = this.activeScreencastsByPageId.get(browserPageId)
     }
     this.activeScreencastPageIds.add(browserPageId)
     const format = params.format
     const subscriptionId = `browser-screencast:${browserPageId}:${randomUUID()}`
-    let session: BrowserScreencastSession
+    let session: BrowserScreencastSession | null = null
+    let resolveActiveDone!: () => void
+    const activeDone = new Promise<void>((resolve) => {
+      resolveActiveDone = resolve
+    })
+    let cancelledBeforeStart = false
+    const activeRecord: ActiveBrowserScreencastPage = {
+      stop: () => {
+        if (session) {
+          session.stop()
+          return
+        }
+        cancelledBeforeStart = true
+      },
+      done: activeDone
+    }
+    this.activeScreencastsByPageId.set(browserPageId, activeRecord)
     try {
       session = await startBrowserScreencast(guest, {
         format,
@@ -464,22 +496,35 @@ export class RuntimeBrowserCommands {
         onEvent: stream.emit,
         onError: (message) => stream.emit?.({ type: 'error', message })
       })
+      if (cancelledBeforeStart) {
+        session.stop()
+        await session.done
+        throw new BrowserError('browser_error', 'Browser screencast was cancelled.')
+      }
     } catch (error) {
       this.activeScreencastPageIds.delete(browserPageId)
+      if (this.activeScreencastsByPageId.get(browserPageId) === activeRecord) {
+        this.activeScreencastsByPageId.delete(browserPageId)
+      }
+      resolveActiveDone()
       throw error
     }
     let stoppingPromise: Promise<void> | null = null
     const clearPageGate = (): void => {
       this.activeScreencastPageIds.delete(browserPageId)
+      if (this.activeScreencastsByPageId.get(browserPageId) === activeRecord) {
+        this.activeScreencastsByPageId.delete(browserPageId)
+      }
       if (
         stoppingPromise &&
         this.stoppingScreencastPageIds.get(browserPageId) === stoppingPromise
       ) {
         this.stoppingScreencastPageIds.delete(browserPageId)
       }
+      resolveActiveDone()
     }
     const markStopping = (): void => {
-      if (stoppingPromise) {
+      if (stoppingPromise || !session) {
         return
       }
       // Why: mobile can unsubscribe and immediately resubscribe on rotation.
@@ -498,7 +543,7 @@ export class RuntimeBrowserCommands {
           done: session.done,
           stop: () => {
             markStopping()
-            session.stop()
+            session?.stop()
           }
         },
         ready: {

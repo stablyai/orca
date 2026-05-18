@@ -1016,6 +1016,10 @@ describe('AgentBrowserBridge', () => {
       deviceScaleFactor: 2,
       mobile: true
     })
+    expect(wc.debugger.sendCommand).toHaveBeenCalledWith('Emulation.setVisibleSize', {
+      width: 375,
+      height: 812
+    })
     const viewportCall = execFileMock.mock.calls.find((call: unknown[]) =>
       (call[1] as string[]).includes('viewport')
     )

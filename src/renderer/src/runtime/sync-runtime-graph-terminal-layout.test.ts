@@ -173,4 +173,131 @@ describe('terminal mobile session layout publication', () => {
 
     expect(buildMobileSessionTabSnapshots(state)[0]?.tabs).toEqual([])
   })
+
+  it('publishes legacy web-prefixed host terminal tabs when they own local PTYs', () => {
+    const leaf = '11111111-1111-4111-8111-111111111111'
+    const state = makeState({
+      activeGroupIdByWorktree: { 'wt-1': 'group-1' },
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-1',
+            activeTabId: 'web-terminal-local-host-tab',
+            tabOrder: ['web-terminal-local-host-tab']
+          }
+        ]
+      } as unknown as AppState['groupsByWorktree'],
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'web-terminal-local-host-tab',
+            groupId: 'group-1',
+            contentType: 'terminal',
+            entityId: 'web-terminal-local-host-tab',
+            title: 'Terminal 5'
+          }
+        ]
+      } as unknown as AppState['unifiedTabsByWorktree'],
+      tabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'web-terminal-local-host-tab',
+            worktreeId: 'wt-1',
+            ptyId: 'wt-1@@local-pty-1',
+            title: 'Terminal 5',
+            defaultTitle: 'Terminal 5',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      } as unknown as AppState['tabsByWorktree'],
+      terminalLayoutsByTabId: {
+        'web-terminal-local-host-tab': {
+          root: { type: 'leaf', leafId: leaf },
+          activeLeafId: leaf,
+          expandedLeafId: null,
+          ptyIdsByLeafId: {
+            [leaf]: 'wt-1@@local-pty-1'
+          }
+        }
+      } as unknown as AppState['terminalLayoutsByTabId']
+    })
+
+    expect(buildMobileSessionTabSnapshots(state)[0]?.tabs).toMatchObject([
+      {
+        type: 'terminal',
+        id: `web-terminal-local-host-tab::${leaf}`,
+        parentTabId: 'web-terminal-local-host-tab',
+        ptyId: 'wt-1@@local-pty-1',
+        title: 'Terminal 5',
+        isActive: true
+      }
+    ])
+  })
+
+  it('does not publish stale single-pane tab labels as pane titles', () => {
+    const leaf = '11111111-1111-4111-8111-111111111111'
+    const state = makeState({
+      activeGroupIdByWorktree: { 'wt-1': 'group-1' },
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-1',
+            activeTabId: 'unified-term-1',
+            tabOrder: ['unified-term-1']
+          }
+        ]
+      } as unknown as AppState['groupsByWorktree'],
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'unified-term-1',
+            groupId: 'group-1',
+            contentType: 'terminal',
+            entityId: 'term-1',
+            title: 'Nightly audit'
+          }
+        ]
+      } as unknown as AppState['unifiedTabsByWorktree'],
+      tabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'term-1',
+            worktreeId: 'wt-1',
+            ptyId: 'pty-1',
+            title: 'Terminal 1',
+            defaultTitle: 'Terminal 1',
+            customTitle: 'Nightly audit',
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      } as unknown as AppState['tabsByWorktree'],
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: { type: 'leaf', leafId: leaf },
+          activeLeafId: leaf,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leaf]: 'pty-1' },
+          titlesByLeafId: { [leaf]: 'Nightly audit' }
+        }
+      } as unknown as AppState['terminalLayoutsByTabId']
+    })
+
+    expect(buildMobileSessionTabSnapshots(state)[0]?.tabs[0]).toMatchObject({
+      type: 'terminal',
+      title: 'Nightly audit',
+      parentLayout: {
+        root: { type: 'leaf', leafId: leaf },
+        activeLeafId: leaf,
+        ptyIdsByLeafId: { [leaf]: 'pty-1' }
+      }
+    })
+    expect(buildMobileSessionTabSnapshots(state)[0]?.tabs[0]).not.toHaveProperty(
+      'parentLayout.titlesByLeafId'
+    )
+  })
 })

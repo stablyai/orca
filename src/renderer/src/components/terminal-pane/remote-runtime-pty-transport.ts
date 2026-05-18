@@ -1,6 +1,9 @@
 /* eslint-disable max-lines -- Why: remote PTY transport keeps lifecycle, JSON fallback, and binary stream wiring together so reconnect/destroy ordering stays testable as one behavior surface. */
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-types'
+import type {
+  RuntimeMobileSessionTabsResult,
+  RuntimeTerminalCreate
+} from '../../../../shared/runtime-types'
 import type { PtyConnectResult, PtyTransport, IpcPtyTransportOptions } from './pty-dispatcher'
 import { createPtyOutputProcessor } from './pty-transport'
 import { unwrapRuntimeRpcResult } from '../../runtime/runtime-rpc-client'
@@ -20,9 +23,18 @@ import {
 } from './remote-runtime-pty-batching'
 import { setFitOverride } from '@/lib/pane-manager/mobile-fit-overrides'
 import { setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
+import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '@/runtime/web-terminal-surface-id'
 
 const REMOTE_TERMINAL_INPUT_FLUSH_MS = 8
 const REMOTE_TERMINAL_VIEWPORT_FLUSH_MS = 33
+const HOST_SESSION_ATTACH_POLL_MS = 150
+const HOST_SESSION_ATTACH_TIMEOUT_MS = 15_000
+
+function normalizeRemoteTerminalInput(data: string): string {
+  // Why: PTYs expect the Enter key as carriage return. Some browser/mobile
+  // input paths can emit bare LF, which zsh renders with PROMPT_SP `%` marks.
+  return data.replace(/\r\n/g, '\r').replace(/\n/g, '\r')
+}
 
 function isRemoteTerminalGoneMessage(message: string): boolean {
   return (
@@ -74,6 +86,109 @@ export function createRemoteRuntimePtyTransport(
     onAgentExited,
     onAgentStatus
   })
+
+  function findReadyHostSessionHandle(
+    snapshot: RuntimeMobileSessionTabsResult,
+    hostTabId: string
+  ): string | null {
+    const terminalTabs = snapshot.tabs.filter((tab) => tab.type === 'terminal')
+    const preferred =
+      terminalTabs.find(
+        (tab) =>
+          tab.status === 'ready' &&
+          tab.parentTabId === hostTabId &&
+          (!leafId || tab.leafId === leafId)
+      ) ??
+      terminalTabs.find(
+        (tab) => tab.status === 'ready' && tab.parentTabId === hostTabId && tab.isActive
+      ) ??
+      terminalTabs.find((tab) => tab.status === 'ready' && tab.parentTabId === hostTabId)
+    return preferred?.terminal ?? null
+  }
+
+  function hasHostSessionTerminalSurface(
+    snapshot: RuntimeMobileSessionTabsResult,
+    hostTabId: string
+  ): boolean {
+    return snapshot.tabs.some(
+      (tab) => tab.type === 'terminal' && (tab.parentTabId === hostTabId || tab.id === hostTabId)
+    )
+  }
+
+  async function waitForHostSessionHandle(hostTabId: string): Promise<string | null> {
+    if (!worktreeId) {
+      return null
+    }
+    const worktree = `id:${worktreeId}`
+    const activated = await callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.activate', {
+      worktree,
+      tabId: hostTabId
+    })
+    const immediate = findReadyHostSessionHandle(activated, hostTabId)
+    if (immediate) {
+      return immediate
+    }
+
+    const startedAt = Date.now()
+    while (!destroyed) {
+      const remainingMs = HOST_SESSION_ATTACH_TIMEOUT_MS - (Date.now() - startedAt)
+      if (remainingMs <= 0) {
+        return null
+      }
+      // Why: host mirrors can be published before their PTY handle is ready,
+      // but a stuck pending surface must not poll the runtime forever.
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(HOST_SESSION_ATTACH_POLL_MS, remainingMs))
+      )
+      const listed = await callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.list', {
+        worktree
+      })
+      const handle = findReadyHostSessionHandle(listed, hostTabId)
+      if (handle) {
+        return handle
+      }
+      if (!hasHostSessionTerminalSurface(listed, hostTabId)) {
+        return null
+      }
+    }
+    return null
+  }
+
+  async function attachHostSessionMirror(
+    options: Parameters<PtyTransport['connect']>[0]
+  ): Promise<PtyConnectResult | undefined> {
+    if (!tabId || !isWebTerminalSurfaceTabId(tabId)) {
+      return undefined
+    }
+    const hostTabId = toHostSessionTabId(tabId)
+    const hostHandle = await waitForHostSessionHandle(hostTabId)
+    if (!hostHandle || destroyed) {
+      if (!destroyed) {
+        storedCallbacks.onError?.('Remote terminal was closed.')
+      }
+      return undefined
+    }
+
+    handle = hostHandle
+    ownsRemoteTerminal = false
+    remotePtyId = toRemoteRuntimePtyId(hostHandle, currentRuntimeEnvironmentId)
+    connected = true
+    desiredViewport = {
+      cols: options.cols ?? 80,
+      rows: options.rows ?? 24
+    }
+    onPtySpawn?.(remotePtyId)
+
+    await subscribeToHandle()
+    if (destroyed || !connected || !remotePtyId) {
+      return undefined
+    }
+
+    return {
+      id: remotePtyId,
+      replay: ''
+    } satisfies PtyConnectResult
+  }
 
   async function callRuntime<TResult>(method: string, params?: unknown): Promise<TResult> {
     const response = await window.api.runtimeEnvironments.call({
@@ -236,6 +351,10 @@ export function createRemoteRuntimePtyTransport(
       }
 
       try {
+        if (isWebTerminalSurfaceTabId(tabId ?? '')) {
+          return await attachHostSessionMirror(options)
+        }
+
         const created = await callRuntime<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
           worktree: worktreeId,
           command,
@@ -336,9 +455,13 @@ export function createRemoteRuntimePtyTransport(
       if (!connected || !handle) {
         return false
       }
+      const normalized = normalizeRemoteTerminalInput(data)
+      if (!normalized) {
+        return true
+      }
       // Why: remote terminal input currently crosses the runtime RPC boundary;
       // coalescing same-frame key bursts avoids a per-keystroke remote round-trip.
-      inputBatcher.push(data)
+      inputBatcher.push(normalized)
       return true
     },
 

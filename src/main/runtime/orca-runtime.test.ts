@@ -1456,6 +1456,31 @@ describe('OrcaRuntimeService', () => {
     expect(spawnedEnv.ORCA_PANE_KEY).toBe(`${tabId}:${leafId}`)
   })
 
+  it('does not adopt web mirror ids as host terminal ids', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtime = new OrcaRuntimeService(store)
+    const tabId = 'web-terminal-host-tab-1'
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      focus: false,
+      tabId,
+      leafId
+    })
+
+    const spawnedEnv =
+      (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
+    expect(spawnedEnv.ORCA_TAB_ID).not.toBe(tabId)
+    expect(spawnedEnv.ORCA_TAB_ID).not.toMatch(/^web-terminal-/)
+    expect(spawnedEnv.ORCA_PANE_KEY).toMatch(`${spawnedEnv.ORCA_TAB_ID}:`)
+  })
+
   it('creates background terminal sessions while the renderer graph is unavailable', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const runtime = new OrcaRuntimeService(store)
@@ -2161,6 +2186,137 @@ describe('OrcaRuntimeService', () => {
     ])
   })
 
+  it('omits stale browser session tabs that no longer have live webContents', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const tabList = vi.fn(() => ({
+      tabs: [
+        {
+          browserPageId: 'browser-page-live',
+          index: 0,
+          url: 'https://live.example/',
+          title: 'Live Browser',
+          active: true
+        }
+      ]
+    }))
+    runtime.setAgentBrowserBridge({ tabList } as never)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'browser-unified-stale',
+          activeTabType: 'browser',
+          tabs: [
+            {
+              type: 'browser',
+              id: 'browser-unified-stale',
+              title: 'Dead Browser',
+              browserWorkspaceId: 'browser-workspace-stale',
+              browserPageId: 'browser-page-stale',
+              url: 'about:blank',
+              loading: false,
+              canGoBack: false,
+              canGoForward: false,
+              isActive: true
+            },
+            {
+              type: 'browser',
+              id: 'browser-unified-live',
+              title: 'Stale Title',
+              browserWorkspaceId: 'browser-workspace-live',
+              browserPageId: 'browser-page-live',
+              url: 'https://stale.example/',
+              loading: false,
+              canGoBack: false,
+              canGoForward: false,
+              isActive: false
+            }
+          ]
+        }
+      ]
+    })
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(tabList).toHaveBeenCalledWith(TEST_WORKTREE_ID)
+    expect(result.tabs).toEqual([
+      expect.objectContaining({
+        type: 'browser',
+        id: 'browser-unified-live',
+        browserPageId: 'browser-page-live',
+        url: 'https://live.example/',
+        title: 'Live Browser',
+        isActive: true
+      })
+    ])
+    expect(result.activeTabId).toBe('browser-unified-live')
+    expect(result.activeTabType).toBe('browser')
+  })
+
+  it('publishes terminal surface agent status for paired web clients', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const hostPaneKey = `tab-1:${leafId}`
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: `tab-1::${leafId}`,
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: `tab-1::${leafId}`,
+              parentTabId: 'tab-1',
+              leafId,
+              title: 'codex [working]',
+              agentStatus: {
+                state: 'working',
+                prompt: 'fix parity',
+                updatedAt: 1_700_000_000_000,
+                stateStartedAt: 1_699_999_999_000,
+                agentType: 'codex',
+                paneKey: hostPaneKey,
+                terminalTitle: 'codex [working]',
+                stateHistory: []
+              },
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(result.tabs).toEqual([
+      expect.objectContaining({
+        type: 'terminal',
+        id: `tab-1::${leafId}`,
+        status: 'pending-handle',
+        terminal: null,
+        agentStatus: expect.objectContaining({
+          state: 'working',
+          prompt: 'fix parity',
+          agentType: 'codex',
+          paneKey: hostPaneKey
+        })
+      })
+    ])
+  })
+
   it('keeps saved PTY bindings pending until the runtime knows the PTY is connected', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.attachWindow(1)
@@ -2202,10 +2358,67 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({
         type: 'terminal',
         id: 'tab-1::pane:1',
+        ptyId: 'daemon-pty-1',
         parentTabId: 'tab-1',
         leafId: 'pane:1',
         status: 'pending-handle',
         terminal: null
+      })
+    ])
+  })
+
+  it('refreshes daemon PTY liveness before publishing mobile session tabs', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        { id: 'daemon-pty-1', cwd: TEST_WORKTREE_PATH, title: 'daemon shell' }
+      ]
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'tab-1::pane:1',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-1::pane:1',
+              parentTabId: 'tab-1',
+              leafId: 'pane:1',
+              title: 'Terminal 1',
+              ptyId: 'daemon-pty-1',
+              parentLayout: {
+                root: { type: 'leaf', leafId: 'pane:1' },
+                activeLeafId: 'pane:1',
+                expandedLeafId: null,
+                ptyIdsByLeafId: { 'pane:1': 'daemon-pty-1' }
+              },
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(result.tabs).toEqual([
+      expect.objectContaining({
+        type: 'terminal',
+        id: 'tab-1::pane:1',
+        ptyId: 'daemon-pty-1',
+        status: 'ready',
+        terminal: expect.stringMatching(/^term_/)
       })
     ])
   })
@@ -2910,6 +3123,133 @@ describe('OrcaRuntimeService', () => {
     await third
 
     expect(thirdStop).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels an active same-page browser screencast before another connection starts', async () => {
+    const runtime = createRuntime()
+    const firstDone = deferred<void>()
+    const secondDone = deferred<void>()
+    const firstStop = vi.fn(() => firstDone.resolve())
+    const secondStop = vi.fn(() => secondDone.resolve())
+    const browserScreencast = vi
+      .fn()
+      .mockResolvedValueOnce({
+        subscriptionId: 'browser-screencast:page-1:first',
+        ready: {
+          type: 'ready',
+          subscriptionId: 'browser-screencast:page-1:first',
+          browserPageId: 'page-1',
+          format: 'jpeg',
+          tab: {
+            browserPageId: 'page-1',
+            index: 0,
+            url: 'about:blank',
+            title: 'Browser',
+            active: true
+          }
+        },
+        session: { stop: firstStop, done: firstDone.promise }
+      })
+      .mockResolvedValueOnce({
+        subscriptionId: 'browser-screencast:page-1:second',
+        ready: {
+          type: 'ready',
+          subscriptionId: 'browser-screencast:page-1:second',
+          browserPageId: 'page-1',
+          format: 'jpeg',
+          tab: {
+            browserPageId: 'page-1',
+            index: 0,
+            url: 'about:blank',
+            title: 'Browser',
+            active: true
+          }
+        },
+        session: { stop: secondStop, done: secondDone.promise }
+      })
+
+    ;(
+      runtime as unknown as { browserCommands: { browserScreencast: typeof browserScreencast } }
+    ).browserCommands = { browserScreencast }
+
+    const firstEmit = vi.fn()
+    const first = runtime.browserScreencast(
+      { worktree: `id:${TEST_WORKTREE_ID}`, page: 'page-1', format: 'jpeg' },
+      { connectionId: 'conn-1', sendBinary: vi.fn(), emit: firstEmit }
+    )
+    await vi.waitFor(() =>
+      expect(firstEmit).toHaveBeenCalledWith(
+        expect.objectContaining({ subscriptionId: 'browser-screencast:page-1:first' })
+      )
+    )
+
+    const secondEmit = vi.fn()
+    const second = runtime.browserScreencast(
+      { worktree: `id:${TEST_WORKTREE_ID}`, page: 'page-1', format: 'jpeg' },
+      { connectionId: 'conn-2', sendBinary: vi.fn(), emit: secondEmit }
+    )
+
+    await vi.waitFor(() => expect(firstStop).toHaveBeenCalledTimes(1))
+    await first
+    await vi.waitFor(() =>
+      expect(secondEmit).toHaveBeenCalledWith(
+        expect.objectContaining({ subscriptionId: 'browser-screencast:page-1:second' })
+      )
+    )
+    expect(browserScreencast).toHaveBeenCalledTimes(2)
+
+    runtime.cleanupSubscription('browser-screencast:page-1:second')
+    await second
+    expect(secondStop).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not deliver or accept browser screencast frames before ready', async () => {
+    const runtime = createRuntime()
+    const done = deferred<void>()
+    const stop = vi.fn(() => done.resolve())
+    const startupFrame = new Uint8Array([1, 2, 3])
+    const sendBinary = vi.fn()
+    const emit = vi.fn()
+    const browserScreencast = vi.fn(
+      async (_params: unknown, stream: { sendBinary: typeof sendBinary }) => {
+        expect(stream.sendBinary(startupFrame)).toBe(false)
+        expect(sendBinary).not.toHaveBeenCalled()
+        return {
+          subscriptionId: 'browser-screencast:page-1:first',
+          ready: {
+            type: 'ready',
+            subscriptionId: 'browser-screencast:page-1:first',
+            browserPageId: 'page-1',
+            format: 'jpeg',
+            tab: {
+              browserPageId: 'page-1',
+              index: 0,
+              url: 'about:blank',
+              title: 'Browser',
+              active: true
+            }
+          },
+          session: { stop, done: done.promise }
+        }
+      }
+    )
+
+    ;(
+      runtime as unknown as { browserCommands: { browserScreencast: typeof browserScreencast } }
+    ).browserCommands = { browserScreencast }
+
+    const task = runtime.browserScreencast(
+      { worktree: `id:${TEST_WORKTREE_ID}`, page: 'page-1', format: 'jpeg' },
+      { connectionId: 'conn-1', sendBinary, emit }
+    )
+
+    await vi.waitFor(() =>
+      expect(emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'ready' }))
+    )
+    expect(sendBinary).not.toHaveBeenCalled()
+
+    runtime.cleanupSubscription('browser-screencast:page-1:first')
+    await task
   })
 
   it('keeps already-idle status after tui-idle wait for immediate message delivery', async () => {

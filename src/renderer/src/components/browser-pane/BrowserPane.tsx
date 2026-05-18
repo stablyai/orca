@@ -1,5 +1,13 @@
 /* eslint-disable max-lines */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent
+} from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import { getConnectionId } from '@/lib/connection-context'
@@ -96,6 +104,7 @@ import BrowserAddressBar from './BrowserAddressBar'
 import { BrowserToolbarMenu } from './BrowserToolbarMenu'
 import BrowserFind from './BrowserFind'
 import { BrowserMobileDriverOverlay } from './BrowserMobileDriverOverlay'
+import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
 import {
   consumeBrowserFocusRequest,
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
@@ -108,8 +117,8 @@ import {
 } from '@/runtime/runtime-file-client'
 import {
   callRuntimeRpc,
-  getActiveRuntimeTarget,
-  RuntimeRpcCallError
+  RuntimeRpcCallError,
+  type RuntimeClientTarget
 } from '@/runtime/runtime-rpc-client'
 import type {
   BrowserBackResult,
@@ -163,6 +172,19 @@ type BrowserOverlayViewport = {
   version: number
 }
 
+function decodeRemoteBrowserFrameUrl(url: string): Promise<void> {
+  const image = new window.Image()
+  image.decoding = 'async'
+  image.src = url
+  if (typeof image.decode === 'function') {
+    return image.decode()
+  }
+  return new Promise((resolve, reject) => {
+    image.onload = () => resolve()
+    image.onerror = () => reject(new Error('Remote browser frame failed to decode.'))
+  })
+}
+
 type RemoteBrowserStreamToken = {
   tabId: string
   environmentId: string
@@ -195,9 +217,25 @@ type RemoteBrowserViewportSize = {
   height: number
 }
 
+type RemoteBrowserImagePoint = {
+  x: number
+  y: number
+}
+
+type PendingRemoteBrowserWheel = {
+  target: RuntimeClientTarget & { kind: 'environment' }
+  pageId: string
+  operationToken: RemoteBrowserOperationToken
+  point: RemoteBrowserImagePoint
+  dx: number
+  dy: number
+}
+
 const EMPTY_BROWSER_PAGES: BrowserPageState[] = []
 const EMPTY_BROWSER_ANNOTATIONS: BrowserPageAnnotation[] = []
 const PENDING_ANNOTATION_CARD_HEIGHT = 330
+const WHEEL_DELTA_LINE = 1
+const WHEEL_DELTA_PAGE = 2
 
 function createBrowserAnnotationId(): string {
   return `browser-annotation-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -594,6 +632,24 @@ function getPositiveFiniteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
 }
 
+function areRemoteViewportSizesNear(
+  a: RemoteBrowserViewportSize | null,
+  b: RemoteBrowserViewportSize | null
+): boolean {
+  if (!a || !b) {
+    return false
+  }
+  return Math.abs(a.width - b.width) <= 3 && Math.abs(a.height - b.height) <= 3
+}
+
+function getRemoteBrowserDeviceScaleFactor(): number {
+  if (typeof window === 'undefined') {
+    return 1
+  }
+  const scale = Number.isFinite(window.devicePixelRatio) ? window.devicePixelRatio : 1
+  return Math.min(2, Math.max(1, Number(scale.toFixed(2))))
+}
+
 function getLoadErrorMetadata(loadError: BrowserLoadError | null): {
   displayUrl: string
   host: string | null
@@ -825,23 +881,30 @@ function RemoteBrowserPagePane({
   const remotePageIdRef = useRef<string | null>(null)
   const remoteViewportSizeRef = useRef<RemoteBrowserViewportSize | null>(null)
   const remoteCssViewportSizeRef = useRef<RemoteBrowserViewportSize | null>(null)
+  const remoteStreamViewportSizeRef = useRef<RemoteBrowserViewportSize | null>(null)
   const remoteViewportTimerRef = useRef<number | null>(null)
   const streamFrameUrlRef = useRef<string | null>(null)
   const streamSubscriptionRef = useRef<RemoteBrowserStreamSubscription | null>(null)
   const streamRestartTimerRef = useRef<number | null>(null)
   const remoteTabRefreshTimerRef = useRef<number | null>(null)
   const remoteInputQueueRef = useRef<Promise<unknown>>(Promise.resolve())
+  const pendingRemoteWheelRef = useRef<PendingRemoteBrowserWheel | null>(null)
+  const remoteWheelFrameRef = useRef<number | null>(null)
+  const remoteWheelInFlightRef = useRef(false)
+  const pendingFrameDecodeRef = useRef(0)
   const streamGenerationRef = useRef(0)
   const remoteOperationGenerationRef = useRef(0)
   const activeStreamTokenRef = useRef<RemoteBrowserStreamToken | null>(null)
   const mountedRef = useRef(true)
   const isActiveRef = useRef(isActive)
   const currentBrowserTabIdRef = useRef(browserTab.id)
+  const currentBrowserTabUrlRef = useRef(browserTab.url)
   const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() ?? null
   const activeRuntimeEnvironmentIdRef = useRef<string | null>(activeRuntimeEnvironmentId)
   const startRemoteStreamRef = useRef<
     (pageId: string) => Promise<RemoteBrowserStreamSubscription | null>
   >(async () => null)
+  const restartRemoteStreamForViewportRef = useRef<(pageId: string) => void>(() => {})
   const fetchRemoteTabInfoRef = useRef<
     (token: RemoteBrowserOperationToken) => Promise<BrowserTabInfo | null>
   >(async () => null)
@@ -851,22 +914,38 @@ function RemoteBrowserPagePane({
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
 
   currentBrowserTabIdRef.current = browserTab.id
+  currentBrowserTabUrlRef.current = browserTab.url
   activeRuntimeEnvironmentIdRef.current = activeRuntimeEnvironmentId
   isActiveRef.current = isActive
 
   const runtimeTarget = useCallback(() => {
-    const target = getActiveRuntimeTarget(settings)
-    return target.kind === 'environment' ? target : null
-  }, [settings])
+    return activeRuntimeEnvironmentId
+      ? ({
+          kind: 'environment',
+          environmentId: activeRuntimeEnvironmentId
+        } satisfies RuntimeClientTarget)
+      : null
+  }, [activeRuntimeEnvironmentId])
 
   const clearStreamFrame = useCallback((): void => {
+    pendingFrameDecodeRef.current += 1
     const prevUrl = streamFrameUrlRef.current
     streamFrameUrlRef.current = null
     remoteCssViewportSizeRef.current = null
+    remoteStreamViewportSizeRef.current = null
     setFrameMetadata(null)
     setFrameUrl(null)
     if (prevUrl) {
       URL.revokeObjectURL(prevUrl)
+    }
+  }, [])
+
+  const clearPendingRemoteWheel = useCallback((): void => {
+    pendingRemoteWheelRef.current = null
+    remoteWheelInFlightRef.current = false
+    if (remoteWheelFrameRef.current !== null) {
+      window.cancelAnimationFrame(remoteWheelFrameRef.current)
+      remoteWheelFrameRef.current = null
     }
   }, [])
 
@@ -910,25 +989,55 @@ function RemoteBrowserPagePane({
     [browserTab.id, browserTab.workspaceId, clearStreamFrame, closeBrowserPage, closeBrowserTab]
   )
 
-  const readRemoteViewportSize = useCallback((): RemoteBrowserViewportSize | null => {
+  const rememberRemoteViewportSize = useCallback(
+    (next: RemoteBrowserViewportSize): RemoteBrowserViewportSize => {
+      const prev = remoteViewportSizeRef.current
+      if (
+        !prev ||
+        Math.abs(prev.width - next.width) > 3 ||
+        Math.abs(prev.height - next.height) > 3
+      ) {
+        remoteViewportSizeRef.current = next
+        return next
+      }
+      return prev
+    },
+    []
+  )
+
+  const readCurrentRemoteViewportSize = useCallback((): RemoteBrowserViewportSize | null => {
     const element = remoteViewportRef.current
     if (!element) {
-      return remoteViewportSizeRef.current
+      return null
     }
     const rect = element.getBoundingClientRect()
     if (rect.width <= 0 || rect.height <= 0) {
-      return remoteViewportSizeRef.current
+      return null
     }
-    const next = {
+    return {
       width: Math.max(320, Math.round(rect.width)),
       height: Math.max(240, Math.round(rect.height))
     }
-    const prev = remoteViewportSizeRef.current
-    if (!prev || Math.abs(prev.width - next.width) > 3 || Math.abs(prev.height - next.height) > 3) {
-      remoteViewportSizeRef.current = next
-    }
-    return remoteViewportSizeRef.current
   }, [])
+
+  const readRemoteViewportSize = useCallback((): RemoteBrowserViewportSize | null => {
+    const next = readCurrentRemoteViewportSize()
+    return next ? rememberRemoteViewportSize(next) : remoteViewportSizeRef.current
+  }, [readCurrentRemoteViewportSize, rememberRemoteViewportSize])
+
+  const waitForRemoteViewportSize =
+    useCallback(async (): Promise<RemoteBrowserViewportSize | null> => {
+      for (let i = 0; i < 3; i += 1) {
+        const next = readCurrentRemoteViewportSize()
+        if (next) {
+          return rememberRemoteViewportSize(next)
+        }
+        await new Promise<void>((resolve) => {
+          window.requestAnimationFrame(() => resolve())
+        })
+      }
+      return readRemoteViewportSize()
+    }, [readCurrentRemoteViewportSize, readRemoteViewportSize, rememberRemoteViewportSize])
 
   const syncRemoteViewport = useCallback(
     async (pageId: string): Promise<void> => {
@@ -945,7 +1054,7 @@ function RemoteBrowserPagePane({
           page: pageId,
           width: size.width,
           height: size.height,
-          deviceScaleFactor: 1,
+          deviceScaleFactor: getRemoteBrowserDeviceScaleFactor(),
           mobile: false
         },
         { timeoutMs: 15_000 }
@@ -971,9 +1080,10 @@ function RemoteBrowserPagePane({
     [readRemoteViewportSize, runtimeTarget, worktreeId]
   )
 
-  const enqueueRemoteInput = useCallback((operation: () => Promise<void>): void => {
+  const enqueueRemoteInput = useCallback((operation: () => Promise<void>): Promise<void> => {
     const next = remoteInputQueueRef.current.catch(() => {}).then(operation)
     remoteInputQueueRef.current = next.catch(() => {})
+    return next
   }, [])
 
   const createRemoteOperationToken = useCallback(
@@ -1035,7 +1145,9 @@ function RemoteBrowserPagePane({
       mountedRef.current = false
       remoteOperationGenerationRef.current += 1
       streamGenerationRef.current += 1
+      pendingFrameDecodeRef.current += 1
       activeStreamTokenRef.current = null
+      remoteStreamViewportSizeRef.current = null
       if (streamRestartTimerRef.current !== null) {
         window.clearTimeout(streamRestartTimerRef.current)
         streamRestartTimerRef.current = null
@@ -1048,19 +1160,22 @@ function RemoteBrowserPagePane({
         window.clearTimeout(remoteTabRefreshTimerRef.current)
         remoteTabRefreshTimerRef.current = null
       }
+      clearPendingRemoteWheel()
       if (streamFrameUrlRef.current) {
         URL.revokeObjectURL(streamFrameUrlRef.current)
         streamFrameUrlRef.current = null
       }
     }
-  }, [])
+  }, [clearPendingRemoteWheel])
 
   useEffect(() => {
     remoteOperationGenerationRef.current += 1
     streamGenerationRef.current += 1
     activeStreamTokenRef.current = null
+    remoteStreamViewportSizeRef.current = null
+    clearPendingRemoteWheel()
     clearStreamFrame()
-  }, [activeRuntimeEnvironmentId, browserTab.id, clearStreamFrame])
+  }, [activeRuntimeEnvironmentId, browserTab.id, clearPendingRemoteWheel, clearStreamFrame])
 
   useEffect(() => {
     if (!isActive) {
@@ -1081,7 +1196,9 @@ function RemoteBrowserPagePane({
         if (!pageId || !isActiveRef.current) {
           return
         }
-        void syncRemoteViewport(pageId).catch(() => {})
+        void syncRemoteViewport(pageId)
+          .then(() => restartRemoteStreamForViewportRef.current(pageId))
+          .catch(() => {})
       }, 150)
     }
     scheduleSync()
@@ -1202,14 +1319,29 @@ function RemoteBrowserPagePane({
       const nextUrl = URL.createObjectURL(
         new Blob([imageBuffer], { type: `image/${frame.format}` })
       )
-      const prevUrl = streamFrameUrlRef.current
-      streamFrameUrlRef.current = nextUrl
-      setFrameMetadata(frame.metadata)
-      setFrameUrl(nextUrl)
-      setBusy(false)
-      if (prevUrl) {
-        URL.revokeObjectURL(prevUrl)
-      }
+      const decodeGeneration = pendingFrameDecodeRef.current + 1
+      pendingFrameDecodeRef.current = decodeGeneration
+      void decodeRemoteBrowserFrameUrl(nextUrl)
+        .then(() => {
+          if (
+            pendingFrameDecodeRef.current !== decodeGeneration ||
+            !isCurrentRemoteStreamToken(token)
+          ) {
+            URL.revokeObjectURL(nextUrl)
+            return
+          }
+          const prevUrl = streamFrameUrlRef.current
+          streamFrameUrlRef.current = nextUrl
+          setFrameMetadata(frame.metadata)
+          setFrameUrl(nextUrl)
+          setBusy(false)
+          if (prevUrl) {
+            URL.revokeObjectURL(prevUrl)
+          }
+        })
+        .catch(() => {
+          URL.revokeObjectURL(nextUrl)
+        })
     },
     [isCurrentRemoteStreamToken]
   )
@@ -1250,10 +1382,9 @@ function RemoteBrowserPagePane({
       }
       const target = { kind: 'environment' as const, environmentId: token.environmentId }
       const createRemotePage = async (): Promise<string | null> => {
+        const currentUrl = currentBrowserTabUrlRef.current
         const initialUrl =
-          browserTab.url === ORCA_BROWSER_BLANK_URL
-            ? 'about:blank'
-            : browserTab.url || 'about:blank'
+          currentUrl === ORCA_BROWSER_BLANK_URL ? 'about:blank' : currentUrl || 'about:blank'
         const created = await callRuntimeRpc<{ browserPageId: string }>(
           target,
           'browser.tabCreate',
@@ -1308,7 +1439,6 @@ function RemoteBrowserPagePane({
     },
     [
       browserTab.id,
-      browserTab.url,
       closeMissingRemotePage,
       isCurrentRemoteOperationToken,
       setRemoteBrowserPageHandle,
@@ -1432,13 +1562,17 @@ function RemoteBrowserPagePane({
       if (!isCurrentRemoteStreamToken(token)) {
         return
       }
-      setBusy(false)
+      setBusy(restart)
       const current = streamSubscriptionRef.current
       streamSubscriptionRef.current = null
       activeStreamTokenRef.current = null
-      // Why: late remote frames must not remain clickable after their stream
-      // owner closed; the next generation will install fresh metadata.
-      clearStreamFrame()
+      remoteStreamViewportSizeRef.current = null
+      // Why: browser navigation can close and recreate the screencast stream.
+      // Keep the last frame visible during restart so remote browser panes do
+      // not flash back to the generic loading placeholder on every navigation.
+      if (!restart) {
+        clearStreamFrame()
+      }
       current?.unsubscribe()
       if (restart) {
         scheduleRemoteStreamRestart(token)
@@ -1466,7 +1600,8 @@ function RemoteBrowserPagePane({
       if (!isCurrentRemoteOperationToken(operationToken)) {
         return null
       }
-      const viewportSize = readRemoteViewportSize()
+      const viewportSize = await waitForRemoteViewportSize()
+      remoteStreamViewportSizeRef.current = viewportSize
       const token: RemoteBrowserStreamToken = {
         tabId: browserTab.id,
         environmentId: target.environmentId,
@@ -1490,6 +1625,7 @@ function RemoteBrowserPagePane({
               maxHeight: 2160,
               viewportWidth: viewportSize?.width,
               viewportHeight: viewportSize?.height,
+              deviceScaleFactor: getRemoteBrowserDeviceScaleFactor(),
               everyNthFrame: 2
             },
             timeoutMs: 15_000
@@ -1553,17 +1689,83 @@ function RemoteBrowserPagePane({
       handleRemoteStreamClosed,
       isCurrentRemoteOperationToken,
       isCurrentRemoteStreamToken,
-      readRemoteViewportSize,
       runtimeTarget,
       syncRemoteViewport,
       updateStreamFrame,
+      waitForRemoteViewportSize,
       worktreeId
     ]
   )
 
+  const restartRemoteStreamForViewport = useCallback(
+    (pageId: string): void => {
+      const current = streamSubscriptionRef.current
+      const nextViewportSize = remoteViewportSizeRef.current
+      if (
+        !current ||
+        current.token.remotePageId !== pageId ||
+        !nextViewportSize ||
+        areRemoteViewportSizesNear(remoteStreamViewportSizeRef.current, nextViewportSize) ||
+        !isCurrentRemoteStreamToken(current.token)
+      ) {
+        return
+      }
+
+      // Why: the runtime stream validates frames against the viewport it was
+      // started with. After a pane resize, restart media so new-size frames are
+      // accepted instead of leaving the renderer on the last old-size bitmap.
+      streamGenerationRef.current += 1
+      activeStreamTokenRef.current = null
+      streamSubscriptionRef.current = null
+      remoteStreamViewportSizeRef.current = null
+      if (streamRestartTimerRef.current !== null) {
+        window.clearTimeout(streamRestartTimerRef.current)
+        streamRestartTimerRef.current = null
+      }
+      setBusy(true)
+      current.unsubscribe()
+      void startRemoteStreamRef
+        .current(pageId)
+        .then((subscription) => {
+          if (!subscription) {
+            if (mountedRef.current && isActiveRef.current && remotePageIdRef.current === pageId) {
+              setBusy(false)
+            }
+            return
+          }
+          if (!isCurrentRemoteStreamToken(subscription.token)) {
+            subscription.unsubscribe()
+            return
+          }
+          streamSubscriptionRef.current = subscription
+        })
+        .catch((error: unknown) => {
+          if (!mountedRef.current || !isActiveRef.current || remotePageIdRef.current !== pageId) {
+            return
+          }
+          if (isRemoteBrowserPageMissingError(error)) {
+            closeMissingRemotePage(pageId)
+            return
+          }
+          setRemoteError(
+            error instanceof Error ? error.message : 'Failed to resize remote browser stream.'
+          )
+          setBusy(false)
+        })
+    },
+    [closeMissingRemotePage, isCurrentRemoteStreamToken]
+  )
+
   useEffect(() => {
     startRemoteStreamRef.current = startRemoteStream
-  }, [startRemoteStream])
+    restartRemoteStreamForViewportRef.current = restartRemoteStreamForViewport
+  }, [restartRemoteStreamForViewport, startRemoteStream])
+
+  useEffect(() => {
+    return () => {
+      restartRemoteStreamForViewportRef.current = () => {}
+    }
+  }, [])
 
   useEffect(() => {
     if (!isActive) {
@@ -1577,7 +1779,6 @@ function RemoteBrowserPagePane({
     activeStreamTokenRef.current = null
     streamSubscriptionRef.current?.unsubscribe()
     streamSubscriptionRef.current = null
-    clearStreamFrame()
     if (streamRestartTimerRef.current !== null) {
       window.clearTimeout(streamRestartTimerRef.current)
       streamRestartTimerRef.current = null
@@ -1626,6 +1827,7 @@ function RemoteBrowserPagePane({
       remoteOperationGenerationRef.current += 1
       streamGenerationRef.current += 1
       activeStreamTokenRef.current = null
+      clearPendingRemoteWheel()
       streamSubscriptionRef.current?.unsubscribe()
       streamSubscriptionRef.current = null
       if (streamRestartTimerRef.current !== null) {
@@ -1634,7 +1836,7 @@ function RemoteBrowserPagePane({
       }
     }
   }, [
-    clearStreamFrame,
+    clearPendingRemoteWheel,
     createRemoteOperationToken,
     ensureRemotePage,
     fetchRemoteTabInfo,
@@ -1754,6 +1956,9 @@ function RemoteBrowserPagePane({
   }
 
   const handleRemotePointerDown = (event: React.PointerEvent<HTMLImageElement>): void => {
+    if (busy) {
+      return
+    }
     const target = runtimeTarget()
     const pageId = remotePageIdRef.current
     const image = imageRef.current
@@ -1801,6 +2006,9 @@ function RemoteBrowserPagePane({
   }
 
   const handleRemotePointerUp = (event: React.PointerEvent<HTMLImageElement>): void => {
+    if (busy) {
+      return
+    }
     const target = runtimeTarget()
     const pageId = remotePageIdRef.current
     const operationToken = pageId ? createRemoteOperationToken(pageId) : null
@@ -1846,6 +2054,9 @@ function RemoteBrowserPagePane({
   }
 
   const handleRemoteContextMenu = (event: React.MouseEvent<HTMLImageElement>): void => {
+    if (busy) {
+      return
+    }
     const target = runtimeTarget()
     const pageId = remotePageIdRef.current
     const point = getRemoteImagePoint(event)
@@ -1939,50 +2150,135 @@ function RemoteBrowserPagePane({
     })
   }
 
-  const handleRemoteScreenshotWheel = (event: React.WheelEvent<HTMLImageElement>): void => {
-    const target = runtimeTarget()
-    const pageId = remotePageIdRef.current
-    const operationToken = pageId ? createRemoteOperationToken(pageId) : null
-    const point = getRemoteImagePoint(event)
-    if (!target || !pageId || !operationToken || !point) {
+  const schedulePendingRemoteWheel = useCallback((): void => {
+    if (remoteWheelFrameRef.current !== null || remoteWheelInFlightRef.current) {
       return
     }
-    event.preventDefault()
-    setRemoteError(null)
-    enqueueRemoteInput(async () => {
-      if (!isCurrentRemoteOperationToken(operationToken)) {
+    remoteWheelFrameRef.current = window.requestAnimationFrame(() => {
+      remoteWheelFrameRef.current = null
+      const pending = pendingRemoteWheelRef.current
+      if (!pending || remoteWheelInFlightRef.current) {
         return
       }
+      pendingRemoteWheelRef.current = null
+      remoteWheelInFlightRef.current = true
+      const { target, pageId, operationToken, point, dx, dy } = pending
       const params = { worktree: `id:${worktreeId}`, page: pageId }
-      try {
-        await callRuntimeRpc(
-          target,
-          'browser.mouseMove',
-          { ...params, x: point.x, y: point.y },
-          { timeoutMs: 15_000 }
-        )
-        await callRuntimeRpc(
-          target,
-          'browser.mouseWheel',
-          {
-            ...params,
-            dx: Math.round(event.deltaX),
-            dy: Math.round(event.deltaY)
-          },
-          { timeoutMs: 15_000 }
-        )
-        scheduleRemoteTabInfoRefresh(operationToken, 400)
-      } catch (error) {
-        if (isCurrentRemoteOperationToken(operationToken)) {
-          if (isRemoteBrowserPageMissingError(error)) {
-            closeMissingRemotePage(pageId)
-            return
-          }
-          setRemoteError(error instanceof Error ? error.message : 'Remote scroll failed.')
+      void enqueueRemoteInput(async () => {
+        if (!isCurrentRemoteOperationToken(operationToken)) {
+          return
         }
-      }
+        try {
+          await callRuntimeRpc(
+            target,
+            'browser.mouseMove',
+            { ...params, x: point.x, y: point.y },
+            { timeoutMs: 15_000 }
+          )
+          await callRuntimeRpc(
+            target,
+            'browser.mouseWheel',
+            {
+              ...params,
+              dx,
+              dy
+            },
+            { timeoutMs: 15_000 }
+          )
+          scheduleRemoteTabInfoRefresh(operationToken, 400)
+        } catch (error) {
+          if (isCurrentRemoteOperationToken(operationToken)) {
+            if (isRemoteBrowserPageMissingError(error)) {
+              closeMissingRemotePage(pageId)
+              return
+            }
+            setRemoteError(error instanceof Error ? error.message : 'Remote scroll failed.')
+          }
+        }
+      }).finally(() => {
+        remoteWheelInFlightRef.current = false
+        if (pendingRemoteWheelRef.current) {
+          schedulePendingRemoteWheel()
+        }
+      })
     })
-  }
+  }, [
+    closeMissingRemotePage,
+    enqueueRemoteInput,
+    isCurrentRemoteOperationToken,
+    scheduleRemoteTabInfoRefresh,
+    worktreeId
+  ])
+
+  const handleRemoteScreenshotWheel = useCallback(
+    (event: WheelEvent): void => {
+      if (busy) {
+        event.preventDefault()
+        return
+      }
+      const target = runtimeTarget()
+      const pageId = remotePageIdRef.current
+      const operationToken = pageId ? createRemoteOperationToken(pageId) : null
+      const point = getRemoteImagePoint(event)
+      if (!target || !pageId || !operationToken || !point) {
+        return
+      }
+      event.preventDefault()
+      setRemoteError(null)
+      const deltaMultiplier =
+        event.deltaMode === WHEEL_DELTA_LINE
+          ? 16
+          : event.deltaMode === WHEEL_DELTA_PAGE
+            ? (remoteViewportRef.current?.clientHeight ?? 800)
+            : 1
+      const dx = Math.round(event.deltaX * deltaMultiplier)
+      const dy = Math.round(event.deltaY * deltaMultiplier)
+      if (dx === 0 && dy === 0) {
+        return
+      }
+      const current = pendingRemoteWheelRef.current
+      const sameTarget =
+        current?.target.environmentId === target.environmentId &&
+        current.pageId === pageId &&
+        current.operationToken.generation === operationToken.generation
+      pendingRemoteWheelRef.current = sameTarget
+        ? {
+            ...current,
+            point,
+            dx: current.dx + dx,
+            dy: current.dy + dy
+          }
+        : {
+            target,
+            pageId,
+            operationToken,
+            point,
+            dx,
+            dy
+          }
+      schedulePendingRemoteWheel()
+    },
+    [
+      busy,
+      createRemoteOperationToken,
+      getRemoteImagePoint,
+      runtimeTarget,
+      schedulePendingRemoteWheel
+    ]
+  )
+
+  useEffect(() => {
+    const image = imageRef.current
+    if (!image || !frameUrl) {
+      return
+    }
+    // Why: React delegates wheel listeners passively in Chromium, so native
+    // non-passive binding is required to prevent page scroll and console noise.
+    image.addEventListener('wheel', handleRemoteScreenshotWheel, { passive: false })
+    return () => image.removeEventListener('wheel', handleRemoteScreenshotWheel)
+  }, [frameUrl, handleRemoteScreenshotWheel])
+
+  const remoteFrameStyle = useMemo(() => getRemoteBrowserFrameStyle(frameMetadata), [frameMetadata])
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col bg-background">
@@ -2162,12 +2458,12 @@ function RemoteBrowserPagePane({
             src={frameUrl}
             alt=""
             tabIndex={0}
-            className="absolute top-0 left-0 h-auto w-auto max-w-none cursor-default bg-white outline-none"
+            style={remoteFrameStyle}
+            className="absolute top-0 left-0 max-w-none cursor-default bg-white outline-none"
             onPointerDown={handleRemotePointerDown}
             onPointerUp={handleRemotePointerUp}
             onContextMenu={handleRemoteContextMenu}
             onKeyDown={handleRemoteScreenshotKeyDown}
-            onWheel={handleRemoteScreenshotWheel}
             draggable={false}
           />
         ) : (

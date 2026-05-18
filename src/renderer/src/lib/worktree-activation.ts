@@ -6,7 +6,10 @@ import { buildAgentStartupPlan } from './tui-agent-startup'
 import { CLIENT_PLATFORM } from './new-workspace'
 import { tuiAgentToAgentKind } from './telemetry'
 import { useAppStore } from '@/store'
-import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
+import {
+  activateWebRuntimeSessionWorktree,
+  isWebRuntimeSessionActive
+} from '@/runtime/web-runtime-session'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import {
   setWorktreeNavActivator,
@@ -142,6 +145,12 @@ export function activateAndRevealWorktree(
   // 3. Core activation: sets activeWorktreeId, restores per-worktree state,
   // clears unread, bumps dead PTY generations, triggers GitHub refresh
   state.setActiveWorktree(worktreeId)
+  if (isWebRuntimeSessionActive(useAppStore.getState().settings?.activeRuntimeEnvironmentId)) {
+    // Why: paired web clients own only local selection state. The desktop host
+    // must also activate the worktree so hidden renderer-owned terminal panes
+    // mount and publish session surfaces back to the web client.
+    void activateWebRuntimeSessionWorktree({ worktreeId })
+  }
 
   // Why: record focus recency for Cmd+J's empty-query ordering BEFORE any
   // later async step (initial terminal / reveal) could throw — the user

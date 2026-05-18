@@ -8,6 +8,7 @@ import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/termina
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
+import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
 import type { AppState } from '@/store/types'
 import type {
   RuntimeMobileSessionBrowserTab,
@@ -17,9 +18,11 @@ import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeSyncWindowGraph
 } from '../../../shared/runtime-types'
-import { isTerminalLeafId } from '../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
+import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import type { TerminalLayoutSnapshot, TerminalPaneLayoutNode } from '../../../shared/types'
 import { getActiveTabNavOrder } from '../components/tab-bar/group-tab-order'
+import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
 
 type RegisteredTerminalTab = {
   tabId: string
@@ -53,10 +56,10 @@ const registeredTabs = new Map<string, RegisteredTerminalTab>()
 // grace period — that indicates a real stuck state.
 const tabRegisteredAt = new Map<string, number>()
 const NO_TRANSPORT_GRACE_MS = 10_000
-const WEB_TERMINAL_SURFACE_TAB_PREFIX = 'web-terminal-'
 const EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE: AppState['activeBrowserTabIdByWorktree'] = {}
 const EMPTY_BROWSER_TABS_BY_WORKTREE: AppState['browserTabsByWorktree'] = {}
 const EMPTY_BROWSER_PAGES_BY_WORKSPACE: AppState['browserPagesByWorkspace'] = {}
+const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = {}
 let syncScheduled = false
 let syncInFlight = false
 let syncPendingAfterFlight = false
@@ -164,6 +167,7 @@ export type RuntimeMobileSessionSyncKey = {
   activeFileIdByWorktree: AppState['activeFileIdByWorktree']
   activeTabId: AppState['activeTabId']
   activeBrowserTabIdByWorktree: AppState['activeBrowserTabIdByWorktree']
+  agentStatusByPaneKey: AppState['agentStatusByPaneKey']
   // Why: these projections still need value-level inspection because the
   // underlying references churn even when the mobile-relevant shape is
   // unchanged (`tabsByWorktree` reallocates on every OSC title frame).
@@ -201,6 +205,9 @@ export function getRuntimeMobileSessionSyncKey(
     activeTabId: state.activeTabId,
     activeBrowserTabIdByWorktree:
       state.activeBrowserTabIdByWorktree ?? EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE,
+    // Why: explicit hook status is published with terminal surfaces so paired
+    // web can render the same per-worktree agent rows before a PTY is opened.
+    agentStatusByPaneKey: state.agentStatusByPaneKey ?? EMPTY_AGENT_STATUS_BY_PANE_KEY,
     // Why: background agent title ticks can change runtimePaneTitlesByTabId
     // many times per second while the user types elsewhere. Reuse unchanged
     // projections so those ticks do not rescan all tabs, files, and drafts.
@@ -346,6 +353,7 @@ export function runtimeMobileSessionSyncKeysEqual(
     a.activeFileIdByWorktree === b.activeFileIdByWorktree &&
     a.activeTabId === b.activeTabId &&
     a.activeBrowserTabIdByWorktree === b.activeBrowserTabIdByWorktree &&
+    a.agentStatusByPaneKey === b.agentStatusByPaneKey &&
     a.tabsProjection === b.tabsProjection &&
     a.openFilesProjection === b.openFilesProjection &&
     a.browserProjection === b.browserProjection &&
@@ -377,11 +385,11 @@ async function syncRuntimeGraph(): Promise<void> {
   }
 
   for (const [tabId, registeredTab] of registeredTabs) {
-    if (tabId.startsWith(WEB_TERMINAL_SURFACE_TAB_PREFIX)) {
-      continue
-    }
     const tab = terminalTabById.get(tabId)
     if (!tab) {
+      continue
+    }
+    if (isWebOnlyMirroredTerminalTab(state, tab)) {
       continue
     }
 
@@ -469,13 +477,11 @@ export function buildMobileSessionTabSnapshots(
 
     for (const item of order) {
       if (item.type === 'terminal') {
-        // Why: paired web clients synthesize local mirror tabs with this
-        // prefix. They must never be republished as host-owned session tabs.
-        if (item.id.startsWith(WEB_TERMINAL_SURFACE_TAB_PREFIX)) {
-          continue
-        }
         const terminal = terminalTabByIdForWorktree.get(item.id)
         if (!terminal) {
+          continue
+        }
+        if (isWebOnlyMirroredTerminalTab(state, terminal)) {
           continue
         }
         tabs.push(...buildMobileTerminalSurfaceTabs(state, terminal, worktreeId, item.tabId))
@@ -518,6 +524,28 @@ export function buildMobileSessionTabSnapshots(
   }
 
   return snapshots
+}
+
+function isRemoteRuntimePtyId(ptyId: string | null | undefined): boolean {
+  return typeof ptyId === 'string' && parseRemoteRuntimePtyId(ptyId) !== null
+}
+
+function isWebOnlyMirroredTerminalTab(
+  state: Pick<AppState, 'terminalLayoutsByTabId'>,
+  tab: Pick<NonNullable<AppState['tabsByWorktree'][string]>[number], 'id' | 'ptyId'>
+): boolean {
+  if (!isWebTerminalSurfaceTabId(tab.id)) {
+    return false
+  }
+  const layoutPtyIds = Object.values(state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {})
+  const ptyIds = [tab.ptyId, ...layoutPtyIds].filter(
+    (ptyId): ptyId is string => typeof ptyId === 'string' && ptyId.length > 0
+  )
+  // Why: web mirror ids are a web-renderer implementation detail. If such an
+  // id has only remote/no PTYs, it is a mirror and must not be published back
+  // as host state. Legacy leaked host tabs with local PTYs still publish so
+  // existing sessions keep desktop/web parity.
+  return ptyIds.every(isRemoteRuntimePtyId)
 }
 
 function getOpenFileIndexes(openFiles: AppState['openFiles']): OpenFileIndexes {
@@ -628,18 +656,23 @@ function buildMobileTerminalSurfaceTabs(
       : (state.terminalLayoutsByTabId[terminal.id]?.activeLeafId ?? leafIds[0] ?? null)
   const paneTitles = state.runtimePaneTitlesByTabId[terminal.id] ?? {}
   const savedLayout = state.terminalLayoutsByTabId[terminal.id]
-  const savedPtyIdsByLeafId = savedLayout?.ptyIdsByLeafId ?? {}
+  const sanitizedSavedLayout = savedLayout
+    ? sanitizeTerminalLayoutPaneTitles(savedLayout, terminal)
+    : undefined
+  const savedPtyIdsByLeafId = sanitizedSavedLayout?.ptyIdsByLeafId ?? {}
   const container = registered?.getContainer()
   const firstChild = container?.firstElementChild
   const liveLayoutRoot = serializePaneTree(
     typeof HTMLElement !== 'undefined' && firstChild instanceof HTMLElement ? firstChild : null
   )
   const parentLayout = normalizeTerminalLayoutSnapshot({
-    root: liveLayoutRoot ?? savedLayout?.root ?? fallbackLayoutForLeafIds(leafIds),
+    root: liveLayoutRoot ?? sanitizedSavedLayout?.root ?? fallbackLayoutForLeafIds(leafIds),
     activeLeafId,
-    expandedLeafId: savedLayout?.expandedLeafId ?? null,
+    expandedLeafId: sanitizedSavedLayout?.expandedLeafId ?? null,
     ...(Object.keys(savedPtyIdsByLeafId).length > 0 ? { ptyIdsByLeafId: savedPtyIdsByLeafId } : {}),
-    ...(savedLayout?.titlesByLeafId ? { titlesByLeafId: savedLayout.titlesByLeafId } : {})
+    ...(sanitizedSavedLayout?.titlesByLeafId
+      ? { titlesByLeafId: sanitizedSavedLayout.titlesByLeafId }
+      : {})
   } satisfies TerminalLayoutSnapshot).snapshot
   return leafIds.map((leafId) => {
     const numericPaneId = manager?.getNumericIdForLeaf(leafId) ?? null
@@ -654,6 +687,8 @@ function buildMobileTerminalSurfaceTabs(
         : legacyPaneId
           ? paneTitles[Number(legacyPaneId)]
           : undefined
+    const paneKey = isTerminalLeafId(leafId) ? makePaneKey(terminal.id, leafId) : null
+    const agentStatus = paneKey ? state.agentStatusByPaneKey?.[paneKey] : undefined
     return {
       type: 'terminal' as const,
       id: mobileTerminalSurfaceId(terminal.id, leafId),
@@ -661,6 +696,7 @@ function buildMobileTerminalSurfaceTabs(
       parentTabId: terminal.id,
       leafId,
       ptyId,
+      ...(agentStatus ? { agentStatus } : {}),
       parentLayout,
       isActive: isDesktopTabActive && leafId === activeLeafId
     }
