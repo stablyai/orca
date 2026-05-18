@@ -93,6 +93,7 @@ import type {
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
 import { linearCreateIssue, linearGetIssue } from '@/runtime/runtime-linear-client'
 import {
+  filterAvailableTaskProviders,
   normalizeVisibleTaskProviders,
   resolveVisibleTaskProvider
 } from '../../../shared/task-providers'
@@ -528,6 +529,8 @@ export default function TaskPage(): React.JSX.Element {
   const workItemsInvalidationNonce = useAppStore((s) => s.workItemsInvalidationNonce)
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
+  const preflightStatus = useAppStore((s) => s.preflightStatus)
+  const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
   const connectLinear = useAppStore((s) => s.connectLinear)
   const selectLinearWorkspace = useAppStore((s) => s.selectLinearWorkspace)
   const searchLinearIssues = useAppStore((s) => s.searchLinearIssues)
@@ -536,6 +539,7 @@ export default function TaskPage(): React.JSX.Element {
   const getCachedLinearTeams = useAppStore((s) => s.getCachedLinearTeams)
   const listLinearTeams = useAppStore((s) => s.listLinearTeams)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
+  const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
   const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
 
   // Why: initial selection resolution honors (1) an explicit preselection from
@@ -612,9 +616,17 @@ export default function TaskPage(): React.JSX.Element {
     linearStatus.activeWorkspaceId ??
     linearWorkspaces[0]?.id ??
     null
-  const visibleTaskProviders = useMemo(
+  const preferredVisibleTaskProviders = useMemo(
     () => normalizeVisibleTaskProviders(settings?.visibleTaskProviders),
     [settings?.visibleTaskProviders]
+  )
+  const visibleTaskProviders = useMemo(
+    () =>
+      filterAvailableTaskProviders(preferredVisibleTaskProviders, {
+        gitlabInstalled: preflightStatus?.glab?.installed === true,
+        linearConnected: linearStatus.connected === true
+      }),
+    [linearStatus.connected, preferredVisibleTaskProviders, preflightStatus?.glab?.installed]
   )
   const visibleSourceOptions = useMemo(
     () => SOURCE_OPTIONS.filter((source) => visibleTaskProviders.includes(source.id)),
@@ -1782,12 +1794,14 @@ export default function TaskPage(): React.JSX.Element {
     selectedLinearIssue
   ])
 
-  // Why: check Linear connection status on mount so the UI can show the
-  // correct connected/disconnected state without requiring a settings visit.
   useEffect(() => {
-    void checkLinearConnection()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    if (!preflightStatusChecked) {
+      void refreshPreflightStatus()
+    }
+    if (!linearStatusChecked) {
+      void checkLinearConnection()
+    }
+  }, [checkLinearConnection, linearStatusChecked, preflightStatusChecked, refreshPreflightStatus])
 
   // Why: debounce the Linear search input so we don't fire a request on every
   // keystroke — matches the 300ms cadence used for GitHub search.

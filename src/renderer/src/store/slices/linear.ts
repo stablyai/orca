@@ -63,6 +63,7 @@ type InflightLinearListRequest = {
 const inflightSearchRequests = new Map<string, InflightLinearListRequest>()
 const inflightListRequests = new Map<string, InflightLinearListRequest>()
 const inflightTeamRequests = new Map<string, Promise<LinearTeam[]>>()
+let inflightStatusRequest: Promise<void> | null = null
 
 function getSelectedWorkspaceId(status: LinearConnectionStatus): LinearWorkspaceSelection | null {
   return status.selectedWorkspaceId ?? status.activeWorkspaceId ?? null
@@ -140,26 +141,37 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   linearTeamCache: {},
 
   checkLinearConnection: async () => {
-    try {
-      const status = (await linearStatus(get().settings)) as LinearConnectionStatus
-      const prev = get().linearStatus
-      if (
-        prev.connected !== status.connected ||
-        prev.viewer?.email !== status.viewer?.email ||
-        getSelectedWorkspaceId(prev) !== getSelectedWorkspaceId(status) ||
-        (prev.workspaces?.length ?? 0) !== (status.workspaces?.length ?? 0)
-      ) {
-        set({ linearStatus: status, linearStatusChecked: true })
-      } else if (!get().linearStatusChecked) {
-        set({ linearStatusChecked: true })
-      }
-    } catch {
-      if (get().linearStatus.connected) {
-        set({ linearStatus: { connected: false, viewer: null }, linearStatusChecked: true })
-      } else if (!get().linearStatusChecked) {
-        set({ linearStatusChecked: true })
-      }
+    if (inflightStatusRequest) {
+      return inflightStatusRequest
     }
+
+    inflightStatusRequest = linearStatus(get().settings)
+      .then((status) => {
+        const typedStatus = status as LinearConnectionStatus
+        const prev = get().linearStatus
+        if (
+          prev.connected !== typedStatus.connected ||
+          prev.viewer?.email !== typedStatus.viewer?.email ||
+          getSelectedWorkspaceId(prev) !== getSelectedWorkspaceId(typedStatus) ||
+          (prev.workspaces?.length ?? 0) !== (typedStatus.workspaces?.length ?? 0)
+        ) {
+          set({ linearStatus: typedStatus, linearStatusChecked: true })
+        } else if (!get().linearStatusChecked) {
+          set({ linearStatusChecked: true })
+        }
+      })
+      .catch(() => {
+        if (get().linearStatus.connected) {
+          set({ linearStatus: { connected: false, viewer: null }, linearStatusChecked: true })
+        } else if (!get().linearStatusChecked) {
+          set({ linearStatusChecked: true })
+        }
+      })
+      .finally(() => {
+        inflightStatusRequest = null
+      })
+
+    return inflightStatusRequest
   },
 
   testLinearConnection: async (workspaceId) => {

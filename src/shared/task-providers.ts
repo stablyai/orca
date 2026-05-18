@@ -24,6 +24,28 @@ export function normalizeVisibleTaskProviders(value: unknown): TaskProvider[] {
   return normalized.length > 0 ? normalized : [...TASK_PROVIDERS]
 }
 
+export type TaskProviderAvailability = {
+  gitlabInstalled: boolean
+  linearConnected: boolean
+}
+
+export function filterAvailableTaskProviders(
+  visibleProviders: readonly TaskProvider[],
+  availability: TaskProviderAvailability
+): TaskProvider[] {
+  const available = visibleProviders.filter((provider) => {
+    if (provider === 'github') {
+      return true
+    }
+    if (provider === 'gitlab') {
+      return availability.gitlabInstalled
+    }
+    return availability.linearConnected
+  })
+
+  return available.length > 0 ? available : ['github']
+}
+
 export function resolveVisibleTaskProvider(
   preferred: TaskProvider | null | undefined,
   visibleProviders: readonly TaskProvider[]

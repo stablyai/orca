@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import type { LinearIssue, LinearTeam } from '../../../../shared/types'
+import type { LinearConnectionStatus, LinearIssue, LinearTeam } from '../../../../shared/types'
 import { createLinearSlice } from './linear'
 
 const linearStatus = vi.fn()
@@ -240,5 +240,28 @@ describe('createLinearSlice caching', () => {
 
     expect(store.getState().linearIssueCache['workspace-1::issue-id'].data?.title).toBe('Updated')
     expect(store.getState().linearIssueCache['workspace-1::issue-id'].fetchedAt).toBe(0)
+  })
+
+  it('dedupes concurrent connection checks', async () => {
+    const pending = deferred<LinearConnectionStatus>()
+    linearStatus.mockReturnValueOnce(pending.promise)
+    const store = createTestStore()
+
+    const first = store.getState().checkLinearConnection()
+    const second = store.getState().checkLinearConnection()
+
+    expect(linearStatus).toHaveBeenCalledTimes(1)
+    pending.resolve({
+      connected: true,
+      viewer: {
+        displayName: 'Test User',
+        email: 'test@example.com',
+        organizationName: 'Test Org'
+      }
+    })
+    await Promise.all([first, second])
+
+    expect(store.getState().linearStatus.connected).toBe(true)
+    expect(store.getState().linearStatusChecked).toBe(true)
   })
 })
