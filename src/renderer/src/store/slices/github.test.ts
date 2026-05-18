@@ -591,7 +591,7 @@ describe('createGitHubSlice.fetchPRComments', () => {
     mockApi.gh.prChecks.mockRejectedValueOnce(new Error('rate limited'))
 
     await expect(
-      store.getState().fetchPRChecks(repoPath, 12, branch, 'abc123head', { force: true })
+      store.getState().fetchPRChecks(repoPath, 12, branch, 'abc123head', null, { force: true })
     ).resolves.toEqual(cachedChecks)
 
     expect(store.getState().checksCache[checksCacheKey]?.data).toEqual(cachedChecks)
@@ -619,7 +619,7 @@ describe('createGitHubSlice.fetchPRComments', () => {
     mockApi.gh.prChecks.mockRejectedValueOnce(new Error('rate limited'))
 
     await expect(
-      store.getState().fetchPRChecks(repoPath, 12, branch, 'new-head', { force: true })
+      store.getState().fetchPRChecks(repoPath, 12, branch, 'new-head', null, { force: true })
     ).resolves.toEqual([])
 
     expect(store.getState().checksCache[checksCacheKey]?.data).toEqual(oldHeadChecks)
@@ -670,10 +670,11 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     }
   })
 
-  it('does not call GitHub refresh IPC for SSH-backed repos', async () => {
+  it('passes SSH connection identity to GitHub refresh IPC for SSH-backed repos', async () => {
     const store = createTestStore()
     const repoPath = '/repo'
     const branch = 'feature/test'
+    const pr = makePR({ number: 44 })
 
     store.setState({
       repos: [
@@ -686,18 +687,31 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         }
       ],
       prCache: {
-        [`${repoPath}::${branch}`]: {
-          data: makePR({ number: 44 }),
+        [`repo-1::${branch}`]: {
+          data: pr,
           fetchedAt: Date.now()
         }
       }
     } as unknown as Partial<AppState>)
+    mockApi.gh.refreshPRNow.mockResolvedValueOnce({
+      kind: 'found',
+      pr,
+      fetchedAt: Date.now()
+    })
 
     await expect(
       store.getState().fetchPRForBranch(repoPath, branch, { force: true })
     ).resolves.toMatchObject({ number: 44 })
     expect(mockApi.gh.prForBranch).not.toHaveBeenCalled()
-    expect(mockApi.gh.enqueuePRRefresh).not.toHaveBeenCalled()
+    expect(mockApi.gh.refreshPRNow).toHaveBeenCalledWith({
+      candidate: expect.objectContaining({
+        repoId: 'repo-1',
+        repoPath,
+        branch,
+        cacheKey: `repo-1::${branch}`,
+        connectionId: 'ssh-1'
+      })
+    })
   })
 
   it('preserves cached PR data when a forced coordinator refresh errors', async () => {
@@ -709,7 +723,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     store.setState({
       repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
       prCache: {
-        [`${repoPath}::${branch}`]: {
+        [`repo-1::${branch}`]: {
           data: cachedPR,
           fetchedAt: 1
         }
@@ -725,7 +739,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     await expect(
       store.getState().fetchPRForBranch(repoPath, branch, { force: true })
     ).resolves.toEqual(cachedPR)
-    expect(store.getState().prCache[`${repoPath}::${branch}`]?.data).toEqual(cachedPR)
+    expect(store.getState().prCache[`repo-1::${branch}`]?.data).toEqual(cachedPR)
   })
 
   it('records PR refresh errors without clearing cached PR data', () => {
@@ -794,7 +808,7 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
       },
       worktreeCardProperties: ['pr'],
       prCache: {
-        [`${repoPath}::${branch}`]: {
+        [`repo-1::${branch}`]: {
           data: makePR({ state: 'open' }),
           fetchedAt: Date.now()
         }
@@ -807,7 +821,7 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
       candidate: expect.objectContaining({
         repoPath,
         branch,
-        cacheKey: `${repoPath}::${branch}`,
+        cacheKey: `repo-1::${branch}`,
         cachedPRState: 'open'
       }),
       reason: 'active',

@@ -243,8 +243,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     fetchHostedReviewForBranch,
     branch,
     hostedReviewCacheKey,
-    showPR,
-    showCI
+    showPR
   ])
 
   // Same rationale for issues: once that section is hidden, polling only burns

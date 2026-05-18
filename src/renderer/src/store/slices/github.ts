@@ -1421,10 +1421,6 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const repoId = options?.repoId ?? repo?.id
     const cacheKey = repoScopedCacheKey(repoPath, repoId, branch)
     const cached = get().prCache[cacheKey]
-    const repo = (get().repos ?? []).find((r) => r.path === repoPath)
-    if (repo?.connectionId) {
-      return cached?.data ?? null
-    }
     // Why: if a prior caller without a linkedPR cached `null` for this branch,
     // the worktree-card lookup (which has a linked PR fallback) would otherwise
     // return null forever. Refetch when the cached miss could now resolve via

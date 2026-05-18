@@ -86,21 +86,6 @@ async function assertRateLimitBudget(bucket: RateLimitBucketKind): Promise<void>
   }
 }
 
-type PRBranchData = {
-  number: number
-  title: string
-  state: string
-  url: string
-  statusCheckRollup: unknown[]
-  updatedAt: string
-  isDraft?: boolean
-  mergeable: string
-  baseRefName?: string
-  headRefName?: string
-  baseRefOid?: string
-  headRefOid?: string
-}
-
 function classifyPRRefreshError(
   err: unknown
 ): Extract<PRRefreshOutcome, { kind: 'upstream-error' }>['errorType'] {
@@ -2247,7 +2232,6 @@ export async function getPRComments(
   if (ownerRepo) {
     await assertRateLimitBudget('core')
   }
-  await assertRateLimitBudget('graphql')
   await acquire()
   try {
     if (ownerRepo) {
@@ -2298,7 +2282,6 @@ export async function getPRComments(
         )
       ])
       noteRateLimitSpend('core', 2)
-      noteRateLimitSpend('graphql')
 
       // Parse issue comments (REST)
       type RESTComment = {

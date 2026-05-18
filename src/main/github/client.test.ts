@@ -14,6 +14,7 @@ const {
   resolvePRRepositoryCandidatesMock,
   getRemoteUrlForRepoMock,
   gitExecFileAsyncMock,
+  getRateLimitMock,
   rateLimitGuardMock,
   noteRateLimitSpendMock,
   ghRepoExecOptionsMock,
@@ -29,6 +30,7 @@ const {
   resolvePRRepositoryCandidatesMock: vi.fn(),
   getRemoteUrlForRepoMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
+  getRateLimitMock: vi.fn(),
   rateLimitGuardMock: vi.fn<() => RateLimitGuardResult>(() => ({ blocked: false })),
   noteRateLimitSpendMock: vi.fn(),
   ghRepoExecOptionsMock: vi.fn((context) =>
@@ -77,6 +79,7 @@ vi.mock('../git/runner', () => ({
 }))
 
 vi.mock('./rate-limit', () => ({
+  getRateLimit: getRateLimitMock,
   rateLimitGuard: rateLimitGuardMock,
   noteRateLimitSpend: noteRateLimitSpendMock
 }))
@@ -106,6 +109,8 @@ describe('getPRForBranch', () => {
     })
     getRemoteUrlForRepoMock.mockReset()
     gitExecFileAsyncMock.mockReset()
+    getRateLimitMock.mockReset()
+    getRateLimitMock.mockResolvedValue({ resources: {} })
     rateLimitGuardMock.mockReset()
     rateLimitGuardMock.mockReturnValue({ blocked: false })
     noteRateLimitSpendMock.mockReset()
@@ -268,9 +273,7 @@ describe('getPRForBranch', () => {
     const pr = await getPRForBranch('/repo-root', 'feature/local-worktree', 99)
 
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['rev-parse', 'HEAD'], {
-      cwd: '/repo-root'
-    })
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'pr',
@@ -291,7 +294,7 @@ describe('getPRForBranch', () => {
     })
   })
 
-  it('uses branch discovery when exact linked PR metadata resolves to a different PR', async () => {
+  it('treats linked PR metadata as authoritative even when the branch head differs', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'current-worktree-head\n', stderr: '' })
     ghExecFileAsyncMock
@@ -332,16 +335,11 @@ describe('getPRForBranch', () => {
 
     const pr = await getPRForBranch('/repo-root', 'feature/test', 99)
 
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      2,
-      ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=1'],
-      { cwd: '/repo-root' }
-    )
-    expect(pr?.number).toBe(42)
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(pr?.number).toBe(99)
   })
 
-  it('falls back to branch discovery when exact linked PR metadata is stale', async () => {
+  it('does not fall back to branch discovery when linked PR metadata is stale', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock
       .mockRejectedValueOnce(new Error('HTTP 404: Not Found'))
@@ -379,15 +377,11 @@ describe('getPRForBranch', () => {
       ],
       { cwd: '/repo-root' }
     )
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      2,
-      ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=1'],
-      { cwd: '/repo-root' }
-    )
-    expect(pr?.number).toBe(42)
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(pr).toBeNull()
   })
 
-  it('continues to branch discovery when exact linked PR REST fallback also misses', async () => {
+  it('returns no PR when linked PR REST fallback also misses', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock
       .mockRejectedValueOnce(new Error('GraphQL: could not resolve to PullRequest'))
@@ -416,15 +410,11 @@ describe('getPRForBranch', () => {
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['api', 'repos/acme/widgets/pulls/99'], {
       cwd: '/repo-root'
     })
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      3,
-      ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=1'],
-      { cwd: '/repo-root' }
-    )
-    expect(pr?.number).toBe(42)
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(pr).toBeNull()
   })
 
-  it('continues to branch discovery when exact linked PR REST fallback has an unclassified failure', async () => {
+  it('returns no PR when linked PR REST fallback has an unclassified failure', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock
       .mockRejectedValueOnce(new Error('GraphQL: server exploded'))
@@ -453,15 +443,11 @@ describe('getPRForBranch', () => {
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['api', 'repos/acme/widgets/pulls/99'], {
       cwd: '/repo-root'
     })
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      3,
-      ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=1'],
-      { cwd: '/repo-root' }
-    )
-    expect(pr?.number).toBe(42)
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(pr).toBeNull()
   })
 
-  it('continues to branch discovery when exact linked PR REST fallback is rate limited', async () => {
+  it('does not continue to branch discovery when linked PR REST fallback is rate limited', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock
       .mockRejectedValueOnce(new Error('GraphQL: API rate limit already exceeded'))
@@ -485,12 +471,7 @@ describe('getPRForBranch', () => {
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['api', 'repos/acme/widgets/pulls/99'], {
       cwd: '/repo-root'
     })
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      3,
-      ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=1'],
-      { cwd: '/repo-root' }
-    )
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(3)
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(pr).toBeNull()
   })
 
@@ -928,12 +909,10 @@ describe('GitHub GraphQL rate-limit guard', () => {
   })
 
   it('skips PR review-thread GraphQL fetch while preserving REST comments', async () => {
-    rateLimitGuardMock.mockReturnValue({
-      blocked: true,
-      remaining: 4,
-      limit: 5000,
-      resetAt: 1_800_000_000
-    })
+    rateLimitGuardMock.mockImplementation(((bucket: string) =>
+      bucket === 'graphql'
+        ? { blocked: true, remaining: 4, limit: 5000, resetAt: 1_800_000_000 }
+        : { blocked: false }) as () => RateLimitGuardResult)
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock
       .mockResolvedValueOnce({
@@ -955,16 +934,14 @@ describe('GitHub GraphQL rate-limit guard', () => {
     expect(comments[0].body).toBe('top-level')
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(ghExecFileAsyncMock.mock.calls.some((call) => call[0][1] === 'graphql')).toBe(false)
-    expect(noteRateLimitSpendMock).not.toHaveBeenCalled()
+    expect(noteRateLimitSpendMock).not.toHaveBeenCalledWith('graphql')
   })
 
   it('uses explicit PR repo for comments when a fork PR is discovered', async () => {
-    rateLimitGuardMock.mockReturnValue({
-      blocked: true,
-      remaining: 4,
-      limit: 5000,
-      resetAt: 1_800_000_000
-    })
+    rateLimitGuardMock.mockImplementation(((bucket: string) =>
+      bucket === 'graphql'
+        ? { blocked: true, remaining: 4, limit: 5000, resetAt: 1_800_000_000 }
+        : { blocked: false }) as () => RateLimitGuardResult)
     ghExecFileAsyncMock
       .mockResolvedValueOnce({
         stdout: JSON.stringify([

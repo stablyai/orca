@@ -10,7 +10,8 @@ import type {
   GitHubOwnerRepo,
   GitHubPullRequestStateUpdate,
   GitHubPRRefreshCandidate,
-  GitHubPRRefreshReason
+  GitHubPRRefreshReason,
+  PRRefreshOutcome
 } from '../../shared/types'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
