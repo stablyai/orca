@@ -193,14 +193,7 @@ async function uploadRelay(
   // Create remote directory
   await execCommand(conn, `mkdir -p ${shellEscape(remoteDir)}`)
 
-  // Upload via SFTP
-  const sftp = await conn.sftp()
-
-  try {
-    await uploadDirectory(sftp, localRelayDir, remoteDir)
-  } finally {
-    sftp.end()
-  }
+  await uploadDirectoryForConnection(conn, localRelayDir, remoteDir)
 
   // Make the node binary executable
   await execCommand(conn, `chmod +x ${shellEscape(`${remoteDir}/node`)} 2>/dev/null; true`)
@@ -208,16 +201,50 @@ async function uploadRelay(
   // Why: write `.version` via SFTP rather than shell to avoid quoting issues
   // with content-hashed version strings. The remote daemon reads this same
   // file on startup so the wire-handshake validates against it.
-  const versionSftp = await conn.sftp()
+  await writeRemoteFile(conn, `${remoteDir}/.version`, fullVersion)
+}
+
+async function uploadDirectoryForConnection(
+  conn: SshConnection,
+  localRelayDir: string,
+  remoteDir: string
+): Promise<void> {
+  if (typeof conn.uploadDirectory === 'function') {
+    await conn.uploadDirectory(localRelayDir, remoteDir)
+    return
+  }
+
+  const sftp = await conn.sftp()
+  try {
+    await uploadDirectory(sftp, localRelayDir, remoteDir)
+  } finally {
+    sftp.end()
+  }
+}
+
+async function writeRemoteFile(
+  conn: SshConnection,
+  remotePath: string,
+  contents: string
+): Promise<void> {
+  if (typeof conn.writeFile === 'function') {
+    await conn.writeFile(remotePath, contents)
+    return
+  }
+
+  const sftp = await conn.sftp()
   try {
     await new Promise<void>((resolve, reject) => {
-      const ws = versionSftp.createWriteStream(`${remoteDir}/.version`)
-      ws.on('close', resolve)
-      ws.on('error', reject)
-      ws.end(fullVersion)
+      const ws = sftp.createWriteStream(remotePath)
+      // .once: a session 'error' arriving after we've already resolved/rejected
+      // would otherwise become an unhandled error and crash main.
+      sftp.once('error', reject)
+      ws.once('close', resolve)
+      ws.once('error', reject)
+      ws.end(contents)
     })
   } finally {
-    versionSftp.end()
+    sftp.end()
   }
 }
 
@@ -303,20 +330,7 @@ async function installNativeDeps(
     type: 'commonjs',
     dependencies: RELAY_NATIVE_DEPS
   })}\n`
-  const sftpPkg = await conn.sftp()
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const ws = sftpPkg.createWriteStream(`${remoteDir}/package.json`)
-      // .once: a session 'error' arriving after we've already resolved/rejected
-      // would otherwise become an unhandled error and crash main.
-      sftpPkg.once('error', reject)
-      ws.once('close', resolve)
-      ws.once('error', reject)
-      ws.end(pkgJson)
-    })
-  } finally {
-    sftpPkg.end()
-  }
+  await writeRemoteFile(conn, `${remoteDir}/package.json`, pkgJson)
 
   try {
     const installArgs = Object.entries(RELAY_NATIVE_DEPS)
