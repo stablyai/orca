@@ -53,6 +53,14 @@ async function setPaneTitleFromTerminalMenu(page: Page, title: string): Promise<
   await expect(titleInput).toBeVisible()
   await titleInput.fill(title)
   await titleInput.press('Enter')
+  // Why: CI can dispatch Enter before React has committed the filled value;
+  // blurring exercises the same submit path and makes the helper deterministic.
+  try {
+    await expect(titleInput).toHaveCount(0, { timeout: 500 })
+  } catch {
+    await titleInput.evaluateAll(([input]) => (input as HTMLElement | undefined)?.blur())
+  }
+  await expect(titleInput).toHaveCount(0)
 }
 
 async function getTabCustomTitle(
@@ -217,8 +225,12 @@ test.describe('Terminal Panes', () => {
 
     await orcaPage.getByRole('button', { name: `Edit pane title: ${paneTitle}` }).focus()
     await orcaPage.keyboard.press('Enter')
-    await expect(orcaPage.getByRole('textbox', { name: 'Pane title' })).toBeVisible()
+    const paneTitleInput = orcaPage.getByRole('textbox', { name: 'Pane title' })
+    await expect(paneTitleInput).toBeVisible()
+    await expect(paneTitleInput).toBeFocused()
     await orcaPage.keyboard.press('Escape')
+    await expect(paneTitleInput).toHaveCount(0)
+    await expect(orcaPage.locator('.pane-title-text', { hasText: paneTitle })).toBeVisible()
 
     await orcaPage.evaluate(
       ({ targetTabId, title }) => {

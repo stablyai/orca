@@ -363,13 +363,14 @@ test.describe('Terminal Shortcuts', () => {
       keyupSent: true
     })
     await expect
-      .poll(async () => (await getPtyWrites(electronApp)).includes('Ф'), {
+      .poll(async () => (await getPtyWrites(electronApp)).some((write) => write.includes('Ф')), {
         timeout: 5_000,
         message: 'Shift+Russian layout text did not reach the PTY as Cyrillic'
       })
       .toBe(true)
     const writes = await getPtyWrites(electronApp)
-    expect(writes).not.toContain('\x1b[97:1060;2;1060u')
-    expect(writes).not.toContain('\x1b[97:1060;2:3u')
+    const joinedWrites = writes.join('')
+    expect(joinedWrites).not.toContain('\x1b[97:1060;2;1060u')
+    expect(joinedWrites).not.toContain('\x1b[97:1060;2:3u')
   })
 })
