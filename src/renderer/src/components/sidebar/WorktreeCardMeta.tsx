@@ -1,9 +1,3 @@
-/**
- * Compact metadata badges and the detailed workspace hovercard.
- *
- * Why extracted: the sidebar card should stay scan-friendly while the richer
- * issue, review, and notes content remains available without opening a modal.
- */
 import React from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -15,11 +9,11 @@ import { LinearIcon } from '@/components/icons/LinearIcon'
 import CommentMarkdown from './CommentMarkdown'
 import { PullRequestIcon } from './WorktreeCardHelpers'
 import {
-  IssueStateIcon,
-  LinearStateIcon,
-  ReviewChecksIcon,
-  ReviewStateIcon
-} from './WorktreeCardMetadataStatusIcons'
+  IssueStateBadge,
+  LinearStateBadge,
+  ReviewChecksBadge,
+  ReviewStateBadge
+} from './WorktreeCardMetadataStatusBadges'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import type { IssueInfo } from '../../../../shared/types'
 
@@ -277,7 +271,6 @@ export function WorktreeCardDetailsHover({
                 label={`Issue #${issue.number}`}
                 actions={
                   <>
-                    {issue.state && <IssueStateIcon state={issue.state} />}
                     {issue.url && (
                       <MetadataActionIcon label="View on GitHub" href={issue.url}>
                         <ExternalLink className="size-3" />
@@ -293,8 +286,9 @@ export function WorktreeCardDetailsHover({
                 <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
                   {issue.title}
                 </div>
-                {issueLabels.length > 0 && (
+                {(issue.state || issueLabels.length > 0) && (
                   <div className="flex flex-wrap gap-1">
+                    {issue.state && <IssueStateBadge state={issue.state} />}
                     {issueLabels.map((label) => (
                       <Badge key={label} variant="outline" className="h-4 px-1.5 text-[9px]">
                         {label}
@@ -313,7 +307,6 @@ export function WorktreeCardDetailsHover({
                 label={`Linear ${linearIssue.identifier}`}
                 actions={
                   <>
-                    {linearIssue.stateName && <LinearStateIcon stateName={linearIssue.stateName} />}
                     {linearIssue.url && (
                       <MetadataActionIcon label="View on Linear" href={linearIssue.url}>
                         <ExternalLink className="size-3" />
@@ -326,9 +319,13 @@ export function WorktreeCardDetailsHover({
                 <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
                   {linearIssue.title}
                 </div>
-                {linearIssue.labels && linearIssue.labels.length > 0 && (
+                {((linearIssue.labels && linearIssue.labels.length > 0) ||
+                  linearIssue.stateName) && (
                   <div className="flex flex-wrap gap-1">
-                    {linearIssue.labels.map((label) => (
+                    {linearIssue.stateName && (
+                      <LinearStateBadge stateName={linearIssue.stateName} />
+                    )}
+                    {(linearIssue.labels ?? []).map((label) => (
                       <Badge key={label} variant="outline" className="h-4 px-1.5 text-[9px]">
                         {label}
                       </Badge>
@@ -346,8 +343,6 @@ export function WorktreeCardDetailsHover({
                 label={`${reviewLabel} #${review.number}`}
                 actions={
                   <>
-                    <ReviewStateIcon state={review.state} label={reviewLabel} />
-                    <ReviewChecksIcon status={review.status} />
                     {review.url && (
                       <MetadataActionIcon label={`View on ${reviewProvider}`} href={review.url}>
                         <ExternalLink className="size-3" />
@@ -360,6 +355,12 @@ export function WorktreeCardDetailsHover({
                 <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
                   {review.title}
                 </div>
+                {(review.state || (review.status && review.status !== 'neutral')) && (
+                  <div className="flex flex-wrap gap-1">
+                    <ReviewStateBadge state={review.state} label={reviewLabel} />
+                    <ReviewChecksBadge status={review.status} />
+                  </div>
+                )}
               </div>
             </section>
           )}
