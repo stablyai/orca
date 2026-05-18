@@ -129,6 +129,7 @@ describe('registerCrashReportingHandlers', () => {
     expect(submitFeedbackMock).toHaveBeenCalledWith(
       expect.objectContaining({
         feedback: expect.stringContaining('[Crash Report]'),
+        submissionType: 'crash',
         githubLogin: 'me',
         githubEmail: 'me@example.com'
       })
