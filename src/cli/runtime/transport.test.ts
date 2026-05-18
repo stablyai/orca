@@ -42,9 +42,11 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
       })
       socket.once('data', (data) => {
         const request = JSON.parse(String(data).trim()) as { id: string }
+        // Why: full-suite load can delay short timers; keep the response past
+        // the client timeout while leaving enough margin between keepalives.
         keepalive = setInterval(() => {
           socket.write('{"_keepalive":true}\n')
-        }, 15)
+        }, 50)
         setTimeout(() => {
           if (keepalive) {
             clearInterval(keepalive)
@@ -58,7 +60,7 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
               _meta: { runtimeId: 'runtime-1' }
             })}\n`
           )
-        }, 90)
+        }, 500)
       })
     })
     servers.add(server)
@@ -75,7 +77,7 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
       metadata,
       'terminal.wait',
       undefined,
-      40
+      200
     )
 
     expect(response).toMatchObject({

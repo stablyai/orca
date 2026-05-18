@@ -8,7 +8,6 @@ import {
 } from '../../shared/agent-detection'
 import type { AgentStatus } from '../../shared/agent-detection'
 import { gitExecFileAsync, wslAwareSpawn } from '../git/runner'
-import { isMissingRemoteRefGitError } from '../git/fetch-error-classification'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
 import { randomUUID } from 'crypto'
 import { basename, isAbsolute, join } from 'path'
@@ -97,7 +96,6 @@ import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import { BrowserError } from '../browser/cdp-bridge'
 import {
   getPRForBranch,
-  getPullRequestPushTarget,
   getRepoSlug,
   getWorkItem,
   listWorkItems,
@@ -121,6 +119,7 @@ import {
   listLabels,
   listAssignableUsers
 } from '../github/client'
+import { resolveGitHubPrStartPoint } from '../github/pr-start-point'
 import { getWorkItemDetails, getPRFileContents } from '../github/work-item-details'
 import { getRateLimit } from '../github/rate-limit'
 import type {
@@ -6216,102 +6215,14 @@ export class OrcaRuntimeService {
       return { error: 'Folder mode does not support creating worktrees.' }
     }
 
-    let headRefName = args.headRefName?.trim() ?? ''
-    let isCrossRepository = args.isCrossRepository === true
-    let pushTarget: GitPushTarget | undefined
-
-    if (!headRefName) {
-      const item = await getWorkItem(repo.path, args.prNumber, 'pr')
-      if (!item || item.type !== 'pr') {
-        return { error: `PR #${args.prNumber} not found.` }
-      }
-      headRefName = (item.branchName ?? '').trim()
-      if (!headRefName) {
-        return { error: `PR #${args.prNumber} has no head branch.` }
-      }
-      if (item.isCrossRepository === true) {
-        isCrossRepository = true
-      }
-    }
-
-    if (isCrossRepository) {
-      try {
-        pushTarget = (await getPullRequestPushTarget(repo.path, args.prNumber)) ?? undefined
-      } catch (error) {
-        // Why: missing fork metadata can block push-target discovery, but we
-        // can still create from refs/pull/<N>/head.
-        console.warn(
-          `[runtime.resolveManagedPrBase] Could not resolve PR #${args.prNumber} head push target.`,
-          error
-        )
-      }
-    }
-
-    let remote: string
-    try {
-      remote = await getDefaultRemote(repo.path)
-    } catch (error) {
-      return { error: error instanceof Error ? error.message : 'Could not resolve git remote.' }
-    }
-
-    const resolvePullHeadBase = async (): Promise<
-      { baseBranch: string; pushTarget?: GitPushTarget } | { error: string }
-    > => {
-      const pullRef = `refs/pull/${args.prNumber}/head`
-      try {
-        await gitExecFileAsync(['fetch', remote, pullRef], { cwd: repo.path })
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        return { error: `Failed to fetch ${pullRef}: ${message.split('\n')[0]}` }
-      }
-      try {
-        const { stdout } = await gitExecFileAsync(['rev-parse', '--verify', 'FETCH_HEAD'], {
-          cwd: repo.path
-        })
-        const sha = stdout.trim()
-        if (!sha) {
-          return { error: `Empty SHA resolving fork PR #${args.prNumber} head.` }
-        }
-        return { baseBranch: sha, ...(pushTarget ? { pushTarget } : {}) }
-      } catch {
-        return { error: `Could not resolve fork PR #${args.prNumber} head after fetch.` }
-      }
-    }
-
-    if (isCrossRepository) {
-      return await resolvePullHeadBase()
-    }
-
-    try {
-      await gitExecFileAsync(
-        ['fetch', remote, `+refs/heads/${headRefName}:refs/remotes/${remote}/${headRefName}`],
-        { cwd: repo.path }
-      )
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      // Why: if cross-repo metadata is missing (e.g. deleted head repo),
-      // a branch fetch can fail even though refs/pull/<N>/head exists. Keep
-      // network/auth failures on the original error path to avoid extra fetches.
-      if (isMissingRemoteRefGitError(error)) {
-        const fallback = await resolvePullHeadBase()
-        if (!('error' in fallback)) {
-          return fallback
-        }
-      }
-      return { error: `Failed to fetch ${remote}/${headRefName}: ${message.split('\n')[0]}` }
-    }
-
-    const remoteRef = `${remote}/${headRefName}`
-    try {
-      await gitExecFileAsync(['rev-parse', '--verify', remoteRef], { cwd: repo.path })
-    } catch {
-      return { error: `Remote ref ${remoteRef} does not exist after fetch.` }
-    }
-
-    return {
-      baseBranch: remoteRef,
-      pushTarget: pushTarget ?? { remoteName: remote, branchName: headRefName }
-    }
+    return resolveGitHubPrStartPoint({
+      repoPath: repo.path,
+      prNumber: args.prNumber,
+      headRefName: args.headRefName,
+      isCrossRepository: args.isCrossRepository,
+      gitExec: (gitArgs) => gitExecFileAsync(gitArgs, { cwd: repo.path }),
+      resolveRemote: () => getDefaultRemote(repo.path)
+    })
   }
 
   async removeManagedWorktree(
