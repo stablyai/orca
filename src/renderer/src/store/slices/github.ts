@@ -404,6 +404,13 @@ export function prChecksCacheSuffix(prNumber: number, prRepo?: GitHubOwnerRepo |
   return `pr-checks::${normalizedRepoIdentity(prRepo)}::${prNumber}`
 }
 
+export function prCommentsCacheSuffix(prNumber: number, prRepo?: GitHubOwnerRepo | null): string {
+  if (!prRepo) {
+    return `pr-comments::${prNumber}`
+  }
+  return `pr-comments::${normalizedRepoIdentity(prRepo)}::${prNumber}`
+}
+
 // Why: 500 entries is generous enough that active developers will never hit it
 // during normal use, but prevents the cache from growing without bound across
 // many repos and branches over a long-running session.
@@ -484,14 +491,14 @@ export type GitHubSlice = {
   fetchPRComments: (
     repoPath: string,
     prNumber: number,
-    options?: RepoScopedFetchOptions
+    options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null }
   ) => Promise<PRComment[]>
   resolveReviewThread: (
     repoPath: string,
     prNumber: number,
     threadId: string,
     resolve: boolean,
-    options?: RepoScopedFetchOptions
+    options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null }
   ) => Promise<boolean>
   initGitHubCache: () => Promise<void>
   refreshAllGitHub: () => void
@@ -1422,7 +1429,14 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const cached = get().checksCache[cacheKey]
     if (!options?.force && isFresh(cached, CHECKS_CACHE_TTL)) {
       const cachedChecks = cached.data ?? []
-      const prStatusUpdate = syncPRChecksStatus(get(), repoPath, repoId, branch, cachedChecks)
+      const prStatusUpdate = syncPRChecksStatus(
+        get(),
+        repoPath,
+        repoId,
+        branch,
+        cachedChecks,
+        prRepo
+      )
       if (prStatusUpdate) {
         set(prStatusUpdate)
         debouncedSaveCache(get())
@@ -1450,7 +1464,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             checksCache: { ...s.checksCache, [cacheKey]: { data: checks, fetchedAt: Date.now() } }
           }
 
-          const prStatusUpdate = syncPRChecksStatus(s, repoPath, repoId, branch, checks)
+          const prStatusUpdate = syncPRChecksStatus(s, repoPath, repoId, branch, checks, prRepo)
           if (prStatusUpdate?.prCache) {
             nextState.prCache = prStatusUpdate.prCache
           }
@@ -1473,7 +1487,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
   fetchPRComments: async (repoPath, prNumber, options): Promise<PRComment[]> => {
     const repoId = options?.repoId ?? get().repos?.find((repo) => repo.path === repoPath)?.id
-    const cacheKey = repoScopedCacheKey(repoPath, repoId, `pr-comments::${prNumber}`)
+    const cacheKey = repoScopedCacheKey(
+      repoPath,
+      repoId,
+      prCommentsCacheSuffix(prNumber, options?.prRepo)
+    )
     const cached = get().commentsCache[cacheKey]
     if (!options?.force && isFresh(cached)) {
       return cached.data ?? []
@@ -1490,6 +1508,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           repoPath,
           repoId,
           prNumber,
+          prRepo: options?.prRepo ?? null,
           noCache: options?.force
         })) as PRComment[]
         set((s) => ({
@@ -1513,7 +1532,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
   resolveReviewThread: async (repoPath, prNumber, threadId, resolve, options) => {
     const repoId = options?.repoId ?? get().repos?.find((repo) => repo.path === repoPath)?.id
-    const cacheKey = repoScopedCacheKey(repoPath, repoId, `pr-comments::${prNumber}`)
+    const cacheKey = repoScopedCacheKey(
+      repoPath,
+      repoId,
+      prCommentsCacheSuffix(prNumber, options?.prRepo)
+    )
 
     // Optimistic update: toggle isResolved on all comments in this thread immediately
     // so the UI feels instant. Reverts if the API call fails.

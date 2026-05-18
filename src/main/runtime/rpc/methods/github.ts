@@ -55,12 +55,12 @@ const Issue = RepoSelector.extend({
 
 const PullRequest = RepoSelector.extend({
   prNumber: z.number().int().positive(),
-  noCache: z.boolean().optional()
+  noCache: z.boolean().optional(),
+  prRepo: SlugRepo.nullable().optional()
 })
 
 const PullRequestChecks = PullRequest.extend({
-  headSha: OptionalString,
-  prRepo: SlugRepo.nullable().optional()
+  headSha: OptionalString
 })
 
 const RerunPullRequestChecks = PullRequest.extend({
@@ -90,12 +90,14 @@ const ReviewThread = RepoSelector.extend({
 
 const UpdatePrTitle = RepoSelector.extend({
   prNumber: z.number().int().positive(),
-  title: requiredString('Missing title')
+  title: requiredString('Missing title'),
+  prRepo: SlugRepo.nullable().optional()
 })
 
 const MergePr = RepoSelector.extend({
   prNumber: z.number().int().positive(),
-  method: z.enum(['merge', 'squash', 'rebase']).optional()
+  method: z.enum(['merge', 'squash', 'rebase']).optional(),
+  prRepo: SlugRepo.nullable().optional()
 })
 
 const UpdatePrState = RepoSelector.extend({
@@ -326,7 +328,9 @@ export const GITHUB_METHODS: RpcMethod[] = [
     name: 'github.prComments',
     params: PullRequest,
     handler: async (params, { runtime }) =>
-      runtime.getRepoPRComments(params.repo, params.prNumber, { noCache: params.noCache })
+      runtime.getRepoPRComments(params.repo, params.prNumber, params.prRepo ?? null, {
+        noCache: params.noCache
+      })
   }),
   defineMethod({
     name: 'github.prFileContents',
@@ -361,13 +365,13 @@ export const GITHUB_METHODS: RpcMethod[] = [
     name: 'github.updatePRTitle',
     params: UpdatePrTitle,
     handler: async (params, { runtime }) =>
-      runtime.updateRepoPRTitle(params.repo, params.prNumber, params.title)
+      runtime.updateRepoPRTitle(params.repo, params.prNumber, params.title, params.prRepo ?? null)
   }),
   defineMethod({
     name: 'github.mergePR',
     params: MergePr,
     handler: async (params, { runtime }) =>
-      runtime.mergeRepoPR(params.repo, params.prNumber, params.method)
+      runtime.mergeRepoPR(params.repo, params.prNumber, params.method, params.prRepo ?? null)
   }),
   defineMethod({
     name: 'github.updatePRState',

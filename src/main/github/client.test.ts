@@ -85,7 +85,9 @@ import {
   getPRComments,
   getPRForBranch,
   getPullRequestPushTarget,
+  mergePR,
   resolveReviewThread,
+  updatePRTitle,
   _resetOwnerRepoCache
 } from './client'
 
@@ -845,6 +847,68 @@ describe('GitHub GraphQL rate-limit guard', () => {
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(ghExecFileAsyncMock.mock.calls.some((call) => call[0][1] === 'graphql')).toBe(false)
     expect(noteRateLimitSpendMock).not.toHaveBeenCalled()
+  })
+
+  it('uses explicit PR repo for comments when a fork PR is discovered', async () => {
+    rateLimitGuardMock.mockReturnValue({
+      blocked: true,
+      remaining: 4,
+      limit: 5000,
+      resetAt: 1_800_000_000
+    })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            id: 10,
+            user: { login: 'octo', avatar_url: 'https://avatar', type: 'User' },
+            body: 'top-level',
+            created_at: '2026-04-01T00:00:00Z',
+            html_url: 'https://github.com/stablyai/orca/pull/7#issuecomment-10'
+          }
+        ])
+      })
+      .mockResolvedValueOnce({ stdout: '[]' })
+
+    await getPRComments('/repo-root', 7, { prRepo: { owner: 'stablyai', repo: 'orca' } }, undefined)
+
+    expect(getOwnerRepoMock).not.toHaveBeenCalled()
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      ['api', '--cache', '60s', 'repos/stablyai/orca/issues/7/comments?per_page=100'],
+      { cwd: '/repo-root' }
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      ['api', '--cache', '60s', 'repos/stablyai/orca/pulls/7/reviews?per_page=100'],
+      { cwd: '/repo-root' }
+    )
+  })
+
+  it('uses explicit PR repo for merge and title mutations', async () => {
+    ghExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+
+    await expect(
+      mergePR('/repo-root', 7, 'squash', undefined, { owner: 'stablyai', repo: 'orca' })
+    ).resolves.toEqual({ ok: true })
+    await expect(
+      updatePRTitle('/repo-root', 7, 'New title', undefined, { owner: 'stablyai', repo: 'orca' })
+    ).resolves.toBe(true)
+
+    expect(getOwnerRepoMock).not.toHaveBeenCalled()
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      ['pr', 'merge', '7', '--squash', '--repo', 'stablyai/orca'],
+      expect.objectContaining({
+        cwd: '/repo-root',
+        env: expect.objectContaining({ GH_PROMPT_DISABLED: '1' })
+      })
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      ['pr', 'edit', '7', '--title', 'New title', '--repo', 'stablyai/orca'],
+      { cwd: '/repo-root' }
+    )
   })
 
   it('blocks review-thread resolve mutations before spawning gh when GraphQL is low', async () => {

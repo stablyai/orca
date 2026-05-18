@@ -3,7 +3,7 @@ merge actions, and conflict state in one component to keep the data flow straigh
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { LoaderCircle, ExternalLink, RefreshCw, Check, X, Pencil } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { prChecksCacheSuffix } from '@/store/slices/github'
+import { prChecksCacheSuffix, prCommentsCacheSuffix } from '@/store/slices/github'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -127,7 +127,8 @@ export default function ChecksPanel(): React.JSX.Element {
   )
   const checksCacheKey =
     repo && prNumber ? `${repo.id}::${prChecksCacheSuffix(prNumber, pr?.prRepo)}` : ''
-  const commentsCacheKey = repo && prNumber ? `${repo.id}::pr-comments::${prNumber}` : ''
+  const commentsCacheKey =
+    repo && prNumber ? `${repo.id}::${prCommentsCacheSuffix(prNumber, pr?.prRepo)}` : ''
   const checksFetchedAt = useAppStore((s) =>
     checksCacheKey ? s.checksCache[checksCacheKey]?.fetchedAt : undefined
   )
@@ -330,16 +331,26 @@ export default function ChecksPanel(): React.JSX.Element {
   const fetchComments = useCallback(
     async ({
       force = false,
-      prNumberOverride
-    }: { force?: boolean; prNumberOverride?: number | null } = {}) => {
+      prNumberOverride,
+      prRepoOverride
+    }: {
+      force?: boolean
+      prNumberOverride?: number | null
+      prRepoOverride?: PRInfo['prRepo'] | null
+    } = {}) => {
       const targetPRNumber = prNumberOverride ?? prNumber
+      const targetPRRepo = prRepoOverride ?? pr?.prRepo
       if (!repo || !targetPRNumber) {
         return
       }
       setCommentsLoading(true)
       try {
-        const requestKey = checksPanelAsyncResultKey(repo.id, branch, targetPRNumber, pr?.prRepo)
-        const result = await fetchPRComments(repo.path, targetPRNumber, { force, repoId: repo.id })
+        const requestKey = checksPanelAsyncResultKey(repo.id, branch, targetPRNumber, targetPRRepo)
+        const result = await fetchPRComments(repo.path, targetPRNumber, {
+          force,
+          repoId: repo.id,
+          prRepo: targetPRRepo
+        })
         if (!isCurrentAsyncResult(requestKey)) {
           return
         }
@@ -347,7 +358,7 @@ export default function ChecksPanel(): React.JSX.Element {
       } catch (err) {
         if (
           !isCurrentAsyncResult(
-            checksPanelAsyncResultKey(repo.id, branch, targetPRNumber, pr?.prRepo)
+            checksPanelAsyncResultKey(repo.id, branch, targetPRNumber, targetPRRepo)
           )
         ) {
           return
@@ -357,7 +368,7 @@ export default function ChecksPanel(): React.JSX.Element {
       } finally {
         if (
           isCurrentAsyncResult(
-            checksPanelAsyncResultKey(repo.id, branch, targetPRNumber, pr?.prRepo)
+            checksPanelAsyncResultKey(repo.id, branch, targetPRNumber, targetPRRepo)
           )
         ) {
           setCommentsLoading(false)
@@ -376,7 +387,7 @@ export default function ChecksPanel(): React.JSX.Element {
     // state after the user switches worktrees, showing the wrong PR's comments.
     let cancelled = false
     setCommentsLoading(true)
-    void fetchPRComments(repo.path, prNumber, { repoId: repo.id }).then(
+    void fetchPRComments(repo.path, prNumber, { repoId: repo.id, prRepo: pr?.prRepo }).then(
       (result) => {
         if (!cancelled) {
           setComments(result)
@@ -393,7 +404,7 @@ export default function ChecksPanel(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [repo, prNumber, isPanelVisible, fetchPRComments])
+  }, [repo, prNumber, pr?.prRepo, isPanelVisible, fetchPRComments])
 
   const handleRefresh = useCallback(async () => {
     if (!repo || !branch) {
@@ -466,7 +477,8 @@ export default function ChecksPanel(): React.JSX.Element {
         setChecksLoading(true)
         const refreshedComments = fetchComments({
           force: true,
-          prNumberOverride: refreshedPR.number
+          prNumberOverride: refreshedPR.number,
+          prRepoOverride: refreshedPR.prRepo
         })
         await Promise.all([
           refreshedChecks.finally(() => {
@@ -566,7 +578,8 @@ export default function ChecksPanel(): React.JSX.Element {
         repoPath: repo.path,
         repoId: repo.id,
         prNumber: pr.number,
-        title: titleDraft.trim()
+        title: titleDraft.trim(),
+        prRepo: pr.prRepo ?? null
       })
       if (ok) {
         // Re-fetch PR to get updated title
@@ -599,20 +612,21 @@ export default function ChecksPanel(): React.JSX.Element {
       if (!repo || !prNumber) {
         return
       }
-      void resolveReviewThread(repo.path, prNumber, threadId, resolve, { repoId: repo.id }).then(
-        (ok) => {
-          if (ok) {
-            // Update local state to match the optimistic store update
-            setComments((prev) =>
-              prev.map((c) => (c.threadId === threadId ? { ...c, isResolved: resolve } : c))
-            )
-          } else {
-            toast.error('Could not update review thread. Check the GitHub API budget.')
-          }
+      void resolveReviewThread(repo.path, prNumber, threadId, resolve, {
+        repoId: repo.id,
+        prRepo: pr?.prRepo
+      }).then((ok) => {
+        if (ok) {
+          // Update local state to match the optimistic store update
+          setComments((prev) =>
+            prev.map((c) => (c.threadId === threadId ? { ...c, isResolved: resolve } : c))
+          )
+        } else {
+          toast.error('Could not update review thread. Check the GitHub API budget.')
         }
-      )
+      })
     },
-    [repo, prNumber, resolveReviewThread]
+    [repo, prNumber, pr?.prRepo, resolveReviewThread]
   )
 
   // Refresh PR (passed to PRActions)
@@ -710,7 +724,8 @@ export default function ChecksPanel(): React.JSX.Element {
             }),
             fetchPRComments(repo.path, refreshedPR.number, {
               force: true,
-              repoId: repo.id
+              repoId: repo.id,
+              prRepo: refreshedPR.prRepo
             }).then((result) => {
               if (isCurrentAsyncResult(requestKey)) {
                 setComments(result)

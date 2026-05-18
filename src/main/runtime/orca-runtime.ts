@@ -4733,11 +4733,12 @@ export class OrcaRuntimeService {
   async getRepoPRComments(
     repoSelector: string,
     prNumber: number,
+    prRepo?: GitHubOwnerRepo | null,
     options?: { noCache?: boolean }
   ): Promise<Awaited<ReturnType<typeof getPRComments>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
     this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_comments')
-    return getPRComments(repo.path, prNumber, options)
+    return getPRComments(repo.path, prNumber, { ...options, prRepo: prRepo ?? null })
   }
 
   async getRepoPRFileContents(
@@ -4782,21 +4783,23 @@ export class OrcaRuntimeService {
   async updateRepoPRTitle(
     repoSelector: string,
     prNumber: number,
-    title: string
+    title: string,
+    prRepo?: GitHubOwnerRepo | null
   ): Promise<Awaited<ReturnType<typeof updatePRTitle>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
     this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_title')
-    return updatePRTitle(repo.path, prNumber, title)
+    return updatePRTitle(repo.path, prNumber, title, undefined, prRepo ?? null)
   }
 
   async mergeRepoPR(
     repoSelector: string,
     prNumber: number,
-    method?: 'merge' | 'squash' | 'rebase'
+    method?: 'merge' | 'squash' | 'rebase',
+    prRepo?: GitHubOwnerRepo | null
   ): Promise<Awaited<ReturnType<typeof mergePR>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
     this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_merge')
-    return mergePR(repo.path, prNumber, method)
+    return mergePR(repo.path, prNumber, method, undefined, prRepo ?? null)
   }
 
   async updateRepoPRState(

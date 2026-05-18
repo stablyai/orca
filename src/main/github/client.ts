@@ -1950,11 +1950,11 @@ query($owner: String!, $repo: String!, $pr: Int!) {
 export async function getPRComments(
   repoPath: string,
   prNumber: number,
-  options?: { noCache?: boolean },
+  options?: { noCache?: boolean; prRepo?: OwnerRepo | null },
   connectionId?: string | null
 ): Promise<PRComment[]> {
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+  const ownerRepo = options?.prRepo ?? (await getOwnerRepo(repoPath, connectionId))
   await acquire()
   try {
     if (ownerRepo) {
@@ -2387,10 +2387,11 @@ export async function mergePR(
   repoPath: string,
   prNumber: number,
   method: 'merge' | 'squash' | 'rebase' = 'squash',
-  connectionId?: string | null
+  connectionId?: string | null,
+  prRepo?: OwnerRepo | null
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+  const ownerRepo = prRepo ?? (await getOwnerRepo(repoPath, connectionId))
   await acquire()
   try {
     // Don't use --delete-branch: it tries to delete the local branch which
@@ -2489,10 +2490,11 @@ export async function updatePRTitle(
   repoPath: string,
   prNumber: number,
   title: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  prRepo?: OwnerRepo | null
 ): Promise<boolean> {
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+  const ownerRepo = prRepo ?? (await getOwnerRepo(repoPath, connectionId))
   await acquire()
   try {
     const args = ['pr', 'edit', String(prNumber), '--title', title]
