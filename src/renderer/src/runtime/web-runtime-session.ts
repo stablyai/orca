@@ -2,8 +2,8 @@
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type {
   BrowserTabCreateResult,
+  RuntimeMobileSessionCreateTerminalResult,
   RuntimeMobileSessionTabsResult,
-  RuntimeTerminalCreate,
   RuntimeTerminalSplit
 } from '../../../shared/runtime-types'
 import type { AppState } from '../store/types'
@@ -48,15 +48,17 @@ export async function createWebRuntimeSessionTerminal(args: {
   try {
     const response = await window.api.runtimeEnvironments.call({
       selector: environmentId,
-      method: 'terminal.create',
+      method: 'session.tabs.createTerminal',
       params: {
         worktree: `id:${args.worktreeId}`,
+        afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
         command: args.command,
         activate: args.activate !== false
       },
       timeoutMs: 15_000
     })
-    unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ terminal: RuntimeTerminalCreate }>)
+    unwrapRuntimeRpcResult(response as RuntimeRpcResponse<RuntimeMobileSessionCreateTerminalResult>)
+    await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId)
     return true
   } catch (error) {
     console.warn(

@@ -2259,6 +2259,77 @@ describe('OrcaRuntimeService', () => {
     expect(result.activeTabType).toBe('browser')
   })
 
+  it('does not let the active browser webContents steal session focus from terminals', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const tabList = vi.fn(() => ({
+      tabs: [
+        {
+          browserPageId: 'browser-page-1',
+          index: 0,
+          url: 'https://example.com/',
+          title: 'Live Browser',
+          active: true
+        }
+      ]
+    }))
+    runtime.setAgentBrowserBridge({ tabList } as never)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'terminal-tab::pane:1',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'browser',
+              id: 'browser-unified-1',
+              title: 'Stale Browser',
+              browserWorkspaceId: 'browser-workspace-1',
+              browserPageId: 'browser-page-1',
+              url: 'https://stale.example/',
+              loading: false,
+              canGoBack: false,
+              canGoForward: false,
+              isActive: false
+            },
+            {
+              type: 'terminal',
+              id: 'terminal-tab::pane:1',
+              parentTabId: 'terminal-tab',
+              leafId: 'pane:1',
+              title: 'Terminal 2',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(result.activeTabId).toBe('terminal-tab::pane:1')
+    expect(result.activeTabType).toBe('terminal')
+    expect(result.tabs).toEqual([
+      expect.objectContaining({
+        type: 'browser',
+        id: 'browser-unified-1',
+        isActive: false,
+        title: 'Live Browser'
+      }),
+      expect.objectContaining({
+        type: 'terminal',
+        id: 'terminal-tab::pane:1',
+        isActive: true
+      })
+    ])
+  })
+
   it('publishes terminal surface agent status for paired web clients', async () => {
     const runtime = new OrcaRuntimeService(store)
     const leafId = '11111111-1111-4111-8111-111111111111'

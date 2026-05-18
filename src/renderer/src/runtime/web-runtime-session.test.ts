@@ -1,6 +1,10 @@
+/* eslint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { createWebRuntimeSessionBrowserTab } from './web-runtime-session'
+import {
+  createWebRuntimeSessionBrowserTab,
+  createWebRuntimeSessionTerminal
+} from './web-runtime-session'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -272,5 +276,113 @@ describe('createWebRuntimeSessionBrowserTab', () => {
 
     await vi.waitFor(() => expect(mocks.applyFreshWebSessionTabsSnapshot).toHaveBeenCalledTimes(1))
     expect(mocks.setRemoteBrowserPageHandle).not.toHaveBeenCalled()
+  })
+})
+
+describe('createWebRuntimeSessionTerminal', () => {
+  beforeEach(() => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    mocks.getState.mockReturnValue({
+      settings: {
+        activeRuntimeEnvironmentId: ENVIRONMENT_ID
+      },
+      activeWorktreeId: WORKTREE_ID,
+      browserPagesByWorkspace: {},
+      remoteBrowserPageHandlesByPageId: {},
+      createBrowserTab: mocks.createBrowserTab,
+      setRemoteBrowserPageHandle: mocks.setRemoteBrowserPageHandle,
+      focusBrowserTabInWorktree: mocks.focusBrowserTabInWorktree
+    })
+    mocks.setState.mockImplementation((updater: (state: unknown) => unknown) => {
+      updater({
+        state: 'before',
+        activeWorktreeId: WORKTREE_ID
+      })
+    })
+    mocks.applyFreshWebSessionTabsSnapshot.mockReturnValue({ state: 'after' })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('creates paired web terminals through session tabs so host activation is mirrored', async () => {
+    const snapshot = {
+      ...makeSnapshot(),
+      snapshotVersion: 2,
+      activeTabId: 'host-tab-2::leaf-1',
+      activeTabType: 'terminal' as const,
+      tabs: [
+        {
+          type: 'terminal' as const,
+          id: 'host-tab-2::leaf-1',
+          parentTabId: 'host-tab-2',
+          leafId: 'leaf-1',
+          title: 'Terminal 2',
+          terminal: 'pty-2',
+          status: 'ready' as const,
+          isActive: true
+        }
+      ]
+    }
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'create-terminal',
+        ok: true,
+        result: {
+          tab: snapshot.tabs[0],
+          publicationEpoch: snapshot.publicationEpoch,
+          snapshotVersion: snapshot.snapshotVersion
+        }
+      })
+      .mockResolvedValueOnce({
+        id: 'list',
+        ok: true,
+        result: snapshot
+      })
+
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          call: runtimeCall
+        }
+      }
+    })
+
+    await expect(
+      createWebRuntimeSessionTerminal({
+        worktreeId: WORKTREE_ID,
+        afterTabId: 'web-terminal-host-tab-1%3A%3Aleaf-1',
+        command: 'zsh',
+        activate: true
+      })
+    ).resolves.toBe(true)
+
+    expect(runtimeCall).toHaveBeenNthCalledWith(1, {
+      selector: ENVIRONMENT_ID,
+      method: 'session.tabs.createTerminal',
+      params: {
+        worktree: `id:${WORKTREE_ID}`,
+        afterTabId: 'host-tab-1::leaf-1',
+        command: 'zsh',
+        activate: true
+      },
+      timeoutMs: 15_000
+    })
+    expect(runtimeCall).toHaveBeenNthCalledWith(2, {
+      selector: ENVIRONMENT_ID,
+      method: 'session.tabs.list',
+      params: {
+        worktree: `id:${WORKTREE_ID}`
+      },
+      timeoutMs: 15_000
+    })
+    expect(mocks.applyFreshWebSessionTabsSnapshot).toHaveBeenCalledWith(
+      { state: 'before', activeWorktreeId: WORKTREE_ID },
+      snapshot,
+      ENVIRONMENT_ID
+    )
   })
 })

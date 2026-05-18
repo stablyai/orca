@@ -6577,7 +6577,7 @@ export class OrcaRuntimeService {
 
   async createMobileSessionTerminal(
     worktreeSelector: string,
-    opts: { afterTabId?: string; activate?: boolean } = {}
+    opts: { afterTabId?: string; command?: string; activate?: boolean } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     this.assertGraphReady()
     const worktreeId = (await this.resolveWorktreeSelector(worktreeSelector)).id
@@ -6596,7 +6596,8 @@ export class OrcaRuntimeService {
       return await this.createHeadlessMobileSessionTerminal(
         worktreeId,
         opts.activate !== false,
-        opts.afterTabId
+        opts.afterTabId,
+        opts.command
       )
     }
     const requestId = randomUUID()
@@ -6625,7 +6626,8 @@ export class OrcaRuntimeService {
       win.webContents.send('terminal:requestTabCreate', {
         requestId,
         worktreeId,
-        afterTabId: afterDesktopTabId
+        afterTabId: afterDesktopTabId,
+        command: opts.command
       })
     })
 
@@ -6638,9 +6640,10 @@ export class OrcaRuntimeService {
   private async createHeadlessMobileSessionTerminal(
     worktreeId: string,
     activate: boolean,
-    afterTabId?: string
+    afterTabId?: string,
+    command?: string
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
-    const terminal = await this.createTerminal(`id:${worktreeId}`, { focus: false })
+    const terminal = await this.createTerminal(`id:${worktreeId}`, { focus: false, command })
     const livePty = this.getLivePtyForHandle(terminal.handle)
     if (!livePty) {
       throw new Error('terminal_handle_stale')
@@ -8029,7 +8032,9 @@ export class OrcaRuntimeService {
           ...tab,
           title: liveTab.title || tab.title,
           url: liveTab.url || tab.url,
-          isActive: liveTab.active
+          // Why: bridge "active" means active BrowserView/webContents, not
+          // active Orca tab. Preserve the renderer's app-level session focus.
+          isActive: tab.isActive
         })
         continue
       }
@@ -8075,7 +8080,14 @@ export class OrcaRuntimeService {
           : { status: 'pending-handle' as const, terminal: null })
       })
     }
-    const active = tabs.find((tab) => tab.isActive) ?? null
+    const active =
+      tabs.find((tab) => tab.isActive && tab.id === snapshot.activeTabId) ??
+      tabs.find((tab) => tab.isActive) ??
+      (snapshot.activeTabId ? (tabs[0] ?? null) : null)
+    const normalizedTabs =
+      active && !tabs.some((tab) => tab.isActive)
+        ? tabs.map((tab) => (tab.id === active.id ? { ...tab, isActive: true } : tab))
+        : tabs
     return {
       worktree: snapshot.worktree,
       publicationEpoch: snapshot.publicationEpoch,
@@ -8083,7 +8095,7 @@ export class OrcaRuntimeService {
       activeGroupId: snapshot.activeGroupId,
       activeTabId: active?.id ?? null,
       activeTabType: active?.type ?? null,
-      tabs
+      tabs: normalizedTabs
     }
   }
 
