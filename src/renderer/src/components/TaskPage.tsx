@@ -111,6 +111,7 @@ import type {
   GitLabWorkItem,
   LinearIssue,
   LinearTeam,
+  LinearWorkflowState,
   Repo,
   TaskProvider,
   TaskViewPresetId
@@ -120,6 +121,7 @@ import { useTeamStates } from '@/hooks/useIssueMetadata'
 import {
   linearCreateIssue,
   linearGetIssue,
+  linearTeamStates,
   linearUpdateIssue
 } from '@/runtime/runtime-linear-client'
 import {
@@ -332,6 +334,12 @@ type LinearGroupSection = {
   issues: LinearIssue[]
 }
 
+type LinearIssueListRow =
+  | { type: 'section'; key: string; label: string; count: number }
+  | { type: 'issue'; issue: LinearIssue }
+
+const LINEAR_BOARD_DRAG_ISSUE_MIME = 'application/x-orca-linear-issue-id'
+
 const LINEAR_VIEW_OPTIONS: {
   id: LinearViewMode
   label: string
@@ -375,6 +383,23 @@ const DEFAULT_LINEAR_DISPLAY_PROPERTIES: LinearDisplayProperty[] = [
 
 function getLinearPriorityLabel(priority: number): string {
   return LINEAR_PRIORITY_LABELS[priority] ?? `P${priority}`
+}
+
+function getLinearStatusSectionState(section: LinearGroupSection): LinearIssue['state'] | null {
+  if (!section.key.startsWith('status:')) {
+    return null
+  }
+  return section.issues[0]?.state ?? null
+}
+
+function findLinearWorkflowStateForStatus(
+  states: LinearWorkflowState[],
+  targetState: LinearIssue['state']
+): LinearWorkflowState | undefined {
+  return (
+    states.find((state) => state.name === targetState.name && state.type === targetState.type) ??
+    states.find((state) => state.name === targetState.name)
+  )
 }
 
 function LinearStateCell({
@@ -1615,6 +1640,7 @@ export default function TaskPage(): React.JSX.Element {
   const getCachedLinearIssues = useAppStore((s) => s.getCachedLinearIssues)
   const getCachedLinearTeams = useAppStore((s) => s.getCachedLinearTeams)
   const listLinearTeams = useAppStore((s) => s.listLinearTeams)
+  const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
   const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
@@ -2011,6 +2037,11 @@ export default function TaskPage(): React.JSX.Element {
   >(() => new Set(DEFAULT_LINEAR_DISPLAY_PROPERTIES))
   const [linearTeamPropertyTouched, setLinearTeamPropertyTouched] = useState(false)
   const [linearRefreshNonce, setLinearRefreshNonce] = useState(0)
+  const [linearBoardDraggingIssueId, setLinearBoardDraggingIssueId] = useState<string | null>(null)
+  const [linearBoardDragOverKey, setLinearBoardDragOverKey] = useState<string | null>(null)
+  const [linearBoardUpdatingIssueIds, setLinearBoardUpdatingIssueIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set())
   const lastLinearRequestRef = useRef<{ nonce: number; signature: string } | null>(null)
 
   useEffect(() => {
@@ -2300,6 +2331,16 @@ export default function TaskPage(): React.JSX.Element {
 
   const effectiveLinearDisplayProperties = useMemo(() => {
     const next = new Set(linearDisplayProperties)
+    const groupedProperty =
+      linearGroupBy === 'status'
+        ? 'state'
+        : linearGroupBy === 'assignee' || linearGroupBy === 'priority' || linearGroupBy === 'team'
+          ? linearGroupBy
+          : null
+    if (groupedProperty) {
+      next.delete(groupedProperty)
+    }
+
     // Why: a Team column repeats the same value when one team is selected.
     // Keep it hidden until the user explicitly opts back into that property.
     if (linearTeamSelection.size <= 1 && !linearTeamPropertyTouched) {
@@ -2308,7 +2349,7 @@ export default function TaskPage(): React.JSX.Element {
       next.add('team')
     }
     return next
-  }, [linearDisplayProperties, linearTeamPropertyTouched, linearTeamSelection.size])
+  }, [linearDisplayProperties, linearGroupBy, linearTeamPropertyTouched, linearTeamSelection.size])
   const linearIssueGridTemplate = useMemo(
     () => getLinearIssueGridTemplate(effectiveLinearDisplayProperties),
     [effectiveLinearDisplayProperties]
@@ -2324,6 +2365,25 @@ export default function TaskPage(): React.JSX.Element {
     () => groupLinearIssues(filteredLinearIssues, linearGroupBy, linearOrderBy),
     [filteredLinearIssues, linearGroupBy, linearOrderBy]
   )
+  const linearIssueListRows = useMemo<LinearIssueListRow[]>(
+    () =>
+      linearIssueSections.flatMap((section) => {
+        const issueRows = section.issues.map((issue) => ({ type: 'issue' as const, issue }))
+        if (linearGroupBy === 'none') {
+          return issueRows
+        }
+        return [
+          {
+            type: 'section' as const,
+            key: section.key,
+            label: section.label,
+            count: section.issues.length
+          },
+          ...issueRows
+        ]
+      }),
+    [linearGroupBy, linearIssueSections]
+  )
   const linearBoardSections = useMemo(
     () =>
       groupLinearIssues(
@@ -2333,6 +2393,119 @@ export default function TaskPage(): React.JSX.Element {
       ),
     [filteredLinearIssues, linearGroupBy, linearOrderBy]
   )
+  const linearStatusBoardEnabled = linearGroupBy === 'none' || linearGroupBy === 'status'
+
+  const handleLinearBoardCardDragStart = useCallback(
+    (issue: LinearIssue, event: React.DragEvent<HTMLDivElement>) => {
+      if (!linearStatusBoardEnabled || linearBoardUpdatingIssueIds.has(issue.id)) {
+        event.preventDefault()
+        return
+      }
+      event.dataTransfer.effectAllowed = 'move'
+      event.dataTransfer.setData(LINEAR_BOARD_DRAG_ISSUE_MIME, issue.id)
+      event.dataTransfer.setData('text/plain', issue.id)
+      setLinearBoardDraggingIssueId(issue.id)
+    },
+    [linearBoardUpdatingIssueIds, linearStatusBoardEnabled]
+  )
+
+  const handleLinearBoardDragOver = useCallback(
+    (section: LinearGroupSection, event: React.DragEvent<HTMLElement>) => {
+      if (!linearStatusBoardEnabled || !getLinearStatusSectionState(section)) {
+        return
+      }
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'move'
+      setLinearBoardDragOverKey(section.key)
+    },
+    [linearStatusBoardEnabled]
+  )
+
+  const handleLinearBoardDrop = useCallback(
+    async (section: LinearGroupSection, event: React.DragEvent<HTMLElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
+      setLinearBoardDragOverKey(null)
+
+      const targetState = getLinearStatusSectionState(section)
+      if (!linearStatusBoardEnabled || !targetState) {
+        return
+      }
+
+      const issueId =
+        event.dataTransfer.getData(LINEAR_BOARD_DRAG_ISSUE_MIME) || linearBoardDraggingIssueId
+      const issue = filteredLinearIssues.find((item) => item.id === issueId)
+      if (
+        !issue ||
+        linearBoardUpdatingIssueIds.has(issue.id) ||
+        (issue.state.name === targetState.name && issue.state.type === targetState.type)
+      ) {
+        return
+      }
+
+      setLinearBoardUpdatingIssueIds((prev) => {
+        const next = new Set(prev)
+        next.add(issue.id)
+        return next
+      })
+
+      const previousState = issue.state
+      const applyFallbackState = (state: LinearIssue['state']) => {
+        setSelectedLinearIssueFallback((prev) =>
+          prev?.id === issue.id ? { ...prev, state } : prev
+        )
+      }
+
+      try {
+        const states = await linearTeamStates(settings, issue.team.id, issue.workspaceId)
+        const workflowState = findLinearWorkflowStateForStatus(states, targetState)
+        if (!workflowState) {
+          toast.error(`"${targetState.name}" is not available for ${issue.team.name}`)
+          return
+        }
+
+        const nextState: LinearIssue['state'] = {
+          name: workflowState.name,
+          type: workflowState.type,
+          color: workflowState.color
+        }
+
+        patchLinearIssue(issue.id, { state: nextState })
+        applyFallbackState(nextState)
+
+        const result = await linearUpdateIssue(
+          settings,
+          issue.id,
+          { stateId: workflowState.id },
+          issue.workspaceId
+        )
+        if (result.ok === false) {
+          patchLinearIssue(issue.id, { state: previousState })
+          applyFallbackState(previousState)
+          toast.error(result.error ?? 'Failed to update Linear state')
+        }
+      } catch {
+        patchLinearIssue(issue.id, { state: previousState })
+        applyFallbackState(previousState)
+        toast.error('Failed to update Linear state')
+      } finally {
+        setLinearBoardUpdatingIssueIds((prev) => {
+          const next = new Set(prev)
+          next.delete(issue.id)
+          return next
+        })
+      }
+    },
+    [
+      filteredLinearIssues,
+      linearBoardDraggingIssueId,
+      linearBoardUpdatingIssueIds,
+      linearStatusBoardEnabled,
+      patchLinearIssue,
+      settings
+    ]
+  )
+
   const toggleLinearDisplayProperty = useCallback((property: LinearDisplayProperty): void => {
     if (property === 'team') {
       setLinearTeamPropertyTouched(true)
@@ -4433,7 +4606,7 @@ export default function TaskPage(): React.JSX.Element {
                 </div>
               </div>
 
-              {linearViewMode === 'list' ? (
+              {linearViewMode === 'list' && linearGroupBy === 'none' ? (
                 <div
                   className="grid h-8 flex-none items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground max-lg:!hidden lg:grid-cols-[var(--linear-grid-template)] [&>span]:min-w-0 [&>span]:truncate"
                   style={linearIssueGridStyle}
@@ -4497,7 +4670,13 @@ export default function TaskPage(): React.JSX.Element {
                     {linearBoardSections.map((section) => (
                       <section
                         key={section.key}
-                        className="min-h-0 rounded-md border border-border/50 bg-muted/20"
+                        onDragOver={(event) => handleLinearBoardDragOver(section, event)}
+                        onDrop={(event) => void handleLinearBoardDrop(section, event)}
+                        className={cn(
+                          'min-h-0 rounded-md border border-border/50 bg-muted/20 transition-[border-color,box-shadow]',
+                          linearBoardDragOverKey === section.key &&
+                            'border-ring/70 ring-1 ring-ring/70'
+                        )}
                       >
                         <div className="flex h-9 items-center justify-between border-b border-border/50 px-3">
                           <span className="truncate text-xs font-medium text-foreground">
@@ -4511,6 +4690,8 @@ export default function TaskPage(): React.JSX.Element {
                           {section.issues.map((issue) => {
                             const selected = issue.id === selectedLinearIssueId
                             const labels = issue.labels.slice(0, 2)
+                            const dragging = linearBoardDraggingIssueId === issue.id
+                            const updating = linearBoardUpdatingIssueIds.has(issue.id)
                             const teamLabel =
                               selectedLinearWorkspaceId === 'all' && issue.workspaceName
                                 ? `${issue.workspaceName} / ${issue.team.name}`
@@ -4520,8 +4701,17 @@ export default function TaskPage(): React.JSX.Element {
                                 key={issue.id}
                                 role="button"
                                 tabIndex={0}
+                                draggable={linearStatusBoardEnabled && !updating}
                                 aria-current={selected ? 'true' : undefined}
                                 data-current={selected ? 'true' : undefined}
+                                aria-disabled={updating ? 'true' : undefined}
+                                onDragStart={(event) =>
+                                  handleLinearBoardCardDragStart(issue, event)
+                                }
+                                onDragEnd={() => {
+                                  setLinearBoardDraggingIssueId(null)
+                                  setLinearBoardDragOverKey(null)
+                                }}
                                 onClick={() => setSelectedLinearIssue(issue)}
                                 onKeyDown={(e) => {
                                   if (e.target !== e.currentTarget) {
@@ -4534,7 +4724,12 @@ export default function TaskPage(): React.JSX.Element {
                                 }}
                                 className={cn(
                                   'group/row cursor-pointer rounded-md border border-border/50 bg-background px-3 py-2 text-left transition hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-                                  selected && 'bg-accent'
+                                  linearStatusBoardEnabled &&
+                                    !updating &&
+                                    'cursor-grab active:cursor-grabbing',
+                                  selected && 'bg-accent',
+                                  dragging && 'opacity-50',
+                                  updating && 'cursor-wait opacity-70'
                                 )}
                               >
                                 <div className="flex min-w-0 items-start justify-between gap-2">
@@ -4615,183 +4810,199 @@ export default function TaskPage(): React.JSX.Element {
                   </div>
                 ) : (
                   <div className="divide-y divide-border/50">
-                    {linearIssueSections
-                      .flatMap((section) => section.issues)
-                      .map((issue) => {
-                        const selected = issue.id === selectedLinearIssueId
-                        const labels = issue.labels.slice(0, 3)
-                        const teamLabel =
-                          selectedLinearWorkspaceId === 'all' && issue.workspaceName
-                            ? `${issue.workspaceName} / ${issue.team.name}`
-                            : issue.team.name
+                    {linearIssueListRows.map((row) => {
+                      if (row.type === 'section') {
                         return (
                           <div
-                            key={issue.id}
-                            role="button"
-                            tabIndex={0}
-                            aria-current={selected ? 'true' : undefined}
-                            data-current={selected ? 'true' : undefined}
-                            onClick={() => {
-                              setSelectedLinearIssue(issue)
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.target !== e.currentTarget) {
-                                return
-                              }
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault()
-                                setSelectedLinearIssue(issue)
-                              }
-                            }}
-                            className={cn(
-                              'group/row grid min-h-12 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-left transition hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring lg:grid-cols-[var(--linear-grid-template)]',
-                              selected && 'bg-accent'
-                            )}
-                            style={linearIssueGridStyle}
+                            key={row.key}
+                            className="flex h-9 items-center gap-2 bg-muted/35 px-3"
                           >
-                            <span className="block truncate font-mono text-[12px] text-muted-foreground max-lg:!hidden">
-                              {issue.identifier}
+                            <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
+                            <span className="min-w-0 truncate text-[13px] font-medium text-foreground">
+                              {row.label}
                             </span>
-
-                            <div className="min-w-0">
-                              <div className="flex min-w-0 items-center gap-2">
-                                <span className="shrink-0 font-mono text-[11px] text-muted-foreground lg:hidden">
-                                  {issue.identifier}
-                                </span>
-                                <h3 className="min-w-0 truncate text-[13px] font-medium text-foreground">
-                                  {issue.title}
-                                </h3>
-                              </div>
-                              <div className="mt-1 flex min-w-0 items-center gap-1.5 lg:!hidden">
-                                {effectiveLinearDisplayProperties.has('state') ? (
-                                  <LinearStateCell issue={issue} className="px-1.5 py-0.5" />
-                                ) : null}
-                                {effectiveLinearDisplayProperties.has('priority') ? (
-                                  <span className="shrink-0 text-[11px] text-muted-foreground">
-                                    {getLinearPriorityLabel(issue.priority)}
-                                  </span>
-                                ) : null}
-                                {effectiveLinearDisplayProperties.has('assignee') ? (
-                                  <span className="min-w-0 truncate text-[11px] text-muted-foreground">
-                                    {issue.assignee?.displayName ?? 'Unassigned'}
-                                  </span>
-                                ) : null}
-                                {effectiveLinearDisplayProperties.has('team') ? (
-                                  <span className="min-w-0 truncate text-[11px] text-muted-foreground">
-                                    {teamLabel}
-                                  </span>
-                                ) : null}
-                              </div>
-                              {effectiveLinearDisplayProperties.has('labels') ? (
-                                <div className="mt-1 flex min-w-0 items-center gap-1 max-lg:!hidden">
-                                  {labels.map((label) => (
-                                    <span
-                                      key={label}
-                                      className="max-w-[140px] truncate rounded-full border border-border/50 bg-muted/35 px-1.5 py-0.5 text-[10px] text-muted-foreground"
-                                    >
-                                      {label}
-                                    </span>
-                                  ))}
-                                  {issue.labels.length > labels.length ? (
-                                    <span className="text-[10px] text-muted-foreground">
-                                      +{issue.labels.length - labels.length}
-                                    </span>
-                                  ) : null}
-                                </div>
-                              ) : null}
-                            </div>
-
-                            {effectiveLinearDisplayProperties.has('state') ? (
-                              <div className="flex min-w-0 max-lg:!hidden">
-                                <LinearStateCell issue={issue} className="max-w-full px-2 py-0.5" />
-                              </div>
-                            ) : null}
-
-                            {effectiveLinearDisplayProperties.has('priority') ? (
-                              <span className="block truncate text-[12px] text-muted-foreground max-lg:!hidden">
-                                {getLinearPriorityLabel(issue.priority)}
-                              </span>
-                            ) : null}
-
-                            {effectiveLinearDisplayProperties.has('assignee') ? (
-                              <div className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground max-lg:!hidden">
-                                {issue.assignee?.avatarUrl ? (
-                                  <img
-                                    src={issue.assignee.avatarUrl}
-                                    alt={issue.assignee.displayName}
-                                    className="size-5 shrink-0 rounded-full"
-                                  />
-                                ) : (
-                                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-[10px]">
-                                    {issue.assignee?.displayName?.slice(0, 1) ?? '-'}
-                                  </span>
-                                )}
-                                <span className="truncate">
-                                  {issue.assignee?.displayName ?? 'Unassigned'}
-                                </span>
-                              </div>
-                            ) : null}
-
-                            {effectiveLinearDisplayProperties.has('team') ? (
-                              <div className="block min-w-0 text-[12px] text-muted-foreground max-lg:!hidden">
-                                <div className="truncate">{teamLabel}</div>
-                              </div>
-                            ) : null}
-
-                            {effectiveLinearDisplayProperties.has('updated') ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <div className="block min-w-0 truncate text-[12px] text-muted-foreground max-lg:!hidden">
-                                    {formatRelativeTime(issue.updatedAt)}
-                                  </div>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom" sideOffset={6}>
-                                  {new Date(issue.updatedAt).toLocaleString()}
-                                </TooltipContent>
-                              </Tooltip>
-                            ) : null}
-
-                            <div className="flex shrink-0 items-center justify-end gap-1 md:opacity-0 md:transition-opacity md:group-hover/row:opacity-100 md:group-focus-within/row:opacity-100">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon-xs"
-                                    onClick={(event) => {
-                                      event.stopPropagation()
-                                      handleUseLinearItem(issue)
-                                    }}
-                                    aria-label={`Start workspace from ${issue.identifier}`}
-                                  >
-                                    <ArrowRight className="size-3.5" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom" sideOffset={6}>
-                                  Start workspace
-                                </TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon-xs"
-                                    onClick={(event) => {
-                                      event.stopPropagation()
-                                      window.api.shell.openUrl(issue.url)
-                                    }}
-                                    aria-label={`Open ${issue.identifier} in Linear`}
-                                  >
-                                    <ExternalLink className="size-3.5" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom" sideOffset={6}>
-                                  Open in Linear
-                                </TooltipContent>
-                              </Tooltip>
-                            </div>
+                            <span className="shrink-0 text-[11px] text-muted-foreground">
+                              {row.count}
+                            </span>
                           </div>
                         )
-                      })}
+                      }
+
+                      const issue = row.issue
+                      const selected = issue.id === selectedLinearIssueId
+                      const labels = issue.labels.slice(0, 3)
+                      const teamLabel =
+                        selectedLinearWorkspaceId === 'all' && issue.workspaceName
+                          ? `${issue.workspaceName} / ${issue.team.name}`
+                          : issue.team.name
+                      return (
+                        <div
+                          key={issue.id}
+                          role="button"
+                          tabIndex={0}
+                          aria-current={selected ? 'true' : undefined}
+                          data-current={selected ? 'true' : undefined}
+                          onClick={() => {
+                            setSelectedLinearIssue(issue)
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.target !== e.currentTarget) {
+                              return
+                            }
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              setSelectedLinearIssue(issue)
+                            }
+                          }}
+                          className={cn(
+                            'group/row grid min-h-12 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-left transition hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring lg:grid-cols-[var(--linear-grid-template)]',
+                            selected && 'bg-accent'
+                          )}
+                          style={linearIssueGridStyle}
+                        >
+                          <span className="block truncate font-mono text-[12px] text-muted-foreground max-lg:!hidden">
+                            {issue.identifier}
+                          </span>
+
+                          <div className="min-w-0">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="shrink-0 font-mono text-[11px] text-muted-foreground lg:hidden">
+                                {issue.identifier}
+                              </span>
+                              <h3 className="min-w-0 truncate text-[13px] font-medium text-foreground">
+                                {issue.title}
+                              </h3>
+                            </div>
+                            <div className="mt-1 flex min-w-0 items-center gap-1.5 lg:!hidden">
+                              {effectiveLinearDisplayProperties.has('state') ? (
+                                <LinearStateCell issue={issue} className="px-1.5 py-0.5" />
+                              ) : null}
+                              {effectiveLinearDisplayProperties.has('priority') ? (
+                                <span className="shrink-0 text-[11px] text-muted-foreground">
+                                  {getLinearPriorityLabel(issue.priority)}
+                                </span>
+                              ) : null}
+                              {effectiveLinearDisplayProperties.has('assignee') ? (
+                                <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+                                  {issue.assignee?.displayName ?? 'Unassigned'}
+                                </span>
+                              ) : null}
+                              {effectiveLinearDisplayProperties.has('team') ? (
+                                <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+                                  {teamLabel}
+                                </span>
+                              ) : null}
+                            </div>
+                            {effectiveLinearDisplayProperties.has('labels') ? (
+                              <div className="mt-1 flex min-w-0 items-center gap-1 max-lg:!hidden">
+                                {labels.map((label) => (
+                                  <span
+                                    key={label}
+                                    className="max-w-[140px] truncate rounded-full border border-border/50 bg-muted/35 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                                  >
+                                    {label}
+                                  </span>
+                                ))}
+                                {issue.labels.length > labels.length ? (
+                                  <span className="text-[10px] text-muted-foreground">
+                                    +{issue.labels.length - labels.length}
+                                  </span>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </div>
+
+                          {effectiveLinearDisplayProperties.has('state') ? (
+                            <div className="flex min-w-0 max-lg:!hidden">
+                              <LinearStateCell issue={issue} className="max-w-full px-2 py-0.5" />
+                            </div>
+                          ) : null}
+
+                          {effectiveLinearDisplayProperties.has('priority') ? (
+                            <span className="block truncate text-[12px] text-muted-foreground max-lg:!hidden">
+                              {getLinearPriorityLabel(issue.priority)}
+                            </span>
+                          ) : null}
+
+                          {effectiveLinearDisplayProperties.has('assignee') ? (
+                            <div className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground max-lg:!hidden">
+                              {issue.assignee?.avatarUrl ? (
+                                <img
+                                  src={issue.assignee.avatarUrl}
+                                  alt={issue.assignee.displayName}
+                                  className="size-5 shrink-0 rounded-full"
+                                />
+                              ) : (
+                                <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-[10px]">
+                                  {issue.assignee?.displayName?.slice(0, 1) ?? '-'}
+                                </span>
+                              )}
+                              <span className="truncate">
+                                {issue.assignee?.displayName ?? 'Unassigned'}
+                              </span>
+                            </div>
+                          ) : null}
+
+                          {effectiveLinearDisplayProperties.has('team') ? (
+                            <div className="block min-w-0 text-[12px] text-muted-foreground max-lg:!hidden">
+                              <div className="truncate">{teamLabel}</div>
+                            </div>
+                          ) : null}
+
+                          {effectiveLinearDisplayProperties.has('updated') ? (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="block min-w-0 truncate text-[12px] text-muted-foreground max-lg:!hidden">
+                                  {formatRelativeTime(issue.updatedAt)}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom" sideOffset={6}>
+                                {new Date(issue.updatedAt).toLocaleString()}
+                              </TooltipContent>
+                            </Tooltip>
+                          ) : null}
+
+                          <div className="flex shrink-0 items-center justify-end gap-1 md:opacity-0 md:transition-opacity md:group-hover/row:opacity-100 md:group-focus-within/row:opacity-100">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    handleUseLinearItem(issue)
+                                  }}
+                                  aria-label={`Start workspace from ${issue.identifier}`}
+                                >
+                                  <ArrowRight className="size-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom" sideOffset={6}>
+                                Start workspace
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    window.api.shell.openUrl(issue.url)
+                                  }}
+                                  aria-label={`Open ${issue.identifier} in Linear`}
+                                >
+                                  <ExternalLink className="size-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom" sideOffset={6}>
+                                Open in Linear
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
