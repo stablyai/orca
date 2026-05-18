@@ -65,14 +65,14 @@ jobs:
         env:
           SKIP_BUILD: '1'
           ORCA_E2E_FORWARD_APP_LOGS: '1'
-        run: xvfb-run --auto-servernum pnpm exec playwright test tests/e2e/settings-agent-awake.spec.ts --config tests/playwright.config.ts --project=electron-headless
+        run: xvfb-run --auto-servernum pnpm exec playwright test tests/e2e/settings-agent-awake.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1
 
       - name: Run awake Playwright spec on Windows
         if: runner.os == 'Windows'
         env:
           SKIP_BUILD: '1'
           ORCA_E2E_FORWARD_APP_LOGS: '1'
-        run: pnpm exec playwright test tests/e2e/settings-agent-awake.spec.ts --config tests/playwright.config.ts --project=electron-headless
+        run: pnpm exec playwright test tests/e2e/settings-agent-awake.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1
 
       - name: Upload Playwright traces
         if: failure()
