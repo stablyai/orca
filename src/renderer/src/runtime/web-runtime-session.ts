@@ -91,7 +91,11 @@ export async function createWebRuntimeSessionBrowserTab(args: {
       params: {
         worktree: `id:${args.worktreeId}`,
         url: args.url,
-        profileId: args.profileId ?? undefined
+        profileId: args.profileId ?? undefined,
+        // Why: paired web clients need the local tab immediately. The remote
+        // pane will stream once the host webview registers; waiting here makes
+        // the workspace appear to close while the host finishes mounting.
+        waitForRegistration: false
       },
       timeoutMs: 15_000
     })

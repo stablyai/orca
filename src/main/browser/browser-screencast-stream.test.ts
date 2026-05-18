@@ -229,6 +229,60 @@ describe('startBrowserScreencast', () => {
     }
   })
 
+  it('reapplies client viewport emulation before navigation fallback captures', async () => {
+    vi.useFakeTimers()
+    const webContents = createMockWebContents()
+    webContents.debugger.sendCommand.mockImplementation(async (method: string) => {
+      if (method === 'Page.captureScreenshot') {
+        return { data: jpegWithSize(958, 609).toString('base64') }
+      }
+      return {}
+    })
+    const onFrame = vi.fn()
+
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 3840,
+      maxHeight: 2160,
+      viewportWidth: 958,
+      viewportHeight: 609,
+      deviceScaleFactor: 1,
+      everyNthFrame: 2,
+      minFrameIntervalMs: 0,
+      onFrame
+    })
+
+    try {
+      await vi.waitFor(() => expect(onFrame).toHaveBeenCalledTimes(1))
+      const beforeNavigation = webContents.debugger.sendCommand.mock.calls.filter(
+        ([method]) => method === 'Emulation.setDeviceMetricsOverride'
+      ).length
+
+      webContents.debugger.emit('message', {}, 'Page.frameNavigated', { frame: { id: 'main' } })
+      await vi.advanceTimersByTimeAsync(250)
+      await vi.waitFor(() => expect(onFrame).toHaveBeenCalledTimes(2))
+
+      const afterNavigation = webContents.debugger.sendCommand.mock.calls.filter(
+        ([method]) => method === 'Emulation.setDeviceMetricsOverride'
+      ).length
+      expect(afterNavigation).toBeGreaterThan(beforeNavigation)
+      expect(webContents.debugger.sendCommand).toHaveBeenCalledWith(
+        'Emulation.setDeviceMetricsOverride',
+        {
+          width: 958,
+          height: 609,
+          deviceScaleFactor: 1,
+          mobile: false
+        }
+      )
+    } finally {
+      session.stop()
+      await session.done
+      vi.useRealTimers()
+    }
+  })
+
   it('captures a fresh fallback frame after static page navigation', async () => {
     const webContents = createMockWebContents()
     let captureCount = 0

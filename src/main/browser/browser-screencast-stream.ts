@@ -361,6 +361,29 @@ export async function startBrowserScreencast(
     deviceMetricsOverridden = false
   }
 
+  const applyDeviceMetricsOverride = async (): Promise<void> => {
+    const viewportWidth = positiveInteger(options.viewportWidth)
+    const viewportHeight = positiveInteger(options.viewportHeight)
+    if (!viewportWidth || !viewportHeight) {
+      return
+    }
+    const deviceScaleFactor = positiveNumber(options.deviceScaleFactor) ?? 1
+    // Why: Back/Forward and cross-process navigations can drop emulation while
+    // the screencast remains attached. Reapply before fallback captures so the
+    // page lays out at the client pane size, not the host BrowserView size.
+    await sendDebuggerCommand(dbg, 'Emulation.setDeviceMetricsOverride', {
+      width: viewportWidth,
+      height: viewportHeight,
+      deviceScaleFactor,
+      mobile: options.mobile === true
+    })
+    await sendDebuggerCommand(dbg, 'Emulation.setVisibleSize', {
+      width: viewportWidth,
+      height: viewportHeight
+    }).catch(() => {})
+    deviceMetricsOverridden = true
+  }
+
   const finish = (): void => {
     if (closed) {
       return
@@ -481,6 +504,10 @@ export async function startBrowserScreencast(
       const viewportWidth = positiveInteger(options.viewportWidth)
       const viewportHeight = positiveInteger(options.viewportHeight)
       let image: Uint8Array | null = null
+      await applyDeviceMetricsOverride()
+      if (isSnapshotStale(initialOnly, generation)) {
+        return
+      }
       if (viewportWidth && viewportHeight && typeof webContents.capturePage === 'function') {
         try {
           // Why: CDP captureScreenshot can tile BrowserView surfaces under
@@ -562,27 +589,7 @@ export async function startBrowserScreencast(
 
   try {
     await sendDebuggerCommand(dbg, 'Page.enable')
-    const viewportWidth = positiveInteger(options.viewportWidth)
-    const viewportHeight = positiveInteger(options.viewportHeight)
-    const deviceScaleFactor = positiveNumber(options.deviceScaleFactor) ?? 1
-    if (viewportWidth && viewportHeight) {
-      // Why: the first frame must use the same CSS viewport as the client pane,
-      // otherwise the image is scaled and input coordinates land off target.
-      await sendDebuggerCommand(dbg, 'Emulation.setDeviceMetricsOverride', {
-        width: viewportWidth,
-        height: viewportHeight,
-        deviceScaleFactor,
-        mobile: options.mobile === true
-      })
-      // Why: BrowserViews keep their host surface size unless the visible area
-      // is overridden too; fallback screenshots can otherwise capture repeated
-      // compositor tiles even though the emulated CSS viewport is correct.
-      await sendDebuggerCommand(dbg, 'Emulation.setVisibleSize', {
-        width: viewportWidth,
-        height: viewportHeight
-      }).catch(() => {})
-      deviceMetricsOverridden = true
-    }
+    await applyDeviceMetricsOverride()
     await sendDebuggerCommand(dbg, 'Page.startScreencast', {
       format: options.format,
       quality: options.quality,

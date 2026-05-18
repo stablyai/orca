@@ -279,16 +279,23 @@ export class CdpWsProxy {
     params: Record<string, unknown>,
     msgSessionId?: string
   ): void {
+    if (this.webContents.isDestroyed()) {
+      this.sendError(clientId, 'Browser tab is no longer available', client)
+      return
+    }
     const sessionId =
       msgSessionId && msgSessionId !== this.clientSessionId ? msgSessionId : undefined
-    this.webContents.debugger
-      .sendCommand(method, params, sessionId)
-      .then((result) => {
-        this.sendResult(clientId, result, client)
-      })
-      .catch((err: Error) => {
-        this.sendError(clientId, err.message, client)
-      })
+    try {
+      Promise.resolve(this.webContents.debugger.sendCommand(method, params, sessionId))
+        .then((result) => {
+          this.sendResult(clientId, result, client)
+        })
+        .catch((err: Error) => {
+          this.sendError(clientId, err.message, client)
+        })
+    } catch (err) {
+      this.sendError(clientId, err instanceof Error ? err.message : String(err), client)
+    }
   }
 
   private async navigateWithLifecycleEnsured(

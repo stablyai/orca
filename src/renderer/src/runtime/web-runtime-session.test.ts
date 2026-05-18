@@ -109,7 +109,8 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       params: {
         worktree: `id:${WORKTREE_ID}`,
         url: 'https://example.com/',
-        profileId: undefined
+        profileId: undefined,
+        waitForRegistration: false
       },
       timeoutMs: 15_000
     })

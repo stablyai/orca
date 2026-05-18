@@ -1267,6 +1267,7 @@ export class RuntimeBrowserCommands {
     url?: string
     worktree?: string
     profileId?: string
+    waitForRegistration?: boolean
   }): Promise<{ browserPageId: string }> {
     const url = params.url ?? 'about:blank'
     const worktreeId = params.worktree
@@ -1289,12 +1290,14 @@ export class RuntimeBrowserCommands {
     // tab is operable by subsequent CLI commands (snapshot, click, etc.).
     // If registration doesn't complete within timeout, return the ID anyway — the
     // tab exists in the UI but may not be ready for automation commands yet.
-    try {
-      await waitForTabRegistration(browserPageId)
-    } catch {
-      // Tab was created in the renderer but the webview hasn't finished mounting.
-      // Return success since the tab exists; subsequent commands will fail with a
-      // clear "tab not available" error if the webview never loads.
+    if (params.waitForRegistration !== false) {
+      try {
+        await waitForTabRegistration(browserPageId)
+      } catch {
+        // Tab was created in the renderer but the webview hasn't finished mounting.
+        // Return success since the tab exists; subsequent commands will fail with a
+        // clear "tab not available" error if the webview never loads.
+      }
     }
 
     // Why: newly created tabs should be auto-activated so subsequent commands

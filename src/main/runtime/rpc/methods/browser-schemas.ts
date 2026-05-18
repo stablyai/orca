@@ -117,7 +117,8 @@ export const TabSwitch = BrowserTarget.extend({
 export const TabCreate = z.object({
   url: OptionalString,
   worktree: OptionalString,
-  profileId: OptionalString
+  profileId: OptionalString,
+  waitForRegistration: z.boolean().optional()
 })
 
 export const TabShow = z.object({
