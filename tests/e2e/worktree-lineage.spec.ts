@@ -23,7 +23,6 @@ async function seedLineageScenario(page: Page): Promise<LineageScenario> {
     state.setSidebarOpen(true)
     state.setGroupBy('none')
     state.setSortBy('recent')
-    state.setShowWorkspaceLineage(true)
 
     const worktrees = Object.values(state.worktreesByRepo)
       .flat()

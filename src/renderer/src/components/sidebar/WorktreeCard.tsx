@@ -43,6 +43,7 @@ type WorktreeCardProps = {
   worktree: Worktree
   repo: Repo | undefined
   isActive: boolean
+  isActiveSurface?: boolean
   isMultiSelected?: boolean
   selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
@@ -68,6 +69,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   worktree,
   repo,
   isActive,
+  isActiveSurface = isActive,
   isMultiSelected = false,
   selectedWorktrees,
   onActivate,
@@ -355,12 +357,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
       className={cn(
         'group relative flex items-start gap-1.5 px-1.5 py-1.5 cursor-pointer transition-all duration-200 outline-none select-none ml-1',
         isMultiSelected ? 'rounded-sm' : 'rounded-lg',
-        isActive
+        isActiveSurface
           ? 'bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] border border-black/[0.015] dark:bg-white/[0.10] dark:border-border/40 dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
           : isMultiSelected
             ? 'border border-sidebar-ring/35 bg-sidebar-accent/70 ring-1 ring-sidebar-ring/30'
             : 'border border-transparent hover:bg-sidebar-accent/40',
-        isActive && isMultiSelected && 'ring-1 ring-sidebar-ring/35',
+        isActiveSurface && isMultiSelected && 'ring-1 ring-sidebar-ring/35',
         !nativeDragEnabled && !isDeleting && '!cursor-grab',
         isDeleting && 'opacity-50 grayscale cursor-not-allowed',
         isSshDisconnected && !isDeleting && 'opacity-60'
