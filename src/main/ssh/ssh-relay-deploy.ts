@@ -5,7 +5,6 @@ import { join } from 'path'
    sequence and the GC's live-socket invariant. */
 import { existsSync } from 'fs'
 import { app } from 'electron'
-import { createHash } from 'crypto'
 import type { SshConnection } from './ssh-connection'
 import { parseUnameToRelayPlatform, type RelayPlatform } from './relay-protocol'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
@@ -25,6 +24,12 @@ import {
   gcOldRelayVersions
 } from './ssh-relay-versioned-install'
 import { shellEscape } from './ssh-connection-utils'
+import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
+import {
+  DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  MIN_SSH_RELAY_GRACE_PERIOD_SECONDS
+} from '../../shared/ssh-types'
 
 export type RelayDeployResult = {
   transport: MultiplexerTransport
@@ -413,16 +418,20 @@ async function launchRelay(
   const nodePath = await resolveRemoteNodePath(conn)
   // Why: graceTimeSeconds originates from user-editable SshTarget config.
   // Clamping to integer prevents shell injection if the type ever loosened.
-  const requestedGraceTime = Math.floor(graceTimeSeconds ?? 300)
-  const graceTime = requestedGraceTime === 0 ? 0 : Math.max(60, Math.min(3600, requestedGraceTime))
+  const requestedGraceTime = Math.floor(graceTimeSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS)
+  const graceTime =
+    requestedGraceTime === 0
+      ? 0
+      : Math.max(
+          MIN_SSH_RELAY_GRACE_PERIOD_SECONDS,
+          Math.min(MAX_SSH_RELAY_GRACE_PERIOD_SECONDS, requestedGraceTime)
+        )
   const escapedDir = shellEscape(remoteDir)
   const escapedNode = shellEscape(nodePath)
   // Why: remoteRelayDir is shared by every Orca target for the same remote
   // account. Hashing the target ID into the socket name prevents one target
   // from attaching to another target's live relay.
-  const sockName = relayInstanceId
-    ? `relay-${hashRelayInstanceId(relayInstanceId)}.sock`
-    : 'relay.sock'
+  const sockName = relaySocketNameForInstanceId(relayInstanceId)
   const sockFile = `${remoteDir}/${sockName}`
 
   // Why: after an app restart a relay may still be running in its grace
@@ -533,8 +542,4 @@ async function launchRelay(
     `cd ${escapedDir} && ${escapedNode} relay.js --connect --sock-path ${shellEscape(sockFile)}`
   )
   return waitForSentinel(channel)
-}
-
-function hashRelayInstanceId(relayInstanceId: string): string {
-  return createHash('sha256').update(relayInstanceId).digest('hex').slice(0, 16)
 }

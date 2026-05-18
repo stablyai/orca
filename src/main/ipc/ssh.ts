@@ -7,15 +7,17 @@ import { SshConnectionManager, type SshConnectionCallbacks } from '../ssh/ssh-co
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { SshRelaySession } from '../ssh/ssh-relay-session'
 import { SshPortForwardManager } from '../ssh/ssh-port-forward'
-import type {
-  SshTarget,
-  SshConnectionState,
-  SshConnectionStatus,
-  DetectedPort,
-  SavedPortForward
+import {
+  DEFAULT_REMOTE_WORKSPACE_SYNC_GRACE_PERIOD_SECONDS,
+  type DetectedPort,
+  type SavedPortForward,
+  type SshTarget,
+  type SshConnectionStatus,
+  type SshConnectionState
 } from '../../shared/ssh-types'
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../shared/constants'
 import { isAuthError } from '../ssh/ssh-connection-utils'
+import { forceStopRelayForTarget } from '../ssh/ssh-relay-reset'
 import { isSshPtyNotFoundError } from '../providers/ssh-pty-provider'
 import { registerSshBrowseHandler } from './ssh-browse'
 import { requestCredential, registerCredentialHandler } from './ssh-passphrase'
@@ -42,7 +44,10 @@ function relayGracePeriodForTarget(target: SshTarget | null | undefined): number
   }
   // Why: cross-device sync should survive transient app closes, but an
   // unset value must not mean "keep remote PTYs forever" after disconnect.
-  return target.remoteWorkspaceSyncGracePeriodSeconds ?? 300
+  return (
+    target.remoteWorkspaceSyncGracePeriodSeconds ??
+    DEFAULT_REMOTE_WORKSPACE_SYNC_GRACE_PERIOD_SECONDS
+  )
 }
 
 // Why: multiple renderer tabs for the same SSH target can fire ssh:connect
@@ -51,6 +56,10 @@ function relayGracePeriodForTarget(target: SshTarget | null | undefined): number
 // leaks. This map holds the in-flight connect promise so the second call
 // awaits the first rather than racing.
 const connectInFlight = new Map<string, Promise<SshConnectionState>>()
+
+// Why: reset tears down and force-stops the relay, then disconnects SSH.
+// Publish that lifecycle so new connects and duplicate resets cannot race it.
+const resetRelayInFlight = new Map<string, Promise<void>>()
 
 // Why: ssh:testConnection calls connect() then disconnect(), which fires
 // state-change events to the renderer. This causes worktree cards to briefly
@@ -212,6 +221,7 @@ export function registerSshHandlers(
     'ssh:connect',
     'ssh:disconnect',
     'ssh:terminateSessions',
+    'ssh:resetRelay',
     'ssh:getState',
     'ssh:needsPassphrasePrompt',
     'ssh:testConnection',
@@ -324,6 +334,11 @@ export function registerSshHandlers(
   // ── Connection lifecycle ───────────────────────────────────────────
 
   ipcMain.handle('ssh:connect', async (_event, args: { targetId: string }) => {
+    const reset = resetRelayInFlight.get(args.targetId)
+    if (reset) {
+      await reset
+    }
+
     // Why: serialize concurrent ssh:connect calls for the same target.
     // Multiple tabs can fire connect simultaneously; without this, they
     // interleave and the first session leaks.
@@ -627,6 +642,74 @@ export function registerSshHandlers(
       clearRelayLostBackoff(args.targetId)
     }
     await connectionManager!.disconnect(args.targetId)
+  })
+
+  async function doResetRelay(targetId: string, target: SshTarget): Promise<void> {
+    const inFlightConnect = connectInFlight.get(targetId)
+    if (inFlightConnect) {
+      try {
+        // Why: reset tears down activeSessions; doing that while doConnect is
+        // still deploying can dispose the session doConnect is about to use.
+        await inFlightConnect
+      } catch {
+        // The reset can still recover a stale remote relay after a failed connect.
+      }
+    }
+
+    const session = activeSessions.get(targetId)
+    if (session) {
+      await portForwardManager!.removeAllForwards(targetId)
+      // Why: reset has its own stale-relay lease semantics below. dispose()
+      // records clean PTY termination, which hides reset-affected leases.
+      session.detach()
+      activeSessions.delete(targetId)
+      clearRelayLostBackoff(targetId)
+    }
+
+    const existingConn = connectionManager!.getConnection(targetId)
+    const conn = existingConn ?? (await connectionManager!.connect(target))
+    try {
+      await forceStopRelayForTarget(conn, targetId)
+    } finally {
+      const ptyIds = new Set(getPtyIdsForConnection(targetId))
+      for (const lease of store.getSshRemotePtyLeases(targetId)) {
+        if (lease.state !== 'terminated' && lease.state !== 'expired') {
+          ptyIds.add(lease.ptyId)
+          store.markSshRemotePtyLease(targetId, lease.ptyId, 'expired')
+        }
+      }
+      // Why: reset force-kills the remote relay daemon, so every local PTY
+      // handle owned by that relay is stale even if the reset command failed
+      // after the remote process accepted SIGTERM.
+      for (const ptyId of ptyIds) {
+        clearProviderPtyState(ptyId)
+        deletePtyOwnership(ptyId)
+      }
+      await connectionManager!.disconnect(targetId)
+    }
+  }
+
+  ipcMain.handle('ssh:resetRelay', (_event, args: { targetId: string }) => {
+    const existingReset = resetRelayInFlight.get(args.targetId)
+    if (existingReset) {
+      return existingReset
+    }
+
+    const target = sshStore!.getTarget(args.targetId)
+    if (!target) {
+      throw new Error(`SSH target "${args.targetId}" not found`)
+    }
+
+    let resetPromise: Promise<void>
+    resetPromise = Promise.resolve()
+      .then(() => doResetRelay(args.targetId, target))
+      .finally(() => {
+        if (resetRelayInFlight.get(args.targetId) === resetPromise) {
+          resetRelayInFlight.delete(args.targetId)
+        }
+      })
+    resetRelayInFlight.set(args.targetId, resetPromise)
+    return resetPromise
   })
 
   ipcMain.handle('ssh:getState', (_event, args: { targetId: string }) => {

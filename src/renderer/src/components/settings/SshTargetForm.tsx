@@ -1,4 +1,9 @@
 import { FileKey } from 'lucide-react'
+import {
+  DEFAULT_REMOTE_WORKSPACE_SYNC_GRACE_PERIOD_SECONDS,
+  DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  MAX_SSH_RELAY_GRACE_PERIOD_SECONDS
+} from '../../../../shared/ssh-types'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -26,9 +31,9 @@ export const EMPTY_FORM: EditingTarget = {
   identityFile: '',
   proxyCommand: '',
   jumpHost: '',
-  relayGracePeriodSeconds: '300',
+  relayGracePeriodSeconds: String(DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS),
   remoteWorkspaceSyncEnabled: false,
-  remoteWorkspaceSyncGracePeriodSeconds: '300'
+  remoteWorkspaceSyncGracePeriodSeconds: String(DEFAULT_REMOTE_WORKSPACE_SYNC_GRACE_PERIOD_SECONDS)
 }
 
 type SshTargetFormProps = {
@@ -136,12 +141,13 @@ export function SshTargetForm({
             onChange={(e) =>
               onFormChange((f) => ({ ...f, relayGracePeriodSeconds: e.target.value }))
             }
-            placeholder="300"
-            min={60}
-            max={3600}
+            placeholder={String(DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS)}
+            min={0}
+            max={MAX_SSH_RELAY_GRACE_PERIOD_SECONDS}
           />
           <p className="text-[11px] text-muted-foreground">
-            How long the relay keeps terminals alive after disconnect. Default: 300 (5 minutes).
+            How long the relay keeps terminals alive after disconnect. Default: 10800 (3 hours). 0
+            keeps it alive until terminals are ended or the relay is reset.
           </p>
         </div>
         <div className="col-span-2 space-y-3 border-t border-border/50 pt-3">
@@ -176,7 +182,7 @@ export function SshTargetForm({
                 }
                 placeholder="0"
                 min={0}
-                max={3600}
+                max={MAX_SSH_RELAY_GRACE_PERIOD_SECONDS}
               />
               <p className="text-[11px] text-muted-foreground">
                 How long synced remote workspace terminals stay alive after all clients disconnect.
