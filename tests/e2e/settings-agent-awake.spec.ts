@@ -39,6 +39,20 @@ async function openSettings(page: Page): Promise<void> {
   await expect(page.getByPlaceholder('Search settings')).toBeVisible({ timeout: 10_000 })
 }
 
+async function dismissTransientAnnouncement(page: Page): Promise<void> {
+  // Why: first-run announcements are independent of this setting and can cover
+  // the settings pane on fresh CI profiles before the search input is used.
+  const maybeLaterButton = page.getByRole('button', { name: 'Maybe Later' })
+  const visible = await maybeLaterButton
+    .isVisible({
+      timeout: 1_000
+    })
+    .catch(() => false)
+  if (visible) {
+    await maybeLaterButton.click()
+  }
+}
+
 async function installPowerSaveBlockerProbe(electronApp: ElectronApplication): Promise<void> {
   await electronApp.evaluate(({ powerSaveBlocker }) => {
     const root = globalThis as typeof globalThis & {
@@ -176,6 +190,7 @@ test.describe('Agent awake setting', () => {
 
   test('can be toggled from Agents settings and persists through IPC', async ({ orcaPage }) => {
     await openSettings(orcaPage)
+    await dismissTransientAnnouncement(orcaPage)
     await orcaPage.getByPlaceholder('Search settings').fill('awake')
 
     await expect(
