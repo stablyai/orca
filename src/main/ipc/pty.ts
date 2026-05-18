@@ -37,6 +37,7 @@ import {
   requestKindSchema
 } from '../../shared/telemetry-events'
 import { isRemoteAgentHooksEnabled } from '../../shared/agent-hook-relay'
+import { createTerminalSessionStateSaveFailureMessage } from '../../shared/terminal-session-state-save-failure'
 import { readShellStartupEnvVar } from '../pty/shell-startup-env'
 import {
   isTerminalLeafId,
@@ -1392,9 +1393,7 @@ export function registerPtyHandlers(
           if (!result.isReattach && args.connectionId && store) {
             store.removeSshRemotePtyLease(args.connectionId, result.id)
           }
-          throw new Error(
-            'Failed to save terminal session state. Check disk space and Orca data directory permissions, then try again.'
-          )
+          throw new Error(createTerminalSessionStateSaveFailureMessage())
         }
       }
       // Why: pre-signal cooperation gate — when the renderer has declared it

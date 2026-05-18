@@ -29,6 +29,7 @@ import { useTerminalFontZoom } from './useTerminalFontZoom'
 import CloseTerminalDialog from './CloseTerminalDialog'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
 import { TerminalErrorToast } from './TerminalErrorToast'
+import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import TerminalContextMenu from './TerminalContextMenu'
 import { useSystemPrefersDark } from './use-system-prefers-dark'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
@@ -49,6 +50,7 @@ import {
   getRemoteRuntimeTerminalHandle
 } from '@/runtime/runtime-terminal-stream'
 import { isPrimarySelectionEnabled, readPrimarySelectionText } from '@/lib/primary-selection'
+import { isTerminalSessionStateSaveFailure } from '../../../../shared/terminal-session-state-save-failure'
 
 // Why: registry lives in a leaf module so the store slice can import it
 // without re-entering the `slice → TerminalPane → store → slice` cycle
@@ -133,6 +135,7 @@ export default function TerminalPane({
   const searchStateRef = useRef<SearchState>({ query: '', caseSensitive: false, regex: false })
   const [closeConfirmPaneId, setCloseConfirmPaneId] = useState<number | null>(null)
   const [terminalError, setTerminalError] = useState<string | null>(null)
+  const [sessionStateSaveFailureOpen, setSessionStateSaveFailureOpen] = useState(false)
   // Why: override state lives in a plain Map for perf (safeFit reads it on
   // every resize). This counter forces a re-render when overrides change so
   // the mobile-fit banner appears/disappears. When an override is cleared
@@ -235,6 +238,11 @@ export default function TerminalPane({
   // then call handleRenameSubmit, saving the title the user wanted to discard.
   const renameSubmittedRef = useRef(false)
   const onPtyErrorRef = useRef((_paneId: number, message: string) => {
+    if (isTerminalSessionStateSaveFailure(message)) {
+      setTerminalError(null)
+      setSessionStateSaveFailureOpen(true)
+      return
+    }
     setTerminalError((prev) => (prev ? `${prev}\n${message}` : message))
   })
 
@@ -258,6 +266,8 @@ export default function TerminalPane({
   const markTerminalTabUnread = useAppStore((store) => store.markTerminalTabUnread)
   const clearWorktreeUnread = useAppStore((store) => store.clearWorktreeUnread)
   const clearTerminalTabUnread = useAppStore((store) => store.clearTerminalTabUnread)
+  const openSpacePage = useAppStore((store) => store.openSpacePage)
+  const refreshWorkspaceSpace = useAppStore((store) => store.refreshWorkspaceSpace)
   const settings = useAppStore((store) => store.settings)
   // Why: Windows is the only platform where bare right-click is repurposed as
   // a paste gesture; on macOS/Linux the terminal still owns right-click for the
@@ -278,6 +288,14 @@ export default function TerminalPane({
       consumeTabStartupCommand(tabId)
     }
   }, [startup, tabId, consumeTabStartupCommand])
+
+  const openDiskSpaceAnalyzer = useCallback(() => {
+    setSessionStateSaveFailureOpen(false)
+    openSpacePage()
+    void refreshWorkspaceSpace().catch((err: unknown) => {
+      console.warn('Failed to refresh Space Analyzer after terminal session save failure:', err)
+    })
+  }, [openSpacePage, refreshWorkspaceSpace])
 
   useEffect(() => {
     if (setupSplit) {
@@ -1218,6 +1236,13 @@ export default function TerminalPane({
       />
       {terminalError && isActive && (
         <TerminalErrorToast error={terminalError} onDismiss={() => setTerminalError(null)} />
+      )}
+      {isActive && (
+        <TerminalSessionStateSaveFailureDialog
+          open={sessionStateSaveFailureOpen}
+          onDismiss={() => setSessionStateSaveFailureOpen(false)}
+          onOpenSpaceAnalyzer={openDiskSpaceAnalyzer}
+        />
       )}
       {activePane?.container &&
         createPortal(
