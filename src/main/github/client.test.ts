@@ -793,6 +793,48 @@ describe('getPRForBranch', () => {
     })
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
+
+  it('probes additional PR repo candidates when the first lookup is not found', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
+      candidates: [
+        { owner: 'fork', repo: 'orca' },
+        { owner: 'stablyai', repo: 'orca' }
+      ],
+      headRepo: { owner: 'fork', repo: 'orca' }
+    })
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('HTTP 404: Not Found'))
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          head: {
+            ref: 'feature/test',
+            repo: {
+              full_name: 'fork/orca',
+              name: 'orca',
+              clone_url: 'https://github.com/fork/orca.git',
+              ssh_url: 'git@github.com:fork/orca.git',
+              owner: { login: 'fork' }
+            }
+          }
+        })
+      })
+
+    await expect(getPullRequestPushTarget('/repo-root', 1849)).resolves.toEqual({
+      remoteName: 'origin',
+      branchName: 'feature/test'
+    })
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      ['api', 'repos/fork/orca/pulls/1849'],
+      { cwd: '/repo-root' }
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      ['api', 'repos/stablyai/orca/pulls/1849'],
+      { cwd: '/repo-root' }
+    )
+  })
 })
 
 describe('GitHub GraphQL rate-limit guard', () => {

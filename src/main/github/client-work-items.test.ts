@@ -350,4 +350,47 @@ describe('listWorkItems', () => {
       }
     ])
   })
+
+  it('marks fork PRs as cross-repository when REST payload only includes head.label', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '[]' })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 1849,
+            title: 'Fork PR with missing head repo',
+            state: 'open',
+            html_url: 'https://github.com/stablyai/orca/pull/1849',
+            updated_at: '2026-04-01T00:00:00Z',
+            user: { login: 'contributor' },
+            head: {
+              ref: 'feat/onboarding-model-choice-782',
+              repo: null,
+              label: 'contributor:feat/onboarding-model-choice-782'
+            },
+            base: { ref: 'main' }
+          }
+        ])
+      })
+
+    const { items } = await listWorkItems('/repo-root', 10)
+    expect(items).toEqual([
+      {
+        id: 'pr:1849',
+        type: 'pr',
+        number: 1849,
+        title: 'Fork PR with missing head repo',
+        state: 'open',
+        url: 'https://github.com/stablyai/orca/pull/1849',
+        labels: [],
+        updatedAt: '2026-04-01T00:00:00Z',
+        author: 'contributor',
+        branchName: 'feat/onboarding-model-choice-782',
+        baseRefName: 'main',
+        isCrossRepository: true
+      }
+    ])
+  })
 })

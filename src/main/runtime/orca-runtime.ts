@@ -6237,15 +6237,12 @@ export class OrcaRuntimeService {
       try {
         pushTarget = (await getPullRequestPushTarget(repo.path, args.prNumber)) ?? undefined
       } catch (error) {
-        return {
-          error:
-            error instanceof Error
-              ? error.message
-              : `Could not resolve PR #${args.prNumber} head push target.`
-        }
-      }
-      if (!pushTarget) {
-        return { error: `Could not resolve PR #${args.prNumber} head push target.` }
+        // Why: missing fork metadata can block push-target discovery, but we
+        // can still create from refs/pull/<N>/head.
+        console.warn(
+          `[runtime.resolveManagedPrBase] Could not resolve PR #${args.prNumber} head push target.`,
+          error
+        )
       }
     }
 
@@ -6256,7 +6253,9 @@ export class OrcaRuntimeService {
       return { error: error instanceof Error ? error.message : 'Could not resolve git remote.' }
     }
 
-    if (isCrossRepository) {
+    const resolvePullHeadBase = async (): Promise<
+      { baseBranch: string; pushTarget?: GitPushTarget } | { error: string }
+    > => {
       const pullRef = `refs/pull/${args.prNumber}/head`
       try {
         await gitExecFileAsync(['fetch', remote, pullRef], { cwd: repo.path })
@@ -6278,6 +6277,10 @@ export class OrcaRuntimeService {
       }
     }
 
+    if (isCrossRepository) {
+      return await resolvePullHeadBase()
+    }
+
     try {
       await gitExecFileAsync(
         ['fetch', remote, `+refs/heads/${headRefName}:refs/remotes/${remote}/${headRefName}`],
@@ -6285,6 +6288,12 @@ export class OrcaRuntimeService {
       )
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+      // Why: if cross-repo metadata is missing (e.g. deleted head repo),
+      // a branch fetch can fail even though refs/pull/<N>/head exists.
+      const fallback = await resolvePullHeadBase()
+      if (!('error' in fallback)) {
+        return fallback
+      }
       return { error: `Failed to fetch ${remote}/${headRefName}: ${message.split('\n')[0]}` }
     }
 

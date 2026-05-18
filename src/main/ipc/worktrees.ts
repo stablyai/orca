@@ -470,15 +470,12 @@ export function registerWorktreeHandlers(
             (await getPullRequestPushTarget(repo.path, args.prNumber, repo.connectionId ?? null)) ??
             undefined
         } catch (error) {
-          return {
-            error:
-              error instanceof Error
-                ? error.message
-                : `Could not resolve PR #${args.prNumber} head push target.`
-          }
-        }
-        if (!pushTarget) {
-          return { error: `Could not resolve PR #${args.prNumber} head push target.` }
+          // Why: a missing/unreadable fork head repo should not block creating
+          // a workspace from the PR commit; we can still fetch refs/pull/<N>/head.
+          console.warn(
+            `[worktrees:resolvePrBase] Could not resolve PR #${args.prNumber} head push target.`,
+            error
+          )
         }
       }
 
@@ -505,7 +502,9 @@ export function registerWorktreeHandlers(
       // derived from the workspace name, so there's no tracking ref to set
       // up, which makes SHA semantics ("branch from this commit") cleaner
       // than returning a ref that would go stale on force-push.
-      if (isCrossRepository) {
+      const resolvePullHeadBase = async (): Promise<
+        { baseBranch: string; pushTarget?: CreateWorktreeArgs['pushTarget'] } | { error: string }
+      > => {
         const pullRef = `refs/pull/${args.prNumber}/head`
         try {
           await gitExec(['fetch', remote, pullRef])
@@ -528,6 +527,10 @@ export function registerWorktreeHandlers(
         return { baseBranch: sha, ...(pushTarget ? { pushTarget } : {}) }
       }
 
+      if (isCrossRepository) {
+        return await resolvePullHeadBase()
+      }
+
       try {
         await gitExec([
           'fetch',
@@ -536,6 +539,13 @@ export function registerWorktreeHandlers(
         ])
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
+        // Why: some PR payloads omit fork metadata (e.g. deleted head repo),
+        // so we may misclassify a fork as same-repo. Falling back to
+        // refs/pull/<N>/head still resolves the PR commit in that case.
+        const fallback = await resolvePullHeadBase()
+        if (!('error' in fallback)) {
+          return fallback
+        }
         return {
           error: `Failed to fetch ${remote}/${headRefName}: ${message.split('\n')[0]}`
         }

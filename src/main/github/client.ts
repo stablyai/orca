@@ -119,19 +119,38 @@ export async function getPullRequestPushTarget(
 ): Promise<GitPushTarget | null> {
   const context = githubRepoContext(repoPath, connectionId)
   const ghOptions = ghRepoExecOptions(context)
-  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
-  if (!ownerRepo) {
+  const { candidates } = await resolvePRRepositoryCandidates(repoPath, connectionId)
+  if (candidates.length === 0) {
     return null
   }
 
   await acquire()
   try {
-    const [{ stdout: prStdout }, origin] = await Promise.all([
-      ghExecFileAsync(['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${prNumber}`], {
-        ...ghOptions
-      }),
-      getOwnerRepoForRemote(repoPath, 'origin', connectionId)
-    ])
+    let prStdout = ''
+    for (const candidate of candidates) {
+      try {
+        const { stdout } = await ghExecFileAsync(
+          ['api', `repos/${candidate.owner}/${candidate.repo}/pulls/${prNumber}`],
+          {
+            ...ghOptions
+          }
+        )
+        prStdout = stdout
+        break
+      } catch (error) {
+        // Why: in fork workflows `origin` is often the contributor fork while
+        // the PR number belongs to `upstream`; probe all known PR repos before
+        // deciding this PR number is unavailable.
+        if (isNotFoundGhError(error)) {
+          continue
+        }
+        throw error
+      }
+    }
+    if (!prStdout) {
+      return null
+    }
+    const origin = await getOwnerRepoForRemote(repoPath, 'origin', connectionId)
     const pr = JSON.parse(prStdout) as {
       head?: {
         ref?: string
@@ -275,7 +294,8 @@ function extractHeadOwnerLogin(item: Record<string, unknown>): string | null {
   }
   // REST API `pull_request` shape: head.repo.owner.login
   if (typeof item.head === 'object' && item.head !== null) {
-    const repo = (item.head as { repo?: unknown }).repo
+    const head = item.head as { repo?: unknown; user?: unknown; label?: unknown }
+    const repo = head.repo
     if (typeof repo === 'object' && repo !== null) {
       const owner = (repo as { owner?: unknown }).owner
       if (typeof owner === 'object' && owner !== null) {
@@ -283,6 +303,21 @@ function extractHeadOwnerLogin(item: Record<string, unknown>): string | null {
         if (typeof login === 'string' && login.trim()) {
           return login
         }
+      }
+    }
+    // Why: when a fork is deleted or made inaccessible, GitHub can return
+    // `head.repo = null` but still include `head.user`/`head.label`.
+    const user = head.user
+    if (typeof user === 'object' && user !== null) {
+      const login = (user as { login?: unknown }).login
+      if (typeof login === 'string' && login.trim()) {
+        return login
+      }
+    }
+    if (typeof head.label === 'string') {
+      const owner = head.label.split(':', 1)[0]?.trim()
+      if (owner) {
+        return owner
       }
     }
   }
