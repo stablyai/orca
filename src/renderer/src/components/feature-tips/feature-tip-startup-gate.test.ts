@@ -33,7 +33,7 @@ describe('feature tip startup gate', () => {
         settings: makeSettings(),
         suppressedByOnboardingThisSession: false
       })
-    ).toBe('open')
+    ).toEqual({ kind: 'open', tipId: 'voice-dictation' })
   })
 
   it('suppresses feature tips for first-time users while onboarding is showing', () => {
@@ -47,7 +47,7 @@ describe('feature tip startup gate', () => {
         settings: makeSettings(),
         suppressedByOnboardingThisSession: false
       })
-    ).toBe('suppress-for-onboarding')
+    ).toEqual({ kind: 'suppress-for-onboarding' })
   })
 
   it('does not open later in the same session after onboarding suppressed it', () => {
@@ -61,7 +61,7 @@ describe('feature tip startup gate', () => {
         settings: makeSettings(),
         suppressedByOnboardingThisSession: true
       })
-    ).toBe('skip')
+    ).toEqual({ kind: 'skip' })
   })
 
   it('does not reopen after the tip was marked seen', () => {
@@ -75,7 +75,7 @@ describe('feature tip startup gate', () => {
         settings: makeSettings(),
         suppressedByOnboardingThisSession: false
       })
-    ).toBe('skip')
+    ).toEqual({ kind: 'skip' })
   })
 
   it('does not open after voice dictation is already enabled', () => {
@@ -89,6 +89,6 @@ describe('feature tip startup gate', () => {
         settings: makeSettings(true),
         suppressedByOnboardingThisSession: false
       })
-    ).toBe('skip')
+    ).toEqual({ kind: 'skip' })
   })
 })

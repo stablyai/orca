@@ -6,7 +6,10 @@ import {
 import type { GlobalSettings, OnboardingState } from '../../../../shared/types'
 import { shouldShowOnboarding } from '../onboarding/should-show-onboarding'
 
-export type FeatureTipsAppOpenDecision = 'open' | 'skip' | 'suppress-for-onboarding'
+export type FeatureTipsAppOpenDecision =
+  | { kind: 'open'; tipId: FeatureTipId }
+  | { kind: 'skip' }
+  | { kind: 'suppress-for-onboarding' }
 
 export function getFeatureTipsAppOpenDecision(args: {
   activeModal: string
@@ -18,7 +21,7 @@ export function getFeatureTipsAppOpenDecision(args: {
   suppressedByOnboardingThisSession: boolean
 }): FeatureTipsAppOpenDecision {
   if (args.onboarding !== null && shouldShowOnboarding(args.onboarding)) {
-    return 'suppress-for-onboarding'
+    return { kind: 'suppress-for-onboarding' }
   }
 
   if (
@@ -30,7 +33,7 @@ export function getFeatureTipsAppOpenDecision(args: {
     args.activeModal !== 'none' ||
     shouldShowOnboarding(args.onboarding)
   ) {
-    return 'skip'
+    return { kind: 'skip' }
   }
 
   const unseenTips = getOrderedUnseenFeatureTips({
@@ -40,5 +43,6 @@ export function getFeatureTipsAppOpenDecision(args: {
     })
   })
 
-  return unseenTips.length > 0 ? 'open' : 'skip'
+  const nextTip = unseenTips[0]
+  return nextTip ? { kind: 'open', tipId: nextTip.id } : { kind: 'skip' }
 }

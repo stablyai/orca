@@ -252,6 +252,7 @@ function App(): React.JSX.Element {
       setHydrationSucceeded: s.setHydrationSucceeded,
       openModal: s.openModal,
       closeModal: s.closeModal,
+      markFeatureTipsSeen: s.markFeatureTipsSeen,
       toggleRightSidebar: s.toggleRightSidebar,
       setRightSidebarOpen: s.setRightSidebarOpen,
       setRightSidebarTab: s.setRightSidebarTab,
@@ -415,19 +416,22 @@ function App(): React.JSX.Element {
       suppressedByOnboardingThisSession: featureTipsSuppressedByOnboardingThisSessionRef.current
     })
 
-    if (featureTipsDecision === 'suppress-for-onboarding') {
+    if (featureTipsDecision.kind === 'suppress-for-onboarding') {
       // Why: first-download users should finish onboarding without a second
       // education modal appearing later in the same first-run session.
       featureTipsSuppressedByOnboardingThisSessionRef.current = true
       return
     }
 
-    if (featureTipsDecision !== 'open') {
+    if (featureTipsDecision.kind !== 'open') {
       return
     }
 
     featureTipsPromptedThisSessionRef.current = true
-    actions.openModal('feature-tips', { source: 'app_open' })
+    // Why: once a tip is visible, app quit/crash should not make it reappear
+    // on the next launch just because the user never clicked a dismiss button.
+    actions.markFeatureTipsSeen([featureTipsDecision.tipId])
+    actions.openModal('feature-tips', { source: 'app_open', tipId: featureTipsDecision.tipId })
   }, [activeModal, actions, featureTipsSeenIds, onboarding, persistedUIReady, settings])
 
   useEffect(() => {

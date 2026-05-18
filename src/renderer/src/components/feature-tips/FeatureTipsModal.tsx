@@ -2,8 +2,10 @@ import type { JSX } from 'react'
 import { Mic, Sparkles } from 'lucide-react'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
 import {
+  FEATURE_TIPS,
   getCompletedFeatureTipIds,
   getOrderedUnseenFeatureTips,
+  isFeatureTipId,
   type FeatureTip
 } from '../../../../shared/feature-tips'
 import { Badge } from '@/components/ui/badge'
@@ -52,14 +54,18 @@ export default function FeatureTipsModal(): JSX.Element | null {
   const updateSettings = useAppStore((s) => s.updateSettings)
   const seenTipIds = useAppStore((s) => s.featureTipsSeenIds)
   const markFeatureTipsSeen = useAppStore((s) => s.markFeatureTipsSeen)
+  const modalData = useAppStore((s) => s.modalData)
   const isOpen = activeModal === 'feature-tips'
+  const modalTipId = isFeatureTipId(modalData.tipId) ? modalData.tipId : null
   const pendingTips = getOrderedUnseenFeatureTips({
     seenTipIds: new Set(seenTipIds),
     completedTipIds: getCompletedFeatureTipIds({
       voiceDictationEnabled: settings?.voice?.enabled === true
     })
   })
-  const currentTip = pendingTips[0] ?? null
+  const currentTip = modalTipId
+    ? (FEATURE_TIPS.find((tip) => tip.id === modalTipId) ?? null)
+    : (pendingTips[0] ?? null)
 
   const markCurrentTipSeen = (): void => {
     if (currentTip) {
