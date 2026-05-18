@@ -131,7 +131,9 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
         return get().detectedAgentIds ?? []
       })
       .finally(() => {
-        refreshPromise = null
+        if (refreshPromise?.promise === pending) {
+          refreshPromise = null
+        }
       })
     refreshPromise = { key: contextKey, promise: pending }
     return pending
