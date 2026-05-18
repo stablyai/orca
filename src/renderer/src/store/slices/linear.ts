@@ -96,9 +96,14 @@ type LinearIssueReadArgs =
 
 type LinearFetchOptions = { force?: boolean }
 
-function cancelInflightStatusRequest(): void {
+function beginStatusOperation(): number {
   statusRequestGeneration += 1
   inflightStatusRequest = null
+  return statusRequestGeneration
+}
+
+function isCurrentStatusOperation(generation: number): boolean {
+  return generation === statusRequestGeneration
 }
 
 export type LinearSlice = {
@@ -151,11 +156,10 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       return inflightStatusRequest
     }
 
-    const requestGeneration = statusRequestGeneration + 1
-    statusRequestGeneration = requestGeneration
+    const requestGeneration = beginStatusOperation()
     inflightStatusRequest = linearStatus(get().settings)
       .then((status) => {
-        if (requestGeneration !== statusRequestGeneration) {
+        if (!isCurrentStatusOperation(requestGeneration)) {
           return
         }
         const typedStatus = status as LinearConnectionStatus
@@ -172,7 +176,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         }
       })
       .catch(() => {
-        if (requestGeneration !== statusRequestGeneration) {
+        if (!isCurrentStatusOperation(requestGeneration)) {
           return
         }
         if (get().linearStatus.connected) {
@@ -182,7 +186,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         }
       })
       .finally(() => {
-        if (requestGeneration === statusRequestGeneration) {
+        if (isCurrentStatusOperation(requestGeneration)) {
           inflightStatusRequest = null
         }
       })
@@ -191,13 +195,15 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   testLinearConnection: async (workspaceId) => {
+    const requestGeneration = beginStatusOperation()
     try {
       const result = (await linearTestConnection(get().settings, workspaceId)) as
         | { ok: true; viewer: LinearViewer }
         | { ok: false; error: string }
       const status = await linearStatus(get().settings)
-      cancelInflightStatusRequest()
-      set({ linearStatus: status, linearStatusChecked: true })
+      if (isCurrentStatusOperation(requestGeneration)) {
+        set({ linearStatus: status, linearStatusChecked: true })
+      }
       return result
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Test failed'
@@ -206,10 +212,10 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   connectLinear: async (apiKey: string) => {
+    const requestGeneration = beginStatusOperation()
     try {
       const result = await linearConnect(get().settings, apiKey)
-      if (result.ok) {
-        cancelInflightStatusRequest()
+      if (result.ok && isCurrentStatusOperation(requestGeneration)) {
         set({
           linearStatus: {
             connected: true,
@@ -226,8 +232,11 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   selectLinearWorkspace: async (workspaceId) => {
+    const requestGeneration = beginStatusOperation()
     const status = await linearSelectWorkspace(get().settings, workspaceId)
-    cancelInflightStatusRequest()
+    if (!isCurrentStatusOperation(requestGeneration)) {
+      return
+    }
     inflightIssueRequests.clear()
     inflightSearchRequests.clear()
     inflightListRequests.clear()
@@ -243,8 +252,11 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   disconnectLinear: async () => {
+    const requestGeneration = beginStatusOperation()
     await linearDisconnect(get().settings)
-    cancelInflightStatusRequest()
+    if (!isCurrentStatusOperation(requestGeneration)) {
+      return
+    }
     inflightIssueRequests.clear()
     inflightSearchRequests.clear()
     inflightListRequests.clear()
@@ -259,14 +271,17 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   disconnectLinearWorkspace: async (workspaceId) => {
+    const requestGeneration = beginStatusOperation()
     await linearDisconnectWorkspace(get().settings, workspaceId)
+    const status = await linearStatus(get().settings)
+    if (!isCurrentStatusOperation(requestGeneration)) {
+      return
+    }
     inflightIssueRequests.clear()
     inflightSearchRequests.clear()
     inflightListRequests.clear()
     inflightTeamRequests.clear()
     clearLinearMetadataCache()
-    const status = await linearStatus(get().settings)
-    cancelInflightStatusRequest()
     set({
       linearStatus: status,
       linearIssueCache: {},

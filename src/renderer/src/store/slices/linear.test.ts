@@ -1,18 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import type { LinearConnectionStatus, LinearIssue, LinearTeam } from '../../../../shared/types'
+import type {
+  LinearConnectionStatus,
+  LinearIssue,
+  LinearTeam,
+  LinearViewer
+} from '../../../../shared/types'
 import { createLinearSlice } from './linear'
 
 const linearStatus = vi.fn()
 const linearConnect = vi.fn()
+const linearDisconnect = vi.fn()
 const linearListIssues = vi.fn()
 const linearSearchIssues = vi.fn()
 const linearListTeams = vi.fn()
+const linearTestConnection = vi.fn()
 
 vi.mock('@/runtime/runtime-linear-client', () => ({
   linearConnect: (...args: unknown[]) => linearConnect(...args),
-  linearDisconnect: vi.fn(),
+  linearDisconnect: (...args: unknown[]) => linearDisconnect(...args),
   linearDisconnectWorkspace: vi.fn(),
   linearGetIssue: vi.fn(),
   linearListIssues: (...args: unknown[]) => linearListIssues(...args),
@@ -20,7 +27,7 @@ vi.mock('@/runtime/runtime-linear-client', () => ({
   linearSearchIssues: (...args: unknown[]) => linearSearchIssues(...args),
   linearSelectWorkspace: vi.fn(),
   linearStatus: (...args: unknown[]) => linearStatus(...args),
-  linearTestConnection: vi.fn()
+  linearTestConnection: (...args: unknown[]) => linearTestConnection(...args)
 }))
 
 vi.mock('../../hooks/useIssueMetadata', () => ({
@@ -248,6 +255,8 @@ describe('createLinearSlice', () => {
   beforeEach(() => {
     linearStatus.mockReset()
     linearConnect.mockReset()
+    linearDisconnect.mockReset()
+    linearTestConnection.mockReset()
   })
 
   it('dedupes concurrent connection checks', async () => {
@@ -299,5 +308,30 @@ describe('createLinearSlice', () => {
 
     expect(store.getState().linearStatus.connected).toBe(true)
     expect(store.getState().linearStatus.viewer?.email).toBe('test@example.com')
+  })
+
+  it('ignores stale direct status writes after a newer mutation', async () => {
+    const testResult = deferred<{ ok: true; viewer: LinearViewer }>()
+    const staleStatus = deferred<LinearConnectionStatus>()
+    const viewer = {
+      displayName: 'Test User',
+      email: 'test@example.com',
+      organizationName: 'Test Org'
+    }
+    linearTestConnection.mockReturnValueOnce(testResult.promise)
+    linearStatus.mockReturnValueOnce(staleStatus.promise)
+    linearDisconnect.mockResolvedValueOnce(undefined)
+    const store = createTestStore()
+
+    const testPromise = store.getState().testLinearConnection()
+    testResult.resolve({ ok: true, viewer })
+    await Promise.resolve()
+
+    await store.getState().disconnectLinear()
+    staleStatus.resolve({ connected: true, viewer })
+    await testPromise
+
+    expect(store.getState().linearStatus.connected).toBe(false)
+    expect(store.getState().linearStatus.viewer).toBeNull()
   })
 })
