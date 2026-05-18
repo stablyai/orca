@@ -21,6 +21,7 @@ import {
 } from '../git/worktree'
 import { gitExecFileAsync } from '../git/runner'
 import { getDefaultRemote } from '../git/repo'
+import { isMissingRemoteRefGitError } from '../git/fetch-error-classification'
 import { getPullRequestPushTarget, getWorkItem } from '../github/client'
 import { getProjectRef as getGlabProjectRef, getGlabKnownHosts } from '../gitlab/gl-utils'
 import { getWorkItemByProjectRef as getGitLabWorkItemByProjectRef } from '../gitlab/client'
@@ -541,10 +542,13 @@ export function registerWorktreeHandlers(
         const message = error instanceof Error ? error.message : String(error)
         // Why: some PR payloads omit fork metadata (e.g. deleted head repo),
         // so we may misclassify a fork as same-repo. Falling back to
-        // refs/pull/<N>/head still resolves the PR commit in that case.
-        const fallback = await resolvePullHeadBase()
-        if (!('error' in fallback)) {
-          return fallback
+        // refs/pull/<N>/head still resolves the PR commit in that case, but
+        // auth/network failures should not pay for another fetch.
+        if (isMissingRemoteRefGitError(error)) {
+          const fallback = await resolvePullHeadBase()
+          if (!('error' in fallback)) {
+            return fallback
+          }
         }
         return {
           error: `Failed to fetch ${remote}/${headRefName}: ${message.split('\n')[0]}`

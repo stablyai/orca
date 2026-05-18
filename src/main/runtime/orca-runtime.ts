@@ -8,6 +8,7 @@ import {
 } from '../../shared/agent-detection'
 import type { AgentStatus } from '../../shared/agent-detection'
 import { gitExecFileAsync, wslAwareSpawn } from '../git/runner'
+import { isMissingRemoteRefGitError } from '../git/fetch-error-classification'
 import { isWslPath, parseWslPath, getWslHome } from '../wsl'
 import { randomUUID } from 'crypto'
 import { basename, isAbsolute, join } from 'path'
@@ -6289,10 +6290,13 @@ export class OrcaRuntimeService {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       // Why: if cross-repo metadata is missing (e.g. deleted head repo),
-      // a branch fetch can fail even though refs/pull/<N>/head exists.
-      const fallback = await resolvePullHeadBase()
-      if (!('error' in fallback)) {
-        return fallback
+      // a branch fetch can fail even though refs/pull/<N>/head exists. Keep
+      // network/auth failures on the original error path to avoid extra fetches.
+      if (isMissingRemoteRefGitError(error)) {
+        const fallback = await resolvePullHeadBase()
+        if (!('error' in fallback)) {
+          return fallback
+        }
       }
       return { error: `Failed to fetch ${remote}/${headRefName}: ${message.split('\n')[0]}` }
     }
