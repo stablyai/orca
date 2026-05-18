@@ -1023,17 +1023,17 @@ export function MobileBrowserPane({
           label="Back"
           onPress={goBack}
         >
-          <ChevronLeft size={18} color={buttonColor(!controlsDisabled && tab.canGoBack)} />
+          <ChevronLeft size={15} color={buttonColor(!controlsDisabled && tab.canGoBack)} />
         </ToolbarIconButton>
         <ToolbarIconButton
           disabled={controlsDisabled || !tab.canGoForward}
           label="Forward"
           onPress={goForward}
         >
-          <ChevronRight size={18} color={buttonColor(!controlsDisabled && tab.canGoForward)} />
+          <ChevronRight size={15} color={buttonColor(!controlsDisabled && tab.canGoForward)} />
         </ToolbarIconButton>
         <ToolbarIconButton disabled={controlsDisabled} label="Reload" onPress={reloadPage}>
-          <RefreshCw size={17} color={buttonColor(!controlsDisabled)} />
+          <RefreshCw size={15} color={buttonColor(!controlsDisabled)} />
         </ToolbarIconButton>
         <TextInput
           style={styles.addressInput}
@@ -1442,19 +1442,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgBase
   },
   toolbar: {
-    minHeight: 48,
+    minHeight: 32,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingVertical: 2,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel
   },
   toolbarIconButton: {
-    width: 36,
-    height: 36,
+    width: 26,
+    height: 26,
     borderRadius: radii.button,
     alignItems: 'center',
     justifyContent: 'center'
@@ -1465,14 +1465,14 @@ const styles = StyleSheet.create({
   addressInput: {
     flex: 1,
     minWidth: 0,
-    height: 40,
+    height: 28,
     borderRadius: radii.input,
     backgroundColor: colors.bgRaised,
     color: colors.textPrimary,
     paddingHorizontal: spacing.sm,
     paddingVertical: 0,
-    fontSize: 14,
-    lineHeight: 22,
+    fontSize: 12,
+    lineHeight: 16,
     includeFontPadding: false,
     textAlignVertical: 'center',
     fontFamily: typography.monoFamily
