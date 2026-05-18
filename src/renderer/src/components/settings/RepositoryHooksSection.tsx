@@ -690,15 +690,14 @@ export function RepositoryHooksSection({
 
       <SearchableSetting
         title="Command Source"
-        description="Choose whether repo commands, local commands, or both are authoritative."
+        description="Choose whether Orca runs commands from `orca.yaml`, local Settings, or both."
         keywords={['command source', 'local', 'shared', 'orca.yaml', 'both', 'authoritative']}
       >
         <div className="space-y-3 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm">
           <div className="space-y-1">
             <h5 className="text-sm font-semibold">Command Source</h5>
             <p className="text-xs text-muted-foreground">
-              Choose whether `orca.yaml` is authoritative, local Settings are authoritative, or both
-              sources can run.
+              Choose whether Orca runs commands from `orca.yaml`, local Settings, or both.
             </p>
           </div>
 

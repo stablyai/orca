@@ -108,7 +108,8 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
           },
           {
             title: 'Command Source',
-            description: 'Choose whether repo commands, local commands, or both are authoritative.',
+            description:
+              'Choose whether Orca runs commands from `orca.yaml`, local Settings, or both.',
             keywords: [
               repo.displayName,
               'local',
