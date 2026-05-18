@@ -22,6 +22,7 @@ type OnboardingState = {
 
 const ORCHESTRATION_ENABLED_STORAGE_KEY = 'orca.orchestration.enabled'
 const BROWSER_USE_ENABLED_STORAGE_KEY = 'orca.browserUse.enabled'
+const SKIP_TO_PROJECT_SETUP_BUTTON = /^Skip to project setup$/i
 
 async function getOnboardingState(page: Page): Promise<OnboardingState> {
   return page.evaluate(() => window.api.onboarding.get() as Promise<OnboardingState>)
@@ -138,7 +139,7 @@ test.describe('Onboarding flow', () => {
     })
     await expect(orcaPage.getByText('1 of 4')).toBeVisible()
     await expect(onboardingFooterButton(orcaPage, /^Continue\b/)).toBeVisible()
-    await expect(onboardingFooterButton(orcaPage, /^Skip$/i)).toBeVisible()
+    await expect(onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON)).toBeVisible()
     // Why: Back is not rendered on the first step (was previously rendered-but-
     // disabled with `disabled:invisible`, now conditionally mounted).
     await expect(orcaPage.getByRole('button', { name: 'Back', exact: true })).toHaveCount(0)
@@ -341,11 +342,11 @@ test.describe('Onboarding flow', () => {
     }
     await codexButton.click()
 
-    await onboardingFooterButton(orcaPage, /^Skip$/i).click()
+    await onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON).click()
 
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
     await expect(orcaPage.getByText('4 of 4')).toBeVisible()
-    await expect(onboardingFooterButton(orcaPage, /^Skip$/i)).toHaveCount(0)
+    await expect(onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON)).toHaveCount(0)
     await expect(onboardingFooterButton(orcaPage, /Skip all onboarding/i)).toHaveCount(0)
     await expect(orcaPage.getByRole('button', { name: /Open a folder/i })).toBeVisible()
     await expect(
@@ -379,7 +380,7 @@ test.describe('Onboarding flow', () => {
     await waitForSessionReady(orcaPage)
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
     await expect(orcaPage.getByText('4 of 4')).toBeVisible()
-    await expect(onboardingFooterButton(orcaPage, /^Skip$/i)).toHaveCount(0)
+    await expect(onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON)).toHaveCount(0)
     expect((await getOnboardingState(orcaPage)).closedAt).toBeNull()
   })
 
@@ -388,7 +389,7 @@ test.describe('Onboarding flow', () => {
       timeout: 15_000
     })
 
-    await onboardingFooterButton(orcaPage, /^Skip$/i).click()
+    await onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON).click()
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
 
     await orcaPage.getByRole('button', { name: /SSH\? Set hosts up in Settings/i }).click()
@@ -450,7 +451,7 @@ test.describe('Onboarding flow', () => {
       .poll(async () => getDocumentThemeClass(orcaPage), { timeout: 5_000 })
       .toBe(oppositeTheme)
 
-    await onboardingFooterButton(orcaPage, /^Skip$/i).click()
+    await onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON).click()
 
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
     await expect
@@ -474,7 +475,7 @@ test.describe('Onboarding flow', () => {
       })
       .toBe('env-e2e')
 
-    await onboardingFooterButton(orcaPage, /^Skip$/i).click()
+    await onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON).click()
 
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
     await expect(orcaPage.getByText('Runtime server', { exact: true })).toBeVisible()
@@ -487,7 +488,7 @@ test.describe('Onboarding flow', () => {
       .getByPlaceholder('git@github.com:org/repo.git')
       .fill('git@github.com:org/repo.git')
     await expect(orcaPage.getByRole('button', { name: /^Clone$/i })).toBeDisabled()
-    await expect(onboardingFooterButton(orcaPage, /^Skip$/i)).toHaveCount(0)
+    await expect(onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON)).toHaveCount(0)
     expect((await getOnboardingState(orcaPage)).closedAt).toBeNull()
   })
 
@@ -515,7 +516,7 @@ test.describe('Onboarding flow', () => {
     await bellSwitch.click()
     await expect(bellSwitch).toHaveAttribute('aria-checked', 'false')
 
-    await onboardingFooterButton(orcaPage, /^Skip$/i).click()
+    await onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON).click()
 
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
     await expect
@@ -783,7 +784,7 @@ test.describe('Onboarding flow', () => {
     await continueOnboarding(orcaPage)
     await expect(orcaPage.getByRole('heading', { name: /Point Orca at some code/i })).toBeVisible()
 
-    await expect(onboardingFooterButton(orcaPage, /^Skip$/i)).toHaveCount(0)
+    await expect(onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON)).toHaveCount(0)
     await expect(onboardingFooterButton(orcaPage, /Skip all onboarding/i)).toHaveCount(0)
     const final = await getOnboardingState(orcaPage)
     expect(final.closedAt).toBeNull()

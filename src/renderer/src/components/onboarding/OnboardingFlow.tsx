@@ -217,7 +217,7 @@ export default function OnboardingFlow({
               disabled={Boolean(busyLabel)}
               onClick={() => void flow.skipToRepo()}
             >
-              Skip
+              Skip to project setup
             </button>
           ) : (
             <span />
