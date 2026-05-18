@@ -74,7 +74,9 @@ import {
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
 } from './runtime/sync-runtime-graph'
+import { useWebSessionTabsSync } from './runtime/web-session-tabs-sync'
 import { useGlobalFileDrop } from './hooks/useGlobalFileDrop'
+import { useRadixBodyPointerEventsRecovery } from './hooks/useRadixBodyPointerEventsRecovery'
 import { registerUpdaterBeforeUnloadBypass } from './lib/updater-beforeunload'
 import {
   buildWorkspaceSessionPayload,
@@ -225,6 +227,8 @@ function applyRemoteWorkspacePatchStatus(
 
 function App(): React.JSX.Element {
   useUnreadDockBadge()
+  useRadixBodyPointerEventsRecovery()
+  useWebSessionTabsSync()
   const [floatingTerminalOpen, setFloatingTerminalOpen] = useState(false)
 
   // Why: Zustand actions are referentially stable, but each individual
@@ -282,6 +286,9 @@ function App(): React.JSX.Element {
     (s) => s.settings?.floatingTerminalTriggerLocation ?? 'floating-button'
   )
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
+  const showFloatingTerminalButton =
+    floatingTerminalEnabled &&
+    (floatingTerminalTriggerLocation === 'floating-button' || !statusBarVisible)
   // Why: the floating terminal is a transient overlay; hotkey minimize should
   // return keyboard focus to the surface the user was working in before it.
   const floatingTerminalReturnFocusRef = useRef<HTMLElement | null>(null)
@@ -345,7 +352,6 @@ function App(): React.JSX.Element {
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const groupBy = useAppStore((s) => s.groupBy)
-  const showWorkspaceLineage = useAppStore((s) => s.showWorkspaceLineage)
   const sortBy = useAppStore((s) => s.sortBy)
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
@@ -370,6 +376,7 @@ function App(): React.JSX.Element {
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
   const featureTipsPromptedThisSessionRef = useRef(false)
   const featureTipsSuppressedByOnboardingThisSessionRef = useRef(false)
+  const [onboardingSettingsDetour, setOnboardingSettingsDetour] = useState(false)
 
   // Subscribe to IPC push events
   useIpcEvents()
@@ -434,6 +441,16 @@ function App(): React.JSX.Element {
     featureTipsPromptedThisSessionRef.current = true
     actions.openModal('feature-tips', { source: 'app_open' })
   }, [activeModal, actions, featureTipsSeenIds, onboarding, persistedUIReady, settings])
+
+  useEffect(() => {
+    if (activeView !== 'settings' || !shouldShowOnboarding(onboarding)) {
+      setOnboardingSettingsDetour(false)
+    }
+  }, [activeView, onboarding])
+
+  const beginOnboardingSettingsDetour = useCallback(() => {
+    setOnboardingSettingsDetour(true)
+  }, [])
 
   // Why: sidebar open/close flips width instantaneously. useLayoutEffect
   // runs synchronously after React commits the DOM but before paint, so
@@ -734,6 +751,9 @@ function App(): React.JSX.Element {
         state.tabBarOrderByWorktree === previousState.tabBarOrderByWorktree &&
         state.activeFileId === previousState.activeFileId &&
         state.activeFileIdByWorktree === previousState.activeFileIdByWorktree &&
+        state.browserTabsByWorktree === previousState.browserTabsByWorktree &&
+        state.browserPagesByWorkspace === previousState.browserPagesByWorkspace &&
+        state.activeBrowserTabIdByWorktree === previousState.activeBrowserTabIdByWorktree &&
         state.openFiles === previousState.openFiles &&
         state.editorDrafts === previousState.editorDrafts &&
         state.activeTabId === previousState.activeTabId &&
@@ -853,7 +873,6 @@ function App(): React.JSX.Element {
         sidebarWidth,
         rightSidebarWidth,
         groupBy,
-        showWorkspaceLineage,
         sortBy,
         showActiveOnly,
         hideDefaultBranchWorkspace,
@@ -873,7 +892,6 @@ function App(): React.JSX.Element {
     sidebarWidth,
     rightSidebarWidth,
     groupBy,
-    showWorkspaceLineage,
     sortBy,
     showActiveOnly,
     hideDefaultBranchWorkspace,
@@ -1501,6 +1519,15 @@ function App(): React.JSX.Element {
                     {activeView === 'terminal' && !activeWorktreeId ? <Landing /> : null}
                   </Suspense>
                 </div>
+                {showFloatingTerminalButton ? (
+                  <FloatingTerminalToggleButton
+                    // Why: anchor the floating trigger to the center surface so it
+                    // cannot cover the worktree sidebar or right sidebar.
+                    className="absolute bottom-8 right-3"
+                    open={floatingTerminalOpen}
+                    onToggle={() => setFloatingTerminalOpenWithFocus((open) => !open)}
+                  />
+                ) : null}
               </div>
             </div>
           </div>
@@ -1512,18 +1539,10 @@ function App(): React.JSX.Element {
           {showRightSidebarControls ? <RightSidebar /> : null}
         </div>
         {floatingTerminalEnabled ? (
-          <>
-            <FloatingTerminalPanel
-              open={floatingTerminalOpen}
-              onOpenChange={setFloatingTerminalOpenWithFocus}
-            />
-            {floatingTerminalTriggerLocation === 'floating-button' || !statusBarVisible ? (
-              <FloatingTerminalToggleButton
-                open={floatingTerminalOpen}
-                onToggle={() => setFloatingTerminalOpenWithFocus((open) => !open)}
-              />
-            ) : null}
-          </>
+          <FloatingTerminalPanel
+            open={floatingTerminalOpen}
+            onOpenChange={setFloatingTerminalOpenWithFocus}
+          />
         ) : null}
         <StatusBar floatingTerminalOpen={floatingTerminalOpen} />
         {/* Why: root overlays can render Radix <Tooltip>s; keep them inside
@@ -1562,9 +1581,13 @@ function App(): React.JSX.Element {
         <SshPassphraseDialog />
         <DeleteWorktreeDialog />
         <CrashReportDialog />
-        {onboarding && shouldShowOnboarding(onboarding) ? (
+        {onboarding && shouldShowOnboarding(onboarding) && !onboardingSettingsDetour ? (
           <Suspense fallback={null}>
-            <OnboardingFlow onboarding={onboarding} onOnboardingChange={setOnboarding} />
+            <OnboardingFlow
+              onboarding={onboarding}
+              onOnboardingChange={setOnboarding}
+              onSettingsDetourStart={beginOnboardingSettingsDetour}
+            />
           </Suspense>
         ) : null}
         <DictationController />

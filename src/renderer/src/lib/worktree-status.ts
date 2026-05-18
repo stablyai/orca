@@ -1,5 +1,6 @@
 import { detectAgentStatusFromTitle } from '@/lib/agent-status'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import type { TerminalTab } from '../../../shared/types'
 
 export type WorktreeStatus = 'active' | 'working' | 'permission' | 'done' | 'inactive'
@@ -48,6 +49,12 @@ export function getWorktreeStatus(
     // view even when they have no PTY-backed terminal. The sidebar filter
     // already treats them as active, so every navigation surface must reuse
     // that rule instead of showing a misleading inactive dot.
+    return 'active'
+  }
+  if (tabs.some((tab) => isWebTerminalSurfaceTabId(tab.id))) {
+    // Why: paired web mirrors can know a host terminal tab exists before the
+    // runtime has issued a stream handle. Match desktop sidebar parity without
+    // treating ordinary slept wake-hint tabs as active.
     return 'active'
   }
   return 'inactive'

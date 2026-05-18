@@ -137,7 +137,14 @@ export function ghRepoExecOptions(context: GitHubRepoContext): {
   return context.connectionId ? {} : { cwd: context.repoPath }
 }
 
-const ownerRepoCache = new Map<string, OwnerRepo | null>()
+const OWNER_REPO_CACHE_TTL_MS = 30_000
+
+type OwnerRepoCacheEntry = {
+  value: OwnerRepo | null
+  expiresAt: number
+}
+
+const ownerRepoCache = new Map<string, OwnerRepoCacheEntry>()
 
 /** @internal — exposed for tests only */
 export function _resetOwnerRepoCache(): void {
@@ -190,20 +197,27 @@ export async function getOwnerRepoForRemote(
 ): Promise<OwnerRepo | null> {
   const context = githubRepoContext(repoPath, connectionId)
   const cacheKey = `${context.connectionId ?? 'local'}\0${context.repoPath}\0${remoteName}`
-  if (ownerRepoCache.has(cacheKey)) {
-    return ownerRepoCache.get(cacheKey)!
+  const cached = ownerRepoCache.get(cacheKey)
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value
+  }
+  if (cached) {
+    ownerRepoCache.delete(cacheKey)
   }
   try {
     const remoteUrl = await getRemoteUrlForRepo(context, remoteName)
     const result = remoteUrl ? parseGitHubOwnerRepo(remoteUrl) : null
     if (result) {
-      ownerRepoCache.set(cacheKey, result)
+      ownerRepoCache.set(cacheKey, {
+        value: result,
+        expiresAt: Date.now() + OWNER_REPO_CACHE_TTL_MS
+      })
       return result
     }
   } catch {
     // ignore — non-GitHub remote or no remote
   }
-  ownerRepoCache.set(cacheKey, null)
+  ownerRepoCache.set(cacheKey, { value: null, expiresAt: Date.now() + OWNER_REPO_CACHE_TTL_MS })
   return null
 }
 
@@ -223,6 +237,39 @@ export async function getIssueOwnerRepo(
     return upstream
   }
   return getOwnerRepoForRemote(repoPath, 'origin', connectionId)
+}
+
+export type PRRepositoryCandidates = {
+  candidates: OwnerRepo[]
+  headRepo: OwnerRepo | null
+}
+
+function ownerRepoKey(ownerRepo: OwnerRepo): string {
+  return `${ownerRepo.owner.toLowerCase()}/${ownerRepo.repo.toLowerCase()}`
+}
+
+export async function resolvePRRepositoryCandidates(
+  repoPath: string,
+  connectionId?: string | null
+): Promise<PRRepositoryCandidates> {
+  const upstream = await getOwnerRepoForRemote(repoPath, 'upstream', connectionId)
+  const origin = await getOwnerRepoForRemote(repoPath, 'origin', connectionId)
+  const seen = new Set<string>()
+  const candidates: OwnerRepo[] = []
+
+  for (const candidate of [upstream, origin]) {
+    if (!candidate) {
+      continue
+    }
+    const key = ownerRepoKey(candidate)
+    if (seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    candidates.push(candidate)
+  }
+
+  return { candidates, headRepo: origin }
 }
 
 export type ResolvedIssueSource = {

@@ -25,11 +25,11 @@ test.describe('Agent awake setting', () => {
     await orcaPage.getByPlaceholder('Search settings').fill('awake')
 
     await expect(
-      orcaPage.getByText('Keep computer awake when Orca sees agents running').first()
+      orcaPage.getByText('Keep computer awake while agents are working').first()
     ).toBeVisible()
 
     const keepAwakeSwitch = orcaPage.getByRole('switch', {
-      name: 'Keep computer awake when Orca sees agents running'
+      name: 'Keep computer awake while agents are working'
     })
 
     await expect(keepAwakeSwitch).toHaveAttribute('aria-checked', 'false')

@@ -1,6 +1,7 @@
 import type { Worktree, Repo, TerminalTab } from '../../../../shared/types'
 import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 
@@ -113,12 +114,18 @@ export function computeVisibleWorktreeIds(
       const hasLiveTerminal = tabs.some((tab) =>
         opts.ptyIdsByTabId ? tabHasLivePty(opts.ptyIdsByTabId, tab.id) : false
       )
+      const hasHostMirroredTerminal = tabs.some((tab) => isWebTerminalSurfaceTabId(tab.id))
       const hasBrowserTabs = (opts.browserTabsByWorktree?.[w.id] ?? []).length > 0
       // Why: "Active only" should reflect the surfaces Orca can actually
       // restore into, not just PTY-backed terminals. A browser-tab worktree is
       // still active from the user's point of view even if it has no live PTY,
       // and the currently selected worktree should never vanish from the list.
-      return hasLiveTerminal || hasBrowserTabs || opts.activeWorktreeId === w.id
+      return (
+        hasLiveTerminal ||
+        hasHostMirroredTerminal ||
+        hasBrowserTabs ||
+        opts.activeWorktreeId === w.id
+      )
     })
   }
 

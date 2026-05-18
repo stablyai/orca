@@ -689,7 +689,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
 
     await handlers.get('repos:searchBaseRefs')!(null, { repoId: 'r1', query: 'upstream' })
 
-    expect(mockGitProvider.exec).toHaveBeenCalledTimes(1)
+    expect(mockGitProvider.exec).toHaveBeenCalledTimes(2)
     const [argv, path] = mockGitProvider.exec.mock.calls[0]
     expect(path).toBe('/remote/repo')
     expect(argv[0]).toBe('for-each-ref')
@@ -698,6 +698,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
     expect(argv).toContain('refs/heads/*upstream*')
     // Guard against regression to the old origin-only glob.
     expect(argv).not.toContain('refs/remotes/origin/*upstream*')
+    expect(mockGitProvider.exec.mock.calls[1]).toEqual([['remote'], '/remote/repo'])
   })
 
   it('sends segmented argv for display-format queries like `upstream/main`', async () => {
@@ -717,7 +718,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
 
     await handlers.get('repos:searchBaseRefs')!(null, { repoId: 'r1', query: 'upstream/main' })
 
-    expect(mockGitProvider.exec).toHaveBeenCalledTimes(1)
+    expect(mockGitProvider.exec).toHaveBeenCalledTimes(2)
     const [argv] = mockGitProvider.exec.mock.calls[0]
     expect(argv).toContain('refs/remotes/*upstream*/*main*')
     expect(argv).toContain('refs/heads/*upstream*/*main*')
@@ -726,6 +727,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
     // which fnmatch cannot match because `*` doesn't cross `/`.
     expect(argv).not.toContain('refs/remotes/*upstream/main*/*')
     expect(argv).not.toContain('refs/remotes/*/*upstream/main*')
+    expect(mockGitProvider.exec.mock.calls[1]).toEqual([['remote'], '/remote/repo'])
   })
 
   it('parses NUL-delimited stdout and filters <remote>/HEAD pseudo-refs', async () => {

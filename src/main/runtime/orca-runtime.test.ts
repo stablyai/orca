@@ -18,7 +18,7 @@ import {
   runHook,
   shouldRunSetupForCreate
 } from '../hooks'
-import { getDefaultBaseRef } from '../git/repo'
+import { getBranchConflictKind, getDefaultBaseRef } from '../git/repo'
 import { OrchestrationDb } from './orchestration/db'
 import { OrcaRuntimeService } from './orca-runtime'
 import {
@@ -38,6 +38,8 @@ const {
   getSshGitProviderMock,
   registerSshGitProviderMock,
   unregisterSshGitProviderMock,
+  getActiveMultiplexerMock,
+  muxRequestMock,
   invalidateAuthorizedRootsCacheMock,
   createHostedReviewMock,
   getHostedReviewCreationEligibilityMock
@@ -68,6 +70,8 @@ const {
     unregisterSshGitProviderMock: vi.fn((connectionId: string) => {
       sshGitProviders.delete(connectionId)
     }),
+    getActiveMultiplexerMock: vi.fn(),
+    muxRequestMock: vi.fn(),
     invalidateAuthorizedRootsCacheMock: vi.fn(),
     createHostedReviewMock: vi.fn(),
     getHostedReviewCreationEligibilityMock: vi.fn()
@@ -85,6 +89,10 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock,
   registerSshGitProvider: registerSshGitProviderMock,
   unregisterSshGitProvider: unregisterSshGitProviderMock
+}))
+
+vi.mock('../ipc/ssh', () => ({
+  getActiveMultiplexer: getActiveMultiplexerMock
 }))
 
 vi.mock('../hooks', () => ({
@@ -153,6 +161,10 @@ afterEach(() => {
   unregisterSshGitProviderMock.mockImplementation((connectionId: string) => {
     sshGitProviders.delete(connectionId)
   })
+  muxRequestMock.mockReset()
+  muxRequestMock.mockResolvedValue(undefined)
+  getActiveMultiplexerMock.mockReset()
+  getActiveMultiplexerMock.mockReturnValue({ request: muxRequestMock, notify: vi.fn() })
   vi.mocked(createSetupRunnerScript).mockReset()
   vi.mocked(getEffectiveHooks).mockReset()
   vi.mocked(hasHooksFile).mockReset()
@@ -543,6 +555,62 @@ describe('OrcaRuntimeService', () => {
     expect(gitProvider.getStatus).toHaveBeenCalledWith('//Server/Share/Repo')
   })
 
+  it('lists persisted SSH worktrees while the git provider is unavailable', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const remoteRepo = {
+      id: 'remote-repo',
+      path: '/home/user/repo',
+      displayName: 'remote',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-missing'
+    }
+    const mainId = `${remoteRepo.id}::/home/user/repo`
+    const childId = `${remoteRepo.id}::/home/user/repo-child`
+    const metaById: Record<string, WorktreeMeta> = {
+      [mainId]: makeWorktreeMeta({ displayName: 'Remote main' }),
+      [childId]: makeWorktreeMeta({ displayName: 'Remote child', linkedPR: 42 })
+    }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [remoteRepo],
+      getRepo: () => remoteRepo,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+        return metaById[worktreeId]
+      }
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const listed = await runtime.listManagedWorktrees('id:remote-repo')
+
+    expect(listWorktrees).not.toHaveBeenCalled()
+    expect(getSshGitProviderMock).toHaveBeenCalledWith('ssh-missing')
+    expect(listed).toMatchObject({
+      totalCount: 2,
+      truncated: false,
+      worktrees: [
+        {
+          id: mainId,
+          path: '/home/user/repo',
+          branch: '',
+          isMainWorktree: true,
+          displayName: 'Remote main'
+        },
+        {
+          id: childId,
+          path: '/home/user/repo-child',
+          branch: '',
+          isMainWorktree: false,
+          displayName: 'Remote child',
+          linkedPR: 42
+        }
+      ]
+    })
+  })
+
   it('does not interpret active as a runtime-global worktree selector', async () => {
     const runtime = new OrcaRuntimeService(store)
 
@@ -582,9 +650,57 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it('does not run local git when runtime worktree creation targets an SSH repo', async () => {
+  it('creates a branchNameOverride worktree from the selected matching remote base ref', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({ stdout: '', stderr: '' })
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/feature-something')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/feature-something')
+    vi.mocked(listWorktrees).mockResolvedValueOnce([
+      {
+        path: '/tmp/workspaces/feature-something',
+        head: 'def',
+        branch: 'feature/something',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'feature/something',
+      baseBranch: 'origin/feature/something',
+      branchNameOverride: 'feature/something'
+    })
+
+    expect(getBranchConflictKind).toHaveBeenCalledWith(
+      TEST_REPO_PATH,
+      'feature/something',
+      'origin/feature/something'
+    )
+    expect(addWorktree).toHaveBeenCalledWith(
+      TEST_REPO_PATH,
+      '/tmp/workspaces/feature-something',
+      'feature/something',
+      'origin/feature/something',
+      false
+    )
+    expect(result.worktree).toMatchObject({
+      path: '/tmp/workspaces/feature-something',
+      branch: 'feature/something'
+    })
+  })
+
+  it('creates SSH-backed worktrees through the SSH provider for mobile/runtime callers', async () => {
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(addWorktree).mockClear()
+    const created = {
+      path: '/remote/mobile-feature',
+      head: 'def',
+      branch: 'refs/heads/mobile-feature',
+      isBare: false,
+      isMainWorktree: false
+    }
+    const metaById: Record<string, WorktreeMeta> = {}
     const remoteStore = {
       ...store,
       getRepos: () => [
@@ -596,14 +712,53 @@ describe('OrcaRuntimeService', () => {
           addedAt: 1,
           connectionId: 'ssh-1'
         }
-      ]
+      ],
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      }
     }
+    const provider = {
+      exec: vi.fn(async (args: string[]) => {
+        if (args[0] === 'config') {
+          return { stdout: 'Remote User\n', stderr: '' }
+        }
+        if (args[0] === 'branch') {
+          return { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'symbolic-ref') {
+          return { stdout: 'origin/main\n', stderr: '' }
+        }
+        if (args[0] === 'fetch') {
+          return { stdout: '', stderr: '' }
+        }
+        throw new Error(`unexpected git call: ${args.join(' ')}`)
+      }),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([created])
+    }
+    registerSshGitProvider('ssh-1', provider as never)
+    getActiveMultiplexerMock.mockReturnValue({ request: muxRequestMock, notify: vi.fn() })
     const runtime = new OrcaRuntimeService(remoteStore as never)
 
-    await expect(
-      runtime.createManagedWorktree({ repoSelector: TEST_REPO_ID, name: 'feature' })
-    ).rejects.toThrow('SSH-backed worktree creation is not supported through runtime RPC yet')
+    const result = await runtime.createManagedWorktree({
+      repoSelector: TEST_REPO_ID,
+      name: 'mobile-feature',
+      startup: { command: 'claude' }
+    })
 
+    expect(provider.addWorktree).toHaveBeenCalledWith(
+      '/remote/repo',
+      'mobile-feature',
+      '/remote/repo/../mobile-feature',
+      { base: 'origin/main' }
+    )
+    expect(result.worktree).toMatchObject({
+      id: `${TEST_REPO_ID}::${created.path}`,
+      path: created.path
+    })
     expect(addWorktree).not.toHaveBeenCalled()
     expect(listWorktrees).not.toHaveBeenCalled()
   })
@@ -1301,6 +1456,31 @@ describe('OrcaRuntimeService', () => {
     expect(spawnedEnv.ORCA_PANE_KEY).toBe(`${tabId}:${leafId}`)
   })
 
+  it('does not adopt web mirror ids as host terminal ids', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtime = new OrcaRuntimeService(store)
+    const tabId = 'web-terminal-host-tab-1'
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      focus: false,
+      tabId,
+      leafId
+    })
+
+    const spawnedEnv =
+      (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
+    expect(spawnedEnv.ORCA_TAB_ID).not.toBe(tabId)
+    expect(spawnedEnv.ORCA_TAB_ID).not.toMatch(/^web-terminal-/)
+    expect(spawnedEnv.ORCA_PANE_KEY).toMatch(`${spawnedEnv.ORCA_TAB_ID}:`)
+  })
+
   it('creates background terminal sessions while the renderer graph is unavailable', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const runtime = new OrcaRuntimeService(store)
@@ -1320,6 +1500,65 @@ describe('OrcaRuntimeService', () => {
         worktreeId: TEST_WORKTREE_ID
       })
     )
+  })
+
+  it('splits visible pty-backed terminal sessions through the parent renderer tab', async () => {
+    const spawn = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'pty-source' })
+      .mockResolvedValueOnce({ id: 'pty-split' })
+    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-bg' })
+    const splitTerminal = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession,
+      splitTerminal,
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    const sourceEnv =
+      (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
+    const sourceLeafId = sourceEnv.ORCA_PANE_KEY.slice(`${sourceEnv.ORCA_TAB_ID}:`.length)
+
+    await expect(runtime.splitTerminal(handle, { direction: 'vertical' })).resolves.toMatchObject({
+      handle: expect.stringMatching(/^term_/),
+      tabId: sourceEnv.ORCA_TAB_ID,
+      paneRuntimeId: -1
+    })
+
+    const splitEnv =
+      (spawn.mock.calls[1]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
+    const splitLeafId = splitEnv.ORCA_PANE_KEY.slice(`${sourceEnv.ORCA_TAB_ID}:`.length)
+    expect(splitTerminal).not.toHaveBeenCalled()
+    expect(splitEnv.ORCA_TAB_ID).toBe(sourceEnv.ORCA_TAB_ID)
+    expect(splitEnv.ORCA_WORKTREE_ID).toBe(TEST_WORKTREE_ID)
+    expect(revealTerminalSession).toHaveBeenLastCalledWith(TEST_WORKTREE_ID, {
+      ptyId: 'pty-split',
+      title: null,
+      activate: true,
+      tabId: sourceEnv.ORCA_TAB_ID,
+      leafId: splitLeafId,
+      splitFromLeafId: sourceLeafId,
+      splitDirection: 'vertical'
+    })
   })
 
   it('returns a background handle when inactive tab adoption fails after spawn', async () => {
@@ -1890,6 +2129,479 @@ describe('OrcaRuntimeService', () => {
     ])
   })
 
+  it('keeps mobile terminal surfaces pending while a live leaf has no PTY', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Terminal 1',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: null,
+          paneTitle: 'Terminal 1'
+        }
+      ],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'tab-1::pane:1',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-1::pane:1',
+              parentTabId: 'tab-1',
+              leafId: 'pane:1',
+              title: 'Terminal 1',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(result.tabs).toEqual([
+      expect.objectContaining({
+        type: 'terminal',
+        id: 'tab-1::pane:1',
+        status: 'pending-handle',
+        terminal: null
+      })
+    ])
+  })
+
+  it('omits stale browser session tabs that no longer have live webContents', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const tabList = vi.fn(() => ({
+      tabs: [
+        {
+          browserPageId: 'browser-page-live',
+          index: 0,
+          url: 'https://live.example/',
+          title: 'Live Browser',
+          active: true
+        }
+      ]
+    }))
+    runtime.setAgentBrowserBridge({ tabList } as never)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'browser-unified-stale',
+          activeTabType: 'browser',
+          tabs: [
+            {
+              type: 'browser',
+              id: 'browser-unified-stale',
+              title: 'Dead Browser',
+              browserWorkspaceId: 'browser-workspace-stale',
+              browserPageId: 'browser-page-stale',
+              url: 'about:blank',
+              loading: false,
+              canGoBack: false,
+              canGoForward: false,
+              isActive: true
+            },
+            {
+              type: 'browser',
+              id: 'browser-unified-live',
+              title: 'Stale Title',
+              browserWorkspaceId: 'browser-workspace-live',
+              browserPageId: 'browser-page-live',
+              url: 'https://stale.example/',
+              loading: false,
+              canGoBack: false,
+              canGoForward: false,
+              isActive: false
+            }
+          ]
+        }
+      ]
+    })
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(tabList).toHaveBeenCalledWith(TEST_WORKTREE_ID)
+    expect(result.tabs).toEqual([
+      expect.objectContaining({
+        type: 'browser',
+        id: 'browser-unified-live',
+        browserPageId: 'browser-page-live',
+        url: 'https://live.example/',
+        title: 'Live Browser',
+        isActive: true
+      })
+    ])
+    expect(result.activeTabId).toBe('browser-unified-live')
+    expect(result.activeTabType).toBe('browser')
+  })
+
+  it('does not let the active browser webContents steal session focus from terminals', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const tabList = vi.fn(() => ({
+      tabs: [
+        {
+          browserPageId: 'browser-page-1',
+          index: 0,
+          url: 'https://example.com/',
+          title: 'Live Browser',
+          active: true
+        }
+      ]
+    }))
+    runtime.setAgentBrowserBridge({ tabList } as never)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'terminal-tab::pane:1',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'browser',
+              id: 'browser-unified-1',
+              title: 'Stale Browser',
+              browserWorkspaceId: 'browser-workspace-1',
+              browserPageId: 'browser-page-1',
+              url: 'https://stale.example/',
+              loading: false,
+              canGoBack: false,
+              canGoForward: false,
+              isActive: false
+            },
+            {
+              type: 'terminal',
+              id: 'terminal-tab::pane:1',
+              parentTabId: 'terminal-tab',
+              leafId: 'pane:1',
+              title: 'Terminal 2',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(result.activeTabId).toBe('terminal-tab::pane:1')
+    expect(result.activeTabType).toBe('terminal')
+    expect(result.tabs).toEqual([
+      expect.objectContaining({
+        type: 'browser',
+        id: 'browser-unified-1',
+        isActive: false,
+        title: 'Live Browser'
+      }),
+      expect.objectContaining({
+        type: 'terminal',
+        id: 'terminal-tab::pane:1',
+        isActive: true
+      })
+    ])
+  })
+
+  it('publishes terminal surface agent status for paired web clients', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const hostPaneKey = `tab-1:${leafId}`
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: `tab-1::${leafId}`,
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: `tab-1::${leafId}`,
+              parentTabId: 'tab-1',
+              leafId,
+              title: 'codex [working]',
+              agentStatus: {
+                state: 'working',
+                prompt: 'fix parity',
+                updatedAt: 1_700_000_000_000,
+                stateStartedAt: 1_699_999_999_000,
+                agentType: 'codex',
+                paneKey: hostPaneKey,
+                terminalTitle: 'codex [working]',
+                stateHistory: []
+              },
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(result.tabs).toEqual([
+      expect.objectContaining({
+        type: 'terminal',
+        id: `tab-1::${leafId}`,
+        status: 'pending-handle',
+        terminal: null,
+        agentStatus: expect.objectContaining({
+          state: 'working',
+          prompt: 'fix parity',
+          agentType: 'codex',
+          paneKey: hostPaneKey
+        })
+      })
+    ])
+  })
+
+  it('keeps saved PTY bindings pending until the runtime knows the PTY is connected', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'tab-1::pane:1',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-1::pane:1',
+              parentTabId: 'tab-1',
+              leafId: 'pane:1',
+              title: 'Terminal 1',
+              ptyId: 'daemon-pty-1',
+              parentLayout: {
+                root: { type: 'leaf', leafId: 'pane:1' },
+                activeLeafId: 'pane:1',
+                expandedLeafId: null,
+                ptyIdsByLeafId: { 'pane:1': 'daemon-pty-1' }
+              },
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(result.tabs).toEqual([
+      expect.objectContaining({
+        type: 'terminal',
+        id: 'tab-1::pane:1',
+        ptyId: 'daemon-pty-1',
+        parentTabId: 'tab-1',
+        leafId: 'pane:1',
+        status: 'pending-handle',
+        terminal: null
+      })
+    ])
+  })
+
+  it('refreshes daemon PTY liveness before publishing mobile session tabs', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        { id: 'daemon-pty-1', cwd: TEST_WORKTREE_PATH, title: 'daemon shell' }
+      ]
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'tab-1::pane:1',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-1::pane:1',
+              parentTabId: 'tab-1',
+              leafId: 'pane:1',
+              title: 'Terminal 1',
+              ptyId: 'daemon-pty-1',
+              parentLayout: {
+                root: { type: 'leaf', leafId: 'pane:1' },
+                activeLeafId: 'pane:1',
+                expandedLeafId: null,
+                ptyIdsByLeafId: { 'pane:1': 'daemon-pty-1' }
+              },
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(result.tabs).toEqual([
+      expect.objectContaining({
+        type: 'terminal',
+        id: 'tab-1::pane:1',
+        ptyId: 'daemon-pty-1',
+        status: 'ready',
+        terminal: expect.stringMatching(/^term_/)
+      })
+    ])
+  })
+
+  it('reattaches mobile terminal surfaces from saved PTY bindings when the PTY is connected', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Terminal 1',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'daemon-pty-1'
+        }
+      ]
+    })
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'tab-1::pane:1',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-1::pane:1',
+              parentTabId: 'tab-1',
+              leafId: 'pane:1',
+              title: 'Terminal 1',
+              ptyId: 'daemon-pty-1',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(result.tabs).toEqual([
+      expect.objectContaining({
+        type: 'terminal',
+        id: 'tab-1::pane:1',
+        status: 'ready',
+        terminal: expect.stringMatching(/^term_/)
+      })
+    ])
+    expect(runtime.resolveLeafForHandle((result.tabs[0] as { terminal: string }).terminal)).toEqual(
+      { ptyId: 'daemon-pty-1' }
+    )
+  })
+
+  it('does not publish exited saved PTY bindings as ready terminal streams', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'tab-1::pane:1',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-1::pane:1',
+              parentTabId: 'tab-1',
+              leafId: 'pane:1',
+              title: 'Terminal 1',
+              ptyId: 'daemon-pty-1',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+    await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    runtime.onPtyExit('daemon-pty-1', 0)
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(result.tabs).toEqual([
+      expect.objectContaining({
+        type: 'terminal',
+        id: 'tab-1::pane:1',
+        status: 'pending-handle',
+        terminal: null
+      })
+    ])
+  })
+
   it('resolves mobile terminal surfaces by exact split leaf', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.attachWindow(1)
@@ -1964,6 +2676,107 @@ describe('OrcaRuntimeService', () => {
     if (left?.type === 'terminal' && right?.type === 'terminal') {
       expect(left.terminal).not.toBe(right.terminal)
     }
+  })
+
+  it('keeps published mobile terminal handles usable across renderer graph epochs', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Terminal 1',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1',
+          paneTitle: 'Terminal 1'
+        }
+      ],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'tab-1::pane:1',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-1::pane:1',
+              parentTabId: 'tab-1',
+              leafId: 'pane:1',
+              title: 'Terminal 1',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    const tab = result.tabs[0]
+    expect(tab?.type).toBe('terminal')
+    if (tab?.type !== 'terminal' || tab.status !== 'ready') {
+      throw new Error('expected ready terminal tab')
+    }
+
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Terminal 1',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1',
+          paneTitle: 'Terminal 1'
+        }
+      ],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-2',
+          snapshotVersion: 2,
+          activeGroupId: 'group-1',
+          activeTabId: 'tab-1::pane:1',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-1::pane:1',
+              parentTabId: 'tab-1',
+              leafId: 'pane:1',
+              title: 'Terminal 1',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+    runtime.onPtyData('pty-1', 'after graph sync\n', 100)
+
+    await expect(runtime.readTerminal(tab.terminal)).resolves.toMatchObject({
+      handle: tab.terminal,
+      tail: ['after graph sync']
+    })
   })
 
   it('closes the matching mobile terminal UUID leaf without closing the whole tab', async () => {
@@ -2049,6 +2862,188 @@ describe('OrcaRuntimeService', () => {
     expect(closeTerminal).not.toHaveBeenCalled()
   })
 
+  it('closes the whole mobile terminal tab when addressed by parent tab id', async () => {
+    const closeTerminal = vi.fn()
+    const kill = vi.fn(() => true)
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn(),
+      write: () => true,
+      kill,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal,
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Terminal 1',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1',
+          paneTitle: 'Terminal 1'
+        }
+      ],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'tab-1::pane:1',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-1::pane:1',
+              parentTabId: 'tab-1',
+              leafId: 'pane:1',
+              title: 'Terminal 1',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'tab-1')
+
+    expect(closeTerminal).toHaveBeenCalledWith('tab-1')
+    expect(kill).not.toHaveBeenCalled()
+  })
+
+  it('activates the active split leaf when addressed by parent tab id', async () => {
+    const focusTerminal = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal,
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'tab-1::pane:2',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-1::pane:1',
+              parentTabId: 'tab-1',
+              leafId: 'pane:1',
+              title: 'left',
+              isActive: false
+            },
+            {
+              type: 'terminal',
+              id: 'tab-1::pane:2',
+              parentTabId: 'tab-1',
+              leafId: 'pane:2',
+              title: 'right',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    await runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'tab-1')
+
+    expect(focusTerminal).toHaveBeenCalledWith('tab-1', TEST_WORKTREE_ID, 'pane:2')
+  })
+
+  it('closes browser mobile session tabs when addressed by browser workspace id', async () => {
+    const closeSessionTab = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      closeSessionTab,
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'browser-unified-1',
+          activeTabType: 'browser',
+          tabs: [
+            {
+              type: 'browser',
+              id: 'browser-unified-1',
+              title: 'Browser',
+              browserWorkspaceId: 'browser-workspace-1',
+              browserPageId: 'browser-page-1',
+              url: 'https://example.com/',
+              loading: false,
+              canGoBack: false,
+              canGoForward: false,
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'browser-workspace-1')
+
+    expect(closeSessionTab).toHaveBeenCalledWith('browser-unified-1', TEST_WORKTREE_ID)
+  })
+
   it('creates mobile session terminals in a headless runtime server', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-headless' })
     const runtime = new OrcaRuntimeService(store)
@@ -2096,6 +3091,236 @@ describe('OrcaRuntimeService', () => {
       code: 'browser_error',
       message: expect.stringContaining('headless orca serve')
     })
+  })
+
+  it('cancels an in-flight same-connection browser screencast before replacing it', async () => {
+    const runtime = createRuntime()
+    const firstStart = deferred<{
+      subscriptionId: string
+      ready: never
+      session: { stop: () => void; done: Promise<void> }
+    }>()
+    const firstDone = deferred<void>()
+    const secondDone = deferred<void>()
+    const thirdDone = deferred<void>()
+    const firstStop = vi.fn(() => firstDone.resolve())
+    const secondStop = vi.fn(() => secondDone.resolve())
+    const thirdStop = vi.fn(() => thirdDone.resolve())
+    const browserScreencast = vi
+      .fn()
+      .mockImplementationOnce(() => firstStart.promise)
+      .mockResolvedValueOnce({
+        subscriptionId: 'browser-screencast:page-1:second',
+        ready: {
+          type: 'ready',
+          subscriptionId: 'browser-screencast:page-1:second',
+          browserPageId: 'page-1',
+          format: 'jpeg',
+          tab: {
+            browserPageId: 'page-1',
+            index: 0,
+            url: 'about:blank',
+            title: 'Browser',
+            active: true
+          }
+        },
+        session: { stop: secondStop, done: secondDone.promise }
+      })
+      .mockResolvedValueOnce({
+        subscriptionId: 'browser-screencast:page-1:third',
+        ready: {
+          type: 'ready',
+          subscriptionId: 'browser-screencast:page-1:third',
+          browserPageId: 'page-1',
+          format: 'jpeg',
+          tab: {
+            browserPageId: 'page-1',
+            index: 0,
+            url: 'about:blank',
+            title: 'Browser',
+            active: true
+          }
+        },
+        session: { stop: thirdStop, done: thirdDone.promise }
+      })
+
+    ;(
+      runtime as unknown as { browserCommands: { browserScreencast: typeof browserScreencast } }
+    ).browserCommands = { browserScreencast }
+
+    const firstEmit = vi.fn()
+    const secondEmit = vi.fn()
+    const first = runtime.browserScreencast(
+      { worktree: `id:${TEST_WORKTREE_ID}`, page: 'page-1', format: 'jpeg' },
+      { connectionId: 'conn-1', sendBinary: vi.fn(), emit: firstEmit }
+    )
+    await Promise.resolve()
+
+    const second = runtime.browserScreencast(
+      { worktree: `id:${TEST_WORKTREE_ID}`, page: 'page-1', format: 'jpeg' },
+      { connectionId: 'conn-1', sendBinary: vi.fn(), emit: secondEmit }
+    )
+    const thirdEmit = vi.fn()
+    const third = runtime.browserScreencast(
+      { worktree: `id:${TEST_WORKTREE_ID}`, page: 'page-1', format: 'jpeg' },
+      { connectionId: 'conn-1', sendBinary: vi.fn(), emit: thirdEmit }
+    )
+    await Promise.resolve()
+
+    expect(browserScreencast).toHaveBeenCalledTimes(1)
+
+    firstStart.resolve({
+      subscriptionId: 'browser-screencast:page-1:first',
+      ready: {} as never,
+      session: { stop: firstStop, done: firstDone.promise }
+    })
+    await first
+    await Promise.resolve()
+
+    expect(firstStop).toHaveBeenCalledTimes(1)
+    expect(firstEmit).not.toHaveBeenCalled()
+    expect(browserScreencast).toHaveBeenCalledTimes(2)
+
+    await second
+    await Promise.resolve()
+
+    expect(secondStop).toHaveBeenCalledTimes(1)
+    expect(browserScreencast).toHaveBeenCalledTimes(3)
+    expect(thirdEmit).toHaveBeenCalledWith(
+      expect.objectContaining({ subscriptionId: 'browser-screencast:page-1:third' })
+    )
+
+    runtime.cleanupSubscription('browser-screencast:page-1:third')
+    await third
+
+    expect(thirdStop).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels an active same-page browser screencast before another connection starts', async () => {
+    const runtime = createRuntime()
+    const firstDone = deferred<void>()
+    const secondDone = deferred<void>()
+    const firstStop = vi.fn(() => firstDone.resolve())
+    const secondStop = vi.fn(() => secondDone.resolve())
+    const browserScreencast = vi
+      .fn()
+      .mockResolvedValueOnce({
+        subscriptionId: 'browser-screencast:page-1:first',
+        ready: {
+          type: 'ready',
+          subscriptionId: 'browser-screencast:page-1:first',
+          browserPageId: 'page-1',
+          format: 'jpeg',
+          tab: {
+            browserPageId: 'page-1',
+            index: 0,
+            url: 'about:blank',
+            title: 'Browser',
+            active: true
+          }
+        },
+        session: { stop: firstStop, done: firstDone.promise }
+      })
+      .mockResolvedValueOnce({
+        subscriptionId: 'browser-screencast:page-1:second',
+        ready: {
+          type: 'ready',
+          subscriptionId: 'browser-screencast:page-1:second',
+          browserPageId: 'page-1',
+          format: 'jpeg',
+          tab: {
+            browserPageId: 'page-1',
+            index: 0,
+            url: 'about:blank',
+            title: 'Browser',
+            active: true
+          }
+        },
+        session: { stop: secondStop, done: secondDone.promise }
+      })
+
+    ;(
+      runtime as unknown as { browserCommands: { browserScreencast: typeof browserScreencast } }
+    ).browserCommands = { browserScreencast }
+
+    const firstEmit = vi.fn()
+    const first = runtime.browserScreencast(
+      { worktree: `id:${TEST_WORKTREE_ID}`, page: 'page-1', format: 'jpeg' },
+      { connectionId: 'conn-1', sendBinary: vi.fn(), emit: firstEmit }
+    )
+    await vi.waitFor(() =>
+      expect(firstEmit).toHaveBeenCalledWith(
+        expect.objectContaining({ subscriptionId: 'browser-screencast:page-1:first' })
+      )
+    )
+
+    const secondEmit = vi.fn()
+    const second = runtime.browserScreencast(
+      { worktree: `id:${TEST_WORKTREE_ID}`, page: 'page-1', format: 'jpeg' },
+      { connectionId: 'conn-2', sendBinary: vi.fn(), emit: secondEmit }
+    )
+
+    await vi.waitFor(() => expect(firstStop).toHaveBeenCalledTimes(1))
+    await first
+    await vi.waitFor(() =>
+      expect(secondEmit).toHaveBeenCalledWith(
+        expect.objectContaining({ subscriptionId: 'browser-screencast:page-1:second' })
+      )
+    )
+    expect(browserScreencast).toHaveBeenCalledTimes(2)
+
+    runtime.cleanupSubscription('browser-screencast:page-1:second')
+    await second
+    expect(secondStop).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not deliver or accept browser screencast frames before ready', async () => {
+    const runtime = createRuntime()
+    const done = deferred<void>()
+    const stop = vi.fn(() => done.resolve())
+    const startupFrame = new Uint8Array([1, 2, 3])
+    const sendBinary = vi.fn()
+    const emit = vi.fn()
+    const browserScreencast = vi.fn(
+      async (_params: unknown, stream: { sendBinary: typeof sendBinary }) => {
+        expect(stream.sendBinary(startupFrame)).toBe(false)
+        expect(sendBinary).not.toHaveBeenCalled()
+        return {
+          subscriptionId: 'browser-screencast:page-1:first',
+          ready: {
+            type: 'ready',
+            subscriptionId: 'browser-screencast:page-1:first',
+            browserPageId: 'page-1',
+            format: 'jpeg',
+            tab: {
+              browserPageId: 'page-1',
+              index: 0,
+              url: 'about:blank',
+              title: 'Browser',
+              active: true
+            }
+          },
+          session: { stop, done: done.promise }
+        }
+      }
+    )
+
+    ;(
+      runtime as unknown as { browserCommands: { browserScreencast: typeof browserScreencast } }
+    ).browserCommands = { browserScreencast }
+
+    const task = runtime.browserScreencast(
+      { worktree: `id:${TEST_WORKTREE_ID}`, page: 'page-1', format: 'jpeg' },
+      { connectionId: 'conn-1', sendBinary, emit }
+    )
+
+    await vi.waitFor(() =>
+      expect(emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'ready' }))
+    )
+    expect(sendBinary).not.toHaveBeenCalled()
+
+    runtime.cleanupSubscription('browser-screencast:page-1:first')
+    await task
   })
 
   it('keeps already-idle status after tui-idle wait for immediate message delivery', async () => {
@@ -2309,6 +3534,56 @@ describe('OrcaRuntimeService', () => {
       totalCount: 1,
       truncated: false
     })
+  })
+
+  it('includes SSH-backed worktrees in the mobile worktree summary', async () => {
+    const remoteRepo = {
+      id: 'repo-ssh',
+      path: '/home/me/project',
+      displayName: 'remote-vm',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-1'
+    }
+    const remoteWorktree = {
+      path: '/home/me/project/.worktrees/feature-mobile',
+      head: 'def',
+      branch: 'refs/heads/feature/mobile',
+      isBare: false,
+      isMainWorktree: false
+    }
+    const metaById: Record<string, WorktreeMeta> = {
+      [`${remoteRepo.id}::${remoteWorktree.path}`]: makeWorktreeMeta({
+        displayName: 'Remote mobile'
+      })
+    }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [remoteRepo],
+      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      }
+    }
+    registerSshGitProvider('ssh-1', {
+      listWorktrees: vi.fn().mockResolvedValue([remoteWorktree])
+    } as never)
+
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const summaries = await runtime.getWorktreePs()
+
+    expect(summaries.worktrees).toEqual([
+      expect.objectContaining({
+        worktreeId: `${remoteRepo.id}::${remoteWorktree.path}`,
+        repoId: remoteRepo.id,
+        repo: 'remote-vm',
+        path: remoteWorktree.path,
+        displayName: 'Remote mobile'
+      })
+    ])
   })
 
   it('clears stale working status after the agent exits and the shell takes over the title', async () => {
@@ -2849,7 +4124,11 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
-    await expect(runtime.showManagedWorktree(`id:${childId}`)).rejects.toThrow('selector_not_found')
+    await expect(runtime.showManagedWorktree(`id:${childId}`)).resolves.toMatchObject({
+      id: childId,
+      parentWorktreeId: parentId,
+      lineage: lineageById[childId]
+    })
 
     expect(removeWorktreeLineage).not.toHaveBeenCalled()
     expect(runtimeStore.setWorktreeMeta).not.toHaveBeenCalled()
@@ -3755,6 +5034,79 @@ describe('OrcaRuntimeService', () => {
       tabId: initialSpawnEnv.ORCA_TAB_ID,
       leafId: initialLeafId
     })
+  })
+
+  it('creates the first terminal by id when duplicate repo entries expose the same path', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-duplicate-path' })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn().mockResolvedValue({ tabId: 'tab-duplicate-path' }),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+
+    const duplicatePath = '/tmp/workspaces/runtime-duplicate-terminal'
+    const getRepos = vi.spyOn(store, 'getRepos').mockReturnValue([
+      {
+        id: TEST_REPO_ID,
+        path: TEST_REPO_PATH,
+        displayName: 'repo',
+        badgeColor: 'blue',
+        addedAt: 1
+      },
+      {
+        id: 'repo-duplicate-entry',
+        path: '/tmp/repo-secondary-worktree',
+        displayName: 'repo-secondary-worktree',
+        badgeColor: 'red',
+        addedAt: 2
+      }
+    ])
+    computeWorktreePathMock.mockReturnValue(duplicatePath)
+    ensurePathWithinWorkspaceMock.mockReturnValue(duplicatePath)
+    vi.mocked(getEffectiveHooks).mockReturnValue(null)
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: duplicatePath,
+        head: 'def',
+        branch: 'runtime-duplicate-terminal',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    try {
+      const result = await runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name: 'runtime-duplicate-terminal'
+      })
+
+      expect(result.warning).toBeUndefined()
+      expect(spawn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwd: duplicatePath,
+          worktreeId: result.worktree.id
+        })
+      )
+    } finally {
+      getRepos.mockRestore()
+    }
   })
 
   it('keeps CLI-created worktrees successful when initial terminal creation fails', async () => {

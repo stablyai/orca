@@ -203,6 +203,62 @@ describe('createRemoteRuntimePtyTransport', () => {
     })
   })
 
+  it('does not close host-owned terminal handles attached from session snapshots', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-tab-1',
+      leafId: 'pane:1'
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-1',
+      cols: 80,
+      rows: 24,
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    runtimeCall.mockClear()
+
+    transport.destroy?.()
+
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.close'
+      })
+    )
+  })
+
+  it('retires stale host-owned terminal handles without surfacing pane errors', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onError = vi.fn()
+    const onPtyExit = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-tab-1',
+      leafId: 'pane:1',
+      onPtyExit
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-stale',
+      cols: 80,
+      rows: 24,
+      callbacks: { onError }
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    const { streamId } = latestSubscribePayload()
+
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: { type: 'error', streamId, message: 'terminal_handle_stale' }
+    })
+
+    expect(onError).not.toHaveBeenCalled()
+    expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-stale')
+    expect(transport.getPtyId()).toBeNull()
+  })
+
   it('closes a remote terminal created after the pane was destroyed', async () => {
     let resolveCreate: (value: unknown) => void = () => {}
     runtimeCall.mockImplementation((args) => {
@@ -231,6 +287,173 @@ describe('createRemoteRuntimePtyTransport', () => {
       params: { terminal: 'terminal-late' },
       timeoutMs: 15_000
     })
+  })
+
+  it('passes activation intent when creating the remote runtime terminal', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      activate: true
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'terminal.create',
+        params: expect.objectContaining({
+          tabId: 'tab-1',
+          leafId: 'pane:1',
+          focus: false,
+          activate: true
+        })
+      })
+    )
+  })
+
+  it('activates pending host session mirrors instead of creating duplicate terminals', async () => {
+    runtimeCall.mockImplementation((args) => {
+      if (args.method === 'session.tabs.activate') {
+        return Promise.resolve({
+          ok: true,
+          result: {
+            worktree: 'wt-1',
+            publicationEpoch: 'epoch-1',
+            snapshotVersion: 1,
+            activeGroupId: 'group-1',
+            activeTabId: 'host-tab-1::leaf-1',
+            activeTabType: 'terminal',
+            tabs: [
+              {
+                type: 'terminal',
+                id: 'host-tab-1::leaf-1',
+                parentTabId: 'host-tab-1',
+                leafId: 'leaf-1',
+                title: 'Terminal 1',
+                isActive: true,
+                status: 'pending-handle',
+                terminal: null
+              }
+            ]
+          }
+        })
+      }
+      if (args.method === 'session.tabs.list') {
+        return Promise.resolve({
+          ok: true,
+          result: {
+            worktree: 'wt-1',
+            publicationEpoch: 'epoch-1',
+            snapshotVersion: 2,
+            activeGroupId: 'group-1',
+            activeTabId: 'host-tab-1::leaf-1',
+            activeTabType: 'terminal',
+            tabs: [
+              {
+                type: 'terminal',
+                id: 'host-tab-1::leaf-1',
+                parentTabId: 'host-tab-1',
+                leafId: 'leaf-1',
+                title: 'Terminal 1',
+                isActive: true,
+                status: 'ready',
+                terminal: 'terminal-1'
+              }
+            ]
+          }
+        })
+      }
+      return Promise.resolve({ ok: true, result: { terminal: { handle: 'duplicate-terminal' } } })
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-host-tab-1',
+      leafId: 'leaf-1'
+    })
+
+    const result = await transport.connect({ url: '', callbacks: {} })
+
+    expect(result).toEqual({ id: 'remote:env-1@@terminal-1', replay: '' })
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'session.tabs.activate',
+        params: { worktree: 'id:wt-1', tabId: 'host-tab-1' }
+      })
+    )
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.create'
+      })
+    )
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    expect(latestSubscribePayload()).toMatchObject({
+      terminal: 'terminal-1',
+      viewport: { cols: 80, rows: 24 }
+    })
+  })
+
+  it('stops polling when a host session mirror never publishes a ready handle', async () => {
+    vi.useFakeTimers()
+    try {
+      const pendingSnapshot = {
+        worktree: 'wt-1',
+        publicationEpoch: 'epoch-1',
+        snapshotVersion: 1,
+        activeGroupId: 'group-1',
+        activeTabId: 'host-tab-1::leaf-1',
+        activeTabType: 'terminal',
+        tabs: [
+          {
+            type: 'terminal',
+            id: 'host-tab-1::leaf-1',
+            parentTabId: 'host-tab-1',
+            leafId: 'leaf-1',
+            title: 'Terminal 1',
+            isActive: true,
+            status: 'pending-handle',
+            terminal: null
+          }
+        ]
+      }
+      runtimeCall.mockImplementation((args) => {
+        if (args.method === 'session.tabs.activate' || args.method === 'session.tabs.list') {
+          return Promise.resolve({ ok: true, result: pendingSnapshot })
+        }
+        return Promise.resolve({ ok: true, result: { terminal: { handle: 'duplicate-terminal' } } })
+      })
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const onError = vi.fn()
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'web-terminal-host-tab-1',
+        leafId: 'leaf-1'
+      })
+
+      const connect = transport.connect({ url: '', callbacks: { onError } })
+      await vi.advanceTimersByTimeAsync(15_000)
+
+      await expect(connect).resolves.toBeUndefined()
+      expect(onError).toHaveBeenCalledWith('Remote terminal was closed.')
+      expect(runtimeCall).toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'session.tabs.activate' })
+      )
+      const listCalls = runtimeCall.mock.calls.filter(
+        (call) => call[0].method === 'session.tabs.list'
+      )
+      expect(listCalls.length).toBeGreaterThan(0)
+      expect(listCalls.length).toBeLessThanOrEqual(100)
+      expect(runtimeCall).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'terminal.create'
+        })
+      )
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('unsubscribes a remote terminal subscription that resolves after destroy', async () => {
@@ -331,7 +554,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(onData).toHaveBeenCalledWith('beforeafter')
   })
 
-  it('does not report PTY exit when the remote runtime subscription closes', async () => {
+  it('resubscribes without surfacing a PTY error when the remote runtime subscription closes', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onExit = vi.fn()
     const onDisconnect = vi.fn()
@@ -351,7 +574,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(onExit).not.toHaveBeenCalled()
     expect(onDisconnect).not.toHaveBeenCalled()
     expect(onPtyExit).not.toHaveBeenCalled()
-    expect(onError).toHaveBeenCalledWith('Remote Orca runtime closed the connection.')
+    expect(onError).not.toHaveBeenCalled()
     await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
   })
 
@@ -433,6 +656,32 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(frame?.opcode).toBe(TerminalStreamOpcode.Input)
       expect(frame?.streamId).toBe(streamId)
       expect(frame ? decodeTerminalStreamText(frame.payload) : '').toBe('ab')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('normalizes bare LF input to carriage returns before writing to the remote PTY', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1'
+      })
+
+      await transport.connect({ url: '', callbacks: {} })
+      const { streamId } = latestSubscribePayload()
+      subscriptionSendBinary.mockClear()
+
+      expect(transport.sendInput('echo one\necho two\r\n')).toBe(true)
+      await vi.runOnlyPendingTimersAsync()
+
+      const frame = decodeTerminalStreamFrame(subscriptionSendBinary.mock.calls[0][0])
+      expect(frame?.opcode).toBe(TerminalStreamOpcode.Input)
+      expect(frame?.streamId).toBe(streamId)
+      expect(frame ? decodeTerminalStreamText(frame.payload) : '').toBe('echo one\recho two\r')
     } finally {
       vi.useRealTimers()
     }

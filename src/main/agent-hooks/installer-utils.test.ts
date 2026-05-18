@@ -17,6 +17,8 @@ import {
   buildWindowsAgentHookPostCommand,
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
+  hookDefinitionHasManagedCommand,
+  removeManagedCommands,
   wrapPosixHookCommand,
   writeManagedScript,
   writeHooksJson,
@@ -175,6 +177,71 @@ describe('createManagedCommandMatcher', () => {
   })
 })
 
+describe('removeManagedCommands', () => {
+  const match = createManagedCommandMatcher('copilot-hook.sh')
+
+  it('removes managed direct bash/powershell/command fields', () => {
+    const cleaned = removeManagedCommands(
+      [
+        {
+          type: 'command',
+          bash: '/bin/sh "/Users/alice/Orca/agent-hooks/copilot-hook.sh"',
+          timeoutSec: 5
+        },
+        {
+          type: 'command',
+          powershell: "& 'C:\\Users\\alice\\Orca\\agent-hooks\\copilot-hook.sh'",
+          timeoutSec: 5
+        },
+        {
+          type: 'command',
+          command: 'echo user hook',
+          timeoutSec: 5
+        }
+      ],
+      match
+    )
+
+    expect(cleaned).toEqual([{ type: 'command', command: 'echo user hook', timeoutSec: 5 }])
+  })
+
+  it('preserves unrelated nested hooks while removing managed entries', () => {
+    const cleaned = removeManagedCommands(
+      [
+        {
+          hooks: [
+            { type: 'command', command: '/bin/sh "/path/agent-hooks/copilot-hook.sh"' },
+            { type: 'command', command: 'echo keep me' }
+          ]
+        }
+      ],
+      match
+    )
+
+    expect(cleaned).toEqual([{ hooks: [{ type: 'command', command: 'echo keep me' }] }])
+  })
+})
+
+describe('hookDefinitionHasManagedCommand', () => {
+  it('detects managed commands in direct and nested fields', () => {
+    const match = createManagedCommandMatcher('copilot-hook.sh')
+
+    expect(
+      hookDefinitionHasManagedCommand(
+        { bash: '/bin/sh "/Users/alice/Orca/agent-hooks/copilot-hook.sh"' },
+        match
+      )
+    ).toBe(true)
+    expect(
+      hookDefinitionHasManagedCommand(
+        { hooks: [{ type: 'command', command: '/bin/sh "/path/agent-hooks/copilot-hook.sh"' }] },
+        match
+      )
+    ).toBe(true)
+    expect(hookDefinitionHasManagedCommand({ bash: 'echo no' }, match)).toBe(false)
+  })
+})
+
 describe('getSharedManagedScriptPath', () => {
   it("returns ~/.orca/agent-hooks/<scriptFileName> rooted at the user's home", () => {
     expect(getSharedManagedScriptPath('claude-hook.sh')).toBe(
@@ -227,6 +294,15 @@ describe('wrapPosixHookCommand', () => {
     const cmd = wrapPosixHookCommand("/path/with'quote/x.sh")
     expect(cmd).toBe(
       "if [ -x '/path/with'\\''quote/x.sh' ]; then /bin/sh '/path/with'\\''quote/x.sh'; fi"
+    )
+  })
+
+  it('can scope environment variables to the guarded script invocation', () => {
+    const cmd = wrapPosixHookCommand('/does/not/exist.sh', {
+      ORCA_COPILOT_HOOK_EVENT: 'UserPromptSubmit'
+    })
+    expect(cmd).toBe(
+      "if [ -x '/does/not/exist.sh' ]; then ORCA_COPILOT_HOOK_EVENT='UserPromptSubmit' /bin/sh '/does/not/exist.sh'; fi"
     )
   })
 

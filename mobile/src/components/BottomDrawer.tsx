@@ -14,6 +14,7 @@ import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-g
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
+  useAnimatedScrollHandler,
   withSpring,
   withTiming,
   runOnJS,
@@ -30,20 +31,17 @@ const SPRING_CONFIG = { damping: 28, stiffness: 400 }
 const RUBBER_BAND_FACTOR = 0.25
 const SHOW_DURATION = 180
 const HIDE_DURATION = 150
+const TOP_SCROLL_EPSILON = 1
 
 type Props = {
   visible: boolean
   onClose: () => void
   children: ReactNode
+  dragContentToDismiss?: boolean
 }
 
-export function BottomDrawer({ visible, onClose, children }: Props) {
+export function BottomDrawer({ visible, onClose, children, dragContentToDismiss = false }: Props) {
   const [mounted, setMounted] = useState(visible)
-  const translateY = useSharedValue(0)
-  const progress = useSharedValue(0)
-  const keyboardOffset = useSharedValue(0)
-  const { height: screenHeight } = useWindowDimensions()
-  const insets = useSafeAreaInsets()
 
   useEffect(() => {
     if (visible) {
@@ -51,21 +49,56 @@ export function BottomDrawer({ visible, onClose, children }: Props) {
     }
   }, [visible])
 
-  useEffect(() => {
-    if (!mounted) return
+  // Why: hidden drawers are rendered by parent screens even while closed; keep
+  // their Reanimated/Gesture setup out of hot paths like commit-message typing.
+  if (!mounted) return null
 
+  return (
+    <MountedBottomDrawer
+      visible={visible}
+      onClose={onClose}
+      onHidden={() => setMounted(false)}
+      dragContentToDismiss={dragContentToDismiss}
+    >
+      {children}
+    </MountedBottomDrawer>
+  )
+}
+
+type MountedBottomDrawerProps = Props & {
+  onHidden: () => void
+}
+
+function MountedBottomDrawer({
+  visible,
+  onClose,
+  onHidden,
+  children,
+  dragContentToDismiss = false
+}: MountedBottomDrawerProps) {
+  const translateY = useSharedValue(0)
+  const progress = useSharedValue(0)
+  const keyboardOffset = useSharedValue(0)
+  const scrollOffsetY = useSharedValue(0)
+  const contentDragStartY = useSharedValue(0)
+  const contentDragCanDismiss = useSharedValue(false)
+  const { height: screenHeight } = useWindowDimensions()
+  const insets = useSafeAreaInsets()
+
+  useEffect(() => {
     if (visible) {
       translateY.value = 0
+      scrollOffsetY.value = 0
       progress.value = withTiming(1, { duration: SHOW_DURATION })
     } else {
       Keyboard.dismiss()
       progress.value = withTiming(0, { duration: HIDE_DURATION }, (finished) => {
         if (finished) {
-          runOnJS(setMounted)(false)
+          runOnJS(onHidden)()
         }
       })
     }
-  }, [mounted, visible])
+  }, [onHidden, visible])
 
   // Why: KeyboardAvoidingView and useAnimatedKeyboard are both unreliable
   // inside Modal (iOS ignores KAV; Android needs adjustNothing for
@@ -106,7 +139,14 @@ export function BottomDrawer({ visible, onClose, children }: Props) {
     onClose()
   }, [onClose])
 
-  const panGesture = Gesture.Pan()
+  const scrollHandler = useAnimatedScrollHandler((event) => {
+    scrollOffsetY.value = Math.max(event.contentOffset.y, 0)
+  })
+
+  const scrollGesture = Gesture.Native()
+  const handlePanGesture = Gesture.Pan()
+    .activeOffsetY([-8, 8])
+    .simultaneousWithExternalGesture(scrollGesture)
     .onUpdate((e) => {
       if (e.translationY > 0) {
         translateY.value = e.translationY
@@ -118,6 +158,53 @@ export function BottomDrawer({ visible, onClose, children }: Props) {
       if (e.translationY > DISMISS_THRESHOLD || e.velocityY > 500) {
         const velocity = Math.max(e.velocityY, 800)
         const remaining = screenHeight - e.translationY
+        const duration = Math.min(Math.max((remaining / velocity) * 1000, 120), 300)
+        translateY.value = withTiming(screenHeight, { duration })
+        progress.value = withTiming(0, { duration }, () => {
+          runOnJS(dismiss)()
+        })
+      } else {
+        translateY.value = withSpring(0, SPRING_CONFIG)
+      }
+    })
+  const contentPanGesture = Gesture.Pan()
+    .activeOffsetY([-8, 8])
+    .simultaneousWithExternalGesture(scrollGesture)
+    .onBegin(() => {
+      contentDragStartY.value = 0
+      contentDragCanDismiss.value = scrollOffsetY.value <= TOP_SCROLL_EPSILON
+    })
+    .onUpdate((e) => {
+      // Why: action-sheet content can be taller than the drawer; downward drags
+      // should scroll back to the top before they start dismissing the sheet.
+      if (scrollOffsetY.value > TOP_SCROLL_EPSILON) {
+        contentDragCanDismiss.value = false
+        contentDragStartY.value = 0
+        if (translateY.value !== 0) {
+          translateY.value = withSpring(0, SPRING_CONFIG)
+        }
+        return
+      }
+
+      if (!contentDragCanDismiss.value) {
+        contentDragCanDismiss.value = true
+        contentDragStartY.value = e.translationY
+      }
+
+      const translationY = e.translationY - contentDragStartY.value
+      if (translationY > 0) {
+        translateY.value = translationY
+      } else {
+        translateY.value = translationY * RUBBER_BAND_FACTOR
+      }
+    })
+    .onEnd((e) => {
+      if (!contentDragCanDismiss.value || scrollOffsetY.value > TOP_SCROLL_EPSILON) return
+
+      const translationY = e.translationY - contentDragStartY.value
+      if (translationY > DISMISS_THRESHOLD || e.velocityY > 500) {
+        const velocity = Math.max(e.velocityY, 800)
+        const remaining = screenHeight - translationY
         const duration = Math.min(Math.max((remaining / velocity) * 1000, 120), 300)
         translateY.value = withTiming(screenHeight, { duration })
         progress.value = withTiming(0, { duration }, () => {
@@ -151,10 +238,6 @@ export function BottomDrawer({ visible, onClose, children }: Props) {
       }) as { pointerEvents: 'auto' | 'none' }
   )
 
-  // Why: hidden drawers can contain auto-focused inputs; keeping them mounted
-  // lets Android open the keyboard even when the drawer is offscreen.
-  if (!mounted) return null
-
   return (
     <Animated.View style={[styles.overlay, pointerStyle]} accessibilityViewIsModal aria-modal>
       <GestureHandlerRootView style={styles.root}>
@@ -173,22 +256,53 @@ export function BottomDrawer({ visible, onClose, children }: Props) {
               drawerStyle
             ]}
           >
-            <GestureDetector gesture={panGesture}>
-              <Animated.View
-                style={styles.handleHitArea}
-                accessibilityRole="button"
-                accessibilityLabel="Dismiss drawer"
-              >
-                <View style={styles.handle} />
-              </Animated.View>
-            </GestureDetector>
-            <ScrollView
-              bounces={false}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            >
-              {children}
-            </ScrollView>
+            {dragContentToDismiss ? (
+              <>
+                <GestureDetector gesture={handlePanGesture}>
+                  <Animated.View
+                    style={styles.handleHitArea}
+                    accessibilityRole="button"
+                    accessibilityLabel="Dismiss drawer"
+                  >
+                    <View style={styles.handle} />
+                  </Animated.View>
+                </GestureDetector>
+                <GestureDetector gesture={contentPanGesture}>
+                  <Animated.View collapsable={false}>
+                    <GestureDetector gesture={scrollGesture}>
+                      <Animated.ScrollView
+                        bounces={false}
+                        keyboardShouldPersistTaps="handled"
+                        onScroll={scrollHandler}
+                        scrollEventThrottle={16}
+                        showsVerticalScrollIndicator={false}
+                      >
+                        {children}
+                      </Animated.ScrollView>
+                    </GestureDetector>
+                  </Animated.View>
+                </GestureDetector>
+              </>
+            ) : (
+              <>
+                <GestureDetector gesture={handlePanGesture}>
+                  <Animated.View
+                    style={styles.handleHitArea}
+                    accessibilityRole="button"
+                    accessibilityLabel="Dismiss drawer"
+                  >
+                    <View style={styles.handle} />
+                  </Animated.View>
+                </GestureDetector>
+                <ScrollView
+                  bounces={false}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                >
+                  {children}
+                </ScrollView>
+              </>
+            )}
             <View style={styles.bottomExtension} />
           </Animated.View>
         </View>

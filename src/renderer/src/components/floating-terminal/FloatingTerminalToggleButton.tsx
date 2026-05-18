@@ -1,21 +1,24 @@
 import { TerminalSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
 import { FloatingTerminalIconContextMenu } from './FloatingTerminalIconContextMenu'
 
 export function FloatingTerminalToggleButton({
   open,
-  onToggle
+  onToggle,
+  className
 }: {
   open: boolean
   onToggle: () => void
+  className?: string
 }): React.JSX.Element {
   const shortcutLabel =
     typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac') ? '⌘⌥T' : 'Ctrl+Alt+T'
   return (
     <FloatingTerminalIconContextMenu
       currentLocation="floating-button"
-      className="fixed bottom-8 right-3 z-40"
+      className={cn('fixed bottom-8 right-3 z-40', className)}
     >
       <Tooltip>
         <TooltipTrigger asChild>

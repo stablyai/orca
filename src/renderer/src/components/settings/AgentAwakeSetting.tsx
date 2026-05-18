@@ -14,21 +14,20 @@ export function AgentAwakeSetting({
   return (
     <section className="space-y-3">
       <SearchableSetting
-        title="Keep computer awake when Orca sees agents running"
-        description="Prevents this computer from sleeping while Orca sees an agent working. The display can still turn off."
-        keywords={['awake', 'sleep', 'power', 'agent', 'running']}
+        title="Keep computer awake while agents are working"
+        description="Keeps this computer awake while agents are working. The display can still turn off."
+        keywords={['awake', 'sleep', 'power', 'agent', 'running', 'working']}
         className="flex items-start justify-between gap-4 px-1 py-2"
       >
         <div className="min-w-0 shrink space-y-0.5">
-          <Label>Keep computer awake when Orca sees agents running</Label>
+          <Label>Keep computer awake while agents are working</Label>
           <p className="text-xs text-muted-foreground">
-            Prevents this computer from sleeping while Orca sees an agent working. The display can
-            still turn off.
+            Keeps this computer awake while agents are working. The display can still turn off.
           </p>
         </div>
         <button
           role="switch"
-          aria-label="Keep computer awake when Orca sees agents running"
+          aria-label="Keep computer awake while agents are working"
           aria-checked={settings.keepComputerAwakeWhileAgentsRun}
           onClick={() =>
             updateSettings({

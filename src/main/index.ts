@@ -60,6 +60,7 @@ import { geminiHookService } from './gemini/hook-service'
 import { cursorHookService } from './cursor/hook-service'
 import { droidHookService } from './droid/hook-service'
 import { grokHookService } from './grok/hook-service'
+import { copilotHookService } from './copilot/hook-service'
 import { hermesHookService } from './hermes/hook-service'
 import {
   getPtyIdForPaneKey,
@@ -276,6 +277,7 @@ function openMainWindow(): BrowserWindow {
         processType: 'renderer'
       })
     },
+    shouldRecoverRenderer: () => !isQuitting && !isQuittingForUpdate(),
     deferLoad: true,
     title: devInstanceIdentity.name
   })
@@ -775,7 +777,7 @@ app.whenReady().then(async () => {
       .filter((account) => account.id !== settings.activeCodexManagedAccountId)
       .map((account) => ({ id: account.id, managedHomePath: account.managedHomePath }))
   })
-  runtime = new OrcaRuntimeService(store, stats, {
+  const runtimeService = new OrcaRuntimeService(store, stats, {
     // Why: resolve the PTY provider lazily. initDaemonPtyProvider() runs later
     // inside attachMainWindowServices and calls setLocalPtyProvider(routedAdapter)
     // to swap the in-process provider for the daemon-routed one. Capturing the
@@ -783,9 +785,10 @@ app.whenReady().then(async () => {
     // and defeat the teardown helper's prefix sweep (design §4.3 wire-up).
     getLocalProvider: () => getLocalPtyProvider()
   })
+  runtime = runtimeService
   automations = new AutomationService(store, { claudeUsage, codexUsage })
-  runtime.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
-  runtime.setCommitMessageAgentEnvironmentResolvers({
+  runtimeService.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
+  runtimeService.setCommitMessageAgentEnvironmentResolvers({
     prepareForCodexLaunch: () =>
       store!.getSettings().activeCodexManagedAccountId
         ? codexRuntimeHome!.prepareForCodexLaunch()
@@ -799,22 +802,28 @@ app.whenReady().then(async () => {
   starNag = new StarNagService(store, stats)
   starNag.start()
   starNag.registerIpcHandlers()
-  runtime.setAgentBrowserBridge(new AgentBrowserBridge(browserManager))
+  runtimeService.setAgentBrowserBridge(
+    new AgentBrowserBridge(browserManager, {
+      onTabsChanged: (worktreeId) => runtimeService.notifyMobileSessionTabsChanged(worktreeId)
+    })
+  )
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
   // Why: managed hook installation mutates user-global agent config. Each
   // installer runs inside its own try/catch so a malformed local config
   // (e.g. corrupted ~/.claude/settings.json) cannot brick Orca startup.
   // The agent label travels with each installer so the catch can attribute
   // the failure in the `agent_hook_install_failed` telemetry event.
-  runManagedHookInstallers([
+  const managedHookInstallers = [
     ['claude', () => claudeHookService.install()],
     ['codex', () => codexHookService.install()],
     ['gemini', () => geminiHookService.install()],
     ['cursor', () => cursorHookService.install()],
     ['droid', () => droidHookService.install()],
     ['grok', () => grokHookService.install()],
+    ['copilot', () => copilotHookService.install()],
     ['hermes', () => hermesHookService.install()]
-  ])
+  ] as const
+  runManagedHookInstallers(managedHookInstallers)
 
   app.on('child-process-gone', (_event, details) => {
     recordProcessGoneCrash('child', details.type, details.reason, details.exitCode ?? null, {

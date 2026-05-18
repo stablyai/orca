@@ -81,15 +81,10 @@ export default function SortableTab({
   // because the slice returns a fresh object reference on each mark/clear.
   const hasUnreadActivity = useAppStore((s) => s.unreadTerminalTabs[tab.id] === true)
 
-  // Why: on Windows, tabs created before the per-tab shell override landed (or
-  // created via the default Ctrl+T path without picking a specific shell)
-  // don't carry a shellOverride. We still want the tab-strip icon to reflect
-  // the shell actually running, so fall back to the user's configured default
-  // Windows shell. On mac/linux this resolves to undefined and the ShellIcon
-  // generic-terminal fallback renders.
-  const defaultWindowsShell = useAppStore((s) => s.settings?.terminalWindowsShell)
-  const isWindows = navigator.userAgent.includes('Windows')
-  const shellForIcon = tab.shellOverride ?? (isWindows ? defaultWindowsShell : undefined)
+  // Why: createTab stamps the shell used at creation time, so changing the
+  // default shell later does not repaint existing tabs as a different shell.
+  // Older persisted tabs without this field fall back to the generic icon.
+  const shellForIcon = tab.shellOverride
 
   // Why: intentionally no transform/transition/opacity here. The PR's
   // design is that tabs stay visually anchored during a drag — only the
@@ -276,6 +271,7 @@ export default function SortableTab({
             // desaturating the brand colors beyond recognition.
             <span
               className={`mr-1 inline-flex shrink-0 ${isActive ? '' : 'opacity-70'}`}
+              data-shell-icon={shellForIcon ?? 'generic'}
               aria-hidden
             >
               <ShellIcon shell={shellForIcon} size={12} />

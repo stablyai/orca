@@ -127,6 +127,22 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([])
   })
 
+  it('treats paired web host terminal mirrors as active while their stream handle is pending', () => {
+    const wt = makeWorktree('wt-web-pending')
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [wt] },
+      [wt.id],
+      visibleOptions({
+        showActiveOnly: true,
+        tabsByWorktree: { [wt.id]: [makeTab('web-terminal-host-tab-1', wt.id, null)] },
+        ptyIdsByTabId: {}
+      })
+    )
+
+    expect(result).toEqual([wt.id])
+  })
+
   it('hides branch-backed main worktrees when default branch workspaces are hidden', () => {
     const main = makeWorktree('main')
     const feature = makeWorktree('feature')

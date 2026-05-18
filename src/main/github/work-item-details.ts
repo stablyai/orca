@@ -741,8 +741,8 @@ export async function getWorkItemDetails(
     const [mentionParticipants, checks] = await Promise.all([
       getMentionParticipants(repoPath, item, comments, participants, connectionId),
       shas?.headSha
-        ? getPRChecks(repoPath, item.number, shas.headSha, undefined, connectionId)
-        : getPRChecks(repoPath, item.number, undefined, undefined, connectionId)
+        ? getPRChecks(repoPath, item.number, shas.headSha, null, undefined, connectionId)
+        : getPRChecks(repoPath, item.number, undefined, null, undefined, connectionId)
     ])
 
     return {

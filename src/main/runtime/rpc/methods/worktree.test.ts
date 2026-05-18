@@ -20,6 +20,7 @@ describe('worktree RPC methods', () => {
       makeRequest('worktree.create', {
         repo: 'repo-1',
         name: 'feature',
+        branchNameOverride: 'feature/something',
         baseBranch: 'origin/main',
         setupDecision: 'skip',
         displayName: 'Feature title',
@@ -35,6 +36,7 @@ describe('worktree RPC methods', () => {
     expect(runtime.createManagedWorktree).toHaveBeenCalledWith({
       repoSelector: 'repo-1',
       name: 'feature',
+      branchNameOverride: 'feature/something',
       baseBranch: 'origin/main',
       linkedIssue: 123,
       linkedPR: 456,

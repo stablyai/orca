@@ -21,6 +21,7 @@ import { buildInstallRgMessage } from './fs-handler-install-rg'
 import { readRelayFileContent, readRelayFileStreamMetadata } from './fs-handler-file-read'
 import { RelayStreamRegistry } from './fs-stream-registry'
 import { scanWorkspaceSpaceDirectory } from './workspace-space-scan'
+import { buildRelayCommandEnv } from './relay-command-env'
 
 type WatchState = {
   rootPath: string
@@ -260,8 +261,11 @@ export class FsHandler {
     // Without this, a git subdirectory would fall through to readdir and
     // surface .gitignore'd build artifacts.
     const isGitRepo = await new Promise<boolean>((resolve) => {
-      execFile('git', ['rev-parse', '--is-inside-work-tree'], { cwd: rootPath }, (err) =>
-        resolve(!err)
+      execFile(
+        'git',
+        ['rev-parse', '--is-inside-work-tree'],
+        { cwd: rootPath, env: buildRelayCommandEnv() },
+        (err) => resolve(!err)
       )
     })
     if (isGitRepo) {

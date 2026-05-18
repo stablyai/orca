@@ -1,22 +1,28 @@
 /* eslint-disable max-lines -- Why: runtime graph sync and mobile session-tab publication share the same injected renderer state and terminal registry. Keeping them together prevents a second store/registry reader from drifting. */
 import {
   collectLeafIdsInOrder,
-  serializePaneTree
+  serializePaneTree,
+  normalizeTerminalLayoutSnapshot
 } from '@/components/terminal-pane/layout-serialization'
 import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/terminal-lifecycle-diagnostics'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
+import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
 import type { AppState } from '@/store/types'
 import type {
+  RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionFileTab,
   RuntimeMobileSessionMarkdownTab,
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTabsSnapshot,
   RuntimeSyncWindowGraph
 } from '../../../shared/runtime-types'
-import { isTerminalLeafId } from '../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
+import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import type { TerminalLayoutSnapshot, TerminalPaneLayoutNode } from '../../../shared/types'
 import { getActiveTabNavOrder } from '../components/tab-bar/group-tab-order'
+import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
 
 type RegisteredTerminalTab = {
   tabId: string
@@ -50,6 +56,10 @@ const registeredTabs = new Map<string, RegisteredTerminalTab>()
 // grace period — that indicates a real stuck state.
 const tabRegisteredAt = new Map<string, number>()
 const NO_TRANSPORT_GRACE_MS = 10_000
+const EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE: AppState['activeBrowserTabIdByWorktree'] = {}
+const EMPTY_BROWSER_TABS_BY_WORKTREE: AppState['browserTabsByWorktree'] = {}
+const EMPTY_BROWSER_PAGES_BY_WORKSPACE: AppState['browserPagesByWorkspace'] = {}
+const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = {}
 let syncScheduled = false
 let syncInFlight = false
 let syncPendingAfterFlight = false
@@ -156,12 +166,15 @@ export type RuntimeMobileSessionSyncKey = {
   activeFileId: AppState['activeFileId']
   activeFileIdByWorktree: AppState['activeFileIdByWorktree']
   activeTabId: AppState['activeTabId']
+  activeBrowserTabIdByWorktree: AppState['activeBrowserTabIdByWorktree']
+  agentStatusByPaneKey: AppState['agentStatusByPaneKey']
   // Why: these projections still need value-level inspection because the
   // underlying references churn even when the mobile-relevant shape is
   // unchanged (`tabsByWorktree` reallocates on every OSC title frame).
   // Pre-serialize them once.
   tabsProjection: string
   openFilesProjection: string
+  browserProjection: string
   editorDraftsProjection: string
 }
 
@@ -171,6 +184,14 @@ export function getRuntimeMobileSessionSyncKey(
   previousKey?: RuntimeMobileSessionSyncKey
 ): RuntimeMobileSessionSyncKey {
   const canReusePrevious = previousState !== undefined && previousKey !== undefined
+  const browserTabsByWorktree = getBrowserTabsByWorktree(state)
+  const browserPagesByWorkspace = getBrowserPagesByWorkspace(state)
+  const previousBrowserTabsByWorktree = previousState
+    ? getBrowserTabsByWorktree(previousState)
+    : EMPTY_BROWSER_TABS_BY_WORKTREE
+  const previousBrowserPagesByWorkspace = previousState
+    ? getBrowserPagesByWorkspace(previousState)
+    : EMPTY_BROWSER_PAGES_BY_WORKSPACE
 
   return {
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
@@ -182,6 +203,11 @@ export function getRuntimeMobileSessionSyncKey(
     activeFileId: state.activeFileId,
     activeFileIdByWorktree: state.activeFileIdByWorktree,
     activeTabId: state.activeTabId,
+    activeBrowserTabIdByWorktree:
+      state.activeBrowserTabIdByWorktree ?? EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE,
+    // Why: explicit hook status is published with terminal surfaces so paired
+    // web can render the same per-worktree agent rows before a PTY is opened.
+    agentStatusByPaneKey: state.agentStatusByPaneKey ?? EMPTY_AGENT_STATUS_BY_PANE_KEY,
     // Why: background agent title ticks can change runtimePaneTitlesByTabId
     // many times per second while the user types elsewhere. Reuse unchanged
     // projections so those ticks do not rescan all tabs, files, and drafts.
@@ -193,11 +219,27 @@ export function getRuntimeMobileSessionSyncKey(
       canReusePrevious && state.openFiles === previousState.openFiles
         ? previousKey.openFilesProjection
         : buildRuntimeMobileOpenFilesProjection(state.openFiles),
+    browserProjection:
+      canReusePrevious &&
+      browserTabsByWorktree === previousBrowserTabsByWorktree &&
+      browserPagesByWorkspace === previousBrowserPagesByWorkspace
+        ? previousKey.browserProjection
+        : buildRuntimeMobileBrowserProjection(state),
     editorDraftsProjection:
       canReusePrevious && state.editorDrafts === previousState.editorDrafts
         ? previousKey.editorDraftsProjection
         : buildRuntimeMobileEditorDraftsProjection(state.editorDrafts)
   }
+}
+
+function getBrowserTabsByWorktree(state: AppState): AppState['browserTabsByWorktree'] {
+  // Why: some runtime-sync callers and tests construct partial pre-browser
+  // renderer states; treat missing browser slices as no browser tabs.
+  return state.browserTabsByWorktree ?? EMPTY_BROWSER_TABS_BY_WORKTREE
+}
+
+function getBrowserPagesByWorkspace(state: AppState): AppState['browserPagesByWorkspace'] {
+  return state.browserPagesByWorkspace ?? EMPTY_BROWSER_PAGES_BY_WORKSPACE
 }
 
 function buildRuntimeMobileTabsProjection(tabsByWorktree: AppState['tabsByWorktree']): string {
@@ -246,11 +288,46 @@ function buildRuntimeMobileOpenFilesProjection(openFiles: AppState['openFiles'])
       worktreeId: file.worktreeId,
       language: file.language,
       mode: file.mode,
+      diffSource: file.diffSource,
       isDirty: file.isDirty,
       isUntitled: file.isUntitled,
       markdownPreviewSourceFileId: file.markdownPreviewSourceFileId
     }))
   )
+}
+
+function buildRuntimeMobileBrowserProjection(state: AppState): string {
+  const browserTabsByWorktree = getBrowserTabsByWorktree(state)
+  const browserPagesByWorkspace = getBrowserPagesByWorkspace(state)
+  return JSON.stringify({
+    workspacesByWorktree: Object.fromEntries(
+      Object.entries(browserTabsByWorktree).map(([worktreeId, workspaces]) => [
+        worktreeId,
+        workspaces.map((workspace) => ({
+          id: workspace.id,
+          activePageId: workspace.activePageId,
+          title: workspace.title,
+          url: workspace.url,
+          loading: workspace.loading,
+          canGoBack: workspace.canGoBack,
+          canGoForward: workspace.canGoForward
+        }))
+      ])
+    ),
+    pagesByWorkspace: Object.fromEntries(
+      Object.entries(browserPagesByWorkspace).map(([workspaceId, pages]) => [
+        workspaceId,
+        pages.map((page) => ({
+          id: page.id,
+          title: page.title,
+          url: page.url,
+          loading: page.loading,
+          canGoBack: page.canGoBack,
+          canGoForward: page.canGoForward
+        }))
+      ])
+    )
+  })
 }
 
 function buildRuntimeMobileEditorDraftsProjection(editorDrafts: AppState['editorDrafts']): string {
@@ -275,8 +352,11 @@ export function runtimeMobileSessionSyncKeysEqual(
     a.activeFileId === b.activeFileId &&
     a.activeFileIdByWorktree === b.activeFileIdByWorktree &&
     a.activeTabId === b.activeTabId &&
+    a.activeBrowserTabIdByWorktree === b.activeBrowserTabIdByWorktree &&
+    a.agentStatusByPaneKey === b.agentStatusByPaneKey &&
     a.tabsProjection === b.tabsProjection &&
     a.openFilesProjection === b.openFilesProjection &&
+    a.browserProjection === b.browserProjection &&
     a.editorDraftsProjection === b.editorDraftsProjection
   )
 }
@@ -307,6 +387,9 @@ async function syncRuntimeGraph(): Promise<void> {
   for (const [tabId, registeredTab] of registeredTabs) {
     const tab = terminalTabById.get(tabId)
     if (!tab) {
+      continue
+    }
+    if (isWebOnlyMirroredTerminalTab(state, tab)) {
       continue
     }
 
@@ -371,6 +454,7 @@ export function buildMobileSessionTabSnapshots(
     ...Object.keys(state.tabsByWorktree),
     ...Object.keys(state.groupsByWorktree),
     ...Object.keys(state.unifiedTabsByWorktree),
+    ...Object.keys(getBrowserTabsByWorktree(state)),
     ...state.openFiles.map((file) => file.worktreeId)
   ])
 
@@ -383,12 +467,21 @@ export function buildMobileSessionTabSnapshots(
     const terminalTabByIdForWorktree = new Map(
       (state.tabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
     )
+    const browserWorkspaceByIdForWorktree = new Map(
+      (getBrowserTabsByWorktree(state)[worktreeId] ?? []).map((workspace) => [
+        workspace.id,
+        workspace
+      ])
+    )
     const tabs: RuntimeMobileSessionSnapshotTab[] = []
 
     for (const item of order) {
       if (item.type === 'terminal') {
         const terminal = terminalTabByIdForWorktree.get(item.id)
         if (!terminal) {
+          continue
+        }
+        if (isWebOnlyMirroredTerminalTab(state, terminal)) {
           continue
         }
         tabs.push(...buildMobileTerminalSurfaceTabs(state, terminal, worktreeId, item.tabId))
@@ -409,6 +502,12 @@ export function buildMobileSessionTabSnapshots(
         } else {
           tabs.push(buildMobileFileTab(state, file, item.tabId))
         }
+      } else if (item.type === 'browser') {
+        const workspace = browserWorkspaceByIdForWorktree.get(item.id)
+        if (!workspace) {
+          continue
+        }
+        tabs.push(buildMobileBrowserTab(state, workspace, item.tabId))
       }
     }
 
@@ -425,6 +524,28 @@ export function buildMobileSessionTabSnapshots(
   }
 
   return snapshots
+}
+
+function isRemoteRuntimePtyId(ptyId: string | null | undefined): boolean {
+  return typeof ptyId === 'string' && parseRemoteRuntimePtyId(ptyId) !== null
+}
+
+function isWebOnlyMirroredTerminalTab(
+  state: Pick<AppState, 'terminalLayoutsByTabId'>,
+  tab: Pick<NonNullable<AppState['tabsByWorktree'][string]>[number], 'id' | 'ptyId'>
+): boolean {
+  if (!isWebTerminalSurfaceTabId(tab.id)) {
+    return false
+  }
+  const layoutPtyIds = Object.values(state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {})
+  const ptyIds = [tab.ptyId, ...layoutPtyIds].filter(
+    (ptyId): ptyId is string => typeof ptyId === 'string' && ptyId.length > 0
+  )
+  // Why: web mirror ids are a web-renderer implementation detail. If such an
+  // id has only remote/no PTYs, it is a mirror and must not be published back
+  // as host state. Legacy leaked host tabs with local PTYs still publish so
+  // existing sessions keep desktop/web parity.
+  return ptyIds.every(isRemoteRuntimePtyId)
 }
 
 function getOpenFileIndexes(openFiles: AppState['openFiles']): OpenFileIndexes {
@@ -476,6 +597,22 @@ function mobileTerminalSurfaceId(parentTabId: string, leafId: string): string {
   return `${parentTabId}::${leafId}`
 }
 
+function fallbackLayoutForLeafIds(leafIds: readonly string[]): TerminalPaneLayoutNode | null {
+  const leaves = leafIds.filter(isTerminalLeafId)
+  if (leaves.length === 0) {
+    return null
+  }
+  return leaves.slice(1).reduce<TerminalPaneLayoutNode>(
+    (root, leafId) => ({
+      type: 'split',
+      direction: 'horizontal',
+      first: root,
+      second: { type: 'leaf', leafId }
+    }),
+    { type: 'leaf', leafId: leaves[0]! }
+  )
+}
+
 function getRuntimeLeafIdsForTerminal(tabId: string, state: AppState): string[] {
   const registered = registeredTabs.get(tabId)
   const manager = registered?.getManager()
@@ -502,6 +639,7 @@ function buildMobileTerminalSurfaceTabs(
   worktreeId: string,
   unifiedTabId?: string
 ): RuntimeMobileSessionSnapshotTab[] {
+  const registered = registeredTabs.get(terminal.id)
   const isDesktopTabActive = unifiedTabId
     ? state.groupsByWorktree[worktreeId]?.some(
         (group) =>
@@ -509,7 +647,7 @@ function buildMobileTerminalSurfaceTabs(
           group.activeTabId === unifiedTabId
       ) === true
     : state.activeTabId === terminal.id
-  const manager = registeredTabs.get(terminal.id)?.getManager()
+  const manager = registered?.getManager()
   const liveActivePaneId = manager?.getActivePane()?.id ?? null
   const leafIds = getRuntimeLeafIdsForTerminal(terminal.id, state)
   const activeLeafId =
@@ -517,8 +655,31 @@ function buildMobileTerminalSurfaceTabs(
       ? (manager?.getLeafId(liveActivePaneId) ?? null)
       : (state.terminalLayoutsByTabId[terminal.id]?.activeLeafId ?? leafIds[0] ?? null)
   const paneTitles = state.runtimePaneTitlesByTabId[terminal.id] ?? {}
+  const savedLayout = state.terminalLayoutsByTabId[terminal.id]
+  const sanitizedSavedLayout = savedLayout
+    ? sanitizeTerminalLayoutPaneTitles(savedLayout, terminal)
+    : undefined
+  const savedPtyIdsByLeafId = sanitizedSavedLayout?.ptyIdsByLeafId ?? {}
+  const container = registered?.getContainer()
+  const firstChild = container?.firstElementChild
+  const liveLayoutRoot = serializePaneTree(
+    typeof HTMLElement !== 'undefined' && firstChild instanceof HTMLElement ? firstChild : null
+  )
+  const parentLayout = normalizeTerminalLayoutSnapshot({
+    root: liveLayoutRoot ?? sanitizedSavedLayout?.root ?? fallbackLayoutForLeafIds(leafIds),
+    activeLeafId,
+    expandedLeafId: sanitizedSavedLayout?.expandedLeafId ?? null,
+    ...(Object.keys(savedPtyIdsByLeafId).length > 0 ? { ptyIdsByLeafId: savedPtyIdsByLeafId } : {}),
+    ...(sanitizedSavedLayout?.titlesByLeafId
+      ? { titlesByLeafId: sanitizedSavedLayout.titlesByLeafId }
+      : {})
+  } satisfies TerminalLayoutSnapshot).snapshot
   return leafIds.map((leafId) => {
     const numericPaneId = manager?.getNumericIdForLeaf(leafId) ?? null
+    const ptyId =
+      numericPaneId === null
+        ? (savedPtyIdsByLeafId[leafId] ?? (leafIds.length === 1 ? terminal.ptyId : null))
+        : (registered?.getPtyIdForPane(numericPaneId) ?? savedPtyIdsByLeafId[leafId] ?? null)
     const legacyPaneId = numericPaneId === null ? /^pane:(\d+)$/.exec(leafId)?.[1] : null
     const paneTitle =
       numericPaneId !== null
@@ -526,12 +687,17 @@ function buildMobileTerminalSurfaceTabs(
         : legacyPaneId
           ? paneTitles[Number(legacyPaneId)]
           : undefined
+    const paneKey = isTerminalLeafId(leafId) ? makePaneKey(terminal.id, leafId) : null
+    const agentStatus = paneKey ? state.agentStatusByPaneKey?.[paneKey] : undefined
     return {
       type: 'terminal' as const,
       id: mobileTerminalSurfaceId(terminal.id, leafId),
       title: paneTitle ?? terminal.customTitle ?? terminal.title ?? 'Terminal',
       parentTabId: terminal.id,
       leafId,
+      ptyId,
+      ...(agentStatus ? { agentStatus } : {}),
+      parentLayout,
       isActive: isDesktopTabActive && leafId === activeLeafId
     }
   })
@@ -586,6 +752,7 @@ function buildMobileFileTab(
   unifiedTabId?: string
 ): RuntimeMobileSessionFileTab {
   const title = file.relativePath.split(/[\\/]/).pop() || file.relativePath || 'File'
+  const diffSource = isMobileFileDiffSource(file.diffSource) ? file.diffSource : undefined
 
   return {
     type: 'file',
@@ -594,12 +761,48 @@ function buildMobileFileTab(
     filePath: file.filePath,
     relativePath: file.relativePath,
     language: file.language,
+    mode: file.mode === 'diff' ? 'diff' : 'edit',
+    ...(diffSource ? { diffSource } : {}),
     isDirty: file.isDirty,
     isActive: unifiedTabId
       ? state.groupsByWorktree[file.worktreeId]?.some(
           (group) => group.activeTabId === unifiedTabId
         ) === true
       : state.activeFileId === file.id
+  }
+}
+
+function isMobileFileDiffSource(
+  diffSource: AppState['openFiles'][number]['diffSource']
+): diffSource is 'staged' | 'unstaged' {
+  return diffSource === 'staged' || diffSource === 'unstaged'
+}
+
+function buildMobileBrowserTab(
+  state: AppState,
+  workspace: NonNullable<AppState['browserTabsByWorktree'][string]>[number],
+  unifiedTabId?: string
+): RuntimeMobileSessionBrowserTab {
+  const pages = state.browserPagesByWorkspace[workspace.id] ?? []
+  const activePage = pages.find((page) => page.id === workspace.activePageId) ?? pages[0] ?? null
+  const title =
+    activePage?.title || workspace.title || activePage?.url || workspace.url || 'Browser'
+
+  return {
+    type: 'browser',
+    id: unifiedTabId ?? workspace.id,
+    title,
+    browserWorkspaceId: workspace.id,
+    browserPageId: activePage?.id ?? workspace.activePageId ?? null,
+    url: activePage?.url ?? workspace.url ?? 'about:blank',
+    loading: activePage?.loading ?? workspace.loading,
+    canGoBack: activePage?.canGoBack ?? workspace.canGoBack,
+    canGoForward: activePage?.canGoForward ?? workspace.canGoForward,
+    isActive: unifiedTabId
+      ? state.groupsByWorktree[workspace.worktreeId]?.some(
+          (group) => group.activeTabId === unifiedTabId
+        ) === true
+      : state.activeBrowserTabIdByWorktree[workspace.worktreeId] === workspace.id
   }
 }
 

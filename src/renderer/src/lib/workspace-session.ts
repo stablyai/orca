@@ -33,6 +33,7 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'activeWorktreeId'
   | 'activeTabId'
   | 'tabsByWorktree'
+  | 'ptyIdsByTabId'
   | 'terminalLayoutsByTabId'
   | 'activeTabIdByWorktree'
   | 'openFiles'
@@ -64,6 +65,7 @@ export const SESSION_RELEVANT_FIELDS = [
   'activeWorktreeId',
   'activeTabId',
   'tabsByWorktree',
+  'ptyIdsByTabId',
   'terminalLayoutsByTabId',
   'activeTabIdByWorktree',
   'openFiles',
@@ -197,14 +199,23 @@ export function buildWorkspaceSessionPayload(
   const layoutByWorktree = snapshot.layoutByWorktree
   const activeGroupIdByWorktree = snapshot.activeGroupIdByWorktree
 
-  // Why: lastKnownRelayPtyIdByTabId preserves session IDs across relay
-  // disconnect/reconnect cycles. tab.ptyId is cleared on disconnect, but
-  // the relay keeps the PTY alive — using the lastKnown fallback ensures
-  // the session save captures the ID even when the mux is temporarily down.
+  // Why: ptyIdsByTabId is the live-PTY map. tab.ptyId is only a wake hint that
+  // sleep intentionally preserves, so using it as liveness would revive slept
+  // worktrees as active after restart.
+  const ptyIdsByTabId = snapshot.ptyIdsByTabId
+  const hasLivePty = (tabId: string): boolean => (ptyIdsByTabId[tabId]?.length ?? 0) > 0
+
+  // Why: lastKnownRelayPtyIdByTabId preserves remote session IDs across relay
+  // disconnect/reconnect cycles, where clearTabPtyId(null) clears tab.ptyId
+  // but keeps the relay PTY alive. Sleep is different: it preserves tab.ptyId
+  // as a wake hint after clearing ptyIdsByTabId, so that shape must not count
+  // as active on restart.
   const lastKnown = snapshot.lastKnownRelayPtyIdByTabId
+  const hasReconnectableSession = (tab: { id: string; ptyId: string | null }): boolean =>
+    hasLivePty(tab.id) || (!tab.ptyId && Boolean(lastKnown[tab.id]))
 
   const activeWorktreeIdsOnShutdown = Object.entries(tabsByWorktree)
-    .filter(([, tabs]) => tabs.some((tab) => tab.ptyId || lastKnown[tab.id]))
+    .filter(([, tabs]) => tabs.some(hasReconnectableSession))
     .map(([worktreeId]) => worktreeId)
 
   // Why: sshConnectionStates is a Map<string, SshConnectionState>, not a plain
@@ -235,6 +246,9 @@ export function buildWorkspaceSessionPayload(
       continue
     }
     for (const tab of tabs) {
+      if (!hasReconnectableSession(tab)) {
+        continue
+      }
       const sessionId = tab.ptyId || lastKnown[tab.id]
       if (sessionId) {
         remoteSessionIdsByTabId[tab.id] = sessionId

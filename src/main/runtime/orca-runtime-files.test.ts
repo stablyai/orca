@@ -70,6 +70,32 @@ describe('RuntimeFileCommands', () => {
     vi.useRealTimers()
   })
 
+  it('opens source control diffs through the renderer host', async () => {
+    const openDiff = vi.fn()
+    const commands = new RuntimeFileCommands({
+      getRuntimeId: () => 'runtime-1',
+      requireStore: () => ({ getRepo: vi.fn(() => undefined) }),
+      resolveWorktreeSelector: vi.fn(async () => ({
+        id: 'wt-1',
+        repoId: 'repo-1',
+        path: '/repo'
+      })),
+      resolveRuntimeGitTarget: vi.fn(),
+      openFile: vi.fn(),
+      openDiff
+    } as never)
+
+    const result = await commands.openMobileDiff('id:wt-1', 'docs/readme.md', true)
+
+    expect(openDiff).toHaveBeenCalledWith('wt-1', '/repo/docs/readme.md', 'docs/readme.md', true)
+    expect(result).toEqual({
+      worktree: 'wt-1',
+      relativePath: 'docs/readme.md',
+      kind: 'markdown',
+      opened: true
+    })
+  })
+
   it('uses a conservative Node watcher for Windows runtime file watches', async () => {
     Object.defineProperty(process, 'platform', {
       configurable: true,

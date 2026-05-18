@@ -6,6 +6,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').showGitIgnoredFiles).toBe(true)
   })
 
+  it('uses list view for Source Control changes by default', () => {
+    expect(getDefaultSettings('/tmp').sourceControlViewMode).toBe('list')
+  })
+
   it('enables separate light terminal theme by default', () => {
     expect(getDefaultSettings('/tmp').terminalUseSeparateLightTheme).toBe(true)
   })

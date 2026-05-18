@@ -20,6 +20,7 @@ import { MarkdownDocLink } from './rich-markdown-doc-link'
 import { RichMarkdownCodeBlock } from './RichMarkdownCodeBlock'
 import { safeReactNodeViewRenderer } from './safe-react-node-view-renderer'
 import { DragSelectionGuard } from './drag-selection-guard'
+import { createRichMarkdownAnnotationHighlightExtension } from './rich-markdown-annotation-highlight'
 
 const lowlight = createLowlight(common)
 
@@ -165,7 +166,8 @@ export function createRichMarkdownExtensions({
       markedOptions: {
         gfm: true
       }
-    })
+    }),
+    createRichMarkdownAnnotationHighlightExtension()
   ]
 
   if (includePlaceholder) {

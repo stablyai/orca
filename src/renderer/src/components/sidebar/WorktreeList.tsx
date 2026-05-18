@@ -4,7 +4,7 @@ import {
   measureElement as measureVirtualElementSize,
   useVirtualizer
 } from '@tanstack/react-virtual'
-import { ChevronDown, CircleX, Plus, Workflow } from 'lucide-react'
+import { ChevronDown, CircleX, Ellipsis, Plus, Trash2, Workflow } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
   getAllWorktreesFromState,
@@ -14,8 +14,15 @@ import {
 } from '@/store/selectors'
 import WorktreeCard from './WorktreeCard'
 import WorktreeCardAgents from './WorktreeCardAgents'
+import { SshDisconnectedDialog } from './SshDisconnectedDialog'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import type {
   Worktree,
@@ -78,10 +85,19 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-cl
 // Prevents jarring position shifts when background events (AI starting work,
 // terminal title changes) trigger score recalculations.
 const SORT_SETTLE_MS = 3_000
+const USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS = 500
 const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
   // Why: TanStack Virtual owns scroll correction. Native browser anchoring can
   // fight virtual row measurement/remounts and produce visible jumps.
   overflowAnchor: 'none'
+}
+
+export function shouldAdjustWorktreeSidebarMeasuredRowScroll(args: {
+  isScrolling: boolean
+  now: number
+  suppressUntil: number
+}): boolean {
+  return !args.isScrolling && args.now >= args.suppressUntil
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -105,22 +121,31 @@ function isEditableTarget(target: EventTarget | null): boolean {
   )
 }
 
+function stopRepoHeaderKeyboardToggle(event: React.KeyboardEvent<HTMLElement>): void {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.stopPropagation()
+  }
+}
+
+function stopNestedWorktreeCardBubble(event: React.SyntheticEvent<HTMLElement>): void {
+  event.stopPropagation()
+}
+
 function getWorktreeOptionId(worktreeId: string): string {
   return `worktree-list-option-${encodeURIComponent(worktreeId)}`
 }
 
-const LINEAGE_INDENT = 24
+const LINEAGE_INDENT = 18
 
 type VirtualizedWorktreeViewportProps = {
   rows: Row[]
   activeWorktreeId: string | null
   groupBy: WorktreeGroupBy
-  showWorkspaceLineage: boolean
-  showInlineAgentCards: boolean
   repoGroupOrdering: RepoGroupOrdering
   toggleGroup: (key: string) => void
   collapsedGroups: Set<string>
   handleCreateForRepo: (repoId: string) => void
+  handleRemoveRepo: (repo: Repo) => void
   activeModal: string
   pendingRevealWorktreeId: string | null
   clearPendingRevealWorktreeId: () => void
@@ -148,6 +173,7 @@ type VirtualizedWorktreeViewportProps = {
   onMoveWorktreesToStatus: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
   onPinWorktree: (worktreeId: string) => void
   onPinWorktrees: (worktreeIds: readonly string[]) => void
+  showInlineAgentCards: boolean
   // Why: broad grouping changes still remount the viewport, while add/delete
   // stays mounted for row-key anchoring and layout animation. These refs bridge
   // both paths so the virtualizer never falls back to scrollTop 0.
@@ -172,11 +198,7 @@ function renderRowContainsWorktree(row: RenderRow, worktreeId: string | null): b
   return row.type === 'item' && row.worktree.id === worktreeId
 }
 
-function buildRenderableRows(rows: Row[], showWorkspaceLineage: boolean): RenderRow[] {
-  if (!showWorkspaceLineage) {
-    return rows
-  }
-
+function buildRenderableRows(rows: Row[]): RenderRow[] {
   const renderRows: RenderRow[] = []
   for (let index = 0; index < rows.length; index++) {
     const row = rows[index]
@@ -245,12 +267,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   rows,
   activeWorktreeId,
   groupBy,
-  showWorkspaceLineage,
-  showInlineAgentCards,
   repoGroupOrdering,
   toggleGroup,
   collapsedGroups,
   handleCreateForRepo,
+  handleRemoveRepo,
   activeModal,
   pendingRevealWorktreeId,
   clearPendingRevealWorktreeId,
@@ -271,12 +292,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   onMoveWorktreesToStatus,
   onPinWorktree,
   onPinWorktrees,
+  showInlineAgentCards,
   scrollOffsetRef,
   scrollAnchorRef
 }: VirtualizedWorktreeViewportProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const suppressMeasurementAdjustmentUntilRef = useRef(0)
   const [dragOverStatus, setDragOverStatus] = useState<WorkspaceStatus | null>(null)
   const [pinDragOver, setPinDragOver] = useState(false)
+  const [lineageReconnectWorktreeId, setLineageReconnectWorktreeId] = useState<string | null>(null)
   const canReorderRepoHeaders = groupBy === 'repo' && repoGroupOrdering === 'manual'
 
   // Drag is only meaningful when repo headers are using manual order. The
@@ -286,14 +310,38 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     onCommit: reorderRepos,
     getScrollContainer: () => scrollRef.current
   })
-  const renderRows = useMemo(
-    () => buildRenderableRows(rows, showWorkspaceLineage),
-    [rows, showWorkspaceLineage]
-  )
+  const renderRows = useMemo(() => buildRenderableRows(rows), [rows])
   const activeWorktreeRowIndex = useMemo(
     () => renderRows.findIndex((row) => renderRowContainsWorktree(row, activeWorktreeId)),
     [renderRows, activeWorktreeId]
   )
+  const activeLineageChildRow = useMemo(() => {
+    if (activeWorktreeId === null) {
+      return null
+    }
+    for (const row of renderRows) {
+      if (row.type !== 'lineage-group') {
+        continue
+      }
+      const child = row.rows.slice(1).find((item) => item.worktree.id === activeWorktreeId)
+      if (child) {
+        return child
+      }
+    }
+    return null
+  }, [activeWorktreeId, renderRows])
+  const activeLineageChildWorktreeId = activeLineageChildRow?.worktree.id ?? null
+  const activeLineageChildConnectionId = activeLineageChildRow?.repo?.connectionId ?? null
+  const activeLineageChildSshStatus = useAppStore((s) =>
+    activeLineageChildConnectionId
+      ? (s.sshConnectionStates.get(activeLineageChildConnectionId)?.status ?? 'disconnected')
+      : null
+  )
+  const activeLineageChildTargetLabel = useAppStore((s) =>
+    activeLineageChildConnectionId ? s.sshTargetLabels.get(activeLineageChildConnectionId) : null
+  )
+  const activeLineageChildSshDisconnected =
+    activeLineageChildSshStatus !== null && activeLineageChildSshStatus !== 'connected'
   const renderRowsRef = useRef(renderRows)
   renderRowsRef.current = renderRows
   const getVirtualItemKey = useCallback(
@@ -344,6 +392,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     },
     [isCurrentVirtualRowElement]
   )
+  const markDirectScrollInput = useCallback(() => {
+    suppressMeasurementAdjustmentUntilRef.current =
+      window.performance.now() + USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS
+  }, [])
+  const shouldSkipScrollAnchorRestore = useCallback(
+    () => window.performance.now() < suppressMeasurementAdjustmentUntilRef.current,
+    []
+  )
 
   const virtualizer = useVirtualizer({
     count: renderRows.length,
@@ -352,6 +408,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     measureElement: measureCurrentVirtualRowElement,
     overscan: 10,
     gap: 6,
+    isScrollingResetDelay: USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS,
     // Why: the sidebar rows are rich cards. Flushing their React render inside
     // TanStack's native scroll listener can make wheel input wait on card work;
     // overscan gives the async render enough runway to stay visually filled.
@@ -364,6 +421,16 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     initialOffset: () => scrollOffsetRef.current,
     getItemKey: getVirtualItemKey
   })
+  // Why: rich worktree cards remeasure while the user wheels through them.
+  // TanStack's default correction writes scrollTop in that path, which feels
+  // like rubber-banding. Structural mutations still use our explicit anchor
+  // restore after direct scroll input has settled.
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (_item, _delta, instance) =>
+    shouldAdjustWorktreeSidebarMeasuredRowScroll({
+      isScrolling: instance.isScrolling,
+      now: window.performance.now(),
+      suppressUntil: suppressMeasurementAdjustmentUntilRef.current
+    })
 
   React.useEffect(() => {
     if (!pendingRevealWorktreeId) {
@@ -372,7 +439,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 
     {
       const targetWorktree = worktrees.find((w) => w.id === pendingRevealWorktreeId)
-      if (targetWorktree && showWorkspaceLineage && !targetWorktree.isPinned) {
+      if (targetWorktree && !targetWorktree.isPinned) {
         const seen = new Set<string>()
         let current: Worktree | undefined = targetWorktree
         while (current && !seen.has(current.id)) {
@@ -440,7 +507,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     prCache,
     worktreeLineageById,
     worktreeMap,
-    showWorkspaceLineage,
     renderRows,
     virtualizer,
     clearPendingRevealWorktreeId,
@@ -498,6 +564,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     rows: renderRows,
     scrollElementRef: scrollRef,
     scrollOffsetRef,
+    shouldSkipRestore: shouldSkipScrollAnchorRestore,
     totalSize,
     virtualizer
   })
@@ -531,7 +598,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         repoGroupOrdering,
         worktreeLineageById,
         worktreeMap,
-        showWorkspaceLineage
+        true
       ).filter((r): r is Extract<Row, { type: 'item' }> => r.type === 'item')
       if (worktreeRows.length === 0) {
         return
@@ -576,8 +643,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       repoOrder,
       workspaceStatuses,
       worktreeLineageById,
-      worktreeMap,
-      showWorkspaceLineage
+      worktreeMap
     ]
   )
 
@@ -605,6 +671,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     window.addEventListener('keydown', handleKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
   }, [activeModal, navigateWorktree])
+
+  // Why: lightweight nested cards do not mount WorktreeCard, so the viewport
+  // owns the SSH reconnect prompt for an active lineage child.
+  useEffect(() => {
+    if (activeLineageChildWorktreeId && activeLineageChildSshDisconnected) {
+      setLineageReconnectWorktreeId(activeLineageChildWorktreeId)
+    }
+  }, [activeLineageChildWorktreeId, activeLineageChildSshDisconnected])
 
   const handleContainerKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -724,9 +798,29 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       aria-multiselectable="true"
       aria-activedescendant={activeDescendantId}
       onKeyDown={handleContainerKeyDown}
+      onTouchMove={markDirectScrollInput}
+      onWheel={markDirectScrollInput}
       className="worktree-sidebar-scrollbar flex-1 overflow-y-scroll overflow-x-hidden pl-1 scrollbar-sleek outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px"
       style={WORKTREE_SIDEBAR_SCROLL_STYLE}
     >
+      {activeLineageChildConnectionId && activeLineageChildSshStatus ? (
+        <SshDisconnectedDialog
+          open={
+            lineageReconnectWorktreeId === activeLineageChildWorktreeId &&
+            activeLineageChildSshDisconnected
+          }
+          onOpenChange={(open) => {
+            if (!open) {
+              setLineageReconnectWorktreeId(null)
+            }
+          }}
+          targetId={activeLineageChildConnectionId}
+          targetLabel={
+            activeLineageChildTargetLabel ?? activeLineageChildRow?.repo?.displayName ?? ''
+          }
+          status={activeLineageChildSshStatus}
+        />
+      ) : null}
       <div
         role="presentation"
         className="relative w-full"
@@ -857,6 +951,50 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   </div>
 
                   {row.repo && groupBy === 'repo' ? (
+                    <DropdownMenu modal={false}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-xs"
+                              className="size-5 shrink-0 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+                              aria-label={`Project actions for ${row.label}`}
+                              onClick={(event) => event.stopPropagation()}
+                              onKeyDown={stopRepoHeaderKeyboardToggle}
+                              onPointerDown={(event) => event.stopPropagation()}
+                            >
+                              <Ellipsis className="size-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" sideOffset={6}>
+                          Project actions
+                        </TooltipContent>
+                      </Tooltip>
+                      <DropdownMenuContent
+                        align="end"
+                        side="bottom"
+                        sideOffset={6}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onSelect={() => {
+                            if (row.repo) {
+                              handleRemoveRepo(row.repo)
+                            }
+                          }}
+                        >
+                          <Trash2 className="size-3.5" />
+                          Remove Project
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : null}
+
+                  {row.repo && groupBy === 'repo' ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
@@ -865,6 +1003,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                           size="icon-xs"
                           className="size-5 shrink-0 rounded-md text-muted-foreground hover:bg-accent/70 hover:text-foreground transition-opacity"
                           aria-label={`Create worktree for ${row.label}`}
+                          onKeyDown={stopRepoHeaderKeyboardToggle}
                           onClick={(event) => {
                             event.preventDefault()
                             event.stopPropagation()
@@ -889,16 +1028,88 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
             )
           }
 
-          const renderLineageChildPreview = (child: WorktreeItemRow) => {
+          const renderWorktreeRow = (
+            itemRow: WorktreeItemRow,
+            nested: boolean,
+            lineageChildren?: React.ReactNode,
+            forceActiveSurface = false
+          ) => {
+            const lineageToggleGroupKey = itemRow.lineageGroupKey
+            // Why: child cards render inside the parent card body, so their
+            // first nested level starts flush with that inset.
+            const paddingDepth = nested ? Math.max(0, itemRow.depth - 1) : itemRow.depth
+            return (
+              <div
+                key={itemRow.worktree.id}
+                id={getWorktreeOptionId(itemRow.worktree.id)}
+                role="option"
+                aria-selected={selectedWorktreeIds.has(itemRow.worktree.id)}
+                aria-current={activeWorktreeId === itemRow.worktree.id ? 'page' : undefined}
+                className="relative"
+                // Why: nested child cards live inside the parent's clickable
+                // card body; bubbling would activate/edit the parent too.
+                onClick={nested ? stopNestedWorktreeCardBubble : undefined}
+                onDoubleClick={nested ? stopNestedWorktreeCardBubble : undefined}
+                onDragStart={nested ? stopNestedWorktreeCardBubble : undefined}
+                style={{
+                  paddingLeft: paddingDepth > 0 ? `${paddingDepth * LINEAGE_INDENT}px` : undefined
+                }}
+              >
+                <WorktreeCard
+                  worktree={itemRow.worktree}
+                  repo={itemRow.repo}
+                  isActive={activeWorktreeId === itemRow.worktree.id}
+                  // Why: a child-active parent should look active without
+                  // running active-card side effects such as SSH reconnect UI.
+                  isActiveSurface={forceActiveSurface || activeWorktreeId === itemRow.worktree.id}
+                  isMultiSelected={selectedWorktreeIds.has(itemRow.worktree.id)}
+                  selectedWorktrees={selectedWorktrees}
+                  onSelectionGesture={onSelectionGesture}
+                  onContextMenuSelect={(event) => onContextMenuSelect(event, itemRow.worktree)}
+                  hideRepoBadge={groupBy === 'repo'}
+                  parentLabel={
+                    itemRow.depth > 0 && itemRow.lineageState === 'valid'
+                      ? undefined
+                      : itemRow.parentLabel
+                  }
+                  lineageState={itemRow.lineageState}
+                  lineageChildCount={itemRow.lineageChildCount}
+                  lineageCollapsed={itemRow.lineageCollapsed}
+                  lineageChildren={lineageChildren}
+                  onLineageToggle={
+                    lineageToggleGroupKey
+                      ? (event) => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          toggleGroupWithScrollAnchor(lineageToggleGroupKey)
+                        }
+                      : undefined
+                  }
+                />
+              </div>
+            )
+          }
+
+          const renderLineageChildCard = (child: WorktreeItemRow) => {
             const isActive = activeWorktreeId === child.worktree.id
             const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
               event.preventDefault()
               event.stopPropagation()
               const selectionOnly = onSelectionGesture(event, child.worktree.id)
-              if (!selectionOnly) {
-                activateAndRevealWorktree(child.worktree.id)
+              if (selectionOnly) {
+                return
+              }
+              activateAndRevealWorktree(child.worktree.id)
+              if (child.repo?.connectionId) {
+                const sshStatus =
+                  useAppStore.getState().sshConnectionStates.get(child.repo.connectionId)?.status ??
+                  'disconnected'
+                if (sshStatus !== 'connected') {
+                  setLineageReconnectWorktreeId(child.worktree.id)
+                }
               }
             }
+            const lineageToggleGroupKey = child.lineageGroupKey
             return (
               <div
                 key={child.worktree.id}
@@ -957,7 +1168,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                           {child.worktree.comment}
                         </div>
                       ) : null}
-                      {child.lineageChildCount > 0 && child.lineageGroupKey ? (
+                      {child.lineageChildCount > 0 && lineageToggleGroupKey ? (
                         <div className="mt-1.5 flex min-w-0 justify-start">
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -975,7 +1186,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                                 onClick={(event) => {
                                   event.preventDefault()
                                   event.stopPropagation()
-                                  toggleGroup(child.lineageGroupKey!)
+                                  toggleGroupWithScrollAnchor(lineageToggleGroupKey)
                                 }}
                               >
                                 <Workflow className="size-2.5" />
@@ -1000,7 +1211,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         </div>
                       ) : null}
                       {showInlineAgentCards ? (
-                        // Why: nested lineage children use this compact
+                        // Why: nested lineage children use this lightweight
                         // renderer instead of WorktreeCard, so their inline
                         // agent rows must be mounted here explicitly.
                         <WorktreeCardAgents
@@ -1011,62 +1222,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     </div>
                   </div>
                 </WorktreeContextMenu>
-              </div>
-            )
-          }
-
-          const renderWorktreeRow = (
-            itemRow: WorktreeItemRow,
-            nested: boolean,
-            lineageChildren?: React.ReactNode,
-            forceActiveSurface = false
-          ) => {
-            const lineageToggleGroupKey = itemRow.lineageGroupKey
-            return (
-              <div
-                key={itemRow.worktree.id}
-                id={getWorktreeOptionId(itemRow.worktree.id)}
-                role="option"
-                aria-selected={selectedWorktreeIds.has(itemRow.worktree.id)}
-                aria-current={activeWorktreeId === itemRow.worktree.id ? 'page' : undefined}
-                className="relative"
-                style={{
-                  paddingLeft:
-                    nested && itemRow.depth > 0
-                      ? `${Math.max(0, itemRow.depth - 1) * LINEAGE_INDENT}px`
-                      : itemRow.depth > 0
-                        ? `${itemRow.depth * LINEAGE_INDENT}px`
-                        : undefined
-                }}
-              >
-                <WorktreeCard
-                  worktree={itemRow.worktree}
-                  repo={itemRow.repo}
-                  isActive={forceActiveSurface || activeWorktreeId === itemRow.worktree.id}
-                  isMultiSelected={selectedWorktreeIds.has(itemRow.worktree.id)}
-                  selectedWorktrees={selectedWorktrees}
-                  onSelectionGesture={onSelectionGesture}
-                  onContextMenuSelect={(event) => onContextMenuSelect(event, itemRow.worktree)}
-                  hideRepoBadge={groupBy === 'repo'}
-                  parentLabel={
-                    itemRow.depth > 0 && itemRow.lineageState === 'valid'
-                      ? undefined
-                      : itemRow.parentLabel
-                  }
-                  lineageState={itemRow.lineageState}
-                  lineageChildCount={itemRow.lineageChildCount}
-                  lineageCollapsed={itemRow.lineageCollapsed}
-                  lineageChildren={lineageChildren}
-                  onLineageToggle={
-                    lineageToggleGroupKey
-                      ? (event) => {
-                          event.preventDefault()
-                          event.stopPropagation()
-                          toggleGroupWithScrollAnchor(lineageToggleGroupKey)
-                        }
-                      : undefined
-                  }
-                />
               </div>
             )
           }
@@ -1090,7 +1245,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     ? renderWorktreeRow(
                         parent,
                         false,
-                        children.length > 0 ? children.map(renderLineageChildPreview) : undefined,
+                        children.length > 0
+                          ? children.map((child) => renderLineageChildCard(child))
+                          : undefined,
                         childIsActive
                       )
                     : null}
@@ -1154,7 +1311,6 @@ const WorktreeList = React.memo(function WorktreeList({
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const groupBy = useAppStore((s) => s.groupBy)
-  const showWorkspaceLineage = useAppStore((s) => s.showWorkspaceLineage)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const sortBy = useAppStore((s) => s.sortBy)
   const showActiveOnly = useAppStore((s) => s.showActiveOnly)
@@ -1350,46 +1506,46 @@ const WorktreeList = React.memo(function WorktreeList({
     hasObservedSmartOnceRef.current = true
   }, [sortBy, sortedIds])
 
-  // Why a 30s timer owned by the component: the class-distribution event is
-  // a coarse health signal — we only need it often enough to see the steady
-  // state, not every render. Cancelling on unmount or sort switch keeps the
-  // timer from firing while the user is in Recent/Name/Repo modes.
+  // Why retry on sortedIds changes: Smart can become active before attention
+  // hydrates. Fire once when class data exists, then stay quiet until the user
+  // leaves Smart so this never becomes a telemetry heartbeat.
+  const hasTrackedSmartDistributionRef = useRef(false)
   useEffect(() => {
     if (sortBy !== 'smart') {
+      hasTrackedSmartDistributionRef.current = false
       return
     }
-    const fire = () => {
-      const attention = lastAttentionByWorktreeRef.current
-      if (!attention) {
-        return
-      }
-      let class1 = 0
-      let class2 = 0
-      let class3 = 0
-      let class4 = 0
-      for (const info of attention.values()) {
-        if (info.cls === 1) {
-          class1++
-        } else if (info.cls === 2) {
-          class2++
-        } else if (info.cls === 3) {
-          class3++
-        } else {
-          class4++
-        }
-      }
-      track('smart_sort_class_distribution', {
-        class_1: class1,
-        class_2: class2,
-        class_3: class3,
-        class_4: class4,
-        total_worktrees: attention.size
-      })
+    if (hasTrackedSmartDistributionRef.current) {
+      return
     }
-    fire()
-    const timer = setInterval(fire, 30_000)
-    return () => clearInterval(timer)
-  }, [sortBy])
+    const attention = lastAttentionByWorktreeRef.current
+    if (!attention || attention.size === 0) {
+      return
+    }
+    let class1 = 0
+    let class2 = 0
+    let class3 = 0
+    let class4 = 0
+    for (const info of attention.values()) {
+      if (info.cls === 1) {
+        class1++
+      } else if (info.cls === 2) {
+        class2++
+      } else if (info.cls === 3) {
+        class3++
+      } else {
+        class4++
+      }
+    }
+    track('smart_sort_class_distribution', {
+      class_1: class1,
+      class_2: class2,
+      class_3: class3,
+      class_4: class4,
+      total_worktrees: attention.size
+    })
+    hasTrackedSmartDistributionRef.current = true
+  }, [sortBy, sortedIds])
 
   // Why fire on the transition: switching away from Smart is the user signal
   // we care about (regression). Use a ref to compare against the previous
@@ -1480,7 +1636,7 @@ const WorktreeList = React.memo(function WorktreeList({
         repoGroupOrdering,
         worktreeLineageById,
         worktreeMap,
-        showWorkspaceLineage
+        true
       ),
     [
       groupBy,
@@ -1492,8 +1648,7 @@ const WorktreeList = React.memo(function WorktreeList({
       workspaceStatuses,
       repoGroupOrdering,
       worktreeLineageById,
-      worktreeMap,
-      showWorkspaceLineage
+      worktreeMap
     ]
   )
   // Why: header/mode changes can shift entire groups, so remount the
@@ -1505,8 +1660,8 @@ const WorktreeList = React.memo(function WorktreeList({
       .filter((r): r is GroupHeaderRow => r.type === 'header')
       .map((r) => r.key)
       .join(',')
-    return `${groupBy}:${showWorkspaceLineage ? 'lineage' : 'flat'}:${headers}`
-  }, [groupBy, rows, showWorkspaceLineage])
+    return `${groupBy}:lineage:${headers}`
+  }, [groupBy, rows])
 
   // Why: derive the rendered item order from the post-buildRows() row list,
   // not the flat `worktrees` array, because grouping (groupBy: 'repo' or
@@ -1614,6 +1769,16 @@ const WorktreeList = React.memo(function WorktreeList({
   const handleCreateForRepo = useCallback(
     (repoId: string) => {
       openModal('new-workspace-composer', { initialRepoId: repoId, telemetrySource: 'sidebar' })
+    },
+    [openModal]
+  )
+
+  const handleRemoveRepo = useCallback(
+    (repo: Repo) => {
+      openModal('confirm-remove-folder', {
+        repoId: repo.id,
+        displayName: repo.displayName
+      })
     },
     [openModal]
   )
@@ -1726,12 +1891,11 @@ const WorktreeList = React.memo(function WorktreeList({
       rows={rows}
       activeWorktreeId={selectedSidebarWorktreeId}
       groupBy={groupBy}
-      showWorkspaceLineage={showWorkspaceLineage}
-      showInlineAgentCards={cardProps.includes('inline-agents')}
       repoGroupOrdering={repoGroupOrdering}
       toggleGroup={toggleGroup}
       collapsedGroups={collapsedGroups}
       handleCreateForRepo={handleCreateForRepo}
+      handleRemoveRepo={handleRemoveRepo}
       activeModal={activeModal}
       pendingRevealWorktreeId={pendingRevealWorktreeId}
       clearPendingRevealWorktreeId={clearPendingRevealWorktreeId}
@@ -1754,6 +1918,7 @@ const WorktreeList = React.memo(function WorktreeList({
       onMoveWorktreesToStatus={moveWorktreesToStatus}
       onPinWorktree={pinWorktree}
       onPinWorktrees={pinWorktrees}
+      showInlineAgentCards={cardProps.includes('inline-agents')}
       scrollOffsetRef={scrollOffsetRef}
       scrollAnchorRef={scrollAnchorRef}
     />

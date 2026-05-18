@@ -56,6 +56,33 @@ describe('file RPC methods', () => {
     })
   })
 
+  it('opens a source control diff for a selected worktree', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      openMobileDiff: vi.fn().mockResolvedValue({
+        worktree: 'wt-1',
+        relativePath: 'docs/readme.md',
+        kind: 'markdown',
+        opened: true
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('files.openDiff', {
+        worktree: 'id:wt-1',
+        relativePath: 'docs/readme.md',
+        staged: true
+      })
+    )
+
+    expect(runtime.openMobileDiff).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md', true)
+    expect(response).toMatchObject({
+      ok: true,
+      result: { kind: 'markdown', opened: true }
+    })
+  })
+
   it('streams file watch changes until the subscription is cleaned up', async () => {
     vi.useFakeTimers()
     try {

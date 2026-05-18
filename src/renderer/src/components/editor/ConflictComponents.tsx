@@ -1,9 +1,11 @@
 import React from 'react'
-import { CircleCheck, GitMerge, RefreshCw, TriangleAlert, X } from 'lucide-react'
+import { CircleCheck, GitMerge, PanelLeftOpen, RefreshCw, TriangleAlert, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import type { OpenFile } from '@/store/slices/editor'
+import type { ConflictReviewEntry, OpenFile } from '@/store/slices/editor'
 import type { GitConflictKind, GitStatusEntry } from '../../../../shared/types'
+import { ConflictReviewFileTree } from './ConflictReviewFileTree'
 
 export const CONFLICT_KIND_LABELS: Record<GitConflictKind, string> = {
   both_modified: 'Both modified',
@@ -24,6 +26,9 @@ export const CONFLICT_HINT_MAP: Record<GitConflictKind, string> = {
   added_by_them: 'Review the added file before keeping it',
   both_deleted: 'Resolve in Git or restore one side before editing'
 }
+
+const EMPTY_CONFLICT_REVIEW_ENTRIES: readonly ConflictReviewEntry[] = []
+let conflictReviewFileTreeCollapsedPreference = false
 
 export function ConflictBanner({
   file,
@@ -103,6 +108,8 @@ export function ConflictReviewPanel({
   file,
   liveEntries,
   onOpenEntry,
+  selectedFile,
+  selectedContent,
   onDismiss,
   onRefreshSnapshot,
   onReturnToSourceControl
@@ -110,17 +117,42 @@ export function ConflictReviewPanel({
   file: OpenFile
   liveEntries: GitStatusEntry[]
   onOpenEntry: (entry: GitStatusEntry) => void
+  selectedFile: OpenFile | null
+  selectedContent: React.ReactNode
   onDismiss: () => void
   onRefreshSnapshot: () => void
   onReturnToSourceControl: () => void
 }): React.JSX.Element {
-  const snapshotEntries = file.conflictReview?.entries ?? []
-  const liveEntriesByPath = new Map(liveEntries.map((entry) => [entry.path, entry]))
-  const unresolvedSnapshotEntries = snapshotEntries.filter(
-    (entry) => liveEntriesByPath.get(entry.path)?.conflictStatus === 'unresolved'
+  const [fileTreeCollapsed, setFileTreeCollapsedState] = React.useState(
+    () => conflictReviewFileTreeCollapsedPreference
   )
+  const snapshotEntries = file.conflictReview?.entries ?? EMPTY_CONFLICT_REVIEW_ENTRIES
+  const liveEntriesByPath = React.useMemo(
+    () => new Map(liveEntries.map((entry) => [entry.path, entry])),
+    [liveEntries]
+  )
+  const treeEntries = React.useMemo(
+    () =>
+      snapshotEntries.map((entry) => ({
+        ...entry,
+        liveEntry: liveEntriesByPath.get(entry.path)
+      })),
+    [liveEntriesByPath, snapshotEntries]
+  )
+  const unresolvedSnapshotEntries = treeEntries.filter(
+    (entry) => entry.liveEntry?.conflictStatus === 'unresolved'
+  )
+  const unresolvedCount = unresolvedSnapshotEntries.length
+  const resolvedCount = Math.max(0, snapshotEntries.length - unresolvedCount)
+  const snapshotTime = new Date(
+    file.conflictReview?.snapshotTimestamp ?? Date.now()
+  ).toLocaleTimeString()
+  const setFileTreeCollapsed = React.useCallback((collapsed: boolean) => {
+    conflictReviewFileTreeCollapsedPreference = collapsed
+    setFileTreeCollapsedState(collapsed)
+  }, [])
 
-  if (snapshotEntries.length > 0 && unresolvedSnapshotEntries.length === 0) {
+  if (snapshotEntries.length > 0 && unresolvedCount === 0) {
     return (
       <div className="flex h-full items-center justify-center px-6 text-center">
         <div className="max-w-md space-y-3">
@@ -144,58 +176,86 @@ export function ConflictReviewPanel({
   }
 
   return (
-    <div className="h-full overflow-auto px-4 py-4">
-      <div className="mb-3">
-        <div className="text-sm font-medium text-foreground">
-          {snapshotEntries.length} unresolved conflict{snapshotEntries.length === 1 ? '' : 's'}
-        </div>
-        <div className="mt-1 text-xs text-muted-foreground">
-          Snapshot captured at{' '}
-          {new Date(file.conflictReview?.snapshotTimestamp ?? Date.now()).toLocaleTimeString()}.
-        </div>
-        <div className="mt-2 flex items-center gap-2">
+    <div className="flex h-full min-h-0 bg-background">
+      <ConflictReviewFileTree
+        entries={treeEntries}
+        collapsed={fileTreeCollapsed}
+        onCollapsedChange={setFileTreeCollapsed}
+        selectedPath={selectedFile?.relativePath ?? null}
+        onOpenEntry={onOpenEntry}
+      />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-5 py-4">
+          <div className="flex min-w-0 items-start gap-2">
+            {fileTreeCollapsed && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label="Show file tree"
+                    onClick={() => setFileTreeCollapsed(false)}
+                  >
+                    <PanelLeftOpen className="size-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  Show file tree
+                </TooltipContent>
+              </Tooltip>
+            )}
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-foreground">
+                {unresolvedCount} unresolved conflict{unresolvedCount === 1 ? '' : 's'}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                Snapshot captured at {snapshotTime}.
+              </div>
+            </div>
+          </div>
           <Button type="button" size="sm" variant="outline" onClick={onRefreshSnapshot}>
             <RefreshCw className="size-3.5" />
             Refresh
           </Button>
         </div>
-      </div>
-      <div className="space-y-2">
-        {snapshotEntries.map((snapshotEntry) => {
-          const liveEntry = liveEntriesByPath.get(snapshotEntry.path)
-          const isStillUnresolved = liveEntry?.conflictStatus === 'unresolved'
-          return (
-            <button
-              key={snapshotEntry.path}
-              type="button"
-              className="flex w-full items-start justify-between rounded-md border border-border/60 px-3 py-2 text-left hover:bg-accent/30"
-              onClick={() => {
-                if (liveEntry) {
-                  onOpenEntry(liveEntry)
-                }
-              }}
-              disabled={!liveEntry}
-            >
-              <div className="min-w-0">
-                <div className="truncate text-sm text-foreground">{snapshotEntry.path}</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {CONFLICT_KIND_LABELS[snapshotEntry.conflictKind]} ·{' '}
-                  {CONFLICT_HINT_MAP[snapshotEntry.conflictKind]}
+        <div className="min-h-0 flex-1">
+          {selectedContent ?? (
+            <div className="flex h-full min-h-0 items-center justify-center px-6 text-center">
+              <div className="max-w-md space-y-3">
+                <div className="mx-auto flex size-10 items-center justify-center rounded-md border border-border bg-card text-muted-foreground">
+                  <GitMerge className="size-4" />
+                </div>
+                <div className="text-sm font-medium text-foreground">
+                  Select a conflict from the file tree
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Open each unresolved file, edit the conflict markers, then refresh this snapshot.
+                </div>
+                {resolvedCount > 0 && (
+                  <div className="text-xs text-muted-foreground">
+                    {resolvedCount} conflict{resolvedCount === 1 ? '' : 's'} no longer live in Git.
+                  </div>
+                )}
+                <div className="flex items-center justify-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={onReturnToSourceControl}
+                  >
+                    <GitMerge className="size-3.5" />
+                    Source Control
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={onDismiss}>
+                    <X className="size-3.5" />
+                    Dismiss
+                  </Button>
                 </div>
               </div>
-              <span
-                className={cn(
-                  'ml-3 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold',
-                  isStillUnresolved
-                    ? 'bg-destructive/12 text-destructive'
-                    : 'bg-muted text-muted-foreground'
-                )}
-              >
-                {isStillUnresolved ? 'Unresolved' : liveEntry ? 'Resolved' : 'Gone'}
-              </span>
-            </button>
-          )
-        })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

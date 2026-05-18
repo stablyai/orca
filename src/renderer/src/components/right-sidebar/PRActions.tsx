@@ -46,7 +46,8 @@ export default function PRActions({
           repoPath: repo.path,
           repoId: repo.id,
           prNumber: pr.number,
-          method
+          method,
+          prRepo: pr.prRepo ?? null
         })
         if (!result.ok) {
           setMergeError(result.error)
@@ -59,7 +60,7 @@ export default function PRActions({
         setMerging(false)
       }
     },
-    [repo.id, repo.path, pr.number, onRefreshPR]
+    [repo.id, repo.path, pr.number, pr.prRepo, onRefreshPR]
   )
 
   useEffect(() => {

@@ -8,11 +8,13 @@ import type {
   GlobalSettings,
   MemorySnapshot,
   OnboardingState,
+  PersistedUIState,
   Repo,
   SearchResult,
   StatsSummary,
   Worktree,
-  WorktreeLineage
+  WorktreeLineage,
+  WorkspaceSessionState
 } from '../../../shared/types'
 import {
   getDefaultOnboardingState,
@@ -20,6 +22,7 @@ import {
   getDefaultUIState,
   getDefaultWorkspaceSession
 } from '../../../shared/constants'
+import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-result'
 import { createE2EConfig } from '../../../shared/e2e-config'
 import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
@@ -36,17 +39,23 @@ import {
 } from './web-runtime-environment'
 import { parseWebPairingInput } from './web-pairing'
 import { WebRuntimeClient } from './web-runtime-client'
+import { RuntimeRpcCallQueuePool } from '../../../shared/runtime-rpc-call-queue'
+import { sanitizeWebRuntimeWorkspaceSession } from './web-workspace-session'
 
 const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
 const UI_STORAGE_KEY = 'orca.web.ui.v1'
 const SESSION_STORAGE_KEY = 'orca.web.workspaceSession.v1'
 const ONBOARDING_STORAGE_KEY = 'orca.web.onboarding.v1'
 const GITHUB_CACHE_STORAGE_KEY = 'orca.web.githubCache.v1'
+// Why: browser-paired clients need desktop parity for large dev sessions; the
+// runtime's no-limit default remains capped for lower-level RPC callers.
+const WEB_RUNTIME_WORKTREE_LIST_LIMIT = 10_000
 
 let activeEnvironment: StoredWebRuntimeEnvironment | null = readStoredWebRuntimeEnvironment()
 let activeClient: WebRuntimeClient | null = null
 let activeClientEnvironmentId: string | null = null
 let cachedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null = null
+const runtimeCallQueuePool = new RuntimeRpcCallQueuePool()
 
 type WebSettingsApi = NonNullable<PreloadApi['settings']>
 
@@ -101,12 +110,12 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       submit: () => Promise.resolve({ ok: false, status: null, error: 'Unavailable on web.' })
     },
     session: {
-      get: () => Promise.resolve(readJson(SESSION_STORAGE_KEY, getDefaultWorkspaceSession())),
+      get: () => Promise.resolve(getStoredWorkspaceSession()),
       set: async (session) => {
-        writeJson(SESSION_STORAGE_KEY, session)
+        writeJson(SESSION_STORAGE_KEY, sanitizeWebRuntimeWorkspaceSession(session))
       },
       setSync: (session) => {
-        writeJson(SESSION_STORAGE_KEY, session)
+        writeJson(SESSION_STORAGE_KEY, sanitizeWebRuntimeWorkspaceSession(session))
       }
     },
     onboarding: {
@@ -209,9 +218,12 @@ function createRuntimeApi(): NonNullable<Partial<PreloadApi>['runtime']> {
     call: ({ method, params }) => callRuntimeEnvelope(method, params),
     getTerminalFitOverrides: () => Promise.resolve([]),
     getTerminalDrivers: () => Promise.resolve([]),
+    getBrowserDrivers: () => Promise.resolve([]),
     restoreTerminalFit: () => Promise.resolve({ restored: false }),
+    reclaimBrowserForDesktop: () => Promise.resolve({ reclaimed: false }),
     onTerminalFitOverrideChanged: () => noopUnsubscribe,
-    onTerminalDriverChanged: () => noopUnsubscribe
+    onTerminalDriverChanged: () => noopUnsubscribe,
+    onBrowserDriverChanged: () => noopUnsubscribe
   }
 }
 
@@ -297,6 +309,17 @@ function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
           limit
         })
       ).refs,
+    searchBaseRefDetails: async ({ repoId, query, limit }) => {
+      const result = await callRuntimeResult<{
+        refs: string[]
+        refDetails?: { refName: string; localBranchName: string }[]
+      }>('repo.searchRefs', {
+        repo: repoId,
+        query,
+        limit
+      })
+      return result.refDetails ?? result.refs.map(legacyBaseRefSearchResult)
+    },
     onChanged: () => noopUnsubscribe
   }
 }
@@ -304,8 +327,12 @@ function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
 function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
   return {
     list: async ({ repoId }) =>
-      (await callRuntimeResult<{ worktrees: Worktree[] }>('worktree.list', { repo: repoId }))
-        .worktrees,
+      (
+        await callRuntimeResult<{ worktrees: Worktree[] }>('worktree.list', {
+          repo: repoId,
+          limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT
+        })
+      ).worktrees,
     listAll: () => listAllRuntimeWorktrees(),
     create: async (args) => {
       cachedWorktrees = null
@@ -313,6 +340,7 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         repo: args.repoId,
         name: args.name,
         baseBranch: args.baseBranch,
+        branchNameOverride: args.branchNameOverride,
         linkedIssue: args.linkedIssue,
         linkedPR: args.linkedPR,
         displayName: args.displayName,
@@ -483,6 +511,10 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     status: async ({ worktreePath, includeIgnored }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.status', { worktree: worktree.id, includeIgnored })
+    },
+    checkIgnored: async ({ worktreePath, paths }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.checkIgnored', { worktree: worktree.id, paths })
     },
     history: async ({ worktreePath, limit, baseRef }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
@@ -658,11 +690,14 @@ function createGitHubApi(): NonNullable<Partial<PreloadApi>['gh']> {
     countWorkItems: direct('github.countWorkItems'),
     listWorkItems: direct('github.listWorkItems'),
     prChecks: direct('github.prChecks'),
+    rerunPRChecks: direct('github.rerunPRChecks'),
     prComments: direct('github.prComments'),
     resolveReviewThread: direct('github.resolveReviewThread'),
     setPRFileViewed: direct('github.setPRFileViewed'),
     updatePRTitle: direct('github.updatePRTitle'),
     mergePR: direct('github.mergePR'),
+    updatePRState: direct('github.updatePRState'),
+    requestPRReviewers: direct('github.requestPRReviewers'),
     updateIssue: direct('github.updateIssue'),
     addIssueComment: direct('github.addIssueComment'),
     addPRReviewCommentReply: direct('github.addPRReviewCommentReply'),
@@ -697,7 +732,7 @@ function createGitHubApi(): NonNullable<Partial<PreloadApi>['gh']> {
 function createRuntimeNamespaceApi(prefix: string): never {
   return createFallbackProxy([prefix], (path, args) => {
     const method = `${prefix}.${path.at(-1) ?? ''}`
-    return callRuntimeResult(method, args[0])
+    return callRuntimeResult(method, mapRuntimeNamespaceArg(prefix, args[0]))
   }) as never
 }
 
@@ -714,12 +749,32 @@ function createHooksApi(): NonNullable<Partial<PreloadApi>['hooks']> {
 }
 
 function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
-  let zoomLevel = readJson(UI_STORAGE_KEY, getDefaultUIState()).uiZoomLevel
+  let zoomLevel = readLocalWebUIState().uiZoomLevel
   return {
-    get: () => Promise.resolve(readJson(UI_STORAGE_KEY, getDefaultUIState())),
+    get: async () => {
+      try {
+        const result = await callRuntimeResult<{ ui: PersistedUIState }>(
+          'ui.get',
+          undefined,
+          15_000
+        )
+        const next = mergeWebUIState(readLocalWebUIState(), result.ui)
+        writeJson(UI_STORAGE_KEY, next)
+        zoomLevel = next.uiZoomLevel
+        return next
+      } catch {
+        return readLocalWebUIState()
+      }
+    },
     set: async (updates) => {
-      const next = { ...readJson(UI_STORAGE_KEY, getDefaultUIState()), ...updates }
+      const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
+      zoomLevel = next.uiZoomLevel
+      try {
+        await callRuntimeResult('ui.set', updates, 15_000)
+      } catch {
+        // Why: unpaired/offline web clients still need local UI persistence.
+      }
     },
     readClipboardText: () => navigator.clipboard?.readText?.() ?? Promise.resolve(''),
     readSelectionClipboardText: () =>
@@ -777,6 +832,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onFocusEditorTab: () => noopUnsubscribe,
     onCloseSessionTab: () => noopUnsubscribe,
     onOpenFileFromMobile: () => noopUnsubscribe,
+    onOpenDiffFromMobile: () => noopUnsubscribe,
     onMobileMarkdownRequest: () => noopUnsubscribe,
     respondMobileMarkdownRequest: () => {},
     onCloseTerminal: () => noopUnsubscribe,
@@ -874,7 +930,9 @@ function createCliApi(): NonNullable<Partial<PreloadApi>['cli']> {
 }
 
 function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
-  const status = (agent: 'claude' | 'codex' | 'gemini' | 'cursor' | 'droid' | 'grok' | 'hermes') =>
+  const status = (
+    agent: 'claude' | 'codex' | 'gemini' | 'cursor' | 'droid' | 'grok' | 'copilot' | 'hermes'
+  ) =>
     Promise.resolve({
       agent,
       state: 'not_installed',
@@ -889,6 +947,7 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
     cursorStatus: () => status('cursor'),
     droidStatus: () => status('droid'),
     grokStatus: () => status('grok'),
+    copilotStatus: () => status('copilot'),
     hermesStatus: () => status('hermes')
   }
 }
@@ -1076,7 +1135,9 @@ async function callRuntimeEnvelope<TResult = unknown>(
   timeoutMs?: number
 ): Promise<RuntimeRpcResponse<TResult>> {
   const environment = requireActiveEnvironment()
-  const response = await getClientForEnvironment(environment).call(method, params, { timeoutMs })
+  const response = await runtimeCallQueuePool.enqueue(environment.id, method, () =>
+    getClientForEnvironment(environment).call(method, params, { timeoutMs })
+  )
   updateEnvironmentFromResponse(environment, response)
   return response as RuntimeRpcResponse<TResult>
 }
@@ -1088,7 +1149,9 @@ async function callEnvironmentEnvelope<TResult = unknown>(
   timeoutMs?: number
 ): Promise<RuntimeRpcResponse<TResult>> {
   const environment = resolveEnvironment(selector)
-  const response = await getClientForEnvironment(environment).call(method, params, { timeoutMs })
+  const response = await runtimeCallQueuePool.enqueue(environment.id, method, () =>
+    getClientForEnvironment(environment).call(method, params, { timeoutMs })
+  )
   updateEnvironmentFromResponse(environment, response)
   return response as RuntimeRpcResponse<TResult>
 }
@@ -1134,6 +1197,11 @@ function disconnectActiveRuntimeEnvironment(): void {
 function resolveEnvironment(selector: string): StoredWebRuntimeEnvironment {
   const environment = requireActiveEnvironment()
   if (selector === environment.id || selector === environment.name || selector === 'active') {
+    return environment
+  }
+  if (selector.startsWith('web-') && environment.id.startsWith('web-')) {
+    // Why: persisted terminal ids can outlive a web-client re-pair, which creates
+    // a fresh web-* environment id even when it points at the same active server.
     return environment
   }
   throw new Error(`Unknown Orca runtime environment: ${selector}`)
@@ -1193,6 +1261,24 @@ function getStoredOnboarding(): OnboardingState {
   return closed
 }
 
+function getStoredWorkspaceSession(): WorkspaceSessionState {
+  const localSession = sanitizeWebRuntimeWorkspaceSession(
+    readJson(SESSION_STORAGE_KEY, getDefaultWorkspaceSession())
+  )
+  if (!requireActiveEnvironmentOrNull()) {
+    return localSession
+  }
+  const ui = readLocalWebUIState()
+  // Why: paired web clients mirror host session-tabs after startup. Replaying
+  // browser-local terminal handles first creates stale remote PTYs and errors.
+  return sanitizeWebRuntimeWorkspaceSession({
+    ...getDefaultWorkspaceSession(),
+    activeRepoId: ui.lastActiveRepoId,
+    activeWorktreeId: ui.lastActiveWorktreeId,
+    lastVisitedAtByWorktreeId: localSession.lastVisitedAtByWorktreeId
+  })
+}
+
 function closeWebOnboarding(base: OnboardingState): OnboardingState {
   return {
     ...base,
@@ -1202,6 +1288,23 @@ function closeWebOnboarding(base: OnboardingState): OnboardingState {
       ...base.checklist,
       dismissed: true
     }
+  }
+}
+
+function readLocalWebUIState(): PersistedUIState {
+  return mergeWebUIState(
+    getDefaultUIState(),
+    readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
+  )
+}
+
+function mergeWebUIState(
+  base: PersistedUIState,
+  updates: Partial<PersistedUIState>
+): PersistedUIState {
+  return {
+    ...base,
+    ...updates
   }
 }
 
@@ -1230,7 +1333,9 @@ async function listAllRuntimeWorktrees(): Promise<Worktree[]> {
   if (cachedWorktrees && Date.now() - cachedWorktrees.loadedAt < 5_000) {
     return cachedWorktrees.worktrees
   }
-  const result = await callRuntimeResult<{ worktrees: Worktree[] }>('worktree.list', {})
+  const result = await callRuntimeResult<{ worktrees: Worktree[] }>('worktree.list', {
+    limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT
+  })
   cachedWorktrees = { loadedAt: Date.now(), worktrees: result.worktrees }
   return result.worktrees
 }
@@ -1291,6 +1396,13 @@ function mapRepoPathArg(args: unknown): unknown {
     ...record,
     repo: record.repoPath
   }
+}
+
+function mapRuntimeNamespaceArg(prefix: string, args: unknown): unknown {
+  if (prefix !== 'hostedReview') {
+    return args
+  }
+  return mapRepoPathArg(args)
 }
 
 function createEmptyMemorySnapshot(): MemorySnapshot {

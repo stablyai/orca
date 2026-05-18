@@ -65,6 +65,7 @@ describe('run-electron-vite-dev', () => {
           ORCA_ELECTRON_VITE_CLI: fakeCliPath,
           ORCA_SKIP_DEV_CLI_PREPARE: '1',
           ORCA_SKIP_DEV_ELECTRON_APP_PREPARE: '1',
+          ORCA_SKIP_DEV_WEB_PREPARE: '1',
           ORCA_DEV_WRAPPER_TEST_PID_FILE: pidFile
         },
         stdio: 'ignore'
@@ -116,6 +117,7 @@ describe('run-electron-vite-dev', () => {
         ORCA_ELECTRON_VITE_CLI: fakeCliPath,
         ORCA_SKIP_DEV_CLI_PREPARE: '1',
         ORCA_SKIP_DEV_ELECTRON_APP_PREPARE: '1',
+        ORCA_SKIP_DEV_WEB_PREPARE: '1',
         ORCA_DEV_WRAPPER_TEST_PID_FILE: pidFile,
         ORCA_DEV_WRAPPER_TEST_ENV_FILE: envFile,
         ORCA_DEV_BRANCH: 'feature/billing-shell',
@@ -182,6 +184,7 @@ describe('run-electron-vite-dev', () => {
           ...process.env,
           ORCA_ELECTRON_VITE_CLI: fakeCliPath,
           ORCA_SKIP_DEV_CLI_PREPARE: '1',
+          ORCA_SKIP_DEV_WEB_PREPARE: '1',
           ORCA_DEV_WRAPPER_TEST_PID_FILE: pidFile,
           ORCA_DEV_WRAPPER_TEST_ENV_FILE: envFile,
           ORCA_DEV_BRANCH: 'feature/stable-name',

@@ -63,6 +63,46 @@ describe('createEditorSlice right sidebar state', () => {
     store.getState().toggleRightSidebar()
     expect(store.getState().rightSidebarOpen).toBe(false)
   })
+
+  it('collapses all expanded directories for one worktree', () => {
+    const store = createEditorStore()
+    store.setState({
+      expandedDirs: {
+        'wt-1': new Set(['/repo/src', '/repo/src/components']),
+        'wt-2': new Set(['/other/packages'])
+      }
+    })
+
+    store.getState().collapseAllDirs('wt-1')
+
+    expect(store.getState().expandedDirs['wt-1']).toEqual(new Set())
+    expect(store.getState().expandedDirs['wt-2']).toEqual(new Set(['/other/packages']))
+  })
+
+  it('keeps collapse all stable when the worktree has no expanded directories', () => {
+    const store = createEditorStore()
+    const expandedDirs = { 'wt-2': new Set(['/other/packages']) }
+    store.setState({ expandedDirs })
+
+    store.getState().collapseAllDirs('wt-1')
+
+    expect(store.getState().expandedDirs).toBe(expandedDirs)
+  })
+
+  it('collapses one directory subtree without touching sibling directories', () => {
+    const store = createEditorStore()
+    store.setState({
+      expandedDirs: {
+        'wt-1': new Set(['/repo/src', '/repo/src/components', '/repo/src2', '/repo/tests']),
+        'wt-2': new Set(['/other/src'])
+      }
+    })
+
+    store.getState().collapseDirSubtree('wt-1', '/repo/src')
+
+    expect(store.getState().expandedDirs['wt-1']).toEqual(new Set(['/repo/src2', '/repo/tests']))
+    expect(store.getState().expandedDirs['wt-2']).toEqual(new Set(['/other/src']))
+  })
 })
 
 describe('createEditorSlice file search seed state', () => {
@@ -791,6 +831,47 @@ describe('createEditorSlice conflict status reconciliation', () => {
         conflictStatusSource: 'session'
       }
     ])
+  })
+
+  it('keeps the conflict review active when selecting a conflict from its tree', () => {
+    const store = createEditorStore()
+
+    store
+      .getState()
+      .openConflictReview(
+        'wt-1',
+        '/repo',
+        [{ path: 'src/conflict.ts', conflictKind: 'both_modified' }],
+        'live-summary'
+      )
+    store.getState().openConflictReviewFile(
+      'wt-1::conflict-review',
+      'wt-1',
+      '/repo',
+      {
+        path: 'src/conflict.ts',
+        status: 'modified',
+        area: 'unstaged',
+        conflictKind: 'both_modified',
+        conflictStatus: 'unresolved',
+        conflictStatusSource: 'git'
+      },
+      'typescript'
+    )
+
+    const reviewFile = store
+      .getState()
+      .openFiles.find((file) => file.id === 'wt-1::conflict-review')
+
+    expect(store.getState().activeFileId).toBe('wt-1::conflict-review')
+    expect(reviewFile?.conflictReview?.selectedFileId).toBe('/repo/src/conflict.ts')
+    expect(store.getState().openFiles).toContainEqual(
+      expect.objectContaining({
+        id: '/repo/src/conflict.ts',
+        mode: 'edit',
+        conflict: expect.objectContaining({ conflictStatus: 'unresolved' })
+      })
+    )
   })
 
   it('marks tracked conflicts as resolved locally after live conflict state disappears', () => {

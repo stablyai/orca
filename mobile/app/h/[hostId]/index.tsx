@@ -15,6 +15,7 @@ import {
   X,
   Pin,
   Bell,
+  GitBranch,
   GitPullRequest,
   SlidersHorizontal,
   Layers,
@@ -1070,6 +1071,20 @@ export default function HostScreen() {
             actions={
               actionTarget
                 ? [
+                    {
+                      label: 'Source Control',
+                      icon: GitBranch,
+                      onPress: () => {
+                        const params = new URLSearchParams({
+                          name: actionTarget.displayName || actionTarget.repo,
+                          origin: 'host'
+                        })
+                        router.push(
+                          `/h/${hostId}/source-control/${encodeURIComponent(actionTarget.worktreeId)}?${params.toString()}`
+                        )
+                        setActionTarget(null)
+                      }
+                    },
                     {
                       label: 'Sleep',
                       icon: Moon,

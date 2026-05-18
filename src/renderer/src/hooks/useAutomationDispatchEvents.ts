@@ -3,7 +3,10 @@ import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-sess
 import { useAppStore } from '@/store'
 import type { AutomationDispatchResult } from '../../../shared/automations-types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
-import { createAutomationRunOutputSnapshotBuffer } from '@/components/automations/automation-run-output-snapshot'
+import {
+  createAutomationRunOutputSnapshotBuffer,
+  selectAutomationRunOutputSnapshot
+} from '@/components/automations/automation-run-output-snapshot'
 
 const AUTOMATIONS_CHANGED_EVENT = 'orca:automations-changed'
 
@@ -122,6 +125,9 @@ export function useAutomationDispatchEvents(): void {
         dispatchWorkspaceDisplayName = worktree.displayName
 
         const outputSnapshotBuffer = createAutomationRunOutputSnapshotBuffer()
+        let latestAssistantMessage: string | null = null
+        const getOutputSnapshot = () =>
+          selectAutomationRunOutputSnapshot(latestAssistantMessage, outputSnapshotBuffer.snapshot())
         let dispatchMarked = false
         let pendingExitCode: number | null = null
         let pendingDone = false
@@ -138,7 +144,7 @@ export function useAutomationDispatchEvents(): void {
             status: 'completed',
             workspaceId: worktree.id,
             workspaceDisplayName: worktree.displayName,
-            outputSnapshot: outputSnapshotBuffer.snapshot(),
+            outputSnapshot: getOutputSnapshot(),
             error: null
           })
         }
@@ -149,7 +155,7 @@ export function useAutomationDispatchEvents(): void {
             status: code === 0 ? 'completed' : 'dispatch_failed',
             workspaceId: worktree.id,
             workspaceDisplayName: worktree.displayName,
-            outputSnapshot: outputSnapshotBuffer.snapshot(),
+            outputSnapshot: getOutputSnapshot(),
             error: code === 0 ? null : `Automation process exited with code ${code}.`
           })
         }
@@ -169,6 +175,8 @@ export function useAutomationDispatchEvents(): void {
             for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
               const parsed = parsePaneKey(paneKey)
               if (parsed?.tabId === tabId && entry.state === 'done') {
+                latestAssistantMessage =
+                  entry.lastAssistantMessage?.trim() || latestAssistantMessage
                 handleAgentDone()
                 return
               }
@@ -189,6 +197,7 @@ export function useAutomationDispatchEvents(): void {
             outputSnapshotBuffer.append(chunk)
           },
           onAgentStatus: (payload) => {
+            latestAssistantMessage = payload.lastAssistantMessage?.trim() || latestAssistantMessage
             if (payload.state !== 'done') {
               return
             }

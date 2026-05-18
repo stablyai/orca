@@ -35,6 +35,7 @@ import { getHistory as getGitHistory } from '../git/history'
 import { getUpstreamStatus } from '../git/upstream'
 import { gitFetch, gitPull, gitPush } from '../git/remote'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import { checkIgnoredPaths } from '../git/check-ignored-paths'
 import {
   cancelGenerateCommitMessageLocal,
   cancelGeneratePullRequestFieldsLocal,
@@ -93,6 +94,21 @@ export class RuntimeGitCommands {
     return options
       ? getGitStatus(target.worktree.path, options)
       : getGitStatus(target.worktree.path)
+  }
+
+  async checkRuntimeGitIgnoredPaths(
+    worktreeSelector: string,
+    relativePaths: string[]
+  ): Promise<string[]> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error('remote_git_unavailable')
+      }
+      return provider.checkIgnoredPaths(target.worktree.path, relativePaths)
+    }
+    return checkIgnoredPaths(target.worktree.path, relativePaths)
   }
 
   async getRuntimeGitHistory(

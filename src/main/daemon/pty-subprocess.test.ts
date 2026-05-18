@@ -128,6 +128,75 @@ describe('createPtySubprocess', () => {
     expect(handle.pid).toBe(42)
   })
 
+  it('does not inherit parent Orca pane identity when caller omits pane env', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const saved = {
+      ORCA_PANE_KEY: process.env.ORCA_PANE_KEY,
+      ORCA_TAB_ID: process.env.ORCA_TAB_ID,
+      ORCA_WORKTREE_ID: process.env.ORCA_WORKTREE_ID
+    }
+    process.env.ORCA_PANE_KEY = 'parent-tab:parent-leaf'
+    process.env.ORCA_TAB_ID = 'parent-tab'
+    process.env.ORCA_WORKTREE_ID = 'parent-worktree'
+
+    try {
+      createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = value
+        }
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)?.[2].env
+    expect(env.ORCA_PANE_KEY).toBeUndefined()
+    expect(env.ORCA_TAB_ID).toBeUndefined()
+    expect(env.ORCA_WORKTREE_ID).toBeUndefined()
+  })
+
+  it('preserves explicit child Orca pane identity over parent env', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const saved = {
+      ORCA_PANE_KEY: process.env.ORCA_PANE_KEY,
+      ORCA_TAB_ID: process.env.ORCA_TAB_ID,
+      ORCA_WORKTREE_ID: process.env.ORCA_WORKTREE_ID
+    }
+    process.env.ORCA_PANE_KEY = 'parent-tab:parent-leaf'
+    process.env.ORCA_TAB_ID = 'parent-tab'
+    process.env.ORCA_WORKTREE_ID = 'parent-worktree'
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: {
+          ORCA_PANE_KEY: 'child-tab:child-leaf',
+          ORCA_TAB_ID: 'child-tab',
+          ORCA_WORKTREE_ID: 'child-worktree'
+        }
+      })
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = value
+        }
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)?.[2].env
+    expect(env.ORCA_PANE_KEY).toBe('child-tab:child-leaf')
+    expect(env.ORCA_TAB_ID).toBe('child-tab')
+    expect(env.ORCA_WORKTREE_ID).toBe('child-worktree')
+  })
+
   it('forwards write calls', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)

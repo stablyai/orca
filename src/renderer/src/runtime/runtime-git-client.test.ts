@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: runtime git routing tests share compatibility-cache and IPC stubs; splitting would hide cross-environment contract drift. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   bulkDiscardRuntimeGitPaths,
@@ -7,6 +8,7 @@ import {
   generateRuntimeCommitMessage,
   getRuntimeGitDiff,
   getRuntimeGitHistory,
+  getRuntimeGitIgnoredPaths,
   getRuntimeGitStatus,
   pushRuntimeGit
 } from './runtime-git-client'
@@ -17,6 +19,7 @@ import {
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 
 const gitStatus = vi.fn()
+const gitCheckIgnored = vi.fn()
 const gitDiff = vi.fn()
 const gitHistory = vi.fn()
 const gitBulkStage = vi.fn()
@@ -32,6 +35,7 @@ const runtimeCall = vi.fn()
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   gitStatus.mockReset()
+  gitCheckIgnored.mockReset()
   gitDiff.mockReset()
   gitHistory.mockReset()
   gitBulkStage.mockReset()
@@ -50,6 +54,7 @@ beforeEach(() => {
     api: {
       git: {
         status: gitStatus,
+        checkIgnored: gitCheckIgnored,
         diff: gitDiff,
         history: gitHistory,
         bulkStage: gitBulkStage,
@@ -109,6 +114,28 @@ describe('runtime git client', () => {
       worktreePath: '/repo',
       connectionId: undefined
     })
+  })
+
+  it('checks ignored paths through local git IPC', async () => {
+    gitCheckIgnored.mockResolvedValue(['dist/bundle.js'])
+
+    const result = await getRuntimeGitIgnoredPaths(
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        connectionId: 'ssh-1'
+      },
+      ['dist/bundle.js', 'src/index.ts']
+    )
+
+    expect(gitCheckIgnored).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: 'ssh-1',
+      paths: ['dist/bundle.js', 'src/index.ts']
+    })
+    expect(result).toEqual(['dist/bundle.js'])
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
   it('uses local git IPC for history when no remote runtime is active', async () => {
@@ -217,6 +244,32 @@ describe('runtime git client', () => {
       params: { worktree: 'wt-1', includeIgnored: true },
       timeoutMs: 15_000
     })
+  })
+
+  it('checks ignored paths through the active runtime environment', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: ['dist/bundle.js'],
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    const result = await getRuntimeGitIgnoredPaths(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      ['dist/bundle.js']
+    )
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'git.checkIgnored',
+      params: { worktree: 'wt-1', paths: ['dist/bundle.js'] },
+      timeoutMs: 15_000
+    })
+    expect(result).toEqual(['dist/bundle.js'])
   })
 
   it('routes bulk mutations and remote operations through the active runtime', async () => {

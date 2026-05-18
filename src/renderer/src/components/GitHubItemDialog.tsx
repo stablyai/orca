@@ -25,11 +25,13 @@ import {
   FileText,
   Folder,
   FolderOpen,
+  GitMerge,
   GitPullRequest,
   LayoutList,
   LoaderCircle,
   MessageSquare,
   MessageSquarePlus,
+  RefreshCw,
   Send,
   UndoDot,
   X
@@ -48,6 +50,12 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { detectLanguage } from '@/lib/language-detect'
 import { cn } from '@/lib/utils'
@@ -85,6 +93,7 @@ import type {
   GitHubWorkItemDetails,
   GitHubAssignableUser,
   GitHubReaction,
+  PRCheckDetail,
   PRComment
 } from '../../../shared/types'
 import { PER_REPO_FETCH_LIMIT } from '../../../shared/work-items'
@@ -303,6 +312,31 @@ function getStateTone(item: GitHubWorkItem): string {
     return 'border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-300'
   }
   return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
+}
+
+function getPRMergeTooltip(item: GitHubWorkItem): string {
+  if (item.mergeable === undefined && item.mergeStateStatus === undefined) {
+    return 'Merge status has not loaded yet'
+  }
+  if (item.state === 'merged') {
+    return 'This pull request is already merged'
+  }
+  if (item.state === 'closed') {
+    return 'This pull request is closed'
+  }
+  if (item.mergeable === 'CONFLICTING') {
+    return 'GitHub reports merge conflicts'
+  }
+  if (item.mergeStateStatus === 'BEHIND') {
+    return 'Update the branch before merging'
+  }
+  if (item.mergeStateStatus === 'BLOCKED') {
+    return 'GitHub reports this pull request is blocked'
+  }
+  if (item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN') {
+    return 'GitHub says this PR can merge'
+  }
+  return 'GitHub has not reported a final merge status'
 }
 
 function WorkItemStateBadge({
@@ -694,6 +728,19 @@ function patchCachedPRFileViewedState(
     error: undefined
   })
   return previousState
+}
+
+function patchCachedPRChecks(cacheKey: string, checks: PRCheckDetail[]): void {
+  const prev = workItemDetailsCache.get(cacheKey)
+  if (!prev?.details) {
+    return
+  }
+  touchWorkItemDetailsCache(cacheKey, {
+    ...prev,
+    details: { ...prev.details, checks },
+    fetchedAt: Date.now(),
+    error: undefined
+  })
 }
 
 // Why: install once at module load — every dialog instance shares the cache,
@@ -1431,11 +1478,17 @@ function ConversationTab({
   loading,
   checks,
   participants: detailsParticipants,
+  localState,
+  onStateChange,
+  projectOrigin,
   onUse,
+  onMutated,
+  onChecksUpdated,
   onCommentAdded
 }: {
   item: GitHubWorkItem
   repoPath: string | null
+  repoId: string | null
   body: string
   comments: PRComment[]
   files: GitHubPRFile[]
@@ -1444,7 +1497,12 @@ function ConversationTab({
   loading: boolean
   checks: GitHubWorkItemDetails['checks']
   participants: GitHubAssignableUser[]
+  localState: GitHubWorkItem['state']
+  onStateChange: (state: GitHubWorkItem['state']) => void
+  projectOrigin: GitHubItemDialogProjectOrigin | undefined
   onUse: (item: GitHubWorkItem) => void
+  onMutated: () => void
+  onChecksUpdated: (checks: PRCheckDetail[]) => void
   onCommentAdded: (comment: PRComment) => void
 }): React.JSX.Element {
   const authorLabel = item.author ?? 'unknown'
@@ -1527,6 +1585,15 @@ function ConversationTab({
     item.type === 'pr' ? (
       <div className="flex h-fit flex-col gap-3 xl:sticky xl:top-4">
         {startWorkspaceButton}
+        <PRActionsPanel
+          item={item}
+          repoPath={repoPath}
+          repoId={item.repoId}
+          projectOrigin={projectOrigin}
+          localState={localState}
+          onStateChange={onStateChange}
+          onMutated={onMutated}
+        />
         <aside className="rounded-lg border border-border/50 bg-card/50 shadow-xs">
           <div className="flex h-10 items-center gap-2 border-b border-border/50 px-3">
             <CircleDashed className="size-3.5 text-muted-foreground" />
@@ -1535,7 +1602,15 @@ function ConversationTab({
               {(checks ?? []).length}
             </span>
           </div>
-          <ChecksTab checks={checks} loading={loading} />
+          <ChecksTab
+            item={item}
+            repoPath={repoPath}
+            repoId={item.repoId}
+            headSha={headSha}
+            checks={checks}
+            loading={loading}
+            onChecksUpdated={onChecksUpdated}
+          />
         </aside>
       </div>
     ) : null
@@ -1751,7 +1826,7 @@ function ConversationTab({
             <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
           </div>
         ) : comments.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-center text-[13px] text-muted-foreground">
+          <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-left text-[13px] text-muted-foreground">
             No comments yet.
           </div>
         ) : visibleComments.length === 0 ? (
@@ -1777,6 +1852,194 @@ function ConversationTab({
 
       {rightPanel}
     </div>
+  )
+}
+
+function PRActionsPanel({
+  item,
+  repoPath,
+  repoId,
+  projectOrigin,
+  localState,
+  onStateChange,
+  onMutated
+}: {
+  item: GitHubWorkItem
+  repoPath: string | null
+  repoId: string | null
+  projectOrigin: GitHubItemDialogProjectOrigin | undefined
+  localState: GitHubWorkItem['state']
+  onStateChange: (state: GitHubWorkItem['state']) => void
+  onMutated: () => void
+}): React.JSX.Element {
+  const [statePending, setStatePending] = useState(false)
+  const [mergePending, setMergePending] = useState(false)
+  const patchWorkItem = useAppStore((s) => s.patchWorkItem)
+  const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
+  const actionItem = { ...item, state: localState }
+  const canMutateState = localState !== 'merged' && (!!repoPath || !!projectOrigin)
+  const nextState: 'open' | 'closed' = localState === 'closed' ? 'open' : 'closed'
+  const mergeDisabled =
+    !repoPath ||
+    mergePending ||
+    localState === 'closed' ||
+    localState === 'merged' ||
+    item.mergeable === 'CONFLICTING'
+
+  const patchProjectRowIfNeeded = useCallback(
+    (state: GitHubWorkItem['state']) => {
+      if (!projectOrigin) {
+        return
+      }
+      patchProjectRowContent(projectOrigin.cacheKey, projectOrigin.projectItemId, { state })
+    },
+    [patchProjectRowContent, projectOrigin]
+  )
+
+  const applyStatePatch = useCallback(
+    (state: GitHubWorkItem['state']) => {
+      onStateChange(state)
+      patchWorkItem(item.id, { state })
+      patchProjectRowIfNeeded(state)
+    },
+    [item.id, onStateChange, patchProjectRowIfNeeded, patchWorkItem]
+  )
+
+  const handleStateChange = async (): Promise<void> => {
+    if (!canMutateState || statePending) {
+      return
+    }
+    const label = nextState === 'closed' ? 'Close' : 'Reopen'
+    if (!window.confirm(`${label} PR #${item.number}?`)) {
+      return
+    }
+    const previousState = localState
+    setStatePending(true)
+    applyStatePatch(nextState)
+    try {
+      await runPullRequestStateUpdate({
+        repoPath,
+        repoId,
+        projectOrigin,
+        number: item.number,
+        updates: { state: nextState }
+      })
+      toast.success(nextState === 'closed' ? 'Pull request closed' : 'Pull request reopened')
+      onMutated()
+    } catch (err) {
+      applyStatePatch(previousState)
+      toast.error(err instanceof Error ? err.message : `Failed to ${label.toLowerCase()} PR`)
+    } finally {
+      setStatePending(false)
+    }
+  }
+
+  const handleMerge = async (method: 'merge' | 'squash' | 'rebase'): Promise<void> => {
+    if (!repoPath || mergeDisabled) {
+      return
+    }
+    const label =
+      method === 'squash' ? 'Squash and merge' : method === 'rebase' ? 'Rebase and merge' : 'Merge'
+    if (!window.confirm(`${label} PR #${item.number}?`)) {
+      return
+    }
+    setMergePending(true)
+    try {
+      const result = await window.api.gh.mergePR({
+        repoPath,
+        repoId: repoId ?? undefined,
+        prNumber: item.number,
+        method
+      })
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+      applyStatePatch('merged')
+      toast.success('Pull request merged')
+      onMutated()
+    } catch {
+      toast.error('Failed to merge pull request')
+    } finally {
+      setMergePending(false)
+    }
+  }
+
+  return (
+    <aside className="rounded-lg border border-border/50 bg-card/50 p-3 shadow-xs">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <GitPullRequest className="size-3.5 text-muted-foreground" />
+          <span className="text-[13px] font-medium text-foreground">Pull request</span>
+        </div>
+        <WorkItemStateBadge item={actionItem} />
+      </div>
+
+      <div className="grid gap-2">
+        <Button
+          type="button"
+          variant={nextState === 'closed' ? 'destructive' : 'secondary'}
+          size="sm"
+          className="w-full justify-center gap-2"
+          disabled={!canMutateState || statePending}
+          onClick={() => void handleStateChange()}
+        >
+          {statePending ? (
+            <LoaderCircle className="size-3.5 animate-spin" />
+          ) : nextState === 'closed' ? (
+            <CircleDashed className="size-3.5" />
+          ) : (
+            <CircleDot className="size-3.5" />
+          )}
+          {nextState === 'closed' ? 'Close PR' : 'Reopen PR'}
+        </Button>
+
+        <DropdownMenu modal={false}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-center gap-2"
+                  disabled={mergePending || localState === 'closed' || localState === 'merged'}
+                >
+                  {mergePending ? (
+                    <LoaderCircle className="size-3.5 animate-spin" />
+                  ) : (
+                    <GitMerge className="size-3.5" />
+                  )}
+                  Merge
+                  <ChevronDown className="size-3 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {!repoPath ? 'Merge requires a registered local repo' : getPRMergeTooltip(actionItem)}
+            </TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent align="start" className="w-52">
+            <DropdownMenuItem disabled={mergeDisabled} onSelect={() => void handleMerge('squash')}>
+              <GitMerge className="size-4" />
+              Squash and merge
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={mergeDisabled} onSelect={() => void handleMerge('merge')}>
+              <GitMerge className="size-4" />
+              Create merge commit
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={mergeDisabled} onSelect={() => void handleMerge('rebase')}>
+              <GitMerge className="size-4" />
+              Rebase and merge
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
+              <ExternalLink className="size-4" />
+              Open GitHub merge box
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </aside>
   )
 }
 
@@ -1878,56 +2141,195 @@ function CommentReplyForm({
 }
 
 function ChecksTab({
+  item,
+  repoPath,
+  repoId,
+  headSha,
   checks,
-  loading
+  loading,
+  onChecksUpdated
 }: {
+  item: GitHubWorkItem
+  repoPath: string | null
+  repoId: string | null
+  headSha: string | undefined
   checks: GitHubWorkItemDetails['checks']
   loading: boolean
+  onChecksUpdated: (checks: PRCheckDetail[]) => void
 }): React.JSX.Element {
-  const list = checks ?? []
+  const [localChecks, setLocalChecks] = useState<PRCheckDetail[] | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const [rerunning, setRerunning] = useState(false)
+  const list = localChecks ?? checks ?? []
+  const failedChecks = list.filter((check) =>
+    ['failure', 'cancelled', 'timed_out'].includes(check.conclusion ?? '')
+  )
+
+  useEffect(() => {
+    setLocalChecks(null)
+  }, [checks])
+
+  const handleRefresh = useCallback(async (): Promise<PRCheckDetail[] | null> => {
+    if (!repoPath) {
+      toast.error('Unable to refresh checks without a repository path.')
+      return null
+    }
+    setRefreshing(true)
+    try {
+      const nextChecks = (await window.api.gh.prChecks({
+        repoPath,
+        repoId: repoId ?? undefined,
+        prNumber: item.number,
+        headSha,
+        noCache: true
+      })) as PRCheckDetail[]
+      setLocalChecks(nextChecks)
+      onChecksUpdated(nextChecks)
+      return nextChecks
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to refresh checks')
+      return null
+    } finally {
+      setRefreshing(false)
+    }
+  }, [headSha, item.number, onChecksUpdated, repoId, repoPath])
+
+  const handleRerun = useCallback(
+    async (failedOnly: boolean): Promise<void> => {
+      if (!repoPath || rerunning) {
+        return
+      }
+      setRerunning(true)
+      try {
+        const result = await window.api.gh.rerunPRChecks({
+          repoPath,
+          repoId: repoId ?? undefined,
+          prNumber: item.number,
+          headSha,
+          failedOnly
+        })
+        if (!result.ok) {
+          toast.error(result.error)
+          return
+        }
+        toast.success(result.count === 1 ? 'Check rerun requested' : 'Check reruns requested')
+        await handleRefresh()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to rerun checks')
+      } finally {
+        setRerunning(false)
+      }
+    },
+    [handleRefresh, headSha, item.number, rerunning, repoId, repoPath]
+  )
+
+  const toolbar = (
+    <div className="flex items-center justify-end gap-1 border-b border-border/40 px-2 py-1.5">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="size-7"
+            disabled={!repoPath || refreshing}
+            onClick={() => void handleRefresh()}
+            aria-label="Refresh checks"
+          >
+            <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={6}>
+          Refresh checks
+        </TooltipContent>
+      </Tooltip>
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="h-7 gap-1.5 px-2 text-[11px]"
+            disabled={!repoPath || rerunning || list.length === 0}
+          >
+            {rerunning ? <LoaderCircle className="size-3 animate-spin" /> : null}
+            Rerun
+            <ChevronDown className="size-3 opacity-60" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuItem
+            disabled={failedChecks.length === 0 || rerunning}
+            onSelect={() => void handleRerun(true)}
+          >
+            <RefreshCw className="size-4" />
+            Rerun failed checks
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={rerunning} onSelect={() => void handleRerun(false)}>
+            <RefreshCw className="size-4" />
+            Rerun all checks
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  )
+
   if (loading && list.length === 0) {
     return (
-      <div className="flex items-center justify-center py-10">
-        <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
-      </div>
+      <>
+        {toolbar}
+        <div className="flex items-center justify-center py-10">
+          <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+        </div>
+      </>
     )
   }
   if (list.length === 0) {
     return (
-      <div className="px-4 py-10 text-center text-[12px] text-muted-foreground">
-        No checks configured.
-      </div>
+      <>
+        {toolbar}
+        <div className="px-4 py-10 text-center text-[12px] text-muted-foreground">
+          No checks found.
+        </div>
+      </>
     )
   }
   return (
-    <div className="px-2 py-2">
-      {list.map((check) => {
-        const conclusion = check.conclusion ?? 'pending'
-        const Icon = CHECK_ICON[conclusion] ?? CircleDashed
-        const color = CHECK_COLOR[conclusion] ?? 'text-muted-foreground'
-        return (
-          <button
-            key={check.name}
-            type="button"
-            onClick={() => {
-              if (check.url) {
-                window.api.shell.openUrl(check.url)
-              }
-            }}
-            className={cn(
-              'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition',
-              check.url ? 'hover:bg-muted/40' : ''
-            )}
-          >
-            <Icon
-              className={cn('size-3.5 shrink-0', color, conclusion === 'pending' && 'animate-spin')}
-            />
-            <span className="flex-1 truncate text-[12px] text-foreground">{check.name}</span>
-            {check.url && <ExternalLink className="size-3 shrink-0 text-muted-foreground/40" />}
-          </button>
-        )
-      })}
-    </div>
+    <>
+      {toolbar}
+      <div className="px-2 py-2">
+        {list.map((check) => {
+          const conclusion = check.conclusion ?? 'pending'
+          const Icon = CHECK_ICON[conclusion] ?? CircleDashed
+          const color = CHECK_COLOR[conclusion] ?? 'text-muted-foreground'
+          return (
+            <button
+              key={check.name}
+              type="button"
+              onClick={() => {
+                if (check.url) {
+                  window.api.shell.openUrl(check.url)
+                }
+              }}
+              className={cn(
+                'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition',
+                check.url ? 'hover:bg-muted/40' : ''
+              )}
+            >
+              <Icon
+                className={cn(
+                  'size-3.5 shrink-0',
+                  color,
+                  conclusion === 'pending' && 'animate-spin'
+                )}
+              />
+              <span className="flex-1 truncate text-[12px] text-foreground">{check.name}</span>
+              {check.url && <ExternalLink className="size-3 shrink-0 text-muted-foreground/40" />}
+            </button>
+          )
+        })}
+      </div>
+    </>
   )
 }
 
@@ -2112,12 +2514,58 @@ async function runIssueUpdate(args: {
   if (!args.repoPath) {
     throw new Error('No repo context available for this edit.')
   }
-  await window.api.gh.updateIssue({
+  const res = await window.api.gh.updateIssue({
     repoPath: args.repoPath,
     repoId: args.repoId ?? undefined,
     number: args.number,
     updates: args.updates
   })
+  if (!res.ok) {
+    throw new Error(res.error)
+  }
+}
+
+async function runPullRequestStateUpdate(args: {
+  repoPath: string | null
+  repoId?: string | null
+  projectOrigin: GitHubItemDialogProjectOrigin | undefined
+  number: number
+  updates: { state: 'open' | 'closed' }
+}): Promise<void> {
+  if (args.projectOrigin) {
+    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    const updateArgs = {
+      owner: args.projectOrigin.owner,
+      repo: args.projectOrigin.repo,
+      number: args.number,
+      updates: args.updates
+    }
+    const res =
+      target.kind === 'environment'
+        ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updatePullRequestBySlug>>>(
+            target,
+            'github.project.updatePullRequestBySlug',
+            updateArgs,
+            { timeoutMs: 30_000 }
+          )
+        : await window.api.gh.updatePullRequestBySlug(updateArgs)
+    if (!res.ok) {
+      throw new Error(res.error.message)
+    }
+    return
+  }
+  if (!args.repoPath) {
+    throw new Error('No repo context available for this pull request.')
+  }
+  const res = await window.api.gh.updatePRState({
+    repoPath: args.repoPath,
+    repoId: args.repoId ?? undefined,
+    prNumber: args.number,
+    updates: args.updates
+  })
+  if (!res.ok) {
+    throw new Error(res.error)
+  }
 }
 
 function GHEditSection({
@@ -3279,6 +3727,7 @@ export default function GitHubItemDialog({
                       <ConversationTab
                         item={workItem}
                         repoPath={repoPath}
+                        repoId={effectiveRepoId}
                         body={body}
                         comments={comments}
                         files={files}
@@ -3287,7 +3736,25 @@ export default function GitHubItemDialog({
                         loading={loading}
                         checks={checks}
                         participants={details?.participants ?? []}
+                        localState={localState}
+                        onStateChange={setLocalState}
+                        projectOrigin={projectOrigin}
                         onUse={onUse}
+                        onMutated={() => {
+                          if (repoPath) {
+                            invalidateWorkItemDetailsCacheByMatch({
+                              repoPath,
+                              repoId: effectiveRepoId ?? undefined,
+                              type: workItem.type,
+                              number: workItem.number
+                            })
+                          }
+                        }}
+                        onChecksUpdated={(nextChecks) => {
+                          if (detailsCacheKey) {
+                            patchCachedPRChecks(detailsCacheKey, nextChecks)
+                          }
+                        }}
                         onCommentAdded={appendOptimisticComment}
                       />
                     </TabsContent>

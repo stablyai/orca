@@ -84,7 +84,6 @@ function WorkspaceKanbanCard({
         isActive={isActive}
         isMultiSelected={isSelected}
         selectedWorktrees={contextWorktrees}
-        hideCiCheck={worktree.isPinned}
         nativeDragEnabled={nativeDragEnabled}
         onActivate={onActivate}
         onSelectionGesture={onSelectionGesture}
