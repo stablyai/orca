@@ -12,6 +12,11 @@ function cssAttributeString(value: string): string {
 export function focusTerminalTabSurface(tabId: string, leafId?: string | null): void {
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
+      // Why: this can be queued before inline tab rename mounts. If it runs
+      // afterward, focusing xterm blurs the rename input and commits it closed.
+      if (document.querySelector('[data-tab-rename-input="true"]')) {
+        return
+      }
       const escapedTabId = cssAttributeString(tabId)
       const scopedSelector = leafId
         ? `[data-terminal-tab-id="${escapedTabId}"] [data-leaf-id="${cssAttributeString(leafId)}"] .xterm-helper-textarea`

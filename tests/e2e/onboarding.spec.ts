@@ -326,11 +326,12 @@ test.describe('Onboarding flow', () => {
       .toBe(1)
   })
 
-  test('Skip jumps to the repo step without dismissing onboarding', async ({ orcaPage }) => {
+  test('Skip jumps to the repo step, saves the selected agent, and keeps onboarding open', async ({
+    orcaPage
+  }) => {
     await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
       timeout: 15_000
     })
-    const beforeDefaultAgent = (await getSettings(orcaPage)).defaultTuiAgent
     const codexButton = orcaPage.getByRole('button', { name: /^Codex\s/ })
     const codexVisible = await codexButton
       .first()
@@ -374,7 +375,7 @@ test.describe('Onboarding flow', () => {
       })
     await expect
       .poll(async () => (await getSettings(orcaPage)).defaultTuiAgent, { timeout: 5_000 })
-      .toBe(beforeDefaultAgent)
+      .toBe('codex')
 
     await orcaPage.reload()
     await waitForSessionReady(orcaPage)

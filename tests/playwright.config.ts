@@ -32,7 +32,7 @@ export default defineConfig({
   // don't share state — we can safely fan out to match the runner's vCPU count.
   workers: process.env.CI ? 4 : undefined,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  retries: 0,
   reporter: 'list',
   use: {
     // Why: this suite intentionally runs with retries disabled so first-failure
