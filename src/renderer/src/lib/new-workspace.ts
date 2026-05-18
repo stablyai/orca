@@ -7,6 +7,7 @@ import {
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import { isShellProcess } from '@/lib/tui-agent-startup'
 import type { OrcaHooks, TaskViewPresetId } from '../../../shared/types'
+import { normalizeHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 
 /**
  * Why: the TaskPage's preset buttons and the openTaskPage prefetcher both need
@@ -120,7 +121,7 @@ export function getSetupConfig(
   repo:
     | {
         hookSettings?: {
-          commandSourcePolicy?: 'shared-only' | 'shared-first' | 'local-only' | 'run-both'
+          commandSourcePolicy?: unknown
           scripts?: { setup?: string }
         }
       }
@@ -129,7 +130,7 @@ export function getSetupConfig(
 ): SetupConfig | null {
   const yamlSetup = yamlHooks?.scripts?.setup?.trim()
   const localSetup = repo?.hookSettings?.scripts?.setup?.trim()
-  const sourcePolicy = repo?.hookSettings?.commandSourcePolicy ?? 'shared-only'
+  const sourcePolicy = normalizeHookCommandSourcePolicy(repo?.hookSettings?.commandSourcePolicy)
 
   if (sourcePolicy === 'local-only') {
     return localSetup ? { source: 'local', command: localSetup } : null
@@ -141,9 +142,6 @@ export function getSetupConfig(
 
   if (yamlSetup) {
     return { source: 'yaml', command: yamlSetup }
-  }
-  if (sourcePolicy === 'shared-first' && localSetup) {
-    return { source: 'local', command: localSetup }
   }
   return null
 }

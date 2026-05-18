@@ -104,7 +104,7 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
           {
             title: 'Local Settings Commands',
             description: 'Personal setup and archive commands stored locally on this machine.',
-            keywords: [repo.displayName, 'local', 'personal', 'fallback', 'hooks']
+            keywords: [repo.displayName, 'local', 'personal', 'hooks']
           },
           {
             title: 'Command Source',
@@ -116,7 +116,6 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
               'shared',
               'both',
               'source',
-              'fallback',
               'authoritative'
             ]
           },

@@ -15,6 +15,7 @@ import { SearchableSetting } from './SearchableSetting'
 import { useAppStore } from '@/store'
 import { readRuntimeIssueCommand, writeRuntimeIssueCommand } from '@/runtime/runtime-hooks-client'
 import { DEFAULT_REPO_HOOK_SETTINGS } from './SettingsConstants'
+import { normalizeHookCommandSourcePolicy } from '../../../../shared/hook-command-source-policy'
 
 type RepositoryHooksSectionProps = {
   repo: Repo
@@ -55,11 +56,6 @@ const COMMAND_SOURCE_POLICY_OPTIONS: PolicyOption<HookCommandSourcePolicy>[] = [
     policy: 'local-only',
     label: 'Use local only',
     description: 'Ignore repo commands and run only your local Settings commands.'
-  },
-  {
-    policy: 'shared-first',
-    label: 'Use local fallback',
-    description: 'Run local commands only when orca.yaml has no command.'
   },
   {
     policy: 'run-both',
@@ -291,8 +287,9 @@ export function RepositoryHooksSection({
   // but the UI always needs a concrete value so the policy grid has an active selection.
   const selectedSetupRunPolicy: SetupRunPolicy =
     hookSettingsDraft.setupRunPolicy ?? 'run-by-default'
-  const selectedCommandSourcePolicy: HookCommandSourcePolicy =
-    hookSettingsDraft.commandSourcePolicy ?? 'shared-only'
+  const selectedCommandSourcePolicy: HookCommandSourcePolicy = normalizeHookCommandSourcePolicy(
+    hookSettingsDraft.commandSourcePolicy
+  )
   const [issueCommandDraft, setIssueCommandDraft] = useState('')
   const localCommandsRepoIdRef = useRef(repo.id)
   const [hasSharedIssueCommand, setHasSharedIssueCommand] = useState(false)
@@ -565,7 +562,7 @@ export function RepositoryHooksSection({
       <SearchableSetting
         title="Local Settings Commands"
         description="Personal setup and archive commands stored locally on this machine."
-        keywords={['local', 'personal', 'fallback', 'setup', 'archive']}
+        keywords={['local', 'personal', 'setup', 'archive']}
       >
         <div className="space-y-4 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm">
           <div className="flex items-start justify-between gap-3">
@@ -694,7 +691,7 @@ export function RepositoryHooksSection({
       <SearchableSetting
         title="Command Source"
         description="Choose whether repo commands, local commands, or both are authoritative."
-        keywords={['command source', 'local', 'shared', 'orca.yaml', 'both', 'fallback']}
+        keywords={['command source', 'local', 'shared', 'orca.yaml', 'both', 'authoritative']}
       >
         <div className="space-y-3 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm">
           <div className="space-y-1">
@@ -709,7 +706,7 @@ export function RepositoryHooksSection({
             options={COMMAND_SOURCE_POLICY_OPTIONS}
             selected={selectedCommandSourcePolicy}
             onSelect={(policy) => updateHookSettingsPolicyDraft({ commandSourcePolicy: policy })}
-            columns="md:grid-cols-4"
+            columns="md:grid-cols-3"
           />
         </div>
       </SearchableSetting>

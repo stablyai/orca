@@ -291,7 +291,7 @@ describe('getEffectiveHooks', () => {
   const makeRepo = (hookSettings?: {
     mode?: 'auto' | 'override'
     setupRunPolicy?: 'ask' | 'run-by-default' | 'skip-by-default'
-    commandSourcePolicy?: 'shared-only' | 'shared-first' | 'local-only' | 'run-both'
+    commandSourcePolicy?: 'shared-only' | 'local-only' | 'run-both'
     scripts?: { setup: string; archive: string }
   }) =>
     ({
@@ -358,26 +358,6 @@ describe('getEffectiveHooks', () => {
     const result = getEffectiveHooks(repo)
 
     expect(result).toBeNull()
-  })
-
-  it('falls back to local settings hooks when command source policy is shared-first', async () => {
-    const fs = await import('fs')
-    vi.mocked(fs.existsSync).mockReturnValue(false)
-
-    const { getEffectiveHooks } = await import('./hooks')
-    const repo = makeRepo({
-      mode: 'override',
-      commandSourcePolicy: 'shared-first',
-      scripts: { setup: 'echo "local setup"', archive: 'echo "local archive"' }
-    })
-    const result = getEffectiveHooks(repo)
-
-    expect(result).toEqual({
-      scripts: {
-        setup: 'echo "local setup"',
-        archive: 'echo "local archive"'
-      }
-    })
   })
 
   it('uses shared yaml settings over local settings by default', async () => {
@@ -458,7 +438,7 @@ describe('getEffectiveHooks', () => {
     })
   })
 
-  it('falls back per hook when command source policy is shared-first', async () => {
+  it('treats legacy shared-first policy as orca.yaml only', async () => {
     const fs = await import('fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  archive: |\n    echo "yaml archive"\n')
@@ -466,14 +446,13 @@ describe('getEffectiveHooks', () => {
     const { getEffectiveHooks } = await import('./hooks')
     const repo = makeRepo({
       mode: 'override',
-      commandSourcePolicy: 'shared-first',
+      commandSourcePolicy: 'shared-first' as never,
       scripts: { setup: 'echo "legacy setup"', archive: 'echo "legacy archive"' }
     })
     const result = getEffectiveHooks(repo)
 
     expect(result).toEqual({
       scripts: {
-        setup: 'echo "legacy setup"',
         archive: 'echo "yaml archive"'
       }
     })
