@@ -18,10 +18,28 @@ import {
 } from '@/components/ui/dialog'
 import { useAppStore } from '@/store'
 
-function getTipPreview(tip: FeatureTip): JSX.Element {
+const WAVEFORM_BAR_HEIGHTS = [30, 60, 90, 70, 100, 50, 80, 35, 65]
+
+function FeatureTipVisual({ tip }: { tip: FeatureTip }): JSX.Element {
   switch (tip.action) {
     case 'enable-voice':
-      return <Mic className="size-8 text-foreground" />
+      return (
+        <div className="flex flex-col items-center gap-2.5">
+          <div className="flex size-14 items-center justify-center rounded-full bg-foreground text-background">
+            <Mic className="size-5" />
+          </div>
+          {/* Animated waveform — purely decorative, signals "voice" without copy */}
+          <div className="flex h-6 items-center justify-center gap-1" aria-hidden="true">
+            {WAVEFORM_BAR_HEIGHTS.map((height, i) => (
+              <span
+                key={i}
+                className="block w-[3px] rounded-[2px] bg-foreground/60 animate-waveform"
+                style={{ height: `${height}%`, animationDelay: `${i * 0.1}s` }}
+              />
+            ))}
+          </div>
+        </div>
+      )
   }
 }
 
@@ -89,8 +107,8 @@ export default function FeatureTipsModal(): JSX.Element | null {
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-lg gap-5 p-7" showCloseButton>
-        <DialogHeader className="items-center gap-3 pr-8 text-center sm:text-center">
+      <DialogContent className="sm:max-w-md gap-4 p-7" showCloseButton>
+        <DialogHeader className="items-center gap-4 px-8 text-center sm:text-center">
           <Badge
             variant="outline"
             className="gap-1.5 px-2.5 py-1 text-[11px] uppercase tracking-[0.08em]"
@@ -98,9 +116,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
             <Sparkles className="size-3" />
             {currentTip.eyebrow}
           </Badge>
-          <div className="flex size-20 items-center justify-center rounded-xl border border-border bg-muted/40">
-            {getTipPreview(currentTip)}
-          </div>
+          <FeatureTipVisual tip={currentTip} />
           <DialogTitle className="text-2xl font-semibold tracking-tight">
             {currentTip.title}
           </DialogTitle>

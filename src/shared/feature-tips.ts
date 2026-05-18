@@ -27,7 +27,7 @@ export const FEATURE_TIPS = [
     description:
       'Speak into any focused pane and Orca will transcribe it. Press the dictation shortcut to start and stop.',
     action: 'enable-voice',
-    ctaLabel: 'Turn on Voice'
+    ctaLabel: 'Set Up Voice'
   }
 ] as const satisfies readonly FeatureTip[]
 

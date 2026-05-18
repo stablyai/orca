@@ -1219,6 +1219,24 @@
   animation: update-card-exit 150ms ease-in both;
 }
 
+/* Waveform bars in the FeatureTipsModal voice tip — purely decorative. */
+@keyframes waveform {
+  0%,
+  100% {
+    transform: scaleY(0.4);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+.animate-waveform {
+  animation: waveform 1.4s ease-in-out infinite;
+  transform-origin: center;
+}
+
 /* ── Diff comment decorations ────────────────────────────────────── */
 
 /* Why: the "+" button is appended into Monaco's editor DOM node by
