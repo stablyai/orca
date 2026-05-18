@@ -2,6 +2,9 @@ import type { GlobalSettings } from '../../../../shared/types'
 import { Label } from '../ui/label'
 import { SearchableSetting } from './SearchableSetting'
 
+const AGENT_AWAKE_DESCRIPTION =
+  'Keeps this computer and display awake while agents are working. On macOS, Orca also asks the system to stay awake when the lid is closed, but closed-lid support still depends on OS and hardware power policy.'
+
 type AgentAwakeSettingProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
@@ -15,15 +18,13 @@ export function AgentAwakeSetting({
     <section className="space-y-3">
       <SearchableSetting
         title="Keep computer awake while agents are working"
-        description="Keeps this computer awake while agents are working. The display can still turn off."
-        keywords={['awake', 'sleep', 'power', 'agent', 'running', 'working']}
+        description={AGENT_AWAKE_DESCRIPTION}
+        keywords={['awake', 'sleep', 'power', 'agent', 'running', 'working', 'lid', 'display']}
         className="flex items-start justify-between gap-4 px-1 py-2"
       >
         <div className="min-w-0 shrink space-y-0.5">
           <Label>Keep computer awake while agents are working</Label>
-          <p className="text-xs text-muted-foreground">
-            Keeps this computer awake while agents are working. The display can still turn off.
-          </p>
+          <p className="text-xs text-muted-foreground">{AGENT_AWAKE_DESCRIPTION}</p>
         </div>
         <button
           role="switch"

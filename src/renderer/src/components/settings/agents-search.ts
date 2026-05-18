@@ -43,7 +43,7 @@ export const AGENTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Keep computer awake while agents are working',
     description:
-      'Keeps this computer awake while agents are working. The display can still turn off.',
-    keywords: ['awake', 'sleep', 'power', 'agent', 'running', 'working']
+      'Keeps this computer and display awake while agents are working. On macOS, Orca also asks the system to stay awake when the lid is closed, but closed-lid support still depends on OS and hardware power policy.',
+    keywords: ['awake', 'sleep', 'power', 'agent', 'running', 'working', 'lid', 'display']
   }
 ]

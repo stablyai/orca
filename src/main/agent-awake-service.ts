@@ -1,5 +1,6 @@
-import { powerSaveBlocker } from 'electron'
+import { powerMonitor, powerSaveBlocker } from 'electron'
 import type { AgentStatusState } from '../shared/agent-status-types'
+import { MacosSystemSleepAssertion } from './macos-system-sleep-assertion'
 
 export const AGENT_AWAKE_STATUS_STALE_AFTER_MS = 2 * 60 * 60 * 1000
 
@@ -10,17 +11,30 @@ export type AgentAwakeStatus = {
 }
 
 type PowerSaveBlocker = {
-  start: (type: 'prevent-app-suspension') => number
+  start: (type: 'prevent-app-suspension' | 'prevent-display-sleep') => number
   stop: (id: number) => void
   isStarted: (id: number) => boolean
 }
 
-type Logger = Pick<Console, 'warn'>
+type PlatformAwakeAssertion = {
+  start: (reason: string) => void
+  stop: (reason: string) => void
+  dispose: () => void
+}
+
+type PowerMonitorEventSource = {
+  on: (event: 'resume', listener: () => void) => void
+  off: (event: 'resume', listener: () => void) => void
+}
+
+type Logger = Pick<Console, 'debug' | 'warn'>
 
 type AgentAwakeServiceOptions = {
   blocker?: PowerSaveBlocker
   logger?: Logger
+  macosAssertion?: PlatformAwakeAssertion
   now?: () => number
+  powerMonitor?: PowerMonitorEventSource | null
 }
 
 export class AgentAwakeService {
@@ -30,12 +44,29 @@ export class AgentAwakeService {
   private staleTimer: ReturnType<typeof setTimeout> | null = null
   private readonly blocker: PowerSaveBlocker
   private readonly logger: Logger
+  private readonly macosAssertion: PlatformAwakeAssertion
   private readonly now: () => number
+  private readonly unsubscribeResume: (() => void) | null
 
   constructor(options: AgentAwakeServiceOptions = {}) {
     this.blocker = options.blocker ?? powerSaveBlocker
     this.logger = options.logger ?? console
     this.now = options.now ?? Date.now
+    this.macosAssertion =
+      options.macosAssertion ??
+      new MacosSystemSleepAssertion({
+        logger: this.logger,
+        now: this.now,
+        onUnexpectedFailure: (reason) => this.refresh(reason)
+      })
+    const resumeSource = options.powerMonitor === undefined ? powerMonitor : options.powerMonitor
+    if (resumeSource) {
+      const onResume = () => this.refresh('power-resume')
+      resumeSource.on('resume', onResume)
+      this.unsubscribeResume = () => resumeSource.off('resume', onResume)
+    } else {
+      this.unsubscribeResume = null
+    }
   }
 
   setEnabled(enabled: boolean): void {
@@ -53,7 +84,9 @@ export class AgentAwakeService {
 
   dispose(): void {
     this.clearStaleTimer()
+    this.unsubscribeResume?.()
     this.stopBlocker('dispose')
+    this.macosAssertion.dispose()
   }
 
   private refresh(reason: string): void {
@@ -62,8 +95,10 @@ export class AgentAwakeService {
     const shouldBlock = this.enabled && runningStatusCount > 0
     if (shouldBlock) {
       this.startBlocker(reason, runningStatusCount)
+      this.startMacosAssertion(reason)
     } else {
       this.stopBlocker(reason, runningStatusCount)
+      this.stopMacosAssertion(reason)
     }
   }
 
@@ -126,7 +161,7 @@ export class AgentAwakeService {
       }
     }
     try {
-      const id = this.blocker.start('prevent-app-suspension')
+      const id = this.blocker.start('prevent-display-sleep')
       this.blockerId = id
       this.reconcileBlocker('post-start')
     } catch (err) {
@@ -134,6 +169,30 @@ export class AgentAwakeService {
         reason,
         enabled: this.enabled,
         runningStatusCount,
+        error: err
+      })
+    }
+  }
+
+  private startMacosAssertion(reason: string): void {
+    try {
+      this.macosAssertion.start(reason)
+    } catch (err) {
+      this.logger.warn('[agent-awake] failed to start macOS system sleep assertion', {
+        reason,
+        enabled: this.enabled,
+        error: err
+      })
+    }
+  }
+
+  private stopMacosAssertion(reason: string): void {
+    try {
+      this.macosAssertion.stop(reason)
+    } catch (err) {
+      this.logger.warn('[agent-awake] failed to stop macOS system sleep assertion', {
+        reason,
+        enabled: this.enabled,
         error: err
       })
     }

@@ -65,7 +65,7 @@ describe('AgentsPane', () => {
 
     expect(markup).toContain('Keep computer awake while agents are working')
     expect(markup).toContain(
-      'Keeps this computer awake while agents are working. The display can still turn off.'
+      'Keeps this computer and display awake while agents are working. On macOS, Orca also asks the system to stay awake when the lid is closed, but closed-lid support still depends on OS and hardware power policy.'
     )
     expect(markup).toContain('aria-checked="false"')
   })
@@ -95,5 +95,6 @@ describe('AgentsPane', () => {
   it('includes awake and sleep search metadata for the setting', () => {
     expect(matchesSettingsSearch('awake', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
     expect(matchesSettingsSearch('sleep', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+    expect(matchesSettingsSearch('lid', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
   })
 })
