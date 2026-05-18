@@ -5,6 +5,7 @@ import type { AppState } from '../types'
 import type { WorktreeLineage } from '../../../../shared/types'
 import { toast } from 'sonner'
 import {
+  MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../../shared/protocol-version'
@@ -320,7 +321,7 @@ describe('createSettingsSlice runtime switching', () => {
           ? {
               runtimeId: 'runtime-old',
               graphStatus: 'ready',
-              runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION - 1,
+              runtimeProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION - 1,
               minCompatibleRuntimeClientVersion: 0
             }
           : {}
