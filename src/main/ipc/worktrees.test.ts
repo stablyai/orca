@@ -652,6 +652,63 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('resolves a fork PR base even when the push target cannot be discovered', async () => {
+    getPullRequestPushTargetMock.mockRejectedValue(new Error('head repo is unavailable'))
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: 'abc123\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    const result = await handlers['worktrees:resolvePrBase'](null, {
+      repoId: 'repo-1',
+      prNumber: 1849,
+      headRefName: 'feat/onboarding-model-choice-782',
+      isCrossRepository: true
+    })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['fetch', 'origin', 'refs/pull/1849/head'], {
+      cwd: '/workspace/repo'
+    })
+    expect(result).toEqual({
+      baseBranch: 'abc123'
+    })
+  })
+
+  it('falls back to the PR head ref when direct branch fetch fails', async () => {
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'fetch' && String(args[2]).startsWith('+refs/heads/')) {
+        throw new Error('fatal: could not find remote ref')
+      }
+      if (args[0] === 'rev-parse') {
+        return { stdout: 'def456\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    const result = await handlers['worktrees:resolvePrBase'](null, {
+      repoId: 'repo-1',
+      prNumber: 1849,
+      headRefName: 'feat/onboarding-model-choice-782'
+    })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        'fetch',
+        'origin',
+        '+refs/heads/feat/onboarding-model-choice-782:refs/remotes/origin/feat/onboarding-model-choice-782'
+      ],
+      { cwd: '/workspace/repo' }
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['fetch', 'origin', 'refs/pull/1849/head'], {
+      cwd: '/workspace/repo'
+    })
+    expect(result).toEqual({
+      baseBranch: 'def456'
+    })
+  })
+
   it('persists linked issue, PR, and selected agent metadata during remote create', async () => {
     const repo = {
       id: 'repo-ssh',

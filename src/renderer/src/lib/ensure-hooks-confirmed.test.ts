@@ -41,11 +41,6 @@ function createTestState(overrides?: Partial<AppState>): {
   return { state, pending }
 }
 
-async function flush(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0))
-  await new Promise((resolve) => setTimeout(resolve, 0))
-}
-
 describe('ensureHooksConfirmed', () => {
   beforeEach(() => {
     hooksCheckMock.mockReset()
@@ -86,9 +81,8 @@ describe('ensureHooksConfirmed', () => {
     })
 
     const promise = ensureHooksConfirmed(state, 'repo-1', 'setup')
-    await flush()
 
-    expect(pending).toHaveLength(1)
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
     expect(pending[0].data.scriptContent).toBe('new script')
     // The dialog uses this flag to tell the user we're re-prompting *because*
     // orca.yaml changed, not because they've never approved this hook.
@@ -151,9 +145,8 @@ describe('ensureHooksConfirmed', () => {
     })
 
     const promise = ensureHooksConfirmed(state, 'repo-1', 'setup')
-    await flush()
 
-    expect(pending).toHaveLength(1)
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
     expect(pending[0].data).toMatchObject({
       repoId: 'repo-1',
       repoName: 'Repo One',
