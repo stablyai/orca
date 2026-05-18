@@ -595,6 +595,27 @@ describe('OrcaRuntimeRpcServer', () => {
     const selectCodexAccount = vi.fn().mockResolvedValue({ ok: true })
     const removeClaudeAccount = vi.fn().mockResolvedValue({ ok: true })
     const readTerminal = vi.fn().mockResolvedValue({ tail: ['ok'] })
+    const getRuntimeGitStatus = vi
+      .fn()
+      .mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    const getRuntimeGitUpstreamStatus = vi
+      .fn()
+      .mockResolvedValue({ hasUpstream: true, ahead: 1, behind: 0 })
+    const bulkStageRuntimeGitPaths = vi.fn().mockResolvedValue({ ok: true })
+    const bulkUnstageRuntimeGitPaths = vi.fn().mockResolvedValue({ ok: true })
+    const getRuntimeGitDiff = vi.fn().mockResolvedValue({
+      kind: 'text',
+      originalContent: 'before\n',
+      modifiedContent: 'after\n',
+      originalIsBinary: false,
+      modifiedIsBinary: false
+    })
+    const openMobileDiff = vi.fn().mockResolvedValue({
+      worktree: 'wt-1',
+      relativePath: 'docs/readme.md',
+      kind: 'markdown',
+      opened: true
+    })
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getStatus: vi.fn().mockResolvedValue({ graphStatus: 'ok' }),
@@ -602,7 +623,13 @@ describe('OrcaRuntimeRpcServer', () => {
       selectClaudeAccount,
       selectCodexAccount,
       removeClaudeAccount,
-      readTerminal
+      readTerminal,
+      getRuntimeGitStatus,
+      getRuntimeGitUpstreamStatus,
+      bulkStageRuntimeGitPaths,
+      bulkUnstageRuntimeGitPaths,
+      getRuntimeGitDiff,
+      openMobileDiff
     } as unknown as OrcaRuntimeService
     const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
@@ -612,7 +639,7 @@ describe('OrcaRuntimeRpcServer', () => {
     await server['handleWebSocketMessage'](
       JSON.stringify({
         id: 'req_forbidden',
-        method: 'git.push',
+        method: 'git.generateCommitMessage',
         deviceToken: mobile.token,
         params: { worktree: 'id:wt-1' }
       }),
@@ -624,6 +651,56 @@ describe('OrcaRuntimeRpcServer', () => {
         id: 'req_allowed',
         method: 'status.get',
         deviceToken: mobile.token
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_git_status',
+        method: 'git.status',
+        deviceToken: mobile.token,
+        params: { worktree: 'id:wt-1' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_git_push',
+        method: 'git.push',
+        deviceToken: mobile.token,
+        params: { worktree: 'id:wt-1', publish: true }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_git_upstream',
+        method: 'git.upstreamStatus',
+        deviceToken: mobile.token,
+        params: { worktree: 'id:wt-1' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_git_bulk_stage',
+        method: 'git.bulkStage',
+        deviceToken: mobile.token,
+        params: { worktree: 'id:wt-1', filePaths: ['a.ts', 'b.ts'] }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_git_bulk_unstage',
+        method: 'git.bulkUnstage',
+        deviceToken: mobile.token,
+        params: { worktree: 'id:wt-1', filePaths: ['c.ts'] }
       }),
       (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
       () => {}
@@ -668,6 +745,26 @@ describe('OrcaRuntimeRpcServer', () => {
       (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
       () => {}
     )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_files_open_diff',
+        method: 'files.openDiff',
+        deviceToken: mobile.token,
+        params: { worktree: 'id:wt-1', relativePath: 'docs/readme.md', staged: true }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_git_diff',
+        method: 'git.diff',
+        deviceToken: mobile.token,
+        params: { worktree: 'id:wt-1', filePath: 'docs/readme.md', staged: false }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
 
     expect(replies).toContainEqual(
       expect.objectContaining({
@@ -677,9 +774,18 @@ describe('OrcaRuntimeRpcServer', () => {
       })
     )
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_allowed', ok: true }))
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_status', ok: true }))
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_push', ok: true }))
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_upstream', ok: true }))
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_bulk_stage', ok: true }))
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_git_bulk_unstage', ok: true })
+    )
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_select_claude', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_select_codex', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_terminal_read', ok: true }))
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_files_open_diff', ok: true }))
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_diff', ok: true }))
     expect(replies).toContainEqual(
       expect.objectContaining({
         id: 'req_remove_claude',
@@ -690,8 +796,14 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(selectClaudeAccount).toHaveBeenCalledWith('claude-account')
     expect(selectCodexAccount).toHaveBeenCalledWith(null)
     expect(readTerminal).toHaveBeenCalledWith('term-1', { cursor: undefined })
+    expect(getRuntimeGitStatus).toHaveBeenCalledWith('id:wt-1')
+    expect(pushRuntimeGit).toHaveBeenCalledWith('id:wt-1', true, undefined)
+    expect(getRuntimeGitUpstreamStatus).toHaveBeenCalledWith('id:wt-1')
+    expect(bulkStageRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['a.ts', 'b.ts'])
+    expect(bulkUnstageRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['c.ts'])
+    expect(openMobileDiff).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md', true)
+    expect(getRuntimeGitDiff).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md', false, undefined)
     expect(removeClaudeAccount).not.toHaveBeenCalled()
-    expect(pushRuntimeGit).not.toHaveBeenCalled()
   })
 
   it('rejects WebSocket requests whose request token differs from the authenticated channel token', async () => {

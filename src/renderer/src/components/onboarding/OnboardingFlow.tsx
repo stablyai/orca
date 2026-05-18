@@ -30,7 +30,7 @@ const stepCopy = {
   },
   repo: {
     title: 'Point Orca at some code',
-    subtitle: 'Open a folder, clone a repo, or skip and add one later.'
+    subtitle: 'Open a folder or clone a repo to finish setup.'
   }
 } as const
 
@@ -44,13 +44,15 @@ const stepTooltipLabels = {
 type OnboardingFlowProps = {
   onboarding: OnboardingState
   onOnboardingChange: (state: OnboardingState) => void
+  onSettingsDetourStart?: () => void
 }
 
 export default function OnboardingFlow({
   onboarding,
-  onOnboardingChange
+  onOnboardingChange,
+  onSettingsDetourStart
 }: OnboardingFlowProps): React.JSX.Element {
-  const flow = useOnboardingFlow(onboarding, onOnboardingChange)
+  const flow = useOnboardingFlow(onboarding, onOnboardingChange, { onSettingsDetourStart })
   const { currentStep, stepIndex, busyLabel } = flow
   const copy = stepCopy[currentStep.id]
   const shouldShowSetupAction =
@@ -195,6 +197,7 @@ export default function OnboardingFlow({
               onOpenFolder={() => void flow.openFolder()}
               onOpenServerFolder={(kind) => void flow.openFolder(kind)}
               onClone={() => void flow.clone()}
+              onOpenSshSettings={() => void flow.openSshSettings()}
               serverPath={flow.serverPath}
               onServerPathChange={flow.setServerPath}
               cloneDestination={flow.cloneDestination}
@@ -208,13 +211,17 @@ export default function OnboardingFlow({
         </div>
 
         <footer className="mt-10 flex items-center justify-between border-t border-border pt-5">
-          <button
-            className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-muted-foreground"
-            disabled={Boolean(busyLabel)}
-            onClick={() => void flow.skip()}
-          >
-            Skip all onboarding
-          </button>
+          {currentStep.id !== 'repo' ? (
+            <button
+              className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:text-muted-foreground"
+              disabled={Boolean(busyLabel)}
+              onClick={() => void flow.skipToRepo()}
+            >
+              Skip to project setup
+            </button>
+          ) : (
+            <span />
+          )}
           <div className="flex items-center gap-2">
             {stepIndex > 0 && (
               <button

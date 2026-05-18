@@ -155,6 +155,10 @@ describe('listWorkItems', () => {
       ],
       { cwd: '/repo-root' }
     )
+    const prListFields = ghExecFileAsyncMock.mock.calls[1][0].join(',')
+    expect(prListFields).not.toContain('statusCheckRollup')
+    expect(prListFields).not.toContain('reviewRequests')
+    expect(prListFields).not.toContain('mergeStateStatus')
     expect(items).toEqual([
       {
         id: 'issue:12',

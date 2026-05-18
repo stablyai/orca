@@ -112,6 +112,26 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
+  it('writes when live PTY bindings change without terminal tab changes', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionState) => void>()
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+
+    useAppStore.setState({
+      ptyIdsByTabId: {
+        ...useAppStore.getState().ptyIdsByTabId,
+        'tab-1': []
+      }
+    })
+    vi.advanceTimersByTime(200)
+
+    expect(persist).toHaveBeenCalledTimes(1)
+    cleanup()
+  })
+
   it('updates its baseline without scheduling when shouldSchedulePersist returns false', () => {
     const persist = vi.fn<(payload: WorkspaceSessionState) => void>()
     let shouldSchedule = false

@@ -18,6 +18,7 @@ import AgentCombobox from '@/components/agent/AgentCombobox'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
+import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import type {
   GitHubWorkItem,
   GitLabWorkItem,
@@ -49,7 +50,7 @@ type NewWorkspaceComposerCardProps = {
   onNameValueChange: (value: string) => void
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
   onSmartGitLabItemSelect: (item: GitLabWorkItem) => void
-  onSmartBranchSelect: (refName: string) => void
+  onSmartBranchSelect: (refName: string, localBranchName: string) => void
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
@@ -144,12 +145,12 @@ function useComposerFileDragOver(): {
 
   const onDragEnter = React.useCallback((event: React.DragEvent<HTMLDivElement>): void => {
     // Why: "Files" is the DataTransfer type the OS adds for native file drags;
-    // internal in-app drags (text/x-orca-file-path) must not trigger the
+    // internal in-app drags must not trigger the
     // attachment-drop highlight so they still route to their own handlers.
     if (!event.dataTransfer.types.includes('Files')) {
       return
     }
-    if (event.dataTransfer.types.includes('text/x-orca-file-path')) {
+    if (event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)) {
       return
     }
     dragCounterRef.current += 1
@@ -162,10 +163,10 @@ function useComposerFileDragOver(): {
         return
       }
       // Why: mirror the onDragEnter guard so internal in-app drags (which may
-      // carry both 'Files' and 'text/x-orca-file-path' types) don't decrement
+      // carry both "Files" and the workspace path MIME type) don't decrement
       // the counter when enter skipped incrementing it — otherwise the counter
       // goes negative and the native-drag highlight state desyncs.
-      if (event.dataTransfer.types.includes('text/x-orca-file-path')) {
+      if (event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)) {
         return
       }
       dragCounterRef.current -= 1

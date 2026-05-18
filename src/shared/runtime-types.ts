@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: shared type definitions for all runtime RPC methods live in one file for discoverability and import simplicity. */
 import type {
+  BaseRefSearchResult,
   BrowserCookieImportResult,
   BrowserSessionProfile,
   BrowserSessionProfileSource,
@@ -123,6 +124,8 @@ export type RuntimeMobileSessionFileTab = {
   filePath: string
   relativePath: string
   language: string
+  mode?: 'edit' | 'diff'
+  diffSource?: 'staged' | 'unstaged'
   isDirty: boolean
   isActive: boolean
 }
@@ -348,6 +351,7 @@ export type RuntimeRepoList = {
 
 export type RuntimeRepoSearchRefs = {
   refs: string[]
+  refDetails?: BaseRefSearchResult[]
   truncated: boolean
 }
 

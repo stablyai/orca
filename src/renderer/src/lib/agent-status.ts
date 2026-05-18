@@ -113,6 +113,7 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   claude: 'Claude',
   codex: 'Codex',
   gemini: 'Gemini',
+  copilot: 'GitHub Copilot',
   opencode: 'OpenCode',
   cursor: 'Cursor',
   aider: 'Aider',

@@ -10,11 +10,10 @@ import {
 import { normalizeTerminalQuickCommands } from '../../../../shared/terminal-quick-commands'
 import { normalizeVisibleTaskProviders } from '../../../../shared/task-providers'
 import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
+import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
 
-export type SettingsSlice = {
+export type SettingsSlice = SettingsSearchState & {
   settings: GlobalSettings | null
-  settingsSearchQuery: string
-  setSettingsSearchQuery: (q: string) => void
   fetchSettings: () => Promise<void>
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
   switchRuntimeEnvironment: (environmentId: string | null) => Promise<boolean>
@@ -117,7 +116,8 @@ function runtimeScopedStateReset(): Partial<AppState> {
     linearStatus: { connected: false, viewer: null },
     linearStatusChecked: false,
     linearIssueCache: {},
-    linearSearchCache: {}
+    linearSearchCache: {},
+    linearTeamCache: {}
   }
 }
 
@@ -221,8 +221,7 @@ async function verifyRuntimeEnvironmentReachable(environmentId: string | null): 
 
 export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> = (set, get) => ({
   settings: null,
-  settingsSearchQuery: '',
-  setSettingsSearchQuery: (q) => set({ settingsSearchQuery: q }),
+  ...createSettingsSearchState((state) => set(state)),
 
   fetchSettings: async () => {
     try {

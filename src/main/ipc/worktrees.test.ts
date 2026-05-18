@@ -390,6 +390,81 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('uses branchNameOverride for the git branch while keeping the sanitized worktree path', async () => {
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/feature-something',
+        head: 'abc123',
+        branch: 'feature/something',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'feature/something',
+      branchNameOverride: 'feature/something'
+    })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['check-ref-format', '--branch', 'feature/something'],
+      { cwd: '/workspace/repo' }
+    )
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/feature-something',
+      'feature/something',
+      'origin/main',
+      false
+    )
+    expect(result).toEqual({
+      worktree: expect.objectContaining({
+        path: '/workspace/feature-something',
+        branch: 'feature/something'
+      })
+    })
+  })
+
+  it('suffixes branchNameOverride without flattening slashes when the first branch collides', async () => {
+    getBranchConflictKindMock.mockImplementation(async (_repoPath: string, branch: string) =>
+      branch === 'feature/something' ? 'remote' : null
+    )
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/feature-something-2',
+        head: 'abc123',
+        branch: 'feature/something-2',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'feature/something',
+      branchNameOverride: 'feature/something'
+    })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['check-ref-format', '--branch', 'feature/something-2'],
+      { cwd: '/workspace/repo' }
+    )
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/feature-something-2',
+      'feature/something-2',
+      'origin/main',
+      false
+    )
+    expect(result).toEqual({
+      worktree: expect.objectContaining({
+        path: '/workspace/feature-something-2',
+        branch: 'feature/something-2'
+      })
+    })
+  })
+
   it('persists a sanitized artifact title as the worktree display name', async () => {
     listWorktreesMock.mockResolvedValue([
       {

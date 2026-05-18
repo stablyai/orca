@@ -24,6 +24,7 @@ import {
   Folder,
   File,
   FileText,
+  GitBranch,
   Mic,
   Monitor,
   Plus,
@@ -58,6 +59,10 @@ import {
   loadCustomKeys,
   type CustomKey
 } from '../../../../src/components/CustomKeyModal'
+import {
+  buildMobileDiffLines,
+  type MobileDiffLine
+} from '../../../../src/session/mobile-diff-lines'
 import { colors, spacing, radii, typography } from '../../../../src/theme/mobile-theme'
 
 type Terminal = {
@@ -94,6 +99,8 @@ type MobileSessionTab =
       filePath: string
       relativePath: string
       language?: string
+      mode?: 'edit' | 'diff'
+      diffSource?: 'staged' | 'unstaged' | 'branch' | 'commit'
       isDirty: boolean
       isActive: boolean
     }
@@ -125,7 +132,8 @@ type MarkdownDocState =
 
 type FileDocState =
   | { status: 'loading' }
-  | { status: 'ready'; content: string; truncated: boolean; byteLength: number }
+  | { status: 'ready'; kind: 'file'; content: string; truncated: boolean; byteLength: number }
+  | { status: 'ready'; kind: 'diff'; lines: MobileDiffLine[]; truncated: boolean }
   | { status: 'error'; message: string }
 
 type DirtyMarkdownDraft = {
@@ -409,6 +417,44 @@ function FileReader({ doc, title }: { doc: FileDocState | undefined; title: stri
     return (
       <View style={styles.markdownState}>
         <Text style={styles.markdownError}>{doc.message}</Text>
+      </View>
+    )
+  }
+
+  if (doc.kind === 'diff') {
+    return (
+      <View style={styles.markdownEditor}>
+        <ScrollView
+          style={styles.filePreviewScroll}
+          contentContainerStyle={styles.filePreviewContent}
+        >
+          {doc.lines.map((line, index) => (
+            <View
+              key={`${index}:${line.kind}:${line.oldLineNumber ?? ''}:${line.newLineNumber ?? ''}`}
+              style={[
+                styles.diffLine,
+                line.kind === 'add' && styles.diffLineAdded,
+                line.kind === 'delete' && styles.diffLineDeleted
+              ]}
+            >
+              <Text style={styles.diffGutter}>
+                {line.oldLineNumber ?? line.newLineNumber ?? ''}
+              </Text>
+              <Text
+                selectable
+                style={[
+                  styles.diffText,
+                  line.kind === 'add' && styles.diffTextAdded,
+                  line.kind === 'delete' && styles.diffTextDeleted
+                ]}
+                accessibilityLabel={`${title} diff line`}
+              >
+                {line.kind === 'add' ? '+ ' : line.kind === 'delete' ? '- ' : '  '}
+                {line.text}
+              </Text>
+            </View>
+          ))}
+        </ScrollView>
       </View>
     )
   }
@@ -1112,6 +1158,36 @@ export default function SessionScreen() {
       if (!client) return
       setFileDocs((prev) => new Map(prev).set(tab.id, { status: 'loading' }))
       try {
+        if (tab.diffSource === 'staged' || tab.diffSource === 'unstaged') {
+          const response = await client.sendRequest('git.diff', {
+            worktree: `id:${worktreeId}`,
+            filePath: tab.relativePath,
+            staged: tab.diffSource === 'staged'
+          })
+          if (!response.ok) {
+            throw new Error((response as RpcFailure).error.message)
+          }
+          const result = (response as RpcSuccess).result as
+            | {
+                kind: 'text'
+                originalContent: string
+                modifiedContent: string
+              }
+            | { kind: 'binary' }
+          if (result.kind !== 'text') {
+            throw new Error('binary_file')
+          }
+          const diff = buildMobileDiffLines(result.originalContent, result.modifiedContent)
+          setFileDocs((prev) =>
+            new Map(prev).set(tab.id, {
+              status: 'ready',
+              kind: 'diff',
+              lines: diff.lines,
+              truncated: diff.truncated
+            })
+          )
+          return
+        }
         const response = await client.sendRequest('files.read', {
           worktree: `id:${worktreeId}`,
           relativePath: tab.relativePath
@@ -1127,6 +1203,7 @@ export default function SessionScreen() {
         setFileDocs((prev) =>
           new Map(prev).set(tab.id, {
             status: 'ready',
+            kind: 'file',
             content: result.content,
             truncated: result.truncated,
             byteLength: result.byteLength
@@ -1139,7 +1216,9 @@ export default function SessionScreen() {
             ? 'Binary preview unavailable'
             : message === 'file_too_large'
               ? 'File too large for mobile preview'
-              : "Couldn't load file preview"
+              : tab.diffSource === 'staged' || tab.diffSource === 'unstaged'
+                ? "Couldn't load diff preview"
+                : "Couldn't load file preview"
         setFileDocs((prev) =>
           new Map(prev).set(tab.id, {
             status: 'error',
@@ -2376,6 +2455,19 @@ export default function SessionScreen() {
               style={({ pressed }) => [styles.filesButton, pressed && styles.filesButtonPressed]}
               onPress={() =>
                 router.push({
+                  pathname: '/h/[hostId]/source-control/[worktreeId]',
+                  params: { hostId, worktreeId, name: worktreeName || '', origin: 'session' }
+                })
+              }
+              hitSlop={8}
+              accessibilityLabel="Open source control"
+            >
+              <GitBranch size={18} color={colors.textSecondary} strokeWidth={2.1} />
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.filesButton, pressed && styles.filesButtonPressed]}
+              onPress={() =>
+                router.push({
                   pathname: '/h/[hostId]/files/[worktreeId]',
                   params: { hostId, worktreeId, name: worktreeName || '' }
                 })
@@ -3121,6 +3213,42 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
   },
+  diffLine: {
+    flexDirection: 'row',
+    borderLeftWidth: 2,
+    borderLeftColor: colors.bgBase,
+    paddingRight: spacing.sm
+  },
+  diffLineAdded: {
+    backgroundColor: colors.bgPanel,
+    borderLeftColor: colors.statusGreen
+  },
+  diffLineDeleted: {
+    backgroundColor: colors.bgPanel,
+    borderLeftColor: colors.statusRed
+  },
+  diffGutter: {
+    width: 42,
+    paddingRight: spacing.sm,
+    textAlign: 'right',
+    color: colors.textMuted,
+    fontSize: typography.metaSize,
+    lineHeight: 22,
+    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
+  },
+  diffText: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontSize: typography.bodySize,
+    lineHeight: 22,
+    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
+  },
+  diffTextAdded: {
+    color: colors.statusGreen
+  },
+  diffTextDeleted: {
+    color: colors.statusRed
+  },
   markdownRefreshButton: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
@@ -3197,7 +3325,9 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   toastText: {
-    backgroundColor: 'rgba(20, 22, 39, 0.92)',
+    backgroundColor: colors.bgRaised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle,
     color: colors.textPrimary,
     fontSize: 13,
     paddingHorizontal: spacing.lg,

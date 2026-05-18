@@ -20,6 +20,7 @@ import {
 import type { PtyTransport, IpcPtyTransportOptions, PtyConnectResult } from './pty-dispatcher'
 import { createBellDetector } from './bell-detector'
 import { createAgentStatusOscProcessor } from './agent-status-osc'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
 
 // Re-export public API so existing consumers keep working.
 export {
@@ -364,7 +365,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         }
         return spawnResult.id
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
+        const msg = extractIpcErrorMessage(err, err instanceof Error ? err.message : String(err))
         if (connectionId && options.sessionId && msg.includes(SSH_SESSION_EXPIRED_ERROR)) {
           return {
             id: options.sessionId,

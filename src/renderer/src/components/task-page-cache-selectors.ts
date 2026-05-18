@@ -33,7 +33,7 @@ export function selectTaskPageWorkItemsCacheEntries(
   limit: number,
   query: string
 ): (CacheEntry<GitHubWorkItem[]> | undefined)[] {
-  return repos.map((repo) => workItemsCache[workItemsCacheKey(repo.path, limit, query)])
+  return repos.map((repo) => workItemsCache[workItemsCacheKey(repo.id, limit, query)])
 }
 
 export function buildTaskPageRepoSourceState(

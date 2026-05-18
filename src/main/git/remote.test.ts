@@ -155,6 +155,38 @@ describe('git remote operations', () => {
     )
   })
 
+  it('normalizes pull dirty-worktree aborts to a friendly message', async () => {
+    gitExecFileAsyncMock.mockRejectedValueOnce(
+      new Error(
+        'Command failed: git pull\n' +
+          'error: Your local changes to the following files would be overwritten by merge:\n' +
+          '\tsrc/app.ts\n' +
+          'Please commit your changes or stash them before you merge.\n' +
+          'Aborting'
+      )
+    )
+
+    await expect(gitPull('/repo')).rejects.toThrow(
+      'Pull would overwrite local changes. Commit, stash, or discard them before pulling.'
+    )
+  })
+
+  it('normalizes pull untracked-file aborts to a friendly message', async () => {
+    gitExecFileAsyncMock.mockRejectedValueOnce(
+      new Error(
+        'Command failed: git pull\n' +
+          'error: The following untracked working tree files would be overwritten by merge:\n' +
+          '\tsrc/new.ts\n' +
+          'Please move or remove them before you merge.\n' +
+          'Aborting'
+      )
+    )
+
+    await expect(gitPull('/repo')).rejects.toThrow(
+      'Pull would overwrite untracked files. Move, remove, or add them before pulling.'
+    )
+  })
+
   it('runs fetch with prune', async () => {
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
 

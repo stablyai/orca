@@ -20,6 +20,7 @@ import {
   getDefaultUIState,
   getDefaultWorkspaceSession
 } from '../../../shared/constants'
+import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-result'
 import { createE2EConfig } from '../../../shared/e2e-config'
 import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
@@ -297,6 +298,17 @@ function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
           limit
         })
       ).refs,
+    searchBaseRefDetails: async ({ repoId, query, limit }) => {
+      const result = await callRuntimeResult<{
+        refs: string[]
+        refDetails?: { refName: string; localBranchName: string }[]
+      }>('repo.searchRefs', {
+        repo: repoId,
+        query,
+        limit
+      })
+      return result.refDetails ?? result.refs.map(legacyBaseRefSearchResult)
+    },
     onChanged: () => noopUnsubscribe
   }
 }
@@ -313,6 +325,7 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         repo: args.repoId,
         name: args.name,
         baseBranch: args.baseBranch,
+        branchNameOverride: args.branchNameOverride,
         linkedIssue: args.linkedIssue,
         linkedPR: args.linkedPR,
         displayName: args.displayName,
@@ -483,6 +496,10 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     status: async ({ worktreePath, includeIgnored }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.status', { worktree: worktree.id, includeIgnored })
+    },
+    checkIgnored: async ({ worktreePath, paths }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.checkIgnored', { worktree: worktree.id, paths })
     },
     history: async ({ worktreePath, limit, baseRef }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
@@ -658,11 +675,14 @@ function createGitHubApi(): NonNullable<Partial<PreloadApi>['gh']> {
     countWorkItems: direct('github.countWorkItems'),
     listWorkItems: direct('github.listWorkItems'),
     prChecks: direct('github.prChecks'),
+    rerunPRChecks: direct('github.rerunPRChecks'),
     prComments: direct('github.prComments'),
     resolveReviewThread: direct('github.resolveReviewThread'),
     setPRFileViewed: direct('github.setPRFileViewed'),
     updatePRTitle: direct('github.updatePRTitle'),
     mergePR: direct('github.mergePR'),
+    updatePRState: direct('github.updatePRState'),
+    requestPRReviewers: direct('github.requestPRReviewers'),
     updateIssue: direct('github.updateIssue'),
     addIssueComment: direct('github.addIssueComment'),
     addPRReviewCommentReply: direct('github.addPRReviewCommentReply'),
@@ -777,6 +797,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onFocusEditorTab: () => noopUnsubscribe,
     onCloseSessionTab: () => noopUnsubscribe,
     onOpenFileFromMobile: () => noopUnsubscribe,
+    onOpenDiffFromMobile: () => noopUnsubscribe,
     onMobileMarkdownRequest: () => noopUnsubscribe,
     respondMobileMarkdownRequest: () => {},
     onCloseTerminal: () => noopUnsubscribe,
@@ -874,7 +895,9 @@ function createCliApi(): NonNullable<Partial<PreloadApi>['cli']> {
 }
 
 function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
-  const status = (agent: 'claude' | 'codex' | 'gemini' | 'cursor' | 'droid' | 'grok' | 'hermes') =>
+  const status = (
+    agent: 'claude' | 'codex' | 'gemini' | 'cursor' | 'droid' | 'grok' | 'copilot' | 'hermes'
+  ) =>
     Promise.resolve({
       agent,
       state: 'not_installed',
@@ -889,6 +912,7 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
     cursorStatus: () => status('cursor'),
     droidStatus: () => status('droid'),
     grokStatus: () => status('grok'),
+    copilotStatus: () => status('copilot'),
     hermesStatus: () => status('hermes')
   }
 }

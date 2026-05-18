@@ -22,9 +22,7 @@
   <a href="#install"><strong>Download 🐋</strong></a>
 </p>
 
-<p align="center">
-  <img src="docs/assets/file-drag.gif" alt="Orca Screenshot" width="800" />
-</p>
+![Orca worktree IDE demo showing Claude Code, Codex, and OpenCode running in parallel across isolated git worktrees](docs/assets/file-drag.gif)
 
 ## Supported Agents
 

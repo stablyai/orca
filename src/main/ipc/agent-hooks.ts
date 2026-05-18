@@ -15,6 +15,7 @@ import { geminiHookService } from '../gemini/hook-service'
 import { cursorHookService } from '../cursor/hook-service'
 import { droidHookService } from '../droid/hook-service'
 import { grokHookService } from '../grok/hook-service'
+import { copilotHookService } from '../copilot/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 
 // Why: install/remove are intentionally not exposed to the renderer. Orca
@@ -34,6 +35,7 @@ export function registerAgentHookHandlers(): void {
   ipcMain.removeHandler('agentHooks:cursorStatus')
   ipcMain.removeHandler('agentHooks:droidStatus')
   ipcMain.removeHandler('agentHooks:grokStatus')
+  ipcMain.removeHandler('agentHooks:copilotStatus')
   ipcMain.removeHandler('agentHooks:hermesStatus')
   ipcMain.removeHandler('agentStatus:getSnapshot')
   ipcMain.removeHandler('agentStatus:getMigrationUnsupportedSnapshot')
@@ -143,6 +145,19 @@ export function registerAgentHookHandlers(): void {
     } catch (err) {
       return {
         agent: 'grok',
+        state: 'error',
+        configPath: '',
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  })
+  ipcMain.handle('agentHooks:copilotStatus', (): AgentHookInstallStatus => {
+    try {
+      return copilotHookService.getStatus()
+    } catch (err) {
+      return {
+        agent: 'copilot',
         state: 'error',
         configPath: '',
         managedHooksPresent: false,

@@ -29,7 +29,6 @@ const GROUP_BY_OPTIONS = [
 const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
   { id: 'status', label: 'Terminal status' },
   { id: 'unread', label: 'Unread indicator' },
-  { id: 'ci', label: 'CI checks' },
   { id: 'issue', label: 'Linked issue' },
   { id: 'pr', label: 'Linked PR' },
   { id: 'comment', label: 'Comment' },
@@ -66,8 +65,6 @@ const SidebarHeader = React.memo(function SidebarHeader() {
   const setSortBy = useAppStore((s) => s.setSortBy)
   const groupBy = useAppStore((s) => s.groupBy)
   const setGroupBy = useAppStore((s) => s.setGroupBy)
-  const showWorkspaceLineage = useAppStore((s) => s.showWorkspaceLineage)
-  const setShowWorkspaceLineage = useAppStore((s) => s.setShowWorkspaceLineage)
 
   const handleWorkspaceBoardOpenChange = useCallback((open: boolean) => {
     setWorkspaceBoardOpen(open)
@@ -194,15 +191,6 @@ const SidebarHeader = React.memo(function SidebarHeader() {
                   ))}
                 </ToggleGroup>
               </div>
-
-              <DropdownMenuSeparator />
-              <DropdownMenuCheckboxItem
-                checked={showWorkspaceLineage}
-                onCheckedChange={(checked) => setShowWorkspaceLineage(Boolean(checked))}
-                onSelect={(e) => e.preventDefault()}
-              >
-                Nest child workspaces
-              </DropdownMenuCheckboxItem>
 
               <DropdownMenuSeparator />
               <DropdownMenuLabel>Sort by</DropdownMenuLabel>

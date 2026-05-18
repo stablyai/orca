@@ -5,7 +5,12 @@ import { useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import type { OpenFile } from '@/store/slices/editor'
-import type { BrowserTab as BrowserTabState, Tab, TabGroup } from '../../../../shared/types'
+import type {
+  BrowserTab as BrowserTabState,
+  Tab,
+  TabGroup,
+  TerminalTab
+} from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { useAllWorktrees } from '../../store/selectors'
 import { createUntitledMarkdownFile } from '../../lib/create-untitled-markdown'
@@ -21,18 +26,9 @@ export type GroupBrowserItem = BrowserTabState & { tabId: string }
 const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
 const EMPTY_BROWSER_TABS: readonly BrowserTabState[] = []
+const EMPTY_TERMINAL_TABS: readonly TerminalTab[] = []
 
-type TerminalTabItem = {
-  id: string
-  unifiedTabId: string
-  ptyId: null
-  worktreeId: string
-  title: string
-  customTitle: string | null
-  color: string | null
-  sortOrder: number
-  createdAt: number
-}
+type TerminalTabItem = TerminalTab & { unifiedTabId: string }
 
 export function useTabGroupWorkspaceModel({
   groupId,
@@ -51,6 +47,7 @@ export function useTabGroupWorkspaceModel({
       // and blanks the window as soon as TabGroupPanel mounts.
       groups: state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS,
       unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS,
+      terminalTabs: state.tabsByWorktree[worktreeId] ?? EMPTY_TERMINAL_TABS,
       openFiles: state.openFiles,
       browserTabs: state.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS,
       expandedPaneByTabId: state.expandedPaneByTabId
@@ -92,23 +89,36 @@ export function useTabGroupWorkspaceModel({
   )
   const activeItemId = group?.activeTabId ?? null
   const activeTab = groupTabs.find((item) => item.id === activeItemId) ?? null
+  // Why: split groups render tab labels from unified tabs, but terminal shell
+  // identity lives on the terminal tab so icons survive default-shell changes.
+  const terminalTabById = useMemo(
+    () => new Map(worktreeState.terminalTabs.map((item) => [item.id, item])),
+    [worktreeState.terminalTabs]
+  )
 
   const terminalTabs = useMemo<TerminalTabItem[]>(
     () =>
       groupTabs
         .filter((item) => item.contentType === 'terminal')
-        .map((item) => ({
-          id: item.entityId,
-          unifiedTabId: item.id,
-          ptyId: null,
-          worktreeId,
-          title: item.label,
-          customTitle: item.customLabel ?? null,
-          color: item.color ?? null,
-          sortOrder: item.sortOrder,
-          createdAt: item.createdAt
-        })),
-    [groupTabs, worktreeId]
+        .map((item) => {
+          const terminalTab = terminalTabById.get(item.entityId)
+          return {
+            id: item.entityId,
+            unifiedTabId: item.id,
+            ptyId: terminalTab?.ptyId ?? null,
+            worktreeId,
+            title: item.label,
+            defaultTitle: terminalTab?.defaultTitle,
+            customTitle: item.customLabel ?? terminalTab?.customTitle ?? null,
+            color: item.color ?? terminalTab?.color ?? null,
+            sortOrder: item.sortOrder,
+            createdAt: item.createdAt,
+            generation: terminalTab?.generation,
+            shellOverride: terminalTab?.shellOverride,
+            pendingActivationSpawn: terminalTab?.pendingActivationSpawn
+          }
+        }),
+    [groupTabs, terminalTabById, worktreeId]
   )
 
   const editorItems = useMemo<GroupEditorItem[]>(

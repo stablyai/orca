@@ -12,6 +12,10 @@ function createSnapshot(overrides: Partial<AppState> = {}): AppState {
       'wt-1': [{ id: 'tab-1', title: 'shell', ptyId: 'pty-1', worktreeId: 'wt-1' }],
       'wt-2': [{ id: 'tab-2', title: 'editor', ptyId: null, worktreeId: 'wt-2' }]
     },
+    ptyIdsByTabId: {
+      'tab-1': ['pty-1'],
+      'tab-2': []
+    },
     terminalLayoutsByTabId: {
       'tab-1': { root: null, activeLeafId: null, expandedLeafId: null }
     },
@@ -125,6 +129,9 @@ describe('buildWorkspaceSessionPayload', () => {
         },
         activeTabIdByWorktree: {
           [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-tab-1'
+        },
+        ptyIdsByTabId: {
+          'floating-tab-1': ['floating-pty-1']
         }
       })
     )
@@ -169,6 +176,9 @@ describe('buildWorkspaceSessionPayload', () => {
             } as never
           ]
         },
+        ptyIdsByTabId: {
+          'tab-local': ['pty-1']
+        },
         terminalLayoutsByTabId: {
           'tab-local': {
             root: null,
@@ -206,6 +216,9 @@ describe('buildWorkspaceSessionPayload', () => {
             } as never
           ]
         },
+        ptyIdsByTabId: {
+          'tab-ssh': ['relay-pty-1']
+        },
         terminalLayoutsByTabId: {
           'tab-ssh': {
             root: null,
@@ -224,12 +237,16 @@ describe('buildWorkspaceSessionPayload', () => {
     })
   })
 
-  it('uses lastKnownRelayPtyIdByTabId fallback for SSH worktrees with null ptyIds', () => {
+  it('uses lastKnownRelayPtyIdByTabId fallback for disconnected SSH worktrees', () => {
     const payload = buildWorkspaceSessionPayload(
       createSnapshot({
         tabsByWorktree: {
           'wt-1': [{ id: 'tab-1', title: 'shell', ptyId: 'pty-1', worktreeId: 'wt-1' } as never],
           'wt-ssh': [{ id: 'tab-ssh', title: 'remote', ptyId: null, worktreeId: 'wt-ssh' } as never]
+        },
+        ptyIdsByTabId: {
+          'tab-1': ['pty-1'],
+          'tab-ssh': []
         },
         lastKnownRelayPtyIdByTabId: { 'tab-ssh': 'relay-sess-42' },
         repos: [createRepo('repo-ssh', 'conn-1')],

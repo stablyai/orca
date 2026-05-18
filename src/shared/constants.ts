@@ -86,7 +86,6 @@ export const STAR_NAG_INITIAL_THRESHOLD = 35
 export const DEFAULT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
   'status',
   'unread',
-  'ci',
   'issue',
   'pr',
   'comment',
@@ -342,7 +341,6 @@ export function getDefaultUIState(): PersistedUIState {
     sidebarWidth: 280,
     rightSidebarWidth: 350,
     groupBy: 'repo',
-    showWorkspaceLineage: false,
     sortBy: 'recent',
     showActiveOnly: false,
     hideDefaultBranchWorkspace: false,

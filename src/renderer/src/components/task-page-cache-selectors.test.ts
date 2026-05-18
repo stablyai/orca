@@ -27,11 +27,11 @@ describe('task page cache selectors', () => {
     const repo = { id: 'repo-1', path: '/repo/one' }
     const selectedEntry = entry<GitHubWorkItem[]>([workItem('issue-1', 'repo-1')])
     const firstCache = {
-      [workItemsCacheKey(repo.path, 20, '')]: selectedEntry
+      [workItemsCacheKey(repo.id, 20, '')]: selectedEntry
     }
     const secondCache = {
       ...firstCache,
-      [workItemsCacheKey('/repo/two', 20, '')]: entry<GitHubWorkItem[]>([
+      [workItemsCacheKey('repo-2', 20, '')]: entry<GitHubWorkItem[]>([
         workItem('issue-2', 'repo-2')
       ])
     }
@@ -48,6 +48,18 @@ describe('task page cache selectors', () => {
         error: null
       }
     ])
+  })
+
+  it('selects work-item cache entries by repo id, not legacy path keys', () => {
+    const repo = { id: 'repo-1', path: '/same/path' }
+    const repoEntry = entry<GitHubWorkItem[]>([workItem('issue-1', 'repo-1')])
+    const pathEntry = entry<GitHubWorkItem[]>([workItem('stale', 'legacy')])
+    const cache = {
+      [workItemsCacheKey(repo.id, 20, '')]: repoEntry,
+      [workItemsCacheKey(repo.path, 20, '')]: pathEntry
+    }
+
+    expect(selectTaskPageWorkItemsCacheEntries(cache, [repo], 20, '')).toEqual([repoEntry])
   })
 
   it('returns null while the GitHub dialog is closed so cache writes do not re-render it', () => {

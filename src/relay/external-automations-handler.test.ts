@@ -107,4 +107,92 @@ describe('ExternalAutomationsHandler', () => {
 
     expect(result).toEqual({ total: 42, runs: [] })
   })
+
+  it('deduplicates concurrent remote Hermes count reads', async () => {
+    const { handler, requestHandlers } = createHandlerHarness()
+    let resolveRefs: (refs: { id: string; run_at: string }[]) => void = () => {}
+    const readHermesRunRefs = vi.fn(
+      () =>
+        new Promise<{ id: string; run_at: string }[]>((resolve) => {
+          resolveRefs = resolve
+        })
+    )
+    const handlerInternals = handler as unknown as {
+      readHermesRunRefs: typeof readHermesRunRefs
+    }
+    handlerInternals.readHermesRunRefs = readHermesRunRefs
+
+    const first = requestHandlers.get('externalAutomations.runs')?.({
+      provider: 'hermes',
+      jobId: 'job-1',
+      page: 1,
+      pageSize: 0
+    })
+    const second = requestHandlers.get('externalAutomations.runs')?.({
+      provider: 'hermes',
+      jobId: 'job-1',
+      page: 1,
+      pageSize: 0
+    })
+
+    expect(readHermesRunRefs).toHaveBeenCalledTimes(1)
+    resolveRefs([
+      { id: 'job-1:2026-05-15_09-00-00.md', run_at: '2026-05-15T09:00:00' },
+      { id: 'job-1:2026-05-16_09-00-00.md', run_at: '2026-05-16T09:00:00' }
+    ])
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { total: 2, runs: [] },
+      { total: 2, runs: [] }
+    ])
+  })
+
+  it('clears the remote Hermes count cache after lifecycle actions', async () => {
+    const { handler, requestHandlers } = createHandlerHarness()
+    const readHermesRunRefs = vi
+      .fn()
+      .mockResolvedValueOnce([
+        { id: 'job-1:2026-05-15_09-00-00.md', run_at: '2026-05-15T09:00:00' }
+      ])
+      .mockResolvedValueOnce([
+        { id: 'job-1:2026-05-15_09-00-00.md', run_at: '2026-05-15T09:00:00' },
+        { id: 'job-1:2026-05-16_09-00-00.md', run_at: '2026-05-16T09:00:00' }
+      ])
+    const handlerInternals = handler as unknown as {
+      readHermesRunRefs: typeof readHermesRunRefs
+    }
+    handlerInternals.readHermesRunRefs = readHermesRunRefs
+
+    await expect(
+      requestHandlers.get('externalAutomations.runs')?.({
+        provider: 'hermes',
+        jobId: 'job-1',
+        page: 1,
+        pageSize: 0
+      })
+    ).resolves.toEqual({ total: 1, runs: [] })
+    await expect(
+      requestHandlers.get('externalAutomations.runs')?.({
+        provider: 'hermes',
+        jobId: 'job-1',
+        page: 1,
+        pageSize: 0
+      })
+    ).resolves.toEqual({ total: 1, runs: [] })
+
+    await requestHandlers.get('externalAutomations.act')?.({
+      provider: 'hermes',
+      action: 'run',
+      jobId: 'job-1'
+    })
+    await expect(
+      requestHandlers.get('externalAutomations.runs')?.({
+        provider: 'hermes',
+        jobId: 'job-1',
+        page: 1,
+        pageSize: 0
+      })
+    ).resolves.toEqual({ total: 2, runs: [] })
+    expect(readHermesRunRefs).toHaveBeenCalledTimes(2)
+  })
 })

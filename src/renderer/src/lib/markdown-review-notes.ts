@@ -49,6 +49,22 @@ export function getMarkdownReviewExcerpt(
   return excerpt.map((line) => `> ${line}`).join('\n')
 }
 
+export function getMarkdownReviewHighlightedText(
+  content: string,
+  note: Pick<DiffComment, 'lineNumber' | 'selectedText' | 'startLine'>
+): string {
+  const selectedText = note.selectedText?.trim()
+  if (selectedText) {
+    return selectedText
+  }
+  const excerpt = getMarkdownReviewExcerpt(content, note)
+  return excerpt
+    .split('\n')
+    .map((line) => line.replace(/^> ?/, ''))
+    .join('\n')
+    .trim()
+}
+
 export function formatMarkdownReviewNotes(
   notes: readonly MarkdownReviewNote[],
   content: string
@@ -60,7 +76,12 @@ export function formatMarkdownReviewNotes(
         .replace(/"/g, '\\"')
         .replace(/\r/g, '\\r')
         .replace(/\n/g, '\\n')
-      const excerpt = getMarkdownReviewExcerpt(content, note)
+      const excerpt = note.selectedText
+        ? getMarkdownReviewHighlightedText(content, note)
+            .split(/\r\n|\r|\n/)
+            .map((line) => `> ${line}`)
+            .join('\n')
+        : getMarkdownReviewExcerpt(content, note)
       const parts = [
         `File: ${note.filePath}`,
         'Source: markdown',

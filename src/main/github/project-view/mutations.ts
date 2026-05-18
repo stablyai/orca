@@ -323,6 +323,10 @@ export async function updatePullRequestBySlug(
     patchArgs.push('--raw-field', `body=${args.updates.body}`)
     fieldCount++
   }
+  if (args.updates.state !== undefined) {
+    patchArgs.push('--raw-field', `state=${args.updates.state}`)
+    fieldCount++
+  }
   if (fieldCount === 0) {
     // No fields to update — nothing to do.
     return { ok: true }

@@ -1,4 +1,4 @@
-import { FolderOpen, GitBranch, Server } from 'lucide-react'
+import { ArrowRight, FolderOpen, GitBranch, Server } from 'lucide-react'
 
 type RepoStepProps = {
   cloneUrl: string
@@ -6,6 +6,7 @@ type RepoStepProps = {
   onOpenFolder: () => void
   onOpenServerFolder: (kind: 'git' | 'folder') => void
   onClone: () => void
+  onOpenSshSettings: () => void
   serverPath: string
   onServerPathChange: (value: string) => void
   cloneDestination: string
@@ -22,6 +23,7 @@ export function RepoStep({
   onOpenFolder,
   onOpenServerFolder,
   onClone,
+  onOpenSshSettings,
   serverPath,
   onServerPathChange,
   cloneDestination,
@@ -159,10 +161,23 @@ export function RepoStep({
             {runtimeActive ? 'Runtime server' : workspaceDir}
           </span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <Server className="size-3.5" />
-          <span>{runtimeActive ? 'Server paths only' : 'SSH? Set hosts up in Settings'}</span>
-        </div>
+        {runtimeActive ? (
+          <div className="flex items-center gap-1.5">
+            <Server className="size-3.5" />
+            <span>Server paths only</span>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="inline-flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
+            disabled={disabled}
+            onClick={onOpenSshSettings}
+          >
+            <Server className="size-3.5 shrink-0" />
+            <span className="truncate">SSH? Set hosts up in Settings</span>
+            <ArrowRight className="size-3.5 shrink-0" />
+          </button>
+        )}
       </div>
 
       {busyLabel && (

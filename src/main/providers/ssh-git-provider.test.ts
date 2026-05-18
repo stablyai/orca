@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: this suite covers the SSH git provider's one-RPC-per-method contract; splitting it would duplicate the shared mux fixture. */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { SshGitProvider } from './ssh-git-provider'
 
@@ -55,6 +56,18 @@ describe('SshGitProvider', () => {
     expect(mux.request).toHaveBeenNthCalledWith(2, 'git.status', {
       worktreePath: '/home/user/repo'
     })
+  })
+
+  it('checkIgnoredPaths sends git.checkIgnored request', async () => {
+    mux.request.mockResolvedValue(['dist/bundle.js'])
+
+    const result = await provider.checkIgnoredPaths('/home/user/repo', ['dist/bundle.js'])
+
+    expect(mux.request).toHaveBeenCalledWith('git.checkIgnored', {
+      worktreePath: '/home/user/repo',
+      paths: ['dist/bundle.js']
+    })
+    expect(result).toEqual(['dist/bundle.js'])
   })
 
   it('getHistory sends git.history request', async () => {

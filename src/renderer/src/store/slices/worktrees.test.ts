@@ -610,6 +610,7 @@ describe('createWorktree base status merge', () => {
         undefined,
         'codex',
         'ENG-123',
+        undefined,
         'in-review'
       )
 
@@ -631,6 +632,93 @@ describe('createWorktree base status merge', () => {
       linkedLinearIssue: 'ENG-123',
       workspaceStatus: 'in-review'
     })
+  })
+
+  it('passes branchNameOverride through the local create IPC payload', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/feature-something',
+      repoId: 'repo1',
+      path: '/path/feature-something',
+      branch: 'feature/something'
+    })
+    mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
+
+    await store
+      .getState()
+      .createWorktree(
+        'repo1',
+        'feature/something',
+        'origin/main',
+        'inherit',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'feature/something'
+      )
+
+    expect(mockApi.worktrees.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoId: 'repo1',
+        name: 'feature/something',
+        baseBranch: 'origin/main',
+        branchNameOverride: 'feature/something'
+      })
+    )
+  })
+
+  it('suffixes branchNameOverride when local IPC returns the SSH branch-exists error', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/feature-something-2',
+      repoId: 'repo1',
+      path: '/path/feature-something-2',
+      branch: 'feature/something-2'
+    })
+    mockApi.worktrees.create
+      .mockRejectedValueOnce(
+        new Error('Branch "feature/something" already exists. Pick a different worktree name.')
+      )
+      .mockResolvedValueOnce({ worktree: wt })
+
+    const result = await store
+      .getState()
+      .createWorktree(
+        'repo1',
+        'feature/something',
+        'origin/main',
+        'inherit',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'feature/something'
+      )
+
+    expect(result).toEqual({ worktree: wt })
+    expect(mockApi.worktrees.create).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        name: 'feature/something',
+        branchNameOverride: 'feature/something'
+      })
+    )
+    expect(mockApi.worktrees.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        name: 'feature/something-2',
+        branchNameOverride: 'feature/something-2'
+      })
+    )
   })
 
   it('does not overwrite a newer reconcile status with the initial checking status', async () => {
@@ -1058,6 +1146,66 @@ describe('worktree remote runtime mutations', () => {
     })
     expect(mockApi.worktrees.create).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo.repo1).toEqual([wt])
+  })
+
+  it('suffixes branchNameOverride when retrying a runtime create conflict', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/feature-something-2',
+      repoId: 'repo1',
+      path: '/path/feature-something-2',
+      branch: 'feature/something-2'
+    })
+    runtimeEnvironmentCall
+      .mockRejectedValueOnce(new Error('Branch already exists on a remote'))
+      .mockResolvedValueOnce({
+        id: 'rpc-create',
+        ok: true,
+        result: { worktree: wt },
+        _meta: { runtimeId: 'runtime-remote' }
+      })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+
+    const result = await store
+      .getState()
+      .createWorktree(
+        'repo1',
+        'feature/something',
+        'origin/main',
+        'skip',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'feature/something'
+      )
+
+    expect(result).toEqual({ worktree: wt })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        params: expect.objectContaining({
+          name: 'feature/something',
+          branchNameOverride: 'feature/something'
+        })
+      })
+    )
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        params: expect.objectContaining({
+          name: 'feature/something-2',
+          branchNameOverride: 'feature/something-2'
+        })
+      })
+    )
   })
 
   it('removes worktrees through the active remote runtime environment', async () => {

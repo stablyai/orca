@@ -38,6 +38,7 @@ import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import { detectLanguage } from '@/lib/language-detect'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
+import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
@@ -358,6 +359,51 @@ function HostedReviewIcon({
 }): React.JSX.Element {
   const Icon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
   return <Icon className={cn(className, hostedReviewStateClass(review))} />
+}
+
+function hostedReviewLabel(review: HostedReviewInfo): string {
+  return `${review.provider === 'gitlab' ? 'MR' : 'PR'} #${review.number}`
+}
+
+export function HostedReviewHeaderLink({
+  review,
+  onOpenGitHubPRInChecks
+}: {
+  review: HostedReviewInfo
+  onOpenGitHubPRInChecks: () => void
+}): React.JSX.Element {
+  const label = hostedReviewLabel(review)
+  const className =
+    'shrink-0 border-0 bg-transparent p-0 text-left font-medium leading-none text-foreground opacity-80 hover:text-foreground hover:underline'
+
+  if (review.provider === 'github') {
+    return (
+      <button
+        type="button"
+        className={className}
+        onClick={(e) => {
+          e.stopPropagation()
+          // Why: GitHub PR details already live in Orca's Checks tab; keep
+          // the sidebar workflow in-app instead of opening the browser.
+          onOpenGitHubPRInChecks()
+        }}
+      >
+        {label}
+      </button>
+    )
+  }
+
+  return (
+    <a
+      href={review.url}
+      target="_blank"
+      rel="noreferrer"
+      className={className}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {label}
+    </a>
+  )
 }
 
 function SourceControlInner(): React.JSX.Element {
@@ -1360,6 +1406,11 @@ function SourceControlInner(): React.JSX.Element {
       setRightSidebarTab
     ]
   )
+
+  const openHostedGitHubPRInChecks = useCallback(() => {
+    setRightSidebarOpen(true)
+    setRightSidebarTab('checks')
+  }, [setRightSidebarOpen, setRightSidebarTab])
 
   const hasUnstagedChanges = grouped.unstaged.length > 0 || grouped.untracked.length > 0
   const hasPartiallyStagedChanges = useMemo(() => {
@@ -2510,15 +2561,10 @@ function SourceControlInner(): React.JSX.Element {
           {hostedReview && (
             <div className="ml-auto mb-1.5 flex items-center gap-1.5 min-w-0 text-[11.5px] leading-none">
               <HostedReviewIcon review={hostedReview} className="size-3 shrink-0" />
-              <a
-                href={hostedReview.url}
-                target="_blank"
-                rel="noreferrer"
-                className="text-foreground opacity-80 font-medium shrink-0 hover:text-foreground hover:underline"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {hostedReview.provider === 'gitlab' ? 'MR' : 'PR'} #{hostedReview.number}
-              </a>
+              <HostedReviewHeaderLink
+                review={hostedReview}
+                onOpenGitHubPRInChecks={openHostedGitHubPRInChecks}
+              />
             </div>
           )}
         </div>
@@ -2593,6 +2639,7 @@ function SourceControlInner(): React.JSX.Element {
                     groupId={activeGroupId ?? activeWorktreeId}
                     onFocusTerminal={focusTerminalTabSurface}
                     prompt={diffCommentsPrompt}
+                    promptDelivery="draft"
                     launchSource="notes_send"
                   />
                 </DropdownMenuContent>
@@ -4218,7 +4265,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
             return
           }
           const absolutePath = joinPath(worktreePath, entry.path)
-          e.dataTransfer.setData('text/x-orca-file-path', absolutePath)
+          e.dataTransfer.setData(WORKSPACE_FILE_PATH_MIME, absolutePath)
           e.dataTransfer.effectAllowed = 'copy'
         }}
         onClick={(e) => {
@@ -4380,7 +4427,7 @@ function BranchEntryRow({
         draggable
         onDragStart={(e) => {
           const absolutePath = joinPath(worktreePath, entry.path)
-          e.dataTransfer.setData('text/x-orca-file-path', absolutePath)
+          e.dataTransfer.setData(WORKSPACE_FILE_PATH_MIME, absolutePath)
           e.dataTransfer.effectAllowed = 'copy'
         }}
         onClick={onOpen}

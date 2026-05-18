@@ -15,9 +15,11 @@ import { mkdir, readdir, rm, stat } from 'fs/promises'
 import { OrchestrationDb } from './orchestration/db'
 import { formatMessagesForInjection } from './orchestration/formatter'
 import type {
+  BaseRefSearchResult,
   CreateWorktreeResult,
   GitPushTarget,
   GitWorktreeInfo,
+  GitHubOwnerRepo,
   GlobalSettings,
   Repo,
   StatsSummary,
@@ -94,6 +96,7 @@ import {
   listWorkItems,
   countWorkItems,
   getPRChecks,
+  rerunPRChecks,
   getPRComments,
   getIssue,
   resolveReviewThread,
@@ -101,6 +104,8 @@ import {
   getWorkItemByOwnerRepo,
   updatePRTitle,
   mergePR,
+  updatePRState,
+  requestPRReviewers,
   createIssue,
   updateIssue,
   addIssueComment,
@@ -113,6 +118,7 @@ import { getWorkItemDetails, getPRFileContents } from '../github/work-item-detai
 import { getRateLimit } from '../github/rate-limit'
 import type {
   GitHubIssueUpdate,
+  GitHubPullRequestStateUpdate,
   GitHubPRFile,
   GitHubPRReviewCommentInput
 } from '../../shared/types'
@@ -145,6 +151,7 @@ import {
   updateIssue as updateLinearIssue,
   type LinearListFilter
 } from '../linear/issues'
+import { listProjects as listLinearProjects } from '../linear/projects'
 import {
   getTeamLabels as getLinearTeamLabels,
   getTeamMembers as getLinearTeamMembers,
@@ -194,10 +201,10 @@ import {
   getBranchConflictKind,
   isGitRepo,
   getRepoName,
-  searchBaseRefs,
+  searchBaseRefDetails,
   getRemoteCount,
   normalizeRefSearchQuery,
-  parseAndFilterSearchRefs,
+  parseAndFilterSearchRefDetails,
   parseRemoteCount,
   resolveDefaultBaseRefViaExec,
   buildSearchBaseRefsArgv,
@@ -229,6 +236,7 @@ import { DEFAULT_REPO_BADGE_COLOR, getDefaultVoiceSettings } from '../../shared/
 import { listRepoWorktrees } from '../repo-worktrees'
 import { createWorktreeSymlinks } from '../ipc/worktree-symlinks'
 import {
+  createRemoteWorktree,
   configureCreatedWorktreePushTarget,
   prepareWorktreePushTarget
 } from '../ipc/worktree-remote'
@@ -428,6 +436,7 @@ type RuntimeNotifier = {
   focusEditorTab?(tabId: string, worktreeId: string): void
   closeSessionTab?(tabId: string, worktreeId: string): void
   openFile?(worktreeId: string, filePath: string, relativePath: string): void
+  openDiff?(worktreeId: string, filePath: string, relativePath: string, staged: boolean): void
   readMobileMarkdownTab?(worktreeId: string, tabId: string): Promise<RuntimeMarkdownReadTabResult>
   saveMobileMarkdownTab?(
     worktreeId: string,
@@ -484,6 +493,23 @@ function omitUndefinedProperties<T extends Record<string, unknown>>(value: T): P
   return Object.fromEntries(
     Object.entries(value).filter(([, entry]) => entry !== undefined)
   ) as Partial<T>
+}
+
+async function resolveCreateBranchName(
+  repoPath: string,
+  branchNameOverride: string | undefined,
+  sanitizedName: string,
+  settings: { branchPrefix: string; branchPrefixCustom?: string },
+  username: string | null
+): Promise<string> {
+  if (!branchNameOverride) {
+    return computeBranchName(sanitizedName, settings, username)
+  }
+  if (branchNameOverride.startsWith('-')) {
+    throw new Error('Branch name must not start with "-"')
+  }
+  await gitExecFileAsync(['check-ref-format', '--branch', branchNameOverride], { cwd: repoPath })
+  return branchNameOverride
 }
 
 type ResolvedWorktree = Worktree & {
@@ -1151,6 +1177,12 @@ export class OrcaRuntimeService {
         throw new Error('renderer_unavailable')
       }
       this.notifier.openFile(worktreeId, filePath, relativePath)
+    },
+    openDiff: (worktreeId, filePath, relativePath, staged) => {
+      if (!this.notifier?.openDiff) {
+        throw new Error('renderer_unavailable')
+      }
+      this.notifier.openDiff(worktreeId, filePath, relativePath, staged)
     }
   })
 
@@ -1158,6 +1190,9 @@ export class OrcaRuntimeService {
     this.fileCommands
   )
   openMobileFile: RuntimeFileCommands['openMobileFile'] = this.fileCommands.openMobileFile.bind(
+    this.fileCommands
+  )
+  openMobileDiff: RuntimeFileCommands['openMobileDiff'] = this.fileCommands.openMobileDiff.bind(
     this.fileCommands
   )
   readMobileFile: RuntimeFileCommands['readMobileFile'] = this.fileCommands.readMobileFile.bind(
@@ -1207,6 +1242,8 @@ export class OrcaRuntimeService {
 
   getRuntimeGitStatus: RuntimeGitCommands['getRuntimeGitStatus'] =
     this.gitCommands.getRuntimeGitStatus.bind(this.gitCommands)
+  checkRuntimeGitIgnoredPaths: RuntimeGitCommands['checkRuntimeGitIgnoredPaths'] =
+    this.gitCommands.checkRuntimeGitIgnoredPaths.bind(this.gitCommands)
   getRuntimeGitHistory: RuntimeGitCommands['getRuntimeGitHistory'] =
     this.gitCommands.getRuntimeGitHistory.bind(this.gitCommands)
   getRuntimeGitConflictOperation: RuntimeGitCommands['getRuntimeGitConflictOperation'] =
@@ -4383,12 +4420,13 @@ export class OrcaRuntimeService {
         truncated: false
       }
     }
-    const refs = repo.connectionId
+    const refDetails = repo.connectionId
       ? await this.searchRemoteRepoRefs(repo, query, limit + 1)
-      : await searchBaseRefs(repo.path, query, limit + 1)
+      : await searchBaseRefDetails(repo.path, query, limit + 1)
     return {
-      refs: refs.slice(0, limit),
-      truncated: refs.length > limit
+      refs: refDetails.slice(0, limit).map((entry) => entry.refName),
+      refDetails: refDetails.slice(0, limit),
+      truncated: refDetails.length > limit
     }
   }
 
@@ -4444,7 +4482,11 @@ export class OrcaRuntimeService {
     return { defaultBaseRef, remoteCount }
   }
 
-  private async searchRemoteRepoRefs(repo: Repo, query: string, limit: number): Promise<string[]> {
+  private async searchRemoteRepoRefs(
+    repo: Repo,
+    query: string,
+    limit: number
+  ): Promise<BaseRefSearchResult[]> {
     const provider = repo.connectionId ? getSshGitProvider(repo.connectionId) : null
     if (!provider) {
       return []
@@ -4454,8 +4496,15 @@ export class OrcaRuntimeService {
       return []
     }
     try {
-      const result = await provider.exec(buildSearchBaseRefsArgv(normalizedQuery), repo.path)
-      return parseAndFilterSearchRefs(result.stdout, limit)
+      const [result, remotesResult] = await Promise.all([
+        provider.exec(buildSearchBaseRefsArgv(normalizedQuery), repo.path),
+        provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
+      ])
+      const remotes = remotesResult.stdout
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+      return parseAndFilterSearchRefDetails(result.stdout, limit, remotes)
     } catch (err) {
       console.warn('[runtime:repo.searchRefs] SSH for-each-ref failed', {
         path: repo.path,
@@ -4663,21 +4712,33 @@ export class OrcaRuntimeService {
     repoSelector: string,
     prNumber: number,
     headSha?: string,
+    prRepo?: GitHubOwnerRepo | null,
     options?: { noCache?: boolean }
   ): Promise<Awaited<ReturnType<typeof getPRChecks>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
     this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_checks')
-    return getPRChecks(repo.path, prNumber, headSha, options)
+    return getPRChecks(repo.path, prNumber, headSha, prRepo ?? null, options)
+  }
+
+  async rerunRepoPRChecks(
+    repoSelector: string,
+    prNumber: number,
+    options?: { headSha?: string; failedOnly?: boolean }
+  ): Promise<Awaited<ReturnType<typeof rerunPRChecks>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_checks_rerun')
+    return rerunPRChecks(repo.path, prNumber, options)
   }
 
   async getRepoPRComments(
     repoSelector: string,
     prNumber: number,
+    prRepo?: GitHubOwnerRepo | null,
     options?: { noCache?: boolean }
   ): Promise<Awaited<ReturnType<typeof getPRComments>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
     this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_comments')
-    return getPRComments(repo.path, prNumber, options)
+    return getPRComments(repo.path, prNumber, { ...options, prRepo: prRepo ?? null })
   }
 
   async getRepoPRFileContents(
@@ -4722,21 +4783,43 @@ export class OrcaRuntimeService {
   async updateRepoPRTitle(
     repoSelector: string,
     prNumber: number,
-    title: string
+    title: string,
+    prRepo?: GitHubOwnerRepo | null
   ): Promise<Awaited<ReturnType<typeof updatePRTitle>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
     this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_title')
-    return updatePRTitle(repo.path, prNumber, title)
+    return updatePRTitle(repo.path, prNumber, title, undefined, prRepo ?? null)
   }
 
   async mergeRepoPR(
     repoSelector: string,
     prNumber: number,
-    method?: 'merge' | 'squash' | 'rebase'
+    method?: 'merge' | 'squash' | 'rebase',
+    prRepo?: GitHubOwnerRepo | null
   ): Promise<Awaited<ReturnType<typeof mergePR>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
     this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_merge')
-    return mergePR(repo.path, prNumber, method)
+    return mergePR(repo.path, prNumber, method, undefined, prRepo ?? null)
+  }
+
+  async updateRepoPRState(
+    repoSelector: string,
+    prNumber: number,
+    updates: GitHubPullRequestStateUpdate
+  ): Promise<Awaited<ReturnType<typeof updatePRState>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_state')
+    return updatePRState(repo.path, prNumber, updates)
+  }
+
+  async requestRepoPRReviewers(
+    repoSelector: string,
+    prNumber: number,
+    reviewers: string[]
+  ): Promise<Awaited<ReturnType<typeof requestPRReviewers>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_reviewers')
+    return requestPRReviewers(repo.path, prNumber, reviewers)
   }
 
   async createRepoIssue(
@@ -5147,6 +5230,7 @@ export class OrcaRuntimeService {
     repoSelector: string
     name: string
     baseBranch?: string
+    branchNameOverride?: string
     linkedIssue?: number | null
     linkedPR?: number | null
     linkedLinearIssue?: string
@@ -5171,10 +5255,7 @@ export class OrcaRuntimeService {
       throw new Error('Folder mode does not support creating worktrees.')
     }
     if (repo.connectionId) {
-      // Why: SSH-backed worktree creation still relies on the desktop SSH
-      // flow, which can prime relay roots and enforce its remote constraints.
-      // Runtime RPC must not fall through to local git against server paths.
-      throw new Error('SSH-backed worktree creation is not supported through runtime RPC yet.')
+      return await this.createManagedRemoteWorktree(repo, args)
     }
     const lineageInput =
       args.lineage || args.comment ? { ...args.lineage, comment: args.comment } : undefined
@@ -5184,9 +5265,26 @@ export class OrcaRuntimeService {
     const requestedDisplayName = args.displayName?.trim() || undefined
     const sanitizedName = sanitizeWorktreeName(args.name)
     const username = getGitUsername(repo.path)
-    const branchName = computeBranchName(sanitizedName, settings, username)
+    const branchName = await resolveCreateBranchName(
+      repo.path,
+      args.branchNameOverride,
+      sanitizedName,
+      settings,
+      username
+    )
 
-    const branchConflictKind = await getBranchConflictKind(repo.path, branchName)
+    const baseBranch = args.baseBranch || repo.worktreeBaseRef || getDefaultBaseRef(repo.path)
+    if (!baseBranch) {
+      // Why: getDefaultBaseRef returns null when no suitable ref exists.
+      // Don't fabricate 'origin/main' — passing it to addWorktree would
+      // produce an opaque git failure. Surface a clear error so the CLI
+      // caller can pick an explicit --base ref.
+      throw new Error(
+        'Could not resolve a default base ref for this repo. Pass an explicit --base and try again.'
+      )
+    }
+
+    const branchConflictKind = await getBranchConflictKind(repo.path, branchName, baseBranch)
     if (branchConflictKind) {
       throw new Error(
         `Branch "${branchName}" already exists ${branchConflictKind === 'local' ? 'locally' : 'on a remote'}.`
@@ -5213,17 +5311,6 @@ export class OrcaRuntimeService {
     const wslHome = wslInfo ? getWslHome(wslInfo.distro) : null
     const workspaceRoot = wslHome ? join(wslHome, 'orca', 'workspaces') : settings.workspaceDir
     worktreePath = ensurePathWithinWorkspace(worktreePath, workspaceRoot)
-    const baseBranch = args.baseBranch || repo.worktreeBaseRef || getDefaultBaseRef(repo.path)
-    if (!baseBranch) {
-      // Why: getDefaultBaseRef returns null when no suitable ref exists.
-      // Don't fabricate 'origin/main' — passing it to addWorktree would
-      // produce an opaque git failure. Surface a clear error so the CLI
-      // caller can pick an explicit --base ref.
-      throw new Error(
-        'Could not resolve a default base ref for this repo. Pass an explicit --base and try again.'
-      )
-    }
-
     const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
     // Why (§3.3 Lifecycle): route through the shared fetch cache so back-to-back
     // CLI creates on the same repo don't each pay the round-trip, and so a
@@ -5507,6 +5594,84 @@ export class OrcaRuntimeService {
       ...(setup ? { setup } : {}),
       ...(warning ? { warning } : {})
     }
+  }
+
+  private async createManagedRemoteWorktree(
+    repo: Repo,
+    args: {
+      name: string
+      baseBranch?: string
+      branchNameOverride?: string
+      linkedIssue?: number | null
+      linkedPR?: number | null
+      linkedLinearIssue?: string
+      comment?: string
+      displayName?: string
+      workspaceStatus?: string
+      sparseCheckout?: { directories: string[]; presetId?: string }
+      pushTarget?: GitPushTarget
+      setupDecision?: 'run' | 'skip' | 'inherit'
+      createdWithAgent?: TuiAgent
+      startup?: WorktreeStartupLaunch
+    }
+  ): Promise<CreateWorktreeResult> {
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+
+    // Why: runtime/mobile callers do not own a renderer BrowserWindow, but the
+    // SSH create helper only uses it for progress and change notifications.
+    // Runtime emits those through RuntimeNotifier after the create succeeds.
+    const headlessWindow = {
+      isDestroyed: () => false,
+      webContents: { send: () => undefined }
+    } as unknown as BrowserWindow
+
+    const result = await createRemoteWorktree(
+      {
+        repoId: repo.id,
+        name: args.name,
+        ...(args.displayName ? { displayName: args.displayName } : {}),
+        ...(args.baseBranch ? { baseBranch: args.baseBranch } : {}),
+        ...(args.branchNameOverride ? { branchNameOverride: args.branchNameOverride } : {}),
+        ...(args.setupDecision ? { setupDecision: args.setupDecision } : {}),
+        ...(args.sparseCheckout ? { sparseCheckout: args.sparseCheckout } : {}),
+        ...(args.linkedIssue != null ? { linkedIssue: args.linkedIssue } : {}),
+        ...(args.linkedPR != null ? { linkedPR: args.linkedPR } : {}),
+        ...(args.linkedLinearIssue ? { linkedLinearIssue: args.linkedLinearIssue } : {}),
+        ...(args.pushTarget ? { pushTarget: args.pushTarget } : {}),
+        ...(args.workspaceStatus ? { workspaceStatus: args.workspaceStatus as never } : {}),
+        ...(args.createdWithAgent ? { createdWithAgent: args.createdWithAgent } : {})
+      },
+      repo,
+      this.store as unknown as Store,
+      headlessWindow
+    )
+
+    if (args.comment !== undefined) {
+      this.store.setWorktreeMeta(result.worktree.id, { comment: args.comment })
+      result.worktree.comment = args.comment
+    }
+
+    this.invalidateResolvedWorktreeCache()
+    this.notifier?.worktreesChanged(repo.id)
+
+    if (args.startup && this.ptyController?.spawn) {
+      try {
+        await this.createTerminal(`path:${result.worktree.path}`, {
+          command: args.startup.command,
+          env: args.startup.env
+        })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        return {
+          ...result,
+          warning: `Failed to create the startup terminal for ${result.worktree.path}: ${message}`
+        }
+      }
+    }
+
+    return result
   }
 
   /**
@@ -8308,9 +8473,14 @@ export class OrcaRuntimeService {
     teamId: string,
     title: string,
     description?: string,
-    workspaceId?: string
+    workspaceId?: string,
+    parentIssueId?: string,
+    projectId?: string | null
   ): ReturnType<typeof createLinearIssue> {
-    return createLinearIssue(teamId, title, description, workspaceId)
+    return createLinearIssue(teamId, title, description, workspaceId, {
+      parentId: parentIssueId,
+      projectId
+    })
   }
 
   linearGetIssue(id: string, workspaceId?: string): ReturnType<typeof getLinearIssue> {
@@ -8342,6 +8512,14 @@ export class OrcaRuntimeService {
 
   linearListTeams(workspaceId?: LinearWorkspaceSelection): ReturnType<typeof listLinearTeams> {
     return listLinearTeams(workspaceId)
+  }
+
+  linearListProjects(
+    query?: string,
+    limit = 20,
+    workspaceId?: LinearWorkspaceSelection
+  ): ReturnType<typeof listLinearProjects> {
+    return listLinearProjects(query, Math.min(Math.max(1, limit), 50), workspaceId)
   }
 
   linearTeamStates(teamId: string, workspaceId?: string): ReturnType<typeof getLinearTeamStates> {

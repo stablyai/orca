@@ -56,6 +56,7 @@ function clampPetSize(size: number): number {
 // openTaskPage warm exactly the cache key the page will read on mount.
 function presetToQuery(presetId: TaskViewPresetId | null): string {
   switch (presetId) {
+    case 'all':
     case 'issues':
       return 'is:issue is:open'
     case 'my-issues':
@@ -67,7 +68,7 @@ function presetToQuery(presetId: TaskViewPresetId | null): string {
     case 'my-prs':
       return 'author:@me is:pr is:open'
     default:
-      return 'is:open'
+      return 'is:issue is:open'
   }
 }
 
@@ -94,6 +95,7 @@ const MAX_LEFT_SIDEBAR_WIDTH = 500
 // cap on wide displays. Use a large hard ceiling purely as a safety net for
 // corrupted/manually-edited values rather than as a product limit.
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
+const LINEAR_TASK_PREFETCH_LIMIT = 36
 // Why: bound disk growth for acknowledgedAgentsByPaneKey across hard quits —
 // in-session cleanup (agent-status.ts) prunes on pane lifecycle, but crash/
 // forced-kill paths leave entries pinned. Mirrors HYDRATE_MAX_AGE_MS in
@@ -354,8 +356,6 @@ export type UISlice = {
   clearOrcaHookTrustForRepo: (repoId: string) => void
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   setGroupBy: (g: UISlice['groupBy']) => void
-  showWorkspaceLineage: boolean
-  setShowWorkspaceLineage: (v: boolean) => void
   sortBy: 'name' | 'smart' | 'recent' | 'repo'
   setSortBy: (s: UISlice['sortBy']) => void
   showActiveOnly: boolean
@@ -548,16 +548,29 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       const resume = state.taskResumeState
       const defaultPreset = state.settings?.defaultTaskViewPreset ?? 'all'
       // Why: must match the exact query TaskPage's resume effect mounts with,
-      // otherwise the warm cache key (e.g. 'is:open') misses the page's actual
-      // fetch key (e.g. '') and the prefetch is wasted. When the user has an
-      // explicit cleared custom search (preset === null), preserve the empty
-      // query so both sides agree.
+      // otherwise the warm cache key (e.g. 'is:issue is:open') misses the
+      // page's actual fetch key and the prefetch is wasted. When the user has
+      // an explicit custom search (preset === null), preserve it so both sides
+      // agree.
       const query =
         resume?.githubItemsPreset === null
           ? (resume.githubItemsQuery ?? '').trim()
           : presetToQuery(resume?.githubItemsPreset ?? defaultPreset)
       for (const repo of selectedRepos) {
         state.prefetchWorkItems(repo.id, repo.path, PER_REPO_FETCH_LIMIT, query)
+      }
+    }
+    if (resolvedSource === 'linear' && typeof state.prefetchLinearIssues === 'function') {
+      const resume = state.taskResumeState
+      const query = (resume?.linearQuery ?? '').trim()
+      if (query) {
+        state.prefetchLinearIssues({ kind: 'search', query, limit: LINEAR_TASK_PREFETCH_LIMIT })
+      } else {
+        state.prefetchLinearIssues({
+          kind: 'list',
+          filter: resume?.linearPreset ?? 'all',
+          limit: LINEAR_TASK_PREFETCH_LIMIT
+        })
       }
     }
   },
@@ -722,9 +735,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     window.api.ui.set({ collapsedGroups: [] }).catch(console.error)
     set({ groupBy: g, collapsedGroups: new Set<string>() })
   },
-
-  showWorkspaceLineage: false,
-  setShowWorkspaceLineage: (v) => set({ showWorkspaceLineage: v }),
 
   sortBy: 'recent',
   setSortBy: (s) => set({ sortBy: s }),
@@ -918,7 +928,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           MAX_RIGHT_SIDEBAR_WIDTH
         ),
         groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
-        showWorkspaceLineage: ui.showWorkspaceLineage ?? false,
         sortBy,
         // Why: "Active only" is part of the user's sidebar working set, not a
         // transient render detail. Restoring it on launch keeps the filtered

@@ -2,7 +2,7 @@
  * E2E tests for the Tasks page.
  *
  * Verifies that opening the tasks view renders correctly and that the
- * repo selector, preset tabs, and close affordance are all present.
+ * repo selector, mode tabs, and close affordance are all present.
  */
 
 import { test, expect } from './helpers/orca-app'
@@ -28,13 +28,17 @@ test.describe('Tasks page', () => {
       .poll(async () => getStoreState<string>(orcaPage, 'activeView'), { timeout: 5_000 })
       .toBe('tasks')
 
-    // Titlebar label, close button, and preset tabs should all render.
+    // Titlebar label, close button, and mode tabs should all render.
     await expect(orcaPage.getByRole('button', { name: 'Close tasks' })).toBeVisible({
       timeout: 10_000
     })
     await expect(orcaPage.getByRole('button', { name: 'GitHub', exact: true })).toBeVisible()
-    await expect(orcaPage.getByRole('button', { name: 'All', exact: true })).toBeVisible()
-    await expect(orcaPage.getByPlaceholder(/GitHub search/i)).toBeVisible()
+    await expect(orcaPage.getByRole('button', { name: 'Issues', exact: true })).toBeVisible()
+    await expect(orcaPage.getByRole('button', { name: 'PRs', exact: true })).toBeVisible()
+    await expect(orcaPage.getByRole('button', { name: 'Projects', exact: true })).toBeVisible()
+    await expect(
+      orcaPage.getByRole('textbox', { name: /Search GitHub (issues|PRs)/i })
+    ).toBeVisible()
   })
 
   test('closing the tasks page returns to the previous view', async ({ orcaPage }) => {

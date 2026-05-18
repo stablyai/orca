@@ -1,101 +1,64 @@
-/**
- * Issue, review, and Comment meta sections for WorktreeCard.
- *
- * Why extracted: keeps WorktreeCard.tsx under the 400-line oxlint limit
- * while co-locating the HoverCard presentation for each metadata type.
- */
 import React from 'react'
 import { Badge } from '@/components/ui/badge'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
+import { Button } from '@/components/ui/button'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
-import { CircleDot, GitMerge, Pencil, Unlink } from 'lucide-react'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { CircleDot, ExternalLink, GitMerge, Pencil, StickyNote } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { LinearIcon } from '@/components/icons/LinearIcon'
 import CommentMarkdown from './CommentMarkdown'
-import { PullRequestIcon, prStateLabel, checksLabel } from './WorktreeCardHelpers'
-import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
+import { PullRequestIcon } from './WorktreeCardHelpers'
 import {
-  CLOSE_ALL_CONTEXT_MENUS_EVENT,
-  WORKTREE_CONTEXT_MENU_SCOPE_ATTR
-} from './WorktreeContextMenu'
+  IssueStateBadge,
+  LinearStateBadge,
+  ReviewChecksBadge,
+  ReviewStateBadge
+} from './WorktreeCardMetadataStatusBadges'
+import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import type { IssueInfo } from '../../../../shared/types'
 
-// ── Issue section ────────────────────────────────────────────────────
+export type WorktreeCardIssueDisplay =
+  | IssueInfo
+  | {
+      number: number
+      title: string
+      state?: IssueInfo['state']
+      url?: string
+      labels?: string[]
+    }
 
-type IssueSectionProps = {
-  issue:
-    | IssueInfo
-    | {
-        number: number
-        title: string
-        state?: IssueInfo['state']
-        url?: string
-        labels?: string[]
-      }
-  onClick: (e: React.MouseEvent) => void
+export type WorktreeCardLinearIssueDisplay = {
+  identifier: string
+  title: string
+  url?: string
+  stateName?: string
+  labels?: string[]
 }
 
-export function IssueSection({ issue, onClick }: IssueSectionProps): React.JSX.Element {
-  const labels = issue.labels ?? []
-  return (
-    <HoverCard openDelay={300}>
-      <HoverCardTrigger asChild>
-        <div
-          className="flex items-center gap-1.5 min-w-0 cursor-pointer group/meta -mx-1.5 px-1.5 py-0.5 rounded transition-colors hover:bg-background/40"
-          onClick={onClick}
-        >
-          <CircleDot className="size-3 shrink-0 text-muted-foreground opacity-60" />
-          <div className="flex-1 min-w-0 flex items-center gap-1.5 text-[11.5px] leading-none">
-            <span className="text-foreground opacity-80 font-medium shrink-0">#{issue.number}</span>
-            <span className="text-muted-foreground truncate group-hover/meta:text-foreground transition-colors">
-              {issue.title}
-            </span>
-          </div>
-        </div>
-      </HoverCardTrigger>
-      <HoverCardContent side="right" align="start" className="w-72 p-3 text-xs space-y-1.5">
-        <div className="font-semibold text-[13px]">
-          #{issue.number} {issue.title}
-        </div>
-        {issue.state && (
-          <div className="text-muted-foreground">
-            State: {issue.state === 'open' ? 'Open' : 'Closed'}
-          </div>
-        )}
-        {labels.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {labels.map((l) => (
-              <Badge key={l} variant="outline" className="h-4 px-1.5 text-[9px]">
-                {l}
-              </Badge>
-            ))}
-          </div>
-        )}
-        {issue.url && (
-          <a
-            href={issue.url}
-            target="_blank"
-            rel="noreferrer"
-            className="text-muted-foreground underline underline-offset-2 hover:text-foreground"
-          >
-            View on GitHub
-          </a>
-        )}
-      </HoverCardContent>
-    </HoverCard>
-  )
+type WorktreeCardMetaBadgesProps = {
+  issue: WorktreeCardIssueDisplay | null
+  linearIssue: WorktreeCardLinearIssueDisplay | null
+  review: WorktreeCardPrDisplay | null
+  comment: string | null
 }
 
-// ── Hosted review section ────────────────────────────────────────────
+type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
+  children: React.ReactElement
+  onEditIssue: (event: React.MouseEvent) => void
+  onEditComment: (event: React.MouseEvent) => void
+}
 
-type ReviewSectionProps = {
-  review: WorktreeCardPrDisplay
-  onEdit: () => void
-  onRemove: () => void
+function hasComment(comment: string | null): boolean {
+  return (comment ?? '').trim().length > 0
+}
+
+export function hasWorktreeCardDetails({
+  issue,
+  linearIssue,
+  review,
+  comment
+}: WorktreeCardMetaBadgesProps): boolean {
+  return Boolean(issue || linearIssue || review || hasComment(comment))
 }
 
 function getReviewLabel(review: WorktreeCardPrDisplay): 'MR' | 'PR' {
@@ -118,162 +81,310 @@ function getProviderName(review: WorktreeCardPrDisplay): string {
   return 'GitHub'
 }
 
-function ReviewIcon({ review }: { review: WorktreeCardPrDisplay }): React.JSX.Element {
+function ReviewIcon({
+  review,
+  className
+}: {
+  review: WorktreeCardPrDisplay
+  className?: string
+}): React.JSX.Element {
   const Icon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
+  // Why: the standalone CI glyph was removed from the card header, so linked
+  // PR metadata carries check health unless the review is already merged.
+  const checkTone =
+    review.state !== 'merged' && review.status === 'failure'
+      ? 'text-rose-500/85'
+      : review.state !== 'merged' && review.status === 'pending'
+        ? 'text-amber-500/85'
+        : review.state === 'open' && review.status === 'success'
+          ? 'text-emerald-500/80'
+          : null
   return (
     <Icon
       className={cn(
-        'size-3 shrink-0',
+        className,
+        checkTone,
         review.state === 'merged' && 'text-purple-600/70 dark:text-purple-400/70',
-        review.state === 'open' && 'text-emerald-500/80',
-        review.state === 'closed' && 'text-muted-foreground/60',
-        review.state === 'draft' && 'text-muted-foreground/50',
-        (!review.state || !['merged', 'open', 'closed', 'draft'].includes(review.state)) &&
-          'text-muted-foreground opacity-60'
+        !checkTone && review.state === 'open' && 'text-emerald-500/80',
+        !checkTone && review.state === 'closed' && 'text-muted-foreground/60',
+        !checkTone && review.state === 'draft' && 'text-muted-foreground/50',
+        !checkTone &&
+          (!review.state || !['merged', 'open', 'closed', 'draft'].includes(review.state)) &&
+          'text-muted-foreground opacity-70'
       )}
     />
   )
 }
 
-export function ReviewSection({ review, onEdit, onRemove }: ReviewSectionProps): React.JSX.Element {
-  const [menuOpen, setMenuOpen] = React.useState(false)
-  const [menuPoint, setMenuPoint] = React.useState({ x: 0, y: 0 })
-  const label = getReviewLabel(review)
-  const providerName = getProviderName(review)
-  const checksText =
-    review.status !== undefined && review.status !== 'neutral' ? checksLabel(review.status) : null
-  const canManageGitHubLink = review.provider === 'github'
-  const stateLabel = review.state ? prStateLabel(review.state) : null
-
-  const reviewRow = (
-    <>
-      <ReviewIcon review={review} />
-      <div className="flex-1 min-w-0 flex items-center gap-1.5 text-[11.5px] leading-none">
-        <span className="text-foreground opacity-80 shrink-0 group-hover/meta:underline">
-          {label} #{review.number}
-        </span>
-        <span className="text-muted-foreground truncate group-hover/meta:text-foreground transition-colors">
-          {review.title}
-        </span>
-      </div>
-    </>
-  )
-
-  const trigger = review.url ? (
-    <a
-      href={review.url}
-      target="_blank"
-      rel="noreferrer"
-      className="flex items-center gap-1.5 min-w-0 cursor-pointer group/meta -mx-1.5 px-1.5 py-0.5 rounded transition-colors hover:bg-background/40"
-      onClick={(e) => e.stopPropagation()}
-    >
-      {reviewRow}
-    </a>
-  ) : (
-    <button
-      type="button"
-      className="flex w-full items-center gap-1.5 min-w-0 cursor-pointer group/meta -mx-1.5 px-1.5 py-0.5 rounded transition-colors hover:bg-background/40 text-left"
-      onClick={(e) => {
-        e.stopPropagation()
-        onEdit()
-      }}
-    >
-      {reviewRow}
-    </button>
-  )
-
-  const content = (
-    <HoverCard openDelay={300}>
-      <HoverCardTrigger asChild>{trigger}</HoverCardTrigger>
-      <HoverCardContent side="right" align="start" className="w-72 p-3 text-xs space-y-1.5">
-        <div className="font-semibold text-[13px]">
-          {label} #{review.number} {review.title}
-        </div>
-        {(stateLabel || checksText) && (
-          <div className="flex items-center gap-2 text-muted-foreground">
-            {stateLabel && <span>State: {stateLabel}</span>}
-            {checksText && <span>Checks: {checksText}</span>}
-          </div>
-        )}
-        {review.url && (
-          <a
-            href={review.url}
-            target="_blank"
-            rel="noreferrer"
-            className="text-muted-foreground underline underline-offset-2 hover:text-foreground"
-            onClick={(e) => e.stopPropagation()}
-          >
-            View on {providerName}
-          </a>
-        )}
-      </HoverCardContent>
-    </HoverCard>
-  )
-
-  if (!canManageGitHubLink) {
-    return content
-  }
-
+function MetaIconBadge({
+  label,
+  children
+}: {
+  label: string
+  children: React.ReactNode
+}): React.JSX.Element {
   return (
-    <div
-      className="relative"
-      {...{ [WORKTREE_CONTEXT_MENU_SCOPE_ATTR]: 'pr' }}
-      onContextMenuCapture={(event) => {
-        event.preventDefault()
-        event.stopPropagation()
-        window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
-        const bounds = event.currentTarget.getBoundingClientRect()
-        setMenuPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
-        setMenuOpen(true)
-      }}
-    >
-      {content}
-      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
-        <DropdownMenuTrigger asChild>
-          <button
-            aria-hidden
-            tabIndex={-1}
-            className="pointer-events-none absolute size-px opacity-0"
-            style={{ left: menuPoint.x, top: menuPoint.y }}
-          />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-44" sideOffset={0} align="start">
-          <DropdownMenuItem onSelect={onEdit}>
-            <Pencil className="size-3.5" />
-            Update GH PR
-          </DropdownMenuItem>
-          <DropdownMenuItem variant="destructive" onSelect={onRemove}>
-            <Unlink className="size-3.5" />
-            Remove GH PR
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+    <span className="inline-flex size-3.5 shrink-0 items-center justify-center text-muted-foreground/70 hover:text-foreground [&>svg]:size-3.5">
+      {children}
+      <span className="sr-only">{label}</span>
+    </span>
+  )
+}
+
+function DetailHeader({
+  icon,
+  label,
+  actions
+}: {
+  icon: React.ReactNode
+  label: string
+  actions?: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+        {icon}
+        <span className="truncate">{label}</span>
+      </div>
+      {actions && <div className="flex shrink-0 items-center gap-0.5">{actions}</div>}
     </div>
   )
 }
 
-// ── Comment section ──────────────────────────────────────────────────
+function MetadataActionIcon({
+  label,
+  href,
+  onClick,
+  children
+}: {
+  label: string
+  href?: string
+  onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void
+  children: React.ReactNode
+}): React.JSX.Element {
+  const trigger = href ? (
+    <Button asChild variant="ghost" size="icon-xs" className="size-6">
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        aria-label={label}
+        onClick={(event) => event.stopPropagation()}
+      >
+        {children}
+      </a>
+    </Button>
+  ) : (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-xs"
+      className="size-6"
+      aria-label={label}
+      onClick={(event) => {
+        event.stopPropagation()
+        onClick?.(event)
+      }}
+    >
+      {children}
+    </Button>
+  )
 
-type CommentSectionProps = {
-  comment: string
-  onDoubleClick: (e: React.MouseEvent) => void
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  )
 }
 
-export function CommentSection({ comment, onDoubleClick }: CommentSectionProps): React.JSX.Element {
+export function WorktreeCardMetaBadges({
+  issue,
+  linearIssue,
+  review,
+  comment
+}: WorktreeCardMetaBadgesProps): React.JSX.Element | null {
+  if (!hasWorktreeCardDetails({ issue, linearIssue, review, comment })) {
+    return null
+  }
+
   return (
-    <HoverCard openDelay={400}>
-      <HoverCardTrigger asChild>
-        <CommentMarkdown
-          content={comment}
-          className="text-[11px] text-muted-foreground break-words -mx-1.5 px-1.5 py-0.5 rounded transition-colors leading-normal line-clamp-2 [&_.comment-md-p]:inline [&_.comment-md-p+.comment-md-p]:before:content-['_']"
-          onDoubleClick={onDoubleClick}
-        />
-      </HoverCardTrigger>
-      <HoverCardContent side="right" align="start" className="w-72 max-h-80 overflow-y-auto p-3">
-        <CommentMarkdown
-          content={comment}
-          className="text-[11.5px] text-foreground break-words leading-normal [&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-1"
-        />
+    <div className="ml-auto flex shrink-0 items-center gap-1" aria-label="Workspace metadata">
+      {issue && (
+        <MetaIconBadge label={`Linked issue #${issue.number}`}>
+          <CircleDot className="text-muted-foreground" />
+        </MetaIconBadge>
+      )}
+      {linearIssue && (
+        <MetaIconBadge label={`Linked Linear ${linearIssue.identifier}`}>
+          <LinearIcon className="text-muted-foreground" />
+        </MetaIconBadge>
+      )}
+      {review && (
+        <MetaIconBadge label={`Linked ${getReviewLabel(review)} #${review.number}`}>
+          <ReviewIcon review={review} />
+        </MetaIconBadge>
+      )}
+      {hasComment(comment) && (
+        <MetaIconBadge label="Workspace notes">
+          <StickyNote className="text-muted-foreground" />
+        </MetaIconBadge>
+      )}
+    </div>
+  )
+}
+
+export function WorktreeCardDetailsHover({
+  issue,
+  linearIssue,
+  review,
+  comment,
+  children,
+  onEditIssue,
+  onEditComment
+}: WorktreeCardDetailsHoverProps): React.JSX.Element {
+  if (!hasWorktreeCardDetails({ issue, linearIssue, review, comment })) {
+    return children
+  }
+
+  const reviewLabel = review ? getReviewLabel(review) : null
+  const reviewProvider = review ? getProviderName(review) : null
+  const issueLabels = issue?.labels ?? []
+
+  return (
+    <HoverCard openDelay={250} closeDelay={120}>
+      <HoverCardTrigger asChild>{children}</HoverCardTrigger>
+      <HoverCardContent
+        side="right"
+        align="start"
+        sideOffset={8}
+        className="w-80 max-h-[28rem] overflow-y-auto p-3 text-xs"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="space-y-3">
+          {issue && (
+            <section className="space-y-1.5">
+              <DetailHeader
+                icon={<CircleDot className="size-3 text-muted-foreground" />}
+                label={`Issue #${issue.number}`}
+                actions={
+                  <>
+                    {issue.url && (
+                      <MetadataActionIcon label="View on GitHub" href={issue.url}>
+                        <ExternalLink className="size-3" />
+                      </MetadataActionIcon>
+                    )}
+                    <MetadataActionIcon label="Edit issue" onClick={onEditIssue}>
+                      <Pencil className="size-3" />
+                    </MetadataActionIcon>
+                  </>
+                }
+              />
+              <div className="space-y-1.5">
+                <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
+                  {issue.title}
+                </div>
+                {(issue.state || issueLabels.length > 0) && (
+                  <div className="flex flex-wrap gap-1">
+                    {issue.state && <IssueStateBadge state={issue.state} />}
+                    {issueLabels.map((label) => (
+                      <Badge key={label} variant="outline" className="h-4 px-1.5 text-[9px]">
+                        {label}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          {linearIssue && (
+            <section className="space-y-1.5">
+              <DetailHeader
+                icon={<LinearIcon className="size-3 text-muted-foreground" />}
+                label={`Linear ${linearIssue.identifier}`}
+                actions={
+                  <>
+                    {linearIssue.url && (
+                      <MetadataActionIcon label="View on Linear" href={linearIssue.url}>
+                        <ExternalLink className="size-3" />
+                      </MetadataActionIcon>
+                    )}
+                  </>
+                }
+              />
+              <div className="space-y-1.5">
+                <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
+                  {linearIssue.title}
+                </div>
+                {((linearIssue.labels && linearIssue.labels.length > 0) ||
+                  linearIssue.stateName) && (
+                  <div className="flex flex-wrap gap-1">
+                    {linearIssue.stateName && (
+                      <LinearStateBadge stateName={linearIssue.stateName} />
+                    )}
+                    {(linearIssue.labels ?? []).map((label) => (
+                      <Badge key={label} variant="outline" className="h-4 px-1.5 text-[9px]">
+                        {label}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          {review && reviewLabel && reviewProvider && (
+            <section className="space-y-1.5">
+              <DetailHeader
+                icon={<ReviewIcon review={review} className="size-3" />}
+                label={`${reviewLabel} #${review.number}`}
+                actions={
+                  <>
+                    {review.url && (
+                      <MetadataActionIcon label={`View on ${reviewProvider}`} href={review.url}>
+                        <ExternalLink className="size-3" />
+                      </MetadataActionIcon>
+                    )}
+                  </>
+                }
+              />
+              <div className="space-y-1.5">
+                <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
+                  {review.title}
+                </div>
+                {(review.state || (review.status && review.status !== 'neutral')) && (
+                  <div className="flex flex-wrap gap-1">
+                    <ReviewStateBadge state={review.state} label={reviewLabel} />
+                    <ReviewChecksBadge status={review.status} />
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          {hasComment(comment) && (
+            <section className="space-y-1.5">
+              <DetailHeader
+                icon={<StickyNote className="size-3 text-muted-foreground" />}
+                label="Notes"
+                actions={
+                  <MetadataActionIcon label="Edit notes" onClick={onEditComment}>
+                    <Pencil className="size-3" />
+                  </MetadataActionIcon>
+                }
+              />
+              <div className="space-y-2">
+                <CommentMarkdown
+                  content={comment ?? ''}
+                  className="text-[11.5px] text-foreground break-words leading-normal [&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-1"
+                />
+              </div>
+            </section>
+          )}
+        </div>
       </HoverCardContent>
     </HoverCard>
   )

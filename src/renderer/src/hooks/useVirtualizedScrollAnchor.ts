@@ -21,6 +21,7 @@ type UseVirtualizedScrollAnchorOptions<
   rows: readonly TRow[]
   scrollElementRef: RefObject<TScrollElement | null>
   scrollOffsetRef: MutableRefObject<number>
+  shouldSkipRestore?: () => boolean
   totalSize: number
   virtualizer: Virtualizer<TScrollElement, TItemElement>
 }
@@ -45,6 +46,7 @@ export function useVirtualizedScrollAnchor<
   rows,
   scrollElementRef,
   scrollOffsetRef,
+  shouldSkipRestore,
   totalSize,
   virtualizer
 }: UseVirtualizedScrollAnchorOptions<TRow, TScrollElement, TItemElement>): void {
@@ -221,6 +223,9 @@ export function useVirtualizedScrollAnchor<
       // the anchor in that window writes scrollTop and fights the user's wheel.
       return
     }
+    if (shouldSkipRestore?.()) {
+      return
+    }
 
     const resolvedKey = rowIndexByKey.has(anchor.key)
       ? anchor.key
@@ -298,6 +303,7 @@ export function useVirtualizedScrollAnchor<
     rowIndexByKey,
     scrollElementRef,
     scrollOffsetRef,
+    shouldSkipRestore,
     totalSize,
     virtualizer,
     virtualizer.isScrolling

@@ -3,6 +3,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { joinPath } from '@/lib/path'
 import { toast } from 'sonner'
+import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal-links'
 import { openHttpLink } from '@/lib/http-link-routing'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
@@ -100,6 +101,7 @@ export type ConflictReviewState = {
   source: 'live-summary' | 'combined-diff-exclusion'
   snapshotTimestamp: number
   entries: ConflictReviewEntry[]
+  selectedFileId?: string
 }
 
 export type CombinedDiffSkippedConflict = {
@@ -239,6 +241,8 @@ export type EditorSlice = {
 
   // File explorer state
   expandedDirs: Record<string, Set<string>> // worktreeId -> set of expanded dir paths
+  collapseAllDirs: (worktreeId: string) => void
+  collapseDirSubtree: (worktreeId: string, dirPath: string) => void
   toggleDir: (worktreeId: string, dirPath: string) => void
   pendingExplorerReveal: {
     worktreeId: string
@@ -324,6 +328,13 @@ export type EditorSlice = {
     areaFilter?: string
   ) => void
   openConflictFile: (
+    worktreeId: string,
+    worktreePath: string,
+    entry: GitStatusEntry,
+    language: string
+  ) => void
+  openConflictReviewFile: (
+    reviewFileId: string,
     worktreeId: string,
     worktreePath: string,
     entry: GitStatusEntry,
@@ -705,6 +716,33 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   // File explorer
   expandedDirs: {},
+  collapseAllDirs: (worktreeId) =>
+    set((s) => {
+      const current = s.expandedDirs[worktreeId]
+      if (!current?.size) {
+        return s
+      }
+      return {
+        expandedDirs: {
+          ...s.expandedDirs,
+          [worktreeId]: new Set<string>()
+        }
+      }
+    }),
+  collapseDirSubtree: (worktreeId, dirPath) =>
+    set((s) => {
+      const current = s.expandedDirs[worktreeId]
+      if (!current?.size) {
+        return s
+      }
+      const next = new Set(
+        Array.from(current).filter((expandedDir) => !isPathInsideOrEqual(dirPath, expandedDir))
+      )
+      if (next.size === current.size) {
+        return s
+      }
+      return { expandedDirs: { ...s.expandedDirs, [worktreeId]: next } }
+    }),
   toggleDir: (worktreeId, dirPath) =>
     set((s) => {
       const current = s.expandedDirs[worktreeId] ?? new Set<string>()
@@ -1822,6 +1860,104 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       }
     })
     void openWorkspaceEditorItem(get(), absolutePath, worktreeId, entry.path, 'editor')
+  },
+
+  openConflictReviewFile: (reviewFileId, worktreeId, worktreePath, entry, language) => {
+    const absolutePath = joinPath(worktreePath, entry.path)
+    const reviewTab = (get().unifiedTabsByWorktree?.[worktreeId] ?? []).find(
+      (tab) => tab.entityId === reviewFileId && tab.contentType === 'conflict-review'
+    )
+    set((s) => {
+      const conflict = toOpenConflictMetadata(entry)
+      const existing = s.openFiles.find((f) => f.id === absolutePath)
+      const nextTracked =
+        entry.conflictStatus === 'unresolved' && entry.conflictKind
+          ? {
+              ...s.trackedConflictPathsByWorktree[worktreeId],
+              [entry.path]: entry.conflictKind
+            }
+          : s.trackedConflictPathsByWorktree[worktreeId]
+
+      if (!conflict) {
+        return s
+      }
+
+      const nextOpenFiles = existing
+        ? s.openFiles.map((f) =>
+            f.id === absolutePath
+              ? {
+                  ...f,
+                  mode: 'edit' as const,
+                  language,
+                  relativePath: entry.path,
+                  filePath: absolutePath,
+                  conflict,
+                  diffSource: undefined,
+                  skippedConflicts: undefined,
+                  conflictReview: undefined
+                }
+              : f.id === reviewFileId && f.conflictReview
+                ? {
+                    ...f,
+                    conflictReview: {
+                      ...f.conflictReview,
+                      selectedFileId: absolutePath
+                    }
+                  }
+                : f
+          )
+        : [
+            ...s.openFiles.map((f) =>
+              f.id === reviewFileId && f.conflictReview
+                ? {
+                    ...f,
+                    conflictReview: {
+                      ...f.conflictReview,
+                      selectedFileId: absolutePath
+                    }
+                  }
+                : f
+            ),
+            {
+              id: absolutePath,
+              filePath: absolutePath,
+              relativePath: entry.path,
+              worktreeId,
+              language,
+              isDirty: false,
+              mode: 'edit' as const,
+              conflict
+            }
+          ]
+
+      return {
+        openFiles: nextOpenFiles,
+        activeFileId: reviewFileId,
+        activeTabType: 'editor',
+        activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: reviewFileId },
+        activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' },
+        trackedConflictPathsByWorktree:
+          nextTracked === s.trackedConflictPathsByWorktree[worktreeId]
+            ? s.trackedConflictPathsByWorktree
+            : { ...s.trackedConflictPathsByWorktree, [worktreeId]: nextTracked }
+      }
+    })
+
+    // Why: the conflict file needs a normal editor backing tab for save/close
+    // flows, but selecting it from Conflict Review must keep the review tab
+    // visible. Create the backing tab beside the review tab, then restore focus.
+    void openWorkspaceEditorItem(
+      get(),
+      absolutePath,
+      worktreeId,
+      entry.path,
+      'editor',
+      undefined,
+      reviewTab?.groupId
+    )
+    if (reviewTab) {
+      get().activateTab?.(reviewTab.id)
+    }
   },
 
   // Why: Review conflicts is launched from Source Control into the editor area,

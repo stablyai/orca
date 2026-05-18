@@ -246,6 +246,7 @@ function buildRuntimeMobileOpenFilesProjection(openFiles: AppState['openFiles'])
       worktreeId: file.worktreeId,
       language: file.language,
       mode: file.mode,
+      diffSource: file.diffSource,
       isDirty: file.isDirty,
       isUntitled: file.isUntitled,
       markdownPreviewSourceFileId: file.markdownPreviewSourceFileId
@@ -586,6 +587,7 @@ function buildMobileFileTab(
   unifiedTabId?: string
 ): RuntimeMobileSessionFileTab {
   const title = file.relativePath.split(/[\\/]/).pop() || file.relativePath || 'File'
+  const diffSource = isMobileFileDiffSource(file.diffSource) ? file.diffSource : undefined
 
   return {
     type: 'file',
@@ -594,6 +596,8 @@ function buildMobileFileTab(
     filePath: file.filePath,
     relativePath: file.relativePath,
     language: file.language,
+    mode: file.mode === 'diff' ? 'diff' : 'edit',
+    ...(diffSource ? { diffSource } : {}),
     isDirty: file.isDirty,
     isActive: unifiedTabId
       ? state.groupsByWorktree[file.worktreeId]?.some(
@@ -601,6 +605,12 @@ function buildMobileFileTab(
         ) === true
       : state.activeFileId === file.id
   }
+}
+
+function isMobileFileDiffSource(
+  diffSource: AppState['openFiles'][number]['diffSource']
+): diffSource is 'staged' | 'unstaged' {
+  return diffSource === 'staged' || diffSource === 'unstaged'
 }
 
 function stableHashString(value: string): string {
