@@ -72,6 +72,12 @@ export function shellEscape(s: string): string {
   return `'${s.replace(/'/g, "'\\''")}'`
 }
 
+export function wrapRemoteCommandForPosixShell(command: string): string {
+  // Why: sshd asks the user's login shell to parse exec commands. Orca emits
+  // POSIX sh snippets; `exec` avoids leaving that shell around for relay bridges.
+  return `exec /bin/sh -c ${shellEscape(command)}`
+}
+
 function cmdEscape(s: string): string {
   return `"${s.replace(/"/g, '""')}"`
 }
@@ -200,7 +206,9 @@ export function spawnProxyCommand(
     proxy.kind === 'jump-host'
       ? // Why: ProxyJump is structured input, not a shell snippet. Spawn ssh
         // directly so jump-host values cannot escape through shell parsing.
-        spawn('ssh', ['-W', `${host}:${port}`, '--', proxy.jumpHost], { stdio: ['pipe', 'pipe', 'pipe'] })
+        spawn('ssh', ['-W', `${host}:${port}`, '--', proxy.jumpHost], {
+          stdio: ['pipe', 'pipe', 'pipe']
+        })
       : (() => {
           const escape = process.platform === 'win32' ? cmdEscape : shellEscape
           const expanded = proxy.command

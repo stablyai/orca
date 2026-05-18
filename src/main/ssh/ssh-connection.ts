@@ -18,6 +18,7 @@ import {
   buildConnectConfig,
   resolveEffectiveProxy,
   spawnProxyCommand,
+  wrapRemoteCommandForPosixShell,
   type SshConnectionCallbacks
 } from './ssh-connection-utils'
 export type { SshConnectionCallbacks } from './ssh-connection-utils'
@@ -70,7 +71,9 @@ export class SshConnection {
     if (!this.client) {
       throw new Error('Not connected')
     }
-    return new Promise((res, rej) => this.client!.exec(cmd, (e, ch) => (e ? rej(e) : res(ch))))
+    return new Promise((res, rej) =>
+      this.client!.exec(wrapRemoteCommandForPosixShell(cmd), (e, ch) => (e ? rej(e) : res(ch)))
+    )
   }
 
   async sftp(): Promise<SFTPWrapper> {
