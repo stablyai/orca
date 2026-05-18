@@ -28,6 +28,7 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 import { e2eConfig } from '@/lib/e2e-config'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -501,6 +502,7 @@ export function connectPanePty(
     // and the main-side guard short-circuits.
     tabId: deps.tabId,
     leafId: pane.leafId,
+    activate: deps.isActiveRef.current && deps.isVisibleRef.current,
     ...(shellOverride ? { shellOverride } : {}),
     ...(paneStartup?.telemetry ? { telemetry: paneStartup.telemetry } : {}),
     onPtyExit: onExit,
@@ -785,6 +787,7 @@ export function connectPanePty(
     // sequences don't leak into the shell. xterm.write() buffers internally
     // regardless of DOM visibility and the guard stays engaged via the
     // write-completion callback until xterm finishes parsing.
+    let replayEndsWithLineBreak = true
     const writeReplayData = (data: string): void => {
       // Why: drain any queued background bytes BEFORE the replay paint, so the
       // scheduler's deferred drain cannot land older bytes on top of the replay.
@@ -793,6 +796,12 @@ export function connectPanePty(
         manager.markPaneHasComplexScriptOutput(pane.id)
       }
       replayIntoTerminal(pane, deps.replayingPanesRef, data)
+      replayEndsWithLineBreak = /[\r\n]$/.test(data)
+    }
+    const terminateReplayLine = (): void => {
+      if (!replayEndsWithLineBreak) {
+        writeReplayData('\r\n')
+      }
     }
 
     const replayDataCallback = (data: string): void => {
@@ -894,6 +903,7 @@ export function connectPanePty(
       if (connectResult?.snapshot) {
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
         writeReplayData(connectResult.snapshot)
+        terminateReplayLine()
         // Snapshot reattach keeps a live session, so avoid the broader mode
         // reset. Focus reporting is the unsafe exception: preserving `?1004h`
         // can make restored shells ring BEL on pane focus/blur.
@@ -912,6 +922,7 @@ export function connectPanePty(
         // bits in the replayed data.
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
         writeReplayData(connectResult.replay)
+        terminateReplayLine()
         writeReplayData(POST_REPLAY_FOCUS_REPORTING_RESET)
         if (connectResult.coldRestore) {
           if (!isRemoteRuntimePtyId(ptyId)) {
@@ -1213,6 +1224,8 @@ export function connectPanePty(
             : null
           : existingPtyId
         : null
+    const detachedRemoteLeafPtyId =
+      restoredSessionId && isRemoteRuntimePtyId(restoredSessionId) ? restoredSessionId : null
     const candidateReattachSessionId =
       restoredSessionId && restoredSessionId !== detachedLivePtyId
         ? restoredSessionId
@@ -1229,7 +1242,7 @@ export function connectPanePty(
         ? candidateReattachSessionId
         : null
     recordPtyConnectDiagnostic(
-      `pane=${pane.id} tab=${deps.tabId} restored=${restoredPtyId} existing=${existingPtyId} detached=${detachedLivePtyId} reattach=${deferredReattachSessionId} hasTransport=${hasExistingPaneTransport} pendingKey=${pendingSpawnKey}`
+      `pane=${pane.id} tab=${deps.tabId} restored=${restoredPtyId} existing=${existingPtyId} detached=${detachedRemoteLeafPtyId ?? detachedLivePtyId} reattach=${deferredReattachSessionId} hasTransport=${hasExistingPaneTransport} pendingKey=${pendingSpawnKey}`
     )
 
     if (deferredReattachSessionId) {
@@ -1314,8 +1327,12 @@ export function connectPanePty(
           reportError(message)
           startFreshSpawn()
         })
-    } else if (detachedLivePtyId) {
-      recordPtyConnectDiagnostic(`pane=${pane.id} -> ATTACH detached=${detachedLivePtyId}`)
+    } else if (detachedRemoteLeafPtyId || detachedLivePtyId) {
+      // Why: mirrored web terminal layouts mount one pane per host leaf.
+      // Later leaves already have a pane transport, but must still attach to
+      // their exact remote PTY instead of spawning replacement host tabs.
+      const attachPtyId = detachedRemoteLeafPtyId ?? detachedLivePtyId!
+      recordPtyConnectDiagnostic(`pane=${pane.id} -> ATTACH detached=${attachPtyId}`)
       allowInitialIdleCacheSeed = false
       // Why: surface synchronous attach failures (e.g., the PTY died between
       // mount and remount, so window.api.pty.resize rejects) through
@@ -1328,7 +1345,7 @@ export function connectPanePty(
       // the store and lands in this branch again in a loop.
       try {
         transport.attach({
-          existingPtyId: detachedLivePtyId,
+          existingPtyId: attachPtyId,
           cols,
           rows,
           callbacks: {
@@ -1337,11 +1354,11 @@ export function connectPanePty(
             onError: reportError
           }
         })
-        deps.syncPanePtyLayoutBinding(pane.id, detachedLivePtyId)
-        deps.updateTabPtyId(deps.tabId, detachedLivePtyId)
+        deps.syncPanePtyLayoutBinding(pane.id, attachPtyId)
+        deps.updateTabPtyId(deps.tabId, attachPtyId)
       } catch (err) {
         reportError(err instanceof Error ? err.message : String(err))
-        deps.clearTabPtyId(deps.tabId, detachedLivePtyId)
+        deps.clearTabPtyId(deps.tabId, attachPtyId)
         startFreshSpawn()
       }
     } else {
@@ -1363,9 +1380,11 @@ export function connectPanePty(
               // produced a usable PTY ID, the remounted pane must issue its own
               // spawn instead of staying attached to a completed-but-empty
               // promise and rendering a dead terminal surface.
-              console.warn(
-                `Pending PTY spawn for tab ${deps.tabId} resolved without a PTY id, retrying fresh spawn`
-              )
+              if (!isWebTerminalSurfaceTabId(deps.tabId)) {
+                console.warn(
+                  `Pending PTY spawn for tab ${deps.tabId} resolved without a PTY id, retrying fresh spawn`
+                )
+              }
               startFreshSpawn()
               return
             }

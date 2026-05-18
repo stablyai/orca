@@ -14,6 +14,7 @@ import {
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -56,7 +57,6 @@ type CombinedDiffTreeNode = SourceControlTreeNode<
 const COMBINED_DIFF_TREE_INDENT_PX = 12
 const COMBINED_DIFF_TREE_DIRECTORY_PADDING_PX = 8
 const COMBINED_DIFF_TREE_FILE_PADDING_PX = 20
-const ORCA_PATH_MIME = 'text/x-orca-file-path'
 const UNCOMMITTED_AREA_ORDER: readonly GitStagingArea[] = ['unstaged', 'staged', 'untracked']
 const UNCOMMITTED_AREA_LABELS: Record<GitStagingArea, string> = {
   unstaged: 'Changes',
@@ -350,7 +350,7 @@ function CombinedDiffFileTreeRow({
         }}
         draggable
         onDragStart={(event) => {
-          event.dataTransfer.setData(ORCA_PATH_MIME, joinPath(worktreePath, node.path))
+          event.dataTransfer.setData(WORKSPACE_FILE_PATH_MIME, joinPath(worktreePath, node.path))
           event.dataTransfer.effectAllowed = 'copy'
         }}
       >
@@ -402,7 +402,10 @@ function CombinedDiffFileTreeRow({
           event.preventDefault()
           return
         }
-        event.dataTransfer.setData(ORCA_PATH_MIME, joinPath(worktreePath, node.entry.path))
+        event.dataTransfer.setData(
+          WORKSPACE_FILE_PATH_MIME,
+          joinPath(worktreePath, node.entry.path)
+        )
         event.dataTransfer.effectAllowed = 'copy'
       }}
       onClick={() => onNavigate(node.entry)}

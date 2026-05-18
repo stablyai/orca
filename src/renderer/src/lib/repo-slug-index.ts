@@ -115,35 +115,49 @@ async function buildIndex(
   return next
 }
 
-/** Returns a lookup function `(slug) => Repo[]`. The lookup is stable
- *  across renders until `state.repos` changes; callers in deep trees can
- *  treat it as referentially equal inside a single render cycle. */
-export function useRepoSlugIndex(): (slug: string | null | undefined) => Repo[] {
+export type RepoSlugIndexState = {
+  lookupSlug: (slug: string | null | undefined) => Repo[]
+  ready: boolean
+}
+
+/** Returns a slug lookup plus readiness for the current repo snapshot. The
+ *  lookup is stable across renders until `state.repos` changes; callers in
+ *  deep trees can treat it as referentially equal inside a single render cycle. */
+export function useRepoSlugIndex(): RepoSlugIndexState {
   const repos = useAppStore((s) => s.repos)
-  const settings = useAppStore((s) => s.settings)
+  const activeRuntimeEnvironmentId = useAppStore((s) => s.settings?.activeRuntimeEnvironmentId)
+  const runtimeSettings = useMemo(
+    () => (activeRuntimeEnvironmentId ? { activeRuntimeEnvironmentId } : null),
+    [activeRuntimeEnvironmentId]
+  )
   const [index, setIndex] = useState<SlugIndex>(() => new Map())
+  const [ready, setReady] = useState(false)
   // Why: track the current repos snapshot so the effect can ignore stale
   // resolutions when repos change mid-flight.
   const generationRef = useRef(0)
 
   useEffect(() => {
     const gen = ++generationRef.current
-    void buildIndex(repos, settings).then((next) => {
+    setReady(false)
+    void buildIndex(repos, runtimeSettings).then((next) => {
       if (gen !== generationRef.current) {
         return
       }
       setIndex(next)
+      setReady(true)
     })
-  }, [repos, settings])
+  }, [repos, runtimeSettings])
 
   return useMemo(
-    () =>
-      (slug: string | null | undefined): Repo[] => {
+    () => ({
+      lookupSlug: (slug: string | null | undefined): Repo[] => {
         if (!slug) {
           return []
         }
         return index.get(slug.toLowerCase()) ?? []
       },
-    [index]
+      ready
+    }),
+    [index, ready]
   )
 }

@@ -124,6 +124,7 @@ describe('FsHandler', () => {
     const methods = Array.from(dispatcher._requestHandlers.keys())
     expect(methods).toContain('fs.readDir')
     expect(methods).toContain('fs.readFile')
+    expect(methods).toContain('fs.tempDir')
     expect(methods).toContain('fs.writeFile')
     expect(methods).toContain('fs.stat')
     expect(methods).toContain('fs.deletePath')
@@ -140,6 +141,10 @@ describe('FsHandler', () => {
 
     const notifMethods = Array.from(dispatcher._notificationHandlers.keys())
     expect(notifMethods).toContain('fs.unwatch')
+  })
+
+  it('tempDir returns the relay host temp directory', async () => {
+    await expect(dispatcher.callRequest('fs.tempDir')).resolves.toBe(tmpdir())
   })
 
   it('readDir returns sorted entries with directories first', async () => {

@@ -28,7 +28,8 @@ import {
 } from '../../../../shared/task-providers'
 import {
   DEFAULT_STATUS_BAR_ITEMS,
-  DEFAULT_WORKTREE_CARD_PROPERTIES
+  DEFAULT_WORKTREE_CARD_PROPERTIES,
+  normalizeWorktreeCardProperties
 } from '../../../../shared/constants'
 import {
   WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT,
@@ -56,6 +57,7 @@ function clampPetSize(size: number): number {
 // openTaskPage warm exactly the cache key the page will read on mount.
 function presetToQuery(presetId: TaskViewPresetId | null): string {
   switch (presetId) {
+    case 'all':
     case 'issues':
       return 'is:issue is:open'
     case 'my-issues':
@@ -67,7 +69,7 @@ function presetToQuery(presetId: TaskViewPresetId | null): string {
     case 'my-prs':
       return 'author:@me is:pr is:open'
     default:
-      return 'is:open'
+      return 'is:issue is:open'
   }
 }
 
@@ -94,6 +96,7 @@ const MAX_LEFT_SIDEBAR_WIDTH = 500
 // cap on wide displays. Use a large hard ceiling purely as a safety net for
 // corrupted/manually-edited values rather than as a product limit.
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
+const LINEAR_TASK_PREFETCH_LIMIT = 36
 // Why: bound disk growth for acknowledgedAgentsByPaneKey across hard quits —
 // in-session cleanup (agent-status.ts) prunes on pane lifecycle, but crash/
 // forced-kill paths leave entries pinned. Mirrors HYDRATE_MAX_AGE_MS in
@@ -547,16 +550,29 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       const resume = state.taskResumeState
       const defaultPreset = state.settings?.defaultTaskViewPreset ?? 'all'
       // Why: must match the exact query TaskPage's resume effect mounts with,
-      // otherwise the warm cache key (e.g. 'is:open') misses the page's actual
-      // fetch key (e.g. '') and the prefetch is wasted. When the user has an
-      // explicit cleared custom search (preset === null), preserve the empty
-      // query so both sides agree.
+      // otherwise the warm cache key (e.g. 'is:issue is:open') misses the
+      // page's actual fetch key and the prefetch is wasted. When the user has
+      // an explicit custom search (preset === null), preserve it so both sides
+      // agree.
       const query =
         resume?.githubItemsPreset === null
           ? (resume.githubItemsQuery ?? '').trim()
           : presetToQuery(resume?.githubItemsPreset ?? defaultPreset)
       for (const repo of selectedRepos) {
         state.prefetchWorkItems(repo.id, repo.path, PER_REPO_FETCH_LIMIT, query)
+      }
+    }
+    if (resolvedSource === 'linear' && typeof state.prefetchLinearIssues === 'function') {
+      const resume = state.taskResumeState
+      const query = (resume?.linearQuery ?? '').trim()
+      if (query) {
+        state.prefetchLinearIssues({ kind: 'search', query, limit: LINEAR_TASK_PREFETCH_LIMIT })
+      } else {
+        state.prefetchLinearIssues({
+          kind: 'list',
+          filter: resume?.linearPreset ?? 'all',
+          limit: LINEAR_TASK_PREFETCH_LIMIT
+        })
       }
     }
   },
@@ -591,12 +607,16 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         worktreeNavHistoryIndex: nextHistoryIndex
       }
     }),
-  openActivityPage: () =>
+  openActivityPage: () => {
+    if (get().settings?.experimentalActivity !== true) {
+      return
+    }
     set((state) => ({
       activeView: 'activity',
       previousViewBeforeActivity:
         state.activeView === 'activity' ? state.previousViewBeforeActivity : state.activeView
-    })),
+    }))
+  },
   closeActivityPage: () =>
     set((state) => ({
       activeView: state.previousViewBeforeActivity
@@ -646,9 +666,14 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         state.activeView === 'settings' ? state.previousViewBeforeSettings : state.activeView
     })),
   closeSettingsPage: () =>
-    set((state) => ({
-      activeView: state.previousViewBeforeSettings
-    })),
+    set((state) => {
+      const previousView =
+        state.previousViewBeforeSettings === 'activity' &&
+        state.settings?.experimentalActivity !== true
+          ? 'terminal'
+          : state.previousViewBeforeSettings
+      return { activeView: previousView }
+    }),
   settingsNavigationTarget: null,
   openSettingsTarget: (target) => set({ settingsNavigationTarget: target }),
   clearSettingsTarget: () => set({ settingsNavigationTarget: null }),
@@ -750,10 +775,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
   toggleWorktreeCardProperty: (prop) =>
     set((s) => {
-      const current = s.worktreeCardProperties || DEFAULT_WORKTREE_CARD_PROPERTIES
-      const updated = current.includes(prop)
-        ? current.filter((p) => p !== prop)
-        : [...current, prop]
+      const current = normalizeWorktreeCardProperties(s.worktreeCardProperties)
+      const next = current.includes(prop) ? current.filter((p) => p !== prop) : [...current, prop]
+      // Why: retired property toggles no longer exist, so their fields must
+      // stay visible even if an older saved preference hid them.
+      const updated = normalizeWorktreeCardProperties(next)
       window.api.ui.set({ worktreeCardProperties: updated }).catch(console.error)
       return { worktreeCardProperties: updated }
     }),
@@ -924,7 +950,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         collapsedGroups: new Set(ui.collapsedGroups ?? []),
         uiZoomLevel: ui.uiZoomLevel ?? 0,
         editorFontZoomLevel: ui.editorFontZoomLevel ?? 0,
-        worktreeCardProperties: ui.worktreeCardProperties ?? [...DEFAULT_WORKTREE_CARD_PROPERTIES],
+        worktreeCardProperties: normalizeWorktreeCardProperties(ui.worktreeCardProperties),
         workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
         workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
         workspaceBoardCompact: normalizeWorkspaceBoardCompact(ui.workspaceBoardCompact),

@@ -74,7 +74,9 @@ import {
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
 } from './runtime/sync-runtime-graph'
+import { useWebSessionTabsSync } from './runtime/web-session-tabs-sync'
 import { useGlobalFileDrop } from './hooks/useGlobalFileDrop'
+import { useRadixBodyPointerEventsRecovery } from './hooks/useRadixBodyPointerEventsRecovery'
 import { registerUpdaterBeforeUnloadBypass } from './lib/updater-beforeunload'
 import {
   buildWorkspaceSessionPayload,
@@ -219,6 +221,8 @@ function applyRemoteWorkspacePatchStatus(
 
 function App(): React.JSX.Element {
   useUnreadDockBadge()
+  useRadixBodyPointerEventsRecovery()
+  useWebSessionTabsSync()
   const [floatingTerminalOpen, setFloatingTerminalOpen] = useState(false)
 
   // Why: Zustand actions are referentially stable, but each individual
@@ -363,6 +367,7 @@ function App(): React.JSX.Element {
   const [collapsedSidebarHeaderWidth, setCollapsedSidebarHeaderWidth] = useState(0)
   const [mountedLazyModalIds, setMountedLazyModalIds] = useState(() => new Set<string>())
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
+  const [onboardingSettingsDetour, setOnboardingSettingsDetour] = useState(false)
 
   // Subscribe to IPC push events
   useIpcEvents()
@@ -392,6 +397,16 @@ function App(): React.JSX.Element {
 
   useEffect(() => {
     return onOnboardingReopened(setOnboarding)
+  }, [])
+
+  useEffect(() => {
+    if (activeView !== 'settings' || !shouldShowOnboarding(onboarding)) {
+      setOnboardingSettingsDetour(false)
+    }
+  }, [activeView, onboarding])
+
+  const beginOnboardingSettingsDetour = useCallback(() => {
+    setOnboardingSettingsDetour(true)
   }, [])
 
   // Why: sidebar open/close flips width instantaneously. useLayoutEffect
@@ -693,6 +708,9 @@ function App(): React.JSX.Element {
         state.tabBarOrderByWorktree === previousState.tabBarOrderByWorktree &&
         state.activeFileId === previousState.activeFileId &&
         state.activeFileIdByWorktree === previousState.activeFileIdByWorktree &&
+        state.browserTabsByWorktree === previousState.browserTabsByWorktree &&
+        state.browserPagesByWorkspace === previousState.browserPagesByWorkspace &&
+        state.activeBrowserTabIdByWorktree === previousState.activeBrowserTabIdByWorktree &&
         state.openFiles === previousState.openFiles &&
         state.editorDrafts === previousState.editorDrafts &&
         state.activeTabId === previousState.activeTabId &&
@@ -1518,9 +1536,13 @@ function App(): React.JSX.Element {
         <SshPassphraseDialog />
         <DeleteWorktreeDialog />
         <CrashReportDialog />
-        {onboarding && shouldShowOnboarding(onboarding) ? (
+        {onboarding && shouldShowOnboarding(onboarding) && !onboardingSettingsDetour ? (
           <Suspense fallback={null}>
-            <OnboardingFlow onboarding={onboarding} onOnboardingChange={setOnboarding} />
+            <OnboardingFlow
+              onboarding={onboarding}
+              onOnboardingChange={setOnboarding}
+              onSettingsDetourStart={beginOnboardingSettingsDetour}
+            />
           </Suspense>
         ) : null}
         <DictationController />

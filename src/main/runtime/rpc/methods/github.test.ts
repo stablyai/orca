@@ -156,13 +156,47 @@ describe('github RPC methods', () => {
         repo: 'repo-1',
         prNumber: 7,
         headSha: 'abc123',
+        prRepo: { owner: 'acme', repo: 'widgets' },
         noCache: true
       })
     )
 
-    expect(runtime.getRepoPRChecks).toHaveBeenCalledWith('repo-1', 7, 'abc123', {
-      noCache: true
-    })
+    expect(runtime.getRepoPRChecks).toHaveBeenCalledWith(
+      'repo-1',
+      7,
+      'abc123',
+      { owner: 'acme', repo: 'widgets' },
+      {
+        noCache: true
+      }
+    )
+    expect(response).toMatchObject({ ok: true, result: [] })
+  })
+
+  it('fetches PR comments on the runtime server with explicit PR repo', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRepoPRComments: vi.fn().mockResolvedValue([])
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('github.prComments', {
+        repo: 'repo-1',
+        prNumber: 7,
+        prRepo: { owner: 'acme', repo: 'widgets' },
+        noCache: true
+      })
+    )
+
+    expect(runtime.getRepoPRComments).toHaveBeenCalledWith(
+      'repo-1',
+      7,
+      { owner: 'acme', repo: 'widgets' },
+      {
+        noCache: true
+      }
+    )
     expect(response).toMatchObject({ ok: true, result: [] })
   })
 
@@ -254,11 +288,15 @@ describe('github RPC methods', () => {
       makeRequest('github.updatePRTitle', {
         repo: 'repo-1',
         prNumber: 7,
-        title: 'New title'
+        title: 'New title',
+        prRepo: { owner: 'acme', repo: 'widgets' }
       })
     )
 
-    expect(runtime.updateRepoPRTitle).toHaveBeenCalledWith('repo-1', 7, 'New title')
+    expect(runtime.updateRepoPRTitle).toHaveBeenCalledWith('repo-1', 7, 'New title', {
+      owner: 'acme',
+      repo: 'widgets'
+    })
     expect(response).toMatchObject({ ok: true, result: true })
   })
 
@@ -273,11 +311,34 @@ describe('github RPC methods', () => {
       makeRequest('github.mergePR', {
         repo: 'repo-1',
         prNumber: 7,
-        method: 'squash'
+        method: 'squash',
+        prRepo: { owner: 'acme', repo: 'widgets' }
       })
     )
 
-    expect(runtime.mergeRepoPR).toHaveBeenCalledWith('repo-1', 7, 'squash')
+    expect(runtime.mergeRepoPR).toHaveBeenCalledWith('repo-1', 7, 'squash', {
+      owner: 'acme',
+      repo: 'widgets'
+    })
+    expect(response).toMatchObject({ ok: true, result: { ok: true } })
+  })
+
+  it('updates PR state on the runtime server', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateRepoPRState: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('github.updatePRState', {
+        repo: 'repo-1',
+        prNumber: 7,
+        updates: { state: 'closed' }
+      })
+    )
+
+    expect(runtime.updateRepoPRState).toHaveBeenCalledWith('repo-1', 7, { state: 'closed' })
     expect(response).toMatchObject({ ok: true, result: { ok: true } })
   })
 

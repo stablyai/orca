@@ -56,7 +56,7 @@ export const GENERAL_EDITOR_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   },
   {
     title: 'Markdown Review Notes',
-    description: 'Show local markdown review note controls and the review panel.',
+    description: 'Show local markdown review note controls in rich editor mode.',
     keywords: ['markdown', 'review', 'notes', 'annotations', 'agents']
   }
 ]

@@ -63,9 +63,9 @@ describe('AgentsPane', () => {
   it('renders the keep-awake toggle from settings', () => {
     const markup = renderPane(getDefaultSettings('/tmp'))
 
-    expect(markup).toContain('Keep computer awake when Orca sees agents running')
+    expect(markup).toContain('Keep computer awake while agents are working')
     expect(markup).toContain(
-      'Prevents this computer from sleeping while Orca sees an agent working. The display can still turn off.'
+      'Keeps this computer awake while agents are working. The display can still turn off.'
     )
     expect(markup).toContain('aria-checked="false"')
   })
@@ -81,9 +81,7 @@ describe('AgentsPane', () => {
     })
 
     const keepAwakeSwitch = findSwitch(element)
-    expect(keepAwakeSwitch.props['aria-label']).toBe(
-      'Keep computer awake when Orca sees agents running'
-    )
+    expect(keepAwakeSwitch.props['aria-label']).toBe('Keep computer awake while agents are working')
     expect(keepAwakeSwitch.props['aria-checked']).toBe(false)
 
     const onClick = keepAwakeSwitch.props.onClick as () => void

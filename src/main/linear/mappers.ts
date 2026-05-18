@@ -1,13 +1,35 @@
 import type { Issue, IssueSearchResult } from '@linear/sdk'
-import type { LinearIssue } from '../../shared/types'
+import type { LinearIssue, LinearIssueChildSummary } from '../../shared/types'
+
+type IssueWithChildren = Issue & {
+  children: Issue['children']
+}
+
+type MapLinearIssueOptions = {
+  includeChildren?: boolean
+  includeProject?: boolean
+}
+
+function mapLinearIssueChild(issue: Issue): LinearIssueChildSummary {
+  return {
+    id: issue.id,
+    identifier: issue.identifier,
+    title: issue.title,
+    url: issue.url
+  }
+}
 
 // Why: the @linear/sdk uses lazy-loading for related entities — state, team,
 // and assignee are fetched on property access and return promises. This mapper
 // awaits them all so callers receive a plain serializable object safe for IPC
 // transfer. Labels use the labels() method on Issue but IssueSearchResult only
 // has labelIds (string UUIDs), so we conditionally resolve label names.
-export async function mapLinearIssue(issue: Issue | IssueSearchResult): Promise<LinearIssue> {
+export async function mapLinearIssue(
+  issue: Issue | IssueSearchResult,
+  options: MapLinearIssueOptions = {}
+): Promise<LinearIssue> {
   const [state, team, assignee] = await Promise.all([issue.state, issue.team, issue.assignee])
+  const project = options.includeProject ? await issue.project : undefined
 
   // Why: IssueSearchResult does not expose the labels() relation method — only
   // the raw labelIds array. For Issue instances we resolve actual label names;
@@ -27,6 +49,16 @@ export async function mapLinearIssue(issue: Issue | IssueSearchResult): Promise<
     labelIds = issue.labelIds as string[]
   }
 
+  let subIssues: LinearIssueChildSummary[] | undefined
+  if (options.includeChildren && 'children' in issue && typeof issue.children === 'function') {
+    try {
+      const childrenConnection = await (issue as IssueWithChildren).children({ first: 25 })
+      subIssues = childrenConnection.nodes.map(mapLinearIssueChild)
+    } catch {
+      // Swallow — child issues are secondary display data and creation still works without them.
+    }
+  }
+
   return {
     id: issue.id,
     identifier: issue.identifier,
@@ -43,6 +75,15 @@ export async function mapLinearIssue(issue: Issue | IssueSearchResult): Promise<
       name: team?.name ?? '',
       key: team?.key ?? ''
     },
+    project: project
+      ? {
+          id: project.id,
+          name: project.name,
+          url: project.url ?? undefined,
+          color: project.color ?? undefined
+        }
+      : undefined,
+    subIssues,
     labels: labelNames,
     labelIds,
     assignee: assignee
@@ -52,6 +93,7 @@ export async function mapLinearIssue(issue: Issue | IssueSearchResult): Promise<
           avatarUrl: assignee.avatarUrl ?? undefined
         }
       : undefined,
+    estimate: issue.estimate ?? null,
     priority: issue.priority,
     updatedAt: issue.updatedAt.toISOString()
   }

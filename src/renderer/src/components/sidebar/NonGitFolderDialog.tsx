@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
 
 const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -26,6 +27,8 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
     if (connectionId && folderPath) {
       void (async () => {
         try {
+          const stateBeforeAdd = useAppStore.getState()
+          const hadProjectBeforeAdd = stateBeforeAdd.repos.length > 0
           const result = await window.api.repos.addRemote({
             connectionId,
             remotePath: folderPath,
@@ -46,7 +49,15 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
           // worktree reveals it in the sidebar and opens the workspace.
           const folderWorktree = useAppStore.getState().worktreesByRepo[repo.id]?.[0]
           if (folderWorktree) {
-            activateAndRevealWorktree(folderWorktree.id)
+            const onboarding = await window.api.onboarding.get().catch(() => null)
+            // Why: SSH users can hit this dialog from Add Project after
+            // dismissing onboarding, bypassing the local addNonGitFolder path.
+            const startup = buildDismissedOnboardingFolderAgentStartup(
+              useAppStore.getState().settings,
+              onboarding,
+              hadProjectBeforeAdd
+            )
+            activateAndRevealWorktree(folderWorktree.id, startup ? { startup } : undefined)
           }
         } catch (err) {
           // This code path calls addRemote directly (not through the store),

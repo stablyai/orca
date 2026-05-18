@@ -1,11 +1,15 @@
 /* eslint-disable max-lines -- Why: terminal pane component co-locates title state, layout serialization, and portal rendering to keep pane lifecycle consistent. */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import type { IDisposable } from '@xterm/xterm'
+import { X } from 'lucide-react'
 import { useAppStore } from '../../store'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DEFAULT_TERMINAL_DIVIDER_DARK,
+  isTerminalBackgroundLight,
   normalizeColor,
   resolveEffectiveTerminalAppearance
 } from '@/lib/terminal-theme'
@@ -29,6 +33,7 @@ import { useTerminalFontZoom } from './useTerminalFontZoom'
 import CloseTerminalDialog from './CloseTerminalDialog'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
 import { TerminalErrorToast } from './TerminalErrorToast'
+import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import TerminalContextMenu from './TerminalContextMenu'
 import { useSystemPrefersDark } from './use-system-prefers-dark'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
@@ -49,6 +54,12 @@ import {
   getRemoteRuntimeTerminalHandle
 } from '@/runtime/runtime-terminal-stream'
 import { isPrimarySelectionEnabled, readPrimarySelectionText } from '@/lib/primary-selection'
+import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import { isTerminalSessionStateSaveFailure } from '../../../../shared/terminal-session-state-save-failure'
+import {
+  isSyntheticSinglePaneTitle,
+  sanitizeTerminalLayoutPaneTitles
+} from '@/lib/terminal-pane-title-sanitization'
 
 // Why: registry lives in a leaf module so the store slice can import it
 // without re-entering the `slice → TerminalPane → store → slice` cycle
@@ -70,6 +81,11 @@ type TerminalPaneProps = {
   isolatedPaneKey?: string | null
   onPtyExit: (ptyId: string) => void
   onCloseTab: () => void
+}
+
+function formatClipboardImagePasteError(error: unknown): string {
+  const detail = error instanceof Error ? error.message : String(error)
+  return `Image paste failed: ${detail}`
 }
 
 export default function TerminalPane({
@@ -133,6 +149,7 @@ export default function TerminalPane({
   const searchStateRef = useRef<SearchState>({ query: '', caseSensitive: false, regex: false })
   const [closeConfirmPaneId, setCloseConfirmPaneId] = useState<number | null>(null)
   const [terminalError, setTerminalError] = useState<string | null>(null)
+  const [sessionStateSaveFailureOpen, setSessionStateSaveFailureOpen] = useState(false)
   // Why: override state lives in a plain Map for perf (safeFit reads it on
   // every resize). This counter forces a re-render when overrides change so
   // the mobile-fit banner appears/disappears. When an override is cleared
@@ -226,6 +243,7 @@ export default function TerminalPane({
   const [paneTitles, setPaneTitles] = useState<Record<number, string>>({})
   const paneTitlesRef = useRef<Record<number, string>>({})
   paneTitlesRef.current = paneTitles
+  const removedTitleLeafIdsRef = useRef<Set<string>>(new Set())
   const [renamingPaneId, setRenamingPaneId] = useState<number | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const renameInputRef = useRef<HTMLInputElement>(null)
@@ -235,6 +253,11 @@ export default function TerminalPane({
   // then call handleRenameSubmit, saving the title the user wanted to discard.
   const renameSubmittedRef = useRef(false)
   const onPtyErrorRef = useRef((_paneId: number, message: string) => {
+    if (isTerminalSessionStateSaveFailure(message)) {
+      setTerminalError(null)
+      setSessionStateSaveFailureOpen(true)
+      return
+    }
     setTerminalError((prev) => (prev ? `${prev}\n${message}` : message))
   })
 
@@ -247,8 +270,15 @@ export default function TerminalPane({
   )
   const clearCodexRestartNotice = useAppStore((store) => store.clearCodexRestartNotice)
   const savedLayout = useAppStore((store) => store.terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT)
+  const terminalTab = useAppStore(
+    (store) => (store.tabsByWorktree[worktreeId] ?? []).find((tab) => tab.id === tabId) ?? null
+  )
   const setTabLayout = useAppStore((store) => store.setTabLayout)
-  const initialLayoutRef = useRef(savedLayout)
+  const restoredLayout = useMemo(
+    () => (terminalTab ? sanitizeTerminalLayoutPaneTitles(savedLayout, terminalTab) : savedLayout),
+    [savedLayout, terminalTab]
+  )
+  const initialLayoutRef = useRef(restoredLayout)
   const updateTabTitle = useAppStore((store) => store.updateTabTitle)
   const setRuntimePaneTitle = useAppStore((store) => store.setRuntimePaneTitle)
   const clearRuntimePaneTitle = useAppStore((store) => store.clearRuntimePaneTitle)
@@ -258,6 +288,8 @@ export default function TerminalPane({
   const markTerminalTabUnread = useAppStore((store) => store.markTerminalTabUnread)
   const clearWorktreeUnread = useAppStore((store) => store.clearWorktreeUnread)
   const clearTerminalTabUnread = useAppStore((store) => store.clearTerminalTabUnread)
+  const openSpacePage = useAppStore((store) => store.openSpacePage)
+  const refreshWorkspaceSpace = useAppStore((store) => store.refreshWorkspaceSpace)
   const settings = useAppStore((store) => store.settings)
   // Why: Windows is the only platform where bare right-click is repurposed as
   // a paste gesture; on macOS/Linux the terminal still owns right-click for the
@@ -278,6 +310,14 @@ export default function TerminalPane({
       consumeTabStartupCommand(tabId)
     }
   }, [startup, tabId, consumeTabStartupCommand])
+
+  const openDiskSpaceAnalyzer = useCallback(() => {
+    setSessionStateSaveFailureOpen(false)
+    openSpacePage()
+    void refreshWorkspaceSpace().catch((err: unknown) => {
+      console.warn('Failed to refresh Space Analyzer after terminal session save failure:', err)
+    })
+  }, [openSpacePage, refreshWorkspaceSpace])
 
   useEffect(() => {
     if (setupSplit) {
@@ -366,15 +406,71 @@ export default function TerminalPane({
     // Preserve pane titles — uses the live React state (via ref) rather than
     // the stale Zustand value because React state reflects in-flight title
     // edits that haven't been persisted yet.
+    const titlesByLeafId: Record<string, string> = {}
+    const removedTitleLeafIds = removedTitleLeafIdsRef.current
+    for (const pane of currentPanes) {
+      const existingTitle = existing?.titlesByLeafId?.[pane.leafId]
+      if (existingTitle && !removedTitleLeafIds.has(pane.leafId)) {
+        titlesByLeafId[pane.leafId] = existingTitle
+      }
+    }
+    // Why: active agents can trigger layout persists while pane-title React
+    // state is catching up. Preserve existing leaf titles unless this pane
+    // explicitly removed them, then overlay the live local pane-title state.
     const titles = paneTitlesRef.current
-    const titleEntries = currentPanes
-      .filter((p) => titles[p.id])
-      .map((p) => [p.leafId, titles[p.id]] as const)
-    if (titleEntries.length > 0) {
-      layout.titlesByLeafId = Object.fromEntries(titleEntries)
+    for (const pane of currentPanes) {
+      const title = titles[pane.id]
+      if (title) {
+        titlesByLeafId[pane.leafId] = title
+        removedTitleLeafIds.delete(pane.leafId)
+      }
+    }
+    if (Object.keys(titlesByLeafId).length > 0) {
+      layout.titlesByLeafId = titlesByLeafId
     }
     setTabLayout(tabId, layout)
   }, [tabId, setTabLayout])
+
+  useEffect(() => {
+    if (!terminalTab) {
+      return
+    }
+    const sanitized = sanitizeTerminalLayoutPaneTitles(savedLayout, terminalTab)
+    if (sanitized !== savedLayout) {
+      setTabLayout(tabId, sanitized)
+    }
+  }, [savedLayout, setTabLayout, tabId, terminalTab])
+
+  useEffect(() => {
+    if (!terminalTab) {
+      return
+    }
+    const manager = managerRef.current
+    if (!manager) {
+      return
+    }
+    const panes = manager.getPanes()
+    if (panes.length !== 1) {
+      return
+    }
+    const paneId = panes[0].id
+    const currentTitle = paneTitlesRef.current[paneId]
+    if (!currentTitle || !isSyntheticSinglePaneTitle(currentTitle, terminalTab)) {
+      return
+    }
+    const nextTitles = { ...paneTitlesRef.current }
+    delete nextTitles[paneId]
+    paneTitlesRef.current = nextTitles
+    setPaneTitles((prev) => {
+      if (!prev[paneId] || !isSyntheticSinglePaneTitle(prev[paneId], terminalTab)) {
+        return prev
+      }
+      const next = { ...prev }
+      delete next[paneId]
+      return next
+    })
+    persistLayoutSnapshot()
+  }, [paneCount, paneTitles, persistLayoutSnapshot, terminalTab])
 
   const syncPanePtyLayoutBinding = useCallback(
     (paneId: number, ptyId: string | null): void => {
@@ -805,12 +901,18 @@ export default function TerminalPane({
           // Why: clipboard has no text — check for an image. This is the
           // image-only clipboard case (e.g. screenshot) where Chromium's paste
           // event would never fire on a textarea. We save the image to a temp
-          // file and paste the path so the terminal process can access it.
-          return window.api.ui.saveClipboardImageAsTempFile().then((filePath) => {
-            if (filePath) {
-              pane.terminal.paste(filePath)
-            }
-          })
+          // file owned by the terminal host and paste that path.
+          const connectionId = getConnectionId(worktreeId) ?? null
+          return window.api.ui
+            .saveClipboardImageAsTempFile({ connectionId })
+            .then((filePath) => {
+              if (filePath) {
+                pane.terminal.paste(filePath)
+              }
+            })
+            .catch((error: unknown) => {
+              setTerminalError(formatClipboardImagePasteError(error))
+            })
         })
         .catch(() => {
           /* ignore clipboard failures */
@@ -874,7 +976,7 @@ export default function TerminalPane({
       container.removeEventListener('keydown', onKeyPaste, { capture: true })
       container.removeEventListener('paste', onPaste, { capture: true })
     }
-  }, [isActive])
+  }, [isActive, worktreeId])
 
   // Why: a click inside the terminal container is a deliberate interaction
   // with the pane — dismiss the bell indicator for this tab and worktree
@@ -994,34 +1096,7 @@ export default function TerminalPane({
     setRenamingPaneId(paneId)
   }, [])
 
-  const handleRenameSubmit = useCallback(() => {
-    if (renamingPaneId === null || renameSubmittedRef.current) {
-      return
-    }
-    renameSubmittedRef.current = true
-    const trimmed = renameValue.trim()
-    if (trimmed.length === 0) {
-      // Empty input — just cancel, don't change anything.
-      setRenamingPaneId(null)
-      return
-    }
-    setPaneTitles((prev) => ({ ...prev, [renamingPaneId]: trimmed }))
-    // Eagerly update the ref so persistLayoutSnapshot (which reads
-    // paneTitlesRef.current) sees the new title immediately, without
-    // waiting for React to re-render and assign it during the next
-    // render pass.
-    paneTitlesRef.current = { ...paneTitlesRef.current, [renamingPaneId]: trimmed }
-    setRenamingPaneId(null)
-    // Persist immediately so the title survives restarts.
-    persistLayoutSnapshot()
-  }, [renamingPaneId, renameValue, persistLayoutSnapshot])
-
-  const handleRenameCancel = useCallback(() => {
-    renameSubmittedRef.current = true
-    setRenamingPaneId(null)
-  }, [])
-
-  const handleRemoveTitle = useCallback(
+  const removePaneTitle = useCallback(
     (paneId: number) => {
       setPaneTitles((prev) => {
         if (!(paneId in prev)) {
@@ -1037,9 +1112,51 @@ export default function TerminalPane({
         delete next[paneId]
         paneTitlesRef.current = next
       }
+      const leafId = managerRef.current?.getPanes().find((pane) => pane.id === paneId)?.leafId
+      if (leafId) {
+        removedTitleLeafIdsRef.current.add(leafId)
+      }
       persistLayoutSnapshot()
     },
     [persistLayoutSnapshot]
+  )
+
+  const handleRenameSubmit = useCallback(() => {
+    if (renamingPaneId === null || renameSubmittedRef.current) {
+      return
+    }
+    renameSubmittedRef.current = true
+    const trimmed = renameValue.trim()
+    if (trimmed.length === 0) {
+      if (paneTitlesRef.current[renamingPaneId]) {
+        removePaneTitle(renamingPaneId)
+      }
+      setRenamingPaneId(null)
+      return
+    }
+    setPaneTitles((prev) => ({ ...prev, [renamingPaneId]: trimmed }))
+    // Eagerly update the ref so persistLayoutSnapshot (which reads
+    // paneTitlesRef.current) sees the new title immediately, without
+    // waiting for React to re-render and assign it during the next
+    // render pass.
+    paneTitlesRef.current = { ...paneTitlesRef.current, [renamingPaneId]: trimmed }
+    const leafId = managerRef.current?.getPanes().find((pane) => pane.id === renamingPaneId)?.leafId
+    if (leafId) {
+      removedTitleLeafIdsRef.current.delete(leafId)
+    }
+    setRenamingPaneId(null)
+    // Persist immediately so the title survives restarts.
+    persistLayoutSnapshot()
+  }, [renamingPaneId, renameValue, removePaneTitle, persistLayoutSnapshot])
+
+  const handleRenameCancel = useCallback(() => {
+    renameSubmittedRef.current = true
+    setRenamingPaneId(null)
+  }, [])
+
+  const handleRemoveTitle = useCallback(
+    (paneId: number) => removePaneTitle(paneId),
+    [removePaneTitle]
   )
 
   // Auto-focus and select-all in the rename input when the dialog opens.
@@ -1060,10 +1177,12 @@ export default function TerminalPane({
     managerRef,
     paneTransportsRef,
     paneCwdRef,
+    worktreeId,
     fallbackCwd: cwd ?? '',
     toggleExpandPane,
     onRequestClosePane: handleRequestClosePane,
     onSetTitle: handleStartRename,
+    onPasteError: setTerminalError,
     rightClickToPaste
   })
 
@@ -1142,6 +1261,15 @@ export default function TerminalPane({
   const effectiveAppearance = settings
     ? resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
     : null
+  // Why: app light/dark mode can diverge from the selected terminal theme, so
+  // pane-title contrast follows the effective terminal surface instead.
+  const titleUsesLightSurface = isTerminalBackgroundLight(
+    settings?.terminalColorOverrides?.background ?? effectiveAppearance?.theme?.background,
+    {
+      appSurface: effectiveAppearance?.mode,
+      backgroundOpacity: settings?.terminalBackgroundOpacity
+    }
+  )
 
   const terminalContainerStyle: CSSProperties = {
     // Why: split groups can keep one terminal visible in an unfocused group so
@@ -1164,18 +1292,19 @@ export default function TerminalPane({
         className="absolute inset-0 min-h-0 min-w-0"
         data-native-file-drop-target="terminal"
         data-terminal-tab-id={tabId}
+        data-pane-title-surface={titleUsesLightSurface ? 'light' : 'dark'}
         style={terminalContainerStyle}
         onContextMenuCapture={contextMenu.onContextMenuCapture}
         onMouseDownCapture={handlePrimarySelectionMiddleMouseDown}
         onAuxClickCapture={handlePrimarySelectionAuxClick}
         onDragOver={(e) => {
-          if (e.dataTransfer.types.includes('text/x-orca-file-path')) {
+          if (e.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)) {
             e.preventDefault()
             e.dataTransfer.dropEffect = 'copy'
           }
         }}
         onDrop={(e) => {
-          const filePath = e.dataTransfer.getData('text/x-orca-file-path')
+          const filePath = e.dataTransfer.getData(WORKSPACE_FILE_PATH_MIME)
           if (!filePath) {
             return
           }
@@ -1218,6 +1347,13 @@ export default function TerminalPane({
       />
       {terminalError && isActive && (
         <TerminalErrorToast error={terminalError} onDismiss={() => setTerminalError(null)} />
+      )}
+      {isActive && (
+        <TerminalSessionStateSaveFailureDialog
+          open={sessionStateSaveFailureOpen}
+          onDismiss={() => setSessionStateSaveFailureOpen(false)}
+          onOpenSpaceAnalyzer={openDiskSpaceAnalyzer}
+        />
       )}
       {activePane?.container &&
         createPortal(
@@ -1277,6 +1413,8 @@ export default function TerminalPane({
               <input
                 ref={renameInputRef}
                 className="pane-title-input"
+                aria-label="Pane title"
+                placeholder="Pane title"
                 value={renameValue}
                 onChange={(e) => setRenameValue(e.target.value)}
                 onKeyDown={(e) => {
@@ -1290,19 +1428,34 @@ export default function TerminalPane({
               />
             ) : (
               <>
-                <span className="pane-title-text" onClick={() => handleStartRename(pane.id)}>
-                  {title}
-                </span>
                 <button
-                  className="pane-title-close"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleRemoveTitle(pane.id)
-                  }}
-                  aria-label="Remove title"
+                  type="button"
+                  className="pane-title-text"
+                  onClick={() => handleStartRename(pane.id)}
+                  aria-label={`Edit pane title: ${title}`}
                 >
-                  ×
+                  {title}
                 </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      className="pane-title-close"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleRemoveTitle(pane.id)
+                      }}
+                      aria-label={`Remove pane title: ${title}`}
+                    >
+                      <X className="size-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={4}>
+                    Remove title
+                  </TooltipContent>
+                </Tooltip>
               </>
             )}
           </div>,

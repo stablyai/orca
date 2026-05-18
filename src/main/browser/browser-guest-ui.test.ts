@@ -22,6 +22,10 @@ describe('setupGuestContextMenu', () => {
       getURL: vi.fn(() => 'https://example.com'),
       canGoBack: vi.fn(() => true),
       canGoForward: vi.fn(() => false),
+      navigationHistory: {
+        canGoBack: vi.fn(() => true),
+        canGoForward: vi.fn(() => false)
+      },
       on: guestOnMock,
       off: guestOffMock,
       ...overrides
@@ -73,8 +77,10 @@ describe('setupGuestContextMenu', () => {
     screenGetCursorScreenPointMock.mockReturnValue({ x: 500, y: 375 })
     const guest = makeGuest({
       getURL: vi.fn(() => 'https://test.dev/page'),
-      canGoBack: vi.fn(() => true),
-      canGoForward: vi.fn(() => true)
+      navigationHistory: {
+        canGoBack: vi.fn(() => true),
+        canGoForward: vi.fn(() => true)
+      }
     })
     const renderer = makeRenderer()
 
@@ -97,6 +103,35 @@ describe('setupGuestContextMenu', () => {
       canGoBack: true,
       canGoForward: true
     })
+  })
+
+  it('reads navigation state from navigationHistory', () => {
+    const deprecatedCanGoBack = vi.fn(() => false)
+    const deprecatedCanGoForward = vi.fn(() => false)
+    const guest = makeGuest({
+      canGoBack: deprecatedCanGoBack,
+      canGoForward: deprecatedCanGoForward,
+      navigationHistory: {
+        canGoBack: vi.fn(() => true),
+        canGoForward: vi.fn(() => true)
+      }
+    })
+    const renderer = makeRenderer()
+
+    setupGuestContextMenu({
+      browserTabId,
+      guest,
+      resolveRenderer: () => renderer
+    })
+
+    triggerContextMenu(guest, { x: 50, y: 75 })
+
+    expect(deprecatedCanGoBack).not.toHaveBeenCalled()
+    expect(deprecatedCanGoForward).not.toHaveBeenCalled()
+    expect(rendererSendMock).toHaveBeenCalledWith(
+      'browser:context-menu-requested',
+      expect.objectContaining({ canGoBack: true, canGoForward: true })
+    )
   })
 
   it('does not send when renderer is unavailable', () => {

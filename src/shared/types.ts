@@ -12,11 +12,25 @@ import type { VoiceSettings } from './speech-types'
 import type { WorkspaceCleanupUIState } from './workspace-cleanup'
 import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './task-providers'
+import type { GitBranchChangeStatus } from './git-status-types'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
 export type { WorkspaceSource as WorkspaceCreateTelemetrySource } from './telemetry-events'
 export type { TaskProvider } from './task-providers'
+export type {
+  GitBranchChangeStatus,
+  GitConflictKind,
+  GitConflictOperation,
+  GitConflictResolutionStatus,
+  GitConflictStatusSource,
+  GitFileStatus,
+  GitStagingArea,
+  GitStatusEntry,
+  GitStatusResult,
+  GitUncommittedEntry,
+  GitUpstreamStatus
+} from './git-status-types'
 
 // ─── Shell PATH hydration ────────────────────────────────────────────
 // Why: shared so the main-side `HydrationResult` discriminator and the
@@ -266,6 +280,8 @@ export type DiffComment = {
   filePath: string
   /** Undefined means a legacy diff note. */
   source?: DiffCommentSource
+  /** Exact text selected when creating a markdown note, when available. */
+  selectedText?: string
   /** Inclusive range start. Must be <= lineNumber when present. */
   startLine?: number
   lineNumber: number
@@ -571,6 +587,8 @@ export type PRConflictSummary = {
   files: string[]
 }
 
+export type GitHubRepositoryIdentity = { owner: string; repo: string }
+
 export type PRInfo = {
   number: number
   title: string
@@ -583,6 +601,8 @@ export type PRInfo = {
   // Keeping the head SHA in cached PR metadata lets the checks panel poll the
   // correct commit without re-querying GitHub or guessing from local branch refs.
   headSha?: string
+  prRepo?: GitHubRepositoryIdentity
+  headRepo?: GitHubRepositoryIdentity
   conflictSummary?: PRConflictSummary
 }
 
@@ -599,7 +619,11 @@ export type PRCheckDetail = {
     | 'pending'
     | null
   url: string | null
+  checkRunId?: number
+  workflowRunId?: number
 }
+
+export type GitHubRerunPRChecksResult = { ok: true; count: number } | { ok: false; error: string }
 
 export type GitHubReactionContent =
   | '+1'
@@ -664,6 +688,20 @@ export type GitHubAssignableUser = {
   avatarUrl: string
 }
 
+export type GitHubPRCheckSummary = {
+  state: 'success' | 'failure' | 'pending' | 'none'
+  total: number
+  passed: number
+  failed: number
+  pending: number
+}
+
+export type GitHubPRReviewSummary = {
+  login: string
+  state?: string | null
+  avatarUrl?: string | null
+}
+
 export type GitHubPRFileViewedState = 'DISMISSED' | 'VIEWED' | 'UNVIEWED'
 
 export type GitHubWorkItem = {
@@ -678,6 +716,17 @@ export type GitHubWorkItem = {
   author: string | null
   branchName?: string
   baseRefName?: string
+  additions?: number
+  deletions?: number
+  changedFiles?: number
+  reviewDecision?: string | null
+  reviewRequests?: GitHubAssignableUser[]
+  latestReviews?: GitHubPRReviewSummary[]
+  assignees?: GitHubAssignableUser[]
+  checksSummary?: GitHubPRCheckSummary
+  mergeable?: PRMergeableState
+  mergeStateStatus?: string | null
+  maintainerCanModify?: boolean
   // Why: true when a PR's head lives on a fork (headRepositoryOwner !== selected repo owner).
   // The Start-from picker passes this to resolvePrBase so fork heads use
   // refs/pull/<N>/head for creation and a separate PR-head push target.
@@ -779,6 +828,8 @@ export type LinearIssue = {
     name: string
     key: string
   }
+  project?: LinearProjectSummary
+  subIssues?: LinearIssueChildSummary[]
   labels: string[]
   labelIds: string[]
   assignee?: {
@@ -786,8 +837,23 @@ export type LinearIssue = {
     displayName: string
     avatarUrl?: string
   }
+  estimate?: number | null
   priority: number
   updatedAt: string
+}
+
+export type LinearProjectSummary = {
+  id: string
+  name: string
+  url?: string
+  color?: string
+}
+
+export type LinearIssueChildSummary = {
+  id: string
+  identifier: string
+  title: string
+  url: string
 }
 
 export type LinearComment = {
@@ -816,12 +882,18 @@ export type GitHubIssueUpdate = {
   removeAssignees?: string[]
 }
 
+export type GitHubPullRequestStateUpdate = {
+  state: 'open' | 'closed'
+}
+
 export type LinearIssueUpdate = {
   stateId?: string
   title?: string
   assigneeId?: string | null
+  estimate?: number | null
   priority?: number
   labelIds?: string[]
+  projectId?: string | null
 }
 
 export type ClassifiedError = {
@@ -840,7 +912,7 @@ export type ClassifiedError = {
 // slices can reference the same structural type without importing from main.
 // Aliased as `OwnerRepo` in `src/main/github/gh-utils.ts` so main call sites
 // can continue using the short local name.
-export type GitHubOwnerRepo = { owner: string; repo: string }
+export type GitHubOwnerRepo = GitHubRepositoryIdentity
 
 // Why: GitLab-specific types live in `./gitlab-types` so they can grow
 // independently from the central types file (which is touched by every
@@ -1272,6 +1344,8 @@ export type OpenInApplication = {
   command: string
 }
 
+export type SourceControlViewMode = 'list' | 'tree'
+
 export type FloatingTerminalCwdRequest = {
   path?: string
 }
@@ -1371,6 +1445,8 @@ export type GlobalSettings = {
   openInApplications?: OpenInApplication[]
   rightSidebarOpenByDefault: boolean
   showGitIgnoredFiles?: boolean
+  /** Preferred Source Control changes layout. Per-user, not per-workspace. */
+  sourceControlViewMode: SourceControlViewMode
   /** Whether to show the Orca app name in the titlebar. */
   showTitlebarAppName: boolean
   /** Why: some users do not use the Tasks feature and prefer to keep the
@@ -1503,9 +1579,12 @@ export type GlobalSettings = {
   /** Legacy persisted key from before the sidekick -> pet rename. Read only
    *  during migration; new writes use experimentalPet. */
   experimentalSidekick?: boolean
-  /** Legacy persisted flag from when Activity was experimental. Activity is
-   *  now default-on and this no longer gates the page. */
+  /** Experimental: left-sidebar Agents view with a threaded feed for agent
+   *  completions, blocking states, unread state, and worktree creation events. */
   experimentalActivity: boolean
+  /** One-shot migration guard for defaulting the Agents view off for all
+   *  users. Once set, later explicit opt-ins persist normally. */
+  experimentalActivityDefaultedOffForAllUsers?: boolean
   /** Experimental: when creating a worktree, automatically symlink a
    *  user-configured set of files/folders from the primary checkout (e.g.
    *  `.env`, `node_modules`) into the new worktree. Opt-in while the
@@ -1686,6 +1765,7 @@ export type NotificationPermissionStatusResult = {
 export type WorktreeCardProperty =
   | 'status'
   | 'unread'
+  // Legacy persisted preference. CI status is now represented by linked PR metadata.
   | 'ci'
   | 'issue'
   | 'pr'
@@ -1970,67 +2050,8 @@ export type FsChangedPayload = {
 }
 
 // ─── Git Status ─────────────────────────────────────────────
-export type GitFileStatus = 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked' | 'copied'
-export type GitStagingArea = 'staged' | 'unstaged' | 'untracked'
-export type GitConflictKind =
-  | 'both_modified'
-  | 'both_added'
-  | 'both_deleted'
-  | 'added_by_us'
-  | 'added_by_them'
-  | 'deleted_by_us'
-  | 'deleted_by_them'
-
-export type GitConflictResolutionStatus = 'unresolved' | 'resolved_locally'
-export type GitConflictStatusSource = 'git' | 'session'
-export type GitConflictOperation = 'merge' | 'rebase' | 'cherry-pick' | 'unknown'
-
-// Compatibility note for non-upgraded consumers:
-// Any consumer that has not been upgraded to read `conflictStatus` may still
-// render `modified` styling via the `status` field (which is a compatibility
-// fallback, not a semantic claim). However, such consumers must NOT offer
-// file-existence-dependent affordances (diff loading, drag payloads, editable-
-// file opening) for entries where `conflictStatus === 'unresolved'` — the file
-// may not exist on disk (e.g. both_deleted). This affects file explorer
-// decorations, tab badges, and any surface outside Source Control.
-//
-// `conflictStatusSource` is never set by the main process. The renderer stamps
-// 'git' for live u-records and 'session' for Resolved locally state.
-export type GitUncommittedEntry = {
-  path: string
-  status: GitFileStatus
-  area: GitStagingArea
-  oldPath?: string
-  conflictKind?: GitConflictKind
-  conflictStatus?: GitConflictResolutionStatus
-  conflictStatusSource?: GitConflictStatusSource
-}
-
-export type GitStatusEntry = GitUncommittedEntry
-
-export type GitStatusResult = {
-  entries: GitStatusEntry[]
-  conflictOperation: GitConflictOperation
-  head?: string
-  branch?: string
-  // Why: porcelain v2 status already includes upstream/ahead/behind metadata.
-  // Folding it in lets refresh polling avoid a second pair of git subprocesses.
-  upstreamStatus?: GitUpstreamStatus
-  ignoredPaths?: string[]
-}
-
-// Why: when hasUpstream is false, ahead/behind are placeholder zeros, not a
-// "sync" signal — callers must check hasUpstream before treating 0/0 as in-sync.
-// Kept as a named type because explicit upstream refreshes can still fail for
-// reasons unrelated to working-tree status (e.g., no upstream is expected).
-export type GitUpstreamStatus = {
-  hasUpstream: boolean
-  upstreamName?: string
-  ahead: number
-  behind: number
-}
-
-export type GitBranchChangeStatus = 'modified' | 'added' | 'deleted' | 'renamed' | 'copied'
+// Re-exported from git-status-types.ts so mobile can share the runtime git
+// wire contract without importing this desktop-oriented aggregate type module.
 
 export type GitBranchChangeEntry = {
   path: string

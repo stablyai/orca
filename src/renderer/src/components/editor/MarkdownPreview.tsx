@@ -1272,6 +1272,7 @@ export default function MarkdownPreview({
                     groupId={sourceWorktree.id}
                     onFocusTerminal={focusTerminalTabSurface}
                     prompt={markdownReviewPrompt}
+                    promptDelivery="draft"
                     launchSource="notes_send"
                   />
                 </DropdownMenuContent>
@@ -1409,6 +1410,7 @@ function MarkdownReviewNotesPanel({
                 groupId={worktreeId}
                 onFocusTerminal={focusTerminalTabSurface}
                 prompt={prompt}
+                promptDelivery="draft"
                 launchSource="notes_send"
               />
             </DropdownMenuContent>

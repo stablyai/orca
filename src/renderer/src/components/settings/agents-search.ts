@@ -41,9 +41,9 @@ export const AGENTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     ]
   },
   {
-    title: 'Keep computer awake when Orca sees agents running',
+    title: 'Keep computer awake while agents are working',
     description:
-      'Prevents this computer from sleeping while Orca sees an agent working. The display can still turn off.',
-    keywords: ['awake', 'sleep', 'power', 'agent', 'running']
+      'Keeps this computer awake while agents are working. The display can still turn off.',
+    keywords: ['awake', 'sleep', 'power', 'agent', 'running', 'working']
   }
 ]

@@ -8,6 +8,7 @@ import { useAppStore } from '@/store'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { detectLanguage } from '@/lib/language-detect'
 import { getConnectionId } from '@/lib/connection-context'
+import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
 import { renameRuntimePath } from '@/runtime/runtime-file-client'
@@ -55,8 +56,6 @@ type UseFileExplorerDragDropResult = {
   /** Clears all native drag visual state (call after import completes) */
   clearNativeDragState: () => void
 }
-
-const ORCA_PATH_MIME = 'text/x-orca-file-path'
 
 // Native drag auto-scroll uses a very thin band; a wider zone matches IDE-style
 // tree dragging so users need not hug the scrollbar.
@@ -325,7 +324,7 @@ export function useFileExplorerDragDrop({
   const rootDragHandlers = {
     onDragOver: useCallback(
       (e: React.DragEvent) => {
-        const isInternal = e.dataTransfer.types.includes(ORCA_PATH_MIME)
+        const isInternal = e.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)
         const isNative = e.dataTransfer.types.includes('Files')
         if (!isInternal && !isNative) {
           return
@@ -340,7 +339,7 @@ export function useFileExplorerDragDrop({
       [tickDragEdgeScroll]
     ),
     onDragEnter: useCallback((e: React.DragEvent) => {
-      const isInternal = e.dataTransfer.types.includes(ORCA_PATH_MIME)
+      const isInternal = e.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)
       const isNative = !isInternal && e.dataTransfer.types.includes('Files')
       if (!isInternal && !isNative) {
         return
@@ -389,7 +388,7 @@ export function useFileExplorerDragDrop({
         // not the React drop handler. We only clear native drag visual state
         // here; the actual import is triggered from onFileDrop.
         clearNativeDragState()
-        const sourcePath = e.dataTransfer.getData(ORCA_PATH_MIME)
+        const sourcePath = e.dataTransfer.getData(WORKSPACE_FILE_PATH_MIME)
         if (sourcePath && worktreePath) {
           handleMoveDrop(sourcePath, worktreePath)
         }

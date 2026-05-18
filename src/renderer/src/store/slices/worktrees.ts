@@ -19,6 +19,10 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rp
 import { getHostedReviewCacheKey } from './hosted-review'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
+// Why: the runtime RPC default is intentionally bounded for CLI calls, but the
+// UI must hydrate the same large repo lists the desktop IPC path sees.
+const REMOTE_WORKTREE_LIST_PARITY_LIMIT = 10_000
+
 function arraysShallowEqual(a: string[] | undefined, b: string[] | undefined): boolean {
   if (a === b) {
     return true
@@ -104,10 +108,57 @@ function toVisibleTabType(contentType: string): WorkspaceVisibleTabType {
   return contentType === 'browser' ? 'browser' : contentType === 'terminal' ? 'terminal' : 'editor'
 }
 
+function toRuntimeWorktreeIdSelector(worktreeId: string): string {
+  return `id:${worktreeId}`
+}
+
 type WorktreeWithLineage = Worktree & {
   parentWorktreeId?: string | null
   childWorktreeIds?: string[]
   lineage?: WorktreeLineage | null
+}
+
+function isRuntimeSelectorNotFoundError(error: unknown): boolean {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'cause' in error &&
+    isRuntimeSelectorNotFoundError((error as { cause?: unknown }).cause)
+  ) {
+    return true
+  }
+  const code =
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    typeof (error as { code: unknown }).code === 'string'
+      ? (error as { code: string }).code
+      : null
+  const responseCode =
+    error &&
+    typeof error === 'object' &&
+    'response' in error &&
+    typeof (error as { response?: { error?: { code?: unknown } } }).response?.error?.code ===
+      'string'
+      ? (error as { response: { error: { code: string } } }).response.error.code
+      : null
+  const responseMessage =
+    error &&
+    typeof error === 'object' &&
+    'response' in error &&
+    typeof (error as { response?: { error?: { message?: unknown } } }).response?.error?.message ===
+      'string'
+      ? (error as { response: { error: { message: string } } }).response.error.message
+      : null
+  const message = error instanceof Error ? error.message : String(error)
+  return (
+    message === 'selector_not_found' ||
+    message.includes('selector_not_found') ||
+    code === 'selector_not_found' ||
+    responseCode === 'selector_not_found' ||
+    responseMessage === 'selector_not_found' ||
+    String(error).includes('selector_not_found')
+  )
 }
 
 function replaceWorktreeInRepoLists(
@@ -138,7 +189,7 @@ async function listWorktreesForRepo(
   const result = await callRuntimeRpc<{ worktrees: Worktree[] }>(
     target,
     'worktree.list',
-    { repo: repoId },
+    { repo: repoId, limit: REMOTE_WORKTREE_LIST_PARITY_LIMIT },
     // Why: remote environment hydration crosses the network. Bound the call
     // so startup can recover instead of leaving the renderer waiting forever.
     { timeoutMs: 15_000 }
@@ -192,7 +243,7 @@ async function persistWorktreeMeta(
   await callRuntimeRpc(
     target,
     'worktree.set',
-    { worktree: worktreeId, ...updates },
+    { worktree: toRuntimeWorktreeIdSelector(worktreeId), ...updates },
     { timeoutMs: 15_000 }
   )
 }
@@ -328,7 +379,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               target,
               'worktree.set',
               {
-                worktree: worktreeId,
+                worktree: toRuntimeWorktreeIdSelector(worktreeId),
                 ...(args.parentWorktreeId ? { parentWorktree: `id:${args.parentWorktreeId}` } : {}),
                 ...(args.noParent === true ? { noParent: true } : {})
               },
@@ -858,6 +909,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         })
       }
     } catch (err) {
+      if (isRuntimeSelectorNotFoundError(err)) {
+        void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+        return
+      }
       console.error('Failed to update worktree meta:', err)
       void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
     }
@@ -884,6 +939,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         try {
           await persistWorktreeMeta(settings, worktreeId, updates)
         } catch (err) {
+          if (isRuntimeSelectorNotFoundError(err)) {
+            void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+            return
+          }
           console.error('Failed to update worktree meta:', err)
           void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
         }
@@ -922,6 +981,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       isUnread: true,
       lastActivityAt: now
     }).catch((err) => {
+      if (isRuntimeSelectorNotFoundError(err)) {
+        void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+        return
+      }
       console.error('Failed to persist unread worktree state:', err)
       void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
     })
@@ -951,6 +1014,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }
 
     void persistWorktreeMeta(get().settings, worktreeId, { isUnread: false }).catch((err) => {
+      if (isRuntimeSelectorNotFoundError(err)) {
+        void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+        return
+      }
       console.error('Failed to persist cleared unread worktree state:', err)
       void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
     })
@@ -958,11 +1025,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
   bumpWorktreeActivity: (worktreeId) => {
     const now = Date.now()
+    let shouldPersist = false
     set((s) => {
       const worktree = findWorktreeById(s.worktreesByRepo, worktreeId)
       if (!worktree) {
         return {}
       }
+      shouldPersist = true
       // Skip sortEpoch bump for the active worktree. Terminal events
       // (PTY spawn, PTY exit) in the active worktree are side-effects of
       // the user clicking the card or interacting with the terminal —
@@ -981,7 +1050,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       }
     })
 
+    if (!shouldPersist) {
+      return
+    }
+
     void persistWorktreeMeta(get().settings, worktreeId, { lastActivityAt: now }).catch((err) => {
+      if (isRuntimeSelectorNotFoundError(err)) {
+        return
+      }
       console.error('Failed to persist worktree activity timestamp:', err)
       void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
     })
@@ -1276,6 +1352,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       }
 
       void persistWorktreeMeta(get().settings, worktreeId, updates).catch((err) => {
+        if (isRuntimeSelectorNotFoundError(err)) {
+          void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+          return
+        }
         console.error('Failed to persist worktree activation state:', err)
         void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
       })

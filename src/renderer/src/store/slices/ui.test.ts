@@ -116,6 +116,25 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().hideDefaultBranchWorkspace).toBe(true)
   })
 
+  it('restores retired card properties during hydration', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        worktreeCardProperties: ['inline-agents']
+      })
+    )
+
+    expect(store.getState().worktreeCardProperties).toEqual([
+      'status',
+      'unread',
+      'issue',
+      'pr',
+      'comment',
+      'inline-agents'
+    ])
+  })
+
   it('restores compact workspace board mode only from an explicit true', () => {
     const store = createUIStore()
 
@@ -417,6 +436,19 @@ describe('createUISlice hydratePersistedUI', () => {
     const expected = { githubMode: 'project', linearPreset: 'all', githubItemsPreset: 'my-prs' }
     expect(store.getState().taskResumeState).toEqual(expected)
     expect(setUI).toHaveBeenCalledWith({ taskResumeState: expected })
+  })
+
+  it('keeps retired card properties enabled when toggling Agent activity', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.setState({ worktreeCardProperties: ['inline-agents'] })
+    store.getState().toggleWorktreeCardProperty('inline-agents')
+
+    const expected = ['status', 'unread', 'issue', 'pr', 'comment']
+    expect(store.getState().worktreeCardProperties).toEqual(expected)
+    expect(setUI).toHaveBeenCalledWith({ worktreeCardProperties: expected })
   })
 })
 

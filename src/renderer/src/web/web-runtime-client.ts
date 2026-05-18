@@ -103,9 +103,9 @@ export class WebRuntimeClient {
   ): Promise<WebRuntimeSubscriptionHandle> {
     const client = new WebRuntimeClient(this.pairing)
     this.childClients.add(client)
-    const closeChild = (): void => {
+    const closeChild = (notifySubscriptions = false): void => {
       this.childClients.delete(client)
-      client.close()
+      client.close({ notifySubscriptions })
     }
     try {
       const wrappedCallbacks: SubscriptionCallbacks = {
@@ -161,15 +161,20 @@ export class WebRuntimeClient {
     }
   }
 
-  close(): void {
+  close(options: { notifySubscriptions?: boolean } = {}): void {
+    const shouldNotifySubscriptions = options.notifySubscriptions ?? true
     this.intentionallyClosed = true
     for (const child of Array.from(this.childClients)) {
-      child.close()
+      child.close({ notifySubscriptions: shouldNotifySubscriptions })
     }
     this.childClients.clear()
     this.clearTimers()
     this.rejectAllPending('Remote Orca runtime connection closed.')
-    this.notifySubscriptionsClosed()
+    if (shouldNotifySubscriptions) {
+      this.notifySubscriptionsClosed()
+    } else {
+      this.subscriptions.clear()
+    }
     if (this.ws) {
       this.ws.close()
       this.ws = null

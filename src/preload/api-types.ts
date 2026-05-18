@@ -38,6 +38,7 @@ import type {
   GitHubPRFileContents,
   GitHubPRReviewCommentInput,
   GitHubCommentResult,
+  GitHubOwnerRepo,
   GitHubWorkItem,
   GitHubWorkItemDetails,
   GitHubViewer,
@@ -64,6 +65,7 @@ import type {
   LinearWorkflowState,
   LinearLabel,
   LinearMember,
+  LinearProjectSummary,
   LinearTeam,
   MarkdownDocument,
   FloatingTerminalCwdRequest,
@@ -158,6 +160,7 @@ import type {
   MigrationUnsupportedPtyEntry
 } from '../shared/agent-status-types'
 import type {
+  RuntimeBrowserDriverState,
   RuntimeStatus,
   RuntimeSyncWindowGraph,
   RuntimeTerminalDriverState
@@ -386,9 +389,9 @@ export type RefreshAgentsResult = {
 }
 
 export type PreflightApi = {
-  check: (args?: { force?: boolean }) => Promise<PreflightStatus>
-  detectAgents: () => Promise<string[]>
-  refreshAgents: () => Promise<RefreshAgentsResult>
+  check: (args?: { force?: boolean; wslDistro?: string | null }) => Promise<PreflightStatus>
+  detectAgents: (args?: { wslDistro?: string | null }) => Promise<string[]>
+  refreshAgents: (args?: { wslDistro?: string | null }) => Promise<RefreshAgentsResult>
   detectRemoteAgents: (args: { connectionId: string }) => Promise<string[]>
 }
 
@@ -797,12 +800,21 @@ export type PreloadApi = {
       repoId?: string
       prNumber: number
       headSha?: string
+      prRepo?: GitHubOwnerRepo | null
       noCache?: boolean
     }) => Promise<PRCheckDetail[]>
+    rerunPRChecks: (args: {
+      repoPath: string
+      repoId?: string
+      prNumber: number
+      headSha?: string
+      failedOnly?: boolean
+    }) => Promise<{ ok: true; count: number } | { ok: false; error: string }>
     prComments: (args: {
       repoPath: string
       repoId?: string
       prNumber: number
+      prRepo?: GitHubOwnerRepo | null
       noCache?: boolean
     }) => Promise<PRComment[]>
     resolveReviewThread: (args: {
@@ -824,12 +836,26 @@ export type PreloadApi = {
       repoId?: string
       prNumber: number
       title: string
+      prRepo?: GitHubOwnerRepo | null
     }) => Promise<boolean>
     mergePR: (args: {
       repoPath: string
       repoId?: string
       prNumber: number
       method?: 'merge' | 'squash' | 'rebase'
+      prRepo?: GitHubOwnerRepo | null
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    updatePRState: (args: {
+      repoPath: string
+      repoId?: string
+      prNumber: number
+      updates: { state: 'open' | 'closed' }
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    requestPRReviewers: (args: {
+      repoPath: string
+      repoId?: string
+      prNumber: number
+      reviewers: string[]
     }) => Promise<{ ok: true } | { ok: false; error: string }>
     updateIssue: (args: {
       repoPath: string
@@ -1042,8 +1068,11 @@ export type PreloadApi = {
       title: string
       description?: string
       workspaceId?: string
+      parentIssueId?: string
+      projectId?: string | null
     }) => Promise<
-      { ok: true; id: string; identifier: string; url: string } | { ok: false; error: string }
+      | { ok: true; id: string; identifier: string; title: string; url: string }
+      | { ok: false; error: string }
     >
     getIssue: (args: { id: string; workspaceId?: string }) => Promise<LinearIssue | null>
     updateIssue: (args: {
@@ -1058,6 +1087,11 @@ export type PreloadApi = {
     }) => Promise<{ ok: true; id: string } | { ok: false; error: string }>
     issueComments: (args: { issueId: string; workspaceId?: string }) => Promise<LinearComment[]>
     listTeams: (args?: { workspaceId?: LinearWorkspaceSelection }) => Promise<LinearTeam[]>
+    listProjects: (args?: {
+      query?: string
+      limit?: number
+      workspaceId?: LinearWorkspaceSelection
+    }) => Promise<LinearProjectSummary[]>
     teamStates: (args: { teamId: string; workspaceId?: string }) => Promise<LinearWorkflowState[]>
     teamLabels: (args: { teamId: string; workspaceId?: string }) => Promise<LinearLabel[]>
     teamMembers: (args: { teamId: string; workspaceId?: string }) => Promise<LinearMember[]>
@@ -1564,6 +1598,8 @@ export type PreloadApi = {
         activate?: boolean
         tabId?: string
         leafId?: string
+        splitFromLeafId?: string
+        splitDirection?: 'horizontal' | 'vertical'
       }) => void
     ) => () => void
     onRequestTerminalCreate: (
@@ -1605,6 +1641,14 @@ export type PreloadApi = {
     onOpenFileFromMobile: (
       callback: (data: { worktreeId: string; filePath: string; relativePath: string }) => void
     ) => () => void
+    onOpenDiffFromMobile: (
+      callback: (data: {
+        worktreeId: string
+        filePath: string
+        relativePath: string
+        staged: boolean
+      }) => void
+    ) => () => void
     onMobileMarkdownRequest: (
       callback: (request: RuntimeMobileMarkdownRequest) => void
     ) => () => void
@@ -1616,7 +1660,9 @@ export type PreloadApi = {
     onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
     readClipboardText: () => Promise<string>
     readSelectionClipboardText: () => Promise<string>
-    saveClipboardImageAsTempFile: () => Promise<string | null>
+    saveClipboardImageAsTempFile: (args?: {
+      connectionId?: string | null
+    }) => Promise<string | null>
     writeClipboardText: (text: string) => Promise<void>
     writeSelectionClipboardText: (text: string) => Promise<void>
     writeClipboardImage: (dataUrl: string) => Promise<void>
@@ -1659,7 +1705,14 @@ export type PreloadApi = {
         driver: RuntimeTerminalDriverState
       }[]
     >
+    getBrowserDrivers: () => Promise<
+      {
+        browserPageId: string
+        driver: RuntimeBrowserDriverState
+      }[]
+    >
     restoreTerminalFit: (ptyId: string) => Promise<{ restored: boolean }>
+    reclaimBrowserForDesktop: (browserPageId: string) => Promise<{ reclaimed: boolean }>
     onTerminalFitOverrideChanged: (
       callback: (event: {
         ptyId: string
@@ -1670,6 +1723,9 @@ export type PreloadApi = {
     ) => () => void
     onTerminalDriverChanged: (
       callback: (event: { ptyId: string; driver: RuntimeTerminalDriverState }) => void
+    ) => () => void
+    onBrowserDriverChanged: (
+      callback: (event: { browserPageId: string; driver: RuntimeBrowserDriverState }) => void
     ) => () => void
   }
   runtimeEnvironments: {

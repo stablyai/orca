@@ -486,8 +486,10 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock,
       getURL: vi.fn(() => 'https://example.com'),
-      canGoBack: vi.fn(() => false),
-      canGoForward: vi.fn(() => false),
+      navigationHistory: {
+        canGoBack: vi.fn(() => false),
+        canGoForward: vi.fn(() => false)
+      },
       reload: vi.fn()
     }
     webContentsFromIdMock.mockImplementation((id: number) => {
@@ -1188,8 +1190,10 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock,
       getURL: vi.fn(() => 'https://example.com/'),
-      canGoBack: vi.fn(() => false),
-      canGoForward: vi.fn(() => false),
+      navigationHistory: {
+        canGoBack: vi.fn(() => false),
+        canGoForward: vi.fn(() => false)
+      },
       goBack: vi.fn(),
       goForward: vi.fn(),
       reload: vi.fn(),

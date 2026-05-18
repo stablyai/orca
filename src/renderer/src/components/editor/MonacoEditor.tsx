@@ -36,6 +36,7 @@ import { isMarkdownComment } from '@/lib/diff-comment-compat'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
 import { getDiffCommentPopoverLeft } from '../diff-comments/diff-comment-popover-position'
+import { isLinuxUserAgent } from '../terminal-pane/pane-helpers'
 
 type MonacoEditorProps = {
   filePath: string
@@ -640,7 +641,11 @@ export default function MonacoEditor({
             addExtraSpaceOnTop: false,
             autoFindInSelection: 'never',
             seedSearchStringFromSelection: 'never'
-          }
+          },
+          // Why: Monaco has its own Linux primary-selection integration; keep
+          // it aligned with Orca's app-level opt-out instead of relying on the
+          // global DOM hook, which does not own Monaco's rendered line surface.
+          selectionClipboard: settings?.primarySelectionMiddleClickPaste ?? isLinuxUserAgent()
         }}
         path={filePath}
         // Why: keepCurrentModel preserves the Monaco text model so undo/redo

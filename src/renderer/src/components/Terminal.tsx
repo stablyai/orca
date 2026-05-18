@@ -66,6 +66,13 @@ import {
   type ActivityTerminalPortalTarget
 } from './activity/activity-terminal-portal'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import {
+  activateWebRuntimeSessionTab,
+  closeWebRuntimeSessionTab,
+  createWebRuntimeSessionBrowserTab,
+  createWebRuntimeSessionTerminal,
+  isWebRuntimeSessionActive
+} from '@/runtime/web-runtime-session'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
@@ -86,6 +93,9 @@ function Terminal(): React.JSX.Element | null {
   const closeTab = useAppStore((s) => s.closeTab)
   const setActiveTab = useAppStore((s) => s.setActiveTab)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
+  const activeRuntimeEnvironmentId = useAppStore(
+    (s) => s.settings?.activeRuntimeEnvironmentId ?? null
+  )
   const setTabCustomTitle = useAppStore((s) => s.setTabCustomTitle)
   const setTabColor = useAppStore((s) => s.setTabColor)
   const consumeSuppressedPtyExit = useAppStore((s) => s.consumeSuppressedPtyExit)
@@ -563,6 +573,11 @@ function Terminal(): React.JSX.Element | null {
     if (!activeWorktreeId) {
       return
     }
+    // Why: in the paired web client, host session-tabs are authoritative.
+    // Creating a local fallback races the host's initial terminal and duplicates tabs.
+    if (isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+      return
+    }
 
     // Why: this fallback exists to give a newly activated/restored worktree a
     // focusable surface when the reconciled tab model has nothing renderable.
@@ -577,11 +592,26 @@ function Terminal(): React.JSX.Element | null {
     // activity and reshuffle the sidebar. Explicit "New Tab" actions
     // (handleNewTab below) still bump normally.
     createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
-  }, [workspaceSessionReady, activeWorktreeId, createTab, reconcileWorktreeTabModel])
+  }, [
+    workspaceSessionReady,
+    activeWorktreeId,
+    activeRuntimeEnvironmentId,
+    createTab,
+    reconcileWorktreeTabModel
+  ])
 
   const handleNewTab = useCallback(
     (shellOverride?: string) => {
       if (!activeWorktreeId) {
+        return
+      }
+      if (isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+        void createWebRuntimeSessionTerminal({
+          worktreeId: activeWorktreeId,
+          environmentId: activeRuntimeEnvironmentId,
+          command: shellOverride,
+          activate: true
+        })
         return
       }
       const newTab = createTab(activeWorktreeId, undefined, shellOverride)
@@ -618,7 +648,7 @@ function Terminal(): React.JSX.Element | null {
       // the new xterm. Matches the "+" menu path in TabBar.tsx.
       focusTerminalTabSurface(newTab.id)
     },
-    [activeWorktreeId, createTab, setActiveTabType, setTabBarOrder]
+    [activeRuntimeEnvironmentId, activeWorktreeId, createTab, setActiveTabType, setTabBarOrder]
   )
 
   const handleNewBrowserTab = useCallback(() => {
@@ -626,11 +656,19 @@ function Terminal(): React.JSX.Element | null {
       return
     }
     const defaultUrl = useAppStore.getState().browserDefaultUrl ?? 'about:blank'
+    if (isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+      void createWebRuntimeSessionBrowserTab({
+        worktreeId: activeWorktreeId,
+        environmentId: activeRuntimeEnvironmentId,
+        url: defaultUrl
+      })
+      return
+    }
     createBrowserTab(activeWorktreeId, defaultUrl, {
       title: 'New Browser Tab',
       focusAddressBar: true
     })
-  }, [activeWorktreeId, createBrowserTab])
+  }, [activeRuntimeEnvironmentId, activeWorktreeId, createBrowserTab])
 
   const handleDuplicateBrowserTab = useCallback(
     (browserTabId: string) => {
@@ -643,12 +681,21 @@ function Terminal(): React.JSX.Element | null {
       if (!source) {
         return
       }
+      if (isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+        void createWebRuntimeSessionBrowserTab({
+          worktreeId: activeWorktreeId,
+          environmentId: activeRuntimeEnvironmentId,
+          url: source.url,
+          profileId: source.sessionProfileId
+        })
+        return
+      }
       createBrowserTab(activeWorktreeId, source.url, {
         title: source.title,
         sessionProfileId: source.sessionProfileId
       })
     },
-    [activeWorktreeId, createBrowserTab]
+    [activeRuntimeEnvironmentId, activeWorktreeId, createBrowserTab]
   )
 
   const handleNewFile = useCallback(async () => {
@@ -691,6 +738,15 @@ function Terminal(): React.JSX.Element | null {
         return
       }
 
+      if (isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+        void closeWebRuntimeSessionTab({
+          worktreeId: owningWorktreeId,
+          tabId,
+          environmentId: activeRuntimeEnvironmentId
+        })
+        return
+      }
+
       const currentTabs = state.tabsByWorktree[owningWorktreeId] ?? []
       if (currentTabs.length <= 1) {
         closeTab(tabId)
@@ -726,6 +782,7 @@ function Terminal(): React.JSX.Element | null {
       closeTab(tabId)
     },
     [
+      activeRuntimeEnvironmentId,
       closeTab,
       setActiveBrowserTab,
       setActiveTab,
@@ -743,6 +800,14 @@ function Terminal(): React.JSX.Element | null {
       )
       const owningWorktreeId = owningWorktreeEntry?.[0] ?? null
       if (!owningWorktreeId) {
+        return
+      }
+      if (isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+        void closeWebRuntimeSessionTab({
+          worktreeId: owningWorktreeId,
+          tabId,
+          environmentId: activeRuntimeEnvironmentId
+        })
         return
       }
       const currentTabs = state.browserTabsByWorktree[owningWorktreeId] ?? []
@@ -777,6 +842,7 @@ function Terminal(): React.JSX.Element | null {
       closeBrowserTab(tabId)
     },
     [
+      activeRuntimeEnvironmentId,
       closeBrowserTab,
       setActiveBrowserTab,
       setActiveFile,
@@ -808,6 +874,20 @@ function Terminal(): React.JSX.Element | null {
         if (id === tabId) {
           continue
         }
+        const unifiedTab = (state.unifiedTabsByWorktree[activeWorktreeId] ?? []).find(
+          (candidate) => candidate.id === id || candidate.entityId === id
+        )
+        if (
+          isWebRuntimeSessionActive(activeRuntimeEnvironmentId) &&
+          (unifiedTab?.contentType === 'terminal' || unifiedTab?.contentType === 'browser')
+        ) {
+          void closeWebRuntimeSessionTab({
+            worktreeId: activeWorktreeId,
+            tabId: unifiedTab.contentType === 'browser' ? unifiedTab.id : unifiedTab.entityId,
+            environmentId: activeRuntimeEnvironmentId
+          })
+          continue
+        }
         if ((state.tabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)) {
           closeTab(id)
         } else if (
@@ -830,7 +910,14 @@ function Terminal(): React.JSX.Element | null {
         queueEditorCloseRequests(dirtyFileIds)
       }
     },
-    [activeWorktreeId, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests]
+    [
+      activeRuntimeEnvironmentId,
+      activeWorktreeId,
+      closeBrowserTab,
+      closeFile,
+      closeTab,
+      queueEditorCloseRequests
+    ]
   )
 
   const handleCloseTabsToRight = useCallback(
@@ -847,6 +934,20 @@ function Terminal(): React.JSX.Element | null {
       const rightIds = currentOrder.slice(index + 1)
       const dirtyFileIds: string[] = []
       for (const id of rightIds) {
+        const unifiedTab = (state.unifiedTabsByWorktree[activeWorktreeId] ?? []).find(
+          (candidate) => candidate.id === id || candidate.entityId === id
+        )
+        if (
+          isWebRuntimeSessionActive(activeRuntimeEnvironmentId) &&
+          (unifiedTab?.contentType === 'terminal' || unifiedTab?.contentType === 'browser')
+        ) {
+          void closeWebRuntimeSessionTab({
+            worktreeId: activeWorktreeId,
+            tabId: unifiedTab.contentType === 'browser' ? unifiedTab.id : unifiedTab.entityId,
+            environmentId: activeRuntimeEnvironmentId
+          })
+          continue
+        }
         if ((state.tabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)) {
           closeTab(id)
         } else if (
@@ -869,7 +970,14 @@ function Terminal(): React.JSX.Element | null {
         queueEditorCloseRequests(dirtyFileIds)
       }
     },
-    [activeWorktreeId, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests]
+    [
+      activeRuntimeEnvironmentId,
+      activeWorktreeId,
+      closeBrowserTab,
+      closeFile,
+      closeTab,
+      queueEditorCloseRequests
+    ]
   )
 
   const handleCloseAllFiles = useCallback(() => {
@@ -891,10 +999,17 @@ function Terminal(): React.JSX.Element | null {
 
   const handleActivateTab = useCallback(
     (tabId: string) => {
+      if (activeWorktreeId && isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+        void activateWebRuntimeSessionTab({
+          worktreeId: activeWorktreeId,
+          tabId,
+          environmentId: activeRuntimeEnvironmentId
+        })
+      }
       setActiveTab(tabId)
       setActiveTabType('terminal')
     },
-    [setActiveTab, setActiveTabType]
+    [activeRuntimeEnvironmentId, activeWorktreeId, setActiveTab, setActiveTabType]
   )
 
   const handleTogglePaneExpand = useCallback(
@@ -913,10 +1028,17 @@ function Terminal(): React.JSX.Element | null {
 
   const handleActivateBrowserTab = useCallback(
     (tabId: string) => {
+      if (activeWorktreeId && isWebRuntimeSessionActive(activeRuntimeEnvironmentId)) {
+        void activateWebRuntimeSessionTab({
+          worktreeId: activeWorktreeId,
+          tabId,
+          environmentId: activeRuntimeEnvironmentId
+        })
+      }
       setActiveBrowserTab(tabId)
       setActiveTabType('browser')
     },
-    [setActiveBrowserTab, setActiveTabType]
+    [activeRuntimeEnvironmentId, activeWorktreeId, setActiveBrowserTab, setActiveTabType]
   )
 
   // Keyboard shortcuts
@@ -998,7 +1120,7 @@ function Terminal(): React.JSX.Element | null {
         if (state.activeTabType === 'editor' && state.activeFileId) {
           handleCloseFile(state.activeFileId)
         } else if (state.activeTabType === 'browser' && state.activeBrowserTabId) {
-          closeBrowserTab(state.activeBrowserTabId)
+          handleCloseBrowserTab(state.activeBrowserTabId)
         }
         return
       }
@@ -1073,7 +1195,6 @@ function Terminal(): React.JSX.Element | null {
     handleNewTab,
     handleCloseTab,
     handleCloseBrowserTab,
-    closeBrowserTab,
     handleCloseFile
   ])
 

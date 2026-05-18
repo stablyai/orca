@@ -618,14 +618,14 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
 
         <SearchableSetting
           title="Markdown Review Notes"
-          description="Show local markdown review note controls and the review panel."
+          description="Show local markdown review note controls in rich editor mode."
           keywords={['markdown', 'review', 'notes', 'annotations', 'agents']}
           className="flex items-center justify-between gap-4 px-1 py-2"
         >
           <div className="space-y-0.5">
             <Label>Markdown Review Notes</Label>
             <p className="text-xs text-muted-foreground">
-              Show local markdown note controls, the review panel, and agent handoff actions.
+              Show local markdown note controls in rich editor mode and agent handoff actions.
             </p>
           </div>
           <button

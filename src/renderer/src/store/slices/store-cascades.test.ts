@@ -1808,4 +1808,28 @@ describe('createTab tabId hint', () => {
       warn.mockRestore()
     }
   })
+
+  it('ignores web mirror id hints instead of making them canonical host tab ids', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt-web-hint'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt-web-hint' })]
+      },
+      groupsByWorktree: {},
+      activeGroupIdByWorktree: {},
+      unifiedTabsByWorktree: {}
+    })
+
+    const hintedId = 'web-terminal-host-tab-1'
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const tab = store.getState().createTab(wt, undefined, undefined, { id: hintedId })
+      expect(tab.id).not.toBe(hintedId)
+      expect(tab.id).not.toMatch(/^web-terminal-/)
+      expect(warn).not.toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
+  })
 })

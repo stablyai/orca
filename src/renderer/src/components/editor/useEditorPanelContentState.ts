@@ -1,3 +1,6 @@
+/* oxlint-disable max-lines -- Why: content loading, retry, and external-change
+   subscriptions share in-flight caches and state setters; splitting them would
+   make the hook coordination harder to audit. */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
 import { getConnectionId } from '@/lib/connection-context'
@@ -72,6 +75,10 @@ export function useEditorPanelContentState({
   openFilesRef.current = openFiles
   const editorViewModeRef = useRef(editorViewMode)
   editorViewModeRef.current = editorViewMode
+  const selectedConflictReviewFile =
+    activeFile?.mode === 'conflict-review' && activeFile.conflictReview?.selectedFileId
+      ? (openFiles.find((file) => file.id === activeFile.conflictReview?.selectedFileId) ?? null)
+      : null
 
   const loadFileContent = useCallback(
     async (filePath: string, id: string, worktreeId?: string): Promise<void> => {
@@ -245,30 +252,38 @@ export function useEditorPanelContentState({
   )
 
   useEffect(() => {
-    if (!activeFile || activeFile.mode === 'conflict-review') {
+    const fileToLoad = selectedConflictReviewFile ?? activeFile
+    if (!fileToLoad || (activeFile?.mode === 'conflict-review' && !selectedConflictReviewFile)) {
       return
     }
-    if (activeFile.mode === 'edit' || activeFile.mode === 'markdown-preview') {
-      if (activeFile.conflict?.kind === 'conflict-placeholder') {
+    if (fileToLoad.mode === 'edit' || fileToLoad.mode === 'markdown-preview') {
+      if (fileToLoad.conflict?.kind === 'conflict-placeholder') {
         return
       }
-      if (!fileContents[activeFile.id]) {
-        void loadFileContent(activeFile.filePath, activeFile.id, activeFile.worktreeId)
+      if (!fileContents[fileToLoad.id]) {
+        void loadFileContent(fileToLoad.filePath, fileToLoad.id, fileToLoad.worktreeId)
       }
-      if (isChangesMode && !diffContents[activeFile.id]) {
-        void loadDiffContent(activeFile)
+      if (isChangesMode && !diffContents[fileToLoad.id]) {
+        void loadDiffContent(fileToLoad)
       }
     } else if (
-      activeFile.mode === 'diff' &&
-      activeFile.diffSource !== undefined &&
-      activeFile.diffSource !== 'combined-uncommitted' &&
-      activeFile.diffSource !== 'combined-branch' &&
-      activeFile.diffSource !== 'combined-commit' &&
-      !diffContents[activeFile.id]
+      fileToLoad.mode === 'diff' &&
+      fileToLoad.diffSource !== undefined &&
+      fileToLoad.diffSource !== 'combined-uncommitted' &&
+      fileToLoad.diffSource !== 'combined-branch' &&
+      fileToLoad.diffSource !== 'combined-commit' &&
+      !diffContents[fileToLoad.id]
     ) {
-      void loadDiffContent(activeFile)
+      void loadDiffContent(fileToLoad)
     }
-  }, [activeFile?.id, isChangesMode]) // eslint-disable-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    activeFile?.id,
+    activeFile?.mode,
+    activeFile?.conflictReview?.selectedFileId,
+    selectedConflictReviewFile?.id,
+    isChangesMode
+  ])
 
   useEditorPanelFileLoadRetry({
     activeFile,

@@ -36,6 +36,10 @@ const richMarkdownSizeEncoder = new TextEncoder()
 // Uint8Array on every render, reducing GC pressure for large files.
 const richMarkdownSizeBuffer = new Uint8Array(RICH_MARKDOWN_MAX_SIZE_BYTES + 1)
 
+export function getMarkdownSourceLineOffset(frontMatterRaw: string): number {
+  return (frontMatterRaw.match(/\r\n|\r|\n/g) ?? []).length
+}
+
 type FileContent = {
   content: string
   isBinary: boolean
@@ -74,6 +78,7 @@ export function EditorContent({
   fileContents,
   diffContents,
   editBuffers,
+  openFiles,
   worktreeEntries,
   resolvedLanguage,
   isMarkdown,
@@ -88,8 +93,10 @@ export function EditorContent({
   onCloseMarkdownTableOfContents = () => {},
   pendingEditorReveal,
   handleContentChange,
+  handleContentChangeForFile,
   handleDirtyStateHint,
   handleSave,
+  handleSaveForFile,
   reloadFileContent
 }: {
   activeFile: OpenFile
@@ -97,6 +104,7 @@ export function EditorContent({
   fileContents: Record<string, FileContent>
   diffContents: Record<string, GitDiffResult>
   editBuffers: Record<string, string>
+  openFiles: OpenFile[]
   worktreeEntries: GitStatusEntry[]
   resolvedLanguage: string
   isMarkdown: boolean
@@ -116,8 +124,10 @@ export function EditorContent({
     matchLength?: number
   } | null
   handleContentChange: (content: string) => void
+  handleContentChangeForFile: (file: OpenFile, content: string) => void
   handleDirtyStateHint: (dirty: boolean) => void
   handleSave: (content: string) => Promise<void>
+  handleSaveForFile: (file: OpenFile, content: string) => Promise<void>
   reloadFileContent: (file: OpenFile) => void
 }): React.JSX.Element {
   const editorViewStateKey =
@@ -132,13 +142,17 @@ export function EditorContent({
       : `${activeFile.id}::${viewStateScopeId}:preview`
   const monacoLanguage = resolvedLanguage === 'notebook' ? 'json' : resolvedLanguage
 
-  const openConflictFile = useAppStore((s) => s.openConflictFile)
+  const openConflictReviewFile = useAppStore((s) => s.openConflictReviewFile)
   const openConflictReview = useAppStore((s) => s.openConflictReview)
   const closeFile = useAppStore((s) => s.closeFile)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   const md = useMarkdownDocuments(activeFile, isMarkdown, mdViewMode, handleSave)
   const activeConflictEntry =
     worktreeEntries.find((entry) => entry.path === activeFile.relativePath) ?? null
+  const selectedConflictReviewFile =
+    activeFile.mode === 'conflict-review' && activeFile.conflictReview?.selectedFileId
+      ? (openFiles.find((file) => file.id === activeFile.conflictReview?.selectedFileId) ?? null)
+      : null
 
   const isCombinedDiff =
     activeFile.mode === 'diff' &&
@@ -162,7 +176,7 @@ export function EditorContent({
       onContentChange={handleContentChange}
       onSave={isMarkdown ? md.mdSave : handleSave}
       worktreeId={activeFile.worktreeId}
-      markdownAnnotationsEnabled={markdownReviewToolsEnabled && isMarkdown && mdViewMode !== 'rich'}
+      markdownAnnotationsEnabled={false}
       conflictDecorationsEnabled={activeFile.conflict?.conflictStatus === 'unresolved'}
       revealLine={
         pendingEditorReveal?.filePath === activeFile.filePath ? pendingEditorReveal.line : undefined
@@ -258,6 +272,10 @@ export function EditorContent({
                 markdownDocuments={md.markdownDocuments}
                 showTableOfContents={showMarkdownTableOfContents}
                 onCloseTableOfContents={onCloseMarkdownTableOfContents}
+                markdownAnnotationsEnabled={markdownReviewToolsEnabled}
+                markdownAnnotationFilePath={activeFile.relativePath}
+                markdownSourceLineOffset={fm ? getMarkdownSourceLineOffset(fm.raw) : 0}
+                markdownReviewContent={currentContent}
                 // Why: render the front-matter banner below the editor toolbar
                 // (inside the editor shell) so formatting controls remain at
                 // the top of the pane — the banner is read-only context, not
@@ -291,7 +309,7 @@ export function EditorContent({
               scrollCacheKey={`${editorViewStateKey}:preview`}
               showTableOfContents={showMarkdownTableOfContents}
               onCloseTableOfContents={onCloseMarkdownTableOfContents}
-              markdownAnnotationsEnabled={markdownReviewToolsEnabled && mdViewMode !== 'rich'}
+              markdownAnnotationsEnabled={false}
               {...md.previewProps}
             />
           </div>
@@ -306,18 +324,105 @@ export function EditorContent({
     return <div className="h-full min-h-0">{renderMonacoEditor(fc)}</div>
   }
 
+  const renderConflictReviewSelectedContent = (selectedFile: OpenFile): React.JSX.Element => {
+    if (selectedFile.conflict?.kind === 'conflict-placeholder') {
+      return <ConflictPlaceholderView file={selectedFile} />
+    }
+
+    const fc = fileContents[selectedFile.id]
+    if (!fc) {
+      return (
+        <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+          Loading...
+        </div>
+      )
+    }
+    if (fc.loadError) {
+      return (
+        <FileLoadErrorView message={fc.loadError} onRetry={() => reloadFileContent(selectedFile)} />
+      )
+    }
+    if (fc.isBinary) {
+      if (fc.isImage) {
+        return (
+          <ImageViewer
+            content={fc.content}
+            filePath={selectedFile.filePath}
+            mimeType={fc.mimeType}
+          />
+        )
+      }
+      return (
+        <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+          Binary file — cannot display
+        </div>
+      )
+    }
+
+    const selectedConflictEntry =
+      worktreeEntries.find((entry) => entry.path === selectedFile.relativePath) ?? null
+    const selectedLanguage = detectLanguage(selectedFile.relativePath)
+    const monacoSelectedLanguage = selectedLanguage === 'notebook' ? 'json' : selectedLanguage
+    const selectedViewStateKey = `${selectedFile.filePath}::${viewStateScopeId}`
+
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        {selectedFile.conflict && (
+          <ConflictBanner file={selectedFile} entry={selectedConflictEntry} />
+        )}
+        <div className="min-h-0 flex-1">
+          <MonacoEditor
+            key={`${viewStateScopeId}:${selectedFile.id}`}
+            filePath={selectedFile.filePath}
+            viewStateKey={selectedViewStateKey}
+            relativePath={selectedFile.relativePath}
+            content={editBuffers[selectedFile.id] ?? fc.content}
+            language={monacoSelectedLanguage}
+            onContentChange={(content) => handleContentChangeForFile(selectedFile, content)}
+            onSave={(content) => handleSaveForFile(selectedFile, content)}
+            worktreeId={selectedFile.worktreeId}
+            markdownAnnotationsEnabled={false}
+            conflictDecorationsEnabled={selectedFile.conflict?.conflictStatus === 'unresolved'}
+            revealLine={
+              pendingEditorReveal?.filePath === selectedFile.filePath
+                ? pendingEditorReveal.line
+                : undefined
+            }
+            revealColumn={
+              pendingEditorReveal?.filePath === selectedFile.filePath
+                ? pendingEditorReveal.column
+                : undefined
+            }
+            revealMatchLength={
+              pendingEditorReveal?.filePath === selectedFile.filePath
+                ? pendingEditorReveal.matchLength
+                : undefined
+            }
+          />
+        </div>
+      </div>
+    )
+  }
+
   if (activeFile.mode === 'conflict-review') {
     return (
       <ConflictReviewPanel
         file={activeFile}
         liveEntries={worktreeEntries}
         onOpenEntry={(entry) =>
-          openConflictFile(
+          openConflictReviewFile(
+            activeFile.id,
             activeFile.worktreeId,
             activeFile.filePath,
             entry,
             detectLanguage(entry.path)
           )
+        }
+        selectedFile={selectedConflictReviewFile}
+        selectedContent={
+          selectedConflictReviewFile
+            ? renderConflictReviewSelectedContent(selectedConflictReviewFile)
+            : null
         }
         onDismiss={() => closeFile(activeFile.id)}
         onRefreshSnapshot={() =>
@@ -381,7 +486,7 @@ export function EditorContent({
           initialAnchor={activeFile.markdownPreviewAnchor ?? null}
           showTableOfContents={showMarkdownTableOfContents}
           onCloseTableOfContents={onCloseMarkdownTableOfContents}
-          markdownAnnotationsEnabled={markdownReviewToolsEnabled && mdViewMode !== 'rich'}
+          markdownAnnotationsEnabled={false}
           {...md.previewProps}
         />
       </div>
@@ -525,7 +630,7 @@ export function EditorContent({
             scrollCacheKey={`${diffViewStateKey}:preview`}
             showTableOfContents={showMarkdownTableOfContents}
             onCloseTableOfContents={onCloseMarkdownTableOfContents}
-            markdownAnnotationsEnabled={markdownReviewToolsEnabled}
+            markdownAnnotationsEnabled={false}
             {...md.previewProps}
           />
         </div>

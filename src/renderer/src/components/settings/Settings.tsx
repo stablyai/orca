@@ -147,8 +147,18 @@ function computerUsePlatformLabel(args: { isWindows: boolean; isMac: boolean }):
 const SECTION_FLASH_CLASS = 'settings-section-flash'
 const SECTION_FLASH_DURATION_MS = 900
 
+function getSettingsScrollTarget(
+  sectionId: string,
+  container?: HTMLElement | null
+): HTMLElement | null {
+  return (
+    container?.querySelector<HTMLElement>(`[data-settings-section="${CSS.escape(sectionId)}"]`) ??
+    document.getElementById(sectionId)
+  )
+}
+
 function scrollSectionIntoView(sectionId: string, container?: HTMLElement | null): void {
-  const target = document.getElementById(sectionId)
+  const target = getSettingsScrollTarget(sectionId, container)
   if (!target) {
     return
   }
@@ -169,7 +179,7 @@ function scrollSectionIntoView(sectionId: string, container?: HTMLElement | null
 }
 
 function flashSectionHighlight(sectionId: string): void {
-  const target = document.getElementById(sectionId)
+  const target = getSettingsScrollTarget(sectionId)
   if (!target) {
     return
   }
@@ -211,6 +221,7 @@ function Settings(): React.JSX.Element {
   const removeRepo = useAppStore((s) => s.removeRepo)
   const settingsNavigationTarget = useAppStore((s) => s.settingsNavigationTarget)
   const clearSettingsTarget = useAppStore((s) => s.clearSettingsTarget)
+  const settingsSearchInputQuery = useAppStore((s) => s.settingsSearchInputQuery)
   const settingsSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const setSettingsSearchQuery = useAppStore((s) => s.setSettingsSearchQuery)
 
@@ -365,6 +376,15 @@ function Settings(): React.JSX.Element {
     )
     pendingNavSectionRef.current = paneSectionId
     pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
+    setMountedSectionIds((previous) => {
+      if (previous.has(paneSectionId)) {
+        return previous
+      }
+      return new Set(previous).add(paneSectionId)
+    })
+    // Why: target consumption stores refs, so bump state to guarantee the
+    // scroll effect runs even when the visible section set is otherwise stable.
+    setPendingNavRequestTick((tick) => tick + 1)
     clearSettingsTarget()
   }, [clearSettingsTarget, settings, settingsNavigationTarget])
 
@@ -784,8 +804,20 @@ function Settings(): React.JSX.Element {
     const pendingNavSectionId = pendingNavSectionRef.current
 
     if (scrollTargetId && pendingNavSectionId && visibleSectionIds.has(pendingNavSectionId)) {
-      scrollSectionIntoView(scrollTargetId, contentScrollRef.current)
-      flashSectionHighlight(scrollTargetId)
+      // Why: target navigation can arrive before the lazy section has mounted;
+      // keep the pending refs alive until the mounted-section update commits.
+      if (!getSettingsScrollTarget(scrollTargetId, contentScrollRef.current)) {
+        return
+      }
+      const scrollToPendingTarget = (): void => {
+        scrollSectionIntoView(scrollTargetId, contentScrollRef.current)
+        flashSectionHighlight(scrollTargetId)
+      }
+      scrollToPendingTarget()
+      // Why: mounting the target section can change settings-page height as
+      // panes hydrate, so repeat once after layout settles.
+      requestAnimationFrame(scrollToPendingTarget)
+      window.setTimeout(scrollToPendingTarget, 150)
       setActiveSectionId(pendingNavSectionId)
       pendingNavSectionRef.current = null
       pendingScrollTargetRef.current = null
@@ -941,7 +973,7 @@ function Settings(): React.JSX.Element {
         generalSections={generalNavSections}
         repoSections={repoNavSections}
         hasRepos={repos.length > 0}
-        searchQuery={settingsSearchQuery}
+        searchQuery={settingsSearchInputQuery}
         searchInputRef={searchInputRef}
         onBack={closeSettingsPageWithPromptGuard}
         onSearchChange={setSettingsSearchQuery}

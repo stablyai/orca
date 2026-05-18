@@ -93,6 +93,24 @@ describe('SshFilesystemProvider', () => {
     })
   })
 
+  describe('getTempDir', () => {
+    it('reads and caches the remote temp directory from the relay', async () => {
+      mux.request.mockResolvedValue('/var/folders/remote')
+
+      await expect(provider.getTempDir()).resolves.toBe('/var/folders/remote')
+      await expect(provider.getTempDir()).resolves.toBe('/var/folders/remote')
+
+      expect(mux.request).toHaveBeenCalledTimes(1)
+      expect(mux.request).toHaveBeenCalledWith('fs.tempDir', {})
+    })
+
+    it('falls back to /tmp when connected to an older relay', async () => {
+      mux.request.mockRejectedValue(Object.assign(new Error('Method not found'), { code: -32601 }))
+
+      await expect(provider.getTempDir()).resolves.toBe('/tmp')
+    })
+  })
+
   describe('writeFileBase64', () => {
     it('writes decoded bytes through SFTP', async () => {
       const written: Buffer[] = []

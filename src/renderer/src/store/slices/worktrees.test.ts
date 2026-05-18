@@ -253,7 +253,7 @@ describe('fetchWorktrees', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'worktree.list',
-      params: { repo: 'repo1' },
+      params: { repo: 'repo1', limit: 10_000 },
       timeoutMs: 15_000
     })
     expect(mockApi.worktrees.list).not.toHaveBeenCalled()
@@ -496,7 +496,7 @@ describe('worktree lineage state', () => {
       selector: 'env-1',
       method: 'worktree.set',
       params: {
-        worktree: lineage.worktreeId,
+        worktree: `id:${lineage.worktreeId}`,
         parentWorktree: `id:${lineage.parentWorktreeId}`
       },
       timeoutMs: 15_000
@@ -535,7 +535,7 @@ describe('worktree lineage state', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'worktree.set',
-      params: { worktree: lineage.worktreeId, noParent: true },
+      params: { worktree: `id:${lineage.worktreeId}`, noParent: true },
       timeoutMs: 15_000
     })
     expect(store.getState().worktreeLineageById).toEqual({})
@@ -1254,11 +1254,59 @@ describe('worktree remote runtime mutations', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'worktree.set',
-      params: expect.objectContaining({ worktree: wt.id, comment: 'remote note' }),
+      params: expect.objectContaining({ worktree: `id:${wt.id}`, comment: 'remote note' }),
       timeoutMs: 15_000
     })
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo.repo1[0]?.comment).toBe('remote note')
+  })
+
+  it('does not surface remote selector misses while persisting activity timestamps', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-set',
+      ok: false,
+      error: { code: 'selector_not_found', message: 'selector_not_found' },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [wt] }
+    } as Partial<AppState>)
+
+    try {
+      store.getState().bumpWorktreeActivity(wt.id)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'worktree.set',
+        params: expect.objectContaining({
+          worktree: `id:${wt.id}`,
+          lastActivityAt: expect.any(Number)
+        }),
+        timeoutMs: 15_000
+      })
+      expect(errorSpy).not.toHaveBeenCalled()
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+
+  it('does not persist activity for a missing worktree', async () => {
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+
+    store.getState().bumpWorktreeActivity('repo1::/missing')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })
 
   it('clears stale hosted review cache and force-refetches when removing linked PR metadata', async () => {

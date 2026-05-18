@@ -24,7 +24,7 @@ import { toPublicPane } from './pane-public-view'
 type SplitManagedPaneArgs = {
   paneId: number
   direction: 'vertical' | 'horizontal'
-  opts?: { ratio?: number; cwd?: string; leafId?: string }
+  opts?: { ratio?: number; cwd?: string; leafId?: string; ptyId?: string }
   panes: Map<number, ManagedPaneInternal>
   root: HTMLElement
   styleOptions: PaneStyleOptions
@@ -89,8 +89,13 @@ function openSplitPane(
   applyDividerStyles(args.root, args.styleOptions)
   newPane.terminal.focus()
   updateMultiPaneState(args.getDragCallbacks())
-  // Why: forward cwd hint so the new PTY spawns in the source pane's cwd.
-  args.publishPaneCreated(newPane, cwd ? { cwd } : undefined)
+  // Why: forward one-shot spawn/adoption hints so the new pane inherits the
+  // source cwd for local splits or attaches a runtime-spawned PTY for web splits.
+  const spawnHints = {
+    ...(cwd ? { cwd } : {}),
+    ...(args.opts?.ptyId ? { ptyId: args.opts.ptyId } : {})
+  }
+  args.publishPaneCreated(newPane, Object.keys(spawnHints).length > 0 ? spawnHints : undefined)
   args.managerOptions.onLayoutChanged?.()
 }
 

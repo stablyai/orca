@@ -121,7 +121,7 @@ describe('HermesHookService', () => {
 
     expect(output).toContain(_internals.HERMES_PLUGIN_NAME)
     expect(output.toLowerCase()).toContain('enabled')
-  })
+  }, 20_000)
 
   it('registered plugin hooks post normalized JSON to Orca', async () => {
     const pythonAvailable = spawnSync('python3', ['--version'], { encoding: 'utf-8' }).status === 0

@@ -86,6 +86,21 @@ function readDataFile(): unknown {
   return JSON.parse(readFileSync(dataFile(), 'utf-8'))
 }
 
+function collectPropertyPaths(value: unknown, property: string, prefix = ''): string[] {
+  if (!value || typeof value !== 'object') {
+    return []
+  }
+  const paths: string[] = []
+  for (const [key, child] of Object.entries(value)) {
+    const path = prefix ? `${prefix}.${key}` : key
+    if (key === property) {
+      paths.push(path)
+    }
+    paths.push(...collectPropertyPaths(child, property, path))
+  }
+  return paths
+}
+
 const makeRepo = (overrides: Partial<Repo> = {}): Repo => ({
   id: 'r1',
   path: '/repo',
@@ -207,7 +222,8 @@ describe('Store', () => {
     expect(settings.showTasksButton).toBe(true)
     expect(settings.visibleTaskProviders).toEqual(['github', 'gitlab', 'linear'])
     expect(settings.openInApplications).toEqual([])
-    expect(settings.experimentalActivity).toBe(true)
+    expect(settings.experimentalActivity).toBe(false)
+    expect(settings.experimentalActivityDefaultedOffForAllUsers).toBe(true)
     expect(settings.floatingTerminalEnabled).toBe(true)
     expect(settings.floatingTerminalDefaultedForAllUsers).toBe(true)
     expect(settings.notifications.customSoundPath).toBeNull()
@@ -595,11 +611,13 @@ describe('Store', () => {
     expect(store.getSettings().editorAutoSaveDelayMs).toBe(1000)
     expect(store.getSettings().refreshLocalBaseRefOnWorktreeCreate).toBe(false)
     expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
+    expect(store.getSettings().sourceControlViewMode).toBe('list')
     expect(store.getSettings().showGitIgnoredFiles).toBe(true)
     expect(store.getSettings().showTasksButton).toBe(true)
     expect(store.getSettings().combinedDiffFileTreeVisibleByDefault).toBe(false)
     expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'gitlab', 'linear'])
-    expect(store.getSettings().experimentalActivity).toBe(true)
+    expect(store.getSettings().experimentalActivity).toBe(false)
+    expect(store.getSettings().experimentalActivityDefaultedOffForAllUsers).toBe(true)
     expect(store.getSettings().notifications.customSoundPath).toBeNull()
     // repos should be loaded
     expect(store.getRepos()).toHaveLength(1)
@@ -964,6 +982,81 @@ describe('Store', () => {
     expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
   })
 
+  it('updateSettings persists sourceControlViewMode as a user setting', async () => {
+    const store = await createStore()
+    expect(store.getSettings().sourceControlViewMode).toBe('list')
+
+    store.updateSettings({ sourceControlViewMode: 'tree' })
+    expect(store.getSettings().sourceControlViewMode).toBe('tree')
+  })
+
+  it('reloads sourceControlViewMode from global settings without touching workspace state', async () => {
+    const workspaceSession = {
+      activeRepoId: 'r1',
+      activeWorktreeId: 'repo1::/worktree-a',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        'repo1::/worktree-a': [
+          makeTerminalTab({
+            id: 'tab1',
+            worktreeId: 'repo1::/worktree-a'
+          })
+        ],
+        'repo1::/worktree-b': [
+          makeTerminalTab({
+            id: 'tab2',
+            worktreeId: 'repo1::/worktree-b'
+          })
+        ]
+      },
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {},
+      browserTabsByWorktree: {},
+      browserPagesByWorkspace: {},
+      activeBrowserTabIdByWorktree: {},
+      activeFileIdByWorktree: {},
+      activeTabTypeByWorktree: {},
+      browserUrlHistory: []
+    }
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [makeRepo()],
+      worktreeMeta: {
+        'repo1::/worktree-a': { status: 'active' },
+        'repo1::/worktree-b': { status: 'active' }
+      },
+      settings: { theme: 'dark' },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().sourceControlViewMode).toBe('list')
+
+    store.updateSettings({ sourceControlViewMode: 'tree' })
+    store.flush()
+
+    const persisted = readDataFile() as {
+      settings?: { sourceControlViewMode?: string }
+      workspaceSession?: typeof workspaceSession
+      worktreeMeta?: Record<string, unknown>
+    }
+    expect(persisted.settings?.sourceControlViewMode).toBe('tree')
+    expect(persisted.workspaceSession).toEqual(workspaceSession)
+    expect(persisted.worktreeMeta).toEqual({
+      'repo1::/worktree-a': { status: 'active' },
+      'repo1::/worktree-b': { status: 'active' }
+    })
+    expect(collectPropertyPaths(persisted, 'sourceControlViewMode')).toEqual([
+      'settings.sourceControlViewMode'
+    ])
+
+    const reloaded = await createStore()
+    expect(reloaded.getSettings().sourceControlViewMode).toBe('tree')
+    expect(reloaded.getWorkspaceSession().activeWorktreeId).toBe('repo1::/worktree-a')
+  })
+
   // ── 10. flush writes synchronously ─────────────────────────────────
 
   it('flush writes state to disk synchronously', async () => {
@@ -1025,6 +1118,20 @@ describe('Store', () => {
     expect(ui.sidebarWidth).toBe(400)
     expect(ui.groupBy).toBe('repo') // default preserved
     expect(ui.dismissedUpdateVersion).toBeNull()
+  })
+
+  it('updateUI restores retired card properties from direct UI writes', async () => {
+    const store = await createStore()
+    store.updateUI({ worktreeCardProperties: ['inline-agents'] })
+
+    expect(store.getUI().worktreeCardProperties).toEqual([
+      'status',
+      'unread',
+      'issue',
+      'pr',
+      'comment',
+      'inline-agents'
+    ])
   })
 
   it('persists updater reminder metadata in UI state', async () => {
@@ -1366,12 +1473,32 @@ describe('Store', () => {
     expect(store.getSettings().experimentalPet).toBe(true)
   })
 
-  it('promotes legacy experimentalActivity profiles to default-on', async () => {
+  it('defaults legacy experimentalActivity profiles off once', async () => {
     writeDataFile({
       schemaVersion: 1,
       repos: [],
       worktreeMeta: {},
-      settings: { experimentalActivity: false },
+      settings: { experimentalActivity: true },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().experimentalActivity).toBe(false)
+    expect(store.getSettings().experimentalActivityDefaultedOffForAllUsers).toBe(true)
+  })
+
+  it('preserves experimentalActivity after the default-off migration has run', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        experimentalActivity: true,
+        experimentalActivityDefaultedOffForAllUsers: true
+      },
       ui: {},
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
@@ -1478,6 +1605,53 @@ describe('Store', () => {
     const props = store.getUI().worktreeCardProperties
     expect(props.filter((p) => p === 'inline-agents')).toHaveLength(1)
     expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
+  })
+
+  it('restores retired card properties when loading old user choices', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {
+        worktreeCardProperties: ['inline-agents'],
+        _inlineAgentsDefaultedForAllUsers: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getUI().worktreeCardProperties).toEqual([
+      'status',
+      'unread',
+      'issue',
+      'pr',
+      'comment',
+      'inline-agents'
+    ])
+  })
+
+  it('keeps Agent activity opt-out while restoring retired card properties', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {
+        worktreeCardProperties: [],
+        _inlineAgentsDefaultedForAllUsers: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getUI().worktreeCardProperties).toEqual([
+      'status',
+      'unread',
+      'issue',
+      'pr',
+      'comment'
+    ])
   })
 
   it('preserves a deliberate uncheck from the experimental-toggle era (Case B)', async () => {

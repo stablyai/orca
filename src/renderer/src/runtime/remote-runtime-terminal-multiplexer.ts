@@ -341,8 +341,9 @@ class RemoteRuntimeTerminalMultiplexer {
     this.streams.clear()
     for (const stream of streams) {
       clearSnapshot(stream)
+      const canHandleClose = Boolean(stream.callbacks.onTransportClose)
       stream.callbacks.onTransportClose?.()
-      if (message) {
+      if (message && !canHandleClose) {
         stream.callbacks.onError?.(message)
       }
     }

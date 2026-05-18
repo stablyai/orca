@@ -270,7 +270,9 @@ function registerRuntimeWindowLifecycle(
           // with the paneKey baked into the PTY env at spawn time, so hook
           // events route to the right slot.
           ...(opts.tabId !== undefined ? { tabId: opts.tabId } : {}),
-          ...(opts.leafId !== undefined ? { leafId: opts.leafId } : {})
+          ...(opts.leafId !== undefined ? { leafId: opts.leafId } : {}),
+          ...(opts.splitFromLeafId !== undefined ? { splitFromLeafId: opts.splitFromLeafId } : {}),
+          ...(opts.splitDirection !== undefined ? { splitDirection: opts.splitDirection } : {})
         })
       }),
     splitTerminal: (tabId, paneRuntimeId, opts) => {
@@ -288,6 +290,8 @@ function registerRuntimeWindowLifecycle(
     closeSessionTab: (tabId, worktreeId) => send('ui:closeSessionTab', { tabId, worktreeId }),
     openFile: (worktreeId, filePath, relativePath) =>
       send('ui:openFileFromMobile', { worktreeId, filePath, relativePath }),
+    openDiff: (worktreeId, filePath, relativePath, staged) =>
+      send('ui:openDiffFromMobile', { worktreeId, filePath, relativePath, staged }),
     readMobileMarkdownTab: (worktreeId, tabId) =>
       requestMobileMarkdownFromRenderer(mainWindow, {
         operation: 'read',
@@ -307,7 +311,9 @@ function registerRuntimeWindowLifecycle(
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) =>
       send('runtime:terminalFitOverrideChanged', { ptyId, mode, cols, rows }),
     terminalDriverChanged: (ptyId, driver) =>
-      send('runtime:terminalDriverChanged', { ptyId, driver })
+      send('runtime:terminalDriverChanged', { ptyId, driver }),
+    browserDriverChanged: (browserPageId, driver) =>
+      send('runtime:browserDriverChanged', { browserPageId, driver })
   })
   // Why: the runtime must fail closed while the renderer graph is being torn
   // down or rebuilt, otherwise future CLI calls could act on stale terminal

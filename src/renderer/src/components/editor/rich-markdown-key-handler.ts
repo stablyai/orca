@@ -234,6 +234,12 @@ export function createRichMarkdownKeyHandler(
 
     const currentFilteredSlashCommands = ctx.filteredSlashCommandsRef.current
 
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      ctx.setSlashMenu(null)
+      return true
+    }
+
     if (currentFilteredSlashCommands.length === 0) {
       return false
     }
@@ -277,12 +283,6 @@ export function createRichMarkdownKeyHandler(
       }
       return true
     }
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      ctx.setSlashMenu(null)
-      return true
-    }
-
     return false
   }
 }

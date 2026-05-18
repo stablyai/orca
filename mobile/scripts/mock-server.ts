@@ -4,6 +4,7 @@
 // runtime exposes, with realistic fake data. Supports E2EE handshake.
 import { WebSocketServer, type WebSocket } from 'ws'
 import nacl from 'tweetnacl'
+import type { MobileGitStatusEntry } from '../src/source-control/mobile-git-status'
 
 const PORT = Number(process.env.PORT) || 6768
 const AUTH_TOKEN = 'mock-device-token'
@@ -111,6 +112,19 @@ const STREAMING_CHUNKS = [
   '\nUpdating src/auth/middleware.ts...\n'
 ]
 
+type FakeGitEntry = MobileGitStatusEntry & {
+  stagedFromUntracked?: boolean
+}
+
+let fakeGitEntries: FakeGitEntry[] = [
+  { path: 'src/auth/middleware.ts', status: 'modified', area: 'unstaged' },
+  { path: 'src/auth/jwt.ts', status: 'untracked', area: 'untracked' },
+  { path: 'README.md', status: 'modified', area: 'staged' }
+]
+let fakeAhead = 1
+let fakeBehind = 0
+let fakeHasUpstream = true
+
 type RpcRequest = {
   id: string
   method: string
@@ -125,6 +139,27 @@ type RpcResponse = {
   error?: { code: string; message: string }
   streaming?: true
   _meta: { runtimeId: string }
+}
+
+function toGitStatusEntry(entry: FakeGitEntry): MobileGitStatusEntry {
+  const { stagedFromUntracked: _stagedFromUntracked, ...statusEntry } = entry
+  return statusEntry
+}
+
+function stageFakeGitEntry(entry: FakeGitEntry, filePaths: Set<string>): FakeGitEntry {
+  if (!filePaths.has(entry.path)) return entry
+  if (entry.area === 'untracked') {
+    return { ...entry, area: 'staged', status: 'added', stagedFromUntracked: true }
+  }
+  return { ...entry, area: 'staged' }
+}
+
+function unstageFakeGitEntry(entry: FakeGitEntry, filePaths: Set<string>): FakeGitEntry {
+  if (!filePaths.has(entry.path)) return entry
+  if (entry.stagedFromUntracked) {
+    return { ...entry, area: 'untracked', status: 'untracked', stagedFromUntracked: false }
+  }
+  return { ...entry, area: 'unstaged' }
 }
 
 function success(id: string, result: unknown, streaming?: boolean): RpcResponse {
@@ -201,6 +236,115 @@ function handleRequest(
 
     case 'terminal.unsubscribe':
       send(success(request.id, { unsubscribed: true }))
+      break
+
+    case 'git.status':
+      send(
+        success(request.id, {
+          entries: fakeGitEntries.map(toGitStatusEntry),
+          conflictOperation: 'unknown',
+          branch: 'refs/heads/feature/auth-refactor',
+          upstreamStatus: {
+            hasUpstream: fakeHasUpstream,
+            upstreamName: 'origin/feature/auth-refactor',
+            ahead: fakeAhead,
+            behind: fakeBehind
+          }
+        })
+      )
+      break
+
+    case 'git.upstreamStatus':
+      send(
+        success(request.id, {
+          hasUpstream: fakeHasUpstream,
+          upstreamName: 'origin/feature/auth-refactor',
+          ahead: fakeAhead,
+          behind: fakeBehind
+        })
+      )
+      break
+
+    case 'git.stage': {
+      const filePath = String(request.params?.filePath ?? '')
+      fakeGitEntries = fakeGitEntries.map((entry) => stageFakeGitEntry(entry, new Set([filePath])))
+      send(success(request.id, { ok: true }))
+      break
+    }
+
+    case 'git.bulkStage': {
+      const filePaths = new Set((request.params?.filePaths as string[] | undefined) ?? [])
+      fakeGitEntries = fakeGitEntries.map((entry) => stageFakeGitEntry(entry, filePaths))
+      send(success(request.id, { ok: true }))
+      break
+    }
+
+    case 'git.unstage': {
+      const filePath = String(request.params?.filePath ?? '')
+      fakeGitEntries = fakeGitEntries.map((entry) =>
+        unstageFakeGitEntry(entry, new Set([filePath]))
+      )
+      send(success(request.id, { ok: true }))
+      break
+    }
+
+    case 'git.bulkUnstage': {
+      const filePaths = new Set((request.params?.filePaths as string[] | undefined) ?? [])
+      fakeGitEntries = fakeGitEntries.map((entry) => unstageFakeGitEntry(entry, filePaths))
+      send(success(request.id, { ok: true }))
+      break
+    }
+
+    case 'git.discard': {
+      const filePath = String(request.params?.filePath ?? '')
+      fakeGitEntries = fakeGitEntries.filter((entry) => entry.path !== filePath)
+      send(success(request.id, { ok: true }))
+      break
+    }
+
+    case 'git.commit':
+      fakeGitEntries = fakeGitEntries.filter((entry) => entry.area !== 'staged')
+      fakeAhead += 1
+      send(success(request.id, { success: true }))
+      break
+
+    case 'git.fetch':
+      send(success(request.id, { ok: true }))
+      break
+
+    case 'git.pull':
+      fakeBehind = 0
+      send(success(request.id, { ok: true }))
+      break
+
+    case 'git.diff':
+      send(
+        success(request.id, {
+          kind: 'text',
+          originalContent: 'const status = "old"\\n',
+          modifiedContent: 'const status = "new"\\n',
+          originalIsBinary: false,
+          modifiedIsBinary: false
+        })
+      )
+      break
+
+    case 'git.push':
+      fakeHasUpstream = true
+      fakeAhead = 0
+      send(success(request.id, { ok: true }))
+      break
+
+    case 'files.open':
+    case 'files.openDiff':
+      send(
+        success(request.id, {
+          worktree: request.params?.worktree ?? 'id:mock',
+          relativePath: request.params?.relativePath ?? '',
+          kind: 'text',
+          opened: true
+        })
+      )
       break
 
     default:

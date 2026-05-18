@@ -13,14 +13,22 @@ import {
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-font-zoom'
-import type { UpdateStatus, WorkspaceSessionState } from '../../../shared/types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode,
+  UpdateStatus,
+  WorkspaceSessionState
+} from '../../../shared/types'
 import type {
   RemoteWorkspacePatchResult,
   RemoteWorkspaceSnapshot
 } from '../../../shared/remote-workspace-types'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { SshConnectionState } from '../../../shared/ssh-types'
-import type { RuntimeTerminalDriverState } from '../../../shared/runtime-types'
+import type {
+  RuntimeBrowserDriverState,
+  RuntimeTerminalDriverState
+} from '../../../shared/runtime-types'
 import { importRemoteWorkspaceSession } from '../../../shared/remote-workspace-session-projection'
 import { zoomLevelToPercent, ZOOM_MIN, ZOOM_MAX } from '@/components/settings/SettingsConstants'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
@@ -40,6 +48,10 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { focusRuntimeTerminalSurface } from '@/runtime/sync-runtime-graph'
 import { setFitOverride, hydrateOverrides } from '@/lib/pane-manager/mobile-fit-overrides'
 import { setDriverForPty, hydrateDrivers } from '@/lib/pane-manager/mobile-driver-state'
+import {
+  hydrateBrowserDrivers,
+  setDriverForBrowserPage
+} from '@/lib/pane-manager/browser-mobile-driver-state'
 import { destroyPersistentWebview } from '@/components/browser-pane/webview-registry'
 import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { detectLanguage } from '@/lib/language-detect'
@@ -48,6 +60,13 @@ import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-seriali
 import { track } from '@/lib/telemetry'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
+import type { AppState } from '../store/types'
+import {
+  closeWebRuntimeSessionTab,
+  createWebRuntimeSessionBrowserTab,
+  createWebRuntimeSessionTerminal,
+  isWebRuntimeSessionActive
+} from '@/runtime/web-runtime-session'
 
 export { resolveZoomTarget } from './resolve-zoom-target'
 
@@ -55,6 +74,114 @@ const ZOOM_STEP = 0.5
 let remoteWorkspaceSnapshotApplyDepth = 0
 let remoteWorkspaceSnapshotWriteSuppressUntil = 0
 const REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS = 1000
+
+type TerminalSplitDirection = 'horizontal' | 'vertical'
+
+function insertLeafAfterSource(
+  node: TerminalPaneLayoutNode,
+  sourceLeafId: string,
+  newLeafId: string,
+  direction: TerminalSplitDirection
+): { node: TerminalPaneLayoutNode; inserted: boolean } {
+  if (node.type === 'leaf') {
+    if (node.leafId !== sourceLeafId) {
+      return { node, inserted: false }
+    }
+    return {
+      node: {
+        type: 'split',
+        direction,
+        first: node,
+        second: { type: 'leaf', leafId: newLeafId },
+        ratio: 0.5
+      },
+      inserted: true
+    }
+  }
+
+  const first = insertLeafAfterSource(node.first, sourceLeafId, newLeafId, direction)
+  if (first.inserted) {
+    return { node: { ...node, first: first.node }, inserted: true }
+  }
+  const second = insertLeafAfterSource(node.second, sourceLeafId, newLeafId, direction)
+  if (second.inserted) {
+    return { node: { ...node, second: second.node }, inserted: true }
+  }
+  return { node, inserted: false }
+}
+
+function addSplitLeafToLayout(
+  layout: TerminalLayoutSnapshot | null | undefined,
+  sourceLeafId: string,
+  newLeafId: string,
+  ptyId: string,
+  direction: TerminalSplitDirection,
+  title?: string | null
+): TerminalLayoutSnapshot {
+  const root = layout?.root ?? { type: 'leaf', leafId: sourceLeafId }
+  const existingLeafIds = collectLeafIdsInOrder(root)
+  const nextRoot = existingLeafIds.includes(newLeafId)
+    ? root
+    : (() => {
+        const inserted = insertLeafAfterSource(root, sourceLeafId, newLeafId, direction)
+        if (inserted.inserted) {
+          return inserted.node
+        }
+        return {
+          type: 'split' as const,
+          direction,
+          first: root,
+          second: { type: 'leaf' as const, leafId: newLeafId },
+          ratio: 0.5
+        }
+      })()
+  return {
+    ...(layout ?? { root: null, activeLeafId: null, expandedLeafId: null }),
+    root: nextRoot,
+    activeLeafId: newLeafId,
+    expandedLeafId: null,
+    ptyIdsByLeafId: {
+      ...layout?.ptyIdsByLeafId,
+      [newLeafId]: ptyId
+    },
+    ...(title
+      ? {
+          titlesByLeafId: {
+            ...layout?.titlesByLeafId,
+            [newLeafId]: title
+          }
+        }
+      : {})
+  }
+}
+
+function activateExistingLeafInLayout(
+  layout: TerminalLayoutSnapshot | null | undefined,
+  leafId: string,
+  ptyId: string,
+  title?: string | null
+): TerminalLayoutSnapshot | null {
+  if (!layout?.root || !collectLeafIdsInOrder(layout.root).includes(leafId)) {
+    return null
+  }
+  return {
+    ...layout,
+    activeLeafId: leafId,
+    expandedLeafId: null,
+    ptyIdsByLeafId: {
+      ...layout.ptyIdsByLeafId,
+      [leafId]: ptyId
+    },
+    ...(title
+      ? {
+          titlesByLeafId: {
+            ...layout.titlesByLeafId,
+            [leafId]: title
+          }
+        }
+      : {})
+  }
+}
 
 export function isRemoteWorkspaceSnapshotApplyInProgress(): boolean {
   return (
@@ -319,8 +446,36 @@ function applyRemoteWorkspacePatchStatus(
   })
 }
 
+type BrowserSessionTabTarget =
+  | { kind: 'unified-browser'; unifiedTabId: string; workspaceId: string; groupId: string }
+  | { kind: 'fallback-browser'; workspaceId: string }
+
+export function resolveBrowserSessionTabTarget(
+  state: Pick<AppState, 'browserTabsByWorktree' | 'unifiedTabsByWorktree'>,
+  worktreeId: string,
+  tabId: string
+): BrowserSessionTabTarget | null {
+  const tab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find((item) => item.id === tabId)
+  if (tab?.contentType === 'browser') {
+    return {
+      kind: 'unified-browser',
+      unifiedTabId: tab.id,
+      workspaceId: tab.entityId,
+      groupId: tab.groupId
+    }
+  }
+  const fallbackBrowser = (state.browserTabsByWorktree[worktreeId] ?? []).find(
+    (workspace) => workspace.id === tabId
+  )
+  return fallbackBrowser ? { kind: 'fallback-browser', workspaceId: fallbackBrowser.id } : null
+}
+
 function isRuntimeEnvironmentActive(): boolean {
   return Boolean(useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim())
+}
+
+function getActiveRuntimeEnvironmentId(): string | null {
+  return useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
 }
 
 export function useIpcEvents(): void {
@@ -556,7 +711,18 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onCreateTerminal(
-        ({ requestId, worktreeId, command, title, ptyId, activate, tabId, leafId }) => {
+        ({
+          requestId,
+          worktreeId,
+          command,
+          title,
+          ptyId,
+          activate,
+          tabId,
+          leafId,
+          splitFromLeafId,
+          splitDirection
+        }) => {
           try {
             if (isRuntimeEnvironmentActive()) {
               if (requestId) {
@@ -585,8 +751,16 @@ export function useIpcEvents(): void {
                     (store.ptyIdsByTabId[candidate.id] ?? []).includes(ptyId)
                 )
               : undefined
+            const isSplitReveal = Boolean(ptyId && tabId && leafId && splitFromLeafId)
+            const splitTargetTab = isSplitReveal
+              ? (store.tabsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === tabId)
+              : undefined
+            if (isSplitReveal && !splitTargetTab) {
+              throw new Error(`Terminal tab ${tabId} not found`)
+            }
+            const reusedTab = existingTab ?? splitTargetTab
             const tab =
-              existingTab ??
+              reusedTab ??
               (ptyId
                 ? store.createTab(worktreeId, undefined, undefined, {
                     initialPtyId: ptyId,
@@ -615,14 +789,57 @@ export function useIpcEvents(): void {
             // Existing tabs may have a user customTitle (set via UI rename) that
             // the runtime's stored title would otherwise silently overwrite on
             // every focus.
-            if (title && !existingTab) {
+            if (title && !reusedTab) {
               store.setTabCustomTitle(tab.id, title)
             }
             if (leafId && ptyId) {
-              // Why: CLI/runtime-spawned PTYs emit hook events before a hidden
-              // tab mounts TerminalPane, so the adopted UUID leaf must exist
-              // in layout state for paneKey validation to accept them.
-              store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId, title))
+              if (splitFromLeafId) {
+                // Why: runtime-spawned split PTYs already carry the parent tab's
+                // paneKey. Reusing the existing tab preserves native split-pane
+                // behavior instead of letting createTab mint a collision tab.
+                store.updateTabPtyId(tab.id, ptyId)
+                store.setTabLayout(
+                  tab.id,
+                  addSplitLeafToLayout(
+                    store.terminalLayoutsByTabId?.[tab.id],
+                    splitFromLeafId,
+                    leafId,
+                    ptyId,
+                    splitDirection ?? 'horizontal',
+                    title
+                  )
+                )
+                window.dispatchEvent(
+                  new CustomEvent<SplitTerminalPaneDetail>(SPLIT_TERMINAL_PANE_EVENT, {
+                    detail: {
+                      tabId: tab.id,
+                      paneRuntimeId: -1,
+                      direction: splitDirection ?? 'horizontal',
+                      sourceLeafId: splitFromLeafId,
+                      newLeafId: leafId,
+                      ptyId
+                    }
+                  })
+                )
+              } else {
+                // Why: CLI/runtime-spawned PTYs emit hook events before a hidden
+                // tab mounts TerminalPane, so the adopted UUID leaf must exist
+                // in layout state for paneKey validation to accept them.
+                const existingLayout = reusedTab
+                  ? activateExistingLeafInLayout(
+                      store.terminalLayoutsByTabId?.[tab.id],
+                      leafId,
+                      ptyId,
+                      title
+                    )
+                  : null
+                if (existingLayout) {
+                  store.updateTabPtyId(tab.id, ptyId)
+                  store.setTabLayout(tab.id, existingLayout)
+                } else {
+                  store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId, title))
+                }
+              }
             }
             if (command) {
               store.queueTabStartupCommand(tab.id, { command })
@@ -776,7 +993,18 @@ export function useIpcEvents(): void {
         const tab = (store.unifiedTabsByWorktree[worktreeId] ?? []).find(
           (item) => item.id === tabId
         )
+        const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, tabId)
         if (!tab) {
+          if (browserTarget) {
+            // Why: older/mobile fallback snapshots can identify browser tabs
+            // by workspace id when no unified tab wrapper exists.
+            store.setActiveWorktree(worktreeId)
+            store.markWorktreeVisited(worktreeId)
+            store.setActiveView('terminal')
+            store.setActiveBrowserTab(browserTarget.workspaceId)
+            store.setActiveTabType('browser')
+            store.revealWorktreeInSidebar(worktreeId)
+          }
           return
         }
         store.setActiveWorktree(worktreeId)
@@ -784,15 +1012,29 @@ export function useIpcEvents(): void {
         store.setActiveView('terminal')
         store.focusGroup(worktreeId, tab.groupId)
         store.activateTab(tab.id)
-        store.setActiveFile(tab.entityId)
-        store.setActiveTabType('editor')
+        if (browserTarget) {
+          // Why: mobile session tabs reuse this IPC for renderer-owned
+          // unified tabs. Browser tabs need their own active-page state,
+          // not the editor file activation path.
+          store.setActiveBrowserTab(browserTarget.workspaceId)
+          store.setActiveTabType('browser')
+        } else {
+          store.setActiveFile(tab.entityId)
+          store.setActiveTabType('editor')
+        }
         store.revealWorktreeInSidebar(worktreeId)
       })
     )
 
     unsubs.push(
-      window.api.ui.onCloseSessionTab(({ tabId }) => {
-        useAppStore.getState().closeUnifiedTab(tabId)
+      window.api.ui.onCloseSessionTab(({ tabId, worktreeId }) => {
+        const store = useAppStore.getState()
+        const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, tabId)
+        if (browserTarget) {
+          store.closeBrowserTab(browserTarget.workspaceId)
+          return
+        }
+        store.closeUnifiedTab(tabId)
       })
     )
 
@@ -813,6 +1055,22 @@ export function useIpcEvents(): void {
           language: detectLanguage(basename),
           mode: 'edit'
         })
+        store.setActiveTabType('editor')
+        store.revealWorktreeInSidebar(worktreeId)
+      })
+    )
+
+    unsubs.push(
+      window.api.ui.onOpenDiffFromMobile(({ worktreeId, filePath, relativePath, staged }) => {
+        const store = useAppStore.getState()
+        const language = detectLanguage(relativePath)
+        store.setActiveWorktree(worktreeId)
+        store.markWorktreeVisited(worktreeId)
+        store.setActiveView('terminal')
+        // Why: mobile renders diff tabs from diff metadata. The desktop
+        // markdown Changes-mode shortcut is editor-local and would publish
+        // plain markdown content back to mobile.
+        store.openDiff(worktreeId, filePath, relativePath, language, staged)
         store.setActiveTabType('editor')
         store.revealWorktreeInSidebar(worktreeId)
       })
@@ -956,12 +1214,29 @@ export function useIpcEvents(): void {
     // capture keyboard focus and bypass the renderer's window-level keydown.
     unsubs.push(
       window.api.ui.onNewBrowserTab(() => {
-        if (isRuntimeEnvironmentActive()) {
-          return
-        }
         const store = useAppStore.getState()
         const worktreeId = store.activeWorktreeId
         if (worktreeId) {
+          if (isRuntimeEnvironmentActive()) {
+            const environmentId = getActiveRuntimeEnvironmentId()
+            if (!isWebRuntimeSessionActive(environmentId)) {
+              store.createBrowserTab(worktreeId, store.browserDefaultUrl ?? 'about:blank', {
+                title: 'New Browser Tab',
+                focusAddressBar: true
+              })
+              return
+            }
+            void (async () => {
+              // Why: paired web browser tabs are host-owned and arrive through
+              // session.tabs. On RPC failure we leave local state unchanged so
+              // the next host snapshot remains authoritative.
+              await createWebRuntimeSessionBrowserTab({
+                worktreeId,
+                url: store.browserDefaultUrl ?? 'about:blank'
+              })
+            })()
+            return
+          }
           store.createBrowserTab(worktreeId, store.browserDefaultUrl ?? 'about:blank', {
             title: 'New Browser Tab',
             focusAddressBar: true
@@ -1141,31 +1416,42 @@ export function useIpcEvents(): void {
         if (!worktreeId) {
           return
         }
-        const newTab = store.createTab(worktreeId)
-        store.setActiveTabType('terminal')
-        // Why: replicate the full reconciliation from Terminal.tsx handleNewTab
-        // so the new tab appends at the visual end instead of jumping to index 0
-        // when tabBarOrderByWorktree is unset (e.g. restored worktrees).
-        const currentTerminals = store.tabsByWorktree[worktreeId] ?? []
-        const currentEditors = store.openFiles.filter((f) => f.worktreeId === worktreeId)
-        const currentBrowsers = store.browserTabsByWorktree[worktreeId] ?? []
-        const stored = store.tabBarOrderByWorktree[worktreeId]
-        const termIds = currentTerminals.map((t) => t.id)
-        const editorIds = currentEditors.map((f) => f.id)
-        const browserIds = currentBrowsers.map((tab) => tab.id)
-        const validIds = new Set([...termIds, ...editorIds, ...browserIds])
-        const base = (stored ?? []).filter((id) => validIds.has(id))
-        const inBase = new Set(base)
-        for (const id of [...termIds, ...editorIds, ...browserIds]) {
-          if (!inBase.has(id)) {
-            base.push(id)
-            inBase.add(id)
+        void (async () => {
+          if (
+            await createWebRuntimeSessionTerminal({
+              worktreeId,
+              activate: true
+            })
+          ) {
+            return
           }
-        }
-        const order = base.filter((id) => id !== newTab.id)
-        order.push(newTab.id)
-        store.setTabBarOrder(worktreeId, order)
-        focusTerminalTabSurface(newTab.id)
+          const newTab = store.createTab(worktreeId)
+          store.setActiveTabType('terminal')
+          // Why: replicate the full reconciliation from Terminal.tsx handleNewTab
+          // so the new tab appends at the visual end instead of jumping to index 0
+          // when tabBarOrderByWorktree is unset (e.g. restored worktrees).
+          const freshStore = useAppStore.getState()
+          const currentTerminals = freshStore.tabsByWorktree[worktreeId] ?? []
+          const currentEditors = freshStore.openFiles.filter((f) => f.worktreeId === worktreeId)
+          const currentBrowsers = freshStore.browserTabsByWorktree[worktreeId] ?? []
+          const stored = freshStore.tabBarOrderByWorktree[worktreeId]
+          const termIds = currentTerminals.map((t) => t.id)
+          const editorIds = currentEditors.map((f) => f.id)
+          const browserIds = currentBrowsers.map((tab) => tab.id)
+          const validIds = new Set([...termIds, ...editorIds, ...browserIds])
+          const base = (stored ?? []).filter((id) => validIds.has(id))
+          const inBase = new Set(base)
+          for (const id of [...termIds, ...editorIds, ...browserIds]) {
+            if (!inBase.has(id)) {
+              base.push(id)
+              inBase.add(id)
+            }
+          }
+          const order = base.filter((id) => id !== newTab.id)
+          order.push(newTab.id)
+          freshStore.setTabBarOrder(worktreeId, order)
+          focusTerminalTabSurface(newTab.id)
+        })()
       })
     )
 
@@ -1173,6 +1459,20 @@ export function useIpcEvents(): void {
       window.api.ui.onCloseActiveTab(() => {
         const store = useAppStore.getState()
         if (store.activeTabType === 'browser' && store.activeBrowserTabId) {
+          if (isRuntimeEnvironmentActive() && store.activeWorktreeId) {
+            const environmentId = getActiveRuntimeEnvironmentId()
+            if (!isWebRuntimeSessionActive(environmentId)) {
+              store.closeBrowserTab(store.activeBrowserTabId)
+              return
+            }
+            void (async () => {
+              await closeWebRuntimeSessionTab({
+                worktreeId: store.activeWorktreeId!,
+                tabId: store.activeBrowserTabId!
+              })
+            })()
+            return
+          }
           store.closeBrowserTab(store.activeBrowserTabId)
         }
       })
@@ -1631,6 +1931,13 @@ export function useIpcEvents(): void {
             driver: RuntimeTerminalDriverState
           }
         }
+      | {
+          kind: 'browser-driver'
+          event: {
+            browserPageId: string
+            driver: RuntimeBrowserDriverState
+          }
+        }
     const pendingMobileStateEvents: PendingMobileStateEvent[] = []
 
     const applyPendingMobileStateEvents = (): void => {
@@ -1638,8 +1945,10 @@ export function useIpcEvents(): void {
         if (pending.kind === 'fit') {
           const { ptyId, mode, cols, rows } = pending.event
           setFitOverride(ptyId, mode, cols, rows)
-        } else {
+        } else if (pending.kind === 'driver') {
           setDriverForPty(pending.event.ptyId, pending.event.driver)
+        } else {
+          setDriverForBrowserPage(pending.event.browserPageId, pending.event.driver)
         }
       }
       pendingMobileStateEvents.length = 0
@@ -1675,17 +1984,32 @@ export function useIpcEvents(): void {
       })
     )
 
+    unsubs.push(
+      window.api.runtime.onBrowserDriverChanged((event) => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
+        if (!mobileStateHydrated) {
+          pendingMobileStateEvents.push({ kind: 'browser-driver', event })
+          return
+        }
+        setDriverForBrowserPage(event.browserPageId, event.driver)
+      })
+    )
+
     // Why: hydrate mobile-owned terminal state on renderer reload. Subscribe
     // first and buffer live events during the snapshot round trip; otherwise an
     // older snapshot could overwrite a newer live lock and hide the overlay.
     if (!isRuntimeEnvironmentActive()) {
       void Promise.all([
         window.api.runtime.getTerminalFitOverrides(),
-        window.api.runtime.getTerminalDrivers()
+        window.api.runtime.getTerminalDrivers(),
+        window.api.runtime.getBrowserDrivers()
       ])
-        .then(([overrides, drivers]) => {
+        .then(([overrides, drivers, browserDrivers]) => {
           hydrateOverrides(overrides)
           hydrateDrivers(drivers)
+          hydrateBrowserDrivers(browserDrivers)
           mobileStateHydrated = true
           applyPendingMobileStateEvents()
         })
