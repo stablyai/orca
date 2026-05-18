@@ -4,7 +4,7 @@ import {
   type WorkItemsCacheError,
   type WorkItemsCacheSources
 } from '@/store/slices/github'
-import type { GitHubWorkItem, LinearIssue } from '../../../shared/types'
+import type { GitHubWorkItem, JiraIssue, LinearIssue } from '../../../shared/types'
 
 export type TaskPageRepoCacheInput = {
   id: string
@@ -31,6 +31,8 @@ export type TaskPageWorkItemsFetchOptions = {
 type WorkItemsCache = Record<string, CacheEntry<GitHubWorkItem[]>>
 type LinearIssueCache = Record<string, CacheEntry<LinearIssue>>
 type LinearSearchCache = Record<string, CacheEntry<LinearIssue[]>>
+type JiraIssueCache = Record<string, CacheEntry<JiraIssue>>
+type JiraSearchCache = Record<string, CacheEntry<JiraIssue[]>>
 
 export function deriveTaskPageGitHubWorkItemsFetchOptions(
   forcedFetch: boolean,
@@ -327,3 +329,28 @@ export function findTaskPageLinearIssue(
 }
 
 export const findTaskPageLinearDrawerIssue = findTaskPageLinearIssue
+
+export function findTaskPageJiraIssue(
+  jiraIssueCache: JiraIssueCache,
+  jiraSearchCache: JiraSearchCache,
+  jiraIssueKey: string | null
+): JiraIssue | null {
+  if (!jiraIssueKey) {
+    return null
+  }
+
+  for (const entry of Object.values(jiraIssueCache)) {
+    if (entry?.data?.key === jiraIssueKey) {
+      return entry.data
+    }
+  }
+
+  for (const entry of Object.values(jiraSearchCache)) {
+    const found = entry?.data?.find((issue) => issue.key === jiraIssueKey)
+    if (found) {
+      return found
+    }
+  }
+
+  return null
+}

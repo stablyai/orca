@@ -130,7 +130,11 @@ function runtimeScopedStateReset(): Partial<AppState> {
     linearCustomViewCache: {},
     linearCustomViewDetailCache: {},
     linearCustomViewIssueCache: {},
-    linearCustomViewProjectCache: {}
+    linearCustomViewProjectCache: {},
+    jiraStatus: { connected: false, viewer: null },
+    jiraStatusChecked: false,
+    jiraIssueCache: {},
+    jiraSearchCache: {}
   }
 }
 

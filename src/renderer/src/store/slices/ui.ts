@@ -223,6 +223,12 @@ const VALID_LINEAR_MODES = new Set<NonNullable<TaskResumeState['linearMode']>>([
   'projects',
   'views'
 ])
+const VALID_JIRA_PRESETS = new Set<NonNullable<TaskResumeState['jiraPreset']>>([
+  'assigned',
+  'reported',
+  'all',
+  'done'
+])
 
 function filterTrustedOrcaHooksToValidRepos(
   trust: PersistedTrustedOrcaHooks,
@@ -385,6 +391,15 @@ function sanitizeTaskResumeState(value: unknown): TaskResumeState | undefined {
         model: context.model === 'issue' || context.model === 'project' ? context.model : undefined
       }
     }
+  }
+  if (
+    typeof input.jiraPreset === 'string' &&
+    VALID_JIRA_PRESETS.has(input.jiraPreset as NonNullable<TaskResumeState['jiraPreset']>)
+  ) {
+    next.jiraPreset = input.jiraPreset as NonNullable<TaskResumeState['jiraPreset']>
+  }
+  if (typeof input.jiraQuery === 'string') {
+    next.jiraQuery = input.jiraQuery
   }
 
   return Object.keys(next).length > 0 ? next : undefined

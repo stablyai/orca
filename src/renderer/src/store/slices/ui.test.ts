@@ -746,7 +746,9 @@ describe('createUISlice hydratePersistedUI', () => {
           githubItemsPreset: 'invalid',
           githubItemsQuery: 42,
           linearPreset: 'completed',
-          linearQuery: 'label:bug'
+          linearQuery: 'label:bug',
+          jiraPreset: 'reported',
+          jiraQuery: 99
         } as unknown as PersistedUIState['taskResumeState']
       })
     )
@@ -754,7 +756,8 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().taskResumeState).toEqual({
       githubMode: 'project',
       linearPreset: 'completed',
-      linearQuery: 'label:bug'
+      linearQuery: 'label:bug',
+      jiraPreset: 'reported'
     })
   })
 
