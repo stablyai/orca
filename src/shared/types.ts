@@ -585,6 +585,8 @@ export type PRConflictSummary = {
   files: string[]
 }
 
+export type GitHubRepositoryIdentity = { owner: string; repo: string }
+
 export type PRInfo = {
   number: number
   title: string
@@ -597,6 +599,8 @@ export type PRInfo = {
   // Keeping the head SHA in cached PR metadata lets the checks panel poll the
   // correct commit without re-querying GitHub or guessing from local branch refs.
   headSha?: string
+  prRepo?: GitHubRepositoryIdentity
+  headRepo?: GitHubRepositoryIdentity
   conflictSummary?: PRConflictSummary
 }
 
@@ -904,7 +908,7 @@ export type ClassifiedError = {
 // slices can reference the same structural type without importing from main.
 // Aliased as `OwnerRepo` in `src/main/github/gh-utils.ts` so main call sites
 // can continue using the short local name.
-export type GitHubOwnerRepo = { owner: string; repo: string }
+export type GitHubOwnerRepo = GitHubRepositoryIdentity
 
 // Why: GitLab-specific types live in `./gitlab-types` so they can grow
 // independently from the central types file (which is touched by every

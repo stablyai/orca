@@ -174,4 +174,27 @@ describe('getPRChecks', () => {
       { cwd: '/repo-root', env: { ...process.env, GH_PROMPT_DISABLED: '1' } }
     )
   })
+
+  it('uses explicit PR repo for check-runs and gh pr checks fallback', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(new Error('gh: No commit found for SHA: stale-head (HTTP 422)'))
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([{ name: 'lint', state: 'PASS', link: 'https://example.com/lint' }])
+      })
+
+    await getPRChecks('/repo-root', 42, 'stale-head', { owner: 'acme', repo: 'widgets' })
+
+    expect(getOwnerRepoMock).not.toHaveBeenCalled()
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      ['api', '--cache', '60s', 'repos/acme/widgets/commits/stale-head/check-runs?per_page=100'],
+      { cwd: '/repo-root' }
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      ['pr', 'checks', '42', '--json', 'name,state,link', '--repo', 'acme/widgets'],
+      { cwd: '/repo-root' }
+    )
+  })
 })

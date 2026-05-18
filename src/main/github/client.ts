@@ -37,6 +37,7 @@ import {
   getOwnerRepo,
   getIssueOwnerRepo,
   getOwnerRepoForRemote,
+  resolvePRRepositoryCandidates,
   resolveIssueSource,
   classifyGhError,
   classifyListIssuesError,
@@ -1451,18 +1452,45 @@ function mapRestPullRequest(pr: RestPullRequest): PullRequestLookupData {
 }
 
 async function getRestPRForBranch(
-  ownerRepo: OwnerRepo,
+  prRepo: OwnerRepo,
+  headOwner: string,
   branchName: string,
   ghOptions: ReturnType<typeof ghRepoExecOptions>
 ): Promise<PullRequestLookupData | null> {
-  const head = encodeURIComponent(`${ownerRepo.owner}:${branchName}`)
+  const head = encodeURIComponent(`${headOwner}:${branchName}`)
   const { stdout } = await ghExecFileAsync(
-    ['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls?head=${head}&state=all&per_page=1`],
+    ['api', `repos/${prRepo.owner}/${prRepo.repo}/pulls?head=${head}&state=all&per_page=1`],
     ghOptions
   )
   const list = JSON.parse(stdout) as RestPullRequest[]
   const pr = list[0]
   return pr ? mapRestPullRequest(pr) : null
+}
+
+async function getFallbackPRListForBranch(
+  prRepo: OwnerRepo,
+  branchName: string,
+  ghOptions: ReturnType<typeof ghRepoExecOptions>
+): Promise<PullRequestLookupData | null> {
+  const { stdout } = await ghExecFileAsync(
+    [
+      'pr',
+      'list',
+      '--repo',
+      `${prRepo.owner}/${prRepo.repo}`,
+      '--head',
+      branchName,
+      '--state',
+      'all',
+      '--limit',
+      '1',
+      '--json',
+      PR_LOOKUP_JSON_FIELDS
+    ],
+    ghOptions
+  )
+  const list = JSON.parse(stdout) as PullRequestLookupData[]
+  return list[0] ?? null
 }
 
 async function getRestPRByNumber(
@@ -1522,18 +1550,15 @@ async function exactPRMatchesWorktreeHead(
   data: PullRequestLookupData,
   connectionId?: string | null
 ): Promise<boolean> {
-  if (!branchName || data.headRefName === branchName) {
-    return true
+  if (!connectionId && data.headRefOid) {
+    try {
+      const { stdout } = await gitExecFileAsync(['rev-parse', 'HEAD'], { cwd: repoPath })
+      return stdout.trim() === data.headRefOid
+    } catch {
+      return false
+    }
   }
-  if (connectionId || !data.headRefOid) {
-    return false
-  }
-  try {
-    const { stdout } = await gitExecFileAsync(['rev-parse', 'HEAD'], { cwd: repoPath })
-    return stdout.trim() === data.headRefOid
-  } catch {
-    return false
-  }
+  return !branchName || data.headRefName === branchName
 }
 
 function isNotFoundGhError(err: unknown): boolean {
@@ -1564,22 +1589,39 @@ export async function getPRForBranch(
 ): Promise<PRInfo | null> {
   // Strip refs/heads/ prefix if present
   const branchName = branch.replace(/^refs\/heads\//, '')
+  if (!branchName && typeof linkedPRNumber !== 'number') {
+    return null
+  }
   const context = githubRepoContext(repoPath, connectionId)
   const ghOptions = ghRepoExecOptions(context)
 
   await acquire()
   try {
-    const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+    const { candidates, headRepo } = await resolvePRRepositoryCandidates(repoPath, connectionId)
     let data: PullRequestLookupData | null = null
+    let dataRepo: OwnerRepo | null = null
     let exactLinkedData: PullRequestLookupData | null = null
+    let exactLinkedRepo: OwnerRepo | null = null
 
-    if (ownerRepo && typeof linkedPRNumber === 'number') {
-      data = await getPRByNumber(ownerRepo, linkedPRNumber, ghOptions)
-      if (data && !(await exactPRMatchesWorktreeHead(repoPath, branchName, data, connectionId))) {
-        // Why: linked PR metadata is user-editable. If the stored number still
-        // resolves but no longer matches this worktree, let branch lookup correct it.
-        exactLinkedData = data
-        data = null
+    if (typeof linkedPRNumber === 'number') {
+      for (const candidate of candidates) {
+        try {
+          const linkedData = await getPRByNumber(candidate, linkedPRNumber, ghOptions)
+          if (!linkedData) {
+            continue
+          }
+          if (await exactPRMatchesWorktreeHead(repoPath, branchName, linkedData, connectionId)) {
+            data = linkedData
+            dataRepo = candidate
+            break
+          }
+          // Why: linked PR metadata is user-editable. If the stored number still
+          // resolves but no longer matches this worktree, let branch lookup correct it.
+          exactLinkedData ??= linkedData
+          exactLinkedRepo ??= candidate
+        } catch {
+          // Candidate probing is best-effort; another repo may own the PR.
+        }
       }
     }
 
@@ -1587,33 +1629,28 @@ export async function getPRForBranch(
     // An empty --head filter causes gh to return an arbitrary PR — skip the
     // branch lookup and rely on the linkedPR fallback below if available.
     if (!data && branchName) {
-      if (ownerRepo) {
-        try {
-          const { stdout } = await ghExecFileAsync(
-            [
-              'pr',
-              'list',
-              '--repo',
-              `${ownerRepo.owner}/${ownerRepo.repo}`,
-              '--head',
-              branchName,
-              '--state',
-              'all',
-              '--limit',
-              '1',
-              '--json',
-              PR_LOOKUP_JSON_FIELDS
-            ],
-            ghOptions
-          )
-          const list = JSON.parse(stdout) as PullRequestLookupData[]
-          data = list[0] ?? null
-        } catch (err) {
-          // Why: `gh pr list/view` uses GraphQL and can hit that quota while
-          // REST is still available. Falling back prevents a real PR from
-          // rendering as "No pull request found" during GraphQL outages.
-          if (!isNotFoundGhError(err)) {
-            data = await getRestPRForBranch(ownerRepo, branchName, ghOptions)
+      if (candidates.length > 0) {
+        for (const candidate of candidates) {
+          try {
+            data = headRepo
+              ? await getRestPRForBranch(candidate, headRepo.owner, branchName, ghOptions)
+              : await getFallbackPRListForBranch(candidate, branchName, ghOptions)
+            if (data) {
+              dataRepo = candidate
+              break
+            }
+          } catch (err) {
+            if (!headRepo && !isNotFoundGhError(err)) {
+              try {
+                data = await getRestPRForBranch(candidate, candidate.owner, branchName, ghOptions)
+                if (data) {
+                  dataRepo = candidate
+                  break
+                }
+              } catch {
+                // Continue to the next candidate below.
+              }
+            }
           }
         }
       } else {
@@ -1625,7 +1662,7 @@ export async function getPRForBranch(
       }
     }
 
-    if (!data && !ownerRepo && typeof linkedPRNumber === 'number') {
+    if (!data && candidates.length === 0 && typeof linkedPRNumber === 'number') {
       const args = ['pr', 'view', String(linkedPRNumber), '--json', PR_LOOKUP_JSON_FIELDS]
       try {
         const { stdout } = await ghExecFileAsync(args, ghOptions)
@@ -1641,6 +1678,7 @@ export async function getPRForBranch(
 
     if (!data && exactLinkedData) {
       data = exactLinkedData
+      dataRepo = exactLinkedRepo
     }
 
     if (!data) {
@@ -1665,6 +1703,8 @@ export async function getPRForBranch(
       updatedAt: data.updatedAt,
       mergeable: (data.mergeable as PRMergeableState) ?? 'UNKNOWN',
       headSha: data.headRefOid,
+      prRepo: dataRepo ?? undefined,
+      headRepo: headRepo ?? undefined,
       conflictSummary
     }
   } catch {
@@ -1683,11 +1723,12 @@ export async function getPRChecks(
   repoPath: string,
   prNumber: number,
   headSha?: string,
+  prRepo?: OwnerRepo | null,
   options?: { noCache?: boolean },
   connectionId?: string | null
 ): Promise<PRCheckDetail[]> {
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+  const ownerRepo = prRepo ?? (await getOwnerRepo(repoPath, connectionId))
   const fallbackToPRChecks = async (): Promise<PRCheckDetail[]> => {
     const fallbackArgs = ['pr', 'checks', String(prNumber), '--json', 'name,state,link']
     if (ownerRepo) {
@@ -1784,6 +1825,7 @@ export async function rerunPRChecks(
     repoPath,
     prNumber,
     options.headSha,
+    ownerRepo,
     { noCache: true },
     connectionId
   )

@@ -19,6 +19,7 @@ import type {
   CreateWorktreeResult,
   GitPushTarget,
   GitWorktreeInfo,
+  GitHubOwnerRepo,
   GlobalSettings,
   Repo,
   StatsSummary,
@@ -4711,11 +4712,12 @@ export class OrcaRuntimeService {
     repoSelector: string,
     prNumber: number,
     headSha?: string,
+    prRepo?: GitHubOwnerRepo | null,
     options?: { noCache?: boolean }
   ): Promise<Awaited<ReturnType<typeof getPRChecks>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
     this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_checks')
-    return getPRChecks(repo.path, prNumber, headSha, options)
+    return getPRChecks(repo.path, prNumber, headSha, prRepo ?? null, options)
   }
 
   async rerunRepoPRChecks(

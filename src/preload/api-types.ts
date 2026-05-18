@@ -38,6 +38,7 @@ import type {
   GitHubPRFileContents,
   GitHubPRReviewCommentInput,
   GitHubCommentResult,
+  GitHubOwnerRepo,
   GitHubWorkItem,
   GitHubWorkItemDetails,
   GitHubViewer,
@@ -798,6 +799,7 @@ export type PreloadApi = {
       repoId?: string
       prNumber: number
       headSha?: string
+      prRepo?: GitHubOwnerRepo | null
       noCache?: boolean
     }) => Promise<PRCheckDetail[]>
     rerunPRChecks: (args: {

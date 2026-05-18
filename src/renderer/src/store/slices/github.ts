@@ -393,6 +393,17 @@ function evictRepoCacheEntries<T>(
   return next ? { cache: next, evicted: true } : { cache, evicted: false }
 }
 
+function normalizedRepoIdentity(repo: GitHubOwnerRepo): string {
+  return `${repo.owner.toLowerCase()}/${repo.repo.toLowerCase()}`
+}
+
+export function prChecksCacheSuffix(prNumber: number, prRepo?: GitHubOwnerRepo | null): string {
+  if (!prRepo) {
+    return `pr-checks::${prNumber}`
+  }
+  return `pr-checks::${normalizedRepoIdentity(prRepo)}::${prNumber}`
+}
+
 // Why: 500 entries is generous enough that active developers will never hit it
 // during normal use, but prevents the cache from growing without bound across
 // many repos and branches over a long-running session.
@@ -467,6 +478,7 @@ export type GitHubSlice = {
     prNumber: number,
     branch?: string,
     headSha?: string,
+    prRepo?: GitHubOwnerRepo | null,
     options?: RepoScopedFetchOptions
   ) => Promise<PRCheckDetail[]>
   fetchPRComments: (
@@ -1397,9 +1409,16 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     return request
   },
 
-  fetchPRChecks: async (repoPath, prNumber, branch, headSha, options): Promise<PRCheckDetail[]> => {
+  fetchPRChecks: async (
+    repoPath,
+    prNumber,
+    branch,
+    headSha,
+    prRepo,
+    options
+  ): Promise<PRCheckDetail[]> => {
     const repoId = options?.repoId ?? get().repos?.find((repo) => repo.path === repoPath)?.id
-    const cacheKey = repoScopedCacheKey(repoPath, repoId, `pr-checks::${prNumber}`)
+    const cacheKey = repoScopedCacheKey(repoPath, repoId, prChecksCacheSuffix(prNumber, prRepo))
     const cached = get().checksCache[cacheKey]
     if (!options?.force && isFresh(cached, CHECKS_CACHE_TTL)) {
       const cachedChecks = cached.data ?? []
@@ -1423,6 +1442,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           repoId,
           prNumber,
           headSha,
+          prRepo: prRepo ?? null,
           noCache: options?.force
         })) as PRCheckDetail[]
         set((s) => {

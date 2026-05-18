@@ -4,7 +4,12 @@ reviewable as one surface. Splitting by feature area would risk drifting
 validation/gate conventions across handler files. */
 import { ipcMain, webContents } from 'electron'
 import { resolve } from 'path'
-import type { Repo, GitHubIssueUpdate, GitHubPullRequestStateUpdate } from '../../shared/types'
+import type {
+  Repo,
+  GitHubIssueUpdate,
+  GitHubOwnerRepo,
+  GitHubPullRequestStateUpdate
+} from '../../shared/types'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
 import {
@@ -278,6 +283,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         repoPath: string
         prNumber: number
         headSha?: string
+        prRepo?: GitHubOwnerRepo | null
         noCache?: boolean
       }
     ) => {
@@ -286,6 +292,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         repo.path,
         args.prNumber,
         args.headSha,
+        args.prRepo ?? null,
         {
           noCache: args.noCache
         },

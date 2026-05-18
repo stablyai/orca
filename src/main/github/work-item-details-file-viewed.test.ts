@@ -158,6 +158,13 @@ describe('getWorkItemDetails PR file viewed state', () => {
       ['src/viewed.ts', 'VIEWED'],
       ['src/changed.ts', 'DISMISSED']
     ])
-    expect(getPRChecksMock).toHaveBeenCalledWith('/repo-root', 42, 'head-sha', undefined, undefined)
+    expect(getPRChecksMock).toHaveBeenCalledWith(
+      '/repo-root',
+      42,
+      'head-sha',
+      null,
+      undefined,
+      undefined
+    )
   })
 })

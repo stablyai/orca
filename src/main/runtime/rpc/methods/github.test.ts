@@ -156,13 +156,20 @@ describe('github RPC methods', () => {
         repo: 'repo-1',
         prNumber: 7,
         headSha: 'abc123',
+        prRepo: { owner: 'acme', repo: 'widgets' },
         noCache: true
       })
     )
 
-    expect(runtime.getRepoPRChecks).toHaveBeenCalledWith('repo-1', 7, 'abc123', {
-      noCache: true
-    })
+    expect(runtime.getRepoPRChecks).toHaveBeenCalledWith(
+      'repo-1',
+      7,
+      'abc123',
+      { owner: 'acme', repo: 'widgets' },
+      {
+        noCache: true
+      }
+    )
     expect(response).toMatchObject({ ok: true, result: [] })
   })
 

@@ -194,7 +194,9 @@ describe('createGitHubSlice.fetchPRChecks', () => {
       { name: 'lint', status: 'completed', conclusion: 'success', url: null }
     ])
 
-    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, { force: true, repoId })
+    await store
+      .getState()
+      .fetchPRChecks(repoPath, 12, branch, undefined, null, { force: true, repoId })
 
     expect(store.getState().prCache[prCacheKey]?.data?.checksStatus).toBe('success')
   })
@@ -220,7 +222,9 @@ describe('createGitHubSlice.fetchPRChecks', () => {
       { name: 'integration', status: 'completed', conclusion: 'failure', url: null }
     ])
 
-    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, { force: true, repoId })
+    await store
+      .getState()
+      .fetchPRChecks(repoPath, 12, branch, undefined, null, { force: true, repoId })
 
     expect(store.getState().prCache[prCacheKey]?.data?.checksStatus).toBe('failure')
   })
@@ -247,7 +251,7 @@ describe('createGitHubSlice.fetchPRChecks', () => {
 
     await store
       .getState()
-      .fetchPRChecks(repoPath, 12, `refs/heads/${branch}`, undefined, { force: true, repoId })
+      .fetchPRChecks(repoPath, 12, `refs/heads/${branch}`, undefined, null, { force: true, repoId })
 
     expect(store.getState().prCache[prCacheKey]?.data?.checksStatus).toBe('success')
   })
@@ -274,7 +278,9 @@ describe('createGitHubSlice.fetchPRChecks', () => {
       { name: 'build', status: 'completed', conclusion: 'success', url: null }
     ])
 
-    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, { force: true, repoId })
+    await store
+      .getState()
+      .fetchPRChecks(repoPath, 12, branch, undefined, null, { force: true, repoId })
     await vi.advanceTimersByTimeAsync(1000)
 
     expect(mockApi.cache.setGitHub).toHaveBeenCalledWith({
@@ -310,7 +316,7 @@ describe('createGitHubSlice.fetchPRChecks', () => {
       }
     })
 
-    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, { repoId })
+    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, null, { repoId })
     await vi.advanceTimersByTimeAsync(1000)
 
     expect(mockApi.gh.prChecks).not.toHaveBeenCalled()
@@ -341,13 +347,65 @@ describe('createGitHubSlice.fetchPRChecks', () => {
 
     await store
       .getState()
-      .fetchPRChecks(repoPath, 12, branch, 'abc123head', { force: true, repoId })
+      .fetchPRChecks(repoPath, 12, branch, 'abc123head', null, { force: true, repoId })
 
     expect(mockApi.gh.prChecks).toHaveBeenCalledWith({
       repoPath,
       repoId,
       prNumber: 12,
       headSha: 'abc123head',
+      prRepo: null,
+      noCache: true
+    })
+  })
+
+  it('keys PR checks by normalized PR repo identity', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+    const branch = 'feature/test'
+
+    mockApi.gh.prChecks
+      .mockResolvedValueOnce([
+        { name: 'upstream', status: 'completed', conclusion: 'success', url: null }
+      ])
+      .mockResolvedValueOnce([
+        { name: 'fork', status: 'completed', conclusion: 'failure', url: null }
+      ])
+
+    await store
+      .getState()
+      .fetchPRChecks(
+        repoPath,
+        12,
+        branch,
+        'head-a',
+        { owner: 'Acme', repo: 'Widgets' },
+        { force: true, repoId }
+      )
+    await store
+      .getState()
+      .fetchPRChecks(
+        repoPath,
+        12,
+        branch,
+        'head-b',
+        { owner: 'Fork', repo: 'Widgets' },
+        { force: true, repoId }
+      )
+
+    expect(
+      store.getState().checksCache[`${repoId}::pr-checks::acme/widgets::12`]?.data?.[0].name
+    ).toBe('upstream')
+    expect(
+      store.getState().checksCache[`${repoId}::pr-checks::fork/widgets::12`]?.data?.[0].name
+    ).toBe('fork')
+    expect(mockApi.gh.prChecks).toHaveBeenNthCalledWith(1, {
+      repoPath,
+      repoId,
+      prNumber: 12,
+      headSha: 'head-a',
+      prRepo: { owner: 'Acme', repo: 'Widgets' },
       noCache: true
     })
   })
@@ -371,7 +429,9 @@ describe('createGitHubSlice.fetchPRChecks', () => {
       { name: 'build', status: 'completed', conclusion: 'success', url: null }
     ])
 
-    await store.getState().fetchPRChecks(repoPath, 12, branch, undefined, { force: true, repoId })
+    await store
+      .getState()
+      .fetchPRChecks(repoPath, 12, branch, undefined, null, { force: true, repoId })
 
     expect(store.getState().prCache[repoScopedKey]?.data?.checksStatus).toBe('success')
     expect(store.getState().prCache[pathScopedKey]?.data?.checksStatus).toBe('pending')

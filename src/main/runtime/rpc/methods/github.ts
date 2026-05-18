@@ -59,7 +59,8 @@ const PullRequest = RepoSelector.extend({
 })
 
 const PullRequestChecks = PullRequest.extend({
-  headSha: OptionalString
+  headSha: OptionalString,
+  prRepo: SlugRepo.nullable().optional()
 })
 
 const RerunPullRequestChecks = PullRequest.extend({
@@ -308,7 +309,7 @@ export const GITHUB_METHODS: RpcMethod[] = [
     name: 'github.prChecks',
     params: PullRequestChecks,
     handler: async (params, { runtime }) =>
-      runtime.getRepoPRChecks(params.repo, params.prNumber, params.headSha, {
+      runtime.getRepoPRChecks(params.repo, params.prNumber, params.headSha, params.prRepo ?? null, {
         noCache: params.noCache
       })
   }),
