@@ -1,11 +1,5 @@
 import { useState } from 'react'
-import type {
-  HookCommandSourcePolicy,
-  OrcaHooks,
-  Repo,
-  RepoHookSettings,
-  SetupRunPolicy
-} from '../../../../shared/types'
+import type { OrcaHooks, Repo, RepoHookSettings } from '../../../../shared/types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import { REPO_COLORS } from '../../../../shared/constants'
 import { Button } from '../ui/button'
@@ -13,7 +7,6 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
 import { Trash2 } from 'lucide-react'
-import { DEFAULT_REPO_HOOK_SETTINGS } from './SettingsConstants'
 import { BaseRefPicker } from './BaseRefPicker'
 import { RepositoryHooksSection } from './RepositoryHooksSection'
 import { McpConfigSection } from './McpConfigSection'
@@ -171,18 +164,7 @@ export function RepositoryPane({
     setConfirmingRemove(repoId)
   }
 
-  const updateSelectedRepoHookSettings = (
-    updates: Partial<Pick<RepoHookSettings, 'setupRunPolicy' | 'commandSourcePolicy' | 'scripts'>>
-  ) => {
-    // Why: local Settings commands and shared `orca.yaml` commands resolve together.
-    // Preserve the full persisted hook shape when saving one field so changing a
-    // policy does not drop a user's local command drafts.
-    const nextSettings: RepoHookSettings = {
-      ...DEFAULT_REPO_HOOK_SETTINGS,
-      ...repo.hookSettings,
-      ...updates
-    }
-
+  const updateSelectedRepoHookSettings = (nextSettings: RepoHookSettings) => {
     updateRepo(repo.id, {
       hookSettings: nextSettings
     })
@@ -198,22 +180,6 @@ export function RepositoryPane({
     echo "Cleaning up before archive"`)
     setCopiedTemplate(true)
     window.setTimeout(() => setCopiedTemplate(false), 1500)
-  }
-
-  const handleClearLegacyHooks = () => {
-    // Why: legacy repo-local commands are still honored as a compatibility fallback.
-    // Keep them visible and removable here so the settings surface matches runtime behavior.
-    updateRepo(repo.id, {
-      hookSettings: {
-        ...DEFAULT_REPO_HOOK_SETTINGS,
-        ...repo.hookSettings,
-        scripts: {
-          ...DEFAULT_REPO_HOOK_SETTINGS.scripts,
-          setup: '',
-          archive: ''
-        }
-      }
-    })
   }
 
   const allEntries = getRepositoryPaneSearchEntries(repo)
@@ -352,24 +318,7 @@ export function RepositoryPane({
         mayNeedUpdate={mayNeedUpdate}
         copiedTemplate={copiedTemplate}
         onCopyTemplate={() => void handleCopyTemplate()}
-        onClearLegacyHooks={handleClearLegacyHooks}
-        onUpdateLocalHookScript={(hookName, script) =>
-          updateSelectedRepoHookSettings({
-            scripts: {
-              ...DEFAULT_REPO_HOOK_SETTINGS.scripts,
-              ...repo.hookSettings?.scripts,
-              [hookName]: script
-            }
-          })
-        }
-        onUpdateCommandSourcePolicy={(policy) =>
-          updateSelectedRepoHookSettings({
-            commandSourcePolicy: policy as HookCommandSourcePolicy
-          })
-        }
-        onUpdateSetupRunPolicy={(policy) =>
-          updateSelectedRepoHookSettings({ setupRunPolicy: policy as SetupRunPolicy })
-        }
+        onUpdateHookSettings={updateSelectedRepoHookSettings}
       />
     ) : null
   ].filter(Boolean)

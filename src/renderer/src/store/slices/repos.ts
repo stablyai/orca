@@ -13,6 +13,30 @@ import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-fol
 
 const ERROR_TOAST_DURATION = 60_000
 
+type RepoUpdate = Partial<
+  Pick<
+    Repo,
+    | 'displayName'
+    | 'badgeColor'
+    | 'hookSettings'
+    | 'worktreeBaseRef'
+    | 'kind'
+    | 'symlinkPaths'
+    | 'issueSourcePreference'
+  >
+>
+
+const updateRepoChainsByStore = new WeakMap<() => AppState, Map<string, Promise<void>>>()
+
+function getRepoUpdateChains(get: () => AppState) {
+  let chains = updateRepoChainsByStore.get(get)
+  if (!chains) {
+    chains = new Map<string, Promise<void>>()
+    updateRepoChainsByStore.set(get, chains)
+  }
+  return chains
+}
+
 export type RepoSlice = {
   repos: Repo[]
   activeRepoId: string | null
@@ -21,21 +45,7 @@ export type RepoSlice = {
   addRepoPath: (path: string, kind?: 'git' | 'folder') => Promise<Repo | null>
   addNonGitFolder: (path: string) => Promise<Repo | null>
   removeRepo: (repoId: string) => Promise<void>
-  updateRepo: (
-    repoId: string,
-    updates: Partial<
-      Pick<
-        Repo,
-        | 'displayName'
-        | 'badgeColor'
-        | 'hookSettings'
-        | 'worktreeBaseRef'
-        | 'kind'
-        | 'symlinkPaths'
-        | 'issueSourcePreference'
-      >
-    >
-  ) => Promise<void>
+  updateRepo: (repoId: string, updates: RepoUpdate) => Promise<void>
   setActiveRepo: (repoId: string | null) => void
   reorderRepos: (orderedIds: string[]) => Promise<void>
 }
@@ -312,17 +322,34 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   },
 
   updateRepo: async (repoId, updates) => {
-    try {
-      const target = getActiveRuntimeTarget(get().settings)
-      await (target.kind === 'local'
-        ? window.api.repos.update({ repoId, updates })
-        : callRuntimeRpc(target, 'repo.update', { repo: repoId, updates }, { timeoutMs: 15_000 }))
-      set((s) => ({
-        repos: s.repos.map((r) => (r.id === repoId ? { ...r, ...updates } : r))
-      }))
-    } catch (err) {
-      console.error('Failed to update repo:', err)
+    const updateRepoChains = getRepoUpdateChains(get)
+    const applyRepoUpdate = async () => {
+      try {
+        const target = getActiveRuntimeTarget(get().settings)
+        await (target.kind === 'local'
+          ? window.api.repos.update({ repoId, updates })
+          : callRuntimeRpc(target, 'repo.update', { repo: repoId, updates }, { timeoutMs: 15_000 }))
+        set((s) => ({
+          repos: s.repos.map((r) => (r.id === repoId ? { ...r, ...updates } : r))
+        }))
+      } catch (err) {
+        console.error('Failed to update repo:', err)
+      }
     }
+    const previous = updateRepoChains.get(repoId)
+    // Why: repo settings are persisted as full nested values. Preserve call
+    // order per repo so a slower IPC/RPC response cannot overwrite newer state.
+    const next = previous
+      ? previous.catch(() => undefined).then(applyRepoUpdate)
+      : applyRepoUpdate()
+    updateRepoChains.set(repoId, next)
+    const cleanup = () => {
+      if (updateRepoChains.get(repoId) === next) {
+        updateRepoChains.delete(repoId)
+      }
+    }
+    void next.then(cleanup, cleanup)
+    await next
   },
 
   setActiveRepo: (repoId) => set({ activeRepoId: repoId }),

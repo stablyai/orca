@@ -4,6 +4,7 @@ import type {
   HookCommandSourcePolicy,
   OrcaHooks,
   Repo,
+  RepoHookSettings,
   SetupRunPolicy
 } from '../../../../shared/types'
 import { AlertTriangle, Plus, Trash2 } from 'lucide-react'
@@ -13,6 +14,7 @@ import { Input } from '../ui/input'
 import { SearchableSetting } from './SearchableSetting'
 import { useAppStore } from '@/store'
 import { readRuntimeIssueCommand, writeRuntimeIssueCommand } from '@/runtime/runtime-hooks-client'
+import { DEFAULT_REPO_HOOK_SETTINGS } from './SettingsConstants'
 
 type RepositoryHooksSectionProps = {
   repo: Repo
@@ -21,13 +23,17 @@ type RepositoryHooksSectionProps = {
   mayNeedUpdate: boolean
   copiedTemplate: boolean
   onCopyTemplate: () => void
-  onClearLegacyHooks: () => void
-  onUpdateLocalHookScript: (hookName: 'setup' | 'archive', script: string) => void
-  onUpdateCommandSourcePolicy: (policy: HookCommandSourcePolicy) => void
-  onUpdateSetupRunPolicy: (policy: SetupRunPolicy) => void
+  onUpdateHookSettings: (settings: RepoHookSettings) => void
 }
 
 type PolicyOption<P> = { policy: P; label: string; description: string }
+export type LocalCommandRow = { value: string; isPlaceholder: boolean }
+const LOCAL_HOOK_NAMES = ['setup', 'archive'] as const
+type LocalHookName = (typeof LOCAL_HOOK_NAMES)[number]
+export type LocalCommandDraft = Record<LocalHookName, LocalCommandRow[]>
+type HookSettingsPolicyDraft = Partial<
+  Pick<RepoHookSettings, 'setupRunPolicy' | 'commandSourcePolicy'>
+>
 
 const SETUP_RUN_POLICY_OPTIONS: PolicyOption<SetupRunPolicy>[] = [
   { policy: 'ask', label: 'Ask every time', description: 'Prompt before running setup.' },
@@ -58,7 +64,7 @@ const COMMAND_SOURCE_POLICY_OPTIONS: PolicyOption<HookCommandSourcePolicy>[] = [
 ]
 
 const LOCAL_HOOK_FIELDS: {
-  name: 'setup' | 'archive'
+  name: LocalHookName
   label: string
   description: string
   placeholder: string
@@ -77,18 +83,52 @@ const LOCAL_HOOK_FIELDS: {
   }
 ]
 
-function scriptToCommandRows(script: string | undefined): string[] {
-  return (script ?? '')
-    .split(/\r?\n/)
-    .map((line) => line.trimEnd())
-    .filter((line) => line.trim().length > 0)
+export function scriptToCommandRows(script: string | undefined): LocalCommandRow[] {
+  if (!script) {
+    return []
+  }
+
+  return script.split('\n').map((line) => ({
+    value: line.endsWith('\r') ? line.slice(0, -1) : line,
+    isPlaceholder: false
+  }))
 }
 
-function commandRowsToScript(commands: string[]): string {
+export function commandRowsToScript(commands: LocalCommandRow[]): string {
   return commands
-    .map((command) => command.trimEnd())
-    .filter((command) => command.trim().length > 0)
+    .filter((command) => !(command.isPlaceholder && command.value.length === 0))
+    .map((command) => command.value)
     .join('\n')
+}
+
+function pruneLocalCommandPlaceholders(commands: LocalCommandRow[]): LocalCommandRow[] {
+  return commands.filter((command) => !(command.isPlaceholder && command.value.length === 0))
+}
+
+export function localCommandDraftToScripts(draft: LocalCommandDraft): RepoHookSettings['scripts'] {
+  return {
+    setup: commandRowsToScript(pruneLocalCommandPlaceholders(draft.setup)),
+    archive: commandRowsToScript(pruneLocalCommandPlaceholders(draft.archive))
+  }
+}
+
+function getHookSettingsDraft(hookSettings: Repo['hookSettings']): RepoHookSettings {
+  return {
+    ...DEFAULT_REPO_HOOK_SETTINGS,
+    ...hookSettings,
+    scripts: {
+      ...DEFAULT_REPO_HOOK_SETTINGS.scripts,
+      ...hookSettings?.scripts
+    }
+  }
+}
+
+function getLocalCommandsDraft(hookSettings: Repo['hookSettings']): LocalCommandDraft {
+  const draft = getHookSettingsDraft(hookSettings)
+  return {
+    setup: scriptToCommandRows(draft.scripts.setup),
+    archive: scriptToCommandRows(draft.scripts.archive)
+  }
 }
 
 const EXAMPLE_TEMPLATE = `scripts:
@@ -213,10 +253,7 @@ export function RepositoryHooksSection({
   mayNeedUpdate,
   copiedTemplate,
   onCopyTemplate,
-  onClearLegacyHooks,
-  onUpdateLocalHookScript,
-  onUpdateCommandSourcePolicy,
-  onUpdateSetupRunPolicy
+  onUpdateHookSettings
 }: RepositoryHooksSectionProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   // Why: distinguish "file has unrecognised top-level keys" from "file is
@@ -229,20 +266,29 @@ export function RepositoryHooksSection({
         ? 'update-available'
         : 'invalid'
       : 'missing'
-  const hs = repo.hookSettings
+  const [hookSettingsDraft, setHookSettingsDraft] = useState(() =>
+    getHookSettingsDraft(repo.hookSettings)
+  )
+  const hookSettingsDraftRef = useRef(hookSettingsDraft)
+  hookSettingsDraftRef.current = hookSettingsDraft
+  const [localCommandsDraft, setLocalCommandsDraft] = useState(() =>
+    getLocalCommandsDraft(repo.hookSettings)
+  )
+  const localCommandsDraftRef = useRef(localCommandsDraft)
+  localCommandsDraftRef.current = localCommandsDraft
+  const localCommandsRepoHookSettingsRef = useRef(repo.hookSettings)
+  const localCommandsDraftDirtyRef = useRef(false)
+  const localCommandsPersistForRepoRef = useRef(onUpdateHookSettings)
   const localHookEntries = (['setup', 'archive'] as const)
-    .map((hookName) => [hookName, hs?.scripts[hookName]?.trim() ?? ''] as const)
+    .map((hookName) => [hookName, hookSettingsDraft.scripts[hookName] ?? ''] as const)
     .filter(([, script]) => Boolean(script))
   // Why: the type allows `undefined` in persisted settings for backward compatibility,
   // but the UI always needs a concrete value so the policy grid has an active selection.
-  const selectedSetupRunPolicy: SetupRunPolicy = hs?.setupRunPolicy ?? 'run-by-default'
+  const selectedSetupRunPolicy: SetupRunPolicy =
+    hookSettingsDraft.setupRunPolicy ?? 'run-by-default'
   const selectedCommandSourcePolicy: HookCommandSourcePolicy =
-    hs?.commandSourcePolicy ?? 'shared-first'
+    hookSettingsDraft.commandSourcePolicy ?? 'shared-first'
   const [issueCommandDraft, setIssueCommandDraft] = useState('')
-  const [localCommandsDraft, setLocalCommandsDraft] = useState({
-    setup: scriptToCommandRows(hs?.scripts.setup),
-    archive: scriptToCommandRows(hs?.scripts.archive)
-  })
   const localCommandsRepoIdRef = useRef(repo.id)
   const [hasSharedIssueCommand, setHasSharedIssueCommand] = useState(false)
   const [issueCommandSaveError, setIssueCommandSaveError] = useState<string | null>(null)
@@ -252,43 +298,121 @@ export function RepositoryHooksSection({
   issueCommandDraftRef.current = issueCommandDraft
   const lastCommittedIssueCommandRef = useRef('')
 
-  useEffect(() => {
-    if (localCommandsRepoIdRef.current === repo.id) {
-      return
-    }
-    localCommandsRepoIdRef.current = repo.id
-    setLocalCommandsDraft({
-      setup: scriptToCommandRows(hs?.scripts.setup),
-      archive: scriptToCommandRows(hs?.scripts.archive)
-    })
-  }, [repo.id, hs?.scripts.setup, hs?.scripts.archive])
+  localCommandsRepoHookSettingsRef.current = repo.hookSettings
 
-  const updateLocalCommandsDraft = useCallback(
-    (hookName: 'setup' | 'archive', commands: string[]) => {
-      setLocalCommandsDraft((current) => ({ ...current, [hookName]: commands }))
-      onUpdateLocalHookScript(hookName, commandRowsToScript(commands))
+  const setAndMaybePersistHookSettings = useCallback(
+    (nextSettings: RepoHookSettings, shouldPersist: boolean) => {
+      hookSettingsDraftRef.current = nextSettings
+      setHookSettingsDraft(nextSettings)
+      if (shouldPersist) {
+        localCommandsDraftDirtyRef.current = false
+        onUpdateHookSettings(nextSettings)
+      }
     },
-    [onUpdateLocalHookScript]
+    [onUpdateHookSettings]
   )
 
-  const pruneEmptyLocalCommands = useCallback(
-    (hookName: 'setup' | 'archive') => {
-      setLocalCommandsDraft((current) => {
-        const next = scriptToCommandRows(commandRowsToScript(current[hookName]))
-        if (next.length === current[hookName].length) {
-          return current
+  const updateLocalCommandsDraft = useCallback(
+    (hookName: LocalHookName, commands: LocalCommandRow[], shouldPersist: boolean) => {
+      const nextCommandsDraft = { ...localCommandsDraftRef.current, [hookName]: commands }
+      localCommandsDraftRef.current = nextCommandsDraft
+      setLocalCommandsDraft(nextCommandsDraft)
+      if (!shouldPersist) {
+        localCommandsDraftDirtyRef.current = true
+      }
+
+      const nextSettings = {
+        ...hookSettingsDraftRef.current,
+        scripts: {
+          ...hookSettingsDraftRef.current.scripts,
+          [hookName]: commandRowsToScript(commands)
         }
-        onUpdateLocalHookScript(hookName, commandRowsToScript(next))
-        return { ...current, [hookName]: next }
-      })
+      }
+      setAndMaybePersistHookSettings(nextSettings, shouldPersist)
     },
-    [onUpdateLocalHookScript]
+    [setAndMaybePersistHookSettings]
+  )
+
+  const commitLocalCommandsDraft = useCallback(
+    (hookName: LocalHookName) => {
+      // Why: Add Command creates an unsaved empty editor row. Existing blank script
+      // lines are real rows and must round-trip, so only placeholder blanks are pruned.
+      const next = pruneLocalCommandPlaceholders(localCommandsDraftRef.current[hookName])
+      updateLocalCommandsDraft(hookName, next, true)
+    },
+    [updateLocalCommandsDraft]
+  )
+
+  const flushDirtyLocalCommandsDraft = useCallback(
+    (persistHookSettings: (settings: RepoHookSettings) => void) => {
+      if (!localCommandsDraftDirtyRef.current) {
+        return
+      }
+
+      const nextSettings = {
+        ...hookSettingsDraftRef.current,
+        scripts: {
+          ...hookSettingsDraftRef.current.scripts,
+          ...localCommandDraftToScripts(localCommandsDraftRef.current)
+        }
+      }
+      hookSettingsDraftRef.current = nextSettings
+      localCommandsDraftDirtyRef.current = false
+      persistHookSettings(nextSettings)
+    },
+    []
+  )
+
+  const updateHookSettingsPolicyDraft = useCallback(
+    (updates: HookSettingsPolicyDraft) => {
+      const nextSettings = {
+        ...hookSettingsDraftRef.current,
+        ...updates
+      }
+      setAndMaybePersistHookSettings(nextSettings, true)
+    },
+    [setAndMaybePersistHookSettings]
   )
 
   const handleClearLocalCommands = useCallback(() => {
-    setLocalCommandsDraft({ setup: [], archive: [] })
-    onClearLegacyHooks()
-  }, [onClearLegacyHooks])
+    const nextCommandsDraft = { setup: [], archive: [] }
+    localCommandsDraftRef.current = nextCommandsDraft
+    setLocalCommandsDraft(nextCommandsDraft)
+    const nextSettings = {
+      ...hookSettingsDraftRef.current,
+      scripts: {
+        ...hookSettingsDraftRef.current.scripts,
+        setup: '',
+        archive: ''
+      }
+    }
+    setAndMaybePersistHookSettings(nextSettings, true)
+  }, [setAndMaybePersistHookSettings])
+
+  useEffect(() => {
+    if (localCommandsRepoIdRef.current === repo.id) {
+      localCommandsPersistForRepoRef.current = onUpdateHookSettings
+      return
+    }
+    // Why: repo switches reset the local editor state before inputs can blur,
+    // so flush dirty row drafts through the previous repo's captured updater.
+    flushDirtyLocalCommandsDraft(localCommandsPersistForRepoRef.current)
+    localCommandsRepoIdRef.current = repo.id
+    const nextSettingsDraft = getHookSettingsDraft(localCommandsRepoHookSettingsRef.current)
+    const nextCommandsDraft = getLocalCommandsDraft(localCommandsRepoHookSettingsRef.current)
+    hookSettingsDraftRef.current = nextSettingsDraft
+    localCommandsDraftRef.current = nextCommandsDraft
+    localCommandsDraftDirtyRef.current = false
+    localCommandsPersistForRepoRef.current = onUpdateHookSettings
+    setHookSettingsDraft(nextSettingsDraft)
+    setLocalCommandsDraft(nextCommandsDraft)
+  }, [flushDirtyLocalCommandsDraft, onUpdateHookSettings, repo.id])
+
+  useEffect(() => {
+    return () => {
+      flushDirtyLocalCommandsDraft(localCommandsPersistForRepoRef.current)
+    }
+  }, [flushDirtyLocalCommandsDraft])
 
   // Keep the local override editor in sync with the selected repo and flush unsaved edits on exit.
   useEffect(() => {
@@ -478,7 +602,13 @@ export function RepositoryHooksSection({
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => updateLocalCommandsDraft(field.name, [...commands, ''])}
+                      onClick={() =>
+                        updateLocalCommandsDraft(
+                          field.name,
+                          [...commands, { value: '', isPlaceholder: true }],
+                          false
+                        )
+                      }
                     >
                       <Plus />
                       Add Command
@@ -501,21 +631,28 @@ export function RepositoryHooksSection({
                               {index + 1}
                             </span>
                             <Input
-                              value={command}
+                              value={command.value}
                               onChange={(event) => {
                                 const next = [...commands]
-                                next[index] = event.target.value
-                                updateLocalCommandsDraft(field.name, next)
+                                next[index] = {
+                                  value: event.target.value,
+                                  isPlaceholder: false
+                                }
+                                updateLocalCommandsDraft(field.name, next, false)
                               }}
-                              onBlur={() => pruneEmptyLocalCommands(field.name)}
+                              onBlur={() => commitLocalCommandsDraft(field.name)}
                               onKeyDown={(event) => {
                                 if (event.key === 'Enter') {
                                   event.preventDefault()
-                                  updateLocalCommandsDraft(field.name, [
-                                    ...commands.slice(0, index + 1),
-                                    '',
-                                    ...commands.slice(index + 1)
-                                  ])
+                                  updateLocalCommandsDraft(
+                                    field.name,
+                                    [
+                                      ...commands.slice(0, index + 1),
+                                      { value: '', isPlaceholder: true },
+                                      ...commands.slice(index + 1)
+                                    ],
+                                    false
+                                  )
                                 }
                               }}
                               placeholder={index === 0 ? field.placeholder : 'Command'}
@@ -529,7 +666,8 @@ export function RepositoryHooksSection({
                               onClick={() =>
                                 updateLocalCommandsDraft(
                                   field.name,
-                                  commands.filter((_, commandIndex) => commandIndex !== index)
+                                  commands.filter((_, commandIndex) => commandIndex !== index),
+                                  true
                                 )
                               }
                               className="text-muted-foreground hover:text-destructive"
@@ -565,7 +703,7 @@ export function RepositoryHooksSection({
           <PolicyOptionGrid
             options={COMMAND_SOURCE_POLICY_OPTIONS}
             selected={selectedCommandSourcePolicy}
-            onSelect={onUpdateCommandSourcePolicy}
+            onSelect={(policy) => updateHookSettingsPolicyDraft({ commandSourcePolicy: policy })}
             columns="md:grid-cols-3"
           />
         </div>
@@ -587,7 +725,7 @@ export function RepositoryHooksSection({
           <PolicyOptionGrid
             options={SETUP_RUN_POLICY_OPTIONS}
             selected={selectedSetupRunPolicy}
-            onSelect={onUpdateSetupRunPolicy}
+            onSelect={(policy) => updateHookSettingsPolicyDraft({ setupRunPolicy: policy })}
             columns="md:grid-cols-3"
           />
         </div>
