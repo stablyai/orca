@@ -5,12 +5,13 @@ import type { LinearConnectionStatus, LinearIssue, LinearTeam } from '../../../.
 import { createLinearSlice } from './linear'
 
 const linearStatus = vi.fn()
+const linearConnect = vi.fn()
 const linearListIssues = vi.fn()
 const linearSearchIssues = vi.fn()
 const linearListTeams = vi.fn()
 
 vi.mock('@/runtime/runtime-linear-client', () => ({
-  linearConnect: vi.fn(),
+  linearConnect: (...args: unknown[]) => linearConnect(...args),
   linearDisconnect: vi.fn(),
   linearDisconnectWorkspace: vi.fn(),
   linearGetIssue: vi.fn(),
@@ -241,6 +242,13 @@ describe('createLinearSlice caching', () => {
     expect(store.getState().linearIssueCache['workspace-1::issue-id'].data?.title).toBe('Updated')
     expect(store.getState().linearIssueCache['workspace-1::issue-id'].fetchedAt).toBe(0)
   })
+})
+
+describe('createLinearSlice', () => {
+  beforeEach(() => {
+    linearStatus.mockReset()
+    linearConnect.mockReset()
+  })
 
   it('dedupes concurrent connection checks', async () => {
     const pending = deferred<LinearConnectionStatus>()
@@ -263,5 +271,33 @@ describe('createLinearSlice caching', () => {
 
     expect(store.getState().linearStatus.connected).toBe(true)
     expect(store.getState().linearStatusChecked).toBe(true)
+  })
+
+  it('ignores stale status checks after a successful connect', async () => {
+    const staleMountCheck = deferred<LinearConnectionStatus>()
+    const freshConnectCheck = deferred<LinearConnectionStatus>()
+    const viewer = {
+      displayName: 'Test User',
+      email: 'test@example.com',
+      organizationName: 'Test Org'
+    }
+    linearStatus.mockReturnValueOnce(staleMountCheck.promise).mockReturnValueOnce(freshConnectCheck.promise)
+    linearConnect.mockResolvedValueOnce({ ok: true, viewer })
+    const store = createTestStore()
+
+    const mountCheck = store.getState().checkLinearConnection()
+    await store.getState().connectLinear('linear-key')
+
+    expect(linearStatus).toHaveBeenCalledTimes(2)
+    expect(store.getState().linearStatus.connected).toBe(true)
+
+    freshConnectCheck.resolve({ connected: true, viewer })
+    await Promise.resolve()
+
+    staleMountCheck.resolve({ connected: false, viewer: null })
+    await mountCheck
+
+    expect(store.getState().linearStatus.connected).toBe(true)
+    expect(store.getState().linearStatus.viewer?.email).toBe('test@example.com')
   })
 })

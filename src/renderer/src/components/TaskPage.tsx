@@ -642,9 +642,12 @@ export default function TaskPage(): React.JSX.Element {
   const initialTaskQuery = getTaskPresetQuery(defaultTaskViewPreset)
 
   const defaultTaskSource = settings?.defaultTaskSource ?? 'github'
+  const preferredTaskSource = pageData.taskSource ?? defaultTaskSource
   const [taskSource, setTaskSource] = useState<TaskSource>(
-    resolveVisibleTaskProvider(pageData.taskSource ?? defaultTaskSource, visibleTaskProviders)
+    resolveVisibleTaskProvider(preferredTaskSource, visibleTaskProviders)
   )
+  const taskSourceManuallyChangedRef = useRef(false)
+  const lastPageTaskSourceRef = useRef(pageData.taskSource)
   const taskResumeAppliedRef = useRef(false)
   const githubSearchPersistReadyRef = useRef(false)
   const linearSearchPersistReadyRef = useRef(false)
@@ -654,10 +657,29 @@ export default function TaskPage(): React.JSX.Element {
   // icon in the sidebar while the task page is already open. useState only
   // initializes once, so sync from the store when the value changes.
   useEffect(() => {
+    const pageTaskSourceChanged = lastPageTaskSourceRef.current !== pageData.taskSource
+    lastPageTaskSourceRef.current = pageData.taskSource
     if (pageData.taskSource) {
+      if (pageTaskSourceChanged) {
+        taskSourceManuallyChangedRef.current = false
+      } else if (taskSourceManuallyChangedRef.current) {
+        return
+      }
       setTaskSource(resolveVisibleTaskProvider(pageData.taskSource, visibleTaskProviders))
     }
   }, [pageData.taskSource, visibleTaskProviders])
+
+  useEffect(() => {
+    if (taskSourceManuallyChangedRef.current) {
+      return
+    }
+    // Why: GitLab/Linear availability hydrates after mount. If the saved
+    // default was unavailable during the first render, restore it once the
+    // relevant check proves the provider can be shown.
+    if (visibleTaskProviders.includes(preferredTaskSource) && taskSource !== preferredTaskSource) {
+      setTaskSource(preferredTaskSource)
+    }
+  }, [preferredTaskSource, taskSource, visibleTaskProviders])
 
   useEffect(() => {
     if (!visibleTaskProviders.includes(taskSource)) {
@@ -2045,6 +2067,7 @@ export default function TaskPage(): React.JSX.Element {
                               type="button"
                               disabled={source.disabled}
                               onClick={() => {
+                                taskSourceManuallyChangedRef.current = true
                                 setTaskSource(source.id)
                                 void updateSettings({ defaultTaskSource: source.id }).catch(() => {
                                   toast.error('Failed to save default task source.')

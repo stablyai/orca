@@ -64,6 +64,7 @@ const inflightSearchRequests = new Map<string, InflightLinearListRequest>()
 const inflightListRequests = new Map<string, InflightLinearListRequest>()
 const inflightTeamRequests = new Map<string, Promise<LinearTeam[]>>()
 let inflightStatusRequest: Promise<void> | null = null
+let statusRequestGeneration = 0
 
 function getSelectedWorkspaceId(status: LinearConnectionStatus): LinearWorkspaceSelection | null {
   return status.selectedWorkspaceId ?? status.activeWorkspaceId ?? null
@@ -95,6 +96,11 @@ type LinearIssueReadArgs =
 
 type LinearFetchOptions = { force?: boolean }
 
+function cancelInflightStatusRequest(): void {
+  statusRequestGeneration += 1
+  inflightStatusRequest = null
+}
+
 export type LinearSlice = {
   linearStatus: LinearConnectionStatus
   linearStatusChecked: boolean
@@ -102,7 +108,7 @@ export type LinearSlice = {
   linearSearchCache: Record<string, CacheEntry<LinearIssue[]>>
   linearTeamCache: Record<string, CacheEntry<LinearTeam[]>>
 
-  checkLinearConnection: () => Promise<void>
+  checkLinearConnection: (force?: boolean) => Promise<void>
   connectLinear: (
     apiKey: string
   ) => Promise<{ ok: true; viewer: LinearViewer } | { ok: false; error: string }>
@@ -140,13 +146,18 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   linearSearchCache: {},
   linearTeamCache: {},
 
-  checkLinearConnection: async () => {
-    if (inflightStatusRequest) {
+  checkLinearConnection: async (force = false) => {
+    if (inflightStatusRequest && !force) {
       return inflightStatusRequest
     }
 
+    const requestGeneration = statusRequestGeneration + 1
+    statusRequestGeneration = requestGeneration
     inflightStatusRequest = linearStatus(get().settings)
       .then((status) => {
+        if (requestGeneration !== statusRequestGeneration) {
+          return
+        }
         const typedStatus = status as LinearConnectionStatus
         const prev = get().linearStatus
         if (
@@ -161,6 +172,9 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         }
       })
       .catch(() => {
+        if (requestGeneration !== statusRequestGeneration) {
+          return
+        }
         if (get().linearStatus.connected) {
           set({ linearStatus: { connected: false, viewer: null }, linearStatusChecked: true })
         } else if (!get().linearStatusChecked) {
@@ -168,7 +182,9 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         }
       })
       .finally(() => {
-        inflightStatusRequest = null
+        if (requestGeneration === statusRequestGeneration) {
+          inflightStatusRequest = null
+        }
       })
 
     return inflightStatusRequest
@@ -180,6 +196,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         | { ok: true; viewer: LinearViewer }
         | { ok: false; error: string }
       const status = await linearStatus(get().settings)
+      cancelInflightStatusRequest()
       set({ linearStatus: status, linearStatusChecked: true })
       return result
     } catch (error) {
@@ -192,13 +209,14 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     try {
       const result = await linearConnect(get().settings, apiKey)
       if (result.ok) {
+        cancelInflightStatusRequest()
         set({
           linearStatus: {
             connected: true,
             viewer: result.viewer as LinearViewer
           }
         })
-        void get().checkLinearConnection()
+        void get().checkLinearConnection(true)
       }
       return result as { ok: true; viewer: LinearViewer } | { ok: false; error: string }
     } catch (error) {
@@ -209,6 +227,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
 
   selectLinearWorkspace: async (workspaceId) => {
     const status = await linearSelectWorkspace(get().settings, workspaceId)
+    cancelInflightStatusRequest()
     inflightIssueRequests.clear()
     inflightSearchRequests.clear()
     inflightListRequests.clear()
@@ -225,6 +244,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
 
   disconnectLinear: async () => {
     await linearDisconnect(get().settings)
+    cancelInflightStatusRequest()
     inflightIssueRequests.clear()
     inflightSearchRequests.clear()
     inflightListRequests.clear()
@@ -246,6 +266,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     inflightTeamRequests.clear()
     clearLinearMetadataCache()
     const status = await linearStatus(get().settings)
+    cancelInflightStatusRequest()
     set({
       linearStatus: status,
       linearIssueCache: {},
