@@ -235,6 +235,64 @@ describe('getRuntimeMobileSessionSyncKey', () => {
 })
 
 describe('buildMobileSessionTabSnapshots', () => {
+  it('preserves source-control diff metadata for mobile file tabs', () => {
+    const diffId = 'wt-1::diff::unstaged::src/app.ts'
+    const state = makeState({
+      browserTabsByWorktree: {},
+      tabBarOrderByWorktree: { 'wt-1': [diffId] },
+      openFiles: [
+        {
+          id: diffId,
+          filePath: '/repo/src/app.ts',
+          relativePath: 'src/app.ts',
+          worktreeId: 'wt-1',
+          language: 'typescript',
+          mode: 'diff',
+          diffSource: 'unstaged',
+          isDirty: false
+        }
+      ]
+    })
+
+    const snapshot = buildMobileSessionTabSnapshots(state)[0]
+
+    expect(snapshot?.tabs).toMatchObject([
+      {
+        type: 'file',
+        id: diffId,
+        mode: 'diff',
+        diffSource: 'unstaged',
+        relativePath: 'src/app.ts'
+      }
+    ])
+  })
+
+  it('omits unsupported branch and commit diff metadata from mobile file tabs', () => {
+    const diffId = 'wt-1::diff::branch::src/app.ts'
+    const state = makeState({
+      browserTabsByWorktree: {},
+      tabBarOrderByWorktree: { 'wt-1': [diffId] },
+      openFiles: [
+        {
+          id: diffId,
+          filePath: '/repo/src/app.ts',
+          relativePath: 'src/app.ts',
+          worktreeId: 'wt-1',
+          language: 'typescript',
+          mode: 'diff',
+          diffSource: 'branch',
+          isDirty: false
+        }
+      ]
+    })
+
+    const snapshot = buildMobileSessionTabSnapshots(state)[0]
+    const tab = snapshot?.tabs[0]
+
+    expect(tab).toMatchObject({ type: 'file', mode: 'diff', relativePath: 'src/app.ts' })
+    expect(tab).not.toHaveProperty('diffSource')
+  })
+
   it('keeps duplicate file ids scoped to their worktree', () => {
     const sharedRemotePath = '/home/dev/project/README.md'
     const previewId = `markdown-preview::${sharedRemotePath}`

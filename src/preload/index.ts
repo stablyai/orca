@@ -2375,6 +2375,21 @@ const api = {
       ipcRenderer.on('ui:openFileFromMobile', listener)
       return () => ipcRenderer.removeListener('ui:openFileFromMobile', listener)
     },
+    onOpenDiffFromMobile: (
+      callback: (data: {
+        worktreeId: string
+        filePath: string
+        relativePath: string
+        staged: boolean
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { worktreeId: string; filePath: string; relativePath: string; staged: boolean }
+      ) => callback(data)
+      ipcRenderer.on('ui:openDiffFromMobile', listener)
+      return () => ipcRenderer.removeListener('ui:openDiffFromMobile', listener)
+    },
     onMobileMarkdownRequest: (
       callback: (request: RuntimeMobileMarkdownRequest) => void
     ): (() => void) => {

@@ -429,6 +429,7 @@ type RuntimeNotifier = {
   focusEditorTab?(tabId: string, worktreeId: string): void
   closeSessionTab?(tabId: string, worktreeId: string): void
   openFile?(worktreeId: string, filePath: string, relativePath: string): void
+  openDiff?(worktreeId: string, filePath: string, relativePath: string, staged: boolean): void
   readMobileMarkdownTab?(worktreeId: string, tabId: string): Promise<RuntimeMarkdownReadTabResult>
   saveMobileMarkdownTab?(
     worktreeId: string,
@@ -1169,6 +1170,12 @@ export class OrcaRuntimeService {
         throw new Error('renderer_unavailable')
       }
       this.notifier.openFile(worktreeId, filePath, relativePath)
+    },
+    openDiff: (worktreeId, filePath, relativePath, staged) => {
+      if (!this.notifier?.openDiff) {
+        throw new Error('renderer_unavailable')
+      }
+      this.notifier.openDiff(worktreeId, filePath, relativePath, staged)
     }
   })
 
@@ -1176,6 +1183,9 @@ export class OrcaRuntimeService {
     this.fileCommands
   )
   openMobileFile: RuntimeFileCommands['openMobileFile'] = this.fileCommands.openMobileFile.bind(
+    this.fileCommands
+  )
+  openMobileDiff: RuntimeFileCommands['openMobileDiff'] = this.fileCommands.openMobileDiff.bind(
     this.fileCommands
   )
   readMobileFile: RuntimeFileCommands['readMobileFile'] = this.fileCommands.readMobileFile.bind(

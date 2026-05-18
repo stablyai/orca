@@ -124,6 +124,8 @@ export type RuntimeMobileSessionFileTab = {
   filePath: string
   relativePath: string
   language: string
+  mode?: 'edit' | 'diff'
+  diffSource?: 'staged' | 'unstaged'
   isDirty: boolean
   isActive: boolean
 }

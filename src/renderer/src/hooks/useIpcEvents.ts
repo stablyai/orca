@@ -819,6 +819,22 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
+      window.api.ui.onOpenDiffFromMobile(({ worktreeId, filePath, relativePath, staged }) => {
+        const store = useAppStore.getState()
+        const language = detectLanguage(relativePath)
+        store.setActiveWorktree(worktreeId)
+        store.markWorktreeVisited(worktreeId)
+        store.setActiveView('terminal')
+        // Why: mobile renders diff tabs from diff metadata. The desktop
+        // markdown Changes-mode shortcut is editor-local and would publish
+        // plain markdown content back to mobile.
+        store.openDiff(worktreeId, filePath, relativePath, language, staged)
+        store.setActiveTabType('editor')
+        store.revealWorktreeInSidebar(worktreeId)
+      })
+    )
+
+    unsubs.push(
       window.api.ui.onCloseTerminal(({ tabId, paneRuntimeId }) => {
         if (paneRuntimeId != null) {
           // Why: when targeting a specific pane in a split layout, dispatch to the

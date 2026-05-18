@@ -578,12 +578,19 @@ export default function MobileSourceControlScreen() {
       setOpeningPath(entry.path)
       try {
         setActionError(null)
-        const response = await client.sendRequest('files.open', {
+        let response = await client.sendRequest('files.openDiff', {
           worktree: `id:${worktreeId}`,
-          relativePath: entry.path
+          relativePath: entry.path,
+          staged: entry.area === 'staged'
         })
+        if (!response.ok && isMobileGitUnavailable(response.error?.code, response.error?.message)) {
+          response = await client.sendRequest('files.open', {
+            worktree: `id:${worktreeId}`,
+            relativePath: entry.path
+          })
+        }
         if (!response.ok) {
-          throw new Error(response.error?.message || 'Unable to open file')
+          throw new Error(response.error?.message || 'Unable to open diff')
         }
         if (!mountedRef.current) return
         triggerSelection()
@@ -602,7 +609,7 @@ export default function MobileSourceControlScreen() {
       } catch (err) {
         if (!mountedRef.current) return
         triggerError()
-        setActionError(err instanceof Error ? err.message : 'Unable to open file')
+        setActionError(err instanceof Error ? err.message : 'Unable to open diff')
       } finally {
         if (openingPathRef.current === entry.path) {
           openingPathRef.current = null

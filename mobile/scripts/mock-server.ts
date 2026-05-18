@@ -317,10 +317,34 @@ function handleRequest(
       send(success(request.id, { ok: true }))
       break
 
+    case 'git.diff':
+      send(
+        success(request.id, {
+          kind: 'text',
+          originalContent: 'const status = "old"\\n',
+          modifiedContent: 'const status = "new"\\n',
+          originalIsBinary: false,
+          modifiedIsBinary: false
+        })
+      )
+      break
+
     case 'git.push':
       fakeHasUpstream = true
       fakeAhead = 0
       send(success(request.id, { ok: true }))
+      break
+
+    case 'files.open':
+    case 'files.openDiff':
+      send(
+        success(request.id, {
+          worktree: request.params?.worktree ?? 'id:mock',
+          relativePath: request.params?.relativePath ?? '',
+          kind: 'text',
+          opened: true
+        })
+      )
       break
 
     default:

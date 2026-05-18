@@ -116,6 +116,7 @@ export type RuntimeFileCommandHost = {
     selector: string
   ): Promise<{ worktree: ResolvedRuntimeFileWorktree; connectionId?: string }>
   openFile(worktreeId: string, filePath: string, relativePath: string): void
+  openDiff(worktreeId: string, filePath: string, relativePath: string, staged: boolean): void
 }
 
 export class RuntimeFileCommands {
@@ -168,6 +169,25 @@ export class RuntimeFileCommands {
     }
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
     this.host.openFile(worktree.id, filePath, relativePath)
+    return { worktree: worktree.id, relativePath, kind, opened: true }
+  }
+
+  async openMobileDiff(
+    worktreeSelector: string,
+    relativePath: string,
+    staged: boolean
+  ): Promise<RuntimeFileOpenResult> {
+    const worktree = await this.host.resolveWorktreeSelector(worktreeSelector)
+    if (!isSafeMobileRelativePath(relativePath)) {
+      throw new Error('invalid_relative_path')
+    }
+    const kind = isMobileBinaryPath(relativePath)
+      ? 'binary'
+      : isMobileMarkdownPath(relativePath)
+        ? 'markdown'
+        : 'text'
+    const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
+    this.host.openDiff(worktree.id, filePath, relativePath, staged)
     return { worktree: worktree.id, relativePath, kind, opened: true }
   }
 
