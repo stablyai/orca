@@ -14,11 +14,7 @@ class MicrophonePermissionRequester: NSObject, EXPermissionsRequester {
     let systemStatus = AVAudioSession.sharedInstance().recordPermission
     var status: EXPermissionStatus
 
-    guard (Bundle.main.infoDictionary?["NSMicrophoneUsageDescription"]) != nil else {
-      EXFatal(EXErrorWithMessage("""
-        This app is missing NSMicrophoneUsageDescription, so audio services will fail.
-        Add one of these keys to your bundle's Info.plist.
-      """))
+    guard Bundle.main.infoDictionary?[microphoneKey] != nil else {
       return ["status": EXPermissionStatusDenied]
     }
 
@@ -39,6 +35,15 @@ class MicrophonePermissionRequester: NSObject, EXPermissionsRequester {
   }
 
   func requestPermissions(resolver resolve: @escaping EXPromiseResolveBlock, rejecter reject: EXPromiseRejectBlock) {
+    guard Bundle.main.infoDictionary?[microphoneKey] != nil else {
+      reject(
+        "ERR_MISSING_MICROPHONE_USAGE_DESCRIPTION",
+        "This app is missing NSMicrophoneUsageDescription, so audio services will fail.",
+        nil
+      )
+      return
+    }
+
     if #available(iOS 17.0, *) {
       AVAudioApplication.requestRecordPermission { _ in
         resolve(self.getPermissions())
