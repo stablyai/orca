@@ -307,6 +307,9 @@ export function useTabGroupWorkspaceModel({
       }
       setActiveTab(terminalId)
       setActiveTabType('terminal')
+      // Why: clicking the tab button gives the browser focus to the tab strip
+      // after pointerdown; explicitly return it to xterm on the next frames.
+      focusTerminalTabSurface(terminalId)
     },
     [activateTab, focusGroup, groupId, groupTabs, setActiveTab, setActiveTabType, worktreeId]
   )
