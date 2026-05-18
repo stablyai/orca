@@ -70,6 +70,7 @@ const EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE: AppState['activeBrowserTabIdByWor
 const EMPTY_BROWSER_TABS_BY_WORKTREE: AppState['browserTabsByWorktree'] = {}
 const EMPTY_BROWSER_PAGES_BY_WORKSPACE: AppState['browserPagesByWorkspace'] = {}
 const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = {}
+const EMPTY_LAYOUT_BY_WORKTREE: AppState['layoutByWorktree'] = {}
 let syncScheduled = false
 let syncInFlight = false
 let syncPendingAfterFlight = false
@@ -171,6 +172,7 @@ export type RuntimeMobileSessionSyncKey = {
   runtimePaneTitlesByTabId: AppState['runtimePaneTitlesByTabId']
   groupsByWorktree: AppState['groupsByWorktree']
   activeGroupIdByWorktree: AppState['activeGroupIdByWorktree']
+  layoutByWorktree: AppState['layoutByWorktree']
   unifiedTabsByWorktree: AppState['unifiedTabsByWorktree']
   tabBarOrderByWorktree: AppState['tabBarOrderByWorktree']
   activeFileId: AppState['activeFileId']
@@ -208,6 +210,7 @@ export function getRuntimeMobileSessionSyncKey(
     runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
     groupsByWorktree: state.groupsByWorktree,
     activeGroupIdByWorktree: state.activeGroupIdByWorktree,
+    layoutByWorktree: state.layoutByWorktree ?? EMPTY_LAYOUT_BY_WORKTREE,
     unifiedTabsByWorktree: state.unifiedTabsByWorktree,
     tabBarOrderByWorktree: state.tabBarOrderByWorktree,
     activeFileId: state.activeFileId,
@@ -357,6 +360,7 @@ export function runtimeMobileSessionSyncKeysEqual(
     a.runtimePaneTitlesByTabId === b.runtimePaneTitlesByTabId &&
     a.groupsByWorktree === b.groupsByWorktree &&
     a.activeGroupIdByWorktree === b.activeGroupIdByWorktree &&
+    a.layoutByWorktree === b.layoutByWorktree &&
     a.unifiedTabsByWorktree === b.unifiedTabsByWorktree &&
     a.tabBarOrderByWorktree === b.tabBarOrderByWorktree &&
     a.activeFileId === b.activeFileId &&
@@ -874,9 +878,7 @@ function buildMobileMarkdownTab(
     mode: file.mode,
     isDirty: file.isDirty || sourceFile.isDirty,
     isActive: unifiedTabId
-      ? state.groupsByWorktree[file.worktreeId]?.some(
-          (group) => group.activeTabId === unifiedTabId
-        ) === true
+      ? isUnifiedTabActiveInActiveGroup(state, file.worktreeId, unifiedTabId)
       : state.activeFileId === file.id,
     sourceFileId: sourceFile.id,
     sourceFilePath: sourceFile.filePath,
@@ -904,9 +906,7 @@ function buildMobileFileTab(
     ...(diffSource ? { diffSource } : {}),
     isDirty: file.isDirty,
     isActive: unifiedTabId
-      ? state.groupsByWorktree[file.worktreeId]?.some(
-          (group) => group.activeTabId === unifiedTabId
-        ) === true
+      ? isUnifiedTabActiveInActiveGroup(state, file.worktreeId, unifiedTabId)
       : state.activeFileId === file.id
   }
 }
@@ -938,11 +938,22 @@ function buildMobileBrowserTab(
     canGoBack: activePage?.canGoBack ?? workspace.canGoBack,
     canGoForward: activePage?.canGoForward ?? workspace.canGoForward,
     isActive: unifiedTabId
-      ? state.groupsByWorktree[workspace.worktreeId]?.some(
-          (group) => group.activeTabId === unifiedTabId
-        ) === true
+      ? isUnifiedTabActiveInActiveGroup(state, workspace.worktreeId, unifiedTabId)
       : state.activeBrowserTabIdByWorktree[workspace.worktreeId] === workspace.id
   }
+}
+
+function isUnifiedTabActiveInActiveGroup(
+  state: AppState,
+  worktreeId: string,
+  unifiedTabId: string
+): boolean {
+  const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
+  return (
+    state.groupsByWorktree[worktreeId]?.some(
+      (group) => group.id === activeGroupId && group.activeTabId === unifiedTabId
+    ) === true
+  )
 }
 
 function stableHashString(value: string): string {

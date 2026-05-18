@@ -704,6 +704,7 @@ function App(): React.JSX.Element {
         state.tabsByWorktree === previousState.tabsByWorktree &&
         state.groupsByWorktree === previousState.groupsByWorktree &&
         state.activeGroupIdByWorktree === previousState.activeGroupIdByWorktree &&
+        state.layoutByWorktree === previousState.layoutByWorktree &&
         state.unifiedTabsByWorktree === previousState.unifiedTabsByWorktree &&
         state.tabBarOrderByWorktree === previousState.tabBarOrderByWorktree &&
         state.activeFileId === previousState.activeFileId &&

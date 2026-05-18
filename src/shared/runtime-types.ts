@@ -180,12 +180,27 @@ export type RuntimeMobileSessionTabGroup = {
   recentTabIds?: string[]
 }
 
-export type RuntimeMobileSessionTabMove = {
+type RuntimeMobileSessionTabMoveBase = {
   tabId: string
   targetGroupId: string
-  index?: number
-  splitDirection?: 'left' | 'right' | 'up' | 'down'
-  tabOrder?: string[]
+}
+
+export type RuntimeMobileSessionTabMove =
+  | (RuntimeMobileSessionTabMoveBase & {
+      kind: 'reorder'
+      tabOrder: string[]
+    })
+  | (RuntimeMobileSessionTabMoveBase & {
+      kind: 'move-to-group'
+      index?: number
+    })
+  | (RuntimeMobileSessionTabMoveBase & {
+      kind: 'split'
+      splitDirection: 'left' | 'right' | 'up' | 'down'
+    })
+
+export type RuntimeMobileSessionTabMoveResult = {
+  moved: true
 }
 
 export type RuntimeMobileSessionTabsSnapshot = {

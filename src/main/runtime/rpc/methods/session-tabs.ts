@@ -21,7 +21,8 @@ const CreateTerminalTab = WorktreeTabSelector.extend({
   activate: z.boolean().optional()
 })
 
-const MoveTab = WorktreeTabSelector.extend({
+const MoveTabBase = {
+  worktree: WorktreeTabSelector.shape.worktree,
   tabId: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
@@ -29,11 +30,32 @@ const MoveTab = WorktreeTabSelector.extend({
   targetGroupId: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing target group id')),
-  index: z.number().int().nonnegative().optional(),
-  splitDirection: z.enum(['left', 'right', 'up', 'down']).optional(),
-  tabOrder: z.array(z.string()).optional()
-})
+    .pipe(z.string().min(1, 'Missing target group id'))
+} as const
+
+const MoveTab = z.discriminatedUnion('kind', [
+  z
+    .object({
+      ...MoveTabBase,
+      kind: z.literal('reorder'),
+      tabOrder: z.array(z.string().min(1)).min(1, 'Missing tab order')
+    })
+    .strict(),
+  z
+    .object({
+      ...MoveTabBase,
+      kind: z.literal('move-to-group'),
+      index: z.number().int().nonnegative().optional()
+    })
+    .strict(),
+  z
+    .object({
+      ...MoveTabBase,
+      kind: z.literal('split'),
+      splitDirection: z.enum(['left', 'right', 'up', 'down'])
+    })
+    .strict()
+])
 
 const SaveMarkdownTab = ActivateTab.extend({
   baseVersion: z
@@ -81,14 +103,31 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'session.tabs.move',
     params: MoveTab,
-    handler: async (params, { runtime }) =>
-      runtime.moveMobileSessionTab(params.worktree, {
+    handler: async (params, { runtime }) => {
+      const base = {
         tabId: params.tabId,
-        targetGroupId: params.targetGroupId,
-        index: params.index,
-        splitDirection: params.splitDirection,
-        tabOrder: params.tabOrder
+        targetGroupId: params.targetGroupId
+      }
+      if (params.kind === 'reorder') {
+        return runtime.moveMobileSessionTab(params.worktree, {
+          ...base,
+          kind: 'reorder',
+          tabOrder: params.tabOrder
+        })
+      }
+      if (params.kind === 'split') {
+        return runtime.moveMobileSessionTab(params.worktree, {
+          ...base,
+          kind: 'split',
+          splitDirection: params.splitDirection
+        })
+      }
+      return runtime.moveMobileSessionTab(params.worktree, {
+        ...base,
+        kind: 'move-to-group',
+        index: params.index
       })
+    }
   }),
   defineStreamingMethod({
     name: 'session.tabs.subscribe',

@@ -33,6 +33,7 @@ import type {
   WorktreeStartupLaunch,
   LinearIssueUpdate,
   LinearWorkspaceSelection,
+  TabGroupLayoutNode,
   TuiAgent
 } from '../../shared/types'
 import { splitWorktreeId } from '../../shared/worktree-id'
@@ -77,6 +78,8 @@ import type {
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionMarkdownTab,
   RuntimeMobileSessionTabMove,
+  RuntimeMobileSessionTabMoveResult,
+  RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTerminalTab,
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult,
@@ -1234,26 +1237,107 @@ export class OrcaRuntimeService {
   async moveMobileSessionTab(
     worktreeSelector: string,
     move: RuntimeMobileSessionTabMove
-  ): Promise<RuntimeMobileSessionTabsResult> {
+  ): Promise<RuntimeMobileSessionTabMoveResult> {
     const explicitWorktreeId = getExplicitWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    if (!this.notifier?.moveSessionTab) {
+      throw new Error('renderer_unavailable')
+    }
+    if (!snapshot) {
+      throw new Error('tab_not_found')
+    }
     const hostTabId = this.resolveMobileSessionHostTabId(snapshot, move.tabId)
     if (!hostTabId) {
       throw new Error('tab_not_found')
     }
+    const publicSnapshot = this.toMobileSessionTabsResult(snapshot)
+    const targetGroup = publicSnapshot.tabGroups?.find((group) => group.id === move.targetGroupId)
+    if (!targetGroup) {
+      throw new Error('target_group_not_found')
+    }
 
     // Why: web clients address terminal surfaces as tab::leaf, while desktop
     // tab grouping is owned by the outer terminal tab id.
-    this.notifier?.moveSessionTab?.(worktreeId, {
+    if (move.kind === 'reorder') {
+      const tabOrder = this.normalizeMobileSessionTabOrder(snapshot, targetGroup, move.tabOrder)
+      if (!tabOrder.includes(hostTabId)) {
+        throw new Error('invalid_tab_order')
+      }
+      this.notifier.moveSessionTab(worktreeId, {
+        ...move,
+        tabId: hostTabId,
+        tabOrder
+      })
+      return { moved: true }
+    }
+    this.notifier.moveSessionTab(worktreeId, {
       ...move,
-      tabId: hostTabId,
-      tabOrder: move.tabOrder
-        ?.map((tabId) => this.resolveMobileSessionHostTabId(snapshot, tabId))
-        .filter((tabId): tabId is string => Boolean(tabId))
+      tabId: hostTabId
     })
-    return this.getMobileSessionTabsForWorktree(worktreeId)
+    return { moved: true }
+  }
+
+  private normalizeMobileSessionTabOrder(
+    snapshot: RuntimeMobileSessionTabsSnapshot | undefined,
+    targetGroup: RuntimeMobileSessionTabGroup,
+    tabOrder: readonly string[]
+  ): string[] {
+    const normalized: string[] = []
+    const seen = new Set<string>()
+    for (const tabId of tabOrder) {
+      const hostTabId = this.resolveMobileSessionHostTabId(snapshot, tabId)
+      if (!hostTabId) {
+        throw new Error('invalid_tab_order')
+      }
+      if (seen.has(hostTabId)) {
+        throw new Error('duplicate_tab_order')
+      }
+      seen.add(hostTabId)
+      normalized.push(hostTabId)
+    }
+
+    const returnedIds = this.collectPublicMobileSessionTabIds(snapshot)
+    const expected = targetGroup.tabOrder
+      .map((tabId) => this.resolveMobileSessionHostTabId(snapshot, tabId) ?? tabId)
+      // Why: clients reorder the sanitized session.tabs.list model; raw groups
+      // can still contain stale browser ids hidden from paired web clients.
+      .filter((tabId) => returnedIds.has(tabId))
+    // Why: reorder is a pure permutation of one existing group. Missing or
+    // extra ids would let a paired web client silently move/lose host tabs.
+    if (normalized.length !== expected.length || expected.some((tabId) => !seen.has(tabId))) {
+      throw new Error('invalid_tab_order')
+    }
+    return normalized
+  }
+
+  private collectPublicMobileSessionTabIds(
+    snapshot: RuntimeMobileSessionTabsSnapshot | undefined
+  ): Set<string> {
+    const ids = new Set<string>()
+    if (!snapshot) {
+      return ids
+    }
+    const liveBrowserTabsByPageId = this.getLiveBrowserTabsByPageId(snapshot.worktree)
+    for (const tab of snapshot.tabs) {
+      if (tab.type === 'browser') {
+        const liveTab = tab.browserPageId
+          ? liveBrowserTabsByPageId.get(tab.browserPageId)
+          : undefined
+        if (!liveTab) {
+          continue
+        }
+        ids.add(tab.id)
+        ids.add(tab.browserWorkspaceId)
+        continue
+      }
+      ids.add(tab.id)
+      if (tab.type === 'terminal') {
+        ids.add(tab.parentTabId)
+      }
+    }
+    return ids
   }
 
   private resolveMobileSessionHostTabId(
@@ -8057,6 +8141,69 @@ export class OrcaRuntimeService {
     return new Map(liveTabs.map((tab) => [tab.browserPageId, tab]))
   }
 
+  private collectReturnedSessionTabIds(
+    tabs: readonly RuntimeMobileSessionClientTab[]
+  ): Set<string> {
+    const ids = new Set<string>()
+    for (const tab of tabs) {
+      ids.add(tab.id)
+      if (tab.type === 'terminal') {
+        ids.add(tab.parentTabId)
+      } else if (tab.type === 'browser') {
+        ids.add(tab.browserWorkspaceId)
+      }
+    }
+    return ids
+  }
+
+  private sanitizeMobileSessionTabGroups(
+    groups: readonly RuntimeMobileSessionTabGroup[] | undefined,
+    returnedTabs: readonly RuntimeMobileSessionClientTab[]
+  ): RuntimeMobileSessionTabGroup[] | undefined {
+    if (!groups || groups.length === 0) {
+      return undefined
+    }
+    const returnedIds = this.collectReturnedSessionTabIds(returnedTabs)
+    const sanitized = groups
+      .map((group): RuntimeMobileSessionTabGroup | null => {
+        const tabOrder = group.tabOrder.filter((tabId) => returnedIds.has(tabId))
+        if (tabOrder.length === 0) {
+          return null
+        }
+        const activeTabId =
+          group.activeTabId && tabOrder.includes(group.activeTabId)
+            ? group.activeTabId
+            : (tabOrder[0] ?? null)
+        const recentTabIds = group.recentTabIds?.filter((tabId) => tabOrder.includes(tabId))
+        return {
+          id: group.id,
+          activeTabId,
+          tabOrder,
+          ...(recentTabIds && recentTabIds.length > 0 ? { recentTabIds } : {})
+        }
+      })
+      .filter((group): group is RuntimeMobileSessionTabGroup => group !== null)
+    return sanitized.length > 0 ? sanitized : undefined
+  }
+
+  private pruneMobileSessionTabGroupLayout(
+    layout: TabGroupLayoutNode | null | undefined,
+    validGroupIds: ReadonlySet<string>
+  ): TabGroupLayoutNode | null {
+    if (!layout) {
+      return null
+    }
+    if (layout.type === 'leaf') {
+      return validGroupIds.has(layout.groupId) ? layout : null
+    }
+    const first = this.pruneMobileSessionTabGroupLayout(layout.first, validGroupIds)
+    const second = this.pruneMobileSessionTabGroupLayout(layout.second, validGroupIds)
+    if (first && second) {
+      return { ...layout, first, second }
+    }
+    return first ?? second
+  }
+
   private toMobileSessionTabsResult(
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsResult {
@@ -8133,15 +8280,33 @@ export class OrcaRuntimeService {
       active && !tabs.some((tab) => tab.isActive)
         ? tabs.map((tab) => (tab.id === active.id ? { ...tab, isActive: true } : tab))
         : tabs
+    const tabGroups = this.sanitizeMobileSessionTabGroups(snapshot.tabGroups, normalizedTabs)
+    const validGroupIds = new Set(tabGroups?.map((group) => group.id) ?? [])
+    const tabGroupLayout =
+      snapshot.tabGroupLayout === undefined
+        ? undefined
+        : this.pruneMobileSessionTabGroupLayout(snapshot.tabGroupLayout, validGroupIds)
+    const activeGroupId =
+      snapshot.activeGroupId && validGroupIds.has(snapshot.activeGroupId)
+        ? snapshot.activeGroupId
+        : (tabGroups?.find((group) =>
+            active
+              ? group.tabOrder.some((tabId) =>
+                  this.collectReturnedSessionTabIds([active]).has(tabId)
+                )
+              : false
+          )?.id ??
+          tabGroups?.[0]?.id ??
+          null)
     return {
       worktree: snapshot.worktree,
       publicationEpoch: snapshot.publicationEpoch,
       snapshotVersion: snapshot.snapshotVersion,
-      activeGroupId: snapshot.activeGroupId,
+      activeGroupId,
       activeTabId: active?.id ?? null,
       activeTabType: active?.type ?? null,
-      ...(snapshot.tabGroups ? { tabGroups: snapshot.tabGroups } : {}),
-      ...(snapshot.tabGroupLayout !== undefined ? { tabGroupLayout: snapshot.tabGroupLayout } : {}),
+      ...(tabGroups ? { tabGroups } : {}),
+      ...(snapshot.tabGroupLayout !== undefined ? { tabGroupLayout } : {}),
       tabs: normalizedTabs
     }
   }

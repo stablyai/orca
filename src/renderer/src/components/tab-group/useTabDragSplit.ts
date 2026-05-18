@@ -16,6 +16,7 @@ import {
   useSensors
 } from '@dnd-kit/core'
 import type { TabGroup } from '../../../../shared/types'
+import type { RuntimeMobileSessionTabMove } from '../../../../shared/runtime-types'
 import { useAppStore } from '../../store'
 import {
   isWebRuntimeSessionActive,
@@ -59,14 +60,11 @@ export type HoveredTabDropTarget = {
   zone: TabDropZone
 }
 
-function mirrorWebRuntimeTabMove(args: {
-  worktreeId: string
-  tabId: string
-  targetGroupId: string
-  index?: number
-  splitDirection?: TabSplitDirection
-  tabOrder?: string[]
-}): void {
+function mirrorWebRuntimeTabMove(
+  args: RuntimeMobileSessionTabMove & {
+    worktreeId: string
+  }
+): void {
   const environmentId = useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() ?? null
   if (!isWebRuntimeSessionActive(environmentId)) {
     return
@@ -344,6 +342,7 @@ export function useTabDragSplit({
             nextOrder.splice(nextIndex, 0, activeData.unifiedTabId)
             reorderUnifiedTabs(overData.groupId, nextOrder)
             mirrorWebRuntimeTabMove({
+              kind: 'reorder',
               worktreeId,
               tabId: activeData.unifiedTabId,
               targetGroupId: overData.groupId,
@@ -358,6 +357,7 @@ export function useTabDragSplit({
           })
           if (moved) {
             mirrorWebRuntimeTabMove({
+              kind: 'move-to-group',
               worktreeId,
               tabId: activeData.unifiedTabId,
               targetGroupId: overData.groupId,
@@ -398,12 +398,22 @@ export function useTabDragSplit({
               splitDirection: zone === 'center' ? undefined : zone
             })
             if (moved) {
-              mirrorWebRuntimeTabMove({
-                worktreeId,
-                tabId: activeData.unifiedTabId,
-                targetGroupId: overData.groupId,
-                splitDirection: zone === 'center' ? undefined : zone
-              })
+              if (zone === 'center') {
+                mirrorWebRuntimeTabMove({
+                  kind: 'move-to-group',
+                  worktreeId,
+                  tabId: activeData.unifiedTabId,
+                  targetGroupId: overData.groupId
+                })
+              } else {
+                mirrorWebRuntimeTabMove({
+                  kind: 'split',
+                  worktreeId,
+                  tabId: activeData.unifiedTabId,
+                  targetGroupId: overData.groupId,
+                  splitDirection: zone
+                })
+              }
             }
           }
         }

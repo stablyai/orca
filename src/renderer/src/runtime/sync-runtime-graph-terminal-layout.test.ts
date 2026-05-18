@@ -227,6 +227,110 @@ describe('terminal mobile session layout publication', () => {
     })
   })
 
+  it('publishes the active tab from the active split group', () => {
+    const rightLeaf = '22222222-2222-4222-8222-222222222222'
+    const state = makeState({
+      activeGroupIdByWorktree: { 'wt-1': 'group-right' },
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-left',
+            activeTabId: 'browser-left',
+            tabOrder: ['browser-left']
+          },
+          {
+            id: 'group-right',
+            activeTabId: 'term-right',
+            tabOrder: ['term-right']
+          }
+        ]
+      } as unknown as AppState['groupsByWorktree'],
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'browser-left',
+            groupId: 'group-left',
+            contentType: 'browser',
+            entityId: 'browser-1',
+            title: 'Browser'
+          },
+          {
+            id: 'term-right',
+            groupId: 'group-right',
+            contentType: 'terminal',
+            entityId: 'term-right',
+            title: 'Terminal'
+          }
+        ]
+      } as unknown as AppState['unifiedTabsByWorktree'],
+      tabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'term-right',
+            worktreeId: 'wt-1',
+            ptyId: 'pty-right',
+            title: 'Terminal',
+            defaultTitle: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 2
+          }
+        ]
+      } as unknown as AppState['tabsByWorktree'],
+      terminalLayoutsByTabId: {
+        'term-right': {
+          root: { type: 'leaf', leafId: rightLeaf },
+          activeLeafId: rightLeaf,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [rightLeaf]: 'pty-right' }
+        }
+      } as unknown as AppState['terminalLayoutsByTabId'],
+      browserTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'browser-1',
+            worktreeId: 'wt-1',
+            activePageId: 'page-1',
+            pageIds: ['page-1'],
+            url: 'https://example.test',
+            title: 'Browser',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          }
+        ]
+      } as unknown as AppState['browserTabsByWorktree'],
+      browserPagesByWorkspace: {
+        'browser-1': [
+          {
+            id: 'page-1',
+            workspaceId: 'browser-1',
+            worktreeId: 'wt-1',
+            url: 'https://example.test',
+            title: 'Browser',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          }
+        ]
+      } as unknown as AppState['browserPagesByWorkspace']
+    })
+
+    const snapshot = buildMobileSessionTabSnapshots(state)[0]
+
+    expect(snapshot?.activeTabId).toBe(`term-right::${rightLeaf}`)
+    expect(snapshot?.tabs.find((tab) => tab.id === 'browser-left')).toMatchObject({
+      isActive: false
+    })
+  })
+
   it('does not publish web-mirrored terminal tabs back to the host session', () => {
     const leaf = '11111111-1111-4111-8111-111111111111'
     const state = makeState({

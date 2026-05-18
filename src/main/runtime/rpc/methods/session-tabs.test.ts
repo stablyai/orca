@@ -13,13 +13,7 @@ describe('session tab RPC methods', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       moveMobileSessionTab: vi.fn().mockResolvedValue({
-        worktree: 'wt-1',
-        publicationEpoch: 'epoch-2',
-        snapshotVersion: 2,
-        activeGroupId: 'group-right',
-        activeTabId: 'tab-1::leaf-1',
-        activeTabType: 'terminal',
-        tabs: []
+        moved: true
       })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
@@ -29,8 +23,7 @@ describe('session tab RPC methods', () => {
         worktree: 'id:wt-1',
         tabId: 'tab-1::leaf-1',
         targetGroupId: 'group-left',
-        index: 1,
-        splitDirection: 'right',
+        kind: 'reorder',
         tabOrder: ['tab-2::leaf-1', 'tab-1::leaf-1']
       })
     )
@@ -39,9 +32,56 @@ describe('session tab RPC methods', () => {
     expect(runtime.moveMobileSessionTab).toHaveBeenCalledWith('id:wt-1', {
       tabId: 'tab-1::leaf-1',
       targetGroupId: 'group-left',
-      index: 1,
-      splitDirection: 'right',
+      kind: 'reorder',
       tabOrder: ['tab-2::leaf-1', 'tab-1::leaf-1']
+    })
+  })
+
+  it('rejects ambiguous tab move payloads', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      moveMobileSessionTab: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('session.tabs.move', {
+        worktree: 'id:wt-1',
+        tabId: 'tab-1',
+        targetGroupId: 'group-1',
+        kind: 'reorder',
+        splitDirection: 'right',
+        tabOrder: ['tab-1']
+      })
+    )
+
+    expect(response.ok).toBe(false)
+    expect(runtime.moveMobileSessionTab).not.toHaveBeenCalled()
+  })
+
+  it('dispatches split tab moves without reorder-only fields', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      moveMobileSessionTab: vi.fn().mockResolvedValue({ moved: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('session.tabs.move', {
+        worktree: 'id:wt-1',
+        tabId: 'tab-1',
+        targetGroupId: 'group-2',
+        kind: 'split',
+        splitDirection: 'right'
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    expect(runtime.moveMobileSessionTab).toHaveBeenCalledWith('id:wt-1', {
+      tabId: 'tab-1',
+      targetGroupId: 'group-2',
+      kind: 'split',
+      splitDirection: 'right'
     })
   })
 

@@ -1039,20 +1039,19 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
-      window.api.ui.onMoveSessionTab(
-        ({ tabId, targetGroupId, index, splitDirection, tabOrder }) => {
-          const store = useAppStore.getState()
-          if (tabOrder) {
-            store.reorderUnifiedTabs(targetGroupId, tabOrder)
-            return
-          }
-          store.dropUnifiedTab(tabId, {
-            groupId: targetGroupId,
-            index,
-            splitDirection
-          })
+      window.api.ui.onMoveSessionTab((move) => {
+        const { tabId, targetGroupId } = move
+        const store = useAppStore.getState()
+        if (move.kind === 'reorder') {
+          store.reorderUnifiedTabs(targetGroupId, move.tabOrder)
+          return
         }
-      )
+        store.dropUnifiedTab(tabId, {
+          groupId: targetGroupId,
+          ...(move.kind === 'move-to-group' ? { index: move.index } : {}),
+          ...(move.kind === 'split' ? { splitDirection: move.splitDirection } : {})
+        })
+      })
     )
 
     unsubs.push(
