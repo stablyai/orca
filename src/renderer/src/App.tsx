@@ -97,11 +97,7 @@ import {
 import type { VirtualizedScrollAnchor } from './hooks/useVirtualizedScrollAnchor'
 import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
 import type { OnboardingState } from '../../shared/types'
-import {
-  getCompletedFeatureTipIds,
-  getOrderedUnseenFeatureTips,
-  type FeatureTipId
-} from '../../shared/feature-tips'
+import { getFeatureTipsAppOpenDecision } from './components/feature-tips/feature-tip-startup-gate'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')
@@ -409,32 +405,24 @@ function App(): React.JSX.Element {
   }, [])
 
   useEffect(() => {
-    if (onboarding !== null && shouldShowOnboarding(onboarding)) {
+    const featureTipsDecision = getFeatureTipsAppOpenDecision({
+      activeModal,
+      featureTipsSeenIds,
+      onboarding,
+      persistedUIReady,
+      promptedThisSession: featureTipsPromptedThisSessionRef.current,
+      settings,
+      suppressedByOnboardingThisSession: featureTipsSuppressedByOnboardingThisSessionRef.current
+    })
+
+    if (featureTipsDecision === 'suppress-for-onboarding') {
       // Why: first-download users should finish onboarding without a second
       // education modal appearing later in the same first-run session.
       featureTipsSuppressedByOnboardingThisSessionRef.current = true
       return
     }
 
-    if (
-      featureTipsPromptedThisSessionRef.current ||
-      featureTipsSuppressedByOnboardingThisSessionRef.current ||
-      !persistedUIReady ||
-      !settings ||
-      onboarding === null ||
-      activeModal !== 'none' ||
-      shouldShowOnboarding(onboarding)
-    ) {
-      return
-    }
-
-    const unseenTips = getOrderedUnseenFeatureTips({
-      seenTipIds: new Set<FeatureTipId>(featureTipsSeenIds),
-      completedTipIds: getCompletedFeatureTipIds({
-        voiceDictationEnabled: settings.voice?.enabled === true
-      })
-    })
-    if (unseenTips.length === 0) {
+    if (featureTipsDecision !== 'open') {
       return
     }
 
