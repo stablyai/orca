@@ -35,6 +35,15 @@ export type XtermBypassOptions = {
   hasSelection: boolean
 }
 
+function isSingleNonAsciiPrintableText(key: string): boolean {
+  const chars = Array.from(key)
+  if (chars.length !== 1) {
+    return false
+  }
+  const codePoint = chars[0].codePointAt(0)
+  return codePoint !== undefined && codePoint >= 0x80
+}
+
 /**
  * Decide whether a chord should bypass xterm's keydown handler so the native
  * browser pipeline (Chromium `copy` event, Electron menu accelerators) can
@@ -53,6 +62,18 @@ export function shouldBypassXtermKeydown(
     // Why: window-level Orca shortcuts may have already handled the chord but
     // not stopped propagation. Match VS Code by preventing xterm's kitty
     // encoder from also sending that app shortcut to the shell.
+    return true
+  }
+
+  if (
+    event.shiftKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    isSingleNonAsciiPrintableText(event.key)
+  ) {
+    // Why: xterm's kitty encoder derives shifted key codes from physical
+    // `code` (KeyA -> Latin "a"). Let Chromium emit the layout text instead.
     return true
   }
 

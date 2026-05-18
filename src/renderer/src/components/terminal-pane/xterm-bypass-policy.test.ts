@@ -115,6 +115,18 @@ describe('shouldBypassXtermKeydown — macOS', () => {
   it('does not bubble plain letters — those are normal input', () => {
     expect(shouldBypassXtermKeydown(event({ key: 'c', code: 'KeyC' }), opts)).toBe(false)
   })
+
+  it('bubbles Shift+non-ASCII printable text so the active keyboard layout wins', () => {
+    expect(shouldBypassXtermKeydown(event({ key: 'Ф', code: 'KeyA', shiftKey: true }), opts)).toBe(
+      true
+    )
+  })
+
+  it('does not bubble Shift+Latin printable text', () => {
+    expect(shouldBypassXtermKeydown(event({ key: 'A', code: 'KeyA', shiftKey: true }), opts)).toBe(
+      false
+    )
+  })
 })
 
 describe('shouldBypassXtermKeydown — Windows/Linux', () => {
@@ -194,6 +206,16 @@ describe('shouldBypassXtermKeydown — Windows/Linux', () => {
 
   it('does not bubble plain letters', () => {
     expect(shouldBypassXtermKeydown(event({ key: 'c', code: 'KeyC' }), noSel)).toBe(false)
+  })
+
+  it('bubbles Shift+non-ASCII printable text so the active keyboard layout wins', () => {
+    expect(shouldBypassXtermKeydown(event({ key: 'Ф', code: 'KeyA', shiftKey: true }), noSel)).toBe(
+      true
+    )
+  })
+
+  it('does not bubble unshifted non-ASCII printable text', () => {
+    expect(shouldBypassXtermKeydown(event({ key: 'ф', code: 'KeyA' }), noSel)).toBe(false)
   })
 
   it('does not bubble Cmd chords on non-Mac (Super+C has no clipboard meaning there)', () => {
