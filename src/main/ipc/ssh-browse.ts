@@ -30,14 +30,14 @@ export function registerSshBrowseHandler(
         throw new Error(`SSH connection "${args.targetId}" not found`)
       }
 
-      // Why: using printf with a delimiter instead of ls avoids issues with
-      // filenames containing spaces or special characters. The -1 flag outputs
-      // one entry per line. The -p flag appends / to directories.
+      // Why: using one line per entry preserves filenames containing spaces.
+      // `command ls` bypasses user aliases/functions like `ls='eza ...'`.
+      // The -1 flag outputs one entry per line. The -p flag appends / to directories.
       // We resolve ~ and get the absolute path via `cd <path> && pwd`.
       // `cd` and `ls` are chained with `&&` so a failing `ls` (e.g. permission
       // denied after a readable `cd ... && pwd`) propagates as a non-zero exit
       // code rather than being indistinguishable from an empty directory.
-      const command = `cd ${shellEscape(args.dirPath)} && pwd && ls -1ap`
+      const command = `cd ${shellEscape(args.dirPath)} && pwd && command ls -1Ap`
       const channel = await conn.exec(command)
 
       return new Promise((resolve, reject) => {
