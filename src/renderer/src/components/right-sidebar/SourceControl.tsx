@@ -304,6 +304,51 @@ function HostedReviewIcon({
   return <Icon className={cn(className, hostedReviewStateClass(review))} />
 }
 
+function hostedReviewLabel(review: HostedReviewInfo): string {
+  return `${review.provider === 'gitlab' ? 'MR' : 'PR'} #${review.number}`
+}
+
+export function HostedReviewHeaderLink({
+  review,
+  onOpenGitHubPRInChecks
+}: {
+  review: HostedReviewInfo
+  onOpenGitHubPRInChecks: () => void
+}): React.JSX.Element {
+  const label = hostedReviewLabel(review)
+  const className =
+    'shrink-0 border-0 bg-transparent p-0 text-left font-medium leading-none text-foreground opacity-80 hover:text-foreground hover:underline'
+
+  if (review.provider === 'github') {
+    return (
+      <button
+        type="button"
+        className={className}
+        onClick={(e) => {
+          e.stopPropagation()
+          // Why: GitHub PR details already live in Orca's Checks tab; keep
+          // the sidebar workflow in-app instead of opening the browser.
+          onOpenGitHubPRInChecks()
+        }}
+      >
+        {label}
+      </button>
+    )
+  }
+
+  return (
+    <a
+      href={review.url}
+      target="_blank"
+      rel="noreferrer"
+      className={className}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {label}
+    </a>
+  )
+}
+
 function SourceControlInner(): React.JSX.Element {
   const sourceControlRef = useRef<HTMLDivElement>(null)
   // Why: React setState is async, so a rapid double-click on the Commit
@@ -1284,6 +1329,11 @@ function SourceControlInner(): React.JSX.Element {
       setRightSidebarTab
     ]
   )
+
+  const openHostedGitHubPRInChecks = useCallback(() => {
+    setRightSidebarOpen(true)
+    setRightSidebarTab('checks')
+  }, [setRightSidebarOpen, setRightSidebarTab])
 
   const hasUnstagedChanges = grouped.unstaged.length > 0 || grouped.untracked.length > 0
   const hasPartiallyStagedChanges = useMemo(() => {
@@ -2434,15 +2484,10 @@ function SourceControlInner(): React.JSX.Element {
           {hostedReview && (
             <div className="ml-auto mb-1.5 flex items-center gap-1.5 min-w-0 text-[11.5px] leading-none">
               <HostedReviewIcon review={hostedReview} className="size-3 shrink-0" />
-              <a
-                href={hostedReview.url}
-                target="_blank"
-                rel="noreferrer"
-                className="text-foreground opacity-80 font-medium shrink-0 hover:text-foreground hover:underline"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {hostedReview.provider === 'gitlab' ? 'MR' : 'PR'} #{hostedReview.number}
-              </a>
+              <HostedReviewHeaderLink
+                review={hostedReview}
+                onOpenGitHubPRInChecks={openHostedGitHubPRInChecks}
+              />
             </div>
           )}
         </div>
