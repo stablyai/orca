@@ -143,9 +143,10 @@ const VIEWER_CREATED_ISSUES_QUERY = `
 
 async function mapIssueForWorkspace(
   entry: LinearClientForWorkspace,
-  issue: Parameters<typeof mapLinearIssue>[0]
+  issue: Parameters<typeof mapLinearIssue>[0],
+  options?: Parameters<typeof mapLinearIssue>[1]
 ): Promise<LinearIssue> {
-  const mapped = await mapLinearIssue(issue)
+  const mapped = await mapLinearIssue(issue, options)
   return {
     ...mapped,
     workspaceId: entry.workspace.id,
@@ -215,7 +216,10 @@ export async function getIssue(
     await acquire()
     try {
       const issue = await entry.client.issue(id)
-      return await mapIssueForWorkspace(entry, issue)
+      return await mapIssueForWorkspace(entry, issue, {
+        includeChildren: true,
+        includeProject: true
+      })
     } catch (error) {
       if (isAuthError(error)) {
         clearToken(entry.workspace.id)
@@ -358,9 +362,11 @@ export async function createIssue(
   teamId: string,
   title: string,
   description?: string,
-  workspaceId?: string | null
+  workspaceId?: string | null,
+  options?: { parentId?: string; projectId?: string | null }
 ): Promise<
-  { ok: true; id: string; identifier: string; url: string } | { ok: false; error: string }
+  | { ok: true; id: string; identifier: string; title: string; url: string }
+  | { ok: false; error: string }
 > {
   const entry = getClients(workspaceId)[0]
   if (!entry) {
@@ -372,7 +378,9 @@ export async function createIssue(
     const result = await entry.client.createIssue({
       teamId,
       title,
-      ...(description ? { description } : {})
+      ...(description ? { description } : {}),
+      ...(options?.parentId ? { parentId: options.parentId } : {}),
+      ...(options?.projectId ? { projectId: options.projectId } : {})
     })
     if (!result.success) {
       return { ok: false, error: 'Linear create failed' }
@@ -381,7 +389,13 @@ export async function createIssue(
     if (!issue) {
       return { ok: false, error: 'Issue was created but could not be retrieved' }
     }
-    return { ok: true, id: issue.id, identifier: issue.identifier, url: issue.url }
+    return {
+      ok: true,
+      id: issue.id,
+      identifier: issue.identifier,
+      title: issue.title,
+      url: issue.url
+    }
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.workspace.id)
@@ -427,6 +441,9 @@ export async function updateIssue(
     }
     if (resolvedLabelIds !== undefined) {
       payload.labelIds = resolvedLabelIds
+    }
+    if (updates.projectId !== undefined) {
+      payload.projectId = updates.projectId
     }
 
     const result = await entry.client.updateIssue(id, payload)

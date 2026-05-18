@@ -64,6 +64,7 @@ import type {
   LinearWorkflowState,
   LinearLabel,
   LinearMember,
+  LinearProjectSummary,
   LinearTeam,
   MarkdownDocument,
   FloatingTerminalCwdRequest,
@@ -1061,8 +1062,11 @@ export type PreloadApi = {
       title: string
       description?: string
       workspaceId?: string
+      parentIssueId?: string
+      projectId?: string | null
     }) => Promise<
-      { ok: true; id: string; identifier: string; url: string } | { ok: false; error: string }
+      | { ok: true; id: string; identifier: string; title: string; url: string }
+      | { ok: false; error: string }
     >
     getIssue: (args: { id: string; workspaceId?: string }) => Promise<LinearIssue | null>
     updateIssue: (args: {
@@ -1077,6 +1081,11 @@ export type PreloadApi = {
     }) => Promise<{ ok: true; id: string } | { ok: false; error: string }>
     issueComments: (args: { issueId: string; workspaceId?: string }) => Promise<LinearComment[]>
     listTeams: (args?: { workspaceId?: LinearWorkspaceSelection }) => Promise<LinearTeam[]>
+    listProjects: (args?: {
+      query?: string
+      limit?: number
+      workspaceId?: LinearWorkspaceSelection
+    }) => Promise<LinearProjectSummary[]>
     teamStates: (args: { teamId: string; workspaceId?: string }) => Promise<LinearWorkflowState[]>
     teamLabels: (args: { teamId: string; workspaceId?: string }) => Promise<LinearLabel[]>
     teamMembers: (args: { teamId: string; workspaceId?: string }) => Promise<LinearMember[]>

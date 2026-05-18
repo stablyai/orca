@@ -22,7 +22,7 @@ type TeamMultiComboboxProps = {
 
 function renderTriggerLabel(teams: LinearTeam[], selected: ReadonlySet<string>): React.JSX.Element {
   if (teams.length === 0) {
-    return <span className="text-muted-foreground">No teams</span>
+    return <span className="inline-flex min-w-0 items-center gap-1.5">All teams</span>
   }
   if (selected.size === teams.length) {
     return <span className="inline-flex min-w-0 items-center gap-1.5">All teams</span>

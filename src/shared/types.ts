@@ -822,6 +822,8 @@ export type LinearIssue = {
     name: string
     key: string
   }
+  project?: LinearProjectSummary
+  subIssues?: LinearIssueChildSummary[]
   labels: string[]
   labelIds: string[]
   assignee?: {
@@ -831,6 +833,20 @@ export type LinearIssue = {
   }
   priority: number
   updatedAt: string
+}
+
+export type LinearProjectSummary = {
+  id: string
+  name: string
+  url?: string
+  color?: string
+}
+
+export type LinearIssueChildSummary = {
+  id: string
+  identifier: string
+  title: string
+  url: string
 }
 
 export type LinearComment = {
@@ -869,6 +885,7 @@ export type LinearIssueUpdate = {
   assigneeId?: string | null
   priority?: number
   labelIds?: string[]
+  projectId?: string | null
 }
 
 export type ClassifiedError = {

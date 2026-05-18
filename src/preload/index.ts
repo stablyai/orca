@@ -1057,8 +1057,11 @@ const api = {
       title: string
       description?: string
       workspaceId?: string
+      parentIssueId?: string
+      projectId?: string | null
     }): Promise<
-      { ok: true; id: string; identifier: string; url: string } | { ok: false; error: string }
+      | { ok: true; id: string; identifier: string; title: string; url: string }
+      | { ok: false; error: string }
     > => ipcRenderer.invoke('linear:createIssue', args),
 
     getIssue: (args: { id: string; workspaceId?: string }): Promise<unknown> =>
@@ -1083,6 +1086,12 @@ const api = {
 
     listTeams: (args?: { workspaceId?: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('linear:listTeams', args),
+
+    listProjects: (args?: {
+      query?: string
+      limit?: number
+      workspaceId?: string
+    }): Promise<unknown[]> => ipcRenderer.invoke('linear:listProjects', args),
 
     teamStates: (args: { teamId: string; workspaceId?: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('linear:teamStates', args),

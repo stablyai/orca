@@ -218,11 +218,11 @@
     list-style: none;
   }
 
-  button:not(:disabled) {
+  :where(button:not(:disabled)) {
     cursor: pointer;
   }
 
-  button:disabled {
+  :where(button:disabled) {
     cursor: default;
   }
 }

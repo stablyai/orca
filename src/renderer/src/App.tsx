@@ -75,6 +75,7 @@ import {
   setRuntimeGraphSyncEnabled
 } from './runtime/sync-runtime-graph'
 import { useGlobalFileDrop } from './hooks/useGlobalFileDrop'
+import { useRadixBodyPointerEventsRecovery } from './hooks/useRadixBodyPointerEventsRecovery'
 import { registerUpdaterBeforeUnloadBypass } from './lib/updater-beforeunload'
 import {
   buildWorkspaceSessionPayload,
@@ -219,6 +220,7 @@ function applyRemoteWorkspacePatchStatus(
 
 function App(): React.JSX.Element {
   useUnreadDockBadge()
+  useRadixBodyPointerEventsRecovery()
   const [floatingTerminalOpen, setFloatingTerminalOpen] = useState(false)
 
   // Why: Zustand actions are referentially stable, but each individual

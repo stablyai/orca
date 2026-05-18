@@ -419,7 +419,10 @@ function SingleSelectCell({
           const colors = singleSelectChipColors(value.color)
           return (
             <span
-              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium leading-none text-[var(--github-project-chip-fg-light)] dark:text-[var(--github-project-chip-fg-dark)]"
+              className={cn(
+                'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium leading-none text-[var(--github-project-chip-fg-light)] dark:text-[var(--github-project-chip-fg-dark)]',
+                editable && 'cursor-pointer'
+              )}
               style={chipStyle(colors)}
             >
               {value.name}
