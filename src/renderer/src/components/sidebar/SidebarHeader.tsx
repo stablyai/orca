@@ -51,6 +51,9 @@ const SORT_OPTIONS = [
 
 const isMac = navigator.userAgent.includes('Mac')
 const newWorktreeShortcutLabel = isMac ? '⌘N' : 'Ctrl+N'
+// Why: the sidebar resize handle intentionally has a wide hit target at the
+// right edge, but header actions overlapping it should remain clickable.
+const HEADER_ACTION_HIT_TARGET_CLASS = 'relative z-20'
 
 const SidebarHeader = React.memo(function SidebarHeader() {
   const [workspaceBoardOpen, setWorkspaceBoardOpen] = useState(false)
@@ -124,7 +127,7 @@ const SidebarHeader = React.memo(function SidebarHeader() {
               <Button
                 variant={workspaceBoardOpen ? 'secondary' : 'ghost'}
                 size="icon-xs"
-                className="text-muted-foreground"
+                className={`${HEADER_ACTION_HIT_TARGET_CLASS} text-muted-foreground`}
                 aria-label="Workspace board"
                 aria-pressed={workspaceBoardOpen}
                 data-workspace-board-trigger=""
@@ -147,7 +150,7 @@ const SidebarHeader = React.memo(function SidebarHeader() {
                   <Button
                     variant="ghost"
                     size="icon-xs"
-                    className="text-muted-foreground"
+                    className={`${HEADER_ACTION_HIT_TARGET_CLASS} text-muted-foreground`}
                     aria-label="View options"
                     data-workspace-board-preserve-open=""
                   >
@@ -244,6 +247,7 @@ const SidebarHeader = React.memo(function SidebarHeader() {
               <Button
                 variant="ghost"
                 size="icon-xs"
+                className={HEADER_ACTION_HIT_TARGET_CLASS}
                 onClick={() => {
                   if (!canCreateWorktree) {
                     return
