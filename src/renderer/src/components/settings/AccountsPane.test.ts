@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildClaudeAddAccountInput,
+  buildClaudeSwitchToastMessage,
   pickClaudeValidationBadgeState,
   resolveClaudeAddAccountAction
 } from './AccountsPane'
@@ -74,5 +75,25 @@ describe('pickClaudeValidationBadgeState', () => {
       reason: 'API key invalid or revoked.',
       rescueHint: 'Generate a new key.'
     })
+  })
+})
+
+describe('buildClaudeSwitchToastMessage', () => {
+  it('includes the account label', () => {
+    expect(buildClaudeSwitchToastMessage({ email: 'Work API' })).toBe(
+      'Switched to Work API. Existing terminals keep their previous account until restarted.'
+    )
+  })
+
+  it('handles oauth email format', () => {
+    expect(buildClaudeSwitchToastMessage({ email: 'tim@example.com' })).toBe(
+      'Switched to tim@example.com. Existing terminals keep their previous account until restarted.'
+    )
+  })
+
+  it('handles System default fallback label', () => {
+    expect(buildClaudeSwitchToastMessage({ email: 'System default' })).toBe(
+      'Switched to System default. Existing terminals keep their previous account until restarted.'
+    )
   })
 })

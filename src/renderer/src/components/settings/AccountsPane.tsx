@@ -67,6 +67,13 @@ function getClaudeAccountLabel(
   return state.accounts.find((account) => account.id === accountId)?.email ?? 'Claude account'
 }
 
+// Why: Design F3.1 — switching accounts must surface the new-PTY-only semantics so
+// users understand that running terminals keep their previous auth until restart.
+// Extracted as a pure helper so the wording is unit-tested without rendering React.
+export function buildClaudeSwitchToastMessage(account: { email: string }): string {
+  return `Switched to ${account.email}. Existing terminals keep their previous account until restarted.`
+}
+
 function getCodexAccountErrorDescription(error: unknown): string {
   const message = String((error as Error)?.message ?? error)
     .replace(/^Error occurred in handler for 'codexAccounts:[^']+':\s*/i, '')
@@ -339,9 +346,13 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
       const next = await operation()
       await syncClaudeAccounts(next)
       if (previousActiveAccountId !== next.activeAccountId || action === 'adding') {
-        toast.info('Claude account updated.', {
-          description: `${getClaudeAccountLabel(claudeAccounts, previousActiveAccountId)} → ${getClaudeAccountLabel(next, next.activeAccountId)}. Restart live Claude terminals before continuing old sessions.`
-        })
+        // Why: Design F3.1 — surface that the switch only affects new terminals.
+        // Existing PTYs keep their previous auth until restarted.
+        toast.info(
+          buildClaudeSwitchToastMessage({
+            email: getClaudeAccountLabel(next, next.activeAccountId)
+          })
+        )
       }
     } catch (error) {
       toast.error('Claude account update failed.', {
