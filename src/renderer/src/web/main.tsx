@@ -11,7 +11,8 @@ import {
 import {
   createStoredWebRuntimeEnvironment,
   readStoredWebRuntimeEnvironment,
-  saveStoredWebRuntimeEnvironment
+  saveStoredWebRuntimeEnvironment,
+  selectStoredWebRuntimeEnvironment
 } from './web-runtime-environment'
 import { installWebPreloadApi } from './web-preload-api'
 
@@ -22,9 +23,9 @@ function WebRoot(): React.JSX.Element {
   const [hasEnvironment, setHasEnvironment] = useState(() => {
     const offer = initialPairingInput ? parseWebPairingInput(initialPairingInput) : null
     if (offer) {
-      saveStoredWebRuntimeEnvironment(
-        createStoredWebRuntimeEnvironment({ name: 'Orca Server', offer })
-      )
+      const environment = createStoredWebRuntimeEnvironment({ name: 'Orca Server', offer })
+      saveStoredWebRuntimeEnvironment(environment)
+      selectStoredWebRuntimeEnvironment(environment.id)
       clearPairingInputFromAddressBar()
       return true
     }
