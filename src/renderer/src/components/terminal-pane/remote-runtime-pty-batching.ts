@@ -16,12 +16,16 @@ export function createRemoteRuntimePtyTextBatcher(
 ): RemoteRuntimePtyBatcher {
   let pending = ''
   let timer: ReturnType<typeof setTimeout> | null = null
+  let microtaskScheduled = false
+  let scheduleGeneration = 0
 
   const clear = (): void => {
     if (timer) {
       clearTimeout(timer)
       timer = null
     }
+    microtaskScheduled = false
+    scheduleGeneration++
   }
 
   const flush = (): void => {
@@ -33,12 +37,29 @@ export function createRemoteRuntimePtyTextBatcher(
     }
   }
 
+  const scheduleFlush = (): void => {
+    if (timer || microtaskScheduled) {
+      return
+    }
+    if (delayMs <= 0) {
+      microtaskScheduled = true
+      const generation = scheduleGeneration
+      // Why: remote typing should not pay a fixed timer delay, but same-turn
+      // xterm bursts still need one coalescing point before crossing RPC.
+      queueMicrotask(() => {
+        if (microtaskScheduled && generation === scheduleGeneration) {
+          flush()
+        }
+      })
+      return
+    }
+    timer = setTimeout(flush, delayMs)
+  }
+
   return {
     push(data: string): void {
       pending += data
-      if (!timer) {
-        timer = setTimeout(flush, delayMs)
-      }
+      scheduleFlush()
     },
     flush,
     clear

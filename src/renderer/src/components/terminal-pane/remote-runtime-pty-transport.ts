@@ -25,7 +25,7 @@ import { setFitOverride } from '@/lib/pane-manager/mobile-fit-overrides'
 import { setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
 import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '@/runtime/web-terminal-surface-id'
 
-const REMOTE_TERMINAL_INPUT_FLUSH_MS = 8
+const REMOTE_TERMINAL_INPUT_FLUSH_MS = 0
 const REMOTE_TERMINAL_VIEWPORT_FLUSH_MS = 33
 const HOST_SESSION_ATTACH_POLL_MS = 150
 const HOST_SESSION_ATTACH_TIMEOUT_MS = 15_000
@@ -459,8 +459,8 @@ export function createRemoteRuntimePtyTransport(
       if (!normalized) {
         return true
       }
-      // Why: remote terminal input currently crosses the runtime RPC boundary;
-      // coalescing same-frame key bursts avoids a per-keystroke remote round-trip.
+      // Why: remote terminal input is user-visible. Coalesce only same-turn
+      // bursts so typing does not pay the old fixed 8 ms batch delay.
       inputBatcher.push(normalized)
       return true
     },

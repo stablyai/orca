@@ -24,6 +24,8 @@ const MOBILE_SNAPSHOT_BYTE_BUDGET = 512 * 1024
 const TERMINAL_STREAM_CHUNK_BYTES = 48 * 1024
 const TERMINAL_OUTPUT_FLUSH_MS = 5
 const TERMINAL_OUTPUT_BATCH_MAX_CHARS = 64 * 1024
+const TERMINAL_OUTPUT_FAST_FLUSH_MAX_CHARS = 2 * 1024
+const TERMINAL_OUTPUT_FAST_FLUSH_COOLDOWN_MS = 40
 const TERMINAL_MULTIPLEX_PENDING_MAX_CHARS = 256 * 1024
 let nextTerminalStreamId = 1
 
@@ -77,13 +79,17 @@ function createTerminalOutputBatcher(onFlush: (data: string) => void): {
   let chunks: string[] = []
   let chars = 0
   let timer: ReturnType<typeof setTimeout> | null = null
+  let microtaskScheduled = false
+  let scheduleGeneration = 0
+  let lastFlushAt = Number.NEGATIVE_INFINITY
 
   const clearTimer = (): void => {
-    if (!timer) {
-      return
+    if (timer) {
+      clearTimeout(timer)
+      timer = null
     }
-    clearTimeout(timer)
-    timer = null
+    microtaskScheduled = false
+    scheduleGeneration++
   }
 
   const flush = (): void => {
@@ -94,7 +100,35 @@ function createTerminalOutputBatcher(onFlush: (data: string) => void): {
     const data = chunks.length === 1 ? chunks[0]! : chunks.join('')
     chunks = []
     chars = 0
+    lastFlushAt = Date.now()
     onFlush(data)
+  }
+
+  const scheduleFlush = (): void => {
+    if (timer || microtaskScheduled) {
+      return
+    }
+    if (
+      chars <= TERMINAL_OUTPUT_FAST_FLUSH_MAX_CHARS &&
+      Date.now() - lastFlushAt >= TERMINAL_OUTPUT_FAST_FLUSH_COOLDOWN_MS
+    ) {
+      microtaskScheduled = true
+      const generation = scheduleGeneration
+      // Why: a single interactive echo should not pay the 5 ms network batch,
+      // but same-turn PTY chunks still need one coalescing point before send.
+      queueMicrotask(() => {
+        if (microtaskScheduled && generation === scheduleGeneration) {
+          flush()
+        }
+      })
+      return
+    }
+    // Why: sustained TUI redraw/output bursts still need a short cross-tick
+    // batch window so remote streams do not send one network frame per chunk.
+    timer = setTimeout(flush, TERMINAL_OUTPUT_FLUSH_MS)
+    if (typeof timer.unref === 'function') {
+      timer.unref()
+    }
   }
 
   return {
@@ -108,14 +142,7 @@ function createTerminalOutputBatcher(onFlush: (data: string) => void): {
         flush()
         return
       }
-      if (!timer) {
-        // Why: Paseo coalesces terminal stream output before crossing the
-        // network. Desktop runtime subscribers need the same burst boundary.
-        timer = setTimeout(flush, TERMINAL_OUTPUT_FLUSH_MS)
-        if (typeof timer.unref === 'function') {
-          timer.unref()
-        }
-      }
+      scheduleFlush()
     },
     flush,
     dispose(): void {

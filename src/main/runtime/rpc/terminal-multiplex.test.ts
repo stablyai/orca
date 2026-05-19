@@ -26,6 +26,11 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
 }
 
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
 describe('terminal multiplex RPC', () => {
   it('multiplexes terminal streams and routes desktop resize to the source PTY', async () => {
     vi.useFakeTimers()
@@ -131,7 +136,7 @@ describe('terminal multiplex RPC', () => {
 
       dataListenerRef.current?.('a')
       dataListenerRef.current?.('b')
-      await vi.runOnlyPendingTimersAsync()
+      await flushMicrotasks()
 
       const outputFrames = binaryFrames
         .map((frame) => decodeTerminalStreamFrame(frame))

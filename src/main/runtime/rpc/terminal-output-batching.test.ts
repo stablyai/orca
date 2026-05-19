@@ -1,3 +1,4 @@
+/* oxlint-disable max-lines -- Why: output batching tests share a streaming dispatcher harness; splitting would duplicate setup and weaken burst/cooldown coverage. */
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
@@ -23,8 +24,13 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
 }
 
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
 describe('terminal output batching', () => {
-  it('coalesces desktop terminal output bursts before emitting stream data', async () => {
+  it('fast-flushes the first small desktop output burst before emitting stream data', async () => {
     vi.useFakeTimers()
     try {
       const messages: string[] = []
@@ -72,7 +78,7 @@ describe('terminal output batching', () => {
 
       expect(messages.map((msg) => JSON.parse(msg).result?.type)).not.toContain('data')
 
-      await vi.runOnlyPendingTimersAsync()
+      await flushMicrotasks()
 
       const dataMessages = messages
         .map((msg) => JSON.parse(msg))
@@ -87,7 +93,7 @@ describe('terminal output batching', () => {
     }
   })
 
-  it('streams desktop terminal output as coalesced binary frames when requested', async () => {
+  it('streams the first small desktop output burst as a coalesced binary frame', async () => {
     vi.useFakeTimers()
     try {
       const messages: string[] = []
@@ -156,13 +162,88 @@ describe('terminal output batching', () => {
 
       expect(messages.map((msg) => JSON.parse(msg).result?.type)).not.toContain('data')
 
-      await vi.runOnlyPendingTimersAsync()
+      await flushMicrotasks()
 
       const outputFrames = binaryFrames
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
       expect(outputFrames).toHaveLength(1)
       expect(outputFrames[0] ? decodeTerminalStreamText(outputFrames[0].payload) : '').toBe('ab')
+
+      runtime.cleanupSubscription('terminal-1:desktop-1')
+      await dispatchPromise
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the timer batch window for sustained desktop output after a fast flush', async () => {
+    vi.useFakeTimers()
+    try {
+      const messages: string[] = []
+      const cleanups = new Map<string, () => void>()
+      const dataListenerRef: { current?: (data: string) => void } = {}
+      const runtime = stubRuntime({
+        resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+        readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
+        serializeTerminalBuffer: vi.fn().mockResolvedValue(null),
+        getTerminalSize: vi.fn().mockReturnValue({ cols: 80, rows: 24 }),
+        getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
+        getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+        subscribeToTerminalData: vi.fn((_: string, listener: (data: string) => void) => {
+          dataListenerRef.current = listener
+          return vi.fn()
+        }),
+        subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+        registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+          cleanups.set(id, cleanup)
+        }),
+        cleanupSubscription: vi.fn((id: string) => {
+          const cleanup = cleanups.get(id)
+          cleanups.delete(id)
+          cleanup?.()
+        }),
+        waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
+      })
+      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+      const dispatchPromise = dispatcher.dispatchStreaming(
+        makeRequest('terminal.subscribe', {
+          terminal: 'terminal-1',
+          client: { id: 'desktop-1', type: 'desktop' }
+        }),
+        (msg) => messages.push(msg)
+      )
+
+      await vi.waitFor(() => expect(dataListenerRef.current).toBeDefined())
+      const emitData = dataListenerRef.current
+      if (!emitData) {
+        throw new Error('missing terminal data listener')
+      }
+      emitData('first')
+      await flushMicrotasks()
+      expect(
+        messages
+          .map((msg) => JSON.parse(msg))
+          .filter((message) => message.result?.type === 'data')
+          .map((message) => message.result.chunk)
+      ).toEqual(['first'])
+      emitData('a')
+      emitData('b')
+      await flushMicrotasks()
+      expect(
+        messages
+          .map((msg) => JSON.parse(msg))
+          .filter((message) => message.result?.type === 'data')
+          .map((message) => message.result.chunk)
+      ).toEqual(['first'])
+      await vi.advanceTimersByTimeAsync(5)
+      expect(
+        messages
+          .map((msg) => JSON.parse(msg))
+          .filter((message) => message.result?.type === 'data')
+          .map((message) => message.result.chunk)
+      ).toEqual(['first', 'ab'])
 
       runtime.cleanupSubscription('terminal-1:desktop-1')
       await dispatchPromise

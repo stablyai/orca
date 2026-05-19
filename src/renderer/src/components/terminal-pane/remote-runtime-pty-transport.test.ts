@@ -109,6 +109,11 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
   }
 
+  async function flushMicrotasks(): Promise<void> {
+    await Promise.resolve()
+    await Promise.resolve()
+  }
+
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
@@ -599,7 +604,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     })
   })
 
-  it('coalesces rapid remote terminal input before sending it to the runtime', async () => {
+  it('coalesces same-turn remote terminal input without waiting for a timer', async () => {
     vi.useFakeTimers()
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
@@ -617,8 +622,9 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(transport.sendInput('a')).toBe(true)
       expect(transport.sendInput('b')).toBe(true)
       expect(runtimeCall).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
 
-      await vi.runOnlyPendingTimersAsync()
+      await flushMicrotasks()
 
       expect(runtimeCall).not.toHaveBeenCalled()
       expect(subscriptionSendBinary).toHaveBeenCalledTimes(1)
@@ -631,7 +637,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
   })
 
-  it('sends coalesced terminal input as binary frames once the stream is established', async () => {
+  it('sends the first interactive terminal input on the next microtask', async () => {
     vi.useFakeTimers()
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
@@ -647,15 +653,16 @@ describe('createRemoteRuntimePtyTransport', () => {
       subscriptionSendBinary.mockClear()
 
       expect(transport.sendInput('a')).toBe(true)
-      expect(transport.sendInput('b')).toBe(true)
-      await vi.runOnlyPendingTimersAsync()
+      expect(subscriptionSendBinary).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
+      await flushMicrotasks()
 
       expect(runtimeCall).not.toHaveBeenCalled()
       expect(subscriptionSendBinary).toHaveBeenCalledTimes(1)
       const frame = decodeTerminalStreamFrame(subscriptionSendBinary.mock.calls[0][0])
       expect(frame?.opcode).toBe(TerminalStreamOpcode.Input)
       expect(frame?.streamId).toBe(streamId)
-      expect(frame ? decodeTerminalStreamText(frame.payload) : '').toBe('ab')
+      expect(frame ? decodeTerminalStreamText(frame.payload) : '').toBe('a')
     } finally {
       vi.useRealTimers()
     }
@@ -676,7 +683,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       subscriptionSendBinary.mockClear()
 
       expect(transport.sendInput('echo one\necho two\r\n')).toBe(true)
-      await vi.runOnlyPendingTimersAsync()
+      await flushMicrotasks()
 
       const frame = decodeTerminalStreamFrame(subscriptionSendBinary.mock.calls[0][0])
       expect(frame?.opcode).toBe(TerminalStreamOpcode.Input)
