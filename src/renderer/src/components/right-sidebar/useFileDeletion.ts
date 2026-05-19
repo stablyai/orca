@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { dirname } from '@/lib/path'
 import { getConnectionId } from '@/lib/connection-context'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
@@ -49,6 +50,7 @@ export function useFileDeletion({
   isMac,
   isWindows
 }: UseFileDeletionParams): UseFileDeletionResult {
+  const confirm = useConfirmationDialog()
   // Why: track in-flight deletes per-path so repeated Del presses on the same
   // node don't issue duplicate IPC calls; the map is a ref to avoid re-renders.
   const inFlightRef = useRef<Set<string>>(new Set())
@@ -82,7 +84,13 @@ export function useFileDeletion({
         const message = node.isDirectory
           ? `Permanently delete '${node.name}' and all its contents? This cannot be undone.`
           : `Permanently delete '${node.name}'? This cannot be undone.`
-        if (!window.confirm(message)) {
+        const confirmed = await confirm({
+          title: `Permanently delete '${node.name}'?`,
+          description: message,
+          confirmLabel: 'Delete',
+          confirmVariant: 'destructive'
+        })
+        if (!confirmed) {
           inFlightRef.current.delete(node.path)
           return
         }
@@ -193,7 +201,16 @@ export function useFileDeletion({
         inFlightRef.current.delete(node.path)
       }
     },
-    [activeWorktreeId, closeFile, isWindows, openFiles, refreshDir, selectedPath, setSelectedPath]
+    [
+      activeWorktreeId,
+      closeFile,
+      confirm,
+      isWindows,
+      openFiles,
+      refreshDir,
+      selectedPath,
+      setSelectedPath
+    ]
   )
 
   const requestDelete = useCallback(

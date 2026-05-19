@@ -76,6 +76,7 @@ import RepoDotLabel from '@/components/repo/RepoDotLabel'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import IssueSourceSelector, { issueSourceChipClass } from '@/components/github/IssueSourceSelector'
 import { reconcileLinearTeamSelection } from '@/components/task-page-linear-team-selection'
+import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import {
   getGitHubPRPrimaryReviewer,
   getGitHubPRReviewLabel,
@@ -1411,6 +1412,7 @@ function PRMergeCell({
   onRefresh: () => void
 }): React.JSX.Element {
   const [merging, setMerging] = useState(false)
+  const confirm = useConfirmationDialog()
   if (item.type !== 'pr') {
     return <span className="text-[11px] text-muted-foreground">Issue</span>
   }
@@ -1425,11 +1427,13 @@ function PRMergeCell({
     if (!repo || mergeDisabled) {
       return
     }
-    const confirmed = window.confirm(
-      method === 'squash'
-        ? `Squash and merge PR #${item.number}?`
-        : `${method === 'rebase' ? 'Rebase and merge' : 'Merge'} PR #${item.number}?`
-    )
+    const label =
+      method === 'squash' ? 'Squash and merge' : method === 'rebase' ? 'Rebase and merge' : 'Merge'
+    const confirmed = await confirm({
+      title: `${label} PR #${item.number}?`,
+      description: 'This will update the pull request on GitHub.',
+      confirmLabel: label
+    })
     if (!confirmed) {
       return
     }

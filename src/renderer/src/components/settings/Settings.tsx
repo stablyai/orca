@@ -31,6 +31,7 @@ import { useAppStore } from '../../store'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { applyDocumentTheme } from '@/lib/document-theme'
+import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { SCROLLBACK_PRESETS_MB, getFallbackTerminalFonts } from './SettingsConstants'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
 import { GeneralPane, GENERAL_PANE_SEARCH_ENTRIES } from './GeneralPane'
@@ -277,6 +278,7 @@ function Settings(): React.JSX.Element {
   const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
   const [hasUnsavedCommitPromptChanges, setHasUnsavedCommitPromptChanges] = useState(false)
   const [commitPromptDiscardSignal, setCommitPromptDiscardSignal] = useState(0)
+  const confirm = useConfirmationDialog()
   // Why: the hidden-experimental group is an unlock — Shift-clicking the
   // Experimental sidebar entry reveals it for the remainder of the session.
   // Not persisted on purpose: it's a power-user affordance we don't want to
@@ -291,22 +293,25 @@ function Settings(): React.JSX.Element {
   const repoHooksRequestSeqRef = useRef(0)
   const repoHooksRuntimeIdentityRef = useRef<string>('local')
 
-  const confirmDiscardCommitPromptChanges = useCallback((): boolean => {
+  const confirmDiscardCommitPromptChanges = useCallback(async (): Promise<boolean> => {
     if (!hasUnsavedCommitPromptChanges) {
       return true
     }
-    const shouldDiscard = window.confirm(
-      'You have unsaved AI commit prompt changes. Leave without saving?'
-    )
+    const shouldDiscard = await confirm({
+      title: 'Discard unsaved commit prompt changes?',
+      description: 'You have unsaved AI commit prompt changes. Leaving will discard them.',
+      confirmLabel: 'Discard',
+      confirmVariant: 'destructive'
+    })
     if (shouldDiscard) {
       setCommitPromptDiscardSignal((signal) => signal + 1)
       setHasUnsavedCommitPromptChanges(false)
     }
     return shouldDiscard
-  }, [hasUnsavedCommitPromptChanges])
+  }, [confirm, hasUnsavedCommitPromptChanges])
 
-  const closeSettingsPageWithPromptGuard = useCallback((): void => {
-    if (!confirmDiscardCommitPromptChanges()) {
+  const closeSettingsPageWithPromptGuard = useCallback(async (): Promise<void> => {
+    if (!(await confirmDiscardCommitPromptChanges())) {
       return
     }
     closeSettingsPage()
@@ -319,8 +324,31 @@ function Settings(): React.JSX.Element {
   const runtimeTargetIdentity = getRuntimeTargetIdentity(settings)
 
   useEffect(() => {
+    const hasVisibleOverlay = (): boolean =>
+      Array.from(
+        document.querySelectorAll('[role="dialog"], [role="listbox"], [role="menu"]')
+      ).some((element) => {
+        if (!(element instanceof HTMLElement)) {
+          return false
+        }
+        if (element.closest('[aria-hidden="true"]')) {
+          return false
+        }
+        const style = window.getComputedStyle(element)
+        return (
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          element.getClientRects().length > 0
+        )
+      })
+
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape' || event.defaultPrevented) {
+        return
+      }
+      // Why: nested dialogs and menus own Escape before Settings page-level
+      // navigation, including the unsaved commit prompt confirmation dialog.
+      if (hasVisibleOverlay()) {
         return
       }
       // Why: Escape in an editable control usually means "cancel this edit",
@@ -331,7 +359,7 @@ function Settings(): React.JSX.Element {
       if (isEditableTarget(event.target)) {
         return
       }
-      closeSettingsPageWithPromptGuard()
+      void closeSettingsPageWithPromptGuard()
     }
 
     document.addEventListener('keydown', handleKeyDown)
@@ -949,11 +977,11 @@ function Settings(): React.JSX.Element {
   }, [visibleNavSections])
 
   const scrollToSection = useCallback(
-    (
+    async (
       sectionId: string,
       modifiers?: { metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }
-    ) => {
-      if (sectionId !== activeSectionId && !confirmDiscardCommitPromptChanges()) {
+    ): Promise<void> => {
+      if (sectionId !== activeSectionId && !(await confirmDiscardCommitPromptChanges())) {
         return
       }
       // Why: Shift-clicking the Experimental sidebar entry unlocks a hidden
@@ -971,8 +999,8 @@ function Settings(): React.JSX.Element {
     [activeSectionId, confirmDiscardCommitPromptChanges]
   )
 
-  const openComputerUseFromBrowser = useCallback(() => {
-    if (!confirmDiscardCommitPromptChanges()) {
+  const openComputerUseFromBrowser = useCallback(async () => {
+    if (!(await confirmDiscardCommitPromptChanges())) {
       return
     }
     pendingNavSectionRef.current = 'computer-use'
