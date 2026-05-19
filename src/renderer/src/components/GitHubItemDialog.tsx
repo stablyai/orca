@@ -41,6 +41,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
+import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { VisuallyHidden } from 'radix-ui'
 import {
@@ -2101,6 +2102,7 @@ function PRActionsPanel({
   const [mergePending, setMergePending] = useState(false)
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
+  const confirm = useConfirmationDialog()
   const actionItem = { ...item, state: localState }
   const canMutateState = localState !== 'merged' && (!!repoPath || !!projectOrigin)
   const nextState: 'open' | 'closed' = localState === 'closed' ? 'open' : 'closed'
@@ -2135,7 +2137,16 @@ function PRActionsPanel({
       return
     }
     const label = nextState === 'closed' ? 'Close' : 'Reopen'
-    if (!window.confirm(`${label} PR #${item.number}?`)) {
+    const confirmed = await confirm({
+      title: `${label} PR #${item.number}?`,
+      description:
+        nextState === 'closed'
+          ? 'This will close the pull request on GitHub.'
+          : 'This will reopen the pull request on GitHub.',
+      confirmLabel: label,
+      confirmVariant: nextState === 'closed' ? 'destructive' : 'default'
+    })
+    if (!confirmed) {
       return
     }
     const previousState = localState
@@ -2165,7 +2176,12 @@ function PRActionsPanel({
     }
     const label =
       method === 'squash' ? 'Squash and merge' : method === 'rebase' ? 'Rebase and merge' : 'Merge'
-    if (!window.confirm(`${label} PR #${item.number}?`)) {
+    const confirmed = await confirm({
+      title: `${label} PR #${item.number}?`,
+      description: 'This will update the pull request on GitHub.',
+      confirmLabel: label
+    })
+    if (!confirmed) {
       return
     }
     setMergePending(true)
