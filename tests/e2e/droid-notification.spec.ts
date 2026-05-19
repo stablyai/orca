@@ -52,8 +52,8 @@ async function getNotificationDispatches(
   })
 }
 
-async function createAndSwitchToOtherWorktree(page: Page): Promise<string> {
-  return page.evaluate(async () => {
+async function switchToOtherExistingWorktree(page: Page): Promise<string> {
+  return page.evaluate(() => {
     const store = window.__store
     if (!store) {
       throw new Error('Store unavailable')
@@ -69,13 +69,26 @@ async function createAndSwitchToOtherWorktree(page: Page): Promise<string> {
     if (!activeWorktree) {
       throw new Error(`Active worktree ${activeWorktreeId} not found`)
     }
-    const result = await state.createWorktree(
-      activeWorktree.repoId,
-      `codex-hook-notify-${Date.now()}`
-    )
-    await state.fetchWorktrees(activeWorktree.repoId)
-    state.setActiveWorktree(result.worktree.id)
-    return result.worktree.id
+    const otherWorktree =
+      Object.values(state.worktreesByRepo)
+        .flat()
+        .find(
+          (worktree) =>
+            worktree.repoId === activeWorktree.repoId &&
+            worktree.id !== activeWorktreeId &&
+            worktree.branch.replace(/^refs\/heads\//, '') === 'e2e-secondary'
+        ) ??
+      Object.values(state.worktreesByRepo)
+        .flat()
+        .find(
+          (worktree) =>
+            worktree.repoId === activeWorktree.repoId && worktree.id !== activeWorktreeId
+        )
+    if (!otherWorktree) {
+      throw new Error(`No inactive worktree found for repo ${activeWorktree.repoId}`)
+    }
+    state.setActiveWorktree(otherWorktree.id)
+    return otherWorktree.id
   })
 }
 
@@ -164,7 +177,7 @@ test.describe('Droid notifications', () => {
       )
       .toBe(true)
 
-    await createAndSwitchToOtherWorktree(orcaPage)
+    await switchToOtherExistingWorktree(orcaPage)
 
     const finalMessage = `Codex hook completed ${Date.now()}`
     await emitCodexHookStatus(endpoint, {

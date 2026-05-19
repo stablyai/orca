@@ -80,18 +80,12 @@ async function seedCreatePREligibleBranch(
       throw new Error('window.__store is not available')
     }
     const state = store.getState()
-    const worktreeId = state.activeWorktreeId
     const worktrees = Object.values(state.worktreesByRepo).flat()
-    const activeWorktree = worktrees.find((entry) => entry.id === worktreeId)
-    const worktree =
-      worktrees.find((entry) => entry.branch.replace(/^refs\/heads\//, '') === 'e2e-secondary') ??
-      worktrees.find((entry) => {
-        const branchName = entry.branch.replace(/^refs\/heads\//, '')
-        return branchName !== 'main' && !entry.isMainWorktree
-      }) ??
-      activeWorktree
+    const worktree = worktrees.find(
+      (entry) => entry.branch.replace(/^refs\/heads\//, '') === 'e2e-secondary'
+    )
     if (!worktree) {
-      throw new Error('active worktree not found')
+      throw new Error('seeded e2e-secondary worktree not found')
     }
     // Why: the worker-scoped test repo can accumulate extra non-main
     // worktrees; use the seeded secondary worktree as the stable PR target.

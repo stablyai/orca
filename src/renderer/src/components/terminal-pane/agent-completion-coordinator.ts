@@ -51,11 +51,14 @@ export function createAgentCompletionCoordinator(
   let requiresFreshWorking = false
   let pollTimer: ReturnType<typeof setTimeout> | null = null
   let pendingTitleTimer: ReturnType<typeof setTimeout> | null = null
+  let pendingTitleSequence = 0
   let pendingTitle: {
+    id: number
     title: string
     expiresAt: number
     maxExpiresAt: number
     firstInspectionFinished: boolean
+    validatedByFreshInspection: boolean
   } | null = null
   let inspectionInFlight = false
   let inspectionGeneration = 0
@@ -125,7 +128,12 @@ export function createAgentCompletionCoordinator(
   }
 
   function dispatchPendingTitleIfEligible(): void {
-    if (!pendingTitle || !agentIdentityEstablished || !hasAgentRunEvidence) {
+    if (
+      !pendingTitle ||
+      !pendingTitle.validatedByFreshInspection ||
+      !agentIdentityEstablished ||
+      !hasAgentRunEvidence
+    ) {
       return
     }
     const title = pendingTitle.title
@@ -165,10 +173,12 @@ export function createAgentCompletionCoordinator(
     // Why: generic spinner titles can be just "⠋ cwd"; hold the completion
     // only long enough for one foreground-process probe to prove an agent owns it.
     pendingTitle = {
+      id: ++pendingTitleSequence,
       title,
       expiresAt: Math.min(now + PENDING_TITLE_TTL_MS, now + PENDING_TITLE_MAX_TTL_MS),
       maxExpiresAt: now + PENDING_TITLE_MAX_TTL_MS,
-      firstInspectionFinished: false
+      firstInspectionFinished: false,
+      validatedByFreshInspection: false
     }
     schedulePendingTitleExpiry()
     requestInspection('pending-title')
@@ -185,12 +195,14 @@ export function createAgentCompletionCoordinator(
     establishAgentEvidence()
   }
 
-  function handleProcessInspectionResult(result: RuntimeTerminalProcessInspection): void {
+  function handleProcessInspectionResult(result: RuntimeTerminalProcessInspection): boolean {
     consecutiveInspectionErrors = 0
     const recognized = recognizeAgentProcess(result.foregroundProcess)
     if (recognized) {
       handleRecognizedProcess(recognized)
-    } else if (lastForegroundAgent && hasAgentRunEvidence) {
+      return true
+    }
+    if (lastForegroundAgent && hasAgentRunEvidence) {
       const exited = lastForegroundAgent
       dispatchCompletion('process-exit', exited.processName)
       lastForegroundAgent = null
@@ -199,6 +211,7 @@ export function createAgentCompletionCoordinator(
       lastForegroundAgent = null
       clearAgentRunEvidence()
     }
+    return false
   }
 
   function requestInspection(priority: InspectionPriority): void {
@@ -211,13 +224,22 @@ export function createAgentCompletionCoordinator(
     }
     inspectionInFlight = true
     const generationAtRequest = inspectionGeneration
+    const pendingTitleIdAtRequest = priority === 'pending-title' ? pendingTitle?.id : null
     enqueueAgentProcessInspection({
       priority,
       run: async () => {
+        let inspectedRecognizedAgent = false
+        let inspectionSucceeded = false
         try {
           const result = await options.inspectProcess(options.getSettings(), ptyId)
           if (!disposed && generationAtRequest === inspectionGeneration) {
-            handleProcessInspectionResult(result)
+            const appliesToCurrentPendingTitle =
+              !pendingTitle ||
+              (priority === 'pending-title' && pendingTitle.id === pendingTitleIdAtRequest)
+            if (appliesToCurrentPendingTitle) {
+              inspectedRecognizedAgent = handleProcessInspectionResult(result)
+            }
+            inspectionSucceeded = true
           }
         } catch {
           consecutiveInspectionErrors += 1
@@ -231,9 +253,21 @@ export function createAgentCompletionCoordinator(
             }
           } else {
             if (pendingTitle) {
-              pendingTitle.firstInspectionFinished = true
-              dispatchPendingTitleIfEligible()
-              schedulePendingTitleExpiry()
+              if (priority === 'pending-title' && pendingTitle.id === pendingTitleIdAtRequest) {
+                pendingTitle.firstInspectionFinished = true
+                if (inspectionSucceeded && inspectedRecognizedAgent) {
+                  pendingTitle.validatedByFreshInspection = true
+                  dispatchPendingTitleIfEligible()
+                } else if (!inspectionSucceeded) {
+                  dropPendingTitle()
+                }
+                schedulePendingTitleExpiry()
+              } else {
+                // Why: only the probe requested for this exact pending title
+                // can prove it belongs to an agent; older in-flight probes are
+                // stale even when they were also pending-title inspections.
+                requestInspection('pending-title')
+              }
             }
             scheduleNextPoll()
           }

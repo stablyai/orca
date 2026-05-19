@@ -22,6 +22,17 @@ function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void
   return { promise, resolve: resolveDeferred }
 }
 
+function createRejectableDeferred<T>(): {
+  promise: Promise<T>
+  reject: (reason?: unknown) => void
+} {
+  let rejectDeferred!: (reason?: unknown) => void
+  const promise = new Promise<T>((_resolve, reject) => {
+    rejectDeferred = reject
+  })
+  return { promise, reject: rejectDeferred }
+}
+
 describe('agent completion coordinator', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -106,6 +117,131 @@ describe('agent completion coordinator', () => {
 
     coordinator.observeTitle('Codex working')
     coordinator.observeTitle('/tmp/orca-e2e-repo')
+    await flushAsyncTicks()
+
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+  })
+
+  it('does not validate a pending cwd title with an already in-flight inspection', async () => {
+    const staleInspection = createDeferred<RuntimeTerminalProcessInspection>()
+    const freshInspection = createDeferred<RuntimeTerminalProcessInspection>()
+    const inspectProcess = vi
+      .fn()
+      .mockReturnValueOnce(staleInspection.promise)
+      .mockReturnValueOnce(freshInspection.promise)
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess,
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.startProcessTracking()
+    vi.advanceTimersByTime(2_000)
+    await flushAsyncTicks()
+
+    coordinator.observeTitle('Codex working')
+    coordinator.observeTitle('/tmp/orca-e2e-repo')
+    staleInspection.resolve(processResult('codex'))
+    await flushAsyncTicks()
+
+    expect(inspectProcess).toHaveBeenCalledTimes(2)
+    expect(dispatchCompletion).not.toHaveBeenCalledWith('/tmp/orca-e2e-repo')
+
+    freshInspection.resolve(processResult('zsh'))
+    await flushAsyncTicks()
+
+    expect(dispatchCompletion).not.toHaveBeenCalledWith('/tmp/orca-e2e-repo')
+  })
+
+  it('does not validate a replaced pending title with an older pending-title inspection', async () => {
+    const titleAInspection = createDeferred<RuntimeTerminalProcessInspection>()
+    const titleBInspection = createDeferred<RuntimeTerminalProcessInspection>()
+    const inspectProcess = vi
+      .fn()
+      .mockReturnValueOnce(titleAInspection.promise)
+      .mockReturnValueOnce(titleBInspection.promise)
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess,
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.observeTitle('Codex working')
+    coordinator.observeTitle('/tmp/title-a')
+    await flushAsyncTicks()
+
+    coordinator.observeTitle('Codex working')
+    coordinator.observeTitle('/tmp/title-b')
+    titleAInspection.resolve(processResult('codex'))
+    await flushAsyncTicks()
+
+    expect(inspectProcess).toHaveBeenCalledTimes(2)
+    expect(dispatchCompletion).not.toHaveBeenCalledWith('/tmp/title-b')
+
+    titleBInspection.resolve(processResult('zsh'))
+    await flushAsyncTicks()
+
+    expect(dispatchCompletion).not.toHaveBeenCalledWith('/tmp/title-b')
+  })
+
+  it('does not drop a replaced pending title from an older non-agent inspection', async () => {
+    const titleAInspection = createDeferred<RuntimeTerminalProcessInspection>()
+    const titleBInspection = createDeferred<RuntimeTerminalProcessInspection>()
+    const inspectProcess = vi
+      .fn()
+      .mockReturnValueOnce(titleAInspection.promise)
+      .mockReturnValueOnce(titleBInspection.promise)
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess,
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.observeTitle('Codex working')
+    coordinator.observeTitle('/tmp/title-a')
+    await flushAsyncTicks()
+
+    coordinator.observeTitle('Codex working')
+    coordinator.observeTitle('/tmp/title-b')
+    titleAInspection.resolve(processResult('zsh'))
+    await flushAsyncTicks()
+
+    expect(inspectProcess).toHaveBeenCalledTimes(2)
+    expect(dispatchCompletion).not.toHaveBeenCalledWith('/tmp/title-b')
+
+    titleBInspection.resolve(processResult('codex'))
+    await flushAsyncTicks()
+
+    expect(dispatchCompletion).toHaveBeenCalledWith('/tmp/title-b')
+  })
+
+  it('does not dispatch a pending cwd title when process inspection fails', async () => {
+    const inspection = createRejectableDeferred<RuntimeTerminalProcessInspection>()
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(() => inspection.promise),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.observeTitle('Codex working')
+    coordinator.observeTitle('/tmp/orca-e2e-repo')
+    inspection.reject(new Error('inspection failed'))
     await flushAsyncTicks()
 
     expect(dispatchCompletion).not.toHaveBeenCalled()
