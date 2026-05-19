@@ -150,6 +150,12 @@ export function AzureFoundryFormView({
           />
         </div>
       )}
+      {tab === 'entra-id' && (
+        <p className="text-sm text-muted-foreground">
+          Make sure you&apos;ve run <code>az login</code>. Orca verifies the sign-in when you click
+          Validate.
+        </p>
+      )}
       {errorMessage ? (
         <p id="afy-apikey-error" className="text-xs text-destructive">
           {errorMessage}

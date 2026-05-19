@@ -65,3 +65,55 @@ describe('AzureFoundryFormView markup — API key tab', () => {
     expect(markup).not.toMatch(/aria-label="Use Entra ID"/) // hidden on api-key tab
   })
 })
+
+describe('buildAzureFoundrySubmit — Entra ID tab', () => {
+  it('omits secretFromUser, sets useEntraId true', () => {
+    const submit = buildAzureFoundrySubmit({
+      tab: 'entra-id',
+      label: 'Foundry dev',
+      resource: 'dev-resource',
+      apiKey: '' // ignored on entra-id tab
+    })
+    expect(submit).toEqual({
+      authMethod: 'azure-foundry',
+      label: 'Foundry dev',
+      providerConfig: { resource: 'dev-resource', useEntraId: true }
+    })
+    expect('secretFromUser' in submit).toBe(false)
+  })
+
+  it('still requires resource on entra-id tab', () => {
+    expect(() =>
+      buildAzureFoundrySubmit({
+        tab: 'entra-id',
+        label: 'F',
+        resource: '',
+        apiKey: ''
+      })
+    ).toThrow(/resource/i)
+  })
+})
+
+describe('AzureFoundryFormView markup — Entra ID tab', () => {
+  it('hides apiKey input and surfaces az login hint', () => {
+    const markup = renderToStaticMarkup(
+      <AzureFoundryFormView
+        tab="entra-id"
+        label=""
+        resource=""
+        apiKey=""
+        useEntraId
+        validation={{ status: 'idle' }}
+        onLabelChange={() => {}}
+        onResourceChange={() => {}}
+        onApiKeyChange={() => {}}
+        onTabChange={() => {}}
+        onValidate={() => {}}
+        onSubmit={() => {}}
+        onBack={() => {}}
+      />
+    )
+    expect(markup).not.toMatch(/aria-label="API key"/)
+    expect(markup).toMatch(/az login/)
+  })
+})
