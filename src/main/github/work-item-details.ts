@@ -8,6 +8,7 @@ import type {
   GitHubPRFileViewedState,
   GitHubWorkItem,
   GitHubWorkItemDetails,
+  PRCheckDetail,
   PRComment
 } from '../../shared/types'
 import {
@@ -670,6 +671,22 @@ async function getMentionParticipants(
   return mergeGitHubUsers([...participants, ...graphQlUsers])
 }
 
+async function getPRChecksForDetails(
+  repoPath: string,
+  prNumber: number,
+  headSha: string | undefined,
+  connectionId?: string | null
+): Promise<PRCheckDetail[]> {
+  try {
+    return await getPRChecks(repoPath, prNumber, headSha, null, undefined, connectionId)
+  } catch (err) {
+    // Why: checks are auxiliary PR metadata; a gh CLI edge case must not block
+    // the user from opening the PR review drawer and reading the files/comments.
+    console.warn('getWorkItemDetails PR checks failed:', err)
+    return []
+  }
+}
+
 export async function getWorkItemDetails(
   repoPath: string,
   number: number,
@@ -740,9 +757,7 @@ export async function getWorkItemDetails(
     // Promise.all above, so there's no ordering requirement between them.
     const [mentionParticipants, checks] = await Promise.all([
       getMentionParticipants(repoPath, item, comments, participants, connectionId),
-      shas?.headSha
-        ? getPRChecks(repoPath, item.number, shas.headSha, null, undefined, connectionId)
-        : getPRChecks(repoPath, item.number, undefined, null, undefined, connectionId)
+      getPRChecksForDetails(repoPath, item.number, shas?.headSha, connectionId)
     ])
 
     return {

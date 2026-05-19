@@ -1769,7 +1769,15 @@ export async function getPRChecks(
     if (ownerRepo) {
       fallbackArgs.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
     }
-    const { stdout } = await ghExecFileAsync(fallbackArgs, ghOptions)
+    const { stdout } = await ghExecFileAsync(fallbackArgs, ghOptions).catch((err: unknown) => {
+      const { stderr } = extractExecError(err)
+      // Why: `gh pr checks` exits non-zero when a PR genuinely has no check
+      // runs yet. Treat that as an empty optional section, not a load failure.
+      if (stderr.toLowerCase().includes('no checks reported')) {
+        return { stdout: '[]', stderr }
+      }
+      throw err
+    })
     const data = JSON.parse(stdout) as { name: string; state: string; link: string }[]
     return data.map((d) => ({
       name: d.name,
@@ -1805,7 +1813,8 @@ export async function getPRChecks(
           }[]
         }
         if (data.check_runs.length === 0) {
-          return fallbackToPRChecks()
+          const fallbackChecks = await fallbackToPRChecks()
+          return fallbackChecks
         }
         return data.check_runs.map((d) => ({
           name: d.name,
@@ -1823,7 +1832,8 @@ export async function getPRChecks(
       }
     }
     // Fallback: no branch provided, empty check-runs, or non-GitHub remote.
-    return fallbackToPRChecks()
+    const fallbackChecks = await fallbackToPRChecks()
+    return fallbackChecks
   } catch (err) {
     console.warn('getPRChecks failed:', err)
     return []

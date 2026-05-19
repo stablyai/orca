@@ -167,4 +167,73 @@ describe('getWorkItemDetails PR file viewed state', () => {
       undefined
     )
   })
+
+  it('keeps PR details loadable when checks lookup fails', async () => {
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    getWorkItemMock.mockResolvedValueOnce({
+      id: 'pr:42',
+      type: 'pr',
+      number: 42,
+      title: 'Review files',
+      state: 'open',
+      url: 'https://github.com/stablyai/orca/pull/42',
+      labels: [],
+      updatedAt: '2026-04-01T00:00:00Z',
+      author: null
+    })
+    getOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+    getPRCommentsMock.mockResolvedValue([])
+    getPRChecksMock.mockRejectedValue(
+      Object.assign(new Error('Command failed: gh pr checks 42'), {
+        stderr: "no checks reported on the 'codex/keybindings-toml' branch\n",
+        stdout: ''
+      })
+    )
+    ghExecFileAsyncMock.mockImplementation((args: string[]) => {
+      const query = args.find((arg) => arg.startsWith('query=')) ?? ''
+      if (query.includes('viewerViewedState')) {
+        return Promise.resolve({
+          stdout: JSON.stringify({
+            data: {
+              repository: {
+                pullRequest: {
+                  id: 'PR_kwDO123',
+                  files: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] }
+                }
+              }
+            }
+          })
+        })
+      }
+      if (query.includes('participants')) {
+        return Promise.resolve({
+          stdout: JSON.stringify({
+            data: { repository: { pullRequest: { participants: { nodes: [] } } } }
+          })
+        })
+      }
+      const endpoint = args.find((arg) => arg.startsWith('repos/')) ?? ''
+      if (endpoint === 'repos/stablyai/orca/pulls/42') {
+        return Promise.resolve({
+          stdout: JSON.stringify({
+            body: 'PR body',
+            head: { sha: 'head-sha' },
+            base: { sha: 'base-sha' }
+          })
+        })
+      }
+      if (endpoint === 'repos/stablyai/orca/pulls/42/files?per_page=100') {
+        return Promise.resolve({ stdout: '[]' })
+      }
+      return Promise.reject(new Error(`unexpected gh call: ${args.join(' ')}`))
+    })
+
+    const details = await getWorkItemDetails('/repo-root', 42, 'pr')
+
+    expect(details?.body).toBe('PR body')
+    expect(details?.headSha).toBe('head-sha')
+    expect(details?.checks).toEqual([])
+    expect(consoleWarnSpy).toHaveBeenCalledOnce()
+    consoleWarnSpy.mockRestore()
+  })
 })

@@ -6,6 +6,7 @@ const {
   getOwnerRepoMock,
   getIssueOwnerRepoMock,
   gitExecFileAsyncMock,
+  extractExecErrorMock,
   rateLimitGuardMock,
   noteRateLimitSpendMock,
   acquireMock,
@@ -16,6 +17,16 @@ const {
   getOwnerRepoMock: vi.fn(),
   getIssueOwnerRepoMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
+  extractExecErrorMock: vi.fn((err: unknown) => {
+    if (err && typeof err === 'object') {
+      const e = err as { stderr?: unknown; stdout?: unknown; message?: unknown }
+      return {
+        stderr: typeof e.stderr === 'string' ? e.stderr : String(e.message ?? err),
+        stdout: typeof e.stdout === 'string' ? e.stdout : ''
+      }
+    }
+    return { stderr: String(err), stdout: '' }
+  }),
   rateLimitGuardMock: vi.fn(() => ({ blocked: false })),
   noteRateLimitSpendMock: vi.fn(),
   acquireMock: vi.fn(),
@@ -32,6 +43,7 @@ vi.mock('./gh-utils', () => ({
   ghRepoExecOptions: (context: { repoPath: string }) => ({ cwd: context.repoPath }),
   getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: getIssueOwnerRepoMock,
+  extractExecError: extractExecErrorMock,
   acquire: acquireMock,
   release: releaseMock,
   _resetOwnerRepoCache: vi.fn()
@@ -55,6 +67,7 @@ describe('getPRChecks', () => {
     getOwnerRepoMock.mockReset()
     getIssueOwnerRepoMock.mockReset()
     gitExecFileAsyncMock.mockReset()
+    extractExecErrorMock.mockClear()
     rateLimitGuardMock.mockReset()
     rateLimitGuardMock.mockReturnValue({ blocked: false })
     noteRateLimitSpendMock.mockReset()
@@ -123,6 +136,48 @@ describe('getPRChecks', () => {
         workflowRunId: undefined
       }
     ])
+  })
+
+  it('treats gh pr checks "no checks reported" as an empty check list', async () => {
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: JSON.stringify({ check_runs: [] }) })
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Command failed: gh pr checks 42'), {
+          stderr: "no checks reported on the 'codex/keybindings-toml' branch\n",
+          stdout: ''
+        })
+      )
+
+    const checks = await getPRChecks('/repo-root', 42, 'head-oid')
+
+    expect(checks).toEqual([])
+    expect(consoleWarnSpy).not.toHaveBeenCalled()
+    consoleWarnSpy.mockRestore()
+  })
+
+  it('keeps unexpected gh pr checks fallback failures inside the empty-checks contract', async () => {
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: JSON.stringify({ check_runs: [] }) })
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Command failed: gh pr checks 42'), {
+          stderr: 'GraphQL: Could not resolve to a PullRequest',
+          stdout: ''
+        })
+      )
+
+    const checks = await getPRChecks('/repo-root', 42, 'head-oid')
+
+    expect(checks).toEqual([])
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      'getPRChecks via head SHA failed, falling back to gh pr checks:',
+      expect.any(Error)
+    )
+    expect(consoleWarnSpy).toHaveBeenCalledWith('getPRChecks failed:', expect.any(Error))
+    consoleWarnSpy.mockRestore()
   })
 
   it('falls back to gh pr checks when the cached head SHA no longer resolves', async () => {
