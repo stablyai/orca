@@ -31,4 +31,29 @@ export function registerClaudeAccountHandlers(claudeAccounts: ClaudeAccountServi
       return { ok: false, reason: 'Account not found.' }
     }
   })
+  // Why: P2 — workspace override is a pointer-only write into the persistence
+  // settings. PTY launch consults the resolver before falling back to the
+  // global active account. (#2314)
+  ipcMain.handle(
+    'claudeAccounts:setWorkspaceOverride',
+    (_event, args: { worktreeId: string; accountId: string }) =>
+      claudeAccounts.setWorkspaceOverride(args)
+  )
+  ipcMain.handle(
+    'claudeAccounts:clearWorkspaceOverride',
+    (_event, args: { worktreeId: string }) => claudeAccounts.clearWorkspaceOverride(args)
+  )
+  // Why: P2 — Detect/Validate probe for AddAccountModal. Validates a
+  // candidate input without persisting the account. Errors are converted to
+  // a typed ValidationResult so the renderer never sees raw exceptions.
+  ipcMain.handle('claudeAccounts:validateInput', async (_event, input: AddClaudeAccountInput) => {
+    try {
+      return await claudeAccounts.validateInput(input)
+    } catch (error) {
+      return {
+        ok: false,
+        reason: error instanceof Error ? error.message : 'Validation failed.'
+      }
+    }
+  })
 }

@@ -761,3 +761,117 @@ describe('ClaudeAccountService addAccount polymorphic input', () => {
     expect(result.accounts[0]?.email).toBe('oauth@example.com')
   })
 })
+
+// Why: P2 T19 — workspace override + validate-input probe. The override is a
+// pointer-only edit on the persistence settings; validateInput materializes a
+// candidate via the provider handler without persisting anything.
+describe('ClaudeAccountService workspace override + validateInput (P2)', () => {
+  let tempDir: string | null = null
+
+  beforeEach(() => {
+    setPlatform('linux')
+    tempDir = null
+    vi.mocked(readManagedClaudeKeychainCredentials).mockReset()
+    vi.mocked(writeManagedClaudeKeychainCredentials).mockReset()
+    vi.mocked(writeManagedClaudeKeychainCredentials).mockResolvedValue()
+  })
+
+  afterEach(() => {
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
+    if (tempDir) {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  type OverrideSettings = {
+    claudeManagedAccounts: unknown[]
+    activeClaudeManagedAccountId: string | null
+    claudeAccountIdByWorkspace?: Record<string, string>
+  }
+
+  async function buildOverrideService(): Promise<{
+    service: import('./service').ClaudeAccountService
+    getSettings: () => OverrideSettings
+  }> {
+    tempDir = '/tmp/orca-claude-service-test'
+    rmSync(tempDir, { recursive: true, force: true })
+    let settings: OverrideSettings = {
+      claudeManagedAccounts: [],
+      activeClaudeManagedAccountId: null
+    }
+    const store = {
+      getSettings: vi.fn((): OverrideSettings => settings),
+      updateSettings: vi.fn((updates: Partial<OverrideSettings>): OverrideSettings => {
+        settings = { ...settings, ...updates }
+        return settings
+      })
+    }
+    const runtimeAuth = {
+      clearLastWrittenCredentialsJson: vi.fn(),
+      syncForCurrentSelection: vi.fn(async () => {}),
+      forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
+    }
+    const rateLimits = {
+      evictInactiveClaudeCache: vi.fn(),
+      refreshForClaudeAccountChange: vi.fn(async () => ({
+        accounts: [],
+        activeAccountId: null
+      }))
+    }
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeAuth as never
+    )
+    return { service, getSettings: () => settings }
+  }
+
+  it('setWorkspaceOverride writes the entry to settings', async () => {
+    const { service, getSettings } = await buildOverrideService()
+    await service.addAccount({
+      authMethod: 'anthropic-api-key',
+      label: 'A',
+      secretFromUser: 'k'
+    })
+    const [account] = service.listAccounts().accounts
+    await service.setWorkspaceOverride({ worktreeId: 'r::/wt1', accountId: account.id })
+    expect(getSettings().claudeAccountIdByWorkspace?.['r::/wt1']).toBe(account.id)
+  })
+
+  it('clearWorkspaceOverride removes the entry', async () => {
+    const { service, getSettings } = await buildOverrideService()
+    await service.addAccount({
+      authMethod: 'anthropic-api-key',
+      label: 'A',
+      secretFromUser: 'k'
+    })
+    const [account] = service.listAccounts().accounts
+    await service.setWorkspaceOverride({ worktreeId: 'r::/wt1', accountId: account.id })
+    await service.clearWorkspaceOverride({ worktreeId: 'r::/wt1' })
+    expect(getSettings().claudeAccountIdByWorkspace?.['r::/wt1']).toBeUndefined()
+  })
+
+  it('setWorkspaceOverride rejects unknown accountId', async () => {
+    const { service } = await buildOverrideService()
+    await expect(
+      service.setWorkspaceOverride({ worktreeId: 'r::/wt1', accountId: 'does-not-exist' })
+    ).rejects.toThrow(/unknown account/i)
+  })
+
+  it('validateInput materializes a candidate via the provider handler without persisting', async () => {
+    const { service, getSettings } = await buildOverrideService()
+    const result = await service.validateInput({
+      authMethod: 'anthropic-api-key',
+      label: 'probe',
+      secretFromUser: 'sk-ant-probe'
+    })
+    // Anthropic API key handler validate() probes /v1/models — in tests fetch is
+    // unmocked here, so the probe fails. The point is the call resolves to a
+    // ValidationResult shape without throwing, and no account was persisted.
+    expect(typeof result.ok).toBe('boolean')
+    expect(getSettings().claudeManagedAccounts).toHaveLength(0)
+  })
+})

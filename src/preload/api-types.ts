@@ -1163,6 +1163,16 @@ export type PreloadApi = {
     /** Live probe of provider credentials. See `ClaudeAccountValidationResult`
      *  for the locked error string contract. */
     validate: (args: { accountId: string }) => Promise<ClaudeAccountValidationResult>
+    /** P2 — write the per-worktree account override (pointer only). The
+     *  resolver consults this map ahead of the global active account when
+     *  preparing a Claude PTY launch. */
+    setWorkspaceOverride: (args: { worktreeId: string; accountId: string }) => Promise<void>
+    /** P2 — clear the per-worktree override so the resolver falls back to the
+     *  global active account. No-op if no entry existed. */
+    clearWorkspaceOverride: (args: { worktreeId: string }) => Promise<void>
+    /** P2 — Detect/Validate probe for AddAccountModal. Validates a candidate
+     *  input against the provider handler without persisting anything. */
+    validateInput: (input: AddClaudeAccountInput) => Promise<ClaudeAccountValidationResult>
   }
   cli: {
     getInstallStatus: () => Promise<CliInstallStatus>

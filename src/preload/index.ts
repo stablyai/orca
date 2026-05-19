@@ -1186,7 +1186,13 @@ const api = {
     select: (args: { accountId: string | null }): Promise<unknown> =>
       ipcRenderer.invoke('claudeAccounts:select', args),
     validate: (args: { accountId: string }): Promise<unknown> =>
-      ipcRenderer.invoke('claudeAccounts:validate', args)
+      ipcRenderer.invoke('claudeAccounts:validate', args),
+    setWorkspaceOverride: (args: { worktreeId: string; accountId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('claudeAccounts:setWorkspaceOverride', args),
+    clearWorkspaceOverride: (args: { worktreeId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('claudeAccounts:clearWorkspaceOverride', args),
+    validateInput: (input: AddClaudeAccountInput): Promise<unknown> =>
+      ipcRenderer.invoke('claudeAccounts:validateInput', input)
   },
 
   cli: {

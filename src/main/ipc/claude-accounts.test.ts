@@ -25,18 +25,34 @@ function makeServiceStub(): {
   service: Parameters<typeof registerClaudeAccountHandlers>[0]
   addAccount: ReturnType<typeof vi.fn>
   validateAccount: ReturnType<typeof vi.fn>
+  setWorkspaceOverride: ReturnType<typeof vi.fn>
+  clearWorkspaceOverride: ReturnType<typeof vi.fn>
+  validateInput: ReturnType<typeof vi.fn>
 } {
   const addAccount = vi.fn().mockResolvedValue({ accounts: [], activeAccountId: null })
   const validateAccount = vi.fn().mockResolvedValue({ ok: true })
+  const setWorkspaceOverride = vi.fn().mockResolvedValue(undefined)
+  const clearWorkspaceOverride = vi.fn().mockResolvedValue(undefined)
+  const validateInput = vi.fn().mockResolvedValue({ ok: true })
   const service = {
     listAccounts: vi.fn(),
     addAccount,
     reauthenticateAccount: vi.fn(),
     removeAccount: vi.fn(),
     selectAccount: vi.fn(),
-    validateAccount
+    validateAccount,
+    setWorkspaceOverride,
+    clearWorkspaceOverride,
+    validateInput
   } as unknown as Parameters<typeof registerClaudeAccountHandlers>[0]
-  return { service, addAccount, validateAccount }
+  return {
+    service,
+    addAccount,
+    validateAccount,
+    setWorkspaceOverride,
+    clearWorkspaceOverride,
+    validateInput
+  }
 }
 
 describe('claudeAccounts:add IPC', () => {
@@ -129,5 +145,48 @@ describe('claudeAccounts:validate IPC', () => {
       reason: 'API key invalid or revoked.',
       rescueHint: 'Generate a new key in the Anthropic Console and try again.'
     })
+  })
+})
+
+// P2 T19 — per-worktree override + Detect/Validate probe IPC.
+describe('claudeAccounts workspace override + validateInput IPC (P2)', () => {
+  it('claudeAccounts:setWorkspaceOverride forwards to service', async () => {
+    const { service, setWorkspaceOverride } = makeServiceStub()
+    registerClaudeAccountHandlers(service)
+    const handler = handleHandlers.get('claudeAccounts:setWorkspaceOverride')!
+    await handler({}, { worktreeId: 'r::/wt1', accountId: 'a' })
+    expect(setWorkspaceOverride).toHaveBeenCalledWith({ worktreeId: 'r::/wt1', accountId: 'a' })
+  })
+
+  it('claudeAccounts:clearWorkspaceOverride forwards to service', async () => {
+    const { service, clearWorkspaceOverride } = makeServiceStub()
+    registerClaudeAccountHandlers(service)
+    const handler = handleHandlers.get('claudeAccounts:clearWorkspaceOverride')!
+    await handler({}, { worktreeId: 'r::/wt1' })
+    expect(clearWorkspaceOverride).toHaveBeenCalledWith({ worktreeId: 'r::/wt1' })
+  })
+
+  it('claudeAccounts:validateInput forwards the polymorphic input to service', async () => {
+    const { service, validateInput } = makeServiceStub()
+    validateInput.mockResolvedValueOnce({ ok: true })
+    registerClaudeAccountHandlers(service)
+    const handler = handleHandlers.get('claudeAccounts:validateInput')!
+    const input = {
+      authMethod: 'anthropic-api-key' as const,
+      label: 'probe',
+      secretFromUser: 'sk-ant-xxx'
+    }
+    const result = await handler({}, input)
+    expect(validateInput).toHaveBeenCalledWith(input)
+    expect(result).toEqual({ ok: true })
+  })
+
+  it('claudeAccounts:validateInput converts thrown errors into a failure ValidationResult', async () => {
+    const { service, validateInput } = makeServiceStub()
+    validateInput.mockRejectedValueOnce(new Error('Provider preset is required.'))
+    registerClaudeAccountHandlers(service)
+    const handler = handleHandlers.get('claudeAccounts:validateInput')!
+    const result = await handler({}, { authMethod: 'anthropic-compat', secretFromUser: 't' })
+    expect(result).toEqual({ ok: false, reason: 'Provider preset is required.' })
   })
 })

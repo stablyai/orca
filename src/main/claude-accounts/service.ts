@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join, relative, resolve, sep } from 'node:path'
 import type {
   AddClaudeAccountInput,
+  ClaudeAuthCredentials,
   ClaudeManagedAccount,
   ClaudeManagedAccountSummary,
   ClaudeRateLimitAccountsState
@@ -36,7 +37,7 @@ import {
 import { beginClaudeAuthSwitch, endClaudeAuthSwitch } from './live-pty-gate'
 import { migrateClaudeAccount, migrateClaudeAccountList } from './migration'
 import { handlerFor, type ValidationResult } from './providers'
-import { getDefaultModelMapping } from './model-defaults'
+import { getDefaultBaseUrl, getDefaultModelMapping } from './model-defaults'
 
 // Why: the canonical type now lives in src/shared/types.ts so preload + renderer
 // can use it without importing main-only code. Re-exported under the original
@@ -121,6 +122,128 @@ export class ClaudeAccountService {
     const account = this.requireAccount(accountId)
     const handler = handlerFor(account.authMethod)
     return handler.validate(account)
+  }
+
+  /**
+   * Set the per-worktree Claude account override. Stored as a pointer into
+   * `claudeAccountIdByWorkspace`; the resolver consults this map ahead of the
+   * global `activeClaudeManagedAccountId` when launching a PTY for the named
+   * worktree. Rejects unknown account ids so we never persist a dangling
+   * pointer. (P2)
+   */
+  async setWorkspaceOverride(args: {
+    worktreeId: string
+    accountId: string
+  }): Promise<void> {
+    return this.serializeMutation(async () => {
+      const settings = this.store.getSettings()
+      const known = settings.claudeManagedAccounts.some((a) => a.id === args.accountId)
+      if (!known) throw new Error(`Unknown account id ${args.accountId}.`)
+      const next = {
+        ...(settings.claudeAccountIdByWorkspace ?? {}),
+        [args.worktreeId]: args.accountId
+      }
+      this.store.updateSettings({ claudeAccountIdByWorkspace: next })
+    })
+  }
+
+  /**
+   * Remove the per-worktree override so the resolver falls back to the global
+   * active account. No-op if no entry existed. (P2)
+   */
+  async clearWorkspaceOverride(args: { worktreeId: string }): Promise<void> {
+    return this.serializeMutation(async () => {
+      const settings = this.store.getSettings()
+      const next = { ...(settings.claudeAccountIdByWorkspace ?? {}) }
+      delete next[args.worktreeId]
+      this.store.updateSettings({ claudeAccountIdByWorkspace: next })
+    })
+  }
+
+  /**
+   * Validate a candidate `AddClaudeAccountInput` against the provider handler
+   * without persisting anything. Used by the AddAccountModal Detect/Validate
+   * probe so users can confirm credentials before the account is created. (P2)
+   *
+   * Implementation: build the discriminated credentials shape, stash any
+   * secret under a transient Keychain id so the handler's validate() probe can
+   * read it, run the handler, then clean up the Keychain entry. No settings
+   * mutation, no managed-auth directory.
+   */
+  async validateInput(input: AddAccountInput): Promise<ValidationResult> {
+    if (input.authMethod === 'subscription-oauth') {
+      return {
+        ok: false,
+        reason: 'OAuth credentials cannot be probed without signing in.'
+      }
+    }
+    const handler = handlerFor(input.authMethod)
+    const credentials = this.buildCredentialsFromInput(input)
+    const probeAccountId = `probe-${randomUUID()}`
+    // Why: handlers' validate() path reads the secret out of Keychain by
+    // account id (see anthropic-api-key-handler.ts). Mirror that for the probe
+    // by writing the secret under a transient id and removing it afterwards.
+    const secret =
+      'secretFromUser' in input && typeof input.secretFromUser === 'string'
+        ? input.secretFromUser.trim()
+        : ''
+    if (secret) {
+      await writeManagedClaudeKeychainCredentials(probeAccountId, secret)
+    }
+    const now = Date.now()
+    const temporary: ClaudeManagedAccount = migrateClaudeAccount({
+      id: probeAccountId,
+      email: 'probe@orca.local',
+      managedAuthPath: '',
+      authMethod: input.authMethod,
+      credentials,
+      modelMapping: {},
+      fallbackAccountIds: [],
+      organizationUuid: null,
+      organizationName: null,
+      createdAt: now,
+      updatedAt: now,
+      lastAuthenticatedAt: now
+    })
+    try {
+      return await handler.validate(temporary)
+    } finally {
+      await deleteManagedClaudeKeychainCredentials(probeAccountId)
+    }
+  }
+
+  // Why: validateInput needs the same shape that the registration handler would
+  // persist, but without writing Keychain/managed-auth state. Mirrors the
+  // discriminated branches in doAddAccountPolymorphic.
+  private buildCredentialsFromInput(
+    input: Exclude<AddAccountInput, { authMethod: 'subscription-oauth' }>
+  ): ClaudeAuthCredentials {
+    if (input.authMethod === 'anthropic-api-key') {
+      return { authMethod: 'anthropic-api-key' }
+    }
+    if (input.authMethod === 'anthropic-compat') {
+      const preset = input.providerConfig?.preset
+      if (!preset) {
+        throw new Error('Anthropic-compat input requires a preset.')
+      }
+      const explicitBaseUrl = input.providerConfig?.baseUrl?.trim()
+      const baked = getDefaultBaseUrl(preset)
+      const baseUrl = explicitBaseUrl || baked || ''
+      return {
+        authMethod: 'anthropic-compat',
+        preset,
+        baseUrl
+      }
+    }
+    // azure-foundry
+    const cfg = input.providerConfig ?? ({} as never)
+    const resource = (cfg as { resource?: string }).resource ?? ''
+    const useEntraId = (cfg as { useEntraId?: boolean }).useEntraId === true
+    return {
+      authMethod: 'azure-foundry',
+      resource,
+      useEntraId
+    }
   }
 
   private serializeMutation<T>(fn: () => Promise<T>): Promise<T> {
