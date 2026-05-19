@@ -1287,6 +1287,14 @@ export type ClaudeRateLimitAccountsState = {
   activeAccountId: string | null
 }
 
+/** Result of a live `claudeAccounts:validate` probe. Shape mirrors the
+ *  main-side `ValidationResult` from `claude-accounts/providers/types.ts`,
+ *  re-declared here so the renderer can consume it without importing
+ *  main-only code. Error strings are locked — see task spec. */
+export type ClaudeAccountValidationResult =
+  | { ok: true }
+  | { ok: false; reason: string; rescueHint?: string }
+
 /** Polymorphic input for `claudeAccounts:add`. Shared across main/preload/renderer
  *  so the IPC bridge can pass a discriminated value through without leaking
  *  main-only types into the renderer. OAuth no-arg legacy call site uses

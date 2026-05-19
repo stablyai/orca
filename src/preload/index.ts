@@ -1184,7 +1184,9 @@ const api = {
     remove: (args: { accountId: string }): Promise<unknown> =>
       ipcRenderer.invoke('claudeAccounts:remove', args),
     select: (args: { accountId: string | null }): Promise<unknown> =>
-      ipcRenderer.invoke('claudeAccounts:select', args)
+      ipcRenderer.invoke('claudeAccounts:select', args),
+    validate: (args: { accountId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('claudeAccounts:validate', args)
   },
 
   cli: {

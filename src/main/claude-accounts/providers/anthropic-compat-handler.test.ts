@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { createAnthropicCompatHandler } from './anthropic-compat-handler'
 import type { ClaudeManagedAccount } from '../../../shared/types'
 
@@ -114,5 +114,91 @@ describe('anthropicCompatHandler.materialize', () => {
     expect(out.envPatch.ANTHROPIC_BASE_URL).toBe('https://example.com')
     expect(out.envPatch.ANTHROPIC_AUTH_TOKEN).toBe('compat-key')
     expect(out.envPatch.ANTHROPIC_DEFAULT_OPUS_MODEL).toBeUndefined()
+  })
+})
+
+describe('anthropicCompatHandler.validate', () => {
+  const originalFetch = global.fetch
+
+  beforeEach(() => {
+    readKeychainMock.mockReset()
+    readKeychainMock.mockResolvedValue('compat-key')
+  })
+
+  afterEach(() => {
+    global.fetch = originalFetch
+  })
+
+  it('returns ok on 200', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200 }) as unknown as typeof fetch
+    const handler = createAnthropicCompatHandler()
+    const result = await handler.validate(compatAccount('zai', 'https://api.z.ai/api/anthropic'))
+    expect(result.ok).toBe(true)
+  })
+
+  it('hits {baseUrl}/v1/models with x-api-key + anthropic-version headers', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 })
+    global.fetch = fetchMock as unknown as typeof fetch
+    const handler = createAnthropicCompatHandler()
+    await handler.validate(compatAccount('zai', 'https://api.z.ai/api/anthropic'))
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('https://api.z.ai/api/anthropic/v1/models')
+    expect(init.method).toBe('GET')
+    const headers = init.headers as Record<string, string>
+    expect(headers['x-api-key']).toBe('compat-key')
+    expect(headers['anthropic-version']).toBe('2023-06-01')
+  })
+
+  it('strips trailing slash from baseUrl before /v1/models', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 })
+    global.fetch = fetchMock as unknown as typeof fetch
+    const handler = createAnthropicCompatHandler()
+    await handler.validate(compatAccount('custom', 'https://proxy.example/'))
+    const [url] = fetchMock.mock.calls[0] as [string]
+    expect(url).toBe('https://proxy.example/v1/models')
+  })
+
+  it('returns provider-generic rescueHint on 401', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 401 }) as unknown as typeof fetch
+    const handler = createAnthropicCompatHandler()
+    const result = await handler.validate(compatAccount('zai', 'https://api.z.ai/api/anthropic'))
+    if (result.ok) throw new Error('expected fail')
+    expect(result.reason).toBe('Provider token invalid or revoked.')
+    expect(result.rescueHint).toContain("provider's dashboard")
+  })
+
+  it('returns reason on 403', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 403 }) as unknown as typeof fetch
+    const handler = createAnthropicCompatHandler()
+    const result = await handler.validate(compatAccount('zai', 'https://api.z.ai/api/anthropic'))
+    if (result.ok) throw new Error('expected fail')
+    expect(result.reason).toBe('API key does not have Claude access.')
+  })
+
+  it('returns network error on fetch rejection', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new Error('ENOTFOUND')) as unknown as typeof fetch
+    const handler = createAnthropicCompatHandler()
+    const result = await handler.validate(compatAccount('zai', 'https://api.z.ai/api/anthropic'))
+    if (result.ok) throw new Error('expected fail')
+    expect(result.reason).toBe('Unable to reach the provider.')
+  })
+
+  it('returns 5xx error', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 502 }) as unknown as typeof fetch
+    const handler = createAnthropicCompatHandler()
+    const result = await handler.validate(compatAccount('zai', 'https://api.z.ai/api/anthropic'))
+    if (result.ok) throw new Error('expected fail')
+    expect(result.reason).toBe('Provider returned an error.')
+  })
+
+  it('returns missing-token error when keychain is empty', async () => {
+    readKeychainMock.mockResolvedValueOnce(null)
+    const fetchMock = vi.fn()
+    global.fetch = fetchMock as unknown as typeof fetch
+    const handler = createAnthropicCompatHandler()
+    const result = await handler.validate(compatAccount('zai', 'https://api.z.ai/api/anthropic'))
+    if (result.ok) throw new Error('expected fail')
+    expect(result.reason).toContain('missing from Keychain')
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

@@ -20,4 +20,15 @@ export function registerClaudeAccountHandlers(claudeAccounts: ClaudeAccountServi
   ipcMain.handle('claudeAccounts:select', (_event, args: { accountId: string | null }) =>
     claudeAccounts.selectAccount(args.accountId)
   )
+  // Why: read-only live probe — translates HTTP status from the provider's
+  // /v1/models endpoint into the locked validation strings consumed by the
+  // renderer pill. Errors from the underlying handler are turned into a
+  // typed ValidationResult so the renderer never sees raw fetch exceptions.
+  ipcMain.handle('claudeAccounts:validate', async (_event, args: { accountId: string }) => {
+    try {
+      return await claudeAccounts.validateAccount(args.accountId)
+    } catch {
+      return { ok: false, reason: 'Account not found.' }
+    }
+  })
 }

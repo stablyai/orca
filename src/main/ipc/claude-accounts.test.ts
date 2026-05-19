@@ -24,16 +24,19 @@ beforeEach(() => {
 function makeServiceStub(): {
   service: Parameters<typeof registerClaudeAccountHandlers>[0]
   addAccount: ReturnType<typeof vi.fn>
+  validateAccount: ReturnType<typeof vi.fn>
 } {
   const addAccount = vi.fn().mockResolvedValue({ accounts: [], activeAccountId: null })
+  const validateAccount = vi.fn().mockResolvedValue({ ok: true })
   const service = {
     listAccounts: vi.fn(),
     addAccount,
     reauthenticateAccount: vi.fn(),
     removeAccount: vi.fn(),
-    selectAccount: vi.fn()
+    selectAccount: vi.fn(),
+    validateAccount
   } as unknown as Parameters<typeof registerClaudeAccountHandlers>[0]
-  return { service, addAccount }
+  return { service, addAccount, validateAccount }
 }
 
 describe('claudeAccounts:add IPC', () => {
@@ -81,5 +84,50 @@ describe('claudeAccounts:add IPC', () => {
     await handler({}, input)
 
     expect(addAccount).toHaveBeenCalledWith(input)
+  })
+})
+
+describe('claudeAccounts:validate IPC', () => {
+  it('forwards the accountId to service.validateAccount and returns its result', async () => {
+    const { service, validateAccount } = makeServiceStub()
+    validateAccount.mockResolvedValueOnce({ ok: true })
+    registerClaudeAccountHandlers(service)
+
+    const handler = handleHandlers.get('claudeAccounts:validate')
+    expect(handler).toBeDefined()
+
+    const result = await handler!({}, { accountId: 'a1' })
+
+    expect(validateAccount).toHaveBeenCalledWith('a1')
+    expect(result).toEqual({ ok: true })
+  })
+
+  it('returns "Account not found." when the service throws', async () => {
+    const { service, validateAccount } = makeServiceStub()
+    validateAccount.mockRejectedValueOnce(new Error('That Claude account no longer exists.'))
+    registerClaudeAccountHandlers(service)
+
+    const handler = handleHandlers.get('claudeAccounts:validate')!
+    const result = await handler({}, { accountId: 'missing' })
+
+    expect(result).toEqual({ ok: false, reason: 'Account not found.' })
+  })
+
+  it('forwards a failure ValidationResult through verbatim', async () => {
+    const { service, validateAccount } = makeServiceStub()
+    validateAccount.mockResolvedValueOnce({
+      ok: false,
+      reason: 'API key invalid or revoked.',
+      rescueHint: 'Generate a new key in the Anthropic Console and try again.'
+    })
+    registerClaudeAccountHandlers(service)
+
+    const handler = handleHandlers.get('claudeAccounts:validate')!
+    const result = await handler({}, { accountId: 'a1' })
+    expect(result).toEqual({
+      ok: false,
+      reason: 'API key invalid or revoked.',
+      rescueHint: 'Generate a new key in the Anthropic Console and try again.'
+    })
   })
 })

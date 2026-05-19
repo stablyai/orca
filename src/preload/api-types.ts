@@ -18,6 +18,7 @@ import type {
   BrowserSessionProfileScope,
   BrowserSessionProfileSource,
   BrowserViewportOverride,
+  ClaudeAccountValidationResult,
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
   CreateWorktreeArgs,
@@ -1155,6 +1156,9 @@ export type PreloadApi = {
     reauthenticate: (args: { accountId: string }) => Promise<ClaudeRateLimitAccountsState>
     remove: (args: { accountId: string }) => Promise<ClaudeRateLimitAccountsState>
     select: (args: { accountId: string | null }) => Promise<ClaudeRateLimitAccountsState>
+    /** Live probe of provider credentials. See `ClaudeAccountValidationResult`
+     *  for the locked error string contract. */
+    validate: (args: { accountId: string }) => Promise<ClaudeAccountValidationResult>
   }
   cli: {
     getInstallStatus: () => Promise<CliInstallStatus>

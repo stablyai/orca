@@ -3,6 +3,7 @@ import {
   writeManagedClaudeKeychainCredentials
 } from '../keychain'
 import { getDefaultBaseUrl, getDefaultModelMapping } from '../model-defaults'
+import { probeAnthropicAuth } from './probe-anthropic-auth'
 import type { ProviderHandler } from './types'
 import type {
   AnthropicCompatPreset,
@@ -67,6 +68,28 @@ export function createAnthropicCompatHandler(): ProviderHandler {
         }
       }
     },
-    validate: async () => ({ ok: true })
+    validate: async (account) => {
+      const token = await readManagedClaudeKeychainCredentials(account.id)
+      if (!token) {
+        return {
+          ok: false,
+          reason: 'Provider token is missing from Keychain.',
+          rescueHint: 'Re-add this account.'
+        }
+      }
+      const creds = account.credentials
+      if (creds.authMethod !== 'anthropic-compat') {
+        return { ok: false, reason: 'Invalid credentials shape for compat handler.' }
+      }
+      const baseUrl = creds.baseUrl.replace(/\/$/, '')
+      return probeAnthropicAuth({
+        url: `${baseUrl}/v1/models`,
+        headers: { 'x-api-key': token, 'anthropic-version': '2023-06-01' },
+        reason401: 'Provider token invalid or revoked.',
+        rescue401: "Generate a new token in the provider's dashboard and try again.",
+        rescue403:
+          "Confirm your provider workspace has Claude-compatible API access enabled."
+      })
+    }
   }
 }

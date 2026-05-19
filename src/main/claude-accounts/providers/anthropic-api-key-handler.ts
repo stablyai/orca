@@ -3,6 +3,7 @@ import {
   writeManagedClaudeKeychainCredentials
 } from '../keychain'
 import { getDefaultModelMapping } from '../model-defaults'
+import { probeAnthropicAuth } from './probe-anthropic-auth'
 import type { ProviderHandler } from './types'
 import type { ClaudeManagedAccount, ClaudeModelMapping } from '../../../shared/types'
 
@@ -45,6 +46,21 @@ export function createAnthropicApiKeyHandler(): ProviderHandler {
         }
       }
     },
-    validate: async () => ({ ok: true })
+    validate: async (account) => {
+      const key = await readManagedClaudeKeychainCredentials(account.id)
+      if (!key) {
+        return {
+          ok: false,
+          reason: 'API key is missing from Keychain.',
+          rescueHint: 'Re-add this account.'
+        }
+      }
+      return probeAnthropicAuth({
+        url: 'https://api.anthropic.com/v1/models',
+        headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+        reason401: 'API key invalid or revoked.',
+        rescue401: 'Generate a new key in the Anthropic Console and try again.'
+      })
+    }
   }
 }

@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react'
 import type {
   AddClaudeAccountInput,
+  ClaudeAccountValidationResult,
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
   GlobalSettings
@@ -16,7 +17,7 @@ import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
-import { Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from '../status-bar/icons'
 import { toast } from 'sonner'
@@ -137,6 +138,76 @@ export function buildClaudeAddAccountInput(submit: AddAccountSubmit): AddClaudeA
   return submit
 }
 
+/**
+ * Render the validation state for a single Claude managed account row.
+ *
+ * Exported separately from the AccountsPane render path so the three-state
+ * (unvalidated / valid / invalid / pending) decoration logic is unit-testable
+ * without rendering the full settings tree.
+ */
+export type ClaudeValidationBadgeState =
+  | { kind: 'unvalidated' }
+  | { kind: 'pending' }
+  | { kind: 'valid' }
+  | { kind: 'invalid'; reason: string; rescueHint?: string }
+
+export function pickClaudeValidationBadgeState(
+  entry: ClaudeAccountValidationResult | 'pending' | undefined
+): ClaudeValidationBadgeState {
+  if (entry === undefined) return { kind: 'unvalidated' }
+  if (entry === 'pending') return { kind: 'pending' }
+  if (entry.ok) return { kind: 'valid' }
+  return { kind: 'invalid', reason: entry.reason, rescueHint: entry.rescueHint }
+}
+
+function ClaudeValidationBadge({
+  state
+}: {
+  state: ClaudeValidationBadgeState
+}): React.JSX.Element | null {
+  if (state.kind === 'unvalidated') {
+    return (
+      <Badge
+        variant="outline"
+        className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-muted-foreground"
+      >
+        Unvalidated
+      </Badge>
+    )
+  }
+  if (state.kind === 'pending') {
+    return (
+      <Badge
+        variant="outline"
+        className="h-4 shrink-0 gap-1 rounded px-1.5 text-[10px] font-medium leading-none text-muted-foreground"
+      >
+        <Loader2 className="size-2.5 animate-spin" />
+        Validating
+      </Badge>
+    )
+  }
+  if (state.kind === 'valid') {
+    return (
+      <Badge
+        variant="outline"
+        className="h-4 shrink-0 gap-1 rounded border-emerald-500/40 px-1.5 text-[10px] font-medium leading-none text-emerald-600 dark:text-emerald-400"
+      >
+        <CheckCircle2 className="size-2.5" />
+        Valid
+      </Badge>
+    )
+  }
+  return (
+    <Badge
+      variant="outline"
+      className="h-4 shrink-0 gap-1 rounded border-destructive/40 px-1.5 text-[10px] font-medium leading-none text-destructive"
+    >
+      <AlertTriangle className="size-2.5" />
+      Invalid
+    </Badge>
+  )
+}
+
 export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
@@ -160,6 +231,12 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
   // Why: gated behind `claudeMultiProviderEnabled`. With the flag off this
   // state is unused and the "Add account" button keeps its legacy OAuth path.
   const [addClaudeModalOpen, setAddClaudeModalOpen] = useState(false)
+  // Why: per-account live-validation state, keyed by account id. Renderer-only —
+  // we never persist this; on every settings open the user sees "Unvalidated"
+  // until they click Re-check (or the auto-validate-on-add path fires).
+  const [claudeValidation, setClaudeValidation] = useState<
+    Record<string, ClaudeAccountValidationResult | 'pending'>
+  >({})
 
   useEffect(() => {
     let stale = false
@@ -275,6 +352,30 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
     }
   }
 
+  // Why: Re-check button fires a one-shot validation probe. We track 'pending'
+  // separately from the result so the row can show a spinner; any prior result
+  // stays in state until replaced so the user never sees the badge flicker
+  // back to "Unvalidated" mid-probe.
+  const runClaudeValidate = async (accountId: string): Promise<void> => {
+    setClaudeValidation((prev) => ({ ...prev, [accountId]: 'pending' }))
+    try {
+      const result = await window.api.claudeAccounts.validate({ accountId })
+      setClaudeValidation((prev) => ({ ...prev, [accountId]: result }))
+    } catch (error) {
+      setClaudeValidation((prev) => ({
+        ...prev,
+        [accountId]: {
+          ok: false,
+          reason:
+            String((error as Error)?.message ?? error)
+              .replace(/^Error invoking remote method [^:]+:\s*/, '')
+              .replace(/^Error:\s*/, '')
+              .trim() || 'Validation failed.'
+        }
+      }))
+    }
+  }
+
   const visibleSections = [
     matchesSettingsSearch(searchQuery, ACCOUNTS_CLAUDE_SEARCH_ENTRIES) ? (
       <section key="claude-accounts" id="accounts-claude" className="space-y-4 scroll-mt-6">
@@ -366,11 +467,14 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
                 const isActive = claudeAccounts.activeAccountId === account.id
                 const isReauthing = claudeAction === `reauth:${account.id}`
                 const isBusy = claudeAction !== 'idle'
+                const validationState = pickClaudeValidationBadgeState(
+                  claudeValidation[account.id]
+                )
 
                 return (
                   <div
                     key={account.id}
-                    className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
+                    className={`flex w-full flex-col gap-1.5 rounded-md border px-3 py-2.5 text-left transition-colors ${
                       isActive
                         ? 'border-foreground/20 bg-accent/15'
                         : 'border-border/70 hover:border-border hover:bg-accent/8'
@@ -397,6 +501,7 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
                               Active
                             </Badge>
                           ) : null}
+                          <ClaudeValidationBadge state={validationState} />
                         </div>
                         <span className="truncate text-[11px] text-muted-foreground">
                           {account.organizationName
@@ -405,6 +510,24 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
                         </span>
                       </button>
                       <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          aria-label="Re-check"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            void runClaudeValidate(account.id)
+                          }}
+                          disabled={isBusy || validationState.kind === 'pending'}
+                          className="h-6 px-2 text-muted-foreground hover:text-foreground"
+                        >
+                          {validationState.kind === 'pending' ? (
+                            <Loader2 className="size-3 animate-spin" />
+                          ) : (
+                            <RefreshCw className="size-3" />
+                          )}
+                          Re-check
+                        </Button>
                         <Button
                           variant="ghost"
                           size="xs"
@@ -439,6 +562,14 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
                         </Button>
                       </div>
                     </div>
+                    {validationState.kind === 'invalid' ? (
+                      <p className="text-[11px] text-destructive">
+                        {validationState.reason}
+                        {validationState.rescueHint ? (
+                          <span className="text-muted-foreground"> {validationState.rescueHint}</span>
+                        ) : null}
+                      </p>
+                    ) : null}
                   </div>
                 )
               })

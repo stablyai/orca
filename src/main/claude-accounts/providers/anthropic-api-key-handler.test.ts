@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { createAnthropicApiKeyHandler } from './anthropic-api-key-handler'
 import type { ClaudeManagedAccount } from '../../../shared/types'
 
@@ -120,5 +120,118 @@ describe('anthropicApiKeyHandler', () => {
       lastAuthenticatedAt: 0
     }
     await expect(handler.materialize(account)).rejects.toThrow(/missing from keychain/i)
+  })
+})
+
+describe('anthropicApiKeyHandler.validate', () => {
+  const originalFetch = global.fetch
+  const account: ClaudeManagedAccount = {
+    id: 'a1',
+    email: 'Work',
+    managedAuthPath: '/tmp/a1/auth',
+    authMethod: 'anthropic-api-key',
+    credentials: { authMethod: 'anthropic-api-key' },
+    modelMapping: {},
+    fallbackAccountIds: [],
+    createdAt: 0,
+    updatedAt: 0,
+    lastAuthenticatedAt: 0
+  }
+
+  beforeEach(() => {
+    readKeychainMock.mockReset()
+    readKeychainMock.mockResolvedValue('sk-ant-test')
+  })
+
+  afterEach(() => {
+    global.fetch = originalFetch
+  })
+
+  it('returns ok on 200', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200
+    }) as unknown as typeof fetch
+    const handler = createAnthropicApiKeyHandler()
+    const result = await handler.validate(account)
+    expect(result.ok).toBe(true)
+  })
+
+  it('hits GET /v1/models with x-api-key + anthropic-version headers', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 })
+    global.fetch = fetchMock as unknown as typeof fetch
+    const handler = createAnthropicApiKeyHandler()
+    await handler.validate(account)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('https://api.anthropic.com/v1/models')
+    expect(init.method).toBe('GET')
+    const headers = init.headers as Record<string, string>
+    expect(headers['x-api-key']).toBe('sk-ant-test')
+    expect(headers['anthropic-version']).toBe('2023-06-01')
+  })
+
+  it('returns reason + rescueHint on 401', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401
+    }) as unknown as typeof fetch
+    const handler = createAnthropicApiKeyHandler()
+    const result = await handler.validate(account)
+    if (result.ok) throw new Error('expected fail')
+    expect(result.reason).toBe('API key invalid or revoked.')
+    expect(result.rescueHint).toContain('Anthropic Console')
+  })
+
+  it('returns reason on 403', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403
+    }) as unknown as typeof fetch
+    const handler = createAnthropicApiKeyHandler()
+    const result = await handler.validate(account)
+    if (result.ok) throw new Error('expected fail')
+    expect(result.reason).toBe('API key does not have Claude access.')
+    expect(result.rescueHint).toContain('Anthropic Console')
+  })
+
+  it('returns network error on fetch rejection', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new Error('ENOTFOUND')) as unknown as typeof fetch
+    const handler = createAnthropicApiKeyHandler()
+    const result = await handler.validate(account)
+    if (result.ok) throw new Error('expected fail')
+    expect(result.reason).toBe('Unable to reach the provider.')
+    expect(result.rescueHint).toContain('network')
+  })
+
+  it('returns 5xx error', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 502
+    }) as unknown as typeof fetch
+    const handler = createAnthropicApiKeyHandler()
+    const result = await handler.validate(account)
+    if (result.ok) throw new Error('expected fail')
+    expect(result.reason).toBe('Provider returned an error.')
+  })
+
+  it('returns timeout error when fetch aborts', async () => {
+    const abortErr = Object.assign(new Error('aborted'), { name: 'AbortError' })
+    global.fetch = vi.fn().mockRejectedValue(abortErr) as unknown as typeof fetch
+    const handler = createAnthropicApiKeyHandler()
+    const result = await handler.validate(account)
+    if (result.ok) throw new Error('expected fail')
+    expect(result.reason).toBe('Validation request timed out.')
+  })
+
+  it('returns missing-key error when keychain is empty', async () => {
+    readKeychainMock.mockResolvedValueOnce(null)
+    const fetchMock = vi.fn()
+    global.fetch = fetchMock as unknown as typeof fetch
+    const handler = createAnthropicApiKeyHandler()
+    const result = await handler.validate(account)
+    if (result.ok) throw new Error('expected fail')
+    expect(result.reason).toContain('missing from Keychain')
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

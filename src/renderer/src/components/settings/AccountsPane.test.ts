@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildClaudeAddAccountInput,
+  pickClaudeValidationBadgeState,
   resolveClaudeAddAccountAction
 } from './AccountsPane'
 
@@ -44,6 +45,34 @@ describe('buildClaudeAddAccountInput', () => {
       label: 'zai',
       secretFromUser: 'token-123',
       providerConfig: { preset: 'zai' }
+    })
+  })
+})
+
+describe('pickClaudeValidationBadgeState', () => {
+  it('returns unvalidated when no entry is present', () => {
+    expect(pickClaudeValidationBadgeState(undefined)).toEqual({ kind: 'unvalidated' })
+  })
+
+  it('returns pending for the literal string sentinel', () => {
+    expect(pickClaudeValidationBadgeState('pending')).toEqual({ kind: 'pending' })
+  })
+
+  it('returns valid when the probe succeeded', () => {
+    expect(pickClaudeValidationBadgeState({ ok: true })).toEqual({ kind: 'valid' })
+  })
+
+  it('returns invalid + reason/rescueHint when the probe failed', () => {
+    expect(
+      pickClaudeValidationBadgeState({
+        ok: false,
+        reason: 'API key invalid or revoked.',
+        rescueHint: 'Generate a new key.'
+      })
+    ).toEqual({
+      kind: 'invalid',
+      reason: 'API key invalid or revoked.',
+      rescueHint: 'Generate a new key.'
     })
   })
 })

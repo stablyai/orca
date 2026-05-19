@@ -32,7 +32,7 @@ import {
 } from './keychain'
 import { beginClaudeAuthSwitch, endClaudeAuthSwitch } from './live-pty-gate'
 import { migrateClaudeAccount, migrateClaudeAccountList } from './migration'
-import { handlerFor } from './providers'
+import { handlerFor, type ValidationResult } from './providers'
 import { getDefaultModelMapping } from './model-defaults'
 
 // Why: the canonical type now lives in src/shared/types.ts so preload + renderer
@@ -97,6 +97,18 @@ export class ClaudeAccountService {
 
   async selectAccount(accountId: string | null): Promise<ClaudeRateLimitAccountsState> {
     return this.serializeMutation(() => this.doSelectAccount(accountId))
+  }
+
+  /**
+   * Live-probe a managed account's credentials against the provider's
+   * `/v1/models` endpoint and translate the result into the locked validation
+   * strings consumed by the AccountsPane re-check pill. Read-only — does not
+   * go through the mutation queue.
+   */
+  async validateAccount(accountId: string): Promise<ValidationResult> {
+    const account = this.requireAccount(accountId)
+    const handler = handlerFor(account.authMethod)
+    return handler.validate(account)
   }
 
   private serializeMutation<T>(fn: () => Promise<T>): Promise<T> {
