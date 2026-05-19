@@ -1,22 +1,14 @@
 import { randomUUID } from 'crypto'
-import { existsSync, readFileSync } from 'fs'
-import path from 'path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 import type { GlobalSettings } from '../../src/shared/types'
+import { readHookEndpoint } from './helpers/agent-hook-endpoint'
 
 type AwakeProbeSnapshot = {
   starts: { type: string; id: number }[]
   stops: { id: number }[]
   activeIds: number[]
-}
-
-type HookEndpoint = {
-  port: string
-  token: string
-  env: string
-  version: string
 }
 
 async function getSettings(page: Page): Promise<GlobalSettings> {
@@ -112,47 +104,6 @@ async function readPowerSaveBlockerProbe(
   })
 }
 
-function parseEndpointFile(contents: string): HookEndpoint {
-  const values: Record<string, string> = {}
-  for (const line of contents.split(/\r?\n/)) {
-    const normalized = line.startsWith('set ') ? line.slice(4) : line
-    const separatorIndex = normalized.indexOf('=')
-    if (separatorIndex <= 0) {
-      continue
-    }
-    values[normalized.slice(0, separatorIndex)] = normalized.slice(separatorIndex + 1)
-  }
-  return {
-    port: values.ORCA_AGENT_HOOK_PORT ?? '',
-    token: values.ORCA_AGENT_HOOK_TOKEN ?? '',
-    env: values.ORCA_AGENT_HOOK_ENV ?? '',
-    version: values.ORCA_AGENT_HOOK_VERSION ?? ''
-  }
-}
-
-async function readAgentHookEndpoint(electronApp: ElectronApplication): Promise<HookEndpoint> {
-  const userDataPath = await electronApp.evaluate(({ app }) => app.getPath('userData'))
-  const endpointFilePath = path.join(
-    userDataPath,
-    'agent-hooks',
-    process.platform === 'win32' ? 'endpoint.cmd' : 'endpoint.env'
-  )
-
-  await expect
-    .poll(() => existsSync(endpointFilePath), {
-      timeout: 10_000,
-      message: 'agent hook endpoint file was not written'
-    })
-    .toBe(true)
-
-  const endpoint = parseEndpointFile(readFileSync(endpointFilePath, 'utf8'))
-  expect(endpoint.port).toBeTruthy()
-  expect(endpoint.token).toBeTruthy()
-  expect(endpoint.env).toBeTruthy()
-  expect(endpoint.version).toBeTruthy()
-  return endpoint
-}
-
 async function postCodexHookEvent(
   electronApp: ElectronApplication,
   options: {
@@ -161,7 +112,7 @@ async function postCodexHookEvent(
     eventName: 'UserPromptSubmit' | 'Stop'
   }
 ): Promise<void> {
-  const endpoint = await readAgentHookEndpoint(electronApp)
+  const endpoint = await readHookEndpoint(electronApp)
   const response = await fetch(`http://127.0.0.1:${endpoint.port}/hook/codex`, {
     method: 'POST',
     headers: {

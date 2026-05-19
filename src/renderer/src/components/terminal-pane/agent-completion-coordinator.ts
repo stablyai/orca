@@ -80,7 +80,6 @@ export function createAgentCompletionCoordinator(
   function establishAgentEvidence(): void {
     agentIdentityEstablished = true
     hasAgentRunEvidence = true
-    dispatchPendingTitleIfEligible()
   }
 
   function clearAgentRunEvidence(): void {
@@ -288,7 +287,10 @@ export function createAgentCompletionCoordinator(
   function observeTitle(title: string): void {
     const status = detectAgentStatusFromTitle(title)
     const isInconclusiveNativeDroidTitle = titleIsInconclusiveNativeDroidTitle(title)
-    if (titleHasExplicitAgentIdentity(title) && !isInconclusiveNativeDroidTitle) {
+    const hasExplicitAgentIdentity =
+      titleHasExplicitAgentIdentity(title) && !isInconclusiveNativeDroidTitle
+    const hadPendingTitle = pendingTitle !== null
+    if (hasExplicitAgentIdentity) {
       establishAgentEvidence()
     }
 
@@ -301,11 +303,24 @@ export function createAgentCompletionCoordinator(
         lastTitleStatus = status
         return
       }
+      if (status === null && !titleHasExplicitAgentIdentity(title)) {
+        // Why: shells commonly restore cwd titles right after a short printf
+        // command. Treat generic completion titles as provisional until process
+        // inspection proves an agent still owns the pane.
+        holdTitleCompletionPending(title)
+        lastTitleStatus = status
+        return
+      }
       if (agentIdentityEstablished && hasAgentRunEvidence) {
         dispatchCompletion('title', title)
       } else {
         holdTitleCompletionPending(title)
       }
+    } else if (hadPendingTitle && status !== null && hasExplicitAgentIdentity) {
+      // Why: a shell can briefly restore cwd between "Codex working" and
+      // "Codex done"; the later explicit agent completion is authoritative.
+      dropPendingTitle()
+      dispatchCompletion('title', title)
     }
     lastTitleStatus = status
   }

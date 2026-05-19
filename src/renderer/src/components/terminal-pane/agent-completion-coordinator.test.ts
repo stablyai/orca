@@ -93,6 +93,64 @@ describe('agent completion coordinator', () => {
     expect(dispatchCompletion).toHaveBeenCalledWith('codex done')
   })
 
+  it('does not dispatch a cwd title after an explicit agent working title if the shell owns the pane', async () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => processResult('zsh')),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.observeTitle('Codex working')
+    coordinator.observeTitle('/tmp/orca-e2e-repo')
+    await flushAsyncTicks()
+
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+  })
+
+  it('prefers a later explicit completion title over a pending cwd title', async () => {
+    const inspection = createDeferred<RuntimeTerminalProcessInspection>()
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(() => inspection.promise),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.observeTitle('Codex working')
+    coordinator.observeTitle('/tmp/orca-e2e-repo')
+    coordinator.observeTitle('Codex done')
+    inspection.resolve(processResult('zsh'))
+    await flushAsyncTicks()
+
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    expect(dispatchCompletion).toHaveBeenCalledWith('Codex done')
+  })
+
+  it('still dispatches a generic completion title after process inspection confirms an agent', async () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => processResult('codex')),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.observeTitle('Codex working')
+    coordinator.observeTitle('Fix flaky e2e tests')
+    await flushAsyncTicks()
+
+    expect(dispatchCompletion).toHaveBeenCalledWith('Fix flaky e2e tests')
+  })
+
   it('suppresses same-turn title completion after a hook completion already notified', () => {
     const dispatchCompletion = vi.fn()
     const coordinator = createAgentCompletionCoordinator({

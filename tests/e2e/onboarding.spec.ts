@@ -408,7 +408,7 @@ test.describe('Onboarding flow', () => {
     await expect(
       orcaPage
         .locator('[data-settings-section="ssh"]')
-        .getByRole('heading', { name: 'SSH', exact: true })
+        .getByRole('heading', { name: 'SSH Hosts', exact: true })
     ).toBeInViewport({ timeout: 10_000 })
     await expect(
       orcaPage.locator('[data-settings-section="ssh"]').getByRole('button', { name: /Add Target/i })

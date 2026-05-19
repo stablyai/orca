@@ -664,12 +664,11 @@ export function useOnboardingFlow(
     // Why: Settings renders behind the fullscreen onboarding layer; SSH users
     // need a temporary detour without marking required repo setup dismissed.
     onSettingsDetourStart?.()
+    // Why: keep the target in the store before the Settings view mounts. A
+    // timer here can run before the lazy view subscribes and strand users on
+    // the default General pane.
+    openSettingsTarget({ pane: 'ssh', repoId: null, sectionId: 'ssh' })
     openSettingsPage()
-    // Why: Settings consumes navigation targets from its mounted view; defer
-    // until the view switch has committed so the SSH pane scroll is reliable.
-    window.setTimeout(() => {
-      openSettingsTarget({ pane: 'ssh', repoId: null, sectionId: 'ssh' })
-    }, 0)
   }, [
     busyLabel,
     currentStep.id,

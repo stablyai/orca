@@ -14,12 +14,36 @@ type CreatePRPayload = {
   }
 }
 
-async function openSourceControl(page: Page): Promise<void> {
-  await page.evaluate(() => {
+async function openSourceControl(page: Page, expectedWorktreeId: string): Promise<void> {
+  await page.evaluate((expectedWorktreeId) => {
     const state = window.__store?.getState()
+    if (state && state.activeWorktreeId !== expectedWorktreeId) {
+      state.setActiveWorktree(expectedWorktreeId)
+    }
     state?.setRightSidebarOpen(true)
     state?.setRightSidebarTab('source-control')
-  })
+  }, expectedWorktreeId)
+  await expect
+    .poll(
+      async () =>
+        page.evaluate((expectedWorktreeId) => {
+          const state = window.__store?.getState()
+          if (!state) {
+            return false
+          }
+          const activeWorktree = Object.values(state.worktreesByRepo)
+            .flat()
+            .some((entry) => entry.id === expectedWorktreeId)
+          return (
+            activeWorktree &&
+            state.activeWorktreeId === expectedWorktreeId &&
+            state.rightSidebarOpen &&
+            state.rightSidebarTab === 'source-control'
+          )
+        }, expectedWorktreeId),
+      { timeout: 5_000 }
+    )
+    .toBe(true)
   await expect(page.getByRole('button', { name: /Source Control/ })).toBeVisible()
   await expect(page.getByRole('textbox', { name: 'Commit message' })).toBeVisible()
 }
@@ -60,16 +84,18 @@ async function seedCreatePREligibleBranch(
     const worktrees = Object.values(state.worktreesByRepo).flat()
     const activeWorktree = worktrees.find((entry) => entry.id === worktreeId)
     const worktree =
+      worktrees.find((entry) => entry.branch.replace(/^refs\/heads\//, '') === 'e2e-secondary') ??
       worktrees.find((entry) => {
         const branchName = entry.branch.replace(/^refs\/heads\//, '')
         return branchName !== 'main' && !entry.isMainWorktree
-      }) ?? activeWorktree
+      }) ??
+      activeWorktree
     if (!worktree) {
       throw new Error('active worktree not found')
     }
-    if (state.activeWorktreeId !== worktree.id) {
-      state.setActiveWorktree(worktree.id)
-    }
+    // Why: the worker-scoped test repo can accumulate extra non-main
+    // worktrees; use the seeded secondary worktree as the stable PR target.
+    state.setActiveWorktree(worktree.id)
     const repo = state.repos.find((entry) => entry.id === worktree.repoId)
     if (!repo) {
       throw new Error('active repo not found')
@@ -165,7 +191,7 @@ test.describe('Source Control create pull request', () => {
     orcaPage
   }) => {
     const { branch, worktreeId } = await seedCreatePREligibleBranch(orcaPage)
-    await openSourceControl(orcaPage)
+    await openSourceControl(orcaPage, worktreeId)
     await forceCreatePREligibleStatus(orcaPage, worktreeId, branch)
 
     const createButton = orcaPage.getByRole('button', { name: 'Create PR' })

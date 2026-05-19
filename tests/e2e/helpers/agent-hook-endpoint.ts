@@ -1,4 +1,4 @@
-import type { ElectronApplication } from '@stablyai/playwright-test'
+import { expect, type ElectronApplication } from '@stablyai/playwright-test'
 import { existsSync, readdirSync, readFileSync } from 'fs'
 import path from 'path'
 import {
@@ -30,7 +30,19 @@ function findEndpointEnvFile(root: string): string | null {
 export async function readHookEndpoint(app: ElectronApplication): Promise<AgentHookEndpoint> {
   const userDataPath = await app.evaluate(({ app: electronApp }) => electronApp.getPath('userData'))
   const hookRoot = path.join(userDataPath, 'agent-hooks')
-  const endpointPath = findEndpointEnvFile(hookRoot)
+  let endpointPath: string | null = null
+  await expect
+    .poll(
+      () => {
+        endpointPath = findEndpointEnvFile(hookRoot)
+        return endpointPath
+      },
+      {
+        timeout: 15_000,
+        message: `Agent hook endpoint file not found under ${hookRoot}`
+      }
+    )
+    .not.toBeNull()
   if (!endpointPath) {
     throw new Error(`Agent hook endpoint file not found under ${hookRoot}`)
   }
