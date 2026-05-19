@@ -382,40 +382,6 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     ],
     defaultModelId: 'github-copilot/gpt-5.4-mini'
   },
-  gemini: {
-    id: 'gemini',
-    label: 'Gemini',
-    binary: 'gemini',
-    promptDelivery: 'argv',
-    buildArgs: ({ prompt, model }) => [
-      '--prompt',
-      prompt,
-      // Why: commit-message generation runs headless in arbitrary Git repos,
-      // including fresh test worktrees that Gemini has not trusted.
-      '--skip-trust',
-      '--approval-mode',
-      'plan',
-      '--output-format',
-      'text',
-      '--model',
-      model
-    ],
-    modelSource: 'static',
-    // Why: Gemini's picker labels Gemini 3 aliases without "preview", but the
-    // headless --model flag currently accepts the preview IDs and auto aliases.
-    models: [
-      { id: 'auto-gemini-3', label: 'Auto (Gemini 3)' },
-      { id: 'auto-gemini-2.5', label: 'Auto (Gemini 2.5)' },
-      { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro Preview' },
-      { id: 'gemini-3-pro-preview', label: 'Gemini 3 Pro Preview' },
-      { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash Preview' },
-      { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite Preview' },
-      { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-      { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' }
-    ],
-    defaultModelId: 'auto-gemini-3'
-  },
   amp: {
     id: 'amp',
     label: 'Amp',

@@ -59,6 +59,9 @@ type ModelDiscoveryState = {
 }
 
 const UNCONFIGURED_AGENT_SELECT_VALUE = ''
+const COMING_SOON_COMMIT_MESSAGE_AGENTS: readonly { id: TuiAgent; label: string }[] = [
+  { id: 'gemini', label: 'Gemini' }
+]
 
 function readSettings(settings: GlobalSettings): CommitMessageAiSettings {
   return settings.commitMessageAi ?? EMPTY_SETTINGS
@@ -268,7 +271,15 @@ export function CommitMessageAiPane({
     [baseAgentCapabilities, discoveryHostKey, modelDiscoveryByAgent]
   )
   const resolvedAgentId = resolveCommitMessageAgentChoice(config.agentId, settings.defaultTuiAgent)
-  const activeAgentSelectValue = resolvedAgentId ?? UNCONFIGURED_AGENT_SELECT_VALUE
+  const unsupportedSelectedAgent =
+    config.agentId &&
+    !isCustomAgentId(config.agentId) &&
+    !getCommitMessageAgentCapability(config.agentId)
+      ? config.agentId
+      : null
+  const activeAgentSelectValue = unsupportedSelectedAgent
+    ? UNCONFIGURED_AGENT_SELECT_VALUE
+    : (resolvedAgentId ?? UNCONFIGURED_AGENT_SELECT_VALUE)
   const unsupportedDefaultAgent =
     resolvedAgentId === null &&
     !config.agentId &&
@@ -279,6 +290,14 @@ export function CommitMessageAiPane({
   const unsupportedDefaultAgentLabel = unsupportedDefaultAgent
     ? (AGENT_CATALOG.find((a) => a.id === unsupportedDefaultAgent)?.label ??
       unsupportedDefaultAgent)
+    : null
+  const unsupportedSelectedAgentIsComingSoon = COMING_SOON_COMMIT_MESSAGE_AGENTS.some(
+    (agent) => agent.id === unsupportedSelectedAgent
+  )
+  const unsupportedSelectedAgentLabel = unsupportedSelectedAgent
+    ? (COMING_SOON_COMMIT_MESSAGE_AGENTS.find((a) => a.id === unsupportedSelectedAgent)?.label ??
+      AGENT_CATALOG.find((a) => a.id === unsupportedSelectedAgent)?.label ??
+      unsupportedSelectedAgent)
     : null
   const isCustom = isCustomAgentId(resolvedAgentId)
   const activeAgentId = resolvedAgentId && !isCustom ? resolvedAgentId : null
@@ -635,6 +654,17 @@ export function CommitMessageAiPane({
                   </SelectItem>
                 )
               })}
+              {COMING_SOON_COMMIT_MESSAGE_AGENTS.filter(
+                (agent) => !agentCapabilities.some((capability) => capability.id === agent.id)
+              ).map((agent) => (
+                <SelectItem key={agent.id} value={agent.id} disabled className="cursor-not-allowed">
+                  <span className="flex items-center gap-2">
+                    <AgentIcon agent={agent.id} size={14} />
+                    <span>{agent.label}</span>
+                    <span className="text-[11px] text-muted-foreground">Coming soon</span>
+                  </span>
+                </SelectItem>
+              ))}
               <SelectItem value={CUSTOM_AGENT_ID} className="cursor-pointer">
                 <span className="flex items-center gap-2">
                   <Terminal className="size-3.5" />
@@ -647,6 +677,14 @@ export function CommitMessageAiPane({
             <p className="max-w-[260px] text-right text-[11px] text-muted-foreground">
               Your default agent is {unsupportedDefaultAgentLabel}, which does not support commit
               message generation yet. Choose a supported agent or Custom.
+            </p>
+          ) : null}
+          {unsupportedSelectedAgentLabel ? (
+            <p className="max-w-[260px] text-right text-[11px] text-muted-foreground">
+              {unsupportedSelectedAgentIsComingSoon
+                ? `${unsupportedSelectedAgentLabel} commit message generation is coming soon.`
+                : `${unsupportedSelectedAgentLabel} does not support commit message generation yet.`}{' '}
+              Choose a supported agent or Custom.
             </p>
           ) : null}
         </div>

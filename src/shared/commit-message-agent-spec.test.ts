@@ -19,38 +19,13 @@ import {
 describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
   it('exposes the installed local agents as commit-message agents', () => {
     const ids = listCommitMessageAgentIds().sort()
-    expect(ids).toEqual([
-      'amp',
-      'claude',
-      'codex',
-      'copilot',
-      'cursor',
-      'gemini',
-      'kimi',
-      'opencode',
-      'pi'
-    ])
+    expect(ids).toEqual(['amp', 'claude', 'codex', 'copilot', 'cursor', 'kimi', 'opencode', 'pi'])
   })
 
   it('uses the strongest available defaults for core agents', () => {
     expect(COMMIT_MESSAGE_AGENT_SPECS.claude?.defaultModelId).toBe('sonnet')
     expect(COMMIT_MESSAGE_AGENT_SPECS.codex?.defaultModelId).toBe('gpt-5.5')
     expect(COMMIT_MESSAGE_AGENT_SPECS.pi?.defaultModelId).toBe('github-copilot/gpt-5.4-mini')
-  })
-
-  it('tracks the Gemini picker aliases that work in headless mode', () => {
-    expect(COMMIT_MESSAGE_AGENT_SPECS.gemini?.defaultModelId).toBe('auto-gemini-3')
-    expect(COMMIT_MESSAGE_AGENT_SPECS.gemini?.models.map((m) => m.id)).toEqual([
-      'auto-gemini-3',
-      'auto-gemini-2.5',
-      'gemini-3.1-pro-preview',
-      'gemini-3-pro-preview',
-      'gemini-3-flash-preview',
-      'gemini-3.1-flash-lite-preview',
-      'gemini-2.5-pro',
-      'gemini-2.5-flash',
-      'gemini-2.5-flash-lite'
-    ])
   })
 
   it('uses the provider-qualified Kimi model id accepted by the CLI', () => {

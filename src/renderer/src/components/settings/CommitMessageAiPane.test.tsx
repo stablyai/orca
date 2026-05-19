@@ -135,6 +135,25 @@ describe('CommitMessageAiPane', () => {
     expect(markup).not.toContain('Thinking effort')
   })
 
+  it('shows Gemini as coming soon instead of a selectable generator', () => {
+    const markup = renderPane(
+      buildSettings({
+        commitMessageAi: {
+          enabled: true,
+          agentId: 'gemini',
+          selectedModelByAgent: {},
+          selectedThinkingByModel: {},
+          customPrompt: '',
+          customAgentCommand: ''
+        }
+      })
+    )
+
+    expect(markup).toContain('Gemini')
+    expect(markup).toContain('Gemini commit message generation is coming soon')
+    expect(markup).not.toContain('Which model the selected agent uses')
+  })
+
   it('keeps custom command discoverable in settings search metadata', () => {
     const customCommandEntry = COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES.find(
       (entry) => entry.title === 'Custom command'

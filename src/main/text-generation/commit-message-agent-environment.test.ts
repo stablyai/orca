@@ -88,21 +88,6 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
     })
   })
 
-  it('hydrates Gemini API key from shell startup files for headless generation', async () => {
-    const home = makeHome()
-    delete process.env.GEMINI_API_KEY
-    writeFileSync(join(home, '.zshrc'), 'export GEMINI_API_KEY="gemini-shell-key"\n')
-
-    const result = await prepareLocalCommitMessageAgentEnv('gemini', undefined)
-
-    expect(result).toEqual({
-      ok: true,
-      env: expect.objectContaining({
-        GEMINI_API_KEY: 'gemini-shell-key'
-      })
-    })
-  })
-
   it('does not synthesize env for agents without shell-scoped auth or config roots', async () => {
     makeHome()
 

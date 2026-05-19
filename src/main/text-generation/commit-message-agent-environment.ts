@@ -49,20 +49,6 @@ function prepareShellConfigDirEnv(agentId: string): { ok: true; env?: NodeJS.Pro
   return { ok: true, env: { ...cloneProcessEnv(), [configVar]: value } }
 }
 
-function prepareGeminiEnv(agentId: string): { ok: true; env?: NodeJS.ProcessEnv } | null {
-  if (agentId !== 'gemini') {
-    return null
-  }
-  const apiKey = readInheritedOrShellEnvVar('GEMINI_API_KEY')
-  if (!apiKey) {
-    return { ok: true }
-  }
-
-  // Why: GUI-launched Orca often lacks shell exports, while `gemini` relies on
-  // GEMINI_API_KEY for headless API mode even when the same CLI works in a terminal.
-  return { ok: true, env: { ...cloneProcessEnv(), GEMINI_API_KEY: apiKey } }
-}
-
 export async function prepareLocalCommitMessageAgentEnv(
   agentId: string,
   resolvers: CommitMessageAgentEnvironmentResolvers | undefined
@@ -70,10 +56,6 @@ export async function prepareLocalCommitMessageAgentEnv(
   const shellConfigEnv = prepareShellConfigDirEnv(agentId)
   if (shellConfigEnv) {
     return shellConfigEnv
-  }
-  const geminiEnv = prepareGeminiEnv(agentId)
-  if (geminiEnv) {
-    return geminiEnv
   }
   if (!resolvers) {
     return { ok: true }
