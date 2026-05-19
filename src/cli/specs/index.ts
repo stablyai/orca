@@ -6,6 +6,7 @@ import { CORE_COMMAND_SPECS } from './core'
 import { ORCHESTRATION_COMMAND_SPECS } from './orchestration'
 import { COMPUTER_COMMAND_SPECS } from './computer'
 import { ENVIRONMENT_COMMAND_SPECS } from './environment'
+import { CLAUDE_ACCOUNTS_COMMAND_SPECS } from './claude-accounts'
 
 export const COMMAND_SPECS: CommandSpec[] = [
   ...CORE_COMMAND_SPECS,
@@ -14,5 +15,6 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...BROWSER_ADVANCED_COMMAND_SPECS,
   ...ORCHESTRATION_COMMAND_SPECS,
   ...COMPUTER_COMMAND_SPECS,
-  ...ENVIRONMENT_COMMAND_SPECS
+  ...ENVIRONMENT_COMMAND_SPECS,
+  ...CLAUDE_ACCOUNTS_COMMAND_SPECS
 ]
