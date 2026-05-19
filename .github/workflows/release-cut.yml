@@ -174,21 +174,9 @@ jobs:
           echo "Already ran this slot: ${{ steps.existing.outputs.already_ran }}"
           echo "Reason: ${{ steps.existing.outputs.reason }}"
 
-      - name: Publish complete release-cut RC drafts from prior runs
-        id: publish_drafts
-        # Why: this must run even when the current slot already cut a tag; a
-        # later cron retry may be the first chance to unstick a complete RC draft.
-        if: steps.window.outputs.allowed == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node config/scripts/publish-complete-draft-releases.mjs
-
       - name: Compute next version
         id: version
-        # Why: if an RC run only had complete drafts to publish, stop there
-        # instead of immediately cutting another RC after the recovered one.
-        # Stable dispatches should still cut the requested stable release.
-        if: steps.window.outputs.allowed == 'true' && steps.existing.outputs.already_ran != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && !((github.event_name == 'schedule' || inputs.kind == 'rc') && steps.publish_drafts.outputs.published_count != '0' && steps.publish_drafts.outputs.skipped_count == '0')
+        if: steps.window.outputs.allowed == 'true' && steps.existing.outputs.already_ran != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KIND: ${{ github.event_name == 'schedule' && 'rc' || inputs.kind }}
@@ -272,6 +260,11 @@ jobs:
             fi
           }
 
+          release_assets_complete() {
+            local tag="$1"
+            node config/scripts/verify-release-required-assets.mjs "$tag" >/dev/null 2>&1
+          }
+
           recover_unpublished_tag() {
             local tag="$1"
             local reason="$2"
@@ -315,11 +308,24 @@ jobs:
                 new="${base}-rc.0"
               else
                 existing_rc_tag="v${base}-rc.${highest_rc}"
-                # Why: a failed or GitHub-stuck run can leave the highest RC
-                # tag attached to a draft/missing release. Resume that tag so
-                # retries finish the intended release instead of piling up
-                # vX.Y.Z-rc.N+1 drafts.
-                recover_unpublished_tag "$existing_rc_tag" "latest RC in series" || true
+                existing_rc_state="$(release_draft_state "$existing_rc_tag")"
+                if [[ "$existing_rc_state" == "missing" ]]; then
+                  # Why: a tag without a release means the previous run was
+                  # interrupted before publishing could even be gated. Retry
+                  # the same tag instead of piling up orphaned tags.
+                  recover_unpublished_tag "$existing_rc_tag" "latest RC in series has no GitHub Release" || true
+                elif [[ "$existing_rc_state" == "true" ]]; then
+                  if release_assets_complete "$existing_rc_tag"; then
+                    # Why: a complete draft means artifact upload finished but
+                    # the publish gate did not. Leave that RC private and cut a
+                    # fresh one so a failed E2E tag does not wedge the series.
+                    echo "::warning::Latest RC $existing_rc_tag is a complete draft; leaving it private and cutting the next RC."
+                  else
+                    # Why: incomplete drafts are usually interrupted builds or
+                    # transient upload failures, so retry the same tag.
+                    recover_unpublished_tag "$existing_rc_tag" "latest RC draft is incomplete" || true
+                  fi
+                fi
                 new="${base}-rc.$((highest_rc + 1))"
               fi
               ;;
@@ -441,10 +447,8 @@ jobs:
             --generate-notes \
             --prerelease="$is_rc"
 
-  # Why: E2E runs alongside the release for visibility (failures surface as a
-  # red check on the tag), but is NOT in `publish-release`'s needs list.
-  # Releases already take a while and the suite is already a required check
-  # on PRs, so gating here would mostly delay shipping without adding signal.
+  # Why: release artifacts may be uploaded to the draft while E2E runs, but
+  # stable and RC releases must not become public if the tagged build fails E2E.
   e2e:
     needs: cut
     if: needs.cut.outputs.should_release == 'true'
@@ -695,6 +699,7 @@ jobs:
     needs:
       - cut
       - build
+      - e2e
     runs-on: ubuntu-latest
     permissions:
       contents: write
