@@ -811,8 +811,10 @@ async function readGitBlobAtIndexPath(
   worktreePath: string,
   filePath: string
 ): Promise<GitBlobReadResult> {
+  // Why: Git's `:<path>` syntax expects forward slashes even on Windows.
+  const gitPath = filePath.replace(/\\/g, '/')
   try {
-    const { stdout } = await gitExecFileAsyncBuffer(['show', `:${filePath}`], {
+    const { stdout } = await gitExecFileAsyncBuffer(['show', `:${gitPath}`], {
       cwd: worktreePath,
       maxBuffer: MAX_GIT_SHOW_BYTES
     })
@@ -828,9 +830,11 @@ async function readGitBlobAtOidPath(
   oid: string,
   filePath: string
 ): Promise<GitBlobReadResult> {
+  // Why: Git's `<oid>:<path>` syntax expects forward slashes even on Windows.
+  const gitPath = filePath.replace(/\\/g, '/')
   try {
     const { stdout } = await gitExecFileAsyncBuffer(
-      ['show', '--end-of-options', `${oid}:${filePath}`],
+      ['show', '--end-of-options', `${oid}:${gitPath}`],
       {
         cwd: worktreePath,
         maxBuffer: MAX_GIT_SHOW_BYTES
