@@ -17,11 +17,16 @@ import {
   AnthropicCompatForm,
   type AnthropicCompatSubmit
 } from './provider-forms/AnthropicCompatForm'
+import {
+  AzureFoundryForm,
+  type AzureFoundrySubmit
+} from './provider-forms/AzureFoundryForm'
 
 // Discriminated union for the AddAccountModal submit payload. Other variants
 // (oauth-result, future managed-provider forms) join this union as later
-// tasks land; P1 covers the two enabled Anthropic-flavored shapes.
-export type AddAccountSubmit = AnthropicApiKeySubmit | AnthropicCompatSubmit
+// tasks land; P1 covers the two enabled Anthropic-flavored shapes, P2 adds the
+// Foundry shape.
+export type AddAccountSubmit = AnthropicApiKeySubmit | AnthropicCompatSubmit | AzureFoundrySubmit
 
 // Cards rendered in step 1. Disabled providers carry a "Coming in P2/P3" hint
 // but no authMethod (those Edge providers are scheduled for later phases).
@@ -71,10 +76,10 @@ const PROVIDER_CARDS: readonly ProviderCard[] = [
     enabled: false
   },
   {
-    authMethod: null,
+    authMethod: 'azure-foundry',
     label: 'Azure AI Foundry',
-    subtitle: 'Coming in P2',
-    enabled: false
+    subtitle: 'Anthropic models on Microsoft Azure (API key or Entra ID)',
+    enabled: true
   }
 ]
 
@@ -188,6 +193,62 @@ function renderProviderGrid({
   )
 }
 
+// Validation probe shape used by the Foundry form. The real wire-up lives in
+// Task 19 (IPC `claudeAccounts.validateInput`); until then `AddAccountModal`
+// stubs it as `() => Promise.resolve({ ok: true })`.
+type ValidateInputFn = (
+  input: AddAccountSubmit
+) => Promise<{ ok: boolean; message?: string }>
+
+type AddAccountModalFormViewProps = {
+  picked: ClaudeAuthMethod | null
+  onSubmit: (input: AddAccountSubmit) => void
+  onBack: () => void
+  onValidate: ValidateInputFn
+}
+
+/**
+ * Stateless step-2 view. Picks the provider-specific form by `picked` and
+ * wires its onSubmit/onBack/onValidate through to the parent.
+ *
+ * Exported so tests can call it directly without going through the stateful
+ * `AddAccountModal` wrapper.
+ */
+export function AddAccountModalFormView({
+  picked,
+  onSubmit,
+  onBack,
+  onValidate
+}: AddAccountModalFormViewProps): React.JSX.Element {
+  if (picked === 'anthropic-api-key') {
+    return <AnthropicApiKeyForm onSubmit={onSubmit} onCancel={onBack} />
+  }
+  if (picked === 'anthropic-compat') {
+    return <AnthropicCompatForm onSubmit={onSubmit} onCancel={onBack} />
+  }
+  if (picked === 'azure-foundry') {
+    return (
+      <AzureFoundryForm
+        onSubmit={onSubmit}
+        onBack={onBack}
+        onValidate={(input) => onValidate(input)}
+      />
+    )
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="text-xs text-muted-foreground">
+        Form placeholder for <span className="font-mono">{picked ?? 'unknown'}</span>
+      </div>
+      <div>
+        <Button variant="outline" onClick={onBack} aria-label="Back">
+          Back
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 type AddAccountModalBodyProps = {
   step: Step
   pickedProvider: ClaudeAuthMethod | null
@@ -196,6 +257,7 @@ type AddAccountModalBodyProps = {
   onPickProvider: (provider: ClaudeAuthMethod) => void
   onBack: () => void
   onSubmit?: (input: AddAccountSubmit) => void
+  onValidate?: ValidateInputFn
 }
 
 /**
@@ -203,7 +265,7 @@ type AddAccountModalBodyProps = {
  *
  * Exported as a stateless controlled view so tests can call it directly as a
  * function (the project's test pattern) without React's hook dispatcher. The
- * stateful wiring lives in `AddAccountModal` above.
+ * stateful wiring lives in `AddAccountModal` below.
  */
 export function AddAccountModalBody({
   step,
@@ -212,7 +274,8 @@ export function AddAccountModalBody({
   onActiveIndexChange,
   onPickProvider,
   onBack,
-  onSubmit
+  onSubmit,
+  onValidate
 }: AddAccountModalBodyProps): React.JSX.Element {
   if (step === 'pick') {
     return renderProviderGrid({
@@ -222,38 +285,13 @@ export function AddAccountModalBody({
     })
   }
 
-  // Step 2: render the provider-specific form. anthropic-api-key + compat
-  // both have real forms in P1; OAuth opens an external browser flow, and
-  // the disabled (Bedrock/Vertex/Foundry) cards never reach step 2.
-  if (pickedProvider === 'anthropic-api-key') {
-    return (
-      <AnthropicApiKeyForm
-        onSubmit={(payload) => onSubmit?.(payload)}
-        onCancel={onBack}
-      />
-    )
-  }
-
-  if (pickedProvider === 'anthropic-compat') {
-    return (
-      <AnthropicCompatForm
-        onSubmit={(payload) => onSubmit?.(payload)}
-        onCancel={onBack}
-      />
-    )
-  }
-
   return (
-    <div className="flex flex-col gap-3">
-      <div className="text-xs text-muted-foreground">
-        Form placeholder for <span className="font-mono">{pickedProvider ?? 'unknown'}</span>
-      </div>
-      <div>
-        <Button variant="outline" onClick={onBack} aria-label="Back">
-          Back
-        </Button>
-      </div>
-    </div>
+    <AddAccountModalFormView
+      picked={pickedProvider}
+      onSubmit={(payload) => onSubmit?.(payload)}
+      onBack={onBack}
+      onValidate={onValidate ?? (async () => ({ ok: true }))}
+    />
   )
 }
 
@@ -306,6 +344,10 @@ export function AddAccountModal({
           onPickProvider={handlePick}
           onBack={handleBack}
           onSubmit={onSubmit}
+          // Validation probe stub. Task 19 replaces this with an IPC call to
+          // `claudeAccounts.validateInput`. Default ok-true keeps the Foundry
+          // form usable in the interim.
+          onValidate={async () => ({ ok: true })}
         />
       </DialogContent>
     </Dialog>

@@ -2,7 +2,7 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { ClaudeAuthMethod } from '../../../../shared/types'
-import { AddAccountModal, AddAccountModalBody } from './AddAccountModal'
+import { AddAccountModal, AddAccountModalBody, AddAccountModalFormView } from './AddAccountModal'
 import {
   AnthropicApiKeyFormView,
   buildAnthropicApiKeySubmit
@@ -185,25 +185,22 @@ describe('AddAccountModal step 1: provider grid', () => {
     expect(collectText(back).toLowerCase()).toMatch(/back/)
   })
 
-  it('shows Bedrock/Vertex/Azure Foundry cards as disabled with "Coming in P2/P3"', () => {
+  it('shows Bedrock/Vertex cards as disabled with "Coming in P2/P3"', () => {
+    // Azure Foundry was enabled in P2 (Task 16) — only Bedrock + Vertex remain
+    // as stub cards. Bedrock → P2 (later), Vertex → P3.
     const tree = renderPickBody()
 
     const bedrock = findByAriaLabel(tree, /aws bedrock/i)
     const vertex = findByAriaLabel(tree, /google vertex/i)
-    const azure = findByAriaLabel(tree, /azure ai foundry/i)
 
     expect(bedrock?.props.disabled).toBe(true)
     expect(vertex?.props.disabled).toBe(true)
-    expect(azure?.props.disabled).toBe(true)
 
     expect(collectText(bedrock).toLowerCase()).toMatch(/coming/i)
     expect(collectText(vertex).toLowerCase()).toMatch(/coming/i)
-    expect(collectText(azure).toLowerCase()).toMatch(/coming/i)
 
-    // Spec: Bedrock & Azure Foundry → P2, Vertex → P3.
     expect(collectText(bedrock)).toMatch(/P2/)
     expect(collectText(vertex)).toMatch(/P3/)
-    expect(collectText(azure)).toMatch(/P2/)
   })
 
   it('enabled cards form a roving tabindex group with one active stop', () => {
@@ -259,14 +256,14 @@ describe('AddAccountModal step 2: Anthropic API key form', () => {
   })
 
   it('AddAccountModalBody wires the API key form into step 2 for anthropic-api-key', () => {
-    // The body returns the form element with onSubmit + onCancel props wired
-    // to the parent. We assert wiring shape — the form internals are tested
-    // separately via renderApiKeyFormView.
+    // P2: the body returns <AddAccountModalFormView /> which dispatches by
+    // `picked` and wires onSubmit/onBack through to the parent. We assert
+    // wiring shape — form internals are tested separately via renderApiKeyFormView.
     const parent = vi.fn()
     const tree = renderFormBody('anthropic-api-key', parent)
     const formEl = tree as ReactElementLike
     expect(typeof formEl.props.onSubmit).toBe('function')
-    expect(typeof formEl.props.onCancel).toBe('function')
+    expect(typeof formEl.props.onBack).toBe('function')
   })
 
   it('buildAnthropicApiKeySubmit produces the wire-shape payload', () => {
@@ -539,9 +536,9 @@ describe('AddAccountModal step 2: Anthropic-compat form', () => {
     const parent = vi.fn()
     const tree = renderFormBody('anthropic-compat', parent)
     const formEl = tree as ReactElementLike
-    // Wire-up: the body returns an AnthropicCompatForm with onSubmit + onCancel.
+    // Wire-up: the body returns <AddAccountModalFormView /> with onSubmit + onBack.
     expect(typeof formEl.props.onSubmit).toBe('function')
-    expect(typeof formEl.props.onCancel).toBe('function')
+    expect(typeof formEl.props.onBack).toBe('function')
   })
 
   it('submitting valid input fires onSubmit with the built payload', () => {
@@ -586,5 +583,35 @@ describe('AddAccountModal step 2: Anthropic-compat form', () => {
     expect(backNode).not.toBeNull()
     ;(backNode?.props.onClick as () => void)()
     expect(onCancel).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('AddAccountModal — Azure AI Foundry (P2)', () => {
+  it('Foundry card is enabled', () => {
+    const markup = renderToStaticMarkup(
+      <AddAccountModal open onOpenChange={() => {}} onSubmit={() => {}} />
+    )
+    // The Radix Dialog renders through a portal so the static markup is empty,
+    // but the picker grid is rendered when we call the body directly. Assert
+    // there: card present + not disabled.
+    const tree = renderPickBody()
+    const foundry = findByAriaLabel(tree, 'Azure AI Foundry')
+    expect(foundry).not.toBeNull()
+    expect(foundry?.props.disabled).toBeFalsy()
+    // Sanity: top-level static render still throws nothing.
+    expect(markup).toBeDefined()
+  })
+
+  it('AddAccountModalFormView renders AzureFoundryForm when picked is azure-foundry', () => {
+    const tree = (
+      <AddAccountModalFormView
+        picked="azure-foundry"
+        onSubmit={() => {}}
+        onBack={() => {}}
+        onValidate={async () => ({ ok: true })}
+      />
+    )
+    const markup = renderToStaticMarkup(tree as React.ReactElement)
+    expect(markup).toMatch(/aria-label="Resource"/)
   })
 })
