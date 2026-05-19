@@ -3,6 +3,7 @@ import type {
   ClaudeAuthCredentials,
   ClaudeModelMapping
 } from '../../shared/types'
+import { fetchPresetRegistry } from './preset-registry'
 
 const ANTHROPIC_NATIVE_DEFAULTS: Required<ClaudeModelMapping> = {
   opus: 'claude-opus-4-7',
@@ -73,4 +74,27 @@ export function getBedrockDefaults(): Required<ClaudeModelMapping> {
 
 export function getVertexDefaults(): Required<ClaudeModelMapping> {
   return { ...VERTEX_DEFAULTS }
+}
+
+// Why: Compat-preset model ids drift between provider releases (e.g. zai's
+// GLM line, kimi versions). The remote preset registry lets us push updates
+// without shipping a new Orca binary. Registry overrides take precedence;
+// missing tiers, missing presets, or unreachable registry all fall through
+// to baked defaults so the feature is silent when the network is down.
+export async function resolveCompatDefaults(
+  preset: AnthropicCompatPreset
+): Promise<ClaudeModelMapping> {
+  const baked = { ...COMPAT_DEFAULTS[preset] }
+  try {
+    const reg = await fetchPresetRegistry()
+    const override = reg?.presets?.[preset]
+    if (!override) return baked
+    return {
+      opus: override.opus ?? baked.opus,
+      sonnet: override.sonnet ?? baked.sonnet,
+      haiku: override.haiku ?? baked.haiku
+    }
+  } catch {
+    return baked
+  }
 }

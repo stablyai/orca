@@ -2,7 +2,7 @@ import {
   readManagedClaudeKeychainCredentials,
   writeManagedClaudeKeychainCredentials
 } from '../keychain'
-import { getDefaultBaseUrl, getDefaultModelMapping } from '../model-defaults'
+import { getDefaultBaseUrl, resolveCompatDefaults } from '../model-defaults'
 import { probeAnthropicAuth } from './probe-anthropic-auth'
 import type { ProviderHandler } from './types'
 import type {
@@ -11,8 +11,14 @@ import type {
   ClaudeModelMapping
 } from '../../../shared/types'
 
-function emitModelEnv(account: ClaudeManagedAccount): Record<string, string> {
-  const defaults = getDefaultModelMapping(account.credentials)
+// Why: compat defaults now flow through the remote preset registry (with
+// baked fallback) so model-id drift can be pushed via the registry instead
+// of a binary release. resolveCompatDefaults swallows registry errors and
+// returns baked values, keeping materialize silent on network failure.
+async function emitModelEnv(account: ClaudeManagedAccount): Promise<Record<string, string>> {
+  const creds = account.credentials
+  const defaults =
+    creds.authMethod === 'anthropic-compat' ? await resolveCompatDefaults(creds.preset) : {}
   const merged: ClaudeModelMapping = { ...defaults, ...account.modelMapping }
   const env: Record<string, string> = {}
   if (merged.opus) env.ANTHROPIC_DEFAULT_OPUS_MODEL = merged.opus
@@ -64,7 +70,7 @@ export function createAnthropicCompatHandler(): ProviderHandler {
         envPatch: {
           ANTHROPIC_BASE_URL: creds.baseUrl,
           ANTHROPIC_AUTH_TOKEN: token,
-          ...emitModelEnv(account)
+          ...(await emitModelEnv(account))
         }
       }
     },

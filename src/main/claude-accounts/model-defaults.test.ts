@@ -1,9 +1,16 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
+
+vi.mock('./preset-registry', () => ({
+  fetchPresetRegistry: vi.fn()
+}))
+
+import { fetchPresetRegistry } from './preset-registry'
 import {
   getBedrockDefaults,
   getDefaultBaseUrl,
   getDefaultModelMapping,
-  getVertexDefaults
+  getVertexDefaults,
+  resolveCompatDefaults
 } from './model-defaults'
 
 describe('getDefaultModelMapping', () => {
@@ -110,5 +117,53 @@ describe('getVertexDefaults', () => {
       sonnet: 'claude-sonnet-4-6',
       haiku: 'claude-haiku-4-5@20251001'
     })
+  })
+})
+
+describe('resolveCompatDefaults — registry overrides', () => {
+  beforeEach(() => {
+    vi.mocked(fetchPresetRegistry).mockReset()
+  })
+
+  it('uses fresh registry override when present', async () => {
+    vi.mocked(fetchPresetRegistry).mockResolvedValue({
+      version: 1,
+      presets: { zai: { opus: 'glm-7.0', sonnet: 'glm-7.0', haiku: 'glm-air-2' } }
+    })
+    const d = await resolveCompatDefaults('zai')
+    expect(d.opus).toBe('glm-7.0')
+    expect(d.sonnet).toBe('glm-7.0')
+    expect(d.haiku).toBe('glm-air-2')
+  })
+
+  it('falls back to baked defaults when registry returns null', async () => {
+    vi.mocked(fetchPresetRegistry).mockResolvedValue(null)
+    const d = await resolveCompatDefaults('zai')
+    expect(d.opus).toBe('glm-5.1') // baked
+    expect(d.sonnet).toBe('glm-5.1')
+    expect(d.haiku).toBe('glm-4.5-air')
+  })
+
+  it('falls back to baked when preset missing from registry', async () => {
+    vi.mocked(fetchPresetRegistry).mockResolvedValue({ version: 1, presets: {} })
+    const d = await resolveCompatDefaults('zai')
+    expect(d.opus).toBe('glm-5.1')
+  })
+
+  it('partial override: baked fills in missing tiers', async () => {
+    vi.mocked(fetchPresetRegistry).mockResolvedValue({
+      version: 1,
+      presets: { kimi: { opus: 'kimi-k3.0' } }
+    })
+    const d = await resolveCompatDefaults('kimi')
+    expect(d.opus).toBe('kimi-k3.0') // override
+    expect(d.sonnet).toBe('kimi-k2.6') // baked
+    expect(d.haiku).toBe('kimi-k2.6') // baked
+  })
+
+  it('falls back to baked when registry fetch throws', async () => {
+    vi.mocked(fetchPresetRegistry).mockRejectedValue(new Error('boom'))
+    const d = await resolveCompatDefaults('zai')
+    expect(d.opus).toBe('glm-5.1')
   })
 })

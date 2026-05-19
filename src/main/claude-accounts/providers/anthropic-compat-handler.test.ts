@@ -1,6 +1,4 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { createAnthropicCompatHandler } from './anthropic-compat-handler'
-import type { ClaudeManagedAccount } from '../../../shared/types'
 
 const writeKeychainMock = vi.fn(async (_id: string, _value: string): Promise<void> => {})
 const readKeychainMock = vi.fn(async (_id: string): Promise<string | null> => 'compat-key')
@@ -10,6 +8,17 @@ vi.mock('../keychain', () => ({
     writeKeychainMock(id, value),
   readManagedClaudeKeychainCredentials: (id: string) => readKeychainMock(id)
 }))
+
+// Why: keep handler.materialize tests deterministic — never hit the real
+// registry network or fs cache. Default to null (= baked fallback); per-test
+// overrides can install registry overrides.
+vi.mock('../preset-registry', () => ({
+  fetchPresetRegistry: vi.fn(async () => null)
+}))
+
+import { fetchPresetRegistry } from '../preset-registry'
+import { createAnthropicCompatHandler } from './anthropic-compat-handler'
+import type { ClaudeManagedAccount } from '../../../shared/types'
 
 function compatAccount(
   preset: 'zai' | 'kimi' | 'minimax' | 'custom',
@@ -114,6 +123,26 @@ describe('anthropicCompatHandler.materialize', () => {
     expect(out.envPatch.ANTHROPIC_BASE_URL).toBe('https://example.com')
     expect(out.envPatch.ANTHROPIC_AUTH_TOKEN).toBe('compat-key')
     expect(out.envPatch.ANTHROPIC_DEFAULT_OPUS_MODEL).toBeUndefined()
+  })
+
+  it('preset registry override beats baked defaults for zai', async () => {
+    vi.mocked(fetchPresetRegistry).mockResolvedValueOnce({
+      version: 1,
+      presets: { zai: { opus: 'glm-7.0', sonnet: 'glm-7.0', haiku: 'glm-air-2' } }
+    })
+    const handler = createAnthropicCompatHandler()
+    const out = await handler.materialize(compatAccount('zai', 'https://api.z.ai/api/anthropic'))
+    expect(out.envPatch.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('glm-7.0')
+    expect(out.envPatch.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('glm-7.0')
+    expect(out.envPatch.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('glm-air-2')
+  })
+
+  it('falls back to baked defaults when registry returns null', async () => {
+    vi.mocked(fetchPresetRegistry).mockResolvedValueOnce(null)
+    const handler = createAnthropicCompatHandler()
+    const out = await handler.materialize(compatAccount('zai', 'https://api.z.ai/api/anthropic'))
+    expect(out.envPatch.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('glm-5.1')
+    expect(out.envPatch.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('glm-4.5-air')
   })
 })
 
