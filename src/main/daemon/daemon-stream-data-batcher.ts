@@ -1,36 +1,24 @@
 import type { Socket } from 'net'
 import { performance } from 'node:perf_hooks'
-import { encodeNdjson } from './ndjson'
-
-type StreamDataClient = {
-  streamSocket: Socket | null
-}
-
-type PendingStreamEvent =
-  | { kind: 'data'; sessionId: string; data: string }
-  | { kind: 'exit'; sessionId: string; code: number }
-
-type PendingStreamDataBatch = {
-  timer: ReturnType<typeof setTimeout> | null
-  drainTimer: ReturnType<typeof setTimeout> | null
-  cleanupWait: (() => void) | null
-  queue: PendingStreamEvent[]
-  queueHead: number
-  queuedDataBytes: number
-  waitingForDrain: boolean
-  warnedBackpressure: boolean
-}
-
-// Why: match main-process PTY IPC batching to avoid adding latency while
-// removing daemon socket writes and JSON framing during bursty output.
-const STREAM_DATA_BATCH_INTERVAL_MS = 8
-const STREAM_DATA_BACKPRESSURE_WARN_BYTES = 512 * 1024
-const STREAM_DATA_DRAIN_TIMEOUT_MS = 30_000
-const STREAM_DATA_MAX_QUEUED_BYTES = 8 * 1024 * 1024
-const STREAM_DATA_MAX_PAYLOAD_CHARS = 64 * 1024
-const STREAM_DATA_MAX_EVENTS_PER_FLUSH = 1024
-const INTERACTIVE_OUTPUT_WINDOW_MS = 100
-const INTERACTIVE_OUTPUT_MAX_CHARS = 1024
+import {
+  compactStreamDataBatch,
+  createPendingStreamDataBatch,
+  getQueuedDataForSession,
+  INTERACTIVE_OUTPUT_MAX_CHARS,
+  INTERACTIVE_OUTPUT_WINDOW_MS,
+  removeQueuedDataForSession,
+  STREAM_DATA_BACKPRESSURE_WARN_BYTES,
+  STREAM_DATA_BATCH_INTERVAL_MS,
+  STREAM_DATA_DRAIN_TIMEOUT_MS,
+  STREAM_DATA_MAX_EVENTS_PER_FLUSH,
+  STREAM_DATA_MAX_PAYLOAD_CHARS,
+  STREAM_DATA_MAX_QUEUED_BYTES,
+  streamInputKey,
+  type PendingStreamDataBatch,
+  type PendingStreamEvent,
+  type StreamDataClient,
+  writeStreamEvent
+} from './daemon-stream-data-batch-state'
 
 export class DaemonStreamDataBatcher {
   private pendingByClient = new Map<string, PendingStreamDataBatch>()
@@ -52,11 +40,11 @@ export class DaemonStreamDataBatcher {
   }
 
   markInput(clientId: string, sessionId: string): void {
-    this.lastInputAtBySession.set(this.inputKey(clientId, sessionId), this.now())
+    this.lastInputAtBySession.set(streamInputKey(clientId, sessionId), this.now())
   }
 
   clearSessionInput(clientId: string, sessionId: string): void {
-    this.lastInputAtBySession.delete(this.inputKey(clientId, sessionId))
+    this.lastInputAtBySession.delete(streamInputKey(clientId, sessionId))
   }
 
   enqueue(clientId: string, sessionId: string, data: string): void {
@@ -85,14 +73,14 @@ export class DaemonStreamDataBatcher {
     }
 
     const batch = this.getOrCreateBatch(clientId)
-    this.compactQueue(batch)
+    compactStreamDataBatch(batch)
 
     if (event.kind === 'data' && !batch.waitingForDrain) {
-      const queuedSessionData = this.getQueuedDataForSession(batch, event.sessionId)
+      const queuedSessionData = getQueuedDataForSession(batch, event.sessionId)
       const nextSessionData = queuedSessionData + event.data
       if (this.shouldSendImmediately(clientId, event.sessionId, nextSessionData)) {
-        this.removeQueuedDataForSession(batch, event.sessionId)
-        const ok = this.writeEvent(client.streamSocket, {
+        removeQueuedDataForSession(batch, event.sessionId)
+        const ok = writeStreamEvent(client.streamSocket, {
           kind: 'data',
           sessionId: event.sessionId,
           data: nextSessionData
@@ -112,16 +100,7 @@ export class DaemonStreamDataBatcher {
   private getOrCreateBatch(clientId: string): PendingStreamDataBatch {
     let batch = this.pendingByClient.get(clientId)
     if (!batch) {
-      batch = {
-        timer: null,
-        drainTimer: null,
-        cleanupWait: null,
-        queue: [],
-        queueHead: 0,
-        queuedDataBytes: 0,
-        waitingForDrain: false,
-        warnedBackpressure: false
-      }
+      batch = createPendingStreamDataBatch()
       this.pendingByClient.set(clientId, batch)
     }
     return batch
@@ -168,40 +147,12 @@ export class DaemonStreamDataBatcher {
   }
 
   private shouldSendImmediately(clientId: string, sessionId: string, data: string): boolean {
-    const lastInputAt = this.lastInputAtBySession.get(this.inputKey(clientId, sessionId))
+    const lastInputAt = this.lastInputAtBySession.get(streamInputKey(clientId, sessionId))
     return (
       data.length <= INTERACTIVE_OUTPUT_MAX_CHARS &&
       lastInputAt !== undefined &&
       this.now() - lastInputAt <= INTERACTIVE_OUTPUT_WINDOW_MS
     )
-  }
-
-  private getQueuedDataForSession(batch: PendingStreamDataBatch, sessionId: string): string {
-    let data = ''
-    for (let index = batch.queueHead; index < batch.queue.length; index++) {
-      const entry = batch.queue[index]!
-      if (entry.kind === 'data' && entry.sessionId === sessionId) {
-        data += entry.data
-      }
-    }
-    return data
-  }
-
-  private removeQueuedDataForSession(
-    batch: PendingStreamDataBatch,
-    sessionId: string
-  ): void {
-    const remaining: PendingStreamEvent[] = []
-    for (let index = batch.queueHead; index < batch.queue.length; index++) {
-      const entry = batch.queue[index]!
-      if (entry.kind === 'data' && entry.sessionId === sessionId) {
-        batch.queuedDataBytes -= Buffer.byteLength(entry.data, 'utf8')
-      } else {
-        remaining.push(entry)
-      }
-    }
-    batch.queue = remaining
-    batch.queueHead = 0
   }
 
   private deleteBatchIfIdle(clientId: string, batch: PendingStreamDataBatch): void {
@@ -213,28 +164,6 @@ export class DaemonStreamDataBatcher {
       batch.timer = null
     }
     this.pendingByClient.delete(clientId)
-  }
-
-  private writeEvent(streamSocket: Socket, entry: PendingStreamEvent): boolean {
-    const payload =
-      entry.kind === 'data'
-        ? {
-            type: 'event',
-            event: 'data',
-            sessionId: entry.sessionId,
-            payload: { data: entry.data }
-          }
-        : {
-            type: 'event',
-            event: 'exit',
-            sessionId: entry.sessionId,
-            payload: { code: entry.code }
-          }
-    return streamSocket.write(encodeNdjson(payload))
-  }
-
-  private inputKey(clientId: string, sessionId: string): string {
-    return `${clientId}\0${sessionId}`
   }
 
   flush(clientId: string): void {
@@ -266,7 +195,7 @@ export class DaemonStreamDataBatcher {
       if (entry.kind === 'data') {
         batch.queuedDataBytes -= Buffer.byteLength(entry.data, 'utf8')
       }
-      const ok = this.writeEvent(streamSocket, entry)
+      const ok = writeStreamEvent(streamSocket, entry)
       if (!ok) {
         this.handleBackpressure(clientId, batch, streamSocket)
         return
@@ -275,7 +204,7 @@ export class DaemonStreamDataBatcher {
         flushedEvents >= STREAM_DATA_MAX_EVENTS_PER_FLUSH &&
         batch.queueHead < batch.queue.length
       ) {
-        this.compactQueue(batch)
+        compactStreamDataBatch(batch)
         batch.timer = setTimeout(() => this.flush(clientId), 0)
         batch.timer.unref?.()
         return
@@ -311,14 +240,6 @@ export class DaemonStreamDataBatcher {
     }
   }
 
-  private compactQueue(batch: PendingStreamDataBatch): void {
-    if (batch.queueHead === 0) {
-      return
-    }
-    batch.queue = batch.queue.slice(batch.queueHead)
-    batch.queueHead = 0
-  }
-
   private handleBackpressure(
     clientId: string,
     batch: PendingStreamDataBatch,
@@ -329,7 +250,7 @@ export class DaemonStreamDataBatcher {
       clearTimeout(batch.timer)
       batch.timer = null
     }
-    this.compactQueue(batch)
+    compactStreamDataBatch(batch)
     if (batch.queuedDataBytes >= STREAM_DATA_BACKPRESSURE_WARN_BYTES && !batch.warnedBackpressure) {
       batch.warnedBackpressure = true
       console.warn('[daemon] PTY stream socket backpressure', {

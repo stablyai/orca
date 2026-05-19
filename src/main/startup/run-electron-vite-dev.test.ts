@@ -35,6 +35,17 @@ async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void
   }
 }
 
+function devWrapperTestEnv(extra: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const env = { ...process.env }
+  for (const key of Object.keys(env)) {
+    if (key.startsWith('ORCA_DEV_')) {
+      delete env[key]
+    }
+  }
+  delete env.ELECTRON_EXEC_PATH
+  return { ...env, ...extra }
+}
+
 describe('run-electron-vite-dev', () => {
   afterEach(() => {
     for (const pid of processesToCleanUp) {
@@ -60,14 +71,13 @@ describe('run-electron-vite-dev', () => {
 
       const wrapper = spawn(process.execPath, [wrapperPath], {
         cwd: resolve('.'),
-        env: {
-          ...process.env,
+        env: devWrapperTestEnv({
           ORCA_ELECTRON_VITE_CLI: fakeCliPath,
           ORCA_SKIP_DEV_CLI_PREPARE: '1',
           ORCA_SKIP_DEV_ELECTRON_APP_PREPARE: '1',
           ORCA_SKIP_DEV_WEB_PREPARE: '1',
           ORCA_DEV_WRAPPER_TEST_PID_FILE: pidFile
-        },
+        }),
         stdio: 'ignore'
       })
 
@@ -112,8 +122,7 @@ describe('run-electron-vite-dev', () => {
 
     const wrapper = spawn(process.execPath, [wrapperPath, '--remote-debugging-port=9444'], {
       cwd: resolve('.'),
-      env: {
-        ...process.env,
+      env: devWrapperTestEnv({
         ORCA_ELECTRON_VITE_CLI: fakeCliPath,
         ORCA_SKIP_DEV_CLI_PREPARE: '1',
         ORCA_SKIP_DEV_ELECTRON_APP_PREPARE: '1',
@@ -121,10 +130,8 @@ describe('run-electron-vite-dev', () => {
         ORCA_DEV_WRAPPER_TEST_PID_FILE: pidFile,
         ORCA_DEV_WRAPPER_TEST_ENV_FILE: envFile,
         ORCA_DEV_BRANCH: 'feature/billing-shell',
-        ORCA_DEV_WORKTREE_NAME: 'payment-ui',
-        ORCA_DEV_DOCK_BADGE_LABEL: undefined,
-        ORCA_DEV_DOCK_TITLE: undefined
-      },
+        ORCA_DEV_WORKTREE_NAME: 'payment-ui'
+      }),
       stdio: 'ignore'
     })
 
@@ -180,8 +187,7 @@ describe('run-electron-vite-dev', () => {
       [wrapperPath, '--stable-name', '--remote-debugging-port=9445'],
       {
         cwd: resolve('.'),
-        env: {
-          ...process.env,
+        env: devWrapperTestEnv({
           ORCA_ELECTRON_VITE_CLI: fakeCliPath,
           ORCA_SKIP_DEV_CLI_PREPARE: '1',
           ORCA_SKIP_DEV_WEB_PREPARE: '1',
@@ -189,7 +195,7 @@ describe('run-electron-vite-dev', () => {
           ORCA_DEV_WRAPPER_TEST_ENV_FILE: envFile,
           ORCA_DEV_BRANCH: 'feature/stable-name',
           ORCA_DEV_WORKTREE_NAME: 'stable-ui'
-        },
+        }),
         stdio: 'ignore'
       }
     )

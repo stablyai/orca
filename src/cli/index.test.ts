@@ -108,6 +108,7 @@ describe('orca cli worktree awareness', () => {
   beforeEach(() => {
     callMock.mockReset()
     delete process.env.ORCA_TERMINAL_HANDLE
+    delete process.env.ORCA_USER_DATA_PATH
     serveOrcaAppMock.mockReset()
     getDefaultUserDataPathMock.mockClear()
     addEnvironmentFromPairingCodeMock.mockReset()
