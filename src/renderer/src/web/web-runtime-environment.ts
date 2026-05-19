@@ -14,7 +14,6 @@ export type StoredWebRuntimeEnvironment = Omit<PublicKnownRuntimeEnvironment, 'e
 }
 
 const ENVIRONMENT_STORAGE_KEY = 'orca.web.runtimeEnvironment.v1'
-const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
 
 export function readStoredWebRuntimeEnvironment(): StoredWebRuntimeEnvironment | null {
   const raw = window.localStorage.getItem(ENVIRONMENT_STORAGE_KEY)
@@ -34,26 +33,6 @@ export function readStoredWebRuntimeEnvironment(): StoredWebRuntimeEnvironment |
 
 export function saveStoredWebRuntimeEnvironment(environment: StoredWebRuntimeEnvironment): void {
   window.localStorage.setItem(ENVIRONMENT_STORAGE_KEY, JSON.stringify(environment))
-}
-
-export function selectStoredWebRuntimeEnvironment(environmentId: string): void {
-  const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY)
-  const settings =
-    raw && raw.trim()
-      ? (() => {
-          try {
-            return JSON.parse(raw) as Record<string, unknown>
-          } catch {
-            return {}
-          }
-        })()
-      : {}
-  // Why: a pairing link is an explicit connection choice. Browser-local
-  // settings from this origin may otherwise keep the web client in local mode.
-  window.localStorage.setItem(
-    SETTINGS_STORAGE_KEY,
-    JSON.stringify({ ...settings, activeRuntimeEnvironmentId: environmentId })
-  )
 }
 
 export function clearStoredWebRuntimeEnvironment(): void {
