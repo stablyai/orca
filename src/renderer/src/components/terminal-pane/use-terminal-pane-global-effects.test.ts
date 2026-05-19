@@ -3,10 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 
 const mocks = vi.hoisted(() => ({
+  captureScrollViewportPosition: vi.fn(),
   fitAndFocusPanes: vi.fn(),
   fitPanes: vi.fn(),
   flushTerminalOutput: vi.fn(),
-  handleTerminalFileDrop: vi.fn()
+  handleTerminalFileDrop: vi.fn(),
+  restoreScrollViewportPosition: vi.fn()
 }))
 
 vi.mock('react', async (importOriginal) => {
@@ -27,6 +29,11 @@ vi.mock('./pane-helpers', () => ({
 
 vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({
   flushTerminalOutput: mocks.flushTerminalOutput
+}))
+
+vi.mock('@/lib/pane-manager/pane-scroll', () => ({
+  captureScrollViewportPosition: mocks.captureScrollViewportPosition,
+  restoreScrollViewportPosition: mocks.restoreScrollViewportPosition
 }))
 
 vi.mock('./terminal-drop-handler', () => ({
@@ -128,6 +135,13 @@ describe('useTerminalPaneGlobalEffects', () => {
     mocks.flushTerminalOutput.mockImplementation((terminal: { name: string }) => {
       order.push(`flush:${terminal.name}`)
     })
+    mocks.captureScrollViewportPosition.mockImplementation((terminal: { name: string }) => {
+      order.push(`capture:${terminal.name}`)
+      return { terminalName: terminal.name }
+    })
+    mocks.restoreScrollViewportPosition.mockImplementation((terminal: { name: string }) => {
+      order.push(`restore:${terminal.name}`)
+    })
     mocks.fitAndFocusPanes.mockImplementation(() => order.push('fit-focus'))
 
     const isActiveRef = { current: false }
@@ -145,7 +159,16 @@ describe('useTerminalPaneGlobalEffects', () => {
       toggleExpandPane: vi.fn()
     })
 
-    expect(order).toEqual(['flush:terminal-a', 'flush:terminal-b', 'resume', 'fit-focus'])
+    expect(order).toEqual([
+      'capture:terminal-a',
+      'capture:terminal-b',
+      'flush:terminal-a',
+      'flush:terminal-b',
+      'resume',
+      'fit-focus',
+      'restore:terminal-a',
+      'restore:terminal-b'
+    ])
     expect(mocks.fitPanes).not.toHaveBeenCalled()
     expect(isActiveRef.current).toBe(true)
     expect(isVisibleRef.current).toBe(true)

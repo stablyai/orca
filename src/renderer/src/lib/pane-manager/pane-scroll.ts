@@ -1,6 +1,15 @@
 import type { Terminal } from '@xterm/xterm'
 import type { ScrollState } from './pane-manager-types'
 
+export type ScrollViewportPosition = {
+  bufferType: 'normal' | 'alternate'
+  wasAtBottom: boolean
+  viewportY: number
+  baseY: number
+  cols: number
+  rows: number
+}
+
 // ---------------------------------------------------------------------------
 // Scroll restoration after reflow
 // ---------------------------------------------------------------------------
@@ -71,6 +80,44 @@ export function restoreScrollState(terminal: Terminal, state: ScrollState): void
     terminal.scrollToLine(target)
     forceViewportScrollbarSync(terminal)
   }
+}
+
+export function captureScrollViewportPosition(terminal: Terminal): ScrollViewportPosition {
+  const buf = terminal.buffer.active
+  return {
+    bufferType: buf.type,
+    wasAtBottom: buf.viewportY >= buf.baseY,
+    viewportY: buf.viewportY,
+    baseY: buf.baseY,
+    cols: terminal.cols,
+    rows: terminal.rows
+  }
+}
+
+export function restoreScrollViewportPosition(
+  terminal: Terminal,
+  state: ScrollViewportPosition
+): void {
+  const buf = terminal.buffer.active
+  if (buf.type !== state.bufferType) {
+    return
+  }
+
+  if (state.wasAtBottom) {
+    terminal.scrollToBottom()
+    forceViewportScrollbarSync(terminal)
+    return
+  }
+
+  if (terminal.cols !== state.cols || terminal.rows !== state.rows) {
+    return
+  }
+
+  // Why: worktree switches can resume WebGL with the same terminal grid but
+  // stale viewport internals. Restore by numeric viewport only when the grid
+  // did not reflow, avoiding duplicate-content matching in long agent logs.
+  terminal.scrollToLine(Math.min(state.viewportY, buf.baseY))
+  forceViewportScrollbarSync(terminal)
 }
 
 // Why: xterm 6's Viewport._sync() updates scrollDimensions after resize but
