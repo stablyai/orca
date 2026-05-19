@@ -9,19 +9,16 @@ import { app, ipcMain, net } from 'electron'
 const FEEDBACK_API_URL = 'https://api.onorca.dev/v1/feedback'
 const FEEDBACK_API_FALLBACK_URL = 'https://www.onorca.dev/v1/feedback'
 
-export type FeedbackSubmissionType = 'feedback' | 'crash'
-
 export type FeedbackSubmitArgs = {
   feedback: string
   submitAnonymously?: boolean
   githubLogin: string | null
   githubEmail: string | null
-  submissionType?: FeedbackSubmissionType
 }
 
 type FeedbackSubmitBody = {
   feedback: string
-  submissionType: FeedbackSubmissionType
+  submissionType: 'feedback'
   githubLogin: string | null
   githubEmail: string | null
   appVersion: string
@@ -48,7 +45,7 @@ function buildSubmitBody(args: FeedbackSubmitArgs): FeedbackSubmitBody {
   // stale renderer state or future identity-shaped fields cannot leak upstream.
   return {
     feedback: args.feedback,
-    submissionType: args.submissionType ?? 'feedback',
+    submissionType: 'feedback',
     ...identity,
     appVersion: app.getVersion(),
     platform: process.platform,

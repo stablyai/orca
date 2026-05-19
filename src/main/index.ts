@@ -20,6 +20,7 @@ import { initDaemonPtyProvider, disconnectDaemon } from './daemon/daemon-init'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
 import { registerCoreHandlers } from './ipc/register-core-handlers'
 import { initObservability, shutdownObservability } from './observability'
+import { startSpan } from './observability/tracer'
 import { registerMobileHandlers } from './ipc/mobile'
 import { initTelemetry, shutdownTelemetry, trackAppOpenedOnce } from './telemetry/client'
 import { runManagedHookInstallers } from './agent-hooks/install-telemetry'
@@ -439,6 +440,25 @@ function recordProcessGoneCrash(
     return
   }
   recentCrashKeys.set(key, now)
+  const span = startSpan('electron.process_gone', {
+    attributes: {
+      'crash.source': source,
+      'crash.process_type': processType,
+      'crash.reason': reason,
+      ...(exitCode !== null ? { 'crash.exit_code': exitCode } : {}),
+      'app.version': app.getVersion(),
+      platform: process.platform,
+      osRelease: os.release(),
+      arch: process.arch,
+      electronVersion: process.versions.electron,
+      chromeVersion: process.versions.chrome,
+      details,
+      breadcrumbs: getCrashBreadcrumbSnapshot()
+    }
+  })
+  // Why: renderer/child crashes belong in the local trace lane so the
+  // diagnostic bundle has the same process-gone signal as the startup prompt.
+  span.fail(`${source} process gone: ${processType} ${reason} (${exitCode ?? 'unknown'})`)
   void crashReports
     .record({
       source,

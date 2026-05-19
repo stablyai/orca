@@ -734,15 +734,9 @@ const api = {
   crashReports: {
     getLatestPending: () => ipcRenderer.invoke('crashReports:getLatestPending'),
     dismiss: (args: { reportId: string }) => ipcRenderer.invoke('crashReports:dismiss', args),
+    markSent: (args: { reportId: string }) => ipcRenderer.invoke('crashReports:markSent', args),
     copyLatestDiagnostics: (args?: { reportId?: string; notes?: string }) =>
-      ipcRenderer.invoke('crashReports:copyLatestDiagnostics', args),
-    submit: (args: {
-      reportId?: string
-      notes?: string
-      submitAnonymously?: boolean
-      githubLogin: string | null
-      githubEmail: string | null
-    }) => ipcRenderer.invoke('crashReports:submit', args)
+      ipcRenderer.invoke('crashReports:copyLatestDiagnostics', args)
   },
 
   export: {

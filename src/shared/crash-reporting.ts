@@ -42,18 +42,6 @@ export type CrashReportCreateInput = Omit<
   breadcrumbs?: CrashReportBreadcrumbInput[]
 }
 
-export type CrashReportSubmitArgs = {
-  reportId?: string
-  notes?: string
-  submitAnonymously?: boolean
-  githubLogin: string | null
-  githubEmail: string | null
-}
-
-export type CrashReportSubmitResult =
-  | { ok: true; report: CrashReportRecord }
-  | { ok: false; status: number | null; error: string; report?: CrashReportRecord }
-
 const MAX_STRING_DETAIL_LENGTH = 240
 const MAX_BREADCRUMB_NAME_LENGTH = 80
 const MAX_BREADCRUMBS = 30

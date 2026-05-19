@@ -68,18 +68,20 @@ describe('submitFeedback', () => {
     })
   })
 
-  it('marks crash submissions so the backend can route them separately', async () => {
+  it('does not accept a crash submission override through the feedback lane', async () => {
     await submitFeedback({
       feedback: '[Crash Report]',
+      // Why: crash diagnostics must use the local trace bundle path, not the
+      // product feedback endpoint.
       submissionType: 'crash',
       submitAnonymously: false,
       githubLogin: 'trusted-user',
       githubEmail: null
-    })
+    } as Parameters<typeof submitFeedback>[0])
 
     expect(postedBody()).toMatchObject({
       feedback: '[Crash Report]',
-      submissionType: 'crash',
+      submissionType: 'feedback',
       githubLogin: 'trusted-user',
       githubEmail: null
     })

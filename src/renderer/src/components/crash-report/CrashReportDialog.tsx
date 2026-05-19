@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Clipboard, Send } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { AlertTriangle, Clipboard, FileText, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -10,8 +10,8 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { formatCrashReportText, type CrashReportRecord } from '../../../../shared/crash-reporting'
-import type { GitHubViewer } from '../../../../shared/types'
+import type { CrashReportRecord } from '../../../../shared/crash-reporting'
+import type { DiagnosticsBundlePayload } from '../../../../preload/api-types'
 
 function formatSummary(report: CrashReportRecord): string {
   return `${report.processType} ${report.reason}${
@@ -19,18 +19,18 @@ function formatSummary(report: CrashReportRecord): string {
   }`
 }
 
+type BundleState =
+  | { stage: 'idle' }
+  | { stage: 'collecting' }
+  | { stage: 'preview'; bundle: DiagnosticsBundlePayload; editedPayload: string }
+  | { stage: 'uploading'; bundle: DiagnosticsBundlePayload; editedPayload: string }
+
 export function CrashReportDialog(): React.JSX.Element {
   const promptedThisLaunch = useRef(false)
   const [open, setOpen] = useState(false)
   const [report, setReport] = useState<CrashReportRecord | null>(null)
-  const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [viewer, setViewer] = useState<GitHubViewer | null>(null)
-  const diagnosticText = useMemo(
-    () => (report ? formatCrashReportText(report, notes) : ''),
-    [notes, report]
-  )
+  const [bundleState, setBundleState] = useState<BundleState>({ stage: 'idle' })
 
   const loadPendingReport = async (promptIfPresent: boolean): Promise<void> => {
     setLoading(true)
@@ -73,34 +73,14 @@ export function CrashReportDialog(): React.JSX.Element {
   }, [])
 
   useEffect(() => {
-    if (!open) {
-      setViewer(null)
-      return
+    if (!open && bundleState.stage !== 'idle') {
+      setBundleState({ stage: 'idle' })
     }
-
-    let cancelled = false
-    void window.api.gh
-      .viewer()
-      .then((nextViewer) => {
-        if (!cancelled) {
-          setViewer(nextViewer)
-        }
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setViewer(null)
-          console.error('Failed to load GitHub viewer for crash report:', error)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [open])
+  }, [bundleState.stage, open])
 
   const handleCopy = async (): Promise<void> => {
     const result = await window.api.crashReports.copyLatestDiagnostics(
-      report ? { reportId: report.id, notes } : {}
+      report ? { reportId: report.id } : {}
     )
     if (!result.ok) {
       toast.error(result.error)
@@ -121,33 +101,43 @@ export function CrashReportDialog(): React.JSX.Element {
     setOpen(false)
   }
 
-  const handleSubmit = async (): Promise<void> => {
+  const handleCollectBundle = async (): Promise<void> => {
     if (!report) {
       return
     }
-    setSubmitting(true)
+    setBundleState({ stage: 'collecting' })
     try {
-      const result = await window.api.crashReports.submit({
-        reportId: report.id,
-        notes,
-        // Why: crash reporting must degrade to anonymous if gh is unavailable;
-        // identity lookup is best-effort and never blocks report creation.
-        submitAnonymously: !viewer,
-        githubLogin: viewer?.login ?? null,
-        githubEmail: null
-      })
-      if (!result.ok) {
-        throw new Error(result.error)
+      const bundle = await window.api.diagnostics.collectBundle()
+      setBundleState({ stage: 'preview', bundle, editedPayload: bundle.payload })
+    } catch (error) {
+      setBundleState({ stage: 'idle' })
+      toast.error(`Could not collect diagnostic bundle: ${(error as Error).message}`)
+    }
+  }
+
+  const handleUploadBundle = async (): Promise<void> => {
+    if (!report || bundleState.stage !== 'preview') {
+      return
+    }
+    const { bundle, editedPayload } = bundleState
+    setBundleState({ stage: 'uploading', bundle, editedPayload })
+    try {
+      await window.api.diagnostics.uploadBundle(editedPayload, bundle.bundleSubmissionId)
+      try {
+        const sent = await window.api.crashReports.markSent({ reportId: report.id })
+        setReport(sent ?? { ...report, status: 'sent' })
+      } catch (error) {
+        // Why: the diagnostic upload already succeeded. A local prompt-state
+        // write failure should not present as a failed send or invite re-upload.
+        console.error('Failed to mark crash report sent:', error)
+        setReport({ ...report, status: 'sent' })
       }
-      setReport(result.report)
-      setNotes('')
-      toast.success('Crash report sent.')
+      setBundleState({ stage: 'idle' })
+      toast.success('Diagnostic bundle sent.')
       setOpen(false)
     } catch (error) {
-      toast.error('Failed to send crash report.')
-      console.error('Failed to submit crash report:', error)
-    } finally {
-      setSubmitting(false)
+      setBundleState({ stage: 'preview', bundle, editedPayload })
+      toast.error(`Could not send diagnostic bundle: ${(error as Error).message}`)
     }
   }
 
@@ -155,7 +145,7 @@ export function CrashReportDialog(): React.JSX.Element {
     <Dialog
       open={open}
       onOpenChange={(nextOpen) => {
-        if (submitting && !nextOpen) {
+        if (bundleState.stage === 'uploading' && !nextOpen) {
           return
         }
         if (!nextOpen) {
@@ -165,14 +155,14 @@ export function CrashReportDialog(): React.JSX.Element {
         setOpen(true)
       }}
     >
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm">
             <AlertTriangle className="size-4 text-destructive" />
             Orca closed unexpectedly
           </DialogTitle>
           <DialogDescription className="text-xs">
-            Send a privacy-safe diagnostic report to help us understand what happened.
+            Review a diagnostic bundle before sending it to Orca support.
           </DialogDescription>
         </DialogHeader>
 
@@ -185,19 +175,33 @@ export function CrashReportDialog(): React.JSX.Element {
                 Orca {report.appVersion}
               </div>
             </div>
-            <textarea
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-              rows={4}
-              placeholder="Optional: what were you doing before Orca closed?"
-              className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            />
-            <div className="space-y-1.5">
-              <div className="text-[11px] font-medium text-muted-foreground">Diagnostic text</div>
-              <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-muted/20 p-3 font-mono text-[11px] leading-5 text-muted-foreground">
-                {diagnosticText}
-              </pre>
-            </div>
+            {bundleState.stage === 'preview' || bundleState.stage === 'uploading' ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+                  <span>
+                    Diagnostic bundle · {bundleState.bundle.spanCount} span(s) ·{' '}
+                    {Math.round(bundleState.bundle.bytes / 1024)} KB
+                  </span>
+                  <span>ID: {bundleState.bundle.bundleSubmissionId}</span>
+                </div>
+                <textarea
+                  value={bundleState.editedPayload}
+                  readOnly={bundleState.stage === 'uploading'}
+                  onChange={(event) =>
+                    bundleState.stage === 'preview'
+                      ? setBundleState({ ...bundleState, editedPayload: event.target.value })
+                      : undefined
+                  }
+                  spellCheck={false}
+                  className="h-72 w-full resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-[11px] leading-tight outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                />
+              </div>
+            ) : (
+              <div className="rounded-md border border-border/70 bg-muted/20 p-3 text-xs text-muted-foreground">
+                Local traces stay on this machine. Sending requires collecting a bundle, reviewing
+                the exact NDJSON payload, then confirming the upload.
+              </div>
+            )}
           </div>
         ) : (
           <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-xs text-muted-foreground">
@@ -215,14 +219,31 @@ export function CrashReportDialog(): React.JSX.Element {
             variant="ghost"
             size="sm"
             onClick={handleDismiss}
-            disabled={submitting}
+            disabled={bundleState.stage === 'uploading'}
           >
             Don&apos;t Send
           </Button>
-          <Button type="button" size="sm" onClick={handleSubmit} disabled={!report || submitting}>
-            <Send className="size-3.5" />
-            Send Report
-          </Button>
+          {bundleState.stage === 'preview' || bundleState.stage === 'uploading' ? (
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleUploadBundle}
+              disabled={!report || bundleState.stage === 'uploading'}
+            >
+              <Send className="size-3.5" />
+              {bundleState.stage === 'uploading' ? 'Sending...' : 'Send Bundle'}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleCollectBundle}
+              disabled={!report || bundleState.stage === 'collecting'}
+            >
+              <FileText className="size-3.5" />
+              {bundleState.stage === 'collecting' ? 'Collecting...' : 'Review Bundle'}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

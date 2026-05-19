@@ -106,8 +106,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     crashReports: {
       getLatestPending: () => Promise.resolve(null),
       dismiss: () => Promise.resolve(null),
-      copyLatestDiagnostics: () => Promise.resolve({ ok: false, error: 'Unavailable on web.' }),
-      submit: () => Promise.resolve({ ok: false, status: null, error: 'Unavailable on web.' })
+      markSent: () => Promise.resolve(null),
+      copyLatestDiagnostics: () => Promise.resolve({ ok: false, error: 'Unavailable on web.' })
     },
     session: {
       get: () => Promise.resolve(getStoredWorkspaceSession()),
