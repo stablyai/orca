@@ -945,3 +945,67 @@ export class ClaudeAccountService {
     return trimmed === '' ? null : trimmed
   }
 }
+
+// Why: when invoked without a running Orca app, the CLI must still be able to
+// add / list / select / remove managed accounts. This builds a self-contained
+// ClaudeAccountService that reads settings from the on-disk Store and exposes
+// a minimal adapter (list / addAccount / selectAccount / removeAccount) — the
+// same surface the IPC handlers call. Electron is imported lazily so the CLI
+// bundle does not eagerly pull in main-process modules at import time.
+export type HeadlessClaudeAccountService = {
+  list: () => Promise<{ accounts: ClaudeManagedAccountSummary[] }>
+  addAccount: (input: AddAccountInput) => Promise<{
+    accountId: string
+    email: string
+    accounts: ClaudeManagedAccountSummary[]
+    activeAccountId?: string
+  }>
+  selectAccount: (accountId: string) => Promise<{ activeAccountId: string }>
+  removeAccount: (accountId: string) => Promise<{ removed: boolean }>
+}
+
+export async function loadClaudeAccountServiceHeadless(): Promise<HeadlessClaudeAccountService> {
+  // Why: lazy imports keep the CLI bundle free of Electron / Store / rate-limit
+  // side effects unless the headless fallback is actually triggered.
+  const { Store, initDataPath } = await import('../persistence')
+  const { RateLimitService } = await import('../rate-limits/service')
+  const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+  initDataPath()
+  const store = new Store()
+  const rateLimits = new RateLimitService()
+  const runtimeAuth = new ClaudeRuntimeAuthService(store)
+  const service = new ClaudeAccountService(store, rateLimits, runtimeAuth)
+
+  function lastAccount(state: ClaudeRateLimitAccountsState): {
+    accountId: string
+    email: string
+  } {
+    const account = state.accounts.at(-1)
+    if (!account) {
+      throw new Error('addAccount returned an empty managed account list')
+    }
+    return { accountId: account.id, email: account.email }
+  }
+
+  return {
+    list: async () => ({ accounts: service.listAccounts().accounts }),
+    addAccount: async (input) => {
+      const state = await service.addAccount(input)
+      const { accountId, email } = lastAccount(state)
+      return {
+        accountId,
+        email,
+        accounts: state.accounts,
+        activeAccountId: state.activeAccountId ?? undefined
+      }
+    },
+    selectAccount: async (accountId) => {
+      const state = await service.selectAccount(accountId)
+      return { activeAccountId: state.activeAccountId ?? accountId }
+    },
+    removeAccount: async (accountId) => {
+      await service.removeAccount(accountId)
+      return { removed: true }
+    }
+  }
+}

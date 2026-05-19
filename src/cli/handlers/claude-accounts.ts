@@ -9,6 +9,32 @@ type AddResult = {
   activeAccountId?: string
 }
 
+// Why: when no Orca app is reachable the IPC transport fails with
+// runtime_unavailable. We retry via the in-process headless bootstrap so the
+// CLI still works in environments without a running Electron UI (e.g. SSH,
+// CI). The headless module is imported dynamically so the CLI does not pull
+// main-process modules at startup.
+function isRuntimeUnavailable(error: unknown): boolean {
+  return error instanceof RuntimeClientError && error.code === 'runtime_unavailable'
+}
+
+async function callOrHeadless<T>(
+  ctx: Parameters<CommandHandler>[0],
+  rpc: string,
+  payload: unknown,
+  headless: () => Promise<T>
+): Promise<T> {
+  try {
+    const response = await ctx.client.call<T>(rpc, payload as never)
+    return response.result
+  } catch (error) {
+    if (isRuntimeUnavailable(error)) {
+      return headless()
+    }
+    throw error
+  }
+}
+
 // Why: --key-env / --token-env carry the env var NAME, not the secret. Reading
 // the secret here keeps it out of argv and out of any shell history transcript.
 function readSecretFromEnv(flags: Map<string, string | boolean>, flagName: string): string {
@@ -39,18 +65,41 @@ function emitFail(error: unknown): never {
 // Extracting this keeps each provider branch focused on payload shape.
 async function finishAdd(ctx: Parameters<CommandHandler>[0], result: AddResult): Promise<void> {
   if (ctx.flags.get('validate') === true) {
-    const probe = await ctx.client.call<{ ok: boolean; error?: string }>(
+    const probe = await callOrHeadless<{ ok: boolean; error?: string }>(
+      ctx,
       'claudeAccounts.validate',
-      { accountId: result.accountId }
+      { accountId: result.accountId },
+      // Why: validate runs a live network probe via the provider handler. The
+      // headless service does not yet expose validateAccount; surface a clear
+      // error rather than silently skipping validation.
+      async () => {
+        throw new RuntimeClientError(
+          'runtime_unavailable',
+          'Cannot validate accounts without a running Orca app.'
+        )
+      }
     )
-    if (!probe.result.ok) {
+    if (!probe.ok) {
       throw new RuntimeClientError(
         'invalid_argument',
-        `Validation failed for account ${result.accountId}: ${probe.result.error ?? 'unknown'}`
+        `Validation failed for account ${result.accountId}: ${probe.error ?? 'unknown'}`
       )
     }
   }
   emitOk(result.accountId, result.email)
+}
+
+type AddPayload = Record<string, unknown> & { authMethod: string }
+
+async function dispatchAdd(
+  ctx: Parameters<CommandHandler>[0],
+  payload: AddPayload
+): Promise<AddResult> {
+  return callOrHeadless<AddResult>(ctx, 'claudeAccounts.add', payload, async () => {
+    const { runHeadlessClaudeAccountsAdd } =
+      await import('../../main/claude-accounts/headless-bootstrap')
+    return runHeadlessClaudeAccountsAdd(payload as never)
+  })
 }
 
 async function handleAdd(ctx: Parameters<CommandHandler>[0]): Promise<void> {
@@ -59,12 +108,12 @@ async function handleAdd(ctx: Parameters<CommandHandler>[0]): Promise<void> {
     if (provider === 'anthropic-api-key') {
       const label = getRequiredStringFlag(ctx.flags, 'label')
       const secret = readSecretFromEnv(ctx.flags, 'key-env')
-      const response = await ctx.client.call<AddResult>('claudeAccounts.add', {
+      const result = await dispatchAdd(ctx, {
         authMethod: 'anthropic-api-key',
         label,
         secretFromUser: secret
       })
-      await finishAdd(ctx, response.result)
+      await finishAdd(ctx, result)
       return
     }
     if (provider === 'anthropic-compat') {
@@ -82,13 +131,13 @@ async function handleAdd(ctx: Parameters<CommandHandler>[0]): Promise<void> {
       if (baseUrl) {
         providerConfig.baseUrl = baseUrl
       }
-      const response = await ctx.client.call<AddResult>('claudeAccounts.add', {
+      const result = await dispatchAdd(ctx, {
         authMethod: 'anthropic-compat',
         label,
         secretFromUser: secret,
         providerConfig
       })
-      await finishAdd(ctx, response.result)
+      await finishAdd(ctx, result)
       return
     }
     if (provider === 'azure-foundry') {
@@ -110,7 +159,7 @@ async function handleAdd(ctx: Parameters<CommandHandler>[0]): Promise<void> {
         )
       }
       const label = getOptionalStringFlag(ctx.flags, 'label') ?? resource
-      const payload: Record<string, unknown> = {
+      const payload: AddPayload = {
         authMethod: 'azure-foundry',
         label,
         providerConfig: { resource, authMode: useEntra ? 'entra-id' : 'api-key' }
@@ -118,8 +167,8 @@ async function handleAdd(ctx: Parameters<CommandHandler>[0]): Promise<void> {
       if (!useEntra) {
         payload.secretFromUser = readSecretFromEnv(ctx.flags, 'key-env')
       }
-      const result = await ctx.client.call<AddResult>('claudeAccounts.add', payload)
-      await finishAdd(ctx, result.result)
+      const result = await dispatchAdd(ctx, payload)
+      await finishAdd(ctx, result)
       return
     }
     if (provider === 'aws-bedrock') {
@@ -132,7 +181,7 @@ async function handleAdd(ctx: Parameters<CommandHandler>[0]): Promise<void> {
         region,
         authMode: tokenEnv ? 'bearer-token' : 'iam-chain'
       }
-      const payload: Record<string, unknown> = {
+      const payload: AddPayload = {
         authMethod: 'aws-bedrock',
         label,
         providerConfig
@@ -140,8 +189,8 @@ async function handleAdd(ctx: Parameters<CommandHandler>[0]): Promise<void> {
       if (tokenEnv) {
         payload.secretFromUser = readSecretFromEnv(ctx.flags, 'token-env')
       }
-      const result = await ctx.client.call<AddResult>('claudeAccounts.add', payload)
-      await finishAdd(ctx, result.result)
+      const result = await dispatchAdd(ctx, payload)
+      await finishAdd(ctx, result)
       return
     }
     if (provider === 'google-vertex') {
@@ -150,12 +199,12 @@ async function handleAdd(ctx: Parameters<CommandHandler>[0]): Promise<void> {
       const projectId = getRequiredStringFlag(ctx.flags, 'project-id')
       const region = getRequiredStringFlag(ctx.flags, 'region')
       const label = getOptionalStringFlag(ctx.flags, 'label') ?? projectId
-      const result = await ctx.client.call<AddResult>('claudeAccounts.add', {
+      const result = await dispatchAdd(ctx, {
         authMethod: 'google-vertex',
         label,
         providerConfig: { projectId, region, authMode: 'adc' }
       })
-      await finishAdd(ctx, result.result)
+      await finishAdd(ctx, result)
       return
     }
     throw new RuntimeClientError('invalid_argument', `Unknown --provider value: ${provider}`)
@@ -166,8 +215,17 @@ async function handleAdd(ctx: Parameters<CommandHandler>[0]): Promise<void> {
 
 async function handleList(ctx: Parameters<CommandHandler>[0]): Promise<void> {
   try {
-    const result = await ctx.client.call<{ accounts: unknown[] }>('claudeAccounts.list', {})
-    console.log(JSON.stringify({ ok: true, accounts: result.result.accounts }))
+    const result = await callOrHeadless<{ accounts: unknown[] }>(
+      ctx,
+      'claudeAccounts.list',
+      {},
+      async () => {
+        const { runHeadlessClaudeAccountsList } =
+          await import('../../main/claude-accounts/headless-bootstrap')
+        return runHeadlessClaudeAccountsList()
+      }
+    )
+    console.log(JSON.stringify({ ok: true, accounts: result.accounts }))
   } catch (error) {
     emitFail(error)
   }
@@ -176,10 +234,17 @@ async function handleList(ctx: Parameters<CommandHandler>[0]): Promise<void> {
 async function handleSelect(ctx: Parameters<CommandHandler>[0]): Promise<void> {
   try {
     const accountId = getRequiredStringFlag(ctx.flags, 'account-id')
-    const result = await ctx.client.call<{ activeAccountId: string }>('claudeAccounts.select', {
-      accountId
-    })
-    console.log(JSON.stringify({ ok: true, activeAccountId: result.result.activeAccountId }))
+    const result = await callOrHeadless<{ activeAccountId: string }>(
+      ctx,
+      'claudeAccounts.select',
+      { accountId },
+      async () => {
+        const { runHeadlessClaudeAccountsSelect } =
+          await import('../../main/claude-accounts/headless-bootstrap')
+        return runHeadlessClaudeAccountsSelect(accountId)
+      }
+    )
+    console.log(JSON.stringify({ ok: true, activeAccountId: result.activeAccountId }))
   } catch (error) {
     emitFail(error)
   }
@@ -188,10 +253,17 @@ async function handleSelect(ctx: Parameters<CommandHandler>[0]): Promise<void> {
 async function handleRemove(ctx: Parameters<CommandHandler>[0]): Promise<void> {
   try {
     const accountId = getRequiredStringFlag(ctx.flags, 'account-id')
-    const result = await ctx.client.call<{ removed: boolean }>('claudeAccounts.remove', {
-      accountId
-    })
-    console.log(JSON.stringify({ ok: true, removed: result.result.removed }))
+    const result = await callOrHeadless<{ removed: boolean }>(
+      ctx,
+      'claudeAccounts.remove',
+      { accountId },
+      async () => {
+        const { runHeadlessClaudeAccountsRemove } =
+          await import('../../main/claude-accounts/headless-bootstrap')
+        return runHeadlessClaudeAccountsRemove(accountId)
+      }
+    )
+    console.log(JSON.stringify({ ok: true, removed: result.removed }))
   } catch (error) {
     emitFail(error)
   }
