@@ -6,6 +6,7 @@ import type {
   RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTabMoveResult,
   RuntimeMobileSessionTabsResult,
+  RuntimeTerminalClose,
   RuntimeTerminalSplit
 } from '../../../shared/runtime-types'
 import type { AppState } from '../store/types'
@@ -450,6 +451,40 @@ export function splitWebRuntimeTerminal(
     .catch((error) => {
       console.warn(
         '[web-runtime-session] failed to split terminal:',
+        error instanceof Error ? error.message : String(error)
+      )
+    })
+  return true
+}
+
+export function closeWebRuntimeTerminal(ptyId: string | null | undefined): boolean {
+  if (!ptyId) {
+    return false
+  }
+  const remote = parseRemoteRuntimePtyId(ptyId)
+  const environmentId = remote?.environmentId?.trim()
+  if (!remote || !environmentId || !isWebRuntimeSessionActive(environmentId)) {
+    return false
+  }
+
+  // Why: host-session mirror panes are detached locally in the browser, but
+  // the host owns the real pane graph. Close the host terminal first so later
+  // session snapshots cannot resurrect the locally removed pane.
+  void window.api.runtimeEnvironments
+    .call({
+      selector: environmentId,
+      method: 'terminal.close',
+      params: {
+        terminal: remote.handle
+      },
+      timeoutMs: 15_000
+    })
+    .then((response) => {
+      unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ close: RuntimeTerminalClose }>)
+    })
+    .catch((error) => {
+      console.warn(
+        '[web-runtime-session] failed to close terminal pane:',
         error instanceof Error ? error.message : String(error)
       )
     })
