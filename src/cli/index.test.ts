@@ -1498,6 +1498,7 @@ describe('orca cli worktree awareness', () => {
       workspace: `path:${path.resolve('/tmp/repo/feature')}`,
       workspaceMode: 'existing',
       baseBranch: undefined,
+      reuseSession: undefined,
       timezone: undefined,
       enabled: undefined,
       missedRunGraceMinutes: undefined,
@@ -1672,6 +1673,71 @@ describe('orca cli worktree awareness', () => {
     process.exitCode = priorExitCode
   })
 
+  it('passes automation session reuse flags through create and edit', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo', 'abc', 'repo-1')]),
+      okFixture('req_create', { automation: { id: 'auto-1', name: 'Daily review' } }),
+      okFixture('req_edit', { automation: { id: 'auto-1', name: 'Daily review' } })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'automations',
+        'create',
+        '--name',
+        'Daily review',
+        '--trigger',
+        'daily',
+        '--prompt',
+        'Review open changes',
+        '--provider',
+        'codex',
+        '--workspace',
+        'current',
+        '--reuse-session',
+        '--json'
+      ],
+      '/tmp/repo/feature/src'
+    )
+    await main(['automations', 'edit', 'auto-1', '--fresh-session', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'automation.create',
+      expect.objectContaining({
+        workspace: `path:${path.resolve('/tmp/repo/feature')}`,
+        workspaceMode: 'existing',
+        reuseSession: true
+      })
+    )
+    expect(callMock).toHaveBeenNthCalledWith(3, 'automation.update', {
+      id: 'auto-1',
+      updates: expect.objectContaining({ reuseSession: false })
+    })
+  })
+
+  it('rejects conflicting automation session reuse flags', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['automations', 'edit', 'auto-1', '--reuse-session', '--fresh-session', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Use either --reuse-session or --fresh-session, not both.'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   it('rejects automation edit with both repo and workspace targets', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -1804,6 +1870,7 @@ describe('orca cli worktree awareness', () => {
         workspace: `path:${path.resolve('/tmp/repo/feature')}`,
         workspaceMode: undefined,
         baseBranch: undefined,
+        reuseSession: undefined,
         timezone: undefined,
         enabled: true,
         missedRunGraceMinutes: undefined

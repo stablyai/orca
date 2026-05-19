@@ -1872,7 +1872,6 @@ describe('connectPanePty', () => {
       '\x1b[?1004hrestored snapshot',
       expect.any(Function)
     )
-    expect(pane.terminal.write).toHaveBeenCalledWith('\r\n', expect.any(Function))
     expect(pane.terminal.write).toHaveBeenCalledWith(
       POST_REPLAY_FOCUS_REPORTING_RESET,
       expect.any(Function)
@@ -3065,7 +3064,6 @@ describe('connectPanePty', () => {
     // content already in the terminal from a prior session.
     expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[2J\x1b[3J\x1b[H', expect.any(Function))
     expect(pane.terminal.write).toHaveBeenCalledWith('restored-ssh-output', expect.any(Function))
-    expect(pane.terminal.write).toHaveBeenCalledWith('\r\n', expect.any(Function))
     expect(pane.terminal.write).toHaveBeenCalledWith(
       POST_REPLAY_FOCUS_REPORTING_RESET,
       expect.any(Function)

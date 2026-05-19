@@ -209,6 +209,13 @@ function normalizeAutomationRunOutputSnapshot(
   }
 }
 
+function normalizeAutomationSessionReuse(automation: Automation): Automation {
+  return {
+    ...automation,
+    reuseSession: automation.workspaceMode === 'existing' && automation.reuseSession === true
+  }
+}
+
 // Why: old persisted targets predate configHost. Default to label-based lookup
 // so imported SSH aliases keep resolving through ssh -G after upgrade.
 function normalizeSshTarget(t: SshTarget): SshTarget {
@@ -1834,9 +1841,9 @@ export class Store {
   // ── Automations ───────────────────────────────────────────────────
 
   listAutomations(): Automation[] {
-    return [...(this.state.automations ?? [])].sort((left, right) =>
-      left.name.localeCompare(right.name)
-    )
+    return (this.state.automations ?? [])
+      .map((automation) => normalizeAutomationSessionReuse(automation))
+      .sort((left, right) => left.name.localeCompare(right.name))
   }
 
   listAutomationRuns(automationId?: string): AutomationRun[] {
@@ -1862,6 +1869,7 @@ export class Store {
       workspaceMode: input.workspaceMode,
       workspaceId: input.workspaceMode === 'existing' ? (input.workspaceId ?? null) : null,
       baseBranch: input.workspaceMode === 'new_per_run' ? (input.baseBranch ?? null) : null,
+      reuseSession: input.workspaceMode === 'existing' ? (input.reuseSession ?? false) : false,
       timezone: input.timezone,
       rrule: input.rrule,
       dtstart: input.dtstart,
@@ -1912,6 +1920,10 @@ export class Store {
             ? (updates.baseBranch ?? null)
             : (current.baseBranch ?? null)
           : null,
+      reuseSession:
+        workspaceMode === 'existing'
+          ? (updates.reuseSession ?? current.reuseSession ?? false)
+          : false,
       rrule,
       dtstart,
       nextRunAt: scheduleChanged

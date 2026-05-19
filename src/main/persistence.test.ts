@@ -457,6 +457,47 @@ describe('Store', () => {
     expect(persisted.automations[0].baseBranch).toBeNull()
   })
 
+  it('persists session reuse only for existing-workspace automations', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const existingWorkspace = store.createAutomation({
+      name: 'Digest',
+      prompt: 'Summarize changes',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      reuseSession: true,
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    const newPerRun = store.createAutomation({
+      name: 'Fresh',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      reuseSession: true,
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+
+    expect(existingWorkspace.reuseSession).toBe(true)
+    expect(newPerRun.reuseSession).toBe(false)
+    expect(
+      store.updateAutomation(existingWorkspace.id, { workspaceMode: 'new_per_run' }).reuseSession
+    ).toBe(false)
+
+    const persisted = readDataFile() as { automations: Record<string, unknown>[] }
+    delete persisted.automations[0].reuseSession
+    writeDataFile(persisted)
+    const reloaded = await createStore()
+    expect(reloaded.listAutomations()[0].reuseSession).toBe(false)
+  })
+
   it('numbers automation run titles per automation', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())

@@ -39,6 +39,7 @@ type AgentComboboxProps = {
    *  instead of opening the popover — lets the parent form treat the Agent
    *  field as the last keyboard-submit step. */
   onTriggerEnter?: () => void
+  allowNarrowTrigger?: boolean
 }
 
 const BLANK_VALUE = '__none__'
@@ -127,7 +128,8 @@ export default function AgentCombobox({
   defaultAgent,
   onSetDefault,
   triggerClassName,
-  onTriggerEnter
+  onTriggerEnter,
+  allowNarrowTrigger = false
 }: AgentComboboxProps): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -244,7 +246,7 @@ export default function AgentCombobox({
               // the compact trigger still needs room for "GitHub Copilot".
               'h-8 justify-between px-3 text-xs font-normal',
               triggerClassName,
-              TRIGGER_MIN_WIDTH_CLASS
+              !allowNarrowTrigger && TRIGGER_MIN_WIDTH_CLASS
             )}
             data-agent-combobox-root="true"
           >
@@ -264,7 +266,10 @@ export default function AgentCombobox({
         </PopoverTrigger>
         <PopoverContent
           align="start"
-          className="w-[var(--radix-popover-trigger-width)] min-w-[18rem] p-0"
+          className={cn(
+            'w-[var(--radix-popover-trigger-width)] p-0',
+            !allowNarrowTrigger && 'min-w-[18rem]'
+          )}
           data-agent-combobox-root="true"
           onOpenAutoFocus={(event) => event.preventDefault()}
         >

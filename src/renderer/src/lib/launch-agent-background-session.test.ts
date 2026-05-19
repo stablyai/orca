@@ -18,6 +18,7 @@ const mockRegisterEagerPtyBuffer = vi.fn()
 const mockSubscribeToPtyData = vi.fn()
 const mockSubscribeToPtyExit = vi.fn()
 const mockPasteDraftWhenAgentReady = vi.fn()
+const mockMarkTrusted = vi.fn()
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
 function expectStablePaneSpawn(): string {
@@ -96,6 +97,9 @@ describe('launchAgentBackgroundSession', () => {
         pty: {
           spawn: mockSpawn
         },
+        agentTrust: {
+          markTrusted: mockMarkTrusted
+        },
         runtime: {
           call: vi.fn()
         },
@@ -148,6 +152,22 @@ describe('launchAgentBackgroundSession', () => {
     expect(mockSubscribeToPtyData).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(mockSubscribeToPtyExit).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(result).toMatchObject({ tabId: 'tab-1', ptyId: 'pty-1' })
+  })
+
+  it('pre-marks trust for agents with first-launch trust prompts', async () => {
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation'
+    })
+
+    expect(mockMarkTrusted).toHaveBeenCalledWith({
+      preset: 'codex',
+      workspacePath: '/repo/worktree'
+    })
+    expect(mockSpawn).toHaveBeenCalled()
   })
 
   it('parses agent status from hidden PTY output', async () => {

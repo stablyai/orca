@@ -30,6 +30,7 @@ describe('automation RPC methods', () => {
         prompt: 'Review changes',
         agentId: 'codex',
         repo: 'repo-1',
+        reuseSession: true,
         rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
         dtstart: 1
       })
@@ -39,6 +40,7 @@ describe('automation RPC methods', () => {
         id: 'auto-1',
         updates: {
           enabled: false,
+          reuseSession: false,
           rrule: '0 9 * * 1-5',
           dtstart: 2
         }
@@ -55,12 +57,13 @@ describe('automation RPC methods', () => {
         name: 'New review',
         prompt: 'Review changes',
         agentId: 'codex',
-        repo: 'repo-1'
+        repo: 'repo-1',
+        reuseSession: true
       })
     )
     expect(runtime.updateAutomation).toHaveBeenCalledWith(
       'auto-1',
-      expect.objectContaining({ enabled: false, rrule: '0 9 * * 1-5' })
+      expect.objectContaining({ enabled: false, reuseSession: false, rrule: '0 9 * * 1-5' })
     )
     expect(runtime.deleteAutomation).toHaveBeenCalledWith('auto-1')
     expect(runtime.runAutomationNow).toHaveBeenCalledWith('auto-1')

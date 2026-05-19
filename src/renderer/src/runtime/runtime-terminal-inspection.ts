@@ -94,3 +94,29 @@ export function sendRuntimePtyInput(
   })
   return true
 }
+
+export async function sendRuntimePtyInputVerified(
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  ptyId: string,
+  data: string
+): Promise<boolean> {
+  const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
+  const target = ownerEnvironmentId
+    ? ({ kind: 'environment', environmentId: ownerEnvironmentId } as const)
+    : getActiveRuntimeTarget(settings)
+  const terminal = getRemoteRuntimeTerminalHandle(ptyId)
+  if (target.kind !== 'environment' || !terminal) {
+    window.api.pty.write(ptyId, data)
+    return true
+  }
+
+  try {
+    await callRuntimeRpc(target, 'terminal.send', { terminal, text: data }, { timeoutMs: 15_000 })
+    return true
+  } catch (error) {
+    if (isTerminalGoneError(error)) {
+      return false
+    }
+    throw error
+  }
+}

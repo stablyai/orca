@@ -1,5 +1,11 @@
+/* eslint-disable max-lines -- Why: automation dispatch is a single renderer lifecycle
+ * coordinator spanning workspace creation, SSH readiness, terminal launch/reuse,
+ * completion bookkeeping, and focus restoration. */
 import { useEffect } from 'react'
 import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-session'
+import { submitPromptToAgentTab } from '@/lib/agent-paste-draft'
+import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
+import { observeExistingAutomationSession } from '@/lib/automation-session-observer'
 import { useAppStore } from '@/store'
 import type { AutomationDispatchResult } from '../../../shared/automations-types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
@@ -9,6 +15,15 @@ import {
 } from '@/components/automations/automation-run-output-snapshot'
 
 const AUTOMATIONS_CHANGED_EVENT = 'orca:automations-changed'
+const activeReuseDispatchTabIds = new Set<string>()
+
+function acquireReuseDispatchTab(tabId: string): (() => void) | null {
+  if (activeReuseDispatchTabIds.has(tabId)) {
+    return null
+  }
+  activeReuseDispatchTabIds.add(tabId)
+  return () => activeReuseDispatchTabIds.delete(tabId)
+}
 
 function buildAutomationWorkspaceName(runTitle: string, scheduledFor: number): string {
   const slug = runTitle
@@ -133,12 +148,22 @@ export function useAutomationDispatchEvents(): void {
         let pendingDone = false
         let completionMarked = false
         let unsubscribeAgentStatus = (): void => {}
+        let unsubscribeSessionObserver = (): void => {}
+        let releaseReuseDispatchTab = (): void => {}
+        const cleanupRunObservers = (): void => {
+          unsubscribeAgentStatus()
+          unsubscribeSessionObserver()
+          releaseReuseDispatchTab()
+          unsubscribeAgentStatus = (): void => {}
+          unsubscribeSessionObserver = (): void => {}
+          releaseReuseDispatchTab = (): void => {}
+        }
         const markCompletionResult = async (): Promise<void> => {
           if (completionMarked) {
             return
           }
           completionMarked = true
-          unsubscribeAgentStatus()
+          cleanupRunObservers()
           await markDispatchResult({
             runId: run.id,
             status: 'completed',
@@ -149,7 +174,7 @@ export function useAutomationDispatchEvents(): void {
           })
         }
         const markExitResult = (code: number): Promise<void> => {
-          unsubscribeAgentStatus()
+          cleanupRunObservers()
           return markDispatchResult({
             runId: run.id,
             status: code === 0 ? 'completed' : 'dispatch_failed',
@@ -169,12 +194,26 @@ export function useAutomationDispatchEvents(): void {
           }
           void markCompletionResult()
         }
-        const observeAgentStatus = (tabId: string): void => {
+        const observeAgentStatus = (
+          tabId: string,
+          startedAfter: number,
+          options?: { requireWorkingAfterStart?: boolean }
+        ): void => {
+          let sawWorkingAfterStart = false
           const checkCurrentStatus = (): void => {
             const { agentStatusByPaneKey } = useAppStore.getState()
             for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
               const parsed = parsePaneKey(paneKey)
-              if (parsed?.tabId === tabId && entry.state === 'done') {
+              if (parsed?.tabId !== tabId || entry.updatedAt < startedAfter) {
+                continue
+              }
+              if (entry.state === 'working') {
+                sawWorkingAfterStart = true
+              }
+              if (
+                entry.state === 'done' &&
+                (!options?.requireWorkingAfterStart || sawWorkingAfterStart)
+              ) {
                 latestAssistantMessage =
                   entry.lastAssistantMessage?.trim() || latestAssistantMessage
                 handleAgentDone()
@@ -186,6 +225,88 @@ export function useAutomationDispatchEvents(): void {
           // hook IPC listener, not the hidden PTY OSC fallback.
           unsubscribeAgentStatus = useAppStore.subscribe(checkCurrentStatus)
           checkCurrentStatus()
+        }
+        const dispatchStartedAt = Date.now()
+        if (automation.reuseSession) {
+          const reusableSession = findReusableAutomationSession({
+            automationId: automation.id,
+            agentId: automation.agentId,
+            worktreeId: worktree.id,
+            currentRunId: run.id,
+            runs: await window.api.automations.listRuns({ automationId: automation.id }),
+            state: useAppStore.getState()
+          })
+          if (reusableSession) {
+            const releaseTab = acquireReuseDispatchTab(reusableSession.tabId)
+            if (releaseTab) {
+              releaseReuseDispatchTab = releaseTab
+              try {
+                const submitted = await submitPromptToAgentTab({
+                  tabId: reusableSession.tabId,
+                  content: automation.prompt
+                })
+                if (!submitted) {
+                  cleanupRunObservers()
+                } else {
+                  let reuseSawWorking = false
+                  const handleReusableAgentStatus = (payload: { state: string }): void => {
+                    if (payload.state === 'working') {
+                      reuseSawWorking = true
+                      return
+                    }
+                    if (payload.state === 'done' && reuseSawWorking) {
+                      handleAgentDone()
+                    }
+                  }
+                  const reuseCompletionStartedAt = Date.now()
+                  unsubscribeSessionObserver = await observeExistingAutomationSession({
+                    ptyId: reusableSession.ptyId,
+                    paneKey: reusableSession.paneKey,
+                    runId: run.id,
+                    onData: (chunk) => {
+                      outputSnapshotBuffer.append(chunk)
+                    },
+                    onAgentStatus: (payload) => {
+                      latestAssistantMessage =
+                        payload.lastAssistantMessage?.trim() || latestAssistantMessage
+                      handleReusableAgentStatus(payload)
+                    },
+                    onExit: (code) => {
+                      if (completionMarked) {
+                        return
+                      }
+                      if (!dispatchMarked) {
+                        pendingExitCode = code
+                        return
+                      }
+                      void markExitResult(code)
+                    }
+                  })
+                  observeAgentStatus(reusableSession.tabId, reuseCompletionStartedAt, {
+                    requireWorkingAfterStart: true
+                  })
+                  await markDispatchResult({
+                    runId: run.id,
+                    status: 'dispatched',
+                    workspaceId: worktree.id,
+                    workspaceDisplayName: worktree.displayName,
+                    terminalSessionId: reusableSession.tabId,
+                    error: null
+                  })
+                  dispatchMarked = true
+                  if (pendingDone) {
+                    await markCompletionResult()
+                  } else if (pendingExitCode !== null) {
+                    await markExitResult(pendingExitCode)
+                  }
+                  return
+                }
+              } catch (error) {
+                cleanupRunObservers()
+                throw error
+              }
+            }
+          }
         }
         const result = await launchAgentBackgroundSession({
           agent: automation.agentId,
@@ -217,7 +338,7 @@ export function useAutomationDispatchEvents(): void {
         if (!result) {
           throw new Error('Unable to build an agent launch plan.')
         }
-        observeAgentStatus(result.tabId)
+        observeAgentStatus(result.tabId, dispatchStartedAt)
         try {
           await markDispatchResult({
             runId: run.id,
@@ -234,7 +355,7 @@ export function useAutomationDispatchEvents(): void {
             await markExitResult(pendingExitCode)
           }
         } catch (error) {
-          unsubscribeAgentStatus()
+          cleanupRunObservers()
           throw error
         }
         const currentState = useAppStore.getState()

@@ -51,6 +51,17 @@ export async function launchAgentBackgroundSession(
   if (!worktree) {
     throw new Error('The target workspace is no longer available.')
   }
+  const preflight = TUI_AGENT_CONFIG[agent].preflightTrust
+  if (preflight && worktree.path && window.api.agentTrust?.markTrusted) {
+    try {
+      await window.api.agentTrust.markTrusted({
+        preset: preflight,
+        workspacePath: worktree.path
+      })
+    } catch {
+      // Best-effort: continue with launch. The user can still accept the trust menu.
+    }
+  }
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0

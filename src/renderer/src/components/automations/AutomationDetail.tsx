@@ -194,6 +194,10 @@ export function AutomationDetail({
                 : workspaceName
             }
           />
+          <DetailMetric
+            label="Session"
+            value={automation.reuseSession ? 'Reuse live session' : 'Fresh each run'}
+          />
           <div className="min-w-0">
             <div className="text-[11px] font-medium uppercase text-muted-foreground">Prompt</div>
             <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-sm text-foreground">

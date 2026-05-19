@@ -57,6 +57,7 @@ const existingAutomation = {
   workspaceMode: 'new_per_run',
   workspaceId: null,
   baseBranch: 'main',
+  reuseSession: false,
   timezone: 'UTC',
   rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
   dtstart: 1,
@@ -121,6 +122,67 @@ describe('OrcaRuntimeService automation methods', () => {
     await runtime.updateAutomation('auto-1', { baseBranch: null })
 
     expect(store.updateAutomation).toHaveBeenCalledWith('auto-1', { baseBranch: null })
+  })
+
+  it('passes session reuse updates for existing-workspace automations', async () => {
+    const existing = {
+      ...existingAutomation,
+      workspaceMode: 'existing',
+      workspaceId: 'repo-1::/tmp/orca',
+      baseBranch: null
+    } satisfies Automation
+    const store = makeStore([existing])
+    const runtime = new OrcaRuntimeService(store as never)
+
+    await runtime.updateAutomation('auto-1', { reuseSession: true })
+
+    expect(store.updateAutomation).toHaveBeenCalledWith('auto-1', { reuseSession: true })
+  })
+
+  it('clears session reuse when retargeting to new-per-run', async () => {
+    const existing = {
+      ...existingAutomation,
+      workspaceMode: 'existing',
+      workspaceId: 'repo-1::/tmp/orca',
+      baseBranch: null,
+      reuseSession: true
+    } satisfies Automation
+    const store = makeStore([existing])
+    const runtime = new OrcaRuntimeService(store as never)
+
+    await runtime.updateAutomation('auto-1', {
+      repo: 'repo-1',
+      workspaceMode: 'new_per_run'
+    })
+
+    expect(store.updateAutomation).toHaveBeenCalledWith(
+      'auto-1',
+      expect.objectContaining({
+        projectId: 'repo-1',
+        workspaceMode: 'new_per_run',
+        workspaceId: null,
+        reuseSession: false
+      })
+    )
+  })
+
+  it('rejects session reuse for new-per-run automations', async () => {
+    const store = makeStore()
+    const runtime = new OrcaRuntimeService(store as never)
+
+    await expect(
+      runtime.createAutomation({
+        name: 'Fresh',
+        prompt: 'Run checks',
+        agentId: 'codex',
+        repo: 'repo-1',
+        workspaceMode: 'new_per_run',
+        reuseSession: true,
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: 1
+      })
+    ).rejects.toThrow('Session reuse requires an existing workspace target.')
+    expect(store.createAutomation).not.toHaveBeenCalled()
   })
 
   it('rejects repo-only updates for existing-workspace automations', async () => {

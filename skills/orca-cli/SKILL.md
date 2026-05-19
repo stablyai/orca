@@ -174,7 +174,8 @@ orca automations list --json
 orca automations show <automationId> --json
 orca automations create --name "Daily review" --trigger daily --time 09:00 --prompt "Review open changes" --provider codex --repo id:<repoId> --json
 orca automations create --name "Weekday triage" --trigger "0 9 * * 1-5" --prompt "Triage issues" --provider claude --repo path:/abs/repo --disabled --json
-orca automations edit <automationId> --name "Weekday review" --trigger weekdays --time 09:30 --json
+orca automations create --name "Inbox digest" --trigger hourly --prompt "Summarize unread mail" --provider codex --workspace active --reuse-session --json
+orca automations edit <automationId> --name "Weekday review" --trigger weekdays --time 09:30 --fresh-session --json
 orca automations run <automationId> --json
 orca automations runs --id <automationId> --json
 orca automations remove <automationId> --json
@@ -183,6 +184,8 @@ orca automations remove <automationId> --json
 Automation schedules accept `hourly`, `daily`, `weekdays`, `weekly`, a 5-field cron expression, or an RRULE string. Use `--time <HH:MM>` with `daily`, `weekdays`, or `weekly`; use `--day <0-6>` only with `weekly`, where Sunday is `0`.
 
 Use `--repo <selector>` for a new worktree per run, or `--workspace <selector>` / `--workspace-mode existing` when the automation should run in an existing Orca worktree. `--repo` and `--workspace` are mutually exclusive.
+
+Use `--reuse-session` only for existing-workspace automations when later runs should submit into the previous live automation terminal. Use `--fresh-session` to turn reuse back off. If the previous live terminal is gone, Orca falls back to a fresh session.
 
 Why: automations are persisted through the running Orca runtime, so use the CLI instead of editing automation storage files directly. Prefer `--disabled` when creating an automation during tests or setup so it cannot run before the user reviews it.
 

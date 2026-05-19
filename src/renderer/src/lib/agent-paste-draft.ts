@@ -2,7 +2,11 @@ import type { TuiAgent } from '../../../shared/types'
 import { TUI_AGENT_CONFIG, type DraftPasteReadySignal } from '../../../shared/tui-agent-config'
 import { useAppStore } from '@/store'
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-dispatcher'
-import { isRemoteRuntimePtyId, sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
+import {
+  isRemoteRuntimePtyId,
+  sendRuntimePtyInput,
+  sendRuntimePtyInputVerified
+} from '@/runtime/runtime-terminal-inspection'
 import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
 
 // Why: bracketed paste markers let modern TUIs (Claude Code / Codex / Pi /
@@ -97,6 +101,23 @@ export async function pasteDraftWhenAgentReady(args: {
     `${BRACKETED_PASTE_BEGIN}${content}${BRACKETED_PASTE_END}${submit ? '\r' : ''}`
   )
   return true
+}
+
+export async function submitPromptToAgentTab(args: {
+  tabId: string
+  content: string
+  timeoutMs?: number
+}): Promise<boolean> {
+  const { tabId, content, timeoutMs } = args
+  const ptyId = await waitForPtyId(tabId, timeoutMs ?? READINESS_TIMEOUT_MS)
+  if (!ptyId) {
+    return false
+  }
+  return await sendRuntimePtyInputVerified(
+    useAppStore.getState().settings,
+    ptyId,
+    `${BRACKETED_PASTE_BEGIN}${content}${BRACKETED_PASTE_END}\r`
+  )
 }
 
 /**

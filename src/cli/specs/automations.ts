@@ -3,7 +3,13 @@ import { GLOBAL_FLAGS } from '../args'
 
 const AUTOMATION_TARGET_FLAGS = ['repo', 'workspace', 'workspace-mode', 'base-branch']
 const AUTOMATION_SCHEDULE_FLAGS = ['trigger', 'schedule', 'time', 'day', 'timezone']
-const AUTOMATION_STATE_FLAGS = ['enabled', 'disabled', 'missed-run-grace-minutes']
+const AUTOMATION_STATE_FLAGS = [
+  'enabled',
+  'disabled',
+  'missed-run-grace-minutes',
+  'reuse-session',
+  'fresh-session'
+]
 
 export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -38,7 +44,8 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Trigger accepts hourly, daily, weekdays, weekly, a 5-field cron expression, or an RRULE string.',
       'When --repo is omitted, the CLI uses the enclosing Orca worktree when one can be resolved from cwd.',
-      'Use --workspace to run in an existing worktree; otherwise the automation creates a new worktree per run.'
+      'Use --workspace to run in an existing worktree; otherwise the automation creates a new worktree per run.',
+      'Use --reuse-session only with existing-workspace automations to submit later runs to the previous live automation session when it is still available. Use --fresh-session to disable reuse.'
     ],
     examples: [
       'orca automations create --name "Daily review" --trigger daily --prompt "Review open changes" --provider codex',

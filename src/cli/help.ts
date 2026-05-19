@@ -386,6 +386,9 @@ export function formatFlagHelp(flag: string): string {
     timezone: '--timezone <tz>       IANA timezone for the automation',
     enabled: '--enabled              Enable the automation',
     disabled: '--disabled             Disable the automation',
+    'reuse-session':
+      '--reuse-session        Reuse the previous live session for existing-workspace runs',
+    'fresh-session': '--fresh-session        Disable session reuse for future runs',
     'workspace-mode': '--workspace-mode <mode> existing or new-per-run',
     'missed-run-grace-minutes': '--missed-run-grace-minutes <n> Missed-run grace window',
     'value-stdin': '--value-stdin         Read set-value payload from stdin',

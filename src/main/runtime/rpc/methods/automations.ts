@@ -43,6 +43,7 @@ const AutomationCreate = z.object({
   workspace: OptionalString,
   workspaceMode: AutomationWorkspaceMode,
   baseBranch: OptionalPlainString,
+  reuseSession: OptionalBoolean,
   timezone: OptionalString,
   rrule: AutomationSchedule,
   dtstart: requiredNumber('Missing trigger start time'),
@@ -59,6 +60,7 @@ const AutomationUpdateFields = z.object({
   workspaceMode: AutomationWorkspaceMode,
   // Why: update patches distinguish omitted from null so callers can clear a saved base branch.
   baseBranch: OptionalNullablePlainString,
+  reuseSession: OptionalBoolean,
   timezone: OptionalString,
   rrule: AutomationSchedule.optional(),
   dtstart: requiredNumber('Missing trigger start time').optional(),
