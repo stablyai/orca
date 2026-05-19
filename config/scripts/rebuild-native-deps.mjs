@@ -41,7 +41,7 @@ if (ignoreModules.length > 0) {
 // modules inside pnpm's .pnpm/ store. Passing an explicit list of modules to
 // rebuild via `onlyModules` ensures they're recompiled against Electron's Node
 // ABI regardless of the package manager's store layout.
-const NATIVE_MODULES = ['better-sqlite3', 'node-pty', 'cpu-features']
+const NATIVE_MODULES = ['better-sqlite3', 'node-pty', 'cpu-features', 'sodium-native']
 const onlyModules = NATIVE_MODULES.filter((m) => !ignoreModules.includes(m))
 const forceRebuild = process.env.ORCA_FORCE_NATIVE_REBUILD === '1'
 

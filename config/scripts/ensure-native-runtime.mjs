@@ -11,7 +11,7 @@ const scriptPath = fileURLToPath(import.meta.url)
 const projectDir = resolve(dirname(scriptPath), '../..')
 const runtime = readRuntimeArg()
 
-const NATIVE_MODULES = ['better-sqlite3', 'node-pty']
+const NATIVE_MODULES = ['better-sqlite3', 'node-pty', 'sodium-native']
 const CHILD_CHECK_FLAG = '--check-only'
 
 if (process.argv.includes(CHILD_CHECK_FLAG)) {
