@@ -123,6 +123,27 @@ function paneKeyMatchesAnyTabPrefix(paneKey: string, tabPrefixes: string[]): boo
   return false
 }
 
+const UNCHANGED_AGENT_STATUS_UPDATE_MIN_INTERVAL_MS = 1_000
+
+function isUnchangedAgentStatusHeartbeat(
+  previous: AgentStatusEntry,
+  next: AgentStatusEntry
+): boolean {
+  return (
+    previous.state === next.state &&
+    previous.prompt === next.prompt &&
+    previous.stateStartedAt === next.stateStartedAt &&
+    previous.agentType === next.agentType &&
+    previous.paneKey === next.paneKey &&
+    previous.terminalTitle === next.terminalTitle &&
+    previous.stateHistory === next.stateHistory &&
+    previous.toolName === next.toolName &&
+    previous.toolInput === next.toolInput &&
+    previous.lastAssistantMessage === next.lastAssistantMessage &&
+    previous.interrupted === next.interrupted
+  )
+}
+
 function pruneMigrationUnsupportedEntries(
   entries: Record<string, MigrationUnsupportedPtyEntry>,
   predicate: (entry: MigrationUnsupportedPtyEntry) => boolean
@@ -284,6 +305,23 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         // status ping would churn that map reference and force spurious
         // re-renders in any subscriber selecting on it.
         const hasSuppressor = paneKey in s.retentionSuppressedPaneKeys
+        const hasMigrationUnsupportedForPaneKey = Object.values(s.migrationUnsupportedByPtyId).some(
+          (entry) => entry.paneKey === paneKey
+        )
+        // Why: Codex/Claude hook heartbeats can arrive many times per second
+        // with only `updatedAt` changed. Rewriting the whole status map for
+        // those pings wakes sidebar/runtime subscribers without changing what
+        // the user sees, so keep freshness accurate at human-scale cadence.
+        if (
+          existing &&
+          !sortRelevantChange &&
+          !hasSuppressor &&
+          !hasMigrationUnsupportedForPaneKey &&
+          updatedAt - existing.updatedAt < UNCHANGED_AGENT_STATUS_UPDATE_MIN_INTERVAL_MS &&
+          isUnchangedAgentStatusHeartbeat(existing, entry)
+        ) {
+          return s
+        }
         let nextRetentionSuppressedPaneKeys = s.retentionSuppressedPaneKeys
         if (hasSuppressor) {
           nextRetentionSuppressedPaneKeys = { ...s.retentionSuppressedPaneKeys }

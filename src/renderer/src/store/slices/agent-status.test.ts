@@ -192,6 +192,46 @@ describe('agent status tool + assistant fields', () => {
     expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
   })
 
+  it('throttles unchanged fresh same-state heartbeats to avoid status-map churn', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'p1', agentType: 'claude', toolName: 'Read' },
+        'claude',
+        { updatedAt: 1_000, stateStartedAt: 1_000 }
+      )
+    const firstMap = store.getState().agentStatusByPaneKey
+    const firstEntry = firstMap['tab-1:1']
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'p1', agentType: 'claude', toolName: 'Read' },
+        'claude',
+        { updatedAt: 1_500, stateStartedAt: 1_000 }
+      )
+
+    expect(store.getState().agentStatusByPaneKey).toBe(firstMap)
+    expect(store.getState().agentStatusByPaneKey['tab-1:1']).toBe(firstEntry)
+    expect(store.getState().agentStatusByPaneKey['tab-1:1'].updatedAt).toBe(1_000)
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'p1', agentType: 'claude', toolName: 'Read' },
+        'claude',
+        { updatedAt: 2_000, stateStartedAt: 1_000 }
+      )
+
+    expect(store.getState().agentStatusByPaneKey).not.toBe(firstMap)
+    expect(store.getState().agentStatusByPaneKey['tab-1:1'].updatedAt).toBe(2_000)
+  })
+
   it('bumps global epochs when a stale same-state entry refreshes', () => {
     vi.useFakeTimers()
     const store = createTestStore()
