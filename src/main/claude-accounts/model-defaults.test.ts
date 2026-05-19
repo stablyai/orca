@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { getDefaultModelMapping, getDefaultBaseUrl } from './model-defaults'
+import {
+  getBedrockDefaults,
+  getDefaultBaseUrl,
+  getDefaultModelMapping,
+  getVertexDefaults
+} from './model-defaults'
 
 describe('getDefaultModelMapping', () => {
   it('returns Anthropic IDs for anthropic-api-key', () => {
@@ -85,5 +90,25 @@ describe('getDefaultBaseUrl', () => {
 
   it('returns null for custom preset', () => {
     expect(getDefaultBaseUrl('custom')).toBeNull()
+  })
+})
+
+describe('getBedrockDefaults', () => {
+  it('returns unprefixed Bedrock model ids', () => {
+    expect(getBedrockDefaults()).toEqual({
+      opus: 'anthropic.claude-opus-4-7',
+      sonnet: 'anthropic.claude-sonnet-4-6',
+      haiku: 'anthropic.claude-haiku-4-5-20251001-v1:0'
+    })
+  })
+})
+
+describe('getVertexDefaults', () => {
+  it('returns Vertex model ids', () => {
+    expect(getVertexDefaults()).toEqual({
+      opus: 'claude-opus-4-7',
+      sonnet: 'claude-sonnet-4-6',
+      haiku: 'claude-haiku-4-5@20251001'
+    })
   })
 })

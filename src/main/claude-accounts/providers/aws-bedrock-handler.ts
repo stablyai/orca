@@ -4,6 +4,7 @@ import {
   readManagedClaudeKeychainCredentials,
   writeManagedClaudeKeychainCredentials
 } from '../keychain'
+import { getBedrockDefaults } from '../model-defaults'
 import { deriveInferenceProfilePrefix } from './inference-profile'
 import type { ProviderHandler } from './types'
 import type { ClaudeManagedAccount, ClaudeModelMapping } from '../../../shared/types'
@@ -15,20 +16,13 @@ type BedrockProviderConfig = {
   inferenceProfilePrefix?: string
 }
 
-// Unprefixed Bedrock model ids. Geographic inference-profile prefix
-// (e.g. `us.`) is applied at materialize time. The handler intentionally
-// keeps this constant local; P3 Task 9 hoists it to `model-defaults.ts`.
-const BEDROCK_DEFAULTS: Required<ClaudeModelMapping> = {
-  opus: 'anthropic.claude-opus-4-7',
-  sonnet: 'anthropic.claude-sonnet-4-6',
-  haiku: 'anthropic.claude-haiku-4-5-20251001-v1:0'
-}
-
 function emitModelEnv(account: ClaudeManagedAccount, prefix: string): Record<string, string> {
-  const merged: ClaudeModelMapping = { ...BEDROCK_DEFAULTS, ...account.modelMapping }
+  // Why: the registry holds unprefixed Bedrock ids. The cross-region
+  // inference-profile prefix (e.g. `us.`) is a region-derived band rather
+  // than a model identifier, so we concatenate it here at materialize time
+  // instead of baking it into the registry value.
+  const merged: ClaudeModelMapping = { ...getBedrockDefaults(), ...account.modelMapping }
   const env: Record<string, string> = {}
-  // Apply prefix to whichever id is in play (default OR override). The prefix
-  // is the cross-region inference-profile band, not a model identifier change.
   if (merged.opus) env.ANTHROPIC_DEFAULT_OPUS_MODEL = `${prefix}${merged.opus}`
   if (merged.sonnet) env.ANTHROPIC_DEFAULT_SONNET_MODEL = `${prefix}${merged.sonnet}`
   if (merged.haiku) env.ANTHROPIC_DEFAULT_HAIKU_MODEL = `${prefix}${merged.haiku}`

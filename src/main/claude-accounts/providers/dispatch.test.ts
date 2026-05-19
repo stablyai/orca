@@ -22,3 +22,12 @@ describe('handlerFor', () => {
     expect(() => handlerFor('unknown')).toThrow(/no provider handler/i)
   })
 })
+
+describe('handlerFor (P3)', () => {
+  it('returns the AWS Bedrock handler for "aws-bedrock"', () => {
+    expect(handlerFor('aws-bedrock').authMethod).toBe('aws-bedrock')
+  })
+  it('returns the Google Vertex handler for "google-vertex"', () => {
+    expect(handlerFor('google-vertex').authMethod).toBe('google-vertex')
+  })
+})

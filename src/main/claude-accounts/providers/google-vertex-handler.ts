@@ -1,5 +1,6 @@
 import { execFile as _execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { getVertexDefaults } from '../model-defaults'
 import type { ProviderHandler } from './types'
 import type { ClaudeModelMapping } from '../../../shared/types'
 
@@ -8,14 +9,6 @@ const execFile = promisify(_execFile)
 type VertexProviderConfig = {
   projectId?: string
   region?: string
-}
-
-// Vertex AI model ids use `@`-versioned suffixes (vs. Bedrock's `-v1:0`).
-// Kept local to the handler; P3 Task 9 hoists these into `model-defaults.ts`.
-const VERTEX_DEFAULTS: Required<ClaudeModelMapping> = {
-  opus: 'claude-opus-4-7',
-  sonnet: 'claude-sonnet-4-6',
-  haiku: 'claude-haiku-4-5@20251001'
 }
 
 export function createGoogleVertexHandler(): ProviderHandler {
@@ -50,7 +43,7 @@ export function createGoogleVertexHandler(): ProviderHandler {
       // ADC-only: we emit env switches but no token. Claude CLI invokes gcloud
       // ADC at launch; the user must have run `gcloud auth application-default
       // login`. Per-account modelMapping overrides shadow the registry defaults.
-      const merged: Required<ClaudeModelMapping> = { ...VERTEX_DEFAULTS, ...account.modelMapping }
+      const merged: Required<ClaudeModelMapping> = { ...getVertexDefaults(), ...account.modelMapping }
       return {
         envPatch: {
           CLAUDE_CODE_USE_VERTEX: '1',
