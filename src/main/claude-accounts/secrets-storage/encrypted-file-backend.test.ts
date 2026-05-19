@@ -109,3 +109,65 @@ describe('encrypted-file-backend', () => {
     await expect(b.read('svc', 'acct')).rejects.toThrow(/passphrase/i)
   })
 })
+
+// Why: separate suite that exercises the full real-libsodium stack across
+// fresh backend instances. The cases above run on a single in-memory backend
+// per test; here we close one backend, open a new one against the same file,
+// and verify the on-disk format survives the round-trip — the contract
+// production cares about across app restarts. (P4 Task 20)
+describe('encrypted-file-backend — real libsodium round-trip', () => {
+  it('persists across backend recreation with the same passphrase', async () => {
+    const holderA = createPassphraseHolder()
+    holderA.set('hunter2')
+    const a = createEncryptedFileBackend({
+      filePath: path,
+      holder: holderA,
+      promptForPassphrase: async () => 'hunter2'
+    })
+    await a.write('svc', 'acct', 'sk-ant-persist')
+
+    const holderB = createPassphraseHolder()
+    holderB.set('hunter2')
+    const b = createEncryptedFileBackend({
+      filePath: path,
+      holder: holderB,
+      promptForPassphrase: async () => 'hunter2'
+    })
+    expect(await b.read('svc', 'acct')).toBe('sk-ant-persist')
+  })
+
+  it('fails to decrypt with wrong passphrase across reopens', async () => {
+    const ha = createPassphraseHolder()
+    ha.set('right-pass')
+    const a = createEncryptedFileBackend({
+      filePath: path,
+      holder: ha,
+      promptForPassphrase: async () => 'right-pass'
+    })
+    await a.write('svc', 'acct', 'val')
+
+    const hb = createPassphraseHolder()
+    hb.set('wrong-pass')
+    const b = createEncryptedFileBackend({
+      filePath: path,
+      holder: hb,
+      promptForPassphrase: async () => 'wrong-pass'
+    })
+    await expect(b.read('svc', 'acct')).rejects.toThrow(/decrypt|verif/i)
+  })
+
+  it('file on disk has mode 0600 on POSIX', async () => {
+    const h = createPassphraseHolder()
+    h.set('p')
+    const b = createEncryptedFileBackend({
+      filePath: path,
+      holder: h,
+      promptForPassphrase: async () => 'p'
+    })
+    await b.write('s', 'a', 'v')
+    if (process.platform !== 'win32') {
+      const { statSync } = await import('node:fs')
+      expect(statSync(path).mode & 0o777).toBe(0o600)
+    }
+  })
+})
