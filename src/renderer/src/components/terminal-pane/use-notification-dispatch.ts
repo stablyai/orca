@@ -22,6 +22,28 @@ function hasLivePtyForWorktree(
   return tabs.some((tab) => (state.ptyIdsByTabId[tab.id] ?? []).length > 0)
 }
 
+function hasLivePtyForPaneKey(
+  state: ReturnType<typeof useAppStore.getState>,
+  paneKey: string | undefined
+): boolean {
+  if (!paneKey) {
+    return false
+  }
+  const tabId = getPaneKeyTabId(paneKey)
+  return tabId !== null && (state.ptyIdsByTabId[tabId] ?? []).length > 0
+}
+
+function hasLivePtyForNotification(
+  state: ReturnType<typeof useAppStore.getState>,
+  worktreeId: string,
+  paneKey: string | undefined
+): boolean {
+  // Why: inactive-worktree hook completions can arrive while the worktree tab
+  // list is between renderer hydration states; the pane-key PTY binding is the
+  // live terminal source in that path.
+  return hasLivePtyForWorktree(state, worktreeId) || hasLivePtyForPaneKey(state, paneKey)
+}
+
 function getPaneKeyTabId(paneKey: string): string | null {
   const parsed = parsePaneKey(paneKey)
   if (parsed) {
@@ -132,7 +154,7 @@ export function dispatchTerminalNotification(
   // state. Checking for live PTYs at dispatch time catches ALL phantom
   // notification sources regardless of which timer or callback produced
   // them, rather than trying to cancel each one individually.
-  if (!hasLivePtyForWorktree(state, worktreeId)) {
+  if (!hasLivePtyForNotification(state, worktreeId, event.paneKey)) {
     return
   }
 

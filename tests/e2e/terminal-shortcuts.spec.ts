@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Terminal shortcut E2E keeps platform keyboard paths beside their shared PTY assertions. */
 /**
  * E2E test for terminal keyboard shortcuts.
  *
@@ -98,10 +99,24 @@ async function enableKittyKeyboardReporting(page: Page, flags: number): Promise<
 async function pressShiftedRussianLayoutKey(page: Page): Promise<{
   keydownDefaultPrevented: boolean
   keypressSent: boolean
+  inputSent: boolean
   keyupSent: boolean
 }> {
   return page.evaluate(() => {
-    const textarea = document.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null
+    const state = window.__store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId =
+      state?.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    pane?.terminal.focus()
+    const textarea = pane?.container.querySelector(
+      '.xterm-helper-textarea'
+    ) as HTMLTextAreaElement | null
     if (!textarea) {
       throw new Error('No xterm helper textarea to receive keyboard input')
     }
@@ -119,7 +134,12 @@ async function pressShiftedRussianLayoutKey(page: Page): Promise<{
     textarea.dispatchEvent(keydown)
 
     if (keydown.defaultPrevented) {
-      return { keydownDefaultPrevented: true, keypressSent: false, keyupSent: false }
+      return {
+        keydownDefaultPrevented: true,
+        keypressSent: false,
+        inputSent: false,
+        keyupSent: false
+      }
     }
 
     const keypress = new KeyboardEvent('keypress', {
@@ -134,6 +154,17 @@ async function pressShiftedRussianLayoutKey(page: Page): Promise<{
     Object.defineProperty(keypress, 'which', { get: () => 1060 })
     textarea.dispatchEvent(keypress)
 
+    // Why: Chromium on Linux can surface layout text through the `input` event
+    // even when an untrusted synthetic keypress does not carry a usable charCode.
+    const input = new InputEvent('input', {
+      data: 'Ф',
+      inputType: 'insertText',
+      bubbles: true,
+      cancelable: false,
+      composed: false
+    })
+    textarea.dispatchEvent(input)
+
     const keyup = new KeyboardEvent('keyup', {
       key: 'Ф',
       code: 'KeyA',
@@ -145,7 +176,7 @@ async function pressShiftedRussianLayoutKey(page: Page): Promise<{
     Object.defineProperty(keyup, 'which', { get: () => 65 })
     textarea.dispatchEvent(keyup)
 
-    return { keydownDefaultPrevented: false, keypressSent: true, keyupSent: true }
+    return { keydownDefaultPrevented: false, keypressSent: true, inputSent: true, keyupSent: true }
   })
 }
 
@@ -360,6 +391,7 @@ test.describe('Terminal Shortcuts', () => {
     expect(dispatch).toEqual({
       keydownDefaultPrevented: false,
       keypressSent: true,
+      inputSent: true,
       keyupSent: true
     })
     await expect
