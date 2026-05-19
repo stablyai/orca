@@ -16,6 +16,15 @@ export type ModelMappingEditorProps = {
   // omitted the <details> defaults to closed.
   open?: boolean
   onToggleOpen?: (open: boolean) => void
+  // P3 T19 — Refresh defaults timestamp + button. Optional so legacy call
+  // sites keep working unchanged (no row rendered when omitted).
+  defaultsFetchedAt?: number | null
+  onRefreshDefaults?: () => void
+  // P3 T19 — Parent-controlled "refresh in flight" flag so the button can be
+  // disabled while the IPC roundtrip is pending.
+  refreshing?: boolean
+  // P3 T19 — Override the clock for deterministic tests. Defaults to `Date.now()`.
+  nowMs?: number
 }
 
 /**
@@ -42,6 +51,26 @@ export function setMappingTier(
   return next
 }
 
+/**
+ * Format an age-in-ms as a compact relative string.
+ *
+ * Why: the registry timestamp surfaces in ModelMappingEditor as "Defaults
+ * updated Nd ago" / "Nh ago" / "Nm ago" / "just now". Pure helper so tests
+ * can pin the clock without rendering the component, and so the rendering
+ * code stays free of date math. Negative deltas (clock skew) clamp to
+ * "just now" rather than rendering a nonsense negative duration.
+ */
+export function formatRelativeAge(ageMs: number): string {
+  if (ageMs < 0) return 'just now'
+  const minutes = Math.floor(ageMs / 60_000)
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
+}
+
 function tierLabel(tier: Tier): string {
   return tier.charAt(0).toUpperCase() + tier.slice(1)
 }
@@ -62,6 +91,15 @@ export function ModelMappingEditor(props: ModelMappingEditorProps): React.JSX.El
     props.onChange(setMappingTier(props.mapping, tier, undefined))
   }
 
+  // P3 T19 — render the defaults source row only when the parent opts in by
+  // wiring `onRefreshDefaults`. Keeps the legacy zero-prop render byte-stable.
+  const showRefreshRow = typeof props.onRefreshDefaults === 'function'
+  const now = props.nowMs ?? Date.now()
+  const defaultsLabel =
+    props.defaultsFetchedAt == null
+      ? 'Defaults: built-in'
+      : `Defaults updated ${formatRelativeAge(now - props.defaultsFetchedAt)}`
+
   return (
     <details
       open={props.open}
@@ -74,6 +112,21 @@ export function ModelMappingEditor(props: ModelMappingEditorProps): React.JSX.El
         Model mapping (advanced)
       </summary>
       <div className="px-3 py-2 space-y-3">
+        {showRefreshRow ? (
+          <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+            <span>{defaultsLabel}</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-label="Refresh defaults"
+              disabled={props.refreshing === true}
+              onClick={() => props.onRefreshDefaults?.()}
+            >
+              {props.refreshing === true ? 'Refreshing…' : 'Refresh defaults'}
+            </Button>
+          </div>
+        ) : null}
         {TIERS.map((tier) => {
           const userValue = props.mapping[tier]
           const defaultValue = props.defaults[tier] ?? ''

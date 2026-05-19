@@ -2,7 +2,11 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { ClaudeModelMapping } from '../../../../shared/types'
-import { ModelMappingEditor, setMappingTier } from './ModelMappingEditor'
+import {
+  ModelMappingEditor,
+  formatRelativeAge,
+  setMappingTier
+} from './ModelMappingEditor'
 
 type ReactElementLike = {
   type: unknown
@@ -94,6 +98,10 @@ function renderEditor(
     onChange: (next: ClaudeModelMapping) => void
     open: boolean
     onToggleOpen: (open: boolean) => void
+    defaultsFetchedAt: number | null
+    onRefreshDefaults: () => void
+    refreshing: boolean
+    nowMs: number
   }> = {}
 ): React.ReactElement {
   return ModelMappingEditor({
@@ -101,7 +109,11 @@ function renderEditor(
     defaults: overrides.defaults ?? DEFAULTS,
     onChange: overrides.onChange ?? (() => {}),
     open: overrides.open,
-    onToggleOpen: overrides.onToggleOpen
+    onToggleOpen: overrides.onToggleOpen,
+    defaultsFetchedAt: overrides.defaultsFetchedAt,
+    onRefreshDefaults: overrides.onRefreshDefaults,
+    refreshing: overrides.refreshing,
+    nowMs: overrides.nowMs
   })
 }
 
@@ -305,5 +317,91 @@ describe('ModelMappingEditor — collapsible <details>', () => {
     const summaries = findAllByType(tree, 'summary')
     const text = summaries.map(collectText).join(' ')
     expect(text.toLowerCase()).toMatch(/model mapping/)
+  })
+})
+
+describe('formatRelativeAge (pure helper)', () => {
+  it('returns "just now" for <1m old', () => {
+    expect(formatRelativeAge(0)).toMatch(/just now/i)
+    expect(formatRelativeAge(45_000)).toMatch(/just now/i)
+  })
+
+  it('returns "Nm ago" for minutes', () => {
+    expect(formatRelativeAge(2 * 60_000)).toBe('2m ago')
+    expect(formatRelativeAge(59 * 60_000)).toBe('59m ago')
+  })
+
+  it('returns "Nh ago" for hours', () => {
+    expect(formatRelativeAge(60 * 60_000)).toBe('1h ago')
+    expect(formatRelativeAge(23 * 60 * 60_000)).toBe('23h ago')
+  })
+
+  it('returns "Nd ago" for days', () => {
+    expect(formatRelativeAge(24 * 60 * 60_000)).toBe('1d ago')
+    expect(formatRelativeAge(2 * 24 * 60 * 60_000)).toBe('2d ago')
+    expect(formatRelativeAge(45 * 24 * 60 * 60_000)).toBe('45d ago')
+  })
+
+  it('clamps negative deltas to "just now" (clock skew)', () => {
+    expect(formatRelativeAge(-1000)).toMatch(/just now/i)
+  })
+})
+
+describe('ModelMappingEditor — refresh defaults (P3 T19)', () => {
+  it('shows "Defaults updated 2d ago" when fetchedAt is 2 days old', () => {
+    const now = Date.now()
+    const twoDaysAgo = now - 2 * 86400 * 1000
+    const tree = renderEditor({
+      defaultsFetchedAt: twoDaysAgo,
+      onRefreshDefaults: vi.fn(),
+      nowMs: now
+    })
+    const markup = renderToStaticMarkup(tree)
+    expect(markup).toMatch(/defaults updated 2d ago/i)
+  })
+
+  it('shows "Defaults: built-in" when fetchedAt is null', () => {
+    const tree = renderEditor({
+      defaultsFetchedAt: null,
+      onRefreshDefaults: vi.fn()
+    })
+    const markup = renderToStaticMarkup(tree)
+    expect(markup).toMatch(/built-in/i)
+  })
+
+  it('does not render the refresh row when onRefreshDefaults is omitted', () => {
+    // Backwards compat: existing consumers that don't pass the new props
+    // should see the original editor unchanged.
+    const tree = renderEditor()
+    const refreshBtn = findByAriaLabel(tree, /refresh defaults/i)
+    expect(refreshBtn).toBeNull()
+  })
+
+  it('renders a "Refresh defaults" button when onRefreshDefaults is provided', () => {
+    const tree = renderEditor({ onRefreshDefaults: vi.fn() })
+    const btn = findByAriaLabel(tree, /refresh defaults/i)
+    expect(btn).not.toBeNull()
+  })
+
+  it('Refresh defaults button click calls onRefreshDefaults', () => {
+    const onRefresh = vi.fn()
+    const tree = renderEditor({
+      defaultsFetchedAt: Date.now(),
+      onRefreshDefaults: onRefresh
+    })
+    const btn = findByAriaLabel(tree, /refresh defaults/i)
+    expect(btn).not.toBeNull()
+    ;(btn?.props.onClick as () => void)()
+    expect(onRefresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('Refresh defaults button is disabled while refreshing is true', () => {
+    const tree = renderEditor({
+      defaultsFetchedAt: Date.now(),
+      onRefreshDefaults: vi.fn(),
+      refreshing: true
+    })
+    const btn = findByAriaLabel(tree, /refresh defaults/i)
+    expect(btn?.props.disabled).toBe(true)
   })
 })
