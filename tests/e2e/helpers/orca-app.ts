@@ -191,6 +191,11 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
               closedAt: 1,
               outcome: 'completed',
               lastCompletedStep: 4
+            },
+            ui: {
+              // Why: unrelated E2Es start from a completed-onboarding profile;
+              // seed first-run feature education too so modals do not cover UI.
+              featureTipsSeenIds: ['voice-dictation']
             }
           },
           null,
