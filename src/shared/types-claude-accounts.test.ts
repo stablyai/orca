@@ -41,3 +41,26 @@ describe('ClaudeAuthCredentials', () => {
     expectTypeOf(account.credentials).toMatchTypeOf<ClaudeAuthCredentials>()
   })
 })
+
+describe('ClaudeAuthCredentials — azure-foundry variant (P2)', () => {
+  it('azure-foundry requires resource, useEntraId optional', () => {
+    const c: ClaudeAuthCredentials = {
+      authMethod: 'azure-foundry',
+      resource: 'my-resource',
+      useEntraId: false,
+    }
+    expectTypeOf(c).toMatchTypeOf<{
+      authMethod: 'azure-foundry'
+      resource: string
+      useEntraId?: boolean
+    }>()
+  })
+
+  it('azure-foundry can omit useEntraId (defaults to API key path semantically)', () => {
+    const c: ClaudeAuthCredentials = {
+      authMethod: 'azure-foundry',
+      resource: 'r',
+    }
+    expectTypeOf(c).toMatchTypeOf<{ authMethod: 'azure-foundry'; resource: string }>()
+  })
+})

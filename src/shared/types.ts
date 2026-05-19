@@ -1247,6 +1247,7 @@ export type ClaudeAuthCredentials =
   | { authMethod: 'subscription-oauth' }
   | { authMethod: 'anthropic-api-key' }
   | { authMethod: 'anthropic-compat'; baseUrl: string; preset: AnthropicCompatPreset }
+  | { authMethod: 'azure-foundry'; resource: string; useEntraId?: boolean }
   | { authMethod: 'unknown' }
 
 export type ClaudeAuthMethod = ClaudeAuthCredentials['authMethod']
