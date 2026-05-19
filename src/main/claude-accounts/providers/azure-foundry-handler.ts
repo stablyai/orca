@@ -3,6 +3,7 @@ import {
   writeManagedClaudeKeychainCredentials
 } from '../keychain'
 import { getDefaultModelMapping } from '../model-defaults'
+import { detectAzureEntraIdSignIn } from './azure-cli'
 import type { ProviderHandler } from './types'
 import type { ClaudeManagedAccount, ClaudeModelMapping } from '../../../shared/types'
 
@@ -32,7 +33,16 @@ export function createAzureFoundryHandler(): ProviderHandler {
         throw new Error('Azure Foundry resource name is required.')
       }
       const useEntraId = cfg.useEntraId === true
-      if (!useEntraId) {
+      if (useEntraId) {
+        const detection = await detectAzureEntraIdSignIn()
+        if (!detection.ok) {
+          if (detection.reason === 'az-not-installed') {
+            throw new Error('Azure CLI (`az`) is not installed. Install it from https://aka.ms/install-azure-cli and try again.')
+          }
+          throw new Error('Not signed in to Azure. Run `az login` and try again.')
+        }
+        // No keychain write — Claude Code uses Entra ID via az's local token cache at launch
+      } else {
         const key = input.secretFromUser?.trim()
         if (!key) {
           throw new Error('Azure Foundry API key is required when not using Entra ID.')
