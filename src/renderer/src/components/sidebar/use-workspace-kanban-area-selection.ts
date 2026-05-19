@@ -45,6 +45,18 @@ type UseWorkspaceKanbanAreaSelectionParams = {
 
 const AREA_SELECTION_DRAG_THRESHOLD = 4
 
+export function shouldCommitWorkspaceKanbanAreaSelection({
+  additive,
+  started
+}: {
+  additive: boolean
+  started: boolean
+}): boolean {
+  // Why: a plain click on empty board space is the user's "click off" gesture;
+  // modifier-clicking empty space should not accidentally drop a selected batch.
+  return started || !additive
+}
+
 export function useWorkspaceKanbanAreaSelection({
   open,
   boardRef,
@@ -154,7 +166,7 @@ export function useWorkspaceKanbanAreaSelection({
         state.frameId = null
       }
       flushAreaSelectionDrag()
-      if (state.started) {
+      if (shouldCommitWorkspaceKanbanAreaSelection(state)) {
         updateSelectionForAreaRef.current(
           state.finalAreaIds,
           state.additive,

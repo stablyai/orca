@@ -4,6 +4,7 @@ export const CARD_SELECTOR = '[data-workspace-board-card-id]'
 export const STATUS_DROP_TARGET = '[data-workspace-status-drop-target]'
 export const PIN_DROP_TARGET = '[data-workspace-pin-drop-target]'
 
+const STATUS_DROP_GAP_TOLERANCE_PX = 24
 const POINTER_CARD_DRAGGING_ATTR = 'data-workspace-board-card-pointer-dragging'
 const POINTER_DRAG_CARD_ATTR = 'data-workspace-board-card-drag-card'
 const POINTER_DRAG_COUNT_ATTR = 'data-workspace-board-card-drag-count'
@@ -23,6 +24,60 @@ type DragPreviewState = {
   previewOffsetY: number
 }
 
+export type WorkspaceKanbanStatusDropRect = {
+  status: WorkspaceStatus
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+export function resolveWorkspaceStatusDropTargetFromRects(
+  rects: readonly WorkspaceKanbanStatusDropRect[],
+  x: number,
+  y: number,
+  gapTolerance = STATUS_DROP_GAP_TOLERANCE_PX
+): WorkspaceStatus | null {
+  let nearest: { status: WorkspaceStatus; distance: number } | null = null
+
+  for (const rect of rects) {
+    if (y < rect.top || y > rect.bottom) {
+      continue
+    }
+    if (x >= rect.left && x <= rect.right) {
+      return rect.status
+    }
+    const distance = x < rect.left ? rect.left - x : x - rect.right
+    if (distance > gapTolerance) {
+      continue
+    }
+    if (!nearest || distance < nearest.distance) {
+      nearest = { status: rect.status, distance }
+    }
+  }
+
+  return nearest?.status ?? null
+}
+
+function getStatusDropTargetRects(board: HTMLElement): WorkspaceKanbanStatusDropRect[] {
+  return Array.from(board.querySelectorAll<HTMLElement>(STATUS_DROP_TARGET)).flatMap((element) => {
+    const status = element.dataset.workspaceStatus
+    if (!status) {
+      return []
+    }
+    const rect = element.getBoundingClientRect()
+    return [
+      {
+        status,
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom
+      }
+    ]
+  })
+}
+
 export function getDropTarget(
   board: HTMLElement,
   x: number,
@@ -39,11 +94,16 @@ export function getDropTarget(
   }
 
   const statusTarget = target.closest<HTMLElement>(STATUS_DROP_TARGET)
+  const directStatus =
+    statusTarget && board.contains(statusTarget)
+      ? (statusTarget.dataset.workspaceStatus ?? null)
+      : null
   return {
+    // Why: dropping in the visual gap between lanes should still land in the
+    // nearest lane. Without this fallback, otherwise-valid drags appeared flaky.
     status:
-      statusTarget && board.contains(statusTarget)
-        ? (statusTarget.dataset.workspaceStatus ?? null)
-        : null,
+      directStatus ??
+      resolveWorkspaceStatusDropTargetFromRects(getStatusDropTargetRects(board), x, y),
     isPinDrop: false
   }
 }

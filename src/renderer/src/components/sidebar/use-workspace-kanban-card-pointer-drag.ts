@@ -39,6 +39,17 @@ type UseWorkspaceKanbanCardPointerDragParams = {
   onPinDragTargetChange: (isOver: boolean) => void
 }
 
+export function shouldStartWorkspaceKanbanCardPointerDrag(
+  event: Pick<PointerEvent, 'button' | 'pointerType' | 'shiftKey' | 'metaKey' | 'ctrlKey'>
+): boolean {
+  if (event.button !== 0 || event.pointerType === 'touch') {
+    return false
+  }
+  // Why: modifier gestures are reserved for selection/context-menu intent.
+  // Letting tiny pointer drift start a drag makes Cmd/Ctrl/Shift selection flaky.
+  return !event.shiftKey && !event.metaKey && !event.ctrlKey
+}
+
 function shouldIgnorePointerDown(target: EventTarget | null, card: HTMLElement): boolean {
   if (!(target instanceof Element)) {
     return false
@@ -185,7 +196,9 @@ export function useWorkspaceKanbanCardPointerDrag({
       }
       state.currentX = event.clientX
       state.currentY = event.clientY
-      event.preventDefault()
+      if (state.started) {
+        event.preventDefault()
+      }
       stopPointerDrag(true)
     }
 
@@ -217,7 +230,7 @@ export function useWorkspaceKanbanCardPointerDrag({
 
   const onCardPointerDownCapture = useCallback(
     (event: React.PointerEvent<HTMLElement>) => {
-      if (!open || event.button !== 0 || event.pointerType === 'touch') {
+      if (!open || !shouldStartWorkspaceKanbanCardPointerDrag(event.nativeEvent)) {
         return
       }
       const target = event.target

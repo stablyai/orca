@@ -37,7 +37,6 @@ export function shouldIgnoreAreaSelectionStart(target: EventTarget | null): bool
     target.closest(
       [
         '[data-workspace-board-card-id]',
-        '[data-workspace-pin-drop-target]',
         'a',
         'button',
         'input',

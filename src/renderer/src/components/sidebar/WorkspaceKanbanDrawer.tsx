@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: the board drawer owns shared board state, drag/drop, and settings callbacks that need one coordinated surface. */
-import React, { useCallback, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useAllWorktrees, useRepoMap } from '@/store/selectors'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
@@ -88,6 +88,7 @@ export default function WorkspaceKanbanDrawer({
     selectionAnchorId,
     updateSelectionForGesture,
     updateSelectionForArea,
+    clearSelection,
     selectForContextMenu
   } = useWorkspaceKanbanSelection(open, boardWorktrees)
   const { handleAreaSelectionPointerDown } = useWorkspaceKanbanAreaSelection({
@@ -317,6 +318,29 @@ export default function WorkspaceKanbanDrawer({
 
   useWorkspaceKanbanShiftWheelScroll(boardRef, laneScrollerRef, open, isPointerDragActiveRef)
   useWorkspaceKanbanOutsideDismiss({ open, boardRef, preserveOpenForMenu, onOpenChange })
+
+  useEffect(() => {
+    if (!open || selectedWorktreeIds.size === 0) {
+      return
+    }
+
+    const clearSelectionOutsideBoard = (event: PointerEvent): void => {
+      const content = boardRef.current?.closest<HTMLElement>('[data-slot="sheet-content"]')
+      const target = event.target
+      if (target instanceof Node && content?.contains(target)) {
+        return
+      }
+      if (isWorkspaceBoardKeepOpenTarget(target)) {
+        return
+      }
+      clearSelection()
+    }
+
+    // Why: clicks in the sidebar are outside the companion board but do not
+    // close it; they still need to behave like "click off" for board selection.
+    document.addEventListener('pointerdown', clearSelectionOutsideBoard, true)
+    return () => document.removeEventListener('pointerdown', clearSelectionOutsideBoard, true)
+  }, [clearSelection, open, selectedWorktreeIds.size])
 
   const opacityPercent = Math.round(workspaceBoardOpacity * 100)
   const drawerLeft = sidebarOpen ? sidebarWidth : 0

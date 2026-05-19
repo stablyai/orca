@@ -118,4 +118,17 @@ describe('worktree multi selection', () => {
     expect([...result.selectedIds]).toEqual(['wt-2'])
     expect(result.anchorId).toBe('wt-2')
   })
+
+  it('clears the existing batch for an empty non-additive area', () => {
+    const result = updateWorktreeAreaSelection({
+      visibleIds,
+      previousSelectedIds: new Set(['wt-2', 'wt-3']),
+      previousAnchorId: 'wt-2',
+      areaIds: [],
+      additive: false
+    })
+
+    expect([...result.selectedIds]).toEqual([])
+    expect(result.anchorId).toBeNull()
+  })
 })
