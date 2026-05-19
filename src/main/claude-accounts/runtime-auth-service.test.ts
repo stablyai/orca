@@ -3419,4 +3419,95 @@ describe('ClaudeRuntimeAuthService', () => {
       })
     })
   })
+
+  describe('prepareForClaudeLaunch — worktree-scoped resolver (P2)', () => {
+    // Why: P2 Task 12. The runtime auth service grows an optional worktreeId
+    // parameter that, when present, lets the workspace-resolver pick an
+    // override account distinct from the global default. No-arg call must keep
+    // the legacy behavior so existing callers stay correct.
+    it('uses the per-worktree override when present', async () => {
+      const oauthCreds = createClaudeCredentialsJson('user@example.com', 'global-token')
+      const oauthAuthPath = createManagedClaudeAuth(
+        testState.userDataDir,
+        'global-A',
+        oauthCreds
+      )
+      const apiKeyAuthPath = join(testState.userDataDir, 'claude-accounts', 'ws-B', 'auth')
+      mkdirSync(apiKeyAuthPath, { recursive: true })
+      writeFileSync(join(apiKeyAuthPath, '.orca-managed-claude-auth'), 'ws-B\n', 'utf-8')
+      testState.managedKeychainCredentials.set('ws-B', 'sk-ant-worktree-override')
+
+      const settings = createSettings({
+        activeClaudeManagedAccountId: 'global-A',
+        claudeAccountIdByWorkspace: { 'r::/wt1': 'ws-B' },
+        claudeManagedAccounts: [
+          createClaudeAccount('global-A', oauthAuthPath),
+          createClaudeAccount('ws-B', apiKeyAuthPath, {
+            authMethod: 'anthropic-api-key',
+            credentials: { authMethod: 'anthropic-api-key' },
+            email: 'ws-b@example.com'
+          })
+        ]
+      })
+      const store = createStore(settings)
+
+      const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+      const service = new ClaudeRuntimeAuthService(store as never)
+      const preparation = await service.prepareForClaudeLaunch('r::/wt1')
+
+      // ws-B is the non-OAuth override account — materialization carries its
+      // API key, and the OAuth-only CLAUDE_CONFIG_DIR patch is suppressed.
+      expect(preparation.materialization?.envPatch).toMatchObject({
+        ANTHROPIC_API_KEY: 'sk-ant-worktree-override'
+      })
+      expect(preparation.materialization?.configDirPath).toBeUndefined()
+      expect(preparation.provenance).toBe('managed:ws-B')
+    })
+
+    it('falls back to the global default when no override', async () => {
+      const oauthCreds = createClaudeCredentialsJson('user@example.com', 'global-token')
+      const oauthAuthPath = createManagedClaudeAuth(
+        testState.userDataDir,
+        'global-A',
+        oauthCreds
+      )
+      const settings = createSettings({
+        activeClaudeManagedAccountId: 'global-A',
+        claudeAccountIdByWorkspace: {},
+        claudeManagedAccounts: [createClaudeAccount('global-A', oauthAuthPath)]
+      })
+      const store = createStore(settings)
+
+      const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+      const service = new ClaudeRuntimeAuthService(store as never)
+      const preparation = await service.prepareForClaudeLaunch('r::/wt1')
+
+      // OAuth path: no materialization, provenance points at the global default.
+      expect(preparation.provenance).toBe('managed:global-A')
+      expect(preparation.stripAuthEnv).toBe(true)
+      expect(preparation.materialization).toBeUndefined()
+    })
+
+    it('preserves no-arg call signature (legacy callers)', async () => {
+      const oauthCreds = createClaudeCredentialsJson('user@example.com', 'global-token')
+      const oauthAuthPath = createManagedClaudeAuth(
+        testState.userDataDir,
+        'global-A',
+        oauthCreds
+      )
+      const settings = createSettings({
+        activeClaudeManagedAccountId: 'global-A',
+        claudeManagedAccounts: [createClaudeAccount('global-A', oauthAuthPath)]
+      })
+      const store = createStore(settings)
+
+      const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+      const service = new ClaudeRuntimeAuthService(store as never)
+      const preparation = await service.prepareForClaudeLaunch()
+
+      expect(preparation.provenance).toBe('managed:global-A')
+      expect(preparation.stripAuthEnv).toBe(true)
+      expect(preparation.materialization).toBeUndefined()
+    })
+  })
 })

@@ -26,6 +26,7 @@ import {
 } from './keychain'
 import { handlerFor } from './providers'
 import type { MaterializedEnvPatch } from './providers'
+import { resolveActiveClaudeAccountId } from './workspace-resolver'
 
 export type ClaudeRuntimeAuthPreparation = {
   configDir: string
@@ -89,18 +90,21 @@ export class ClaudeRuntimeAuthService {
     void this.safeSyncForCurrentSelection()
   }
 
-  async prepareForClaudeLaunch(): Promise<ClaudeRuntimeAuthPreparation> {
+  async prepareForClaudeLaunch(worktreeId?: string): Promise<ClaudeRuntimeAuthPreparation> {
+    await this.syncForCurrentSelection(worktreeId)
+    return await this.getPreparation(worktreeId)
+  }
+
+  // Why: rate-limit fetches are not workspace-scoped in P2 — they probe the
+  // globally-active account so the renderer surface stays consistent. The
+  // worktreeId is accepted only to keep the signature symmetric with launch.
+  async prepareForRateLimitFetch(_worktreeId?: string): Promise<ClaudeRuntimeAuthPreparation> {
     await this.syncForCurrentSelection()
     return await this.getPreparation()
   }
 
-  async prepareForRateLimitFetch(): Promise<ClaudeRuntimeAuthPreparation> {
-    await this.syncForCurrentSelection()
-    return await this.getPreparation()
-  }
-
-  async syncForCurrentSelection(): Promise<void> {
-    await this.serializeMutation(() => this.doSyncForCurrentSelection())
+  async syncForCurrentSelection(worktreeId?: string): Promise<void> {
+    await this.serializeMutation(() => this.doSyncForCurrentSelection(worktreeId))
   }
 
   async forceMaterializeCurrentSelectionForRollback(): Promise<void> {
@@ -153,11 +157,15 @@ export class ClaudeRuntimeAuthService {
     return next
   }
 
-  private async doSyncForCurrentSelection(): Promise<void> {
+  private async doSyncForCurrentSelection(worktreeId?: string): Promise<void> {
     const settings = this.store.getSettings()
+    // Why: P2 — per-worktree overrides resolve to a workspace-specific account.
+    // Falls through to settings.activeClaudeManagedAccountId when worktreeId is
+    // absent or the override is unknown, preserving global-default semantics.
+    const resolvedActiveId = resolveActiveClaudeAccountId(settings, worktreeId)
     const activeAccount = this.getActiveAccount(
       settings.claudeManagedAccounts,
-      settings.activeClaudeManagedAccountId
+      resolvedActiveId
     )
     const previousAccount = this.getActiveAccount(
       settings.claudeManagedAccounts,
@@ -181,7 +189,9 @@ export class ClaudeRuntimeAuthService {
       }
     }
     if (!activeAccount) {
-      if (settings.activeClaudeManagedAccountId) {
+      // Why: don't clear the global active id when operating under a worktree
+      // override — a bad override shouldn't nuke the global default.
+      if (worktreeId === undefined && settings.activeClaudeManagedAccountId) {
         this.store.updateSettings({ activeClaudeManagedAccountId: null })
       }
       if (this.lastSyncedAccountId !== null) {
@@ -215,7 +225,11 @@ export class ClaudeRuntimeAuthService {
           await this.restoreSystemDefaultSnapshot(this.lastWrittenCredentialsJson, undefined)
         }
       }
-      this.store.updateSettings({ activeClaudeManagedAccountId: null })
+      // Why: only clear the global active id when operating without a
+      // worktree override (see comment above).
+      if (worktreeId === undefined) {
+        this.store.updateSettings({ activeClaudeManagedAccountId: null })
+      }
       this.lastSyncedAccountId = null
       return
     }
@@ -252,7 +266,10 @@ export class ClaudeRuntimeAuthService {
           await this.restoreSystemDefaultSnapshot(this.lastWrittenCredentialsJson, undefined)
         }
       }
-      this.store.updateSettings({ activeClaudeManagedAccountId: null })
+      // Why: invalid override credentials should not erase the global selection.
+      if (worktreeId === undefined) {
+        this.store.updateSettings({ activeClaudeManagedAccountId: null })
+      }
       this.lastSyncedAccountId = null
       return
     }
@@ -476,12 +493,15 @@ export class ClaudeRuntimeAuthService {
     return candidates
   }
 
-  private async getPreparation(): Promise<ClaudeRuntimeAuthPreparation> {
+  private async getPreparation(worktreeId?: string): Promise<ClaudeRuntimeAuthPreparation> {
     const settings = this.store.getSettings()
     const paths = this.pathResolver.getRuntimePaths()
+    // Why: P2 — resolve through the workspace override map so launch env reflects
+    // the per-worktree account when one is pinned. Pure read; no settings mutation.
+    const resolvedActiveId = resolveActiveClaudeAccountId(settings, worktreeId)
     const activeAccount = this.getActiveAccount(
       settings.claudeManagedAccounts,
-      settings.activeClaudeManagedAccountId
+      resolvedActiveId
     )
     const activeAccountId = activeAccount?.id ?? null
     const base: ClaudeRuntimeAuthPreparation = {
