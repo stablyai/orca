@@ -1,8 +1,17 @@
 import type { ProviderHandler } from './types'
+import type { ClaudeModelMapping } from '../../../shared/types'
 
 type VertexProviderConfig = {
   projectId?: string
   region?: string
+}
+
+// Vertex AI model ids use `@`-versioned suffixes (vs. Bedrock's `-v1:0`).
+// Kept local to the handler; P3 Task 9 hoists these into `model-defaults.ts`.
+const VERTEX_DEFAULTS: Required<ClaudeModelMapping> = {
+  opus: 'claude-opus-4-7',
+  sonnet: 'claude-sonnet-4-6',
+  haiku: 'claude-haiku-4-5@20251001'
 }
 
 export function createGoogleVertexHandler(): ProviderHandler {
@@ -29,8 +38,25 @@ export function createGoogleVertexHandler(): ProviderHandler {
         organizationName: null
       }
     },
-    materialize: async () => {
-      throw new Error('google-vertex materialize not yet implemented')
+    materialize: async (account) => {
+      const creds = account.credentials
+      if (creds.authMethod !== 'google-vertex') {
+        throw new Error('Google Vertex handler invoked on non-vertex account.')
+      }
+      // ADC-only: we emit env switches but no token. Claude CLI invokes gcloud
+      // ADC at launch; the user must have run `gcloud auth application-default
+      // login`. Per-account modelMapping overrides shadow the registry defaults.
+      const merged: Required<ClaudeModelMapping> = { ...VERTEX_DEFAULTS, ...account.modelMapping }
+      return {
+        envPatch: {
+          CLAUDE_CODE_USE_VERTEX: '1',
+          ANTHROPIC_VERTEX_PROJECT_ID: creds.projectId,
+          CLOUD_ML_REGION: creds.region,
+          ANTHROPIC_DEFAULT_OPUS_MODEL: merged.opus,
+          ANTHROPIC_DEFAULT_SONNET_MODEL: merged.sonnet,
+          ANTHROPIC_DEFAULT_HAIKU_MODEL: merged.haiku
+        }
+      }
     },
     validate: async () => {
       throw new Error('google-vertex validate not yet implemented')
