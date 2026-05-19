@@ -52,6 +52,7 @@ import {
   type TerminalModes,
   type TerminalWebViewHandle
 } from '../../../../src/terminal/TerminalWebView'
+import { TERMINAL_ACCESSORY_KEYS } from '../../../../src/terminal/terminal-accessory-keys'
 import { countTerminalGestureInputSequences } from '../../../../src/terminal/terminal-gesture-input'
 import { MobileBrowserPane, type MobileBrowserTab } from '../../../../src/browser/MobileBrowserPane'
 import { isBlankBrowserUrl, normalizeBrowserUrl } from '../../../../src/browser/browser-url'
@@ -273,35 +274,6 @@ type TerminalCreateResult = {
 }
 
 type MobileDisplayMode = 'auto' | 'phone' | 'desktop'
-
-type AccessoryKey = {
-  label: string
-  bytes: string
-  accessibilityLabel?: string
-  repeatable?: boolean
-}
-
-const ACCESSORY_KEYS: AccessoryKey[] = [
-  { label: 'Esc', bytes: '\x1b' },
-  { label: 'Tab', bytes: '\t' },
-  // Why: terminal apps recognize ESC [ Z as the reverse-tab sequence.
-  { label: 'Shift+Tab', bytes: '\x1b[Z', accessibilityLabel: 'Shift Tab' },
-  { label: '⌫', bytes: '\x7f', accessibilityLabel: 'Backspace', repeatable: true },
-  { label: 'Del', bytes: '\x1b[3~', accessibilityLabel: 'Forward delete', repeatable: true },
-  { label: '↑', bytes: '\x1b[A', repeatable: true },
-  { label: '↓', bytes: '\x1b[B', repeatable: true },
-  { label: '←', bytes: '\x1b[D', repeatable: true },
-  { label: '→', bytes: '\x1b[C', repeatable: true },
-  { label: 'Ctrl+C', bytes: '\x03', accessibilityLabel: 'Interrupt terminal' },
-  { label: 'Ctrl+D', bytes: '\x04', accessibilityLabel: 'Send EOF' },
-  { label: 'Ctrl+L', bytes: '\x0c', accessibilityLabel: 'Clear screen' },
-  { label: 'Ctrl+Z', bytes: '\x1a', accessibilityLabel: 'Suspend process' },
-  { label: 'Ctrl+R', bytes: '\x12', accessibilityLabel: 'Reverse search' },
-  { label: 'Ctrl+A', bytes: '\x01', accessibilityLabel: 'Start of line' },
-  { label: 'Ctrl+E', bytes: '\x05', accessibilityLabel: 'End of line' },
-  { label: 'Ctrl+W', bytes: '\x17', accessibilityLabel: 'Delete word backward' },
-  { label: 'Ctrl+U', bytes: '\x15', accessibilityLabel: 'Clear line before cursor' }
-]
 
 const STATUS_LABELS: Record<ConnectionState, string> = {
   connecting: 'Connecting',
@@ -2963,7 +2935,7 @@ export default function SessionScreen() {
                     </Text>
                   </Pressable>
                 )}
-                {ACCESSORY_KEYS.map((key) => (
+                {TERMINAL_ACCESSORY_KEYS.map((key) => (
                   <Pressable
                     key={key.label}
                     style={({ pressed }) => [
