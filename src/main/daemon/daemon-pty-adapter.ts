@@ -31,6 +31,12 @@ export type DaemonPtyAdapterOptions = {
 }
 
 const MAX_TOMBSTONES = 1000
+const MAX_PENDING_DAEMON_NOTIFICATIONS = 512
+
+type PendingDaemonNotification = {
+  type: 'write' | 'resize'
+  payload: unknown
+}
 
 export class TerminalKilledError extends Error {
   constructor(sessionId: string) {
@@ -53,6 +59,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
   private dataListeners: ((payload: { id: string; data: string }) => void)[] = []
   private exitListeners: ((payload: { id: string; code: number }) => void)[] = []
   private removeEventListener: (() => void) | null = null
+  private removeDisconnectedListener: (() => void) | null = null
+  private recoveryPromise: Promise<void> | null = null
+  private pendingNotifications: PendingDaemonNotification[] = []
+  private disposed = false
   private initialCwds = new Map<string, string>()
   // Why: React re-renders and StrictMode double-mounts can call createOrAttach
   // for a session the user just killed. Without tombstones, the daemon would
@@ -60,6 +70,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // Uses a Map<id, timestamp> so eviction removes the oldest by insertion order,
   // matching terminal-host.ts tombstone semantics.
   private killedSessionTombstones = new Map<string, number>()
+  private sessionSizes = new Map<string, { cols: number; rows: number }>()
   // Why: React StrictMode double-mounts: mount → cold restore → unmount →
   // mount → ??? The sticky cache returns the same cold restore data on the
   // second mount until the renderer explicitly acknowledges it.
@@ -84,6 +95,11 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.historyReader = opts.historyPath ? new HistoryReader(opts.historyPath) : null
     this.respawnFn = opts.respawn ?? null
     this.supportsCheckpoints = this.protocolVersion >= 4
+    this.removeDisconnectedListener = this.client.onDisconnected(() => {
+      void this.recoverActiveSessionsAfterDisconnect().catch((err) =>
+        console.warn('[daemon] reconnect after stream failure failed:', err)
+      )
+    })
   }
 
   getHistoryManager(): HistoryManager | null {
@@ -151,6 +167,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
 
     this.activeSessionIds.add(sessionId)
+    this.sessionSizes.set(sessionId, { cols: effectiveCols, rows: effectiveRows })
 
     // Cold restore: daemon created a new session but disk history shows
     // an unclean shutdown → return saved scrollback so the renderer can
@@ -230,12 +247,13 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
   write(id: string, data: string): void {
     this.markSessionDirty(id)
-    this.client.notify('write', { sessionId: id, data })
+    this.sendNotification('write', { sessionId: id, data })
   }
 
   resize(id: string, cols: number, rows: number): void {
     this.markSessionDirty(id)
-    this.client.notify('resize', { sessionId: id, cols, rows })
+    this.sessionSizes.set(id, { cols, rows })
+    this.sendNotification('resize', { sessionId: id, cols, rows })
   }
 
   async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
@@ -243,6 +261,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.activeSessionIds.delete(id)
     this.dirtySessionVersions.delete(id)
     this.initialCwds.delete(id)
+    this.sessionSizes.delete(id)
     // Why: history removal is for the "user explicitly closed this terminal"
     // path. Sleep also calls shutdown but expects scrollback to survive — wake
     // re-spawns and the cold-restore reader needs the dir intact. Caller
@@ -359,6 +378,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         // set, disconnectOnly()'s final checkpoint would skip them, leaving
         // stale recovery data if the daemon later crashes.
         this.activeSessionIds.add(session.sessionId)
+        this.sessionSizes.set(session.sessionId, { cols: session.cols, rows: session.rows })
         this.historyManager?.registerWriter(session.sessionId)
       }
     }
@@ -403,6 +423,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     const ids = [...this.activeSessionIds]
     this.activeSessionIds.clear()
     this.dirtySessionVersions.clear()
+    this.sessionSizes.clear()
     for (const id of ids) {
       // Why: listener throws are intentionally *not* caught — matches the
       // natural onExit fanout in setupEventRouting, so synthetic exits don't
@@ -458,11 +479,13 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   dispose(): void {
+    this.disposed = true
     if (this.checkpointInterval) {
       clearInterval(this.checkpointInterval)
       this.checkpointInterval = null
     }
     this.dirtySessionVersions.clear()
+    this.sessionSizes.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
     // Why: final checkpoints are written daemon-side in TerminalHost.dispose()
@@ -474,6 +497,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
         .catch((err) => console.warn('[history] dispose failed:', err))
     }
     this.client.disconnect()
+    this.removeDisconnectedListener?.()
+    this.removeDisconnectedListener = null
+    this.pendingNotifications = []
   }
 
   // Why: for in-process daemon mode, disconnect without flushing history.
@@ -483,6 +509,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // We write a final checkpoint before disconnecting so that if the daemon
   // later crashes while Orca is closed, checkpoint.json has recovery data.
   async disconnectOnly(): Promise<void> {
+    this.disposed = true
     if (this.checkpointInterval) {
       clearInterval(this.checkpointInterval)
       this.checkpointInterval = null
@@ -503,6 +530,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.removeEventListener?.()
     this.removeEventListener = null
     this.client.disconnect()
+    this.removeDisconnectedListener?.()
+    this.removeDisconnectedListener = null
+    this.pendingNotifications = []
   }
 
   private async ensureConnected(): Promise<void> {
@@ -527,6 +557,72 @@ export class DaemonPtyAdapter implements IPtyProvider {
         this.checkpointInFlight = null
       })
     }, DaemonPtyAdapter.CHECKPOINT_INTERVAL_MS)
+  }
+
+  private sendNotification(type: PendingDaemonNotification['type'], payload: unknown): void {
+    if (this.recoveryPromise) {
+      this.queueNotification(type, payload)
+      return
+    }
+    if (this.client.notify(type, payload)) {
+      return
+    }
+    this.queueNotification(type, payload)
+    void this.recoverActiveSessionsAfterDisconnect().catch((err) =>
+      console.warn('[daemon] reconnect after notification failure failed:', err)
+    )
+  }
+
+  private queueNotification(type: PendingDaemonNotification['type'], payload: unknown): void {
+    this.pendingNotifications.push({ type, payload })
+    if (this.pendingNotifications.length > MAX_PENDING_DAEMON_NOTIFICATIONS) {
+      this.pendingNotifications.splice(
+        0,
+        this.pendingNotifications.length - MAX_PENDING_DAEMON_NOTIFICATIONS
+      )
+    }
+  }
+
+  private async recoverActiveSessionsAfterDisconnect(): Promise<void> {
+    if (this.disposed || this.activeSessionIds.size === 0) {
+      return
+    }
+    if (!this.recoveryPromise) {
+      this.recoveryPromise = this.reattachActiveSessions().finally(() => {
+        this.recoveryPromise = null
+      })
+    }
+    await this.recoveryPromise
+  }
+
+  private async reattachActiveSessions(): Promise<void> {
+    await this.ensureConnected()
+    // Why: daemon stream failure only breaks the renderer socket pair; the
+    // backing PTYs stay alive in TerminalHost. Reattach active sessions so
+    // stream events resume instead of letting panes black-hole input.
+    for (const sessionId of this.activeSessionIds) {
+      const size = this.sessionSizes.get(sessionId) ?? { cols: 80, rows: 24 }
+      await this.client.request<CreateOrAttachResult>('createOrAttach', {
+        sessionId,
+        cols: size.cols,
+        rows: size.rows
+      })
+    }
+    this.flushPendingNotifications()
+  }
+
+  private flushPendingNotifications(): void {
+    const pending = this.pendingNotifications
+    this.pendingNotifications = []
+    for (const notification of pending) {
+      if (!this.client.notify(notification.type, notification.payload)) {
+        this.queueNotification(notification.type, notification.payload)
+        void this.recoverActiveSessionsAfterDisconnect().catch((err) =>
+          console.warn('[daemon] reconnect after pending notification failed:', err)
+        )
+        return
+      }
+    }
   }
 
   private markSessionDirty(sessionId: string): void {
@@ -646,6 +742,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       } else if (event.event === 'exit') {
         this.activeSessionIds.delete(event.sessionId)
         this.dirtySessionVersions.delete(event.sessionId)
+        this.sessionSizes.delete(event.sessionId)
         if (this.historyManager) {
           void this.historyManager
             .closeSession(event.sessionId, event.payload.code)

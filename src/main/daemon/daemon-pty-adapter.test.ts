@@ -114,6 +114,22 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await new Promise((r) => setTimeout(r, 50))
       expect(lastSubprocess.write).toHaveBeenCalledWith('ls\n')
     })
+
+    it('reattaches active sessions and flushes writes after daemon stream failure', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+
+        lastSubprocess._simulateData('x'.repeat(8 * 1024 * 1024 + 1))
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        adapter.write(id, 'after-reconnect\n')
+
+        await waitFor(() => vi.mocked(lastSubprocess.write).mock.calls.length > 0, 3000)
+        expect(lastSubprocess.write).toHaveBeenCalledWith('after-reconnect\n')
+      } finally {
+        warn.mockRestore()
+      }
+    })
   })
 
   describe('resize', () => {

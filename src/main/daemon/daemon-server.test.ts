@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { connect } from 'net'
+import { connect, type Socket } from 'net'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { mkdtempSync, rmSync, readFileSync } from 'fs'
@@ -66,6 +66,39 @@ describe('DaemonServer', () => {
     return client
   }
 
+  async function connectRawSocket(role: 'control' | 'stream', clientId: string): Promise<Socket> {
+    const socket = connect(socketPath)
+    await new Promise<void>((resolve) => socket.on('connect', resolve))
+    socket.write(
+      encodeNdjson({
+        type: 'hello',
+        version: PROTOCOL_VERSION,
+        token: readFileSync(tokenPath, 'utf-8').trim(),
+        clientId,
+        role
+      })
+    )
+    const response = await readSocketLine(socket)
+    expect(JSON.parse(response)).toMatchObject({ ok: true })
+    return socket
+  }
+
+  function readSocketLine(socket: Socket): Promise<string> {
+    return new Promise((resolve) => {
+      let buffer = ''
+      const onData = (chunk: Buffer): void => {
+        buffer += chunk.toString()
+        const newlineIdx = buffer.indexOf('\n')
+        if (newlineIdx === -1) {
+          return
+        }
+        socket.removeListener('data', onData)
+        resolve(buffer.slice(0, newlineIdx))
+      }
+      socket.on('data', onData)
+    })
+  }
+
   describe('startup', () => {
     it('creates token file and starts listening', async () => {
       await startServer()
@@ -120,6 +153,22 @@ describe('DaemonServer', () => {
       const result = await c.request<{ pong: boolean }>('ping', undefined)
 
       expect(result).toEqual({ pong: true })
+    })
+
+    it('keeps a replacement control socket alive when the old socket closes later', async () => {
+      await startServer()
+      const firstControl = await connectRawSocket('control', 'same-client')
+      const secondControl = await connectRawSocket('control', 'same-client')
+
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      secondControl.write(encodeNdjson({ id: 'req-1', type: 'ping' }))
+
+      await expect(readSocketLine(secondControl)).resolves.toMatch(
+        /"id":"req-1".*"payload":\{"pong":true\}/
+      )
+
+      firstControl.destroy()
+      secondControl.destroy()
     })
 
     it('handles write (fire-and-forget)', async () => {

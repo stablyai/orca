@@ -990,7 +990,51 @@ describe('connectPanePty', () => {
     }
   })
 
-  it('writes visible split-pane PTY bytes immediately even when the tab is not active', async () => {
+  it('queues visible inactive split-pane PTY bytes so active pane input stays responsive', async () => {
+    const pendingTimeouts: (() => void)[] = []
+    const originalSetTimeout = globalThis.setTimeout
+    globalThis.setTimeout = vi.fn((fn: () => void) => {
+      pendingTimeouts.push(fn)
+      return 999 as unknown as ReturnType<typeof setTimeout>
+    }) as unknown as typeof setTimeout
+
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-id'
+        }
+      )
+      transportFactoryQueue.push(transport)
+
+      const pane = createPane(1)
+      const manager = createManager(2)
+      manager.getActivePane.mockReturnValue({ id: 2 })
+      const deps = createDeps({
+        isVisibleRef: { current: true }
+      })
+
+      connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks(6)
+
+      expect(capturedDataCallback.current).not.toBeNull()
+      capturedDataCallback.current?.('visible split output\r\n')
+      expect(pane.terminal.write).not.toHaveBeenCalledWith('visible split output\r\n')
+
+      for (const fn of pendingTimeouts) {
+        fn()
+      }
+
+      expect(pane.terminal.write).toHaveBeenCalledWith('visible split output\r\n')
+    } finally {
+      globalThis.setTimeout = originalSetTimeout
+    }
+  })
+
+  it('writes active visible split-pane PTY bytes immediately', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -1001,9 +1045,9 @@ describe('connectPanePty', () => {
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
-    const manager = createManager(1)
+    const manager = createManager(2)
+    manager.getActivePane.mockReturnValue({ id: 1 })
     const deps = createDeps({
-      isActiveRef: { current: false },
       isVisibleRef: { current: true }
     })
 
@@ -1011,9 +1055,9 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(6)
 
     expect(capturedDataCallback.current).not.toBeNull()
-    capturedDataCallback.current?.('visible split output\r\n')
+    capturedDataCallback.current?.('active split output\r\n')
 
-    expect(pane.terminal.write).toHaveBeenCalledWith('visible split output\r\n')
+    expect(pane.terminal.write).toHaveBeenCalledWith('active split output\r\n')
   })
 
   it('marks panes that receive Arabic output for DOM rendering', async () => {

@@ -50,10 +50,14 @@ describe('DaemonClient', () => {
   function startMockDaemon(opts?: {
     onControlMessage?: (msg: unknown) => string | null
     onStreamHello?: (msg: HelloMessage) => void
+    streamHelloGate?: Promise<void>
     rejectVersion?: boolean
   }): Promise<void> {
     return new Promise((resolve) => {
       server = createServer((socket) => {
+        socket.on('error', () => {
+          /* tests intentionally destroy sockets mid-handshake */
+        })
         let buffer = ''
         socket.on('data', (chunk) => {
           buffer += chunk.toString()
@@ -73,10 +77,22 @@ describe('DaemonClient', () => {
                 socket.write(encodeNdjson({ type: 'hello', ok: false, error: 'Version mismatch' }))
                 return
               }
-              socket.write(encodeNdjson({ type: 'hello', ok: true }))
               if (hello.role === 'stream') {
                 opts?.onStreamHello?.(hello)
+                if (opts?.streamHelloGate) {
+                  void opts.streamHelloGate.then(() => {
+                    if (!socket.destroyed) {
+                      try {
+                        socket.write(encodeNdjson({ type: 'hello', ok: true }))
+                      } catch {
+                        /* client intentionally disconnected during handshake */
+                      }
+                    }
+                  })
+                  return
+                }
               }
+              socket.write(encodeNdjson({ type: 'hello', ok: true }))
             } else if (opts?.onControlMessage) {
               const response = opts.onControlMessage(msg)
               if (response) {
@@ -251,6 +267,30 @@ describe('DaemonClient', () => {
     it('disconnect() can be called safely when not connected', () => {
       client = new DaemonClient({ socketPath, tokenPath })
       expect(() => client.disconnect()).not.toThrow()
+    })
+
+    it('disconnect() cancels an in-flight connection attempt', async () => {
+      let releaseStreamHello!: () => void
+      const streamHelloGate = new Promise<void>((resolve) => {
+        releaseStreamHello = resolve
+      })
+      let sawStreamHello = false
+      await startMockDaemon({
+        streamHelloGate,
+        onStreamHello: () => {
+          sawStreamHello = true
+        }
+      })
+
+      client = new DaemonClient({ socketPath, tokenPath })
+      const connectPromise = client.ensureConnected()
+      await waitFor(() => sawStreamHello)
+
+      client.disconnect()
+      releaseStreamHello()
+
+      await expect(connectPromise).rejects.toThrow()
+      expect(client.isConnected()).toBe(false)
     })
   })
 

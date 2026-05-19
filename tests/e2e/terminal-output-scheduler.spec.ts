@@ -15,7 +15,13 @@ import {
   waitForActiveWorktree,
   waitForSessionReady
 } from './helpers/store'
-import { getTerminalContent, waitForActiveTerminalManager } from './helpers/terminal'
+import {
+  getTerminalContent,
+  splitActiveTerminalPane,
+  waitForActiveTerminalManager,
+  waitForPaneCount,
+  waitForPaneIdentitySnapshot
+} from './helpers/terminal'
 
 type SchedulerDebugSnapshot = {
   backgroundEnqueueCount: number
@@ -248,5 +254,76 @@ test.describe('Terminal output scheduler', () => {
         message: 'Background terminal output was not preserved after scheduler drain'
       })
       .toBe(true)
+  })
+
+  test('visible inactive split-pane output uses the shared drain @headful', async ({
+    orcaPage
+  }) => {
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    await waitForPaneCount(orcaPage, 1, 30_000)
+
+    await splitActiveTerminalPane(orcaPage, 'horizontal')
+    const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 2)
+    const activePane = snapshot.panes[0]
+    const inactivePane = snapshot.panes[1]
+    if (!activePane.ptyId || !inactivePane.ptyId) {
+      throw new Error('Split pane PTY ids were unavailable')
+    }
+
+    await orcaPage.evaluate(
+      ({ tabId, paneId }) => {
+        const manager = window.__paneManagers?.get(tabId)
+        if (!manager) {
+          throw new Error('Active terminal PaneManager is not mounted')
+        }
+        // Why: the active split pane owns keyboard latency even though both
+        // split panes are visible in this headful repro.
+        manager.setActivePane(paneId, { focus: true })
+      },
+      { tabId: snapshot.tabId, paneId: activePane.numericPaneId }
+    )
+
+    await resetSchedulerDebug(orcaPage)
+
+    const runId = Date.now()
+    const activeMarker = `ACTIVE_SPLIT_SCHED_${runId}`
+    const inactiveMarker = `INACTIVE_SPLIT_SCHED_${runId}`
+    await sendPtyCommands(orcaPage, [
+      {
+        ptyId: inactivePane.ptyId,
+        command: nodeConsoleCommand(`'x'.repeat(120000) + ':${inactiveMarker}'`)
+      },
+      {
+        ptyId: activePane.ptyId,
+        command: nodeConsoleCommand(`'${activeMarker}'`)
+      }
+    ])
+
+    await expect
+      .poll(async () => (await getTerminalContent(orcaPage)).includes(activeMarker), {
+        timeout: 5_000,
+        message: 'Active split pane did not render foreground output during inactive burst'
+      })
+      .toBe(true)
+
+    await expect
+      .poll(async () => (await getSchedulerDebug(orcaPage)).backgroundEnqueueCount, {
+        timeout: 5_000,
+        message: 'Visible inactive split-pane output bypassed the shared scheduler'
+      })
+      .toBeGreaterThanOrEqual(1)
+
+    await expect
+      .poll(async () => (await getSchedulerDebug(orcaPage)).backgroundWriteCount, {
+        timeout: 10_000,
+        message: 'Visible inactive split-pane output did not drain from the shared scheduler'
+      })
+      .toBeGreaterThanOrEqual(1)
+
+    const debug = await getSchedulerDebug(orcaPage)
+    expect(debug.foregroundWriteCount).toBeGreaterThan(0)
   })
 })
