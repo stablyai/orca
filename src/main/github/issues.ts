@@ -242,6 +242,28 @@ export async function updateIssue(
     }
   }
 
+  if (updates.body !== undefined) {
+    await acquire()
+    try {
+      await ghExecFileAsync(
+        [
+          'api',
+          '-X',
+          'PATCH',
+          `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${issueNumber}`,
+          '--raw-field',
+          `body=${updates.body}`
+        ],
+        ghOptions
+      )
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err)
+      errors.push(classifyGhError(stderr).message)
+    } finally {
+      release()
+    }
+  }
+
   // Field edits (labels, assignees, title) via gh issue edit
   const editArgs: string[] = ['issue', 'edit', String(issueNumber), '--repo', repo]
   let hasEditArgs = false

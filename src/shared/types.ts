@@ -916,10 +916,9 @@ export type LinearComment = {
 export type GitHubIssueUpdate = {
   state?: 'open' | 'closed'
   title?: string
-  // Why: body writes are driven by the Project-mode slug-addressed path
-  // (`updateIssueBySlug`) because `gh issue edit` does not consistently
-  // cover every body-edit case the dialog needs; the repoPath-based
-  // `updateIssue` flow keeps ignoring `body` for backward compatibility.
+  // Why: body writes use the REST issue endpoint instead of `gh issue edit`
+  // because that command does not consistently cover every body-edit case the
+  // dialog needs.
   body?: string
   addLabels?: string[]
   removeLabels?: string[]

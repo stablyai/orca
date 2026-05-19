@@ -39,6 +39,7 @@ import {
   updatePRState,
   rerunPRChecks,
   requestPRReviewers,
+  removePRReviewers,
   checkOrcaStarred,
   starOrca
 } from '../github/client'
@@ -631,6 +632,26 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     async (event, args: { repoPath: string; prNumber: number; reviewers: string[] }) => {
       const repo = assertRegisteredRepo(args, store)
       const result = await requestPRReviewers(
+        repo.path,
+        args.prNumber,
+        args.reviewers,
+        repoConnectionId(repo)
+      )
+      if (result.ok) {
+        broadcastWorkItemMutated(
+          { repoPath: repo.path, repoId: repo.id, type: 'pr', number: args.prNumber },
+          event.sender.id
+        )
+      }
+      return result
+    }
+  )
+
+  ipcMain.handle(
+    'gh:removePRReviewers',
+    async (event, args: { repoPath: string; prNumber: number; reviewers: string[] }) => {
+      const repo = assertRegisteredRepo(args, store)
+      const result = await removePRReviewers(
         repo.path,
         args.prNumber,
         args.reviewers,

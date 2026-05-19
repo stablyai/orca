@@ -120,6 +120,11 @@ const RequestPrReviewers = RepoSelector.extend({
   reviewers: z.array(z.string()).min(1)
 })
 
+const RemovePrReviewers = RepoSelector.extend({
+  prNumber: z.number().int().positive(),
+  reviewers: z.array(z.string()).min(1)
+})
+
 const CreateIssue = RepoSelector.extend({
   title: requiredString('Missing title'),
   body: z.string()
@@ -404,6 +409,12 @@ export const GITHUB_METHODS: RpcMethod[] = [
     params: RequestPrReviewers,
     handler: async (params, { runtime }) =>
       runtime.requestRepoPRReviewers(params.repo, params.prNumber, params.reviewers)
+  }),
+  defineMethod({
+    name: 'github.removePRReviewers',
+    params: RemovePrReviewers,
+    handler: async (params, { runtime }) =>
+      runtime.removeRepoPRReviewers(params.repo, params.prNumber, params.reviewers)
   }),
   defineMethod({
     name: 'github.createIssue',

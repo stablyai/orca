@@ -889,6 +889,12 @@ export type PreloadApi = {
       prNumber: number
       reviewers: string[]
     }) => Promise<{ ok: true } | { ok: false; error: string }>
+    removePRReviewers: (args: {
+      repoPath: string
+      repoId?: string
+      prNumber: number
+      reviewers: string[]
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
     updateIssue: (args: {
       repoPath: string
       repoId?: string

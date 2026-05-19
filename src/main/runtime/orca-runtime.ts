@@ -135,6 +135,7 @@ import {
   mergePR,
   updatePRState,
   requestPRReviewers,
+  removePRReviewers,
   createIssue,
   updateIssue,
   addIssueComment,
@@ -5301,6 +5302,16 @@ export class OrcaRuntimeService {
     const repo = await this.resolveRepoSelector(repoSelector)
     this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_reviewers')
     return requestPRReviewers(repo.path, prNumber, reviewers)
+  }
+
+  async removeRepoPRReviewers(
+    repoSelector: string,
+    prNumber: number,
+    reviewers: string[]
+  ): Promise<Awaited<ReturnType<typeof removePRReviewers>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_reviewers')
+    return removePRReviewers(repo.path, prNumber, reviewers)
   }
 
   async createRepoIssue(

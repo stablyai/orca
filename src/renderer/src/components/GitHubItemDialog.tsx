@@ -27,11 +27,13 @@ import {
   FolderOpen,
   GitMerge,
   GitPullRequest,
+  GitPullRequestClosed,
   LayoutList,
   ListChecks,
   LoaderCircle,
   MessageSquare,
   MessageSquarePlus,
+  Pencil,
   RefreshCw,
   Send,
   UndoDot,
@@ -54,7 +56,7 @@ import {
 } from '@/components/ui/accordion'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -90,7 +92,6 @@ import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/u
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import {
-  appendGitHubPRRequestedReviewers,
   getGitHubPRReviewerRows,
   normalizeGitHubReviewerLogins
 } from '@/components/github-pr-reviewer-display'
@@ -116,6 +117,8 @@ import type {
   Worktree
 } from '../../../shared/types'
 import { PER_REPO_FETCH_LIMIT } from '../../../shared/work-items'
+
+const IS_MAC = navigator.userAgent.includes('Mac')
 
 // Why: the GH item dialog can be opened from any work-item list surface and
 // doesn't have the full owner/repo context the list's cache entry carries.
@@ -422,6 +425,45 @@ function ReviewerAvatar({
   )
 }
 
+function mergeReviewerSuggestions(
+  users: GitHubAssignableUser[],
+  seedUsers: GitHubAssignableUser[]
+): GitHubAssignableUser[] {
+  const byLogin = new Map<string, GitHubAssignableUser>()
+  for (const user of [...seedUsers, ...users]) {
+    const key = user.login.toLowerCase()
+    const existing = byLogin.get(key)
+    if (!existing) {
+      byLogin.set(key, user)
+      continue
+    }
+    if (!existing.avatarUrl && user.avatarUrl) {
+      byLogin.set(key, { ...existing, avatarUrl: user.avatarUrl })
+    }
+  }
+  return Array.from(byLogin.values()).sort((a, b) => a.login.localeCompare(b.login))
+}
+
+function buildRequestedReviewUsers(
+  logins: string[],
+  candidates: GitHubAssignableUser[],
+  existingRequests: GitHubAssignableUser[]
+): GitHubAssignableUser[] {
+  const byLogin = new Map<string, GitHubAssignableUser>()
+  for (const user of existingRequests) {
+    byLogin.set(user.login.toLowerCase(), user)
+  }
+  const candidatesByLogin = new Map(candidates.map((user) => [user.login.toLowerCase(), user]))
+  for (const login of logins) {
+    const key = login.toLowerCase()
+    if (byLogin.has(key)) {
+      continue
+    }
+    byLogin.set(key, candidatesByLogin.get(key) ?? { login, name: null, avatarUrl: '' })
+  }
+  return Array.from(byLogin.values())
+}
+
 function PRReviewersPanel({
   item,
   loading,
@@ -433,19 +475,73 @@ function PRReviewersPanel({
   repoPath: string | null
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
 }): React.JSX.Element {
+  const [open, setOpen] = useState(false)
   const [reviewerInput, setReviewerInput] = useState('')
+  const [reviewerPickerSide, setReviewerPickerSide] = useState<'top' | 'bottom'>('bottom')
+  const [reviewerPickerMaxHeight, setReviewerPickerMaxHeight] = useState<number | null>(null)
+  const [activeReviewerIndex, setActiveReviewerIndex] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [localReviewRequests, setLocalReviewRequests] = useState<GitHubAssignableUser[]>(
     () => item.reviewRequests ?? []
   )
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
+  const settings = useAppStore((s) => s.settings)
+  const reviewerInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     setLocalReviewRequests(item.reviewRequests ?? [])
   }, [item.id, item.reviewRequests])
 
+  const reviewerSeedUsers = useMemo<GitHubAssignableUser[]>(() => {
+    const byLogin = new Map<string, GitHubAssignableUser>()
+    const add = (user: GitHubAssignableUser): void => {
+      if (!user.login) {
+        return
+      }
+      byLogin.set(user.login.toLowerCase(), user)
+    }
+    for (const user of localReviewRequests) {
+      add(user)
+    }
+    for (const review of item.latestReviews ?? []) {
+      add({
+        login: review.login,
+        name: null,
+        avatarUrl: review.avatarUrl ?? ''
+      })
+    }
+    if (item.author) {
+      add({ login: item.author, name: null, avatarUrl: '' })
+    }
+    return Array.from(byLogin.values())
+  }, [item.author, item.latestReviews, localReviewRequests])
+
+  const reviewSlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
+  const reviewerMetadataBySlug = useRepoAssigneesBySlug(
+    open && reviewSlug ? reviewSlug.owner : null,
+    open && reviewSlug ? reviewSlug.repo : null,
+    reviewerSeedUsers.map((user) => user.login),
+    settings
+  )
+  const reviewerMetadataByPath = useRepoAssignees(
+    open && !reviewSlug ? repoPath : null,
+    open && !reviewSlug ? item.repoId : null
+  )
+  const reviewerMetadata = reviewSlug ? reviewerMetadataBySlug : reviewerMetadataByPath
   const displayItem = { ...item, reviewRequests: localReviewRequests }
   const reviewers = getGitHubPRReviewerRows(displayItem)
+  const authorLogin = item.author?.toLowerCase() ?? null
+  const reviewerCandidates = useMemo(
+    () =>
+      mergeReviewerSuggestions(reviewerMetadata.data, reviewerSeedUsers).filter(
+        (user) => user.login.toLowerCase() !== authorLogin
+      ),
+    [authorLogin, reviewerMetadata.data, reviewerSeedUsers]
+  )
+  const reviewerCandidatesByLogin = useMemo(
+    () => new Map(reviewerCandidates.map((user) => [user.login.toLowerCase(), user])),
+    [reviewerCandidates]
+  )
   const selectedReviewerLogins = useMemo(
     () =>
       new Set(
@@ -453,21 +549,94 @@ function PRReviewersPanel({
       ),
     [localReviewRequests]
   )
+  const reviewerQuery = reviewerInput.trim().replace(/^@/, '').toLowerCase()
+  const filteredReviewerCandidates = useMemo(() => {
+    const query = reviewerQuery
+    return reviewerCandidates
+      .filter((user) => {
+        const login = user.login.toLowerCase()
+        return (
+          query.length === 0 ||
+          login.includes(query) ||
+          (user.name ?? '').toLowerCase().includes(query)
+        )
+      })
+      .sort((a, b) => {
+        const aLogin = a.login.toLowerCase()
+        const bLogin = b.login.toLowerCase()
+        const aStarts = aLogin.startsWith(query)
+        const bStarts = bLogin.startsWith(query)
+        if (aStarts !== bStarts) {
+          return aStarts ? -1 : 1
+        }
+        return a.login.localeCompare(b.login)
+      })
+  }, [reviewerCandidates, reviewerQuery])
+  const suggestedReviewerRows = useMemo(
+    () =>
+      reviewerQuery.length === 0
+        ? reviewerSeedUsers
+            .filter((user) => !selectedReviewerLogins.has(user.login.toLowerCase()))
+            .filter((user) => user.login.toLowerCase() !== authorLogin)
+            .map((user) => reviewerCandidatesByLogin.get(user.login.toLowerCase()) ?? user)
+            .slice(0, 1)
+        : [],
+    [
+      authorLogin,
+      reviewerCandidatesByLogin,
+      reviewerQuery.length,
+      reviewerSeedUsers,
+      selectedReviewerLogins
+    ]
+  )
+  const everyoneElseReviewerRows = useMemo(() => {
+    const suggestedLogins = new Set(suggestedReviewerRows.map((user) => user.login.toLowerCase()))
+    return filteredReviewerCandidates.filter(
+      (user) => !suggestedLogins.has(user.login.toLowerCase())
+    )
+  }, [filteredReviewerCandidates, suggestedReviewerRows])
+  const actionableReviewerRows = useMemo(
+    () => [...suggestedReviewerRows, ...everyoneElseReviewerRows],
+    [everyoneElseReviewerRows, suggestedReviewerRows]
+  )
+
+  useEffect(() => {
+    setActiveReviewerIndex(0)
+  }, [reviewerQuery, actionableReviewerRows.length])
+
   const hasReviewerMetadata =
     item.reviewDecision !== undefined ||
     localReviewRequests.length > 0 ||
     item.reviewRequests !== undefined ||
     item.latestReviews !== undefined
-  const canRequestReview =
-    !!repoPath || getActiveRuntimeTarget(useAppStore.getState().settings).kind === 'environment'
+  const canRequestReview = !!repoPath || getActiveRuntimeTarget(settings).kind === 'environment'
 
-  const handleRequestReview = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
-    event.preventDefault()
+  const measureReviewerPickerPlacement = useCallback(() => {
+    const rect = reviewerInputRef.current?.getBoundingClientRect()
+    if (!rect) {
+      setReviewerPickerSide('bottom')
+      setReviewerPickerMaxHeight(null)
+      return
+    }
+
+    const gap = 8
+    const minUsefulHeight = 180
+    const availableBelow = window.innerHeight - rect.bottom - gap
+    const availableAbove = rect.top - gap
+    const nextSide =
+      availableBelow < minUsefulHeight && availableAbove > availableBelow ? 'top' : 'bottom'
+    const available = nextSide === 'top' ? availableAbove : availableBelow
+
+    setReviewerPickerSide(nextSide)
+    setReviewerPickerMaxHeight(Math.max(120, Math.min(330, available)))
+  }, [])
+
+  const handleRequestReview = async (requestedLogins?: string[]): Promise<void> => {
     if (submitting) {
       return
     }
     const logins = normalizeGitHubReviewerLogins(
-      reviewerInput.split(/[\s,]+/),
+      requestedLogins ?? reviewerInput.split(/[\s,]+/),
       selectedReviewerLogins
     )
     if (logins.length === 0) {
@@ -478,7 +647,7 @@ function PRReviewersPanel({
       toast.error('You can request up to 15 reviewers')
       return
     }
-    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    const target = getActiveRuntimeTarget(settings)
     if (target.kind !== 'environment' && !repoPath) {
       toast.error('No repo context available for this pull request.')
       return
@@ -503,7 +672,11 @@ function PRReviewersPanel({
         toast.error(result.error ?? 'Failed to request reviewer')
         return
       }
-      const nextReviewRequests = appendGitHubPRRequestedReviewers(localReviewRequests, logins)
+      const nextReviewRequests = buildRequestedReviewUsers(
+        logins,
+        reviewerCandidates,
+        localReviewRequests
+      )
       setLocalReviewRequests(nextReviewRequests)
       patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId)
       onReviewersRequested(nextReviewRequests)
@@ -514,6 +687,132 @@ function PRReviewersPanel({
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const handleRemoveReviewers = async (reviewersToRemove: string[]): Promise<void> => {
+    if (submitting) {
+      return
+    }
+    const selected = new Set(localReviewRequests.map((reviewer) => reviewer.login.toLowerCase()))
+    const logins = reviewersToRemove
+      .map((reviewer) => reviewer.trim().replace(/^@/, ''))
+      .filter((reviewer) => reviewer.length > 0 && selected.has(reviewer.toLowerCase()))
+    if (logins.length === 0) {
+      return
+    }
+    const target = getActiveRuntimeTarget(settings)
+    if (target.kind !== 'environment' && !repoPath) {
+      toast.error('No repo context available for this pull request.')
+      return
+    }
+    setSubmitting(true)
+    try {
+      const result =
+        target.kind === 'environment'
+          ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
+              target,
+              'github.removePRReviewers',
+              { repo: item.repoId, prNumber: item.number, reviewers: logins },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.removePRReviewers({
+              repoPath: repoPath ?? '',
+              repoId: item.repoId,
+              prNumber: item.number,
+              reviewers: logins
+            })
+      if (!result.ok) {
+        toast.error(result.error ?? 'Failed to remove reviewer')
+        return
+      }
+      const removed = new Set(logins.map((login) => login.toLowerCase()))
+      const nextReviewRequests = localReviewRequests.filter(
+        (reviewer) => !removed.has(reviewer.login.toLowerCase())
+      )
+      setLocalReviewRequests(nextReviewRequests)
+      patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId)
+      onReviewersRequested(nextReviewRequests)
+      setReviewerInput('')
+      toast.success(logins.length === 1 ? 'Reviewer removed' : 'Reviewers removed')
+    } catch {
+      toast.error('Failed to remove reviewer')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const requestReviewer = async (reviewer: GitHubAssignableUser): Promise<void> => {
+    await (selectedReviewerLogins.has(reviewer.login.toLowerCase())
+      ? handleRemoveReviewers([reviewer.login])
+      : handleRequestReview([reviewer.login]))
+    requestAnimationFrame(() => reviewerInputRef.current?.focus())
+  }
+
+  const handleReviewerPickerOpenChange = (nextOpen: boolean): void => {
+    if (nextOpen) {
+      measureReviewerPickerPlacement()
+    }
+    setOpen(nextOpen)
+    if (nextOpen) {
+      requestAnimationFrame(() => reviewerInputRef.current?.focus())
+      return
+    }
+    setReviewerInput('')
+  }
+
+  const renderReviewerPickerRow = (
+    reviewer: GitHubAssignableUser,
+    options: { suggested: boolean; activeIndex: number }
+  ): React.JSX.Element => {
+    const selected = selectedReviewerLogins.has(reviewer.login.toLowerCase())
+    const active = actionableReviewerRows[activeReviewerIndex]?.login === reviewer.login
+    return (
+      <button
+        key={`${options.suggested ? 'suggested' : 'reviewer'}:${reviewer.login}`}
+        type="button"
+        aria-label={
+          selected ? `Unrequest reviewer ${reviewer.login}` : `Request reviewer ${reviewer.login}`
+        }
+        aria-pressed={selected}
+        className={cn(
+          'flex min-h-10 w-full items-center gap-2 border-b border-border/70 px-3 py-2 text-left text-[13px] outline-none last:border-b-0 hover:bg-accent/70 focus-visible:bg-accent focus-visible:text-accent-foreground',
+          active && 'bg-accent text-accent-foreground',
+          selected && 'font-medium'
+        )}
+        onMouseEnter={() => setActiveReviewerIndex(options.activeIndex)}
+        onMouseDown={(event) => {
+          event.preventDefault()
+        }}
+        onFocus={() => setActiveReviewerIndex(options.activeIndex)}
+        onClick={() => {
+          void requestReviewer(reviewer)
+        }}
+      >
+        <span className="flex size-4 shrink-0 items-center justify-center text-foreground">
+          {selected ? <Check className="size-3.5" /> : null}
+        </span>
+        {reviewer.avatarUrl ? (
+          <img src={reviewer.avatarUrl} alt="" className="size-5 shrink-0 rounded-full" />
+        ) : (
+          <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground">
+            {reviewer.login.slice(0, 1).toUpperCase()}
+          </span>
+        )}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate">
+            <span className="font-semibold text-foreground">{reviewer.login}</span>
+            {reviewer.name ? (
+              <span className="ml-1 font-normal text-muted-foreground">{reviewer.name}</span>
+            ) : null}
+          </span>
+          {options.suggested ? (
+            <span className="block truncate text-[12px] leading-4 text-muted-foreground">
+              Recently edited these files
+            </span>
+          ) : null}
+        </span>
+      </button>
+    )
   }
 
   return (
@@ -535,46 +834,171 @@ function PRReviewersPanel({
           </div>
         ) : reviewers.length > 0 ? (
           <div className="flex flex-col gap-2">
-            {reviewers.map((reviewer) => (
-              <div key={reviewer.login} className="flex min-w-0 items-center gap-2">
-                <ReviewerAvatar login={reviewer.login} avatarUrl={reviewer.avatarUrl} />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[13px] font-medium text-foreground">
-                    {reviewer.login}
-                  </div>
-                  {reviewer.name ? (
-                    <div className="truncate text-[11px] text-muted-foreground">
-                      {reviewer.name}
+            {reviewers.map((reviewer) => {
+              const canRemoveReviewer = selectedReviewerLogins.has(reviewer.login.toLowerCase())
+              return (
+                <div key={reviewer.login} className="flex min-w-0 items-center gap-2">
+                  <ReviewerAvatar login={reviewer.login} avatarUrl={reviewer.avatarUrl} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13px] font-medium text-foreground">
+                      {reviewer.login}
                     </div>
+                    {reviewer.name ? (
+                      <div className="truncate text-[11px] text-muted-foreground">
+                        {reviewer.name}
+                      </div>
+                    ) : null}
+                  </div>
+                  <span className="shrink-0 text-[11px] text-muted-foreground">
+                    {reviewer.stateLabel}
+                  </span>
+                  {canRemoveReviewer ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          className="size-6 shrink-0 text-muted-foreground hover:text-foreground"
+                          disabled={submitting || !canRequestReview}
+                          aria-label={`Remove reviewer ${reviewer.login}`}
+                          onClick={() => {
+                            void handleRemoveReviewers([reviewer.login])
+                          }}
+                        >
+                          <X className="size-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Remove reviewer</TooltipContent>
+                    </Tooltip>
                   ) : null}
                 </div>
-                <span className="shrink-0 text-[11px] text-muted-foreground">
-                  {reviewer.stateLabel}
-                </span>
-              </div>
-            ))}
+              )
+            })}
           </div>
         ) : (
           <div className="py-1 text-[12px] text-muted-foreground">No reviewers requested.</div>
         )}
-        <form className="mt-3 flex items-center gap-2" onSubmit={handleRequestReview}>
-          <Input
-            value={reviewerInput}
-            onChange={(event) => setReviewerInput(event.target.value)}
-            disabled={submitting || !canRequestReview}
-            placeholder="Reviewer"
-            aria-label="Reviewer"
-            className="h-8 min-w-0 flex-1 rounded-md border-border/50 bg-background text-xs"
-          />
-          <Button
-            type="submit"
-            size="sm"
-            disabled={submitting || !canRequestReview || reviewerInput.trim().length === 0}
-            className="h-8 shrink-0 px-2.5 text-xs"
+        <Popover open={open} onOpenChange={handleReviewerPickerOpenChange}>
+          <PopoverAnchor asChild>
+            <Input
+              ref={reviewerInputRef}
+              value={reviewerInput}
+              onChange={(event) => {
+                setReviewerInput(event.target.value)
+                if (!open) {
+                  handleReviewerPickerOpenChange(true)
+                }
+              }}
+              disabled={submitting || !canRequestReview}
+              placeholder="Type or choose a user"
+              aria-label="Reviewer"
+              aria-expanded={open}
+              aria-haspopup="listbox"
+              className="mt-3 h-8 min-w-0 cursor-text rounded-md border-border/50 bg-background text-xs"
+              onFocus={() => {
+                if (canRequestReview) {
+                  handleReviewerPickerOpenChange(true)
+                }
+              }}
+              onClick={() => {
+                if (canRequestReview) {
+                  handleReviewerPickerOpenChange(true)
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'ArrowDown' && actionableReviewerRows.length > 0) {
+                  event.preventDefault()
+                  setOpen(true)
+                  setActiveReviewerIndex((current) => (current + 1) % actionableReviewerRows.length)
+                  return
+                }
+                if (event.key === 'ArrowUp' && actionableReviewerRows.length > 0) {
+                  event.preventDefault()
+                  setOpen(true)
+                  setActiveReviewerIndex(
+                    (current) =>
+                      (current - 1 + actionableReviewerRows.length) % actionableReviewerRows.length
+                  )
+                  return
+                }
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  const activeReviewer = actionableReviewerRows[activeReviewerIndex]
+                  if (activeReviewer) {
+                    void requestReviewer(activeReviewer)
+                    return
+                  }
+                  void handleRequestReview()
+                  return
+                }
+                if (event.key === 'Escape') {
+                  event.preventDefault()
+                  handleReviewerPickerOpenChange(false)
+                }
+              }}
+            />
+          </PopoverAnchor>
+          <PopoverContent
+            className="flex w-[330px] flex-col overflow-hidden rounded-md border-border/70 p-0"
+            align="start"
+            side={reviewerPickerSide}
+            sideOffset={6}
+            avoidCollisions={false}
+            style={{
+              maxHeight: reviewerPickerMaxHeight ? `${reviewerPickerMaxHeight}px` : undefined
+            }}
+            onOpenAutoFocus={(event) => {
+              event.preventDefault()
+            }}
           >
-            {submitting ? <LoaderCircle className="size-3.5 animate-spin" /> : 'Request'}
-          </Button>
-        </form>
+            <div className="border-b border-border/70 px-3 py-2">
+              <div className="text-[13px] font-semibold text-foreground">
+                Request up to 15 reviewers
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
+              {reviewerMetadata.loading ? (
+                <div className="px-3 py-2 text-[13px] text-muted-foreground">Loading...</div>
+              ) : filteredReviewerCandidates.length > 0 ? (
+                <>
+                  {suggestedReviewerRows.length > 0 ? (
+                    <>
+                      <div className="border-b border-border/70 bg-muted/50 px-3 py-1.5 text-[12px] font-semibold text-foreground">
+                        Suggestions
+                      </div>
+                      {suggestedReviewerRows.map((reviewer, index) =>
+                        renderReviewerPickerRow(reviewer, { suggested: true, activeIndex: index })
+                      )}
+                    </>
+                  ) : null}
+                  <div className="border-b border-border/70 bg-muted/50 px-3 py-1.5 text-[12px] font-semibold text-foreground">
+                    Everyone else
+                  </div>
+                  {everyoneElseReviewerRows.length > 0 ? (
+                    everyoneElseReviewerRows.map((reviewer, index) =>
+                      renderReviewerPickerRow(reviewer, {
+                        suggested: false,
+                        activeIndex: suggestedReviewerRows.length + index
+                      })
+                    )
+                  ) : (
+                    <div className="px-3 py-2 text-[13px] text-muted-foreground">
+                      No matching reviewers.
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="px-3 py-2 text-[13px] text-muted-foreground">
+                  {reviewerMetadata.error ??
+                    (hasReviewerMetadata
+                      ? 'No matching reviewers.'
+                      : 'Open the PR details to view current reviewers.')}
+                </div>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
     </aside>
   )
@@ -978,6 +1402,19 @@ function patchCachedPRReviewRequests(
       ...prev.details,
       item: { ...prev.details.item, reviewRequests }
     },
+    fetchedAt: Date.now(),
+    error: undefined
+  })
+}
+
+function patchCachedWorkItemBody(cacheKey: string, body: string): void {
+  const prev = workItemDetailsCache.get(cacheKey)
+  if (!prev?.details) {
+    return
+  }
+  touchWorkItemDetailsCache(cacheKey, {
+    ...prev,
+    details: { ...prev.details, body },
     fetchedAt: Date.now(),
     error: undefined
   })
@@ -1724,6 +2161,7 @@ function ConversationTab({
   projectOrigin,
   onMutated,
   onChecksUpdated,
+  onBodyUpdated,
   onCommentAdded,
   onReviewersRequested
 }: {
@@ -1744,12 +2182,17 @@ function ConversationTab({
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
   onMutated: () => void
   onChecksUpdated: (checks: PRCheckDetail[]) => void
+  onBodyUpdated: (body: string) => void
   onCommentAdded: (comment: PRComment) => void
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
 }): React.JSX.Element {
   const authorLabel = item.author ?? 'unknown'
   const [replyingTo, setReplyingTo] = useState<number | null>(null)
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
+  const [bodyDraft, setBodyDraft] = useState(body)
+  const [bodyEditing, setBodyEditing] = useState(false)
+  const [bodySaving, setBodySaving] = useState(false)
+  const bodyTextareaRef = useRef<HTMLTextAreaElement>(null)
   const repoAssignees = useRepoAssignees(repoPath, item.repoId)
   const commentCounts = useMemo(() => getPRCommentAudienceCounts(comments), [comments])
   const visibleComments = useMemo(
@@ -1773,6 +2216,51 @@ function ConversationTab({
       setReplyingTo(null)
     }
   }, [replyingTo, visibleComments])
+
+  useEffect(() => {
+    if (!bodyEditing) {
+      setBodyDraft(body)
+    }
+  }, [body, bodyEditing, item.id])
+
+  useEffect(() => {
+    if (bodyEditing) {
+      requestAnimationFrame(() => bodyTextareaRef.current?.focus())
+    }
+  }, [bodyEditing])
+
+  const bodySlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
+  const markdownGitHubRepo = useMemo(
+    () => (projectOrigin ? { owner: projectOrigin.owner, repo: projectOrigin.repo } : bodySlug),
+    [bodySlug, projectOrigin]
+  )
+  const canEditBody =
+    item.type === 'pr' ? Boolean(projectOrigin || bodySlug) : Boolean(projectOrigin || repoPath)
+  const bodyChanged = bodyDraft !== body
+
+  const handleSaveBody = useCallback(async (): Promise<void> => {
+    if (bodySaving || !bodyChanged) {
+      setBodyEditing(false)
+      return
+    }
+    setBodySaving(true)
+    try {
+      await runWorkItemBodyUpdate({
+        item,
+        repoPath,
+        projectOrigin,
+        body: bodyDraft,
+        parsedSlug: bodySlug
+      })
+      onBodyUpdated(bodyDraft)
+      setBodyEditing(false)
+      toast.success('Description updated.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update description.')
+    } finally {
+      setBodySaving(false)
+    }
+  }, [bodyChanged, bodyDraft, bodySaving, bodySlug, item, onBodyUpdated, projectOrigin, repoPath])
 
   const handleReply = useCallback(
     async (comment: PRComment, replyBody: string): Promise<boolean> => {
@@ -1934,6 +2422,7 @@ function ConversationTab({
         <CommentMarkdown
           content={comment.body}
           variant="document"
+          githubRepo={markdownGitHubRepo}
           className="min-w-0 max-w-full overflow-hidden break-words text-[13px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
         />
         <CommentReactions reactions={comment.reactions} />
@@ -1995,7 +2484,10 @@ function ConversationTab({
     <div
       className={cn(
         'grid min-w-0 gap-5 px-4 py-4',
-        item.type === 'pr' && 'xl:grid-cols-[minmax(0,1fr)_300px]'
+        // Why: the drawer expands nearly full-width on narrow app windows, so
+        // keep PR controls beside the conversation instead of hiding them below
+        // long review threads.
+        item.type === 'pr' && 'grid-cols-[minmax(0,1fr)_300px]'
       )}
     >
       <div className="flex min-w-0 flex-col gap-4">
@@ -2003,16 +2495,93 @@ function ConversationTab({
           <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2 text-[12px] text-muted-foreground">
             <span className="font-medium text-foreground">{authorLabel}</span>
             <span>updated {formatRelativeTime(item.updatedAt)}</span>
+            {canEditBody && !loading && detailsLoaded ? (
+              bodyEditing ? (
+                <div className="ml-auto flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    className="gap-1.5"
+                    disabled={bodySaving}
+                    onClick={() => {
+                      setBodyDraft(body)
+                      setBodyEditing(false)
+                    }}
+                  >
+                    <X className="size-3.5" />
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    size="xs"
+                    className="gap-1.5"
+                    disabled={bodySaving || !bodyChanged}
+                    onClick={() => void handleSaveBody()}
+                  >
+                    {bodySaving ? (
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                    ) : (
+                      <Check className="size-3.5" />
+                    )}
+                    Save
+                  </Button>
+                </div>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      className="ml-auto size-7"
+                      onClick={() => {
+                        setBodyDraft(body)
+                        setBodyEditing(true)
+                      }}
+                      aria-label="Edit description"
+                    >
+                      <Pencil className="size-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Edit description</TooltipContent>
+                </Tooltip>
+              )
+            ) : null}
           </div>
           <div className="px-4 py-4 text-[14px] leading-relaxed text-foreground">
             {loading && !detailsLoaded ? (
               <div className="flex items-center justify-center py-5">
                 <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
               </div>
+            ) : bodyEditing ? (
+              <MentionTextarea
+                textareaRef={bodyTextareaRef}
+                value={bodyDraft}
+                onValueChange={setBodyDraft}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    event.preventDefault()
+                    setBodyDraft(body)
+                    setBodyEditing(false)
+                    return
+                  }
+                  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                    event.preventDefault()
+                    void handleSaveBody()
+                  }
+                }}
+                placeholder="Description"
+                rows={12}
+                mentionOptions={mentionOptions}
+                wrapperClassName="flex min-h-64 w-full items-stretch"
+                className="scrollbar-sleek block min-h-64 w-full resize-y rounded-md border border-input bg-background px-3 py-2 font-mono text-[13px] leading-5 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
             ) : body.trim() ? (
               <CommentMarkdown
                 content={body}
                 variant="document"
+                githubRepo={markdownGitHubRepo}
                 className="min-w-0 max-w-full overflow-hidden break-words text-[14px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
               />
             ) : (
@@ -2226,33 +2795,17 @@ function PRActionsPanel({
       </div>
 
       <div className="grid gap-2">
-        <Button
-          type="button"
-          variant={nextState === 'closed' ? 'destructive' : 'secondary'}
-          size="sm"
-          className="w-fit justify-center gap-2 xl:w-full"
-          disabled={!canMutateState || statePending}
-          onClick={() => void handleStateChange()}
-        >
-          {statePending ? (
-            <LoaderCircle className="size-3.5 animate-spin" />
-          ) : nextState === 'closed' ? (
-            <CircleDashed className="size-3.5" />
-          ) : (
-            <CircleDot className="size-3.5" />
-          )}
-          {nextState === 'closed' ? 'Close PR' : 'Reopen PR'}
-        </Button>
-
         <DropdownMenu modal={false}>
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
                 <Button
                   type="button"
-                  variant="outline"
                   size="sm"
-                  className="w-fit justify-center gap-2 xl:w-full"
+                  className={cn(
+                    'w-full justify-center gap-2 bg-green-600 text-white hover:bg-green-700',
+                    'disabled:cursor-not-allowed disabled:opacity-50'
+                  )}
                   disabled={mergePending || localState === 'closed' || localState === 'merged'}
                 >
                   {mergePending ? (
@@ -2288,6 +2841,28 @@ function PRActionsPanel({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <Button
+          type="button"
+          variant={nextState === 'closed' ? 'outline' : 'secondary'}
+          size="sm"
+          className={cn(
+            'w-full justify-center gap-2',
+            nextState === 'closed' &&
+              'border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50'
+          )}
+          disabled={!canMutateState || statePending}
+          onClick={() => void handleStateChange()}
+        >
+          {statePending ? (
+            <LoaderCircle className="size-3.5 animate-spin" />
+          ) : nextState === 'closed' ? (
+            <GitPullRequestClosed className="size-3.5 text-destructive" />
+          ) : (
+            <CircleDot className="size-3.5" />
+          )}
+          {nextState === 'closed' ? 'Close pull request' : 'Reopen PR'}
+        </Button>
       </div>
     </aside>
   )
@@ -2797,26 +3372,28 @@ function ChecksTab({
     [detailsByCheckKey, prRepo, repoId, repoPath]
   )
 
-  const actions = (
-    <div className="flex items-center gap-1">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="size-7"
-            disabled={!repoPath || refreshing}
-            onClick={() => void handleRefresh()}
-            aria-label="Refresh checks"
-          >
-            <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={6}>
-          Refresh checks
-        </TooltipContent>
-      </Tooltip>
+  const refreshAction = (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="size-7 shrink-0"
+          disabled={!repoPath || refreshing}
+          onClick={() => void handleRefresh()}
+          aria-label="Refresh checks"
+        >
+          <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        Refresh checks
+      </TooltipContent>
+    </Tooltip>
+  )
+  const fixBrokenChecksAction =
+    failedChecks.length > 0 || fixingChecks ? (
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -2832,15 +3409,16 @@ function ChecksTab({
             ) : (
               <Wrench className="size-3" />
             )}
-            Fix broken checks
+            {variant === 'compact' ? 'Fix checks' : 'Fix broken checks'}
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
-          {failedChecks.length > 0
-            ? 'Start the default AI agent on these checks'
-            : 'No broken checks to fix'}
+          Start the default AI agent on these checks
         </TooltipContent>
       </Tooltip>
+    ) : null
+  const rerunAction =
+    list.length > 0 || rerunning ? (
       <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
           <Button
@@ -2873,24 +3451,54 @@ function ChecksTab({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+    ) : null
+  const secondaryActions =
+    variant === 'compact' && !fixBrokenChecksAction ? null : fixBrokenChecksAction ||
+      rerunAction ? (
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+        {fixBrokenChecksAction}
+        {variant === 'page' ? rerunAction : null}
+      </div>
+    ) : null
+  const actions = (
+    <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+      {refreshAction}
+      {fixBrokenChecksAction}
+      {rerunAction}
     </div>
   )
   const compactHeader = (
-    <div className="flex min-w-0 items-center gap-2 border-b border-border/50 px-3 py-2">
-      <SummaryIcon
-        className={cn(
-          'size-3.5 shrink-0',
-          summaryColor,
-          counts.pending > 0 && counts.failing === 0 && 'animate-spin'
-        )}
-      />
-      <div className="flex min-w-0 flex-1 items-baseline gap-2">
-        <span className="text-[13px] font-medium text-foreground">Checks</span>
-        {list.length > 0 && (
-          <span className="truncate text-[11px] text-muted-foreground">{summaryLabel}</span>
-        )}
+    <div className="border-b border-border/50 px-3 py-2">
+      <div className="flex min-w-0 items-start gap-2">
+        <div className="flex min-w-0 flex-1 items-start gap-2">
+          <SummaryIcon
+            className={cn(
+              'mt-0.5 size-3.5 shrink-0',
+              summaryColor,
+              counts.pending > 0 && counts.failing === 0 && 'animate-spin'
+            )}
+          />
+          <div className="min-w-0 flex-1">
+            <div className="text-[13px] font-medium leading-5 text-foreground">Checks</div>
+            {list.length > 0 && (
+              <div className="truncate text-[11px] leading-4 text-muted-foreground">
+                {summaryLabel}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {refreshAction}
+          {list.length > 0 && (
+            <div className="[&_button]:h-7 [&_button]:px-2 [&_button]:text-[11px]">
+              {rerunAction}
+            </div>
+          )}
+        </div>
       </div>
-      {actions}
+      {secondaryActions ? (
+        <div className="mt-2 flex min-w-0 justify-end">{secondaryActions}</div>
+      ) : null}
     </div>
   )
 
@@ -3396,6 +4004,51 @@ async function runIssueUpdate(args: {
   if (!res.ok) {
     throw new Error(res.error)
   }
+}
+
+async function runWorkItemBodyUpdate(args: {
+  item: GitHubWorkItem
+  repoPath: string | null
+  projectOrigin: GitHubItemDialogProjectOrigin | undefined
+  body: string
+  parsedSlug: GitHubOwnerRepo | null
+}): Promise<void> {
+  if (args.item.type === 'pr') {
+    const targetSlug = args.projectOrigin
+      ? { owner: args.projectOrigin.owner, repo: args.projectOrigin.repo }
+      : args.parsedSlug
+    if (!targetSlug) {
+      throw new Error('No GitHub repository context available for this pull request.')
+    }
+    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    const updateArgs = {
+      owner: targetSlug.owner,
+      repo: targetSlug.repo,
+      number: args.item.number,
+      updates: { body: args.body }
+    }
+    const res =
+      target.kind === 'environment'
+        ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updatePullRequestBySlug>>>(
+            target,
+            'github.project.updatePullRequestBySlug',
+            updateArgs,
+            { timeoutMs: 30_000 }
+          )
+        : await window.api.gh.updatePullRequestBySlug(updateArgs)
+    if (!res.ok) {
+      throw new Error(res.error.message)
+    }
+    return
+  }
+
+  await runIssueUpdate({
+    repoPath: args.repoPath,
+    repoId: args.item.repoId,
+    projectOrigin: args.projectOrigin,
+    number: args.item.number,
+    updates: { body: args.body }
+  })
 }
 
 async function runPullRequestStateUpdate(args: {
@@ -4457,7 +5110,15 @@ export default function GitHubItemDialog({
       <SheetContent
         side="right"
         showCloseButton={false}
-        className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[720px] lg:max-w-[920px] xl:max-w-[1120px] 2xl:max-w-[1240px]"
+        className={cn(
+          'flex w-full flex-col gap-0 overflow-hidden p-0 xl:max-w-[1120px] 2xl:max-w-[1240px]',
+          // Why: native macOS traffic lights are drawn above web content, so a
+          // nearly full-width right sheet must leave the titlebar's 80px
+          // traffic-light pad uncovered instead of relying on z-index.
+          IS_MAC
+            ? 'max-w-[calc(100vw-(80px/var(--ui-zoom-factor,1)))] sm:max-w-[calc(100vw-(80px/var(--ui-zoom-factor,1)))] lg:max-w-[calc(100vw-(80px/var(--ui-zoom-factor,1)))]'
+            : 'max-w-[calc(100vw-1rem)] sm:max-w-[calc(100vw-1rem)] lg:max-w-[calc(100vw-2rem)]'
+        )}
         onOpenAutoFocus={(event) => {
           // Why: focusing the first actionable element inside the drawer
           // causes the "Start workspace" action to receive focus and
@@ -4474,7 +5135,7 @@ export default function GitHubItemDialog({
         </VisuallyHidden.Root>
         <VisuallyHidden.Root asChild>
           <SheetDescription>
-            Read-only preview of the selected GitHub issue or pull request.
+            Preview and edit the selected GitHub issue or pull request.
           </SheetDescription>
         </VisuallyHidden.Root>
 
@@ -4507,59 +5168,7 @@ export default function GitHubItemDialog({
                     <WorkItemIssueSourceIndicator url={workItem.url} repoId={effectiveRepoId} />
                   )}
                 </div>
-                <div className="flex shrink-0 flex-col items-end gap-2">
-                  <div className="flex items-center justify-end gap-1">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => void handleCopyWorkItemLink()}
-                          aria-label="Copy GitHub link"
-                        >
-                          {linkCopied ? (
-                            <Check className="size-4 text-emerald-500" />
-                          ) : (
-                            <Copy className="size-4" />
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" sideOffset={6}>
-                        {linkCopied ? 'Copied' : 'Copy GitHub link'}
-                      </TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => window.api.shell.openUrl(workItem.url)}
-                          aria-label="Open on GitHub"
-                        >
-                          <ExternalLink className="size-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" sideOffset={6}>
-                        Open on GitHub
-                      </TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={onClose}
-                          aria-label="Close preview"
-                        >
-                          <X className="size-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" sideOffset={6}>
-                        Close · Esc
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
+                <div className="flex shrink-0 items-center justify-end gap-1">
                   {workItem.type === 'pr' && (
                     <Button
                       type="button"
@@ -4572,6 +5181,56 @@ export default function GitHubItemDialog({
                       <ArrowRight className="size-3.5" />
                     </Button>
                   )}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => void handleCopyWorkItemLink()}
+                        aria-label="Copy GitHub link"
+                      >
+                        {linkCopied ? (
+                          <Check className="size-4 text-emerald-500" />
+                        ) : (
+                          <Copy className="size-4" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      {linkCopied ? 'Copied' : 'Copy GitHub link'}
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => window.api.shell.openUrl(workItem.url)}
+                        aria-label="Open on GitHub"
+                      >
+                        <ExternalLink className="size-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Open on GitHub
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={onClose}
+                        aria-label="Close preview"
+                      >
+                        <X className="size-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Close · Esc
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
               </div>
             </div>
@@ -4678,6 +5337,11 @@ export default function GitHubItemDialog({
                         onChecksUpdated={(nextChecks) => {
                           if (detailsCacheKey) {
                             patchCachedPRChecks(detailsCacheKey, nextChecks)
+                          }
+                        }}
+                        onBodyUpdated={(nextBody) => {
+                          if (detailsCacheKey) {
+                            patchCachedWorkItemBody(detailsCacheKey, nextBody)
                           }
                         }}
                         onCommentAdded={appendOptimisticComment}

@@ -705,6 +705,7 @@ function createGitHubApi(): NonNullable<Partial<PreloadApi>['gh']> {
     mergePR: direct('github.mergePR'),
     updatePRState: direct('github.updatePRState'),
     requestPRReviewers: direct('github.requestPRReviewers'),
+    removePRReviewers: direct('github.removePRReviewers'),
     updateIssue: direct('github.updateIssue'),
     addIssueComment: direct('github.addIssueComment'),
     addPRReviewCommentReply: direct('github.addPRReviewCommentReply'),

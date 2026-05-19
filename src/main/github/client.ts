@@ -2688,6 +2688,38 @@ export async function requestPRReviewers(
   }
 }
 
+export async function removePRReviewers(
+  repoPath: string,
+  prNumber: number,
+  reviewers: string[],
+  connectionId?: string | null
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const logins = reviewers.map((reviewer) => reviewer.trim()).filter(Boolean)
+  if (logins.length === 0) {
+    return { ok: false, error: 'Enter at least one reviewer' }
+  }
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
+  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+  await acquire()
+  try {
+    const args = ['pr', 'edit', String(prNumber), '--remove-reviewer', logins.join(',')]
+    if (ownerRepo) {
+      args.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
+    }
+    await ghExecFileAsync(args, {
+      ...ghOptions,
+      env: { ...process.env, GH_PROMPT_DISABLED: '1' }
+    })
+    return { ok: true }
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
+    return { ok: false, error: message }
+  } finally {
+    release()
+  }
+}
+
 /**
  * Update a PR's title.
  */
