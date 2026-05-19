@@ -13,6 +13,7 @@ type RegisterAppMenuOptions = {
   onOpenFeatureTour: (window?: Electron.BaseWindow | null) => void
   onOpenCrashReport: (window?: Electron.BaseWindow | null) => void
   onCheckForUpdates: (options: { includePrerelease: boolean }) => void
+  onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
   onZoomIn: () => void
   onZoomOut: () => void
   onZoomReset: () => void
@@ -28,6 +29,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     onOpenFeatureTour,
     onOpenCrashReport,
     onCheckForUpdates,
+    onBeforeReload,
     onZoomIn,
     onZoomOut,
     onZoomReset,
@@ -45,6 +47,8 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     if (!webContents) {
       return
     }
+
+    onBeforeReload?.({ ignoreCache, webContentsId: webContents.id })
 
     if (ignoreCache) {
       webContents.reloadIgnoringCache()

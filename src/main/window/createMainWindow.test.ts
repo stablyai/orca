@@ -1390,6 +1390,7 @@ describe('createMainWindow', () => {
   it('notifies the caller when the renderer process is gone', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
+      id: 142,
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
       }),
@@ -1422,12 +1423,117 @@ describe('createMainWindow', () => {
     const details = { reason: 'crashed', exitCode: 5 } as Electron.RenderProcessGoneDetails
     windowHandlers['render-process-gone']?.({} as never, details)
 
-    expect(onRendererProcessGone).toHaveBeenCalledWith(details)
+    expect(onRendererProcessGone).toHaveBeenCalledWith(details, 142)
+  })
+
+  it('passes the renderer webContents id through crash classification callbacks', () => {
+    vi.useFakeTimers()
+
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      id: 424,
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+    const onRendererProcessGone = vi.fn()
+    const shouldRecordRendererCrash = vi.fn(() => true)
+    const shouldRecoverRenderer = vi.fn(() => true)
+
+    try {
+      createMainWindow(null, {
+        onRendererProcessGone,
+        shouldRecordRendererCrash,
+        shouldRecoverRenderer
+      })
+
+      const details = { reason: 'crashed', exitCode: 5 } as Electron.RenderProcessGoneDetails
+      windowHandlers['render-process-gone']?.({} as never, details)
+      vi.advanceTimersByTime(250)
+
+      expect(shouldRecordRendererCrash).toHaveBeenCalledWith(details, 424)
+      expect(onRendererProcessGone).toHaveBeenCalledWith(details, 424)
+      expect(shouldRecoverRenderer).toHaveBeenCalledWith(details, 424)
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
+  it('does not notify the crash recorder for an expected renderer teardown', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+    const onRendererProcessGone = vi.fn()
+
+    createMainWindow(null, {
+      onRendererProcessGone,
+      shouldRecordRendererCrash: () => false
+    })
+
+    windowHandlers['render-process-gone']?.(
+      {} as never,
+      {
+        reason: 'killed',
+        exitCode: 15
+      } as Electron.RenderProcessGoneDetails
+    )
+
+    expect(onRendererProcessGone).not.toHaveBeenCalled()
+
+    consoleError.mockRestore()
   })
 
   const createRendererRecoveryWindowHarness = () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
+      id: 143,
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
       }),

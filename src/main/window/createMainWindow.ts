@@ -69,11 +69,24 @@ type CreateMainWindowOptions = {
    *  latch must be cleared or later window closes will be misclassified as
    *  quit attempts. */
   onQuitAborted?: () => void
-  onRendererProcessGone?: (details: Electron.RenderProcessGoneDetails) => void
+  onRendererProcessGone?: (
+    details: Electron.RenderProcessGoneDetails,
+    webContentsId: number
+  ) => void
+  /** Returns true when a renderer loss should be reported as a crash. Why:
+   *  intentional reload/update/quit paths can emit crash-like `killed`
+   *  renderer exits, but surfacing those as crash reports is noise. */
+  shouldRecordRendererCrash?: (
+    details: Electron.RenderProcessGoneDetails,
+    webContentsId: number
+  ) => boolean
   /** Returns true when Orca should reload after an unexpected renderer loss.
    *  Why: update relaunch and app quit intentionally tear down child
    *  processes; recovering those paths can fight Electron's shutdown. */
-  shouldRecoverRenderer?: (details: Electron.RenderProcessGoneDetails) => boolean
+  shouldRecoverRenderer?: (
+    details: Electron.RenderProcessGoneDetails,
+    webContentsId: number
+  ) => boolean
   /** Why: main-process startup must register IPC handlers before the renderer
    *  begins booting, or eager renderer calls can race into missing channels. */
   deferLoad?: boolean
@@ -218,6 +231,7 @@ export function createMainWindow(
       webviewTag: true
     }
   })
+  const rendererWebContentsId = mainWindow.webContents.id
 
   if (process.platform === 'darwin') {
     // Why: persistent parked webviews use separate compositor layers, and on
@@ -502,7 +516,7 @@ export function createMainWindow(
       !isCrashReportReason(details.reason) ||
       windowClosing ||
       opts?.getIsQuitting?.() ||
-      opts?.shouldRecoverRenderer?.(details) === false ||
+      opts?.shouldRecoverRenderer?.(details, rendererWebContentsId) === false ||
       mainWindow.isDestroyed()
     ) {
       return
@@ -512,7 +526,7 @@ export function createMainWindow(
       if (
         windowClosing ||
         opts?.getIsQuitting?.() ||
-        opts?.shouldRecoverRenderer?.(details) === false ||
+        opts?.shouldRecoverRenderer?.(details, rendererWebContentsId) === false ||
         mainWindow.isDestroyed()
       ) {
         return
@@ -526,7 +540,9 @@ export function createMainWindow(
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     rendererProcessGone = true
     resetMarkdownEditorFocus()
-    opts?.onRendererProcessGone?.(details)
+    if (opts?.shouldRecordRendererCrash?.(details, rendererWebContentsId) !== false) {
+      opts?.onRendererProcessGone?.(details, rendererWebContentsId)
+    }
     console.error('[window] Renderer process gone; close confirmation will be bypassed', details)
     scheduleRendererRecovery(details)
   })

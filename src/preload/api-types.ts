@@ -539,6 +539,9 @@ export type AppApi = {
    *  by settings panes that need a full restart to apply changes (e.g. the
    *  terminal-window blur setting in TerminalWindowSection). */
   relaunch: () => Promise<void>
+  /** Reloads the current app renderer through main so expected renderer
+   *  teardown can be classified before Electron emits process-gone events. */
+  reload: () => Promise<void>
   /** Returns the macOS `AppleCurrentKeyboardLayoutInputSourceID` when
    *  available (e.g. `com.apple.keylayout.PolishPro`). Used by the
    *  keyboard-layout probe to distinguish layouts whose base layer matches

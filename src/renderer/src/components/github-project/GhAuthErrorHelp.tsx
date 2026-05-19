@@ -25,6 +25,17 @@ const LOGIN_CMD = 'gh auth login'
 // macOS/Linux vs PowerShell on Windows.
 const IS_WINDOWS = typeof navigator !== 'undefined' && /Win(dows|32|64)/i.test(navigator.userAgent)
 
+function reloadOrcaRenderer(): void {
+  const reload = window.api.app.reload
+  if (typeof reload !== 'function') {
+    window.location.reload()
+    return
+  }
+  void reload().catch(() => {
+    window.location.reload()
+  })
+}
+
 function findEnvVarCommand(varName: string): { label: string; command: string } {
   if (IS_WINDOWS) {
     return {
@@ -228,7 +239,7 @@ export function GhAuthErrorHelp({
               reload the renderer to pick up the new gh token state. */}
           <button
             type="button"
-            onClick={() => window.location.reload()}
+            onClick={reloadOrcaRenderer}
             className="inline-flex items-center gap-1 rounded border border-amber-500/30 px-1.5 py-0.5 text-[11px] hover:bg-amber-500/20"
           >
             <RotateCw className="size-3" /> Reload
@@ -261,7 +272,7 @@ export function GhAuthErrorHelp({
         ) : null}
         {/* Why: after running the refresh command in a terminal, users need to
             reload the renderer to pick up the new gh token state. */}
-        <Button size="sm" variant="outline" onClick={() => window.location.reload()}>
+        <Button size="sm" variant="outline" onClick={reloadOrcaRenderer}>
           <RotateCw className="mr-1 size-3.5" /> Reload
         </Button>
       </div>

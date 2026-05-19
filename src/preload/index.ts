@@ -349,6 +349,7 @@ const api = {
     getFeatureWallAssetBaseUrl: (): Promise<string> =>
       ipcRenderer.invoke('app:getFeatureWallAssetBaseUrl'),
     relaunch: (): Promise<void> => ipcRenderer.invoke('app:relaunch'),
+    reload: (): Promise<void> => ipcRenderer.invoke('app:reload'),
     // Why: on macOS this returns AppleCurrentKeyboardLayoutInputSourceID so
     // the renderer's keyboard-layout probe can distinguish Polish Pro / US
     // Extended / ABC Extended / IME Roman modes from plain US QWERTY (see

@@ -82,6 +82,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         }),
       getFeatureWallAssetBaseUrl: () => Promise.resolve('/'),
       relaunch: () => Promise.resolve(window.location.reload()),
+      reload: () => Promise.resolve(window.location.reload()),
       getKeyboardInputSourceId: () => Promise.resolve(null),
       setUnreadDockBadgeCount: () => Promise.resolve(),
       getFloatingTerminalCwd: () => Promise.resolve('~')

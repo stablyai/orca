@@ -29,6 +29,7 @@ function buildMenuOptions() {
     onOpenSettings: vi.fn(),
     onOpenFeatureTour: vi.fn(),
     onOpenCrashReport: vi.fn(),
+    onBeforeReload: vi.fn(),
     onZoomIn: vi.fn(),
     onZoomOut: vi.fn(),
     onZoomReset: vi.fn(),
@@ -83,33 +84,40 @@ describe('registerAppMenu', () => {
   it('reloads the focused window from the view menu', () => {
     const reloadMock = vi.fn()
     const reloadIgnoringCacheMock = vi.fn()
+    const options = buildMenuOptions()
+    options.onBeforeReload = vi.fn()
     getFocusedWindowMock.mockReturnValue({
       webContents: {
+        id: 101,
         reload: reloadMock,
         reloadIgnoringCache: reloadIgnoringCacheMock
       }
     })
 
-    registerAppMenu(buildMenuOptions())
+    registerAppMenu(options)
 
     const reloadItem = getSubmenu(getTemplate(), 'View').find((item) => item.label === 'Reload')
     reloadItem?.click?.({} as never, {} as never, {} as never)
 
     expect(reloadMock).toHaveBeenCalledTimes(1)
     expect(reloadIgnoringCacheMock).not.toHaveBeenCalled()
+    expect(options.onBeforeReload).toHaveBeenCalledWith({ ignoreCache: false, webContentsId: 101 })
   })
 
   it('force reloads the focused window from the view menu', () => {
     const reloadMock = vi.fn()
     const reloadIgnoringCacheMock = vi.fn()
+    const options = buildMenuOptions()
+    options.onBeforeReload = vi.fn()
     getFocusedWindowMock.mockReturnValue({
       webContents: {
+        id: 102,
         reload: reloadMock,
         reloadIgnoringCache: reloadIgnoringCacheMock
       }
     })
 
-    registerAppMenu(buildMenuOptions())
+    registerAppMenu(options)
 
     const forceReloadItem = getSubmenu(getTemplate(), 'View').find(
       (item) => item.label === 'Force Reload'
@@ -118,6 +126,7 @@ describe('registerAppMenu', () => {
 
     expect(reloadIgnoringCacheMock).toHaveBeenCalledTimes(1)
     expect(reloadMock).not.toHaveBeenCalled()
+    expect(options.onBeforeReload).toHaveBeenCalledWith({ ignoreCache: true, webContentsId: 102 })
   })
 
   it('includes prereleases when Check for Updates is clicked with shift held', () => {
