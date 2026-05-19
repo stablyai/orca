@@ -50,4 +50,20 @@ describe('migrateClaudeAccount', () => {
     const migrated = migrateClaudeAccount(legacy as never)
     expect(migrated.credentials).toEqual({ authMethod: 'unknown' })
   })
+
+  it('coerces legacy azure-foundry into placeholder credentials when none present', () => {
+    // Legacy rows pre-credentials field synthesize a minimal placeholder; UI
+    // must surface "Re-add this account" elsewhere when resource is empty.
+    const legacy = {
+      id: 'a1',
+      email: 'F',
+      managedAuthPath: '/tmp',
+      authMethod: 'azure-foundry' as const,
+      createdAt: 1,
+      updatedAt: 1,
+      lastAuthenticatedAt: 1
+    }
+    const migrated = migrateClaudeAccount(legacy as never)
+    expect(migrated.credentials).toEqual({ authMethod: 'azure-foundry', resource: '', useEntraId: false })
+  })
 })

@@ -14,6 +14,10 @@ describe('handlerFor', () => {
     expect(handlerFor('anthropic-compat').authMethod).toBe('anthropic-compat')
   })
 
+  it('returns Azure Foundry handler', () => {
+    expect(handlerFor('azure-foundry').authMethod).toBe('azure-foundry')
+  })
+
   it('throws on unknown authMethod', () => {
     expect(() => handlerFor('unknown')).toThrow(/no provider handler/i)
   })

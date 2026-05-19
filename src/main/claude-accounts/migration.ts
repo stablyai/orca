@@ -12,6 +12,7 @@ type LegacyAccount = Omit<
 function deriveCredentials(authMethod: LegacyAccount['authMethod']): ClaudeAuthCredentials {
   if (authMethod === 'subscription-oauth') return { authMethod: 'subscription-oauth' }
   if (authMethod === 'anthropic-api-key') return { authMethod: 'anthropic-api-key' }
+  if (authMethod === 'azure-foundry') return { authMethod: 'azure-foundry', resource: '', useEntraId: false }
   return { authMethod: 'unknown' }
 }
 
