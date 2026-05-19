@@ -1,5 +1,9 @@
 import { describe, it, expectTypeOf } from 'vitest'
-import type { ClaudeManagedAccount, ClaudeAuthCredentials } from './types'
+import type {
+  ClaudeManagedAccount,
+  ClaudeAuthCredentials,
+  AddClaudeAccountInput,
+} from './types'
 
 describe('ClaudeAuthCredentials', () => {
   it('subscription-oauth has no extra fields', () => {
@@ -62,5 +66,26 @@ describe('ClaudeAuthCredentials — azure-foundry variant (P2)', () => {
       resource: 'r',
     }
     expectTypeOf(c).toMatchTypeOf<{ authMethod: 'azure-foundry'; resource: string }>()
+  })
+})
+
+describe('AddClaudeAccountInput — azure-foundry variant (P2)', () => {
+  it('api-key path requires secretFromUser + resource', () => {
+    const input: AddClaudeAccountInput = {
+      authMethod: 'azure-foundry',
+      label: 'Foundry prod',
+      secretFromUser: 'fkey-abc',
+      providerConfig: { resource: 'prod-resource' }
+    }
+    expectTypeOf(input).toMatchTypeOf<{ authMethod: 'azure-foundry' }>()
+  })
+
+  it('entra-id path omits secretFromUser, sets useEntraId true', () => {
+    const input: AddClaudeAccountInput = {
+      authMethod: 'azure-foundry',
+      label: 'Foundry dev',
+      providerConfig: { resource: 'dev-resource', useEntraId: true }
+    }
+    expectTypeOf(input).toMatchTypeOf<{ authMethod: 'azure-foundry' }>()
   })
 })

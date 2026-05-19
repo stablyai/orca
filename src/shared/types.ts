@@ -1309,6 +1309,16 @@ export type AddClaudeAccountInput =
       secretFromUser: string
       providerConfig: { preset: AnthropicCompatPreset; baseUrl?: string }
     }
+  | {
+      authMethod: 'azure-foundry'
+      label?: string
+      secretFromUser?: string // present on API-key path, absent on Entra ID path
+      providerConfig: {
+        resource: string
+        baseUrl?: string // optional override of the derived endpoint
+        useEntraId?: boolean // true → Entra ID path; false/undefined → API-key path
+      }
+    }
 
 /** All AI coding agents Orca knows how to launch. Used for the agent picker in the new-workspace
  *  flow and for the default-agent setting. Extend this union as new agents are added. */
