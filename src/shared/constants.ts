@@ -338,7 +338,7 @@ export function getDefaultUIState(): PersistedUIState {
     lastActiveWorktreeId: null,
     sidebarWidth: 280,
     rightSidebarWidth: 350,
-    groupBy: 'repo',
+    groupBy: 'workspace-status',
     sortBy: 'recent',
     showActiveOnly: false,
     hideDefaultBranchWorkspace: false,

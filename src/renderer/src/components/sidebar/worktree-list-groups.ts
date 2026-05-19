@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: sidebar row construction keeps every grouping mode in one pure module so reveal, virtualized rendering, and tests share the same flat row contract. */
-import { CircleX, Folder, Pin } from 'lucide-react'
+import { CircleX, Folder, List, Pin } from 'lucide-react'
 import type React from 'react'
 import type {
   Repo,
@@ -103,6 +103,14 @@ export const PINNED_GROUP_META = {
   label: 'Pinned',
   tone: 'text-foreground',
   icon: Pin
+} as const
+
+export const ALL_GROUP_KEY = 'all'
+
+export const ALL_GROUP_META = {
+  label: 'All',
+  tone: 'text-foreground',
+  icon: List
 } as const
 
 export const MISSING_PARENT_GROUP_META = {
@@ -373,11 +381,23 @@ export function buildRows(
   const unpinned = pinnedIds.size > 0 ? worktrees.filter((w) => !pinnedIds.has(w.id)) : worktrees
 
   if (groupBy === 'none') {
-    appendWorktreeRows(result, unpinned, repoMap, lineageById, worktreeMap, {
-      nestLineage,
-      showLineageContext: nestLineage,
-      collapsedGroups
-    })
+    if (unpinned.length > 0) {
+      result.push({
+        type: 'header',
+        key: ALL_GROUP_KEY,
+        label: ALL_GROUP_META.label,
+        count: unpinned.length,
+        tone: ALL_GROUP_META.tone,
+        icon: ALL_GROUP_META.icon
+      })
+      if (!collapsedGroups.has(ALL_GROUP_KEY)) {
+        appendWorktreeRows(result, unpinned, repoMap, lineageById, worktreeMap, {
+          nestLineage,
+          showLineageContext: nestLineage,
+          collapsedGroups
+        })
+      }
+    }
     return result
   }
 
@@ -513,7 +533,7 @@ export function getGroupKeyForWorktree(
   workspaceStatuses: readonly WorkspaceStatusDefinition[] = cloneDefaultWorkspaceStatuses()
 ): string | null {
   if (groupBy === 'none') {
-    return null
+    return ALL_GROUP_KEY
   }
   if (groupBy === 'workspace-status') {
     return getWorkspaceStatusGroupKey(getWorkspaceStatus(worktree, workspaceStatuses))
