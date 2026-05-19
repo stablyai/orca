@@ -2,10 +2,14 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { CommitMessageAiSettings, GlobalSettings } from '../../../../shared/types'
-import { getCommitMessageModelDiscoveryHostKey } from '../../../../shared/commit-message-host-key'
+import {
+  getCommitMessageModelDiscoveryHostKey,
+  getCommitMessageModelDiscoveryHostKeyForScope
+} from '../../../../shared/commit-message-host-key'
 import { useAppStore } from '../../store'
 import {
   CommitMessageAiPane,
+  getCommitMessageSettingsPaneDiscoveryHostKey,
   mergeDiscoveredModelsIntoCommitMessageConfig
 } from './CommitMessageAiPane'
 import { COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES } from './commit-message-ai-search'
@@ -112,7 +116,7 @@ describe('CommitMessageAiPane', () => {
   it('shows an unconfigured state when the default agent is unsupported', () => {
     const markup = renderPane(
       buildSettings({
-        defaultTuiAgent: 'gemini',
+        defaultTuiAgent: 'aider',
         commitMessageAi: {
           enabled: true,
           agentId: null,
@@ -125,8 +129,8 @@ describe('CommitMessageAiPane', () => {
     )
 
     expect(markup).toContain('Not configured')
-    expect(markup).toContain('Your default agent is Gemini')
-    expect(markup).toContain('Choose Claude, Codex, or Custom')
+    expect(markup).toContain('Your default agent is Aider')
+    expect(markup).toContain('Choose a supported agent or Custom')
     expect(markup).not.toContain('Which model the selected agent uses')
     expect(markup).not.toContain('Thinking effort')
   })
@@ -204,5 +208,21 @@ describe('CommitMessageAiPane', () => {
     expect(getCommitMessageModelDiscoveryHostKey(null)).toBe('local')
     expect(getCommitMessageModelDiscoveryHostKey('ssh-1')).toBe('ssh:ssh-1')
     expect(getCommitMessageModelDiscoveryHostKey(undefined)).toBe('unknown')
+    expect(getCommitMessageModelDiscoveryHostKeyForScope('runtime:env-1')).toBe('runtime:env-1')
+    expect(getCommitMessageModelDiscoveryHostKeyForScope('ssh-1')).toBe('ssh:ssh-1')
+  })
+
+  it('keeps local active worktree discovery scoped to local, not unknown', () => {
+    expect(getCommitMessageSettingsPaneDiscoveryHostKey(buildSettings(), null, true)).toBe('local')
+    expect(getCommitMessageSettingsPaneDiscoveryHostKey(buildSettings(), undefined, true)).toBe(
+      'unknown'
+    )
+    expect(
+      getCommitMessageSettingsPaneDiscoveryHostKey(
+        buildSettings({ activeRuntimeEnvironmentId: 'env-1' }),
+        null,
+        true
+      )
+    ).toBe('runtime:env-1')
   })
 })

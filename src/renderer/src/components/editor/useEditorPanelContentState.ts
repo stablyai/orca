@@ -149,7 +149,7 @@ export function useEditorPanelContentState({
       const compareAgainstHead = file.mode === 'edit'
       const key = inFlightDiffKey(
         { ...file, diffSource: effectiveDiffSource },
-        gitScope,
+        gitScope ?? undefined,
         compareAgainstHead
       )
       let pending = inFlightDiffReads.get(key)

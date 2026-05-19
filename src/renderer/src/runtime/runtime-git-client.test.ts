@@ -5,6 +5,7 @@ import {
   bulkStageRuntimeGitPaths,
   cancelRuntimeGenerateCommitMessage,
   commitRuntimeGit,
+  discoverRuntimeCommitMessageModels,
   generateRuntimeCommitMessage,
   getRuntimeGitDiff,
   getRuntimeGitHistory,
@@ -27,6 +28,7 @@ const gitBulkDiscard = vi.fn()
 const gitCommit = vi.fn()
 const gitPush = vi.fn()
 const gitGenerateCommitMessage = vi.fn()
+const gitDiscoverCommitMessageModels = vi.fn()
 const gitCancelGenerateCommitMessage = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
@@ -43,6 +45,7 @@ beforeEach(() => {
   gitCommit.mockReset()
   gitPush.mockReset()
   gitGenerateCommitMessage.mockReset()
+  gitDiscoverCommitMessageModels.mockReset()
   gitCancelGenerateCommitMessage.mockReset()
   runtimeEnvironmentCall.mockReset()
   runtimeEnvironmentTransportCall.mockReset()
@@ -62,6 +65,7 @@ beforeEach(() => {
         commit: gitCommit,
         push: gitPush,
         generateCommitMessage: gitGenerateCommitMessage,
+        discoverCommitMessageModels: gitDiscoverCommitMessageModels,
         cancelGenerateCommitMessage: gitCancelGenerateCommitMessage
       },
       runtime: { call: runtimeCall },
@@ -313,7 +317,7 @@ describe('runtime git client', () => {
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(4, {
       selector: 'env-1',
       method: 'git.generateCommitMessage',
-      params: { worktree: 'wt-1' },
+      params: { worktree: 'wt-1', commitMessageDiscoveryHostKey: 'runtime:env-1' },
       timeoutMs: 75_000
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(5, {
@@ -365,9 +369,37 @@ describe('runtime git client', () => {
         worktree: 'wt-1',
         commitMessageAi,
         agentCmdOverrides,
-        enableGitHubAttribution: true
+        enableGitHubAttribution: true,
+        commitMessageDiscoveryHostKey: 'runtime:env-1'
       },
       timeoutMs: 75_000
     })
+  })
+
+  it('discovers commit-message models through the active runtime', async () => {
+    const agentCmdOverrides = { cursor: 'cursor-agent' }
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { success: true, models: [{ id: 'auto', label: 'Auto' }], defaultModelId: 'auto' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    await discoverRuntimeCommitMessageModels(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1', agentCmdOverrides },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      'cursor'
+    )
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'git.discoverCommitMessageModels',
+      params: { worktree: 'wt-1', agentId: 'cursor', agentCmdOverrides },
+      timeoutMs: 75_000
+    })
+    expect(gitDiscoverCommitMessageModels).not.toHaveBeenCalled()
   })
 })

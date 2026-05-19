@@ -16,7 +16,7 @@ import {
 } from '../../../../shared/commit-message-agent-spec'
 import { CUSTOM_PROMPT_PLACEHOLDER } from '../../../../shared/commit-message-prompt'
 import {
-  getCommitMessageModelDiscoveryHostKey,
+  getCommitMessageModelDiscoveryHostKeyForScope,
   LOCAL_COMMIT_MESSAGE_HOST_KEY
 } from '../../../../shared/commit-message-host-key'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
@@ -24,6 +24,10 @@ import { getConnectionId } from '@/lib/connection-context'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import {
+  discoverRuntimeCommitMessageModels,
+  getRuntimeGitScope
+} from '../../runtime/runtime-git-client'
 import { useAppStore } from '../../store'
 import { useActiveWorktree } from '../../store/selectors'
 import { SearchableSetting } from './SearchableSetting'
@@ -179,6 +183,17 @@ function selectModelForHost(
   }
 }
 
+export function getCommitMessageSettingsPaneDiscoveryHostKey(
+  settings: GlobalSettings,
+  activeConnectionId: string | null | undefined,
+  hasActiveWorktree: boolean
+): string {
+  const runtimeScope = hasActiveWorktree
+    ? getRuntimeGitScope(settings, activeConnectionId)
+    : activeConnectionId
+  return getCommitMessageModelDiscoveryHostKeyForScope(runtimeScope)
+}
+
 export function CommitMessageAiPane({
   settings,
   updateSettings,
@@ -188,7 +203,11 @@ export function CommitMessageAiPane({
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const activeWorktree = useActiveWorktree()
   const activeConnectionId = getConnectionId(activeWorktree?.id ?? null)
-  const discoveryHostKey = getCommitMessageModelDiscoveryHostKey(activeConnectionId)
+  const discoveryHostKey = getCommitMessageSettingsPaneDiscoveryHostKey(
+    settings,
+    activeConnectionId,
+    Boolean(activeWorktree?.id)
+  )
   const config = readSettings(settings)
   const latestConfigRef = useRef(config)
   latestConfigRef.current = config
@@ -298,11 +317,15 @@ export function CommitMessageAiPane({
       }
     }))
     try {
-      const result = await window.api.git.discoverCommitMessageModels({
-        agentId,
-        ...(activeWorktree?.path ? { worktreePath: activeWorktree.path } : {}),
-        ...(activeConnectionId ? { connectionId: activeConnectionId } : {})
-      })
+      const result = await discoverRuntimeCommitMessageModels(
+        {
+          settings,
+          worktreeId: activeWorktree?.id,
+          worktreePath: activeWorktree?.path ?? '',
+          connectionId: activeConnectionId ?? undefined
+        },
+        agentId
+      )
       if (!result.success) {
         setModelDiscoveryByAgent((prev) => ({
           ...prev,
@@ -623,7 +646,7 @@ export function CommitMessageAiPane({
           {unsupportedDefaultAgentLabel ? (
             <p className="max-w-[260px] text-right text-[11px] text-muted-foreground">
               Your default agent is {unsupportedDefaultAgentLabel}, which does not support commit
-              message generation yet. Choose Claude, Codex, or Custom.
+              message generation yet. Choose a supported agent or Custom.
             </p>
           ) : null}
         </div>

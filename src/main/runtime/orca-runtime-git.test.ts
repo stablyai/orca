@@ -10,7 +10,8 @@ import { RuntimeGitCommands, type ResolvedRuntimeGitWorktree } from './orca-runt
 const mocks = vi.hoisted(() => ({
   getStagedCommitContext: vi.fn(),
   generateCommitMessageFromContext: vi.fn(),
-  resolveCommitMessageSettings: vi.fn()
+  resolveCommitMessageSettings: vi.fn(),
+  getSshGitProvider: vi.fn()
 }))
 
 vi.mock('../git/status', async () => ({
@@ -24,6 +25,10 @@ vi.mock('../text-generation/commit-message-text-generation', async () => ({
   )),
   generateCommitMessageFromContext: mocks.generateCommitMessageFromContext,
   resolveCommitMessageSettings: mocks.resolveCommitMessageSettings
+}))
+
+vi.mock('../providers/ssh-git-dispatch', () => ({
+  getSshGitProvider: mocks.getSshGitProvider
 }))
 
 const tempDirs: string[] = []
@@ -55,6 +60,7 @@ describe('RuntimeGitCommands', () => {
     mocks.getStagedCommitContext.mockReset()
     mocks.generateCommitMessageFromContext.mockReset()
     mocks.resolveCommitMessageSettings.mockReset()
+    mocks.getSshGitProvider.mockReset()
   })
 
   afterEach(() => {
@@ -109,6 +115,12 @@ describe('RuntimeGitCommands', () => {
       message: 'docs: update readme'
     })
 
+    expect(mocks.resolveCommitMessageSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        commitMessageAi: { enabled: true, agentId: 'codex' }
+      }),
+      'local'
+    )
     expect(mocks.generateCommitMessageFromContext).toHaveBeenCalledWith(
       context,
       params,
@@ -116,6 +128,58 @@ describe('RuntimeGitCommands', () => {
         kind: 'local',
         cwd: worktreePath,
         env: expect.objectContaining({ CODEX_HOME: '/managed/codex-home' })
+      })
+    )
+  })
+
+  it('resolves remote commit-message settings against the SSH host cache', async () => {
+    const worktreePath = '/remote/repo'
+    const context = {
+      branch: 'main',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const params = { agentId: 'cursor', model: 'remote-model' }
+    mocks.resolveCommitMessageSettings.mockReturnValue({ ok: true, params })
+    mocks.generateCommitMessageFromContext.mockResolvedValue({
+      success: true,
+      message: 'docs: update remote readme'
+    })
+    const provider = {
+      getStagedCommitContext: vi.fn().mockResolvedValue(context),
+      executeCommitMessagePlan: vi.fn()
+    }
+    mocks.getSshGitProvider.mockReturnValue(provider)
+    const commands = new RuntimeGitCommands({
+      resolveRuntimeGitTarget: async () => ({
+        worktree: makeWorktree(worktreePath),
+        connectionId: 'conn-1'
+      }),
+      getRuntimeSettings: () =>
+        ({
+          commitMessageAi: {
+            enabled: true,
+            agentId: 'cursor',
+            selectedModelByAgentByHost: { 'ssh:conn-1': { cursor: 'remote-model' } }
+          }
+        }) as unknown as GlobalSettings
+    })
+
+    await expect(commands.generateRuntimeCommitMessage('id:wt-1')).resolves.toEqual({
+      success: true,
+      message: 'docs: update remote readme'
+    })
+
+    expect(mocks.resolveCommitMessageSettings).toHaveBeenCalledWith(
+      expect.any(Object),
+      'ssh:conn-1'
+    )
+    expect(mocks.generateCommitMessageFromContext).toHaveBeenCalledWith(
+      context,
+      params,
+      expect.objectContaining({
+        kind: 'remote',
+        cwd: worktreePath
       })
     )
   })

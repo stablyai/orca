@@ -191,6 +191,11 @@ describe('git RPC methods', () => {
       generateRuntimeCommitMessage: vi
         .fn()
         .mockResolvedValue({ success: true, message: 'feat: test' }),
+      discoverRuntimeCommitMessageModels: vi.fn().mockResolvedValue({
+        success: true,
+        models: [{ id: 'auto', label: 'Auto' }],
+        defaultModelId: 'auto'
+      }),
       cancelRuntimeGenerateCommitMessage: vi.fn().mockResolvedValue({ ok: true }),
       pushRuntimeGit: vi.fn().mockResolvedValue({ ok: true }),
       getRuntimeGitRemoteFileUrl: vi.fn().mockResolvedValue('https://example.com/file#L3')
@@ -201,6 +206,13 @@ describe('git RPC methods', () => {
       makeRequest('git.commit', { worktree: 'id:wt-1', message: 'feat: test' })
     )
     await dispatcher.dispatch(makeRequest('git.generateCommitMessage', { worktree: 'id:wt-1' }))
+    await dispatcher.dispatch(
+      makeRequest('git.discoverCommitMessageModels', {
+        worktree: 'id:wt-1',
+        agentId: 'cursor',
+        agentCmdOverrides: { cursor: 'cursor-agent' }
+      })
+    )
     await dispatcher.dispatch(
       makeRequest('git.cancelGenerateCommitMessage', { worktree: 'id:wt-1' })
     )
@@ -221,6 +233,9 @@ describe('git RPC methods', () => {
 
     expect(runtime.commitRuntimeGit).toHaveBeenCalledWith('id:wt-1', 'feat: test')
     expect(runtime.generateRuntimeCommitMessage).toHaveBeenCalledWith('id:wt-1')
+    expect(runtime.discoverRuntimeCommitMessageModels).toHaveBeenCalledWith('id:wt-1', 'cursor', {
+      agentCmdOverrides: { cursor: 'cursor-agent' }
+    })
     expect(runtime.cancelRuntimeGenerateCommitMessage).toHaveBeenCalledWith('id:wt-1')
     expect(runtime.pushRuntimeGit).toHaveBeenCalledWith('id:wt-1', true, { remote: 'origin' })
     expect(response).toMatchObject({ ok: true, result: 'https://example.com/file#L3' })
@@ -231,6 +246,15 @@ describe('git RPC methods', () => {
       enabled: true,
       agentId: 'codex',
       selectedModelByAgent: { codex: 'gpt-5.3-codex-spark' },
+      selectedModelByAgentByHost: { 'ssh:conn-1': { cursor: 'remote-model' } },
+      discoveredModelsByAgent: {
+        cursor: [{ id: 'local-model', label: 'Local Model' }]
+      },
+      discoveredModelsByAgentByHost: {
+        'ssh:conn-1': {
+          cursor: [{ id: 'remote-model', label: 'Remote Model' }]
+        }
+      },
       selectedThinkingByModel: { 'gpt-5.3-codex-spark': 'medium' },
       customPrompt: '',
       customAgentCommand: ''
@@ -247,14 +271,16 @@ describe('git RPC methods', () => {
         worktree: 'id:wt-1',
         commitMessageAi,
         agentCmdOverrides,
-        enableGitHubAttribution: true
+        enableGitHubAttribution: true,
+        commitMessageDiscoveryHostKey: 'runtime:env-1'
       })
     )
 
     expect(runtime.generateRuntimeCommitMessage).toHaveBeenCalledWith('id:wt-1', {
       commitMessageAi,
       agentCmdOverrides,
-      enableGitHubAttribution: true
+      enableGitHubAttribution: true,
+      commitMessageDiscoveryHostKey: 'runtime:env-1'
     })
   })
 

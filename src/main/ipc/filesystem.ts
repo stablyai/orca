@@ -773,7 +773,8 @@ export function registerFilesystemHandlers(
         connectionId?: string
       }
     ): Promise<GeneratePullRequestFieldsResult> => {
-      const resolvedSettings = resolveCommitMessageSettings(store.getSettings())
+      const discoveryHostKey = getCommitMessageModelDiscoveryHostKey(args.connectionId ?? null)
+      const resolvedSettings = resolveCommitMessageSettings(store.getSettings(), discoveryHostKey)
       if (!resolvedSettings.ok) {
         return { success: false, error: resolvedSettings.error }
       }
