@@ -34,6 +34,25 @@ function emitFail(error: unknown): never {
   throw error instanceof Error ? error : new Error(message)
 }
 
+// Why: every provider branch ends the same way — optionally probe the new
+// credential via claudeAccounts.validate, then emit the success envelope.
+// Extracting this keeps each provider branch focused on payload shape.
+async function finishAdd(ctx: Parameters<CommandHandler>[0], result: AddResult): Promise<void> {
+  if (ctx.flags.get('validate') === true) {
+    const probe = await ctx.client.call<{ ok: boolean; error?: string }>(
+      'claudeAccounts.validate',
+      { accountId: result.accountId }
+    )
+    if (!probe.result.ok) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `Validation failed for account ${result.accountId}: ${probe.result.error ?? 'unknown'}`
+      )
+    }
+  }
+  emitOk(result.accountId, result.email)
+}
+
 async function handleAdd(ctx: Parameters<CommandHandler>[0]): Promise<void> {
   const provider = getRequiredStringFlag(ctx.flags, 'provider')
   try {
@@ -45,7 +64,7 @@ async function handleAdd(ctx: Parameters<CommandHandler>[0]): Promise<void> {
         label,
         secretFromUser: secret
       })
-      emitOk(response.result.accountId, response.result.email)
+      await finishAdd(ctx, response.result)
       return
     }
     if (provider === 'anthropic-compat') {
@@ -69,7 +88,7 @@ async function handleAdd(ctx: Parameters<CommandHandler>[0]): Promise<void> {
         secretFromUser: secret,
         providerConfig
       })
-      emitOk(response.result.accountId, response.result.email)
+      await finishAdd(ctx, response.result)
       return
     }
     if (provider === 'azure-foundry') {
@@ -100,7 +119,7 @@ async function handleAdd(ctx: Parameters<CommandHandler>[0]): Promise<void> {
         payload.secretFromUser = readSecretFromEnv(ctx.flags, 'key-env')
       }
       const result = await ctx.client.call<AddResult>('claudeAccounts.add', payload)
-      emitOk(result.result.accountId, result.result.email)
+      await finishAdd(ctx, result.result)
       return
     }
     if (provider === 'aws-bedrock') {
@@ -122,7 +141,7 @@ async function handleAdd(ctx: Parameters<CommandHandler>[0]): Promise<void> {
         payload.secretFromUser = readSecretFromEnv(ctx.flags, 'token-env')
       }
       const result = await ctx.client.call<AddResult>('claudeAccounts.add', payload)
-      emitOk(result.result.accountId, result.result.email)
+      await finishAdd(ctx, result.result)
       return
     }
     if (provider === 'google-vertex') {
@@ -136,7 +155,7 @@ async function handleAdd(ctx: Parameters<CommandHandler>[0]): Promise<void> {
         label,
         providerConfig: { projectId, region, authMode: 'adc' }
       })
-      emitOk(result.result.accountId, result.result.email)
+      await finishAdd(ctx, result.result)
       return
     }
     throw new RuntimeClientError('invalid_argument', `Unknown --provider value: ${provider}`)
@@ -145,6 +164,42 @@ async function handleAdd(ctx: Parameters<CommandHandler>[0]): Promise<void> {
   }
 }
 
+async function handleList(ctx: Parameters<CommandHandler>[0]): Promise<void> {
+  try {
+    const result = await ctx.client.call<{ accounts: unknown[] }>('claudeAccounts.list', {})
+    console.log(JSON.stringify({ ok: true, accounts: result.result.accounts }))
+  } catch (error) {
+    emitFail(error)
+  }
+}
+
+async function handleSelect(ctx: Parameters<CommandHandler>[0]): Promise<void> {
+  try {
+    const accountId = getRequiredStringFlag(ctx.flags, 'account-id')
+    const result = await ctx.client.call<{ activeAccountId: string }>('claudeAccounts.select', {
+      accountId
+    })
+    console.log(JSON.stringify({ ok: true, activeAccountId: result.result.activeAccountId }))
+  } catch (error) {
+    emitFail(error)
+  }
+}
+
+async function handleRemove(ctx: Parameters<CommandHandler>[0]): Promise<void> {
+  try {
+    const accountId = getRequiredStringFlag(ctx.flags, 'account-id')
+    const result = await ctx.client.call<{ removed: boolean }>('claudeAccounts.remove', {
+      accountId
+    })
+    console.log(JSON.stringify({ ok: true, removed: result.result.removed }))
+  } catch (error) {
+    emitFail(error)
+  }
+}
+
 export const CLAUDE_ACCOUNTS_HANDLERS: Record<string, CommandHandler> = {
-  'claude-accounts add': handleAdd
+  'claude-accounts add': handleAdd,
+  'claude-accounts list': handleList,
+  'claude-accounts select': handleSelect,
+  'claude-accounts remove': handleRemove
 }
