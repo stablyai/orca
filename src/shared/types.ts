@@ -1563,6 +1563,12 @@ export type GlobalSettings = {
   /** Gates multi-provider Claude managed accounts (issue #2314). Defaults to
    *  false; flipped on in P4 once the new UI/runtime path is ready to ship. */
   claudeMultiProviderEnabled?: boolean
+  /** Per-worktree default Claude account override. Keyed by `Worktree.id`
+   *  (i.e. `${repoId}::${path}`). When resolving the active account for a
+   *  Claude PTY launch, the resolver prefers this entry over
+   *  `activeClaudeManagedAccountId`. Account records hold credentials;
+   *  this map only stores the pointer. (P2) */
+  claudeAccountIdByWorkspace?: Record<string, string>
   /** When true, each worktree gets its own shell history file so ArrowUp
    *  does not surface commands from other worktrees. Defaults to true.
    *  Disable to revert to shared global shell history. */

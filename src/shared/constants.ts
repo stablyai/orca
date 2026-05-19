@@ -223,6 +223,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     claudeManagedAccounts: [],
     activeClaudeManagedAccountId: null,
     claudeMultiProviderEnabled: false,
+    claudeAccountIdByWorkspace: {},
     terminalScopeHistoryByWorktree: true,
     defaultTuiAgent: null,
     skipDeleteWorktreeConfirm: false,

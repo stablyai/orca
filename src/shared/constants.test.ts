@@ -21,6 +21,11 @@ describe('getDefaultSettings', () => {
       selectedModelByAgent: {}
     })
   })
+
+  it('default settings include empty claudeAccountIdByWorkspace map (P2)', () => {
+    const settings = getDefaultSettings('/tmp')
+    expect(settings.claudeAccountIdByWorkspace).toEqual({})
+  })
 })
 
 describe('getDefaultPrimarySelectionMiddleClickPaste', () => {
