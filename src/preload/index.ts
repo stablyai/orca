@@ -1192,7 +1192,19 @@ const api = {
     clearWorkspaceOverride: (args: { worktreeId: string }): Promise<unknown> =>
       ipcRenderer.invoke('claudeAccounts:clearWorkspaceOverride', args),
     validateInput: (input: AddClaudeAccountInput): Promise<unknown> =>
-      ipcRenderer.invoke('claudeAccounts:validateInput', input)
+      ipcRenderer.invoke('claudeAccounts:validateInput', input),
+    // Why: P3 — dedicated Detect probes accept the smallest viable payload
+    // shape (region/secret for Bedrock, projectId/region for Vertex). Main
+    // reconstructs the full AddClaudeAccountInput before delegating.
+    bedrockDetect: (payload: {
+      region: string
+      secret: string
+      inferenceProfilePrefix?: string
+    }): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:bedrock-detect', payload),
+    vertexDetect: (payload: { projectId: string; region: string }): Promise<unknown> =>
+      ipcRenderer.invoke('claudeAccounts:vertex-detect', payload),
+    refreshPresetDefaults: (): Promise<unknown> =>
+      ipcRenderer.invoke('claudeAccounts:refresh-preset-defaults')
   },
 
   cli: {

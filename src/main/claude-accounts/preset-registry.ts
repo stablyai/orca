@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 // Why: 24h TTL keeps registry overrides fresh without hammering the network.
@@ -76,4 +76,21 @@ export async function getCachedRegistry(): Promise<{
 }> {
   const c = await readCache()
   return { data: c?.data ?? null, fetchedAt: c?.fetchedAt ?? null }
+}
+
+/**
+ * Delete the on-disk registry cache so the next `fetchPresetRegistry()` is
+ * forced to round-trip the network.
+ *
+ * Why: the renderer "Refresh defaults" button (T19) needs to bypass the 24h
+ * TTL — wiping the file is the simplest way to invalidate it without adding a
+ * second invalidation path inside `fetchPresetRegistry`. Swallow ENOENT so
+ * the operation is idempotent.
+ */
+export async function clearPresetRegistryCache(): Promise<void> {
+  try {
+    await rm(cachePath())
+  } catch {
+    // No cache file is the desired post-state — ENOENT is a no-op.
+  }
 }

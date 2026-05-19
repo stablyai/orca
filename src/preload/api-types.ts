@@ -20,6 +20,7 @@ import type {
   BrowserViewportOverride,
   ClaudeAccountValidationResult,
   ClaudeRateLimitAccountsState,
+  ClaudeRefreshPresetDefaultsResult,
   CodexRateLimitAccountsState,
   CreateWorktreeArgs,
   CreateWorktreeResult,
@@ -1173,6 +1174,25 @@ export type PreloadApi = {
     /** P2 — Detect/Validate probe for AddAccountModal. Validates a candidate
      *  input against the provider handler without persisting anything. */
     validateInput: (input: AddClaudeAccountInput) => Promise<ClaudeAccountValidationResult>
+    /** P3 — Dedicated Bedrock Detect probe used by `AwsBedrockForm`. Accepts
+     *  the smallest viable payload; the main side reconstructs the full
+     *  `AddClaudeAccountInput` before delegating to `validateInput`. An empty
+     *  `secret` switches the probe to the IAM-chain path. */
+    bedrockDetect: (payload: {
+      region: string
+      secret: string
+      inferenceProfilePrefix?: string
+    }) => Promise<ClaudeAccountValidationResult>
+    /** P3 — Dedicated Vertex Detect probe used by `GoogleVertexForm`. Vertex
+     *  is ADC-only — no secret. */
+    vertexDetect: (payload: {
+      projectId: string
+      region: string
+    }) => Promise<ClaudeAccountValidationResult>
+    /** P3 — Clear the preset-registry disk cache and refetch upstream. Used
+     *  by the ModelMappingEditor "Refresh defaults" button. `fetchedAt` is
+     *  null when the fetch falls back to null (offline + no cache). */
+    refreshPresetDefaults: () => Promise<ClaudeRefreshPresetDefaultsResult>
   }
   cli: {
     getInstallStatus: () => Promise<CliInstallStatus>

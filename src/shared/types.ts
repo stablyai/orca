@@ -1298,6 +1298,19 @@ export type ClaudeAccountValidationResult =
   | { ok: true }
   | { ok: false; reason: string; rescueHint?: string }
 
+/** P3 — Result of `claudeAccounts:refreshPresetDefaults`. The renderer uses
+ *  `fetchedAt` to render the "Defaults updated Nd ago" timestamp in the
+ *  ModelMappingEditor. `registry` is null when the upstream fetch failed
+ *  and no cached fallback was available (offline + no cache). */
+export type ClaudePresetRegistry = {
+  version: number
+  presets: Record<string, { opus?: string; sonnet?: string; haiku?: string }>
+}
+export type ClaudeRefreshPresetDefaultsResult = {
+  registry: ClaudePresetRegistry | null
+  fetchedAt: number | null
+}
+
 /** Polymorphic input for `claudeAccounts:add`. Shared across main/preload/renderer
  *  so the IPC bridge can pass a discriminated value through without leaking
  *  main-only types into the renderer. OAuth no-arg legacy call site uses
