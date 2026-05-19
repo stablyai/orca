@@ -2,6 +2,14 @@ import type { CommandHandler } from '../dispatch'
 import { RuntimeClientError } from '../runtime-client'
 import { getRequiredStringFlag, getOptionalStringFlag } from '../flags'
 
+// Why: the CLI tsconfig (config/tsconfig.cli.json) only includes `src/cli/` and
+// `src/shared/`, not `src/main/`. The headless bootstrap module lives under
+// main because it instantiates main-process services. We resolve the module
+// path through a string variable so tsc cannot statically follow it into the
+// main project, while runtime resolution still finds it (the file exists in
+// the same monorepo at build time).
+const HEADLESS_MODULE = '../../main/claude-accounts/headless-bootstrap.js'
+
 type AddResult = {
   accountId: string
   email: string
@@ -96,8 +104,7 @@ async function dispatchAdd(
   payload: AddPayload
 ): Promise<AddResult> {
   return callOrHeadless<AddResult>(ctx, 'claudeAccounts.add', payload, async () => {
-    const { runHeadlessClaudeAccountsAdd } =
-      await import('../../main/claude-accounts/headless-bootstrap')
+    const { runHeadlessClaudeAccountsAdd } = await import(HEADLESS_MODULE)
     return runHeadlessClaudeAccountsAdd(payload as never)
   })
 }
@@ -220,8 +227,7 @@ async function handleList(ctx: Parameters<CommandHandler>[0]): Promise<void> {
       'claudeAccounts.list',
       {},
       async () => {
-        const { runHeadlessClaudeAccountsList } =
-          await import('../../main/claude-accounts/headless-bootstrap')
+        const { runHeadlessClaudeAccountsList } = await import(HEADLESS_MODULE)
         return runHeadlessClaudeAccountsList()
       }
     )
@@ -239,8 +245,7 @@ async function handleSelect(ctx: Parameters<CommandHandler>[0]): Promise<void> {
       'claudeAccounts.select',
       { accountId },
       async () => {
-        const { runHeadlessClaudeAccountsSelect } =
-          await import('../../main/claude-accounts/headless-bootstrap')
+        const { runHeadlessClaudeAccountsSelect } = await import(HEADLESS_MODULE)
         return runHeadlessClaudeAccountsSelect(accountId)
       }
     )
@@ -258,8 +263,7 @@ async function handleRemove(ctx: Parameters<CommandHandler>[0]): Promise<void> {
       'claudeAccounts.remove',
       { accountId },
       async () => {
-        const { runHeadlessClaudeAccountsRemove } =
-          await import('../../main/claude-accounts/headless-bootstrap')
+        const { runHeadlessClaudeAccountsRemove } = await import(HEADLESS_MODULE)
         return runHeadlessClaudeAccountsRemove(accountId)
       }
     )
