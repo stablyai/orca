@@ -35,9 +35,10 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     ])
   })
 
-  it('lists Copilot OpenAI-family models and omits policy-filtered Claude models', () => {
+  it('lists Copilot Haiku and OpenAI-family models while omitting policy-filtered Claude models', () => {
     expect(COMMIT_MESSAGE_AGENT_SPECS.copilot?.defaultModelId).toBe('gpt-5.4')
     expect(COMMIT_MESSAGE_AGENT_SPECS.copilot?.models.map((m) => m.id)).toEqual([
+      'claude-haiku-4.5',
       'gpt-4.1',
       'gpt-5-mini',
       'gpt-5.2',
