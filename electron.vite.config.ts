@@ -69,6 +69,18 @@ export default defineConfig({
     build: {
       externalizeDeps: {
         exclude: ['@electron-toolkit/preload']
+      },
+      rollupOptions: {
+        input: {
+          // Why: electron-vite's default preload input picks up src/preload/index.ts
+          // automatically. Add the passphrase-modal preload as a separate bundle so
+          // the secrets-modal BrowserWindow can load a tiny, locked-down bridge
+          // instead of the full renderer preload.
+          index: resolve('src/preload/index.ts'),
+          'passphrase-modal-preload': resolve(
+            'src/main/claude-accounts/secrets-storage/passphrase-modal-preload.ts'
+          )
+        }
       }
     }
   },

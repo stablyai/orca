@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+    <title>Orca secrets</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 16px 20px;
+        font-size: 13px;
+      }
+      h1 {
+        font-size: 14px;
+        font-weight: 600;
+        margin: 0 0 4px;
+      }
+      p.detail {
+        margin: 0 0 12px;
+        opacity: 0.8;
+        line-height: 1.4;
+      }
+      p.warn {
+        margin: 0 0 8px;
+        color: #c0392b;
+        font-weight: 500;
+      }
+      label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 500;
+      }
+      input[type='password'] {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 6px 8px;
+        margin-bottom: 10px;
+        font-size: 13px;
+      }
+      .row {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      button {
+        padding: 6px 14px;
+        font-size: 13px;
+      }
+      button.primary {
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <h1 id="title">Unlock Orca secrets</h1>
+    <p class="detail" id="detail"></p>
+    <p class="warn" id="warn" hidden>Passphrases do not match. Try again.</p>
+    <form id="form" autocomplete="off">
+      <label for="pass">Passphrase</label>
+      <input id="pass" type="password" autofocus required />
+      <div id="confirm-row" hidden>
+        <label for="confirm">Confirm passphrase</label>
+        <input id="confirm" type="password" />
+      </div>
+      <div class="row">
+        <button type="button" id="cancel">Cancel</button>
+        <button type="submit" class="primary" id="submit">Unlock</button>
+      </div>
+    </form>
+    <script>
+      // Why: the modal posts the submitted value (or "pass\nconfirm" in create
+      // mode) back through window.electronAPI.submitPassphrase, which the main
+      // process exposes via a one-shot ipcMain handler. We read params from
+      // location.hash (works for both file:// and data: URLs) and fall back to
+      // location.search for the file-URL case.
+      const rawParams =
+        window.location.hash.slice(1) || window.location.search.replace(/^\?/, '')
+      const params = new URLSearchParams(rawParams)
+      const mode = params.get('mode') === 'create' ? 'create' : 'unlock'
+      const attempt = Number(params.get('attempt') ?? '1')
+
+      const titleEl = document.getElementById('title')
+      const detailEl = document.getElementById('detail')
+      const warnEl = document.getElementById('warn')
+      const confirmRow = document.getElementById('confirm-row')
+      const submitBtn = document.getElementById('submit')
+      const cancelBtn = document.getElementById('cancel')
+      const passEl = document.getElementById('pass')
+      const confirmEl = document.getElementById('confirm')
+
+      if (mode === 'create') {
+        titleEl.textContent = 'Create Orca secrets passphrase'
+        detailEl.textContent =
+          'Choose a passphrase to encrypt Claude account credentials on disk. You will enter it once per launch.'
+        confirmRow.hidden = false
+        submitBtn.textContent = 'Create'
+      } else {
+        titleEl.textContent = 'Unlock Orca secrets'
+        if (attempt === 1) {
+          detailEl.textContent =
+            'Enter the passphrase you set when you first added a Claude account.'
+        } else {
+          detailEl.textContent = `Incorrect passphrase. ${4 - attempt} attempts remaining.`
+        }
+      }
+
+      function send(value) {
+        if (window.electronAPI && typeof window.electronAPI.submitPassphrase === 'function') {
+          window.electronAPI.submitPassphrase(value)
+        }
+      }
+
+      document.getElementById('form').addEventListener('submit', (event) => {
+        event.preventDefault()
+        warnEl.hidden = true
+        const pass = passEl.value
+        if (mode === 'create') {
+          const confirm = confirmEl.value
+          if (pass !== confirm) {
+            warnEl.hidden = false
+            confirmEl.value = ''
+            confirmEl.focus()
+            return
+          }
+          send(`${pass}\n${confirm}`)
+        } else {
+          send(pass)
+        }
+      })
+
+      cancelBtn.addEventListener('click', () => {
+        send(null)
+      })
+    </script>
+  </body>
+</html>

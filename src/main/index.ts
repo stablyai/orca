@@ -80,6 +80,7 @@ import {
 } from './crash-reporting/crash-breadcrumb-store'
 import { CrashReportStore } from './crash-reporting/crash-report-store'
 import { isCrashReportReason } from '../shared/crash-reporting'
+import { getProcessPassphraseHolder } from './claude-accounts/secrets-storage/passphrase-prompt'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
@@ -1047,6 +1048,10 @@ app.on('will-quit', (e) => {
   setUnreadDockBadgeCount(0)
   agentHookServer.stop()
   stats?.flush()
+  // Why: zero the in-memory passphrase buffer so the Claude-accounts secrets
+  // key material does not linger in process memory after quit. Safe to call
+  // even when the holder was never used (no-op on a fresh holder).
+  getProcessPassphraseHolder().clear()
   // Why: agent-browser daemon processes would otherwise linger after Orca quits,
   // holding ports and leaving stale session state on disk.
   runtime?.getAgentBrowserBridge()?.destroyAllSessions()
