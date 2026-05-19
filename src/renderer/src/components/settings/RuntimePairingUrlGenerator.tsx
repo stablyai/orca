@@ -6,6 +6,7 @@ import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { RuntimeAccessGrantList } from './RuntimeAccessGrantList'
 
 const LOOPBACK_ADDRESS = '127.0.0.1'
@@ -105,9 +106,11 @@ export function RuntimePairingUrlGenerator({
   )
   const [runtimeAccessGrants, setRuntimeAccessGrants] = useState<RuntimeAccessGrant[]>([])
   const [isLoadingAccessGrants, setIsLoadingAccessGrants] = useState(false)
+  const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const [revokingGrantId, setRevokingGrantId] = useState<string | null>(null)
   const [copiedTarget, setCopiedTarget] = useState<'web' | 'pairing' | null>(null)
   const [isGeneratingPairing, setIsGeneratingPairing] = useState(false)
+  const networkInterfaceLoadIdRef = useRef(0)
   const accessGrantLoadIdRef = useRef(0)
 
   const loadRuntimeAccessGrants = useCallback(
@@ -135,26 +138,35 @@ export function RuntimePairingUrlGenerator({
     []
   )
 
-  useEffect(() => {
-    let stale = false
-
-    const loadNetworkInterfaces = async (): Promise<void> => {
+  const loadNetworkInterfaces = useCallback(
+    async (options: { showToastOnError?: boolean } = {}): Promise<void> => {
+      const loadId = networkInterfaceLoadIdRef.current + 1
+      networkInterfaceLoadIdRef.current = loadId
+      setRefreshingNetworkInterfaces(true)
       try {
         const result = await window.api.mobile.listNetworkInterfaces()
-        if (!stale) {
+        if (loadId === networkInterfaceLoadIdRef.current) {
           setNetworkInterfaces(result.interfaces)
         }
       } catch {
-        // Keep the loopback option available even if interface enumeration fails.
+        if (loadId === networkInterfaceLoadIdRef.current && options.showToastOnError) {
+          toast.error('Failed to refresh network interfaces.')
+        }
+      } finally {
+        if (loadId === networkInterfaceLoadIdRef.current) {
+          setRefreshingNetworkInterfaces(false)
+        }
       }
-    }
+    },
+    []
+  )
 
+  useEffect(() => {
     void loadNetworkInterfaces()
-
     return () => {
-      stale = true
+      networkInterfaceLoadIdRef.current += 1
     }
-  }, [])
+  }, [loadNetworkInterfaces])
 
   useEffect(() => {
     void loadRuntimeAccessGrants()
@@ -269,29 +281,51 @@ export function RuntimePairingUrlGenerator({
                 <Label id="runtime-pairing-address-label" htmlFor="runtime-pairing-address">
                   Connection address
                 </Label>
-                <Select value={selectedAddress} onValueChange={updateSelectedAddress}>
-                  <SelectTrigger
-                    id="runtime-pairing-address"
-                    size="sm"
-                    className="min-w-[220px]"
-                    aria-labelledby="runtime-pairing-address-label"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={LOOPBACK_ADDRESS}>
-                      This computer ({LOOPBACK_ADDRESS})
-                    </SelectItem>
-                    {networkInterfaces.map((networkInterface, index) => (
-                      <SelectItem
-                        key={`${networkInterface.name}:${networkInterface.address}:${index}`}
-                        value={networkInterface.address}
-                      >
-                        {networkInterface.name} ({networkInterface.address})
+                <div className="flex items-center gap-2">
+                  <Select value={selectedAddress} onValueChange={updateSelectedAddress}>
+                    <SelectTrigger
+                      id="runtime-pairing-address"
+                      size="sm"
+                      className="min-w-[220px]"
+                      aria-labelledby="runtime-pairing-address-label"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={LOOPBACK_ADDRESS}>
+                        This computer ({LOOPBACK_ADDRESS})
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      {networkInterfaces.map((networkInterface, index) => (
+                        <SelectItem
+                          key={`${networkInterface.name}:${networkInterface.address}:${index}`}
+                          value={networkInterface.address}
+                        >
+                          {networkInterface.name} ({networkInterface.address})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {/* Why: server sharing uses the same interface list as Mobile,
+                      and VPN/tailnet addresses can appear after Settings opens. */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => void loadNetworkInterfaces({ showToastOnError: true })}
+                        disabled={refreshingNetworkInterfaces}
+                        aria-label="Refresh connection addresses"
+                        className="text-muted-foreground"
+                      >
+                        <RefreshCw className={refreshingNetworkInterfaces ? 'animate-spin' : ''} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Refresh connection addresses
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
               </div>
               <div className="min-w-0 space-y-1">
                 <Label htmlFor="runtime-pairing-custom-address">Custom address</Label>
