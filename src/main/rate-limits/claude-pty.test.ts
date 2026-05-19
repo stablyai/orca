@@ -102,6 +102,83 @@ describe('fetchViaPty', () => {
     expect(term.write).not.toHaveBeenCalledWith('\x1b[D\x1b[D')
   })
 
+  it('uses applyEnvFromMaterialization when preparation.materialization is set (non-OAuth provider)', async () => {
+    // Why: T12.5 — non-OAuth providers ship credentials in `materialization`.
+    // Verify the spawned env carries ANTHROPIC_API_KEY and that any stale
+    // OAuth/provider env in process.env is stripped by the allowlist path.
+    const priorOauth = process.env.CLAUDE_CODE_OAUTH_TOKEN
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = 'stale-oauth-token'
+    try {
+      const term = makeMockTerm()
+      spawnMock.mockReturnValue(term)
+
+      const resultPromise = fetchViaPty({
+        authPreparation: {
+          configDir: '/tmp/claude',
+          envPatch: {},
+          stripAuthEnv: true,
+          provenance: 'managed:api-key-account',
+          materialization: {
+            envPatch: {
+              ANTHROPIC_API_KEY: 'sk-ant-test-1234'
+            }
+          }
+        }
+      })
+
+      // node-pty is dynamically imported, so spawn happens on a microtask
+      // after fetchViaPty resolves the import — flush before inspecting.
+      await vi.advanceTimersByTimeAsync(0)
+      const spawnArgs = spawnMock.mock.calls.at(-1) as
+        | [string, string[], { env: Record<string, string> }]
+        | undefined
+      expect(spawnArgs).toBeDefined()
+      const spawnedEnv = spawnArgs![2].env
+      expect(spawnedEnv.ANTHROPIC_API_KEY).toBe('sk-ant-test-1234')
+      // The allowlist-replace path strips the stale provider env.
+      expect(spawnedEnv.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined()
+      // TERM still gets through (it's not a provider key).
+      expect(spawnedEnv.TERM).toBe('xterm-256color')
+
+      // Drain the pending fetch promise so vitest doesn't warn.
+      await vi.advanceTimersByTimeAsync(25_000)
+      await resultPromise
+    } finally {
+      if (priorOauth === undefined) {
+        delete process.env.CLAUDE_CODE_OAUTH_TOKEN
+      } else {
+        process.env.CLAUDE_CODE_OAUTH_TOKEN = priorOauth
+      }
+    }
+  })
+
+  it('falls back to applyClaudeEnvPatch when preparation.materialization is undefined (OAuth)', async () => {
+    const term = makeMockTerm()
+    spawnMock.mockReturnValue(term)
+
+    const resultPromise = fetchViaPty({
+      authPreparation: {
+        configDir: '/tmp/claude-oauth',
+        envPatch: { CLAUDE_CONFIG_DIR: '/tmp/claude-oauth' },
+        stripAuthEnv: true,
+        provenance: 'managed:oauth-account'
+      }
+    })
+
+    await vi.advanceTimersByTimeAsync(0)
+    const spawnArgs = spawnMock.mock.calls.at(-1) as
+      | [string, string[], { env: Record<string, string> }]
+      | undefined
+    expect(spawnArgs).toBeDefined()
+    const spawnedEnv = spawnArgs![2].env
+    expect(spawnedEnv.CLAUDE_CONFIG_DIR).toBe('/tmp/claude-oauth')
+    // No materialization, so ANTHROPIC_API_KEY is not injected.
+    expect(spawnedEnv.ANTHROPIC_API_KEY).toBeUndefined()
+
+    await vi.advanceTimersByTimeAsync(25_000)
+    await resultPromise
+  })
+
   it('keeps waiting for plan windows after the Claude 2.1 usage shell renders', async () => {
     const term = makeMockTerm()
     spawnMock.mockReturnValue(term)

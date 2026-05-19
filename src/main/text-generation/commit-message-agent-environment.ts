@@ -1,5 +1,5 @@
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
-import { applyClaudeEnvPatch } from '../claude-accounts/environment'
+import { applyClaudeEnvPatch, applyEnvFromMaterialization } from '../claude-accounts/environment'
 
 export type CommitMessageAgentEnvironmentResolvers = {
   prepareForCodexLaunch?: () => string | null
@@ -35,9 +35,15 @@ export async function prepareLocalCommitMessageAgentEnv(
 
     if (agentId === 'claude' && resolvers.prepareForClaudeLaunch) {
       const preparation = await resolvers.prepareForClaudeLaunch()
-      const env = applyClaudeEnvPatch(cloneProcessEnv(), preparation.envPatch, {
-        stripAuthEnv: preparation.stripAuthEnv
-      })
+      // Why: non-OAuth providers ship credentials through `materialization`
+      // (autoplan E5/T12). applyEnvFromMaterialization strips every known
+      // provider key and re-emits from the patch so an API-key account's
+      // ANTHROPIC_API_KEY actually reaches the spawned agent.
+      const env = preparation.materialization
+        ? applyEnvFromMaterialization(cloneProcessEnv(), preparation.materialization)
+        : applyClaudeEnvPatch(cloneProcessEnv(), preparation.envPatch, {
+            stripAuthEnv: preparation.stripAuthEnv
+          })
       return { ok: true, env }
     }
   } catch (error) {

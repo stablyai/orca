@@ -20,7 +20,11 @@ import { SSH_SESSION_EXPIRED_ERROR, isSshPtyNotFoundError } from '../providers/s
 import { mintPtySessionId, isSafePtySessionId } from '../daemon/pty-session-id'
 import { addNodePtyRecoveryHint } from '../daemon/node-pty-error-hints'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
-import { CLAUDE_AUTH_ENV_VARS, hasClaudeAuthEnvConflict } from '../claude-accounts/environment'
+import {
+  CLAUDE_AUTH_ENV_VARS,
+  applyEnvFromMaterialization,
+  hasClaudeAuthEnvConflict
+} from '../claude-accounts/environment'
 import {
   isClaudeAuthSwitchInProgress,
   markClaudePtyExited,
@@ -875,8 +879,14 @@ export function registerPtyHandlers(
 
       const isDaemonHostSpawn = !args.connectionId && !(provider instanceof LocalPtyProvider)
       const sessionId = isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined
+      // Why: non-OAuth providers ship credentials in `materialization` (autoplan
+      // E5/T12). applyEnvFromMaterialization strips every known provider key,
+      // then re-emits the patch so the spawned CLI sees ANTHROPIC_API_KEY (or
+      // ANTHROPIC_AUTH_TOKEN/BASE_URL for compat). OAuth retains the spread.
       let env: Record<string, string> | undefined = claudeAuth
-        ? { ...args.env, ...claudeAuth.envPatch }
+        ? claudeAuth.materialization
+          ? applyEnvFromMaterialization({ ...(args.env ?? {}) }, claudeAuth.materialization)
+          : { ...args.env, ...claudeAuth.envPatch }
         : args.env
       if (args.preAllocatedHandle) {
         env = { ...env, ORCA_TERMINAL_HANDLE: args.preAllocatedHandle }
@@ -1178,8 +1188,14 @@ export function registerPtyHandlers(
           sshSourceEnv = stripped
         }
       }
+      // Why: non-OAuth providers ship credentials in `materialization` (autoplan
+      // E5/T12). applyEnvFromMaterialization strips every known provider key,
+      // then re-emits the patch so the spawned CLI sees the API-key/base-url
+      // values. OAuth retains the spread shape (CLAUDE_CONFIG_DIR only).
       const baseEnvWithAuth = claudeAuth
-        ? { ...sshSourceEnv, ...claudeAuth.envPatch }
+        ? claudeAuth.materialization
+          ? applyEnvFromMaterialization({ ...(sshSourceEnv ?? {}) }, claudeAuth.materialization)
+          : { ...sshSourceEnv, ...claudeAuth.envPatch }
         : sshSourceEnv
       const spawnPaneKey = baseEnvWithAuth?.ORCA_PANE_KEY
       const parsedSpawnPaneKey = parseValidPaneKey(spawnPaneKey)

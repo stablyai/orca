@@ -1,7 +1,7 @@
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
-import { applyClaudeEnvPatch } from '../claude-accounts/environment'
+import { applyClaudeEnvPatch, applyEnvFromMaterialization } from '../claude-accounts/environment'
 
 const PTY_TIMEOUT_MS = 25_000
 const MAX_OUTPUT_LENGTH = 100_000 // 100KB buffer limit
@@ -165,11 +165,16 @@ export async function fetchViaPty(options?: {
     const spawnFile = isWin32 ? 'cmd.exe' : claudeCommand
     const spawnArgs = isWin32 ? ['/c', `"${claudeCommand}"`] : []
 
-    const spawnEnv = applyClaudeEnvPatch(
-      { ...process.env, TERM: 'xterm-256color' } as Record<string, string>,
-      options?.authPreparation?.envPatch ?? {},
-      { stripAuthEnv: options?.authPreparation?.stripAuthEnv ?? false }
-    )
+    // Why: non-OAuth providers carry credentials in `materialization` (autoplan
+    // E5/T12). Use the allowlist-replace model so an API-key account's
+    // ANTHROPIC_API_KEY/BASE_URL/model defaults reach the spawned claude CLI.
+    // OAuth keeps the envPatch shape (CLAUDE_CONFIG_DIR only).
+    const baseEnv = { ...process.env, TERM: 'xterm-256color' } as Record<string, string>
+    const spawnEnv = options?.authPreparation?.materialization
+      ? applyEnvFromMaterialization(baseEnv, options.authPreparation.materialization)
+      : applyClaudeEnvPatch(baseEnv, options?.authPreparation?.envPatch ?? {}, {
+          stripAuthEnv: options?.authPreparation?.stripAuthEnv ?? false
+        })
 
     const term = pty.spawn(spawnFile, spawnArgs, {
       name: 'xterm-256color',
