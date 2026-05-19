@@ -33,7 +33,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
   })
 
   it('uses the strongest available defaults for core agents', () => {
-    expect(COMMIT_MESSAGE_AGENT_SPECS.claude?.defaultModelId).toBe('claude-opus-4-7')
+    expect(COMMIT_MESSAGE_AGENT_SPECS.claude?.defaultModelId).toBe('sonnet')
     expect(COMMIT_MESSAGE_AGENT_SPECS.codex?.defaultModelId).toBe('gpt-5.5')
     expect(COMMIT_MESSAGE_AGENT_SPECS.pi?.defaultModelId).toBe('github-copilot/gpt-5.4-mini')
   })
@@ -107,8 +107,8 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     expect(spark?.defaultThinkingLevel).toBe('low')
   })
 
-  it('omits thinking levels on Claude Haiku 4.5 (non-reasoning model)', () => {
-    const haiku = getCommitMessageModel('claude', 'claude-haiku-4-5')
+  it('omits thinking levels on Claude Haiku (non-reasoning model)', () => {
+    const haiku = getCommitMessageModel('claude', 'haiku')
     expect(haiku).toBeDefined()
     expect(haiku?.thinkingLevels).toBeUndefined()
     expect(haiku?.defaultThinkingLevel).toBeUndefined()
@@ -158,13 +158,13 @@ describe('buildArgs (Claude)', () => {
   const spec = getCommitMessageAgentSpec('claude')!
 
   it('passes -p, output format, and model on every call', () => {
-    const args = spec.buildArgs({ prompt: '', model: 'claude-haiku-4-5' })
+    const args = spec.buildArgs({ prompt: '', model: 'haiku' })
     expect(args).toEqual([
       '-p',
       '--output-format',
       'text',
       '--model',
-      'claude-haiku-4-5',
+      'haiku',
       '--permission-mode',
       'plan'
     ])
@@ -173,7 +173,7 @@ describe('buildArgs (Claude)', () => {
   it('appends --effort when a thinking level is supplied', () => {
     const args = spec.buildArgs({
       prompt: '',
-      model: 'claude-sonnet-4-6',
+      model: 'sonnet',
       thinkingLevel: 'high'
     })
     expect(args).toEqual([
@@ -181,7 +181,7 @@ describe('buildArgs (Claude)', () => {
       '--output-format',
       'text',
       '--model',
-      'claude-sonnet-4-6',
+      'sonnet',
       '--permission-mode',
       'plan',
       '--effort',
@@ -190,7 +190,7 @@ describe('buildArgs (Claude)', () => {
   })
 
   it('omits --effort when thinkingLevel is not provided', () => {
-    const args = spec.buildArgs({ prompt: '', model: 'claude-opus-4-7' })
+    const args = spec.buildArgs({ prompt: '', model: 'opus' })
     expect(args).not.toContain('--effort')
   })
 })

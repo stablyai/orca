@@ -66,6 +66,29 @@ describe('resolveCommitMessageSettings', () => {
     })
   })
 
+  it('falls back from stale Claude version ids to the CLI alias default', () => {
+    const settings = getDefaultSettings('/tmp')
+    settings.commitMessageAi = {
+      enabled: true,
+      agentId: 'claude',
+      selectedModelByAgent: { claude: 'claude-sonnet-4-6' },
+      selectedThinkingByModel: { sonnet: 'low' },
+      customPrompt: '',
+      customAgentCommand: ''
+    }
+
+    const result = resolveCommitMessageSettings(settings)
+
+    expect(result).toMatchObject({
+      ok: true,
+      params: {
+        agentId: 'claude',
+        model: 'sonnet',
+        thinkingLevel: 'low'
+      }
+    })
+  })
+
   it("uses the user's default agent when the AI setting has no explicit agent", () => {
     const settings = getDefaultSettings('/tmp')
     settings.defaultTuiAgent = 'codex'

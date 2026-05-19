@@ -225,26 +225,25 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     modelSource: 'static',
     models: [
       {
-        // Why: Haiku 4.5 is a non-reasoning model — `claude --effort` rejects
-        // any value for it. Omit thinkingLevels so the UI hides the dropdown
-        // and the buildArgs path skips passing --effort entirely.
-        id: 'claude-haiku-4-5',
-        label: 'Haiku 4.5'
+        // Why: Claude Code aliases track the account/provider's supported
+        // model IDs; hardcoded version IDs can be rejected by Bedrock/Vertex.
+        id: 'haiku',
+        label: 'Haiku'
       },
       {
-        id: 'claude-sonnet-4-6',
-        label: 'Sonnet 4.6',
+        id: 'sonnet',
+        label: 'Sonnet',
         thinkingLevels: CLAUDE_THINKING_LEVELS,
         defaultThinkingLevel: 'low'
       },
       {
-        id: 'claude-opus-4-7',
-        label: 'Opus 4.7',
+        id: 'opus',
+        label: 'Opus',
         thinkingLevels: CLAUDE_THINKING_LEVELS,
         defaultThinkingLevel: 'low'
       }
     ],
-    defaultModelId: 'claude-opus-4-7'
+    defaultModelId: 'sonnet'
   },
   codex: {
     id: 'codex',

@@ -6,7 +6,7 @@ describe('planCommitMessageGeneration', () => {
     const result = planCommitMessageGeneration(
       {
         agentId: 'claude',
-        model: 'claude-sonnet-4-6',
+        model: 'sonnet',
         thinkingLevel: 'high'
       },
       'PROMPT'
@@ -21,7 +21,7 @@ describe('planCommitMessageGeneration', () => {
           '--output-format',
           'text',
           '--model',
-          'claude-sonnet-4-6',
+          'sonnet',
           '--permission-mode',
           'plan',
           '--effort',
@@ -160,7 +160,7 @@ describe('planCommitMessageGeneration', () => {
     const result = planCommitMessageGeneration(
       {
         agentId: 'claude',
-        model: 'claude-haiku-4-5',
+        model: 'haiku',
         agentCommandOverride: 'claude "unterminated'
       },
       'PROMPT'

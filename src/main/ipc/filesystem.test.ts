@@ -968,7 +968,7 @@ describe('registerFilesystemHandlers', () => {
       stagedSummary: 'M\tREADME.md',
       stagedPatch: '+hello'
     }
-    const params = { agentId: 'claude', model: 'claude-haiku-4-5' }
+    const params = { agentId: 'claude', model: 'haiku' }
     resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
     getStagedCommitContextMock.mockResolvedValue(context)
     generateCommitMessageFromContextMock.mockResolvedValue({
