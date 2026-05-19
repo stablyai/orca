@@ -580,3 +580,145 @@ describe('ClaudeAccountService credential capture', () => {
     expect(settings.claudeManagedAccounts[0].email).toBe('new@example.com')
   })
 })
+
+describe('ClaudeAccountService addAccount polymorphic input', () => {
+  let tempDir: string | null = null
+
+  beforeEach(() => {
+    setPlatform('linux')
+    tempDir = null
+    vi.mocked(readManagedClaudeKeychainCredentials).mockReset()
+    vi.mocked(writeManagedClaudeKeychainCredentials).mockReset()
+    vi.mocked(writeManagedClaudeKeychainCredentials).mockResolvedValue()
+  })
+
+  afterEach(() => {
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
+    if (tempDir) {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  type PolymorphicSettings = {
+    claudeManagedAccounts: unknown[]
+    activeClaudeManagedAccountId: string | null
+  }
+
+  async function buildPolymorphicService(): Promise<{
+    service: import('./service').ClaudeAccountService
+    getSettings: () => PolymorphicSettings
+    runtimeAuth: {
+      clearLastWrittenCredentialsJson: ReturnType<typeof vi.fn>
+      forceMaterializeCurrentSelectionForRollback: ReturnType<typeof vi.fn>
+      syncForCurrentSelection: ReturnType<typeof vi.fn>
+    }
+    rateLimits: {
+      evictInactiveClaudeCache: ReturnType<typeof vi.fn>
+      refreshForClaudeAccountChange: ReturnType<typeof vi.fn>
+    }
+  }> {
+    tempDir = '/tmp/orca-claude-service-test'
+    rmSync(tempDir, { recursive: true, force: true })
+    let settings: PolymorphicSettings = {
+      claudeManagedAccounts: [],
+      activeClaudeManagedAccountId: null
+    }
+    const store = {
+      getSettings: vi.fn((): PolymorphicSettings => settings),
+      updateSettings: vi.fn((updates: Partial<PolymorphicSettings>): PolymorphicSettings => {
+        settings = { ...settings, ...updates }
+        return settings
+      })
+    }
+    const runtimeAuth = {
+      clearLastWrittenCredentialsJson: vi.fn(),
+      syncForCurrentSelection: vi.fn(async () => {}),
+      forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
+    }
+    const rateLimits = {
+      evictInactiveClaudeCache: vi.fn(),
+      refreshForClaudeAccountChange: vi.fn(async () => ({
+        accounts: [],
+        activeAccountId: null
+      }))
+    }
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeAuth as never
+    )
+    return { service, getSettings: () => settings, runtimeAuth, rateLimits }
+  }
+
+  it('dispatches to anthropic-api-key handler when input has that authMethod', async () => {
+    const { service } = await buildPolymorphicService()
+    const result = await service.addAccount({
+      authMethod: 'anthropic-api-key',
+      label: 'My API key',
+      secretFromUser: 'sk-ant-test-key'
+    })
+    expect(result.accounts).toHaveLength(1)
+    expect(result.accounts[0]?.authMethod).toBe('anthropic-api-key')
+    expect(result.activeAccountId).toBe(result.accounts[0]?.id)
+    expect(writeManagedClaudeKeychainCredentials).toHaveBeenCalledWith(
+      result.accounts[0]?.id,
+      'sk-ant-test-key'
+    )
+  })
+
+  it('dispatches to anthropic-compat handler for zai preset and sets baseUrl from preset', async () => {
+    const { service } = await buildPolymorphicService()
+    const result = await service.addAccount({
+      authMethod: 'anthropic-compat',
+      label: 'z.ai',
+      secretFromUser: 'zai-token',
+      providerConfig: { preset: 'zai' }
+    })
+    const compat = result.accounts[0]
+    expect(compat?.credentials).toEqual({
+      authMethod: 'anthropic-compat',
+      baseUrl: 'https://api.z.ai/api/anthropic',
+      preset: 'zai'
+    })
+  })
+
+  it('rolls back settings on handler error when compat preset is missing', async () => {
+    const { service, getSettings } = await buildPolymorphicService()
+    await expect(
+      service.addAccount({
+        authMethod: 'anthropic-compat',
+        label: 'Bad',
+        secretFromUser: 'token',
+        providerConfig: {} as never
+      })
+    ).rejects.toThrow(/preset/i)
+    expect(getSettings().claudeManagedAccounts).toHaveLength(0)
+    expect(service.listAccounts().accounts).toHaveLength(0)
+  })
+
+  it('no-arg addAccount() still routes through the existing OAuth flow', async () => {
+    const { service } = await buildPolymorphicService()
+    ;(
+      service as unknown as {
+        runClaudeLoginAndCapture(): Promise<{
+          credentialsJson: string
+          oauthAccount: unknown
+          identity: { email: string; organizationUuid: null; organizationName: null }
+        }>
+      }
+    ).runClaudeLoginAndCapture = vi.fn(async () => ({
+      credentialsJson: '{"oauth":true}\n',
+      oauthAccount: { newOauth: true },
+      identity: { email: 'oauth@example.com', organizationUuid: null, organizationName: null }
+    }))
+
+    const result = await service.addAccount()
+
+    expect(result.accounts).toHaveLength(1)
+    expect(result.accounts[0]?.authMethod).toBe('subscription-oauth')
+    expect(result.accounts[0]?.email).toBe('oauth@example.com')
+  })
+})

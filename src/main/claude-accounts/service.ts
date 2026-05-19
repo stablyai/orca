@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join, relative, resolve, sep } from 'node:path'
 import type {
+  AnthropicCompatPreset,
   ClaudeManagedAccount,
   ClaudeManagedAccountSummary,
   ClaudeRateLimitAccountsState
@@ -31,6 +32,18 @@ import {
 } from './keychain'
 import { beginClaudeAuthSwitch, endClaudeAuthSwitch } from './live-pty-gate'
 import { migrateClaudeAccount, migrateClaudeAccountList } from './migration'
+import { handlerFor } from './providers'
+import { getDefaultModelMapping } from './model-defaults'
+
+export type AddAccountInput =
+  | { authMethod: 'subscription-oauth' }
+  | { authMethod: 'anthropic-api-key'; label?: string; secretFromUser: string }
+  | {
+      authMethod: 'anthropic-compat'
+      label?: string
+      secretFromUser: string
+      providerConfig: { preset: AnthropicCompatPreset; baseUrl?: string }
+    }
 
 const LOGIN_TIMEOUT_MS = 180_000
 const STATUS_TIMEOUT_MS = 20_000
@@ -67,8 +80,16 @@ export class ClaudeAccountService {
     return this.getSnapshot()
   }
 
-  async addAccount(): Promise<ClaudeRateLimitAccountsState> {
-    return this.serializeMutation(() => this.doAddAccount())
+  async addAccount(): Promise<ClaudeRateLimitAccountsState>
+  async addAccount(input: AddAccountInput): Promise<ClaudeRateLimitAccountsState>
+  async addAccount(input?: AddAccountInput): Promise<ClaudeRateLimitAccountsState> {
+    // Why: preserve the no-arg back-compat path while letting new callers pick a
+    // provider via discriminated input. OAuth still runs the original flow.
+    const resolved: AddAccountInput = input ?? { authMethod: 'subscription-oauth' }
+    if (resolved.authMethod === 'subscription-oauth') {
+      return this.serializeMutation(() => this.doAddAccount())
+    }
+    return this.serializeMutation(() => this.doAddAccountPolymorphic(resolved))
   }
 
   async reauthenticateAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
@@ -130,6 +151,63 @@ export class ClaudeAccountService {
         activeClaudeManagedAccountId: account.id
       })
       this.runtimeAuth.clearLastWrittenCredentialsJson(accountId)
+      await this.syncRuntimeAuthWithLivePtyGate()
+      await this.rateLimits.refreshForClaudeAccountChange(outgoingAccountId)
+      return this.getSnapshot()
+    } catch (error) {
+      this.restoreClaudeSettings(previousSettings)
+      await this.runtimeAuth.forceMaterializeCurrentSelectionForRollback()
+      await this.safeRemoveManagedAuth(accountId, managedAuthPath)
+      throw error
+    }
+  }
+
+  private async doAddAccountPolymorphic(
+    input: Exclude<AddAccountInput, { authMethod: 'subscription-oauth' }>
+  ): Promise<ClaudeRateLimitAccountsState> {
+    const accountId = randomUUID()
+    const managedAuthPath = this.createManagedAuthDir(accountId)
+    const previousSettings = this.store.getSettings()
+
+    try {
+      const handler = handlerFor(input.authMethod)
+      const registered = await handler.registerAccount({
+        accountId,
+        managedAuthPath,
+        label: 'label' in input ? input.label : undefined,
+        secretFromUser: 'secretFromUser' in input ? input.secretFromUser : undefined,
+        providerConfig: 'providerConfig' in input ? (input.providerConfig as never) : undefined
+      })
+
+      const now = Date.now()
+      // Why: new accounts ship with the full P1 schema; migrate() guarantees
+      // credentials/modelMapping/fallbackAccountIds defaults stay in sync.
+      const newAccount: ClaudeManagedAccount = migrateClaudeAccount({
+        id: registered.accountId,
+        email: registered.email,
+        managedAuthPath,
+        authMethod: input.authMethod,
+        credentials: registered.credentials,
+        modelMapping: { ...getDefaultModelMapping(registered.credentials) },
+        fallbackAccountIds: [],
+        organizationUuid: registered.organizationUuid,
+        organizationName: registered.organizationName,
+        createdAt: now,
+        updatedAt: now,
+        lastAuthenticatedAt: now
+      })
+
+      const outgoingAccountId = previousSettings.activeClaudeManagedAccountId
+      // Why: migrate the existing array before appending so any legacy entries
+      // upgrade in the same write (lazy persistence — only on mutation).
+      this.store.updateSettings({
+        claudeManagedAccounts: [
+          ...migrateClaudeAccountList(previousSettings.claudeManagedAccounts),
+          newAccount
+        ],
+        activeClaudeManagedAccountId: newAccount.id
+      })
+      this.runtimeAuth.clearLastWrittenCredentialsJson(newAccount.id)
       await this.syncRuntimeAuthWithLivePtyGate()
       await this.rateLimits.refreshForClaudeAccountChange(outgoingAccountId)
       return this.getSnapshot()
