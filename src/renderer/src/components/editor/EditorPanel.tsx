@@ -174,24 +174,6 @@ function EditorPanelInner({
   )
   useEditorCmdSaveRequest({ activeFile, openFiles, fileContents, handleSave })
 
-  const handleEditorToggleChange = useCallback(
-    (next: EditorToggleValue): void => {
-      const fileId = activeFile?.id
-      if (!fileId) {
-        return
-      }
-      if (next === 'changes') {
-        setEditorViewMode(fileId, 'changes')
-        return
-      }
-      setEditorViewMode(fileId, 'edit')
-      if (next !== 'edit') {
-        setMarkdownViewMode(fileId, next)
-      }
-    },
-    [activeFile?.id, setEditorViewMode, setMarkdownViewMode]
-  )
-
   const handleCopyPath = useCallback(async (): Promise<void> => {
     if (!activeFile) {
       return
@@ -234,7 +216,7 @@ function EditorPanelInner({
       sourceGroupId
     })
   }
-  const handleOpenDiffTargetFile = (): void => {
+  const handleOpenDiffTargetFile = (preferredMarkdownViewMode?: 'rich'): void => {
     if (!model.openFileState.canOpen) {
       return
     }
@@ -246,6 +228,25 @@ function EditorPanelInner({
       language: detectLanguage(activeFile.relativePath),
       mode: 'edit'
     })
+    if (preferredMarkdownViewMode) {
+      setEditorViewMode(activeFile.filePath, 'edit')
+      setMarkdownViewMode(activeFile.filePath, preferredMarkdownViewMode)
+    }
+  }
+  const handleEditorToggleChange = (next: EditorToggleValue): void => {
+    const fileId = activeFile.id
+    if (activeFile.mode === 'diff' && model.isMarkdown && next === 'rich') {
+      handleOpenDiffTargetFile('rich')
+      return
+    }
+    if (next === 'changes') {
+      setEditorViewMode(fileId, 'changes')
+      return
+    }
+    setEditorViewMode(fileId, 'edit')
+    if (next !== 'edit') {
+      setMarkdownViewMode(fileId, next)
+    }
   }
   const handleOpenMarkdownPreview = (): void => {
     openMarkdownPreview({

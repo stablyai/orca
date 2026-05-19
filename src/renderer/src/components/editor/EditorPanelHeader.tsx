@@ -61,7 +61,7 @@ type EditorPanelHeaderProps = {
   sideBySide: boolean
   openFileState: EditorHeaderOpenFileState
   onCopyPath: () => void
-  onOpenDiffTargetFile: () => void
+  onOpenDiffTargetFile: (preferredMarkdownViewMode?: 'rich') => void
   onOpenPreviewToSide: () => void
   onOpenMarkdownPreview: () => void
   onOpenContainingFolder: () => void
@@ -187,7 +187,7 @@ export function EditorPanelHeader({
               <button
                 type="button"
                 className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-                onClick={onOpenDiffTargetFile}
+                onClick={() => onOpenDiffTargetFile(isMarkdown ? 'rich' : undefined)}
                 aria-label="Open file"
                 disabled={!openFileState.canOpen}
               >

@@ -29,7 +29,7 @@ type EditorPanelShellProps = {
   renameError: string | null
   disableRenameBrowse: boolean
   onCopyPath: () => void
-  onOpenDiffTargetFile: () => void
+  onOpenDiffTargetFile: (preferredMarkdownViewMode?: 'rich') => void
   onOpenPreviewToSide: () => void
   onOpenMarkdownPreview: () => void
   onOpenContainingFolder: () => void
