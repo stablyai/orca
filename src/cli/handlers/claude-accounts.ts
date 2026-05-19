@@ -72,6 +72,37 @@ async function handleAdd(ctx: Parameters<CommandHandler>[0]): Promise<void> {
       emitOk(response.result.accountId, response.result.email)
       return
     }
+    if (provider === 'azure-foundry') {
+      const resource = getRequiredStringFlag(ctx.flags, 'resource')
+      const useEntra = ctx.flags.get('use-entra-id') === true
+      const keyEnvFlag = getOptionalStringFlag(ctx.flags, 'key-env')
+      // Why: the two auth modes are mutually exclusive — picking both is
+      // ambiguous, so fail fast before any secret read.
+      if (useEntra && keyEnvFlag) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          'Choose either --use-entra-id or --key-env for azure-foundry, not both.'
+        )
+      }
+      if (!useEntra && !keyEnvFlag) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          'azure-foundry requires either --use-entra-id or --key-env.'
+        )
+      }
+      const label = getOptionalStringFlag(ctx.flags, 'label') ?? resource
+      const payload: Record<string, unknown> = {
+        authMethod: 'azure-foundry',
+        label,
+        providerConfig: { resource, authMode: useEntra ? 'entra-id' : 'api-key' }
+      }
+      if (!useEntra) {
+        payload.secretFromUser = readSecretFromEnv(ctx.flags, 'key-env')
+      }
+      const result = await ctx.client.call<AddResult>('claudeAccounts.add', payload)
+      emitOk(result.result.accountId, result.result.email)
+      return
+    }
     throw new RuntimeClientError('invalid_argument', `Unknown --provider value: ${provider}`)
   } catch (error) {
     emitFail(error)

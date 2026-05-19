@@ -109,3 +109,65 @@ describe('claude-accounts add — anthropic-compat', () => {
     })
   })
 })
+
+describe('claude-accounts add — azure-foundry', () => {
+  it('--use-entra-id sends authMode entra without secret env', async () => {
+    callMock.mockResolvedValueOnce({
+      result: { accountId: 'acct-az', email: 'myres', accounts: [], activeAccountId: 'acct-az' }
+    })
+    await CLAUDE_ACCOUNTS_HANDLERS['claude-accounts add'](
+      buildCtx({
+        provider: 'azure-foundry',
+        resource: 'myres',
+        'use-entra-id': true
+      })
+    )
+    expect(callMock).toHaveBeenCalledWith('claudeAccounts.add', {
+      authMethod: 'azure-foundry',
+      label: 'myres',
+      providerConfig: { resource: 'myres', authMode: 'entra-id' }
+    })
+  })
+
+  it('API-key mode reads from --key-env', async () => {
+    process.env.SECRET_ENV = 'az-key'
+    callMock.mockResolvedValueOnce({
+      result: { accountId: 'acct-az2', email: 'myres', accounts: [], activeAccountId: 'acct-az2' }
+    })
+    await CLAUDE_ACCOUNTS_HANDLERS['claude-accounts add'](
+      buildCtx({
+        provider: 'azure-foundry',
+        resource: 'myres',
+        'key-env': 'SECRET_ENV'
+      })
+    )
+    expect(callMock).toHaveBeenCalledWith('claudeAccounts.add', {
+      authMethod: 'azure-foundry',
+      label: 'myres',
+      secretFromUser: 'az-key',
+      providerConfig: { resource: 'myres', authMode: 'api-key' }
+    })
+  })
+
+  it('rejects azure-foundry without --resource', async () => {
+    await expect(
+      CLAUDE_ACCOUNTS_HANDLERS['claude-accounts add'](
+        buildCtx({ provider: 'azure-foundry', 'use-entra-id': true })
+      )
+    ).rejects.toThrow(/--resource/i)
+  })
+
+  it('rejects passing both --use-entra-id and --key-env', async () => {
+    process.env.SECRET_ENV = 'k'
+    await expect(
+      CLAUDE_ACCOUNTS_HANDLERS['claude-accounts add'](
+        buildCtx({
+          provider: 'azure-foundry',
+          resource: 'r',
+          'use-entra-id': true,
+          'key-env': 'SECRET_ENV'
+        })
+      )
+    ).rejects.toThrow(/either.*--use-entra-id.*--key-env/i)
+  })
+})
