@@ -42,6 +42,9 @@ type WorktreeCardMetaBadgesProps = {
   comment: string | null
 }
 
+type WorktreeCardMetaBadgesRootProps = WorktreeCardMetaBadgesProps &
+  React.HTMLAttributes<HTMLDivElement>
+
 type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
   children: React.ReactElement
   onEditIssue: (event: React.MouseEvent) => void
@@ -200,23 +203,31 @@ function MetadataActionIcon({
   )
 }
 
-export function WorktreeCardMetaBadges({
-  issue,
-  linearIssue,
-  review,
-  comment
-}: WorktreeCardMetaBadgesProps): React.JSX.Element | null {
+export const WorktreeCardMetaBadges = React.forwardRef<
+  HTMLDivElement,
+  WorktreeCardMetaBadgesRootProps
+>(function WorktreeCardMetaBadges(
+  { issue, linearIssue, review, comment, className, ...props },
+  ref
+): React.JSX.Element | null {
   if (!hasWorktreeCardDetails({ issue, linearIssue, review, comment })) {
     return null
   }
 
   return (
-    // Why: inline agent rows reserve this same right inset for their dismiss X,
-    // so the card metadata icons align on the same visual rail.
+    // Why: Radix HoverCardTrigger uses `asChild`, so this group must forward
+    // trigger props/ref to the actual DOM node for attachment-only hover.
     <div
-      className="ml-auto flex shrink-0 items-center gap-1 pr-1.5"
+      ref={ref}
+      {...props}
+      className={cn('ml-auto flex shrink-0 items-center gap-1 pr-1.5', className)}
       aria-label="Workspace metadata"
     >
+      {hasComment(comment) && (
+        <MetaIconBadge label="Workspace notes">
+          <StickyNote className="text-muted-foreground" />
+        </MetaIconBadge>
+      )}
       {issue && (
         <MetaIconBadge label={`Linked issue #${issue.number}`}>
           <CircleDot className="text-muted-foreground" />
@@ -232,14 +243,9 @@ export function WorktreeCardMetaBadges({
           <ReviewIcon review={review} />
         </MetaIconBadge>
       )}
-      {hasComment(comment) && (
-        <MetaIconBadge label="Workspace notes">
-          <StickyNote className="text-muted-foreground" />
-        </MetaIconBadge>
-      )}
     </div>
   )
-}
+})
 
 export function WorktreeCardDetailsHover({
   issue,

@@ -150,6 +150,7 @@ describe('WorktreeCard linked PR display', () => {
     expect(markup).not.toContain('Loading issue')
     expect(markup).not.toContain('Loading PR')
     expect(markup).not.toContain('Reviewer handoff note')
+    expect(markup.indexOf('Workspace notes')).toBeLessThan(markup.indexOf('Linked issue #123'))
   })
 
   it('does not render the standalone CI badge and colors a failing linked PR icon red', async () => {

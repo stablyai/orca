@@ -607,12 +607,30 @@ const WorktreeCard = React.memo(function WorktreeCard({
             )}
           </div>
 
-          <WorktreeCardMetaBadges
-            issue={metaIssue}
-            linearIssue={metaLinearIssue}
-            review={metaReview}
-            comment={metaComment}
-          />
+          {hasDetails ? (
+            <WorktreeCardDetailsHover
+              issue={metaIssue}
+              linearIssue={metaLinearIssue}
+              review={metaReview}
+              comment={metaComment}
+              onEditIssue={handleEditIssue}
+              onEditComment={handleEditComment}
+            >
+              <WorktreeCardMetaBadges
+                issue={metaIssue}
+                linearIssue={metaLinearIssue}
+                review={metaReview}
+                comment={metaComment}
+              />
+            </WorktreeCardDetailsHover>
+          ) : (
+            <WorktreeCardMetaBadges
+              issue={metaIssue}
+              linearIssue={metaLinearIssue}
+              review={metaReview}
+              comment={metaComment}
+            />
+          )}
         </div>
 
         {remoteBranchConflict && (
@@ -676,20 +694,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         selectedWorktrees={selectedWorktrees}
         onContextMenuSelect={onContextMenuSelect}
       >
-        {hasDetails ? (
-          <WorktreeCardDetailsHover
-            issue={metaIssue}
-            linearIssue={metaLinearIssue}
-            review={metaReview}
-            comment={metaComment}
-            onEditIssue={handleEditIssue}
-            onEditComment={handleEditComment}
-          >
-            {cardBody}
-          </WorktreeCardDetailsHover>
-        ) : (
-          cardBody
-        )}
+        {cardBody}
       </WorktreeContextMenu>
 
       {repo?.connectionId && (
