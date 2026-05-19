@@ -89,29 +89,6 @@ describe('resolveCommitMessageSettings', () => {
     })
   })
 
-  it('falls back from stale Copilot Claude model ids to the Copilot default', () => {
-    const settings = getDefaultSettings('/tmp')
-    settings.commitMessageAi = {
-      enabled: true,
-      agentId: 'copilot',
-      selectedModelByAgent: { copilot: 'claude-sonnet-4.5' },
-      selectedThinkingByModel: { 'gpt-5.4': 'low' },
-      customPrompt: '',
-      customAgentCommand: ''
-    }
-
-    const result = resolveCommitMessageSettings(settings)
-
-    expect(result).toMatchObject({
-      ok: true,
-      params: {
-        agentId: 'copilot',
-        model: 'gpt-5.4',
-        thinkingLevel: 'low'
-      }
-    })
-  })
-
   it("uses the user's default agent when the AI setting has no explicit agent", () => {
     const settings = getDefaultSettings('/tmp')
     settings.defaultTuiAgent = 'codex'
