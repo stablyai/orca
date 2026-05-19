@@ -1,4 +1,9 @@
 import type { SettingsSearchEntry } from './settings-search'
+import {
+  AGENT_AWAKE_TITLE,
+  getAgentAwakeDescription,
+  getAgentAwakeSearchKeywords
+} from './agent-awake-copy'
 
 export const AGENTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
@@ -29,7 +34,9 @@ export const AGENTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'qwen',
       'rovo',
       'hermes',
+      'openclaw',
       'copilot',
+      'grok',
       'github',
       'github copilot',
       'command',
@@ -37,5 +44,10 @@ export const AGENTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'install',
       'detected'
     ]
+  },
+  {
+    title: AGENT_AWAKE_TITLE,
+    description: getAgentAwakeDescription(),
+    keywords: getAgentAwakeSearchKeywords()
   }
 ]

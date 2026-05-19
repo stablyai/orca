@@ -1,5 +1,8 @@
 /* eslint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const {
   removeHandlerMock,
@@ -62,9 +65,12 @@ import {
 } from './notifications'
 
 describe('registerNotificationHandlers', () => {
+  let tempDir: string
+
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-03-28T16:00:00Z'))
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-notification-test-'))
     removeHandlerMock.mockReset()
     handleMock.mockReset()
     notificationCtorMock.mockClear()
@@ -77,12 +83,34 @@ describe('registerNotificationHandlers', () => {
     getAllWindowsMock.mockReturnValue([])
   })
 
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true })
+  })
+
   function getDispatchHandler(): (event: unknown, args: unknown) => unknown {
     const call = handleMock.mock.calls.find((c: unknown[]) => c[0] === 'notifications:dispatch')
     if (!call) {
       throw new Error('notifications:dispatch handler not registered')
     }
     return call[1] as (event: unknown, args: unknown) => unknown
+  }
+
+  function getLoadSoundHandler(): (event: unknown) => Promise<unknown> {
+    const call = handleMock.mock.calls.find((c: unknown[]) => c[0] === 'notifications:loadSound')
+    if (!call) {
+      throw new Error('notifications:loadSound handler not registered')
+    }
+    return call[1] as (event: unknown) => Promise<unknown>
+  }
+
+  function getResolveSoundPathHandler(): (event: unknown) => unknown {
+    const call = handleMock.mock.calls.find(
+      (c: unknown[]) => c[0] === 'notifications:resolveSoundPath'
+    )
+    if (!call) {
+      throw new Error('notifications:resolveSoundPath handler not registered')
+    }
+    return call[1] as (event: unknown) => unknown
   }
 
   it('registers the IPC handler', () => {
@@ -171,6 +199,304 @@ describe('registerNotificationHandlers', () => {
     expect(notificationShowMock).toHaveBeenCalledTimes(1)
   })
 
+  it('formats agent-task-complete with the agent response when a status snapshot is present', () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: false,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    expect(
+      handler(
+        {},
+        {
+          source: 'agent-task-complete',
+          worktreeId: 'repo::wt1',
+          worktreeLabel: 'feat/notis',
+          repoLabel: 'orca',
+          terminalTitle: '* Claude done',
+          agentType: 'codex',
+          agentState: 'done',
+          agentPrompt: 'Fix rich notification text',
+          agentLastAssistantMessage: 'Updated the notification body.'
+        }
+      )
+    ).toEqual({ delivered: true })
+
+    expect(notificationCtorMock).toHaveBeenCalledWith({
+      title: 'feat/notis - Codex finished',
+      body: 'Updated the notification body.'
+    })
+  })
+
+  it('includes the repo name when multiple repos are active', () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: false,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    expect(
+      handler(
+        {},
+        {
+          source: 'agent-task-complete',
+          worktreeId: 'repo::wt1',
+          worktreeLabel: 'feat/notis',
+          repoLabel: 'orca',
+          hasMultipleActiveRepos: true,
+          agentType: 'codex',
+          agentState: 'done',
+          agentLastAssistantMessage: 'Updated the notification body.'
+        }
+      )
+    ).toEqual({ delivered: true })
+
+    expect(notificationCtorMock).toHaveBeenCalledWith({
+      title: 'orca / feat/notis - Codex finished',
+      body: 'Updated the notification body.'
+    })
+  })
+
+  it('keeps a readable body when no assistant response was captured', () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: false,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    expect(
+      handler(
+        {},
+        {
+          source: 'agent-task-complete',
+          worktreeId: 'repo::wt1',
+          worktreeLabel: 'main',
+          repoLabel: 'jinjing-work',
+          hasMultipleActiveRepos: true,
+          agentType: 'claude',
+          agentState: 'done',
+          agentPrompt: 'Do not show this request text'
+        }
+      )
+    ).toEqual({ delivered: true })
+
+    expect(notificationCtorMock).toHaveBeenCalledWith({
+      title: 'jinjing-work / main - Claude finished',
+      body: 'Claude finished.'
+    })
+  })
+
+  it('formats blocked and interrupted agent snapshots distinctly', () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: false,
+          suppressWhenFocused: false
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    expect(
+      handler(
+        {},
+        {
+          source: 'agent-task-complete',
+          worktreeId: 'repo::wt1',
+          worktreeLabel: 'feat/notis',
+          agentType: 'claude',
+          agentState: 'blocked',
+          agentLastAssistantMessage: 'Please approve the command.'
+        }
+      )
+    ).toEqual({ delivered: true })
+    vi.advanceTimersByTime(5001)
+    expect(
+      handler(
+        {},
+        {
+          source: 'agent-task-complete',
+          worktreeId: 'repo::wt1',
+          worktreeLabel: 'feat/notis',
+          agentType: 'claude',
+          agentState: 'done',
+          agentInterrupted: true,
+          agentLastAssistantMessage: 'Stopped by user.'
+        }
+      )
+    ).toEqual({ delivered: true })
+
+    expect(notificationCtorMock).toHaveBeenNthCalledWith(1, {
+      title: 'feat/notis - Claude needs input',
+      body: 'Please approve the command.'
+    })
+    expect(notificationCtorMock).toHaveBeenNthCalledWith(2, {
+      title: 'feat/notis - Claude stopped',
+      body: 'Stopped by user.'
+    })
+  })
+
+  it('normalizes custom agent labels and re-bounds multiline assistant previews', () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: false,
+          suppressWhenFocused: false
+        }
+      })
+    } as never)
+
+    const longAssistantMessage = `Line one\n\n${'x'.repeat(400)}`
+    const handler = getDispatchHandler()
+    expect(
+      handler(
+        {},
+        {
+          source: 'agent-task-complete',
+          worktreeId: 'repo::wt1',
+          worktreeLabel: 'feat/notis',
+          agentType: 'builder\nagent',
+          agentState: 'done',
+          agentLastAssistantMessage: longAssistantMessage
+        }
+      )
+    ).toEqual({ delivered: true })
+
+    const options = (
+      notificationCtorMock.mock.calls as unknown as [{ title: string; body: string }][]
+    )[0]?.[0]
+    if (!options) {
+      throw new Error('Expected notification options')
+    }
+    expect(options).toMatchObject({
+      title: 'feat/notis - builder agent finished'
+    })
+    expect(options.body).toMatch(/^Line one x+/)
+    expect(options.body).not.toContain('\n')
+    expect(options.body.length).toBeLessThanOrEqual(180)
+  })
+
+  it('uses tool context before falling back when no prompt or assistant preview exists', () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: false,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    expect(
+      handler(
+        {},
+        {
+          source: 'agent-task-complete',
+          worktreeId: 'repo::wt1',
+          worktreeLabel: 'feat/notis',
+          agentType: 'unknown',
+          agentState: 'working',
+          agentToolName: 'Bash',
+          agentToolInput: 'pnpm test'
+        }
+      )
+    ).toEqual({ delivered: true })
+
+    expect(notificationCtorMock).toHaveBeenCalledWith({
+      title: 'feat/notis - Agent finished',
+      body: 'Using Bash: pnpm test'
+    })
+  })
+
+  it('uses rich formatter output for mobile notifications before desktop guards', () => {
+    notificationIsSupportedMock.mockReturnValue(false)
+    const dispatchMobileNotification = vi.fn()
+    registerNotificationHandlers(
+      {
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: false,
+            suppressWhenFocused: true
+          }
+        })
+      } as never,
+      { dispatchMobileNotification } as never
+    )
+
+    const handler = getDispatchHandler()
+    expect(
+      handler(
+        {},
+        {
+          source: 'agent-task-complete',
+          worktreeId: 'repo::wt1',
+          worktreeLabel: 'feat/notis',
+          agentType: 'hermes',
+          agentState: 'done',
+          agentPrompt: 'Summarize the diff',
+          agentLastAssistantMessage: 'The diff updates notification formatting.'
+        }
+      )
+    ).toEqual({ delivered: false, reason: 'not-supported' })
+
+    expect(dispatchMobileNotification).toHaveBeenCalledWith({
+      source: 'agent-task-complete',
+      title: 'feat/notis - Hermes finished',
+      body: 'The diff updates notification formatting.',
+      worktreeId: 'repo::wt1'
+    })
+    expect(notificationCtorMock).not.toHaveBeenCalled()
+  })
+
+  it('silences the native notification when a custom sound is configured', () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: true,
+          customSoundPath: '/Users/kaylee/Downloads/Note_block_pling.ogg'
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    expect(handler({}, { source: 'test' })).toEqual({ delivered: true })
+    expect(notificationCtorMock).toHaveBeenCalledWith({
+      title: 'Orca notifications are on',
+      body: 'This is a test notification from Orca.',
+      silent: true
+    })
+  })
+
   it('returns source-disabled when the specific source toggle is off', () => {
     registerNotificationHandlers({
       getSettings: () => ({
@@ -241,6 +567,87 @@ describe('registerNotificationHandlers', () => {
       reason: 'cooldown'
     })
     expect(notificationShowMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('loads allowed custom sound files for preload playback', async () => {
+    const soundPath = join(tempDir, 'sound.ogg')
+    writeFileSync(soundPath, Buffer.from([1, 2, 3]))
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: false,
+          customSoundPath: soundPath
+        }
+      })
+    } as never)
+
+    const handler = getLoadSoundHandler()
+    await expect(handler({})).resolves.toMatchObject({
+      ok: true,
+      data: new Uint8Array([1, 2, 3]),
+      mimeType: 'audio/ogg'
+    })
+  })
+
+  it('rejects unsupported custom sound file types', async () => {
+    const soundPath = join(tempDir, 'sound.txt')
+    writeFileSync(soundPath, 'not audio')
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: false,
+          customSoundPath: soundPath
+        }
+      })
+    } as never)
+
+    const handler = getLoadSoundHandler()
+    await expect(handler({})).resolves.toEqual({
+      ok: false,
+      reason: 'unsupported-type'
+    })
+  })
+
+  it('resolves the sound path without reading the file', () => {
+    const soundPath = join(tempDir, 'sound.ogg')
+    writeFileSync(soundPath, Buffer.from([1, 2, 3]))
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: false,
+          customSoundPath: soundPath
+        }
+      })
+    } as never)
+
+    const handler = getResolveSoundPathHandler()
+    expect(handler({})).toEqual({ ok: true, path: soundPath })
+  })
+
+  it('rejects unsupported types from resolveSoundPath without touching the disk', () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: false,
+          customSoundPath: '/some/where/sound.txt'
+        }
+      })
+    } as never)
+
+    const handler = getResolveSoundPathHandler()
+    expect(handler({})).toEqual({ ok: false, reason: 'unsupported-type' })
   })
 })
 

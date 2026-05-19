@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines */
-import { app, BrowserWindow, ipcMain, nativeTheme, screen, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, nativeTheme, screen, shell } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import icon from '../../../resources/icon.png?asset'
@@ -11,8 +11,10 @@ import {
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl
 } from '../../shared/browser-url'
+import { isCrashReportReason } from '../../shared/crash-reporting'
 import { resolveWindowShortcutAction } from '../../shared/window-shortcut-policy'
 import { getMainE2EConfig } from '../e2e-config'
+import { buildEditableContextMenuTemplate } from './editable-context-menu'
 
 function forceRepaint(window: BrowserWindow): void {
   if (window.isDestroyed()) {
@@ -31,11 +33,19 @@ function forceRepaint(window: BrowserWindow): void {
   }, 32)
 }
 
-// Why: the titlebar is 42px (border-box, 1px border-bottom).  The visual
-// center of the CSS-centered content sits at ~20 CSS px from the top.
-// At zoom factor z that becomes 20·z window px.  Traffic lights are
+function isCtrlTabSwitchKey(input: Electron.Input): boolean {
+  return input.code === 'Tab' && input.control && !input.meta && !input.alt
+}
+
+function isControlKeyRelease(input: Electron.Input): boolean {
+  return input.type === 'keyUp' && (input.code === 'ControlLeft' || input.code === 'ControlRight')
+}
+
+// Why: the titlebar is 36px (border-box, 1px border-bottom).  The visual
+// center of the CSS-centered content sits at ~18 CSS px from the top.
+// At zoom factor z that becomes 18·z window px.  Traffic lights are
 // ~12px tall, so we position their top edge at (center − 6).
-const TITLEBAR_CSS_CENTER = 20
+const TITLEBAR_CSS_CENTER = 18
 const TRAFFIC_LIGHT_RADIUS = 6
 const TRAFFIC_LIGHT_X = 16
 const MIN_WIDTH = 600
@@ -59,6 +69,23 @@ type CreateMainWindowOptions = {
    *  latch must be cleared or later window closes will be misclassified as
    *  quit attempts. */
   onQuitAborted?: () => void
+  onRendererProcessGone?: (details: Electron.RenderProcessGoneDetails) => void
+  /** Returns true when Orca should reload after an unexpected renderer loss.
+   *  Why: update relaunch and app quit intentionally tear down child
+   *  processes; recovering those paths can fight Electron's shutdown. */
+  shouldRecoverRenderer?: (details: Electron.RenderProcessGoneDetails) => boolean
+  /** Why: main-process startup must register IPC handlers before the renderer
+   *  begins booting, or eager renderer calls can race into missing channels. */
+  deferLoad?: boolean
+  title?: string
+}
+
+export function loadMainWindow(mainWindow: BrowserWindow): void {
+  if (is.dev && process.env.ELECTRON_RENDERER_URL) {
+    void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
+  } else {
+    void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  }
 }
 
 export function createMainWindow(
@@ -127,6 +154,12 @@ export function createMainWindow(
   })()
 
   const settings = store?.getSettings()
+  browserManager.setDictationShortcutForwardingPredicate(() => {
+    // Why: focused webview guests do not expose a safe transcript insertion
+    // target yet. Let Cmd/Ctrl+E continue to the page instead of starting a
+    // dictation session whose final text would be dropped.
+    return false
+  })
   const blur = settings?.windowBackgroundBlur ?? false
   // Why: native blur requires platform-specific Electron APIs. macOS uses
   // vibrancy (needs transparent: true), Windows uses backgroundMaterial.
@@ -146,6 +179,7 @@ export function createMainWindow(
     ...(savedBounds ? { x: savedBounds.x, y: savedBounds.y } : {}),
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
+    title: opts?.title ?? 'Orca',
     show: false,
     // Why: on macOS the menu lives in the system menu bar, so the in-window
     // menu bar is irrelevant. On Windows/Linux we auto-hide so the menu bar
@@ -155,7 +189,17 @@ export function createMainWindow(
     // conventions (File Explorer, Firefox, etc.).
     autoHideMenuBar: true,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : undefined,
+    // Why: on macOS 'hiddenInset' keeps the native traffic lights positioned
+    // inside our custom 42px titlebar. On Windows 'hidden' removes the default
+    // OS title bar (which would otherwise stack on top of our renderer titlebar
+    // and waste vertical space) while still allowing our renderer to draw its
+    // own drag region and window controls.
+    titleBarStyle:
+      process.platform === 'darwin'
+        ? 'hiddenInset'
+        : process.platform === 'win32'
+          ? 'hidden'
+          : undefined,
     // Why: initial position for 1x zoom; syncTrafficLightPosition() adjusts
     // dynamically when the user changes UI zoom.
     ...(process.platform === 'darwin'
@@ -296,11 +340,13 @@ export function createMainWindow(
       return
     }
     store?.updateUI({ windowMaximized: true })
+    mainWindow.webContents.send('window:maximize-changed', true)
   })
   mainWindow.on('unmaximize', () => {
     if (windowClosing) {
       return
     }
+    mainWindow.webContents.send('window:maximize-changed', false)
     const bounds = mainWindow.getBounds()
     // Why: mirror the saveBounds guard — unmaximize during teardown can land
     // at MIN_WIDTH × MIN_HEIGHT and we must not persist those as the user's
@@ -422,6 +468,18 @@ export function createMainWindow(
   }
   ipcMain.on(markdownFocusChannel, onMarkdownEditorFocused)
 
+  const onMainContextMenu = (_event: Electron.Event, params: Electron.ContextMenuParams): void => {
+    const template = buildEditableContextMenuTemplate(params, mainWindow.webContents)
+    if (template.length === 0) {
+      return
+    }
+    // Why: right-click can produce a Chromium context-menu event before our
+    // renderer focus mirror updates, so trust Electron's editable/spellcheck
+    // params here instead of gating on markdownEditorFocused.
+    Menu.buildFromTemplate(template).popup({ window: mainWindow, x: params.x, y: params.y })
+  }
+  mainWindow.webContents.on('context-menu', onMainContextMenu)
+
   // Why: renderer can't mirror focus state across a crash/reload/close.
   // Default-deny the carve-out so Cmd+B falls back to sidebar-toggle, which is
   // the safe behavior when focus context is unknown. Preserves the
@@ -429,26 +487,88 @@ export function createMainWindow(
   const resetMarkdownEditorFocus = (): void => {
     markdownEditorFocused = false
   }
-  mainWindow.webContents.on('render-process-gone', resetMarkdownEditorFocus)
+  let rendererProcessGone = false
+  let rendererRecoveryTimer: ReturnType<typeof setTimeout> | null = null
+  const clearRendererRecoveryTimer = (): void => {
+    if (rendererRecoveryTimer) {
+      clearTimeout(rendererRecoveryTimer)
+      rendererRecoveryTimer = null
+    }
+  }
+  const scheduleRendererRecovery = (details: Electron.RenderProcessGoneDetails): void => {
+    if (
+      rendererRecoveryTimer ||
+      !details ||
+      !isCrashReportReason(details.reason) ||
+      windowClosing ||
+      opts?.getIsQuitting?.() ||
+      opts?.shouldRecoverRenderer?.(details) === false ||
+      mainWindow.isDestroyed()
+    ) {
+      return
+    }
+    rendererRecoveryTimer = setTimeout(() => {
+      rendererRecoveryTimer = null
+      if (
+        windowClosing ||
+        opts?.getIsQuitting?.() ||
+        opts?.shouldRecoverRenderer?.(details) === false ||
+        mainWindow.isDestroyed()
+      ) {
+        return
+      }
+      // Why: a transient Network Service / renderer loss can leave Chromium
+      // showing a blank shell. Reload the app document once so the user gets
+      // back to a usable window instead of needing a full relaunch.
+      loadMainWindow(mainWindow)
+    }, 250)
+  }
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    rendererProcessGone = true
+    resetMarkdownEditorFocus()
+    opts?.onRendererProcessGone?.(details)
+    console.error('[window] Renderer process gone; close confirmation will be bypassed', details)
+    scheduleRendererRecovery(details)
+  })
   mainWindow.webContents.on('destroyed', resetMarkdownEditorFocus)
   mainWindow.webContents.on('did-start-navigation', (_e, _url, _isInPlace, isMainFrame) => {
     if (isMainFrame) {
       resetMarkdownEditorFocus()
     }
   })
+  mainWindow.webContents.on('did-finish-load', () => {
+    rendererProcessGone = false
+    clearRendererRecoveryTimer()
+  })
 
+  let ctrlTabSwitching = false
   mainWindow.webContents.on('before-input-event', (event, input) => {
-    if (input.type !== 'keyDown') {
-      return
-    }
-
-    if (is.dev && input.code === 'F12') {
+    if (input.type === 'keyDown' && is.dev && input.code === 'F12') {
       event.preventDefault()
       if (mainWindow.webContents.isDevToolsOpened()) {
         mainWindow.webContents.closeDevTools()
       } else {
         mainWindow.webContents.openDevTools({ mode: 'undocked' })
       }
+      return
+    }
+
+    if (isCtrlTabSwitchKey(input)) {
+      // Why: Ctrl+Tab is a held-key interaction. Route both press and release
+      // through IPC so renderer keyup suppression from preventDefault cannot
+      // leave the switcher overlay stranded.
+      event.preventDefault()
+      if (input.type === 'keyDown') {
+        ctrlTabSwitching = true
+        mainWindow.webContents.send('ui:ctrlTabKeyDown', { shiftKey: input.shift === true })
+      }
+      return
+    }
+
+    if (ctrlTabSwitching && isControlKeyRelease(input)) {
+      event.preventDefault()
+      ctrlTabSwitching = false
+      mainWindow.webContents.send('ui:ctrlTabKeyUp')
       return
     }
 
@@ -478,6 +598,34 @@ export function createMainWindow(
       return
     }
 
+    if (input.type !== 'keyDown') {
+      return
+    }
+
+    // Why: in hold mode, Cmd+E must NOT be intercepted here. Calling
+    // preventDefault() in before-input-event suppresses ALL subsequent DOM
+    // events for the key combo — including the keyUp the renderer needs to
+    // detect release. By letting the event through, the renderer's
+    // capture-phase DOM listeners handle both keydown and keyup normally.
+    // Toggle mode still uses the IPC path since it doesn't need keyUp.
+    if (action.type === 'dictationKeyDown') {
+      const voiceSettings = store?.getSettings().voice
+      if (!voiceSettings?.enabled || !voiceSettings.sttModel) {
+        return
+      }
+      const dictationMode = voiceSettings.dictationMode ?? 'toggle'
+      if (dictationMode === 'hold') {
+        return
+      }
+      if (input.isAutoRepeat) {
+        event.preventDefault()
+        return
+      }
+      event.preventDefault()
+      mainWindow.webContents.send('ui:dictationKeyDown')
+      return
+    }
+
     event.preventDefault()
 
     if (action.type === 'zoom') {
@@ -504,8 +652,12 @@ export function createMainWindow(
       return
     }
 
+    if (action.type === 'toggleFloatingTerminal') {
+      mainWindow.webContents.send('ui:toggleFloatingTerminal')
+      return
+    }
+
     if (action.type === 'openQuickOpen') {
-      // Forward Cmd/Ctrl+P to trigger Quick Open
       mainWindow.webContents.send('ui:openQuickOpen')
       return
     }
@@ -514,14 +666,11 @@ export function createMainWindow(
       // Why: routed through the main process so focus contexts that bypass
       // the renderer's window-level keydown (contentEditable markdown editor,
       // browser-guest webContents) still reach the new-workspace composer.
-      // Forward the target tab so Cmd/Ctrl+Shift+N lands on the
-      // "Create from…" tab instead of the default quick-create form.
-      mainWindow.webContents.send('ui:openNewWorkspace', action.tab)
+      mainWindow.webContents.send('ui:openNewWorkspace')
       return
     }
 
     if (action.type === 'jumpToWorktreeIndex') {
-      // Forward Cmd/Ctrl+1-9 for quick worktree switching
       mainWindow.webContents.send('ui:jumpToWorktreeIndex', action.index)
       return
     }
@@ -567,6 +716,18 @@ export function createMainWindow(
       }
       return
     }
+    const isRendererCrashed = mainWindow.webContents.isCrashed?.() ?? false
+    if (rendererProcessGone || isRendererCrashed) {
+      // Why: after a native renderer crash the renderer cannot answer
+      // window:close-requested. Let Cmd+Q / OS close complete instead of
+      // trapping the user in a blank, unquittable window.
+      windowClosing = true
+      if (boundsTimer) {
+        clearTimeout(boundsTimer)
+        boundsTimer = null
+      }
+      return
+    }
     e.preventDefault()
     mainWindow.webContents.send('window:close-requested', {
       isQuitting: opts?.getIsQuitting?.() ?? false
@@ -592,22 +753,86 @@ export function createMainWindow(
   }
   ipcMain.on(trafficLightChannel, onSyncTrafficLights)
 
+  // Why: renderer-drawn window controls on Windows send these to replicate the
+  // native title bar buttons that 'hidden' titleBarStyle removes.
+  const minimizeChannel = 'window:minimize'
+  const onMinimize = (): void => {
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.minimize()
+    }
+  }
+  const maximizeChannel = 'window:maximize'
+  const onMaximize = (): void => {
+    if (mainWindow.isDestroyed()) {
+      return
+    }
+    if (mainWindow.isMaximized()) {
+      mainWindow.unmaximize()
+    } else {
+      mainWindow.maximize()
+    }
+  }
+  // Why: send window:close-requested directly rather than calling
+  // mainWindow.close() and letting the 'close' event re-send it. Calling
+  // mainWindow.close() from within an IPC message handler on Windows can cause
+  // the 'close' event to misfire (e.preventDefault() doesn't suppress the OS
+  // close in all Windows configurations). Going straight to the renderer's
+  // close guard (Terminal.tsx onWindowCloseRequested) keeps the flow identical
+  // to what happens when confirmWindowClose() ultimately calls mainWindow.close()
+  // with windowCloseConfirmed = true.
+  const requestCloseChannel = 'window:request-close'
+  const onRequestClose = (): void => {
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('window:close-requested', { isQuitting: false })
+    }
+  }
+  // Why: the ··· button in the renderer-drawn title bar on Windows pops up
+  // the application menu at the cursor position, replicating the Alt-key
+  // reveal that autoHideMenuBar normally provides.
+  const popupMenuChannel = 'menu:popup'
+  const onPopupMenu = (): void => {
+    Menu.getApplicationMenu()?.popup({ window: mainWindow })
+  }
+  // Why: the renderer's WindowControls mounts after ready-to-show, which is
+  // also when savedMaximized is restored — so window:maximize-changed has
+  // already fired (or not fired, if maximize() was called pre-mount) before
+  // the listener attaches. Expose a synchronous getter so the button can
+  // initialize its icon to match the current state on mount.
+  const isMaximizedChannel = 'window:isMaximized'
+  const onIsMaximized = (): boolean => {
+    return !mainWindow.isDestroyed() && mainWindow.isMaximized()
+  }
+  ipcMain.on(minimizeChannel, onMinimize)
+  ipcMain.on(maximizeChannel, onMaximize)
+  ipcMain.on(requestCloseChannel, onRequestClose)
+  ipcMain.on(popupMenuChannel, onPopupMenu)
+  ipcMain.handle(isMaximizedChannel, onIsMaximized)
+
   ipcMain.on(confirmCloseChannel, onConfirmClose)
   mainWindow.on('closed', () => {
     // Why: default-deny the Cmd+B carve-out after the window is gone so a
     // stale-true flag can't leak past subsequent state transitions. Paired
     // with the webContents lifecycle resets above.
     markdownEditorFocused = false
+    clearRendererRecoveryTimer()
     ipcMain.removeListener(trafficLightChannel, onSyncTrafficLights)
+    ipcMain.removeListener(minimizeChannel, onMinimize)
+    ipcMain.removeListener(maximizeChannel, onMaximize)
+    browserManager.setDictationShortcutForwardingPredicate(null)
+    ipcMain.removeListener(requestCloseChannel, onRequestClose)
+    ipcMain.removeListener(popupMenuChannel, onPopupMenu)
+    ipcMain.removeHandler(isMaximizedChannel)
     ipcMain.removeListener(confirmCloseChannel, onConfirmClose)
     ipcMain.removeListener(markdownFocusChannel, onMarkdownEditorFocused)
+    // Why: on updater-triggered shutdown, BrowserWindow can emit `closed`
+    // after its webContents has already been destroyed. The destroyed
+    // webContents owns its listeners, so do not touch `mainWindow.webContents`
+    // here or the quit path can crash before Squirrel.Mac relaunches Orca.
     app.removeListener('before-quit', freezeBoundsOnQuit)
   })
 
-  if (is.dev && process.env.ELECTRON_RENDERER_URL) {
-    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
-  } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  if (!opts?.deferLoad) {
+    loadMainWindow(mainWindow)
   }
 
   return mainWindow

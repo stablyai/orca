@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: root and generated command help text live together so CLI discovery stays greppable. */
 import type { CommandSpec } from './args'
 import { findCommandSpec, isCommandGroup, supportsBrowserPageFlag } from './args'
 
@@ -7,7 +8,23 @@ Usage: orca <command> [options]
 
 Startup:
   open                      Launch Orca and wait for the runtime to be reachable
+  serve                     Start a headless Orca runtime server
   status                    Show app/runtime/graph readiness
+
+Environments:
+  environment add           Save a remote Orca runtime from a pairing code
+  environment list          List saved remote Orca runtimes
+  environment show          Show one saved remote Orca runtime
+  environment rm            Remove a saved remote Orca runtime
+
+Automations:
+  automations list          List scheduled Orca automations
+  automations show          Show one Orca automation
+  automations create        Create a scheduled Orca automation
+  automations edit          Edit an Orca automation
+  automations remove        Remove an Orca automation and its run history
+  automations run           Run an Orca automation now
+  automations runs          List automation run history
 
 Repos:
   repo list                 List repos registered in Orca
@@ -32,7 +49,7 @@ Terminals:
   terminal send             Send input to a live terminal
   terminal wait             Wait for a terminal condition (exit, tui-idle)
   terminal stop             Stop terminals for a worktree
-  terminal create           Create a new terminal tab in a worktree
+  terminal create           Create a terminal session in a worktree
   terminal rename           Set or clear the title of a terminal tab
   terminal split            Split an existing terminal pane
   terminal switch           Bring a terminal tab to the foreground
@@ -56,9 +73,33 @@ Orchestration:
   orchestration gate-list   List decision gates
   orchestration reset       Reset orchestration state
 
+Computer Use:
+  computer permissions      Open the macOS permission setup for computer-use
+  computer list-apps        List running apps available to computer-use
+  computer list-windows     List visible windows for a target app
+  computer get-app-state    Capture a compact accessibility snapshot of an app
+  computer click            Click an app element or window coordinate
+  computer perform-secondary-action Run an advertised accessibility action
+  computer scroll           Scroll an app element
+  computer drag             Drag between app elements or window coordinates
+  computer type-text        Type literal text at the current app focus
+  computer press-key        Press a key using xdotool-style syntax
+  computer hotkey           Press a shortcut combination such as CmdOrCtrl+A
+  computer paste-text       Paste text through the native clipboard path
+  computer set-value        Set the value of a settable app element
+
 Browser Automation:
   tab create                Create a new browser tab (navigates to --url)
   tab list                  List open browser tabs
+  tab show                  Show one browser tab by page id
+  tab current               Show the current browser tab
+  tab profile list          List browser session profiles
+  tab profile create        Create a browser session profile
+  tab profile delete        Delete a browser session profile
+  tab profile set           Switch a browser tab to a different profile
+  tab profile show          Show the profile bound to a browser tab
+  tab profile use-default   Switch a browser tab back to the default profile
+  tab profile clone         Clone a browser tab into another profile
   tab switch                Switch the active browser tab by --index or --page
   tab close                 Close a browser tab by --index/--page or the current tab
   snapshot                  Accessibility snapshot with element refs (e.g. @e1, @e2)
@@ -113,12 +154,17 @@ Browser Automation:
 
 Common Commands:
   orca open [--json]
+  orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--json]
   orca status [--json]
+  orca environment add --name <name> --pairing-code <code> [--json]
+  orca environment list [--json]
+  orca environment show --environment <selector> [--json]
+  orca environment rm --environment <selector> [--json]
   orca worktree list [--repo <selector>] [--limit <n>] [--json]
-  orca worktree create --repo <selector> --name <name> [--base-branch <ref>] [--issue <number>] [--comment <text>] [--run-hooks] [--json]
+  orca worktree create --repo <selector> --name <name> [--base-branch <ref>] [--issue <number>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]
   orca worktree show --worktree <selector> [--json]
   orca worktree current [--json]
-  orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--comment <text>] [--json]
+  orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--comment <text>] [--parent-worktree <selector>|--no-parent] [--json]
   orca worktree rm --worktree <selector> [--force] [--run-hooks] [--json]
   orca worktree ps [--limit <n>] [--json]
   orca terminal list [--worktree <selector>] [--limit <n>] [--json]
@@ -127,7 +173,7 @@ Common Commands:
   orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--json]
   orca terminal wait [--terminal <handle>] --for exit|tui-idle [--timeout-ms <ms>] [--json]
   orca terminal stop --worktree <selector> [--json]
-  orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--json]
+  orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--focus] [--json]
   orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--json]
   orca terminal switch [--terminal <handle>] [--json]
   orca terminal close [--terminal <handle>] [--json]
@@ -141,6 +187,8 @@ Selectors:
   --repo <selector>         Registered repo selector such as id:<id>, name:<name>, or path:<path>
   --worktree <selector>     Worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current
   --terminal <handle>       Runtime-issued terminal handle returned by \`orca terminal list --json\`
+  --parent-worktree <selector> Parent worktree selector; create infers one from the Orca terminal or current directory by default
+  --no-parent               Force worktree creation/update to have no parent lineage
 
 Terminal Send Options:
   --text <text>             Text to send to the terminal
@@ -153,10 +201,13 @@ Wait Options:
 
 Output Options:
   --json                    Emit machine-readable JSON instead of human text
+  --pairing-code <code>      Connect to a remote Orca runtime using an orca://pair#... code
+  --environment <selector>   Connect using a saved environment id or name
   --help                    Show this help message
 
 Behavior:
   Most commands require a running Orca runtime. If Orca is not open yet, run \`orca open\` first.
+  Remote runtime access can also be supplied with ORCA_PAIRING_CODE or ORCA_ENVIRONMENT.
   Use selectors for discovery and handles for repeated live terminal operations.
 
 Browser Workflow:
@@ -183,6 +234,8 @@ Browser Options:
   --amount <pixels>         Scroll distance in pixels (default: viewport height)
   --index <n>               Tab index (from \`tab list\`)
   --page <id>               Stable browser page id (preferred for concurrent workflows)
+  --profile <id>            Browser profile id
+  --show-profile            Include the tab's browser profile in text output
   --format <png|jpeg>       Screenshot image format
   --from <ref>              Drag source element ref
   --to <ref>                Drag target element ref
@@ -202,7 +255,10 @@ Examples:
   $ orca terminal list --worktree path:/Users/me/orca/workspaces/orca/cli-test-1 --json
   $ orca terminal send --terminal term_123 --text "hi" --enter
   $ orca terminal wait --terminal term_123 --for exit --timeout-ms 60000 --json
-  $ orca tab create --url https://example.com
+  $ orca tab current --json
+  $ orca tab show --page page_123 --json
+  $ orca tab create --url https://example.com --profile work
+  $ orca tab profile clone --page page_123 --profile work --json
   $ orca snapshot
   $ orca click --element e3
   $ orca fill --element e5 --value "hello"
@@ -276,27 +332,65 @@ export function formatFlagHelp(flag: string): string {
     command: '--command <text>       Command to run in the terminal on startup',
     comment: '--comment <text>       Comment stored in Orca metadata',
     cursor: '--cursor <n>           Line cursor from a previous read (returns only new output)',
-    direction: '--direction <dir>      Direction: horizontal|vertical (split) or up|down (scroll)',
+    action: '--action <name>       Secondary accessibility action name',
+    activate: '--activate             Reveal the new worktree in the Orca app',
+    app: '--app <app>            App name, bundle ID, or pid:N',
+    direction:
+      '--direction <dir>      Direction: up|down|left|right for scroll, horizontal|vertical for split',
     'display-name': '--display-name <name>  Override the Orca display name',
+    'element-index': '--element-index <n>   Element index from get-app-state',
     title: '--title <text>         Custom title for the terminal tab (omit to reset)',
     enter: '--enter                Append Enter after sending text',
     force: '--force                Force worktree removal when supported',
+    focus: '--focus                Reveal the created terminal session in Orca',
     for: '--for exit|tui-idle    Wait condition to satisfy',
+    'from-element-index': '--from-element-index <n> Source element index from get-app-state',
+    'from-x': '--from-x <x>           Source window-local x coordinate',
+    'from-y': '--from-y <y>           Source window-local y coordinate',
     help: '--help                 Show this help message',
     interrupt: '--interrupt            Send as an interrupt-style input when supported',
     issue: '--issue <number|null>  Linked GitHub issue number',
     json: '--json                 Emit machine-readable JSON',
+    key: '--key <key>            Key or combo to press, e.g. Escape or CmdOrCtrl+L',
     limit: '--limit <n>            Maximum number of rows to return',
-    name: '--name <name>          Name for the new worktree',
+    'mouse-button': '--mouse-button <btn>   Mouse button: left, right, or middle',
+    name: '--name <name>          Name for the new worktree or automation',
+    'no-parent': '--no-parent            Force no parent lineage',
+    'no-screenshot': '--no-screenshot       Skip screenshot capture after the operation',
+    pages: '--pages <n>           Number of scroll pages',
+    'parent-worktree':
+      '--parent-worktree <selector> Parent worktree selector; create infers one by default',
     path: '--path <path>          Filesystem path to the repo',
     query: '--query <text>        Search text for matching refs',
     ref: '--ref <ref>            Base ref to persist for the repo',
     repo: '--repo <selector>      Repo selector such as id:<id>, name:<name>, or path:<path>',
+    'restore-window':
+      '--restore-window     Bring the target app/window forward before the operation',
+    session: '--session <id>        Snapshot namespace for a related computer-use workflow',
     terminal: '--terminal <handle>  Runtime-issued terminal handle',
-    text: '--text <text>          Text to send to the terminal',
+    text: '--text <text>          Text payload to send or type',
+    'text-stdin': '--text-stdin          Read text payload from stdin',
     'timeout-ms': '--timeout-ms <ms>     Maximum wait time before timing out',
+    'to-element-index': '--to-element-index <n> Destination element index from get-app-state',
+    'to-x': '--to-x <x>             Destination window-local x coordinate',
+    'to-y': '--to-y <y>             Destination window-local y coordinate',
     worktree:
       '--worktree <selector>  Worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current',
+    workspace: '--workspace <selector> Existing worktree selector for automation runs',
+    prompt: '--prompt <text>        Automation prompt to pass to the agent',
+    provider: '--provider <agent>     Agent id such as codex, claude, or gemini',
+    trigger: '--trigger <schedule>   Automation schedule preset, cron, or RRULE',
+    schedule: '--schedule <schedule>  Alias for --trigger',
+    time: '--time <HH:MM>        Time used with daily/weekdays/weekly presets',
+    day: '--day <0-6>           Day used with weekly preset, Sunday=0',
+    timezone: '--timezone <tz>       IANA timezone for the automation',
+    enabled: '--enabled              Enable the automation',
+    disabled: '--disabled             Disable the automation',
+    'workspace-mode': '--workspace-mode <mode> existing or new-per-run',
+    'missed-run-grace-minutes': '--missed-run-grace-minutes <n> Missed-run grace window',
+    'value-stdin': '--value-stdin         Read set-value payload from stdin',
+    'window-id': '--window-id <id>      Target a window id from list-windows',
+    'window-index': '--window-index <n>   Target a window index from list-windows',
     // Browser automation flags
     element: '--element <ref>        Element ref from snapshot (e.g. e3)',
     url: '--url <url>            URL to navigate to',
@@ -306,6 +400,8 @@ export function formatFlagHelp(flag: string): string {
     amount: '--amount <pixels>      Scroll distance in pixels',
     index: '--index <n>            Tab index to switch to',
     page: '--page <id>            Stable browser page id from `orca tab list --json`',
+    profile: '--profile <id>        Browser profile id',
+    'show-profile': '--show-profile        Include tab profile in text output',
     format: '--format <png|jpeg>    Screenshot image format'
   }
 

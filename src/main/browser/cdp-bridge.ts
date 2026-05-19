@@ -776,6 +776,9 @@ export class CdpBridge {
         deviceScaleFactor,
         mobile
       })
+      // Why: BrowserView's compositor surface can keep the previous host size
+      // after metrics-only resize, which crops remote screencast clients.
+      await Promise.resolve(sender('Emulation.setVisibleSize', { width, height })).catch(() => {})
 
       return { width, height, deviceScaleFactor, mobile }
     })

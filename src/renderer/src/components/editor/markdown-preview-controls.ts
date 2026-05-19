@@ -6,12 +6,10 @@ type MarkdownPreviewTarget = Pick<OpenFile, 'mode' | 'diffSource'> & {
 }
 
 const MARKDOWN_EDIT_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
-const MARKDOWN_DIFF_VIEW_MODES = [
-  'source',
-  'preview'
-] as const satisfies readonly MarkdownViewMode[]
+const MARKDOWN_DIFF_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
 const MERMAID_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
 const CSV_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
+const NOTEBOOK_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
 const NO_VIEW_MODES = [] as const satisfies readonly MarkdownViewMode[]
 
 // Why: every editable file (markdown, mermaid, or plain code) can flip into
@@ -25,6 +23,11 @@ const CODE_EDIT_TOGGLE_MODES = ['edit', 'changes'] as const satisfies readonly E
 export function getEditorToggleModes(target: MarkdownPreviewTarget): readonly EditorToggleValue[] {
   if (target.mode !== 'edit') {
     return getMarkdownViewModes(target)
+  }
+  if (target.language === 'notebook') {
+    // Why: notebook source mode is raw JSON and Changes would diff that JSON,
+    // which is noisy and currently invalid for restored external notebooks.
+    return NOTEBOOK_VIEW_MODES
   }
   const languageModes = getMarkdownViewModes(target)
   if (languageModes.length > 0) {
@@ -41,7 +44,8 @@ export function getMarkdownViewModes(target: MarkdownPreviewTarget): readonly Ma
     if (
       target.mode === 'diff' &&
       target.diffSource !== 'combined-uncommitted' &&
-      target.diffSource !== 'combined-branch'
+      target.diffSource !== 'combined-branch' &&
+      target.diffSource !== 'combined-commit'
     ) {
       return MARKDOWN_DIFF_VIEW_MODES
     }
@@ -55,10 +59,17 @@ export function getMarkdownViewModes(target: MarkdownPreviewTarget): readonly Ma
     return CSV_VIEW_MODES
   }
 
+  if (target.language === 'notebook' && target.mode === 'edit') {
+    return NOTEBOOK_VIEW_MODES
+  }
+
   return NO_VIEW_MODES
 }
 
 export function getDefaultMarkdownViewMode(target: MarkdownPreviewTarget): MarkdownViewMode {
+  if (target.language === 'markdown' && target.mode === 'diff') {
+    return 'source'
+  }
   const modes = getMarkdownViewModes(target)
   return modes.includes('rich') ? 'rich' : 'source'
 }

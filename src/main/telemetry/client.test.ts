@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 // End-to-end behavior of the track() wrapper against a mock PostHog. These
 // tests pin the ordering contracts:
 //
@@ -5,8 +6,8 @@
 //   - burst cap runs BEFORE consent resolve (opted-out flood does not hit
 //     resolveConsent)
 //   - per-session 1000-event ceiling enforced
-//   - opt-out event fires BEFORE posthog.optOut() — the one event that
-//     transmits against the user's new preference
+//   - opt-out event reaches the SDK queue BEFORE posthog.optOut() — the one
+//     event that transmits against the user's new preference
 //   - serialized capture payload is exactly CommonProps ∪ EventProps ∪ the
 //     allowed auto-properties ({ $process_person_profile }); an unexpected
 //     auto-property from a future SDK upgrade fails the drift check
@@ -25,9 +26,13 @@ import {
   _setPostHogClientForTests,
   _setShuttingDownForTests,
   _setStoreForTests,
+  _resetFirstAppOpenedFiredForTests,
+  persistBannerAcknowledgeWithoutEmitting,
   setOptIn,
+  shouldOptOutSdkAtInit,
   shutdownTelemetry,
-  track
+  track,
+  trackAppOpenedOnce
 } from './client'
 
 // Minimal mock of the PostHog client surface the wrapper actually calls.
@@ -39,14 +44,42 @@ type MockPostHog = {
   optIn: ReturnType<typeof vi.fn>
   optOut: ReturnType<typeof vi.fn>
   shutdown: ReturnType<typeof vi.fn>
+  on: ReturnType<typeof vi.fn>
+  emitForTests: (event: string, payload: unknown) => void
 }
 
 function makeMockPostHog(): MockPostHog {
+  const listeners = new Map<string, Set<(payload: unknown) => void>>()
+  const emitForTests = (event: string, payload: unknown): void => {
+    for (const listener of listeners.get(event) ?? []) {
+      listener(payload)
+    }
+  }
+
   return {
-    capture: vi.fn(),
-    optIn: vi.fn(),
-    optOut: vi.fn(),
-    shutdown: vi.fn(async () => {})
+    capture: vi.fn((message: { event?: string; uuid?: string }) => {
+      queueMicrotask(() => {
+        emitForTests('capture', {
+          event: message.event,
+          uuid: message.uuid
+        })
+      })
+    }),
+    optIn: vi.fn(async () => {}),
+    optOut: vi.fn(async () => {}),
+    shutdown: vi.fn(async () => {}),
+    on: vi.fn((event: string, listener: (payload: unknown) => void) => {
+      let eventListeners = listeners.get(event)
+      if (!eventListeners) {
+        eventListeners = new Set()
+        listeners.set(event, eventListeners)
+      }
+      eventListeners.add(listener)
+      return () => {
+        eventListeners?.delete(listener)
+      }
+    }),
+    emitForTests
   }
 }
 
@@ -59,7 +92,10 @@ function makeFakeStore(settings: GlobalSettings): Store {
     getSettings: vi.fn(() => settings),
     updateSettings: vi.fn((updates: Partial<GlobalSettings>) => {
       if (updates.telemetry) {
-        settings.telemetry = { ...settings.telemetry, ...updates.telemetry } as typeof settings.telemetry
+        settings.telemetry = {
+          ...settings.telemetry,
+          ...updates.telemetry
+        } as typeof settings.telemetry
       }
       return settings
     })
@@ -137,12 +173,14 @@ describe('track()', () => {
     _setStoreForTests(store)
     _setShuttingDownForTests(false)
     _enableTransportForTests(true)
+    _resetFirstAppOpenedFiredForTests()
   })
   afterEach(() => {
     _enableTransportForTests(false)
     _setPostHogClientForTests(null)
     _setCommonPropsForTests(null)
     _setStoreForTests(null)
+    _resetFirstAppOpenedFiredForTests()
     vi.restoreAllMocks()
     restoreConsentEnv(envStash)
   })
@@ -237,11 +275,18 @@ describe('track()', () => {
   it('drops invalid events before calling capture', () => {
     // Raw error strings on agent_error are rejected by `.strict()`.
     track('agent_error', {
-      error_class: 'auth_expired',
+      error_class: 'unknown',
       agent_kind: 'claude-code',
       error_message: 'leaked message' // rejected by .strict()
     } as never)
     expect(mock.capture).not.toHaveBeenCalled()
+  })
+
+  it('trackAppOpenedOnce emits app_opened at most once per session', () => {
+    trackAppOpenedOnce()
+    trackAppOpenedOnce()
+    expect(mock.capture).toHaveBeenCalledTimes(1)
+    expect(mock.capture.mock.calls[0]![0].event).toBe('app_opened')
   })
 })
 
@@ -268,40 +313,152 @@ describe('setOptIn()', () => {
     _setStoreForTests(store)
     _setShuttingDownForTests(false)
     _enableTransportForTests(true)
+    _resetFirstAppOpenedFiredForTests()
   })
   afterEach(() => {
     _enableTransportForTests(false)
     _setPostHogClientForTests(null)
     _setCommonPropsForTests(null)
     _setStoreForTests(null)
+    _resetFirstAppOpenedFiredForTests()
     vi.restoreAllMocks()
     restoreConsentEnv(envStash)
   })
 
   // Ordering invariant: the opt-out event is the one signal that transmits
-  // against the user's new preference. It MUST reach capture() before we
-  // disable the SDK — otherwise the signal is lost.
-  it('fires telemetry_opted_out BEFORE posthog.optOut()', () => {
+  // against the user's new preference. It MUST reach the SDK queue before
+  // we disable the SDK — otherwise posthog-node drops it at enqueue time.
+  it('waits for telemetry_opted_out to enqueue before posthog.optOut()', async () => {
     const order: string[] = []
-    mock.capture.mockImplementation(() => {
-      order.push('capture')
+    mock.capture.mockImplementation((message: { event?: string; uuid?: string }) => {
+      order.push('capture called')
+      queueMicrotask(() => {
+        order.push('sdk enqueue')
+        mock.emitForTests('capture', {
+          event: message.event,
+          uuid: message.uuid
+        })
+      })
     })
-    mock.optOut.mockImplementation(() => {
+    mock.optOut.mockImplementation(async () => {
       order.push('optOut')
     })
-    setOptIn('settings', false)
-    expect(order).toEqual(['capture', 'optOut'])
+    await setOptIn('settings', false)
+    expect(order).toEqual(['capture called', 'sdk enqueue', 'optOut'])
   })
 
-  it('fires telemetry_opted_in AFTER posthog.optIn()', () => {
+  it('fires telemetry_opted_in after posthog.optIn without app_opened for settings opt-in', async () => {
     // Flip settings to currently-opted-out so the flip to true exercises
-    // the opt-in branch cleanly.
+    // the opt-in branch cleanly. This is not the pending-banner path, so
+    // it must not replay the once-per-session app_opened event.
     settings.telemetry!.optedIn = false
     const order: string[] = []
-    mock.optIn.mockImplementation(() => order.push('optIn'))
-    mock.capture.mockImplementation(() => order.push('capture'))
-    setOptIn('settings', true)
-    expect(order).toEqual(['optIn', 'capture'])
+    mock.optIn.mockImplementation(async () => order.push('optIn'))
+    mock.capture.mockImplementation((message: { event?: string }) => {
+      order.push(`capture:${message.event}`)
+    })
+    await setOptIn('settings', true)
+    expect(order).toEqual(['optIn', 'capture:telemetry_opted_in'])
+  })
+
+  it('drops telemetry_opted_in silently in non-official builds', async () => {
+    settings.telemetry!.optedIn = false
+    _setPostHogClientForTests(null)
+    _enableTransportForTests(false)
+
+    await setOptIn('settings', true)
+
+    expect(mock.capture).not.toHaveBeenCalled()
+    expect(console.debug).not.toHaveBeenCalled()
+  })
+
+  it('fires app_opened once after pending-banner opt-in enables the SDK', async () => {
+    settings.telemetry = {
+      optedIn: null,
+      installId: BASE_COMMON.install_id,
+      existedBeforeTelemetryRelease: true
+    }
+    const order: string[] = []
+    mock.optIn.mockImplementation(async () => order.push('optIn'))
+    mock.capture.mockImplementation((message: { event?: string }) => {
+      order.push(`capture:${message.event}`)
+    })
+
+    await setOptIn('settings', true)
+
+    expect(order).toEqual(['optIn', 'capture:app_opened', 'capture:telemetry_opted_in'])
+  })
+})
+
+describe('persistBannerAcknowledgeWithoutEmitting()', () => {
+  let mock: MockPostHog
+  let store: Store
+  let settings: GlobalSettings
+  let envStash: Record<string, string | undefined>
+
+  beforeEach(() => {
+    envStash = stashAndClearConsentEnv()
+    vi.spyOn(console, 'debug').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    resetBurstCapsForSession()
+    mock = makeMockPostHog()
+    settings = makeFakeSettings({
+      optedIn: null,
+      installId: BASE_COMMON.install_id,
+      existedBeforeTelemetryRelease: true
+    })
+    store = makeFakeStore(settings)
+    _setPostHogClientForTests(mock as unknown as PostHog)
+    _setCommonPropsForTests(BASE_COMMON)
+    _setStoreForTests(store)
+    _setShuttingDownForTests(false)
+    _enableTransportForTests(true)
+    _resetFirstAppOpenedFiredForTests()
+  })
+
+  afterEach(() => {
+    _enableTransportForTests(false)
+    _setPostHogClientForTests(null)
+    _setCommonPropsForTests(null)
+    _setStoreForTests(null)
+    _resetFirstAppOpenedFiredForTests()
+    vi.restoreAllMocks()
+    restoreConsentEnv(envStash)
+  })
+
+  it('fires app_opened after re-enabling the SDK and does not emit telemetry_opted_in', async () => {
+    const order: string[] = []
+    mock.optIn.mockImplementation(async () => order.push('optIn'))
+    mock.capture.mockImplementation((message: { event?: string }) => {
+      order.push(`capture:${message.event}`)
+    })
+
+    await persistBannerAcknowledgeWithoutEmitting()
+
+    expect(order).toEqual(['optIn', 'capture:app_opened'])
+    expect(settings.telemetry?.optedIn).toBe(true)
+  })
+})
+
+// Pin the init-time SDK opt-out decision. The bug this test prevents: if
+// `initTelemetry` flipped the SDK's `optedOut` flag for `pending_banner`
+// (existing users who have not yet resolved the notice), the direct
+// `posthog.capture(telemetry_opted_out)` on the Turn-off path would be
+// dropped by posthog-core's enqueue — silently losing the one signal that
+// tells us the existing-user opt-out flow works.
+describe('shouldOptOutSdkAtInit()', () => {
+  it('opts out the SDK for every disabled-reason', () => {
+    for (const reason of ['user_opt_out', 'ci', 'do_not_track', 'orca_disabled'] as const) {
+      expect(shouldOptOutSdkAtInit({ effective: 'disabled', reason })).toBe(true)
+    }
+  })
+
+  it('does NOT opt out the SDK for pending_banner', () => {
+    expect(shouldOptOutSdkAtInit({ effective: 'pending_banner' })).toBe(false)
+  })
+
+  it('does NOT opt out the SDK for enabled', () => {
+    expect(shouldOptOutSdkAtInit({ effective: 'enabled' })).toBe(false)
   })
 })
 

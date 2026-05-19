@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Import, Loader2 } from 'lucide-react'
+import { Import, Loader2, MousePointerClick } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
+import { ORCA_CLI_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
+import {
+  BROWSER_USE_ENABLED_STORAGE_KEY,
+  BROWSER_USE_SKILL_INSTALLED_STORAGE_KEY
+} from '@/lib/browser-use-setup-state'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import {
@@ -24,15 +29,14 @@ import { BrowserUseExamples } from './BrowserUseExamples'
 import { StepBadge } from './BrowserUseStepBadge'
 import { BrowserUseSkillStep } from './BrowserUseSkillStep'
 
-const ORCA_SKILL_INSTALL_COMMAND =
-  'npx skills add https://github.com/stablyai/orca --skill orca-cli'
-
 type BrowserUseSetupProps = {
   onConfigureMoreBrowsers?: () => void
+  onOpenComputerUse?: () => void
 }
 
 export function BrowserUseSetup({
-  onConfigureMoreBrowsers
+  onConfigureMoreBrowsers,
+  onOpenComputerUse
 }: BrowserUseSetupProps = {}): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
@@ -50,12 +54,12 @@ export function BrowserUseSetup({
   // functional effect elsewhere in the app — it's a UI affordance local to
   // this pane, consistent with the skill-installed marker below.
   const [browserUseEnabled, setBrowserUseEnabled] = useState<boolean>(() => {
-    return localStorage.getItem('orca.browserUse.enabled') === '1'
+    return localStorage.getItem(BROWSER_USE_ENABLED_STORAGE_KEY) === '1'
   })
 
   const toggleBrowserUse = (value: boolean): void => {
     setBrowserUseEnabled(value)
-    localStorage.setItem('orca.browserUse.enabled', value ? '1' : '0')
+    localStorage.setItem(BROWSER_USE_ENABLED_STORAGE_KEY, value ? '1' : '0')
   }
 
   const refreshCli = async (): Promise<void> => {
@@ -94,12 +98,12 @@ export function BrowserUseSetup({
   // user mark it done explicitly after copying — this avoids falsely implying
   // progress and keeps the guided flow honest.
   const [skillInstalled, setSkillInstalled] = useState<boolean>(() => {
-    return localStorage.getItem('orca.browserUse.skillInstalled') === '1'
+    return localStorage.getItem(BROWSER_USE_SKILL_INSTALLED_STORAGE_KEY) === '1'
   })
 
   const markSkillInstalled = (value: boolean): void => {
     setSkillInstalled(value)
-    localStorage.setItem('orca.browserUse.skillInstalled', value ? '1' : '0')
+    localStorage.setItem(BROWSER_USE_SKILL_INSTALLED_STORAGE_KEY, value ? '1' : '0')
   }
 
   const handleEnableCli = async (): Promise<void> => {
@@ -117,8 +121,8 @@ export function BrowserUseSetup({
 
   const handleCopySkillCommand = async (): Promise<void> => {
     try {
-      await window.api.ui.writeClipboardText(ORCA_SKILL_INSTALL_COMMAND)
-      toast.success('Copied install command. Run it in your agent project.')
+      await window.api.ui.writeClipboardText(ORCA_CLI_SKILL_INSTALL_COMMAND)
+      toast.success('Copied install command. Run it on this computer.')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to copy command.')
     }
@@ -220,6 +224,31 @@ export function BrowserUseSetup({
         </div>
       </div>
 
+      {onOpenComputerUse ? (
+        <div className="rounded-xl border border-border/60 bg-card/50 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+            <div className="min-w-0 flex-1 space-y-1">
+              <p className="text-sm font-medium">Use an existing browser session</p>
+              <p className="text-xs text-muted-foreground">
+                If cookie import is not the right fit, Computer Use can control local apps and may
+                use existing logged-in browser sessions where applicable. Install the Computer Use
+                skill; macOS also requires privacy permissions.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onOpenComputerUse}
+              className="shrink-0 gap-1.5 self-start"
+            >
+              <MousePointerClick className="size-3.5" />
+              Open Computer Use
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {showStep1 ? (
         <SearchableSetting
           title="Enable Orca CLI"
@@ -280,7 +309,7 @@ export function BrowserUseSetup({
           }`}
         >
           <BrowserUseSkillStep
-            command={ORCA_SKILL_INSTALL_COMMAND}
+            command={ORCA_CLI_SKILL_INSTALL_COMMAND}
             skillInstalled={skillInstalled}
             disabled={!cliEnabled}
             onCopy={() => void handleCopySkillCommand()}

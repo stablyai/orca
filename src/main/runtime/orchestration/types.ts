@@ -6,6 +6,7 @@ export type MessageType =
   | 'escalation'
   | 'handoff'
   | 'decision_gate'
+  | 'heartbeat'
 
 export type MessagePriority = 'normal' | 'high' | 'urgent'
 
@@ -30,11 +31,13 @@ export type MessageRow = {
   read: number
   sequence: number
   created_at: string
+  delivered_at: string | null
 }
 
 export type TaskRow = {
   id: string
   parent_id: string | null
+  created_by_terminal_handle: string | null
   spec: string
   status: TaskStatus
   deps: string
@@ -53,6 +56,7 @@ export type DispatchContextRow = {
   dispatched_at: string | null
   completed_at: string | null
   created_at: string
+  last_heartbeat_at: string | null
 }
 
 export type DecisionGateRow = {

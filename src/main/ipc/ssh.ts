@@ -7,16 +7,26 @@ import { SshConnectionManager, type SshConnectionCallbacks } from '../ssh/ssh-co
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { SshRelaySession } from '../ssh/ssh-relay-session'
 import { SshPortForwardManager } from '../ssh/ssh-port-forward'
-import type {
-  SshTarget,
-  SshConnectionState,
-  SshConnectionStatus,
-  DetectedPort,
-  SavedPortForward
+import {
+  DEFAULT_REMOTE_WORKSPACE_SYNC_GRACE_PERIOD_SECONDS,
+  type DetectedPort,
+  type SavedPortForward,
+  type SshTarget,
+  type SshConnectionStatus,
+  type SshConnectionState
 } from '../../shared/ssh-types'
+import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../shared/constants'
 import { isAuthError } from '../ssh/ssh-connection-utils'
+import { forceStopRelayForTarget } from '../ssh/ssh-relay-reset'
+import { isSshPtyNotFoundError } from '../providers/ssh-pty-provider'
 import { registerSshBrowseHandler } from './ssh-browse'
 import { requestCredential, registerCredentialHandler } from './ssh-passphrase'
+import {
+  clearProviderPtyState,
+  deletePtyOwnership,
+  getPtyIdsForConnection,
+  getSshPtyProvider
+} from './pty'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
 let sshStore: SshConnectionStore | null = null
@@ -28,6 +38,18 @@ let portForwardManager: SshPortForwardManager | null = null
 // scattered Maps/Sets that previously tracked this state independently.
 const activeSessions = new Map<string, SshRelaySession>()
 
+function relayGracePeriodForTarget(target: SshTarget | null | undefined): number | undefined {
+  if (!target?.remoteWorkspaceSyncEnabled) {
+    return target?.relayGracePeriodSeconds
+  }
+  // Why: cross-device sync should survive transient app closes, but an
+  // unset value must not mean "keep remote PTYs forever" after disconnect.
+  return (
+    target.remoteWorkspaceSyncGracePeriodSeconds ??
+    DEFAULT_REMOTE_WORKSPACE_SYNC_GRACE_PERIOD_SECONDS
+  )
+}
+
 // Why: multiple renderer tabs for the same SSH target can fire ssh:connect
 // concurrently. Without serialization, the second call interleaves with the
 // first — both see no existing session, both create one, and the first one
@@ -35,11 +57,80 @@ const activeSessions = new Map<string, SshRelaySession>()
 // awaits the first rather than racing.
 const connectInFlight = new Map<string, Promise<SshConnectionState>>()
 
+// Why: reset tears down and force-stops the relay, then disconnects SSH.
+// Publish that lifecycle so new connects and duplicate resets cannot race it.
+const resetRelayInFlight = new Map<string, Promise<void>>()
+
 // Why: ssh:testConnection calls connect() then disconnect(), which fires
 // state-change events to the renderer. This causes worktree cards to briefly
 // flash "connected" then "disconnected". Suppressing broadcasts during tests
 // avoids that visual glitch.
 const testingTargets = new Set<string>()
+
+// Why: when a relay channel keeps dying (e.g. a stale --connect bridge keeps
+// being replaced, a remote-side bug closes the channel right after handshake,
+// or a mismatched relay binary refuses every handshake), the unguarded
+// _onRelayLost handler reconnects as fast as the network allows, hammering
+// both the local main process and the remote sshd in a tight loop. Track
+// per-target reconnect attempts and apply exponential backoff so the loop
+// terminates with a recoverable error instead of running forever. Successful
+// `ready` resets the attempt counter for the next genuine drop.
+type RelayLostBackoffState = {
+  attempts: number
+  lastAttemptStartedAt: number
+  pendingTimer: ReturnType<typeof setTimeout> | null
+}
+const relayLostBackoff = new Map<string, RelayLostBackoffState>()
+const relayStateOverrides = new Map<string, SshConnectionState>()
+const RELAY_LOST_MAX_ATTEMPTS = 6
+const RELAY_LOST_BASE_DELAY_MS = 500
+const RELAY_LOST_MAX_DELAY_MS = 15_000
+// Why: if a fresh reconnect's mux dies within this window, the new session
+// never stabilized (a flap, not a real recovery). Without this clamp the
+// attempt counter would be reset prematurely by a mux that "reached ready"
+// only on paper. 5 seconds covers normal post-deploy provider registration
+// and PTY reattach without being so generous that a real long-lived session
+// looks like a flap.
+const RELAY_LOST_STABILIZED_MS = 5_000
+
+function clearRelayLostBackoff(targetId: string): void {
+  const state = relayLostBackoff.get(targetId)
+  if (state?.pendingTimer) {
+    clearTimeout(state.pendingTimer)
+  }
+  relayLostBackoff.delete(targetId)
+}
+
+function broadcastSshState(
+  getMainWindow: () => BrowserWindow | null,
+  targetId: string,
+  state: SshConnectionState
+): void {
+  const win = getMainWindow()
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('ssh:state-changed', { targetId, state })
+  }
+}
+
+function publishRelayOverride(
+  getMainWindow: () => BrowserWindow | null,
+  targetId: string,
+  status: SshConnectionStatus,
+  error: string | null,
+  reconnectAttempt: number
+): void {
+  const state: SshConnectionState = { targetId, status, error, reconnectAttempt }
+  relayStateOverrides.set(targetId, state)
+  broadcastSshState(getMainWindow, targetId, state)
+}
+
+function clearRelayStateOverride(targetId: string): void {
+  relayStateOverrides.delete(targetId)
+}
+
+function getPublicSshState(targetId: string): SshConnectionState | undefined {
+  return relayStateOverrides.get(targetId) ?? connectionManager!.getState(targetId) ?? undefined
+}
 
 function broadcastPortForwards(getMainWindow: () => BrowserWindow | null, targetId: string): void {
   const win = getMainWindow()
@@ -161,7 +252,10 @@ export function registerSshHandlers(
     'ssh:importConfig',
     'ssh:connect',
     'ssh:disconnect',
+    'ssh:terminateSessions',
+    'ssh:resetRelay',
     'ssh:getState',
+    'ssh:needsPassphrasePrompt',
     'ssh:testConnection',
     'ssh:addPortForward',
     'ssh:updatePortForward',
@@ -191,16 +285,33 @@ export function registerSshHandlers(
         return
       }
 
-      const win = getMainWindow()
-      if (win && !win.isDestroyed()) {
-        win.webContents.send('ssh:state-changed', { targetId, state })
-      }
-
       // Why: when SSH reconnects after a network blip, we must re-deploy the
       // relay and rebuild the full provider stack. The session's state machine
       // ensures this only triggers when appropriate — 'deploying' state from
       // an explicit ssh:connect is not 'ready', so this branch won't fire.
       const session = activeSessions.get(targetId)
+      const sessionState = session?.getState()
+      const shouldReconnectRelay =
+        session !== undefined &&
+        state.status === 'connected' &&
+        state.reconnectAttempt === 0 &&
+        (sessionState === 'ready' || sessionState === 'reconnecting')
+
+      if (shouldReconnectRelay) {
+        // Why: SSH is connected before the relay providers are rebuilt. Keep
+        // renderer actions gated until SshRelaySession reaches ready again.
+        publishRelayOverride(
+          getMainWindow,
+          targetId,
+          'reconnecting',
+          'Relay channel reconnecting...',
+          state.reconnectAttempt
+        )
+      } else {
+        clearRelayStateOverride(targetId)
+        broadcastSshState(getMainWindow, targetId, state)
+      }
+
       if (!session) {
         return
       }
@@ -208,16 +319,11 @@ export function registerSshHandlers(
       // 'reconnecting' (previous reconnect attempt failed, e.g. relay deploy
       // error on a working SSH connection). Without the 'reconnecting' check,
       // a failed relay deploy would permanently brick the session.
-      const sessionState = session.getState()
-      if (
-        state.status === 'connected' &&
-        state.reconnectAttempt === 0 &&
-        (sessionState === 'ready' || sessionState === 'reconnecting')
-      ) {
+      if (shouldReconnectRelay) {
         const target = sshStore?.getTarget(targetId)
         const conn = connectionManager?.getConnection(targetId)
         if (conn) {
-          void session.reconnect(conn, target?.relayGracePeriodSeconds)
+          void session.reconnect(conn, relayGracePeriodForTarget(target))
         }
       }
     }
@@ -244,7 +350,25 @@ export function registerSshHandlers(
     }
   )
 
-  ipcMain.handle('ssh:removeTarget', (_event, args: { id: string }) => {
+  ipcMain.handle('ssh:removeTarget', async (_event, args: { id: string }) => {
+    const session = activeSessions.get(args.id)
+    if (session) {
+      // Why: removing a target is destructive. Tear down the live relay before
+      // deleting metadata so callbacks cannot keep using an orphan target id.
+      await portForwardManager!.removeAllForwards(args.id)
+      session.dispose()
+      activeSessions.delete(args.id)
+      clearRelayLostBackoff(args.id)
+      clearRelayStateOverride(args.id)
+    }
+    try {
+      await connectionManager!.disconnect(args.id)
+    } catch (err) {
+      console.warn(
+        `[ssh] Failed to disconnect removed target ${args.id}: ${err instanceof Error ? err.message : String(err)}`
+      )
+    }
+    store.removeSshRemotePtyLeases(args.id)
     sshStore!.removeTarget(args.id)
   })
 
@@ -255,6 +379,11 @@ export function registerSshHandlers(
   // ── Connection lifecycle ───────────────────────────────────────────
 
   ipcMain.handle('ssh:connect', async (_event, args: { targetId: string }) => {
+    const reset = resetRelayInFlight.get(args.targetId)
+    if (reset) {
+      await reset
+    }
+
     // Why: serialize concurrent ssh:connect calls for the same target.
     // Multiple tabs can fire connect simultaneously; without this, they
     // interleave and the first session leaks.
@@ -273,6 +402,7 @@ export function registerSshHandlers(
   })
 
   async function doConnect(targetId: string): Promise<SshConnectionState> {
+    clearRelayStateOverride(targetId)
     const target = sshStore!.getTarget(targetId)
     if (!target) {
       throw new Error(`SSH target "${targetId}" not found`)
@@ -288,8 +418,10 @@ export function registerSshHandlers(
       // local ports. Without this, restorePortForwards in the new session
       // can hit EADDRINUSE on the same ports the old session was using.
       await portForwardManager!.removeAllForwards(targetId)
-      existingSession.dispose()
+      existingSession.detach()
       activeSessions.delete(targetId)
+      clearRelayLostBackoff(targetId)
+      clearRelayStateOverride(targetId)
     }
 
     // Why: create the session early so onStateChange sees it in 'deploying'
@@ -321,18 +453,14 @@ export function registerSshHandlers(
       // needs a passphrase.
       credentialRequestedForTarget.delete(targetId)
       activeSessions.delete(targetId)
-      const win = getMainWindow()
-      if (win && !win.isDestroyed()) {
-        win.webContents.send('ssh:state-changed', {
-          targetId,
-          state: {
-            targetId,
-            status,
-            error: errObj.message,
-            reconnectAttempt: 0
-          }
-        })
-      }
+      clearRelayLostBackoff(targetId)
+      clearRelayStateOverride(targetId)
+      broadcastSshState(getMainWindow, targetId, {
+        targetId,
+        status,
+        error: errObj.message,
+        reconnectAttempt: 0
+      })
       throw err
     }
 
@@ -352,26 +480,116 @@ export function registerSshHandlers(
       // triggers session.reconnect() using the live SSH connection.
       // Set before establish() so the callback is in place if the relay
       // dies during the deploy/connect sequence.
+      // Why: a wire-handshake mismatch (typed RelayVersionMismatchError) means
+      // the local client and remote daemon are at different code versions —
+      // no amount of backoff will reconcile them. Skip the relay-lost loop
+      // entirely and surface a terminal "please reconnect manually" error.
+      session.setOnTerminalRelayError((tid, err) => {
+        clearRelayLostBackoff(tid)
+        console.warn(
+          `[ssh] Terminal relay error for ${tid}: ${err.message}; skipping reconnect backoff.`
+        )
+        publishRelayOverride(getMainWindow, tid, 'error', err.message, 0)
+      })
+
       session.setOnRelayLost((tid) => {
         const s = activeSessions.get(tid)
         if (!s) {
           return
         }
         const c = connectionManager?.getConnection(tid)
-        const t = sshStore?.getTarget(tid)
-        if (c) {
-          void s.reconnect(c, t?.relayGracePeriodSeconds)
+        if (!c) {
+          return
         }
+        const t = sshStore?.getTarget(tid)
+
+        // Why: bounded exponential backoff. Without this, a remote-side bug
+        // that closes every fresh --connect channel turns into an infinite
+        // tight loop spawning relay deploys until the user force-quits.
+        const state = relayLostBackoff.get(tid) ?? {
+          attempts: 0,
+          lastAttemptStartedAt: 0,
+          pendingTimer: null
+        }
+        if (state.pendingTimer) {
+          // A retry is already scheduled — coalesce this burst.
+          return
+        }
+        if (state.attempts >= RELAY_LOST_MAX_ATTEMPTS) {
+          console.warn(
+            `[ssh] Relay channel for ${tid} kept dying across ${state.attempts} attempts; giving up. User must reconnect manually.`
+          )
+          relayLostBackoff.delete(tid)
+          // Why: surface the failure so the renderer can prompt the user.
+          // A still-live SSH connection with a dead relay is otherwise an
+          // invisible failure — typing in remote terminals just stops working.
+          publishRelayOverride(
+            getMainWindow,
+            tid,
+            'error',
+            'Relay channel kept dropping. Click Reconnect on the SSH target before retrying.',
+            0
+          )
+          return
+        }
+        const delay = Math.min(
+          RELAY_LOST_BASE_DELAY_MS * 2 ** state.attempts,
+          RELAY_LOST_MAX_DELAY_MS
+        )
+        state.attempts += 1
+        publishRelayOverride(
+          getMainWindow,
+          tid,
+          'reconnecting',
+          'Relay channel lost. Reconnecting...',
+          state.attempts
+        )
+        state.pendingTimer = setTimeout(() => {
+          state.pendingTimer = null
+          state.lastAttemptStartedAt = Date.now()
+          relayLostBackoff.set(tid, state)
+          const liveConn = connectionManager?.getConnection(tid)
+          if (!liveConn || !activeSessions.has(tid)) {
+            return
+          }
+          void s.reconnect(liveConn, relayGracePeriodForTarget(t))
+        }, delay)
+        relayLostBackoff.set(tid, state)
+        console.warn(
+          `[ssh] Relay channel for ${tid} lost; reconnect attempt ${state.attempts}/${RELAY_LOST_MAX_ATTEMPTS} in ${delay}ms`
+        )
       })
 
       // Why: fires after both establish() and reconnect() reach 'ready'.
       // Re-creates persisted port forwards so they survive app restarts
-      // and network blips without manual re-configuration.
+      // and network blips without manual re-configuration. We also clear
+      // the relay-lost backoff state so a subsequent genuine drop starts
+      // from a fresh attempt counter — but only if the session had a chance
+      // to stabilize, otherwise rapid `ready → lost → ready → lost` flaps
+      // would silently keep retrying forever.
       session.setOnReady((tid) => {
+        const state = relayLostBackoff.get(tid)
+        if (state) {
+          const stabilized =
+            state.lastAttemptStartedAt === 0 ||
+            Date.now() - state.lastAttemptStartedAt >= RELAY_LOST_STABILIZED_MS
+          if (stabilized) {
+            relayLostBackoff.delete(tid)
+          }
+        }
+        clearRelayStateOverride(tid)
+        if (!testingTargets.has(tid)) {
+          broadcastSshState(getMainWindow, tid, {
+            targetId: tid,
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0
+          })
+        }
         void restorePortForwards(tid, getMainWindow)
       })
 
-      await session.establish(conn, target.relayGracePeriodSeconds)
+      await session.establish(conn, relayGracePeriodForTarget(target))
 
       // Why: we manually pushed `deploying-relay` above, so the renderer's
       // state is stuck there. Send `connected` directly to the renderer
@@ -379,6 +597,7 @@ export function registerSshHandlers(
       // trigger the reconnection logic.
       const win = getMainWindow()
       if (win && !win.isDestroyed()) {
+        clearRelayStateOverride(targetId)
         win.webContents.send('ssh:state-changed', {
           targetId,
           state: {
@@ -392,6 +611,7 @@ export function registerSshHandlers(
     } catch (err) {
       // Relay deployment failed — disconnect SSH
       activeSessions.delete(targetId)
+      clearRelayLostBackoff(targetId)
       await connectionManager!.disconnect(targetId)
       throw err
     }
@@ -404,7 +624,7 @@ export function registerSshHandlers(
     credentialRequestedForTarget.delete(targetId)
     sshStore!.updateTarget(targetId, { lastRequiredPassphrase: requiredPassphrase })
 
-    return connectionManager!.getState(targetId)!
+    return getPublicSshState(targetId)!
   }
 
   ipcMain.handle('ssh:disconnect', async (_event, args: { targetId: string }) => {
@@ -414,14 +634,150 @@ export function registerSshHandlers(
       // before the disconnect completes. Without this, an immediate
       // reconnect can hit EADDRINUSE on the same ports.
       await portForwardManager!.removeAllForwards(args.targetId)
-      session.dispose()
+      session.detach()
       activeSessions.delete(args.targetId)
+      clearRelayLostBackoff(args.targetId)
+      clearRelayStateOverride(args.targetId)
     }
     await connectionManager!.disconnect(args.targetId)
   })
 
+  ipcMain.handle('ssh:terminateSessions', async (_event, args: { targetId: string }) => {
+    const session = activeSessions.get(args.targetId)
+    const provider = getSshPtyProvider(args.targetId)
+    const leasedIds = store
+      .getSshRemotePtyLeases(args.targetId)
+      .filter((lease) => lease.state !== 'terminated' && lease.state !== 'expired')
+      .map((lease) => lease.ptyId)
+    const ptyIds = Array.from(new Set([...getPtyIdsForConnection(args.targetId), ...leasedIds]))
+
+    if (ptyIds.length > 0 && !provider) {
+      throw new Error(
+        `${SSH_TERMINATE_RECONNECT_REQUIRED}: SSH relay is not connected; reconnect before terminating remote sessions.`
+      )
+    }
+    const shutdownResults = provider
+      ? await Promise.allSettled(
+          ptyIds.map((ptyId) => provider.shutdown(ptyId, { immediate: true, keepHistory: false }))
+        )
+      : []
+    const shutdownFailures: string[] = []
+    for (const [index, result] of shutdownResults.entries()) {
+      const ptyId = ptyIds[index]
+      if (result.status !== 'fulfilled' && !isSshPtyNotFoundError(result.reason)) {
+        shutdownFailures.push(
+          `${ptyId}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`
+        )
+        continue
+      }
+      clearProviderPtyState(ptyId)
+      deletePtyOwnership(ptyId)
+      store.markSshRemotePtyLease(args.targetId, ptyId, 'terminated')
+    }
+    if (shutdownFailures.length > 0) {
+      // Why: a failed relay shutdown can leave the remote process alive in the
+      // grace window. Keep the lease/session intact so the user can retry.
+      throw new Error(`Failed to terminate remote SSH sessions: ${shutdownFailures.join('; ')}`)
+    }
+    if (session) {
+      await portForwardManager!.removeAllForwards(args.targetId)
+      session.dispose()
+      activeSessions.delete(args.targetId)
+      clearRelayLostBackoff(args.targetId)
+      clearRelayStateOverride(args.targetId)
+    }
+    await connectionManager!.disconnect(args.targetId)
+  })
+
+  async function doResetRelay(targetId: string, target: SshTarget): Promise<void> {
+    const inFlightConnect = connectInFlight.get(targetId)
+    if (inFlightConnect) {
+      try {
+        // Why: reset tears down activeSessions; doing that while doConnect is
+        // still deploying can dispose the session doConnect is about to use.
+        await inFlightConnect
+      } catch {
+        // The reset can still recover a stale remote relay after a failed connect.
+      }
+    }
+
+    const session = activeSessions.get(targetId)
+    if (session) {
+      await portForwardManager!.removeAllForwards(targetId)
+      // Why: reset has its own stale-relay lease semantics below. dispose()
+      // records clean PTY termination, which hides reset-affected leases.
+      session.detach()
+      activeSessions.delete(targetId)
+      clearRelayLostBackoff(targetId)
+    }
+
+    const existingConn = connectionManager!.getConnection(targetId)
+    const conn = existingConn ?? (await connectionManager!.connect(target))
+    try {
+      await forceStopRelayForTarget(conn, targetId)
+    } finally {
+      const ptyIds = new Set(getPtyIdsForConnection(targetId))
+      for (const lease of store.getSshRemotePtyLeases(targetId)) {
+        if (lease.state !== 'terminated' && lease.state !== 'expired') {
+          ptyIds.add(lease.ptyId)
+          store.markSshRemotePtyLease(targetId, lease.ptyId, 'expired')
+        }
+      }
+      // Why: reset force-kills the remote relay daemon, so every local PTY
+      // handle owned by that relay is stale even if the reset command failed
+      // after the remote process accepted SIGTERM.
+      for (const ptyId of ptyIds) {
+        clearProviderPtyState(ptyId)
+        deletePtyOwnership(ptyId)
+      }
+      // Why: reset's connect() can trip onCredentialRequest, which adds to
+      // credentialRequestedForTarget. Without this delete, a later doConnect
+      // that doesn't prompt would still persist lastRequiredPassphrase=true.
+      credentialRequestedForTarget.delete(targetId)
+      await connectionManager!.disconnect(targetId)
+    }
+  }
+
+  ipcMain.handle('ssh:resetRelay', (_event, args: { targetId: string }) => {
+    const existingReset = resetRelayInFlight.get(args.targetId)
+    if (existingReset) {
+      return existingReset
+    }
+
+    const target = sshStore!.getTarget(args.targetId)
+    if (!target) {
+      throw new Error(`SSH target "${args.targetId}" not found`)
+    }
+
+    let resetPromise: Promise<void>
+    resetPromise = Promise.resolve()
+      .then(() => doResetRelay(args.targetId, target))
+      .finally(() => {
+        if (resetRelayInFlight.get(args.targetId) === resetPromise) {
+          resetRelayInFlight.delete(args.targetId)
+        }
+      })
+    resetRelayInFlight.set(args.targetId, resetPromise)
+    return resetPromise
+  })
+
   ipcMain.handle('ssh:getState', (_event, args: { targetId: string }) => {
-    return connectionManager!.getState(args.targetId)
+    return getPublicSshState(args.targetId)
+  })
+
+  // Why: callers that want to auto-connect (Cmd+J jump, terminal reattach) need
+  // to know whether doing so will pop a passphrase/password dialog. Auto-firing
+  // the connect is fine when no prompt is needed, but surprising otherwise —
+  // the user expects to enter the credential before the app starts connecting.
+  // Returns true if the target's last successful connect required a credential
+  // AND the live SshConnection (if any) does not already have one cached.
+  ipcMain.handle('ssh:needsPassphrasePrompt', (_event, args: { targetId: string }) => {
+    const target = sshStore!.getTarget(args.targetId)
+    if (!target?.lastRequiredPassphrase) {
+      return false
+    }
+    const conn = connectionManager!.getConnection(args.targetId)
+    return !conn?.hasCachedCredential()
   })
 
   ipcMain.handle('ssh:testConnection', async (_event, args: { targetId: string }) => {

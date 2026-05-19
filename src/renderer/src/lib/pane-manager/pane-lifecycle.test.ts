@@ -1,8 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WebglAddon } from '@xterm/addon-webgl'
 import type { ManagedPaneInternal } from './pane-manager-types'
-import { attachWebgl, resetTerminalWebglSuggestion } from './pane-lifecycle'
-import { buildDefaultTerminalOptions } from './pane-terminal-options'
+import {
+  attachWebgl,
+  markComplexScriptOutput,
+  resetTerminalWebglSuggestion
+} from './pane-webgl-renderer'
+import { openTerminal } from './pane-lifecycle'
+import {
+  buildDefaultTerminalOptions,
+  resolveTerminalCursorInactiveStyle
+} from './pane-terminal-options'
 
 const webglMock = vi.hoisted(() => ({
   contextLossHandler: null as (() => void) | null,
@@ -21,8 +29,11 @@ vi.mock('@xterm/addon-webgl', () => ({
 }))
 
 function createPane(): ManagedPaneInternal {
+  const leafId = '11111111-1111-4111-8111-111111111111' as never
   return {
     id: 1,
+    leafId,
+    stablePaneId: leafId,
     terminal: {
       loadAddon: vi.fn(),
       refresh: vi.fn(),
@@ -35,6 +46,7 @@ function createPane(): ManagedPaneInternal {
     gpuRenderingEnabled: true,
     webglAttachmentDeferred: false,
     webglDisabledAfterContextLoss: false,
+    hasComplexScriptOutput: false,
     fitAddon: {
       fit: vi.fn()
     } as never,
@@ -57,6 +69,16 @@ describe('buildDefaultTerminalOptions', () => {
     expect(buildDefaultTerminalOptions().macOptionIsMeta).toBe(false)
   })
 
+  it('keeps the default inactive cursor as a single bar', () => {
+    expect(buildDefaultTerminalOptions().cursorInactiveStyle).toBe('bar')
+  })
+
+  it('only uses inactive outline for block cursors', () => {
+    expect(resolveTerminalCursorInactiveStyle('block')).toBe('outline')
+    expect(resolveTerminalCursorInactiveStyle('bar')).toBe('bar')
+    expect(resolveTerminalCursorInactiveStyle('underline')).toBe('underline')
+  })
+
   it('advertises kitty keyboard protocol so CLIs enable enhanced key reporting', () => {
     // Why: Orca already writes CSI-u bytes for extended key chords like
     // Shift+Enter (see terminal-shortcut-policy.ts). CLIs that gate
@@ -74,6 +96,10 @@ describe('attachWebgl', () => {
     webglMock.dispose.mockClear()
     vi.mocked(WebglAddon).mockClear()
     resetTerminalWebglSuggestion()
+    vi.stubGlobal('navigator', {
+      platform: 'MacIntel',
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
+    })
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(16)
       return 1
@@ -90,6 +116,7 @@ describe('attachWebgl', () => {
     attachWebgl(pane)
     expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
     expect(webglMock.contextLossHandler).not.toBeNull()
+    vi.mocked(pane.terminal.refresh).mockClear()
 
     webglMock.contextLossHandler?.()
 
@@ -101,6 +128,14 @@ describe('attachWebgl', () => {
     attachWebgl(pane)
 
     expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+  })
+
+  it('repaints the current buffer after WebGL attaches', () => {
+    const pane = createPane()
+
+    attachWebgl(pane)
+
+    expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
   })
 
   it('does not attach WebGL while initial rendering is deferred', () => {
@@ -121,6 +156,32 @@ describe('attachWebgl', () => {
 
     expect(pane.webglAddon).toBeNull()
     expect(pane.terminal.loadAddon).not.toHaveBeenCalled()
+  })
+
+  it('uses DOM rendering for auto GPU acceleration on Linux', () => {
+    vi.stubGlobal('navigator', {
+      platform: 'Linux x86_64',
+      userAgent: 'Mozilla/5.0 (X11; Linux x86_64)'
+    })
+    const pane = createPane()
+
+    attachWebgl(pane)
+
+    expect(pane.webglAddon).toBeNull()
+    expect(pane.terminal.loadAddon).not.toHaveBeenCalled()
+  })
+
+  it('still allows forced WebGL on Linux', () => {
+    vi.stubGlobal('navigator', {
+      platform: 'Linux x86_64',
+      userAgent: 'Mozilla/5.0 (X11; Linux x86_64)'
+    })
+    const pane = createPane()
+    pane.terminalGpuAcceleration = 'on'
+
+    attachWebgl(pane)
+
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
   })
 
   it('uses DOM for later auto panes after WebGL attach fails until the suggestion resets', () => {
@@ -158,5 +219,145 @@ describe('attachWebgl', () => {
     attachWebgl(forcedPane)
 
     expect(forcedPane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps auto-mode panes on DOM after complex-script output', () => {
+    const pane = createPane()
+
+    attachWebgl(pane)
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+
+    markComplexScriptOutput(pane)
+
+    expect(pane.hasComplexScriptOutput).toBe(true)
+    expect(pane.webglAddon).toBeNull()
+    expect(webglMock.dispose).toHaveBeenCalledTimes(1)
+
+    attachWebgl(pane)
+
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+  })
+
+  it('allows explicit on mode to override complex-script DOM fallback', () => {
+    const pane = createPane()
+
+    markComplexScriptOutput(pane)
+    pane.terminalGpuAcceleration = 'on'
+    attachWebgl(pane)
+
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('openTerminal — Unicode 11 ordering', () => {
+  beforeEach(() => {
+    vi.stubGlobal('requestAnimationFrame', () => 1)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  // Why: CJK / emoji / ZWJ widths get baked into the buffer at the active
+  // unicode version on write. If anything writes bytes through xterm before
+  // unicode v11 is activated (still on default v6 width tables), wide chars
+  // lay out as single cells. The bug surfaces as the broken `?`-style glyphs
+  // users saw on worktree switch.
+  it('activates unicode 11 before any caller-driven write would be possible', () => {
+    const events: string[] = []
+
+    const fitAddon = { fit: vi.fn() } as unknown as ManagedPaneInternal['fitAddon']
+    const searchAddon = {} as unknown as ManagedPaneInternal['searchAddon']
+    const serializeAddon = {} as unknown as ManagedPaneInternal['serializeAddon']
+    const unicode11Addon = {} as unknown as ManagedPaneInternal['unicode11Addon']
+    const webLinksAddon = {} as unknown as ManagedPaneInternal['webLinksAddon']
+
+    const unicodeProxy = {
+      _version: '6' as '6' | '11',
+      get activeVersion(): '6' | '11' {
+        return this._version
+      },
+      set activeVersion(v: '6' | '11') {
+        events.push(`activeVersion=${v}`)
+        this._version = v
+      }
+    }
+
+    const fakeContainer = {
+      appendChild: vi.fn(),
+      addEventListener: vi.fn()
+    } as unknown as HTMLDivElement
+    const fakeTooltip = {} as unknown as HTMLDivElement
+
+    const terminal = {
+      element: null as HTMLElement | null,
+      textarea: null,
+      cols: 80,
+      rows: 24,
+      open: vi.fn(() => {
+        events.push('open')
+      }),
+      loadAddon: vi.fn((addon: object) => {
+        if (addon === fitAddon) {
+          events.push('loadAddon:fit')
+        } else if (addon === searchAddon) {
+          events.push('loadAddon:search')
+        } else if (addon === serializeAddon) {
+          events.push('loadAddon:serialize')
+        } else if (addon === unicode11Addon) {
+          events.push('loadAddon:unicode11')
+        } else if (addon === webLinksAddon) {
+          events.push('loadAddon:webLinks')
+        }
+      }),
+      write: vi.fn(() => {
+        events.push('write')
+      }),
+      unicode: unicodeProxy,
+      buffer: { active: { cursorX: 0, cursorY: 0 } }
+    } as unknown as ManagedPaneInternal['terminal']
+
+    const leafId = '22222222-2222-4222-8222-222222222222' as never
+    const pane: ManagedPaneInternal = {
+      id: 1,
+      leafId,
+      stablePaneId: leafId,
+      terminal,
+      container: fakeContainer,
+      xtermContainer: fakeContainer,
+      linkTooltip: fakeTooltip,
+      terminalGpuAcceleration: 'off',
+      gpuRenderingEnabled: false,
+      webglAttachmentDeferred: false,
+      webglDisabledAfterContextLoss: false,
+      hasComplexScriptOutput: false,
+      fitAddon,
+      fitResizeObserver: null,
+      pendingObservedFitRafId: null,
+      searchAddon,
+      serializeAddon,
+      unicode11Addon,
+      ligaturesAddon: null,
+      webLinksAddon,
+      webglAddon: null,
+      compositionHandler: null,
+      pendingSplitScrollState: null,
+      debugLabel: null
+    }
+
+    openTerminal(pane)
+
+    expect(events).toContain('loadAddon:unicode11')
+    expect(events).toContain('activeVersion=11')
+
+    const unicodeIdx = events.indexOf('activeVersion=11')
+    const writeIdx = events.indexOf('write')
+    if (writeIdx !== -1) {
+      expect(unicodeIdx).toBeLessThan(writeIdx)
+    }
+
+    const loadUnicodeIdx = events.indexOf('loadAddon:unicode11')
+    expect(loadUnicodeIdx).toBeLessThan(unicodeIdx)
+    expect(events.indexOf('open')).toBeLessThan(loadUnicodeIdx)
   })
 })

@@ -16,6 +16,7 @@ type UntitledFileRenameDialogProps = {
   currentName: string
   worktreePath: string
   externalError?: string | null
+  disableBrowse?: boolean
   onClose: () => void
   onConfirm: (newRelativePath: string) => void
 }
@@ -25,6 +26,7 @@ export function UntitledFileRenameDialog({
   currentName,
   worktreePath,
   externalError,
+  disableBrowse = false,
   onClose,
   onConfirm
 }: UntitledFileRenameDialogProps): React.JSX.Element {
@@ -143,8 +145,11 @@ export function UntitledFileRenameDialog({
                 variant="outline"
                 size="icon"
                 className="h-8 w-8 shrink-0"
+                disabled={disableBrowse}
                 onClick={() => void handleBrowse()}
-                title="Browse folders"
+                title={
+                  disableBrowse ? 'Folder picker unavailable for remote files' : 'Browse folders'
+                }
               >
                 <FolderOpen className="size-3.5" />
               </Button>

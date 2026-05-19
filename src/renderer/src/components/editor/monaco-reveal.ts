@@ -2,6 +2,8 @@ import type React from 'react'
 import type { editor } from 'monaco-editor'
 import { computeMonacoRevealRange } from './monaco-reveal-range'
 
+export const MAX_REVEAL_CONTENT_WAIT_FRAMES = 120
+
 /**
  * Shared reveal logic used by both onMount and useEffect paths in MonacoEditor.
  * Positions the cursor, optionally selects the match range, scrolls into center,

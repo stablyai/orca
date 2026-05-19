@@ -35,10 +35,12 @@ function writeMetadata(
     JSON.stringify({
       runtimeId: 'runtime-1',
       pid,
-      transport: {
-        kind: 'unix',
-        endpoint
-      },
+      transports: [
+        {
+          kind: 'unix',
+          endpoint
+        }
+      ],
       authToken,
       startedAt: 1
     }),

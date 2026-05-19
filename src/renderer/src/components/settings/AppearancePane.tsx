@@ -1,3 +1,4 @@
+import type React from 'react'
 import type { GlobalSettings, StatusBarItem } from '../../../../shared/types'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
@@ -5,11 +6,44 @@ import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 import { useAppStore } from '../../store'
+import { FontAutocomplete } from './SettingsFormControls'
+import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
+import { useAvailableStatusBarToggles } from '../status-bar/use-available-status-bar-toggles'
 
 type AppearancePaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
   applyTheme: (theme: 'system' | 'dark' | 'light') => void
+  fontSuggestions: string[]
+}
+
+function ToggleSwitchButton({
+  checked,
+  onToggle,
+  ariaLabel
+}: {
+  checked: boolean
+  onToggle: () => void
+  ariaLabel?: string
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={ariaLabel}
+      onClick={onToggle}
+      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+        checked ? 'bg-foreground' : 'bg-muted-foreground/30'
+      }`}
+    >
+      <span
+        className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+          checked ? 'translate-x-4' : 'translate-x-0.5'
+        }`}
+      />
+    </button>
+  )
 }
 
 const STATUS_BAR_TOGGLES: readonly {
@@ -56,18 +90,12 @@ const STATUS_BAR_TOGGLES: readonly {
       'Show the active SSH connection. Only visible once an SSH target is configured.'
   },
   {
-    id: 'sessions',
-    title: 'Terminal Sessions',
-    description: 'Show the terminal session count in the status bar.',
-    keywords: ['status bar', 'terminal', 'sessions', 'count', 'pty'],
-    toggleDescription: 'Show the number of active terminal sessions across all workspaces.'
-  },
-  {
-    id: 'memory',
-    title: 'Memory Monitoring',
-    description: 'Show memory and CPU usage in the status bar.',
-    keywords: ['status bar', 'memory', 'ram', 'cpu', 'monitoring', 'usage', 'performance'],
-    toggleDescription: 'Show total memory and CPU usage. Click it to see a per-workspace breakdown.'
+    id: 'resource-usage',
+    title: 'Resource Manager',
+    description: 'Show CPU, memory, terminal sessions, and workspace disk usage in the status bar.',
+    keywords: ['status bar', 'resource', 'manager', 'memory', 'cpu', 'terminal', 'disk', 'space'],
+    toggleDescription:
+      'Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.'
   }
 ]
 
@@ -87,19 +115,32 @@ const ZOOM_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
+const TYPOGRAPHY_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'IDE Font',
+    description: 'Choose the font used by the Orca interface.',
+    keywords: ['font', 'typeface', 'typography', 'ide', 'orca', 'interface', 'app', 'ui']
+  }
+]
+
 const LAYOUT_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Open Right Sidebar by Default',
     description: 'Automatically expand the file explorer panel when creating a new worktree.',
     keywords: ['layout', 'file explorer', 'sidebar']
+  },
+  {
+    title: 'Show Git-Ignored Files',
+    description: 'Dim files matched by .gitignore in the file explorer.',
+    keywords: ['git', 'gitignore', 'ignored', 'file explorer', 'sidebar', 'hide']
   }
 ]
 
 const TITLEBAR_ENTRIES: SettingsSearchEntry[] = [
   {
-    title: 'Titlebar Agent Activity',
-    description: 'Show the number of active agents in the titlebar.',
-    keywords: ['titlebar', 'agent', 'badge', 'active', 'count', 'status']
+    title: 'Titlebar App Name',
+    description: 'Show Orca in the titlebar.',
+    keywords: ['titlebar', 'orca', 'app', 'name', 'brand']
   }
 ]
 
@@ -117,6 +158,7 @@ const SIDEBAR_ENTRIES: SettingsSearchEntry[] = [
 
 export const APPEARANCE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   ...THEME_ENTRIES,
+  ...TYPOGRAPHY_ENTRIES,
   ...ZOOM_ENTRIES,
   ...LAYOUT_ENTRIES,
   ...TITLEBAR_ENTRIES,
@@ -127,7 +169,8 @@ export const APPEARANCE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
 export function AppearancePane({
   settings,
   updateSettings,
-  applyTheme
+  applyTheme,
+  fontSuggestions
 }: AppearancePaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isMac = navigator.userAgent.includes('Mac')
@@ -135,6 +178,7 @@ export function AppearancePane({
   const zoomOutLabel = isMac ? '⌘-' : 'Ctrl -'
   const statusBarItems = useAppStore((state) => state.statusBarItems)
   const toggleStatusBarItem = useAppStore((state) => state.toggleStatusBarItem)
+  const visibleStatusBarToggles = useAvailableStatusBarToggles(STATUS_BAR_TOGGLES)
 
   const visibleSections = [
     matchesSettingsSearch(searchQuery, THEME_ENTRIES) ? (
@@ -191,6 +235,33 @@ export function AppearancePane({
         </SearchableSetting>
       </section>
     ) : null,
+    matchesSettingsSearch(searchQuery, TYPOGRAPHY_ENTRIES) ? (
+      <section key="typography" className="space-y-4">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">Typography</h3>
+          <p className="text-xs text-muted-foreground">
+            Choose the font used by the Orca interface.
+          </p>
+        </div>
+
+        <SearchableSetting
+          title="IDE Font"
+          description="Choose the font used by the Orca interface."
+          keywords={['font', 'typeface', 'typography', 'ide', 'orca', 'interface', 'app', 'ui']}
+          className="space-y-2"
+        >
+          <Label>IDE Font</Label>
+          <FontAutocomplete
+            value={settings.appFontFamily}
+            suggestions={fontSuggestions}
+            placeholder={DEFAULT_APP_FONT_FAMILY}
+            onChange={(value) =>
+              updateSettings({ appFontFamily: value.trim() || DEFAULT_APP_FONT_FAMILY })
+            }
+          />
+        </SearchableSetting>
+      </section>
+    ) : null,
     matchesSettingsSearch(searchQuery, LAYOUT_ENTRIES) ? (
       <section key="layout" className="space-y-4">
         <div className="space-y-1">
@@ -212,24 +283,32 @@ export function AppearancePane({
               Automatically expand the file explorer panel when creating a new worktree.
             </p>
           </div>
-          <button
-            role="switch"
-            aria-checked={settings.rightSidebarOpenByDefault}
-            onClick={() =>
-              updateSettings({
-                rightSidebarOpenByDefault: !settings.rightSidebarOpenByDefault
-              })
+          <ToggleSwitchButton
+            checked={settings.rightSidebarOpenByDefault}
+            onToggle={() =>
+              updateSettings({ rightSidebarOpenByDefault: !settings.rightSidebarOpenByDefault })
             }
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-              settings.rightSidebarOpenByDefault ? 'bg-foreground' : 'bg-muted-foreground/30'
-            }`}
-          >
-            <span
-              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                settings.rightSidebarOpenByDefault ? 'translate-x-4' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
+          />
+        </SearchableSetting>
+
+        <SearchableSetting
+          title="Show Git-Ignored Files"
+          description="Show files matched by .gitignore in the file explorer."
+          keywords={['git', 'gitignore', 'ignored', 'file explorer', 'sidebar', 'hide']}
+          className="flex items-center justify-between gap-4 px-1 py-2"
+        >
+          <div className="space-y-0.5">
+            <Label>Show Git-Ignored Files</Label>
+            <p className="text-xs text-muted-foreground">
+              Turn off to hide files matched by .gitignore from the file explorer.
+            </p>
+          </div>
+          <ToggleSwitchButton
+            checked={settings.showGitIgnoredFiles ?? true}
+            onToggle={() =>
+              updateSettings({ showGitIgnoredFiles: !(settings.showGitIgnoredFiles ?? true) })
+            }
+          />
         </SearchableSetting>
       </section>
     ) : null,
@@ -243,35 +322,19 @@ export function AppearancePane({
         </div>
 
         <SearchableSetting
-          title="Titlebar Agent Activity"
-          description="Show the number of active agents in the titlebar."
-          keywords={['titlebar', 'agent', 'badge', 'active', 'count', 'status']}
+          title="Titlebar App Name"
+          description="Show Orca in the titlebar."
+          keywords={['titlebar', 'orca', 'app', 'name', 'brand']}
           className="flex items-center justify-between gap-4 px-1 py-2"
         >
           <div className="space-y-0.5">
-            <Label>Titlebar Agent Activity</Label>
-            <p className="text-xs text-muted-foreground">
-              Show the number of active agents in the titlebar.
-            </p>
+            <Label>Titlebar App Name</Label>
+            <p className="text-xs text-muted-foreground">Show Orca in the titlebar.</p>
           </div>
-          <button
-            role="switch"
-            aria-checked={settings.showTitlebarAgentActivity}
-            onClick={() =>
-              updateSettings({
-                showTitlebarAgentActivity: !settings.showTitlebarAgentActivity
-              })
-            }
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-              settings.showTitlebarAgentActivity ? 'bg-foreground' : 'bg-muted-foreground/30'
-            }`}
-          >
-            <span
-              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                settings.showTitlebarAgentActivity ? 'translate-x-4' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
+          <ToggleSwitchButton
+            checked={settings.showTitlebarAppName}
+            onToggle={() => updateSettings({ showTitlebarAppName: !settings.showTitlebarAppName })}
+          />
         </SearchableSetting>
       </section>
     ) : null,
@@ -285,7 +348,7 @@ export function AppearancePane({
           </p>
         </div>
 
-        {STATUS_BAR_TOGGLES.map((toggle) => {
+        {visibleStatusBarToggles.map((toggle) => {
           const enabled = statusBarItems.includes(toggle.id)
           return (
             <SearchableSetting
@@ -299,22 +362,11 @@ export function AppearancePane({
                 <Label>{toggle.title}</Label>
                 <p className="text-xs text-muted-foreground">{toggle.toggleDescription}</p>
               </div>
-              <button
-                type="button"
-                role="switch"
-                aria-label={toggle.title}
-                aria-checked={enabled}
-                onClick={() => toggleStatusBarItem(toggle.id)}
-                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-                  enabled ? 'bg-foreground' : 'bg-muted-foreground/30'
-                }`}
-              >
-                <span
-                  className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                    enabled ? 'translate-x-4' : 'translate-x-0.5'
-                  }`}
-                />
-              </button>
+              <ToggleSwitchButton
+                checked={enabled}
+                onToggle={() => toggleStatusBarItem(toggle.id)}
+                ariaLabel={toggle.title}
+              />
             </SearchableSetting>
           )
         })}
@@ -338,24 +390,10 @@ export function AppearancePane({
               Show the Tasks button at the top of the left sidebar.
             </p>
           </div>
-          <button
-            role="switch"
-            aria-checked={settings.showTasksButton}
-            onClick={() =>
-              updateSettings({
-                showTasksButton: !settings.showTasksButton
-              })
-            }
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-              settings.showTasksButton ? 'bg-foreground' : 'bg-muted-foreground/30'
-            }`}
-          >
-            <span
-              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                settings.showTasksButton ? 'translate-x-4' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
+          <ToggleSwitchButton
+            checked={settings.showTasksButton}
+            onToggle={() => updateSettings({ showTasksButton: !settings.showTasksButton })}
+          />
         </SearchableSetting>
       </section>
     ) : null

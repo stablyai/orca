@@ -1,11 +1,10 @@
 // ─── Protocol Version ────────────────────────────────────────────────
-// Why: daemons can survive app updates with long-lived shell env. Bump when
-// spawn-time env semantics change so stale sessions cannot bypass new behavior.
-// Why: bumped from 3 → 4 for the getSnapshot RPC. A surviving v3 daemon
-// would reject getSnapshot as unknown, silently failing all checkpoint
-// writes. The bump forces a stale daemon to be replaced on reconnect.
-export const PROTOCOL_VERSION = 4
-export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [1, 2, 3] as const
+// Why: daemons can survive app updates. Bump for IPC wire-shape changes, or
+// when daemon-baked behavior cannot be delivered by on-disk wrapper refresh.
+// Why: bumped from 6 -> 7 so existing daemons restart with the headless
+// emulator's mouse-mode snapshot tracking for mobile alternate-screen TUIs.
+export const PROTOCOL_VERSION = 7
+export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [1, 2, 3, 4, 5, 6] as const
 
 // ─── Session State Machine ──────────────────────────────────────────
 export type SessionState = 'created' | 'spawning' | 'running' | 'exiting' | 'exited'
@@ -29,6 +28,9 @@ export type TerminalSnapshot = {
 export type TerminalModes = {
   bracketedPaste: boolean
   mouseTracking: boolean
+  mouseTrackingMode?: 'none' | 'x10' | 'vt200' | 'drag' | 'any'
+  sgrMouseMode?: boolean
+  sgrMousePixelsMode?: boolean
   applicationCursor: boolean
   alternateScreen: boolean
 }

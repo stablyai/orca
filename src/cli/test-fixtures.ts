@@ -12,6 +12,9 @@ type WorktreeFixture = {
   repoId: string
   path: string
   branch: string
+  parentWorktreeId: string | null
+  childWorktreeIds: string[]
+  lineage: null
   linkedIssue: null
   git: {
     path: string
@@ -35,6 +38,9 @@ export function buildWorktree(
     repoId,
     path,
     branch,
+    parentWorktreeId: null,
+    childWorktreeIds: [],
+    lineage: null,
     linkedIssue: null,
     git: { path, head, branch, isBare: false, isMainWorktree: false },
     displayName: '',

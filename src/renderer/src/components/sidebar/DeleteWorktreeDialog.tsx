@@ -8,10 +8,11 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { AlertTriangle, Check, LoaderCircle, Trash2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
-import { runWorktreeDeleteWithToast } from './delete-worktree-flow'
+import { runWorktreeDeletesInParallel } from './delete-worktree-flow'
 
 const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -26,22 +27,49 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
 
   const isOpen = activeModal === 'delete-worktree'
   const worktreeId = typeof modalData.worktreeId === 'string' ? modalData.worktreeId : ''
+  const worktreeIds = useMemo(
+    () =>
+      Array.isArray(modalData.worktreeIds)
+        ? modalData.worktreeIds.filter((id): id is string => typeof id === 'string')
+        : worktreeId
+          ? [worktreeId]
+          : [],
+    [modalData.worktreeIds, worktreeId]
+  )
+  const onDeleted =
+    typeof modalData.onDeleted === 'function'
+      ? (modalData.onDeleted as (worktreeIds: string[]) => void)
+      : null
   const worktree = useMemo(
     () => (worktreeId ? (allWorktrees().find((item) => item.id === worktreeId) ?? null) : null),
     [allWorktrees, worktreeId]
   )
-  const deleteState = useAppStore((s) =>
-    worktreeId ? s.deleteStateByWorktreeId[worktreeId] : undefined
+  const worktrees = useMemo(() => {
+    if (worktreeIds.length === 0) {
+      return []
+    }
+    const selected = new Set(worktreeIds)
+    return allWorktrees().filter((item) => selected.has(item.id))
+  }, [allWorktrees, worktreeIds])
+  const isBatchDelete = worktreeIds.length > 1
+  const deleteStateByWorktreeId = useAppStore((s) => s.deleteStateByWorktreeId)
+  const deleteStates = useMemo(
+    () =>
+      worktreeIds
+        .map((id) => deleteStateByWorktreeId[id])
+        .filter((state): state is NonNullable<typeof state> => state != null),
+    [deleteStateByWorktreeId, worktreeIds]
   )
-  const isDeleting = deleteState?.isDeleting ?? false
-  const deleteError = deleteState?.error ?? null
-  const canForceDelete = deleteState?.canForceDelete ?? false
+  const deleteState = worktreeId ? deleteStateByWorktreeId[worktreeId] : undefined
+  const isDeleting = deleteStates.some((state) => state.isDeleting)
+  const deleteError = !isBatchDelete ? (deleteState?.error ?? null) : null
+  const canForceDelete = !isBatchDelete && (deleteState?.canForceDelete ?? false)
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
-  const worktreeName = worktree?.displayName ?? 'unknown'
+  const allowSkipConfirm = !isBatchDelete && modalData.allowSkipConfirm !== false
   // Why: the main worktree is the repo's original clone directory — `git worktree remove`
   // always rejects it. We block the delete button upfront so the user doesn't have to
   // discover this limitation via a confusing force-delete dead-end.
-  const isMainWorktree = worktree?.isMainWorktree ?? false
+  const isMainWorktree = !isBatchDelete && (worktree?.isMainWorktree ?? false)
   const [dontAskAgain, setDontAskAgain] = useState(false)
 
   // Why: the checkbox is a one-shot intent captured inside the dialog — when
@@ -55,11 +83,21 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   }, [isOpen])
 
   useEffect(() => {
-    if (isOpen && worktreeId && !worktree && !isDeleting) {
-      clearWorktreeDeleteState(worktreeId)
+    if (isOpen && worktreeIds.length > 0 && worktrees.length === 0 && !isDeleting) {
+      for (const id of worktreeIds) {
+        clearWorktreeDeleteState(id)
+      }
       closeModal()
     }
-  }, [clearWorktreeDeleteState, closeModal, isDeleting, isOpen, worktree, worktreeId])
+  }, [
+    clearWorktreeDeleteState,
+    closeModal,
+    isDeleting,
+    isOpen,
+    worktreeIds,
+    worktreeIds.length,
+    worktrees.length
+  ])
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
@@ -69,12 +107,19 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
       const currentState = worktreeId
         ? useAppStore.getState().deleteStateByWorktreeId[worktreeId]
         : undefined
-      if (worktreeId && !currentState?.isDeleting) {
+      if (isBatchDelete) {
+        const state = useAppStore.getState().deleteStateByWorktreeId
+        for (const id of worktreeIds) {
+          if (!state[id]?.isDeleting) {
+            clearWorktreeDeleteState(id)
+          }
+        }
+      } else if (worktreeId && !currentState?.isDeleting) {
         clearWorktreeDeleteState(worktreeId)
       }
       closeModal()
     },
-    [clearWorktreeDeleteState, closeModal, worktreeId]
+    [clearWorktreeDeleteState, closeModal, isBatchDelete, worktreeId, worktreeIds]
   )
 
   const persistDontAskAgainPreference = useCallback((): void => {
@@ -101,46 +146,60 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
 
   const handleDelete = useCallback(
     (force = false) => {
-      if (!worktreeId) {
+      if (worktreeIds.length === 0) {
         return
       }
       // Why: force-delete is a recovery path taken after a failed first delete.
       // Saving "don't ask again" from that state would conflate the recovery
       // action with a broader preference. Only persist the preference on the
       // primary (non-force) confirmation so users intentionally opt in.
-      if (dontAskAgain && !force) {
+      if (dontAskAgain && allowSkipConfirm && !force) {
         persistDontAskAgainPreference()
       }
       if (force) {
         // Why: this branch preserves the legacy "Force Delete" button behavior
         // inside the dialog — it runs the destructive retry directly without
-        // the shared toast wrapper, since the user is already looking at an
-        // error state and a success silently closes the dialog.
-        removeWorktree(worktreeId, true)
+        // the shared toast wrapper. Close immediately because workspace cards
+        // already show the deleting state while the retry runs.
+        const deletePromise = removeWorktree(worktreeId, true)
+        closeModal()
+        deletePromise
           .then((result) => {
             if (!result.ok) {
               toast.error('Force delete failed', {
                 description: result.error
               })
+              return
             }
+            onDeleted?.([worktreeId])
           })
           .catch((err: unknown) => {
-            toast.error('Failed to delete worktree', {
+            toast.error('Failed to delete workspace', {
               description: err instanceof Error ? err.message : String(err)
             })
           })
       } else {
-        runWorktreeDeleteWithToast(worktreeId, worktreeName)
+        const deletePromise = runWorktreeDeletesInParallel(worktrees)
+        // Why: the workspace card owns the in-progress feedback, so the
+        // confirmation should get out of the way as soon as deletion begins.
+        closeModal()
+        void deletePromise.then((deletedIds) => {
+          if (deletedIds.length > 0) {
+            onDeleted?.(deletedIds)
+          }
+        })
       }
-      closeModal()
     },
     [
       closeModal,
       dontAskAgain,
+      allowSkipConfirm,
+      onDeleted,
       persistDontAskAgainPreference,
       removeWorktree,
+      worktreeIds.length,
       worktreeId,
-      worktreeName
+      worktrees
     ]
   )
 
@@ -162,20 +221,65 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         }}
       >
         <DialogHeader>
-          <DialogTitle className="text-sm">Delete Worktree</DialogTitle>
+          <DialogTitle className="text-sm">
+            {isBatchDelete ? 'Delete Workspaces' : 'Delete Workspace'}
+          </DialogTitle>
           <DialogDescription className="text-xs">
-            Remove{' '}
-            <span className="break-all font-medium text-foreground">{worktree?.displayName}</span>{' '}
-            from git and delete its working tree folder.
+            {isBatchDelete ? (
+              <>
+                Remove{' '}
+                <span className="font-medium text-foreground">{worktrees.length} workspaces</span>{' '}
+                from git and delete their workspace folders.
+              </>
+            ) : (
+              <>
+                Remove{' '}
+                <span className="break-all font-medium text-foreground">
+                  {worktree?.displayName}
+                </span>{' '}
+                from git and delete its workspace folder.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
-        {worktree && (
+        {isBatchDelete ? (
+          <ScrollArea className="max-h-48 rounded-md border border-border/70 bg-muted/35 text-xs">
+            <div className="space-y-1 px-3 py-2">
+              {worktrees.map((item) => {
+                const itemDeleteState = deleteStateByWorktreeId[item.id]
+                return (
+                  <div
+                    key={item.id}
+                    className="min-w-0 border-b border-border/50 py-1 last:border-0"
+                  >
+                    <div className="flex min-w-0 items-start gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="break-all font-medium text-foreground">
+                          {item.displayName}
+                        </div>
+                        <div className="mt-0.5 break-all text-muted-foreground">{item.path}</div>
+                        {itemDeleteState?.error ? (
+                          <div className="mt-1 whitespace-pre-wrap break-all text-destructive">
+                            {itemDeleteState.error}
+                          </div>
+                        ) : null}
+                      </div>
+                      {itemDeleteState?.isDeleting ? (
+                        <LoaderCircle className="mt-0.5 size-3.5 shrink-0 animate-spin text-muted-foreground" />
+                      ) : null}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </ScrollArea>
+        ) : worktree ? (
           <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs">
             <div className="break-all font-medium text-foreground">{worktree.displayName}</div>
             <div className="mt-1 break-all text-muted-foreground">{worktree.path}</div>
           </div>
-        )}
+        ) : null}
 
         {isMainWorktree && (
           <div className="rounded-md border border-blue-500/40 bg-blue-500/8 px-3 py-2 text-xs text-blue-700 dark:text-blue-300">
@@ -198,7 +302,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
           </div>
         )}
 
-        {!isMainWorktree && !canForceDelete && (
+        {!isMainWorktree && allowSkipConfirm && !canForceDelete && (
           // Why: only show "Don't ask again" for the primary confirmation. The
           // force-delete variant is a recovery path that shouldn't double as a
           // preference checkpoint; see handleDelete for the matching guard.
@@ -245,7 +349,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
                 disabled={isDeleting}
               >
                 {isDeleting ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 />}
-                {isDeleting ? 'Deleting…' : 'Delete'}
+                {isDeleting ? 'Deleting…' : isBatchDelete ? `Delete ${worktrees.length}` : 'Delete'}
               </Button>
             ))}
         </DialogFooter>

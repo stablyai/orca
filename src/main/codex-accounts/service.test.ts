@@ -24,6 +24,7 @@ vi.mock('node:os', async () => {
 })
 
 function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
+  const appFontFamily = overrides.appFontFamily ?? 'Geist'
   return {
     workspaceDir: testState.fakeHomeDir,
     nestWorkspaces: false,
@@ -34,6 +35,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     editorAutoSave: false,
     editorAutoSaveDelayMs: 1000,
     editorMinimapEnabled: false,
+    markdownReviewToolsEnabled: true,
     terminalFontSize: 14,
     terminalFontFamily: 'JetBrains Mono',
     terminalFontWeight: 500,
@@ -59,14 +61,20 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalScrollbackBytes: 10_000_000,
     openLinksInApp: false,
     rightSidebarOpenByDefault: true,
-    showTitlebarAgentActivity: true,
+    sourceControlViewMode: 'list',
+    showTitlebarAppName: true,
     showTasksButton: true,
+    floatingTerminalEnabled: false,
+    floatingTerminalCwd: '~',
+    floatingTerminalTriggerLocation: 'floating-button',
     diffDefaultView: 'inline',
+    combinedDiffFileTreeVisibleByDefault: false,
     notifications: {
       enabled: true,
       agentTaskComplete: true,
       terminalBell: false,
-      suppressWhenFocused: true
+      suppressWhenFocused: true,
+      customSoundPath: null
     },
     promptCacheTimerEnabled: false,
     promptCacheTtlMs: 300_000,
@@ -77,22 +85,29 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalScopeHistoryByWorktree: true,
     defaultTuiAgent: null,
     skipDeleteWorktreeConfirm: false,
+    skipDeleteAutomationConfirm: false,
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
+    visibleTaskProviders: ['github', 'gitlab', 'linear'],
     defaultRepoSelection: null,
     defaultLinearTeamSelection: null,
     opencodeSessionCookie: '',
     opencodeWorkspaceId: '',
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
+    keepComputerAwakeWhileAgentsRun: false,
     terminalMacOptionAsAlt: 'false',
     terminalMacOptionAsAltMigrated: true,
-    experimentalAgentDashboard: false,
-    experimentalSidekick: false,
+    experimentalMobile: false,
+    mobileAutoRestoreFitMs: null,
+    experimentalPet: false,
+    experimentalActivity: true,
+    experimentalWorktreeSymlinks: false,
     terminalWindowsShell: 'powershell.exe',
     terminalWindowsPowerShellImplementation: 'powershell.exe',
     enableGitHubAttribution: true,
-    ...overrides
+    ...overrides,
+    appFontFamily
   }
 }
 

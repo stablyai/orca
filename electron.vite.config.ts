@@ -46,7 +46,9 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve('src/main/index.ts'),
-          'daemon-entry': resolve('src/main/daemon/daemon-entry.ts')
+          'daemon-entry': resolve('src/main/daemon/daemon-entry.ts'),
+          'computer-sidecar': resolve('src/main/computer/sidecar-entry.ts'),
+          'stt-worker': resolve('src/main/speech/stt-worker.ts')
         }
       }
     },

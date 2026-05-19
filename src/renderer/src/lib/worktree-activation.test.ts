@@ -14,6 +14,12 @@ function setSetupScriptLaunchMode(mode: SetupScriptLaunchMode | null): void {
 }
 
 afterEach(() => {
+  delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
+  useAppStore.setState((state) => ({
+    settings: state.settings
+      ? { ...state.settings, activeRuntimeEnvironmentId: null }
+      : ({ activeRuntimeEnvironmentId: null } as unknown as typeof state.settings)
+  }))
   setSetupScriptLaunchMode('new-tab')
 })
 
@@ -72,6 +78,22 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.queueTabSetupSplit).not.toHaveBeenCalled()
   })
 
+  it('does not create a local fallback tab in the paired web runtime client', () => {
+    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    useAppStore.setState((state) => ({
+      settings: state.settings
+        ? { ...state.settings, activeRuntimeEnvironmentId: 'web-runtime-1' }
+        : ({ activeRuntimeEnvironmentId: 'web-runtime-1' } as unknown as typeof state.settings)
+    }))
+    const store = createMockStore()
+
+    const result = ensureWorktreeHasInitialTerminal(store, 'wt-1')
+
+    expect(result).toBeNull()
+    expect(store.createTab).not.toHaveBeenCalled()
+    expect(store.setActiveTab).not.toHaveBeenCalled()
+  })
+
   it('does not create or queue anything when the worktree already has renderable content', () => {
     const store = createMockStore({
       reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 1 }))
@@ -109,6 +131,34 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     })
     expect(store.queueTabSetupSplit).not.toHaveBeenCalled()
     expect(store.queueTabIssueCommandSplit).not.toHaveBeenCalled()
+  })
+
+  it('forwards telemetry on the queued startup so main can fire agent_started', () => {
+    const store = createMockStore()
+
+    ensureWorktreeHasInitialTerminal(
+      store,
+      'wt-1',
+      {
+        command: 'claude',
+        telemetry: {
+          agent_kind: 'claude-code',
+          launch_source: 'new_workspace_composer',
+          request_kind: 'new'
+        }
+      },
+      undefined,
+      undefined
+    )
+
+    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
+      command: 'claude',
+      telemetry: {
+        agent_kind: 'claude-code',
+        launch_source: 'new_workspace_composer',
+        request_kind: 'new'
+      }
+    })
   })
 
   it('does not create a terminal just because the legacy terminal slice is empty', () => {

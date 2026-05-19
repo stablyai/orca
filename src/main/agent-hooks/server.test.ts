@@ -14,8 +14,30 @@ import {
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { AgentHookServer, _internals } from './server'
+import {
+  AGENT_STATUS_MAX_FIELD_LENGTH,
+  parseAgentStatusPayload
+} from '../../shared/agent-status-types'
+import { makePaneKey } from '../../shared/stable-pane-id'
 
-const PANE = 'tab-1:0'
+const { trackMock } = vi.hoisted(() => ({
+  trackMock: vi.fn()
+}))
+
+vi.mock('../telemetry/client', () => ({
+  track: trackMock
+}))
+
+const LEAF_1 = '11111111-1111-4111-8111-111111111111'
+const LEAF_2 = '22222222-2222-4222-8222-222222222222'
+const LEAF_3 = '33333333-3333-4333-8333-333333333333'
+const LEAF_4 = '44444444-4444-4444-8444-444444444444'
+const LEAF_5 = '55555555-5555-4555-8555-555555555555'
+const PANE = makePaneKey('tab-1', LEAF_1)
+const GOOD_PANE = makePaneKey('tab-good', LEAF_2)
+const OLD_PANE = makePaneKey('tab-old', LEAF_3)
+const FRESH_PANE = makePaneKey('tab-fresh', LEAF_4)
+const TAB_A_PANE = makePaneKey('tab-A', LEAF_5)
 
 type Body = {
   paneKey: string
@@ -39,6 +61,7 @@ function buildBody(payload: Record<string, unknown>, overrides: Partial<Body> = 
 
 beforeEach(() => {
   _internals.resetCachesForTests()
+  trackMock.mockReset()
 })
 
 afterEach(() => {
@@ -46,6 +69,151 @@ afterEach(() => {
 })
 
 describe('AgentHookServer listener replay', () => {
+  it('allows multiple status-change subscribers to observe the same update', () => {
+    const server = new AgentHookServer()
+    const first = vi.fn()
+    const second = vi.fn()
+    server.subscribeStatusChanges(first)
+    server.subscribeStatusChanges(second)
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+
+    expect(first).toHaveBeenCalledWith([
+      expect.objectContaining({
+        state: 'working',
+        receivedAt: expect.any(Number),
+        observedInCurrentRuntime: true
+      })
+    ])
+    expect(second).toHaveBeenCalledWith([
+      expect.objectContaining({
+        state: 'working',
+        receivedAt: expect.any(Number),
+        observedInCurrentRuntime: true
+      })
+    ])
+  })
+
+  it('keeps status-change subscribers when renderer fanout listener is cleared', () => {
+    const server = new AgentHookServer()
+    const statusChangeListener = vi.fn()
+    const rendererListener = vi.fn()
+    server.subscribeStatusChanges(statusChangeListener)
+    server.setListener(rendererListener)
+    server.setListener(null)
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+
+    expect(statusChangeListener).toHaveBeenCalledTimes(1)
+    expect(rendererListener).not.toHaveBeenCalled()
+  })
+
+  it('unsubscribes status-change listeners without removing the remaining listeners', () => {
+    const server = new AgentHookServer()
+    const removed = vi.fn()
+    const remaining = vi.fn()
+    const unsubscribe = server.subscribeStatusChanges(removed)
+    server.subscribeStatusChanges(remaining)
+
+    unsubscribe()
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+
+    expect(removed).not.toHaveBeenCalled()
+    expect(remaining).toHaveBeenCalledWith([
+      expect.objectContaining({
+        state: 'working',
+        observedInCurrentRuntime: true
+      })
+    ])
+  })
+
+  it('notifies status-change subscribers when a working status is dropped or cleared', () => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.subscribeStatusChanges(listener)
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    server.dropStatusEntry(PANE)
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    server.clearPaneState(PANE)
+
+    expect(listener).toHaveBeenNthCalledWith(2, [])
+    expect(listener).toHaveBeenNthCalledWith(4, [])
+  })
+
+  it('hydrates cached statuses as not observed in the current runtime', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-agent-hooks-'))
+    const firstServer = new AgentHookServer()
+    const secondServer = new AgentHookServer()
+    try {
+      await firstServer.start({ env: 'production', userDataPath: dir })
+      firstServer.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: { state: 'working', agentType: 'claude' }
+        },
+        'conn-1'
+      )
+      firstServer.flushStatusPersistSync()
+      firstServer.stop()
+
+      await secondServer.start({ env: 'production', userDataPath: dir })
+
+      expect(secondServer.getStatusChangeSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'working',
+          observedInCurrentRuntime: false
+        })
+      ])
+    } finally {
+      firstServer.stop()
+      secondServer.stop()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('replays the latest retained pane status when a listener attaches after windowless events', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
@@ -73,16 +241,21 @@ describe('AgentHookServer listener replay', () => {
       server.setListener(listener)
 
       expect(listener).toHaveBeenCalledTimes(1)
-      expect(listener).toHaveBeenCalledWith({
-        paneKey: PANE,
-        tabId: 'tab-1',
-        worktreeId: 'wt-1',
-        payload: expect.objectContaining({
-          state: 'working',
-          prompt: 'replay me',
-          agentType: 'claude'
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          connectionId: null,
+          receivedAt: expect.any(Number),
+          stateStartedAt: expect.any(Number),
+          payload: expect.objectContaining({
+            state: 'working',
+            prompt: 'replay me',
+            agentType: 'claude'
+          })
         })
-      })
+      )
     } finally {
       server.stop()
     }
@@ -112,6 +285,199 @@ describe('AgentHookServer listener replay', () => {
       server.setListener(listener)
 
       expect(listener).not.toHaveBeenCalled()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('maps registered legacy numeric HTTP pane keys to stable pane keys', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      server.registerPaneKeyAlias('tab-1:0', PANE)
+      const env = server.buildPtyEnv()
+      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify(
+          buildBody(
+            {
+              hook_event_name: 'UserPromptSubmit',
+              prompt: 'legacy pane'
+            },
+            { paneKey: 'tab-1:0' }
+          )
+        )
+      })
+      expect(response.status).toBe(204)
+
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: expect.objectContaining({
+            state: 'working',
+            prompt: 'legacy pane',
+            agentType: 'claude'
+          })
+        })
+      )
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('tracks hook posts with an empty paneKey before dropping them', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify(
+          buildBody(
+            {
+              hook_event_name: 'UserPromptSubmit',
+              prompt: 'missing pane'
+            },
+            { paneKey: '' }
+          )
+        )
+      })
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      expect(response.status).toBe(204)
+      expect(listener).not.toHaveBeenCalled()
+      expect(trackMock).toHaveBeenCalledWith('agent_hook_unattributed', {
+        reason: 'empty_pane_key'
+      })
+    } finally {
+      server.stop()
+    }
+  })
+
+  // Why: agent-status-over-SSH §3 — ingestRemote must run the same warn-once
+  // cross-build diagnostics the local HTTP path runs, so a remote source of
+  // genuinely stale hooks emits the same signal locally.
+  it('runs warn-once env/version diagnostics on relay-forwarded events', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          env: 'development',
+          version: '999',
+          payload: {
+            state: 'working',
+            paneKey: PANE,
+            updatedAt: Date.now(),
+            agentType: 'claude'
+          }
+        },
+        'conn-1'
+      )
+
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          connectionId: 'conn-1',
+          payload: expect.objectContaining({ state: 'working', agentType: 'claude' })
+        })
+      )
+
+      const warnCalls = warn.mock.calls.map((c) => String(c[0]))
+      expect(warnCalls.some((m) => m.includes('v999'))).toBe(true)
+      expect(warnCalls.some((m) => m.includes('development') && m.includes('production'))).toBe(
+        true
+      )
+
+      const warnsAfterFirst = warn.mock.calls.length
+      const secondPane = makePaneKey('tab-2', LEAF_2)
+      server.ingestRemote(
+        {
+          paneKey: secondPane,
+          env: 'development',
+          version: '999',
+          payload: {
+            state: 'working',
+            paneKey: secondPane,
+            updatedAt: Date.now(),
+            agentType: 'claude'
+          }
+        },
+        'conn-1'
+      )
+      expect(warn.mock.calls.length).toBe(warnsAfterFirst)
+      // Why: pin both invariants — warn-once dedupe AND fanout still fires for
+      // the second event. Without the second assertion, a future refactor that
+      // drops the second event silently would still leave warn-count unchanged.
+      expect(listener).toHaveBeenCalledTimes(2)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('treats remote env as normal relay traffic and normalizes payload at the trust boundary', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      const oversizedPrompt = 'x'.repeat(AGENT_STATUS_MAX_FIELD_LENGTH + 50)
+      const remotePane = makePaneKey('tab-3', LEAF_3)
+      server.ingestRemote(
+        {
+          paneKey: ` ${remotePane} `,
+          tabId: ' tab-3 ',
+          worktreeId: ' wt-3 ',
+          env: 'remote',
+          version: '1',
+          payload: {
+            state: 'done',
+            prompt: oversizedPrompt,
+            agentType: 'codex'
+          }
+        },
+        ' conn-9 '
+      )
+
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: remotePane,
+          tabId: 'tab-3',
+          worktreeId: 'wt-3',
+          connectionId: 'conn-9',
+          payload: expect.objectContaining({
+            state: 'done',
+            agentType: 'codex',
+            prompt: 'x'.repeat(AGENT_STATUS_MAX_FIELD_LENGTH)
+          })
+        })
+      )
+      expect(warn).not.toHaveBeenCalled()
     } finally {
       server.stop()
     }
@@ -147,16 +513,62 @@ describe('AgentHookServer listener replay', () => {
       const listener = vi.fn()
       server.setListener(listener)
 
-      expect(listener).toHaveBeenCalledWith({
-        paneKey: PANE,
-        tabId: 'tab-1',
-        worktreeId: 'repo::/tmp/worktree with "quotes"',
-        payload: expect.objectContaining({
-          state: 'working',
-          prompt: 'form encoded',
-          agentType: 'claude'
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'repo::/tmp/worktree with "quotes"',
+          connectionId: null,
+          receivedAt: expect.any(Number),
+          stateStartedAt: expect.any(Number),
+          payload: expect.objectContaining({
+            state: 'working',
+            prompt: 'form encoded',
+            agentType: 'claude'
+          })
         })
+      )
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('accepts Hermes plugin hook posts on /hook/hermes', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/hermes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify(
+          buildBody({
+            hook_event_name: 'pre_llm_call',
+            user_message: 'verify Hermes route'
+          })
+        )
       })
+      expect(response.status).toBe(204)
+
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          connectionId: null,
+          payload: expect.objectContaining({
+            state: 'working',
+            prompt: 'verify Hermes route',
+            agentType: 'hermes'
+          })
+        })
+      )
     } finally {
       server.stop()
     }
@@ -462,7 +874,7 @@ describe('Codex hook normalization', () => {
     // Why: Codex's PreToolUse is NOT an approval prompt — it fires for every
     // tool call. We map it to `working` (never `waiting`) and use it only to
     // give the dashboard a live readout during the gap between prompt and
-    // Stop. Real approval signals flow through Codex's `notify` callback.
+    // Stop. Real approval signals flow through PermissionRequest.
     const result = _internals.normalizeHookPayload(
       'codex',
       buildBody({
@@ -475,6 +887,26 @@ describe('Codex hook normalization', () => {
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.toolName).toBe('exec_command')
     expect(result?.payload.toolInput).toBe('git status')
+  })
+
+  it('PermissionRequest maps to waiting and surfaces the pending tool input', () => {
+    // Why: Codex asks for user attention through PermissionRequest. Orca's
+    // sidebar red dot depends on this becoming `waiting`; treating it like
+    // PreToolUse would leave the pane looking busy while it is blocked on the
+    // user.
+    const result = _internals.normalizeHookPayload(
+      'codex',
+      buildBody({
+        hook_event_name: 'PermissionRequest',
+        tool_name: 'exec_command',
+        tool_input: { cmd: 'rm -rf build', workdir: '/tmp' }
+      }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('waiting')
+    expect(result?.payload.agentType).toBe('codex')
+    expect(result?.payload.toolName).toBe('exec_command')
+    expect(result?.payload.toolInput).toBe('rm -rf build')
   })
 
   it('UserPromptSubmit does not extract tool fields even when the payload carries them', () => {
@@ -660,6 +1092,22 @@ describe('OpenCode hook normalization', () => {
     expect(result?.payload.state).toBe('waiting')
   })
 
+  it('AskUserQuestion maps to waiting', () => {
+    // Why: OpenCode emits `question.asked` when the agent uses an ask-the-user
+    // tool (distinct from `permission.asked`, which blocks on tool approval).
+    // Both leave the agent idle-but-waiting on a human, so both must render
+    // the same red "needs attention" indicator. Without this mapping the pane
+    // silently stays in `working` and the user has no visual cue that the
+    // agent is waiting on them.
+    const result = _internals.normalizeHookPayload(
+      'opencode',
+      buildBody({ hook_event_name: 'AskUserQuestion' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('waiting')
+    expect(result?.payload.agentType).toBe('opencode')
+  })
+
   it('unknown event name returns null', () => {
     const result = _internals.normalizeHookPayload(
       'opencode',
@@ -840,6 +1288,786 @@ describe('Cursor hook normalization', () => {
   })
 })
 
+describe('Droid hook normalization', () => {
+  it('UserPromptSubmit maps to working and captures the prompt', () => {
+    const result = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'ship this fix' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.agentType).toBe('droid')
+    expect(result?.payload.prompt).toBe('ship this fix')
+  })
+
+  it('Notification maps permission prompts to waiting and idle prompts to done', () => {
+    const waiting = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'Notification',
+        message: 'Droid needs your permission to use Execute'
+      }),
+      'production'
+    )
+    expect(waiting?.payload.state).toBe('waiting')
+
+    const done = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'Notification',
+        message: 'Droid is waiting for your input'
+      }),
+      'production'
+    )
+    expect(done?.payload.state).toBe('done')
+
+    const ignored = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'Notification',
+        message: 'Task completed successfully'
+      }),
+      'production'
+    )
+    expect(ignored).toBeNull()
+  })
+
+  it('Notification preserves the cached user prompt instead of using status text as prompt', () => {
+    _internals.normalizeHookPayload(
+      'droid',
+      buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'write tests' }),
+      'production'
+    )
+
+    const done = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'Notification',
+        message: 'Droid is waiting for your input'
+      }),
+      'production'
+    )
+
+    expect(done?.payload.state).toBe('done')
+    expect(done?.payload.prompt).toBe('write tests')
+  })
+
+  it('Notification ignores confirmation status text rather than treating it as permission', () => {
+    const result = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'Notification',
+        message: 'Confirmed configuration loaded'
+      }),
+      'production'
+    )
+
+    expect(result).toBeNull()
+  })
+
+  it('PreToolUse maps to working and surfaces the tool name and input preview', () => {
+    const result = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Read',
+        tool_input: { file_path: '/tmp/example.ts' }
+      }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.toolName).toBe('Read')
+    expect(result?.payload.toolInput).toBe('/tmp/example.ts')
+  })
+
+  it('PreToolUse falls back to the `name` and `input` fields when tool_name/tool_input are absent', () => {
+    const result = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        name: 'Bash',
+        input: { command: 'pnpm typecheck' }
+      }),
+      'production'
+    )
+    expect(result?.payload.toolName).toBe('Bash')
+    expect(result?.payload.toolInput).toBe('pnpm typecheck')
+  })
+
+  it('PreToolUse AskUser maps to waiting for human input', () => {
+    const result = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'AskUser',
+        tool_input: { question: 'Which permission-requiring action should I perform?' }
+      }),
+      'production'
+    )
+
+    expect(result?.payload.state).toBe('waiting')
+    expect(result?.payload.toolName).toBe('AskUser')
+  })
+
+  it('PreToolUse high-risk Execute maps to waiting for approval', () => {
+    const result = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Execute',
+        tool_input: {
+          command: 'echo "test modification" >> ~/.claude/config.json',
+          riskLevel: 'high',
+          riskLevelReason: "This command modifies the user's Claude Code config file."
+        }
+      }),
+      'production'
+    )
+
+    expect(result?.payload.state).toBe('waiting')
+    expect(result?.payload.toolName).toBe('Execute')
+    expect(result?.payload.toolInput).toBe('echo "test modification" >> ~/.claude/config.json')
+  })
+
+  it('PermissionRequest maps low-impact Edit approvals to waiting and carries cached tool', () => {
+    _internals.normalizeHookPayload(
+      'droid',
+      buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'edit it to none' }),
+      'production'
+    )
+    _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Edit',
+        tool_input: {
+          file_path: '/Users/thebr/.claude/settings.json',
+          old_str: '"preferredNotifChannel": "terminal_bell"',
+          new_str: '"preferredNotifChannel": "none"'
+        }
+      }),
+      'production'
+    )
+
+    const result = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({ hook_event_name: 'PermissionRequest' }),
+      'production'
+    )
+
+    expect(result?.payload.state).toBe('waiting')
+    expect(result?.payload.prompt).toBe('edit it to none')
+    expect(result?.payload.toolName).toBe('Edit')
+    expect(result?.payload.toolInput).toBe('/Users/thebr/.claude/settings.json')
+  })
+
+  it('SessionStart resets turn caches without marking Droid working', () => {
+    _internals.normalizeHookPayload(
+      'droid',
+      buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'old prompt' }),
+      'production'
+    )
+    _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Read',
+        tool_input: { file_path: '/tmp/old.ts' }
+      }),
+      'production'
+    )
+
+    const sessionStart = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({ hook_event_name: 'SessionStart' }),
+      'production'
+    )
+    expect(sessionStart).toBeNull()
+
+    const nextTool = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Execute',
+        tool_input: { command: 'pwd' }
+      }),
+      'production'
+    )
+    expect(nextTool?.payload.state).toBe('working')
+    expect(nextTool?.payload.prompt).toBe('')
+    expect(nextTool?.payload.toolName).toBe('Execute')
+    expect(nextTool?.payload.toolInput).toBe('pwd')
+  })
+
+  it('SubagentStop does not close the primary session row', () => {
+    const result = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({ hook_event_name: 'SubagentStop' }),
+      'production'
+    )
+    expect(result).toBeNull()
+  })
+
+  it('Stop maps to done and preserves the cached prompt', () => {
+    _internals.normalizeHookPayload(
+      'droid',
+      buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'write tests' }),
+      'production'
+    )
+    const stop = _internals.normalizeHookPayload(
+      'droid',
+      buildBody({ hook_event_name: 'Stop' }),
+      'production'
+    )
+    expect(stop?.payload.state).toBe('done')
+    expect(stop?.payload.prompt).toBe('write tests')
+  })
+})
+
+describe('Pi hook normalization', () => {
+  it('before_agent_start maps to working and captures the prompt', () => {
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'before_agent_start', prompt: 'rename this fn' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.agentType).toBe('pi')
+    expect(result?.payload.prompt).toBe('rename this fn')
+  })
+
+  it('agent_start without a prompt keeps the cached prompt from the current turn', () => {
+    _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'before_agent_start', prompt: 'first prompt' }),
+      'production'
+    )
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'agent_start' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.prompt).toBe('first prompt')
+  })
+
+  it('before_agent_start clears the previous turn’s tool cache', () => {
+    _internals.normalizeHookPayload(
+      'pi',
+      buildBody({
+        hook_event_name: 'tool_call',
+        tool_name: 'bash',
+        tool_input: { command: 'ls' }
+      }),
+      'production'
+    )
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'before_agent_start', prompt: 'next' }),
+      'production'
+    )
+    expect(result?.payload.toolName).toBeUndefined()
+    expect(result?.payload.toolInput).toBeUndefined()
+  })
+
+  it('tool_call surfaces tool_name + tool_input preview', () => {
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({
+        hook_event_name: 'tool_call',
+        tool_name: 'bash',
+        tool_input: { command: 'pnpm test' }
+      }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.toolName).toBe('bash')
+    expect(result?.payload.toolInput).toBe('pnpm test')
+  })
+
+  it('tool_execution_start also populates the tool preview', () => {
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({
+        hook_event_name: 'tool_execution_start',
+        tool_name: 'read',
+        tool_input: { path: 'src/main/index.ts' }
+      }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.toolName).toBe('read')
+    expect(result?.payload.toolInput).toBe('src/main/index.ts')
+  })
+
+  it('message_end (assistant) stays in working but captures lastAssistantMessage', () => {
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({
+        hook_event_name: 'message_end',
+        role: 'assistant',
+        text: 'Done — I refactored the helper.'
+      }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.lastAssistantMessage).toBe('Done — I refactored the helper.')
+  })
+
+  it('message_end (user) is ignored', () => {
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'message_end', role: 'user', text: 'hi' }),
+      'production'
+    )
+    // Why: pi captures the user prompt via before_agent_start, not via
+    // message_end. A user-role message_end should not flip lastAssistantMessage.
+    expect(result?.payload.lastAssistantMessage).toBeUndefined()
+  })
+
+  it('agent_end maps to done', () => {
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'agent_end' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('done')
+    expect(result?.payload.agentType).toBe('pi')
+  })
+
+  it('session_shutdown maps to done', () => {
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'session_shutdown' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('done')
+  })
+
+  it('done preserves the cached lastAssistantMessage from a prior message_end', () => {
+    _internals.normalizeHookPayload(
+      'pi',
+      buildBody({
+        hook_event_name: 'message_end',
+        role: 'assistant',
+        text: 'final reply'
+      }),
+      'production'
+    )
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'agent_end' }),
+      'production'
+    )
+    expect(result?.payload.lastAssistantMessage).toBe('final reply')
+  })
+
+  it('unknown event names are dropped', () => {
+    const result = _internals.normalizeHookPayload(
+      'pi',
+      buildBody({ hook_event_name: 'never_heard_of_it' }),
+      'production'
+    )
+    expect(result).toBeNull()
+  })
+})
+
+describe('Copilot hook normalization', () => {
+  it('UserPromptSubmit maps to working and captures the prompt', () => {
+    const result = _internals.normalizeHookPayload(
+      'copilot',
+      buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'add a migration' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.agentType).toBe('copilot')
+    expect(result?.payload.prompt).toBe('add a migration')
+  })
+
+  it('accepts camelCase Copilot event names from older hook configs', () => {
+    const result = _internals.normalizeHookPayload(
+      'copilot',
+      buildBody({ hook_event_name: 'userPromptSubmitted', prompt: 'camel event' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.prompt).toBe('camel event')
+  })
+
+  it('infers Copilot user prompt payloads that omit hook_event_name', () => {
+    const result = _internals.normalizeHookPayload(
+      'copilot',
+      buildBody({ prompt: 'raw prompt payload' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.prompt).toBe('raw prompt payload')
+  })
+
+  it('captures initialPrompt from Copilot sessionStart payloads', () => {
+    const result = _internals.normalizeHookPayload(
+      'copilot',
+      buildBody({ initialPrompt: 'first prompt' }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.prompt).toBe('first prompt')
+  })
+
+  it('PreToolUse stays working and surfaces tool context', () => {
+    const result = _internals.normalizeHookPayload(
+      'copilot',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        toolName: 'bash',
+        toolInput: { command: 'pnpm test' }
+      }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.toolName).toBe('bash')
+    expect(result?.payload.toolInput).toBe('pnpm test')
+  })
+
+  it('PreToolUse ask_user maps to blocked and surfaces the question', () => {
+    _internals.normalizeHookPayload(
+      'copilot',
+      buildBody({ prompt: 'ask me a question' }),
+      'production'
+    )
+    const result = _internals.normalizeHookPayload(
+      'copilot',
+      buildBody({
+        toolCalls: [
+          {
+            name: 'ask_user',
+            args: JSON.stringify({ question: 'Which deployment target should I use?' })
+          }
+        ]
+      }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('blocked')
+    expect(result?.payload.prompt).toBe('ask me a question')
+    expect(result?.payload.toolName).toBe('ask_user')
+    expect(result?.payload.toolInput).toBe('Which deployment target should I use?')
+    expect(result?.payload.lastAssistantMessage).toBe('Which deployment target should I use?')
+  })
+
+  it('PermissionRequest stays working and preserves tool context', () => {
+    const result = _internals.normalizeHookPayload(
+      'copilot',
+      buildBody({
+        hook_event_name: 'PermissionRequest',
+        tool_name: 'bash',
+        tool_input: { command: 'rm -rf /tmp/orca-test' }
+      }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.toolName).toBe('bash')
+    expect(result?.payload.toolInput).toBe('rm -rf /tmp/orca-test')
+  })
+
+  it('surfaces lowercase Copilot file tool input previews', () => {
+    const result = _internals.normalizeHookPayload(
+      'copilot',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'edit',
+        tool_input: { path: '/repo/src/app.ts' }
+      }),
+      'production'
+    )
+    expect(result?.payload.toolName).toBe('edit')
+    expect(result?.payload.toolInput).toBe('/repo/src/app.ts')
+  })
+
+  it('Notification(permission_prompt) maps to blocked and surfaces message text', () => {
+    const result = _internals.normalizeHookPayload(
+      'copilot',
+      buildBody({
+        hook_event_name: 'Notification',
+        notification_type: 'permission_prompt',
+        title: 'Approval needed',
+        message: 'Allow Bash to run?'
+      }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('blocked')
+    expect(result?.payload.lastAssistantMessage).toBe('Allow Bash to run?')
+  })
+
+  it('Notification(elicitation_dialog) preserves the cached prompt', () => {
+    _internals.normalizeHookPayload(
+      'copilot',
+      buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'deploy the app' }),
+      'production'
+    )
+    const result = _internals.normalizeHookPayload(
+      'copilot',
+      buildBody({
+        hook_event_name: 'Notification',
+        notification_type: 'elicitation_dialog',
+        message: 'Which environment?'
+      }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('blocked')
+    expect(result?.payload.prompt).toBe('deploy the app')
+    expect(result?.payload.lastAssistantMessage).toBe('Which environment?')
+  })
+
+  it('Notification(elicitation_dialog) accepts camelCase type and surfaces the question', () => {
+    const result = _internals.normalizeHookPayload(
+      'copilot',
+      buildBody({
+        hook_event_name: 'Notification',
+        notificationType: 'elicitation_dialog',
+        message: 'Which deployment target should I use?'
+      }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('blocked')
+    expect(result?.payload.lastAssistantMessage).toBe('Which deployment target should I use?')
+  })
+
+  it('later progress clears a prior blocked state for the same pane', () => {
+    _internals.normalizeHookPayload(
+      'copilot',
+      buildBody({
+        hook_event_name: 'PermissionRequest',
+        tool_name: 'bash',
+        tool_input: { command: 'pnpm build' }
+      }),
+      'production'
+    )
+    const result = _internals.normalizeHookPayload(
+      'copilot',
+      buildBody({
+        hook_event_name: 'PostToolUse',
+        tool_name: 'bash',
+        tool_input: { command: 'pnpm build' },
+        tool_result: { text_result_for_llm: 'build passed' }
+      }),
+      'production'
+    )
+    expect(result?.payload.state).toBe('working')
+    expect(result?.payload.lastAssistantMessage).toBe('build passed')
+  })
+
+  it('Stop reads the final assistant message from Copilot transcript events', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-copilot-transcript-'))
+    const transcriptPath = join(tmpDir, 'events.jsonl')
+    try {
+      const lines = [
+        {
+          type: 'assistant.message',
+          data: {
+            content: '',
+            toolRequests: [{ name: 'bash', arguments: { command: 'pnpm test' } }]
+          }
+        },
+        {
+          type: 'assistant.message',
+          data: { content: 'Done - tests pass now.', toolRequests: [] }
+        }
+      ]
+      writeFileSync(transcriptPath, `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`)
+
+      const result = _internals.normalizeHookPayload(
+        'copilot',
+        buildBody({ hook_event_name: 'Stop', transcript_path: transcriptPath }),
+        'production'
+      )
+
+      expect(result?.payload.state).toBe('done')
+      expect(result?.payload.lastAssistantMessage).toBe('Done - tests pass now.')
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('unknown event name returns null', () => {
+    const result = _internals.normalizeHookPayload(
+      'copilot',
+      buildBody({ hook_event_name: 'somethingElse' }),
+      'production'
+    )
+    expect(result).toBeNull()
+  })
+
+  it('accepts authenticated HTTP posts on /hook/copilot', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const listener = vi.fn()
+      server.setListener(listener)
+      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/copilot`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify(
+          buildBody({ hook_event_name: 'Notification', notificationType: 'permission_prompt' })
+        )
+      })
+
+      expect(response.status).toBe(204)
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          payload: expect.objectContaining({ state: 'blocked', agentType: 'copilot' })
+        })
+      )
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('updates Copilot Stop with final transcript text after a non-blocking retry', async () => {
+    const server = new AgentHookServer()
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-copilot-transcript-retry-'))
+    const transcriptPath = join(tmpDir, 'events.jsonl')
+    writeFileSync(transcriptPath, '')
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/copilot`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify(
+          buildBody({
+            hook_event_name: 'PostToolUse',
+            tool_result: { text_result_for_llm: 'stale tool output' }
+          })
+        )
+      })
+      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/copilot`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify(
+          buildBody({ hook_event_name: 'Stop', transcript_path: transcriptPath })
+        )
+      })
+
+      expect(response.status).toBe(204)
+      await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/copilot`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify(buildBody({ hook_event_name: 'SessionEnd', reason: 'complete' }))
+      })
+      expect(listener).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            state: 'done',
+            lastAssistantMessage: undefined
+          })
+        })
+      )
+
+      writeFileSync(
+        transcriptPath,
+        `${JSON.stringify({
+          type: 'assistant.message',
+          data: { content: 'Done after transcript flush.' }
+        })}\n`
+      )
+      await new Promise((resolve) => setTimeout(resolve, 120))
+
+      expect(listener).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            state: 'done',
+            lastAssistantMessage: 'Done after transcript flush.'
+          })
+        })
+      )
+    } finally {
+      server.stop()
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('updates Grok Stop with final chat-history text after a non-blocking retry', async () => {
+    const server = new AgentHookServer()
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-grok-chat-history-retry-'))
+    const sessionId = '019e37f4-5135-7b63-a4ab-6d13aa6bf528'
+    const cwd = join(tmpDir, 'workspace')
+    const sessionDir = join(tmpDir, '.grok', 'sessions', encodeURIComponent(cwd), sessionId)
+    mkdirSync(sessionDir, { recursive: true })
+    writeFileSync(join(sessionDir, 'chat_history.jsonl'), '')
+    vi.stubEnv('HOME', tmpDir)
+    vi.stubEnv('USERPROFILE', tmpDir)
+    await server.start({ env: 'production' })
+    try {
+      const env = server.buildPtyEnv()
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/grok`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify(buildBody({ hookEventName: 'user_prompt_submit', prompt: 'hihi' }))
+      })
+      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/grok`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify(buildBody({ hookEventName: 'Stop', sessionId, cwd }))
+      })
+
+      expect(response.status).toBe(204)
+      expect(listener).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            state: 'done',
+            lastAssistantMessage: undefined
+          })
+        })
+      )
+
+      writeFileSync(
+        join(sessionDir, 'chat_history.jsonl'),
+        `${JSON.stringify({ type: 'assistant', content: 'Hi! How can I help you today?' })}\n`
+      )
+      await new Promise((resolve) => setTimeout(resolve, 120))
+
+      expect(listener).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            state: 'done',
+            lastAssistantMessage: 'Hi! How can I help you today?'
+          })
+        })
+      )
+    } finally {
+      server.stop()
+      vi.unstubAllEnvs()
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('Endpoint file lifecycle', () => {
   let userDataPath: string
 
@@ -951,6 +2179,43 @@ describe('Endpoint file lifecycle', () => {
     }
   })
 
+  it('buildPtyEnv includes namespaced ORCA_AGENT_HOOK_ENDPOINT for development servers', async () => {
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'development',
+      userDataPath,
+      endpointNamespace: 'com.stablyai.orca.dev.test123'
+    })
+    try {
+      const env = server.buildPtyEnv()
+      expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBe(server.endpointFilePath)
+      expect(env.ORCA_AGENT_HOOK_ENDPOINT).toContain('com.stablyai.orca.dev.test123')
+      expect(env.ORCA_AGENT_HOOK_PORT).toBeTruthy()
+      expect(env.ORCA_AGENT_HOOK_TOKEN).toBeTruthy()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('keeps endpoint files separate for parallel dev namespaces', async () => {
+    const firstServer = new AgentHookServer()
+    const secondServer = new AgentHookServer()
+    await firstServer.start({ env: 'development', userDataPath, endpointNamespace: 'dev-a' })
+    await secondServer.start({ env: 'development', userDataPath, endpointNamespace: 'dev-b' })
+    try {
+      expect(firstServer.endpointFilePath).not.toBe(secondServer.endpointFilePath)
+      expect(firstServer.buildPtyEnv().ORCA_AGENT_HOOK_ENDPOINT).toBe(firstServer.endpointFilePath)
+      expect(secondServer.buildPtyEnv().ORCA_AGENT_HOOK_ENDPOINT).toBe(
+        secondServer.endpointFilePath
+      )
+      expect(existsSync(firstServer.endpointFilePath!)).toBe(true)
+      expect(existsSync(secondServer.endpointFilePath!)).toBe(true)
+    } finally {
+      firstServer.stop()
+      secondServer.stop()
+    }
+  })
+
   it('buildPtyEnv omits ORCA_AGENT_HOOK_ENDPOINT when no userDataPath was provided', async () => {
     // Why: the endpoint file is opt-in via start({ userDataPath }). In tests
     // and in the packaged main-process path where userData is unset for any
@@ -1016,6 +2281,68 @@ describe('Endpoint file lifecycle', () => {
     }
   })
 
+  it('ingestRemote stamps connectionId and feeds the listener bypassing HTTP', () => {
+    const server = new AgentHookServer()
+    const events: { paneKey: string; connectionId: string | null; payload: unknown }[] = []
+    server.setListener((evt) => {
+      events.push({
+        paneKey: evt.paneKey,
+        connectionId: evt.connectionId,
+        payload: evt.payload
+      })
+    })
+    try {
+      const remotePane = makePaneKey('tab-3', LEAF_3)
+      server.ingestRemote(
+        {
+          paneKey: remotePane,
+          tabId: 'tab-3',
+          worktreeId: 'wt-3',
+          payload: {
+            state: 'working',
+            prompt: 'remote prompt',
+            agentType: 'claude'
+          }
+        },
+        'conn-42'
+      )
+      expect(events).toHaveLength(1)
+      expect(events[0].paneKey).toBe(remotePane)
+      expect(events[0].connectionId).toBe('conn-42')
+      expect(events[0].payload).toMatchObject({
+        state: 'working',
+        prompt: 'remote prompt',
+        agentType: 'claude'
+      })
+    } finally {
+      server.setListener(null)
+    }
+  })
+
+  it('ingestRemote ignores malformed envelopes (fail-open)', () => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.setListener(listener)
+    try {
+      // Missing paneKey
+      server.ingestRemote({ paneKey: '', payload: { state: 'working' } } as never, 'conn-x')
+      // Missing payload state
+      server.ingestRemote({ paneKey: 'tab-1:0', payload: { foo: 'bar' } }, 'conn-x')
+      // Invalid payload state
+      server.ingestRemote({ paneKey: 'tab-1:0', payload: { state: 'nonsense' } }, 'conn-x')
+      // Empty connection id
+      server.ingestRemote({ paneKey: 'tab-1:0', payload: { state: 'working' } }, '  ')
+      // Wrong types
+      server.ingestRemote(
+        { paneKey: 'tab-1:0', payload: 'not-an-object' as unknown } as never,
+        'conn-x'
+      )
+      expect(listener).not.toHaveBeenCalled()
+    } finally {
+      server.setListener(null)
+    }
+  })
+
   it('endpoint file contents are re-parseable by /bin/sh', async () => {
     if (process.platform === 'win32') {
       return
@@ -1036,5 +2363,718 @@ describe('Endpoint file lifecycle', () => {
     } finally {
       server.stop()
     }
+  })
+})
+
+describe('Last-status persistence', () => {
+  let userDataPath: string
+
+  beforeEach(() => {
+    userDataPath = mkdtempSync(join(tmpdir(), 'orca-laststatus-'))
+  })
+
+  afterEach(() => {
+    rmSync(userDataPath, { recursive: true, force: true })
+  })
+
+  function lastStatusPath(): string {
+    return join(userDataPath, 'agent-hooks', 'last-status.json')
+  }
+
+  // Why: hydrate now drops entries older than 7d (HYDRATE_MAX_AGE_MS). Use
+  // a recent-but-not-Date.now() timestamp in fixtures so the tests assert
+  // hydration behavior rather than racing the wall clock.
+  function recentTs(offsetMs = 0): number {
+    return Date.now() - 60 * 60 * 1000 + offsetMs
+  }
+
+  async function postHookEvent(
+    server: AgentHookServer,
+    body: Body,
+    path: string = '/hook/claude'
+  ): Promise<Response> {
+    const env = server.buildPtyEnv()
+    return fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+      },
+      body: JSON.stringify(body)
+    })
+  }
+
+  it('writes last-status.json after a hook event', async () => {
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'persist me' })
+      )
+      // Synchronous flush via stop() captures the trailing-debounced write.
+      server.flushStatusPersistSync()
+      expect(existsSync(lastStatusPath())).toBe(true)
+      const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      expect(file.version).toBe(2)
+      expect(file.entries[PANE]).toMatchObject({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        receivedAt: expect.any(Number),
+        stateStartedAt: expect.any(Number),
+        payload: expect.objectContaining({ state: 'working', prompt: 'persist me' })
+      })
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('hydrates last-status.json into the cache before listener registration', async () => {
+    // Pre-populate the file directly to simulate a prior session.
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    const receivedAt = recentTs()
+    const stateStartedAt = recentTs(-1000)
+    const fileContents = {
+      version: 2,
+      entries: {
+        [PANE]: {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          receivedAt,
+          stateStartedAt,
+          payload: {
+            state: 'done',
+            prompt: 'survived restart',
+            agentType: 'claude'
+          }
+        }
+      }
+    }
+    writeFileSync(lastStatusPath(), JSON.stringify(fileContents), 'utf8')
+
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      const listener = vi.fn()
+      server.setListener(listener)
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          receivedAt,
+          stateStartedAt,
+          payload: expect.objectContaining({
+            state: 'done',
+            prompt: 'survived restart',
+            agentType: 'claude'
+          })
+        })
+      )
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          receivedAt,
+          stateStartedAt,
+          state: 'done',
+          prompt: 'survived restart',
+          agentType: 'claude'
+        })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('treats a corrupt file as empty hydration without throwing', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    writeFileSync(lastStatusPath(), 'not-json{{', 'utf8')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      const listener = vi.fn()
+      server.setListener(listener)
+      expect(listener).not.toHaveBeenCalled()
+      expect(warnSpy).toHaveBeenCalled()
+    } finally {
+      server.stop()
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('rejects a stale version mismatch on hydrate', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 1,
+        entries: {
+          [PANE]: {
+            paneKey: PANE,
+            receivedAt: 1_700_000_000_000,
+            stateStartedAt: 1_699_999_999_000,
+            payload: { state: 'done', prompt: 'old version', agentType: 'claude' }
+          }
+        }
+      }),
+      'utf8'
+    )
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      const listener = vi.fn()
+      server.setListener(listener)
+      expect(listener).not.toHaveBeenCalled()
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('version mismatch'))
+    } finally {
+      server.stop()
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('drops entries with malformed paneKeys but keeps valid ones', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          // Missing colon — drop.
+          'no-colon': {
+            paneKey: 'no-colon',
+            receivedAt: 1_700_000_000_000,
+            stateStartedAt: 1_699_999_999_000,
+            payload: { state: 'done', prompt: 'bad', agentType: 'claude' }
+          },
+          // Embedded paneKey mismatch — drop.
+          [PANE]: {
+            paneKey: makePaneKey('tab-x', LEAF_2),
+            receivedAt: 1_700_000_000_000,
+            stateStartedAt: 1_699_999_999_000,
+            payload: { state: 'done', prompt: 'mismatch', agentType: 'claude' }
+          },
+          // Valid.
+          [GOOD_PANE]: {
+            paneKey: GOOD_PANE,
+            tabId: 'tab-good',
+            receivedAt: recentTs(),
+            stateStartedAt: recentTs(-1000),
+            payload: { state: 'done', prompt: 'survived', agentType: 'claude' }
+          }
+        }
+      }),
+      'utf8'
+    )
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      const listener = vi.fn()
+      server.setListener(listener)
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: GOOD_PANE,
+          payload: expect.objectContaining({ prompt: 'survived' })
+        })
+      )
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('drops hydrate entries older than the TTL cutoff', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    const eightDaysAgoMs = Date.now() - 8 * 24 * 60 * 60 * 1000
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          // Stale — should be dropped.
+          [OLD_PANE]: {
+            paneKey: OLD_PANE,
+            tabId: 'tab-old',
+            receivedAt: eightDaysAgoMs,
+            stateStartedAt: eightDaysAgoMs - 1000,
+            payload: { state: 'done', prompt: 'old', agentType: 'claude' }
+          },
+          // Recent — should survive.
+          [FRESH_PANE]: {
+            paneKey: FRESH_PANE,
+            tabId: 'tab-fresh',
+            receivedAt: recentTs(),
+            stateStartedAt: recentTs(-1000),
+            payload: { state: 'done', prompt: 'fresh', agentType: 'claude' }
+          }
+        }
+      }),
+      'utf8'
+    )
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      const snapshot = server.getStatusSnapshot()
+      expect(snapshot.map((e) => e.paneKey)).toEqual([FRESH_PANE])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('hydrates registered legacy numeric pane keys as stable pane status entries', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          'tab-1:0': {
+            paneKey: 'tab-1:0',
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            connectionId: null,
+            receivedAt: recentTs(),
+            stateStartedAt: recentTs(-1000),
+            payload: { state: 'working', prompt: 'legacy cached', agentType: 'claude' }
+          }
+        }
+      }),
+      'utf8'
+    )
+    const server = new AgentHookServer()
+    server.registerPaneKeyAlias('tab-1:0', PANE)
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          state: 'working',
+          prompt: 'legacy cached',
+          agentType: 'claude'
+        })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('clears hydrated stable statuses when their persisted legacy alias PTY is cleared', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          'tab-1:0': {
+            paneKey: 'tab-1:0',
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            connectionId: null,
+            receivedAt: recentTs(),
+            stateStartedAt: recentTs(-1000),
+            payload: { state: 'working', prompt: 'legacy cached', agentType: 'claude' }
+          }
+        }
+      }),
+      'utf8'
+    )
+    const server = new AgentHookServer()
+    const statusListener = vi.fn()
+    server.registerPaneKeyAlias('tab-1:0', PANE, 'pty-1')
+    server.subscribeStatusChanges(statusListener)
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      expect(server.getStatusSnapshot()).toHaveLength(1)
+
+      server.clearPaneKeyAliasesForPty('pty-1')
+
+      expect(server.getStatusSnapshot()).toEqual([])
+      expect(statusListener).toHaveBeenCalledWith([])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('does not clear a stable status when alias cleanup no longer owns that pane', () => {
+    const server = new AgentHookServer()
+    server.registerPaneKeyAlias('tab-1:0', PANE, 'old-pty')
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+
+    server.clearPaneKeyAliasesForPty('old-pty', { shouldClearStablePaneKey: () => false })
+
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({
+        paneKey: PANE,
+        state: 'working',
+        agentType: 'claude'
+      })
+    ])
+  })
+
+  it('drops a hydrate entry whose tabId disagrees with the paneKey prefix', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          [TAB_A_PANE]: {
+            paneKey: TAB_A_PANE,
+            // Why: deliberately divergent — paneKey says tab-A, the entry
+            // claims tab-B. Sanitizer must drop rather than hydrate this
+            // inconsistent row.
+            tabId: 'tab-B',
+            receivedAt: recentTs(),
+            stateStartedAt: recentTs(-1000),
+            payload: { state: 'done', prompt: 'mismatch', agentType: 'claude' }
+          }
+        }
+      }),
+      'utf8'
+    )
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      expect(server.getStatusSnapshot()).toEqual([])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('clearPaneState evicts the entry from the on-disk file', async () => {
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'about to drop' })
+      )
+      server.flushStatusPersistSync()
+      let parsed = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      expect(parsed.entries[PANE]).toBeTruthy()
+
+      server.clearPaneState(PANE)
+      server.flushStatusPersistSync()
+      parsed = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      expect(parsed.entries[PANE]).toBeUndefined()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('skips a write when the serialized contents are byte-identical to the previous write', async () => {
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'first' })
+      )
+      server.flushStatusPersistSync()
+      const firstMtime = statSync(lastStatusPath()).mtimeMs
+
+      // Why: a no-op clearPaneState on a paneKey not in the cache is a
+      // mutation site that should NOT trigger a redundant write. (clear was
+      // designed to bail when nothing was evicted.)
+      server.clearPaneState(makePaneKey('non-existent', LEAF_5))
+      server.flushStatusPersistSync()
+      // Touch back to the same mtime would let the test pass spuriously, so
+      // assert no rewrite happened by checking that mtime is unchanged after
+      // a forced sync flush.
+      const secondMtime = statSync(lastStatusPath()).mtimeMs
+      expect(secondMtime).toBe(firstMtime)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('stop() flushes pending debounced writes synchronously', async () => {
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'production',
+      userDataPath
+    })
+    try {
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'flush me' })
+      )
+      // Note: do NOT call flushStatusPersistSync explicitly — let stop() do it.
+    } finally {
+      server.stop()
+    }
+    // Why: file written even though we never explicitly flushed before stop —
+    // stop() must synchronously drain the pending trailing-debounced timer.
+    expect(existsSync(lastStatusPath())).toBe(true)
+    const parsed = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+    expect(parsed.entries[PANE]?.payload?.prompt).toBe('flush me')
+  })
+})
+
+describe('AgentHookServer ingestRemote', () => {
+  it('stamps connectionId and forwards a valid relay envelope to the listener', () => {
+    const server = new AgentHookServer()
+    const payload = parseAgentStatusPayload(
+      JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
+    )
+    if (!payload) {
+      throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
+    }
+    const listener = vi.fn()
+    server.setListener(listener)
+    server.ingestRemote({ paneKey: PANE, tabId: 'tab-1', worktreeId: 'wt-1', payload }, 'conn-1')
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        connectionId: 'conn-1',
+        receivedAt: expect.any(Number),
+        stateStartedAt: expect.any(Number),
+        payload
+      })
+    )
+  })
+
+  it('drops envelopes whose payload state is not in AGENT_STATUS_STATES', () => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.setListener(listener)
+    // Why: bypass parseAgentStatusPayload (which itself rejects bad states) by
+    // constructing an obviously-invalid payload — `ingestRemote` is the trust
+    // boundary we're testing, not the parser.
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'nonsense', prompt: '', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('drops envelopes whose paneKey exceeds MAX_PANE_KEY_LEN', () => {
+    const server = new AgentHookServer()
+    const payload = parseAgentStatusPayload(
+      JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
+    )
+    if (!payload) {
+      throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
+    }
+    const listener = vi.fn()
+    server.setListener(listener)
+    // 201 chars — one past the listener's 200-char cap.
+    const oversized = 'a'.repeat(201)
+    server.ingestRemote(
+      { paneKey: oversized, tabId: 'tab-1', worktreeId: 'wt-1', payload },
+      'conn-1'
+    )
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('drops remote relay envelopes with legacy numeric paneKeys before cache mutation', () => {
+    const server = new AgentHookServer()
+    const payload = parseAgentStatusPayload(
+      JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
+    )
+    if (!payload) {
+      throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
+    }
+    const listener = vi.fn()
+    server.setListener(listener)
+    server.ingestRemote(
+      { paneKey: 'tab-1:0', tabId: 'tab-1', worktreeId: 'wt-1', payload },
+      'conn-1'
+    )
+    expect(listener).not.toHaveBeenCalled()
+    expect(server.getStatusSnapshot()).toEqual([])
+  })
+
+  it('maps registered legacy numeric relay pane keys to stable pane keys', () => {
+    const server = new AgentHookServer()
+    const payload = parseAgentStatusPayload(
+      JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
+    )
+    if (!payload) {
+      throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
+    }
+    const listener = vi.fn()
+    server.registerPaneKeyAlias('tab-1:0', PANE)
+    server.setListener(listener)
+    server.ingestRemote(
+      { paneKey: 'tab-1:0', tabId: 'tab-1', worktreeId: 'wt-1', payload },
+      'conn-1'
+    )
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        connectionId: 'conn-1',
+        payload
+      })
+    )
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        state: 'working',
+        prompt: 'p'
+      })
+    ])
+  })
+
+  it('drops remote relay envelopes whose tabId disagrees with the paneKey tab', () => {
+    const server = new AgentHookServer()
+    const payload = parseAgentStatusPayload(
+      JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
+    )
+    if (!payload) {
+      throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
+    }
+    const listener = vi.fn()
+    server.setListener(listener)
+    server.ingestRemote(
+      { paneKey: PANE, tabId: 'tab-other', worktreeId: 'wt-1', payload },
+      'conn-1'
+    )
+    expect(listener).not.toHaveBeenCalled()
+    expect(server.getStatusSnapshot()).toEqual([])
+  })
+
+  it('rejects empty connectionId', () => {
+    const server = new AgentHookServer()
+    const payload = parseAgentStatusPayload(
+      JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
+    )
+    if (!payload) {
+      throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
+    }
+    const listener = vi.fn()
+    server.setListener(listener)
+    server.ingestRemote({ paneKey: PANE, tabId: 'tab-1', worktreeId: 'wt-1', payload }, '')
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('rejects whitespace-only connectionId', () => {
+    const server = new AgentHookServer()
+    const payload = parseAgentStatusPayload(
+      JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
+    )
+    if (!payload) {
+      throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
+    }
+    const listener = vi.fn()
+    server.setListener(listener)
+    server.ingestRemote({ paneKey: PANE, tabId: 'tab-1', worktreeId: 'wt-1', payload }, '   ')
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('rejects non-string tabId', () => {
+    const server = new AgentHookServer()
+    const payload = parseAgentStatusPayload(
+      JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
+    )
+    if (!payload) {
+      throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
+    }
+    const listener = vi.fn()
+    server.setListener(listener)
+    server.ingestRemote(
+      { paneKey: PANE, tabId: 123 as unknown as string, worktreeId: 'wt-1', payload },
+      'conn-1'
+    )
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('rejects empty paneKey after trim', () => {
+    const server = new AgentHookServer()
+    const payload = parseAgentStatusPayload(
+      JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
+    )
+    if (!payload) {
+      throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
+    }
+    const listener = vi.fn()
+    server.setListener(listener)
+    server.ingestRemote({ paneKey: '   ', tabId: 'tab-1', worktreeId: 'wt-1', payload }, 'conn-1')
+    expect(listener).not.toHaveBeenCalled()
+    expect(trackMock).toHaveBeenCalledWith('agent_hook_unattributed', {
+      reason: 'empty_pane_key'
+    })
+  })
+
+  it('normalizes inner payload via normalizeAgentStatusPayload — clamps oversized prompt', () => {
+    // Why: the relay normally normalizes the payload on the wire, but a buggy
+    // or malicious relay could forward an over-cap field. ingestRemote must
+    // re-run the canonical normalizer so the AGENT_STATUS_MAX_FIELD_LENGTH
+    // cap (200 chars) is enforced at the trust boundary.
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.setListener(listener)
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', prompt: 'x'.repeat(500), agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    expect(listener).toHaveBeenCalledTimes(1)
+    const event = listener.mock.calls[0][0] as { payload: { prompt: string } }
+    expect(event.payload.prompt.length).toBe(200)
   })
 })

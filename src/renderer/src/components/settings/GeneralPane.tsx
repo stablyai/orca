@@ -2,7 +2,7 @@
    splitting individual settings into separate files would scatter related controls without a
    meaningful abstraction boundary. */
 import { useEffect, useRef, useState } from 'react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings, OpenInApplication } from '../../../../shared/types'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -16,6 +16,7 @@ import {
   MAX_EDITOR_AUTO_SAVE_DELAY_MS,
   MIN_EDITOR_AUTO_SAVE_DELAY_MS
 } from '../../../../shared/constants'
+import { OPEN_IN_APPLICATIONS_MAX } from '../../../../shared/open-in-applications'
 import { clampNumber } from '@/lib/terminal-theme'
 import {
   GENERAL_CACHE_TIMER_SEARCH_ENTRIES,
@@ -29,6 +30,30 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
+
+function createOpenInApplication(): OpenInApplication {
+  return {
+    id:
+      globalThis.crypto?.randomUUID?.() ??
+      `open-in-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
+    label: '',
+    command: ''
+  }
+}
+
+function createPresetOpenInApplication(label: string, command: string): OpenInApplication {
+  return {
+    ...createOpenInApplication(),
+    label,
+    command
+  }
+}
+
+export function shouldCommitOpenInApplicationsDraft(applications: OpenInApplication[]): boolean {
+  return applications.every((application) => {
+    return application.label.trim() !== '' && application.command.trim() !== ''
+  })
+}
 
 export { GENERAL_PANE_SEARCH_ENTRIES }
 
@@ -67,6 +92,9 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
   const [appVersion, setAppVersion] = useState<string | null>(null)
   const [autoSaveDelayDraft, setAutoSaveDelayDraft] = useState(
     String(settings.editorAutoSaveDelayMs)
+  )
+  const [openInApplicationsDraft, setOpenInApplicationsDraft] = useState<OpenInApplication[]>(
+    settings.openInApplications ?? []
   )
   // Why: the star state is derived from gh, not from settings, so it does not
   // live in the global settings store. 'hidden' covers the gh-unavailable and
@@ -121,6 +149,22 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
   useEffect(() => {
     setAutoSaveDelayDraft(String(settings.editorAutoSaveDelayMs))
   }, [settings.editorAutoSaveDelayMs])
+
+  useEffect(() => {
+    setOpenInApplicationsDraft(settings.openInApplications ?? [])
+  }, [settings.openInApplications])
+
+  const commitOpenInApplications = (applications: OpenInApplication[]): void => {
+    if (!shouldCommitOpenInApplicationsDraft(applications)) {
+      return
+    }
+    updateSettings({ openInApplications: applications })
+  }
+
+  const applyOpenInApplicationsDraft = (applications: OpenInApplication[]): void => {
+    setOpenInApplicationsDraft(applications)
+    commitOpenInApplications(applications)
+  }
 
   const handleBrowseWorkspace = async () => {
     const path = await window.api.repos.pickFolder()
@@ -234,38 +278,174 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
             breaks that toast action even though this pane still renders fine. */}
         <div id="general-skip-delete-worktree-confirm" className="scroll-mt-6">
           <SearchableSetting
-            title="Skip Delete Worktree Confirmation"
-            description="Delete worktrees from the context menu without a confirmation dialog."
+            title="Ask Before Deleting Workspaces"
+            description="Show a confirmation dialog before deleting a workspace."
             keywords={['delete', 'worktree', 'confirm', 'dialog', 'skip', 'prompt']}
             className="flex items-center justify-between gap-4 px-1 py-2"
           >
             <div className="space-y-0.5">
-              <Label>Skip Delete Worktree Confirmation</Label>
+              <Label>Ask Before Deleting Workspaces</Label>
               <p className="text-xs text-muted-foreground">
-                Delete worktrees from the context menu without a confirmation dialog. Errors still
-                surface as a toast with a Force Delete fallback.
+                Show a confirmation before deleting a workspace from the context menu. Failed
+                deletes still surface a Force Delete fallback.
               </p>
             </div>
             <button
               role="switch"
-              aria-checked={settings.skipDeleteWorktreeConfirm}
+              aria-checked={!settings.skipDeleteWorktreeConfirm}
               onClick={() =>
                 updateSettings({
                   skipDeleteWorktreeConfirm: !settings.skipDeleteWorktreeConfirm
                 })
               }
               className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-                settings.skipDeleteWorktreeConfirm ? 'bg-foreground' : 'bg-muted-foreground/30'
+                !settings.skipDeleteWorktreeConfirm ? 'bg-foreground' : 'bg-muted-foreground/30'
               }`}
             >
               <span
                 className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                  settings.skipDeleteWorktreeConfirm ? 'translate-x-4' : 'translate-x-0.5'
+                  !settings.skipDeleteWorktreeConfirm ? 'translate-x-4' : 'translate-x-0.5'
                 }`}
               />
             </button>
           </SearchableSetting>
         </div>
+
+        <div id="general-skip-delete-automation-confirm" className="scroll-mt-6">
+          <SearchableSetting
+            title="Ask Before Deleting Automations"
+            description="Show a confirmation dialog before deleting an automation and its run history."
+            keywords={['delete', 'automation', 'confirm', 'dialog', 'skip', 'prompt']}
+            className="flex items-center justify-between gap-4 px-1 py-2"
+          >
+            <div className="space-y-0.5">
+              <Label>Ask Before Deleting Automations</Label>
+              <p className="text-xs text-muted-foreground">
+                Show a confirmation before deleting automations and their run history.
+              </p>
+            </div>
+            <button
+              role="switch"
+              aria-checked={!settings.skipDeleteAutomationConfirm}
+              onClick={() =>
+                updateSettings({
+                  skipDeleteAutomationConfirm: !settings.skipDeleteAutomationConfirm
+                })
+              }
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+                !settings.skipDeleteAutomationConfirm ? 'bg-foreground' : 'bg-muted-foreground/30'
+              }`}
+            >
+              <span
+                className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+                  !settings.skipDeleteAutomationConfirm ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </SearchableSetting>
+        </div>
+
+        <SearchableSetting
+          title="Open In Menu"
+          description="Add custom launchers to the worktree Open in menu."
+          keywords={['open in', 'editor', 'launcher', 'cursor', 'zed', 'command', 'vscode']}
+          className="space-y-3"
+        >
+          <div className="space-y-1">
+            <Label>Open In Menu</Label>
+            <p className="text-xs text-muted-foreground">
+              VS Code is always included first. Add executables to show extra entries in each
+              worktree&apos;s Open in menu.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Commands are not shell-parsed. Use only an executable command name. For flags, use a
+              wrapper script.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                applyOpenInApplicationsDraft([
+                  ...openInApplicationsDraft,
+                  createPresetOpenInApplication('Cursor', 'cursor')
+                ])
+              }
+            >
+              Add Cursor
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                applyOpenInApplicationsDraft([
+                  ...openInApplicationsDraft,
+                  createPresetOpenInApplication('Zed', 'zed')
+                ])
+              }
+            >
+              Add Zed
+            </Button>
+          </div>
+          <div className="space-y-2">
+            {openInApplicationsDraft.map((app, index) => (
+              <div key={app.id} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                <Input
+                  value={app.label}
+                  placeholder="Label"
+                  onChange={(event) => {
+                    const next = [...openInApplicationsDraft]
+                    next[index] = { ...app, label: event.target.value }
+                    setOpenInApplicationsDraft(next)
+                  }}
+                  onBlur={() => commitOpenInApplications(openInApplicationsDraft)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      commitOpenInApplications(openInApplicationsDraft)
+                    }
+                  }}
+                />
+                <Input
+                  value={app.command}
+                  placeholder="Executable command"
+                  onChange={(event) => {
+                    const next = [...openInApplicationsDraft]
+                    next[index] = { ...app, command: event.target.value }
+                    setOpenInApplicationsDraft(next)
+                  }}
+                  onBlur={() => commitOpenInApplications(openInApplicationsDraft)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      commitOpenInApplications(openInApplicationsDraft)
+                    }
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const next = openInApplicationsDraft.filter((entry) => entry.id !== app.id)
+                    setOpenInApplicationsDraft(next)
+                    commitOpenInApplications(next)
+                  }}
+                >
+                  Remove
+                </Button>
+              </div>
+            ))}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              setOpenInApplicationsDraft([...openInApplicationsDraft, createOpenInApplication()])
+            }
+            disabled={openInApplicationsDraft.length >= OPEN_IN_APPLICATIONS_MAX}
+          >
+            Add Custom Launcher
+          </Button>
+        </SearchableSetting>
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, GENERAL_EDITOR_SEARCH_ENTRIES) ? (
@@ -370,6 +550,41 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
         </SearchableSetting>
 
         <SearchableSetting
+          title="Default Diff File Tree"
+          description="Show or hide the file tree when opening combined diff views."
+          keywords={['diff', 'tree', 'file tree', 'combined diff', 'sidebar']}
+          className="flex flex-col items-start gap-3 px-1 py-2 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="space-y-0.5">
+            <Label>Default Diff File Tree</Label>
+            <p className="text-xs text-muted-foreground">
+              Show or hide the file tree when opening combined diff views.
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center rounded-md border border-border/60 bg-background/50 p-0.5">
+            {[
+              { label: 'Shown', value: true },
+              { label: 'Hidden', value: false }
+            ].map((option) => (
+              <button
+                key={option.label}
+                type="button"
+                onClick={() =>
+                  updateSettings({ combinedDiffFileTreeVisibleByDefault: option.value })
+                }
+                className={`rounded-sm px-3 py-1 text-sm transition-colors ${
+                  settings.combinedDiffFileTreeVisibleByDefault === option.value
+                    ? 'bg-accent font-medium text-accent-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </SearchableSetting>
+
+        <SearchableSetting
           title="Minimap"
           description="Show the minimap overview when editing a file."
           keywords={['minimap', 'overview', 'code', 'scroll']}
@@ -400,6 +615,38 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
             />
           </button>
         </SearchableSetting>
+
+        <SearchableSetting
+          title="Markdown Review Notes"
+          description="Show local markdown review note controls in rich editor mode."
+          keywords={['markdown', 'review', 'notes', 'annotations', 'agents']}
+          className="flex items-center justify-between gap-4 px-1 py-2"
+        >
+          <div className="space-y-0.5">
+            <Label>Markdown Review Notes</Label>
+            <p className="text-xs text-muted-foreground">
+              Show local markdown note controls in rich editor mode and agent handoff actions.
+            </p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={settings.markdownReviewToolsEnabled}
+            onClick={() =>
+              updateSettings({
+                markdownReviewToolsEnabled: !settings.markdownReviewToolsEnabled
+              })
+            }
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+              settings.markdownReviewToolsEnabled ? 'bg-foreground' : 'bg-muted-foreground/30'
+            }`}
+          >
+            <span
+              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+                settings.markdownReviewToolsEnabled ? 'translate-x-4' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </SearchableSetting>
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, GENERAL_CLI_SEARCH_ENTRIES) ? (
@@ -422,7 +669,15 @@ export function GeneralPane({ settings, updateSettings }: GeneralPaneProps): Rea
         <SearchableSetting
           title="Cache Timer"
           description="Show a countdown after a Claude agent becomes idle."
-          keywords={['cache', 'timer', 'prompt', 'ttl', 'claude']}
+          // Why: this is the primary control for the section gated by
+          // GENERAL_CACHE_TIMER_SEARCH_ENTRIES (title "Prompt Cache Timer").
+          // Mirroring those keywords keeps a search for "Prompt Cache Timer"
+          // from rendering the section header with no body underneath.
+          keywords={GENERAL_CACHE_TIMER_SEARCH_ENTRIES.flatMap((entry) => [
+            entry.title,
+            entry.description ?? '',
+            ...(entry.keywords ?? [])
+          ])}
           className="flex items-center justify-between gap-4 px-1 py-2"
         >
           <div className="space-y-0.5">

@@ -1,7 +1,8 @@
 /* eslint-disable max-lines -- Why: terminal pane lifecycle wiring is intentionally co-located so PTY attach, theme sync, and runtime graph publication remain consistent for live terminals. */
 import { useEffect, useRef } from 'react'
-import type { IDisposable } from '@xterm/xterm'
+import type { IDisposable, Terminal } from '@xterm/xterm'
 import { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { resolveTerminalCursorInactiveStyle } from '@/lib/pane-manager/pane-terminal-options'
 import { useAppStore } from '@/store'
 import {
   createFilePathLinkProvider,
@@ -13,15 +14,18 @@ import type { LinkHandlerDeps } from './terminal-link-handlers'
 import type {
   GlobalSettings,
   SetupSplitDirection,
+  TerminalTab,
   TerminalLayoutSnapshot
 } from '../../../../shared/types'
+import type { EventProps } from '../../../../shared/telemetry-events'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import {
   buildFontFamily,
-  collectLeafIdsInReplayCreationOrder,
+  normalizeTerminalLayoutSnapshot,
   replayTerminalLayout,
   restoreScrollbackBuffers
 } from './layout-serialization'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { applyExpandedLayoutTo, restoreExpandedLayoutFrom } from './expand-collapse'
 import {
   applyTerminalAppearance,
@@ -30,17 +34,23 @@ import {
 } from './terminal-appearance'
 import { parseOsc52 } from './osc52-clipboard'
 import { parseOsc7 } from './parse-osc7'
-import { shouldBypassXtermKeydown } from './xterm-bypass-policy'
+import { shouldBypassXtermKeyboardEvent } from './xterm-bypass-policy'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { connectPanePty } from './pty-connection'
 import type { PtyTransport } from './pty-transport'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { isPaneReplaying, type ReplayingPanesRef } from './replay-guard'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import { registerRuntimeTerminalTab, scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { e2eConfig } from '@/lib/e2e-config'
+import {
+  PRIMARY_SELECTION_MAX_LENGTH,
+  isPrimarySelectionEnabled,
+  setPrimarySelectionText
+} from '@/lib/primary-selection'
 import {
   SPLIT_TERMINAL_PANE_EVENT,
   CLOSE_TERMINAL_PANE_EVENT,
@@ -52,7 +62,13 @@ type UseTerminalPaneLifecycleDeps = {
   tabId: string
   worktreeId: string
   cwd?: string
-  startup?: { command: string; env?: Record<string, string> } | null
+  startup?: {
+    command: string
+    env?: Record<string, string>
+    /** Telemetry payload for `agent_started`. Forwarded to `pty:spawn`
+     *  so main fires the event only after the spawn succeeds. */
+    telemetry?: EventProps<'agent_started'>
+  } | null
   /** When present, the initial pane boots clean and a split pane is created
    *  (vertical or horizontal per the user setting) to run the setup command —
    *  keeping the main terminal interactive. */
@@ -88,7 +104,6 @@ type UseTerminalPaneLifecycleDeps = {
   paneMode2031Ref: React.RefObject<Map<number, boolean>>
   paneLastThemeModeRef: React.RefObject<Map<number, 'dark' | 'light'>>
   panePtyBindingsRef: React.RefObject<Map<number, IDisposable>>
-  pendingWritesRef: React.RefObject<Map<number, string>>
   replayingPanesRef: ReplayingPanesRef
   isActiveRef: React.RefObject<boolean>
   isVisibleRef: React.RefObject<boolean>
@@ -107,6 +122,7 @@ type UseTerminalPaneLifecycleDeps = {
   dispatchNotification: (event: {
     source: 'terminal-bell' | 'agent-task-complete'
     terminalTitle?: string
+    paneKey?: string
   }) => void
   setCacheTimerStartedAt: (key: string, ts: number | null) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void
@@ -123,6 +139,32 @@ type UseTerminalPaneLifecycleDeps = {
   // imperative managerRef.getPanes().length is not reactive, so without this
   // dispatcher structural changes wouldn't trigger dependent effects.
   setPaneCount: React.Dispatch<React.SetStateAction<number>>
+}
+
+export function suppressIntentionalPaneCloseExit(
+  transport: Pick<PtyTransport, 'getPtyId'> | null | undefined,
+  suppressPtyExit: (ptyId: string) => void
+): string | null {
+  const ptyId = transport?.getPtyId() ?? null
+  if (ptyId) {
+    suppressPtyExit(ptyId)
+  }
+  return ptyId
+}
+
+function terminalSelectionExceedsPrimaryLimit(terminal: Terminal): boolean {
+  const range = terminal.getSelectionPosition()
+  if (!range) {
+    return false
+  }
+  const startY = Math.min(range.start.y, range.end.y)
+  const endY = Math.max(range.start.y, range.end.y)
+  const rowSpan = endY - startY
+  const cellEstimate =
+    rowSpan === 0
+      ? Math.abs(range.end.x - range.start.x)
+      : rowSpan * terminal.cols + Math.abs(range.end.x - range.start.x)
+  return cellEstimate > PRIMARY_SELECTION_MAX_LENGTH
 }
 
 type SplitStartupPayload = { command: string; env?: Record<string, string> }
@@ -153,6 +195,23 @@ export function splitPaneWithOneShotStartup<TPane>(
   }
 }
 
+export function shouldDetachPaneTransportOnUnmount(args: {
+  tabStillExists: boolean
+  tabId: string
+  ptyId: string | null
+  worktreeTabs: readonly TerminalTab[] | undefined
+}): boolean {
+  if (!args.ptyId) {
+    return false
+  }
+  if (args.tabStillExists) {
+    return true
+  }
+  return Boolean(
+    args.worktreeTabs?.some((tab) => tab.id !== args.tabId && tab.ptyId === args.ptyId)
+  )
+}
+
 export function useTerminalPaneLifecycle({
   tabId,
   worktreeId,
@@ -176,7 +235,6 @@ export function useTerminalPaneLifecycle({
   paneMode2031Ref,
   paneLastThemeModeRef,
   panePtyBindingsRef,
-  pendingWritesRef,
   replayingPanesRef,
   isActiveRef,
   isVisibleRef,
@@ -211,6 +269,7 @@ export function useTerminalPaneLifecycle({
   // Why: read settingsRef at fire time so toggling "copy on select" takes
   // effect without recreating panes.
   const selectionDisposablesRef = useRef(new Map<number, IDisposable>())
+  const selectionCaptureTimersRef = useRef(new Map<number, number>())
   const mode2031DisposablesRef = useRef(new Map<number, IDisposable[]>())
   const osc52DisposablesRef = useRef(new Map<number, IDisposable>())
   const osc7DisposablesRef = useRef(new Map<number, IDisposable>())
@@ -234,21 +293,34 @@ export function useTerminalPaneLifecycle({
   }
 
   const pushMode2031ForPane = (paneId: number): void => {
-    const transport = paneTransportsRef.current.get(paneId)
-    if (!transport?.isConnected()) {
-      return
+    let attempts = 0
+    const send = (): void => {
+      if (!managerRef.current?.getPanes().some((pane) => pane.id === paneId)) {
+        return
+      }
+      const transport = paneTransportsRef.current.get(paneId)
+      if (!transport?.isConnected()) {
+        // Why: TUIs can subscribe before pty:spawn resolves. Retry briefly so
+        // the recorded subscription still receives the initial dark/light seed.
+        attempts += 1
+        if (attempts < 8) {
+          window.setTimeout(send, 25)
+        }
+        return
+      }
+      const currentSettings = settingsRef.current
+      if (!currentSettings) {
+        return
+      }
+      const { mode } = resolveEffectiveTerminalAppearance(
+        currentSettings,
+        systemPrefersDarkRef.current
+      )
+      if (transport.sendInput(mode2031SequenceFor(mode))) {
+        paneLastThemeModeRef.current.set(paneId, mode)
+      }
     }
-    const currentSettings = settingsRef.current
-    if (!currentSettings) {
-      return
-    }
-    const { mode } = resolveEffectiveTerminalAppearance(
-      currentSettings,
-      systemPrefersDarkRef.current
-    )
-    if (transport.sendInput(mode2031SequenceFor(mode))) {
-      paneLastThemeModeRef.current.set(paneId, mode)
-    }
+    send()
   }
 
   // Initialize PaneManager instance once
@@ -260,9 +332,9 @@ export function useTerminalPaneLifecycle({
     const expandedStyleSnapshots = expandedStyleSnapshotRef.current
     const paneTransports = paneTransportsRef.current
     const panePtyBindings = panePtyBindingsRef.current
-    const pendingWrites = pendingWritesRef.current
     const linkDisposables = linkProviderDisposablesRef.current
     const selectionDisposables = selectionDisposablesRef.current
+    const selectionCaptureTimers = selectionCaptureTimersRef.current
     const mouseHideDisposables = mouseHideDisposablesRef.current
     const worktreePath =
       useAppStore
@@ -279,7 +351,11 @@ export function useTerminalPaneLifecycle({
       startupCwd,
       managerRef,
       linkProviderDisposablesRef,
-      pathExistsCache
+      pathExistsCache,
+      getRuntimeEnvironmentIdForPane: (paneId) => {
+        const ptyId = paneTransportsRef.current.get(paneId)?.getPtyId()
+        return ptyId ? getRemoteRuntimePtyEnvironmentId(ptyId) : null
+      }
     }
     let resizeRaf: number | null = null
     const queueResizeAll = (focusActive: boolean): void => {
@@ -313,18 +389,18 @@ export function useTerminalPaneLifecycle({
       setPaneCount(managerRef.current?.getPanes().length ?? 0)
     }
 
+    const normalizedInitialLayout = normalizeTerminalLayoutSnapshot(initialLayoutRef.current)
+    if (normalizedInitialLayout.changed) {
+      initialLayoutRef.current = normalizedInitialLayout.snapshot
+      useAppStore.getState().setTabLayout(tabId, normalizedInitialLayout.snapshot)
+    }
     let shouldPersistLayout = false
-    const restoredLeafIdsInCreationOrder = collectLeafIdsInReplayCreationOrder(
-      initialLayoutRef.current.root
-    )
-    let restoredPaneCreateIndex = 0
     const ptyDeps = {
       tabId,
       worktreeId,
       cwd,
       startup,
       paneTransportsRef,
-      pendingWritesRef,
       replayingPanesRef,
       isActiveRef,
       isVisibleRef,
@@ -425,20 +501,18 @@ export function useTerminalPaneLifecycle({
         })
         osc7DisposablesRef.current.set(pane.id, osc7Disposable)
 
-        // Why: let clipboard chords bypass xterm's kitty CSI-u encoder.
+        // Why: let host-handled keys bypass xterm's kitty CSI-u encoder.
         // With vtExtensions.kittyKeyboard on, a CLI that activates progressive
         // enhancement (Codex does, Claude Code does not) makes xterm encode
         // Cmd+C as a CSI-u sequence with cancel=true, which preventDefaults
         // the keydown and suppresses Chromium's native copy event — so the
-        // selection never reaches the clipboard. Returning false here short-
-        // circuits xterm's _keyDown before the encoder runs, letting the
-        // browser copy pipeline and Electron menu accelerators fire normally.
+        // selection never reaches the clipboard. The same hook also bypasses
+        // matching keyups so kitty release sequences do not leak after a
+        // bypassed press. Returning false here short-circuits xterm before the
+        // encoder runs, letting the browser and Electron paths fire normally.
         // See xterm-bypass-policy.ts for the rule derivation (Ghostty/VS Code).
         pane.terminal.attachCustomKeyEventHandler((e) => {
-          if (e.type !== 'keydown') {
-            return true
-          }
-          return !shouldBypassXtermKeydown(e, {
+          return !shouldBypassXtermKeyboardEvent(e, {
             isMac: navigator.userAgent.includes('Mac'),
             hasSelection: pane.terminal.hasSelection()
           })
@@ -451,7 +525,46 @@ export function useTerminalPaneLifecycle({
         // Why: skip empty selections so clicking to deselect doesn't clobber
         // whatever the user last copied elsewhere.
         const selectionDisposable = pane.terminal.onSelectionChange(() => {
-          if (!settingsRef.current?.terminalClipboardOnSelect) {
+          const shouldWritePrimarySelection = isPrimarySelectionEnabled()
+          const shouldWriteClipboard = settingsRef.current?.terminalClipboardOnSelect === true
+          if (!shouldWritePrimarySelection && !shouldWriteClipboard) {
+            return
+          }
+          if (!pane.terminal.hasSelection()) {
+            return
+          }
+          if (
+            shouldWritePrimarySelection &&
+            !shouldWriteClipboard &&
+            terminalSelectionExceedsPrimaryLimit(pane.terminal)
+          ) {
+            return
+          }
+
+          if (shouldWritePrimarySelection) {
+            const existingTimer = selectionCaptureTimersRef.current.get(pane.id)
+            if (existingTimer !== undefined) {
+              window.clearTimeout(existingTimer)
+            }
+            // Why: xterm fires selection changes while dragging; defer the
+            // primary-selection clipboard write to avoid clipboard churn.
+            const timer = window.setTimeout(() => {
+              selectionCaptureTimersRef.current.delete(pane.id)
+              if (!isPrimarySelectionEnabled() || !pane.terminal.hasSelection()) {
+                return
+              }
+              if (terminalSelectionExceedsPrimaryLimit(pane.terminal)) {
+                return
+              }
+              const selection = pane.terminal.getSelection()
+              if (selection) {
+                setPrimarySelectionText(selection)
+              }
+            }, 100)
+            selectionCaptureTimersRef.current.set(pane.id, timer)
+          }
+
+          if (!shouldWriteClipboard) {
             return
           }
           const selection = pane.terminal.getSelection()
@@ -472,7 +585,10 @@ export function useTerminalPaneLifecycle({
         pane.terminal.options.linkHandler = {
           allowNonHttpProtocols: true,
           activate: (event, text) => {
-            handleOscLink(text, event as MouseEvent | undefined, linkDeps)
+            handleOscLink(text, event as MouseEvent | undefined, {
+              ...linkDeps,
+              runtimeEnvironmentId: linkDeps.getRuntimeEnvironmentIdForPane?.(pane.id) ?? null
+            })
             // Why: Cmd/Ctrl+clicking a link activates Orca handling (open file,
             // new browser tab, system browser) which can steal focus from the
             // terminal before the click's mouseup reaches ownerDocument. Without
@@ -495,15 +611,19 @@ export function useTerminalPaneLifecycle({
           }
         }
         applyAppearance(manager)
-        const restoredLeafId = restoredLeafIdsInCreationOrder[restoredPaneCreateIndex] ?? null
-        restoredPaneCreateIndex += 1
         const panePtyBinding = connectPanePty(pane, manager, {
           ...ptyDeps,
           // Why: spread order matters — spawnHints.cwd (inherited from the
           // source pane) must override the tab-level ptyDeps.cwd (worktree
           // root) so Cmd+D splits boot in the live cwd.
           ...(spawnHints?.cwd ? { cwd: spawnHints.cwd } : {}),
-          restoredLeafId
+          restoredPtyIdByLeafId: spawnHints?.ptyId
+            ? {
+                ...ptyDeps.restoredPtyIdByLeafId,
+                [pane.leafId]: spawnHints.ptyId
+              }
+            : ptyDeps.restoredPtyIdByLeafId,
+          restoredLeafId: pane.leafId
         })
         // Why: connectPanePty receives a spread copy of ptyDeps, so the
         // `deps.startup = undefined` it performs internally only clears its
@@ -522,7 +642,7 @@ export function useTerminalPaneLifecycle({
         scheduleRuntimeGraphSync()
         queueResizeAll(true)
       },
-      onPaneClosed: (paneId) => {
+      onPaneClosed: (paneId, closedPane) => {
         const linkProviderDisposable = linkProviderDisposablesRef.current.get(paneId)
         if (linkProviderDisposable) {
           linkProviderDisposable.dispose()
@@ -532,6 +652,11 @@ export function useTerminalPaneLifecycle({
         if (selectionDisposable) {
           selectionDisposable.dispose()
           selectionDisposablesRef.current.delete(paneId)
+        }
+        const selectionCaptureTimer = selectionCaptureTimersRef.current.get(paneId)
+        if (selectionCaptureTimer !== undefined) {
+          window.clearTimeout(selectionCaptureTimer)
+          selectionCaptureTimersRef.current.delete(paneId)
         }
         const mode2031Disposables = mode2031DisposablesRef.current.get(paneId)
         if (mode2031Disposables) {
@@ -567,8 +692,14 @@ export function useTerminalPaneLifecycle({
           panePtyBindings.delete(paneId)
         }
         if (transport) {
-          const ptyId = transport.getPtyId()
+          const ptyId = suppressIntentionalPaneCloseExit(
+            transport,
+            useAppStore.getState().suppressPtyExit
+          )
           if (ptyId) {
+            // Why: user/CLI pane closes intentionally tear down this PTY after
+            // PaneManager has already promoted the sibling. Suppress that exit
+            // so the last-surviving pane is not mistaken for an exited tab.
             syncPanePtyLayoutBinding(paneId, null)
             clearTabPtyId(tabId, ptyId)
           }
@@ -576,13 +707,17 @@ export function useTerminalPaneLifecycle({
           // (not remove) so any retained `done` snapshot for this pane is also
           // cleared and a same-frame live→gone transition cannot re-snapshot
           // it via the retention sync.
-          useAppStore.getState().dropAgentStatus(`${tabId}:${paneId}`)
+          const leafId = closedPane?.leafId
+          if (leafId) {
+            const paneKey = makePaneKey(tabId, leafId)
+            useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
+            useAppStore.getState().dropAgentStatus(paneKey)
+          }
           transport.destroy?.()
           paneTransportsRef.current.delete(paneId)
         }
         clearRuntimePaneTitle(tabId, paneId)
         paneFontSizesRef.current.delete(paneId)
-        pendingWritesRef.current.delete(paneId)
         replayingPanesRef.current.delete(paneId)
         // Clean up pane title state so closed panes don't leave stale entries.
         setPaneTitles((prev) => {
@@ -647,6 +782,7 @@ export function useTerminalPaneLifecycle({
       terminalOptions: () => {
         const currentSettings = settingsRef.current
         const terminalFontWeights = resolveTerminalFontWeights(currentSettings?.terminalFontWeight)
+        const cursorStyle = currentSettings?.terminalCursorStyle ?? 'bar'
         return {
           fontSize: currentSettings?.terminalFontSize ?? 14,
           fontFamily: buildFontFamily(currentSettings?.terminalFontFamily ?? ''),
@@ -659,7 +795,8 @@ export function useTerminalPaneLifecycle({
               Math.round((currentSettings?.terminalScrollbackBytes ?? 10_000_000) / 200)
             )
           ),
-          cursorStyle: currentSettings?.terminalCursorStyle ?? 'bar',
+          cursorStyle,
+          cursorInactiveStyle: resolveTerminalCursorInactiveStyle(cursorStyle),
           cursorBlink: currentSettings?.terminalCursorBlink ?? true,
           macOptionIsMeta: effectiveMacOptionAsAltRef.current === 'true',
           lineHeight: currentSettings?.terminalLineHeight ?? 1,
@@ -670,7 +807,13 @@ export function useTerminalPaneLifecycle({
         if (!event) {
           return
         }
-        void handleOscLink(url, event, linkDeps)
+        const activePane = managerRef.current?.getActivePane()
+        void handleOscLink(url, event, {
+          ...linkDeps,
+          runtimeEnvironmentId: activePane
+            ? (linkDeps.getRuntimeEnvironmentIdForPane?.(activePane.id) ?? null)
+            : null
+        })
         // Why: Cmd/Ctrl+click on a plain-text URL (WebLinksAddon) takes focus
         // away from the terminal before the click's mouseup reaches
         // ownerDocument. That leaves xterm's SelectionService drag-select
@@ -720,6 +863,10 @@ export function useTerminalPaneLifecycle({
         // Merge (not replace) so we don't discard any concurrent state
         // updates from onPaneClosed that React may have batched.
         setPaneTitles((prev) => ({ ...prev, ...restored }))
+        // Why: the lifecycle immediately persists a fresh layout after restore,
+        // before React state has flushed. Keep the ref in sync now so that
+        // persist preserves restored titles instead of rewriting them away.
+        paneTitlesRef.current = { ...paneTitlesRef.current, ...restored }
       }
     }
 
@@ -824,12 +971,25 @@ export function useTerminalPaneLifecycle({
       if (!mgr) {
         return
       }
+      if (detail.newLeafId && mgr.getNumericIdForLeaf(detail.newLeafId) !== null) {
+        return
+      }
+      const sourcePaneId = detail.sourceLeafId
+        ? (mgr.getNumericIdForLeaf(detail.sourceLeafId) ?? detail.paneRuntimeId)
+        : detail.paneRuntimeId
+      if (sourcePaneId < 0) {
+        return
+      }
+      const splitOptions = {
+        ...(detail.newLeafId ? { leafId: detail.newLeafId } : {}),
+        ...(detail.ptyId ? { ptyId: detail.ptyId } : {})
+      }
       if (detail.command) {
         splitPaneWithOneShotStartup(ptyDeps, { command: detail.command }, () =>
-          mgr.splitPane(detail.paneRuntimeId, detail.direction)
+          mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
         )
       } else {
-        mgr.splitPane(detail.paneRuntimeId, detail.direction)
+        mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
       }
     }
     window.addEventListener(SPLIT_TERMINAL_PANE_EVENT, onCliSplitPane)
@@ -861,10 +1021,9 @@ export function useTerminalPaneLifecycle({
     return () => {
       window.removeEventListener(SPLIT_TERMINAL_PANE_EVENT, onCliSplitPane)
       window.removeEventListener(CLOSE_TERMINAL_PANE_EVENT, onCliClosePane)
+      const currentWorktreeTabs = useAppStore.getState().tabsByWorktree[worktreeId]
       const tabStillExists = Boolean(
-        useAppStore
-          .getState()
-          .tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
+        currentWorktreeTabs?.some((candidate) => candidate.id === tabId)
       )
       unregisterRuntimeTab()
       if (resizeRaf !== null) {
@@ -879,16 +1038,30 @@ export function useTerminalPaneLifecycle({
         disposable.dispose()
       }
       selectionDisposables.clear()
+      for (const timer of selectionCaptureTimers.values()) {
+        window.clearTimeout(timer)
+      }
+      selectionCaptureTimers.clear()
       for (const disposable of mouseHideDisposables.values()) {
         disposable.dispose()
       }
       mouseHideDisposables.clear()
       for (const transport of paneTransports.values()) {
-        if (tabStillExists && transport.getPtyId()) {
+        const ptyId = transport.getPtyId()
+        if (
+          shouldDetachPaneTransportOnUnmount({
+            tabStillExists,
+            tabId,
+            ptyId,
+            worktreeTabs: currentWorktreeTabs
+          })
+        ) {
           // Why: moving a terminal tab between groups currently rehomes the
           // React subtree, which unmounts this TerminalPane even though the tab
-          // itself is still alive. Detaching preserves the running PTY so the
-          // remounted pane can reattach without restarting the user's shell.
+          // itself is still alive. Web session mirroring can also replace a
+          // temporary local tab with a host surface that owns the same PTY.
+          // Detaching preserves the running PTY so the remounted pane can
+          // reattach without restarting the user's shell.
           // Transports that have not attached yet still have no PTY ID; those
           // must be destroyed so any in-flight spawn resolves into a killed PTY
           // instead of reviving a stale binding after unmount.
@@ -902,7 +1075,6 @@ export function useTerminalPaneLifecycle({
       }
       panePtyBindings.clear()
       paneTransports.clear()
-      pendingWrites.clear()
       manager.destroy()
       managerRef.current = null
       if (e2eConfig.exposeStore) {

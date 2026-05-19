@@ -27,6 +27,7 @@ import {
 } from './tab-group-state'
 import { buildHydratedTabState } from './tabs-hydration'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
 
@@ -394,7 +395,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
   layoutByWorktree: {},
 
   createUnifiedTab: (worktreeId, contentType, init) => {
-    const id = init?.id ?? globalThis.crypto.randomUUID()
+    const id = init?.id ?? createBrowserUuid()
     let created!: Tab
     set((state) => {
       const { group, groupsByWorktree, activeGroupIdByWorktree } = ensureGroup(
@@ -797,7 +798,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       return get().activeGroupIdByWorktree[worktreeId] ?? existingGroups[0].id
     }
 
-    const groupId = globalThis.crypto.randomUUID()
+    const groupId = createBrowserUuid()
     set((state) => ({
       // Why: a freshly selected worktree can legitimately have zero tabs, but
       // split-group affordances still need a canonical root group so new tabs
@@ -928,7 +929,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
   },
 
   createEmptySplitGroup: (worktreeId, sourceGroupId, direction) => {
-    const newGroupId = globalThis.crypto.randomUUID()
+    const newGroupId = createBrowserUuid()
     const newGroup: TabGroup = {
       id: newGroupId,
       worktreeId,
@@ -1076,7 +1077,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       let resolvedTargetGroupId = target.groupId
 
       if (target.splitDirection) {
-        const newGroupId = globalThis.crypto.randomUUID()
+        const newGroupId = createBrowserUuid()
         const newGroup: TabGroup = {
           id: newGroupId,
           worktreeId,
@@ -1285,6 +1286,15 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       if (unifiedTerminalEntityIds.has(tab.id)) {
         return false
       }
+      // Why: this is a one-shot migration filter for tabs not yet promoted
+      // to unifiedTabs — keeping the wake-hint `tab.ptyId` clause is
+      // intentional. tab.ptyId is the preserved sessionId (so wake can
+      // reattach to the same daemon-history dir / relay session); a slept
+      // tab will have `livePtyIds` empty *and* `tab.ptyId` populated, and
+      // we want it included in the migration sweep so reconcile picks it
+      // up. Reconcile fires again post-reattach, so the eventual live PTY
+      // also routes through this branch. Do *not* repurpose this as an
+      // "is this tab alive?" check — those reads must use ptyIdsByTabId.
       const livePtyIds = state.ptyIdsByTabId[tab.id] ?? []
       return livePtyIds.length > 0 || tab.ptyId != null
     })

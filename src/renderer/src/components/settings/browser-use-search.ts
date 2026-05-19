@@ -33,7 +33,14 @@ export const BROWSER_USE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'auth',
       'chrome',
       'edge',
-      'arc'
+      'arc',
+      'computer use',
+      'system browser',
+      'existing session',
+      'authenticated browser',
+      'chrome profile',
+      'edge profile',
+      'arc profile'
     ]
   }
 ]

@@ -3,21 +3,21 @@ import type { SettingsSearchEntry } from './settings-search'
 export const ACCOUNTS_CLAUDE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Claude Accounts',
-    description: 'Manage which Claude account Orca uses while preserving shared chat context.',
-    keywords: ['claude', 'account', 'switch', 'active', 'status bar', 'quota']
+    description: 'Optional account switching for Claude while preserving shared chat context.',
+    keywords: ['claude', 'account', 'switch', 'active', 'status bar', 'quota', 'optional']
   }
 ]
 
 export const ACCOUNTS_CODEX_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Codex Accounts',
-    description: 'Manage which Codex account Orca uses for live rate limit fetching.',
-    keywords: ['codex', 'account', 'rate limit', 'status bar', 'quota']
+    description: 'Optional account switching for Codex and live rate limit fetching.',
+    keywords: ['codex', 'account', 'rate limit', 'status bar', 'quota', 'optional']
   },
   {
     title: 'Active Codex Account',
-    description: 'Choose which saved Codex account powers live quota reads.',
-    keywords: ['codex', 'account', 'switch', 'active', 'status bar']
+    description: 'Choose which optional saved Codex account powers live quota reads.',
+    keywords: ['codex', 'account', 'switch', 'active', 'status bar', 'optional']
   }
 ]
 

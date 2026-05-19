@@ -1,4 +1,5 @@
 import type { DiffComment } from '../../../shared/types'
+import { isMarkdownComment } from './diff-comment-compat'
 
 // Why: the pasted format is the contract between this feature and whatever
 // agent consumes it. Keep it stable and deterministic — quote escaping matters
@@ -10,7 +11,16 @@ export function formatDiffComment(c: DiffComment): string {
     .replace(/"/g, '\\"')
     .replace(/\r/g, '\\r')
     .replace(/\n/g, '\\n')
-  return [`File: ${c.filePath}`, `Line: ${c.lineNumber}`, `User comment: "${escaped}"`].join('\n')
+  const lineLabel =
+    c.startLine !== undefined && c.startLine !== c.lineNumber
+      ? `Lines: ${c.startLine}-${c.lineNumber}`
+      : `Line: ${c.lineNumber}`
+  if (!isMarkdownComment(c)) {
+    return [`File: ${c.filePath}`, lineLabel, `User comment: "${escaped}"`].join('\n')
+  }
+  return [`File: ${c.filePath}`, 'Source: markdown', lineLabel, `User comment: "${escaped}"`].join(
+    '\n'
+  )
 }
 
 export function formatDiffComments(comments: DiffComment[]): string {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { RuntimeRpcEnvelopeSchema } from './envelope-schema'
+import { RuntimeRpcEnvelopeSchema, isKeepaliveFrame } from './envelope-schema'
 
 describe('RuntimeRpcEnvelopeSchema', () => {
   it('accepts a well-formed success envelope', () => {
@@ -56,5 +56,38 @@ describe('RuntimeRpcEnvelopeSchema', () => {
   it('rejects a frame with unrelated fields only', () => {
     const parsed = RuntimeRpcEnvelopeSchema.safeParse({ hello: 'world' })
     expect(parsed.success).toBe(false)
+  })
+
+  it('accepts a keepalive frame', () => {
+    const parsed = RuntimeRpcEnvelopeSchema.safeParse({ _keepalive: true })
+    expect(parsed.success).toBe(true)
+  })
+
+  it('rejects a keepalive frame with _keepalive !== true', () => {
+    const parsed = RuntimeRpcEnvelopeSchema.safeParse({ _keepalive: false })
+    expect(parsed.success).toBe(false)
+  })
+})
+
+describe('isKeepaliveFrame', () => {
+  it('returns true for a well-formed keepalive', () => {
+    expect(isKeepaliveFrame({ _keepalive: true })).toBe(true)
+  })
+
+  it('returns false for a success envelope', () => {
+    expect(isKeepaliveFrame({ id: 'x', ok: true, result: {}, _meta: { runtimeId: 'r' } })).toBe(
+      false
+    )
+  })
+
+  it('returns false for non-object inputs', () => {
+    expect(isKeepaliveFrame(null)).toBe(false)
+    expect(isKeepaliveFrame(undefined)).toBe(false)
+    expect(isKeepaliveFrame('keepalive')).toBe(false)
+  })
+
+  it('returns false when _keepalive is not strictly true', () => {
+    expect(isKeepaliveFrame({ _keepalive: 1 })).toBe(false)
+    expect(isKeepaliveFrame({ _keepalive: 'true' })).toBe(false)
   })
 })

@@ -123,6 +123,34 @@ describe('SshChannelMultiplexer', () => {
       vi.advanceTimersByTime(1_000)
 
       await expect(promise).rejects.toThrow('timed out')
+      const cancelPayload = JSON.parse(
+        transport.written
+          .at(-1)!
+          .subarray(HEADER_LENGTH, HEADER_LENGTH + transport.written.at(-1)!.readUInt32BE(9))
+          .toString()
+      )
+      expect(cancelPayload).toMatchObject({
+        method: 'rpc.cancel',
+        params: { id: 1 }
+      })
+    })
+
+    it('uses per-request timeout overrides', async () => {
+      const promise = mux.request('fs.workspaceSpaceScan', {}, { timeoutMs: 60_000 })
+
+      for (let i = 0; i < 6; i++) {
+        vi.advanceTimersByTime(5_000)
+        transport.dataCallbacks[0](encodeKeepAliveFrame(i + 1, 0))
+      }
+      await Promise.resolve()
+      const requestWrites = transport.written.filter((frame) => frame[0] === MessageType.Regular)
+      expect(requestWrites).toHaveLength(1)
+
+      for (let i = 6; i < 12; i++) {
+        vi.advanceTimersByTime(5_000)
+        transport.dataCallbacks[0](encodeKeepAliveFrame(i + 1, 0))
+      }
+      await expect(promise).rejects.toThrow('timed out after 60000ms')
     })
 
     it('assigns unique request IDs', async () => {
@@ -167,6 +195,40 @@ describe('SshChannelMultiplexer', () => {
 
       expect(handler).toHaveBeenCalledWith('pty.exit', { id: 'pty-1', code: 0 })
     })
+
+    it('typed dispatcher only fires for its method', () => {
+      const chunkHandler = vi.fn()
+      const otherHandler = vi.fn()
+      const generic = vi.fn()
+      mux.onNotificationByMethod('fs.streamChunk', chunkHandler)
+      mux.onNotificationByMethod('fs.streamEnd', otherHandler)
+      mux.onNotification(generic)
+
+      transport.dataCallbacks[0](
+        makeNotificationFrame('fs.streamChunk', { streamId: 1, seq: 0, data: 'aGk=' }, 1)
+      )
+
+      expect(chunkHandler).toHaveBeenCalledWith({ streamId: 1, seq: 0, data: 'aGk=' })
+      expect(otherHandler).not.toHaveBeenCalled()
+      expect(generic).toHaveBeenCalledWith('fs.streamChunk', {
+        streamId: 1,
+        seq: 0,
+        data: 'aGk='
+      })
+    })
+
+    it('typed dispatcher unsubscribe removes only that handler', () => {
+      const a = vi.fn()
+      const b = vi.fn()
+      const unsubA = mux.onNotificationByMethod('fs.streamEnd', a)
+      mux.onNotificationByMethod('fs.streamEnd', b)
+      unsubA()
+
+      transport.dataCallbacks[0](makeNotificationFrame('fs.streamEnd', { streamId: 7 }, 1))
+
+      expect(a).not.toHaveBeenCalled()
+      expect(b).toHaveBeenCalledWith({ streamId: 7 })
+    })
   })
 
   describe('keepalive', () => {
@@ -178,6 +240,16 @@ describe('SshChannelMultiplexer', () => {
 
       const lastFrame = transport.written.at(-1)!
       expect(lastFrame[0]).toBe(MessageType.KeepAlive)
+    })
+
+    it('turns transport write failures into connection loss instead of throwing from the timer', () => {
+      const writeError = new Error('write EPIPE')
+      transport.write = vi.fn(() => {
+        throw writeError
+      })
+
+      expect(() => vi.advanceTimersByTime(5_000)).not.toThrow()
+      expect(mux.isDisposed()).toBe(true)
     })
   })
 

@@ -12,9 +12,19 @@ export const GENERAL_WORKSPACE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     keywords: ['nested', 'subfolder', 'directory']
   },
   {
-    title: 'Skip Delete Worktree Confirmation',
-    description: 'Delete worktrees from the context menu without a confirmation dialog.',
+    title: 'Ask Before Deleting Workspaces',
+    description: 'Show a confirmation dialog before deleting a workspace.',
     keywords: ['delete', 'worktree', 'confirm', 'dialog', 'skip', 'prompt']
+  },
+  {
+    title: 'Ask Before Deleting Automations',
+    description: 'Show a confirmation dialog before deleting an automation and its run history.',
+    keywords: ['delete', 'automation', 'confirm', 'dialog', 'skip', 'prompt']
+  },
+  {
+    title: 'Open In Menu',
+    description: 'Add custom launchers to the worktree Open in menu.',
+    keywords: ['open in', 'editor', 'launcher', 'cursor', 'zed', 'command', 'vscode']
   }
 ]
 
@@ -35,9 +45,19 @@ export const GENERAL_EDITOR_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     keywords: ['diff', 'view', 'inline', 'side-by-side', 'split']
   },
   {
+    title: 'Default Diff File Tree',
+    description: 'Show or hide the file tree when opening combined diff views.',
+    keywords: ['diff', 'tree', 'file tree', 'combined diff', 'sidebar']
+  },
+  {
     title: 'Minimap',
     description: 'Show the minimap overview when editing a file.',
     keywords: ['minimap', 'overview', 'code', 'scroll']
+  },
+  {
+    title: 'Markdown Review Notes',
+    description: 'Show local markdown review note controls in rich editor mode.',
+    keywords: ['markdown', 'review', 'notes', 'annotations', 'agents']
   }
 ]
 
@@ -83,7 +103,8 @@ export const GENERAL_AGENT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'pi',
       'gemini',
       'aider',
-      'copilot'
+      'copilot',
+      'grok'
     ]
   }
 ]

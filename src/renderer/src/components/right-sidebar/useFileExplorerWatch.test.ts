@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { getExternalFileChangeRelativePath } from './useFileExplorerWatch'
+import type { FsChangedPayload } from '../../../../shared/types'
+import {
+  canonicalizeFileExplorerWatchPath,
+  getExternalFileChangeRelativePath,
+  payloadRequiresDeferredTreeRefresh
+} from './useFileExplorerWatch'
 
 describe('getExternalFileChangeRelativePath', () => {
   it('returns a worktree-relative file path for external file updates', () => {
@@ -25,6 +30,22 @@ describe('getExternalFileChangeRelativePath', () => {
   it('normalizes Windows separators before deriving the relative path', () => {
     expect(
       getExternalFileChangeRelativePath('C:\\repo', 'C:\\repo\\config\\settings.json', false)
+    ).toBe('config/settings.json')
+  })
+
+  it('matches Windows paths case-insensitively before deriving the relative path', () => {
+    expect(
+      getExternalFileChangeRelativePath('C:\\Repo', 'c:\\repo\\config\\settings.json', false)
+    ).toBe('config/settings.json')
+  })
+
+  it('preserves UNC roots when deriving the relative path', () => {
+    expect(
+      getExternalFileChangeRelativePath(
+        '//Server/Share/Repo',
+        '//server/share/repo/config/settings.json',
+        false
+      )
     ).toBe('config/settings.json')
   })
 
@@ -55,5 +76,61 @@ describe('getExternalFileChangeRelativePath', () => {
     expect(getExternalFileChangeRelativePath('/repo', '/repo/a/b/c/deep.ts', false)).toBe(
       'a/b/c/deep.ts'
     )
+  })
+})
+
+describe('canonicalizeFileExplorerWatchPath', () => {
+  it('returns event paths with the watched worktree casing for UNC cache lookups', () => {
+    expect(
+      canonicalizeFileExplorerWatchPath('//Server/Share/Repo', '//server/share/repo/src/index.ts')
+    ).toBe('//Server/Share/Repo/src/index.ts')
+  })
+
+  it('preserves the watched worktree separator style for Windows cache lookups', () => {
+    expect(canonicalizeFileExplorerWatchPath('C:\\Repo', 'c:\\repo\\src\\index.ts')).toBe(
+      'C:\\Repo\\src\\index.ts'
+    )
+  })
+
+  it('rejects sibling UNC shares whose path merely shares a prefix', () => {
+    expect(
+      canonicalizeFileExplorerWatchPath(
+        '//Server/Share/Repo',
+        '//server/share/repository/src/index.ts'
+      )
+    ).toBeNull()
+  })
+})
+
+describe('payloadRequiresDeferredTreeRefresh', () => {
+  function payload(events: FsChangedPayload['events'], worktreePath = '/repo'): FsChangedPayload {
+    return { worktreePath, events }
+  }
+
+  it('does not require a full tree refresh for replayable deferred changes', () => {
+    const changes = payload([
+      { kind: 'create', absolutePath: '/repo/src/new.ts', isDirectory: false },
+      { kind: 'update', absolutePath: '/repo/src', isDirectory: true },
+      { kind: 'delete', absolutePath: '/repo/src/old.ts' }
+    ])
+
+    expect(payloadRequiresDeferredTreeRefresh(changes, '/repo')).toBe(false)
+  })
+
+  it('requires a full tree refresh for unreplayable rename payloads in the current worktree', () => {
+    const changes = payload([
+      { kind: 'rename', absolutePath: '/repo/src/old.ts', isDirectory: false }
+    ])
+
+    expect(payloadRequiresDeferredTreeRefresh(changes, '/repo')).toBe(true)
+  })
+
+  it('ignores stale deferred rename payloads from a previous worktree', () => {
+    const changes = payload(
+      [{ kind: 'rename', absolutePath: '/other/src/old.ts', isDirectory: false }],
+      '/other'
+    )
+
+    expect(payloadRequiresDeferredTreeRefresh(changes, '/repo')).toBe(false)
   })
 })

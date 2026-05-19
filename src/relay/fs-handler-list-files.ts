@@ -8,7 +8,7 @@
  * matching files" even though the file existed on disk. This implementation:
  *   - streams via spawn (no maxBuffer failure mode)
  *   - prunes traversal at rg level using the shared blocklist globs
- *   - runs a second --no-ignore-vcs pass for .env* files
+ *   - runs a second --no-ignore-vcs pass for ignored files
  *   - honors excludePathPrefixes for nested linked worktrees
  *   - rejects (not resolves) on timeout / spawn error / signal exit so
  *     the UI shows a load error instead of a false-empty list
@@ -34,7 +34,7 @@ export function listFilesWithRg(
     let done = false
     const children: ChildProcess[] = []
 
-    const { primary, envPass } = buildRgArgsForQuickOpen({
+    const { primary, ignoredPass } = buildRgArgsForQuickOpen({
       // Why: rg only applies root-relative exclude globs as traversal pruning
       // when the search target is relative to cwd. Absolute targets still
       // emit root-relative-looking paths for filters, but they do not prune.
@@ -162,7 +162,7 @@ export function listFilesWithRg(
       }
     }
 
-    Promise.all([runPass(primary), runPass(envPass)])
+    Promise.all([runPass(primary), runPass(ignoredPass)])
       .then(() => {
         if (done) {
           return

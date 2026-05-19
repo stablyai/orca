@@ -4,6 +4,7 @@ import { existsSync, statSync } from 'fs'
 import { join, basename } from 'path'
 import hostedGitInfo from 'hosted-git-info'
 import { gitExecFileSync, gitExecFileAsync } from './runner'
+import type { BaseRefSearchResult } from '../../shared/types'
 
 /**
  * Ordered probe list used to resolve a repo's default base ref when no
@@ -224,6 +225,63 @@ export async function getBaseRefDefault(path: string): Promise<string | null> {
 }
 
 /**
+ * Return { ahead, behind } for localRef vs remoteRef, or null on git failure.
+ *
+ * Why: `rev-list --left-right --count A...B` emits `<ahead>\t<behind>` —
+ * ahead = commits on A not reachable from B; behind = commits on B not
+ * reachable from A. This is the merge-base-symmetric delta used by the
+ * stale-base dispatch guard (§3.1). Returning null on any failure (bad
+ * ref, corrupt repo, non-numeric output) lets callers degrade gracefully
+ * instead of failing dispatch on a probe error.
+ */
+export function getRemoteDrift(
+  repoPath: string,
+  localRef: string,
+  remoteRef: string
+): { ahead: number; behind: number } | null {
+  try {
+    const stdout = gitExecFileSync(
+      ['rev-list', '--left-right', '--count', `${localRef}...${remoteRef}`],
+      { cwd: repoPath }
+    )
+    const [aheadStr, behindStr] = stdout.trim().split(/\s+/)
+    const ahead = Number(aheadStr)
+    const behind = Number(behindStr)
+    if (!Number.isFinite(ahead) || !Number.isFinite(behind)) {
+      return null
+    }
+    return { ahead, behind }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Up to `limit` commit subjects present on remoteRef but not localRef, in
+ * recency order. Returns [] on git failure.
+ *
+ * Why: powers the preamble drift section (§3.2) so a worker dispatched
+ * against an acknowledged-stale base can see at a glance whether the
+ * drift touches their task area.
+ */
+export function getRecentDriftSubjects(
+  repoPath: string,
+  localRef: string,
+  remoteRef: string,
+  limit: number
+): string[] {
+  try {
+    const stdout = gitExecFileSync(
+      ['log', '--format=%s', '-n', String(limit), `${localRef}..${remoteRef}`],
+      { cwd: repoPath }
+    )
+    return stdout.split('\n').filter((s) => s.trim().length > 0)
+  } catch {
+    return []
+  }
+}
+
+/**
  * Parse `git remote` stdout into a count of configured remotes.
  *
  * Why: shared between the local path and the SSH relay path so the
@@ -406,6 +464,14 @@ export async function getDefaultRemote(path: string): Promise<string> {
 }
 
 export async function searchBaseRefs(path: string, query: string, limit = 25): Promise<string[]> {
+  return (await searchBaseRefDetails(path, query, limit)).map((entry) => entry.refName)
+}
+
+export async function searchBaseRefDetails(
+  path: string,
+  query: string,
+  limit = 25
+): Promise<BaseRefSearchResult[]> {
   const normalizedQuery = normalizeRefSearchQuery(query)
   if (!normalizedQuery) {
     return []
@@ -414,17 +480,30 @@ export async function searchBaseRefs(path: string, query: string, limit = 25): P
   try {
     // Why: argv (including the two-remote-glob rationale) lives in
     // buildSearchBaseRefsArgv so the SSH sibling cannot drift.
-    const { stdout } = await gitExecFileAsync(buildSearchBaseRefsArgv(normalizedQuery), {
-      cwd: path
-    })
+    const [{ stdout }, remotes] = await Promise.all([
+      gitExecFileAsync(buildSearchBaseRefsArgv(normalizedQuery), { cwd: path }),
+      listRemoteNames(path)
+    ])
 
-    return parseAndFilterSearchRefs(stdout, limit)
+    return parseAndFilterSearchRefDetails(stdout, limit, remotes)
   } catch (err) {
     // Why: surface the failure for diagnostics; callers treat `[]` as "no
     // matches", but silently swallowing the error makes a missing result
     // set impossible to debug. Mirrors the SSH sibling in
     // src/main/ipc/repos.ts.
     console.warn('[searchBaseRefs] for-each-ref failed', { path, err })
+    return []
+  }
+}
+
+async function listRemoteNames(path: string): Promise<string[]> {
+  try {
+    const { stdout } = await gitExecFileAsync(['remote'], { cwd: path })
+    return stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+  } catch {
     return []
   }
 }
@@ -441,7 +520,16 @@ export async function searchBaseRefs(path: string, query: string, limit = 25): P
  * lived in a single location; two copies double the regression surface.
  */
 export function parseAndFilterSearchRefs(stdout: string, limit: number): string[] {
+  return parseAndFilterSearchRefDetails(stdout, limit).map((entry) => entry.refName)
+}
+
+export function parseAndFilterSearchRefDetails(
+  stdout: string,
+  limit: number,
+  remotes: string[] = []
+): BaseRefSearchResult[] {
   const seen = new Set<string>()
+  const sortedRemotes = [...remotes].sort((a, b) => b.length - a.length)
   return (
     stdout
       .split('\n')
@@ -474,12 +562,28 @@ export function parseAndFilterSearchRefs(stdout: string, limit: number): string[
         seen.add(short)
         return true
       })
-      .map(({ short }) => short)
+      .map(({ full, short }) => ({
+        refName: short,
+        localBranchName: resolveLocalBranchName(full, short, sortedRemotes)
+      }))
       // Why: `Math.max(0, limit)` — treat pathological `limit <= 0` as
       // "zero results" rather than "at least 1". More honest than silently
       // returning a single ref when the caller explicitly asked for none.
       .slice(0, Math.max(0, limit))
   )
+}
+
+function resolveLocalBranchName(fullRef: string, shortRef: string, remotes: string[]): string {
+  const remoteRefPrefix = 'refs/remotes/'
+  if (!fullRef.startsWith(remoteRefPrefix)) {
+    return shortRef
+  }
+  const remoteAndBranch = fullRef.slice(remoteRefPrefix.length)
+  const remote = remotes.find((candidate) => remoteAndBranch.startsWith(`${candidate}/`))
+  if (remote) {
+    return remoteAndBranch.slice(remote.length + 1)
+  }
+  return remoteAndBranch.split('/').slice(1).join('/') || shortRef
 }
 
 export function normalizeRefSearchQuery(query: string): string {
@@ -499,7 +603,8 @@ export type BranchConflictKind = 'local' | 'remote'
 
 export async function getBranchConflictKind(
   path: string,
-  branchName: string
+  branchName: string,
+  allowedBaseRef?: string
 ): Promise<BranchConflictKind | null> {
   if (await hasGitRefAsync(path, `refs/heads/${branchName}`)) {
     return 'local'
@@ -514,7 +619,11 @@ export async function getBranchConflictKind(
     // first three segments so that e.g. "feature/dashboard" only matches
     // "refs/remotes/origin/feature/dashboard", not "refs/remotes/origin/other/feature/dashboard".
     const hasRemoteConflict = stdout.split('\n').some((ref) => {
-      const parts = ref.trim().split('/')
+      const trimmed = ref.trim()
+      if (isAllowedRemoteBaseRef(trimmed, allowedBaseRef)) {
+        return false
+      }
+      const parts = trimmed.split('/')
       return parts.slice(3).join('/') === branchName
     })
 
@@ -522,6 +631,16 @@ export async function getBranchConflictKind(
   } catch {
     return null
   }
+}
+
+function isAllowedRemoteBaseRef(refName: string, allowedBaseRef: string | undefined): boolean {
+  if (!allowedBaseRef) {
+    return false
+  }
+  const normalizedAllowedRef = allowedBaseRef.startsWith('refs/remotes/')
+    ? allowedBaseRef
+    : `refs/remotes/${allowedBaseRef}`
+  return refName === normalizedAllowedRef
 }
 
 /**

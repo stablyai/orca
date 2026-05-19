@@ -1,7 +1,11 @@
+/* eslint-disable max-lines -- Why: these worktree path/name tests share a
+single setup-free pure-logic module, and splitting them would make the related
+edge cases harder to audit together. */
 import { join, resolve } from 'path'
 import { describe, expect, it } from 'vitest'
 import {
   sanitizeWorktreeName,
+  sanitizeWorktreeDisplayName,
   ensurePathWithinWorkspace,
   computeBranchName,
   computeWorktreePath,
@@ -9,6 +13,7 @@ import {
   mergeWorktree,
   parseWorktreeId,
   formatWorktreeRemovalError,
+  isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError,
   areWorktreePathsEqual
 } from './worktree-logic'
@@ -51,12 +56,47 @@ describe('sanitizeWorktreeName', () => {
     expect(sanitizeWorktreeName('a..b...c')).toBe('a.b.c')
   })
 
+  it('preserves non-ASCII letters and numbers', () => {
+    // Why: users name workspaces in their own language (CJK, accented Latin,
+    // Cyrillic, etc.). Stripping these to ASCII left the name empty and threw
+    // "Invalid worktree name" on every non-Latin keyboard input.
+    expect(sanitizeWorktreeName('中文')).toBe('中文')
+    expect(sanitizeWorktreeName('日本語 テスト')).toBe('日本語-テスト')
+    expect(sanitizeWorktreeName('café-déjà')).toBe('café-déjà')
+    expect(sanitizeWorktreeName('Привет мир')).toBe('Привет-мир')
+  })
+
+  it('still strips git-unsafe punctuation around Unicode names', () => {
+    expect(sanitizeWorktreeName('feat: 中文 (v2)')).toBe('feat-中文-v2')
+  })
+
   it('throws for empty name', () => {
     expect(() => sanitizeWorktreeName('')).toThrow('Invalid worktree name')
   })
 
   it('throws for whitespace-only name', () => {
     expect(() => sanitizeWorktreeName('   ')).toThrow('Invalid worktree name')
+  })
+})
+
+describe('sanitizeWorktreeDisplayName', () => {
+  it('keeps readable punctuation while collapsing unsafe controls and whitespace', () => {
+    expect(sanitizeWorktreeDisplayName('  Fix: login / callback\n\tregression\u0000  ')).toBe(
+      'Fix: login / callback regression'
+    )
+  })
+
+  it('strips bidi override controls from external artifact titles', () => {
+    expect(sanitizeWorktreeDisplayName('Review \u202eexe.txt')).toBe('Review exe.txt')
+  })
+
+  it('truncates very long titles', () => {
+    const title = 'a'.repeat(200)
+    expect(sanitizeWorktreeDisplayName(title)).toHaveLength(120)
+  })
+
+  it('returns undefined when nothing displayable remains', () => {
+    expect(sanitizeWorktreeDisplayName('\u0000\n\t')).toBeUndefined()
   })
 })
 
@@ -176,11 +216,15 @@ describe('mergeWorktree', () => {
       linkedIssue: 42,
       linkedPR: 10,
       linkedLinearIssue: null,
+      linkedGitLabMR: null,
+      linkedGitLabIssue: null,
       isArchived: true,
       isUnread: true,
       isPinned: true,
       sortOrder: 5,
-      lastActivityAt: 1000
+      lastActivityAt: 1000,
+      workspaceStatus: 'in-review',
+      diffComments: []
     }
     const result = mergeWorktree('repo1', baseGit, meta)
     expect(result).toEqual({
@@ -196,11 +240,15 @@ describe('mergeWorktree', () => {
       linkedIssue: 42,
       linkedPR: 10,
       linkedLinearIssue: null,
+      linkedGitLabMR: null,
+      linkedGitLabIssue: null,
       isArchived: true,
       isUnread: true,
       isPinned: true,
       sortOrder: 5,
-      lastActivityAt: 1000
+      lastActivityAt: 1000,
+      workspaceStatus: 'in-review',
+      diffComments: []
     })
   })
 
@@ -215,6 +263,7 @@ describe('mergeWorktree', () => {
     expect(result.isPinned).toBe(false)
     expect(result.sortOrder).toBe(0)
     expect(result.lastActivityAt).toBe(0)
+    expect(result.workspaceStatus).toBe('in-progress')
   })
 
   it('strips refs/heads/ prefix from branch for display name', () => {
@@ -316,5 +365,37 @@ describe('isOrphanedWorktreeError', () => {
   it('returns false for non-Error input', () => {
     expect(isOrphanedWorktreeError('string error')).toBe(false)
     expect(isOrphanedWorktreeError(null)).toBe(false)
+  })
+})
+
+describe('isOrphanCompatiblePreflightError', () => {
+  it('matches not-a-working-tree errors', () => {
+    const error = Object.assign(new Error('git failed'), {
+      stderr: "fatal: '/some/path' is not a working tree"
+    })
+
+    expect(isOrphanCompatiblePreflightError(error)).toBe(true)
+  })
+
+  it('matches status failures from non-repo directories', () => {
+    const error = Object.assign(new Error('status failed'), {
+      stderr: 'fatal: not a git repository (or any of the parent directories): .git'
+    })
+
+    expect(isOrphanCompatiblePreflightError(error)).toBe(true)
+  })
+
+  it('matches missing directories by error code', () => {
+    const error = Object.assign(new Error('spawn git'), { code: 'ENOENT' })
+
+    expect(isOrphanCompatiblePreflightError(error)).toBe(true)
+  })
+
+  it('does not match unrelated subprocess failures', () => {
+    const error = Object.assign(new Error('status failed'), {
+      stderr: 'fatal: unable to read current working directory'
+    })
+
+    expect(isOrphanCompatiblePreflightError(error)).toBe(false)
   })
 })

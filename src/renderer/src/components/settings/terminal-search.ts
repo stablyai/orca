@@ -45,7 +45,7 @@ export const TERMINAL_RENDERING_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'GPU Acceleration',
     description:
-      'Controls whether the terminal uses xterm.js WebGL rendering. Auto mirrors VS Code: try GPU and fall back to DOM if WebGL fails.',
+      'Controls whether the terminal uses xterm.js WebGL rendering. Auto uses DOM on Linux to avoid driver glyph corruption, and otherwise tries WebGL with DOM fallback.',
     keywords: [
       'terminal',
       'gpu',
@@ -75,6 +75,31 @@ export const TERMINAL_CURSOR_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Cursor Opacity',
     description: 'Opacity of the terminal cursor.',
     keywords: ['terminal', 'cursor', 'opacity', 'transparency']
+  }
+]
+
+export const TERMINAL_FLOATING_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'Floating Terminal',
+    description:
+      'Enable the global floating terminal, choose where new tabs start, and choose where the toggle button appears.',
+    keywords: [
+      'terminal',
+      'global',
+      'floating',
+      'quick terminal',
+      'launch directory',
+      'toggle button',
+      'status bar'
+    ]
+  }
+]
+
+export const TERMINAL_QUICK_COMMANDS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'Quick Commands',
+    description: 'Saved terminal command snippets available from the terminal right-click menu.',
+    keywords: ['terminal', 'command', 'snippet', 'quick command', 'send', 'context menu']
   }
 ]
 
@@ -275,6 +300,8 @@ export function getTerminalPaneSearchEntries(platform: {
   // users from landing on an option the UI intentionally hides.
   return [
     ...TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES,
+    ...TERMINAL_FLOATING_SEARCH_ENTRIES,
+    ...TERMINAL_QUICK_COMMANDS_SEARCH_ENTRIES,
     ...TERMINAL_RENDERING_SEARCH_ENTRIES,
     ...TERMINAL_CURSOR_SEARCH_ENTRIES,
     ...TERMINAL_PANE_STYLE_SEARCH_ENTRIES,

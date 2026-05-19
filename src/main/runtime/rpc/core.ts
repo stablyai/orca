@@ -3,6 +3,7 @@
 // CLI-facing contract greppable and lets the dispatcher verify every payload
 // against the same shape the handler consumed during development.
 import { ZodError, type ZodType } from 'zod'
+import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
 import type { OrcaRuntimeService } from '../orca-runtime'
 
 export type RpcEnvelopeMeta = {
@@ -13,6 +14,7 @@ export type RpcSuccess = {
   id: string
   ok: true
   result: unknown
+  streaming?: true
   _meta: RpcEnvelopeMeta
 }
 
@@ -38,6 +40,33 @@ export type RpcRequest = {
 
 export type RpcContext = {
   runtime: OrcaRuntimeService
+  // Why: long-poll handlers (e.g. orchestration.check with wait=true) need to
+  // observe the underlying socket's lifetime so they can release their slot
+  // and resolve their inner waiters immediately when a client disconnects
+  // instead of running down the configured timeoutMs. Undefined outside the
+  // runtime-rpc transport (direct in-process callers don't need it).
+  // See design doc §3.1 counter-lifecycle.
+  signal?: AbortSignal
+  // Why: streaming handlers (notifications/accounts/terminal subscribe)
+  // register cleanup callbacks against the runtime so reconnects don't leak
+  // listeners. Keying those cleanups by per-WebSocket connectionId lets the
+  // server reap all subscriptions for a closing socket, even when other
+  // sockets for the same deviceToken stay alive (multi-screen mobile).
+  connectionId?: string
+  // Why: WebSocket RPCs authenticate by mobile device token. State-owning
+  // handlers use this to clean up when that paired device disconnects.
+  clientId?: string
+  // Why: mobile terminal traffic is byte-oriented and bypasses JSON streaming
+  // responses after the binary terminal cutover. Undefined on Unix/socket
+  // transports and non-E2EE WebSocket paths.
+  sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
+  // Why: binary terminal input/resize frames arrive outside JSON-RPC after a
+  // stream is established. The WebSocket transport owns the connection-scoped
+  // stream table; handlers register only the stream IDs they created.
+  registerBinaryStreamHandler?: (
+    streamId: number,
+    handler: (frame: TerminalStreamFrame) => void
+  ) => () => void
 }
 
 export type RpcHandler<TParams> = (params: TParams, ctx: RpcContext) => Promise<unknown> | unknown
@@ -69,10 +98,53 @@ export function defineMethod<TSchema extends ZodType | null>(
   }
 }
 
-export type RpcRegistry = ReadonlyMap<string, RpcMethod>
+export type RpcStreamingHandler<TParams> = (
+  params: TParams,
+  ctx: RpcContext,
+  emit: (result: unknown) => void
+) => Promise<void>
 
-export function buildRegistry(methods: readonly RpcMethod[]): RpcRegistry {
-  const registry = new Map<string, RpcMethod>()
+// Why: streaming methods emit multiple responses over a long-lived connection.
+// The `stream` flag lets the dispatcher distinguish them from one-shot methods
+// and route them to the emit-based call path instead of the Promise-based one.
+export type RpcStreamingMethod = {
+  readonly name: string
+  readonly params: ZodType | null
+  readonly stream: true
+  readonly handler: (
+    params: unknown,
+    ctx: RpcContext,
+    emit: (result: unknown) => void
+  ) => Promise<void>
+}
+
+type DefineStreamingMethodSpec<TSchema extends ZodType | null> = {
+  name: string
+  params: TSchema
+  handler: RpcStreamingHandler<TSchema extends ZodType ? TSchema['_output'] : void>
+}
+
+export function defineStreamingMethod<TSchema extends ZodType | null>(
+  spec: DefineStreamingMethodSpec<TSchema>
+): RpcStreamingMethod {
+  return {
+    name: spec.name,
+    params: spec.params,
+    stream: true,
+    handler: spec.handler as RpcStreamingMethod['handler']
+  }
+}
+
+export type RpcAnyMethod = RpcMethod | RpcStreamingMethod
+
+export function isStreamingMethod(method: RpcAnyMethod): method is RpcStreamingMethod {
+  return 'stream' in method && method.stream === true
+}
+
+export type RpcRegistry = ReadonlyMap<string, RpcAnyMethod>
+
+export function buildRegistry(methods: readonly RpcAnyMethod[]): RpcRegistry {
+  const registry = new Map<string, RpcAnyMethod>()
   for (const method of methods) {
     if (registry.has(method.name)) {
       throw new Error(`duplicate_rpc_method:${method.name}`)

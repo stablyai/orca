@@ -5,14 +5,19 @@ import type { BrowserWindow } from 'electron'
 import { dialog, ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
 import type { Store } from '../persistence'
-import type { Repo, BaseRefDefaultResult, SparsePreset } from '../../shared/types'
+import type {
+  BaseRefSearchResult,
+  Repo,
+  BaseRefDefaultResult,
+  SparsePreset
+} from '../../shared/types'
 import { isFolderRepo } from '../../shared/repo-kind'
-import { REPO_COLORS } from '../../shared/constants'
-import { rebuildAuthorizedRootsCache } from './filesystem-auth'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
+import { invalidateAuthorizedRootsCache } from './filesystem-auth'
 import type { ChildProcess } from 'child_process'
-import { rm } from 'fs/promises'
-import { gitSpawn } from '../git/runner'
-import { join, basename } from 'path'
+import { access, mkdir, readdir, rm } from 'fs/promises'
+import { gitExecFileAsync, gitSpawn } from '../git/runner'
+import { basename, isAbsolute, join } from 'path'
 import {
   isGitRepo,
   getGitUsername,
@@ -20,15 +25,39 @@ import {
   getBaseRefDefault,
   getRemoteCount,
   normalizeRefSearchQuery,
-  parseAndFilterSearchRefs,
+  parseAndFilterSearchRefDetails,
   parseRemoteCount,
   resolveDefaultBaseRefViaExec,
   buildSearchBaseRefsArgv,
-  searchBaseRefs
+  searchBaseRefDetails
 } from '../git/repo'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getActiveMultiplexer } from './ssh'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
+import { track } from '../telemetry/client'
+import { getCohortAtEmit } from '../telemetry/cohort-classifier'
+import type { RepoMethod } from '../../shared/telemetry-events'
+
+// Why: `method` answers "which entry point did the user take?", not "what did
+// they add?" — so the IPC the renderer invoked IS the method. We never send
+// the path, URL, or display name. `repos:create` collapses into
+// `folder_picker` because the user's entry was the folder picker, even
+// though main also `git init`s. `drag_drop` is reserved for a future call
+// site; no current renderer surface produces it.
+function emitRepoAdded(method: RepoMethod, alreadyExisted: boolean): void {
+  // Why: re-adding an existing repo (matched by path inside the handler)
+  // is not a new activation event. Suppressing the duplicate keeps the
+  // funnel honest and avoids inflating `repo_added` for users who
+  // re-pick the same folder.
+  if (alreadyExisted) {
+    return
+  }
+  // Why: cohort must read AFTER `store.addRepo()` lands so the just-added
+  // repo is counted — every call site below already emits post-addRepo, so
+  // `getCohortAtEmit()` here returns the user's Nth `repo_added` as `N`.
+  // See docs/onboarding-funnel-cohort-addendum.md §Read-vs-write ordering.
+  track('repo_added', { method, ...getCohortAtEmit() })
+}
 
 // Why: module-scoped so the abort handle survives window re-creation on macOS.
 // registerRepoHandlers is called again when a new BrowserWindow is created,
@@ -42,6 +71,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('repos:list')
   ipcMain.removeHandler('repos:add')
   ipcMain.removeHandler('repos:remove')
+  ipcMain.removeHandler('repos:reorder')
   ipcMain.removeHandler('repos:update')
   ipcMain.removeHandler('repos:pickFolder')
   ipcMain.removeHandler('repos:pickDirectory')
@@ -50,7 +80,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('repos:getGitUsername')
   ipcMain.removeHandler('repos:getBaseRefDefault')
   ipcMain.removeHandler('repos:searchBaseRefs')
+  ipcMain.removeHandler('repos:searchBaseRefDetails')
   ipcMain.removeHandler('repos:addRemote')
+  ipcMain.removeHandler('repos:create')
   ipcMain.removeHandler('sparsePresets:list')
   ipcMain.removeHandler('sparsePresets:save')
   ipcMain.removeHandler('sparsePresets:remove')
@@ -73,6 +105,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       // Check if already added
       const existing = store.getRepos().find((r) => r.path === args.path)
       if (existing) {
+        emitRepoAdded('folder_picker', true)
         return { repo: existing }
       }
 
@@ -80,14 +113,15 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         id: randomUUID(),
         path: args.path,
         displayName: getRepoName(args.path),
-        badgeColor: REPO_COLORS[store.getRepos().length % REPO_COLORS.length],
+        badgeColor: DEFAULT_REPO_BADGE_COLOR,
         addedAt: Date.now(),
         kind: repoKind
       }
 
       store.addRepo(repo)
-      await rebuildAuthorizedRootsCache(store)
+      invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
+      emitRepoAdded('folder_picker', false)
       return { repo }
     }
   )
@@ -134,6 +168,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         .getRepos()
         .find((r) => r.connectionId === args.connectionId && r.path === resolvedPath)
       if (existing) {
+        emitRepoAdded('folder_picker', true)
         return { repo: existing }
       }
 
@@ -177,7 +212,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         id: randomUUID(),
         path: resolvedPath,
         displayName,
-        badgeColor: REPO_COLORS[store.getRepos().length % REPO_COLORS.length],
+        badgeColor: DEFAULT_REPO_BADGE_COLOR,
         addedAt: Date.now(),
         kind: repoKind,
         connectionId: args.connectionId
@@ -194,13 +229,220 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         mux.notify('session.registerRoot', { rootPath: resolvedPath })
       }
 
+      emitRepoAdded('folder_picker', false)
       return { repo }
+    }
+  )
+
+  // Creates a new repo or folder from scratch (orca#763). An empty initial
+  // commit is required for git repos so HEAD has a branch ref — Orca's
+  // worktree features all need one.
+  ipcMain.handle(
+    'repos:create',
+    async (
+      _event,
+      args: { parentPath: string; name: string; kind: 'git' | 'folder' }
+    ): Promise<{ repo: Repo } | { error: string }> => {
+      const name = args.name?.trim() ?? ''
+      const parentPath = args.parentPath?.trim() ?? ''
+      // Why: IPC input is untrusted — coerce to the narrow union so a bogus
+      // string (e.g. "x") can't skip git init yet persist as kind: "x" in the
+      // store. Mirrors the coercion in repos:add above.
+      const repoKind: 'git' | 'folder' = args.kind === 'folder' ? 'folder' : 'git'
+
+      if (!name) {
+        return { error: 'Name cannot be empty' }
+      }
+      // Block slashes and ./.. so the name can't escape the chosen parent.
+      // The UI already disables submit in these cases; this guards direct IPC use.
+      if (/[\\/]/.test(name) || name === '.' || name === '..') {
+        return { error: 'Name cannot contain slashes or be "." / ".."' }
+      }
+      if (!parentPath) {
+        return { error: 'Parent directory is required' }
+      }
+      // Why: blocks CWD-relative paths from slipping through the IPC boundary;
+      // the UI uses pickDirectory which returns absolute paths, this guards
+      // direct IPC use (and keeps targetPath stable across process cwd changes).
+      if (!isAbsolute(parentPath)) {
+        return { error: 'Parent directory must be an absolute path' }
+      }
+
+      const targetPath = join(parentPath, name)
+
+      // Dedup by path (same as repos:add) so a double-click on Create doesn't
+      // produce two sidebar entries pointing at the same folder. This is the
+      // first of three dedup checks; see the pre-addRepo check below for why
+      // the race matters even after this one passes.
+      const existing = store.getRepos().find((r) => r.path === targetPath)
+      if (existing) {
+        emitRepoAdded('folder_picker', true)
+        return { repo: existing }
+      }
+
+      // Empty pre-existing directories are allowed (e.g. one the user made in
+      // Finder first). Non-empty ones are rejected so we don't overwrite files.
+      let createdDir = false
+      let targetExists = false
+      try {
+        await access(targetPath)
+        targetExists = true
+      } catch (err) {
+        // Why: only ENOENT means "the path is free to use". Other codes
+        // (EACCES, ENOTDIR, EPERM, ELOOP, ...) mean something is in the way
+        // that mkdir can't fix — surface a precise error instead of falling
+        // through to mkdir and returning a misleading "Failed to create
+        // directory" message.
+        //
+        // Why the message fallback: fs.promises.access always attaches a
+        // NodeJS.ErrnoException code in production, but plain Error objects
+        // thrown in tests / non-Node contexts won't — treat a message that
+        // reads like ENOENT as one so we don't over-reject.
+        const code =
+          err && typeof err === 'object' && 'code' in err
+            ? (err as NodeJS.ErrnoException).code
+            : undefined
+        const looksLikeEnoent =
+          code === 'ENOENT' ||
+          (code === undefined && err instanceof Error && /ENOENT/.test(err.message))
+        if (!looksLikeEnoent) {
+          const message = err instanceof Error ? err.message : String(err)
+          return { error: `Cannot access target path: ${message}` }
+        }
+      }
+
+      if (targetExists) {
+        try {
+          const entries = await readdir(targetPath)
+          if (entries.length > 0) {
+            return {
+              error: `"${name}" already exists at this location and is not empty.`
+            }
+          }
+        } catch (err) {
+          // Why: access succeeded but readdir failed — the path exists but we
+          // can't inspect it (e.g. it's a file, not a directory; or perms).
+          // mkdir would definitely fail here too, so return a distinct error.
+          const message = err instanceof Error ? err.message : String(err)
+          return { error: `Failed to read directory: ${message}` }
+        }
+      } else {
+        try {
+          await mkdir(targetPath, { recursive: false })
+          createdDir = true
+        } catch (err) {
+          // Why: EEXIST here means another concurrent repos:create for the
+          // same path won the mkdir race. If they already added the repo to
+          // the store, return that entry instead of a confusing error. This
+          // is the second dedup check; see the pre-addRepo check below for
+          // the full race explanation.
+          const code =
+            err && typeof err === 'object' && 'code' in err
+              ? (err as NodeJS.ErrnoException).code
+              : undefined
+          const isEexist = code === 'EEXIST' || (err instanceof Error && /EEXIST/.test(err.message))
+          if (isEexist) {
+            const raceWinner = store.getRepos().find((r) => r.path === targetPath)
+            if (raceWinner) {
+              return { repo: raceWinner }
+            }
+          }
+          const message = err instanceof Error ? err.message : String(err)
+          return { error: `Failed to create directory: ${message}` }
+        }
+      }
+
+      if (repoKind === 'git') {
+        // Why: track which git step is running so the catch can attribute the
+        // failure correctly. The identity-hint regex is only meaningful during
+        // commit — git init itself never produces "Please tell me who you are".
+        let step: 'init' | 'commit' = 'init'
+        try {
+          await gitExecFileAsync(['init'], { cwd: targetPath })
+          step = 'commit'
+          await gitExecFileAsync(['commit', '--allow-empty', '-m', 'Initial commit'], {
+            cwd: targetPath
+          })
+        } catch (err) {
+          // Only remove the directory if we made it. A pre-existing folder the
+          // user picked must survive so they can retry after fixing git config.
+          // Why: if we didn't make the directory but `git init` created `.git/`
+          // inside it, strip just `.git/` so the user's folder looks the way
+          // they left it. Retrying works either way, but leaving a half-init'd
+          // repo behind is confusing if they choose to skip the retry.
+          if (createdDir) {
+            await rm(targetPath, { recursive: true, force: true }).catch(() => {})
+          } else if (step === 'commit') {
+            await rm(join(targetPath, '.git'), { recursive: true, force: true }).catch(() => {})
+          }
+          const message = err instanceof Error ? err.message : String(err)
+          if (
+            step === 'commit' &&
+            /Please tell me who you are|user\.name|user\.email/i.test(message)
+          ) {
+            return {
+              error:
+                'Git author identity is not configured. Run `git config --global user.name "Your Name"` and `git config --global user.email "you@example.com"`, then try again.'
+            }
+          }
+          const stepLabel =
+            step === 'init'
+              ? 'Failed to initialize git repository'
+              : 'Failed to create initial commit'
+          return { error: `${stepLabel}: ${message}` }
+        }
+      }
+
+      // Why: ipcMain.handle doesn't serialize concurrent calls; re-running the
+      // dedup lookup here closes the window between the first check and
+      // addRepo. A second repos:create for the same path that raced past the
+      // initial dedup now returns the entry the first call persisted.
+      const raceWinner = store.getRepos().find((r) => r.path === targetPath)
+      if (raceWinner) {
+        // Why: do NOT rm even if this invocation created the directory — the
+        // other invocation is using it. Leaking a freshly-made empty folder on
+        // a rare race is strictly safer than deleting a directory the winning
+        // call (and the user) now owns.
+        emitRepoAdded('folder_picker', true)
+        return { repo: raceWinner }
+      }
+
+      const repo: Repo = {
+        id: randomUUID(),
+        path: targetPath,
+        displayName: name,
+        badgeColor: DEFAULT_REPO_BADGE_COLOR,
+        addedAt: Date.now(),
+        kind: repoKind
+      }
+
+      store.addRepo(repo)
+      invalidateAuthorizedRootsCache()
+      notifyReposChanged(mainWindow)
+      emitRepoAdded('folder_picker', false)
+      return { repo }
+    }
+  )
+
+  ipcMain.handle(
+    'repos:reorder',
+    (_event, args: { orderedIds: string[] }): { status: 'applied' | 'rejected' } => {
+      // Why: validate at the IPC boundary — IPC input is untrusted and a
+      // permutation mismatch means the renderer's drag was stale relative to
+      // a concurrent add/remove. Reject so the renderer can resync.
+      const ids = Array.isArray(args?.orderedIds) ? args.orderedIds : []
+      const applied = store.reorderRepos(ids)
+      if (applied) {
+        notifyReposChanged(mainWindow)
+        return { status: 'applied' }
+      }
+      return { status: 'rejected' }
     }
   )
 
   ipcMain.handle('repos:remove', async (_event, args: { repoId: string }) => {
     store.removeRepo(args.repoId)
-    await rebuildAuthorizedRootsCache(store)
+    invalidateAuthorizedRootsCache()
     notifyReposChanged(mainWindow)
   })
 
@@ -218,6 +460,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'hookSettings'
             | 'worktreeBaseRef'
             | 'kind'
+            | 'symlinkPaths'
             | 'issueSourcePreference'
           >
         >
@@ -238,6 +481,18 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         updates.issueSourcePreference !== 'auto'
       ) {
         delete updates.issueSourcePreference
+      }
+      // Why: `symlinkPaths` is consumed by `createWorktreeSymlinks` which
+      // calls `.trim()` on each entry. A renderer bug or preload-version skew
+      // that persists a non-`string[]` value (e.g. `[42, null]`, a bare
+      // string) would throw inside the worktree-create path with no UI
+      // signal. Strip invalid shapes at the boundary the same way
+      // `issueSourcePreference` is validated above.
+      if ('symlinkPaths' in updates && updates.symlinkPaths !== undefined) {
+        const v = updates.symlinkPaths as unknown
+        if (!Array.isArray(v) || !v.every((e) => typeof e === 'string')) {
+          delete updates.symlinkPaths
+        }
       }
       const updated = store.updateRepo(args.repoId, updates)
       if (updated) {
@@ -347,6 +602,10 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       if (!repoName) {
         throw new Error('Could not determine repository name from URL')
       }
+      // Why: gitSpawn uses args.destination as cwd, so it must exist before
+      // spawn — fresh installs may have a defaulted parent dir that does not
+      // exist yet (e.g. ~/orca). recursive: true is a no-op when present.
+      await mkdir(args.destination, { recursive: true })
       const clonePath = join(args.destination, repoName)
 
       // Why: use spawn instead of execFile so there is no maxBuffer limit.
@@ -420,9 +679,12 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           const updated = store.updateRepo(existing.id, { kind: 'git' })
           if (updated) {
             notifyReposChanged(mainWindow)
+            // Why: folder→git upgrade is a real new git repo provisioning event.
+            emitRepoAdded('clone_url', false)
             return updated
           }
         }
+        emitRepoAdded('clone_url', true)
         return existing
       }
 
@@ -430,14 +692,15 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         id: randomUUID(),
         path: clonePath,
         displayName: getRepoName(clonePath),
-        badgeColor: REPO_COLORS[store.getRepos().length % REPO_COLORS.length],
+        badgeColor: DEFAULT_REPO_BADGE_COLOR,
         addedAt: Date.now(),
         kind: 'git'
       }
 
       store.addRepo(repo)
-      await rebuildAuthorizedRootsCache(store)
+      invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
+      emitRepoAdded('clone_url', false)
       return repo
     }
   )
@@ -544,46 +807,67 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.handle(
     'repos:searchBaseRefs',
     async (_event, args: { repoId: string; query: string; limit?: number }) => {
-      const repo = store.getRepo(args.repoId)
-      if (!repo || isFolderRepo(repo)) {
-        return []
-      }
-      const limit = args.limit ?? 25
-      // Why: remote repos need the relay to list branches on the remote host.
-      if (repo.connectionId) {
-        const provider = getSshGitProvider(repo.connectionId)
-        if (!provider) {
-          return []
-        }
-        // Why: mirror the local path's sanitization (normalizeRefSearchQuery
-        // in ../git/repo.ts) — strip glob metacharacters to prevent glob
-        // injection via the SSH branch, and short-circuit empty queries so
-        // we don't leak every ref. Without this the SSH path diverges from
-        // the local path's behavior.
-        const normalizedQuery = normalizeRefSearchQuery(args.query)
-        if (!normalizedQuery) {
-          return []
-        }
-        try {
-          // Why: argv (including the two-remote-glob rationale) lives in
-          // buildSearchBaseRefsArgv so the SSH and local paths cannot drift.
-          const result = await provider.exec(buildSearchBaseRefsArgv(normalizedQuery), repo.path)
-          // Why: delegate the NUL-parse + HEAD filter + dedup + limit pipeline
-          // to the shared helper so the SSH and local paths cannot diverge.
-          // See parseAndFilterSearchRefs in ../git/repo.ts for the dedup +
-          // HEAD-filter rationale.
-          return parseAndFilterSearchRefs(result.stdout, limit)
-        } catch (err) {
-          console.warn('[repos:searchBaseRefs] SSH for-each-ref failed', {
-            path: repo.path,
-            err
-          })
-          return []
-        }
-      }
-      return searchBaseRefs(repo.path, args.query, limit)
+      return (await searchBaseRefDetailsForRepo(store, args)).map((entry) => entry.refName)
     }
   )
+
+  ipcMain.handle(
+    'repos:searchBaseRefDetails',
+    async (_event, args: { repoId: string; query: string; limit?: number }) => {
+      return searchBaseRefDetailsForRepo(store, args)
+    }
+  )
+}
+
+async function searchBaseRefDetailsForRepo(
+  store: Store,
+  args: { repoId: string; query: string; limit?: number }
+): Promise<BaseRefSearchResult[]> {
+  const repo = store.getRepo(args.repoId)
+  if (!repo || isFolderRepo(repo)) {
+    return []
+  }
+  const limit = args.limit ?? 25
+  // Why: remote repos need the relay to list branches on the remote host.
+  if (repo.connectionId) {
+    const provider = getSshGitProvider(repo.connectionId)
+    if (!provider) {
+      return []
+    }
+    // Why: mirror the local path's sanitization (normalizeRefSearchQuery
+    // in ../git/repo.ts) — strip glob metacharacters to prevent glob
+    // injection via the SSH branch, and short-circuit empty queries so
+    // we don't leak every ref. Without this the SSH path diverges from
+    // the local path's behavior.
+    const normalizedQuery = normalizeRefSearchQuery(args.query)
+    if (!normalizedQuery) {
+      return []
+    }
+    try {
+      // Why: argv (including the two-remote-glob rationale) lives in
+      // buildSearchBaseRefsArgv so the SSH and local paths cannot drift.
+      const [result, remotesResult] = await Promise.all([
+        provider.exec(buildSearchBaseRefsArgv(normalizedQuery), repo.path),
+        provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
+      ])
+      // Why: delegate the NUL-parse + HEAD filter + dedup + limit pipeline
+      // to the shared helper so the SSH and local paths cannot diverge.
+      // See parseAndFilterSearchRefs in ../git/repo.ts for the dedup +
+      // HEAD-filter rationale.
+      const remotes = remotesResult.stdout
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+      return parseAndFilterSearchRefDetails(result.stdout, limit, remotes)
+    } catch (err) {
+      console.warn('[repos:searchBaseRefs] SSH for-each-ref failed', {
+        path: repo.path,
+        err
+      })
+      return []
+    }
+  }
+  return searchBaseRefDetails(repo.path, args.query, limit)
 }
 
 function notifyReposChanged(mainWindow: BrowserWindow): void {

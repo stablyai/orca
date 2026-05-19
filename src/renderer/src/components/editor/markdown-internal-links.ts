@@ -15,7 +15,14 @@ export type MarkdownLinkTarget =
       line?: number
       column?: number
     }
-  | { kind: 'file'; uri: string }
+  | {
+      kind: 'file'
+      uri: string
+      absolutePath: string
+      relativePath?: string
+      line?: number
+      column?: number
+    }
 
 // Why: renderer runs with sandbox + contextIsolation, so process.platform is
 // unavailable. navigator.userAgent is the portable fallback (AGENTS.md).
@@ -200,12 +207,22 @@ export function resolveMarkdownLinkTarget(
     }
   }
 
+  const relativePath =
+    worktreeRoot !== null && isDescendantOf(pathForClassification, worktreeRoot)
+      ? computeRelativePath(pathForClassification, worktreeRoot)
+      : undefined
+
   // Rebuild a file: URI without the line anchor so the OS handler gets a
   // clean path. Use the original resolved URL minus the hash as an
   // approximation; for trailing-colon paths there's no clean URL form,
   // so we reconstruct from the stripped absolute path.
-  if (line === undefined) {
-    return { kind: 'file', uri: resolved.toString() }
+  const cleanUri = line === undefined ? resolved.toString() : toFileUrl(pathForClassification)
+  return {
+    kind: 'file',
+    uri: cleanUri,
+    absolutePath: pathForClassification,
+    relativePath,
+    line,
+    column
   }
-  return { kind: 'file', uri: toFileUrl(pathForClassification) }
 }

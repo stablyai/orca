@@ -1,13 +1,14 @@
 import React, { useCallback } from 'react'
 import { Settings as SettingsIcon } from 'lucide-react'
 import { toast } from 'sonner'
-import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { waitForAgentReady } from '@/lib/agent-ready-wait'
 import type { TuiAgent } from '../../../../shared/types'
+import type { LaunchSource } from '../../../../shared/telemetry-events'
 
 export type QuickLaunchAgentMenuItemsProps = {
   worktreeId: string
@@ -16,6 +17,16 @@ export type QuickLaunchAgentMenuItemsProps = {
    *  Reuses the TabBar's existing double-rAF handoff — this component does
    *  not duplicate the focus logic. */
   onFocusTerminal: (tabId: string) => void
+  /** Optional initial prompt forwarded to `launchAgentInNewTab`. When set,
+   *  the picked agent boots with this prompt — argv/flag agents auto-submit,
+   *  followup-path agents land it as a draft for the user to confirm. */
+  prompt?: string
+  /** Use `'draft'` for generated context that must not become shell syntax. */
+  promptDelivery?: 'auto-submit' | 'draft'
+  /** Telemetry surface for `agent_started.launch_source`. Defaults to
+   *  `'tab_bar_quick_launch'` so the existing tab-bar `+` callsite is
+   *  unchanged. */
+  launchSource?: LaunchSource
 }
 
 function getCatalogEntry(agent: TuiAgent): { id: TuiAgent; label: string } | null {
@@ -37,10 +48,36 @@ function orderAgents(
   return [defaultAgent, ...inCatalogOrder.filter((id) => id !== defaultAgent)]
 }
 
+export function shouldShowLaunchWatchdogTimeout({
+  launchSource,
+  prompt,
+  pasteDraftAfterLaunch,
+  hasPty
+}: {
+  launchSource?: LaunchSource
+  prompt?: string
+  pasteDraftAfterLaunch: boolean
+  hasPty: boolean
+}): boolean {
+  return !(
+    launchSource === 'notes_send' &&
+    (prompt?.trim().length ?? 0) > 0 &&
+    pasteDraftAfterLaunch &&
+    hasPty
+  )
+}
+
+function getLaunchWatchdogTimeoutMessage(label: string): string {
+  return `Couldn't launch ${label} — the terminal is still open.`
+}
+
 function QuickLaunchAgentMenuItemsInner({
   worktreeId,
   groupId,
-  onFocusTerminal
+  onFocusTerminal,
+  prompt,
+  promptDelivery,
+  launchSource
 }: QuickLaunchAgentMenuItemsProps): React.JSX.Element | null {
   // Why: must be a reactive selector (not getConnectionId() which reads a
   // snapshot via getState()). This ensures the component re-renders when the
@@ -69,7 +106,14 @@ function QuickLaunchAgentMenuItemsInner({
     (agent: TuiAgent) => {
       const entry = getCatalogEntry(agent)
       const label = entry?.label ?? agent
-      const result = launchAgentInNewTab({ agent, worktreeId, groupId })
+      const result = launchAgentInNewTab({
+        agent,
+        worktreeId,
+        groupId,
+        ...(prompt !== undefined ? { prompt } : {}),
+        ...(promptDelivery !== undefined ? { promptDelivery } : {}),
+        ...(launchSource !== undefined ? { launchSource } : {})
+      })
       if (!result) {
         toast.error(`Could not build launch command for ${label}.`)
         return
@@ -79,7 +123,8 @@ function QuickLaunchAgentMenuItemsInner({
       // Why: the watchdog guards against "queued startup command never ran" —
       // e.g. shell failed to spawn. Suppress the toast if the tab has been
       // closed or the worktree has been navigated away from before the
-      // deadline (see §States: Launch failure handling).
+      // deadline (see §States: Launch failure handling). Bracketed-paste
+      // failures have their own toast in launch-agent-in-new-tab.ts.
       void waitForAgentReady(result.tabId, result.startupPlan.expectedProcess, {
         timeoutMs: 5000
       }).then((ready) => {
@@ -96,17 +141,27 @@ function QuickLaunchAgentMenuItemsInner({
         if (state.activeWorktreeId !== worktreeId) {
           return
         }
-        toast.message(`Couldn't launch ${label} — the terminal is still open.`)
+        const hasPty = (state.ptyIdsByTabId[result.tabId]?.length ?? 0) > 0
+        if (
+          !shouldShowLaunchWatchdogTimeout({
+            launchSource,
+            prompt,
+            pasteDraftAfterLaunch: result.pasteDraftAfterLaunch,
+            hasPty
+          })
+        ) {
+          return
+        }
+        toast.message(getLaunchWatchdogTimeoutMessage(label))
       })
     },
-    [worktreeId, groupId, onFocusTerminal]
+    [worktreeId, groupId, onFocusTerminal, prompt, promptDelivery, launchSource]
   )
 
   const agents = detectedIds ? orderAgents(defaultAgent, detectedIds) : []
 
   return (
     <>
-      <DropdownMenuSeparator />
       {agents.length === 0 ? (
         <DropdownMenuItem
           disabled

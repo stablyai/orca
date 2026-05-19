@@ -42,6 +42,7 @@ type AgentComboboxProps = {
 }
 
 const BLANK_VALUE = '__none__'
+const TRIGGER_MIN_WIDTH_CLASS = '!min-w-[260px]'
 
 type ItemRenderArgs = {
   key: string
@@ -239,18 +240,21 @@ export default function AgentCombobox({
             aria-expanded={open}
             onKeyDown={handleTriggerKeyDown}
             className={cn(
-              'h-8 min-w-[184px] justify-between px-3 text-xs font-normal',
-              triggerClassName
+              // Why: callers sometimes pass `min-w-0` for grid layouts, but
+              // the compact trigger still needs room for "GitHub Copilot".
+              'h-8 justify-between px-3 text-xs font-normal',
+              triggerClassName,
+              TRIGGER_MIN_WIDTH_CLASS
             )}
             data-agent-combobox-root="true"
           >
             {selectedAgent ? (
-              <span className="inline-flex min-w-0 items-center gap-1.5">
+              <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
                 <AgentIcon agent={selectedAgent.id} />
                 <span className="truncate">{selectedAgent.label}</span>
               </span>
             ) : (
-              <span className="inline-flex min-w-0 items-center gap-1.5">
+              <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
                 <Terminal className="size-3.5" />
                 <span className="truncate">Blank Terminal</span>
               </span>

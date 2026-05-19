@@ -21,7 +21,7 @@ import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types
 
 export function useRemoteRepo(
   fetchWorktrees: (repoId: string) => Promise<void>,
-  setStep: (step: 'add' | 'clone' | 'remote' | 'setup') => void,
+  setStep: (step: 'add' | 'clone' | 'remote' | 'create' | 'setup') => void,
   setAddedRepo: (repo: Repo | null) => void,
   closeModal: () => void
 ) {
@@ -240,7 +240,7 @@ export function RemoteStep({
               </Button>
             </div>
           ) : (
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
               {sshTargets.map((target) => (
                 <SshTargetRow
                   key={target.id}
@@ -306,6 +306,7 @@ type CloneStepProps = {
   cloneError: string | null
   cloneProgress: { phase: string; percent: number } | null
   isCloning: boolean
+  disableDestinationPicker?: boolean
   onUrlChange: (value: string) => void
   onDestChange: (value: string) => void
   onPickDestination: () => void
@@ -318,6 +319,7 @@ export function CloneStep({
   cloneError,
   cloneProgress,
   isCloning,
+  disableDestinationPicker = false,
   onUrlChange,
   onDestChange,
   onPickDestination,
@@ -369,7 +371,8 @@ export function CloneStep({
               size="sm"
               className="h-8 px-2 shrink-0"
               onClick={onPickDestination}
-              disabled={isCloning}
+              disabled={isCloning || disableDestinationPicker}
+              title={disableDestinationPicker ? 'Enter a server path manually' : 'Choose folder'}
             >
               <Folder className="size-3.5" />
             </Button>

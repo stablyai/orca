@@ -1,10 +1,24 @@
 import type { ITerminalOptions } from '@xterm/xterm'
 
+type TerminalCursorStyle = NonNullable<ITerminalOptions['cursorStyle']>
+type TerminalCursorInactiveStyle = NonNullable<ITerminalOptions['cursorInactiveStyle']>
+
+export function resolveTerminalCursorInactiveStyle(
+  cursorStyle: TerminalCursorStyle | undefined
+): TerminalCursorInactiveStyle {
+  // Why: xterm's default inactive outline turns a bar/underline cursor into
+  // extra strokes in blurred panes; only block cursors benefit from outline.
+  return (cursorStyle ?? 'bar') === 'block' ? 'outline' : (cursorStyle ?? 'bar')
+}
+
 export function buildDefaultTerminalOptions(): ITerminalOptions {
+  const cursorStyle: TerminalCursorStyle = 'bar'
+
   return {
     allowProposedApi: true,
     cursorBlink: true,
-    cursorStyle: 'bar',
+    cursorStyle,
+    cursorInactiveStyle: resolveTerminalCursorInactiveStyle(cursorStyle),
     fontSize: 14,
     // Cross-platform fallback chain; keep in sync with FALLBACK_FONTS in layout-serialization.ts.
     fontFamily:

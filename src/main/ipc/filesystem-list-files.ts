@@ -43,7 +43,7 @@ export async function listQuickOpenFiles(
   // UNC paths up-front before the shared line normalizer runs.
   const wslInfo = parseWslPath(authorizedRootPath)
 
-  const { primary, envPass } = buildRgArgsForQuickOpen({
+  const { primary, ignoredPass } = buildRgArgsForQuickOpen({
     // Why: rg evaluates root-relative exclude globs against cwd only when the
     // search target is cwd-relative. With an absolute target, `!packages/app`
     // filters output after traversal but does not prune the nested worktree.
@@ -159,7 +159,7 @@ export async function listQuickOpenFiles(
   }
 
   try {
-    await Promise.all([runRg(primary), runRg(envPass)])
+    await Promise.all([runRg(primary), runRg(ignoredPass)])
   } catch (err) {
     killSurvivors()
     throw err
@@ -172,15 +172,14 @@ export async function listQuickOpenFiles(
  *
  * Why two git ls-files calls: the first lists tracked + untracked-but-not-ignored
  * files (mirrors rg --files --hidden with gitignore respect). The second
- * surfaces .env* files that are typically gitignored but users frequently
- * need in quick-open (mirrors the second rg call with --no-ignore-vcs).
+ * surfaces ignored files (mirrors the second rg call with --no-ignore-vcs).
  */
 function listFilesWithGit(
   rootPath: string,
   excludePathPrefixes: readonly string[]
 ): Promise<string[]> {
   const files = new Set<string>()
-  const { primary, envPass } = buildGitLsFilesArgsForQuickOpen(excludePathPrefixes)
+  const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen(excludePathPrefixes)
 
   const runGitLsFiles = (args: string[]): Promise<void> => {
     return new Promise((resolve) => {
@@ -251,5 +250,7 @@ function listFilesWithGit(
     })
   }
 
-  return Promise.all([runGitLsFiles(primary), runGitLsFiles(envPass)]).then(() => Array.from(files))
+  return Promise.all([runGitLsFiles(primary), runGitLsFiles(ignoredPass)]).then(() =>
+    Array.from(files)
+  )
 }

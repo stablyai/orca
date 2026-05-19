@@ -1,6 +1,7 @@
+/* eslint-disable max-lines -- Why: the add-project dialog centralizes step routing, clone/remote/create state, and reset semantics across five steps so the modal flow stays in one place. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { FolderOpen, GitBranchPlus, Settings, ArrowLeft, Globe, Monitor } from 'lucide-react'
+import { FolderOpen, ArrowLeft, Globe, Monitor } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
   Dialog,
@@ -10,26 +11,36 @@ import {
   DialogDescription
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { LinkedWorktreeItem } from './LinkedWorktreeItem'
+import { track } from '@/lib/telemetry'
 import { RemoteStep, CloneStep, useRemoteRepo } from './AddRepoSteps'
+import { CreateStep, useCreateRepo } from './AddRepoCreateStep'
+import { SetupStep } from './AddRepoSetupStep'
+import { getDefaultCloneParent } from './clone-defaults'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { Repo, Worktree } from '../../../../shared/types'
+import { finalizeImportedRepoAfterSkip } from './add-repo-skip-finalization'
 
 const AddRepoDialog = React.memo(function AddRepoDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
   const closeModal = useAppStore((s) => s.closeModal)
   const addRepo = useAppStore((s) => s.addRepo)
+  const addRepoPath = useAppStore((s) => s.addRepoPath)
   const repos = useAppStore((s) => s.repos)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const settings = useAppStore((s) => s.settings)
 
-  const [step, setStep] = useState<'add' | 'clone' | 'remote' | 'setup'>('add')
+  const [step, setStep] = useState<'add' | 'clone' | 'remote' | 'create' | 'setup'>('add')
   const [addedRepo, setAddedRepo] = useState<Repo | null>(null)
   const [isAdding, setIsAdding] = useState(false)
+  const [serverPath, setServerPath] = useState('')
+  const [isAddingServerPath, setIsAddingServerPath] = useState(false)
   const [cloneUrl, setCloneUrl] = useState('')
   const [cloneDestination, setCloneDestination] = useState('')
   const [isCloning, setIsCloning] = useState(false)
@@ -40,6 +51,9 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
 
   // Why: monotonic ID so stale clone callbacks can detect they were superseded.
   const cloneGenRef = useRef(0)
+  // Why: track whether we've already auto-filled for this entry into the clone step,
+  // so a late settings hydration still gets a chance to set the default.
+  const cloneStepAutoFilledRef = useRef(false)
 
   const {
     sshTargets,
@@ -55,6 +69,21 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     handleAddRemoteRepo,
     handleConnectTarget
   } = useRemoteRepo(fetchWorktrees, setStep, setAddedRepo, closeModal)
+
+  const {
+    createName,
+    createParent,
+    createKind,
+    createError,
+    isCreating,
+    setCreateName,
+    setCreateParent,
+    setCreateKind,
+    setCreateError,
+    resetCreateState,
+    handlePickParent,
+    handleCreate
+  } = useCreateRepo(fetchWorktrees, setStep, setAddedRepo, closeModal)
   useEffect(() => {
     if (!isCloning) {
       return
@@ -62,8 +91,30 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     return window.api.repos.onCloneProgress(setCloneProgress)
   }, [isCloning])
 
+  useEffect(() => {
+    if (step !== 'clone') {
+      cloneStepAutoFilledRef.current = false
+      return
+    }
+    if (cloneStepAutoFilledRef.current) {
+      return
+    }
+    if (cloneDestination) {
+      return
+    }
+    if (settings?.activeRuntimeEnvironmentId?.trim()) {
+      return
+    }
+    if (!settings?.workspaceDir) {
+      return
+    }
+    cloneStepAutoFilledRef.current = true
+    setCloneDestination(getDefaultCloneParent(settings.workspaceDir))
+  }, [step, cloneDestination, settings?.activeRuntimeEnvironmentId, settings?.workspaceDir])
+
   const isOpen = activeModal === 'add-repo'
   const repoId = addedRepo?.id ?? ''
+  const isRuntimeEnvironmentActive = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
 
   const worktrees = useMemo(() => {
     return worktreesByRepo[repoId] ?? []
@@ -79,8 +130,6 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     })
   }, [worktrees])
 
-  const hasWorktrees = worktrees.length > 0
-
   const resetState = useCallback(() => {
     cloneGenRef.current++
     // Why: kill the git clone process if one is running, so backing out
@@ -89,13 +138,16 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     setStep('add')
     setAddedRepo(null)
     setIsAdding(false)
+    setServerPath('')
+    setIsAddingServerPath(false)
     setCloneUrl('')
     setCloneDestination('')
     setIsCloning(false)
     setCloneError(null)
     setCloneProgress(null)
+    resetCreateState()
     resetRemoteState()
-  }, [resetRemoteState])
+  }, [resetRemoteState, resetCreateState])
 
   // Why: reset state on close so reopening doesn't show stale step/repo.
   useEffect(() => {
@@ -104,7 +156,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     }
   }, [isOpen, resetState])
 
-  const isInputStep = step === 'add' || step === 'clone' || step === 'remote'
+  const isInputStep = step === 'add' || step === 'clone' || step === 'remote' || step === 'create'
 
   const handleBrowse = useCallback(async () => {
     setIsAdding(true)
@@ -123,13 +175,42 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     }
   }, [addRepo, fetchWorktrees, closeModal])
 
+  const handleAddServerPath = useCallback(
+    async (kind: 'git' | 'folder') => {
+      const path = serverPath.trim()
+      if (!path) {
+        return
+      }
+      setIsAddingServerPath(true)
+      try {
+        const repo = await addRepoPath(path, kind)
+        if (repo && isGitRepoKind(repo)) {
+          setAddedRepo(repo)
+          await fetchWorktrees(repo.id)
+          setStep('setup')
+        } else if (repo) {
+          closeModal()
+        }
+      } finally {
+        setIsAddingServerPath(false)
+      }
+    },
+    [addRepoPath, closeModal, fetchWorktrees, serverPath]
+  )
+
   const handlePickDestination = useCallback(async () => {
+    if (settings?.activeRuntimeEnvironmentId?.trim()) {
+      // Why: the native folder picker returns a client-local path. Runtime
+      // clone destinations must be typed as server paths.
+      toast.error('Enter a server path for the clone destination.')
+      return
+    }
     const dir = await window.api.repos.pickDirectory()
     if (dir) {
       setCloneDestination(dir)
       setCloneError(null)
     }
-  }, [])
+  }, [settings?.activeRuntimeEnvironmentId])
 
   const handleClone = useCallback(async () => {
     const trimmedUrl = cloneUrl.trim()
@@ -141,10 +222,24 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     setCloneError(null)
     setCloneProgress(null)
     try {
-      const repo = (await window.api.repos.clone({
-        url: trimmedUrl,
-        destination: cloneDestination.trim()
-      })) as Repo
+      const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+      const repo =
+        target.kind === 'environment'
+          ? (
+              await callRuntimeRpc<{ repo: Repo }>(
+                target,
+                'repo.clone',
+                {
+                  url: trimmedUrl,
+                  destination: cloneDestination.trim()
+                },
+                { timeoutMs: 10 * 60_000 }
+              )
+            ).repo
+          : ((await window.api.repos.clone({
+              url: trimmedUrl,
+              destination: cloneDestination.trim()
+            })) as Repo)
       // Why: if the user closed the dialog or clicked Back during the clone,
       // cloneGenRef will have been bumped by resetState. Ignore this stale result.
       if (gen !== cloneGenRef.current) {
@@ -179,6 +274,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
 
   const handleOpenWorktree = useCallback(
     (worktree: Worktree) => {
+      track('add_repo_setup_step_action', { action: 'open_existing' })
       activateAndRevealWorktree(worktree.id)
       closeModal()
     },
@@ -186,29 +282,68 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   )
 
   const handleCreateWorktree = useCallback(() => {
+    // Why: Setup-step "Create" affordance — fires on click intent, not on IPC arrival, mirroring the other 4 actions in this dialog.
+    track('add_repo_setup_step_action', { action: 'create_worktree' })
     // Why: small delay so the Add Project dialog close animation finishes before
     // the composer modal takes focus; otherwise the dialog teardown can steal
     // the first focus frame from the composer's prompt textarea.
     closeModal()
     setTimeout(() => {
-      openModal('new-workspace-composer', { initialRepoId: repoId })
+      openModal('new-workspace-composer', { initialRepoId: repoId, telemetrySource: 'sidebar' })
     }, 150)
   }, [closeModal, openModal, repoId])
 
   const handleConfigureRepo = useCallback(() => {
+    track('add_repo_setup_step_action', { action: 'configure' })
     closeModal()
     openSettingsTarget({ pane: 'repo', repoId })
     openSettingsPage()
   }, [closeModal, openSettingsTarget, openSettingsPage, repoId])
 
+  const finishImportedRepoWithoutOpening = useCallback(async () => {
+    const importedRepoId = repoId
+    closeModal()
+    resetState()
+    if (!importedRepoId) {
+      return
+    }
+
+    await fetchWorktrees(importedRepoId)
+    const state = useAppStore.getState()
+    finalizeImportedRepoAfterSkip(state, importedRepoId)
+  }, [closeModal, fetchWorktrees, repoId, resetState])
+
   // Why: handleBack reuses resetState which already aborts clones and resets all fields.
   const handleBack = resetState
+
+  const handleSkip = useCallback(() => {
+    track('add_repo_setup_step_action', { action: 'skip' })
+    void finishImportedRepoWithoutOpening()
+  }, [finishImportedRepoWithoutOpening])
+
+  // Why: only the Setup step's "Add another project" back arrow counts as a
+  // funnel event — the in-flight Back arrows on clone/remote/create are not
+  // a Setup-step affordance. Keeping the emit scoped to this handler avoids
+  // also tagging mid-clone backs.
+  const handleSetupStepBack = useCallback(() => {
+    track('add_repo_setup_step_action', { action: 'back' })
+    handleBack()
+  }, [handleBack])
 
   return (
     <Dialog
       open={isOpen}
       onOpenChange={(open) => {
         if (!open) {
+          // Why: Radix only fires onOpenChange for internal triggers (X icon, ESC,
+          // outside-click), so this branch only runs for implicit closes — explicit
+          // Skip is handled on its own renderer-side click handler. Implicit closes
+          // on the Setup step are funnel-equivalent to Skip.
+          if (step === 'setup') {
+            track('add_repo_setup_step_action', { action: 'skip' })
+            void finishImportedRepoWithoutOpening()
+            return
+          }
           closeModal()
           resetState()
         }
@@ -217,7 +352,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       <DialogContent className="sm:max-w-lg">
         {/* Step indicator row — back button (step 2 only), dots, X is rendered by DialogContent */}
         <div className="flex items-center justify-center -mt-1">
-          {(step === 'clone' || step === 'remote') && (
+          {(step === 'clone' || step === 'remote' || step === 'create') && (
             <button
               className="absolute left-6 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               onClick={handleBack}
@@ -229,7 +364,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           {step === 'setup' && (
             <button
               className="absolute left-6 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-              onClick={handleBack}
+              onClick={handleSetupStepBack}
             >
               <ArrowLeft className="size-3" />
               Add another project
@@ -245,7 +380,76 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           </div>
         </div>
 
-        {step === 'add' ? (
+        {step === 'add' && isRuntimeEnvironmentActive ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>Add a server project</DialogTitle>
+              <DialogDescription>
+                Add a Git repository or folder that already exists on the selected runtime server.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3 pt-2">
+              <div className="space-y-1">
+                <label
+                  htmlFor="server-project-path"
+                  className="text-[11px] font-medium text-muted-foreground block"
+                >
+                  Server path
+                </label>
+                <Input
+                  id="server-project-path"
+                  value={serverPath}
+                  onChange={(event) => setServerPath(event.target.value)}
+                  placeholder="/home/user/project"
+                  className="h-11 text-sm font-mono"
+                  disabled={isAddingServerPath}
+                  autoFocus
+                  spellCheck={false}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  onClick={() => void handleAddServerPath('git')}
+                  disabled={!serverPath.trim() || isAddingServerPath}
+                  className="h-10"
+                >
+                  Add Git Project
+                </Button>
+                <Button
+                  onClick={() => void handleAddServerPath('folder')}
+                  disabled={!serverPath.trim() || isAddingServerPath}
+                  variant="outline"
+                  className="h-10"
+                >
+                  Open as Folder
+                </Button>
+              </div>
+              <div className="flex items-center justify-center gap-4 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCloneError(null)
+                    setStep('clone')
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  Clone into server path
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCreateError(null)
+                    setStep('create')
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  Create on server
+                </button>
+              </div>
+            </div>
+          </>
+        ) : step === 'add' ? (
           <>
             <DialogHeader>
               <DialogTitle>Add a project</DialogTitle>
@@ -300,6 +504,21 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
                 </div>
               </Button>
             </div>
+
+            {/* Secondary link rather than a fourth card — create-from-scratch
+               is a less common path than importing. See orca#763. */}
+            <div className="flex items-center justify-center pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setCreateError(null)
+                  setStep('create')
+                }}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                Or start a new project from scratch
+              </button>
+            </div>
           </>
         ) : step === 'remote' ? (
           <RemoteStep
@@ -331,6 +550,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
             cloneError={cloneError}
             cloneProgress={cloneProgress}
             isCloning={isCloning}
+            disableDestinationPicker={isRuntimeEnvironmentActive}
             onUrlChange={(value) => {
               setCloneUrl(value)
               setCloneError(null)
@@ -342,64 +562,38 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
             onPickDestination={handlePickDestination}
             onClone={handleClone}
           />
+        ) : step === 'create' ? (
+          <CreateStep
+            createName={createName}
+            createParent={createParent}
+            createKind={createKind}
+            createError={createError}
+            isCreating={isCreating}
+            manualParentEntry={isRuntimeEnvironmentActive}
+            onNameChange={(value) => {
+              setCreateName(value)
+              setCreateError(null)
+            }}
+            onParentChange={(value) => {
+              setCreateParent(value)
+              setCreateError(null)
+            }}
+            onKindChange={(kind) => {
+              setCreateKind(kind)
+              setCreateError(null)
+            }}
+            onPickParent={handlePickParent}
+            onCreate={handleCreate}
+          />
         ) : (
-          <>
-            <DialogHeader>
-              <DialogTitle>
-                {hasWorktrees ? 'Open or create a worktree' : 'Set up your first worktree'}
-              </DialogTitle>
-              <DialogDescription>
-                {hasWorktrees
-                  ? `${addedRepo?.displayName} has ${worktrees.length} worktree${worktrees.length !== 1 ? 's' : ''}. Open one to pick up where you left off, or create a new one.`
-                  : `Orca uses git worktrees as isolated task environments. Create one for ${addedRepo?.displayName} to get started.`}
-              </DialogDescription>
-            </DialogHeader>
-
-            {hasWorktrees && (
-              <div className="space-y-2 min-w-0">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Existing worktrees
-                </p>
-                <div className="space-y-1.5 max-h-[40vh] overflow-y-auto scrollbar-sleek pr-1">
-                  {sortedWorktrees.map((wt) => (
-                    <LinkedWorktreeItem
-                      key={wt.id}
-                      worktree={wt}
-                      onOpen={() => handleOpenWorktree(wt)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="flex flex-col gap-3 pt-2">
-              <Button onClick={handleCreateWorktree} className="w-full">
-                <GitBranchPlus className="size-4 mr-2" />
-                {hasWorktrees ? 'Create new worktree' : 'Create first worktree'}
-              </Button>
-
-              <div className="flex items-center justify-between">
-                <button
-                  className="inline-flex items-center justify-center gap-1.5 text-xs text-muted-foreground/70 hover:text-foreground transition-colors cursor-pointer"
-                  onClick={handleConfigureRepo}
-                >
-                  <Settings className="size-3" />
-                  Configure project
-                </button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-xs"
-                  onClick={() => {
-                    closeModal()
-                    resetState()
-                  }}
-                >
-                  Skip
-                </Button>
-              </div>
-            </div>
-          </>
+          <SetupStep
+            repoName={addedRepo?.displayName ?? ''}
+            sortedWorktrees={sortedWorktrees}
+            onOpenWorktree={handleOpenWorktree}
+            onCreateWorktree={handleCreateWorktree}
+            onConfigureRepo={handleConfigureRepo}
+            onSkip={handleSkip}
+          />
         )}
       </DialogContent>
     </Dialog>

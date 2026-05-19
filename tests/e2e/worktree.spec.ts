@@ -87,9 +87,12 @@ test.describe('Create Workspace', () => {
       })
       await orcaPage.waitForTimeout(100)
 
-      // 3. Type the workspace name into the Name input. This is what lets
-      // the composer pass its `workspaceName` guard inside submitQuick.
-      const nameInput = dialog.getByPlaceholder(/Workspace name/i)
+      // 3. Type the workspace name into the unified smart-name input.
+      // The composer's default mode is 'smart'; its placeholder advertises
+      // multiple input shapes ("Type a name, #1234, branch, GitHub or
+      // Linear URL"). Plain free-form text is treated as a workspace name
+      // by submitQuick, which is what we want here.
+      const nameInput = dialog.getByPlaceholder(/Type a name/i)
       await expect(nameInput).toBeVisible()
       await nameInput.fill(workspaceName)
 

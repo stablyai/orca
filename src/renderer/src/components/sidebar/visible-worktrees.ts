@@ -1,5 +1,7 @@
 import type { Worktree, Repo, TerminalTab } from '../../../../shared/types'
 import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
+import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 
@@ -79,6 +81,7 @@ export function computeVisibleWorktreeIds(
     filterRepoIds: string[]
     showActiveOnly: boolean
     tabsByWorktree: Record<string, TerminalTab[]> | null
+    ptyIdsByTabId: Record<string, string[]> | null
     browserTabsByWorktree?: Record<string, { id: string }[]> | null
     activeWorktreeId?: string | null
     // Why required: every caller (WorktreeList, getVisibleWorktreeIds
@@ -108,13 +111,21 @@ export function computeVisibleWorktreeIds(
   if (opts.showActiveOnly) {
     all = all.filter((w) => {
       const tabs = opts.tabsByWorktree?.[w.id] ?? []
-      const hasLiveTerminal = tabs.some((t) => t.ptyId)
+      const hasLiveTerminal = tabs.some((tab) =>
+        opts.ptyIdsByTabId ? tabHasLivePty(opts.ptyIdsByTabId, tab.id) : false
+      )
+      const hasHostMirroredTerminal = tabs.some((tab) => isWebTerminalSurfaceTabId(tab.id))
       const hasBrowserTabs = (opts.browserTabsByWorktree?.[w.id] ?? []).length > 0
       // Why: "Active only" should reflect the surfaces Orca can actually
       // restore into, not just PTY-backed terminals. A browser-tab worktree is
       // still active from the user's point of view even if it has no live PTY,
       // and the currently selected worktree should never vanish from the list.
-      return hasLiveTerminal || hasBrowserTabs || opts.activeWorktreeId === w.id
+      return (
+        hasLiveTerminal ||
+        hasHostMirroredTerminal ||
+        hasBrowserTabs ||
+        opts.activeWorktreeId === w.id
+      )
     })
   }
 
@@ -175,30 +186,22 @@ export function getVisibleWorktreeIds(): string[] {
 
   let sortedIds: string[]
 
-  // Why: matches WorktreeList's gate — when the experimental agent-activity
-  // feature is off, the agent-status map is not populated, so fall back to
-  // the non-status sort heuristics instead of scoring against an empty map.
-  const agentStatusForSort =
-    state.settings?.experimentalAgentDashboard === true ? state.agentStatusByPaneKey : undefined
   if (state.sortBy === 'smart') {
     sortedIds = sortWorktreesSmart(
       allWorktrees,
       state.tabsByWorktree,
       repoMap,
-      state.prCache,
-      agentStatusForSort
+      state.agentStatusByPaneKey,
+      state.runtimePaneTitlesByTabId,
+      state.ptyIdsByTabId,
+      state.migrationUnsupportedByPtyId,
+      state.terminalLayoutsByTabId
     ).map((w) => w.id)
   } else {
+    // Why empty map: non-smart branches don't read attentionByWorktree, but
+    // the param is required to keep smart-mode callers honest at the type level.
     const sorted = [...allWorktrees].sort(
-      buildWorktreeComparator(
-        state.sortBy,
-        state.tabsByWorktree,
-        repoMap,
-        state.prCache,
-        Date.now(),
-        null,
-        agentStatusForSort
-      )
+      buildWorktreeComparator(state.sortBy, repoMap, Date.now(), new Map())
     )
     sortedIds = sorted.map((w) => w.id)
   }
@@ -207,6 +210,7 @@ export function getVisibleWorktreeIds(): string[] {
     filterRepoIds: state.filterRepoIds,
     showActiveOnly: state.showActiveOnly,
     tabsByWorktree: state.tabsByWorktree,
+    ptyIdsByTabId: state.ptyIdsByTabId,
     browserTabsByWorktree: state.browserTabsByWorktree,
     activeWorktreeId: state.activeWorktreeId,
     hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,

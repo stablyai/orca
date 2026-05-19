@@ -11,7 +11,11 @@ import { bufferToBlob, buildDiffResult, parseBranchDiff } from './git-handler-ut
 
 // ─── Executor types ──────────────────────────────────────────────────
 
-export type GitExec = (args: string[], cwd: string) => Promise<{ stdout: string; stderr: string }>
+export type GitExec = (
+  args: string[],
+  cwd: string,
+  opts?: { maxBuffer?: number; disableOptionalLocks?: boolean }
+) => Promise<{ stdout: string; stderr: string }>
 
 export type GitBufferExec = (args: string[], cwd: string) => Promise<Buffer>
 
@@ -23,8 +27,10 @@ export async function readBlobAtOid(
   oid: string,
   filePath: string
 ): Promise<{ content: string; isBinary: boolean }> {
+  // Why: Git's `<oid>:<path>` syntax expects forward slashes even on Windows.
+  const gitPath = filePath.replace(/\\/g, '/')
   try {
-    const buf = await gitBuffer(['show', `${oid}:${filePath}`], cwd)
+    const buf = await gitBuffer(['show', '--end-of-options', `${oid}:${gitPath}`], cwd)
     return bufferToBlob(buf, filePath)
   } catch {
     return { content: '', isBinary: false }
@@ -36,8 +42,10 @@ export async function readBlobAtIndex(
   cwd: string,
   filePath: string
 ): Promise<{ content: string; isBinary: boolean }> {
+  // Why: Git's `:<path>` syntax expects forward slashes even on Windows.
+  const gitPath = filePath.replace(/\\/g, '/')
   try {
-    const buf = await gitBuffer(['show', `:${filePath}`], cwd)
+    const buf = await gitBuffer(['show', '--end-of-options', `:${gitPath}`], cwd)
     return bufferToBlob(buf, filePath)
   } catch {
     return { content: '', isBinary: false }
@@ -217,8 +225,9 @@ export async function branchDiffEntries(
     return []
   }
 
+  // Why: see core.quotePath rationale in getStatusOp — keep UTF-8 paths intact.
   const { stdout } = await git(
-    ['diff', '--name-status', '-M', '-C', mergeBase, headOid],
+    ['-c', 'core.quotePath=false', 'diff', '--name-status', '-M', '-C', mergeBase, headOid],
     worktreePath
   )
   const allChanges = parseBranchDiff(stdout)

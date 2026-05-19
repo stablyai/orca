@@ -3,6 +3,7 @@ import { RuntimeClientError } from './runtime-client'
 export type ParsedArgs = {
   commandPath: string[]
   flags: Map<string, string | boolean>
+  positionalFlagConflicts?: string[]
 }
 
 export type CommandSpec = {
@@ -10,11 +11,12 @@ export type CommandSpec = {
   summary: string
   usage: string
   allowedFlags: string[]
+  positionalArgs?: string[]
   examples?: string[]
   notes?: string[]
 }
 
-export const GLOBAL_FLAGS = ['help', 'json']
+export const GLOBAL_FLAGS = ['help', 'json', 'pairing-code', 'environment']
 
 export function parseArgs(argv: string[]): ParsedArgs {
   const commandPath: string[] = []
@@ -28,8 +30,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
     }
 
     const flag = token.slice(2)
+    const hasNext = i + 1 < argv.length
     const next = argv[i + 1]
-    if (!next || next.startsWith('--')) {
+    if (!hasNext || next.startsWith('--')) {
       flags.set(flag, true)
       continue
     }
@@ -61,16 +64,26 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
   if (['open', 'status'].includes(commandPath[0])) {
     return false
   }
-  if (['repo', 'worktree', 'terminal'].includes(commandPath[0])) {
+  if (
+    ['automations', 'repo', 'worktree', 'terminal', 'computer', 'note'].includes(commandPath[0])
+  ) {
     return false
   }
-  return !['tab list', 'tab create'].includes(joined)
+  return ![
+    'tab list',
+    'tab create',
+    'tab current',
+    'tab profile list',
+    'tab profile create',
+    'tab profile delete'
+  ].includes(joined)
 }
 
 export function isCommandGroup(commandPath: string[]): boolean {
   return (
     (commandPath.length === 1 &&
       [
+        'automations',
         'repo',
         'worktree',
         'terminal',
@@ -83,12 +96,41 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'clipboard',
         'dialog',
         'storage',
-        'orchestration'
+        'orchestration',
+        'computer',
+        'environment'
       ].includes(commandPath[0])) ||
     (commandPath.length === 2 &&
       commandPath[0] === 'storage' &&
       ['local', 'session'].includes(commandPath[1]))
   )
+}
+
+export function normalizeCommandPositionals(specs: CommandSpec[], parsed: ParsedArgs): ParsedArgs {
+  for (const spec of specs) {
+    const positionalArgs = spec.positionalArgs ?? []
+    if (positionalArgs.length === 0) {
+      continue
+    }
+    if (parsed.commandPath.length !== spec.path.length + positionalArgs.length) {
+      continue
+    }
+    if (!matches(parsed.commandPath.slice(0, spec.path.length), spec.path)) {
+      continue
+    }
+    const flags = new Map(parsed.flags)
+    const values = parsed.commandPath.slice(spec.path.length)
+    // Why: validation runs inside main's error-reporting path, so normalization
+    // records ambiguity instead of throwing before CLI errors can be formatted.
+    const positionalFlagConflicts = positionalArgs.filter((name) => flags.has(name))
+    positionalArgs.forEach((name, index) => {
+      if (!flags.has(name)) {
+        flags.set(name, values[index])
+      }
+    })
+    return { commandPath: spec.path, flags, positionalFlagConflicts }
+  }
+  return parsed
 }
 
 export function findCommandSpec(
@@ -104,6 +146,15 @@ export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs
     throw new RuntimeClientError(
       'invalid_argument',
       `Unknown command: ${parsed.commandPath.join(' ')}`
+    )
+  }
+
+  if (parsed.positionalFlagConflicts && parsed.positionalFlagConflicts.length > 0) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `Pass ${parsed.positionalFlagConflicts
+        .map((flag) => `--${flag}`)
+        .join(', ')} either positionally or as a flag, not both.`
     )
   }
 

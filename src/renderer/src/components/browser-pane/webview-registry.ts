@@ -12,6 +12,57 @@ export const parkedAtByTabId = new Map<string, number>()
 export const MAX_PARKED_WEBVIEWS = 6
 
 let hiddenContainer: HTMLDivElement | null = null
+const DRAG_LISTENER_KEY = '__orcaBrowserPaneDragListeners'
+let dragListenersAttached = false
+
+type DragListenerRegistry = {
+  dragstart: () => void
+  dragend: () => void
+  drop: () => void
+}
+
+function getListenerHost(): (Window & { [DRAG_LISTENER_KEY]?: DragListenerRegistry }) | null {
+  if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') {
+    return null
+  }
+  return window as Window & { [DRAG_LISTENER_KEY]?: DragListenerRegistry }
+}
+
+function removeDragListeners(): void {
+  const listenerHost = getListenerHost()
+  const existingListeners = listenerHost?.[DRAG_LISTENER_KEY]
+  if (!listenerHost || !existingListeners) {
+    return
+  }
+  window.removeEventListener('dragstart', existingListeners.dragstart, true)
+  window.removeEventListener('dragend', existingListeners.dragend, true)
+  window.removeEventListener('drop', existingListeners.drop, true)
+  delete listenerHost[DRAG_LISTENER_KEY]
+  dragListenersAttached = false
+}
+
+function ensureDragListeners(): void {
+  const listenerHost = getListenerHost()
+  if (!listenerHost) {
+    return
+  }
+  if (dragListenersAttached && listenerHost[DRAG_LISTENER_KEY]) {
+    return
+  }
+  removeDragListeners()
+
+  const dragstart = (): void => setWebviewsDragPassthrough(true)
+  const dragend = (): void => setWebviewsDragPassthrough(false)
+  const drop = (): void => setWebviewsDragPassthrough(false)
+
+  window.addEventListener('dragstart', dragstart, true)
+  window.addEventListener('dragend', dragend, true)
+  window.addEventListener('drop', drop, true)
+  // Why: only live webviews need drag passthrough listeners; removing them
+  // when the registry empties keeps browserless sessions free of global hooks.
+  listenerHost[DRAG_LISTENER_KEY] = { dragstart, dragend, drop }
+  dragListenersAttached = true
+}
 
 export function getHiddenContainer(): HTMLDivElement {
   if (!hiddenContainer) {
@@ -34,33 +85,19 @@ export function setWebviewsDragPassthrough(passthrough: boolean): void {
   }
 }
 
-const DRAG_LISTENER_KEY = '__orcaBrowserPaneDragListeners'
+export function registerPersistentWebview(
+  browserTabId: string,
+  webview: Electron.WebviewTag
+): void {
+  webviewRegistry.set(browserTabId, webview)
+  ensureDragListeners()
+}
 
-if (typeof window !== 'undefined') {
-  type DragListenerRegistry = {
-    dragstart: () => void
-    dragend: () => void
-    drop: () => void
+export function unregisterPersistentWebview(browserTabId: string): void {
+  webviewRegistry.delete(browserTabId)
+  if (webviewRegistry.size === 0) {
+    removeDragListeners()
   }
-  const listenerHost = window as Window & { [DRAG_LISTENER_KEY]?: DragListenerRegistry }
-  const existingListeners = listenerHost[DRAG_LISTENER_KEY]
-  if (existingListeners) {
-    window.removeEventListener('dragstart', existingListeners.dragstart, true)
-    window.removeEventListener('dragend', existingListeners.dragend, true)
-    window.removeEventListener('drop', existingListeners.drop, true)
-  }
-
-  const dragstart = (): void => setWebviewsDragPassthrough(true)
-  const dragend = (): void => setWebviewsDragPassthrough(false)
-  const drop = (): void => setWebviewsDragPassthrough(false)
-
-  window.addEventListener('dragstart', dragstart, true)
-  window.addEventListener('dragend', dragend, true)
-  window.addEventListener('drop', drop, true)
-  // Why: BrowserPane installs process-wide drag listeners so parked webviews
-  // stop swallowing drop targets. We store/remove the previous handlers on
-  // window to keep Vite HMR from stacking duplicates across module reloads.
-  listenerHost[DRAG_LISTENER_KEY] = { dragstart, dragend, drop }
 }
 
 export function destroyPersistentWebview(browserTabId: string): void {
@@ -81,7 +118,7 @@ export function destroyPersistentWebview(browserTabId: string): void {
     window.focus()
   }
   webview.remove()
-  webviewRegistry.delete(browserTabId)
+  unregisterPersistentWebview(browserTabId)
   registeredWebContentsIds.delete(browserTabId)
   parkedAtByTabId.delete(browserTabId)
   clearLiveBrowserUrl(browserTabId)

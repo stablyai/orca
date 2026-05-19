@@ -4,6 +4,7 @@ import {
   extractTerminalFileLinks,
   isPathInsideWorktree,
   resolveTerminalFileLink,
+  resolveTerminalFileLinkText,
   toWorktreeRelativePath
 } from '@/lib/terminal-links'
 import { useAppStore } from '@/store'
@@ -12,6 +13,14 @@ import { absolutePathToFileUri } from '@/components/editor/markdown-internal-lin
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { openHttpLink } from '@/lib/http-link-routing'
+import {
+  isRemoteRuntimeFileOperation,
+  runtimePathExists,
+  statRuntimePath,
+  type RuntimeFileOperationArgs
+} from '@/runtime/runtime-file-client'
+import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { resolveTerminalFileUrlTarget } from './terminal-file-url-target'
 
 export type LinkHandlerDeps = {
   worktreeId: string
@@ -20,6 +29,8 @@ export type LinkHandlerDeps = {
   managerRef: React.RefObject<PaneManager | null>
   linkProviderDisposablesRef: React.RefObject<Map<number, IDisposable>>
   pathExistsCache: Map<string, boolean>
+  runtimeEnvironmentId?: string | null
+  getRuntimeEnvironmentIdForPane?: (paneId: number) => string | null
 }
 
 type TerminalLinkEvent = Pick<MouseEvent, 'metaKey' | 'ctrlKey'> &
@@ -63,28 +74,54 @@ function openHtmlFileInBrowser(filePath: string, worktreeId: string): void {
   store.createBrowserTab(worktreeId, fileUrl, { title, activate: true })
 }
 
+function getTerminalFileContext(
+  worktreeId: string,
+  worktreePath: string,
+  runtimeEnvironmentId?: string | null
+): RuntimeFileOperationArgs {
+  const settings = useAppStore.getState().settings
+  return {
+    settings: settingsForRuntimeOwner(settings, runtimeEnvironmentId),
+    worktreeId: worktreeId || null,
+    worktreePath,
+    connectionId: getConnectionId(worktreeId || null) ?? undefined
+  }
+}
+
+let latestOpenDetectedFilePathRequestId = 0
+
 export function openDetectedFilePath(
   filePath: string,
   line: number | null,
   column: number | null,
-  deps: Pick<LinkHandlerDeps, 'worktreeId' | 'worktreePath'>
+  deps: Pick<LinkHandlerDeps, 'worktreeId' | 'worktreePath' | 'runtimeEnvironmentId'>
 ): void {
-  const { worktreeId, worktreePath } = deps
+  const { runtimeEnvironmentId, worktreeId, worktreePath } = deps
+  const requestId = ++latestOpenDetectedFilePathRequestId
 
   void (async () => {
     let statResult
     try {
-      const connectionId = getConnectionId(deps.worktreeId ?? null) ?? undefined
-      // Why: remote paths don't need local auth — the relay is the security boundary.
-      if (!connectionId) {
+      const fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
+      const isRemoteRuntimePath = isRemoteRuntimeFileOperation(fileContext, filePath)
+      // Why: remote paths don't need local auth — the relay/runtime is the security boundary.
+      if (!fileContext.connectionId && !isRemoteRuntimePath) {
         await window.api.fs.authorizeExternalPath({ targetPath: filePath })
       }
-      statResult = await window.api.fs.stat({ filePath, connectionId })
+      statResult = await statRuntimePath(fileContext, filePath)
     } catch {
       return
     }
 
+    if (requestId !== latestOpenDetectedFilePathRequestId) {
+      return
+    }
+
     if (statResult.isDirectory) {
+      const fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
+      if (fileContext.connectionId || isRemoteRuntimeFileOperation(fileContext, filePath)) {
+        return
+      }
       await window.api.shell.openFilePath(filePath)
       return
     }
@@ -93,7 +130,12 @@ export function openDetectedFilePath(
     // as source in Monaco — ⌘/Ctrl+click on an HTML path in the terminal should
     // feel like clicking an http link and render the page, not dump HTML source.
     // Mirrors the editor's "Open Preview to the Side" action.
-    if (isHtmlFilePath(filePath)) {
+    const fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
+    if (
+      isHtmlFilePath(filePath) &&
+      !fileContext.connectionId &&
+      !isRemoteRuntimeFileOperation(fileContext, filePath)
+    ) {
       openHtmlFileInBrowser(filePath, worktreeId)
       return
     }
@@ -119,17 +161,24 @@ export function openDetectedFilePath(
       relativePath,
       worktreeId: worktreeId || '',
       language: detectLanguage(filePath),
-      mode: 'edit'
+      mode: 'edit',
+      runtimeEnvironmentId: runtimeEnvironmentId ?? undefined
     })
 
     if (line !== null) {
+      const targetColumn = column ?? 1
+      store.setPendingEditorReveal(null)
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          window.dispatchEvent(
-            new CustomEvent('orca:editor-reveal-location', {
-              detail: { filePath, line, column }
-            })
-          )
+          if (requestId !== latestOpenDetectedFilePathRequestId) {
+            return
+          }
+          store.setPendingEditorReveal({
+            filePath,
+            line,
+            column: targetColumn,
+            matchLength: 0
+          })
         })
       })
     }
@@ -171,9 +220,18 @@ export function createFilePathLinkProvider(
             return null
           }
 
-          const cachedExists = pathExistsCache.get(resolved.absolutePath)
-          const exists = cachedExists ?? (await window.api.shell.pathExists(resolved.absolutePath))
-          pathExistsCache.set(resolved.absolutePath, exists)
+          const runtimeEnvironmentId =
+            deps.getRuntimeEnvironmentIdForPane?.(paneId) ?? deps.runtimeEnvironmentId ?? null
+          const cacheKey = `${runtimeEnvironmentId ?? 'active'}\0${resolved.absolutePath}`
+          const cachedExists = pathExistsCache.get(cacheKey)
+          const fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
+          const exists =
+            cachedExists ??
+            (fileContext.connectionId ||
+            isRemoteRuntimeFileOperation(fileContext, resolved.absolutePath)
+              ? await runtimePathExists(fileContext, resolved.absolutePath)
+              : await window.api.shell.pathExists(resolved.absolutePath))
+          pathExistsCache.set(cacheKey, exists)
           if (!exists) {
             return null
           }
@@ -196,7 +254,8 @@ export function createFilePathLinkProvider(
               }
               openDetectedFilePath(resolved.absolutePath, resolved.line, resolved.column, {
                 worktreeId,
-                worktreePath
+                worktreePath,
+                runtimeEnvironmentId
               })
             },
             hover: () => {
@@ -233,7 +292,8 @@ export function isTerminalLinkActivation(
 export function handleOscLink(
   rawText: string,
   event: TerminalLinkEvent | undefined,
-  deps: Pick<LinkHandlerDeps, 'worktreeId' | 'worktreePath'>
+  deps: Pick<LinkHandlerDeps, 'worktreeId' | 'worktreePath'> &
+    Partial<Pick<LinkHandlerDeps, 'runtimeEnvironmentId' | 'startupCwd'>>
 ): void {
   if (!isTerminalLinkActivation(event)) {
     return
@@ -254,6 +314,10 @@ export function handleOscLink(
   try {
     parsed = new URL(rawText)
   } catch {
+    const resolved = resolveTerminalFileLinkText(rawText, deps.startupCwd || deps.worktreePath)
+    if (resolved) {
+      openDetectedFilePath(resolved.absolutePath, resolved.line, resolved.column, deps)
+    }
     return
   }
 
@@ -271,15 +335,10 @@ export function handleOscLink(
     // the same openDetectedFilePath logic used for detected file-path links.
     // Only local files are supported — remote hosts (file://remote/…) are rejected
     // because we cannot open them as local paths.
-    if (parsed.hostname && parsed.hostname !== 'localhost') {
+    const resolved = resolveTerminalFileUrlTarget(parsed)
+    if (!resolved) {
       return
     }
-    let filePath = decodeURIComponent(parsed.pathname)
-    // Why: on Windows, file:///C:/foo yields pathname "/C:/foo". The leading
-    // slash must be stripped to produce a valid Windows path ("C:/foo").
-    if (/^\/[A-Za-z]:/.test(filePath)) {
-      filePath = filePath.slice(1)
-    }
-    openDetectedFilePath(filePath, null, null, deps)
+    openDetectedFilePath(resolved.filePath, resolved.line, resolved.column, deps)
   }
 }

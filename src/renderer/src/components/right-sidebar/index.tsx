@@ -67,8 +67,6 @@ type ActivityBarItem = {
   shortcut: string
   /** When true, hidden for non-git (folder-mode) repos. */
   gitOnly?: boolean
-  /** When true, only shown when at least one SSH connection is active. */
-  sshOnly?: boolean
 }
 
 const isMac = navigator.userAgent.includes('Mac')
@@ -107,8 +105,7 @@ const ACTIVITY_ITEMS: ActivityBarItem[] = [
     title: 'Ports',
     // Why: Ctrl+Shift+I is the DevTools accelerator on Windows/Linux, so this
     // shortcut is macOS-only. On other platforms the tooltip omits it.
-    shortcut: isMac ? `\u21E7${mod}I` : '',
-    sshOnly: true
+    shortcut: isMac ? `\u21E7${mod}I` : ''
   }
 ]
 
@@ -128,84 +125,15 @@ function RightSidebarInner(): React.JSX.Element {
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
 
-  // Why: show the Ports tab only when the active worktree belongs to a
-  // remote (SSH) repo, not for any global SSH connection. Switching to a
-  // local worktree should hide the tab even if SSH sessions are alive.
-  const isRemoteWorktree = !!activeRepo?.connectionId
-  const hasActiveSshConnection = useAppStore((s) => {
-    if (!activeRepo?.connectionId) {
-      return false
-    }
-    const state = s.sshConnectionStates.get(activeRepo.connectionId)
-    return state?.status === 'connected'
-  })
-
-  // Why: when the SSH connection drops while the user is viewing the Ports
-  // panel, hiding the tab immediately would be jarring. Keep it visible
-  // during a 30-second grace period, then hide it.
-  const isPortsPanelActive = rightSidebarTab === 'ports'
-  // Why: graceActiveRef is set synchronously during render (not via useEffect)
-  // so that the very first render after disconnect already sees the grace flag,
-  // preventing a one-frame flicker to the Explorer tab.
-  const graceActiveRef = React.useRef(false)
-  const graceTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [, forceUpdate] = useState(0)
-
-  if (!hasActiveSshConnection && isPortsPanelActive && !graceActiveRef.current) {
-    graceActiveRef.current = true
-  } else if (graceActiveRef.current && (hasActiveSshConnection || !isPortsPanelActive)) {
-    // Why: clear grace when either (a) the SSH session reconnects, or (b) the
-    // user navigates away from the Ports tab — no reason to keep it visible
-    // once they've moved on.
-    graceActiveRef.current = false
-    if (graceTimerRef.current) {
-      clearTimeout(graceTimerRef.current)
-      graceTimerRef.current = null
-    }
-  }
-
-  const disconnectGraceActive = graceActiveRef.current
-
-  useEffect(() => {
-    if (disconnectGraceActive) {
-      graceTimerRef.current = setTimeout(() => {
-        graceActiveRef.current = false
-        graceTimerRef.current = null
-        // Why: only reset the tab if the user is still on Ports. If they
-        // already navigated to Search/Checks/etc during the grace period,
-        // forcing them back to Explorer would be disruptive.
-        if (useAppStore.getState().rightSidebarTab === 'ports') {
-          setRightSidebarTab('explorer')
-        }
-        forceUpdate((n) => n + 1)
-      }, 30_000)
-      return () => {
-        if (graceTimerRef.current) {
-          clearTimeout(graceTimerRef.current)
-          graceTimerRef.current = null
-        }
-      }
-    }
-    return undefined
-  }, [disconnectGraceActive, setRightSidebarTab])
-
   const visibleItems = useMemo(
     () =>
       ACTIVITY_ITEMS.filter((item) => {
         if (item.gitOnly && isFolder) {
           return false
         }
-        if (item.sshOnly) {
-          if (!isRemoteWorktree) {
-            return false
-          }
-          if (!hasActiveSshConnection && !disconnectGraceActive) {
-            return false
-          }
-        }
         return true
       }),
-    [isFolder, isRemoteWorktree, hasActiveSshConnection, disconnectGraceActive]
+    [isFolder]
   )
 
   // If the active tab is hidden (e.g. switched from a git repo to a folder),
@@ -244,7 +172,7 @@ function RightSidebarInner(): React.JSX.Element {
         {effectiveTab === 'search' && <SearchPanel />}
         {effectiveTab === 'source-control' && <SourceControl />}
         {effectiveTab === 'checks' && <ChecksPanel />}
-        {effectiveTab === 'ports' && <PortsPanel />}
+        {effectiveTab === 'ports' && <PortsPanel isVisible={rightSidebarOpen} />}
       </div>
     </div>
   )
@@ -301,14 +229,21 @@ function RightSidebarInner(): React.JSX.Element {
         {activityBarPosition === 'top' ? (
           /* ── Top activity bar: horizontal icon row ── */
           <ContextMenu>
-            <ContextMenuTrigger asChild>
-              <div className="flex items-center justify-between border-b border-border h-[42px] min-h-[42px] pl-2 pr-1">
-                <TooltipProvider delayDuration={400}>
-                  <div className="flex items-center">{activityBarIcons}</div>
+            <div className="flex items-center border-b border-border h-[36px] min-h-[36px] pl-2 pr-1 right-sidebar-header-inset right-sidebar-header-drag overflow-hidden">
+              <TooltipProvider delayDuration={400}>
+                <ContextMenuTrigger asChild>
+                  <div className="right-sidebar-activity-strip flex min-w-0 flex-1 items-center overflow-x-auto overflow-y-hidden scrollbar-sleek right-sidebar-header-no-drag">
+                    {/* Why: Windows window controls can leave less safe header width
+                        than the activity buttons need; scroll inside the safe area
+                        instead of letting buttons extend under the overlay. */}
+                    <div className="flex shrink-0">{activityBarIcons}</div>
+                  </div>
+                </ContextMenuTrigger>
+                <div className="flex shrink-0 items-center right-sidebar-header-no-drag">
                   {closeButton}
-                </TooltipProvider>
-              </div>
-            </ContextMenuTrigger>
+                </div>
+              </TooltipProvider>
+            </div>
             <ActivityBarPositionMenu
               currentPosition={activityBarPosition}
               onChangePosition={setActivityBarPosition}
@@ -316,11 +251,18 @@ function RightSidebarInner(): React.JSX.Element {
           </ContextMenu>
         ) : (
           /* ── Side layout: static title header ── */
-          <div className="flex items-center justify-between h-[42px] min-h-[42px] px-3 border-b border-border">
+          /* Why: the 40px side activity bar absorbs the rightmost 40px of the
+             138px window-controls overlay, but the remaining 98px still overlaps
+             the panel header. right-sidebar-header-side-inset applies exactly
+             that remainder (138-40=98px) as padding-right so the close button
+             clears the minimize button without the full 138px gap. */
+          <div className="flex items-center justify-between h-[36px] min-h-[36px] px-3 border-b border-border right-sidebar-header-side-inset right-sidebar-header-drag">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
               {visibleItems.find((item) => item.id === effectiveTab)?.title ?? ''}
             </span>
-            <TooltipProvider delayDuration={400}>{closeButton}</TooltipProvider>
+            <TooltipProvider delayDuration={400}>
+              <div className="flex items-center">{closeButton}</div>
+            </TooltipProvider>
           </div>
         )}
 
@@ -337,7 +279,7 @@ function RightSidebarInner(): React.JSX.Element {
       {activityBarPosition === 'side' && (
         <ContextMenu>
           <ContextMenuTrigger asChild>
-            <div className="flex flex-col items-center w-10 min-w-[40px] bg-sidebar border-l border-border">
+            <div className="flex flex-col items-center w-10 min-w-[40px] bg-sidebar border-l border-border side-activity-bar-windows-inset">
               <TooltipProvider delayDuration={400}>{activityBarIcons}</TooltipProvider>
             </div>
           </ContextMenuTrigger>
@@ -408,8 +350,8 @@ function ActivityBarButton({
       <TooltipTrigger asChild>
         <button
           className={cn(
-            'relative flex items-center justify-center transition-colors',
-            isTop ? 'h-[42px] w-9' : 'w-10 h-10',
+            'relative flex items-center justify-center transition-colors right-sidebar-header-no-drag',
+            isTop ? 'h-[36px] w-9' : 'w-10 h-10',
             active ? 'text-foreground' : 'text-muted-foreground/60 hover:text-muted-foreground'
           )}
           onClick={onClick}

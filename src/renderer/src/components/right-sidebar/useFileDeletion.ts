@@ -2,8 +2,10 @@ import { useCallback, useMemo, useRef } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { dirname } from '@/lib/path'
 import { getConnectionId } from '@/lib/connection-context'
+import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { isPathEqualOrDescendant } from './file-explorer-paths'
 import type { TreeNode } from './file-explorer-types'
 import {
@@ -11,6 +13,12 @@ import {
   requestEditorSaveQuiesce
 } from '@/components/editor/editor-autosave'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
+import {
+  deleteRuntimePath,
+  isRemoteRuntimeFileOperation,
+  readRuntimeFileContent,
+  writeRuntimeFile
+} from '@/runtime/runtime-file-client'
 
 type UseFileDeletionParams = {
   activeWorktreeId: string | null
@@ -42,6 +50,7 @@ export function useFileDeletion({
   isMac,
   isWindows
 }: UseFileDeletionParams): UseFileDeletionResult {
+  const confirm = useConfirmationDialog()
   // Why: track in-flight deletes per-path so repeated Del presses on the same
   // node don't issue duplicate IPC calls; the map is a ref to avoid re-renders.
   const inFlightRef = useRef<Set<string>>(new Set())
@@ -54,7 +63,18 @@ export function useFileDeletion({
       inFlightRef.current.add(node.path)
 
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
-      const isRemote = connectionId !== undefined
+      const state = useAppStore.getState()
+      const worktree = activeWorktreeId
+        ? findWorktreeById(state.worktreesByRepo, activeWorktreeId)
+        : null
+      const fileContext = {
+        settings: state.settings,
+        worktreeId: activeWorktreeId,
+        worktreePath: worktree?.path ?? null,
+        connectionId
+      }
+      const isRemote =
+        connectionId !== undefined || isRemoteRuntimeFileOperation(fileContext, node.path)
 
       // Why: remote deletes go through `rm` on the relay — there is no OS-level
       // Trash/Recycle Bin, so the operation is permanent. Require an explicit
@@ -64,7 +84,13 @@ export function useFileDeletion({
         const message = node.isDirectory
           ? `Permanently delete '${node.name}' and all its contents? This cannot be undone.`
           : `Permanently delete '${node.name}'? This cannot be undone.`
-        if (!window.confirm(message)) {
+        const confirmed = await confirm({
+          title: `Permanently delete '${node.name}'?`,
+          description: message,
+          confirmLabel: 'Delete',
+          confirmVariant: 'destructive'
+        })
+        if (!confirmed) {
           inFlightRef.current.delete(node.path)
           return
         }
@@ -93,7 +119,13 @@ export function useFileDeletion({
         let undoContent: string | undefined
         if (!node.isDirectory) {
           try {
-            const rf = await window.api.fs.readFile({ filePath: node.path, connectionId })
+            const rf = await readRuntimeFileContent({
+              settings: fileContext.settings,
+              filePath: node.path,
+              relativePath: node.relativePath,
+              worktreeId: activeWorktreeId ?? undefined,
+              connectionId
+            })
             if (!rf.isBinary) {
               undoContent = rf.content
             }
@@ -103,28 +135,16 @@ export function useFileDeletion({
           }
         }
 
-        await window.api.fs.deletePath({
-          targetPath: node.path,
-          connectionId,
-          recursive: node.isDirectory
-        })
+        await deleteRuntimePath(fileContext, node.path, node.isDirectory)
 
         if (undoContent !== undefined) {
           commitFileExplorerOp({
             undo: async () => {
-              await window.api.fs.writeFile({
-                filePath: node.path,
-                content: undoContent,
-                connectionId
-              })
+              await writeRuntimeFile(fileContext, node.path, undoContent)
               await refreshDir(parentDir)
             },
             redo: async () => {
-              await window.api.fs.deletePath({
-                targetPath: node.path,
-                connectionId,
-                recursive: node.isDirectory
-              })
+              await deleteRuntimePath(fileContext, node.path, node.isDirectory)
               await refreshDir(parentDir)
             }
           })
@@ -181,7 +201,16 @@ export function useFileDeletion({
         inFlightRef.current.delete(node.path)
       }
     },
-    [activeWorktreeId, closeFile, isWindows, openFiles, refreshDir, selectedPath, setSelectedPath]
+    [
+      activeWorktreeId,
+      closeFile,
+      confirm,
+      isWindows,
+      openFiles,
+      refreshDir,
+      selectedPath,
+      setSelectedPath
+    ]
   )
 
   const requestDelete = useCallback(

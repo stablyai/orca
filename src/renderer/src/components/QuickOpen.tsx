@@ -1,11 +1,13 @@
 /* oxlint-disable max-lines */
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Check, Copy, File } from 'lucide-react'
+import { AlertTriangle, Check, Copy } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useWorktreesForRepo } from '@/store/selectors'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
 import { getConnectionId } from '@/lib/connection-context'
+import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { listRuntimeFiles } from '@/runtime/runtime-file-client'
 import {
   CommandDialog,
   CommandInput,
@@ -254,15 +256,18 @@ export default function QuickOpen(): React.JSX.Element | null {
 
     const excludePaths = excludePathsKey ? excludePathsKey.split('\n') : undefined
 
-    void window.api.fs
-      // Why: quick-open shares the active worktree path model with file explorer
-      // and search, so remote worktrees must include connectionId. Without this,
-      // Windows resolves Linux roots (e.g. /home/*) as local C:\home\* paths.
-      .listFiles({
+    void listRuntimeFiles(
+      {
+        settings: useAppStore.getState().settings,
+        worktreeId: activeWorktreeId,
+        worktreePath,
+        connectionId
+      },
+      {
         rootPath: worktreePath,
-        connectionId,
         excludePaths
-      })
+      }
+    )
       .then((result) => {
         if (!cancelled) {
           setFiles(result)
@@ -289,7 +294,7 @@ export default function QuickOpen(): React.JSX.Element | null {
     return () => {
       cancelled = true
     }
-  }, [visible, worktreePath, connectionId, excludePathsKey, filesRequestKey])
+  }, [visible, activeWorktreeId, worktreePath, connectionId, excludePathsKey, filesRequestKey])
 
   // Filter files by fuzzy match
   const filtered = useMemo(() => {
@@ -375,6 +380,7 @@ export default function QuickOpen(): React.JSX.Element | null {
             const lastSlash = item.path.lastIndexOf('/')
             const dir = lastSlash >= 0 ? item.path.slice(0, lastSlash) : ''
             const filename = item.path.slice(lastSlash + 1)
+            const FileIcon = getFileTypeIcon(item.path)
 
             return (
               <CommandItem
@@ -383,7 +389,7 @@ export default function QuickOpen(): React.JSX.Element | null {
                 onSelect={() => handleSelect(item.path)}
                 className="flex items-center gap-2 px-3 py-1.5"
               >
-                <File size={14} className="text-muted-foreground flex-shrink-0" />
+                <FileIcon className="size-3.5 text-muted-foreground flex-shrink-0" />
                 <span className="truncate text-foreground">{filename}</span>
                 {dir && <span className="truncate text-muted-foreground ml-1">{dir}</span>}
               </CommandItem>

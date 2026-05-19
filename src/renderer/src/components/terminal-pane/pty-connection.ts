@@ -4,30 +4,102 @@ import type { IDisposable } from '@xterm/xterm'
 import { isGeminiTerminalTitle, isClaudeAgent } from '@/lib/agent-status'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
-import { toast } from 'sonner'
 import type { PtyConnectResult } from './pty-transport'
 import { createIpcPtyTransport } from './pty-transport'
+import { createRemoteRuntimePtyTransport } from './remote-runtime-pty-transport'
 import { shouldSeedCacheTimerOnInitialTitle } from './cache-timer-seeding'
 import type { PtyConnectionDeps } from './pty-connection-types'
+import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
+import { getFitOverrideForPty, bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
+import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { isPaneReplaying, replayIntoTerminal } from './replay-guard'
-import {
-  paneLeafId,
-  POST_REPLAY_MODE_RESET,
-  POST_REPLAY_FOCUS_REPORTING_RESET
-} from './layout-serialization'
+import { terminalOutputPrefersDomRenderer } from '@/lib/pane-manager/terminal-complex-script'
+import { POST_REPLAY_MODE_RESET, POST_REPLAY_FOCUS_REPORTING_RESET } from './layout-serialization'
 import { warnTerminalLifecycleAnomaly } from './terminal-lifecycle-diagnostics'
-import { detectDeveloperPermissionHint } from './developer-permission-hints'
+import { registerPtySerializer, registerPtyTitleSource } from './pty-buffer-serializer'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
+import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
+import {
+  discardTerminalOutput,
+  flushTerminalOutput,
+  waitForTerminalOutputParsed,
+  writeTerminalOutput
+} from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
+import { e2eConfig } from '@/lib/e2e-config'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
+import { createAgentCompletionCoordinator } from './agent-completion-coordinator'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
-const developerPermissionHintKeys = new Set<string>()
+const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
+const REMOTE_PTY_ID_PREFIX = 'remote:'
+const PTY_CONNECT_DIAG_LIMIT = 200
+const AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS = 250
+const AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS = 1000
+const AGENT_TASK_COMPLETE_NOTIFICATION_DETAIL_MAX_AGE_MS = 10_000
+
+function isAgentTaskCompleteNotificationEnabled(): boolean {
+  const notifications = useAppStore.getState().settings?.notifications
+  return notifications?.enabled !== false && notifications?.agentTaskComplete !== false
+}
+
+function hasAgentNotificationDetail(entry: AgentStatusEntry | undefined): boolean {
+  return Boolean(
+    entry &&
+    Date.now() - entry.updatedAt <= AGENT_TASK_COMPLETE_NOTIFICATION_DETAIL_MAX_AGE_MS &&
+    (entry.lastAssistantMessage || entry.toolName || entry.toolInput)
+  )
+}
+
+function recordPtyConnectDiagnostic(message: string): void {
+  if (!e2eConfig.exposeStore) {
+    return
+  }
+  console.log(`[pty-connect] ${message}`)
+  const target = globalThis as Record<string, unknown>
+  const diag = (target.__ptyConnectDiag ??= [] as string[]) as string[]
+  diag.push(message)
+  if (diag.length > PTY_CONNECT_DIAG_LIMIT) {
+    diag.splice(0, diag.length - PTY_CONNECT_DIAG_LIMIT)
+  }
+}
 
 // Why: when multiple panes/tabs need the same deferred SSH connection,
 // the first one calls ssh.connect() and subsequent ones must wait for it
 // rather than returning early (which would leave them disconnected). This
 // helper either connects or waits for an in-flight connect to finish.
 type SshConnectResult = { connected: true } | { connected: false; error: string }
+type UserInitiatedSshConnectOutcome = 'connected' | 'cancelled' | 'failed'
 
 const sshConnectPromises = new Map<string, Promise<SshConnectResult>>()
+
+function isSshSessionExpiredError(err: unknown): boolean {
+  return (err instanceof Error ? err.message : String(err)).includes(SSH_SESSION_EXPIRED_ERROR)
+}
+
+function isRemoteRuntimePtyId(ptyId: string | null | undefined): boolean {
+  return typeof ptyId === 'string' && ptyId.startsWith(REMOTE_PTY_ID_PREFIX)
+}
+
+function sshPromptConnectOutcomeForStatus(
+  status: string | undefined,
+  sawNonDisconnected: boolean
+): UserInitiatedSshConnectOutcome | null {
+  if (status === 'connected') {
+    return 'connected'
+  }
+  if (status === 'auth-failed' || status === 'error' || status === 'reconnection-failed') {
+    return 'failed'
+  }
+  // Why: this only counts after a real connect attempt; the entry-time
+  // disconnected state just means the user still needs to initiate auth.
+  if (sawNonDisconnected && status === 'disconnected') {
+    return 'cancelled'
+  }
+  return null
+}
 
 async function waitForSshConnection(connectionId: string): Promise<SshConnectResult> {
   const state = useAppStore.getState().sshConnectionStates.get(connectionId)
@@ -86,38 +158,6 @@ function isSessionOwnedByWorktree(sessionId: string, worktreeId: string): boolea
   return sessionId.slice(0, separatorIdx) === worktreeId
 }
 
-function maybeShowDeveloperPermissionHint(worktreeId: string, data: string): void {
-  if (!navigator.userAgent.includes('Mac')) {
-    return
-  }
-
-  const hint = detectDeveloperPermissionHint(data)
-  if (!hint) {
-    return
-  }
-  const key = `${worktreeId}:${hint.permissionId}`
-  if (developerPermissionHintKeys.has(key)) {
-    return
-  }
-  developerPermissionHintKeys.add(key)
-
-  toast.message(hint.title, {
-    description: hint.description,
-    duration: 12000,
-    action: {
-      label: 'Open Permissions',
-      onClick: () => {
-        useAppStore.getState().openSettingsTarget({
-          pane: 'developer-permissions',
-          repoId: null,
-          sectionId: 'developer-permissions'
-        })
-        useAppStore.getState().openSettingsPage()
-      }
-    }
-  })
-}
-
 export function connectPanePty(
   pane: ManagedPane,
   manager: PaneManager,
@@ -126,6 +166,20 @@ export function connectPanePty(
   let disposed = false
   let connectFrame: number | null = null
   let startupInjectTimer: ReturnType<typeof setTimeout> | null = null
+  let agentTaskCompleteNotificationGraceTimer: ReturnType<typeof setTimeout> | null = null
+  let agentTaskCompleteNotificationMaxTimer: ReturnType<typeof setTimeout> | null = null
+  let agentTaskCompleteStatusUnsubscribe: (() => void) | null = null
+  let agentTaskCompleteSettingsUnsubscribe: (() => void) | null = null
+  let agentTaskCompleteNotificationGeneration = 0
+  let wasAgentTaskCompleteNotificationEnabled = isAgentTaskCompleteNotificationEnabled()
+  let terminalBellNotificationTimer: ReturnType<typeof setTimeout> | null = null
+  let pendingTerminalBellNotification = false
+  // Why: passphrase-gate waits register a teardown here so dispose() can
+  // actively unsubscribe + resolve them. Without this, a pane disposed
+  // mid-wait leaks its zustand subscriber and the surrounding async IIFE
+  // forever, since the subscriber's `disposed` check only fires when the
+  // store next emits — which may never happen after disconnect.
+  const waitTeardowns: (() => void)[] = []
   // Why: startup commands must only run once — in the pane they were
   // targeted at. Capture `deps.startup` into a local and clear the field on
   // the (already spread-copied) `deps` so nothing else inside this function
@@ -135,12 +189,43 @@ export function connectPanePty(
   const paneStartup = deps.startup ?? null
   deps.startup = undefined
 
-  // Why: cache timer state is keyed per-pane (not per-tab) so split-pane tabs
-  // can track each Claude session independently without overwriting each other.
-  const cacheKey = `${deps.tabId}:${pane.id}`
-  const pendingSpawnKey = `${deps.tabId}:${paneLeafId(pane.id)}`
+  // Why: paneKey crosses PTY env, hook IPC, retained rows, and reload/replay.
+  // Use the stable layout leaf UUID, not the renderer-local numeric pane id.
+  const cacheKey = makePaneKey(deps.tabId, pane.leafId)
+  const pendingSpawnKey = cacheKey
+  const commandLifecycle = createTerminalCommandLifecycle({
+    onCommandFinished: () => {
+      const state = useAppStore.getState()
+      const entry = state.agentStatusByPaneKey[cacheKey]
+      // Why: OSC 133 D marks the foreground shell command exiting. Remove the
+      // row without retaining a done snapshot; this section represents a live
+      // agent process, and the shell prompt means that process is gone.
+      if (entry) {
+        state.dropAgentStatus(cacheKey)
+      }
+    }
+  })
+  commandLifecycle.attachXtermConsumer(pane.terminal)
+
+  const agentCompletionCoordinator = createAgentCompletionCoordinator({
+    paneKey: cacheKey,
+    getPtyId: () => transport.getPtyId(),
+    getSettings: () => useAppStore.getState().settings,
+    inspectProcess: inspectRuntimeTerminalProcess,
+    dispatchCompletion: (title) => scheduleAgentTaskCompleteNotification(title),
+    isLive: () => {
+      if (disposed) {
+        return false
+      }
+      if (transport.getPtyId()) {
+        return true
+      }
+      return (useAppStore.getState().ptyIdsByTabId[deps.tabId] ?? []).length > 0
+    }
+  })
 
   const onExit = (ptyId: string): void => {
+    agentCompletionCoordinator.dispose()
     deps.syncPanePtyLayoutBinding(pane.id, null)
     deps.clearRuntimePaneTitle(deps.tabId, pane.id)
     deps.clearTabPtyId(deps.tabId, ptyId)
@@ -183,6 +268,9 @@ export function connectPanePty(
   const onTitleChange = (title: string, rawTitle: string): void => {
     manager.setPaneGpuRendering(pane.id, !isGeminiTerminalTitle(rawTitle))
     deps.setRuntimePaneTitle(deps.tabId, pane.id, title)
+    if (syncAgentTaskCompleteNotificationEnabled()) {
+      agentCompletionCoordinator.observeTitle(rawTitle)
+    }
     // Why: only the focused pane should drive the tab title — otherwise two
     // agents in split panes cause rapid title flickering as each emits OSC
     // sequences. Only the active split's title propagates to the tab. When
@@ -209,11 +297,14 @@ export function connectPanePty(
   }
 
   const onPtySpawn = (ptyId: string): void => {
+    bindPanePtyId(pane.id, ptyId, deps.tabId)
+    pane.container.dataset.ptyId = ptyId
     deps.syncPanePtyLayoutBinding(pane.id, ptyId)
     deps.updateTabPtyId(deps.tabId, ptyId)
     // Spawn completion is when a pane gains a concrete PTY ID. The initial
     // frame-level sync often runs before that async result arrives.
     scheduleRuntimeGraphSync()
+    agentCompletionCoordinator.startProcessTracking()
   }
   // ─── Attention signal: BEL ────────────────────────────────────────────
   //
@@ -238,8 +329,136 @@ export function connectPanePty(
     // decision higher up, not a transport-layer guess.
     deps.markWorktreeUnread(deps.worktreeId)
     deps.markTerminalTabUnread(deps.tabId)
-    deps.dispatchNotification({ source: 'terminal-bell' })
+    // Why: agent CLIs often emit BEL in the same completion burst as their
+    // working->idle title change. Delay only the OS notification so the richer
+    // agent-complete notification can win the main-process worktree cooldown.
+    pendingTerminalBellNotification = true
+    if (!hasPendingAgentTaskCompleteNotification()) {
+      scheduleTerminalBellNotification()
+    }
   }
+
+  const clearTerminalBellNotificationTimer = (): void => {
+    if (terminalBellNotificationTimer !== null) {
+      clearTimeout(terminalBellNotificationTimer)
+      terminalBellNotificationTimer = null
+    }
+  }
+
+  const scheduleTerminalBellNotification = (): void => {
+    if (terminalBellNotificationTimer !== null) {
+      return
+    }
+    terminalBellNotificationTimer = setTimeout(() => {
+      terminalBellNotificationTimer = null
+      if (disposed) {
+        pendingTerminalBellNotification = false
+        return
+      }
+      if (hasPendingAgentTaskCompleteNotification()) {
+        return
+      }
+      pendingTerminalBellNotification = false
+      deps.dispatchNotification({ source: 'terminal-bell' })
+    }, AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS)
+  }
+
+  const hasPendingAgentTaskCompleteNotification = (): boolean =>
+    isAgentTaskCompleteNotificationEnabled() &&
+    (agentTaskCompleteNotificationGraceTimer !== null ||
+      agentTaskCompleteNotificationMaxTimer !== null ||
+      agentTaskCompleteStatusUnsubscribe !== null)
+
+  const clearPendingAgentTaskCompleteNotification = (): void => {
+    if (agentTaskCompleteNotificationGraceTimer !== null) {
+      clearTimeout(agentTaskCompleteNotificationGraceTimer)
+      agentTaskCompleteNotificationGraceTimer = null
+    }
+    if (agentTaskCompleteNotificationMaxTimer !== null) {
+      clearTimeout(agentTaskCompleteNotificationMaxTimer)
+      agentTaskCompleteNotificationMaxTimer = null
+    }
+    if (agentTaskCompleteStatusUnsubscribe !== null) {
+      agentTaskCompleteStatusUnsubscribe()
+      agentTaskCompleteStatusUnsubscribe = null
+    }
+  }
+
+  const syncAgentTaskCompleteNotificationEnabled = (): boolean => {
+    const enabled = isAgentTaskCompleteNotificationEnabled()
+    if (!enabled && wasAgentTaskCompleteNotificationEnabled) {
+      // Why: disabling notifications is an event-time boundary. Drop pending
+      // timers and coordinator state so completions observed while off cannot
+      // replay if the user turns the setting back on.
+      agentTaskCompleteNotificationGeneration += 1
+      clearPendingAgentTaskCompleteNotification()
+      agentCompletionCoordinator.resetCompletionState({ requireFreshWorking: true })
+      if (pendingTerminalBellNotification) {
+        scheduleTerminalBellNotification()
+      }
+    } else if (enabled && !wasAgentTaskCompleteNotificationEnabled) {
+      // Why: a pane may have observed work while agent-complete was disabled.
+      // Re-enabling should not let the next idle event notify for that old task.
+      agentCompletionCoordinator.resetCompletionState({ requireFreshWorking: true })
+    }
+    wasAgentTaskCompleteNotificationEnabled = enabled
+    return enabled
+  }
+
+  const scheduleAgentTaskCompleteNotification = (title: string): void => {
+    if (!syncAgentTaskCompleteNotificationEnabled()) {
+      return
+    }
+    clearPendingAgentTaskCompleteNotification()
+    let graceElapsed = false
+    const generationAtSchedule = agentTaskCompleteNotificationGeneration
+
+    const dispatch = (): void => {
+      clearPendingAgentTaskCompleteNotification()
+      if (
+        generationAtSchedule !== agentTaskCompleteNotificationGeneration ||
+        !syncAgentTaskCompleteNotificationEnabled()
+      ) {
+        return
+      }
+      pendingTerminalBellNotification = false
+      clearTerminalBellNotificationTimer()
+      if (disposed) {
+        return
+      }
+      deps.dispatchNotification({
+        source: 'agent-task-complete',
+        terminalTitle: title,
+        paneKey: cacheKey
+      })
+    }
+
+    const dispatchIfDetailed = (): void => {
+      if (!graceElapsed) {
+        return
+      }
+      const entry = useAppStore.getState().agentStatusByPaneKey[cacheKey]
+      if (hasAgentNotificationDetail(entry)) {
+        dispatch()
+      }
+    }
+
+    agentTaskCompleteStatusUnsubscribe = useAppStore.subscribe(dispatchIfDetailed)
+    agentTaskCompleteNotificationGraceTimer = setTimeout(() => {
+      agentTaskCompleteNotificationGraceTimer = null
+      graceElapsed = true
+      dispatchIfDetailed()
+    }, AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS)
+    // Why: some agents never surface assistant text through hooks. Keep a hard
+    // cap so task-complete notifications still fire instead of waiting forever.
+    agentTaskCompleteNotificationMaxTimer = setTimeout(
+      dispatch,
+      AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS
+    )
+  }
+  agentTaskCompleteSettingsUnsubscribe = useAppStore.subscribe(() => {
+    syncAgentTaskCompleteNotificationEnabled()
+  })
 
   // ─── Agent task-complete: OS notification, not tab attention ──────────
   //
@@ -253,8 +472,9 @@ export function connectPanePty(
   // signals. OS notifications are a separate channel: not every agent CLI
   // reliably emits BEL on completion (Gemini, some Codex flows), and
   // without this dispatch the Settings toggle would have zero producers.
-  // Double-firing with a concurrent BEL is handled by the 5 s per-worktree
-  // dedupe in main/ipc/notifications.ts.
+  // Double-firing with a concurrent BEL is handled by delaying the BEL OS
+  // notification below; main still keeps a 5 s per-worktree dedupe as the
+  // final guard.
   const onAgentBecameIdle = (title: string): void => {
     // Why: only start the prompt-cache countdown for Claude agents — other
     // agents have different (or no) prompt-caching semantics and showing a
@@ -270,40 +490,36 @@ export function connectPanePty(
     if (isClaudeAgent(title) && (settings === null || settings.promptCacheTimerEnabled)) {
       deps.setCacheTimerStartedAt(cacheKey, Date.now())
     }
-    // Why: this is the sole producer of 'agent-task-complete' in the renderer;
-    // removing it (as #944 did) leaves the user-facing Settings toggle with no
-    // events to fire. Dispatch is gated per-source in main; the main-process
-    // dedupe also collapses concurrent BEL + task-complete for the same
-    // worktree into a single notification.
-    deps.dispatchNotification({ source: 'agent-task-complete', terminalTitle: title })
+    if (syncAgentTaskCompleteNotificationEnabled()) {
+      agentCompletionCoordinator.observeClassifiedTitleCompletion(title)
+    }
   }
   const onAgentBecameWorking = (): void => {
+    if (syncAgentTaskCompleteNotificationEnabled()) {
+      agentCompletionCoordinator.observeTitleWorking()
+    }
     // Why: a new API call refreshes the prompt-cache TTL, so clear any running
     // countdown. The timer will restart when the agent becomes idle again.
     deps.setCacheTimerStartedAt(cacheKey, null)
+    clearPendingAgentTaskCompleteNotification()
+    if (pendingTerminalBellNotification) {
+      scheduleTerminalBellNotification()
+    }
   }
   const onAgentExited = (): void => {
     // Why: when the terminal title reverts to a plain shell (e.g., "bash", "zsh"),
     // the agent has exited. Clear any running cache timer so the sidebar doesn't
     // show a stale countdown for a tab that no longer has an active Claude session.
     deps.setCacheTimerStartedAt(cacheKey, null)
-    // Why: the agent process is gone, so its explicit status is no longer meaningful.
-    // Remove the entry so the hover UI does not show stale "working" for a dead agent.
-    //
-    // TODO(#1167): this path only fires on idle→shell title transitions, which
-    // means Ctrl+C'd `working` rows (Codex, Gemini, OpenCode — agents with no
-    // interrupt hook) linger until the 30-min AGENT_STATUS_STALE_AFTER_MS TTL
-    // decays them to idle or the pane/tab is closed. PR #1167 replaces this
-    // heuristic with authoritative foreground-process tracking in main so the
-    // row drops within 2s of the CLI process exiting. See branch
-    // brennanb2025/foreground-process-agent-exit.
-    useAppStore.getState().removeAgentStatus(cacheKey)
+    // Why: do not let terminal-title reversion own agent-status lifecycle.
+    // Explicit hooks and OSC 133 command-finished marks are the reliable
+    // signals; title changes can race normal "done" states and make agents
+    // look like they vanished as soon as they finished responding.
   }
   // Why: inject ORCA_PANE_KEY so global Claude/Codex hooks can attribute their
   // callbacks to the correct Orca pane without resolving worktrees from cwd.
-  // The key matches the `${tabId}:${paneId}` composite used for cacheTimerByKey.
-  // ORCA_TAB_ID / ORCA_WORKTREE_ID are exposed separately so the receiver has
-  // routing context without having to split paneKey back into its parts.
+  // The key matches the `${tabId}:${leafId}` composite used for cacheTimerByKey
+  // and agentStatusByPaneKey. Treat it as opaque outside Orca.
   const paneEnv = {
     ...paneStartup?.env,
     ORCA_PANE_KEY: cacheKey,
@@ -321,13 +537,31 @@ export function connectPanePty(
   const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find((t) => t.id === deps.tabId)
   const shellOverride = tab?.shellOverride
 
-  const transport = createIpcPtyTransport({
+  const restoredPtyIdForTransport =
+    deps.restoredLeafId && deps.restoredPtyIdByLeafId
+      ? (deps.restoredPtyIdByLeafId[deps.restoredLeafId] ?? null)
+      : null
+  const remoteRuntimeOwnerForTransport =
+    (restoredPtyIdForTransport
+      ? getRemoteRuntimePtyEnvironmentId(restoredPtyIdForTransport)
+      : null) ?? (tab?.ptyId ? getRemoteRuntimePtyEnvironmentId(tab.ptyId) : null)
+  const activeRuntimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim() || null
+  const runtimeEnvironmentId = remoteRuntimeOwnerForTransport ?? activeRuntimeEnvironmentId
+  const transportOptions = {
     cwd: deps.cwd,
     env: paneEnv,
     command: paneStartup?.command,
     connectionId,
     worktreeId: deps.worktreeId,
+    // Why: closes the SIGKILL race documented in INVESTIGATION.md by letting
+    // main sync-flush the (worktreeId, tabId, leafId → ptyId) binding before
+    // pty:spawn returns. Daemon-host-only: SSH path leaves these undefined
+    // and the main-side guard short-circuits.
+    tabId: deps.tabId,
+    leafId: pane.leafId,
+    activate: deps.isActiveRef.current && deps.isVisibleRef.current,
     ...(shellOverride ? { shellOverride } : {}),
+    ...(paneStartup?.telemetry ? { telemetry: paneStartup.telemetry } : {}),
     onPtyExit: onExit,
     onTitleChange,
     onPtySpawn,
@@ -343,18 +577,18 @@ export function connectPanePty(
       // setAgentStatus call observe the same state. Re-reading getState()
       // between the two lines opens a brief window where the title could
       // shift (OSC title update landing in between) and the status would be
-      // stored against a title that was never paired with it. The same
-      // snapshot also gates on the experimental dashboard setting — without
-      // the opt-in, OSC 9999 status payloads are dropped before they reach
-      // the store.
+      // stored against a title that was never paired with it.
       const currentState = useAppStore.getState()
-      if (currentState.settings?.experimentalAgentDashboard !== true) {
-        return
-      }
       const title = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
       currentState.setAgentStatus(cacheKey, payload, title)
+      if (syncAgentTaskCompleteNotificationEnabled()) {
+        agentCompletionCoordinator.observeHookStatus(payload)
+      }
     }
-  })
+  }
+  const transport = runtimeEnvironmentId
+    ? createRemoteRuntimePtyTransport(runtimeEnvironmentId, transportOptions)
+    : createIpcPtyTransport(transportOptions)
   const hasExistingPaneTransport = deps.paneTransportsRef.current.size > 0
   deps.paneTransportsRef.current.set(pane.id, transport)
 
@@ -379,6 +613,16 @@ export function connectPanePty(
     if (isCodexPaneStale({ tabId: deps.tabId, panePtyId: currentPtyId })) {
       return
     }
+    // Why: presence-lock input drop. While mobile is the driver for this
+    // PTY, desktop keystrokes must not reach the shell — any input would
+    // race the mobile session and is also dimensionally wrong (PTY is at
+    // phone fit). Renderer-side guard belongs here so we don't even mark
+    // the pane as "interacted" (no unread clear, no take-floor cascade).
+    // The pty:write IPC has a defense-in-depth twin. See
+    // docs/mobile-presence-lock.md.
+    if (currentPtyId && isPtyLocked(currentPtyId)) {
+      return
+    }
     // Why: a real keystroke into the terminal is the unambiguous "user is
     // here" signal that dismisses the bell (ghostty "show until interact").
     // Guarded by the replay and codex-stale checks above so synthetic xterm
@@ -389,22 +633,83 @@ export function connectPanePty(
   })
 
   const onResizeDisposable = pane.terminal.onResize(({ cols, rows }) => {
+    // Why: when a mobile-fit override is active OR mobile is currently the
+    // driver of this PTY, the PTY is already at phone dims and any desktop
+    // resize is wrong. Suppress resize forwarding to avoid spurious SIGWINCH
+    // signals (TUI flicker / wrap corruption). Both checks are needed:
+    // - getFitOverrideForPty covers the "phone-fit dims" state.
+    // - isPtyLocked covers the broader "mobile driving" state, including
+    //   transitions where override may not be set (e.g. legacy code paths).
+    // The pty:resize IPC has a defense-in-depth twin. See
+    // docs/mobile-presence-lock.md.
+    const currentPtyId = transport.getPtyId()
+    if (currentPtyId && (getFitOverrideForPty(currentPtyId) || isPtyLocked(currentPtyId))) {
+      return
+    }
     transport.resize(cols, rows)
   })
 
+  // Why: while a mobile-fit override is active, the onResize listener above
+  // and the matching server-side gate both correctly drop pty:resize so the
+  // PTY stays parked at phone dims. But the server still needs to learn the
+  // real desktop pane geometry — otherwise resolveDesktopRestoreTarget falls
+  // back to the PTY's spawn default (e.g. 80×24 for a hidden tab) and Take
+  // Back leaves the terminal partially restored. This observer measures the
+  // pane container as a side-channel, computes proposed cols/rows the way
+  // safeFit would, and reports it via pty:reportGeometry — a measurement-
+  // only IPC that updates lastRendererSizes and non-null subscriber
+  // baselines without resizing the PTY. We only fire while an override is
+  // active because the normal pty:resize path covers all other cases. See
+  // docs/mobile-fit-hold.md.
+  let pendingGeometryReportRaf: number | null = null
+  const reportPaneGeometry = (): void => {
+    pendingGeometryReportRaf = null
+    const currentPtyId = transport.getPtyId()
+    if (!currentPtyId) {
+      return
+    }
+    if (!getFitOverrideForPty(currentPtyId)) {
+      return
+    }
+    let proposed: { cols: number; rows: number } | undefined
+    try {
+      proposed = pane.fitAddon.proposeDimensions()
+    } catch {
+      proposed = undefined
+    }
+    if (!proposed || proposed.cols <= 0 || proposed.rows <= 0) {
+      return
+    }
+    if (!isRemoteRuntimePtyId(currentPtyId)) {
+      window.api.pty.reportGeometry(currentPtyId, proposed.cols, proposed.rows)
+    }
+  }
+  const geometryReportObserver =
+    typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(() => {
+          if (pendingGeometryReportRaf !== null) {
+            return
+          }
+          pendingGeometryReportRaf = requestAnimationFrame(reportPaneGeometry)
+        })
+  // Why: pane.xtermContainer is created later in pane-lifecycle's
+  // attachWebgl/initial-fit path; pane.container is always present at the
+  // moment connectPanePty runs (it's the .pane element). Both report the
+  // same layout signal — when the outer pane resizes, the inner xterm
+  // container resizes too — so this is the safe element to observe.
+  if (geometryReportObserver && pane.container instanceof Element) {
+    geometryReportObserver.observe(pane.container)
+  }
+
   // Defer PTY spawn/attach to next frame so FitAddon has time to calculate
   // the correct terminal dimensions from the laid-out container.
-  deps.pendingWritesRef.current.set(pane.id, '')
   connectFrame = requestAnimationFrame(() => {
     connectFrame = null
     if (disposed) {
       return
     }
-    try {
-      pane.fitAddon.fit()
-    } catch {
-      /* ignore */
-    }
+    safeFit(pane)
     const cols = pane.terminal.cols
     const rows = pane.terminal.rows
 
@@ -422,12 +727,59 @@ export function connectPanePty(
       deps.onPtyErrorRef?.current?.(pane.id, message)
     }
 
-    // Why: 512 KB cap keeps the pending buffer from growing without bound
-    // when an agent runs for minutes in a background worktree.  When the
-    // cap is reached, the oldest output is trimmed so the most recent
-    // terminal state is preserved.  This matches the MAX_BUFFER_BYTES
-    // constant used for serialized scrollback capture.
-    const MAX_PENDING_BYTES = 512 * 1024
+    // Why: shared registration so both fresh-spawn and reattach paths install
+    // the same SerializeAddon-backed serializer plus the onTitleChange wrapper
+    // that drives lastTitle parity for mobile subscribers. Wires the resulting
+    // unregister into onDataDisposable.dispose so disposal stays a single
+    // teardown point. See docs/mobile-prefer-renderer-scrollback.md.
+    const registerPaneSerializerFor = (ptyId: string): void => {
+      // Why: StrictMode mounts panes twice; the first mount is disposed
+      // before the second runs, but its pty:spawn IPC may have resolved by
+      // the time `disposed` flips. Without this guard, the disposed first
+      // mount would register against a torn-down xterm and replace the live
+      // second-mount registration via owner-token shadowing.
+      if (disposed) {
+        return
+      }
+      const unregisterSerializer = registerPtySerializer(
+        ptyId,
+        async (opts) => {
+          try {
+            await waitForTerminalOutputParsed(pane.terminal)
+            // Why: alt-screen TUIs (vim, claude-code) hold transient state in
+            // the alternate screen. The hydration path requests
+            // altScreenForcesZeroRows so normal-buffer scrollback isn't bled
+            // into the seed when the user is mid-TUI; the read-fallback path
+            // omits it because it wants the user's currently-visible content.
+            const alt = pane.terminal.buffer.active.type === 'alternate'
+            const data =
+              opts?.altScreenForcesZeroRows && alt
+                ? pane.serializeAddon.serialize({ scrollback: 0 })
+                : pane.serializeAddon.serialize({ scrollback: opts?.scrollbackRows })
+            return {
+              data,
+              cols: pane.terminal.cols,
+              rows: pane.terminal.rows
+            }
+          } catch {
+            return null
+          }
+        },
+        () => {
+          discardTerminalOutput(pane.terminal)
+          pane.terminal.clear()
+        }
+      )
+      const unregisterTitleSource = registerPtyTitleSource(ptyId, (handler) =>
+        pane.terminal.onTitleChange(handler)
+      )
+      const origOnDataDisposableDispose = onDataDisposable.dispose.bind(onDataDisposable)
+      onDataDisposable.dispose = () => {
+        unregisterTitleSource()
+        unregisterSerializer()
+        origOnDataDisposableDispose()
+      }
+    }
 
     // Why: for local connections (connectionId === null) the local PTY provider
     // already writes the startup command via writeStartupCommandWhenShellReady,
@@ -437,75 +789,100 @@ export function connectPanePty(
     let pendingStartupCommand = connectionId ? (paneStartup?.command ?? null) : null
 
     const startFreshSpawn = (): void => {
-      const spawnPromise = Promise.resolve(
-        transport.connect({
-          url: '',
-          cols,
-          rows,
-          callbacks: {
-            onData: dataCallback,
-            onReplayData: replayDataCallback,
-            onError: reportError
+      // Why: pre-signal the main process so its cooperation gate suppresses
+      // the daemon-snapshot seed for this paneKey. We issue declare and the
+      // spawn back-to-back without awaiting, because Electron's
+      // ipcRenderer→ipcMain channel preserves order across consecutive invoke
+      // calls from the same renderer. The cooperation gate at pty:spawn time
+      // sees pendingByPaneKey populated. Settle/clear later echoes the gen
+      // token captured here. See docs/mobile-prefer-renderer-scrollback.md.
+      const preSignalPromise = runtimeEnvironmentId
+        ? Promise.resolve(null)
+        : window.api.pty.declarePendingPaneSerializer(cacheKey).catch(() => null)
+
+      const spawnedRaw = transport.connect({
+        url: '',
+        cols,
+        rows,
+        callbacks: {
+          onData: dataCallback,
+          onReplayData: replayDataCallback,
+          onError: reportError
+        }
+      })
+
+      const trackedPromise: Promise<string | null> = Promise.resolve(spawnedRaw)
+        .then(async (spawnedPtyId) => {
+          const resolvedPtyId =
+            typeof spawnedPtyId === 'string' ? spawnedPtyId : transport.getPtyId()
+          const gen = await preSignalPromise
+          if (typeof gen === 'number' && resolvedPtyId) {
+            if (!isRemoteRuntimePtyId(resolvedPtyId)) {
+              registerPaneSerializerFor(resolvedPtyId)
+              void window.api.pty.settlePaneSerializer(cacheKey, gen).catch(() => {})
+            }
+          } else if (typeof gen === 'number') {
+            void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
           }
+          return resolvedPtyId
         })
-      )
-        .then((spawnedPtyId) =>
-          typeof spawnedPtyId === 'string' ? spawnedPtyId : transport.getPtyId()
-        )
-        .catch(() => null)
+        .catch(async () => {
+          const gen = await preSignalPromise
+          if (typeof gen === 'number') {
+            void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
+          }
+          return null
+        })
         .finally(() => {
-          if (pendingSpawnByPaneKey.get(pendingSpawnKey) === spawnPromise) {
+          if (pendingSpawnByPaneKey.get(pendingSpawnKey) === trackedPromise) {
             pendingSpawnByPaneKey.delete(pendingSpawnKey)
           }
         })
       // Why: split panes in the same tab can spawn concurrently. Key by pane
       // as well as tab so a remount cannot attach to a sibling setup pane's PTY.
-      pendingSpawnByPaneKey.set(pendingSpawnKey, spawnPromise)
+      pendingSpawnByPaneKey.set(pendingSpawnKey, trackedPromise)
     }
 
-    // Why: replay bytes (eager-buffer flush, attach-time screen clear) must
-    // always go through the replay guard so xterm's auto-replies to embedded
-    // query sequences don't leak to the shell. Unlike dataCallback we do not
-    // honor isVisibleRef — the visibility branch is a perf batching strategy
-    // for live output that defers parsing until the worktree is foregrounded,
-    // but deferring replay parsing drops the bytes into pendingWritesRef,
-    // which later flushes through plain pane.terminal.write (in
-    // use-terminal-pane-global-effects) with no guard engaged. xterm's
-    // write() buffers internally regardless of DOM visibility, and the guard
-    // stays engaged via the write-completion callback until xterm finishes
-    // parsing — so writing directly here is both correct and safe.
-    const replayDataCallback = (data: string): void => {
-      // Why: the relay's replay buffer holds the full last 100 KB of output,
-      // including data already rendered in xterm before the disconnect.
-      // Clearing before writing prevents duplication on SSH reconnect.
-      replayIntoTerminal(pane, deps.replayingPanesRef, '\x1b[2J\x1b[3J\x1b[H')
+    // The replay path uses the guard so xterm auto-replies to embedded query
+    // sequences don't leak into the shell. xterm.write() buffers internally
+    // regardless of DOM visibility and the guard stays engaged via the
+    // write-completion callback until xterm finishes parsing.
+    let replayEndsWithLineBreak = true
+    const writeReplayData = (data: string): void => {
+      // Why: drain any queued background bytes BEFORE the replay paint, so the
+      // scheduler's deferred drain cannot land older bytes on top of the replay.
+      flushTerminalOutput(pane.terminal)
+      if (terminalOutputPrefersDomRenderer(data)) {
+        manager.markPaneHasComplexScriptOutput(pane.id)
+      }
       replayIntoTerminal(pane, deps.replayingPanesRef, data)
+      replayEndsWithLineBreak = /[\r\n]$/.test(data)
+    }
+    const terminateReplayLine = (): void => {
+      if (!replayEndsWithLineBreak) {
+        writeReplayData('\r\n')
+      }
+    }
+
+    const replayDataCallback = (data: string): void => {
+      // Relay replay buffer holds the last 100 KB of output, which may
+      // overlap with content already rendered in xterm before the
+      // disconnect. Clear first to prevent duplication on SSH reconnect.
+      writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+      writeReplayData(data)
     }
 
     const dataCallback = (data: string): void => {
-      maybeShowDeveloperPermissionHint(deps.worktreeId, data)
-
-      if (deps.isVisibleRef.current) {
-        pane.terminal.write(data)
-      } else {
-        const pending = deps.pendingWritesRef.current
-        let buf = (pending.get(pane.id) ?? '') + data
-        if (buf.length > MAX_PENDING_BYTES) {
-          // Why: slicing at an arbitrary offset can bisect a multi-byte
-          // character or an ANSI escape sequence (e.g. \x1b[38;2;255;0m),
-          // producing garbled output when the buffer is later flushed.
-          // Snapping forward to the next newline ensures the cut lands on
-          // a line boundary where escape state is far less likely to be
-          // mid-sequence.
-          let cutAt = buf.length - MAX_PENDING_BYTES
-          const nl = buf.indexOf('\n', cutAt)
-          if (nl !== -1 && nl < cutAt + 256) {
-            cutAt = nl + 1
-          }
-          buf = buf.slice(cutAt)
-        }
-        pending.set(pane.id, buf)
+      commandLifecycle.handlePtyData(data)
+      if (terminalOutputPrefersDomRenderer(data)) {
+        manager.markPaneHasComplexScriptOutput(pane.id)
       }
+      // Why: visibility is the right gate — split-pane layouts have multiple
+      // visible-but-inactive panes whose output the user is watching. Only
+      // hidden panes (background tabs) should be throttled.
+      writeTerminalOutput(pane.terminal, data, {
+        foreground: deps.isVisibleRef.current
+      })
 
       if (pendingStartupCommand) {
         if (startupInjectTimer !== null) {
@@ -538,7 +915,7 @@ export function connectPanePty(
         warnTerminalLifecycleAnomaly('restored PTY reattach returned no PTY id', {
           tabId: deps.tabId,
           worktreeId: deps.worktreeId,
-          leafId: deps.restoredLeafId ?? paneLeafId(pane.id),
+          leafId: deps.restoredLeafId ?? pane.leafId,
           paneId: pane.id,
           ptyId: staleSessionId ?? null
         })
@@ -551,71 +928,100 @@ export function connectPanePty(
         startFreshSpawn()
         return
       }
+      if (connectResult?.sessionExpired) {
+        deps.syncPanePtyLayoutBinding(pane.id, null)
+        if (staleSessionId) {
+          deps.clearTabPtyId(deps.tabId, staleSessionId)
+        }
+        // Why: SSH sleep/reconnect can invalidate the relay-held PTY while
+        // leaving the tab mounted. Replace the dead lease in-place instead of
+        // stranding the pane behind a stale expired-session overlay.
+        startFreshSpawn()
+        return
+      }
+      bindPanePtyId(pane.id, ptyId, deps.tabId)
+      pane.container.dataset.ptyId = ptyId
       deps.syncPanePtyLayoutBinding(pane.id, ptyId)
       deps.updateTabPtyId(deps.tabId, ptyId)
+      agentCompletionCoordinator.startProcessTracking()
 
-      if (connectResult?.coldRestore) {
-        // Why: restoreScrollbackBuffers() already wrote the saved xterm
-        // buffer before this rAF ran. The cold-restore scrollback from
-        // disk history overlaps with that content. Without clearing first,
-        // the terminal shows duplicated output.
-        // Why replayIntoTerminal: the recorded scrollback is raw PTY output
-        // that may contain query sequences the previous agent CLI emitted;
-        // writing them through xterm.write would trigger auto-replies that
-        // land in the new shell's stdin. See replay-guard.ts.
-        replayIntoTerminal(pane, deps.replayingPanesRef, '\x1b[2J\x1b[3J\x1b[H')
-        replayIntoTerminal(pane, deps.replayingPanesRef, connectResult.coldRestore.scrollback)
-        replayIntoTerminal(
-          pane,
-          deps.replayingPanesRef,
-          '\r\n\x1b[2m--- session restored ---\x1b[0m\r\n\r\n'
-        )
-        // Why: the cold-restore scrollback is raw PTY output from the prior
-        // session, so mode-setting bytes emitted by a crashed TUI (e.g.
-        // Claude's \e[?1004h) come through verbatim and re-enable those modes
-        // in xterm. Cold-restore means the daemon lost the session and spawned
-        // a fresh shell — there is no TUI consuming these modes anymore, so
-        // reset them to match the fresh shell's expectations. Not applied to
-        // the snapshot branch below: that branch reattaches to a live daemon
-        // session where a running TUI may still depend on these modes.
-        replayIntoTerminal(pane, deps.replayingPanesRef, POST_REPLAY_MODE_RESET)
-        window.api.pty.ackColdRestore(ptyId)
-      } else if (connectResult?.snapshot) {
-        // Why: always clear before writing the daemon/SSH snapshot to prevent
-        // duplication with scrollback restored earlier. The replay guard also
-        // prevents terminal auto-replies from leaking into the live shell.
-        replayIntoTerminal(pane, deps.replayingPanesRef, '\x1b[2J\x1b[3J\x1b[H')
-        replayIntoTerminal(pane, deps.replayingPanesRef, connectResult.snapshot)
-        // Why: snapshot restore keeps a live session, so avoid the broader mode
+      // Why: mobile terminal streaming needs the exact screen state from
+      // xterm.js. The shared helper installs both the SerializeAddon-backed
+      // serializer and the onTitleChange-driven lastTitle source so the
+      // main-process hydration path has full status parity.
+      registerPaneSerializerFor(ptyId)
+
+      // Strict precedence: snapshot > replay > coldRestore. Paint exactly
+      // one source per reattach. Painting snapshot AND replay produced the
+      // duplicated TUI output users saw on worktree switch (the relay replay
+      // buffer's tail typically overlaps with the daemon snapshot's tail, so
+      // both writing into xterm doubles the same lines). Snapshot wins
+      // because the daemon's authoritative buffer is freshest when present;
+      // replay wins over coldRestore because the relay's last 100 KB is
+      // newer than disk-recorded scrollback. If we ever return all three,
+      // the daemon and relay are by definition tracking the same session
+      // and only the freshest source belongs on screen.
+      if (connectResult?.snapshot) {
+        writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+        writeReplayData(connectResult.snapshot)
+        terminateReplayLine()
+        // Snapshot reattach keeps a live session, so avoid the broader mode
         // reset. Focus reporting is the unsafe exception: preserving `?1004h`
         // can make restored shells ring BEL on pane focus/blur.
-        replayIntoTerminal(pane, deps.replayingPanesRef, POST_REPLAY_FOCUS_REPORTING_RESET)
-      }
-      if (connectResult?.replay) {
-        // Why: the relay's replay buffer is the authoritative terminal state
-        // (last 100 KB of raw output). On SSH reattach the local xterm may
-        // already hold pre-disconnect content that overlaps with the buffer.
-        // Clearing before writing prevents duplication — same approach the
-        // snapshot path uses above. Focus-reporting reset prevents BEL on
-        // pane focus/blur from stale mode bits in the replayed data.
-        if (!connectResult.snapshot && !connectResult.coldRestore) {
-          replayIntoTerminal(pane, deps.replayingPanesRef, '\x1b[2J\x1b[3J\x1b[H')
+        writeReplayData(POST_REPLAY_FOCUS_REPORTING_RESET)
+        if (connectResult.coldRestore) {
+          // Snapshot superseded the cold-restore payload — ack it so the
+          // daemon does not redeliver it on the next reattach.
+          if (!isRemoteRuntimePtyId(ptyId)) {
+            window.api.pty.ackColdRestore(ptyId)
+          }
         }
-        replayIntoTerminal(pane, deps.replayingPanesRef, connectResult.replay)
-        replayIntoTerminal(pane, deps.replayingPanesRef, POST_REPLAY_FOCUS_REPORTING_RESET)
+      } else if (connectResult?.replay) {
+        // Relay replay holds the last 100 KB of raw output. The xterm may
+        // already hold pre-disconnect content; clear first to avoid
+        // duplication. Focus-reporting reset prevents BEL from stale mode
+        // bits in the replayed data.
+        writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+        writeReplayData(connectResult.replay)
+        terminateReplayLine()
+        writeReplayData(POST_REPLAY_FOCUS_REPORTING_RESET)
+        if (connectResult.coldRestore) {
+          if (!isRemoteRuntimePtyId(ptyId)) {
+            window.api.pty.ackColdRestore(ptyId)
+          }
+        }
+      } else if (connectResult?.coldRestore) {
+        // restoreScrollbackBuffers() already wrote the saved xterm buffer
+        // before this rAF ran. The cold-restore scrollback overlaps with
+        // that content; clear first.
+        // replayIntoTerminal: the recorded scrollback is raw PTY output that
+        // may contain query sequences the previous agent CLI emitted;
+        // writing them through xterm.write would trigger auto-replies that
+        // land in the new shell's stdin. See replay-guard.ts.
+        writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+        writeReplayData(connectResult.coldRestore.scrollback)
+        writeReplayData('\r\n\x1b[2m--- session restored ---\x1b[0m\r\n\r\n')
+        // Cold-restore means the daemon lost the session and spawned a
+        // fresh shell — no TUI is consuming the mode-setting bytes that a
+        // crashed TUI (e.g. Claude's \e[?1004h) left in the scrollback, so
+        // reset them to match the fresh shell's expectations.
+        writeReplayData(POST_REPLAY_MODE_RESET)
+        if (!isRemoteRuntimePtyId(ptyId)) {
+          window.api.pty.ackColdRestore(ptyId)
+        }
       }
-      if (connectResult?.sessionExpired) {
-        toast.info('Previous SSH session expired.', {
-          id: `ssh-session-expired-${deps.tabId}`,
-          description: 'Started a new shell.'
-        })
+      // Why: when a mobile-fit override is active, skip sending desktop dims
+      // to the PTY — the PTY is already at phone dimensions and must stay there.
+      const reattachPtyId = transport.getPtyId()
+      if (!reattachPtyId || !getFitOverrideForPty(reattachPtyId)) {
+        transport.resize(cols, rows)
       }
-
-      transport.resize(cols, rows)
       // Why: POSIX only delivers SIGWINCH when terminal dimensions actually
       // change. Sending it explicitly guarantees restored TUIs repaint at
       // the correct cursor position after snapshot replay.
-      window.api.pty.signal(ptyId, 'SIGWINCH')
+      if (!isRemoteRuntimePtyId(ptyId)) {
+        window.api.pty.signal(ptyId, 'SIGWINCH')
+      }
 
       scheduleRuntimeGraphSync()
     }
@@ -639,6 +1045,119 @@ export function connectPanePty(
       )
       if (pendingSessionId || isDeferredTarget) {
         void (async () => {
+          // Why: if the target requires a passphrase/password and no credential
+          // is cached yet, auto-firing ssh.connect would surprise the user —
+          // a prompt pops unprompted just because they focused a tab / jumped
+          // via Cmd+J. Wait for the user to initiate the connect (via
+          // SshDisconnectedDialog → passphrase dialog) before proceeding with
+          // the PTY reattach. No-passphrase targets (ssh-agent, unencrypted
+          // key, cached creds) return false here and continue auto-connecting
+          // as before.
+          let needsPrompt = false
+          try {
+            needsPrompt = await window.api.ssh.needsPassphrasePrompt({
+              targetId: connectionId
+            })
+          } catch (err) {
+            console.warn('[pty-connection] needsPassphrasePrompt probe failed:', err)
+            // Why: if the probe fails, fall through to the existing auto-connect
+            // behavior rather than stranding the tab — a stuck tab is worse
+            // than a surprising prompt.
+          }
+          if (disposed) {
+            return
+          }
+          if (needsPrompt) {
+            const alreadyConnected =
+              useAppStore.getState().sshConnectionStates.get(connectionId)?.status === 'connected'
+            if (!alreadyConnected) {
+              // Wait for the user-driven connect (SshDisconnectedDialog →
+              // passphrase dialog → ssh.connect) to complete, then continue.
+              // Why: resolve on terminal-failure statuses too ('auth-failed',
+              // 'error', 'reconnection-failed') so this promise can't hang
+              // forever if the user cancels or the connect fails —
+              // waitForSshConnection below has its own error path that will
+              // surface the failure via reportError.
+              const outcome = await new Promise<UserInitiatedSshConnectOutcome>((resolve) => {
+                // Why: 'disconnected' counts as terminal only after we've
+                // observed a non-disconnected status — i.e. the user actually
+                // initiated a connect attempt that returned to 'disconnected'
+                // (cancel/dismiss). Treating the entry-time 'disconnected'
+                // as terminal would skip the gate entirely, defeating the
+                // passphrase-prompt deferral.
+                let sawNonDisconnected =
+                  useAppStore.getState().sshConnectionStates.get(connectionId)?.status !==
+                    'disconnected' &&
+                  useAppStore.getState().sshConnectionStates.get(connectionId)?.status !== undefined
+                let resolvedOutcome: UserInitiatedSshConnectOutcome = 'cancelled'
+                let settled = false
+                const finish = (nextOutcome: UserInitiatedSshConnectOutcome): void => {
+                  if (settled) {
+                    return
+                  }
+                  resolvedOutcome = nextOutcome
+                  settled = true
+                  unsub()
+                  const idx = waitTeardowns.indexOf(teardown)
+                  if (idx !== -1) {
+                    waitTeardowns.splice(idx, 1)
+                  }
+                  resolve(resolvedOutcome)
+                }
+                const teardown = (): void => finish('cancelled')
+                // Why: registering a teardown lets dispose() actively
+                // unsubscribe + resolve if the pane is torn down while the
+                // wait is in flight. Without this the zustand subscriber and
+                // the surrounding async IIFE leak for the rest of the app
+                // session because the callback only checks `disposed` when
+                // it next fires — and it may never fire again.
+                waitTeardowns.push(teardown)
+                const unsub = useAppStore.subscribe((state) => {
+                  if (disposed) {
+                    finish('cancelled')
+                    return
+                  }
+                  const status = state.sshConnectionStates.get(connectionId)?.status
+                  if (status && status !== 'disconnected') {
+                    sawNonDisconnected = true
+                  }
+                  const nextOutcome = sshPromptConnectOutcomeForStatus(status, sawNonDisconnected)
+                  if (nextOutcome) {
+                    finish(nextOutcome)
+                  }
+                })
+                // Why: re-read state immediately after subscribing to close the
+                // race where status transitioned between the alreadyConnected
+                // check above and the subscribe registration — otherwise we'd
+                // wait forever for a state change that already happened.
+                if (disposed) {
+                  finish('cancelled')
+                  return
+                }
+                const currentStatus = useAppStore
+                  .getState()
+                  .sshConnectionStates.get(connectionId)?.status
+                const currentOutcome = sshPromptConnectOutcomeForStatus(
+                  currentStatus,
+                  sawNonDisconnected
+                )
+                if (currentOutcome) {
+                  finish(currentOutcome)
+                }
+              })
+              if (disposed) {
+                return
+              }
+              if (outcome === 'cancelled') {
+                return
+              }
+              if (outcome === 'failed') {
+                reportError('SSH connection failed')
+                return
+              }
+            }
+          }
+
           // Why: ensure the SSH connection is established before attempting
           // PTY reattach. Multiple panes/tabs may need the same connection,
           // so we wait for it rather than returning early when in-flight.
@@ -662,6 +1181,15 @@ export function connectPanePty(
             // Clear it before attach/fallback so remounts don't keep retrying
             // an expired session after a fresh shell has been created.
             useAppStore.getState().removeDeferredSshSessionId(deps.tabId)
+            // Why: pre-signal also for SSH-deferred reattach so the
+            // cooperation gate uniformly applies to remote sessions. Issue
+            // declare and connect back-to-back; Electron preserves order. See
+            // docs/mobile-prefer-renderer-scrollback.md.
+            const preSignalPromise =
+              runtimeEnvironmentId || isRemoteRuntimePtyId(pendingSessionId)
+                ? Promise.resolve(null)
+                : window.api.pty.declarePendingPaneSerializer(cacheKey).catch(() => null)
+            let expiredReattachError = false
             const reattachPromise = transport.connect({
               url: '',
               cols,
@@ -670,11 +1198,17 @@ export function connectPanePty(
               callbacks: {
                 onData: dataCallback,
                 onReplayData: replayDataCallback,
-                onError: reportError
+                onError: (message) => {
+                  if (isSshSessionExpiredError(message)) {
+                    expiredReattachError = true
+                    return
+                  }
+                  reportError(message)
+                }
               }
             })
             void Promise.resolve(reattachPromise)
-              .then((result) => {
+              .then(async (result) => {
                 console.warn(
                   `[pty-connection] Reattach result for tab=${deps.tabId}:`,
                   result
@@ -684,11 +1218,40 @@ export function connectPanePty(
                       }
                     : 'undefined'
                 )
+                if (!result && expiredReattachError) {
+                  if (disposed) {
+                    return
+                  }
+                  deps.syncPanePtyLayoutBinding(pane.id, null)
+                  deps.clearTabPtyId(deps.tabId, pendingSessionId)
+                  const gen = await preSignalPromise
+                  if (typeof gen === 'number') {
+                    void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
+                  }
+                  startFreshSpawn()
+                  return
+                }
                 handleReattachResult(result, pendingSessionId)
+                const gen = await preSignalPromise
+                if (typeof gen === 'number') {
+                  if (!isRemoteRuntimePtyId(pendingSessionId)) {
+                    void window.api.pty.settlePaneSerializer(cacheKey, gen).catch(() => {})
+                  }
+                }
               })
-              .catch((err) => {
+              .catch(async (err) => {
+                const gen = await preSignalPromise
+                if (typeof gen === 'number') {
+                  void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
+                }
                 console.warn(`[pty-connection] Reattach FAILED for tab=${deps.tabId}:`, err)
                 if (disposed) {
+                  return
+                }
+                if (isSshSessionExpiredError(err)) {
+                  deps.syncPanePtyLayoutBinding(pane.id, null)
+                  deps.clearTabPtyId(deps.tabId, pendingSessionId)
+                  startFreshSpawn()
                   return
                 }
                 startFreshSpawn()
@@ -722,6 +1285,8 @@ export function connectPanePty(
             : null
           : existingPtyId
         : null
+    const detachedRemoteLeafPtyId =
+      restoredSessionId && isRemoteRuntimePtyId(restoredSessionId) ? restoredSessionId : null
     const candidateReattachSessionId =
       restoredSessionId && restoredSessionId !== detachedLivePtyId
         ? restoredSessionId
@@ -733,12 +1298,32 @@ export function connectPanePty(
     // the reattach and spawn a fresh session instead.
     const deferredReattachSessionId =
       candidateReattachSessionId &&
+      !isRemoteRuntimePtyId(candidateReattachSessionId) &&
       isSessionOwnedByWorktree(candidateReattachSessionId, deps.worktreeId)
         ? candidateReattachSessionId
         : null
+    recordPtyConnectDiagnostic(
+      `pane=${pane.id} tab=${deps.tabId} restored=${restoredPtyId} existing=${existingPtyId} detached=${detachedRemoteLeafPtyId ?? detachedLivePtyId} reattach=${deferredReattachSessionId} hasTransport=${hasExistingPaneTransport} pendingKey=${pendingSpawnKey}`
+    )
+
     if (deferredReattachSessionId) {
       allowInitialIdleCacheSeed = true
+      recordPtyConnectDiagnostic(`pane=${pane.id} -> REATTACH ${deferredReattachSessionId}`)
 
+      // Why: reattach also pre-signals so the cooperation gate suppresses
+      // the daemon seed for this paneKey. Reattach paths register their
+      // serializer in handleReattachResult (via registerPaneSerializerFor),
+      // mirroring the fresh-spawn path. We issue declare and the reattach
+      // connect back-to-back without awaiting; Electron's ipcRenderer→ipcMain
+      // channel preserves order. See
+      // docs/mobile-prefer-renderer-scrollback.md (Renderer-side prerequisite
+      // requirement #4).
+      const preSignalPromise =
+        runtimeEnvironmentId || isRemoteRuntimePtyId(deferredReattachSessionId)
+          ? Promise.resolve(null)
+          : window.api.pty.declarePendingPaneSerializer(cacheKey).catch(() => null)
+
+      let expiredReattachError = false
       const reattachPromise = transport.connect({
         url: '',
         cols,
@@ -747,30 +1332,68 @@ export function connectPanePty(
         callbacks: {
           onData: dataCallback,
           onReplayData: replayDataCallback,
-          onError: reportError
+          onError: (message) => {
+            if (isSshSessionExpiredError(message)) {
+              expiredReattachError = true
+              return
+            }
+            reportError(message)
+          }
         }
       })
 
       void Promise.resolve(reattachPromise)
-        .then((result) => {
+        .then(async (result) => {
+          if (!result && expiredReattachError) {
+            if (disposed) {
+              return
+            }
+            deps.syncPanePtyLayoutBinding(pane.id, null)
+            deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
+            const gen = await preSignalPromise
+            if (typeof gen === 'number') {
+              void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
+            }
+            startFreshSpawn()
+            return
+          }
           handleReattachResult(result, deferredReattachSessionId)
+          const gen = await preSignalPromise
+          if (typeof gen === 'number') {
+            if (!isRemoteRuntimePtyId(deferredReattachSessionId)) {
+              void window.api.pty.settlePaneSerializer(cacheKey, gen).catch(() => {})
+            }
+          }
         })
-        .catch((err) => {
+        .catch(async (err) => {
+          const gen = await preSignalPromise
+          if (typeof gen === 'number') {
+            void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
+          }
           const message = err instanceof Error ? err.message : String(err)
           warnTerminalLifecycleAnomaly('restored PTY reattach threw', {
             tabId: deps.tabId,
             worktreeId: deps.worktreeId,
-            leafId: deps.restoredLeafId ?? paneLeafId(pane.id),
+            leafId: deps.restoredLeafId ?? pane.leafId,
             paneId: pane.id,
             ptyId: deferredReattachSessionId,
             reason: message
           })
-          reportError(message)
           deps.syncPanePtyLayoutBinding(pane.id, null)
           deps.clearTabPtyId(deps.tabId, deferredReattachSessionId)
+          if (connectionId && isSshSessionExpiredError(err)) {
+            startFreshSpawn()
+            return
+          }
+          reportError(message)
           startFreshSpawn()
         })
-    } else if (detachedLivePtyId) {
+    } else if (detachedRemoteLeafPtyId || detachedLivePtyId) {
+      // Why: mirrored web terminal layouts mount one pane per host leaf.
+      // Later leaves already have a pane transport, but must still attach to
+      // their exact remote PTY instead of spawning replacement host tabs.
+      const attachPtyId = detachedRemoteLeafPtyId ?? detachedLivePtyId!
+      recordPtyConnectDiagnostic(`pane=${pane.id} -> ATTACH detached=${attachPtyId}`)
       allowInitialIdleCacheSeed = false
       // Why: surface synchronous attach failures (e.g., the PTY died between
       // mount and remount, so window.api.pty.resize rejects) through
@@ -783,7 +1406,7 @@ export function connectPanePty(
       // the store and lands in this branch again in a loop.
       try {
         transport.attach({
-          existingPtyId: detachedLivePtyId,
+          existingPtyId: attachPtyId,
           cols,
           rows,
           callbacks: {
@@ -792,19 +1415,19 @@ export function connectPanePty(
             onError: reportError
           }
         })
-        deps.syncPanePtyLayoutBinding(pane.id, detachedLivePtyId)
-        deps.updateTabPtyId(deps.tabId, detachedLivePtyId)
+        deps.syncPanePtyLayoutBinding(pane.id, attachPtyId)
+        deps.updateTabPtyId(deps.tabId, attachPtyId)
+        agentCompletionCoordinator.startProcessTracking()
       } catch (err) {
         reportError(err instanceof Error ? err.message : String(err))
-        deps.clearTabPtyId(deps.tabId, detachedLivePtyId)
+        deps.clearTabPtyId(deps.tabId, attachPtyId)
         startFreshSpawn()
       }
     } else {
       allowInitialIdleCacheSeed = false
-      const pendingSpawn = hasExistingPaneTransport
-        ? undefined
-        : pendingSpawnByPaneKey.get(pendingSpawnKey)
+      const pendingSpawn = pendingSpawnByPaneKey.get(pendingSpawnKey)
       if (pendingSpawn) {
+        recordPtyConnectDiagnostic(`pane=${pane.id} -> PENDING SPAWN`)
         void pendingSpawn
           .then((spawnedPtyId) => {
             if (disposed) {
@@ -819,9 +1442,11 @@ export function connectPanePty(
               // produced a usable PTY ID, the remounted pane must issue its own
               // spawn instead of staying attached to a completed-but-empty
               // promise and rendering a dead terminal surface.
-              console.warn(
-                `Pending PTY spawn for tab ${deps.tabId} resolved without a PTY id, retrying fresh spawn`
-              )
+              if (!isWebTerminalSurfaceTabId(deps.tabId)) {
+                console.warn(
+                  `Pending PTY spawn for tab ${deps.tabId} resolved without a PTY id, retrying fresh spawn`
+                )
+              }
               startFreshSpawn()
               return
             }
@@ -840,11 +1465,15 @@ export function connectPanePty(
                 onError: reportError
               }
             })
+            // Why: attach sets the transport's PTY id; starting process
+            // tracking before this point no-ops because getPtyId() is empty.
+            agentCompletionCoordinator.startProcessTracking()
           })
           .catch((err) => {
             reportError(err instanceof Error ? err.message : String(err))
           })
       } else {
+        recordPtyConnectDiagnostic(`pane=${pane.id} -> FRESH SPAWN`)
         startFreshSpawn()
       }
     }
@@ -854,9 +1483,24 @@ export function connectPanePty(
   return {
     dispose() {
       disposed = true
+      // Why: actively resolve any in-flight passphrase-gate waits so their
+      // zustand subscribers + async IIFEs don't hang for the rest of the
+      // session when the pane is torn down before SSH state changes.
+      while (waitTeardowns.length > 0) {
+        const teardown = waitTeardowns.pop()
+        teardown?.()
+      }
       if (startupInjectTimer !== null) {
         clearTimeout(startupInjectTimer)
         startupInjectTimer = null
+      }
+      clearPendingAgentTaskCompleteNotification()
+      pendingTerminalBellNotification = false
+      clearTerminalBellNotificationTimer()
+      discardTerminalOutput(pane.terminal)
+      if (agentTaskCompleteSettingsUnsubscribe !== null) {
+        agentTaskCompleteSettingsUnsubscribe()
+        agentTaskCompleteSettingsUnsubscribe = null
       }
       if (connectFrame !== null) {
         // Why: StrictMode and split-group remounts can dispose a pane binding
@@ -868,6 +1512,13 @@ export function connectPanePty(
       }
       onDataDisposable.dispose()
       onResizeDisposable.dispose()
+      geometryReportObserver?.disconnect()
+      if (pendingGeometryReportRaf !== null) {
+        cancelAnimationFrame(pendingGeometryReportRaf)
+        pendingGeometryReportRaf = null
+      }
+      commandLifecycle.dispose()
+      agentCompletionCoordinator.dispose()
     }
   }
 }

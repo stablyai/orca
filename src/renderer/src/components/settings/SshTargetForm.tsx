@@ -1,4 +1,9 @@
 import { FileKey } from 'lucide-react'
+import {
+  DEFAULT_REMOTE_WORKSPACE_SYNC_GRACE_PERIOD_SECONDS,
+  DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
+  MAX_SSH_RELAY_GRACE_PERIOD_SECONDS
+} from '../../../../shared/ssh-types'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -13,6 +18,8 @@ export type EditingTarget = {
   proxyCommand: string
   jumpHost: string
   relayGracePeriodSeconds: string
+  remoteWorkspaceSyncEnabled: boolean
+  remoteWorkspaceSyncGracePeriodSeconds: string
 }
 
 export const EMPTY_FORM: EditingTarget = {
@@ -24,7 +31,9 @@ export const EMPTY_FORM: EditingTarget = {
   identityFile: '',
   proxyCommand: '',
   jumpHost: '',
-  relayGracePeriodSeconds: '300'
+  relayGracePeriodSeconds: String(DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS),
+  remoteWorkspaceSyncEnabled: false,
+  remoteWorkspaceSyncGracePeriodSeconds: String(DEFAULT_REMOTE_WORKSPACE_SYNC_GRACE_PERIOD_SECONDS)
 }
 
 type SshTargetFormProps = {
@@ -132,13 +141,55 @@ export function SshTargetForm({
             onChange={(e) =>
               onFormChange((f) => ({ ...f, relayGracePeriodSeconds: e.target.value }))
             }
-            placeholder="300"
-            min={60}
-            max={3600}
+            placeholder={String(DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS)}
+            min={0}
+            max={MAX_SSH_RELAY_GRACE_PERIOD_SECONDS}
           />
           <p className="text-[11px] text-muted-foreground">
-            How long the relay keeps terminals alive after disconnect. Default: 300 (5 minutes).
+            How long the relay keeps terminals alive after disconnect. Default: 10800 (3 hours). 0
+            keeps it alive until terminals are ended or the relay is reset.
           </p>
+        </div>
+        <div className="col-span-2 space-y-3 border-t border-border/50 pt-3">
+          <label className="flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-4 accent-foreground"
+              checked={form.remoteWorkspaceSyncEnabled}
+              onChange={(e) =>
+                onFormChange((f) => ({ ...f, remoteWorkspaceSyncEnabled: e.target.checked }))
+              }
+            />
+            <span className="space-y-1">
+              <span className="block font-medium">Sync remote workspace</span>
+              <span className="block text-[11px] text-muted-foreground">
+                Store terminal tabs and split layouts on the SSH host so another Orca client can
+                restore the same remote workspace.
+              </span>
+            </span>
+          </label>
+          {form.remoteWorkspaceSyncEnabled && (
+            <div className="space-y-1.5 pl-7">
+              <Label>Synced Relay Grace Period (seconds)</Label>
+              <Input
+                type="number"
+                value={form.remoteWorkspaceSyncGracePeriodSeconds}
+                onChange={(e) =>
+                  onFormChange((f) => ({
+                    ...f,
+                    remoteWorkspaceSyncGracePeriodSeconds: e.target.value
+                  }))
+                }
+                placeholder="0"
+                min={0}
+                max={MAX_SSH_RELAY_GRACE_PERIOD_SECONDS}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                How long synced remote workspace terminals stay alive after all clients disconnect.
+                0 keeps them alive until explicitly terminated.
+              </p>
+            </div>
+          )}
         </div>
       </div>
 

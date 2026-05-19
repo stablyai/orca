@@ -68,6 +68,12 @@ jobs:
             exit 1
           fi
 
+      - name: Check feature wall asset budget
+        run: pnpm check:feature-wall-assets
+
+      - name: Verify macOS entitlements
+        run: pnpm verify:macos-entitlements
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -82,12 +88,3 @@ jobs:
 
       - name: Build
         run: pnpm build
-
-  e2e:
-    uses: ./.github/workflows/e2e.yml
-    # Why: check out the PR head directly instead of refs/pull/N/merge.
-    # The merge ref doesn't exist when the PR has conflicts or GitHub
-    # hasn't computed the merge commit yet, causing checkout to fail
-    # for reasons unrelated to the code under test.
-    with:
-      ref: ${{ github.event.pull_request.head.sha }}

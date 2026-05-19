@@ -1,4 +1,5 @@
 export type WindowShortcutInput = {
+  type?: string
   key?: string
   code?: string
   alt?: boolean
@@ -10,12 +11,14 @@ export type WindowShortcutInput = {
 export type WindowShortcutAction =
   | { type: 'zoom'; direction: 'in' | 'out' | 'reset' }
   | { type: 'toggleWorktreePalette' }
+  | { type: 'toggleFloatingTerminal' }
   | { type: 'toggleLeftSidebar' }
   | { type: 'toggleRightSidebar' }
   | { type: 'openQuickOpen' }
-  | { type: 'openNewWorkspace'; tab: 'quick' | 'create-from' }
+  | { type: 'openNewWorkspace' }
   | { type: 'jumpToWorktreeIndex'; index: number }
   | { type: 'worktreeHistoryNavigate'; direction: 'back' | 'forward' }
+  | { type: 'dictationKeyDown' }
 
 function platformPrimaryModifier(
   input: Pick<WindowShortcutInput, 'meta' | 'control'>,
@@ -65,6 +68,16 @@ function isHistoryNavigateChord(input: WindowShortcutInput, platform: NodeJS.Pla
     Boolean(input.alt) &&
     !input.shift &&
     (input.code === 'ArrowLeft' || input.code === 'ArrowRight')
+  )
+}
+
+function isFloatingTerminalChord(input: WindowShortcutInput, platform: NodeJS.Platform): boolean {
+  return (
+    platformPrimaryModifier(input, platform) &&
+    !platformOppositeModifier(input, platform) &&
+    Boolean(input.alt) &&
+    !input.shift &&
+    matchesLetterShortcut(input, 't', 'KeyT')
   )
 }
 
@@ -124,6 +137,10 @@ export function resolveWindowShortcutAction(
     }
   }
 
+  if (isFloatingTerminalChord(input, platform)) {
+    return { type: 'toggleFloatingTerminal' }
+  }
+
   if (!isWindowShortcutModifierChord(input, platform)) {
     return null
   }
@@ -167,13 +184,24 @@ export function resolveWindowShortcutAction(
   // main process so it reaches the renderer even when focus lives inside
   // a contentEditable surface (markdown rich editor) or a browser guest
   // webContents, both of which bypass the renderer's window-level keydown.
-  // Cmd/Ctrl+Shift+N opens the composer on the "Create from…" tab so users
-  // can start a workspace directly from an existing PR, issue, branch, or
-  // Linear ticket without going through the quick-create flow first.
+  // Shift is accepted for compatibility with the former Create-from shortcut;
+  // the unified composer now exposes source switching inside the name field.
   if (matchesLetterShortcut(input, 'n', 'KeyN')) {
     if (!input.alt) {
-      return { type: 'openNewWorkspace', tab: input.shift ? 'create-from' : 'quick' }
+      return { type: 'openNewWorkspace' }
     }
+  }
+
+  // Why: Cmd/Ctrl+E activates voice dictation. Routed through the main process
+  // (same rationale as the other shortcuts in this allowlist) so the keydown
+  // reaches the renderer's dictation controller even when focus is inside a
+  // contentEditable surface or browser guest webContents. Acknowledged
+  // tradeoff: this preempts Ctrl+E (readline end-of-line) inside the terminal
+  // on Linux/Windows when the global window matches first. The renderer's
+  // dictation controller is responsible for forwarding the chord through to
+  // the PTY when dictation is intentionally disabled or the user is mid-input.
+  if (matchesLetterShortcut(input, 'e', 'KeyE') && !input.shift) {
+    return { type: 'dictationKeyDown' }
   }
 
   if (input.key && input.key >= '1' && input.key <= '9' && !input.shift) {

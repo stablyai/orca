@@ -273,7 +273,7 @@ describe('Browser automation pipeline (integration)', () => {
     await server.start()
 
     const metadata = readRuntimeMetadata(userDataPath)!
-    endpoint = metadata.transport!.endpoint
+    endpoint = metadata.transports[0]!.endpoint
     authToken = metadata.authToken!
   })
 
@@ -521,7 +521,7 @@ describe('Browser automation pipeline (integration)', () => {
     await server2.start()
 
     const metadata2 = readRuntimeMetadata(userDataPath2)!
-    const res = await sendRequest(metadata2.transport!.endpoint, {
+    const res = await sendRequest(metadata2.transports[0]!.endpoint, {
       id: 'req_no_tab',
       authToken: metadata2.authToken,
       method: 'browser.snapshot'

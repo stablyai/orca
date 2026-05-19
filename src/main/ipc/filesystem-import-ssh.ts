@@ -1,4 +1,4 @@
-import { lstat, readdir } from 'fs/promises'
+import { lstat, readdir, realpath } from 'fs/promises'
 import { basename, join, posix, resolve } from 'path'
 import type { SFTPWrapper } from 'ssh2'
 import { authorizeExternalPath, isENOENT } from './filesystem-auth'
@@ -124,10 +124,12 @@ async function importOneSourceSsh(
     const renamed = finalName !== originalName
 
     if (isDir) {
-      await mkdirSftp(sftp, destPath)
-      await uploadDirectory(sftp, resolvedSource, destPath)
+      await mkdirSftp(sftp, destPath, { allowExisting: false })
+      await uploadDirectory(sftp, resolvedSource, destPath, await realpath(resolvedSource), {
+        exclusive: true
+      })
     } else {
-      await uploadFile(sftp, resolvedSource, destPath)
+      await uploadFile(sftp, resolvedSource, destPath, { exclusive: true })
     }
 
     return {

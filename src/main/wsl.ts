@@ -86,6 +86,49 @@ export function toWindowsWslPath(linuxPath: string, distro: string): string {
 // ─── WSL home directory resolution ──────────────────────────────────
 
 const wslHomeCache = new Map<string, string>()
+let wslDistroCache: string[] | null = null
+
+function normalizeWslListOutput(output: string): string[] {
+  // Why: wsl.exe can emit UTF-16-looking NUL bytes when inherited through
+  // some Windows shells; strip them before line parsing.
+  return output
+    .replaceAll(String.fromCharCode(0), '')
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/^\*\s*/, ''))
+    .filter(Boolean)
+}
+
+function isUserWslDistro(distro: string): boolean {
+  return !distro.toLowerCase().startsWith('docker-desktop')
+}
+
+export function listWslDistros(): string[] {
+  if (wslDistroCache) {
+    return wslDistroCache
+  }
+
+  if (process.platform !== 'win32') {
+    wslDistroCache = []
+    return wslDistroCache
+  }
+
+  try {
+    const output = execFileSync('wsl.exe', ['--list', '--quiet'], {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 5000
+    })
+    wslDistroCache = normalizeWslListOutput(output).filter(isUserWslDistro)
+    return wslDistroCache
+  } catch {
+    wslDistroCache = []
+    return wslDistroCache
+  }
+}
+
+export function getDefaultWslDistro(): string | null {
+  return listWslDistros()[0] ?? null
+}
 
 /**
  * Get the home directory for a WSL distro, returned as a Windows UNC path.

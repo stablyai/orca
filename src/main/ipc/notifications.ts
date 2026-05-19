@@ -1,8 +1,27 @@
 import { app, BrowserWindow, Notification, ipcMain, shell } from 'electron'
+import { readFile, stat } from 'node:fs/promises'
+import { extname, isAbsolute, normalize } from 'node:path'
 import type { Store } from '../persistence'
-import type { NotificationDispatchRequest, NotificationDispatchResult } from '../../shared/types'
+import type {
+  NotificationDispatchRequest,
+  NotificationDispatchResult,
+  NotificationPermissionStatusResult,
+  NotificationSoundDataResult
+} from '../../shared/types'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { buildNotificationOptions } from './notification-options'
 
 const NOTIFICATION_COOLDOWN_MS = 5000
+const MAX_NOTIFICATION_SOUND_BYTES = 10 * 1024 * 1024
+const NOTIFICATION_SOUND_MIME_BY_EXTENSION: ReadonlyMap<string, string> = new Map([
+  ['.ogg', 'audio/ogg'],
+  ['.mp3', 'audio/mpeg'],
+  ['.wav', 'audio/wav'],
+  ['.m4a', 'audio/mp4'],
+  ['.aac', 'audio/aac'],
+  ['.flac', 'audio/flac']
+])
 
 // Why: Electron Notification objects are normal JS objects — if the only
 // reference is a local variable inside the ipcMain handler, the GC can
@@ -11,10 +30,12 @@ const NOTIFICATION_COOLDOWN_MS = 5000
 // strong reference until the notification is clicked or closed.
 const activeNotifications = new Set<Notification>()
 
-export function registerNotificationHandlers(store: Store): void {
+export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntimeService): void {
   const recentNotifications = new Map<string, number>()
 
   ipcMain.removeHandler('notifications:openSystemSettings')
+  ipcMain.removeHandler('notifications:getPermissionStatus')
+  ipcMain.removeHandler('notifications:requestPermission')
   ipcMain.handle('notifications:openSystemSettings', (): void => {
     if (process.platform === 'darwin') {
       // Deep-link into the macOS Notifications settings pane.
@@ -24,10 +45,44 @@ export function registerNotificationHandlers(store: Store): void {
     }
   })
 
+  // Why: Electron's main-process `Notification` class exposes no synchronous
+  // way to read macOS auth status — the renderer-side `Notification.permission`
+  // does not exist here. We expose what we can reliably observe: whether the
+  // platform supports notifications and whether we've already kicked off the
+  // first-permission prompt. A 'denied' OS result is invisible to us; the
+  // dispatch path simply won't deliver in that case, which the user can
+  // diagnose via the System Settings deep-link.
+  const getPermissionStatus = (): NotificationPermissionStatusResult => ({
+    supported: Notification.isSupported(),
+    platform: process.platform,
+    requested: store.getUI().notificationPermissionRequested === true
+  })
+
+  ipcMain.handle('notifications:getPermissionStatus', getPermissionStatus)
+  ipcMain.handle('notifications:requestPermission', (): NotificationPermissionStatusResult => {
+    triggerStartupNotificationRegistration(store)
+    return getPermissionStatus()
+  })
+
   ipcMain.removeHandler('notifications:dispatch')
   ipcMain.handle(
     'notifications:dispatch',
     (_event, args: NotificationDispatchRequest): NotificationDispatchResult => {
+      // Why: mobile push is independent of desktop notification guards.
+      // The user's phone should receive the notification even when the desktop
+      // window is focused (suppressWhenFocused), Electron notifications aren't
+      // supported, or the desktop is in cooldown. The mobile client decides
+      // independently whether to show based on its own app state.
+      if (runtime) {
+        const opts = buildNotificationOptions(args)
+        runtime.dispatchMobileNotification({
+          source: args.source,
+          title: opts.title,
+          body: opts.body,
+          worktreeId: args.worktreeId
+        })
+      }
+
       if (!Notification.isSupported()) {
         return { delivered: false, reason: 'not-supported' }
       }
@@ -74,7 +129,11 @@ export function registerNotificationHandlers(store: Store): void {
         }
       }
 
-      const notification = new Notification(buildNotificationOptions(args))
+      const notificationOptions = buildNotificationOptions(args)
+      if (settings.customSoundPath) {
+        notificationOptions.silent = true
+      }
+      const notification = new Notification(notificationOptions)
 
       // Why: prevent GC from collecting the notification (and its click
       // handler) while it's still visible in macOS Notification Center.
@@ -97,7 +156,7 @@ export function registerNotificationHandlers(store: Store): void {
       // the click-to-navigate binding — the notification still fires but
       // clicking it will not attempt to switch to an unknown worktree.
       if (args.worktreeId && args.worktreeId.includes('::')) {
-        const repoId = args.worktreeId.slice(0, args.worktreeId.indexOf('::'))
+        const repoId = getRepoIdFromWorktreeId(args.worktreeId)
         notification.on('click', () => {
           release()
           const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
@@ -119,9 +178,68 @@ export function registerNotificationHandlers(store: Store): void {
       }
 
       notification.show()
+
       return { delivered: true }
     }
   )
+
+  // Why: the preload caches the decoded blob keyed by path. Returning just
+  // the validated path lets it skip the 10MB IPC round-trip on every dispatch
+  // when the user's selection hasn't changed — terminal-bell bursts can fire
+  // many notifications in seconds.
+  ipcMain.removeHandler('notifications:resolveSoundPath')
+  ipcMain.handle(
+    'notifications:resolveSoundPath',
+    ():
+      | { ok: true; path: string }
+      | { ok: false; reason: 'missing-path' | 'invalid-path' | 'unsupported-type' } => {
+      const pathValue = store.getSettings().notifications.customSoundPath
+      if (!pathValue) {
+        return { ok: false, reason: 'missing-path' }
+      }
+      const normalizedPath = normalize(pathValue)
+      if (!isAbsolute(normalizedPath)) {
+        return { ok: false, reason: 'invalid-path' }
+      }
+      if (!NOTIFICATION_SOUND_MIME_BY_EXTENSION.has(extname(normalizedPath).toLowerCase())) {
+        return { ok: false, reason: 'unsupported-type' }
+      }
+      return { ok: true, path: normalizedPath }
+    }
+  )
+
+  ipcMain.removeHandler('notifications:loadSound')
+  ipcMain.handle('notifications:loadSound', async (): Promise<NotificationSoundDataResult> => {
+    const pathValue = store.getSettings().notifications.customSoundPath
+    if (!pathValue) {
+      return { ok: false, reason: 'missing-path' }
+    }
+
+    const normalizedPath = normalize(pathValue)
+    if (!isAbsolute(normalizedPath)) {
+      return { ok: false, reason: 'invalid-path' }
+    }
+
+    const mimeType = NOTIFICATION_SOUND_MIME_BY_EXTENSION.get(extname(normalizedPath).toLowerCase())
+    if (!mimeType) {
+      return { ok: false, reason: 'unsupported-type' }
+    }
+
+    try {
+      const fileStat = await stat(normalizedPath)
+      if (!fileStat.isFile()) {
+        return { ok: false, reason: 'invalid-path' }
+      }
+      if (fileStat.size > MAX_NOTIFICATION_SOUND_BYTES) {
+        return { ok: false, reason: 'too-large' }
+      }
+
+      const data = await readFile(normalizedPath)
+      return { ok: true, data: new Uint8Array(data), mimeType, path: normalizedPath }
+    } catch {
+      return { ok: false, reason: 'read-failed' }
+    }
+  })
 }
 
 /**
@@ -184,31 +302,4 @@ export function triggerStartupNotificationRegistration(store: Store): void {
   setTimeout(cleanup, 10_000)
 
   notification.show()
-}
-
-function buildNotificationOptions(args: NotificationDispatchRequest): {
-  title: string
-  body: string
-  silent?: boolean
-} {
-  if (args.source === 'terminal-bell') {
-    return {
-      title: `Bell in ${args.worktreeLabel ?? 'workspace'}`,
-      body: args.repoLabel ? `${args.repoLabel} · Attention requested` : 'Attention requested'
-    }
-  }
-
-  if (args.source === 'test') {
-    return {
-      title: 'Orca notifications are on',
-      body: 'This is a test notification from Orca.'
-    }
-  }
-
-  return {
-    title: `Task complete in ${args.worktreeLabel ?? 'workspace'}`,
-    body: args.repoLabel
-      ? `${args.repoLabel}${args.terminalTitle ? ` · ${args.terminalTitle}` : ''}`
-      : (args.terminalTitle ?? 'A coding agent finished working.')
-  }
 }

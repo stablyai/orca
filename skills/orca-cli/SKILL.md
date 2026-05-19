@@ -1,6 +1,19 @@
 ---
 name: orca-cli
-description: Use the Orca CLI to orchestrate worktrees, live terminals, and browser automation through a running Orca editor. Use when an agent needs to create, inspect, update, or remove Orca worktrees; inspect repo state known to Orca; read, send to, wait on, or stop Orca-managed terminals; or automate the built-in browser (navigate, snapshot, click, fill, screenshot). Coding agents should also keep the current worktree comment updated with the latest meaningful work-in-progress checkpoint whenever useful. Triggers include "use orca cli", "manage Orca worktrees", "read Orca terminal", "reply to Claude Code in Orca", "create a worktree in Orca", "update Orca worktree comment", "click on", "fill the form", "take a screenshot", "navigate to", "interact with the page", "snapshot the page", or any task where the agent should operate through Orca.
+description: >-
+  Use the `orca` CLI to drive a running Orca editor — manage Orca worktrees;
+  create and manage scheduled automations; create, read, and run shell commands
+  in Orca-managed terminals; and automate Orca's built-in browser
+  (snapshot/click/fill/screenshot/tabs). Use this
+  instead of raw `git worktree`, ad hoc shell PTYs, or Playwright whenever the
+  task touches Orca state. Coding agents inside an Orca worktree should also use
+  it to keep the worktree comment fresh at meaningful checkpoints. Boundary with
+  `orchestration`: if the recipient of a terminal write is another AI agent
+  (Claude Code, Gemini, Codex, a worker), use `orchestration` — it is the only
+  correct way to send messages, nudges, replies, or task hand-offs to agents.
+  orca-cli writes are for non-agent terminals (shells, build/test commands);
+  reading or `wait`ing on any terminal — including agent terminals — stays in
+  orca-cli.
 ---
 
 # Orca CLI
@@ -13,8 +26,9 @@ Use `orca` for:
 
 - worktree orchestration inside a running Orca app
 - updating the current worktree comment with meaningful progress checkpoints
-- reading and replying to Orca-managed terminals
+- reading Orca-managed terminals and sending input to non-agent terminals
 - stopping or waiting on Orca-managed terminals
+- creating and managing scheduled Orca automations
 - accessing repos known to Orca
 Do not use `orca` when plain shell tools are simpler and Orca state does not matter.
 
@@ -22,8 +36,9 @@ Examples:
 
 - creating one Orca worktree per GitHub issue
 - updating the current worktree comment after a significant checkpoint, such as reproducing a bug, validating a fix, or handing off for review
-- finding the Claude Code terminal for a worktree and replying to it
+- finding the Claude Code terminal for a worktree and reading its status
 - checking which Orca worktrees have live terminal activity
+- creating a scheduled automation that runs a prompt against a known repo or worktree
 
 ## Preconditions
 
@@ -86,6 +101,7 @@ orca terminal list --json
 4. Act through Orca:
 
 - `worktree create/set/rm`
+- `automations list/show/create/edit/remove/run/runs`
 - `terminal read/send/wait/stop`
 
 5. When the agent reaches a significant checkpoint in the current worktree, update the Orca worktree comment so the UI reflects the latest work-in-progress:
@@ -130,6 +146,25 @@ Worktree selectors supported in focused v1:
 - `issue:<number>`
 - `active` / `current` to resolve the enclosing Orca-managed worktree from the shell `cwd`
 
+### Automations
+
+```bash
+orca automations list --json
+orca automations show <automationId> --json
+orca automations create --name "Daily review" --trigger daily --time 09:00 --prompt "Review open changes" --provider codex --repo id:<repoId> --json
+orca automations create --name "Weekday triage" --trigger "0 9 * * 1-5" --prompt "Triage issues" --provider claude --repo path:/abs/repo --disabled --json
+orca automations edit <automationId> --name "Weekday review" --trigger weekdays --time 09:30 --json
+orca automations run <automationId> --json
+orca automations runs --id <automationId> --json
+orca automations remove <automationId> --json
+```
+
+Automation schedules accept `hourly`, `daily`, `weekdays`, `weekly`, a 5-field cron expression, or an RRULE string. Use `--time <HH:MM>` with `daily`, `weekdays`, or `weekly`; use `--day <0-6>` only with `weekly`, where Sunday is `0`.
+
+Use `--repo <selector>` for a new worktree per run, or `--workspace <selector>` / `--workspace-mode existing` when the automation should run in an existing Orca worktree. `--repo` and `--workspace` are mutually exclusive.
+
+Why: automations are persisted through the running Orca runtime, so use the CLI instead of editing automation storage files directly. Prefer `--disabled` when creating an automation during tests or setup so it cannot run before the user reviews it.
+
 ### Terminal
 
 Use selectors to discover terminals, then use the returned handle for repeated live interaction.
@@ -163,6 +198,7 @@ Why: `--direction horizontal` splits the pane **left and right** (new pane appea
 ## Agent Guidance
 
 - If the user says to create/manage an Orca worktree, use `orca worktree ...`, not raw `git worktree ...`.
+- If the user says to create/manage a scheduled Orca automation, use `orca automations ...`, not direct persistence edits.
 - Treat Orca as the source of truth for Orca worktree and terminal tasks. Do not mix Orca-managed state with ad hoc git worktree commands unless Orca explicitly cannot perform the requested action.
 - Prefer `--json` for all machine-driven use.
 - Use `worktree ps` as the first summary view when many worktrees may exist.
@@ -178,7 +214,7 @@ Why: `--direction horizontal` splits the pane **left and right** (new pane appea
 - Use `terminal read` before `terminal send` unless the next input is obvious.
 - Use `terminal wait --terminal <handle> --for exit` only when the task actually depends on process completion.
 - Use `terminal wait --terminal <handle> --for tui-idle` to wait for an agent CLI (Claude Code, Gemini, Codex, etc.) to finish its current task. This detects the working→idle OSC title transition. Always pass `--timeout-ms` as a safety net — unsupported CLIs will hang until timeout.
-- Use `terminal create` to spin up new terminal tabs programmatically, optionally with a `--command` for startup (e.g. `--command "claude"` to launch Claude Code) and `--title` for labeling. After creating a `--command` terminal, use `terminal wait --for tui-idle` to wait for the agent to boot before dispatching.
+- Use `terminal create` to spin up new terminal tabs programmatically, optionally with a `--command` for startup (e.g. `--command "claude"` to launch Claude Code) and `--title` for labeling. In local Orca sessions, `--command "codex"` is routed through Orca's visible terminal path automatically so Codex does not start as a headless/background PTY. After creating a `--command` terminal, use `terminal wait --for tui-idle` to wait for the agent to boot before dispatching.
 - Use `terminal split` to create split panes within an existing terminal tab. Pass `--command` to run a command in the new pane.
 - Prefer Orca worktree selectors over hardcoded paths when Orca identity already exists.
 - If the user asks for CLI UX feedback, test the public `orca` command first. Only inspect `src/cli` or use `node out/cli/index.js` if the public command is missing or the task is explicitly about implementation internals.

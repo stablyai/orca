@@ -6,7 +6,7 @@ import { existsSync } from 'fs'
 import { DaemonClient } from './client'
 import { HistoryManager } from './history-manager'
 import { HistoryReader } from './history-reader'
-import { mintPtySessionId } from './pty-session-id'
+import { mintPtySessionId, parsePtySessionId } from './pty-session-id'
 import { supportsPtyStartupBarrier } from './shell-ready'
 import {
   PROTOCOL_VERSION,
@@ -65,6 +65,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // second mount until the renderer explicitly acknowledges it.
   private coldRestoreCache = new Map<string, { scrollback: string; cwd: string }>()
   private activeSessionIds = new Set<string>()
+  private dirtySessionVersions = new Map<string, number>()
   private checkpointInterval: ReturnType<typeof setInterval> | null = null
   private checkpointInFlight: Promise<void> | null = null
   // Why: checkpoint-based persistence requires the getSnapshot RPC (v4+).
@@ -141,7 +142,12 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // but should still return the cached cold restore data.
     const cachedRestore = this.coldRestoreCache.get(sessionId)
     if (cachedRestore) {
-      return { id: sessionId, pid, coldRestore: cachedRestore }
+      return {
+        id: sessionId,
+        pid,
+        coldRestore: cachedRestore,
+        ...(!result.isNew ? { isReattach: true } : {})
+      }
     }
 
     this.activeSessionIds.add(sessionId)
@@ -196,7 +202,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
     const isReattach = !result.isNew
     if (!isReattach || !result.snapshot) {
-      return { id: sessionId, pid }
+      return { id: sessionId, pid, ...(isReattach ? { isReattach: true } : {}) }
     }
 
     const isAltScreen = result.snapshot.modes.alternateScreen
@@ -223,33 +229,41 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   write(id: string, data: string): void {
+    this.markSessionDirty(id)
     this.client.notify('write', { sessionId: id, data })
   }
 
   resize(id: string, cols: number, rows: number): void {
+    this.markSessionDirty(id)
     this.client.notify('resize', { sessionId: id, cols, rows })
   }
 
-  async shutdown(id: string, _immediate: boolean): Promise<void> {
+  async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
     await this.client.request('kill', { sessionId: id })
     this.activeSessionIds.delete(id)
+    this.dirtySessionVersions.delete(id)
     this.initialCwds.delete(id)
-    // Why: user explicitly closed this terminal — clean up disk history
-    // so it doesn't trigger a false cold restore on next launch.
-    if (this.historyManager) {
+    // Why: history removal is for the "user explicitly closed this terminal"
+    // path. Sleep also calls shutdown but expects scrollback to survive — wake
+    // re-spawns and the cold-restore reader needs the dir intact. Caller
+    // indicates intent via opts.keepHistory.
+    if (this.historyManager && !opts.keepHistory) {
       void this.historyManager
         .removeSession(id)
         .catch((err) => console.warn('[history] removeSession failed:', id, err))
     }
 
-    // Why: delete-then-set ensures the entry moves to the end of Map iteration
-    // order, so re-killing a session doesn't leave it as the first eviction target.
-    this.killedSessionTombstones.delete(id)
-    this.killedSessionTombstones.set(id, Date.now())
-    if (this.killedSessionTombstones.size > MAX_TOMBSTONES) {
-      const oldest = this.killedSessionTombstones.keys().next().value
-      if (oldest) {
-        this.killedSessionTombstones.delete(oldest)
+    // Why: tombstone rejects reattach against a session the user explicitly
+    // killed. Sleep legitimately reattaches on wake, so skip both the LRU bump
+    // and the size-cap eviction under keepHistory.
+    if (!opts.keepHistory) {
+      this.killedSessionTombstones.delete(id)
+      this.killedSessionTombstones.set(id, Date.now())
+      if (this.killedSessionTombstones.size > MAX_TOMBSTONES) {
+        const oldest = this.killedSessionTombstones.keys().next().value
+        if (oldest) {
+          this.killedSessionTombstones.delete(oldest)
+        }
       }
     }
   }
@@ -283,6 +297,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
   async clearBuffer(id: string): Promise<void> {
     await this.client.request('clearScrollback', { sessionId: id })
+    this.markSessionDirty(id)
   }
 
   acknowledgeDataEvent(_id: string, _charCount: number): void {
@@ -325,14 +340,12 @@ export class DaemonPtyAdapter implements IPtyProvider {
       if (!session.isAlive) {
         continue
       }
-      // Why: session IDs use the format `${worktreeId}@@${shortUuid}`. The @@
-      // separator is unambiguous — worktreeIds contain hyphens and colons but
-      // never @@.
-      const separatorIdx = session.sessionId.lastIndexOf('@@')
-      const worktreeId =
-        separatorIdx !== -1 ? session.sessionId.slice(0, separatorIdx) : session.sessionId
+      // Why: session IDs use the format `${worktreeId}@@${shortUuid}`. Sessions
+      // whose id does not match the minted format (worktreeId === null) cannot
+      // be tied to a live worktree and are treated as orphans.
+      const { worktreeId } = parsePtySessionId(session.sessionId)
 
-      if (!validWorktreeIds.has(worktreeId)) {
+      if (worktreeId === null || !validWorktreeIds.has(worktreeId)) {
         try {
           await this.client.request('kill', { sessionId: session.sessionId })
         } catch {
@@ -389,6 +402,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   fanoutSyntheticExits(code: number): void {
     const ids = [...this.activeSessionIds]
     this.activeSessionIds.clear()
+    this.dirtySessionVersions.clear()
     for (const id of ids) {
       // Why: listener throws are intentionally *not* caught — matches the
       // natural onExit fanout in setupEventRouting, so synthetic exits don't
@@ -448,6 +462,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       clearInterval(this.checkpointInterval)
       this.checkpointInterval = null
     }
+    this.dirtySessionVersions.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
     // Why: final checkpoints are written daemon-side in TerminalHost.dispose()
@@ -484,6 +499,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     // before disconnecting — fire-and-forget would race with client.disconnect()
     // and the pending getSnapshot RPCs would be rejected.
     await this.checkpointAllSessions()
+    this.dirtySessionVersions.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
     this.client.disconnect()
@@ -507,10 +523,39 @@ export class DaemonPtyAdapter implements IPtyProvider {
       if (this.checkpointInFlight) {
         return
       }
-      this.checkpointInFlight = this.checkpointAllSessions().finally(() => {
+      this.checkpointInFlight = this.checkpointDirtySessions().finally(() => {
         this.checkpointInFlight = null
       })
     }, DaemonPtyAdapter.CHECKPOINT_INTERVAL_MS)
+  }
+
+  private markSessionDirty(sessionId: string): void {
+    if (!this.activeSessionIds.has(sessionId)) {
+      return
+    }
+    this.dirtySessionVersions.set(sessionId, (this.dirtySessionVersions.get(sessionId) ?? 0) + 1)
+  }
+
+  private async checkpointDirtySessions(): Promise<void> {
+    if (!this.historyManager || this.dirtySessionVersions.size === 0) {
+      return
+    }
+    // Why: getSnapshot serializes the daemon's terminal buffer. On large
+    // workspaces, checkpointing every live idle session every 5s burns CPU and
+    // disk for identical payloads; dirty versions keep retries precise without
+    // dropping writes that arrive during an in-flight checkpoint.
+    const versions = new Map(
+      [...this.dirtySessionVersions].filter(([sessionId]) => this.activeSessionIds.has(sessionId))
+    )
+    if (versions.size === 0) {
+      return
+    }
+    const completed = await this.checkpointSessions(versions.keys())
+    for (const [sessionId, version] of versions) {
+      if (completed.has(sessionId) && this.dirtySessionVersions.get(sessionId) === version) {
+        this.dirtySessionVersions.delete(sessionId)
+      }
+    }
   }
 
   // Why: the adapter runs in the Electron main process and does not have direct
@@ -518,24 +563,36 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // daemon socket per session. Returns a promise that resolves when all
   // checkpoint writes complete (callers that don't need to wait can void it).
   private async checkpointAllSessions(): Promise<void> {
+    const completed = await this.checkpointSessions(this.activeSessionIds)
+    for (const sessionId of completed) {
+      this.dirtySessionVersions.delete(sessionId)
+    }
+  }
+
+  private async checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>> {
+    const completed = new Set<string>()
     if (!this.historyManager) {
-      return
+      return completed
     }
     const promises: Promise<void>[] = []
-    for (const sessionId of this.activeSessionIds) {
+    for (const sessionId of sessionIds) {
       promises.push(
         this.client
           .request<GetSnapshotResult>('getSnapshot', { sessionId })
           .then((result) => {
             if (result.snapshot && this.historyManager) {
-              return this.historyManager.checkpoint(sessionId, result.snapshot)
+              return this.historyManager.checkpoint(sessionId, result.snapshot).then(() => {
+                completed.add(sessionId)
+              })
             }
+            completed.add(sessionId)
             return undefined
           })
           .catch((err) => console.warn('[history] checkpoint failed:', sessionId, err))
       )
     }
     await Promise.all(promises)
+    return completed
   }
 
   // Why: when the daemon process dies, operations fail with ENOENT (socket
@@ -581,12 +638,14 @@ export class DaemonPtyAdapter implements IPtyProvider {
       }
 
       if (event.event === 'data') {
+        this.markSessionDirty(event.sessionId)
         // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
         for (const listener of [...this.dataListeners]) {
           listener({ id: event.sessionId, data: event.payload.data })
         }
       } else if (event.event === 'exit') {
         this.activeSessionIds.delete(event.sessionId)
+        this.dirtySessionVersions.delete(event.sessionId)
         if (this.historyManager) {
           void this.historyManager
             .closeSession(event.sessionId, event.payload.code)

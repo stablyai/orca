@@ -1,23 +1,34 @@
 import React from 'react'
-import { Github, List, Search } from 'lucide-react'
+import { Bell, CalendarClock, Github, Gitlab, List, Search } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import type { GlobalSettings } from '../../../../shared/types'
 import { getTaskPresetQuery, PER_REPO_FETCH_LIMIT } from '@/lib/new-workspace'
+import { LinearIcon } from '@/components/icons/LinearIcon'
+import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
+import {
+  filterAvailableTaskProviders,
+  normalizeVisibleTaskProviders,
+  resolveVisibleTaskProvider
+} from '../../../../shared/task-providers'
 
 const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
+// Why: the sidebar resize handle keeps a wide edge target, but primary nav
+// rows under that strip should remain clickable when their bounds overlap.
+const SIDEBAR_NAV_HIT_TARGET_CLASS = 'relative z-20'
 
-function LinearIcon({ className }: { className?: string }): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden className={className} fill="currentColor">
-      <path d="M2.886 4.18A11.982 11.982 0 0 1 11.99 0C18.624 0 24 5.376 24 12.009c0 3.64-1.62 6.903-4.18 9.105L2.887 4.18ZM1.817 5.626l16.556 16.556c-.524.33-1.075.62-1.65.866L.951 7.277c.247-.575.537-1.126.866-1.65ZM.322 9.163l14.515 14.515c-.71.172-1.443.282-2.195.322L0 11.358a12 12 0 0 1 .322-2.195Zm-.17 4.862 9.823 9.824a12.02 12.02 0 0 1-9.824-9.824Z" />
-    </svg>
-  )
+export function shouldShowAgentsButton(
+  settings: Pick<GlobalSettings, 'experimentalActivity'> | null | undefined
+): boolean {
+  return settings?.experimentalActivity === true
 }
 
 const SidebarNav = React.memo(function SidebarNav() {
   const openTaskPage = useAppStore((s) => s.openTaskPage)
+  const openAutomationsPage = useAppStore((s) => s.openAutomationsPage)
+  const openActivityPage = useAppStore((s) => s.openActivityPage)
   const openModal = useAppStore((s) => s.openModal)
   const activeView = useAppStore((s) => s.activeView)
   const repos = useAppStore((s) => s.repos)
@@ -26,6 +37,40 @@ const SidebarNav = React.memo(function SidebarNav() {
   // Why: the setting is opt-out (default true). `!== false` keeps the button
   // visible for users whose persisted settings predate this field.
   const showTasksButton = useAppStore((s) => s.settings?.showTasksButton !== false)
+  const rawVisibleTaskProviders = useAppStore((s) => s.settings?.visibleTaskProviders)
+  const defaultTaskSource = useAppStore((s) => s.settings?.defaultTaskSource ?? 'github')
+  const preflightStatus = useAppStore((s) => s.preflightStatus)
+  const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
+  const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
+  const linearStatus = useAppStore((s) => s.linearStatus)
+  const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
+  const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
+  const showAgentsButton = useAppStore((s) => shouldShowAgentsButton(s.settings))
+  const preferredVisibleTaskProviders = React.useMemo(
+    () => normalizeVisibleTaskProviders(rawVisibleTaskProviders),
+    [rawVisibleTaskProviders]
+  )
+  const visibleTaskProviders = React.useMemo(
+    () =>
+      filterAvailableTaskProviders(preferredVisibleTaskProviders, {
+        gitlabInstalled: preflightStatus?.glab?.installed === true,
+        linearConnected: linearStatus.connected === true
+      }),
+    [linearStatus.connected, preferredVisibleTaskProviders, preflightStatus?.glab?.installed]
+  )
+  const resolvedDefaultTaskSource = React.useMemo(
+    () => resolveVisibleTaskProvider(defaultTaskSource, visibleTaskProviders),
+    [defaultTaskSource, visibleTaskProviders]
+  )
+
+  React.useEffect(() => {
+    if (!preflightStatusChecked) {
+      void refreshPreflightStatus()
+    }
+    if (!linearStatusChecked) {
+      void checkLinearConnection()
+    }
+  }, [checkLinearConnection, linearStatusChecked, preflightStatusChecked, refreshPreflightStatus])
 
   // Why: warm the GitHub work-item cache on hover/focus so by the time the
   // user's click finishes the round-trip has either completed or is already
@@ -34,7 +79,7 @@ const SidebarNav = React.memo(function SidebarNav() {
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const defaultTaskViewPreset = useAppStore((s) => s.settings?.defaultTaskViewPreset ?? 'all')
   const handlePrefetch = React.useCallback(() => {
-    if (!canBrowseTasks) {
+    if (!canBrowseTasks || resolvedDefaultTaskSource !== 'github') {
       return
     }
     const activeRepo = activeRepoId ? (repoMap.get(activeRepoId) ?? null) : null
@@ -52,9 +97,55 @@ const SidebarNav = React.memo(function SidebarNav() {
         getTaskPresetQuery(defaultTaskViewPreset)
       )
     }
-  }, [activeRepoId, canBrowseTasks, defaultTaskViewPreset, prefetchWorkItems, repoMap, repos])
+  }, [
+    activeRepoId,
+    canBrowseTasks,
+    defaultTaskViewPreset,
+    prefetchWorkItems,
+    repoMap,
+    repos,
+    resolvedDefaultTaskSource
+  ])
 
   const tasksActive = activeView === 'tasks'
+  const automationsActive = activeView === 'automations'
+  const activityActive = activeView === 'activity'
+  const activityUnreadCount = useAppStore((s) => {
+    let count = 0
+    for (const worktrees of Object.values(s.worktreesByRepo)) {
+      for (const worktree of worktrees) {
+        if (worktree.createdAt && worktree.isUnread) {
+          count += 1
+        }
+      }
+    }
+    for (const [paneKey, entry] of Object.entries(s.agentStatusByPaneKey)) {
+      if (entry.state !== 'done' && entry.state !== 'blocked' && entry.state !== 'waiting') {
+        continue
+      }
+      if ((s.acknowledgedAgentsByPaneKey[paneKey] ?? 0) < entry.stateStartedAt) {
+        count += 1
+      }
+    }
+    for (const [paneKey, retained] of Object.entries(s.retainedAgentsByPaneKey)) {
+      if (retained.entry.state !== 'done') {
+        continue
+      }
+      if ((s.acknowledgedAgentsByPaneKey[paneKey] ?? 0) < retained.entry.stateStartedAt) {
+        count += 1
+      }
+    }
+    for (const unsupported of Object.values(s.migrationUnsupportedByPtyId)) {
+      const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
+      if (!entry) {
+        continue
+      }
+      if ((s.acknowledgedAgentsByPaneKey[entry.paneKey] ?? 0) < entry.stateStartedAt) {
+        count += 1
+      }
+    }
+    return count
+  })
 
   return (
     <div className="flex flex-col gap-0.5 px-2 pt-2 pb-1">
@@ -72,54 +163,124 @@ const SidebarNav = React.memo(function SidebarNav() {
           disabled={!canBrowseTasks}
           aria-current={tasksActive ? 'page' : undefined}
           className={cn(
+            SIDEBAR_NAV_HIT_TARGET_CLASS,
             'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
             tasksActive
               ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-              : 'text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground',
+              : 'text-sidebar-foreground/60 hover:bg-sidebar-foreground/8',
             !canBrowseTasks && 'cursor-not-allowed opacity-50 hover:bg-transparent'
           )}
         >
-          <List className="size-4 shrink-0" strokeWidth={2.25} />
+          <List
+            className={cn('size-4 shrink-0', !tasksActive && 'text-sidebar-foreground/30')}
+            strokeWidth={tasksActive ? 2.25 : 1.75}
+          />
           <span className="flex-1">Tasks</span>
           <span className="flex items-center gap-1">
-            <span
-              role="button"
-              tabIndex={-1}
-              onClick={(e) => {
-                e.stopPropagation()
-                if (!canBrowseTasks) {
-                  return
-                }
-                openTaskPage({ taskSource: 'github' })
-              }}
-              className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-foreground"
-            >
-              <Github className="size-3.5" aria-hidden />
-            </span>
-            <span
-              role="button"
-              tabIndex={-1}
-              onClick={(e) => {
-                e.stopPropagation()
-                if (!canBrowseTasks) {
-                  return
-                }
-                openTaskPage({ taskSource: 'linear' })
-              }}
-              className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-foreground"
-            >
-              <LinearIcon className="size-3.5" />
-            </span>
+            {visibleTaskProviders.includes('github') ? (
+              <span
+                role="button"
+                tabIndex={-1}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (!canBrowseTasks) {
+                    return
+                  }
+                  openTaskPage({ taskSource: 'github' })
+                }}
+                className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-foreground"
+                aria-label="Open GitHub tasks"
+              >
+                <Github className="size-3.5" aria-hidden />
+              </span>
+            ) : null}
+            {visibleTaskProviders.includes('gitlab') ? (
+              <span
+                role="button"
+                tabIndex={-1}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (!canBrowseTasks) {
+                    return
+                  }
+                  openTaskPage({ taskSource: 'gitlab' })
+                }}
+                className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-foreground"
+                aria-label="Open GitLab tasks"
+              >
+                <Gitlab className="size-3.5" aria-hidden />
+              </span>
+            ) : null}
+            {visibleTaskProviders.includes('linear') ? (
+              <span
+                role="button"
+                tabIndex={-1}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (!canBrowseTasks) {
+                    return
+                  }
+                  openTaskPage({ taskSource: 'linear' })
+                }}
+                className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-foreground"
+                aria-label="Open Linear tasks"
+              >
+                <LinearIcon className="size-3.5" />
+              </span>
+            ) : null}
           </span>
+        </button>
+      ) : null}
+      <button
+        type="button"
+        onClick={openAutomationsPage}
+        aria-current={automationsActive ? 'page' : undefined}
+        className={cn(
+          SIDEBAR_NAV_HIT_TARGET_CLASS,
+          'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+          automationsActive
+            ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+            : 'text-sidebar-foreground/60 hover:bg-sidebar-foreground/8'
+        )}
+      >
+        <CalendarClock
+          className={cn('size-4 shrink-0', !automationsActive && 'text-sidebar-foreground/30')}
+          strokeWidth={automationsActive ? 2.25 : 1.75}
+        />
+        <span className="flex-1">Automations</span>
+      </button>
+      {showAgentsButton ? (
+        <button
+          type="button"
+          onClick={openActivityPage}
+          aria-current={activityActive ? 'page' : undefined}
+          className={cn(
+            SIDEBAR_NAV_HIT_TARGET_CLASS,
+            'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+            activityActive
+              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+              : 'text-sidebar-foreground/60 hover:bg-sidebar-foreground/8'
+          )}
+        >
+          <Bell
+            className={cn('size-4 shrink-0', !activityActive && 'text-sidebar-foreground/30')}
+            strokeWidth={activityActive ? 2.25 : 1.75}
+          />
+          <span className="flex-1">Agents</span>
+          {activityUnreadCount > 0 ? (
+            <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-semibold text-primary-foreground">
+              {activityUnreadCount}
+            </span>
+          ) : null}
         </button>
       ) : null}
       <button
         type="button"
         onClick={() => openModal('worktree-palette')}
         aria-label="Search worktrees and browser tabs"
-        className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight text-sidebar-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+        className={`${SIDEBAR_NAV_HIT_TARGET_CLASS} group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight text-sidebar-foreground/60 transition-colors hover:bg-sidebar-foreground/8`}
       >
-        <Search className="size-4 shrink-0" strokeWidth={2.25} />
+        <Search className="size-4 shrink-0 text-sidebar-foreground/30" strokeWidth={1.75} />
         <span className="flex-1">Search</span>
         <kbd className="hidden rounded border border-border/60 bg-background/40 px-1.5 py-px font-mono text-[10px] font-medium text-muted-foreground group-hover:inline-flex items-center">
           {isMac ? '⌘J' : 'Ctrl+Shift+J'}

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parseWorkspaceSession } from './workspace-session-schema'
+import { MAX_BROWSER_HISTORY_ENTRIES } from './workspace-session-browser-history'
 
 describe('parseWorkspaceSession', () => {
   it('accepts a minimal valid session', () => {
@@ -94,5 +95,49 @@ describe('parseWorkspaceSession', () => {
     expect(parseWorkspaceSession(null).ok).toBe(false)
     expect(parseWorkspaceSession('garbage').ok).toBe(false)
     expect(parseWorkspaceSession(42).ok).toBe(false)
+  })
+
+  it('drops bad lastVisitedAtByWorktreeId entries rather than failing the session', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      lastVisitedAtByWorktreeId: {
+        good: 1_700_000_000_000,
+        nan: Number.NaN,
+        infinite: Number.POSITIVE_INFINITY,
+        negative: -5,
+        string: 'nope'
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.lastVisitedAtByWorktreeId).toEqual({ good: 1_700_000_000_000 })
+    }
+  })
+
+  it('caps oversized browser history while parsing legacy workspace sessions', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      browserUrlHistory: Array.from({ length: 500 }, (_, index) => ({
+        url: `https://example.com/${index}`,
+        normalizedUrl: `https://example.com/${index}`,
+        title: `Example ${index}`,
+        lastVisitedAt: 1_700_000_000_000 - index,
+        visitCount: 1
+      }))
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.browserUrlHistory).toHaveLength(MAX_BROWSER_HISTORY_ENTRIES)
+      expect(result.value.browserUrlHistory?.at(-1)?.url).toBe('https://example.com/199')
+    }
   })
 })

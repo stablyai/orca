@@ -17,16 +17,16 @@ import {
 } from '../ui/dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { SearchableSetting } from './SearchableSetting'
+import { MANAGE_SESSIONS_SEARCH_ENTRIES } from './terminal-search'
+import { splitWorktreeId } from '../../../../shared/worktree-id'
 import { useAppStore } from '../../store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { useDaemonActions, DaemonActionDialog } from '../shared/useDaemonActions'
 
-type ConfirmKind = 'killAll' | 'restart' | 'killOne'
+type ConfirmKind = 'killOne'
 
-type PendingConfirm =
-  | { kind: 'killAll' }
-  | { kind: 'restart' }
-  | { kind: 'killOne'; session: PtyManagementSession }
-  | null
+type PendingConfirm = { kind: 'killOne'; session: PtyManagementSession } | null
 
 // Why: mirror the status-bar SessionsStatusSegment label style — last two
 // path segments joined by the platform separator, no ellipsis prefix. This
@@ -53,10 +53,9 @@ function formatWorkspace(session: { cwd: string | null; sessionId: string }): st
   const sep = session.sessionId.lastIndexOf('@@')
   if (sep !== -1) {
     const worktreeId = session.sessionId.slice(0, sep)
-    // Strip a leading `<uuid>::` prefix if present (newer protocol).
-    const afterColons = worktreeId.split('::')
-    const path = afterColons.at(-1)
-    return shortCwd(path ?? worktreeId)
+    // Why: take everything after the first `::` to recover the worktree path
+    // from the canonical `${repoId}::${path}` worktreeId encoding.
+    return shortCwd(splitWorktreeId(worktreeId)?.worktreePath ?? worktreeId)
   }
   return 'unknown'
 }
@@ -83,50 +82,23 @@ function getConfirmCopy(confirm: PendingConfirm): {
   if (!confirm) {
     return null
   }
-  switch (confirm.kind) {
-    case 'killAll':
-      return {
-        title: 'Kill all terminal sessions?',
-        description: (
-          <>
-            This force-quits every running terminal pane across all workspaces. Any unsaved work in
-            those sessions is lost. The daemon itself keeps running, and new terminals can be opened
-            immediately. This can&apos;t be undone.
-          </>
-        ),
-        confirmLabel: 'Kill all sessions',
-        busyLabel: 'Killing…'
-      }
-    case 'restart':
-      return {
-        title: 'Restart the terminal daemon?',
-        description: (
-          <>
-            Kills every running terminal pane and restarts the daemon process. Panes show
-            &ldquo;Process exited&rdquo; and can be reopened immediately. Legacy-protocol sessions
-            from a previous app version are preserved. This can&apos;t be undone.
-          </>
-        ),
-        confirmLabel: 'Restart daemon',
-        busyLabel: 'Restarting…'
-      }
-    case 'killOne':
-      return {
-        title: 'Kill this session?',
-        description: (
-          <>
-            Force-quits{' '}
-            <span className="font-medium text-foreground">{confirm.session.sessionId}</span>. Any
-            unsaved work in that pane is lost. This can&apos;t be undone.
-          </>
-        ),
-        confirmLabel: 'Kill session',
-        busyLabel: 'Killing…'
-      }
+  return {
+    title: 'Kill this session?',
+    description: (
+      <>
+        Force-quits <span className="font-medium text-foreground">{confirm.session.sessionId}</span>
+        . Any unsaved work in that pane is lost. This can&apos;t be undone.
+      </>
+    ),
+    confirmLabel: 'Kill session',
+    busyLabel: 'Killing…'
   }
 }
 
 export function ManageSessionsSection(): React.JSX.Element {
+  const activeRuntimeEnvironmentId = useAppStore(
+    (s) => s.settings?.activeRuntimeEnvironmentId ?? null
+  )
   const [sessions, setSessions] = useState<PtyManagementSession[]>([])
   const [isRefreshing, setIsRefreshing] = useState(true)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
@@ -154,7 +126,6 @@ export function ManageSessionsSection(): React.JSX.Element {
   // entry points can't drift on what "go to this session" means.
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
-  const setActiveTab = useAppStore((s) => s.setActiveTab)
   const setActiveView = useAppStore((s) => s.setActiveView)
   const closeSettingsPage = useAppStore((s) => s.closeSettingsPage)
 
@@ -184,17 +155,20 @@ export function ManageSessionsSection(): React.JSX.Element {
       if (worktreeId) {
         // Why: match SessionsStatusSegment — route through the shared
         // activation path before switching tab so the worktree container
-        // is mounted by the time setActiveTab runs.
+        // is mounted by the time activateTabAndFocusPane runs.
         activateAndRevealWorktree(worktreeId)
       }
       setActiveView('terminal')
-      setActiveTab(tabId)
+      // Why: rows here only carry ptyId, and there's no selector that maps
+      // ptyId → numeric paneId for an unmounted tab. Pass null so the helper
+      // degrades to tab-only activation (no worse than prior behavior).
+      activateTabAndFocusPane(tabId, null)
       // Why: the status-bar version doesn't need this because it's already
       // rendered over the terminal surface; from the Settings pane the user
       // would otherwise land on their pane with the modal still covering it.
       closeSettingsPage()
     },
-    [tabIdToWorktreeId, setActiveView, setActiveTab, closeSettingsPage]
+    [tabIdToWorktreeId, setActiveView, closeSettingsPage]
   )
 
   useEffect(() => {
@@ -205,6 +179,14 @@ export function ManageSessionsSection(): React.JSX.Element {
   }, [])
 
   const refresh = useCallback(async (): Promise<PtyManagementSession[]> => {
+    if (activeRuntimeEnvironmentId?.trim()) {
+      if (isMounted.current) {
+        setSessions([])
+        setIsRefreshing(false)
+        setHasLoadedOnce(true)
+      }
+      return []
+    }
     setIsRefreshing(true)
     try {
       const result = await window.api.pty.management.listSessions()
@@ -227,7 +209,7 @@ export function ManageSessionsSection(): React.JSX.Element {
         setHasLoadedOnce(true)
       }
     }
-  }, [])
+  }, [activeRuntimeEnvironmentId])
 
   useEffect(() => {
     void refresh()
@@ -235,48 +217,30 @@ export function ManageSessionsSection(): React.JSX.Element {
 
   const sessionCount = sessions.length
 
-  const handleKillAll = useCallback(async () => {
-    setBusyKind('killAll')
-    mutationInFlight.current = true
-    optimisticRollback.current = sessions
-    setSessions([])
-    try {
-      const { killedCount, remainingCount } = await window.api.pty.management.killAll()
-      if (remainingCount > 0 && killedCount > 0) {
-        toast.warning(
-          `Killed ${killedCount} of ${killedCount + remainingCount} sessions. ${remainingCount} refused to exit.`
-        )
-      } else if (killedCount > 0) {
-        toast.success(`Killed ${killedCount} session${killedCount === 1 ? '' : 's'}.`)
-      } else if (remainingCount === 0) {
-        toast.info('No sessions running.')
-      } else {
-        toast.error(`${remainingCount} session${remainingCount === 1 ? '' : 's'} refused to exit.`)
-      }
-      mutationInFlight.current = false
-      await refresh()
-    } catch (err) {
-      // Why: the IPC rejected before the daemon could act — restore the list
-      // so the user isn't left staring at a blank table that doesn't reflect
-      // reality.
+  // Why: shared hook owns the daemon-wide restart + kill-all flows so the
+  // status-bar segment and this settings pane can't drift on copy, IPC calls,
+  // or the anti-dismiss guard. We pass lifecycle callbacks to keep the pane's
+  // optimistic setSessions([]) + rollback pattern local to the component.
+  const daemonActions = useDaemonActions({
+    onKillAllStart: () => {
+      mutationInFlight.current = true
+      optimisticRollback.current = sessions
+      setSessions([])
+    },
+    onKillAllError: () => {
       if (isMounted.current && optimisticRollback.current) {
         setSessions(optimisticRollback.current)
       }
-      toast.error('Couldn’t kill sessions.', {
-        description: err instanceof Error ? err.message : undefined
-      })
-    } finally {
+    },
+    onKillAllSettled: () => {
       optimisticRollback.current = null
       mutationInFlight.current = false
-      if (isMounted.current) {
-        setBusyKind(null)
-        // Why: the dialog stays open during the mutation so the user sees the
-        // spinner + busyLabel and can't dismiss mid-flight (see Dialog guard
-        // below). Close it here when the op actually finishes.
-        setConfirm(null)
-      }
+      void refresh()
+    },
+    onRestartSettled: () => {
+      void refresh()
     }
-  }, [refresh, sessions])
+  })
 
   const handleKillOne = useCallback(
     async (session: PtyManagementSession) => {
@@ -308,54 +272,42 @@ export function ManageSessionsSection(): React.JSX.Element {
     [refresh]
   )
 
-  const handleRestart = useCallback(async () => {
-    setBusyKind('restart')
-    mutationInFlight.current = true
-    try {
-      const { success } = await window.api.pty.management.restart()
-      if (success) {
-        toast.success('Daemon restarted.')
-      } else {
-        toast.error('Restart failed — check logs.')
-      }
-      mutationInFlight.current = false
-      await refresh()
-    } catch (err) {
-      toast.error('Restart failed.', {
-        description: err instanceof Error ? err.message : undefined
-      })
-    } finally {
-      mutationInFlight.current = false
-      if (isMounted.current) {
-        setBusyKind(null)
-        setConfirm(null)
-      }
-    }
-  }, [refresh])
-
   // Why: do NOT clear `confirm` here — the dialog must stay open for the
   // duration of the mutation so the spinner + busyLabel render and the
-  // anti-dismiss guard can actually hold. Each handler's `finally` clears
+  // anti-dismiss guard can actually hold. handleKillOne's `finally` clears
   // `confirm` when the op resolves.
   const runConfirmed = useCallback(() => {
     if (!confirm) {
       return
     }
-    const pending = confirm
-    switch (pending.kind) {
-      case 'killAll':
-        void handleKillAll()
-        return
-      case 'restart':
-        void handleRestart()
-        return
-      case 'killOne':
-        void handleKillOne(pending.session)
-    }
-  }, [confirm, handleKillAll, handleKillOne, handleRestart])
+    void handleKillOne(confirm.session)
+  }, [confirm, handleKillOne])
 
   const copy = useMemo(() => getConfirmCopy(confirm), [confirm])
-  const isBusy = busyKind !== null
+  const isBusy = busyKind !== null || daemonActions.isBusy
+
+  if (activeRuntimeEnvironmentId?.trim()) {
+    return (
+      <section className="space-y-4">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold">Manage Sessions</h3>
+          <p className="text-xs text-muted-foreground">
+            Session management is unavailable while a remote runtime server is active.
+          </p>
+        </div>
+        <SearchableSetting
+          title={MANAGE_SESSIONS_SEARCH_ENTRIES[0].title}
+          description={MANAGE_SESSIONS_SEARCH_ENTRIES[0].description}
+          keywords={MANAGE_SESSIONS_SEARCH_ENTRIES[0].keywords}
+          className="space-y-3"
+        >
+          <div className="rounded-lg border border-border/60 px-3 py-3 text-xs text-muted-foreground">
+            Switch back to the local runtime to restart or kill local daemon sessions.
+          </div>
+        </SearchableSetting>
+      </section>
+    )
+  }
 
   return (
     <section className="space-y-4">
@@ -368,9 +320,9 @@ export function ManageSessionsSection(): React.JSX.Element {
       </div>
 
       <SearchableSetting
-        title="Daemon sessions running"
-        description="Count of live PTY sessions across all workspaces."
-        keywords={['daemon', 'pty', 'sessions', 'manage', 'kill', 'restart', 'terminal']}
+        title={MANAGE_SESSIONS_SEARCH_ENTRIES[0].title}
+        description={MANAGE_SESSIONS_SEARCH_ENTRIES[0].description}
+        keywords={MANAGE_SESSIONS_SEARCH_ENTRIES[0].keywords}
         className="space-y-3"
       >
         {/* Why: full-width sessions card. The table *is* the primary
@@ -410,11 +362,11 @@ export function ManageSessionsSection(): React.JSX.Element {
                     variant="ghost"
                     size="icon-xs"
                     disabled={isBusy || sessionCount === 0}
-                    onClick={() => setConfirm({ kind: 'killAll' })}
+                    onClick={() => daemonActions.setPending('killAll')}
                     aria-label="Kill all sessions"
                     className="text-muted-foreground hover:text-destructive"
                   >
-                    {busyKind === 'killAll' ? (
+                    {daemonActions.busyKind === 'killAll' ? (
                       <LoaderCircle className="animate-spin" />
                     ) : (
                       <Trash2 />
@@ -431,11 +383,11 @@ export function ManageSessionsSection(): React.JSX.Element {
                     variant="ghost"
                     size="icon-xs"
                     disabled={isBusy}
-                    onClick={() => setConfirm({ kind: 'restart' })}
+                    onClick={() => daemonActions.setPending('restart')}
                     aria-label="Restart daemon"
                     className="text-muted-foreground"
                   >
-                    {busyKind === 'restart' ? (
+                    {daemonActions.busyKind === 'restart' ? (
                       <LoaderCircle className="animate-spin" />
                     ) : (
                       <RotateCw />
@@ -581,6 +533,7 @@ export function ManageSessionsSection(): React.JSX.Element {
           ) : null}
         </DialogContent>
       </Dialog>
+      <DaemonActionDialog api={daemonActions} />
     </section>
   )
 }

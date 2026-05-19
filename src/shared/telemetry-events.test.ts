@@ -1,16 +1,17 @@
 // Schema round-trip coverage for the event map. Fail-closed invariants that
 // must hold: agent_error is enum-only (error_message / error_stack rejected
-// by `.strict()`), error_name is whitelisted, unknown enum values fail, and
-// any well-formed payload round-trips without coercion.
+// by `.strict()`), unknown enum values fail, and any well-formed payload
+// round-trips without coercion.
 
 import { describe, expect, it } from 'vitest'
 import {
-  AGENT_ERROR_NAME_WHITELIST,
-  agentErrorNameSchema,
+  addRepoSetupStepActionSchema,
+  AGENT_KIND_VALUES,
   agentKindSchema,
   commonPropsSchema,
   errorClassSchema,
   eventSchemas,
+  featureWallTileIdSchema,
   SETTINGS_CHANGED_WHITELIST,
   settingsChangedKeySchema
 } from './telemetry-events'
@@ -18,30 +19,10 @@ import {
 describe('agent_error schema', () => {
   it('round-trips a minimal {error_class, agent_kind} payload', () => {
     const parsed = eventSchemas.agent_error.safeParse({
-      error_class: 'auth_expired',
+      error_class: 'unknown',
       agent_kind: 'claude-code'
     })
     expect(parsed.success).toBe(true)
-  })
-
-  it('round-trips every whitelisted error_name value', () => {
-    for (const name of AGENT_ERROR_NAME_WHITELIST) {
-      const parsed = eventSchemas.agent_error.safeParse({
-        error_class: 'auth_expired',
-        agent_kind: 'claude-code',
-        error_name: name
-      })
-      expect(parsed.success).toBe(true)
-    }
-  })
-
-  it('rejects error_name values outside the whitelist', () => {
-    const parsed = eventSchemas.agent_error.safeParse({
-      error_class: 'auth_expired',
-      agent_kind: 'claude-code',
-      error_name: 'SomeNonWhitelistedName'
-    })
-    expect(parsed.success).toBe(false)
   })
 
   // Core invariant: `.strict()` rejects raw error strings. If this test ever
@@ -49,7 +30,7 @@ describe('agent_error schema', () => {
   // change.
   it('rejects error_message via .strict()', () => {
     const parsed = eventSchemas.agent_error.safeParse({
-      error_class: 'auth_expired',
+      error_class: 'unknown',
       agent_kind: 'claude-code',
       error_message: 'boom at /Users/alice/secret/path'
     })
@@ -58,9 +39,21 @@ describe('agent_error schema', () => {
 
   it('rejects error_stack via .strict()', () => {
     const parsed = eventSchemas.agent_error.safeParse({
-      error_class: 'auth_expired',
+      error_class: 'unknown',
       agent_kind: 'claude-code',
       error_stack: 'Error: boom\n    at /Users/alice/...'
+    })
+    expect(parsed.success).toBe(false)
+  })
+
+  it('rejects error_name (deferred — schema is enum-only)', () => {
+    // `error_name` was part of an earlier draft. The trimmed schema is
+    // enum-only; if a future PR re-introduces it as additive-optional,
+    // this test should be replaced rather than relaxed silently.
+    const parsed = eventSchemas.agent_error.safeParse({
+      error_class: 'unknown',
+      agent_kind: 'claude-code',
+      error_name: 'BinaryNotFound'
     })
     expect(parsed.success).toBe(false)
   })
@@ -75,7 +68,7 @@ describe('agent_error schema', () => {
 
   it('rejects unknown agent_kind enum values', () => {
     const parsed = eventSchemas.agent_error.safeParse({
-      error_class: 'auth_expired',
+      error_class: 'unknown',
       agent_kind: 'made_up_agent'
     })
     expect(parsed.success).toBe(false)
@@ -119,6 +112,85 @@ describe('agent_started schema', () => {
   })
 })
 
+describe('agent_hook_unattributed schema', () => {
+  it('accepts the two bounded attribution failure reasons', () => {
+    for (const reason of ['empty_pane_key', 'unknown_tab_id'] as const) {
+      expect(eventSchemas.agent_hook_unattributed.safeParse({ reason }).success).toBe(true)
+    }
+  })
+
+  it('rejects extra payload fields via .strict()', () => {
+    const parsed = eventSchemas.agent_hook_unattributed.safeParse({
+      reason: 'unknown_tab_id',
+      pane_key: 'tab-secret:1'
+    })
+    expect(parsed.success).toBe(false)
+  })
+})
+
+describe('add_repo_setup_step_action schema', () => {
+  it('accepts every Setup-step action declared in the schema', () => {
+    for (const action of addRepoSetupStepActionSchema.options) {
+      const parsed = eventSchemas.add_repo_setup_step_action.safeParse({ action })
+      expect(parsed.success).toBe(true)
+    }
+  })
+
+  it('rejects unknown action enum values', () => {
+    const parsed = eventSchemas.add_repo_setup_step_action.safeParse({
+      action: 'export_to_pdf'
+    })
+    expect(parsed.success).toBe(false)
+  })
+
+  it('rejects extra keys via .strict()', () => {
+    const parsed = eventSchemas.add_repo_setup_step_action.safeParse({
+      action: 'skip',
+      repo_name: 'orca' // raw repo names are UGC — must not cross the wire
+    })
+    expect(parsed.success).toBe(false)
+  })
+})
+
+describe('workspace_create_failed schema', () => {
+  it('accepts a valid payload', () => {
+    const parsed = eventSchemas.workspace_create_failed.safeParse({
+      source: 'sidebar',
+      error_class: 'git_failed'
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  it('rejects unknown error_class values', () => {
+    const parsed = eventSchemas.workspace_create_failed.safeParse({
+      source: 'sidebar',
+      error_class: 'cosmic_ray'
+    })
+    expect(parsed.success).toBe(false)
+  })
+
+  // Core invariant mirroring agent_error: raw error strings never cross the
+  // wire. If this test ever flips, the failure-rate lane is leaking UGC —
+  // revert the offending schema change.
+  it('rejects error_message via .strict()', () => {
+    const parsed = eventSchemas.workspace_create_failed.safeParse({
+      source: 'sidebar',
+      error_class: 'git_failed',
+      error_message: 'fatal: cannot create work tree at /Users/alice/secret'
+    })
+    expect(parsed.success).toBe(false)
+  })
+
+  it('rejects error_stack via .strict()', () => {
+    const parsed = eventSchemas.workspace_create_failed.safeParse({
+      source: 'sidebar',
+      error_class: 'git_failed',
+      error_stack: 'Error: cannot create work tree\n    at /Users/alice/...'
+    })
+    expect(parsed.success).toBe(false)
+  })
+})
+
 describe('settings_changed schema', () => {
   it('accepts whitelisted setting keys', () => {
     for (const key of SETTINGS_CHANGED_WHITELIST) {
@@ -136,6 +208,50 @@ describe('settings_changed schema', () => {
       value_kind: 'bool'
     })
     expect(parsed.success).toBe(false)
+  })
+})
+
+describe('feature wall schemas', () => {
+  it('accepts the unconditional open and close payloads', () => {
+    expect(eventSchemas.feature_wall_opened.safeParse({ source: 'help_menu' }).success).toBe(true)
+    expect(eventSchemas.feature_wall_opened.safeParse({ source: 'popup' }).success).toBe(true)
+    expect(eventSchemas.feature_wall_closed.safeParse({ dwell_ms: 1200 }).success).toBe(true)
+  })
+
+  it('rejects stale or invalid source variants', () => {
+    expect(eventSchemas.feature_wall_opened.safeParse({}).success).toBe(false)
+    expect(eventSchemas.feature_wall_opened.safeParse({ surface: 'help_tour' }).success).toBe(false)
+    expect(eventSchemas.feature_wall_opened.safeParse({ source: 'help_tour' }).success).toBe(false)
+  })
+
+  it('rejects out-of-range dwell time', () => {
+    expect(eventSchemas.feature_wall_closed.safeParse({ dwell_ms: -1 }).success).toBe(false)
+  })
+
+  it('accepts only known tile ids for tile focus telemetry', () => {
+    expect(
+      eventSchemas.feature_wall_tile_focused.safeParse({
+        tile_id: 'tile-12'
+      }).success
+    ).toBe(true)
+    expect(
+      eventSchemas.feature_wall_tile_focused.safeParse({
+        tile_id: 'tile-99'
+      }).success
+    ).toBe(false)
+  })
+
+  it('accepts only known tile ids for tile click telemetry', () => {
+    expect(
+      eventSchemas.feature_wall_tile_clicked.safeParse({
+        tile_id: 'tile-03'
+      }).success
+    ).toBe(true)
+    expect(
+      eventSchemas.feature_wall_tile_clicked.safeParse({
+        tile_id: 'tile-99'
+      }).success
+    ).toBe(false)
   })
 })
 
@@ -199,9 +315,9 @@ describe('commonPropsSchema', () => {
 
 describe('exported enum schemas', () => {
   it('agentKindSchema accepts the known product IDs', () => {
-    expect(agentKindSchema.safeParse('claude-code').success).toBe(true)
-    expect(agentKindSchema.safeParse('codex').success).toBe(true)
-    expect(agentKindSchema.safeParse('other').success).toBe(true)
+    for (const kind of AGENT_KIND_VALUES) {
+      expect(agentKindSchema.safeParse(kind).success).toBe(true)
+    }
   })
 
   it('errorClassSchema rejects novel classes', () => {
@@ -214,9 +330,7 @@ describe('exported enum schemas', () => {
     }
   })
 
-  it('agentErrorNameSchema membership matches AGENT_ERROR_NAME_WHITELIST', () => {
-    for (const name of AGENT_ERROR_NAME_WHITELIST) {
-      expect(agentErrorNameSchema.safeParse(name).success).toBe(true)
-    }
+  it('feature wall enum schemas accept known values', () => {
+    expect(featureWallTileIdSchema.safeParse('tile-01').success).toBe(true)
   })
 })

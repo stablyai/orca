@@ -1,5 +1,5 @@
 import type { AppState } from '../types'
-import type { PRCheckDetail, CheckStatus } from '../../../../shared/types'
+import type { PRCheckDetail, CheckStatus, GitHubOwnerRepo } from '../../../../shared/types'
 
 export function normalizeBranchName(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
@@ -36,17 +36,24 @@ export function deriveCheckStatusFromChecks(checks: PRCheckDetail[]): CheckStatu
 export function syncPRChecksStatus(
   state: AppState,
   repoPath: string,
+  repoId: string | undefined,
   branch: string | undefined,
-  checks: PRCheckDetail[]
+  checks: PRCheckDetail[],
+  prRepo?: GitHubOwnerRepo | null
 ): Partial<AppState> | null {
   const normalized = branch ? normalizeBranchName(branch) : ''
   if (!normalized) {
     return null
   }
 
-  const prCacheKey = `${repoPath}::${normalized}`
+  const prCacheKey = `${repoId ?? repoPath}::${normalized}`
   const prEntry = state.prCache[prCacheKey]
   if (!prEntry?.data) {
+    return null
+  }
+  // Why: fork PR rediscovery can retarget the branch cache while an older
+  // checks request is still in flight; only the matching PR repo may update it.
+  if (!samePRRepo(prEntry.data.prRepo, prRepo)) {
     return null
   }
 
@@ -67,4 +74,15 @@ export function syncPRChecksStatus(
       }
     }
   }
+}
+
+function normalizedPRRepo(repo?: GitHubOwnerRepo | null): string | null {
+  if (!repo) {
+    return null
+  }
+  return `${repo.owner.toLowerCase()}/${repo.repo.toLowerCase()}`
+}
+
+function samePRRepo(left?: GitHubOwnerRepo | null, right?: GitHubOwnerRepo | null): boolean {
+  return normalizedPRRepo(left) === normalizedPRRepo(right)
 }

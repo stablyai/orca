@@ -238,6 +238,7 @@ function makeResolved(overrides?: Partial<SshResolvedConfig>): SshResolvedConfig
     port: 22,
     identityFile: [],
     forwardAgent: false,
+    proxyUseFdpass: false,
     ...overrides
   }
 }

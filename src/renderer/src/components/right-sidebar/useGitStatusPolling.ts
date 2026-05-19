@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useAllWorktrees, useRepoById, useRepoMap } from '@/store/selectors'
-import type { GitConflictOperation, GitStatusResult } from '../../../../shared/types'
+import type { GitConflictOperation } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getConnectionId } from '@/lib/connection-context'
+import { getRuntimeGitConflictOperation } from '@/runtime/runtime-git-client'
+import { refreshGitStatusForWorktree } from './git-status-refresh'
+import { createCoalescedPollRunner } from './coalesced-poll-runner'
 
 const POLL_INTERVAL_MS = 3000
 
@@ -11,16 +14,28 @@ export function useGitStatusPolling(): void {
   const activeWorktree = useActiveWorktree()
   const allWorktrees = useAllWorktrees()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
+  const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
   const setGitStatus = useAppStore((s) => s.setGitStatus)
+  const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)
+  const setUpstreamStatus = useAppStore((s) => s.setUpstreamStatus)
   const setConflictOperation = useAppStore((s) => s.setConflictOperation)
   const conflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
+  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const repoMap = useRepoMap()
+  const statusPollInFlightRef = useRef(false)
+  const statusPollRerunRef = useRef(false)
+  const fetchStatusRef = useRef<() => void>(() => {})
 
   const worktreePath = activeWorktree?.path ?? null
   const activeRepoId = activeWorktree?.repoId ?? null
   const activeRepo = useRepoById(activeRepoId)
   const activeRepoSupportsGit = activeRepo ? isGitRepoKind(activeRepo) : false
+  const activeConnectionId = activeRepo?.connectionId ?? null
+  const isConnectionReady = useCallback(
+    (connectionId: string | null | undefined): boolean =>
+      !connectionId || sshConnectionStates.get(connectionId)?.status === 'connected',
+    [sshConnectionStates]
+  )
 
   // Why: build a list of non-active worktrees that still have a known conflict
   // operation (merge/rebase/cherry-pick). These need lightweight polling so
@@ -44,21 +59,60 @@ export function useGitStatusPolling(): void {
     return result
   }, [allWorktrees, conflictOperationByWorktree, activeWorktreeId, repoMap])
 
-  const fetchStatus = useCallback(async () => {
+  const runFetchStatus = useCallback(async () => {
     if (!activeWorktreeId || !worktreePath || !activeRepoSupportsGit) {
+      return
+    }
+    if (!isConnectionReady(activeConnectionId)) {
       return
     }
     try {
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
-      const status = (await window.api.git.status({
+      await refreshGitStatusForWorktree({
+        settings: useAppStore.getState().settings,
+        worktreeId: activeWorktreeId,
         worktreePath,
-        connectionId
-      })) as GitStatusResult
-      setGitStatus(activeWorktreeId, status)
+        connectionId,
+        deps: {
+          setGitStatus,
+          updateWorktreeGitIdentity,
+          setUpstreamStatus,
+          fetchUpstreamStatus
+        }
+      })
     } catch {
       // ignore
     }
-  }, [activeRepoSupportsGit, activeWorktreeId, worktreePath, setGitStatus])
+  }, [
+    activeRepoSupportsGit,
+    activeConnectionId,
+    activeWorktreeId,
+    fetchUpstreamStatus,
+    isConnectionReady,
+    worktreePath,
+    setGitStatus,
+    setUpstreamStatus,
+    updateWorktreeGitIdentity
+  ])
+
+  const fetchStatus = useCallback(() => {
+    if (statusPollInFlightRef.current) {
+      statusPollRerunRef.current = true
+      return
+    }
+    statusPollInFlightRef.current = true
+    // Why: git status can exceed the 3s poll interval on large repos. Keep at
+    // most one subprocess chain in flight, then run one trailing refresh if a
+    // tick was skipped so the UI catches up without process pileups.
+    void runFetchStatus().finally(() => {
+      statusPollInFlightRef.current = false
+      if (statusPollRerunRef.current) {
+        statusPollRerunRef.current = false
+        fetchStatusRef.current()
+      }
+    })
+  }, [runFetchStatus])
+  fetchStatusRef.current = fetchStatus
 
   useEffect(() => {
     void fetchStatus()
@@ -81,29 +135,6 @@ export function useGitStatusPolling(): void {
     }
   }, [fetchStatus])
 
-  useEffect(() => {
-    if (!activeRepoId || !activeRepoSupportsGit) {
-      return
-    }
-
-    // Why: checkout/switch operations happen inside the terminal, outside the
-    // renderer's normal worktree-change events. Poll the active repo's worktree
-    // list so a branch change updates the sidebar's PR key instead of leaving
-    // the previous merged PR attached to this worktree indefinitely.
-    void fetchWorktrees(activeRepoId)
-    const intervalId = setInterval(() => {
-      if (document.hasFocus()) {
-        void fetchWorktrees(activeRepoId)
-      }
-    }, POLL_INTERVAL_MS)
-    const onFocus = (): void => void fetchWorktrees(activeRepoId)
-    window.addEventListener('focus', onFocus)
-    return () => {
-      clearInterval(intervalId)
-      window.removeEventListener('focus', onFocus)
-    }
-  }, [activeRepoId, activeRepoSupportsGit, fetchWorktrees])
-
   // Why: poll conflict operation for non-active worktrees that have a stale
   // non-unknown operation. This is a lightweight fs-only check (no git status)
   // so it won't cause performance issues even with many worktrees.
@@ -115,9 +146,17 @@ export function useGitStatusPolling(): void {
     const pollStale = async (): Promise<void> => {
       for (const { id, path } of staleConflictWorktrees) {
         try {
-          const op = (await window.api.git.conflictOperation({
+          const connectionId = getConnectionId(id) ?? undefined
+          // Why: after explicit SSH disconnect the provider is intentionally
+          // gone; keep remote polling quiet until the target reconnects.
+          if (!isConnectionReady(connectionId)) {
+            continue
+          }
+          const op = (await getRuntimeGitConflictOperation({
+            settings: useAppStore.getState().settings,
+            worktreeId: id,
             worktreePath: path,
-            connectionId: getConnectionId(id) ?? undefined
+            connectionId
           })) as GitConflictOperation
           setConflictOperation(id, op)
         } catch {
@@ -126,17 +165,22 @@ export function useGitStatusPolling(): void {
       }
     }
 
-    void pollStale()
+    // Why: remote conflict probes can exceed the 3s interval. Keep one poll in
+    // flight and coalesce skipped ticks into one trailing pass so stale badges
+    // catch up without stacking SSH/RPC work.
+    const pollRunner = createCoalescedPollRunner(pollStale)
+    pollRunner.run()
     const intervalId = setInterval(() => {
       if (document.hasFocus()) {
-        void pollStale()
+        pollRunner.run()
       }
     }, POLL_INTERVAL_MS)
-    const onFocus = (): void => void pollStale()
+    const onFocus = (): void => pollRunner.run()
     window.addEventListener('focus', onFocus)
     return () => {
+      pollRunner.dispose()
       clearInterval(intervalId)
       window.removeEventListener('focus', onFocus)
     }
-  }, [staleConflictWorktrees, setConflictOperation])
+  }, [staleConflictWorktrees, setConflictOperation, isConnectionReady])
 }

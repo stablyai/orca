@@ -1,7 +1,13 @@
 import { useAppStore } from '@/store'
+import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
+import {
+  inspectRuntimeTerminalProcess,
+  sendRuntimePtyInput
+} from '@/runtime/runtime-terminal-inspection'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import { isShellProcess } from '@/lib/tui-agent-startup'
 import type { OrcaHooks, TaskViewPresetId } from '../../../shared/types'
+import { normalizeHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 
 /**
  * Why: the TaskPage's preset buttons and the openTaskPage prefetcher both need
@@ -13,6 +19,7 @@ export { PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT } from '../../../shared/
 
 export function getTaskPresetQuery(presetId: TaskViewPresetId | null): string {
   switch (presetId) {
+    case 'all':
     case 'issues':
       return 'is:issue is:open'
     case 'my-issues':
@@ -24,7 +31,7 @@ export function getTaskPresetQuery(presetId: TaskViewPresetId | null): string {
     case 'review':
       return 'review-requested:@me is:pr is:open'
     default:
-      return 'is:open'
+      return 'is:issue is:open'
   }
 }
 
@@ -37,10 +44,16 @@ export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Wi
     : 'linux'
 
 export type LinkedWorkItemSummary = {
-  type: 'issue' | 'pr'
+  /** 'mr' is the GitLab analogue of 'pr'. The shape is otherwise
+   *  identical so the linked-work-item badge in the composer renders
+   *  uniformly across providers. */
+  type: 'issue' | 'pr' | 'mr'
   number: number
   title: string
   url: string
+  /** Linear identifier (for example ENG-123) when this linked item came from
+   *  Linear rather than GitHub. */
+  linearIdentifier?: string
 }
 
 // Why: when a repo has no `orca.yaml` issueCommand and no per-user override,
@@ -48,6 +61,8 @@ export type LinkedWorkItemSummary = {
 // attaches a linked work item without typing anything else. "Complete <url>"
 // is the minimum viable instruction that always produces a coherent agent task.
 export const DEFAULT_ISSUE_COMMAND_TEMPLATE = 'Complete {{artifact_url}}'
+
+export type SetupConfig = { source: 'yaml' | 'local' | 'both'; command: string }
 
 /**
  * Substitute the issue-command template variables. Prefers `{{artifact_url}}`
@@ -103,16 +118,30 @@ export function getAttachmentLabel(pathValue: string): string {
 }
 
 export function getSetupConfig(
-  repo: { hookSettings?: { scripts?: { setup?: string } } } | undefined,
+  repo:
+    | {
+        hookSettings?: {
+          commandSourcePolicy?: unknown
+          scripts?: { setup?: string }
+        }
+      }
+    | undefined,
   yamlHooks: OrcaHooks | null
-): { source: 'yaml' | 'legacy'; command: string } | null {
+): SetupConfig | null {
   const yamlSetup = yamlHooks?.scripts?.setup?.trim()
+  const localSetup = repo?.hookSettings?.scripts?.setup?.trim()
+  const sourcePolicy = normalizeHookCommandSourcePolicy(repo?.hookSettings?.commandSourcePolicy)
+
+  if (sourcePolicy === 'local-only') {
+    return localSetup ? { source: 'local', command: localSetup } : null
+  }
+
+  if (sourcePolicy === 'run-both' && yamlSetup && localSetup) {
+    return { source: 'both', command: `${yamlSetup}\n${localSetup}` }
+  }
+
   if (yamlSetup) {
     return { source: 'yaml', command: yamlSetup }
-  }
-  const legacySetup = repo?.hookSettings?.scripts?.setup?.trim()
-  if (legacySetup) {
-    return { source: 'legacy', command: legacySetup }
   }
   return null
 }
@@ -195,65 +224,87 @@ export function getWorkspaceSeedName(args: {
   return 'workspace'
 }
 
+// Why: bracketed paste markers and ready-wait grace timing live in
+// agent-paste-draft.ts so the new-workspace and "Use" flows share one
+// definition of "type into the agent's input as a non-submitted draft".
+
 export async function ensureAgentStartupInTerminal(args: {
   worktreeId: string
   startup: AgentStartupPlan
 }): Promise<void> {
   const { worktreeId, startup } = args
-  if (startup.followupPrompt === null) {
+  const draftPrompt = startup.draftPrompt ?? null
+  if (startup.followupPrompt === null && draftPrompt === null) {
     return
   }
 
-  let promptInjected = false
-
+  // Why: poll until a terminal tab + PTY exists for the worktree before we
+  // can interact with it. Activation creates the tab synchronously but the
+  // PTY spawn is async, so a brief wait is normal.
+  let tabId: string | null = null
+  let ptyId: string | null = null
   for (let attempt = 0; attempt < 30; attempt += 1) {
     if (attempt > 0) {
       await new Promise((resolve) => window.setTimeout(resolve, 150))
     }
-
     const state = useAppStore.getState()
-    const tabId =
+    tabId =
       state.activeTabIdByWorktree[worktreeId] ?? state.tabsByWorktree[worktreeId]?.[0]?.id ?? null
     if (!tabId) {
       continue
     }
-
-    const ptyId = state.ptyIdsByTabId[tabId]?.[0]
-    if (!ptyId) {
-      continue
+    ptyId = state.ptyIdsByTabId[tabId]?.[0] ?? null
+    if (ptyId) {
+      break
     }
+  }
+  if (!tabId || !ptyId) {
+    return
+  }
 
+  // Why: followupPrompt is the legacy path for stdin-after-start agents
+  // (aider, goose, etc.) that need their initial prompt typed into the live
+  // session and submitted. Wait until the agent owns the PTY before writing.
+  if (startup.followupPrompt) {
+    await waitForAgentForeground(ptyId, startup.expectedProcess)
+    sendRuntimePtyInput(useAppStore.getState().settings, ptyId, `${startup.followupPrompt}\r`)
+  }
+
+  // Why: draftPrompt uses bracketed-paste so the URL lands atomically in the
+  // agent's input buffer (no per-char echo, no auto-submit). Shared with the
+  // launch-work-item-direct flow so both behave identically.
+  if (draftPrompt) {
+    await pasteDraftWhenAgentReady({
+      tabId,
+      content: draftPrompt,
+      agent: startup.agent
+    })
+  }
+}
+
+// Why: legacy followupPrompt path used `agentOwnsForeground` exclusively (with
+// a hasChildProcesses fallback after several polls). Preserve that behavior so
+// stdin-after-start agents still receive their prompt under the same
+// conditions. Returns when the agent appears ready or the budget expires.
+async function waitForAgentForeground(ptyId: string, expectedProcess: string): Promise<void> {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    if (attempt > 0) {
+      await new Promise((resolve) => window.setTimeout(resolve, 150))
+    }
     try {
-      const foreground = (await window.api.pty.getForegroundProcess(ptyId))?.toLowerCase() ?? ''
-      const agentOwnsForeground =
-        foreground === startup.expectedProcess ||
-        foreground.startsWith(`${startup.expectedProcess}.`)
-
-      if (agentOwnsForeground && !promptInjected && startup.followupPrompt) {
-        window.api.pty.write(ptyId, `${startup.followupPrompt}\r`)
-        promptInjected = true
+      const process = await inspectRuntimeTerminalProcess(useAppStore.getState().settings, ptyId)
+      const foreground = process.foregroundProcess?.toLowerCase() ?? ''
+      const owns =
+        foreground === expectedProcess ||
+        foreground.startsWith(`${expectedProcess}.`) ||
+        foreground.endsWith(`/${expectedProcess}`)
+      if (owns) {
         return
       }
-
-      if (agentOwnsForeground && promptInjected) {
-        return
-      }
-
-      const hasChildProcesses = await window.api.pty.hasChildProcesses(ptyId)
-      if (
-        !promptInjected &&
-        startup.followupPrompt &&
-        hasChildProcesses &&
-        !isShellProcess(foreground) &&
-        attempt >= 4
-      ) {
-        // Why: the initial agent launch is already queued on the first terminal
-        // tab. Only agents without a verified startup-prompt flag need extra
-        // help here: once the TUI owns the PTY, type the draft prompt into the
-        // live session instead of launching the binary a second time.
-        window.api.pty.write(ptyId, `${startup.followupPrompt}\r`)
-        promptInjected = true
-        return
+      if (attempt >= 4 && !isShellProcess(foreground)) {
+        if (process.hasChildProcesses) {
+          return
+        }
       }
     } catch {
       // Ignore transient PTY inspection failures and keep polling.

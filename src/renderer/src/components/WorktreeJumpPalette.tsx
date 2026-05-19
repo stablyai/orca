@@ -17,6 +17,7 @@ import { getLinkedWorkItemSuggestedName } from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { sortWorktreesSmart } from '@/components/sidebar/smart-sort'
 import { isDefaultBranchWorkspace } from '@/components/sidebar/visible-worktrees'
+import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
 import StatusIndicator from '@/components/sidebar/StatusIndicator'
 import { cn } from '@/lib/utils'
 import { getWorktreeStatus, getWorktreeStatusLabel } from '@/lib/worktree-status'
@@ -150,8 +151,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   // jump palette. Without this, clicking between panes would desync the
   // palette's spinner from the sidebar's spinner.
   const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
+  // Why: ptyIdsByTabId is the live-pty source of truth — without it,
+  // getWorktreeStatus would treat slept tabs as live (their preserved
+  // tab.ptyId is a wake-hint sessionId, not a liveness signal) and the jump
+  // palette dot would lie green even though the sidebar dot is correctly grey.
+  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
+  const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
   const prCache = useAppStore((s) => s.prCache)
   const issueCache = useAppStore((s) => s.issueCache)
+  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
+  const migrationUnsupportedByPtyId = useAppStore((s) => s.migrationUnsupportedByPtyId)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeTabType = useAppStore((s) => s.activeTabType)
   const activeBrowserTabId = useAppStore((s) => s.activeBrowserTabId)
@@ -159,6 +168,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const browserPagesByWorkspace = useAppStore((s) => s.browserPagesByWorkspace)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
+  const lastVisitedAtByWorktreeId = useAppStore((s) => s.lastVisitedAtByWorktreeId)
 
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
@@ -177,37 +187,75 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
   const hasQuery = deferredQuery.trim().length > 0
 
-  const sortedWorktrees = useMemo(() => {
-    const visibleWorktrees = allWorktrees.filter((worktree) => {
-      if (worktree.isArchived) {
-        return false
-      }
-      // Why: keep the jump palette aligned with the sidebar. If the user
-      // opted to hide the default-branch workspace, surfacing it here via
-      // Cmd+J would reintroduce the entry they asked to remove.
-      // Drift warning: this check must stay in lockstep with the sidebar's
-      // filter in computeVisibleWorktreeIds (visible-worktrees.ts). Both
-      // surfaces share isDefaultBranchWorkspace so the predicate can't drift,
-      // but adding a new filter axis (e.g. a second toggle) here would need
-      // the matching change in the sidebar pipeline — otherwise Cmd+J and
-      // the sidebar will show different lists.
-      if (hideDefaultBranchWorkspace && isDefaultBranchWorkspace(worktree)) {
-        return false
-      }
-      return true
-    })
-    // Why: on empty query, show pure recency (matches sidebar's 'recent' sort
-    // rationale in smart-sort.ts) so Cmd+J is a predictable "jump back to what
-    // I was just on" surface. Typing swaps in smart-sort to rank matches.
-    // Deps over-include on the empty-query branch; acceptable since they
-    // change infrequently and branching the memo isn't worth it.
-    return hasQuery
-      ? sortWorktreesSmart(visibleWorktrees, tabsByWorktree, repoMap, prCache)
-      : [...visibleWorktrees].sort(
-          (a, b) =>
-            b.lastActivityAt - a.lastActivityAt || a.displayName.localeCompare(b.displayName)
-        )
-  }, [allWorktrees, tabsByWorktree, repoMap, prCache, hasQuery, hideDefaultBranchWorkspace])
+  // Why: keep the jump palette aligned with the sidebar. If the user
+  // opted to hide the default-branch workspace, surfacing it here via
+  // Cmd+J would reintroduce the entry they asked to remove.
+  // Drift warning: this check must stay in lockstep with the sidebar's
+  // filter in computeVisibleWorktreeIds (visible-worktrees.ts). Both
+  // surfaces share isDefaultBranchWorkspace so the predicate can't drift,
+  // but adding a new filter axis (e.g. a second toggle) here would need
+  // the matching change in the sidebar pipeline — otherwise Cmd+J and
+  // the sidebar will show different lists.
+  const visibleWorktrees = useMemo(
+    () =>
+      allWorktrees.filter((worktree) => {
+        if (worktree.isArchived) {
+          return false
+        }
+        if (hideDefaultBranchWorkspace && isDefaultBranchWorkspace(worktree)) {
+          return false
+        }
+        return true
+      }),
+    [allWorktrees, hideDefaultBranchWorkspace]
+  )
+
+  // Why: empty-query rows use focus-recency (lastVisitedAtByWorktreeId) with
+  // lastActivityAt fallback so SSH / quiet worktrees don't get pushed below
+  // the fold by noisy local worktrees. Current worktree is excluded from the
+  // empty-query rows per product model (Cmd+J is a switch surface, not a
+  // "show me everything" surface), but kept in visibleWorktreesForState so
+  // empty-state/loading logic remains unaffected.
+  // See docs/cmd-j-empty-query-ordering.md.
+  const { visibleWorktreesForState, switchableWorktreesForRows } = useMemo(
+    () =>
+      orderEmptyQueryWorktrees({
+        visibleWorktrees,
+        activeWorktreeId,
+        lastVisitedAtByWorktreeId
+      }),
+    [visibleWorktrees, activeWorktreeId, lastVisitedAtByWorktreeId]
+  )
+
+  // Why: typed queries still route through sortWorktreesSmart — switcher
+  // ranking only diverges from smart-sort on the empty-query branch.
+  const sortedWorktrees = useMemo(
+    () =>
+      hasQuery
+        ? sortWorktreesSmart(
+            visibleWorktrees,
+            tabsByWorktree,
+            repoMap,
+            agentStatusByPaneKey,
+            runtimePaneTitlesByTabId,
+            ptyIdsByTabId,
+            migrationUnsupportedByPtyId,
+            terminalLayoutsByTabId
+          )
+        : switchableWorktreesForRows,
+    [
+      hasQuery,
+      visibleWorktrees,
+      switchableWorktreesForRows,
+      tabsByWorktree,
+      repoMap,
+      agentStatusByPaneKey,
+      runtimePaneTitlesByTabId,
+      ptyIdsByTabId,
+      migrationUnsupportedByPtyId,
+      terminalLayoutsByTabId
+    ]
+  )
 
   const browserSortedWorktrees = useMemo(() => {
     // Why: browser-tab search is explicitly cross-worktree, so it must keep
@@ -216,8 +264,26 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     // tab on the default-branch worktree before toggling hide-on should still
     // be able to Cmd+J back to it — the setting hides the *workspace row*,
     // not the browser tabs that live inside it.
-    return sortWorktreesSmart(allWorktrees, tabsByWorktree, repoMap, prCache)
-  }, [allWorktrees, tabsByWorktree, repoMap, prCache])
+    return sortWorktreesSmart(
+      allWorktrees,
+      tabsByWorktree,
+      repoMap,
+      agentStatusByPaneKey,
+      runtimePaneTitlesByTabId,
+      ptyIdsByTabId,
+      migrationUnsupportedByPtyId,
+      terminalLayoutsByTabId
+    )
+  }, [
+    allWorktrees,
+    tabsByWorktree,
+    repoMap,
+    agentStatusByPaneKey,
+    runtimePaneTitlesByTabId,
+    ptyIdsByTabId,
+    migrationUnsupportedByPtyId,
+    terminalLayoutsByTabId
+  ])
 
   // Why: browser rows need worktree lookups for repo badge colors, and browser
   // search intentionally includes archived worktrees. This map must cover all
@@ -387,7 +453,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     canCreateWorktree && createWorktreeName.length > 0 && worktreeItems.length === 0
 
   const isLoading = repos.length > 0 && Object.keys(worktreesByRepo).length === 0
-  const hasAnyWorktrees = sortedWorktrees.length > 0
+  // Why: empty-state / "has any worktrees?" uses the full visible list
+  // (including current) so the palette never claims to be empty just
+  // because the only visible worktree is the currently active one.
+  // See docs/cmd-j-empty-query-ordering.md.
+  const hasAnyWorktrees = visibleWorktreesForState.length > 0
   const hasAnyBrowserPages = browserPageEntries.length > 0
 
   useEffect(() => {
@@ -577,7 +647,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       closeModal()
       // Why: defer opening so Radix fully unmounts the palette's dialog before
       // the composer modal mounts, avoiding focus churn between the two.
-      queueMicrotask(() => openModal('new-workspace-composer', data))
+      queueMicrotask(() =>
+        openModal('new-workspace-composer', { ...data, telemetrySource: 'command_palette' })
+      )
     }
 
     // Case 1: user pasted a GH issue/PR URL.
@@ -614,7 +686,14 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       // composer once the lookup returns.
       closeModal()
       void window.api.gh
-        .workItem({ repoPath: repoForLookup.path, number })
+        .workItemByOwnerRepo({
+          repoPath: repoForLookup.path,
+          repoId: repoForLookup.id,
+          owner: slug.owner,
+          repo: slug.repo,
+          number,
+          type: ghLink.type
+        })
         .then((item) => {
           const data: Record<string, unknown> = { initialRepoId: repoForLookup.id }
           if (item) {
@@ -630,11 +709,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
             // Fallback: we couldn't resolve the URL, just seed the name.
             data.prefilledName = `${slug.owner}-${slug.repo}-${number}`
           }
-          queueMicrotask(() => openModal('new-workspace-composer', data))
+          queueMicrotask(() =>
+            openModal('new-workspace-composer', { ...data, telemetrySource: 'command_palette' })
+          )
         })
         .catch(() => {
           queueMicrotask(() =>
-            openModal('new-workspace-composer', { initialRepoId: repoForLookup.id })
+            openModal('new-workspace-composer', {
+              initialRepoId: repoForLookup.id,
+              telemetrySource: 'command_palette'
+            })
           )
         })
       return
@@ -663,7 +747,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
       closeModal()
       void window.api.gh
-        .workItem({ repoPath: repoForLookup.path, number: ghNumber })
+        .workItem({ repoPath: repoForLookup.path, repoId: repoForLookup.id, number: ghNumber })
         .then((item) => {
           const data: Record<string, unknown> = { initialRepoId: repoForLookup.id }
           if (item) {
@@ -678,13 +762,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           } else {
             data.prefilledName = trimmed
           }
-          queueMicrotask(() => openModal('new-workspace-composer', data))
+          queueMicrotask(() =>
+            openModal('new-workspace-composer', { ...data, telemetrySource: 'command_palette' })
+          )
         })
         .catch(() => {
           queueMicrotask(() =>
             openModal('new-workspace-composer', {
               initialRepoId: repoForLookup.id,
-              prefilledName: trimmed
+              prefilledName: trimmed,
+              telemetrySource: 'command_palette'
             })
           )
         })
@@ -710,6 +797,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       return {
         title: 'No results match your search',
         subtitle: 'Try a name, branch, repo, comment, PR, page title, or URL.'
+      }
+    }
+    // Why: empty-query rows exclude the current worktree, so a single-worktree
+    // setup has hasAnyWorktrees=true but zero switchable rows. Without this
+    // branch the palette would claim "No active worktrees" while one is open
+    // — misleading. See docs/cmd-j-empty-query-ordering.md.
+    if (!hasQuery && hasAnyWorktrees && !hasAnyBrowserPages) {
+      return {
+        title: 'No other worktrees to switch to',
+        subtitle: 'Type to search or create a new worktree.'
       }
     }
     return {
@@ -789,6 +886,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                 const status = getWorktreeStatus(
                   tabsByWorktree[worktree.id] ?? [],
                   browserTabsByWorktree[worktree.id] ?? [],
+                  ptyIdsByTabId,
                   runtimePaneTitlesByTabId
                 )
                 const statusLabel = getWorktreeStatusLabel(status)
@@ -807,7 +905,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                     data-current={isCurrentWorktree ? 'true' : undefined}
                     className={cn(
                       'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-                      'data-[selected=true]:border-border data-[selected=true]:bg-[#ededed] data-[selected=true]:text-foreground dark:data-[selected=true]:bg-[#333333]'
+                      'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
                     )}
                   >
                     <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5">
@@ -922,7 +1020,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                   onSelect={() => handleSelectItem(entry)}
                   className={cn(
                     'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-                    'data-[selected=true]:border-border data-[selected=true]:bg-[#ededed] data-[selected=true]:text-foreground dark:data-[selected=true]:bg-[#333333]'
+                    'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
                   )}
                 >
                   <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5 text-muted-foreground/85">

@@ -45,19 +45,39 @@ export const Scroll = BrowserTarget.extend({
   amount: z
     .unknown()
     .transform((v) => (typeof v === 'number' && v > 0 ? v : undefined))
-    .pipe(z.number().optional())
+    .pipe(z.union([z.number(), z.undefined()]))
+    .optional()
 })
 
 export const Screenshot = BrowserTarget.extend({
   format: z
     .unknown()
     .transform((v) => (v === 'png' || v === 'jpeg' ? v : undefined))
-    .pipe(z.enum(['png', 'jpeg']).optional())
+    .pipe(z.union([z.enum(['png', 'jpeg']), z.undefined()]))
+    .optional()
+})
+
+export const Screencast = BrowserTarget.extend({
+  format: z
+    .unknown()
+    .optional()
+    .transform((v) => (v === 'png' ? 'png' : 'jpeg'))
+    .pipe(z.enum(['png', 'jpeg'])),
+  quality: OptionalFiniteNumber,
+  maxWidth: OptionalFiniteNumber,
+  maxHeight: OptionalFiniteNumber,
+  viewportWidth: OptionalFiniteNumber,
+  viewportHeight: OptionalFiniteNumber,
+  deviceScaleFactor: OptionalFiniteNumber,
+  mobile: OptionalBoolean,
+  everyNthFrame: OptionalFiniteNumber,
+  minFrameIntervalMs: OptionalFiniteNumber
 })
 
 export const FullScreenshot = BrowserTarget.extend({
   format: z
     .unknown()
+    .optional()
     .transform((v) => (v === 'jpeg' ? 'jpeg' : 'png'))
     .pipe(z.enum(['png', 'jpeg']))
 })
@@ -66,18 +86,24 @@ export const Eval = BrowserTarget.extend({
   expression: requiredString('Missing required --expression')
 })
 
-export const TabList = z.object({
-  worktree: OptionalString
-})
+export const TabList = z.object({ worktree: OptionalString })
 
 // Why: --index xor --page must be present. The refine guards that invariant
 // so the dispatcher surfaces a single legible error instead of either shape
 // leaking into the runtime.
+//
+// `focus` is opt-in: when true, the runtime sends `browser:pane-focus` to
+// the renderer after the switch lands. The renderer surfaces the browser
+// pane only if the user is already on the targeted worktree; otherwise it
+// pre-stages per-worktree state silently. This avoids cross-worktree screen
+// theft when multiple agents drive browsers in parallel worktrees.
 export const TabSwitch = BrowserTarget.extend({
   index: z
     .unknown()
     .transform((v) => (typeof v === 'number' ? v : undefined))
-    .pipe(z.number().optional())
+    .pipe(z.union([z.number(), z.undefined()]))
+    .optional(),
+  focus: z.boolean().optional()
 }).refine(
   (val) => {
     if (val.page !== undefined) {
@@ -90,16 +116,51 @@ export const TabSwitch = BrowserTarget.extend({
 
 export const TabCreate = z.object({
   url: OptionalString,
+  worktree: OptionalString,
+  profileId: OptionalString,
+  waitForRegistration: z.boolean().optional()
+})
+
+export const TabShow = z.object({
+  page: requiredString('Missing required --page'),
   worktree: OptionalString
 })
+
+export const TabCurrent = z.object({ worktree: OptionalString })
 
 export const TabClose = z.object({
   index: z
     .unknown()
     .transform((v) => (typeof v === 'number' ? v : undefined))
-    .pipe(z.number().optional()),
+    .pipe(z.union([z.number(), z.undefined()]))
+    .optional(),
   page: OptionalString,
   worktree: OptionalString
+})
+
+export const TabSetProfile = BrowserTarget.extend({
+  profileId: requiredString('Missing required --profile')
+})
+
+export const TabProfileClone = BrowserTarget.extend({
+  profileId: requiredString('Missing required --profile')
+})
+
+export const ProfileCreate = z.object({
+  label: requiredString('Missing required --label'),
+  // Strict enum so unknown scope values surface validation errors instead of being
+  // silently coerced to 'isolated' (pr-bug-scan finding from #1397).
+  scope: z.enum(['isolated', 'imported'])
+})
+
+export const ProfileDelete = z.object({
+  profileId: requiredString('Missing required --profile')
+})
+
+export const ProfileImportFromBrowser = z.object({
+  profileId: requiredString('Missing required --profile'),
+  browserFamily: requiredString('Missing required --browser-family'),
+  browserProfile: OptionalString
 })
 
 export const Drag = BrowserTarget.extend({
@@ -120,7 +181,8 @@ export const Wait = BrowserTarget.extend({
   timeout: z
     .unknown()
     .transform((v) => (typeof v === 'number' && v > 0 ? v : undefined))
-    .pipe(z.number().optional()),
+    .pipe(z.union([z.number(), z.undefined()]))
+    .optional(),
   text: OptionalPlainString,
   url: OptionalPlainString,
   load: OptionalPlainString,
@@ -132,6 +194,7 @@ export const Check = BrowserTarget.extend({
   element: requiredString('Missing required --element'),
   checked: z
     .unknown()
+    .optional()
     .transform((v) => v !== false)
     .pipe(z.boolean())
 })
@@ -232,7 +295,8 @@ export const InterceptEnable = BrowserTarget.extend({
   patterns: z
     .unknown()
     .transform((v) => (Array.isArray(v) ? (v as string[]) : undefined))
-    .pipe(z.array(z.string()).optional())
+    .pipe(z.union([z.array(z.string()), z.undefined()]))
+    .optional()
 })
 
 export const MouseXY = BrowserTarget.extend({

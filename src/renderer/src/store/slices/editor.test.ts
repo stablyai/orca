@@ -4,6 +4,11 @@ import { createStore, type StoreApi } from 'zustand/vanilla'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { createEditorSlice } from './editor'
 import type { AppState } from '../types'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from '../../runtime/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -58,6 +63,145 @@ describe('createEditorSlice right sidebar state', () => {
     store.getState().toggleRightSidebar()
     expect(store.getState().rightSidebarOpen).toBe(false)
   })
+
+  it('setRightSidebarTab writes the active worktree entry', () => {
+    const store = createEditorStore()
+
+    store.getState().setRightSidebarTab('search')
+
+    expect(store.getState().rightSidebarTab).toBe('search')
+    expect(store.getState().rightSidebarTabByWorktree).toEqual({ 'wt-1': 'search' })
+  })
+
+  it('setRightSidebarTab with no active worktree does not mutate the worktree map', () => {
+    const store = createEditorStore()
+    const remembered = { 'wt-1': 'checks' as const }
+    store.setState({ activeWorktreeId: null, rightSidebarTabByWorktree: remembered })
+
+    store.getState().setRightSidebarTab('search')
+
+    expect(store.getState().rightSidebarTab).toBe('search')
+    expect(store.getState().rightSidebarTabByWorktree).toBe(remembered)
+  })
+
+  it('revealInExplorer records explorer for the target worktree', () => {
+    const store = createEditorStore()
+    store.setState({
+      activeWorktreeId: 'wt-1',
+      rightSidebarTab: 'search',
+      rightSidebarTabByWorktree: { 'wt-1': 'search', 'wt-2': 'checks' }
+    })
+
+    store.getState().revealInExplorer('wt-2', '/repo/file.ts')
+
+    expect(store.getState().rightSidebarOpen).toBe(true)
+    expect(store.getState().rightSidebarTab).toBe('explorer')
+    expect(store.getState().rightSidebarTabByWorktree).toEqual({
+      'wt-1': 'search',
+      'wt-2': 'explorer'
+    })
+    expect(store.getState().pendingExplorerReveal).toMatchObject({
+      worktreeId: 'wt-2',
+      filePath: '/repo/file.ts'
+    })
+  })
+
+  it('collapses all expanded directories for one worktree', () => {
+    const store = createEditorStore()
+    store.setState({
+      expandedDirs: {
+        'wt-1': new Set(['/repo/src', '/repo/src/components']),
+        'wt-2': new Set(['/other/packages'])
+      }
+    })
+
+    store.getState().collapseAllDirs('wt-1')
+
+    expect(store.getState().expandedDirs['wt-1']).toEqual(new Set())
+    expect(store.getState().expandedDirs['wt-2']).toEqual(new Set(['/other/packages']))
+  })
+
+  it('keeps collapse all stable when the worktree has no expanded directories', () => {
+    const store = createEditorStore()
+    const expandedDirs = { 'wt-2': new Set(['/other/packages']) }
+    store.setState({ expandedDirs })
+
+    store.getState().collapseAllDirs('wt-1')
+
+    expect(store.getState().expandedDirs).toBe(expandedDirs)
+  })
+
+  it('collapses one directory subtree without touching sibling directories', () => {
+    const store = createEditorStore()
+    store.setState({
+      expandedDirs: {
+        'wt-1': new Set(['/repo/src', '/repo/src/components', '/repo/src2', '/repo/tests']),
+        'wt-2': new Set(['/other/src'])
+      }
+    })
+
+    store.getState().collapseDirSubtree('wt-1', '/repo/src')
+
+    expect(store.getState().expandedDirs['wt-1']).toEqual(new Set(['/repo/src2', '/repo/tests']))
+    expect(store.getState().expandedDirs['wt-2']).toEqual(new Set(['/other/src']))
+  })
+})
+
+describe('createEditorSlice file search seed state', () => {
+  it('seeds file search with a one-shot request id', () => {
+    const store = createEditorStore()
+
+    store.getState().seedFileSearchQuery('wt-1', 'selectedText')
+
+    expect(store.getState().fileSearchStateByWorktree['wt-1']).toMatchObject({
+      query: 'selectedText',
+      results: null,
+      loading: false,
+      seedRequestId: 1
+    })
+  })
+
+  it('preserves search options while replacing stale results and collapsed files', () => {
+    const store = createEditorStore()
+    store.getState().updateFileSearchState('wt-1', {
+      query: 'old',
+      caseSensitive: true,
+      wholeWord: true,
+      useRegex: true,
+      includePattern: '*.ts',
+      excludePattern: 'dist/**',
+      results: { files: [], totalMatches: 1, truncated: false },
+      loading: true,
+      collapsedFiles: new Set(['/repo/file.ts'])
+    })
+
+    store.getState().seedFileSearchQuery('wt-1', 'next')
+
+    const state = store.getState().fileSearchStateByWorktree['wt-1']
+    expect(state).toMatchObject({
+      query: 'next',
+      caseSensitive: true,
+      wholeWord: true,
+      useRegex: true,
+      includePattern: '*.ts',
+      excludePattern: 'dist/**',
+      results: null,
+      loading: false,
+      seedRequestId: 1
+    })
+    expect(state.collapsedFiles.size).toBe(0)
+  })
+
+  it('consumes only the matching seed request id', () => {
+    const store = createEditorStore()
+    store.getState().seedFileSearchQuery('wt-1', 'selectedText')
+
+    store.getState().consumeFileSearchSeedRequest('wt-1', 2)
+    expect(store.getState().fileSearchStateByWorktree['wt-1']?.seedRequestId).toBe(1)
+
+    store.getState().consumeFileSearchSeedRequest('wt-1', 1)
+    expect(store.getState().fileSearchStateByWorktree['wt-1']?.seedRequestId).toBeUndefined()
+  })
 })
 
 describe('createEditorSlice openDiff', () => {
@@ -107,7 +251,231 @@ describe('createEditorSlice openDiff', () => {
   })
 })
 
+describe('createEditorSlice untitled cleanup routing', () => {
+  const runtimeEnvironmentCallMock = vi.fn()
+  const runtimeEnvironmentTransportCallMock = vi.fn()
+  const localDeletePathMock = vi.fn()
+
+  beforeEach(() => {
+    clearRuntimeCompatibilityCacheForTests()
+    runtimeEnvironmentCallMock.mockReset()
+    runtimeEnvironmentTransportCallMock.mockReset()
+    localDeletePathMock.mockReset()
+    runtimeEnvironmentCallMock.mockResolvedValue({ ok: true, result: { deleted: true } })
+    runtimeEnvironmentTransportCallMock.mockImplementation(
+      (args: RuntimeEnvironmentCallRequest) =>
+        createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCallMock(args)
+    )
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: { call: runtimeEnvironmentTransportCallMock },
+        fs: { deletePath: localDeletePathMock }
+      }
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function seedRemoteWorktree(store: StoreApi<AppState>): void {
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [
+        {
+          id: 'repo1',
+          path: '/remote/repo',
+          displayName: 'Repo',
+          badgeColor: '#000',
+          addedAt: 0
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          {
+            id: 'wt-1',
+            repoId: 'repo1',
+            path: '/remote/wt',
+            branch: 'refs/heads/main',
+            head: 'abc',
+            isBare: false,
+            isMainWorktree: false,
+            displayName: 'main',
+            comment: '',
+            linkedIssue: null,
+            linkedPR: null,
+            linkedLinearIssue: null,
+            isArchived: false,
+            isUnread: false,
+            isPinned: false,
+            sortOrder: 0,
+            lastActivityAt: 0
+          }
+        ]
+      }
+    } as Partial<AppState>)
+  }
+
+  it('closeFile deletes untouched remote untitled files through runtime file RPC', async () => {
+    const store = createEditorStore()
+    seedRemoteWorktree(store)
+    store.getState().openFile({
+      filePath: '/remote/wt/untitled.md',
+      relativePath: 'untitled.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      isUntitled: true,
+      mode: 'edit'
+    })
+
+    store.getState().closeFile('/remote/wt/untitled.md')
+
+    await vi.waitFor(() => {
+      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'files.delete',
+        params: { worktree: 'wt-1', relativePath: 'untitled.md', recursive: undefined },
+        timeoutMs: 15_000
+      })
+    })
+    expect(localDeletePathMock).not.toHaveBeenCalled()
+  })
+
+  it('closeAllFiles deletes untouched remote untitled files through runtime file RPC', async () => {
+    const store = createEditorStore()
+    seedRemoteWorktree(store)
+    store.getState().openFile({
+      filePath: '/remote/wt/untitled.md',
+      relativePath: 'untitled.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      isUntitled: true,
+      mode: 'edit'
+    })
+
+    store.getState().closeAllFiles()
+
+    await vi.waitFor(() => {
+      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'files.delete',
+        params: { worktree: 'wt-1', relativePath: 'untitled.md', recursive: undefined },
+        timeoutMs: 15_000
+      })
+    })
+    expect(localDeletePathMock).not.toHaveBeenCalled()
+  })
+
+  it('closeFile uses relative remote delete when worktree metadata is missing', async () => {
+    const store = createEditorStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [],
+      worktreesByRepo: {}
+    } as Partial<AppState>)
+    store.getState().openFile({
+      filePath: '/remote/wt/untitled.md',
+      relativePath: 'untitled.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      isUntitled: true,
+      mode: 'edit'
+    })
+
+    store.getState().closeFile('/remote/wt/untitled.md')
+
+    await vi.waitFor(() => {
+      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'files.delete',
+        params: { worktree: 'wt-1', relativePath: 'untitled.md', recursive: undefined },
+        timeoutMs: 15_000
+      })
+    })
+    expect(localDeletePathMock).not.toHaveBeenCalled()
+  })
+
+  it('closeFile deletes untouched remote untitled files in their owning runtime after switching local', async () => {
+    const store = createEditorStore()
+    seedRemoteWorktree(store)
+    store.getState().openFile({
+      filePath: '/remote/wt/untitled.md',
+      relativePath: 'untitled.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      isUntitled: true,
+      mode: 'edit'
+    })
+    store.setState({ settings: { activeRuntimeEnvironmentId: null } as never })
+
+    store.getState().closeFile('/remote/wt/untitled.md')
+
+    await vi.waitFor(() => {
+      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'files.delete',
+        params: { worktree: 'wt-1', relativePath: 'untitled.md', recursive: undefined },
+        timeoutMs: 15_000
+      })
+    })
+    expect(localDeletePathMock).not.toHaveBeenCalled()
+  })
+
+  it('closeFile deletes untouched remote untitled files in their owning runtime after switching environments', async () => {
+    const store = createEditorStore()
+    seedRemoteWorktree(store)
+    store.getState().openFile({
+      filePath: '/remote/wt/untitled.md',
+      relativePath: 'untitled.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      isUntitled: true,
+      mode: 'edit'
+    })
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-2' } as never })
+
+    store.getState().closeFile('/remote/wt/untitled.md')
+
+    await vi.waitFor(() => {
+      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'files.delete',
+        params: { worktree: 'wt-1', relativePath: 'untitled.md', recursive: undefined },
+        timeoutMs: 15_000
+      })
+    })
+    expect(localDeletePathMock).not.toHaveBeenCalled()
+  })
+})
+
 describe('createEditorSlice markdown view state', () => {
+  it('updates stale language metadata when reopening an existing file', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile({
+      filePath: '/repo/notebooks/example.ipynb',
+      relativePath: 'notebooks/example.ipynb',
+      worktreeId: 'wt-1',
+      language: 'json',
+      mode: 'edit'
+    })
+
+    store.getState().openFile({
+      filePath: '/repo/notebooks/example.ipynb',
+      relativePath: 'notebooks/example.ipynb',
+      worktreeId: 'wt-1',
+      language: 'notebook',
+      mode: 'edit'
+    })
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/repo/notebooks/example.ipynb',
+        language: 'notebook'
+      })
+    ])
+  })
+
   it('drops markdown view mode for a replaced preview tab', () => {
     const store = createEditorStore()
 
@@ -453,6 +821,24 @@ describe('createEditorSlice editor drafts', () => {
 })
 
 describe('createEditorSlice conflict status reconciliation', () => {
+  it('clears ignored path cache when status refresh omits ignored paths', () => {
+    const store = createEditorStore()
+
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [],
+      ignoredPaths: ['dist/', '.env']
+    })
+    expect(store.getState().gitIgnoredPathsByWorktree['wt-1']).toEqual(['dist/', '.env'])
+
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: []
+    })
+
+    expect(store.getState().gitIgnoredPathsByWorktree['wt-1']).toEqual([])
+  })
+
   it('tracks unresolved conflicts when opened through the conflict-safe entry point', () => {
     const store = createEditorStore()
 
@@ -487,6 +873,47 @@ describe('createEditorSlice conflict status reconciliation', () => {
         conflictStatusSource: 'session'
       }
     ])
+  })
+
+  it('keeps the conflict review active when selecting a conflict from its tree', () => {
+    const store = createEditorStore()
+
+    store
+      .getState()
+      .openConflictReview(
+        'wt-1',
+        '/repo',
+        [{ path: 'src/conflict.ts', conflictKind: 'both_modified' }],
+        'live-summary'
+      )
+    store.getState().openConflictReviewFile(
+      'wt-1::conflict-review',
+      'wt-1',
+      '/repo',
+      {
+        path: 'src/conflict.ts',
+        status: 'modified',
+        area: 'unstaged',
+        conflictKind: 'both_modified',
+        conflictStatus: 'unresolved',
+        conflictStatusSource: 'git'
+      },
+      'typescript'
+    )
+
+    const reviewFile = store
+      .getState()
+      .openFiles.find((file) => file.id === 'wt-1::conflict-review')
+
+    expect(store.getState().activeFileId).toBe('wt-1::conflict-review')
+    expect(reviewFile?.conflictReview?.selectedFileId).toBe('/repo/src/conflict.ts')
+    expect(store.getState().openFiles).toContainEqual(
+      expect.objectContaining({
+        id: '/repo/src/conflict.ts',
+        mode: 'edit',
+        conflict: expect.objectContaining({ conflictStatus: 'unresolved' })
+      })
+    )
   })
 
   it('marks tracked conflicts as resolved locally after live conflict state disappears', () => {
@@ -582,16 +1009,528 @@ describe('createEditorSlice combined diff exclusions', () => {
   })
 })
 
+describe('createEditorSlice remote branch actions', () => {
+  const gitStatusMock = vi.fn()
+  const gitUpstreamStatusMock = vi.fn()
+  const gitPushMock = vi.fn()
+  const gitPullMock = vi.fn()
+  const gitFetchMock = vi.fn()
+
+  beforeEach(() => {
+    toastErrorMock.mockReset()
+    gitStatusMock.mockReset()
+    gitUpstreamStatusMock.mockReset()
+    gitPushMock.mockReset()
+    gitPullMock.mockReset()
+    gitFetchMock.mockReset()
+
+    gitStatusMock.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    gitUpstreamStatusMock.mockResolvedValue({
+      hasUpstream: true,
+      upstreamName: 'origin/main',
+      ahead: 1,
+      behind: 0
+    })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(globalThis as any).window = (globalThis as any).window ?? {}
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(globalThis as any).window.api = {
+      git: {
+        status: gitStatusMock,
+        upstreamStatus: gitUpstreamStatusMock,
+        push: gitPushMock,
+        pull: gitPullMock,
+        fetch: gitFetchMock
+      }
+    }
+  })
+
+  it('stores upstream status per worktree', () => {
+    const store = createEditorStore()
+
+    store.getState().setUpstreamStatus('wt-1', {
+      hasUpstream: true,
+      upstreamName: 'origin/main',
+      ahead: 2,
+      behind: 1
+    })
+
+    expect(store.getState().remoteStatusesByWorktree['wt-1']).toEqual({
+      hasUpstream: true,
+      upstreamName: 'origin/main',
+      ahead: 2,
+      behind: 1
+    })
+  })
+
+  it('does not notify subscribers when upstream status is unchanged', () => {
+    const store = createEditorStore()
+    const status = {
+      hasUpstream: true,
+      upstreamName: 'origin/main',
+      ahead: 2,
+      behind: 1
+    }
+
+    store.getState().setUpstreamStatus('wt-1', status)
+    const listener = vi.fn()
+    const unsubscribe = store.subscribe(listener)
+    store.getState().setUpstreamStatus('wt-1', { ...status })
+    unsubscribe()
+
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('runs pull and refreshes status + upstream on success', async () => {
+    const store = createEditorStore()
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [{ path: 'src/app.ts', status: 'modified', area: 'unstaged' }]
+    })
+
+    await store.getState().pullBranch('wt-1', '/repo')
+
+    expect(gitPullMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a readable toast when pull reports local changes would be overwritten', async () => {
+    const store = createEditorStore()
+    gitPullMock.mockRejectedValueOnce(
+      new Error(
+        'error: Your local changes to the following files would be overwritten by merge:\n\tsrc/app.ts\nPlease commit your changes or stash them before you merge.\nAborting'
+      )
+    )
+
+    await expect(store.getState().pullBranch('wt-1', '/repo')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Pull blocked — commit or stash your local changes first.'
+    )
+  })
+
+  it('surfaces an explicit toast when pull stops on merge conflicts', async () => {
+    const store = createEditorStore()
+    gitPullMock.mockRejectedValueOnce(
+      new Error(
+        'Auto-merging src/app.ts\nCONFLICT (content): Merge conflict in src/app.ts\nAutomatic merge failed; fix conflicts and then commit the result.'
+      )
+    )
+
+    await expect(store.getState().pullBranch('wt-1', '/repo')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Pull stopped with merge conflicts. Resolve them in Source Control, then commit the merge.'
+    )
+  })
+
+  it('runs publish branch through push with publish=true', async () => {
+    // Why: pushBranch no longer awaits a post-op git status / upstream
+    // refresh. The 3s git-status poll and the upstream-status effect in the
+    // sidebar reconcile state shortly after the IPC returns; keeping the
+    // mutation tight stops compound flows from stalling between commit and
+    // push.
+    const store = createEditorStore()
+
+    await store.getState().pushBranch('wt-1', '/repo', true)
+
+    expect(gitPushMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      publish: true,
+      connectionId: undefined
+    })
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('preserves actionable publish errors and avoids refresh on failure', async () => {
+    const store = createEditorStore()
+    const publishError = new Error(
+      'Push rejected: remote has newer commits (non-fast-forward). Please pull or sync first.'
+    )
+    gitPushMock.mockRejectedValueOnce(publishError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', true)).rejects.toThrow(
+      publishError.message
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Push rejected — remote has changes. Pull first, then try again.'
+    )
+    expect(gitStatusMock).not.toHaveBeenCalled()
+    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('maps publish updates-were-rejected into a clean actionable toast', async () => {
+    const store = createEditorStore()
+    const publishError = new Error(
+      'Updates were rejected because the tip of your current branch is behind its remote counterpart.'
+    )
+    gitPushMock.mockRejectedValueOnce(publishError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', true)).rejects.toThrow(
+      publishError.message
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Push rejected — remote has changes. Pull first, then try again.'
+    )
+    expect(gitStatusMock).not.toHaveBeenCalled()
+    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('maps raw publish wrapper errors into a cleaner actionable toast', async () => {
+    const store = createEditorStore()
+    const rawPublishError = new Error(
+      'git push failed: Command failed: git push --set-upstream origin feature-branch\nremote: Repository not found.\nfatal: Authentication failed for https://github.com/acme/private-repo.git'
+    )
+    gitPushMock.mockRejectedValueOnce(rawPublishError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', true)).rejects.toThrow(
+      rawPublishError.message
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Publish Branch failed. Authentication failed for https://github.com/acme/private-repo.git. Check your remote access and try again.'
+    )
+  })
+
+  it('uses a fallback message for generic publish errors', async () => {
+    const store = createEditorStore()
+    const publishError = new Error('error: RPC failed; curl 56 GnuTLS recv error')
+    gitPushMock.mockRejectedValueOnce(publishError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', true)).rejects.toThrow(
+      publishError.message
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Publish Branch failed. Check your remote access and try again.'
+    )
+    expect(gitStatusMock).not.toHaveBeenCalled()
+    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('maps non-fast-forward push errors into a clean actionable toast', async () => {
+    const store = createEditorStore()
+    const pushError = new Error(
+      'Updates were rejected because the tip of your current branch is behind its remote counterpart.'
+    )
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toThrow(
+      pushError.message
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Push rejected — remote has changes. Pull first, then try again.'
+    )
+    expect(gitStatusMock).not.toHaveBeenCalled()
+    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('maps non-fast-forward keyword push errors into a clean actionable toast', async () => {
+    const store = createEditorStore()
+    const pushError = new Error('Push rejected: remote has newer commits (non-fast-forward).')
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toThrow(
+      pushError.message
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Push rejected — remote has changes. Pull first, then try again.'
+    )
+    expect(gitStatusMock).not.toHaveBeenCalled()
+    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('uses a fallback message for generic push errors', async () => {
+    const store = createEditorStore()
+    const pushError = new Error('network timeout')
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toThrow(
+      pushError.message
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith('Push failed. Check your connection and try again.')
+    expect(gitStatusMock).not.toHaveBeenCalled()
+    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('uses a fallback remote failure message when push rejects without Error', async () => {
+    const store = createEditorStore()
+    gitPushMock.mockRejectedValueOnce('failure')
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toBe('failure')
+
+    expect(toastErrorMock).toHaveBeenCalledWith('Remote operation failed')
+  })
+
+  it('runs fetchBranch and clears the busy flag on success', async () => {
+    // Why: fetchBranch no longer awaits a post-op upstream refresh.
+    // useGitStatusPolling and the sidebar's upstream effect handle the
+    // reconcile, keeping the mutation focused on the single IPC.
+    const store = createEditorStore()
+    await store.getState().fetchBranch('wt-1', '/repo')
+
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+    expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a toast and clears the busy flag when fetch fails', async () => {
+    const store = createEditorStore()
+    gitFetchMock.mockRejectedValueOnce(new Error('network timeout'))
+
+    await expect(store.getState().fetchBranch('wt-1', '/repo')).rejects.toThrow('network timeout')
+
+    expect(toastErrorMock).toHaveBeenCalledWith('Fetch failed. network timeout')
+    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('preserves prior upstream status when fetch fails', async () => {
+    // Why: a transient upstream fetch failure (network blip, auth prompt
+    // timeout) must not erase the last-known ahead/behind counts — doing so
+    // would briefly flip the UI to an unknown/no-upstream state that
+    // misrepresents the branch's relationship to its remote.
+    const store = createEditorStore()
+    store.getState().setUpstreamStatus('wt-1', {
+      hasUpstream: true,
+      upstreamName: 'origin/main',
+      ahead: 2,
+      behind: 1
+    })
+    gitUpstreamStatusMock.mockRejectedValueOnce(new Error('transient failure'))
+
+    await store.getState().fetchUpstreamStatus('wt-1', '/repo')
+
+    expect(store.getState().remoteStatusesByWorktree['wt-1']).toEqual({
+      hasUpstream: true,
+      upstreamName: 'origin/main',
+      ahead: 2,
+      behind: 1
+    })
+  })
+
+  it('keeps isRemoteOperationActive true while any remote op is in flight', async () => {
+    // Why: a bare boolean races across worktrees — if push A finishes while
+    // pull B is still running, flipping the flag off would prematurely
+    // re-enable B's button. The refcount-derived boolean must stay true
+    // until every in-flight remote op has finished.
+    const store = createEditorStore()
+
+    let resolveA: () => void = () => {}
+    let resolveB: () => void = () => {}
+    gitPushMock
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveA = resolve
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveB = resolve
+          })
+      )
+
+    const pushA = store.getState().pushBranch('wt-1', '/a')
+    // Kick microtasks so pushA has begun and flipped the flag on.
+    await Promise.resolve()
+    expect(store.getState().isRemoteOperationActive).toBe(true)
+
+    const pushB = store.getState().pushBranch('wt-2', '/b')
+    await Promise.resolve()
+    expect(store.getState().isRemoteOperationActive).toBe(true)
+
+    resolveA()
+    await pushA.catch(() => {})
+    // B is still running, so the busy flag must remain true.
+    expect(store.getState().isRemoteOperationActive).toBe(true)
+
+    resolveB()
+    await pushB.catch(() => {})
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('runs syncBranch end-to-end (fetch+pull+push) on success', async () => {
+    // Why: syncBranch no longer awaits a post-op git status / upstream
+    // refresh. The polling layer reconciles state after the mutation
+    // returns; the in-mutation upstream-status read remains because it
+    // gates whether the inner push stage runs.
+    const store = createEditorStore()
+
+    await store.getState().syncBranch('wt-1', '/repo')
+
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitPullMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    // ahead=1 in the default mock, so sync pushes.
+    expect(gitPushMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(toastErrorMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('skips the inner push when syncBranch sees ahead=0', async () => {
+    // Why: guards against a no-op push round-trip after a pure fast-forward
+    // pull. See syncBranch's ahead>0 guard in editor.ts.
+    const store = createEditorStore()
+    gitUpstreamStatusMock.mockResolvedValueOnce({
+      hasUpstream: true,
+      upstreamName: 'origin/main',
+      ahead: 0,
+      behind: 0
+    })
+
+    await store.getState().syncBranch('wt-1', '/repo')
+
+    expect(gitFetchMock).toHaveBeenCalled()
+    expect(gitPullMock).toHaveBeenCalled()
+    expect(gitPushMock).not.toHaveBeenCalled()
+    expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a sync-labeled toast when syncBranch inner push fails with auth error', async () => {
+    // Why: the user invoked Sync — the toast must read "Sync failed..." even
+    // though the underlying step is push. Detail extraction still surfaces
+    // the actionable fatal/remote line so auth/protected-branch reasons stay
+    // visible.
+    const store = createEditorStore()
+    const authError = new Error(
+      'git push failed: Command failed: git push origin feature\nremote: Repository not found.\nfatal: Authentication failed for https://github.com/acme/private-repo.git'
+    )
+    gitPushMock.mockRejectedValueOnce(authError)
+
+    await expect(store.getState().syncBranch('wt-1', '/repo')).rejects.toThrow(authError.message)
+
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Sync failed. Authentication failed for https://github.com/acme/private-repo.git. Check your remote access and try again.'
+    )
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('surfaces a single sync-labeled toast when syncBranch inner push is non-fast-forward', async () => {
+    // Why: under sync, NFF means the remote raced ahead between fetch and
+    // push — sync just pulled, so the bare "Pull first" guidance is wrong.
+    // Surface a sync-shaped retry hint instead.
+    const store = createEditorStore()
+    const pushError = new Error(
+      'Updates were rejected because the tip of your current branch is behind its remote counterpart.'
+    )
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(store.getState().syncBranch('wt-1', '/repo')).rejects.toThrow(pushError.message)
+
+    // No double-toast from the outer catch.
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Sync failed — remote moved while syncing. Try again.'
+    )
+  })
+
+  it('surfaces the pull-blocked toast when syncBranch pull stage fails', async () => {
+    // Why: failures in sync's fetch/pull/status stages flow through the
+    // outer catch's generic path; push-specific framing only applies to
+    // the inner push stage.
+    const store = createEditorStore()
+    gitPullMock.mockRejectedValueOnce(
+      new Error(
+        'error: Your local changes to the following files would be overwritten by merge:\n\tsrc/app.ts\nPlease commit your changes or stash them before you merge.\nAborting'
+      )
+    )
+
+    await expect(store.getState().syncBranch('wt-1', '/repo')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Pull blocked — commit or stash your local changes first.'
+    )
+    expect(gitPushMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('surfaces a sync-labeled toast when syncBranch stops on merge conflicts', async () => {
+    const store = createEditorStore()
+    gitPullMock.mockRejectedValueOnce(
+      new Error(
+        'Auto-merging src/app.ts\nCONFLICT (content): Merge conflict in src/app.ts\nAutomatic merge failed; fix conflicts and then commit the result.'
+      )
+    )
+
+    await expect(store.getState().syncBranch('wt-1', '/repo')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Sync stopped with merge conflicts. Resolve them in Source Control, then commit the merge.'
+    )
+    expect(gitPushMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+})
+
 describe('createEditorSlice activateMarkdownLink', () => {
   const openUrlMock = vi.fn()
   const openFileUriMock = vi.fn()
   const pathExistsMock = vi.fn()
+  const authorizeExternalPathMock = vi.fn()
+  const fsStatMock = vi.fn()
+  const runtimeEnvironmentCallMock = vi.fn()
+  const runtimeEnvironmentTransportCallMock = vi.fn()
 
   beforeEach(() => {
+    clearRuntimeCompatibilityCacheForTests()
     toastErrorMock.mockReset()
     openUrlMock.mockReset()
     openFileUriMock.mockReset()
     pathExistsMock.mockReset()
+    pathExistsMock.mockResolvedValue(true)
+    authorizeExternalPathMock.mockReset()
+    fsStatMock.mockReset()
+    fsStatMock.mockImplementation(async ({ filePath }: { filePath: string }) => {
+      const exists = await pathExistsMock(filePath)
+      if (!exists) {
+        throw new Error('File not found')
+      }
+      return { size: 1, isDirectory: false, mtime: 1 }
+    })
+    runtimeEnvironmentCallMock.mockReset()
+    runtimeEnvironmentTransportCallMock.mockReset()
+    runtimeEnvironmentCallMock.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { size: 1, isDirectory: false, mtime: 1 },
+      _meta: { runtimeId: 'runtime-source' }
+    })
+    runtimeEnvironmentTransportCallMock.mockImplementation(
+      (args: RuntimeEnvironmentCallRequest) =>
+        createCompatibleRuntimeStatusResponseIfNeeded(args, 'runtime-source') ??
+        runtimeEnvironmentCallMock(args)
+    )
     openHttpLinkMock.mockReset()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(globalThis as any).window = (globalThis as any).window ?? {}
@@ -601,6 +1540,13 @@ describe('createEditorSlice activateMarkdownLink', () => {
         openUrl: openUrlMock,
         openFileUri: openFileUriMock,
         pathExists: pathExistsMock
+      },
+      fs: {
+        authorizeExternalPath: authorizeExternalPathMock,
+        stat: fsStatMock
+      },
+      runtimeEnvironments: {
+        call: runtimeEnvironmentTransportCallMock
       }
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -633,6 +1579,142 @@ describe('createEditorSlice activateMarkdownLink', () => {
     ])
     expect(openFileUriMock).not.toHaveBeenCalled()
     expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('opens remote-owned markdown links through the source file runtime owner', async () => {
+    const store = createEditorStore()
+    pathExistsMock.mockResolvedValue(true)
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-active' } as AppState['settings']
+    })
+    store.getState().openFile({
+      filePath: '/repo/docs/note.md',
+      relativePath: 'docs/note.md',
+      worktreeId: 'wt-1',
+      runtimeEnvironmentId: 'env-source',
+      language: 'markdown',
+      mode: 'edit'
+    })
+
+    await store.getState().activateMarkdownLink('./guide.md', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
+      selector: 'env-source',
+      method: 'files.stat',
+      params: { worktree: 'wt-1', relativePath: 'docs/guide.md' },
+      timeoutMs: 15_000
+    })
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/repo/docs/note.md',
+        runtimeEnvironmentId: 'env-source'
+      }),
+      expect.objectContaining({
+        filePath: '/repo/docs/guide.md',
+        runtimeEnvironmentId: 'env-source',
+        mode: 'edit',
+        isPreview: true
+      })
+    ])
+  })
+
+  it('stats SSH markdown links through the source worktree connection before opening', async () => {
+    const store = createEditorStore()
+    pathExistsMock.mockResolvedValue(true)
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/repo',
+          displayName: 'Repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          {
+            id: 'wt-1',
+            repoId: 'repo1',
+            path: '/repo',
+            branch: 'refs/heads/main',
+            head: 'abc',
+            isBare: false,
+            isMainWorktree: true,
+            displayName: 'main',
+            comment: '',
+            linkedIssue: null,
+            linkedPR: null,
+            linkedLinearIssue: null,
+            isArchived: false,
+            isUnread: false,
+            isPinned: false,
+            sortOrder: 0,
+            lastActivityAt: 0
+          }
+        ]
+      }
+    } as Partial<AppState>)
+
+    await store.getState().activateMarkdownLink('./guide.md', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(fsStatMock).toHaveBeenCalledWith({
+      filePath: '/repo/docs/guide.md',
+      connectionId: 'ssh-1'
+    })
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/repo/docs/guide.md',
+        mode: 'edit',
+        isPreview: true
+      })
+    ])
+  })
+
+  it('does not open linked markdown directories as files', async () => {
+    const store = createEditorStore()
+    fsStatMock.mockResolvedValueOnce({ size: 1, isDirectory: true, mtime: 1 })
+
+    await store.getState().activateMarkdownLink('./guide.md', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(store.getState().openFiles).toEqual([])
+    expect(toastErrorMock).toHaveBeenCalledWith('Cannot open directory: docs/guide.md')
+  })
+
+  it('can open a file without adopting the currently active runtime owner', () => {
+    const store = createEditorStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-active' } as AppState['settings']
+    })
+
+    store.getState().openFile(
+      {
+        filePath: '/remote/.orca/drops/log.txt',
+        relativePath: '.orca/drops/log.txt',
+        worktreeId: 'wt-1',
+        language: 'text',
+        mode: 'edit'
+      },
+      { suppressActiveRuntimeFallback: true }
+    )
+
+    expect(store.getState().openFiles[0]).toMatchObject({
+      filePath: '/remote/.orca/drops/log.txt'
+    })
+    expect(store.getState().openFiles[0]?.runtimeEnvironmentId).toBeUndefined()
   })
 
   it('toasts when the markdown target is missing', async () => {
@@ -681,15 +1763,134 @@ describe('createEditorSlice activateMarkdownLink', () => {
     expect(store.getState().openFiles).toEqual([])
   })
 
-  it('delegates outside-worktree files to shell.openFileUri', async () => {
+  it('opens in-worktree file links in Orca', async () => {
     const store = createEditorStore()
     await store.getState().activateMarkdownLink('./image.png', {
       sourceFilePath: '/repo/docs/note.md',
       worktreeId: 'wt-1',
       worktreeRoot: '/repo'
     })
-    expect(openFileUriMock).toHaveBeenCalledTimes(1)
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/repo/docs/image.png',
+        relativePath: 'docs/image.png',
+        mode: 'edit',
+        isPreview: true
+      })
+    ])
+    expect(openFileUriMock).not.toHaveBeenCalled()
+  })
+
+  it('reveals line targets for non-markdown file links', async () => {
+    const store = createEditorStore()
+    await store.getState().activateMarkdownLink('../src/PdfViewer.tsx:142:7', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/repo/src/PdfViewer.tsx',
+        relativePath: 'src/PdfViewer.tsx',
+        mode: 'edit',
+        isPreview: true
+      })
+    ])
+    expect(store.getState().pendingEditorReveal).toEqual({
+      filePath: '/repo/src/PdfViewer.tsx',
+      line: 142,
+      column: 7,
+      matchLength: 0
+    })
+  })
+
+  it('opens explicit file URLs inside the worktree in Orca', async () => {
+    const store = createEditorStore()
+    await store.getState().activateMarkdownLink('file:///repo/docs/image.png', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/repo/docs/image.png',
+        relativePath: 'docs/image.png',
+        mode: 'edit',
+        isPreview: true
+      })
+    ])
+    expect(openFileUriMock).not.toHaveBeenCalled()
+  })
+
+  it('opens explicit file URLs outside the worktree in Orca after authorizing them', async () => {
+    const store = createEditorStore()
+    await store.getState().activateMarkdownLink('file:///tmp/image.png', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+    expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/image.png' })
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/tmp/image.png',
+        relativePath: '/tmp/image.png',
+        mode: 'edit',
+        isPreview: true
+      })
+    ])
+    expect(openFileUriMock).not.toHaveBeenCalled()
+  })
+
+  it('blocks external file URLs from SSH markdown sources', async () => {
+    const store = createEditorStore()
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/repo',
+          displayName: 'Repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          {
+            id: 'wt-1',
+            repoId: 'repo1',
+            path: '/repo',
+            branch: 'refs/heads/main',
+            head: 'abc',
+            isBare: false,
+            isMainWorktree: true,
+            displayName: 'main',
+            comment: '',
+            linkedIssue: null,
+            linkedPR: null,
+            linkedLinearIssue: null,
+            isArchived: false,
+            isUnread: false,
+            isPinned: false,
+            sortOrder: 0,
+            lastActivityAt: 0
+          }
+        ]
+      }
+    } as Partial<AppState>)
+
+    await store.getState().activateMarkdownLink('file:///tmp/image.png', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
     expect(store.getState().openFiles).toEqual([])
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Opening remote paths in the local OS is not available.'
+    )
   })
 
   it('activates same-file line anchors via setActiveFile without opening a new tab', async () => {

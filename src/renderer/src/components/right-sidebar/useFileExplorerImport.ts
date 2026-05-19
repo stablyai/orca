@@ -3,6 +3,8 @@ import type { Dispatch, SetStateAction } from 'react'
 import { toast } from 'sonner'
 import { getConnectionId } from '@/lib/connection-context'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { useAppStore } from '@/store'
+import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
 
 type UseFileExplorerImportParams = {
   worktreePath: string | null
@@ -61,21 +63,26 @@ export function useFileExplorerImport({
 
       void (async () => {
         try {
-          const { results } = await window.api.fs.importExternalPaths({
-            sourcePaths: paths,
-            destDir: destinationDir,
-            connectionId
-          })
+          const settings = useAppStore.getState().settings
+          const { results } = await importExternalPathsToRuntime(
+            {
+              settings,
+              worktreeId: wtId,
+              worktreePath: worktreePathRef.current,
+              connectionId
+            },
+            paths,
+            destinationDir
+          )
 
           // Refresh the destination directory once per gesture
           await refreshDirRef.current(destinationDir)
 
           // Why: only select (highlight) the first imported file — don't trigger
-          // the full reveal machinery (scrollToIndex + flash) because the user
-          // already knows where they dropped the file. The reveal's aggressive
-          // scroll-to-center races with FS watcher refreshes and can snap the
-          // viewport back to the top of the tree.
+          // the full reveal machinery because watcher refreshes can otherwise
+          // snap the tree viewport away from the user's drop target.
           const imported = results.filter((r) => r.status === 'imported')
+          const skipped = results.filter((r) => r.status === 'skipped')
           const failed = results.filter((r) => r.status === 'failed')
 
           if (imported.length > 0) {
@@ -85,6 +92,9 @@ export function useFileExplorerImport({
           if (failed.length > 0) {
             const noun = failed.length === 1 ? 'file' : 'files'
             toast.error(`Failed to import ${failed.length} ${noun}.`)
+          } else if (skipped.length > 0 && imported.length === 0) {
+            const noun = skipped.length === 1 ? 'file' : 'files'
+            toast.error(`Skipped ${skipped.length} ${noun}.`)
           }
         } catch (err) {
           toast.error(extractIpcErrorMessage(err, 'Failed to import files.'))

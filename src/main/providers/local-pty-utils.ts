@@ -1,8 +1,28 @@
-import { basename } from 'path'
+import { basename, join } from 'path'
 import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants } from 'fs'
 import type * as pty from 'node-pty'
 
 let didEnsureSpawnHelperExecutable = false
+
+function toUnpackedAsarPath(candidate: string): string {
+  return candidate
+    .replace(/app\.asar([/\\])/, 'app.asar.unpacked$1')
+    .replace(/node_modules\.asar([/\\])/, 'node_modules.asar.unpacked$1')
+}
+
+export function getNodePtySpawnHelperCandidates(): string[] {
+  const unixTerminalPath = require.resolve('node-pty/lib/unixTerminal.js')
+  const packageRoot =
+    basename(unixTerminalPath) === 'unixTerminal.js'
+      ? unixTerminalPath.replace(/[/\\]lib[/\\]unixTerminal\.js$/, '')
+      : unixTerminalPath
+
+  return [
+    join(packageRoot, 'build', 'Release', 'spawn-helper'),
+    join(packageRoot, 'build', 'Debug', 'spawn-helper'),
+    join(packageRoot, 'prebuilds', `${process.platform}-${process.arch}`, 'spawn-helper')
+  ].map(toUnpackedAsarPath)
+}
 
 /**
  * Validate that a shell binary exists and is executable.
@@ -37,22 +57,7 @@ export function ensureNodePtySpawnHelperExecutable(): void {
   didEnsureSpawnHelperExecutable = true
 
   try {
-    const unixTerminalPath = require.resolve('node-pty/lib/unixTerminal.js')
-    const packageRoot =
-      basename(unixTerminalPath) === 'unixTerminal.js'
-        ? unixTerminalPath.replace(/[/\\]lib[/\\]unixTerminal\.js$/, '')
-        : unixTerminalPath
-    const candidates = [
-      `${packageRoot}/build/Release/spawn-helper`,
-      `${packageRoot}/build/Debug/spawn-helper`,
-      `${packageRoot}/prebuilds/${process.platform}-${process.arch}/spawn-helper`
-    ].map((candidate) =>
-      candidate
-        .replace('app.asar/', 'app.asar.unpacked/')
-        .replace('node_modules.asar/', 'node_modules.asar.unpacked/')
-    )
-
-    for (const candidate of candidates) {
+    for (const candidate of getNodePtySpawnHelperCandidates()) {
       if (!existsSync(candidate)) {
         continue
       }
