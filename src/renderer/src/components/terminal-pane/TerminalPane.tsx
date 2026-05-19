@@ -60,6 +60,7 @@ import {
   isSyntheticSinglePaneTitle,
   sanitizeTerminalLayoutPaneTitles
 } from '@/lib/terminal-pane-title-sanitization'
+import { planTerminalLiveLayoutInsertions } from './terminal-live-layout-reconciliation'
 import type { TerminalQuickCommand, TerminalQuickCommandScope } from '../../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
@@ -698,6 +699,45 @@ export default function TerminalPane({
     setRenamingPaneId,
     setPaneCount
   })
+
+  useEffect(() => {
+    if (!(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__) {
+      return
+    }
+    const manager = managerRef.current
+    if (!manager || !restoredLayout.root) {
+      return
+    }
+    const insertions = planTerminalLiveLayoutInsertions(
+      restoredLayout.root,
+      manager.getPanes().map((pane) => pane.leafId)
+    )
+    if (insertions.length === 0) {
+      return
+    }
+
+    for (const insertion of insertions) {
+      const ptyId = restoredLayout.ptyIdsByLeafId?.[insertion.newLeafId]
+      const sourcePaneId = manager.getNumericIdForLeaf(insertion.sourceLeafId)
+      if (!ptyId || sourcePaneId === null || manager.getNumericIdForLeaf(insertion.newLeafId)) {
+        continue
+      }
+      // Why: paired web terminals receive host split-pane snapshots after the
+      // pane manager is already mounted. Adopt the host leaf + PTY instead of
+      // spawning a local-only web pane.
+      manager.splitPane(sourcePaneId, insertion.direction, {
+        leafId: insertion.newLeafId,
+        ptyId
+      })
+    }
+
+    if (restoredLayout.activeLeafId) {
+      const activePaneId = manager.getNumericIdForLeaf(restoredLayout.activeLeafId)
+      if (activePaneId !== null) {
+        manager.setActivePane(activePaneId, { focus: isActive })
+      }
+    }
+  }, [isActive, paneCount, restoredLayout])
 
   // Why (Activity-only pane isolation): when this TerminalPane is being
   // portaled into the Activity page for a specific agent pane, hide the

@@ -109,7 +109,7 @@ function createTerminalOutputBatcher(onFlush: (data: string) => void): {
         return
       }
       if (!timer) {
-        // Why: Paseo coalesces terminal stream output before crossing the
+        // Why: terminal stream output should be coalesced before crossing the
         // network. Desktop runtime subscribers need the same burst boundary.
         timer = setTimeout(flush, TERMINAL_OUTPUT_FLUSH_MS)
         if (typeof timer.unref === 'function') {
@@ -141,6 +141,12 @@ function isTerminalInputLockedForClient(
     return false
   }
   return runtime.getDriver(ptyId).kind === 'mobile'
+}
+
+function normalizeTerminalInputText(text: string): string {
+  // Why: PTY Enter is carriage return. Browser/mobile clients can emit bare
+  // LF; zsh may render those as PROMPT_SP `%` marker lines.
+  return text.replace(/\r\n/g, '\r').replace(/\n/g, '\r')
 }
 
 function resolveMobileFloorClientId(
@@ -673,9 +679,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     }
   }),
   // Why: desktop remote sessions can have dozens of panes. One streaming RPC
-  // owns the binary socket and routes terminal slots by streamId, mirroring
-  // Paseo's slot-based terminal data plane while keeping legacy subscribe as
-  // the compatibility fallback.
+  // owns the binary socket and routes terminal slots by streamId while keeping
+  // legacy subscribe as the compatibility fallback.
   defineStreamingMethod({
     name: 'terminal.multiplex',
     params: TerminalMultiplex,
@@ -752,7 +757,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           return
         }
         if (frame.opcode === TerminalStreamOpcode.Input) {
-          const text = decodeTerminalStreamText(frame.payload)
+          const text = normalizeTerminalInputText(decodeTerminalStreamText(frame.payload))
           if (!text) {
             return
           }
@@ -1135,7 +1140,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             return
           }
           if (frame.opcode === TerminalStreamOpcode.Input) {
-            const text = decodeTerminalStreamText(frame.payload)
+            const text = normalizeTerminalInputText(decodeTerminalStreamText(frame.payload))
             if (!text) {
               return
             }

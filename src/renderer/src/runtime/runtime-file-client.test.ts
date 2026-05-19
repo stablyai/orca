@@ -41,6 +41,7 @@ const runtimeEnvironmentSubscribe = vi.fn()
 const runtimeCall = vi.fn()
 
 beforeEach(() => {
+  delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
   clearRuntimeCompatibilityCacheForTests()
   fsReadFile.mockReset()
   fsOnChanged.mockReset()
@@ -1182,5 +1183,51 @@ describe('runtime file client', () => {
         timeoutMs: 5_000
       })
     )
+  })
+
+  it('unwatches a remote file watch that is stopped before the ready frame arrives', async () => {
+    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    const onPayload = vi.fn()
+    const unsubscribe = vi.fn()
+    let onResponse: ((response: unknown) => void) | undefined
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'unwatch',
+      ok: true,
+      result: { unsubscribed: true },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    runtimeEnvironmentSubscribe.mockImplementation((_args, callbacks) => {
+      onResponse = callbacks.onResponse
+      return Promise.resolve({ unsubscribe, sendBinary: vi.fn() })
+    })
+
+    const stop = await subscribeRuntimeFileChanges(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/remote/repo'
+      },
+      onPayload
+    )
+
+    stop()
+    expect(unsubscribe).not.toHaveBeenCalled()
+
+    onResponse?.({
+      id: 'ready',
+      ok: true,
+      result: { type: 'ready', subscriptionId: 'files-watch-late' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    await vi.waitFor(() =>
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'files.unwatch',
+        params: { subscriptionId: 'files-watch-late' },
+        timeoutMs: 5_000
+      })
+    )
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
   })
 })

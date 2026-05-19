@@ -128,6 +128,36 @@ describe('WebRuntimeClient', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps file watches on the owning WebSocket instead of opening child clients', async () => {
+    const client = new WebRuntimeClient({
+      v: 2,
+      endpoint: 'ws://127.0.0.1:6768',
+      deviceToken: 'token',
+      publicKeyB64: Buffer.alloc(32).toString('base64')
+    })
+    const handle = { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+    const internals = client as unknown as {
+      childClients: Set<WebRuntimeClient>
+      subscribeOnCurrentConnection: WebRuntimeClient['subscribe']
+    }
+    const subscribeOnCurrentConnection = vi
+      .spyOn(internals, 'subscribeOnCurrentConnection')
+      .mockResolvedValue(handle)
+
+    await expect(
+      client.subscribe('files.watch', { worktree: 'wt-1' }, { onResponse: vi.fn() })
+    ).resolves.toBe(handle)
+
+    expect(subscribeOnCurrentConnection).toHaveBeenCalledWith(
+      'files.watch',
+      { worktree: 'wt-1' },
+      { onResponse: expect.any(Function) },
+      undefined
+    )
+    expect(internals.childClients.size).toBe(0)
+    client.close()
+  })
+
   it('decrypts binary WebSocket frames into subscription callbacks', async () => {
     const client = new WebRuntimeClient({
       v: 2,
