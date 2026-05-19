@@ -1503,6 +1503,9 @@ export type GlobalSettings = {
    *  not fork prior chat/session context the way CLAUDE_CONFIG_DIR swapping would. */
   claudeManagedAccounts: ClaudeManagedAccount[]
   activeClaudeManagedAccountId: string | null
+  /** Gates multi-provider Claude managed accounts (issue #2314). Defaults to
+   *  false; flipped on in P4 once the new UI/runtime path is ready to ship. */
+  claudeMultiProviderEnabled?: boolean
   /** When true, each worktree gets its own shell history file so ArrowUp
    *  does not surface commands from other worktrees. Defaults to true.
    *  Disable to revert to shared global shell history. */
