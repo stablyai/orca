@@ -89,3 +89,36 @@ describe('AddClaudeAccountInput — azure-foundry variant (P2)', () => {
     expectTypeOf(input).toMatchTypeOf<{ authMethod: 'azure-foundry' }>()
   })
 })
+
+describe('ClaudeAuthCredentials — P3 variants', () => {
+  it('aws-bedrock requires region, optional inferenceProfilePrefix', () => {
+    const c: ClaudeAuthCredentials = {
+      authMethod: 'aws-bedrock',
+      region: 'us-east-1',
+      inferenceProfilePrefix: 'us.'
+    }
+    expectTypeOf(c).toMatchTypeOf<{
+      authMethod: 'aws-bedrock'
+      region: string
+      inferenceProfilePrefix?: string
+    }>()
+  })
+
+  it('aws-bedrock without prefix is valid', () => {
+    const c: ClaudeAuthCredentials = { authMethod: 'aws-bedrock', region: 'eu-west-1' }
+    expectTypeOf(c).toMatchTypeOf<{ authMethod: 'aws-bedrock'; region: string }>()
+  })
+
+  it('google-vertex requires projectId + region', () => {
+    const c: ClaudeAuthCredentials = {
+      authMethod: 'google-vertex',
+      projectId: 'my-project',
+      region: 'us-east5'
+    }
+    expectTypeOf(c).toMatchTypeOf<{
+      authMethod: 'google-vertex'
+      projectId: string
+      region: string
+    }>()
+  })
+})

@@ -1248,6 +1248,8 @@ export type ClaudeAuthCredentials =
   | { authMethod: 'anthropic-api-key' }
   | { authMethod: 'anthropic-compat'; baseUrl: string; preset: AnthropicCompatPreset }
   | { authMethod: 'azure-foundry'; resource: string; useEntraId?: boolean }
+  | { authMethod: 'aws-bedrock'; region: string; inferenceProfilePrefix?: string }
+  | { authMethod: 'google-vertex'; projectId: string; region: string }
   | { authMethod: 'unknown' }
 
 export type ClaudeAuthMethod = ClaudeAuthCredentials['authMethod']
