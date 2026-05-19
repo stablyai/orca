@@ -47,62 +47,6 @@ function restoreCapturedScrollState(
   refreshAfterReparent(pane)
 }
 
-function logPaneHealth(pane: ManagedPaneInternal, phase: string): void {
-  const canvases = pane.container.querySelectorAll('canvas')
-  const canvasInfo = Array.from(canvases).map((c) => {
-    const gl = c.getContext('webgl2') ?? c.getContext('webgl')
-    return {
-      w: c.width,
-      h: c.height,
-      inDOM: c.isConnected,
-      ctxLost: gl ? gl.isContextLost() : 'no-ctx'
-    }
-  })
-  const content = pane.serializeAddon?.serialize?.() ?? ''
-  // oxlint-disable-next-line no-control-regex
-  const stripped = content.replace(/[\s\x00-\x1f]/g, '')
-  const info = {
-    phase,
-    paneId: pane.id,
-    webgl: !!pane.webglAddon,
-    webglDeferred: pane.webglAttachmentDeferred,
-    webglDisabled: pane.webglDisabledAfterContextLoss,
-    canvases: canvasInfo,
-    contentLen: stripped.length,
-    bufferLines: pane.terminal.buffer.active.length
-  }
-  const hasBufferData = pane.terminal.buffer.active.length > pane.terminal.rows
-  if (stripped.length === 0 && hasBufferData) {
-    console.error(
-      '[split-diag] DEAD TERMINAL — pane',
-      pane.id,
-      pane.debugLabel ?? '',
-      'has buffer data but no rendered content at',
-      phase,
-      info
-    )
-  } else if (stripped.length === 0) {
-    console.log(
-      '[split-diag] pane',
-      pane.id,
-      pane.debugLabel ?? '',
-      'no content yet at',
-      phase,
-      '(PTY likely still spawning)'
-    )
-  } else {
-    console.log(
-      '[split-diag] pane',
-      pane.id,
-      pane.debugLabel ?? '',
-      'healthy at',
-      phase,
-      '— content:',
-      stripped.length
-    )
-  }
-}
-
 // Why: reparenting a terminal container during split resets the viewport
 // scroll position (browser clears scrollTop on DOM move). This schedules a
 // two-phase restore: an early double-rAF (~32ms) to minimise the visible
@@ -178,15 +122,4 @@ export function scheduleSplitScrollRestore(
     }
     restoreCapturedScrollState(live, scrollState, reattachWebgl)
   }, 200)
-
-  setTimeout(() => {
-    if (isDestroyed()) {
-      return
-    }
-    const live = getPaneById(paneId)
-    // Skip suspended panes — they have no WebGL/content by design.
-    if (live && !live.webglAttachmentDeferred) {
-      logPaneHealth(live, '1s-health-check')
-    }
-  }, 1000)
 }

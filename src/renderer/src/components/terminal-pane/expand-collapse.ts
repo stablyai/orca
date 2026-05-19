@@ -96,10 +96,8 @@ export function createExpandCollapseActions(state: ExpandCollapseState) {
   // Why: expand/collapse flips inline display/flex styles on ancestor panes
   // synchronously. The rAF here lets layout settle so FitAddon's
   // proposeDimensions reads the final rects, not the pre-toggle ones.
-  // xterm preserves viewportY natively across resize (see
-  // scroll-reflow.test.ts "reference: undisturbed"), so a bare fit() is
-  // enough — the content-hash capture/restore we used to do here jumped to
-  // the wrong duplicate scrollback line in long sessions.
+  // safeFit owns scroll preservation; content matching here jumped to the
+  // wrong duplicate scrollback line in long sessions.
   const refreshPaneSizes = (focusActive: boolean): void => {
     requestAnimationFrame(() => {
       const manager = state.managerRef.current

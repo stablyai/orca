@@ -49,14 +49,22 @@ function createPane({
     refresh: vi.fn(),
     buffer: {
       active: {
+        type: 'normal',
         viewportY: 0,
         baseY: 0,
         getLine: vi.fn(() => ({ translateToString: () => '' }))
       }
     },
     scrollToBottom: vi.fn(),
-    scrollToLine: vi.fn(),
-    scrollLines: vi.fn()
+    scrollToLine: vi.fn((line: number) => {
+      terminal.buffer.active.viewportY = line
+    }),
+    scrollLines: vi.fn((delta: number) => {
+      terminal.buffer.active.viewportY = Math.max(
+        0,
+        Math.min(terminal.buffer.active.baseY, terminal.buffer.active.viewportY + delta)
+      )
+    })
   }
 
   return {
@@ -104,6 +112,26 @@ describe('safeFit', () => {
     expect(pane.fitAddon.fit).not.toHaveBeenCalled()
   })
 
+  it('does not restore scroll for no-op drag-frame refits', () => {
+    const pane = createPane({
+      proposedCols: 120,
+      proposedRows: 32,
+      terminalCols: 120,
+      terminalRows: 32
+    })
+    const activeBuffer = pane.terminal.buffer.active as { viewportY: number; baseY: number }
+    activeBuffer.viewportY = 42
+    activeBuffer.baseY = 100
+
+    safeFit(pane)
+
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
+    expect(pane.terminal.scrollToLine).not.toHaveBeenCalled()
+    expect(pane.terminal.scrollToBottom).not.toHaveBeenCalled()
+    expect(pane.terminal.scrollLines).not.toHaveBeenCalled()
+    expect(activeBuffer.viewportY).toBe(42)
+  })
+
   it('still refits when the proposed grid dimensions changed', () => {
     const pane = createPane({
       proposedCols: 100,
@@ -117,6 +145,27 @@ describe('safeFit', () => {
     expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
   })
 
+  it('restores the viewport if fit clobbers it during resize', () => {
+    const pane = createPane({
+      proposedCols: 100,
+      proposedRows: 32,
+      terminalCols: 120,
+      terminalRows: 32
+    })
+    const activeBuffer = pane.terminal.buffer.active as { viewportY: number; baseY: number }
+    activeBuffer.viewportY = 42
+    activeBuffer.baseY = 100
+    vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
+      activeBuffer.viewportY = 0
+    })
+
+    safeFit(pane)
+
+    expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
+    expect(pane.terminal.scrollToLine).toHaveBeenCalledWith(42)
+    expect(activeBuffer.viewportY).toBe(42)
+  })
+
   it('still refits when a split-scroll lock is active and the grid changed', () => {
     const pane = createPane({
       proposedCols: 100,
@@ -127,9 +176,8 @@ describe('safeFit', () => {
     pane.pendingSplitScrollState = {
       bufferType: 'normal',
       wasAtBottom: true,
-      firstVisibleLineContent: '',
       viewportY: 0,
-      totalLines: 32
+      baseY: 0
     } satisfies ScrollState
 
     safeFit(pane)

@@ -3,12 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 
 const mocks = vi.hoisted(() => ({
-  captureScrollViewportPosition: vi.fn(),
+  captureScrollState: vi.fn(),
   fitAndFocusPanes: vi.fn(),
   fitPanes: vi.fn(),
   flushTerminalOutput: vi.fn(),
   handleTerminalFileDrop: vi.fn(),
-  restoreScrollViewportPosition: vi.fn()
+  restoreScrollState: vi.fn()
 }))
 
 vi.mock('react', async (importOriginal) => {
@@ -32,8 +32,8 @@ vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({
 }))
 
 vi.mock('@/lib/pane-manager/pane-scroll', () => ({
-  captureScrollViewportPosition: mocks.captureScrollViewportPosition,
-  restoreScrollViewportPosition: mocks.restoreScrollViewportPosition
+  captureScrollState: mocks.captureScrollState,
+  restoreScrollState: mocks.restoreScrollState
 }))
 
 vi.mock('./terminal-drop-handler', () => ({
@@ -135,11 +135,11 @@ describe('useTerminalPaneGlobalEffects', () => {
     mocks.flushTerminalOutput.mockImplementation((terminal: { name: string }) => {
       order.push(`flush:${terminal.name}`)
     })
-    mocks.captureScrollViewportPosition.mockImplementation((terminal: { name: string }) => {
+    mocks.captureScrollState.mockImplementation((terminal: { name: string }) => {
       order.push(`capture:${terminal.name}`)
       return { terminalName: terminal.name }
     })
-    mocks.restoreScrollViewportPosition.mockImplementation((terminal: { name: string }) => {
+    mocks.restoreScrollState.mockImplementation((terminal: { name: string }) => {
       order.push(`restore:${terminal.name}`)
     })
     mocks.fitAndFocusPanes.mockImplementation(() => order.push('fit-focus'))

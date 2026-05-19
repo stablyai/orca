@@ -15,10 +15,7 @@ import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-sch
 import { handleFocusTerminalPaneDetail } from './focus-terminal-pane-event'
 import { surfaceStaleAgentRow } from './stale-agent-row'
 import { useAppStore } from '@/store'
-import {
-  captureScrollViewportPosition,
-  restoreScrollViewportPosition
-} from '@/lib/pane-manager/pane-scroll'
+import { captureScrollState, restoreScrollState } from '@/lib/pane-manager/pane-scroll'
 
 type UseTerminalPaneGlobalEffectsArgs = {
   tabId: string
@@ -68,9 +65,7 @@ export function useTerminalPaneGlobalEffects({
       // restore path avoids content matching so duplicate agent log lines do
       // not jump to the wrong history entry.
       const viewportPositions = new Map(
-        manager
-          .getPanes()
-          .map((pane) => [pane.id, captureScrollViewportPosition(pane.terminal)] as const)
+        manager.getPanes().map((pane) => [pane.id, captureScrollState(pane.terminal)] as const)
       )
       // Why: background PTY output is throttled while a pane is not focused;
       // flush it before fitting so newly visible terminals paint current state.
@@ -93,7 +88,7 @@ export function useTerminalPaneGlobalEffects({
       for (const pane of manager.getPanes()) {
         const position = viewportPositions.get(pane.id)
         if (position) {
-          restoreScrollViewportPosition(pane.terminal, position)
+          restoreScrollState(pane.terminal, position)
         }
       }
     } else if (wasVisibleRef.current) {
@@ -172,10 +167,7 @@ export function useTerminalPaneGlobalEffects({
   // useLayoutEffect (pre-paint, same frame as the width change) so the
   // terminal fits synchronously with the new container size, eliminating the
   // ~16ms "old cols, new container width" flash that a deferred
-  // ResizeObserver rAF would otherwise produce. xterm's terminal.resize()
-  // natively preserves viewportY across reflows (verified in
-  // scroll-reflow.test.ts "reference: undisturbed"), so a bare fitAllPanes()
-  // is all we need — no capture/restore dance. The subsequent per-pane
+  // ResizeObserver rAF would otherwise produce. The subsequent per-pane
   // ResizeObserver rAF and the 150ms debounced global fit become no-ops
   // because proposeDimensions() will match current cols/rows (early-return
   // branch in safeFit). Listener is global (not gated on isVisible/isActive)

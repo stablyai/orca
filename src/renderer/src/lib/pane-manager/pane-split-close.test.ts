@@ -72,9 +72,8 @@ function createScrollState(viewportY: number): ScrollState {
   return {
     bufferType: 'normal',
     wasAtBottom: false,
-    firstVisibleLineContent: `line-${viewportY}`,
     viewportY,
-    totalLines: 100
+    baseY: 100
   }
 }
 
