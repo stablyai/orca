@@ -7,7 +7,8 @@ const writeKeychainMock = vi.fn(async (_id: string, _value: string): Promise<voi
 const readKeychainMock = vi.fn(async (_id: string): Promise<string | null> => 'foundry-key')
 
 vi.mock('../keychain', () => ({
-  writeManagedClaudeKeychainCredentials: (id: string, value: string) => writeKeychainMock(id, value),
+  writeManagedClaudeKeychainCredentials: (id: string, value: string) =>
+    writeKeychainMock(id, value),
   readManagedClaudeKeychainCredentials: (id: string) => readKeychainMock(id)
 }))
 
@@ -35,7 +36,10 @@ function foundryAccount(overrides: Partial<ClaudeManagedAccount> = {}): ClaudeMa
 }
 
 describe('azureFoundryHandler.registerAccount — API key path', () => {
-  beforeEach(() => { writeKeychainMock.mockClear(); readKeychainMock.mockClear() })
+  beforeEach(() => {
+    writeKeychainMock.mockClear()
+    readKeychainMock.mockClear()
+  })
 
   it('persists key + records resource in credentials', async () => {
     const handler = createAzureFoundryHandler()
@@ -157,9 +161,11 @@ describe('azureFoundryHandler.registerAccount — Entra ID path', () => {
 describe('azureFoundryHandler.materialize — Entra ID path', () => {
   it('omits ANTHROPIC_FOUNDRY_API_KEY when useEntraId true', async () => {
     const handler = createAzureFoundryHandler()
-    const out = await handler.materialize(foundryAccount({
-      credentials: { authMethod: 'azure-foundry', resource: 'r1', useEntraId: true }
-    }))
+    const out = await handler.materialize(
+      foundryAccount({
+        credentials: { authMethod: 'azure-foundry', resource: 'r1', useEntraId: true }
+      })
+    )
     expect(out.envPatch.CLAUDE_CODE_USE_FOUNDRY).toBe('1')
     expect(out.envPatch.ANTHROPIC_FOUNDRY_RESOURCE).toBe('r1')
     expect(out.envPatch.ANTHROPIC_FOUNDRY_API_KEY).toBeUndefined()
@@ -194,8 +200,11 @@ describe('azureFoundryHandler.validate', () => {
     const handler = createAzureFoundryHandler()
     const result = await handler.validate(foundryAccount())
     restoreFetch()
-    if (result.ok) throw new Error('expected fail')
-    expect(result.reason).toBe('Azure Foundry token invalid or expired. Run `az login` and try again.')
+    if (result.ok) {
+      throw new Error('expected fail')
+    }
+    // foundryAccount() defaults to useEntraId: false (API-key path); 401 message routes accordingly.
+    expect(result.reason).toBe('Azure Foundry API key invalid or expired.')
   })
 
   it('returns locked 403 reason string', async () => {
@@ -203,8 +212,12 @@ describe('azureFoundryHandler.validate', () => {
     const handler = createAzureFoundryHandler()
     const result = await handler.validate(foundryAccount())
     restoreFetch()
-    if (result.ok) throw new Error('expected fail')
-    expect(result.reason).toBe("Foundry deployment does not allow Claude access. Check your workspace's model deployment.")
+    if (result.ok) {
+      throw new Error('expected fail')
+    }
+    expect(result.reason).toBe(
+      "Foundry deployment does not allow Claude access. Check your workspace's model deployment."
+    )
   })
 
   it('returns locked network-error reason on fetch rejection', async () => {
@@ -212,16 +225,20 @@ describe('azureFoundryHandler.validate', () => {
     const handler = createAzureFoundryHandler()
     const result = await handler.validate(foundryAccount())
     restoreFetch()
-    if (result.ok) throw new Error('expected fail')
+    if (result.ok) {
+      throw new Error('expected fail')
+    }
     expect(result.reason).toBe('Unable to reach Foundry endpoint. Check resource name and network.')
   })
 
   it('targets https://<resource>.services.ai.azure.com/anthropic/v1/models', async () => {
     fetchMock.mockResolvedValue({ ok: true, status: 200 } as Response)
     const handler = createAzureFoundryHandler()
-    await handler.validate(foundryAccount({
-      credentials: { authMethod: 'azure-foundry', resource: 'my-fdry', useEntraId: false }
-    }))
+    await handler.validate(
+      foundryAccount({
+        credentials: { authMethod: 'azure-foundry', resource: 'my-fdry', useEntraId: false }
+      })
+    )
     restoreFetch()
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [calledUrl] = fetchMock.mock.calls[0] as [string, RequestInit]
@@ -244,9 +261,11 @@ describe('azureFoundryHandler.validate', () => {
     globalThis.fetch = localFetch as unknown as typeof globalThis.fetch
     const { createAzureFoundryHandler: createFresh } = await import('./azure-foundry-handler')
     const handler = createFresh()
-    await handler.validate(foundryAccount({
-      credentials: { authMethod: 'azure-foundry', resource: 'entra-rsrc', useEntraId: true }
-    }))
+    await handler.validate(
+      foundryAccount({
+        credentials: { authMethod: 'azure-foundry', resource: 'entra-rsrc', useEntraId: true }
+      })
+    )
     restoreFetch()
     vi.doUnmock('./azure-cli')
     vi.resetModules()

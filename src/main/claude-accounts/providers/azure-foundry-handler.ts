@@ -19,9 +19,15 @@ function emitModelEnv(account: ClaudeManagedAccount): Record<string, string> {
   const defaults = getDefaultModelMapping(account.credentials)
   const merged: ClaudeModelMapping = { ...defaults, ...account.modelMapping }
   const env: Record<string, string> = {}
-  if (merged.opus) env.ANTHROPIC_DEFAULT_OPUS_MODEL = merged.opus
-  if (merged.sonnet) env.ANTHROPIC_DEFAULT_SONNET_MODEL = merged.sonnet
-  if (merged.haiku) env.ANTHROPIC_DEFAULT_HAIKU_MODEL = merged.haiku
+  if (merged.opus) {
+    env.ANTHROPIC_DEFAULT_OPUS_MODEL = merged.opus
+  }
+  if (merged.sonnet) {
+    env.ANTHROPIC_DEFAULT_SONNET_MODEL = merged.sonnet
+  }
+  if (merged.haiku) {
+    env.ANTHROPIC_DEFAULT_HAIKU_MODEL = merged.haiku
+  }
   return env
 }
 
@@ -39,7 +45,9 @@ export function createAzureFoundryHandler(): ProviderHandler {
         const detection = await detectAzureEntraIdSignIn()
         if (!detection.ok) {
           if (detection.reason === 'az-not-installed') {
-            throw new Error('Azure CLI (`az`) is not installed. Install it from https://aka.ms/install-azure-cli and try again.')
+            throw new Error(
+              'Azure CLI (`az`) is not installed. Install it from https://aka.ms/install-azure-cli and try again.'
+            )
           }
           throw new Error('Not signed in to Azure. Run `az login` and try again.')
         }
@@ -72,7 +80,9 @@ export function createAzureFoundryHandler(): ProviderHandler {
       if (!creds.useEntraId) {
         const key = await readManagedClaudeKeychainCredentials(account.id)
         if (!key) {
-          throw new Error(`Azure Foundry API key for account ${account.id} is missing from Keychain.`)
+          throw new Error(
+            `Azure Foundry API key for account ${account.id} is missing from Keychain.`
+          )
         }
         env.ANTHROPIC_FOUNDRY_API_KEY = key
       }
@@ -99,27 +109,38 @@ export function createAzureFoundryHandler(): ProviderHandler {
       } else {
         const key = await readManagedClaudeKeychainCredentials(account.id)
         if (!key) {
-          return { ok: false, reason: 'Azure Foundry API key for this account is missing from Keychain.' }
+          return {
+            ok: false,
+            reason: 'Azure Foundry API key for this account is missing from Keychain.'
+          }
         }
-        headers = { 'api-key': key }
+        // Why: Foundry's /anthropic endpoint speaks Anthropic's wire protocol so
+        // it expects Anthropic's standard `x-api-key` + `anthropic-version`
+        // headers, not Azure OpenAI's `api-key` header.
+        headers = { 'x-api-key': key, 'anthropic-version': '2023-06-01' }
       }
       try {
         const controller = new AbortController()
         const timer = setTimeout(() => controller.abort(), VALIDATE_TIMEOUT_MS)
         const response = await fetch(url, { method: 'GET', headers, signal: controller.signal })
         clearTimeout(timer)
-        if (response.ok) return { ok: true }
+        if (response.ok) {
+          return { ok: true }
+        }
         if (response.status === 401) {
-          return {
-            ok: false,
-            reason: 'Azure Foundry token invalid or expired. Run `az login` and try again.',
-            rescueHint: 'Run `az login` or re-paste the API key.'
-          }
+          const reason = creds.useEntraId
+            ? 'Azure Foundry token invalid or expired. Run `az login` and try again.'
+            : 'Azure Foundry API key invalid or expired.'
+          const rescueHint = creds.useEntraId
+            ? 'Run `az login` in your terminal.'
+            : 'Re-paste the API key from your Foundry project portal.'
+          return { ok: false, reason, rescueHint }
         }
         if (response.status === 403) {
           return {
             ok: false,
-            reason: "Foundry deployment does not allow Claude access. Check your workspace's model deployment.",
+            reason:
+              "Foundry deployment does not allow Claude access. Check your workspace's model deployment.",
             rescueHint: 'Verify the Anthropic model is deployed in this Foundry resource.'
           }
         }
