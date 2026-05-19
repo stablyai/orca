@@ -1,5 +1,9 @@
+import { execFile as _execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import type { ProviderHandler } from './types'
 import type { ClaudeModelMapping } from '../../../shared/types'
+
+const execFile = promisify(_execFile)
 
 type VertexProviderConfig = {
   projectId?: string
@@ -58,8 +62,42 @@ export function createGoogleVertexHandler(): ProviderHandler {
         }
       }
     },
-    validate: async () => {
-      throw new Error('google-vertex validate not yet implemented')
+    validate: async (account) => {
+      const creds = account.credentials
+      if (creds.authMethod !== 'google-vertex') {
+        return { ok: false, reason: 'Google Vertex validate invoked on non-vertex account.' }
+      }
+      // ADC-only probe: print-access-token resolves the user's
+      // application-default credentials without burning request quota on
+      // aiplatform.googleapis.com. Locked error strings let the UI map probe
+      // failures to actionable rescue hints.
+      try {
+        await execFile('gcloud', ['auth', 'application-default', 'print-access-token'])
+        return { ok: true }
+      } catch (err) {
+        const stderr =
+          (err as { stderr?: string }).stderr ??
+          (err instanceof Error ? err.message : String(err))
+        if (/application-default login|Reauthentication required|credentials were not found/i.test(stderr)) {
+          return {
+            ok: false,
+            reason: 'No GCP credentials. Run `gcloud auth application-default login`.',
+            rescueHint: 'Run `gcloud auth application-default login` and retry.'
+          }
+        }
+        if (/aiplatform\.googleapis\.com|API .* has not been used|is disabled/i.test(stderr)) {
+          return {
+            ok: false,
+            reason: 'Project does not have Vertex AI / Claude enabled.',
+            rescueHint: 'Enable the Vertex AI API and request Claude model access in the GCP console.'
+          }
+        }
+        return {
+          ok: false,
+          reason: 'Network or gcloud error contacting Vertex AI.',
+          rescueHint: 'Check your network and gcloud CLI installation.'
+        }
+      }
     }
   }
 }

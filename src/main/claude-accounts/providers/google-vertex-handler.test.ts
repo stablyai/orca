@@ -109,3 +109,66 @@ describe('googleVertexHandler.materialize', () => {
     expect(out.envPatch.AWS_BEARER_TOKEN_BEDROCK).toBeUndefined()
   })
 })
+
+type ExecFileCb = (err: Error | null, stdout: string, stderr: string) => void
+const execFileMock = vi.fn<(cmd: string, args: string[], cb: ExecFileCb) => void>()
+
+vi.mock('node:child_process', () => ({
+  execFile: (cmd: string, args: string[], cb: ExecFileCb) => execFileMock(cmd, args, cb)
+}))
+
+describe('googleVertexHandler.validate', () => {
+  beforeEach(() => {
+    execFileMock.mockReset()
+  })
+
+  it('happy path: gcloud print-access-token succeeds', async () => {
+    execFileMock.mockImplementation((_c, _a, cb) => cb(null, 'ya29.abc...\n', ''))
+    const handler = createGoogleVertexHandler()
+    const r = await handler.validate(vertexAccount())
+    expect(execFileMock).toHaveBeenCalledWith(
+      'gcloud',
+      expect.arrayContaining(['auth', 'application-default', 'print-access-token']),
+      expect.any(Function)
+    )
+    expect(r.ok).toBe(true)
+  })
+
+  it('no ADC → locked message about gcloud login', async () => {
+    execFileMock.mockImplementation((_c, _a, cb) => {
+      const err = new Error('exit 1') as Error & { stderr?: string }
+      err.stderr =
+        'Reauthentication required. Please run gcloud auth application-default login.'
+      cb(err, '', err.stderr)
+    })
+    const handler = createGoogleVertexHandler()
+    const r = await handler.validate(vertexAccount())
+    if (r.ok) throw new Error('expected fail')
+    expect(r.reason).toMatch(/No GCP credentials\. Run `gcloud auth application-default login`\./)
+  })
+
+  it('project lacks Vertex/Claude → locked enablement message', async () => {
+    execFileMock.mockImplementation((_c, _a, cb) => {
+      const err = new Error('exit 7') as Error & { stderr?: string }
+      err.stderr =
+        'API [aiplatform.googleapis.com] has not been used or is disabled in project my-gcp'
+      cb(err, '', err.stderr)
+    })
+    const handler = createGoogleVertexHandler()
+    const r = await handler.validate(vertexAccount())
+    if (r.ok) throw new Error('expected fail')
+    expect(r.reason).toMatch(/Project does not have Vertex AI \/ Claude enabled\./)
+  })
+
+  it('unknown gcloud error → locked network message', async () => {
+    execFileMock.mockImplementation((_c, _a, cb) => {
+      const err = new Error('exit 1') as Error & { stderr?: string }
+      err.stderr = 'Connection refused'
+      cb(err, '', err.stderr)
+    })
+    const handler = createGoogleVertexHandler()
+    const r = await handler.validate(vertexAccount())
+    if (r.ok) throw new Error('expected fail')
+    expect(r.reason).toMatch(/Network or gcloud error contacting Vertex AI\./)
+  })
+})
