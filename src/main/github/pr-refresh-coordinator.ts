@@ -7,6 +7,7 @@ import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEvent,
   GitHubPRRefreshReason,
+  GitHubPRRefreshSkippedReason,
   PRRefreshOutcome
 } from '../../shared/types'
 import { getPRForBranchOutcome } from './client'
@@ -55,7 +56,7 @@ function nextSequence(): number {
 }
 
 function broadcast(event: Omit<GitHubPRRefreshEvent, 'sequence'>, sequenceOverride?: number): void {
-  const payload: GitHubPRRefreshEvent = { ...event, sequence: sequenceOverride ?? nextSequence() }
+  const payload = { ...event, sequence: sequenceOverride ?? nextSequence() } as GitHubPRRefreshEvent
   for (const wc of webContents.getAllWebContents()) {
     if (!wc.isDestroyed()) {
       wc.send('gh:prRefreshEvent', payload)
@@ -108,7 +109,7 @@ function isBudgetedBackground(reason: GitHubPRRefreshReason): boolean {
 
 function validateCandidate(
   candidate: GitHubPRRefreshCandidate
-): GitHubPRRefreshEvent['skippedReason'] | null {
+): GitHubPRRefreshSkippedReason | null {
   if (candidate.repoKind !== 'git') {
     return 'not-git'
   }
@@ -117,9 +118,6 @@ function validateCandidate(
   }
   if (candidate.isArchived) {
     return 'archived'
-  }
-  if (candidate.connectionId && candidate.connectionState === 'connected') {
-    return 'remote'
   }
   if (candidate.connectionId && candidate.connectionState === 'disconnected') {
     return 'disconnected'
@@ -210,6 +208,7 @@ function removeQueuedAliasForInvalidCandidate(key: string, alias: GitHubPRRefres
   const replacementAlias = existing.aliases.values().next().value
   if (!replacementAlias) {
     queue.delete(key)
+    errorBackoff.delete(key)
     return
   }
 
@@ -292,6 +291,13 @@ function refreshIntervalForCandidate(candidate: GitHubPRRefreshCandidate): numbe
   return MIN_BACKGROUND_REFRESH_AGE_MS
 }
 
+function backgroundRefreshBuckets(): ('core' | 'graphql')[] {
+  // Why: branch refreshes prefer REST but can still fall back to `gh pr list`
+  // when local head-owner metadata is unavailable. Guard both buckets until the
+  // client exposes an exact per-lookup cost plan.
+  return ['core', 'graphql']
+}
+
 function noteBackgroundStart(): void {
   const now = Date.now()
   lastBackgroundStartAt = now
@@ -370,6 +376,7 @@ async function drainQueue(): Promise<void> {
         continue
       }
       if (next.reason === 'visible' && !isVisibleKey(next.key)) {
+        errorBackoff.delete(next.key)
         broadcast({ aliases, reason: next.reason, status: 'skipped', skippedReason: 'fresh' })
         continue
       }
@@ -391,13 +398,10 @@ async function drainQueue(): Promise<void> {
           scheduleDrain(30_000)
           continue
         }
-        const graphqlGuard = rateLimitGuard('graphql')
-        const coreGuard = rateLimitGuard('core')
-        const blockedGuard = graphqlGuard.blocked
-          ? graphqlGuard
-          : coreGuard.blocked
-            ? coreGuard
-            : null
+        const buckets = backgroundRefreshBuckets()
+        const blockedGuard = buckets
+          .map((bucket) => rateLimitGuard(bucket))
+          .find((guard) => guard.blocked)
         if (blockedGuard?.blocked) {
           const retryAt = blockedGuard.resetAt * 1000
           queue.set(next.key, { ...next, dueAt: retryAt })
@@ -414,8 +418,9 @@ async function drainQueue(): Promise<void> {
         if (isBudgetedBackground(next.reason)) {
           noteBackgroundStart()
         }
-        noteRateLimitSpend('graphql')
-        noteRateLimitSpend('core')
+        for (const bucket of buckets) {
+          noteRateLimitSpend(bucket)
+        }
       }
 
       const outcome = await getPRForBranchOutcome(
@@ -448,6 +453,7 @@ export function enqueuePRRefresh(
 ): void {
   const alias: GitHubPRRefreshAlias = {
     cacheKey: candidate.cacheKey,
+    repoId: candidate.repoId,
     repoPath: candidate.repoPath,
     branch: candidate.branch,
     worktreeId: candidate.worktreeId
@@ -513,6 +519,7 @@ export function reportVisiblePRRefreshCandidates(
   for (const [key, entry] of queue) {
     if (entry.reason === 'visible' && !isVisibleKey(key)) {
       queue.delete(key)
+      errorBackoff.delete(key)
       broadcast({
         aliases: Array.from(entry.aliases.values()),
         reason: 'visible',
@@ -529,6 +536,7 @@ export function reportVisiblePRRefreshCandidates(
 export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise<PRRefreshOutcome> {
   const alias: GitHubPRRefreshAlias = {
     cacheKey: candidate.cacheKey,
+    repoId: candidate.repoId,
     repoPath: candidate.repoPath,
     branch: candidate.branch,
     worktreeId: candidate.worktreeId

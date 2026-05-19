@@ -432,7 +432,7 @@ export default function ChecksPanel(): React.JSX.Element {
       return
     }
     const initialRequestKey = checksPanelAsyncResultKey(repo.id, branch, prNumber, pr?.prRepo)
-    const refreshRequestKey = `${activeWorktreeId ?? ''}::${repo.id}::${branch}`
+    const refreshRequestKey = `${activeWorktreeId ?? ''}::${repo.id}::${branch}::${Date.now()}::${Math.random()}`
     refreshRequestKeyRef.current = refreshRequestKey
     const isCurrentRequest = (): boolean => refreshRequestKeyRef.current === refreshRequestKey
     setIsRefreshing(true)
@@ -481,7 +481,7 @@ export default function ChecksPanel(): React.JSX.Element {
           { force: true, repoId: repo.id }
         ).then(
           (result) => {
-            if (!isCurrentRequest()) {
+            if (!isCurrentRequest() || !isCurrentAsyncResult(prRequestKey)) {
               return
             }
             setChecks(result)
@@ -495,7 +495,7 @@ export default function ChecksPanel(): React.JSX.Element {
             prevChecksRef.current = signature
           },
           (err) => {
-            if (!isCurrentRequest()) {
+            if (!isCurrentRequest() || !isCurrentAsyncResult(prRequestKey)) {
               return
             }
             console.warn('Failed to fetch PR checks:', err)
@@ -510,12 +510,12 @@ export default function ChecksPanel(): React.JSX.Element {
           prRepo: refreshedPR.prRepo
         }).then(
           (result) => {
-            if (isCurrentRequest()) {
+            if (isCurrentRequest() && isCurrentAsyncResult(prRequestKey)) {
               setComments(result)
             }
           },
           (err) => {
-            if (!isCurrentRequest()) {
+            if (!isCurrentRequest() || !isCurrentAsyncResult(prRequestKey)) {
               return
             }
             console.warn('Failed to fetch PR comments:', err)
@@ -524,12 +524,12 @@ export default function ChecksPanel(): React.JSX.Element {
         )
         await Promise.all([
           refreshedChecks.finally(() => {
-            if (isCurrentRequest()) {
+            if (isCurrentRequest() && isCurrentAsyncResult(prRequestKey)) {
               setChecksLoading(false)
             }
           }),
           refreshedComments.finally(() => {
-            if (isCurrentRequest()) {
+            if (isCurrentRequest() && isCurrentAsyncResult(prRequestKey)) {
               setCommentsLoading(false)
             }
           })

@@ -689,6 +689,7 @@ function createGitHubApi(): NonNullable<Partial<PreloadApi>['gh']> {
     prForBranch: direct('github.prForBranch'),
     refreshPRNow: async ({ candidate }) => {
       const pr = await callRuntimeResult('github.prForBranch', {
+        repo: candidate.repoId || candidate.repoPath,
         repoPath: candidate.repoPath,
         branch: candidate.branch,
         linkedPRNumber: candidate.linkedPRNumber ?? null

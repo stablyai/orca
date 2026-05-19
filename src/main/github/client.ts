@@ -111,6 +111,39 @@ function classifyPRRefreshError(
   return /auth|login|credential/i.test(message) ? 'auth' : 'unknown'
 }
 
+function safePRRefreshErrorMessage(
+  errorType: Extract<PRRefreshOutcome, { kind: 'upstream-error' }>['errorType']
+): string {
+  switch (errorType) {
+    case 'rate_limited':
+      return 'GitHub rate limit is low. Try again after the limit resets.'
+    case 'auth':
+      return 'GitHub authentication is unavailable. Check your gh login.'
+    case 'network':
+      return 'GitHub is unreachable right now. Check your network and try again.'
+    case 'permission':
+      return 'GitHub did not allow access to this pull request.'
+    case 'repo_unavailable':
+      return 'The GitHub repository is unavailable or cannot be resolved.'
+    case 'gh_unavailable':
+      return 'GitHub CLI is unavailable.'
+    case 'unknown':
+      return 'GitHub pull request refresh failed.'
+  }
+}
+
+function prRefreshUpstreamError(
+  err: unknown
+): Extract<PRRefreshOutcome, { kind: 'upstream-error' }> {
+  const errorType = classifyPRRefreshError(err)
+  return {
+    kind: 'upstream-error',
+    errorType,
+    message: safePRRefreshErrorMessage(errorType),
+    fetchedAt: Date.now()
+  }
+}
+
 function isNoPullRequestError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err)
   return /no pull requests? found|could not find.*pull request/i.test(message)
@@ -1640,7 +1673,7 @@ function isNotFoundGhError(err: unknown): boolean {
 function shouldStopAfterExactLookupError(err: unknown): boolean {
   const stderr = err instanceof Error ? err.message : String(err)
   const type = classifyGhError(stderr).type
-  return type === 'rate_limited' || type === 'permission_denied' || type === 'network_error'
+  return type !== 'not_found'
 }
 
 /**
@@ -1707,12 +1740,7 @@ export async function getPRForBranchOutcome(
           data = JSON.parse(stdout)
         } catch (err) {
           if (!isNoPullRequestError(err)) {
-            return {
-              kind: 'upstream-error',
-              errorType: classifyPRRefreshError(err),
-              message: err instanceof Error ? err.message : String(err),
-              fetchedAt: Date.now()
-            }
+            return prRefreshUpstreamError(err)
           }
           // Why: a stale linkedPRNumber (PR deleted, wrong repo, ...) makes
           // `gh pr view <number>` reject. Treat that as the no-PR case so
@@ -1735,15 +1763,13 @@ export async function getPRForBranchOutcome(
               break
             }
           } catch (err) {
-            if (!headRepo && !isNotFoundGhError(err)) {
-              try {
-                data = await getRestPRForBranch(candidate, candidate.owner, branchName, ghOptions)
-                if (data) {
-                  dataRepo = candidate
-                  break
-                }
-              } catch {
-                // Continue to the next candidate below.
+            if (headRepo) {
+              throw err
+            } else {
+              data = await getRestPRForBranch(candidate, candidate.owner, branchName, ghOptions)
+              if (data) {
+                dataRepo = candidate
+                break
               }
             }
           }
@@ -1795,12 +1821,7 @@ export async function getPRForBranchOutcome(
       }
     }
   } catch (err) {
-    return {
-      kind: 'upstream-error',
-      errorType: classifyPRRefreshError(err),
-      message: err instanceof Error ? err.message : String(err),
-      fetchedAt: Date.now()
-    }
+    return prRefreshUpstreamError(err)
   } finally {
     release()
   }

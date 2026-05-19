@@ -318,6 +318,10 @@ type PRRefreshState = {
   message?: string
 }
 
+function bypassesGitHubPRRefreshFreshness(reason: GitHubPRRefreshReason): boolean {
+  return reason === 'manual' || reason === 'active' || reason === 'post-push'
+}
+
 const CACHE_TTL = 300_000 // 5 minutes (stale data shown instantly, then refreshed)
 const CHECKS_CACHE_TTL = 60_000 // 1 minute — checks change more frequently
 // Why: the NewWorkspace page's work-item list is a browse surface, not a
@@ -469,12 +473,6 @@ function buildPRRefreshCandidate(
   const sshStatus = repo.connectionId
     ? state.sshConnectionStates.get(repo.connectionId)?.status
     : null
-  if (repo.connectionId) {
-    // Why: main currently runs gh against local repo paths only. Avoid sending
-    // remote worktrees into a queue that can only skip them until SSH gh support
-    // exists.
-    return null
-  }
   return {
     repoId: repo.id,
     repoPath: repoPath ?? repo.path,
@@ -1442,7 +1440,6 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const request = (async () => {
       try {
         const runtimeRepo = getRuntimeRepoTarget(get(), repoPath)
-        const usesRefreshCoordinator = !runtimeRepo && Boolean(window.api.gh.refreshPRNow)
         const outcome = runtimeRepo
           ? await callRuntimeRpc<PRInfo | null>(
               runtimeRepo.target,
@@ -1480,7 +1477,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         if (outcome.kind === 'upstream-error') {
           return cached?.data ?? null
         }
-        if (!usesRefreshCoordinator && prRequestGenerations.get(cacheKey) === generation) {
+        if (prRequestGenerations.get(cacheKey) === generation) {
           set((s) => ({
             prCache: { ...s.prCache, [cacheKey]: { data: pr, fetchedAt: outcome.fetchedAt } }
           }))
@@ -1737,9 +1734,20 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     }
     const enqueue = window.api.gh.enqueuePRRefresh
     if (enqueue) {
-      void enqueue({ candidate, reason, priority }).catch((err) => {
-        console.warn('Failed to enqueue PR refresh:', err)
-      })
+      void enqueue({ candidate, reason, priority })
+        .then((queued) => {
+          if (queued === false) {
+            return get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
+              force: bypassesGitHubPRRefreshFreshness(reason),
+              repoId: candidate.repoId,
+              linkedPRNumber: candidate.linkedPRNumber ?? null
+            })
+          }
+          return null
+        })
+        .catch((err) => {
+          console.warn('Failed to enqueue PR refresh:', err)
+        })
     }
   },
 
@@ -1795,7 +1803,26 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             event.outcome.kind === 'found'
               ? (() => {
                   const pr = event.outcome.pr
-                  const checksEntry = s.checksCache[`${alias.repoPath}::pr-checks::${pr.number}`]
+                  const checksCacheKeys = [
+                    ...(alias.repoId
+                      ? [
+                          repoScopedCacheKey(
+                            alias.repoPath,
+                            alias.repoId,
+                            prChecksCacheSuffix(pr.number, pr.prRepo)
+                          )
+                        ]
+                      : []),
+                    repoScopedCacheKey(
+                      alias.repoPath,
+                      undefined,
+                      prChecksCacheSuffix(pr.number, pr.prRepo)
+                    ),
+                    `${alias.repoPath}::pr-checks::${pr.number}`
+                  ]
+                  const checksEntry = checksCacheKeys
+                    .map((key) => s.checksCache[key])
+                    .find((entry) => entry?.data)
                   if (
                     checksEntry?.data &&
                     checksEntry.headSha &&

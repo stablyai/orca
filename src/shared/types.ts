@@ -629,6 +629,7 @@ export type GitHubPRRefreshReason = 'visible' | 'active' | 'post-push' | 'manual
 
 export type GitHubPRRefreshAlias = {
   cacheKey: string
+  repoId?: string
   repoPath: string
   branch: string
   worktreeId?: string
@@ -648,22 +649,46 @@ export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
   cachedChecksStatus?: CheckStatus | null
 }
 
-export type GitHubPRRefreshEvent = {
+export type GitHubPRRefreshSkippedReason =
+  | 'fresh'
+  | 'not-git'
+  | 'bare'
+  | 'archived'
+  | 'disconnected'
+  | 'remote'
+  | 'rate-limit'
+
+type GitHubPRRefreshEventBase = {
   sequence: number
   reason: GitHubPRRefreshReason
   aliases: GitHubPRRefreshAlias[]
-  outcome?: PRRefreshOutcome
-  status?: 'queued' | 'in-flight' | 'paused' | 'skipped'
-  pausedUntil?: number
-  skippedReason?:
-    | 'fresh'
-    | 'not-git'
-    | 'bare'
-    | 'archived'
-    | 'disconnected'
-    | 'remote'
-    | 'rate-limit'
 }
+
+export type GitHubPRRefreshEvent =
+  | (GitHubPRRefreshEventBase & {
+      outcome: PRRefreshOutcome
+      status?: never
+      pausedUntil?: never
+      skippedReason?: never
+    })
+  | (GitHubPRRefreshEventBase & {
+      status: 'queued' | 'in-flight'
+      outcome?: never
+      pausedUntil?: never
+      skippedReason?: never
+    })
+  | (GitHubPRRefreshEventBase & {
+      status: 'paused'
+      pausedUntil: number
+      skippedReason: 'rate-limit'
+      outcome?: never
+    })
+  | (GitHubPRRefreshEventBase & {
+      status: 'skipped'
+      skippedReason: GitHubPRRefreshSkippedReason
+      outcome?: never
+      pausedUntil?: never
+    })
 
 export type PRCheckDetail = {
   name: string

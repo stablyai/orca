@@ -162,7 +162,7 @@ describe('getPRChecks', () => {
     consoleWarnSpy.mockRestore()
   })
 
-  it('keeps unexpected gh pr checks fallback failures inside the empty-checks contract', async () => {
+  it('throws unexpected gh pr checks fallback failures so callers preserve cache', async () => {
     const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock
@@ -174,12 +174,8 @@ describe('getPRChecks', () => {
         })
       )
 
-    const checks = await getPRChecks('/repo-root', 42, 'head-oid')
-
-    expect(checks).toEqual([])
-    expect(consoleWarnSpy).toHaveBeenCalledWith(
-      'getPRChecks via head SHA failed, falling back to gh pr checks:',
-      expect.any(Error)
+    await expect(getPRChecks('/repo-root', 42, 'head-oid')).rejects.toThrow(
+      'Command failed: gh pr checks 42'
     )
     expect(consoleWarnSpy).toHaveBeenCalledWith('getPRChecks failed:', expect.any(Error))
     consoleWarnSpy.mockRestore()

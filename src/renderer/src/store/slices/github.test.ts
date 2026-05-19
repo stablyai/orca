@@ -862,7 +862,7 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
     expect(mockApi.gh.enqueuePRRefresh).not.toHaveBeenCalled()
   })
 
-  it('skips active PR refresh IPC for SSH-backed repos', () => {
+  it('enqueues active PR refresh IPC for connected SSH-backed repos', () => {
     const store = createTestStore()
     const repoPath = '/repo'
     const branch = 'feature/test'
@@ -898,7 +898,16 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
 
     store.getState().refreshGitHubForWorktreeIfStale(worktreeId)
 
-    expect(mockApi.gh.enqueuePRRefresh).not.toHaveBeenCalled()
+    expect(mockApi.gh.enqueuePRRefresh).toHaveBeenCalledWith({
+      candidate: expect.objectContaining({
+        repoPath,
+        branch,
+        connectionId: 'ssh-1',
+        connectionState: 'connected'
+      }),
+      reason: 'active',
+      priority: 80
+    })
   })
 
   it('enqueues active PR refresh when source control is the visible PR surface', () => {
