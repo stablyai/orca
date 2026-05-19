@@ -21,12 +21,23 @@ import {
   AzureFoundryForm,
   type AzureFoundrySubmit
 } from './provider-forms/AzureFoundryForm'
+import {
+  AwsBedrockForm,
+  type AwsBedrockSubmit
+} from './provider-forms/AwsBedrockForm'
+import {
+  GoogleVertexForm,
+  type GoogleVertexSubmit
+} from './provider-forms/GoogleVertexForm'
 
-// Discriminated union for the AddAccountModal submit payload. Other variants
-// (oauth-result, future managed-provider forms) join this union as later
-// tasks land; P1 covers the two enabled Anthropic-flavored shapes, P2 adds the
-// Foundry shape.
-export type AddAccountSubmit = AnthropicApiKeySubmit | AnthropicCompatSubmit | AzureFoundrySubmit
+// Discriminated union for the AddAccountModal submit payload. P1 added the
+// two Anthropic-flavored shapes; P2 added Foundry; P3 adds Bedrock + Vertex.
+export type AddAccountSubmit =
+  | AnthropicApiKeySubmit
+  | AnthropicCompatSubmit
+  | AzureFoundrySubmit
+  | AwsBedrockSubmit
+  | GoogleVertexSubmit
 
 // Cards rendered in step 1. Disabled providers carry a "Coming in P2/P3" hint
 // but no authMethod (those Edge providers are scheduled for later phases).
@@ -64,16 +75,16 @@ const PROVIDER_CARDS: readonly ProviderCard[] = [
     enabled: true
   },
   {
-    authMethod: null,
+    authMethod: 'aws-bedrock',
     label: 'AWS Bedrock',
-    subtitle: 'Coming in P2',
-    enabled: false
+    subtitle: 'Anthropic models on AWS (bearer token or IAM chain)',
+    enabled: true
   },
   {
-    authMethod: null,
+    authMethod: 'google-vertex',
     label: 'Google Vertex',
-    subtitle: 'Coming in P3',
-    enabled: false
+    subtitle: 'Anthropic models on Google Cloud (gcloud ADC)',
+    enabled: true
   },
   {
     authMethod: 'azure-foundry',
@@ -241,6 +252,24 @@ export function AddAccountModalFormView({
   if (picked === 'azure-foundry') {
     return (
       <AzureFoundryForm
+        onSubmit={onSubmit}
+        onBack={onBack}
+        onValidate={(input) => onValidate(input)}
+      />
+    )
+  }
+  if (picked === 'aws-bedrock') {
+    return (
+      <AwsBedrockForm
+        onSubmit={onSubmit}
+        onBack={onBack}
+        onValidate={(input) => onValidate(input)}
+      />
+    )
+  }
+  if (picked === 'google-vertex') {
+    return (
+      <GoogleVertexForm
         onSubmit={onSubmit}
         onBack={onBack}
         onValidate={(input) => onValidate(input)}

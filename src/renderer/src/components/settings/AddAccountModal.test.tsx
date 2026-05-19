@@ -185,22 +185,21 @@ describe('AddAccountModal step 1: provider grid', () => {
     expect(collectText(back).toLowerCase()).toMatch(/back/)
   })
 
-  it('shows Bedrock/Vertex cards as disabled with "Coming in P2/P3"', () => {
-    // Azure Foundry was enabled in P2 (Task 16) — only Bedrock + Vertex remain
-    // as stub cards. Bedrock → P2 (later), Vertex → P3.
+  it('Bedrock + Vertex cards are enabled in P3', () => {
+    // P3 T17 enabled both provider cards. Their subtitles now describe the
+    // auth method rather than "Coming in PX".
     const tree = renderPickBody()
 
     const bedrock = findByAriaLabel(tree, /aws bedrock/i)
     const vertex = findByAriaLabel(tree, /google vertex/i)
 
-    expect(bedrock?.props.disabled).toBe(true)
-    expect(vertex?.props.disabled).toBe(true)
+    expect(bedrock).not.toBeNull()
+    expect(vertex).not.toBeNull()
+    expect(bedrock?.props.disabled).toBeFalsy()
+    expect(vertex?.props.disabled).toBeFalsy()
 
-    expect(collectText(bedrock).toLowerCase()).toMatch(/coming/i)
-    expect(collectText(vertex).toLowerCase()).toMatch(/coming/i)
-
-    expect(collectText(bedrock)).toMatch(/P2/)
-    expect(collectText(vertex)).toMatch(/P3/)
+    expect(collectText(bedrock).toLowerCase()).not.toMatch(/coming/i)
+    expect(collectText(vertex).toLowerCase()).not.toMatch(/coming/i)
   })
 
   it('enabled cards form a roving tabindex group with one active stop', () => {
@@ -209,18 +208,23 @@ describe('AddAccountModal step 1: provider grid', () => {
     const oauth = findByAriaLabel(tree, /sign in with claude\.ai/i)
     const apiKey = findByAriaLabel(tree, /anthropic api key/i)
     const compat = findByAriaLabel(tree, /anthropic-compatible/i)
+    const bedrock = findByAriaLabel(tree, /aws bedrock/i)
+    const vertex = findByAriaLabel(tree, /google vertex/i)
+    const foundry = findByAriaLabel(tree, /azure ai foundry/i)
 
-    // Roving tabindex: exactly one enabled card has tabIndex 0, others have -1.
-    const tabIndexes = [oauth, apiKey, compat].map((c) => c?.props.tabIndex)
+    // All six provider cards are enabled as of P3. Roving tabindex: exactly
+    // one enabled card has tabIndex 0, others have -1.
+    const cards = [oauth, apiKey, compat, bedrock, vertex, foundry]
+    const tabIndexes = cards.map((c) => c?.props.tabIndex)
     const zeros = tabIndexes.filter((t) => t === 0)
     const minusOnes = tabIndexes.filter((t) => t === -1)
     expect(zeros.length).toBe(1)
-    expect(minusOnes.length).toBe(2)
+    expect(minusOnes.length).toBe(cards.length - 1)
 
     // Enabled cards listen for arrow-key navigation.
-    expect(typeof oauth?.props.onKeyDown).toBe('function')
-    expect(typeof apiKey?.props.onKeyDown).toBe('function')
-    expect(typeof compat?.props.onKeyDown).toBe('function')
+    for (const c of cards) {
+      expect(typeof c?.props.onKeyDown).toBe('function')
+    }
   })
 
   it('the AddAccountModal wrapper renders without throwing', () => {
@@ -654,5 +658,69 @@ describe('AddAccountModal — Azure AI Foundry (P2)', () => {
       secretFromUser: 'bad'
     })
     expect(result).toEqual({ ok: false, message: 'API key invalid or revoked.' })
+  })
+})
+
+describe('AddAccountModal — Bedrock + Vertex (P3 T17)', () => {
+  it('Bedrock card is enabled', () => {
+    const tree = renderPickBody()
+    const bedrock = findByAriaLabel(tree, 'AWS Bedrock')
+    expect(bedrock).not.toBeNull()
+    expect(bedrock?.props.disabled).toBeFalsy()
+  })
+
+  it('Vertex card is enabled', () => {
+    const tree = renderPickBody()
+    const vertex = findByAriaLabel(tree, 'Google Vertex')
+    expect(vertex).not.toBeNull()
+    expect(vertex?.props.disabled).toBeFalsy()
+  })
+
+  it('clicking the Bedrock card calls onPickProvider with aws-bedrock', () => {
+    const onPick = vi.fn()
+    const tree = renderPickBody(onPick)
+    const card = findByAriaLabel(tree, 'AWS Bedrock')
+    expect(card).not.toBeNull()
+    ;(card?.props.onClick as () => void)()
+    expect(onPick).toHaveBeenCalledWith('aws-bedrock')
+  })
+
+  it('clicking the Vertex card calls onPickProvider with google-vertex', () => {
+    const onPick = vi.fn()
+    const tree = renderPickBody(onPick)
+    const card = findByAriaLabel(tree, 'Google Vertex')
+    expect(card).not.toBeNull()
+    ;(card?.props.onClick as () => void)()
+    expect(onPick).toHaveBeenCalledWith('google-vertex')
+  })
+
+  it('AddAccountModalFormView renders AwsBedrockForm when picked is aws-bedrock', () => {
+    const tree = (
+      <AddAccountModalFormView
+        picked="aws-bedrock"
+        onSubmit={() => {}}
+        onBack={() => {}}
+        onValidate={async () => ({ ok: true })}
+      />
+    )
+    const markup = renderToStaticMarkup(tree as React.ReactElement)
+    expect(markup).toMatch(/aria-label="AWS Region"/)
+    expect(markup).toMatch(/aria-label="Bearer Token"/)
+  })
+
+  it('AddAccountModalFormView renders GoogleVertexForm when picked is google-vertex', () => {
+    const tree = (
+      <AddAccountModalFormView
+        picked="google-vertex"
+        onSubmit={() => {}}
+        onBack={() => {}}
+        onValidate={async () => ({ ok: true })}
+      />
+    )
+    const markup = renderToStaticMarkup(tree as React.ReactElement)
+    expect(markup).toMatch(/aria-label="Project ID"/)
+    expect(markup).toMatch(/aria-label="Region"/)
+    // ADC-only: no secret input
+    expect(markup).not.toMatch(/aria-label="Bearer Token"/)
   })
 })
