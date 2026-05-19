@@ -10,6 +10,7 @@ describe('shouldRecordProcessGoneCrash', () => {
       shouldRecordProcessGoneCrash({
         source: 'renderer',
         reason: 'killed',
+        exitCode: 15,
         expectedTeardown: 'renderer-reload'
       })
     ).toBe(false)
@@ -17,6 +18,7 @@ describe('shouldRecordProcessGoneCrash', () => {
       shouldRecordProcessGoneCrash({
         source: 'child',
         reason: 'killed',
+        exitCode: 15,
         expectedTeardown: 'app-shutdown'
       })
     ).toBe(false)
@@ -27,6 +29,7 @@ describe('shouldRecordProcessGoneCrash', () => {
       shouldRecordProcessGoneCrash({
         source: 'renderer',
         reason: 'crashed',
+        exitCode: 5,
         expectedTeardown: 'renderer-reload'
       })
     ).toBe(true)
@@ -34,26 +37,40 @@ describe('shouldRecordProcessGoneCrash', () => {
       shouldRecordProcessGoneCrash({
         source: 'renderer',
         reason: 'oom',
+        exitCode: null,
         expectedTeardown: 'renderer-reload'
       })
     ).toBe(true)
   })
 
-  it('records killed process exits outside expected lifecycle teardown', () => {
+  it('skips SIGTERM killed events outside expected lifecycle teardown', () => {
     expect(
       shouldRecordProcessGoneCrash({
         source: 'renderer',
         reason: 'killed',
+        exitCode: 15,
+        expectedTeardown: 'none'
+      })
+    ).toBe(false)
+  })
+
+  it('records non-SIGTERM killed process exits outside expected lifecycle teardown', () => {
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'renderer',
+        reason: 'killed',
+        exitCode: 9,
         expectedTeardown: 'none'
       })
     ).toBe(true)
   })
 
-  it('records child-process killed events during renderer-only reloads', () => {
+  it('records non-SIGTERM child-process killed events during renderer-only reloads', () => {
     expect(
       shouldRecordProcessGoneCrash({
         source: 'child',
         reason: 'killed',
+        exitCode: 9,
         expectedTeardown: 'renderer-reload'
       })
     ).toBe(true)

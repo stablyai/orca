@@ -323,6 +323,7 @@ function openMainWindow(): BrowserWindow {
       shouldRecordProcessGoneCrash({
         source: 'renderer',
         reason: details.reason,
+        exitCode: details.exitCode ?? null,
         expectedTeardown: getExpectedTeardownScope(webContentsId)
       }),
     shouldRecoverRenderer: (details, webContentsId) =>
@@ -498,6 +499,7 @@ function recordProcessGoneCrash(
     !shouldRecordProcessGoneCrash({
       source,
       reason,
+      exitCode,
       expectedTeardown: getExpectedTeardownScope(webContentsId)
     })
   ) {
