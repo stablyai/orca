@@ -668,15 +668,11 @@ function createSharedRuntimeFileWatch(
     .then((subscription) => {
       shared.unsubscribe = subscription.unsubscribe
       if (shared.closed || sharedRuntimeFileWatches.get(key) !== shared) {
-        if (!shared.remoteSubscriptionId) {
-          // Why: shared web-client file watches stay on the main WebSocket.
-          // If the caller unsubscribes before the server returns its watch id,
-          // keep the stream listener alive just long enough to receive `ready`
-          // and issue files.unwatch instead of leaking the server watcher.
-          return
-        }
         subscription.unsubscribe()
-        unwatchSharedRuntimeFileWatch(shared)
+        shared.unsubscribe = null
+        if (!shared.keepStreamUntilReady) {
+          unwatchSharedRuntimeFileWatch(shared)
+        }
       }
     })
     .catch((err) => {
@@ -702,9 +698,11 @@ function handleSharedRuntimeFileWatchResponse(
     if (event.type === 'ready') {
       shared.remoteSubscriptionId = event.subscriptionId
       if (shared.closed) {
-        unwatchSharedRuntimeFileWatch(shared)
         shared.unsubscribe?.()
         shared.unsubscribe = null
+        if (!shared.keepStreamUntilReady) {
+          unwatchSharedRuntimeFileWatch(shared)
+        }
       }
     } else if (event.type === 'changed') {
       for (const listener of Array.from(shared.listeners)) {
@@ -728,7 +726,11 @@ function closeSharedRuntimeFileWatch(key: string, shared: SharedRuntimeFileWatch
   }
   shared.closed = true
   sharedRuntimeFileWatches.delete(key)
-  if (shared.keepStreamUntilReady && !shared.remoteSubscriptionId) {
+  if (shared.keepStreamUntilReady) {
+    // Why: WebRuntimeClient owns shared-socket file-watch cleanup, including
+    // pre-ready fallback timers and late-ready files.unwatch.
+    shared.unsubscribe?.()
+    shared.unsubscribe = null
     return
   }
   shared.unsubscribe?.()

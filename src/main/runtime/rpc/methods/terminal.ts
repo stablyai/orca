@@ -143,12 +143,6 @@ function isTerminalInputLockedForClient(
   return runtime.getDriver(ptyId).kind === 'mobile'
 }
 
-function normalizeTerminalInputText(text: string): string {
-  // Why: PTY Enter is carriage return. Browser/mobile clients can emit bare
-  // LF; zsh may render those as PROMPT_SP `%` marker lines.
-  return text.replace(/\r\n/g, '\r').replace(/\n/g, '\r')
-}
-
 function resolveMobileFloorClientId(
   driver: DriverState | null,
   client: TerminalViewportClient | undefined
@@ -757,7 +751,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           return
         }
         if (frame.opcode === TerminalStreamOpcode.Input) {
-          const text = normalizeTerminalInputText(decodeTerminalStreamText(frame.payload))
+          const text = decodeTerminalStreamText(frame.payload)
           if (!text) {
             return
           }
@@ -1140,7 +1134,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             return
           }
           if (frame.opcode === TerminalStreamOpcode.Input) {
-            const text = normalizeTerminalInputText(decodeTerminalStreamText(frame.payload))
+            const text = decodeTerminalStreamText(frame.payload)
             if (!text) {
               return
             }

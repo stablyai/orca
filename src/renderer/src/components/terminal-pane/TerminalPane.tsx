@@ -716,6 +716,7 @@ export default function TerminalPane({
       return
     }
 
+    let appliedInsertion = false
     for (const insertion of insertions) {
       const ptyId = restoredLayout.ptyIdsByLeafId?.[insertion.newLeafId]
       const sourcePaneId = manager.getNumericIdForLeaf(insertion.sourceLeafId)
@@ -725,10 +726,33 @@ export default function TerminalPane({
       // Why: paired web terminals receive host split-pane snapshots after the
       // pane manager is already mounted. Adopt the host leaf + PTY instead of
       // spawning a local-only web pane.
-      manager.splitPane(sourcePaneId, insertion.direction, {
-        leafId: insertion.newLeafId,
-        ptyId
-      })
+      // Before-placement swaps [source, new] after splitPane, so invert the
+      // host first-child ratio before applying it to the temporary order.
+      const splitRatio =
+        insertion.ratio === undefined
+          ? undefined
+          : insertion.placement === 'before'
+            ? 1 - insertion.ratio
+            : insertion.ratio
+      const createdPane = manager.splitPaneAroundLeafIds(
+        insertion.sourceLeafIds,
+        sourcePaneId,
+        insertion.direction,
+        {
+          ...(splitRatio !== undefined && { ratio: splitRatio }),
+          leafId: insertion.newLeafId,
+          ptyId,
+          placement: insertion.placement
+        }
+      )
+      if (!createdPane) {
+        continue
+      }
+      appliedInsertion = true
+    }
+
+    if (appliedInsertion) {
+      persistLayoutSnapshot()
     }
 
     if (restoredLayout.activeLeafId) {
@@ -737,7 +761,7 @@ export default function TerminalPane({
         manager.setActivePane(activePaneId, { focus: isActive })
       }
     }
-  }, [isActive, paneCount, restoredLayout])
+  }, [isActive, paneCount, persistLayoutSnapshot, restoredLayout])
 
   // Why (Activity-only pane isolation): when this TerminalPane is being
   // portaled into the Activity page for a specific agent pane, hide the

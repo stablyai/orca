@@ -1185,17 +1185,11 @@ describe('runtime file client', () => {
     )
   })
 
-  it('unwatches a remote file watch that is stopped before the ready frame arrives', async () => {
+  it('delegates stopped pre-ready web shared file watch cleanup to the subscription handle', async () => {
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
     const onPayload = vi.fn()
     const unsubscribe = vi.fn()
     let onResponse: ((response: unknown) => void) | undefined
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'unwatch',
-      ok: true,
-      result: { unsubscribed: true },
-      _meta: { runtimeId: 'remote-runtime' }
-    })
     runtimeEnvironmentSubscribe.mockImplementation((_args, callbacks) => {
       onResponse = callbacks.onResponse
       return Promise.resolve({ unsubscribe, sendBinary: vi.fn() })
@@ -1211,7 +1205,10 @@ describe('runtime file client', () => {
     )
 
     stop()
-    expect(unsubscribe).not.toHaveBeenCalled()
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'files.unwatch' })
+    )
 
     onResponse?.({
       id: 'ready',
@@ -1220,14 +1217,43 @@ describe('runtime file client', () => {
       _meta: { runtimeId: 'remote-runtime' }
     })
 
-    await vi.waitFor(() =>
-      expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-        selector: 'env-1',
-        method: 'files.unwatch',
-        params: { subscriptionId: 'files-watch-late' },
-        timeoutMs: 5_000
-      })
-    )
     expect(unsubscribe).toHaveBeenCalledTimes(1)
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'files.unwatch' })
+    )
+  })
+
+  it('delegates stopped ready web shared file watch cleanup to the subscription handle', async () => {
+    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    const onPayload = vi.fn()
+    const unsubscribe = vi.fn()
+    let onResponse: ((response: unknown) => void) | undefined
+    runtimeEnvironmentSubscribe.mockImplementation((_args, callbacks) => {
+      onResponse = callbacks.onResponse
+      return Promise.resolve({ unsubscribe, sendBinary: vi.fn() })
+    })
+
+    const stop = await subscribeRuntimeFileChanges(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/remote/repo'
+      },
+      onPayload
+    )
+
+    onResponse?.({
+      id: 'ready',
+      ok: true,
+      result: { type: 'ready', subscriptionId: 'files-watch-ready' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    stop()
+
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'files.unwatch' })
+    )
   })
 })

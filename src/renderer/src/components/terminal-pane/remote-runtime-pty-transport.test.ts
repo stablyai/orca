@@ -661,7 +661,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
   })
 
-  it('normalizes bare LF input to carriage returns before writing to the remote PTY', async () => {
+  it('preserves literal LF input when sending remote PTY binary frames', async () => {
     vi.useFakeTimers()
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
@@ -673,15 +673,18 @@ describe('createRemoteRuntimePtyTransport', () => {
 
       await transport.connect({ url: '', callbacks: {} })
       const { streamId } = latestSubscribePayload()
+      runtimeCall.mockClear()
       subscriptionSendBinary.mockClear()
 
       expect(transport.sendInput('echo one\necho two\r\n')).toBe(true)
       await vi.runOnlyPendingTimersAsync()
 
+      expect(runtimeCall).not.toHaveBeenCalled()
+      expect(subscriptionSendBinary).toHaveBeenCalledTimes(1)
       const frame = decodeTerminalStreamFrame(subscriptionSendBinary.mock.calls[0][0])
       expect(frame?.opcode).toBe(TerminalStreamOpcode.Input)
       expect(frame?.streamId).toBe(streamId)
-      expect(frame ? decodeTerminalStreamText(frame.payload) : '').toBe('echo one\recho two\r')
+      expect(frame ? decodeTerminalStreamText(frame.payload) : '').toBe('echo one\necho two\r\n')
     } finally {
       vi.useRealTimers()
     }
