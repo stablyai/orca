@@ -103,7 +103,7 @@ describe('fetchGeminiRateLimits', () => {
             {
               remainingFraction: 0.82,
               resetTime: '2026-04-24T13:00:00.000Z',
-              modelId: 'gemini-3-flash-preview'
+              modelId: 'gemini-3.5-flash'
             }
           ])
         )
