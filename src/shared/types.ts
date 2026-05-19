@@ -1235,11 +1235,33 @@ export type CodexRateLimitAccountsState = {
   activeAccountId: string | null
 }
 
+export type ClaudeModelMapping = {
+  opus?: string
+  sonnet?: string
+  haiku?: string
+}
+
+export type AnthropicCompatPreset = 'zai' | 'kimi' | 'minimax' | 'custom'
+
+export type ClaudeAuthCredentials =
+  | { authMethod: 'subscription-oauth' }
+  | { authMethod: 'anthropic-api-key' }
+  | { authMethod: 'anthropic-compat'; baseUrl: string; preset: AnthropicCompatPreset }
+  | { authMethod: 'unknown' }
+
+export type ClaudeAuthMethod = ClaudeAuthCredentials['authMethod']
+
 export type ClaudeManagedAccount = {
   id: string
   email: string
   managedAuthPath: string
-  authMethod: 'subscription-oauth' | 'unknown'
+  // Mirrors `credentials.authMethod`. Kept as an explicit field so existing
+  // call sites that read `account.authMethod` directly keep working until
+  // Task 3 migrates them to the discriminated `credentials` union.
+  authMethod: ClaudeAuthMethod
+  credentials: ClaudeAuthCredentials
+  modelMapping: ClaudeModelMapping
+  fallbackAccountIds: string[]
   organizationUuid?: string | null
   organizationName?: string | null
   createdAt: number
@@ -1250,7 +1272,9 @@ export type ClaudeManagedAccount = {
 export type ClaudeManagedAccountSummary = {
   id: string
   email: string
-  authMethod: 'subscription-oauth' | 'unknown'
+  authMethod: ClaudeAuthMethod
+  credentials: ClaudeAuthCredentials
+  modelMapping: ClaudeModelMapping
   organizationUuid?: string | null
   organizationName?: string | null
   createdAt: number
