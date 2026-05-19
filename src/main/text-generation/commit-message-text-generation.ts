@@ -192,7 +192,39 @@ function sanitizeAgentFailureDetail(detail: string | null): string | null {
   return trimmed.length > 240 ? `${trimmed.slice(0, 240).trimEnd()}...` : trimmed
 }
 
-function userFacingAgentFailure(label: string): string {
+function extractKnownSafeAgentFailureDetail(
+  label: string,
+  stdout: string,
+  stderr: string
+): string | null {
+  const combined = `${stdout}\n${stderr}`
+  if (
+    label === 'Gemini' &&
+    combined.includes('When using Gemini API, you must specify the GEMINI_API_KEY')
+  ) {
+    return 'When using Gemini API, you must specify the GEMINI_API_KEY environment variable.'
+  }
+  return null
+}
+
+function userFacingSafeAgentFailureDetail(label: string, detail: string | null): string | null {
+  if (!detail) {
+    return null
+  }
+  if (
+    label === 'Gemini' &&
+    detail.includes('When using Gemini API, you must specify the GEMINI_API_KEY')
+  ) {
+    return 'Gemini is configured for API-key auth, but Orca cannot see GEMINI_API_KEY.'
+  }
+  return null
+}
+
+function userFacingAgentFailure(label: string, detail: string | null = null): string {
+  const safeDetail = userFacingSafeAgentFailureDetail(label, detail)
+  if (safeDetail) {
+    return `${label} failed. ${safeDetail}`
+  }
   return `${label} failed. Check the agent CLI configuration and try again.`
 }
 
@@ -617,7 +649,10 @@ function finalizeFromAgentOutput(args: {
 }): void {
   const { code, stdout, stderr, label, emptyResultName, finalize } = args
   if (code !== 0) {
-    const safeDetail = sanitizeAgentFailureDetail(extractAgentErrorMessage(stdout, stderr))
+    const safeDetail = sanitizeAgentFailureDetail(
+      extractAgentErrorMessage(stdout, stderr) ??
+        extractKnownSafeAgentFailureDetail(label, stdout, stderr)
+    )
     console.error('[commit-message] Generator failed:', {
       label,
       exitCode: code,
@@ -625,12 +660,15 @@ function finalizeFromAgentOutput(args: {
       stdout,
       stderr
     })
-    finalize({ success: false, error: userFacingAgentFailure(label) })
+    finalize({ success: false, error: userFacingAgentFailure(label, safeDetail) })
     return
   }
   const cleaned = cleanGeneratedCommitMessage(stdout)
   if (!cleaned) {
-    const safeDetail = sanitizeAgentFailureDetail(extractAgentErrorMessage(stdout, stderr))
+    const safeDetail = sanitizeAgentFailureDetail(
+      extractAgentErrorMessage(stdout, stderr) ??
+        extractKnownSafeAgentFailureDetail(label, stdout, stderr)
+    )
     if (safeDetail) {
       console.error('[commit-message] Generator returned no stdout but reported an error:', {
         label,
@@ -639,7 +677,7 @@ function finalizeFromAgentOutput(args: {
         stdout,
         stderr
       })
-      finalize({ success: false, error: userFacingAgentFailure(label) })
+      finalize({ success: false, error: userFacingAgentFailure(label, safeDetail) })
       return
     }
     finalize({ success: false, error: `${label} returned an empty ${emptyResultName}.` })

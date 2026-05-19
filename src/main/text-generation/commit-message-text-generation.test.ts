@@ -532,6 +532,39 @@ describe('generateCommitMessageFromContext', () => {
     })
   })
 
+  it('explains Gemini API-key auth failures without exposing arbitrary stderr', async () => {
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'gemini',
+        model: 'auto-gemini-3'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr:
+            'When using Gemini API, you must specify the GEMINI_API_KEY environment variable.\n' +
+            'Update your environment and try again (no reload needed if using .env)!',
+          exitCode: 41,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error:
+        'Gemini failed. Gemini is configured for API-key auth, but Orca cannot see GEMINI_API_KEY.'
+    })
+  })
+
   it('treats empty stdout plus an error on stderr as an agent failure', async () => {
     const result = await generateCommitMessageFromContext(
       {
