@@ -7,6 +7,11 @@ import {
   AnthropicApiKeyFormView,
   buildAnthropicApiKeySubmit
 } from './provider-forms/AnthropicApiKeyForm'
+import {
+  AnthropicCompatFormView,
+  buildAnthropicCompatSubmit
+} from './provider-forms/AnthropicCompatForm'
+import type { AnthropicCompatPreset } from '../../../../shared/types'
 
 type ReactElementLike = {
   type: unknown
@@ -357,6 +362,229 @@ describe('AddAccountModal step 2: Anthropic API key form', () => {
     const back = findByAriaLabel(tree, /^back$/i)
     expect(back).not.toBeNull()
     ;(back?.props.onClick as () => void)()
+    expect(onCancel).toHaveBeenCalledTimes(1)
+  })
+})
+
+// Helpers + tests for the Anthropic-compat provider form (Task 15).
+function renderCompatFormView(
+  overrides: Partial<{
+    preset: AnthropicCompatPreset
+    token: string
+    label: string
+    baseUrl: string
+    error: string | null
+    onChangePreset: (p: AnthropicCompatPreset) => void
+    onChangeToken: (v: string) => void
+    onChangeLabel: (v: string) => void
+    onChangeBaseUrl: (v: string) => void
+    onSubmit: () => void
+    onCancel: () => void
+  }> = {}
+): unknown {
+  return AnthropicCompatFormView({
+    preset: 'zai',
+    token: '',
+    label: '',
+    baseUrl: '',
+    error: null,
+    onChangePreset: () => {},
+    onChangeToken: () => {},
+    onChangeLabel: () => {},
+    onChangeBaseUrl: () => {},
+    onSubmit: () => {},
+    onCancel: () => {},
+    ...overrides
+  })
+}
+
+function findAllByRole(node: unknown, role: string): ReactElementLike[] {
+  const out: ReactElementLike[] = []
+  visit(node, (entry) => {
+    if (entry.props.role === role) {
+      out.push(entry)
+    }
+  })
+  return out
+}
+
+function findByTestId(node: unknown, testId: string): ReactElementLike | null {
+  let found: ReactElementLike | null = null
+  visit(node, (entry) => {
+    if (found) return
+    if (entry.props['data-testid'] === testId) {
+      found = entry
+    }
+  })
+  return found
+}
+
+describe('AddAccountModal step 2: Anthropic-compat form', () => {
+  it('renders 4 preset segmented-control options (z.ai, Kimi, MiniMax, Custom)', () => {
+    const tree = renderCompatFormView()
+    const tabs = findAllByRole(tree, 'tab')
+    expect(tabs).toHaveLength(4)
+    const labels = tabs.map((t) => collectText(t).toLowerCase())
+    expect(labels.some((l) => l.includes('z.ai'))).toBe(true)
+    expect(labels.some((l) => l.includes('kimi'))).toBe(true)
+    expect(labels.some((l) => l.includes('minimax'))).toBe(true)
+    expect(labels.some((l) => l.includes('custom'))).toBe(true)
+  })
+
+  it('exactly one preset tab is aria-selected at a time', () => {
+    const tree = renderCompatFormView({ preset: 'kimi' })
+    const tabs = findAllByRole(tree, 'tab')
+    const selected = tabs.filter((t) => t.props['aria-selected'] === true)
+    expect(selected).toHaveLength(1)
+    expect(collectText(selected[0]).toLowerCase()).toMatch(/kimi/)
+  })
+
+  it('non-custom presets show the baked baseUrl as read-only context (no input)', () => {
+    for (const preset of ['zai', 'kimi', 'minimax'] as const) {
+      const tree = renderCompatFormView({ preset })
+      const baked = findByTestId(tree, 'baked-base-url')
+      expect(baked).not.toBeNull()
+      // Baked URL is shown inline, no editable baseUrl input.
+      expect(findById(tree, 'acf-baseurl')).toBeNull()
+    }
+  })
+
+  it('custom preset reveals a baseUrl input and hides the baked context', () => {
+    const tree = renderCompatFormView({ preset: 'custom' })
+    expect(findByTestId(tree, 'baked-base-url')).toBeNull()
+    const baseUrlInput = findById(tree, 'acf-baseurl')
+    expect(baseUrlInput).not.toBeNull()
+  })
+
+  it('buildAnthropicCompatSubmit returns payload without baseUrl for non-custom presets', () => {
+    const result = buildAnthropicCompatSubmit({
+      preset: 'zai',
+      token: 'zai-tok',
+      label: 'GLM'
+    })
+    expect('error' in result).toBe(false)
+    if (!('error' in result)) {
+      expect(result).toEqual({
+        authMethod: 'anthropic-compat',
+        label: 'GLM',
+        secretFromUser: 'zai-tok',
+        providerConfig: { preset: 'zai' }
+      })
+    }
+  })
+
+  it('buildAnthropicCompatSubmit includes baseUrl when preset is custom', () => {
+    const result = buildAnthropicCompatSubmit({
+      preset: 'custom',
+      token: 'tok',
+      label: 'X',
+      baseUrl: 'https://example.com'
+    })
+    expect('error' in result).toBe(false)
+    if (!('error' in result)) {
+      expect(result).toEqual({
+        authMethod: 'anthropic-compat',
+        label: 'X',
+        secretFromUser: 'tok',
+        providerConfig: { preset: 'custom', baseUrl: 'https://example.com' }
+      })
+    }
+  })
+
+  it('custom preset with empty baseUrl produces an inline error', () => {
+    const result = buildAnthropicCompatSubmit({
+      preset: 'custom',
+      token: 'tok',
+      label: '',
+      baseUrl: '   '
+    })
+    expect('error' in result).toBe(true)
+    if ('error' in result) {
+      expect(result.error.toLowerCase()).toMatch(/base url/)
+    }
+  })
+
+  it('empty token produces an inline error', () => {
+    const result = buildAnthropicCompatSubmit({
+      preset: 'zai',
+      token: '   ',
+      label: ''
+    })
+    expect('error' in result).toBe(true)
+    if ('error' in result) {
+      expect(result.error.toLowerCase()).toMatch(/token|required/)
+    }
+    // And the rendered view surfaces an error message when provided.
+    const tree = renderCompatFormView({ error: 'Provider auth token is required.' })
+    const markup = renderToStaticMarkup(tree as React.ReactElement)
+    expect(markup).toMatch(/required/i)
+  })
+
+  it('omits the label field when blank and trims whitespace on token + baseUrl', () => {
+    const result = buildAnthropicCompatSubmit({
+      preset: 'custom',
+      token: '  tok-xyz  ',
+      label: '   ',
+      baseUrl: '  https://proxy.example.com  '
+    })
+    expect('error' in result).toBe(false)
+    if (!('error' in result)) {
+      expect(result.label).toBeUndefined()
+      expect(result.secretFromUser).toBe('tok-xyz')
+      expect(result.providerConfig.baseUrl).toBe('https://proxy.example.com')
+    }
+  })
+
+  it('AddAccountModalBody wires the compat form into step 2 for anthropic-compat', () => {
+    const parent = vi.fn()
+    const tree = renderFormBody('anthropic-compat', parent)
+    const formEl = tree as ReactElementLike
+    // Wire-up: the body returns an AnthropicCompatForm with onSubmit + onCancel.
+    expect(typeof formEl.props.onSubmit).toBe('function')
+    expect(typeof formEl.props.onCancel).toBe('function')
+  })
+
+  it('submitting valid input fires onSubmit with the built payload', () => {
+    const parent = vi.fn()
+    const tree = renderFormBody('anthropic-compat', parent)
+    const formEl = tree as ReactElementLike
+    const onSubmitProp = formEl.props.onSubmit as (p: unknown) => void
+    const built = buildAnthropicCompatSubmit({
+      preset: 'minimax',
+      token: 'mm-token',
+      label: 'M2'
+    })
+    expect('error' in built).toBe(false)
+    if (!('error' in built)) {
+      onSubmitProp(built)
+    }
+    expect(parent).toHaveBeenCalledWith({
+      authMethod: 'anthropic-compat',
+      label: 'M2',
+      secretFromUser: 'mm-token',
+      providerConfig: { preset: 'minimax' }
+    })
+  })
+
+  it('cancel button invokes the back/cancel handler', () => {
+    const onCancel = vi.fn()
+    const tree = renderCompatFormView({ onCancel })
+    const back = findByAriaLabel(tree, /^back$/i) ?? null
+    // The compat form's Back button is a plain Button with text "Back"; if
+    // aria-label is absent, fall back to scanning button text.
+    let backNode: ReactElementLike | null = back
+    if (!backNode) {
+      visit(tree, (entry) => {
+        if (backNode) return
+        const text = collectText(entry).trim().toLowerCase()
+        const onClick = entry.props.onClick
+        if (text === 'back' && typeof onClick === 'function' && entry.props.type === 'button') {
+          backNode = entry
+        }
+      })
+    }
+    expect(backNode).not.toBeNull()
+    ;(backNode?.props.onClick as () => void)()
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
 })

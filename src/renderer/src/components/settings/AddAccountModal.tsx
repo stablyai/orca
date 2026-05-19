@@ -13,11 +13,15 @@ import {
   AnthropicApiKeyForm,
   type AnthropicApiKeySubmit
 } from './provider-forms/AnthropicApiKeyForm'
+import {
+  AnthropicCompatForm,
+  type AnthropicCompatSubmit
+} from './provider-forms/AnthropicCompatForm'
 
 // Discriminated union for the AddAccountModal submit payload. Other variants
-// (compat, oauth-result) join this union in T15+; for P1 the only concrete
-// shape is the Anthropic API key form's payload.
-export type AddAccountSubmit = AnthropicApiKeySubmit
+// (oauth-result, future managed-provider forms) join this union as later
+// tasks land; P1 covers the two enabled Anthropic-flavored shapes.
+export type AddAccountSubmit = AnthropicApiKeySubmit | AnthropicCompatSubmit
 
 // Cards rendered in step 1. Disabled providers carry a "Coming in P2/P3" hint
 // but no authMethod (those Edge providers are scheduled for later phases).
@@ -218,12 +222,21 @@ export function AddAccountModalBody({
     })
   }
 
-  // Step 2: render the provider-specific form. Only anthropic-api-key has a
-  // real form in P1 — compat lands in T15, OAuth opens an external browser
-  // flow, and the disabled (Bedrock/Vertex/Foundry) cards never reach step 2.
+  // Step 2: render the provider-specific form. anthropic-api-key + compat
+  // both have real forms in P1; OAuth opens an external browser flow, and
+  // the disabled (Bedrock/Vertex/Foundry) cards never reach step 2.
   if (pickedProvider === 'anthropic-api-key') {
     return (
       <AnthropicApiKeyForm
+        onSubmit={(payload) => onSubmit?.(payload)}
+        onCancel={onBack}
+      />
+    )
+  }
+
+  if (pickedProvider === 'anthropic-compat') {
+    return (
+      <AnthropicCompatForm
         onSubmit={(payload) => onSubmit?.(payload)}
         onCancel={onBack}
       />
