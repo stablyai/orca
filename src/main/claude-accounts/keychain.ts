@@ -98,8 +98,15 @@ export async function deleteManagedClaudeKeychainCredentials(accountId: string):
   managedKeychainCache.invalidate(accountId)
 }
 
-// Test-only escape hatch — not exported from index. Used by integration tests
-// to reset cache state between cases.
+// Production reset path — invoked from ClaudeAccountService.resetSecretsStorage
+// when the user wipes the encrypted secrets file. Keeps the LRU consistent
+// with the on-disk state.
+export function clearManagedClaudeKeychainCache(): void {
+  managedKeychainCache.clear()
+}
+
+// Test-only alias — keeps the existing __resetKeychainCacheForTests imports
+// working without exposing the cache-clear under that name in production code.
 export function __resetKeychainCacheForTests(): void {
   managedKeychainCache.clear()
 }

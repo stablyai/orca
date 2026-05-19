@@ -1,8 +1,8 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest'
-import { mkdtempSync } from 'node:fs'
+import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createEncryptedFileBackend } from './encrypted-file-backend'
+import { createEncryptedFileBackend, resetEncryptedSecretsFile } from './encrypted-file-backend'
 import { createPassphraseHolder } from './passphrase-prompt'
 
 let dir: string
@@ -67,6 +67,25 @@ describe('encrypted-file-backend', () => {
     await b.write('svc', 'b', 'val-b')
     expect(await b.read('svc', 'a')).toBe('val-a')
     expect(await b.read('svc', 'b')).toBe('val-b')
+  })
+
+  it('resetEncryptedSecretsFile removes file and clears holder', async () => {
+    const b = backendWithPassphrase('hunter2')
+    await b.write('svc', 'acct', 'val')
+    expect(existsSync(path)).toBe(true)
+    const holder = createPassphraseHolder()
+    holder.set('hunter2')
+    await resetEncryptedSecretsFile({ filePath: path, holder })
+    expect(existsSync(path)).toBe(false)
+    expect(holder.get()).toBeNull()
+  })
+
+  it('resetEncryptedSecretsFile is a no-op when file does not exist', async () => {
+    const holder = createPassphraseHolder()
+    holder.set('x')
+    const missing = join(dir, 'never-written.enc')
+    await expect(resetEncryptedSecretsFile({ filePath: missing, holder })).resolves.toBeUndefined()
+    expect(holder.get()).toBeNull()
   })
 
   it('throws when read called but passphrase prompt is cancelled', async () => {

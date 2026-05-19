@@ -15,10 +15,7 @@ import type {
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
 import { resolveClaudeCommand } from '../codex-cli/command'
-import type {
-  ClaudeRuntimeAuthPreparation,
-  ClaudeRuntimeAuthService
-} from './runtime-auth-service'
+import type { ClaudeRuntimeAuthPreparation, ClaudeRuntimeAuthService } from './runtime-auth-service'
 import {
   getClaudeManagedAccountsRoot,
   readClaudeManagedAuthFile,
@@ -26,6 +23,7 @@ import {
   writeClaudeManagedAuthFile
 } from './managed-auth-path'
 import {
+  clearManagedClaudeKeychainCache,
   deleteActiveClaudeKeychainCredentialsStrict,
   deleteManagedClaudeKeychainCredentials,
   readActiveClaudeKeychainCredentials,
@@ -34,6 +32,9 @@ import {
   writeActiveClaudeKeychainCredentials,
   writeManagedClaudeKeychainCredentials
 } from './keychain'
+import { resetEncryptedSecretsFile } from './secrets-storage/encrypted-file-backend'
+import { getProcessPassphraseHolder } from './secrets-storage/passphrase-prompt'
+import { getEncryptedSecretsFilePath } from './runtime-paths'
 import { beginClaudeAuthSwitch, endClaudeAuthSwitch } from './live-pty-gate'
 import { migrateClaudeAccount, migrateClaudeAccountList } from './migration'
 import { handlerFor, type ValidationResult } from './providers'
@@ -126,22 +127,41 @@ export class ClaudeAccountService {
   }
 
   /**
+   * Irreversibly wipe the encrypted secrets file, drop the cached managed
+   * keychain LRU, and forget the in-memory passphrase. After this returns,
+   * every managed account record still exists in settings but cannot be
+   * materialized until its secret is re-entered. Surfaced as a service
+   * method so a future "reset secrets" UI or `claude-accounts reset-secrets`
+   * CLI subcommand can drive it. (P4)
+   */
+  async resetSecretsStorage(): Promise<void> {
+    // Why: late-bound electron import — service.ts is imported by the CLI
+    // entrypoint which has no `app`, so we only resolve it when reset is
+    // actually invoked (always from the main process).
+    const { app } = await import('electron')
+    await resetEncryptedSecretsFile({
+      filePath: getEncryptedSecretsFilePath(app.getPath('userData')),
+      holder: getProcessPassphraseHolder()
+    })
+    clearManagedClaudeKeychainCache()
+  }
+
+  /**
    * Set the per-worktree Claude account override. Stored as a pointer into
    * `claudeAccountIdByWorkspace`; the resolver consults this map ahead of the
    * global `activeClaudeManagedAccountId` when launching a PTY for the named
    * worktree. Rejects unknown account ids so we never persist a dangling
    * pointer. (P2)
    */
-  async setWorkspaceOverride(args: {
-    worktreeId: string
-    accountId: string
-  }): Promise<void> {
+  async setWorkspaceOverride(args: { worktreeId: string; accountId: string }): Promise<void> {
     return this.serializeMutation(async () => {
       const settings = this.store.getSettings()
       const known = settings.claudeManagedAccounts.some((a) => a.id === args.accountId)
-      if (!known) throw new Error(`Unknown account id ${args.accountId}.`)
+      if (!known) {
+        throw new Error(`Unknown account id ${args.accountId}.`)
+      }
       const next = {
-        ...(settings.claudeAccountIdByWorkspace ?? {}),
+        ...settings.claudeAccountIdByWorkspace,
         [args.worktreeId]: args.accountId
       }
       this.store.updateSettings({ claudeAccountIdByWorkspace: next })
@@ -155,7 +175,7 @@ export class ClaudeAccountService {
   async clearWorkspaceOverride(args: { worktreeId: string }): Promise<void> {
     return this.serializeMutation(async () => {
       const settings = this.store.getSettings()
-      const next = { ...(settings.claudeAccountIdByWorkspace ?? {}) }
+      const next = { ...settings.claudeAccountIdByWorkspace }
       delete next[args.worktreeId]
       this.store.updateSettings({ claudeAccountIdByWorkspace: next })
     })

@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- test suite covers Claude capture and rollback edge cases */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -11,6 +11,7 @@ import {
   writeActiveClaudeKeychainCredentials,
   writeManagedClaudeKeychainCredentials
 } from './keychain'
+import type { ClaudeAccountService as ClaudeAccountServiceType } from './service'
 
 vi.mock('electron', () => ({
   app: {
@@ -23,6 +24,8 @@ vi.mock('../codex-cli/command', () => ({
 }))
 
 vi.mock('./keychain', () => ({
+  __resetKeychainCacheForTests: vi.fn(),
+  clearManagedClaudeKeychainCache: vi.fn(),
   deleteActiveClaudeKeychainCredentialsStrict: vi.fn(async () => {}),
   deleteManagedClaudeKeychainCredentials: vi.fn(async () => {}),
   readActiveClaudeKeychainCredentials: vi.fn(),
@@ -35,7 +38,10 @@ vi.mock('./keychain', () => ({
 // Why: the azure-foundry handler shells to `az` when Entra ID is enabled. Stub
 // the detection + token helpers so the service test stays hermetic.
 vi.mock('./providers/azure-cli', () => ({
-  detectAzureEntraIdSignIn: vi.fn(async () => ({ ok: true, account: { user: 'a', tenantId: 't' } })),
+  detectAzureEntraIdSignIn: vi.fn(async () => ({
+    ok: true,
+    account: { user: 'a', tenantId: 't' }
+  })),
   getEntraAccessTokenForCognitiveServices: vi.fn(async () => ({ ok: true, token: 'jwt' }))
 }))
 
@@ -614,7 +620,7 @@ describe('ClaudeAccountService addAccount polymorphic input', () => {
   }
 
   async function buildPolymorphicService(): Promise<{
-    service: import('./service').ClaudeAccountService
+    service: ClaudeAccountServiceType
     getSettings: () => PolymorphicSettings
     runtimeAuth: {
       clearLastWrittenCredentialsJson: ReturnType<typeof vi.fn>
@@ -825,7 +831,7 @@ describe('ClaudeAccountService workspace override + validateInput (P2)', () => {
   }
 
   async function buildOverrideService(): Promise<{
-    service: import('./service').ClaudeAccountService
+    service: ClaudeAccountServiceType
     getSettings: () => OverrideSettings
   }> {
     tempDir = '/tmp/orca-claude-service-test'
@@ -906,5 +912,69 @@ describe('ClaudeAccountService workspace override + validateInput (P2)', () => {
     // ValidationResult shape without throwing, and no account was persisted.
     expect(typeof result.ok).toBe('boolean')
     expect(getSettings().claudeManagedAccounts).toHaveLength(0)
+  })
+})
+
+describe('ClaudeAccountService.resetSecretsStorage (P4)', () => {
+  it('removes the encrypted secrets file, clears the LRU, and forgets the passphrase', async () => {
+    setPlatform('darwin')
+    const userDataDir = mkdtempSync(join(tmpdir(), 'orca-claude-reset-'))
+    const secretsPath = join(userDataDir, 'claude-accounts', 'secrets.enc')
+    mkdirSync(join(userDataDir, 'claude-accounts'), { recursive: true })
+    writeFileSync(secretsPath, 'fake-encrypted-bytes', 'utf-8')
+
+    // Re-point electron.app.getPath at the temp dir for this case so the
+    // service's resetSecretsStorage resolves the correct secrets path.
+    const electron = await import('electron')
+    const getPathSpy = vi.spyOn(electron.app, 'getPath').mockReturnValue(userDataDir)
+
+    // Seed the passphrase holder so we can assert it gets cleared.
+    const { getProcessPassphraseHolder, resetPassphraseHolderForTest } =
+      await import('./secrets-storage/passphrase-prompt')
+    resetPassphraseHolderForTest()
+    getProcessPassphraseHolder().set('hunter2')
+
+    const { clearManagedClaudeKeychainCache } = await import('./keychain')
+
+    const store = {
+      getSettings: () => ({ claudeManagedAccounts: [], activeClaudeManagedAccountId: null }),
+      updateSettings: vi.fn()
+    }
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      store as never,
+      { evictInactiveClaudeCache: vi.fn() } as never,
+      {} as never
+    )
+
+    await service.resetSecretsStorage()
+
+    expect(existsSync(secretsPath)).toBe(false)
+    expect(getProcessPassphraseHolder().get()).toBeNull()
+    expect(clearManagedClaudeKeychainCache).toHaveBeenCalledTimes(1)
+    getPathSpy.mockRestore()
+    rmSync(userDataDir, { recursive: true, force: true })
+  })
+
+  it('is a no-op when the secrets file does not exist', async () => {
+    setPlatform('darwin')
+    const userDataDir = mkdtempSync(join(tmpdir(), 'orca-claude-reset-noop-'))
+    const electron = await import('electron')
+    const getPathSpy = vi.spyOn(electron.app, 'getPath').mockReturnValue(userDataDir)
+
+    const store = {
+      getSettings: () => ({ claudeManagedAccounts: [], activeClaudeManagedAccountId: null }),
+      updateSettings: vi.fn()
+    }
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      store as never,
+      { evictInactiveClaudeCache: vi.fn() } as never,
+      {} as never
+    )
+
+    await expect(service.resetSecretsStorage()).resolves.toBeUndefined()
+    getPathSpy.mockRestore()
+    rmSync(userDataDir, { recursive: true, force: true })
   })
 })

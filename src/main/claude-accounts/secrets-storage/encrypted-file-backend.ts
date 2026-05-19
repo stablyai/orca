@@ -1,3 +1,4 @@
+import { promises as fsp } from 'node:fs'
 import {
   type EncryptedFileV1,
   readEncryptedFile,
@@ -86,6 +87,25 @@ export function createEncryptedFileBackend(deps: EncryptedFileBackendDeps): Secr
       }
       delete existing.records[k]
       await writeEncryptedFile(deps.filePath, existing)
+    }
+  }
+}
+
+// Irreversibly wipes the encrypted secrets file and clears the in-memory
+// passphrase. All previously-stored secrets become unrecoverable; callers
+// must accept that account records pointing into the file will need to be
+// re-added before they can be materialized again.
+export async function resetEncryptedSecretsFile(opts: {
+  filePath: string
+  holder: PassphraseHolder
+}): Promise<void> {
+  opts.holder.clear()
+  try {
+    await fsp.unlink(opts.filePath)
+  } catch (error) {
+    // ENOENT just means we already had no file — that's a successful reset.
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw error
     }
   }
 }
