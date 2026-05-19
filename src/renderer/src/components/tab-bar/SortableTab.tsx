@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { X, Minimize2, Columns2, Rows2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { ShellIcon } from './shell-icons'
 import {
   DropdownMenu,
@@ -10,7 +11,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
-import type { TerminalTab } from '../../../../shared/types'
+import type { ClaudeManagedAccountSummary, TerminalTab } from '../../../../shared/types'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import { FilledBellIcon } from '../sidebar/WorktreeCardHelpers'
 import { useAppStore } from '../../store'
@@ -19,6 +20,10 @@ import {
   getDropIndicatorClasses,
   type DropIndicator
 } from './drop-indicator'
+import {
+  SortableTabClaudeAccountItem,
+  type AccountSummary as ClaudeAccountSummary
+} from './SortableTabClaudeAccountItem'
 
 type SortableTabProps = {
   tab: TerminalTab
@@ -80,6 +85,18 @@ export default function SortableTab({
   // map in TabBar would invalidate every SortableTab on every bell event
   // because the slice returns a fresh object reference on each mark/clear.
   const hasUnreadActivity = useAppStore((s) => s.unreadTerminalTabs[tab.id] === true)
+
+  // Why: P2 — Claude account per-tab override is gated by the multi-provider
+  // flag. Subscribe to both the flag and the per-worktree override map so the
+  // submenu's "currently selected" state stays in sync without a refetch on
+  // every render.
+  const multiProviderEnabled = useAppStore(
+    (s) => s.settings?.claudeMultiProviderEnabled === true
+  )
+  const workspaceOverride = useAppStore(
+    (s) => s.settings?.claudeAccountIdByWorkspace?.[tab.worktreeId] ?? null
+  )
+  const [claudeAccountSummaries, setClaudeAccountSummaries] = useState<ClaudeAccountSummary[]>([])
 
   // Why: createTab stamps the shell used at creation time, so changing the
   // default shell later does not repaint existing tabs as a different shell.
@@ -153,6 +170,56 @@ export default function SortableTab({
     window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
     return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
   }, [])
+
+  // Why: lazy-load the Claude account list the first time the menu opens so we
+  // never pay the IPC cost when the multi-provider flag is off or when the
+  // user never opens the tab context menu. The list is stable for the
+  // lifetime of the dropdown — refetch on the next open if the menu closes
+  // and reopens (cheap and avoids stale labels).
+  useEffect(() => {
+    if (!menuOpen || !multiProviderEnabled) {
+      return
+    }
+    let stale = false
+    void window.api.claudeAccounts.list().then((state) => {
+      if (stale) return
+      const summaries = (state.accounts ?? []).map((a: ClaudeManagedAccountSummary) => ({
+        id: a.id,
+        label: a.email || a.id
+      }))
+      setClaudeAccountSummaries(summaries)
+    })
+    return () => {
+      stale = true
+    }
+  }, [menuOpen, multiProviderEnabled])
+
+  const handleApplyClaudeAccountOverride = useCallback(
+    async (
+      update:
+        | { action: 'clear'; worktreeId: string }
+        | { action: 'set'; worktreeId: string; accountId: string }
+    ): Promise<void> => {
+      try {
+        if (update.action === 'clear') {
+          await window.api.claudeAccounts.clearWorkspaceOverride({
+            worktreeId: update.worktreeId
+          })
+        } else {
+          await window.api.claudeAccounts.setWorkspaceOverride({
+            worktreeId: update.worktreeId,
+            accountId: update.accountId
+          })
+        }
+      } catch (error) {
+        toast.error('Could not update the Claude account override.', {
+          description: String((error as Error)?.message ?? error)
+        })
+      }
+    },
+    []
+  )
+
 
   // Why: Electron <webview> elements run in a separate process, so clicking
   // inside one never dispatches a pointerdown on the renderer document. Radix
@@ -406,6 +473,19 @@ export default function SortableTab({
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={handleRenameOpen}>Change Title</DropdownMenuItem>
+          {multiProviderEnabled && tab.worktreeId && (
+            <>
+              <DropdownMenuSeparator />
+              <SortableTabClaudeAccountItem
+                worktreeId={tab.worktreeId}
+                accounts={claudeAccountSummaries}
+                currentOverride={workspaceOverride}
+                onApply={(update) => {
+                  void handleApplyClaudeAccountOverride(update)
+                }}
+              />
+            </>
+          )}
           <div className="px-2 pt-1.5 pb-1">
             <div className="text-xs font-medium text-muted-foreground mb-1.5">Tab Color</div>
             <div className="flex flex-wrap gap-2">
