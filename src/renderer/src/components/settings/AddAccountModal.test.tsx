@@ -614,4 +614,45 @@ describe('AddAccountModal — Azure AI Foundry (P2)', () => {
     const markup = renderToStaticMarkup(tree as React.ReactElement)
     expect(markup).toMatch(/aria-label="Resource"/)
   })
+
+  it('validateInputViaIpc forwards the input to claudeAccounts.validateInput and returns ok', async () => {
+    // Mock the renderer's window.api surface for this test. The helper
+    // bridges the form's `{ ok, message? }` shape onto the IPC's locked
+    // `{ ok: true } | { ok: false, reason, rescueHint? }` contract.
+    const validateInputMock = vi.fn(async () => ({ ok: true } as const))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(globalThis as any).window = {
+      api: { claudeAccounts: { validateInput: validateInputMock } }
+    }
+
+    const { validateInputViaIpc } = await import('./AddAccountModal')
+    const input = {
+      authMethod: 'azure-foundry' as const,
+      label: 'probe',
+      secretFromUser: 'k',
+      providerConfig: { resource: 'res', useEntraId: false as const }
+    }
+    const result = await validateInputViaIpc(input)
+    expect(validateInputMock).toHaveBeenCalledWith(input)
+    expect(result).toEqual({ ok: true, message: undefined })
+  })
+
+  it('validateInputViaIpc maps an IPC failure to { ok: false, message: reason }', async () => {
+    const validateInputMock = vi.fn(async () => ({
+      ok: false as const,
+      reason: 'API key invalid or revoked.',
+      rescueHint: 'Generate a new key.'
+    }))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(globalThis as any).window = {
+      api: { claudeAccounts: { validateInput: validateInputMock } }
+    }
+
+    const { validateInputViaIpc } = await import('./AddAccountModal')
+    const result = await validateInputViaIpc({
+      authMethod: 'anthropic-api-key',
+      secretFromUser: 'bad'
+    })
+    expect(result).toEqual({ ok: false, message: 'API key invalid or revoked.' })
+  })
 })

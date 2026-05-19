@@ -193,12 +193,24 @@ function renderProviderGrid({
   )
 }
 
-// Validation probe shape used by the Foundry form. The real wire-up lives in
-// Task 19 (IPC `claudeAccounts.validateInput`); until then `AddAccountModal`
-// stubs it as `() => Promise.resolve({ ok: true })`.
+// Validation probe shape used by the Foundry form. Wired in P2 T21 to the
+// `claudeAccounts.validateInput` IPC via `validateInputViaIpc` below.
 type ValidateInputFn = (
   input: AddAccountSubmit
 ) => Promise<{ ok: boolean; message?: string }>
+
+/**
+ * Bridge the renderer's `{ ok, message? }` form contract onto the IPC's locked
+ * `ClaudeAccountValidationResult` shape (`{ ok: true } | { ok: false, reason,
+ * rescueHint? }`). Exported so the AddAccountModal test can mock the IPC
+ * boundary without rendering the stateful Dialog.
+ */
+export async function validateInputViaIpc(
+  input: AddAccountSubmit
+): Promise<{ ok: boolean; message?: string }> {
+  const result = await window.api.claudeAccounts.validateInput(input)
+  return { ok: result.ok, message: result.ok ? undefined : result.reason }
+}
 
 type AddAccountModalFormViewProps = {
   picked: ClaudeAuthMethod | null
@@ -344,10 +356,8 @@ export function AddAccountModal({
           onPickProvider={handlePick}
           onBack={handleBack}
           onSubmit={onSubmit}
-          // Validation probe stub. Task 19 replaces this with an IPC call to
-          // `claudeAccounts.validateInput`. Default ok-true keeps the Foundry
-          // form usable in the interim.
-          onValidate={async () => ({ ok: true })}
+          // P2 T21 — Detect/Validate now hits the real IPC probe.
+          onValidate={validateInputViaIpc}
         />
       </DialogContent>
     </Dialog>
