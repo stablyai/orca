@@ -1321,6 +1321,29 @@ export type AddClaudeAccountInput =
         useEntraId?: boolean // true → Entra ID path; false/undefined → API-key path
       }
     }
+  | {
+      // Why: Bedrock supports both static bearer tokens (secretFromUser present)
+      // and IAM-chain credentials (secretFromUser absent — Claude CLI picks up
+      // AWS_* env at launch). inferenceProfilePrefix is optional; the handler
+      // derives it from `region` when omitted.
+      authMethod: 'aws-bedrock'
+      label?: string
+      secretFromUser?: string
+      providerConfig: {
+        region: string
+        inferenceProfilePrefix?: string
+      }
+    }
+  | {
+      // Why: Vertex is ADC-only — we never store a token, gcloud supplies
+      // credentials at runtime. The renderer omits `secretFromUser` entirely.
+      authMethod: 'google-vertex'
+      label?: string
+      providerConfig: {
+        projectId: string
+        region: string
+      }
+    }
 
 /** All AI coding agents Orca knows how to launch. Used for the agent picker in the new-workspace
  *  flow and for the default-agent setting. Extend this union as new agents are added. */

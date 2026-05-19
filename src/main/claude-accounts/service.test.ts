@@ -738,6 +738,39 @@ describe('ClaudeAccountService addAccount polymorphic input', () => {
     })
   })
 
+  it('routes aws-bedrock input to the Bedrock handler', async () => {
+    const { service } = await buildPolymorphicService()
+    const result = await service.addAccount({
+      authMethod: 'aws-bedrock',
+      label: 'Bedrock US',
+      secretFromUser: 'bearer-xyz',
+      providerConfig: { region: 'us-east-1' }
+    })
+    expect(result.accounts).toHaveLength(1)
+    expect(result.accounts[0]?.authMethod).toBe('aws-bedrock')
+    expect(result.accounts[0]?.credentials).toMatchObject({
+      authMethod: 'aws-bedrock',
+      region: 'us-east-1',
+      inferenceProfilePrefix: 'us.'
+    })
+  })
+
+  it('routes google-vertex input to the Vertex handler', async () => {
+    const { service } = await buildPolymorphicService()
+    const result = await service.addAccount({
+      authMethod: 'google-vertex',
+      label: 'Vertex',
+      providerConfig: { projectId: 'p', region: 'us-east5' }
+    })
+    expect(result.accounts).toHaveLength(1)
+    expect(result.accounts[0]?.authMethod).toBe('google-vertex')
+    expect(result.accounts[0]?.credentials).toMatchObject({
+      authMethod: 'google-vertex',
+      projectId: 'p',
+      region: 'us-east5'
+    })
+  })
+
   it('no-arg addAccount() still routes through the existing OAuth flow', async () => {
     const { service } = await buildPolymorphicService()
     ;(

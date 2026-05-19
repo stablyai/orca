@@ -37,6 +37,7 @@ import {
 import { beginClaudeAuthSwitch, endClaudeAuthSwitch } from './live-pty-gate'
 import { migrateClaudeAccount, migrateClaudeAccountList } from './migration'
 import { handlerFor, type ValidationResult } from './providers'
+import { deriveInferenceProfilePrefix } from './providers/inference-profile'
 import { getDefaultBaseUrl, getDefaultModelMapping } from './model-defaults'
 
 // Why: the canonical type now lives in src/shared/types.ts so preload + renderer
@@ -233,6 +234,24 @@ export class ClaudeAccountService {
         authMethod: 'anthropic-compat',
         preset,
         baseUrl
+      }
+    }
+    if (input.authMethod === 'aws-bedrock') {
+      // Why: mirror the Bedrock handler's region-derived prefix so the probe
+      // sees the same credentials shape the handler would persist.
+      const region = input.providerConfig.region
+      return {
+        authMethod: 'aws-bedrock',
+        region,
+        inferenceProfilePrefix:
+          input.providerConfig.inferenceProfilePrefix ?? deriveInferenceProfilePrefix(region)
+      }
+    }
+    if (input.authMethod === 'google-vertex') {
+      return {
+        authMethod: 'google-vertex',
+        projectId: input.providerConfig.projectId,
+        region: input.providerConfig.region
       }
     }
     // azure-foundry
