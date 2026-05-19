@@ -284,6 +284,8 @@ type AccessoryKey = {
 const ACCESSORY_KEYS: AccessoryKey[] = [
   { label: 'Esc', bytes: '\x1b' },
   { label: 'Tab', bytes: '\t' },
+  // Why: terminal apps recognize ESC [ Z as the reverse-tab sequence.
+  { label: 'Shift+Tab', bytes: '\x1b[Z', accessibilityLabel: 'Shift Tab' },
   { label: '⌫', bytes: '\x7f', accessibilityLabel: 'Backspace', repeatable: true },
   { label: 'Del', bytes: '\x1b[3~', accessibilityLabel: 'Forward delete', repeatable: true },
   { label: '↑', bytes: '\x1b[A', repeatable: true },
