@@ -81,7 +81,12 @@ export function useEditorPanelContentState({
       : null
 
   const loadFileContent = useCallback(
-    async (filePath: string, id: string, worktreeId?: string): Promise<void> => {
+    async (
+      filePath: string,
+      id: string,
+      worktreeId?: string,
+      relativePath?: string
+    ): Promise<void> => {
       try {
         const connectionId = getConnectionId(worktreeId ?? null) ?? undefined
         const restoredOpenFile = openFilesRef.current.find((file) => file.id === id)
@@ -108,7 +113,7 @@ export function useEditorPanelContentState({
           pending = readRuntimeFileContent({
             settings: readSettings,
             filePath,
-            relativePath: restoredOpenFile?.relativePath,
+            relativePath: restoredOpenFile?.relativePath ?? relativePath,
             worktreeId,
             connectionId
           }) as Promise<FileContent>
@@ -246,7 +251,7 @@ export function useEditorPanelContentState({
         delete next[file.id]
         return next
       })
-      void loadFileContent(file.filePath, file.id, file.worktreeId)
+      void loadFileContent(file.filePath, file.id, file.worktreeId, file.relativePath)
     },
     [loadFileContent]
   )
@@ -281,8 +286,10 @@ export function useEditorPanelContentState({
     activeFile?.id,
     activeFile?.mode,
     activeFile?.conflictReview?.selectedFileId,
+    activeFile?.conflictReview?.snapshotTimestamp,
     selectedConflictReviewFile?.id,
-    isChangesMode
+    isChangesMode,
+    gitStatusByWorktree
   ])
 
   useEditorPanelFileLoadRetry({
