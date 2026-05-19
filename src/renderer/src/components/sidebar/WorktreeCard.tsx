@@ -353,6 +353,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
     lineageChildCount === 1 ? 'child' : 'children'
   }`
   const showLineageChildChip = lineageChildCount > 0 && onLineageToggle !== undefined
+  const lineageParentTooltip =
+    lineageState === 'missing'
+      ? 'Parent workspace unavailable'
+      : parentLabel
+        ? `Parent workspace: ${parentLabel}`
+        : ''
 
   const handleDragStart = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
@@ -545,9 +551,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
           </div>
         </div>
 
-        {/* Subtitle row: Repo badge + Branch */}
+        {/* Why: the left metadata lane clips before the right metadata badges,
+             so long lineage labels truncate instead of painting underneath icons. */}
         <div className="flex items-center gap-1.5 min-w-0">
-          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
             {repo && !hideRepoBadge && (
               <div className="flex items-center gap-1.5 shrink-0 px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
                 <div
@@ -590,20 +597,33 @@ const WorktreeCard = React.memo(function WorktreeCard({
             <CacheTimer worktreeId={worktree.id} />
 
             {parentLabel && (
-              <Badge
-                variant="outline"
-                className={cn(
-                  'h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 gap-1 leading-none',
-                  lineageState === 'missing'
-                    ? 'text-muted-foreground border-border bg-muted/40'
-                    : 'text-muted-foreground border-border bg-accent/50'
-                )}
-              >
-                <Workflow className="size-2.5" />
-                <span className="max-w-[7rem] truncate">
-                  {lineageState === 'missing' ? 'Missing parent' : `from ${parentLabel}`}
-                </span>
-              </Badge>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge
+                    variant="outline"
+                    aria-label={lineageParentTooltip}
+                    className={cn(
+                      'h-[16px] min-w-0 max-w-[7rem] justify-start px-1.5 text-[10px] font-medium rounded shrink gap-1 leading-none',
+                      lineageState === 'missing'
+                        ? 'text-muted-foreground border-border bg-muted/40'
+                        : 'text-muted-foreground border-border bg-accent/50'
+                    )}
+                  >
+                    <Workflow className="size-2.5 shrink-0" />
+                    {lineageState === 'missing' ? (
+                      <span className="max-w-[7rem] truncate">Missing parent</span>
+                    ) : (
+                      <>
+                        <span className="shrink-0 text-muted-foreground/80">parent:</span>
+                        <span className="min-w-0 truncate">{parentLabel}</span>
+                      </>
+                    )}
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={8}>
+                  {lineageParentTooltip}
+                </TooltipContent>
+              </Tooltip>
             )}
           </div>
 
