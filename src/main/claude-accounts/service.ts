@@ -30,6 +30,7 @@ import {
   writeManagedClaudeKeychainCredentials
 } from './keychain'
 import { beginClaudeAuthSwitch, endClaudeAuthSwitch } from './live-pty-gate'
+import { migrateClaudeAccount, migrateClaudeAccountList } from './migration'
 
 const LOGIN_TIMEOUT_MS = 180_000
 const STATUS_TIMEOUT_MS = 20_000
@@ -101,21 +102,31 @@ export class ClaudeAccountService {
       await this.writeManagedAuth(accountId, managedAuthPath, captured)
 
       const now = Date.now()
-      const account: ClaudeManagedAccount = {
+      // Why: new accounts ship with the full P1 schema; migrate() guarantees
+      // credentials/modelMapping/fallbackAccountIds defaults stay in sync.
+      const account: ClaudeManagedAccount = migrateClaudeAccount({
         id: accountId,
         email: captured.identity.email,
         managedAuthPath,
         authMethod: 'subscription-oauth',
+        credentials: { authMethod: 'subscription-oauth' },
+        modelMapping: {},
+        fallbackAccountIds: [],
         organizationUuid: captured.identity.organizationUuid,
         organizationName: captured.identity.organizationName,
         createdAt: now,
         updatedAt: now,
         lastAuthenticatedAt: now
-      }
+      })
 
       const outgoingAccountId = previousSettings.activeClaudeManagedAccountId
+      // Why: migrate the existing array before appending so any legacy entries
+      // upgrade in the same write (lazy persistence — only on mutation).
       this.store.updateSettings({
-        claudeManagedAccounts: [...previousSettings.claudeManagedAccounts, account],
+        claudeManagedAccounts: [
+          ...migrateClaudeAccountList(previousSettings.claudeManagedAccounts),
+          account
+        ],
         activeClaudeManagedAccountId: account.id
       })
       this.runtimeAuth.clearLastWrittenCredentialsJson(accountId)
@@ -142,17 +153,20 @@ export class ClaudeAccountService {
 
     const settings = this.store.getSettings()
     const now = Date.now()
-    const reauthenticatedAccounts = settings.claudeManagedAccounts.map((entry) =>
-      entry.id === accountId
-        ? {
-            ...entry,
-            email: captured.identity.email!,
-            organizationUuid: captured.identity.organizationUuid,
-            organizationName: captured.identity.organizationName,
-            updatedAt: now,
-            lastAuthenticatedAt: now
-          }
-        : entry
+    // Why: lazy-migrate legacy entries on the mutation write path so disk
+    // converges to the new schema without a forced read-time write.
+    const reauthenticatedAccounts = migrateClaudeAccountList(settings.claudeManagedAccounts).map(
+      (entry) =>
+        entry.id === accountId
+          ? {
+              ...entry,
+              email: captured.identity.email!,
+              organizationUuid: captured.identity.organizationUuid,
+              organizationName: captured.identity.organizationName,
+              updatedAt: now,
+              lastAuthenticatedAt: now
+            }
+          : entry
     )
     let wroteManagedCredentials = false
     try {
@@ -205,7 +219,11 @@ export class ClaudeAccountService {
   private async doRemoveAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
     const account = this.requireAccount(accountId)
     const settings = this.store.getSettings()
-    const nextAccounts = settings.claudeManagedAccounts.filter((entry) => entry.id !== accountId)
+    // Why: lazy-migrate remaining accounts so the post-remove write also
+    // upgrades any legacy survivors to the new schema.
+    const nextAccounts = migrateClaudeAccountList(settings.claudeManagedAccounts).filter(
+      (entry) => entry.id !== accountId
+    )
     const nextActiveId =
       settings.activeClaudeManagedAccountId === accountId
         ? null
@@ -240,7 +258,13 @@ export class ClaudeAccountService {
     }
     const previousSettings = this.store.getSettings()
     const outgoingAccountId = previousSettings.activeClaudeManagedAccountId
-    this.store.updateSettings({ activeClaudeManagedAccountId: accountId })
+    // Why: piggyback the lazy migration onto this selection write so legacy
+    // entries upgrade without a separate read-time persistence pass.
+    const migratedAccounts = migrateClaudeAccountList(previousSettings.claudeManagedAccounts)
+    this.store.updateSettings({
+      claudeManagedAccounts: migratedAccounts,
+      activeClaudeManagedAccountId: accountId
+    })
     try {
       await this.syncRuntimeAuthWithLivePtyGate()
       await this.rateLimits.refreshForClaudeAccountChange(outgoingAccountId)
@@ -254,8 +278,10 @@ export class ClaudeAccountService {
 
   private getSnapshot(): ClaudeRateLimitAccountsState {
     const settings = this.store.getSettings()
+    // Why: lazy migration on the read path. We synthesize the new fields in
+    // memory but do NOT persist here — mutations are the only writes.
     return {
-      accounts: settings.claudeManagedAccounts
+      accounts: migrateClaudeAccountList(settings.claudeManagedAccounts)
         .map((account) => this.toSummary(account))
         .sort((a, b) => b.updatedAt - a.updatedAt),
       activeAccountId: settings.activeClaudeManagedAccountId
@@ -267,6 +293,8 @@ export class ClaudeAccountService {
       id: account.id,
       email: account.email,
       authMethod: account.authMethod ?? 'unknown',
+      credentials: account.credentials,
+      modelMapping: account.modelMapping,
       organizationUuid: account.organizationUuid ?? null,
       organizationName: account.organizationName ?? null,
       createdAt: account.createdAt,
@@ -282,7 +310,9 @@ export class ClaudeAccountService {
     if (!account) {
       throw new Error('That Claude account no longer exists.')
     }
-    return account
+    // Why: lazy-migrate on read so callers see the full P1 schema even when
+    // disk still holds the legacy shape.
+    return migrateClaudeAccount(account)
   }
 
   private normalizeActiveSelection(): void {
