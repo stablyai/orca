@@ -32,3 +32,9 @@ export class ClaudeRuntimePathResolver {
     return join(homedir(), '.claude.json')
   }
 }
+
+// Why: cross-platform path under app userData; mode-0600 enforced on write
+// (see encrypted-file-format.writeEncryptedFile).
+export function getEncryptedSecretsFilePath(userDataDir: string): string {
+  return join(userDataDir, 'claude-accounts', 'secrets.enc')
+}

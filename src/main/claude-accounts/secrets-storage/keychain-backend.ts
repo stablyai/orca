@@ -1,5 +1,23 @@
 import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import type { SecretsStorage } from './types'
+
+const execFileAsync = promisify(execFile)
+
+// Why: a quick liveness probe for the macOS keychain CLI. Returns false on
+// non-darwin or when `security` is missing/timed out, so the selector can fall
+// back to the encrypted-file backend (e.g. headless SSH, sandboxed CI).
+export async function probeKeychainAvailable(): Promise<boolean> {
+  if (process.platform !== 'darwin') {
+    return false
+  }
+  try {
+    await execFileAsync('security', ['list-keychains'], { timeout: 1_500 })
+    return true
+  } catch {
+    return false
+  }
+}
 
 // Wraps the macOS `security` CLI as a SecretsStorage backend. Mirrors the
 // existing keychain.ts shape so the LRU cache + callers can swap to the
