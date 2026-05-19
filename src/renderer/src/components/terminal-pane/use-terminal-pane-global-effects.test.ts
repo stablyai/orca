@@ -11,6 +11,20 @@ const mocks = vi.hoisted(() => ({
   restoreScrollState: vi.fn()
 }))
 
+const reactRefState = vi.hoisted(() => ({
+  slots: [] as { current: unknown }[],
+  index: 0
+}))
+
+function beginHookRender(): void {
+  reactRefState.index = 0
+}
+
+function resetHookRefs(): void {
+  reactRefState.slots = []
+  reactRefState.index = 0
+}
+
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()
   return {
@@ -18,7 +32,14 @@ vi.mock('react', async (importOriginal) => {
     useEffect: (effect: () => void | (() => void)) => {
       effect()
     },
-    useRef: <T>(value: T) => ({ current: value })
+    useRef: <T>(value: T) => {
+      const index = reactRefState.index
+      reactRefState.index += 1
+      if (!reactRefState.slots[index]) {
+        reactRefState.slots[index] = { current: value }
+      }
+      return reactRefState.slots[index] as { current: T }
+    }
   }
 })
 
@@ -80,6 +101,7 @@ function useMountForFileDrop(
   }
   const paneTransports = new Map<number, never>()
 
+  beginHookRender()
   useTerminalPaneGlobalEffects({
     tabId: options.tabId ?? 'tab-1',
     worktreeId: options.worktreeId ?? 'wt-1',
@@ -99,6 +121,7 @@ function useMountForFileDrop(
 
 describe('useTerminalPaneGlobalEffects', () => {
   beforeEach(() => {
+    resetHookRefs()
     vi.clearAllMocks()
     ;(globalThis as unknown as { window: unknown }).window = {
       addEventListener: vi.fn(),
@@ -146,6 +169,7 @@ describe('useTerminalPaneGlobalEffects', () => {
 
     const isActiveRef = { current: false }
     const isVisibleRef = { current: false }
+    beginHookRender()
     useTerminalPaneGlobalEffects({
       tabId: 'tab-1',
       worktreeId: 'wt-1',
@@ -172,6 +196,61 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(mocks.fitPanes).not.toHaveBeenCalled()
     expect(isActiveRef.current).toBe(true)
     expect(isVisibleRef.current).toBe(true)
+  })
+
+  it('restores from the pre-hide scroll state when hidden layout changes the viewport', () => {
+    const terminalA = { name: 'terminal-a' }
+    const manager = {
+      getPanes: vi.fn(() => [{ id: 1, terminal: terminalA }]),
+      resumeRendering: vi.fn(),
+      suspendRendering: vi.fn(),
+      fitAllPanes: vi.fn(),
+      getActivePane: vi.fn(() => null),
+      setActivePane: vi.fn()
+    }
+    const initialState = { marker: 'initial' }
+    const preHideState = { marker: 'before-hide' }
+    const corruptedHiddenState = { marker: 'hidden-corrupted' }
+    let nextCapturedState = initialState
+    mocks.captureScrollState.mockImplementation(() => nextCapturedState)
+
+    const baseArgs = {
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      managerRef: { current: manager as never },
+      containerRef: { current: null },
+      paneTransportsRef: { current: new Map() },
+      isActiveRef: { current: false },
+      isVisibleRef: { current: false },
+      toggleExpandPane: vi.fn()
+    }
+
+    beginHookRender()
+    useTerminalPaneGlobalEffects({
+      ...baseArgs,
+      isActive: true,
+      isVisible: true
+    })
+
+    nextCapturedState = preHideState
+    beginHookRender()
+    useTerminalPaneGlobalEffects({
+      ...baseArgs,
+      isActive: false,
+      isVisible: false
+    })
+
+    nextCapturedState = corruptedHiddenState
+    beginHookRender()
+    useTerminalPaneGlobalEffects({
+      ...baseArgs,
+      isActive: true,
+      isVisible: true
+    })
+
+    expect(mocks.captureScrollState).toHaveBeenCalledTimes(2)
+    expect(manager.suspendRendering).toHaveBeenCalledTimes(1)
+    expect(mocks.restoreScrollState).toHaveBeenLastCalledWith(terminalA, preHideState)
   })
 
   it('ignores terminal file drops for another terminal tab', () => {

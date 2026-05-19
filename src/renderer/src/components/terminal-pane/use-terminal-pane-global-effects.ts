@@ -16,6 +16,7 @@ import { handleFocusTerminalPaneDetail } from './focus-terminal-pane-event'
 import { surfaceStaleAgentRow } from './stale-agent-row'
 import { useAppStore } from '@/store'
 import { captureScrollState, restoreScrollState } from '@/lib/pane-manager/pane-scroll'
+import type { ScrollState } from '@/lib/pane-manager/pane-manager-types'
 
 type UseTerminalPaneGlobalEffectsArgs = {
   tabId: string
@@ -53,6 +54,7 @@ export function useTerminalPaneGlobalEffects({
   // otherwise leak WebGL contexts — openTerminal() unconditionally creates
   // one — and exhaust Chromium's ~8-context budget across worktrees.
   const wasVisibleRef = useRef(true)
+  const scrollStatesBeforeHideRef = useRef<Map<number, ScrollState> | null>(null)
 
   useEffect(() => {
     const manager = managerRef.current
@@ -64,9 +66,11 @@ export function useTerminalPaneGlobalEffects({
       // post-resume fit runs. Capture numeric viewport positions first; the
       // restore path avoids content matching so duplicate agent log lines do
       // not jump to the wrong history entry.
-      const viewportPositions = new Map(
-        manager.getPanes().map((pane) => [pane.id, captureScrollState(pane.terminal)] as const)
-      )
+      const viewportPositions =
+        scrollStatesBeforeHideRef.current && scrollStatesBeforeHideRef.current.size > 0
+          ? scrollStatesBeforeHideRef.current
+          : capturePaneScrollStates(manager)
+      scrollStatesBeforeHideRef.current = null
       // Why: background PTY output is throttled while a pane is not focused;
       // flush it before fitting so newly visible terminals paint current state.
       for (const pane of manager.getPanes()) {
@@ -92,6 +96,9 @@ export function useTerminalPaneGlobalEffects({
         }
       }
     } else if (wasVisibleRef.current) {
+      // Why: hidden DOM/layout churn can mutate xterm's viewport before the
+      // pane becomes visible again. Preserve the last visible position.
+      scrollStatesBeforeHideRef.current = capturePaneScrollStates(manager)
       // Suspend WebGL when going hidden. xterm.write() continues to land in
       // the (now DOM-renderer-fallback or paused-canvas) terminal; the
       // suspend is purely a GPU resource decision.
@@ -307,4 +314,8 @@ export function useTerminalPaneGlobalEffects({
       })
     })
   }, [isActive, isVisible, managerRef, paneTransportsRef, tabId])
+}
+
+function capturePaneScrollStates(manager: PaneManager): Map<number, ScrollState> {
+  return new Map(manager.getPanes().map((pane) => [pane.id, captureScrollState(pane.terminal)]))
 }
