@@ -1,3 +1,5 @@
+import { execFile as _execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import {
   readManagedClaudeKeychainCredentials,
   writeManagedClaudeKeychainCredentials
@@ -5,6 +7,8 @@ import {
 import { deriveInferenceProfilePrefix } from './inference-profile'
 import type { ProviderHandler } from './types'
 import type { ClaudeManagedAccount, ClaudeModelMapping } from '../../../shared/types'
+
+const execFile = promisify(_execFile)
 
 type BedrockProviderConfig = {
   region?: string
@@ -84,8 +88,50 @@ export function createAwsBedrockHandler(): ProviderHandler {
       }
       return { envPatch: env }
     },
-    validate: async () => {
-      throw new Error('aws-bedrock validate not implemented yet (P3 Task 5)')
+    validate: async (account) => {
+      const creds = account.credentials
+      if (creds.authMethod !== 'aws-bedrock') {
+        return { ok: false, reason: 'AWS Bedrock validate invoked on non-bedrock account.' }
+      }
+      // No AWS SDK runtime dep — shell out to the user's `aws` CLI. Decision
+      // locked in plan: Claude CLI reads AWS_* env directly at launch, so
+      // Detect only needs to prove the chain resolves.
+      const bearer = await readManagedClaudeKeychainCredentials(account.id)
+      try {
+        if (!bearer) {
+          // IAM-chain path — verify the AWS chain resolves at all.
+          await execFile('aws', ['sts', 'get-caller-identity', '--region', creds.region])
+          return { ok: true }
+        }
+        // Static-token path — optionally probe Bedrock model listing so a
+        // missing iam:bedrock:* policy surfaces as a locked 403 error here
+        // rather than at first prompt.
+        await execFile('aws', ['bedrock', 'list-foundation-models', '--region', creds.region])
+        return { ok: true }
+      } catch (err) {
+        const stderr =
+          (err as { stderr?: string }).stderr ??
+          (err instanceof Error ? err.message : String(err))
+        if (/AccessDenied/i.test(stderr)) {
+          return {
+            ok: false,
+            reason: 'Bedrock model access denied. Request in AWS console.',
+            rescueHint: 'Request Anthropic model access in the Bedrock model catalog.'
+          }
+        }
+        if (/locate credentials|expired|InvalidToken/i.test(stderr)) {
+          return {
+            ok: false,
+            reason: 'AWS credentials missing/expired. Run `aws sso login` then click Detect.',
+            rescueHint: 'Run `aws sso login` (or refresh your role) and retry.'
+          }
+        }
+        return {
+          ok: false,
+          reason: 'Network or AWS error contacting Bedrock.',
+          rescueHint: 'Check your network and the AWS CLI configuration.'
+        }
+      }
     }
   }
 }

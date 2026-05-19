@@ -137,3 +137,83 @@ describe('awsBedrockHandler.materialize', () => {
     )
   })
 })
+
+type ExecFileCb = (err: Error | null, stdout: string, stderr: string) => void
+const execFileMock = vi.fn<
+  (cmd: string, args: string[], cb: ExecFileCb) => void
+>()
+
+vi.mock('node:child_process', () => ({
+  execFile: (cmd: string, args: string[], cb: ExecFileCb) => execFileMock(cmd, args, cb)
+}))
+
+describe('awsBedrockHandler.validate', () => {
+  beforeEach(() => {
+    execFileMock.mockReset()
+    readKeychainMock.mockReset()
+  })
+
+  it('static-token path: probes Bedrock list-foundation-models with bearer present', async () => {
+    readKeychainMock.mockResolvedValueOnce('bearer-xyz')
+    execFileMock.mockImplementation((_cmd, _args, cb) => cb(null, '{"modelSummaries":[]}', ''))
+    const handler = createAwsBedrockHandler()
+    const r = await handler.validate(bedrockAccount('us-east-1', 'us.'))
+    expect(r.ok).toBe(true)
+  })
+
+  it('IAM-chain path: shells out to `aws sts get-caller-identity`', async () => {
+    readKeychainMock.mockResolvedValueOnce(null)
+    execFileMock.mockImplementation((_cmd, _args, cb) =>
+      cb(null, '{"Arn":"arn:aws:iam::1:user/x"}', '')
+    )
+    const handler = createAwsBedrockHandler()
+    const r = await handler.validate(bedrockAccount('us-east-1', 'us.'))
+    expect(execFileMock).toHaveBeenCalledWith(
+      'aws',
+      expect.arrayContaining(['sts', 'get-caller-identity']),
+      expect.any(Function)
+    )
+    expect(r.ok).toBe(true)
+  })
+
+  it('IAM-chain failure → locked credentials-missing message', async () => {
+    readKeychainMock.mockResolvedValueOnce(null)
+    execFileMock.mockImplementation((_c, _a, cb) => {
+      const err = new Error('exit 255') as Error & { stderr?: string }
+      err.stderr = 'Unable to locate credentials'
+      cb(err, '', 'Unable to locate credentials')
+    })
+    const handler = createAwsBedrockHandler()
+    const r = await handler.validate(bedrockAccount('us-east-1', 'us.'))
+    if (r.ok) throw new Error('expected fail')
+    expect(r.reason).toBe(
+      'AWS credentials missing/expired. Run `aws sso login` then click Detect.'
+    )
+  })
+
+  it('Bedrock access denied → locked 403 message', async () => {
+    readKeychainMock.mockResolvedValueOnce('t')
+    execFileMock.mockImplementation((_c, _a, cb) => {
+      const err = new Error('exit 254') as Error & { stderr?: string }
+      err.stderr = 'AccessDeniedException: not authorized'
+      cb(err, '', 'AccessDeniedException: not authorized')
+    })
+    const handler = createAwsBedrockHandler()
+    const r = await handler.validate(bedrockAccount('us-east-1', 'us.'))
+    if (r.ok) throw new Error('expected fail')
+    expect(r.reason).toBe('Bedrock model access denied. Request in AWS console.')
+  })
+
+  it('unknown AWS CLI error → locked network message', async () => {
+    readKeychainMock.mockResolvedValueOnce(null)
+    execFileMock.mockImplementation((_c, _a, cb) => {
+      const err = new Error('exit 1') as Error & { stderr?: string }
+      err.stderr = 'Connection timed out'
+      cb(err, '', 'Connection timed out')
+    })
+    const handler = createAwsBedrockHandler()
+    const r = await handler.validate(bedrockAccount('us-east-1', 'us.'))
+    if (r.ok) throw new Error('expected fail')
+    expect(r.reason).toBe('Network or AWS error contacting Bedrock.')
+  })
+})
