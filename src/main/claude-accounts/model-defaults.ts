@@ -25,7 +25,11 @@ const COMPAT_BASE_URLS: Record<AnthropicCompatPreset, string | null> = {
 }
 
 export function getDefaultModelMapping(creds: ClaudeAuthCredentials): ClaudeModelMapping {
-  if (creds.authMethod === 'anthropic-api-key' || creds.authMethod === 'subscription-oauth') {
+  if (
+    creds.authMethod === 'anthropic-api-key' ||
+    creds.authMethod === 'subscription-oauth' ||
+    creds.authMethod === 'azure-foundry'
+  ) {
     return { ...ANTHROPIC_NATIVE_DEFAULTS }
   }
   if (creds.authMethod === 'anthropic-compat') {

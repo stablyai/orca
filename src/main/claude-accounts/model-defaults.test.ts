@@ -52,6 +52,28 @@ describe('getDefaultModelMapping', () => {
   })
 })
 
+describe('getDefaultModelMapping — azure-foundry (P2)', () => {
+  it('returns Anthropic native IDs for azure-foundry', () => {
+    const m = getDefaultModelMapping({
+      authMethod: 'azure-foundry',
+      resource: 'r1',
+      useEntraId: false
+    })
+    expect(m.opus).toBe('claude-opus-4-7')
+    expect(m.sonnet).toBe('claude-sonnet-4-6')
+    expect(m.haiku).toBe('claude-haiku-4-5-20251001')
+  })
+
+  it('treats Entra ID variant identically (still native IDs)', () => {
+    const m = getDefaultModelMapping({
+      authMethod: 'azure-foundry',
+      resource: 'r1',
+      useEntraId: true
+    })
+    expect(m.opus).toBe('claude-opus-4-7')
+  })
+})
+
 describe('getDefaultBaseUrl', () => {
   it.each([
     ['zai', 'https://api.z.ai/api/anthropic'],
