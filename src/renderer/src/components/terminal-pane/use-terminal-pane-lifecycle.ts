@@ -141,6 +141,17 @@ type UseTerminalPaneLifecycleDeps = {
   setPaneCount: React.Dispatch<React.SetStateAction<number>>
 }
 
+export function suppressIntentionalPaneCloseExit(
+  transport: Pick<PtyTransport, 'getPtyId'> | null | undefined,
+  suppressPtyExit: (ptyId: string) => void
+): string | null {
+  const ptyId = transport?.getPtyId() ?? null
+  if (ptyId) {
+    suppressPtyExit(ptyId)
+  }
+  return ptyId
+}
+
 function terminalSelectionExceedsPrimaryLimit(terminal: Terminal): boolean {
   const range = terminal.getSelectionPosition()
   if (!range) {
@@ -681,8 +692,14 @@ export function useTerminalPaneLifecycle({
           panePtyBindings.delete(paneId)
         }
         if (transport) {
-          const ptyId = transport.getPtyId()
+          const ptyId = suppressIntentionalPaneCloseExit(
+            transport,
+            useAppStore.getState().suppressPtyExit
+          )
           if (ptyId) {
+            // Why: user/CLI pane closes intentionally tear down this PTY after
+            // PaneManager has already promoted the sibling. Suppress that exit
+            // so the last-surviving pane is not mistaken for an exited tab.
             syncPanePtyLayoutBinding(paneId, null)
             clearTabPtyId(tabId, ptyId)
           }
