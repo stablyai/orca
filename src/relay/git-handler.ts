@@ -67,11 +67,15 @@ export class GitHandler {
   private async git(
     args: string[],
     cwd: string,
-    opts?: { maxBuffer?: number }
+    opts?: { maxBuffer?: number; disableOptionalLocks?: boolean }
   ): Promise<{ stdout: string; stderr: string }> {
+    const env = buildRelayCommandEnv()
+    if (opts?.disableOptionalLocks) {
+      env.GIT_OPTIONAL_LOCKS = '0'
+    }
     return execFileAsync('git', args, {
       cwd: expandTilde(cwd),
-      env: buildRelayCommandEnv(),
+      env,
       encoding: 'utf-8',
       maxBuffer: opts?.maxBuffer ?? MAX_GIT_BUFFER
     })

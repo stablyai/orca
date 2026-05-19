@@ -17,6 +17,7 @@ import { getBitbucketRepoSlug } from '../bitbucket/client'
 import { getGiteaRepoSlug } from '../gitea/client'
 import { createGitHubPullRequest, getRepoSlug } from '../github/client'
 import { acquire, ghExecFileAsync, gitExecFileAsync, release } from '../github/gh-utils'
+import { gitOptionalLocksDisabledEnv } from '../git/runner'
 import { resolveDefaultBaseRefViaExec } from '../git/repo'
 import { getUpstreamStatus } from '../git/upstream'
 import { getProjectSlug } from '../gitlab/client'
@@ -104,7 +105,12 @@ async function getCurrentBranch(repoPath: string): Promise<string> {
 }
 
 async function hasUncommittedChanges(repoPath: string): Promise<boolean> {
-  const { stdout } = await gitExecFileAsync(['status', '--porcelain'], { cwd: repoPath })
+  const { stdout } = await gitExecFileAsync(['status', '--porcelain'], {
+    cwd: repoPath,
+    // Why: create-PR validation should not take Git's optional index lock while
+    // the user may be running fetch/pull/rebase from a terminal.
+    env: gitOptionalLocksDisabledEnv()
+  })
   return stdout.trim().length > 0
 }
 

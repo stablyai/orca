@@ -11,7 +11,11 @@ import { bufferToBlob, buildDiffResult, parseBranchDiff } from './git-handler-ut
 
 // ─── Executor types ──────────────────────────────────────────────────
 
-export type GitExec = (args: string[], cwd: string) => Promise<{ stdout: string; stderr: string }>
+export type GitExec = (
+  args: string[],
+  cwd: string,
+  opts?: { maxBuffer?: number; disableOptionalLocks?: boolean }
+) => Promise<{ stdout: string; stderr: string }>
 
 export type GitBufferExec = (args: string[], cwd: string) => Promise<Buffer>
 

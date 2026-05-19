@@ -13,7 +13,11 @@ const { gitExecFileAsyncMock, gitExecFileAsyncBufferMock, readFileMock, rmMock, 
 
 vi.mock('./runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,
-  gitExecFileAsyncBuffer: gitExecFileAsyncBufferMock
+  gitExecFileAsyncBuffer: gitExecFileAsyncBufferMock,
+  gitOptionalLocksDisabledEnv: (env: NodeJS.ProcessEnv = process.env) => ({
+    ...env,
+    GIT_OPTIONAL_LOCKS: '0'
+  })
 }))
 
 vi.mock('fs/promises', () => ({
@@ -363,7 +367,7 @@ describe('getStatus', () => {
         '--branch',
         '--untracked-files=all'
       ],
-      { cwd: '/repo' }
+      { cwd: '/repo', env: expect.objectContaining({ GIT_OPTIONAL_LOCKS: '0' }) }
     )
     expect(result.entries).toEqual([
       { path: 'docs/日本語/sample.md', status: 'modified', area: 'unstaged' }
@@ -389,7 +393,7 @@ describe('getStatus', () => {
         '--untracked-files=all',
         '--ignored=matching'
       ],
-      { cwd: '/repo' }
+      { cwd: '/repo', env: expect.objectContaining({ GIT_OPTIONAL_LOCKS: '0' }) }
     )
     expect(result.ignoredPaths).toEqual(['dist/', 'generated/file.js'])
   })
@@ -458,7 +462,7 @@ describe('getStatus', () => {
         '--branch',
         '--untracked-files=all'
       ],
-      { cwd: '/repo' }
+      { cwd: '/repo', env: expect.objectContaining({ GIT_OPTIONAL_LOCKS: '0' }) }
     )
     expect('ignoredPaths' in result).toBe(false)
   })
@@ -482,7 +486,7 @@ describe('getStatus', () => {
         '--untracked-files=all',
         '--ignored=matching'
       ],
-      { cwd: '/repo' }
+      { cwd: '/repo', env: expect.objectContaining({ GIT_OPTIONAL_LOCKS: '0' }) }
     )
     expect(result.ignoredPaths).toEqual(['dist/', '.env', 'coverage/'])
     expect(result.entries).toEqual([])

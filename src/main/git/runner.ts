@@ -212,6 +212,15 @@ type GitExecOptions = {
   env?: NodeJS.ProcessEnv
 }
 
+export function gitOptionalLocksDisabledEnv(
+  env: NodeJS.ProcessEnv = process.env
+): NodeJS.ProcessEnv {
+  return {
+    ...env,
+    GIT_OPTIONAL_LOCKS: '0'
+  }
+}
+
 /**
  * Async git command execution. Drop-in replacement for
  * `execFileAsync('git', args, { cwd, encoding, ... })`.

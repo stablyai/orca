@@ -94,7 +94,11 @@ export async function getStatusOp(
     if (includeIgnored) {
       statusArgs.push('--ignored=matching')
     }
-    const { stdout } = await git(statusArgs, worktreePath)
+    const { stdout } = await git(statusArgs, worktreePath, {
+      // Why: status polling is read-like; avoid refreshing the index and racing
+      // terminal Git commands on `.git/worktrees/*/index.lock`.
+      disableOptionalLocks: true
+    })
     const parsed = parseStatusOutput(stdout)
     entries.push(...parsed.entries)
     head = parsed.head

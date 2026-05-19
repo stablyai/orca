@@ -16,7 +16,7 @@ import type {
   GitStatusResult
 } from '../../shared/types'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
-import { gitExecFileAsync, gitExecFileAsyncBuffer } from './runner'
+import { gitExecFileAsync, gitExecFileAsyncBuffer, gitOptionalLocksDisabledEnv } from './runner'
 
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
@@ -59,7 +59,12 @@ export async function getStatus(
   if (options.includeIgnored) {
     statusArgs.push('--ignored=matching')
   }
-  const statusPromise = gitExecFileAsync(statusArgs, { cwd: worktreePath })
+  const statusPromise = gitExecFileAsync(statusArgs, {
+    cwd: worktreePath,
+    // Why: status polling is read-like; avoid refreshing the index and racing
+    // terminal Git commands on `.git/worktrees/*/index.lock`.
+    env: gitOptionalLocksDisabledEnv()
+  })
   const conflictOperation = await conflictPromise
 
   try {
