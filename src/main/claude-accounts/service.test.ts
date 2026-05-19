@@ -32,6 +32,13 @@ vi.mock('./keychain', () => ({
   writeManagedClaudeKeychainCredentials: vi.fn(async () => {})
 }))
 
+// Why: the azure-foundry handler shells to `az` when Entra ID is enabled. Stub
+// the detection + token helpers so the service test stays hermetic.
+vi.mock('./providers/azure-cli', () => ({
+  detectAzureEntraIdSignIn: vi.fn(async () => ({ ok: true, account: { user: 'a', tenantId: 't' } })),
+  getEntraAccessTokenForCognitiveServices: vi.fn(async () => ({ ok: true, token: 'jwt' }))
+}))
+
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
 
 function setPlatform(platform: NodeJS.Platform): void {
@@ -697,6 +704,38 @@ describe('ClaudeAccountService addAccount polymorphic input', () => {
     ).rejects.toThrow(/preset/i)
     expect(getSettings().claudeManagedAccounts).toHaveLength(0)
     expect(service.listAccounts().accounts).toHaveLength(0)
+  })
+
+  it('addAccount(input) for azure-foundry API-key path persists credentials and active id', async () => {
+    const { service } = await buildPolymorphicService()
+    const result = await service.addAccount({
+      authMethod: 'azure-foundry',
+      label: 'Foundry prod',
+      secretFromUser: 'fkey-abc',
+      providerConfig: { resource: 'prod-resource' }
+    })
+    expect(result.accounts).toHaveLength(1)
+    expect(result.accounts[0]?.authMethod).toBe('azure-foundry')
+    expect(result.accounts[0]?.credentials).toEqual({
+      authMethod: 'azure-foundry',
+      resource: 'prod-resource',
+      useEntraId: false
+    })
+    expect(result.activeAccountId).toBe(result.accounts[0]?.id)
+  })
+
+  it('addAccount(input) for azure-foundry Entra ID path persists useEntraId true and skips secret', async () => {
+    const { service } = await buildPolymorphicService()
+    const result = await service.addAccount({
+      authMethod: 'azure-foundry',
+      label: 'Foundry dev',
+      providerConfig: { resource: 'dev-resource', useEntraId: true }
+    })
+    expect(result.accounts[0]?.credentials).toEqual({
+      authMethod: 'azure-foundry',
+      resource: 'dev-resource',
+      useEntraId: true
+    })
   })
 
   it('no-arg addAccount() still routes through the existing OAuth flow', async () => {
