@@ -161,9 +161,15 @@ export type ClaudeValidationBadgeState =
 export function pickClaudeValidationBadgeState(
   entry: ClaudeAccountValidationResult | 'pending' | undefined
 ): ClaudeValidationBadgeState {
-  if (entry === undefined) return { kind: 'unvalidated' }
-  if (entry === 'pending') return { kind: 'pending' }
-  if (entry.ok) return { kind: 'valid' }
+  if (entry === undefined) {
+    return { kind: 'unvalidated' }
+  }
+  if (entry === 'pending') {
+    return { kind: 'pending' }
+  }
+  if (entry.ok) {
+    return { kind: 'valid' }
+  }
   return { kind: 'invalid', reason: entry.reason, rescueHint: entry.rescueHint }
 }
 
@@ -418,7 +424,10 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
               variant="outline"
               size="xs"
               onClick={() => {
-                if (resolveClaudeAddAccountAction(settings.claudeMultiProviderEnabled) === 'open-modal') {
+                if (
+                  resolveClaudeAddAccountAction(settings.claudeMultiProviderEnabled) ===
+                  'open-modal'
+                ) {
                   setAddClaudeModalOpen(true)
                   return
                 }
@@ -478,9 +487,7 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
                 const isActive = claudeAccounts.activeAccountId === account.id
                 const isReauthing = claudeAction === `reauth:${account.id}`
                 const isBusy = claudeAction !== 'idle'
-                const validationState = pickClaudeValidationBadgeState(
-                  claudeValidation[account.id]
-                )
+                const validationState = pickClaudeValidationBadgeState(claudeValidation[account.id])
 
                 return (
                   <div
@@ -539,25 +546,27 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
                           )}
                           Re-check
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            void runClaudeAccountAction(`reauth:${account.id}`, () =>
-                              window.api.claudeAccounts.reauthenticate({ accountId: account.id })
-                            )
-                          }}
-                          disabled={isBusy}
-                          className="h-6 px-2 text-muted-foreground hover:text-foreground"
-                        >
-                          {isReauthing ? (
-                            <Loader2 className="size-3 animate-spin" />
-                          ) : (
-                            <RefreshCw className="size-3" />
-                          )}
-                          Re-authenticate
-                        </Button>
+                        {account.authMethod === 'subscription-oauth' && (
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              void runClaudeAccountAction(`reauth:${account.id}`, () =>
+                                window.api.claudeAccounts.reauthenticate({ accountId: account.id })
+                              )
+                            }}
+                            disabled={isBusy}
+                            className="h-6 px-2 text-muted-foreground hover:text-foreground"
+                          >
+                            {isReauthing ? (
+                              <Loader2 className="size-3 animate-spin" />
+                            ) : (
+                              <RefreshCw className="size-3" />
+                            )}
+                            Re-authenticate
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="xs"
@@ -577,7 +586,10 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
                       <p className="text-[11px] text-destructive">
                         {validationState.reason}
                         {validationState.rescueHint ? (
-                          <span className="text-muted-foreground"> {validationState.rescueHint}</span>
+                          <span className="text-muted-foreground">
+                            {' '}
+                            {validationState.rescueHint}
+                          </span>
                         ) : null}
                       </p>
                     ) : null}
