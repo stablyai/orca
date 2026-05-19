@@ -1,9 +1,11 @@
 /* eslint-disable max-lines */
 import React, { useMemo, useCallback, useRef, useState, useEffect, useLayoutEffect } from 'react'
 import {
+  defaultRangeExtractor,
   measureElement as measureVirtualElementSize,
   useVirtualizer
 } from '@tanstack/react-virtual'
+import type { Range } from '@tanstack/react-virtual'
 import { ChevronDown, CircleX, Ellipsis, Plus, Trash2, Workflow } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
@@ -92,6 +94,8 @@ const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
   // fight virtual row measurement/remounts and produce visible jumps.
   overflowAnchor: 'none'
 }
+const GROUP_HEADER_ROW_HEIGHT = 28
+const SECONDARY_GROUP_HEADER_TOP_MARGIN = 8
 
 export function shouldAdjustWorktreeSidebarMeasuredRowScroll(args: {
   isScrolling: boolean
@@ -253,7 +257,42 @@ function getVirtualRowKey(element: Element): string | null {
   return element.getAttribute('data-worktree-virtual-row-key')
 }
 
-function estimateRenderRowSize(row: RenderRow | undefined): number {
+function shouldUseHeaderTopSpacing(args: {
+  rows: readonly RenderRow[]
+  index: number
+  firstHeaderIndex: number
+  isActiveStickyHeader: boolean
+}): boolean {
+  const previousRenderRow = args.rows[args.index - 1]
+  const followsCollapsedPinnedHeader =
+    previousRenderRow?.type === 'header' && previousRenderRow.key === PINNED_GROUP_KEY
+  return (
+    args.index !== args.firstHeaderIndex &&
+    !args.isActiveStickyHeader &&
+    !followsCollapsedPinnedHeader
+  )
+}
+
+function estimateRenderRowSize(
+  rows: readonly RenderRow[],
+  index: number,
+  firstHeaderIndex: number,
+  activeStickyHeaderIndex: number | null
+): number {
+  const row = rows[index]
+  if (row?.type === 'header') {
+    return (
+      GROUP_HEADER_ROW_HEIGHT +
+      (shouldUseHeaderTopSpacing({
+        rows,
+        index,
+        firstHeaderIndex,
+        isActiveStickyHeader: activeStickyHeaderIndex === index
+      })
+        ? SECONDARY_GROUP_HEADER_TOP_MARGIN
+        : 0)
+    )
+  }
   if (row?.type === 'lineage-group') {
     return 100 + Math.max(0, row.rows.length - 1) * 96
   }
@@ -262,6 +301,29 @@ function estimateRenderRowSize(row: RenderRow | undefined): number {
 
 function getVirtualRowTransform(start: number): string {
   return `translateY(${start}px)`
+}
+
+function getStickyHeaderIndexes(rows: readonly RenderRow[]): number[] {
+  const indexes: number[] = []
+  rows.forEach((row, index) => {
+    if (row.type === 'header') {
+      indexes.push(index)
+    }
+  })
+  return indexes
+}
+
+function getActiveStickyHeaderIndex(
+  stickyHeaderIndexes: readonly number[],
+  rangeStartIndex: number
+): number | null {
+  for (let index = stickyHeaderIndexes.length - 1; index >= 0; index--) {
+    const headerIndex = stickyHeaderIndexes[index]
+    if (headerIndex <= rangeStartIndex) {
+      return headerIndex
+    }
+  }
+  return null
 }
 
 const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewport({
@@ -313,6 +375,16 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     getScrollContainer: () => scrollRef.current
   })
   const renderRows = useMemo(() => buildRenderableRows(rows), [rows])
+  const firstHeaderIndex = useMemo(
+    () => renderRows.findIndex((row) => row.type === 'header'),
+    [renderRows]
+  )
+  const firstHeaderIndexRef = useRef(firstHeaderIndex)
+  firstHeaderIndexRef.current = firstHeaderIndex
+  const stickyHeaderIndexes = useMemo(() => getStickyHeaderIndexes(renderRows), [renderRows])
+  const stickyHeaderIndexesRef = useRef(stickyHeaderIndexes)
+  stickyHeaderIndexesRef.current = stickyHeaderIndexes
+  const activeStickyHeaderIndexRef = useRef<number | null>(null)
   const activeWorktreeRowIndex = useMemo(
     () => renderRows.findIndex((row) => renderRowContainsWorktree(row, activeWorktreeId)),
     [renderRows, activeWorktreeId]
@@ -388,7 +460,21 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         // into whichever row now owns the old data-index.
         return (
           measured?.size ??
-          estimateRenderRowSize(index === null ? undefined : renderRowsRef.current[index])
+          estimateRenderRowSize(
+            renderRowsRef.current,
+            index ?? -1,
+            firstHeaderIndexRef.current,
+            activeStickyHeaderIndexRef.current
+          )
+        )
+      }
+      const index = getVirtualRowIndex(element)
+      if (index !== null && renderRowsRef.current[index]?.type === 'header') {
+        return estimateRenderRowSize(
+          renderRowsRef.current,
+          index,
+          firstHeaderIndexRef.current,
+          activeStickyHeaderIndexRef.current
         )
       }
       return measureVirtualElementSize(element, entry, instance)
@@ -418,8 +504,30 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const virtualizer = useVirtualizer({
     count: renderRows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: (index) => estimateRenderRowSize(renderRows[index]),
+    estimateSize: (index) =>
+      estimateRenderRowSize(
+        renderRows,
+        index,
+        firstHeaderIndex,
+        activeStickyHeaderIndexRef.current
+      ),
     measureElement: measureCurrentVirtualRowElement,
+    rangeExtractor: useCallback((range: Range) => {
+      const activeStickyHeaderIndex = getActiveStickyHeaderIndex(
+        stickyHeaderIndexesRef.current,
+        range.startIndex
+      )
+      activeStickyHeaderIndexRef.current = activeStickyHeaderIndex
+      if (activeStickyHeaderIndex === null) {
+        return defaultRangeExtractor(range)
+      }
+
+      // Why: this mirrors TanStack Virtual's sticky example — the active
+      // section header remains a real virtual row even after it scrolls out.
+      return Array.from(new Set([activeStickyHeaderIndex, ...defaultRangeExtractor(range)])).sort(
+        (a, b) => a - b
+      )
+    }, []),
     overscan: 10,
     gap: 6,
     isScrollingResetDelay: USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS,
@@ -734,11 +842,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     [markDirectScrollInput]
   )
 
-  const firstHeaderIndex = useMemo(
-    () => renderRows.findIndex((row) => row.type === 'header'),
-    [renderRows]
-  )
-
   const activeDescendantId =
     activeWorktreeId != null &&
     activeWorktreeRowIndex !== -1 &&
@@ -880,6 +983,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           }
 
           if (row.type === 'header') {
+            const isActiveStickyHeader = activeStickyHeaderIndexRef.current === vItem.index
+            const hasHeaderTopSpacing = shouldUseHeaderTopSpacing({
+              rows: renderRows,
+              index: vItem.index,
+              firstHeaderIndex,
+              isActiveStickyHeader
+            })
             const isRepoHeader = groupBy === 'repo' && row.repo !== undefined
             const repoIdForHeader = isRepoHeader ? row.repo!.id : undefined
             const isDraggingThis =
@@ -906,10 +1016,19 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 role="presentation"
                 data-worktree-virtual-row
                 data-worktree-virtual-row-key={String(vItem.key)}
+                data-worktree-sticky-header=""
+                data-worktree-sticky-header-active={isActiveStickyHeader ? '' : undefined}
                 data-index={vItem.index}
                 ref={measureVirtualRowElement}
-                className="absolute left-0 right-0"
-                style={{ transform: getVirtualRowTransform(vItem.start) }}
+                className={cn(
+                  'left-0 right-0',
+                  isActiveStickyHeader ? 'sticky -top-px z-20 bg-sidebar' : 'absolute top-0'
+                )}
+                style={
+                  isActiveStickyHeader
+                    ? undefined
+                    : { transform: getVirtualRowTransform(vItem.start) }
+                }
               >
                 <div
                   role="button"
@@ -931,7 +1050,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       'rounded-md bg-sidebar-accent ring-1 ring-sidebar-ring/40',
                     // First header sits directly under SidebarHeader, which already
                     // supplies its own spacing — only offset secondary group headers.
-                    vItem.index !== firstHeaderIndex && 'mt-2',
+                    // Why: the active sticky header must paint flush to the
+                    // scrollport top; a collapsed top margin leaks rows behind it.
+                    hasHeaderTopSpacing && 'mt-2',
                     row.repo && 'overflow-hidden'
                   )}
                   onDragOver={
@@ -1305,7 +1426,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 data-worktree-virtual-row-key={String(vItem.key)}
                 data-index={vItem.index}
                 ref={measureVirtualRowElement}
-                className="absolute left-0 right-0"
+                className="absolute left-0 right-0 top-0"
                 style={{ transform: getVirtualRowTransform(vItem.start) }}
               >
                 <div className="overflow-visible">
@@ -1339,7 +1460,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               ref={measureVirtualRowElement}
               data-workspace-status-drop-target={itemWorkspaceStatus ? '' : undefined}
               data-workspace-status={itemWorkspaceStatus ?? undefined}
-              className="absolute left-0 right-0"
+              className="absolute left-0 right-0 top-0"
               style={{ transform: getVirtualRowTransform(vItem.start) }}
               onDragOver={
                 itemWorkspaceStatus

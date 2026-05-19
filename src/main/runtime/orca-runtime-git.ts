@@ -9,9 +9,11 @@ import type {
   GitUpstreamStatus,
   GitWorktreeInfo,
   GlobalSettings,
+  TuiAgent,
   Worktree
 } from '../../shared/types'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
+import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import { getRemoteFileUrl } from '../git/repo'
 import {
@@ -42,9 +44,12 @@ import { checkIgnoredPaths } from '../git/check-ignored-paths'
 import {
   cancelGenerateCommitMessageLocal,
   cancelGeneratePullRequestFieldsLocal,
+  discoverCommitMessageModelsLocal,
+  discoverCommitMessageModelsRemote,
   generateCommitMessageFromContext,
   generatePullRequestFieldsFromContext,
   resolveCommitMessageSettings,
+  type DiscoverCommitMessageModelsResult,
   type GenerateCommitMessageResult,
   type GeneratePullRequestFieldsResult
 } from '../text-generation/commit-message-text-generation'
@@ -57,7 +62,9 @@ import { gitExecFileAsync } from '../git/runner'
 export type ResolvedRuntimeGitWorktree = Worktree & { git: GitWorktreeInfo }
 type RuntimeCommitMessageSettingsOverride = Partial<
   Pick<GlobalSettings, 'commitMessageAi' | 'agentCmdOverrides' | 'enableGitHubAttribution'>
->
+> & {
+  commitMessageDiscoveryHostKey?: string
+}
 
 function normalizeRuntimeGitRelativePath(filePath: string): string {
   const relativePath = normalizeRuntimeRelativePath(filePath)
@@ -333,15 +340,21 @@ export class RuntimeGitCommands {
     worktreeSelector: string,
     settingsOverride?: RuntimeCommitMessageSettingsOverride
   ): Promise<GenerateCommitMessageResult> {
-    const resolvedSettings = resolveCommitMessageSettings({
-      ...this.host.getRuntimeSettings(),
-      ...settingsOverride
-    })
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const discoveryHostKey =
+      settingsOverride?.commitMessageDiscoveryHostKey ??
+      getCommitMessageModelDiscoveryHostKey(target.connectionId ?? null)
+    const resolvedSettings = resolveCommitMessageSettings(
+      {
+        ...this.host.getRuntimeSettings(),
+        ...settingsOverride
+      },
+      discoveryHostKey
+    )
     if (!resolvedSettings.ok) {
       return { success: false, error: resolvedSettings.error }
     }
 
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
       if (!provider) {
@@ -408,15 +421,21 @@ export class RuntimeGitCommands {
     input: { base: string; title: string; body: string; draft: boolean },
     settingsOverride?: RuntimeCommitMessageSettingsOverride
   ): Promise<GeneratePullRequestFieldsResult> {
-    const resolvedSettings = resolveCommitMessageSettings({
-      ...this.host.getRuntimeSettings(),
-      ...settingsOverride
-    })
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const discoveryHostKey =
+      settingsOverride?.commitMessageDiscoveryHostKey ??
+      getCommitMessageModelDiscoveryHostKey(target.connectionId ?? null)
+    const resolvedSettings = resolveCommitMessageSettings(
+      {
+        ...this.host.getRuntimeSettings(),
+        ...settingsOverride
+      },
+      discoveryHostKey
+    )
     if (!resolvedSettings.ok) {
       return { success: false, error: resolvedSettings.error }
     }
 
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId && !provider) {
       return {
@@ -476,6 +495,41 @@ export class RuntimeGitCommands {
     }
     cancelGeneratePullRequestFieldsLocal(target.worktree.path)
     return { ok: true }
+  }
+
+  async discoverRuntimeCommitMessageModels(
+    worktreeSelector: string,
+    agentId: string,
+    settingsOverride?: Pick<RuntimeCommitMessageSettingsOverride, 'agentCmdOverrides'>
+  ): Promise<DiscoverCommitMessageModelsResult> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const typedAgentId = agentId as TuiAgent
+    const agentCommandOverride =
+      settingsOverride?.agentCmdOverrides?.[typedAgentId] ??
+      this.host.getRuntimeSettings().agentCmdOverrides?.[typedAgentId]
+    if (target.connectionId) {
+      const provider = getSshGitProvider(target.connectionId)
+      if (!provider) {
+        return {
+          success: false,
+          error: `No git provider for connection "${target.connectionId}"`
+        }
+      }
+      return discoverCommitMessageModelsRemote(
+        typedAgentId,
+        target.worktree.path,
+        (plan, cwd, timeoutMs) => provider.executeCommitMessagePlan(plan, cwd, timeoutMs),
+        agentCommandOverride
+      )
+    }
+    const localEnv = await prepareLocalCommitMessageAgentEnv(
+      typedAgentId,
+      this.host.getCommitMessageAgentEnvironment?.()
+    )
+    if (!localEnv.ok) {
+      return { success: false, error: localEnv.error }
+    }
+    return discoverCommitMessageModelsLocal(typedAgentId, localEnv.env, agentCommandOverride)
   }
 
   async stageRuntimeGitPath(worktreeSelector: string, filePath: string): Promise<{ ok: true }> {

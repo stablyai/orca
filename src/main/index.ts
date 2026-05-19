@@ -789,6 +789,7 @@ app.whenReady().then(async () => {
   })
   runtime = runtimeService
   automations = new AutomationService(store, { claudeUsage, codexUsage })
+  runtimeService.setAutomationService(automations)
   runtimeService.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
   runtimeService.setCommitMessageAgentEnvironmentResolvers({
     prepareForCodexLaunch: () =>

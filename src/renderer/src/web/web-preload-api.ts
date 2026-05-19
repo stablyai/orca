@@ -586,6 +586,10 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       success: false,
       error: 'Commit message generation is unavailable in the web client.'
     }),
+    discoverCommitMessageModels: async () => ({
+      success: false,
+      error: 'Commit message model discovery is unavailable in the web client.'
+    }),
     cancelGenerateCommitMessage: () => Promise.resolve(),
     generatePullRequestFields: async () => ({
       success: false,

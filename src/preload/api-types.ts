@@ -169,6 +169,10 @@ import type {
   RuntimeSyncWindowGraph,
   RuntimeTerminalDriverState
 } from '../shared/runtime-types'
+import type {
+  CommitMessageAgentCapability,
+  CommitMessageModelCapability
+} from '../shared/commit-message-agent-spec'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult } from '../shared/skills'
 import type {
@@ -1485,6 +1489,19 @@ export type PreloadApi = {
     }) => Promise<
       | { success: true; message: string; agentLabel?: string }
       | { success: false; error: string; canceled?: boolean }
+    >
+    discoverCommitMessageModels: (args: {
+      agentId: string
+      worktreePath?: string
+      connectionId?: string
+    }) => Promise<
+      | {
+          success: true
+          capability: CommitMessageAgentCapability
+          models: CommitMessageModelCapability[]
+          defaultModelId: string
+        }
+      | { success: false; error: string }
     >
     cancelGenerateCommitMessage: (args: {
       worktreePath: string

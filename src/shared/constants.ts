@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: default persisted settings live in one schema-shaped object so migrations and tests compare against one source of truth. */
 import type {
   GlobalSettings,
   NotificationSettings,
@@ -276,6 +277,9 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
       enabled: true,
       agentId: null,
       selectedModelByAgent: {},
+      discoveredModelsByAgent: {},
+      selectedModelByAgentByHost: {},
+      discoveredModelsByAgentByHost: {},
       selectedThinkingByModel: {},
       customPrompt: '',
       customAgentCommand: ''

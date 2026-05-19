@@ -33,7 +33,7 @@ export type CommitMessagePlanResult =
   | { ok: true; plan: CommitMessagePlan }
   | { ok: false; error: string }
 
-function planAgentBinary(
+export function planAgentBinary(
   defaultBinary: string,
   commandOverride: string | undefined
 ): { ok: true; binary: string; prefixArgs: string[] } | { ok: false; error: string } {
@@ -91,13 +91,13 @@ export function planCommitMessageGeneration(
     return { ok: false, error: `Model "${input.model}" is not available for ${spec.label}.` }
   }
   if (input.thinkingLevel) {
-    if (!model.thinkingLevels) {
+    if (!model.thinkingLevels && spec.modelSource !== 'dynamic') {
       return {
         ok: false,
         error: `Model "${model.label}" does not support a thinking effort level.`
       }
     }
-    if (!model.thinkingLevels.some((l) => l.id === input.thinkingLevel)) {
+    if (model.thinkingLevels && !model.thinkingLevels.some((l) => l.id === input.thinkingLevel)) {
       return {
         ok: false,
         error: `Thinking level "${input.thinkingLevel}" is not valid for ${model.label}.`

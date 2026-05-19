@@ -17,6 +17,15 @@ Environments:
   environment show          Show one saved remote Orca runtime
   environment rm            Remove a saved remote Orca runtime
 
+Automations:
+  automations list          List scheduled Orca automations
+  automations show          Show one Orca automation
+  automations create        Create a scheduled Orca automation
+  automations edit          Edit an Orca automation
+  automations remove        Remove an Orca automation and its run history
+  automations run           Run an Orca automation now
+  automations runs          List automation run history
+
 Repos:
   repo list                 List repos registered in Orca
   repo add                  Add a project to Orca by filesystem path
@@ -345,7 +354,7 @@ export function formatFlagHelp(flag: string): string {
     key: '--key <key>            Key or combo to press, e.g. Escape or CmdOrCtrl+L',
     limit: '--limit <n>            Maximum number of rows to return',
     'mouse-button': '--mouse-button <btn>   Mouse button: left, right, or middle',
-    name: '--name <name>          Name for the new worktree',
+    name: '--name <name>          Name for the new worktree or automation',
     'no-parent': '--no-parent            Force no parent lineage',
     'no-screenshot': '--no-screenshot       Skip screenshot capture after the operation',
     pages: '--pages <n>           Number of scroll pages',
@@ -367,6 +376,18 @@ export function formatFlagHelp(flag: string): string {
     'to-y': '--to-y <y>             Destination window-local y coordinate',
     worktree:
       '--worktree <selector>  Worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current',
+    workspace: '--workspace <selector> Existing worktree selector for automation runs',
+    prompt: '--prompt <text>        Automation prompt to pass to the agent',
+    provider: '--provider <agent>     Agent id such as codex, claude, or gemini',
+    trigger: '--trigger <schedule>   Automation schedule preset, cron, or RRULE',
+    schedule: '--schedule <schedule>  Alias for --trigger',
+    time: '--time <HH:MM>        Time used with daily/weekdays/weekly presets',
+    day: '--day <0-6>           Day used with weekly preset, Sunday=0',
+    timezone: '--timezone <tz>       IANA timezone for the automation',
+    enabled: '--enabled              Enable the automation',
+    disabled: '--disabled             Disable the automation',
+    'workspace-mode': '--workspace-mode <mode> existing or new-per-run',
+    'missed-run-grace-minutes': '--missed-run-grace-minutes <n> Missed-run grace window',
     'value-stdin': '--value-stdin         Read set-value payload from stdin',
     'window-id': '--window-id <id>      Target a window id from list-windows',
     'window-index': '--window-index <n>   Target a window index from list-windows',

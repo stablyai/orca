@@ -2,8 +2,9 @@
 name: orca-cli
 description: >-
   Use the `orca` CLI to drive a running Orca editor — manage Orca worktrees;
-  create, read, and run shell commands in Orca-managed terminals; and automate
-  Orca's built-in browser (snapshot/click/fill/screenshot/tabs). Use this
+  create and manage scheduled automations; create, read, and run shell commands
+  in Orca-managed terminals; and automate Orca's built-in browser
+  (snapshot/click/fill/screenshot/tabs). Use this
   instead of raw `git worktree`, ad hoc shell PTYs, or Playwright whenever the
   task touches Orca state. Coding agents inside an Orca worktree should also use
   it to keep the worktree comment fresh at meaningful checkpoints. Boundary with
@@ -27,6 +28,7 @@ Use `orca` for:
 - updating the current worktree comment with meaningful progress checkpoints
 - reading Orca-managed terminals and sending input to non-agent terminals
 - stopping or waiting on Orca-managed terminals
+- creating and managing scheduled Orca automations
 - accessing repos known to Orca
 Do not use `orca` when plain shell tools are simpler and Orca state does not matter.
 
@@ -36,6 +38,7 @@ Examples:
 - updating the current worktree comment after a significant checkpoint, such as reproducing a bug, validating a fix, or handing off for review
 - finding the Claude Code terminal for a worktree and reading its status
 - checking which Orca worktrees have live terminal activity
+- creating a scheduled automation that runs a prompt against a known repo or worktree
 
 ## Preconditions
 
@@ -98,6 +101,7 @@ orca terminal list --json
 4. Act through Orca:
 
 - `worktree create/set/rm`
+- `automations list/show/create/edit/remove/run/runs`
 - `terminal read/send/wait/stop`
 
 5. When the agent reaches a significant checkpoint in the current worktree, update the Orca worktree comment so the UI reflects the latest work-in-progress:
@@ -142,6 +146,25 @@ Worktree selectors supported in focused v1:
 - `issue:<number>`
 - `active` / `current` to resolve the enclosing Orca-managed worktree from the shell `cwd`
 
+### Automations
+
+```bash
+orca automations list --json
+orca automations show <automationId> --json
+orca automations create --name "Daily review" --trigger daily --time 09:00 --prompt "Review open changes" --provider codex --repo id:<repoId> --json
+orca automations create --name "Weekday triage" --trigger "0 9 * * 1-5" --prompt "Triage issues" --provider claude --repo path:/abs/repo --disabled --json
+orca automations edit <automationId> --name "Weekday review" --trigger weekdays --time 09:30 --json
+orca automations run <automationId> --json
+orca automations runs --id <automationId> --json
+orca automations remove <automationId> --json
+```
+
+Automation schedules accept `hourly`, `daily`, `weekdays`, `weekly`, a 5-field cron expression, or an RRULE string. Use `--time <HH:MM>` with `daily`, `weekdays`, or `weekly`; use `--day <0-6>` only with `weekly`, where Sunday is `0`.
+
+Use `--repo <selector>` for a new worktree per run, or `--workspace <selector>` / `--workspace-mode existing` when the automation should run in an existing Orca worktree. `--repo` and `--workspace` are mutually exclusive.
+
+Why: automations are persisted through the running Orca runtime, so use the CLI instead of editing automation storage files directly. Prefer `--disabled` when creating an automation during tests or setup so it cannot run before the user reviews it.
+
 ### Terminal
 
 Use selectors to discover terminals, then use the returned handle for repeated live interaction.
@@ -175,6 +198,7 @@ Why: `--direction horizontal` splits the pane **left and right** (new pane appea
 ## Agent Guidance
 
 - If the user says to create/manage an Orca worktree, use `orca worktree ...`, not raw `git worktree ...`.
+- If the user says to create/manage a scheduled Orca automation, use `orca automations ...`, not direct persistence edits.
 - Treat Orca as the source of truth for Orca worktree and terminal tasks. Do not mix Orca-managed state with ad hoc git worktree commands unless Orca explicitly cannot perform the requested action.
 - Prefer `--json` for all machine-driven use.
 - Use `worktree ps` as the first summary view when many worktrees may exist.

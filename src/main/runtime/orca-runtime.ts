@@ -15,6 +15,13 @@ import { mkdir, readdir, rm, stat } from 'fs/promises'
 import { OrchestrationDb } from './orchestration/db'
 import { formatMessagesForInjection } from './orchestration/formatter'
 import type {
+  Automation,
+  AutomationCreateInput,
+  AutomationRun,
+  AutomationUpdateInput,
+  AutomationWorkspaceMode
+} from '../../shared/automations-types'
+import type {
   BaseRefSearchResult,
   CreateWorktreeResult,
   GitPushTarget,
@@ -91,6 +98,7 @@ import type {
   BrowserTabInfo,
   BrowserScreencastResult
 } from '../../shared/runtime-types'
+import type { AutomationService } from '../automations/service'
 import { RuntimeBrowserCommands } from './orca-runtime-browser'
 import { RuntimeFileCommands } from './orca-runtime-files'
 import { RuntimeGitCommands } from './orca-runtime-git'
@@ -323,6 +331,11 @@ type RuntimeStore = {
   getWorkspaceSession?: Store['getWorkspaceSession']
   getUI?: Store['getUI']
   updateUI?: Store['updateUI']
+  listAutomations?: Store['listAutomations']
+  listAutomationRuns?: Store['listAutomationRuns']
+  createAutomation?: Store['createAutomation']
+  updateAutomation?: Store['updateAutomation']
+  deleteAutomation?: Store['deleteAutomation']
   getSettings(): {
     workspaceDir: string
     nestWorkspaces: boolean
@@ -337,6 +350,31 @@ type RuntimeStore = {
   // a cast. The runtime never reads the return value — the persisted value
   // is read back via getSettings() on the next access.
   updateSettings?: (updates: Partial<GlobalSettings>) => unknown
+}
+
+export type RuntimeAutomationCreateInput = Omit<
+  AutomationCreateInput,
+  'projectId' | 'workspaceId' | 'workspaceMode' | 'timezone'
+> & {
+  repo?: string
+  workspace?: string
+  workspaceMode?: AutomationWorkspaceMode
+  timezone?: string
+}
+
+export type RuntimeAutomationUpdateInput = Omit<
+  AutomationUpdateInput,
+  'projectId' | 'workspaceId'
+> & {
+  repo?: string
+  workspace?: string
+}
+
+function hasRuntimeAutomationUpdateValue<K extends keyof RuntimeAutomationUpdateInput>(
+  updates: RuntimeAutomationUpdateInput,
+  key: K
+): boolean {
+  return Object.hasOwn(updates, key) && updates[key] !== undefined
 }
 
 type RuntimeLeafRecord = RuntimeSyncedLeaf & {
@@ -887,16 +925,21 @@ export class OrcaRuntimeService {
   // vice-versa. Keyed by `<repoPath>::<remote>` so multi-remote repos (even
   // though v1 only uses `origin`) don't cross-contaminate. The in-flight Map
   // also provides serialization — two concurrent callers share a single
-  // underlying `git fetch`. Lifecycle rules are enforced in
-  // `fetchRemoteWithCache` and MUST NOT be duplicated elsewhere:
+  // underlying `git fetch`. Full-remote fetch lifecycle rules:
   //   - entry inserted BEFORE await,
   //   - `.finally()` removes the entry on BOTH success and rejection,
   //   - timestamp written ONLY on success (rejection must not make the
   //     30s freshness cache lie).
   // A literal "insert before await / read-back after await" without these
-  // three rules wedges all future creates on the same repo after a single
-  // DNS hiccup until process restart (see §3.3 Lifecycle).
+  // three rules wedges future fetches on the same repo after a single
+  // DNS hiccup until process restart (see §3.3 Lifecycle). Exact base-ref
+  // refreshes share the in-flight rule but intentionally do not write the
+  // full-remote freshness timestamp.
   private fetchInflight = new Map<string, Promise<RemoteFetchResult>>()
+  // Why: `git fetch origin` and `git fetch origin <refspec>` contend for the
+  // same repo remote/ref locks. This queue serializes all fetch shapes for one
+  // canonical repo+remote while still letting same-shape callers share promises.
+  private remoteFetchQueueTail = new Map<string, Promise<RemoteFetchResult>>()
   private fetchLastCompletedAt = new Map<string, number>()
   // Why: `getCanonicalFetchKey` is awaited from every freshness probe and
   // every getOrStartRemoteFetch call. Without memoization the warm-cache hot
@@ -908,6 +951,7 @@ export class OrcaRuntimeService {
   private readonly getLocalProviderFn: (() => IPtyProvider) | null
   private accountServices: RuntimeAccountServices | null = null
   private commitMessageAgentEnv: CommitMessageAgentEnvironmentResolvers | null = null
+  private automationService: AutomationService | null = null
   private mobileDictation: {
     id: string
     owner: string
@@ -961,6 +1005,163 @@ export class OrcaRuntimeService {
     return this.store.getUI()
   }
 
+  listAutomations(): Automation[] {
+    if (!this.store?.listAutomations) {
+      throw new Error('runtime_unavailable')
+    }
+    return this.store.listAutomations()
+  }
+
+  listAutomationRuns(automationId?: string): AutomationRun[] {
+    if (!this.store?.listAutomationRuns) {
+      throw new Error('runtime_unavailable')
+    }
+    return this.store.listAutomationRuns(automationId)
+  }
+
+  showAutomation(id: string): Automation {
+    const automation = this.listAutomations().find((entry) => entry.id === id)
+    if (!automation) {
+      throw new Error('Automation not found.')
+    }
+    return automation
+  }
+
+  async createAutomation(input: RuntimeAutomationCreateInput): Promise<Automation> {
+    if (!this.store?.createAutomation) {
+      throw new Error('runtime_unavailable')
+    }
+    const target = await this.resolveAutomationTarget(input)
+    return this.store.createAutomation({
+      name: input.name,
+      prompt: input.prompt,
+      agentId: input.agentId,
+      projectId: target.projectId,
+      workspaceMode: target.workspaceMode,
+      workspaceId: target.workspaceId,
+      baseBranch: input.baseBranch,
+      timezone: input.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+      rrule: input.rrule,
+      dtstart: input.dtstart,
+      enabled: input.enabled,
+      missedRunGraceMinutes: input.missedRunGraceMinutes
+    })
+  }
+
+  async updateAutomation(id: string, updates: RuntimeAutomationUpdateInput): Promise<Automation> {
+    if (!this.store?.updateAutomation) {
+      throw new Error('runtime_unavailable')
+    }
+    const current = this.showAutomation(id)
+    const patch: AutomationUpdateInput = {}
+    if (hasRuntimeAutomationUpdateValue(updates, 'name')) {
+      patch.name = updates.name
+    }
+    if (hasRuntimeAutomationUpdateValue(updates, 'prompt')) {
+      patch.prompt = updates.prompt
+    }
+    if (hasRuntimeAutomationUpdateValue(updates, 'agentId')) {
+      patch.agentId = updates.agentId
+    }
+    if (hasRuntimeAutomationUpdateValue(updates, 'baseBranch')) {
+      patch.baseBranch = updates.baseBranch
+    }
+    if (hasRuntimeAutomationUpdateValue(updates, 'timezone')) {
+      patch.timezone = updates.timezone
+    }
+    if (hasRuntimeAutomationUpdateValue(updates, 'rrule')) {
+      patch.rrule = updates.rrule
+    }
+    if (hasRuntimeAutomationUpdateValue(updates, 'dtstart')) {
+      patch.dtstart = updates.dtstart
+    }
+    if (hasRuntimeAutomationUpdateValue(updates, 'enabled')) {
+      patch.enabled = updates.enabled
+    }
+    if (hasRuntimeAutomationUpdateValue(updates, 'missedRunGraceMinutes')) {
+      patch.missedRunGraceMinutes = updates.missedRunGraceMinutes
+    }
+    const targetChanged =
+      hasRuntimeAutomationUpdateValue(updates, 'repo') ||
+      hasRuntimeAutomationUpdateValue(updates, 'workspace') ||
+      hasRuntimeAutomationUpdateValue(updates, 'workspaceMode')
+    if (targetChanged) {
+      const target = await this.resolveAutomationTarget(updates, current)
+      patch.projectId = target.projectId
+      patch.workspaceMode = target.workspaceMode
+      patch.workspaceId = target.workspaceId
+    }
+    return this.store.updateAutomation(id, patch)
+  }
+
+  deleteAutomation(id: string): { removed: boolean; id: string } {
+    if (!this.store?.deleteAutomation) {
+      throw new Error('runtime_unavailable')
+    }
+    this.showAutomation(id)
+    this.store.deleteAutomation(id)
+    return { removed: true, id }
+  }
+
+  async runAutomationNow(id: string): Promise<AutomationRun> {
+    if (!this.automationService) {
+      throw new Error('runtime_unavailable')
+    }
+    return await this.automationService.runNow(id)
+  }
+
+  private async resolveAutomationTarget(
+    input: {
+      repo?: string
+      workspace?: string
+      workspaceMode?: AutomationWorkspaceMode
+      baseBranch?: string | null
+    },
+    current?: Automation
+  ): Promise<{
+    projectId: string
+    workspaceMode: AutomationWorkspaceMode
+    workspaceId?: string | null
+  }> {
+    const hasRepo = input.repo !== undefined
+    const hasWorkspace = input.workspace !== undefined
+    if (
+      current?.workspaceMode === 'existing' &&
+      hasRepo &&
+      !hasWorkspace &&
+      input.workspaceMode !== 'new_per_run'
+    ) {
+      throw new Error(
+        'Repo updates for existing-workspace automation require workspaceMode new_per_run.'
+      )
+    }
+    const workspace = input.workspace ? await this.showManagedWorktree(input.workspace) : null
+    const repo = input.repo ? await this.showRepo(input.repo) : null
+    const workspaceMode =
+      input.workspaceMode ??
+      (workspace
+        ? 'existing'
+        : input.repo && !current
+          ? 'new_per_run'
+          : (current?.workspaceMode ?? 'new_per_run'))
+    if (workspaceMode === 'existing') {
+      const workspaceId = workspace?.id ?? current?.workspaceId
+      const projectId = workspace?.repoId ?? current?.projectId
+      if (repo && repo.id !== projectId) {
+        throw new Error('Selected workspace belongs to a different repo.')
+      }
+      if (!workspaceId || !projectId) {
+        throw new Error('Existing-workspace automation requires --workspace.')
+      }
+      return { projectId, workspaceMode, workspaceId }
+    }
+    const projectId = repo?.id ?? workspace?.repoId ?? current?.projectId
+    if (!projectId) {
+      throw new Error('Automation requires --repo or --workspace.')
+    }
+    return { projectId, workspaceMode: 'new_per_run', workspaceId: null }
+  }
+
   // Why: lazy initialization — the DB path depends on Electron's userData
   // which may not be finalized until after app.ready. Also allows unit tests
   // to inject an in-memory DB without touching the filesystem.
@@ -975,6 +1176,10 @@ export class OrcaRuntimeService {
 
   setOrchestrationDb(db: OrchestrationDb): void {
     this._orchestrationDb = db
+  }
+
+  setAutomationService(service: AutomationService): void {
+    this.automationService = service
   }
 
   getRuntimeId(): string {
@@ -1489,6 +1694,8 @@ export class OrcaRuntimeService {
   )
   generateRuntimeCommitMessage: RuntimeGitCommands['generateRuntimeCommitMessage'] =
     this.gitCommands.generateRuntimeCommitMessage.bind(this.gitCommands)
+  discoverRuntimeCommitMessageModels: RuntimeGitCommands['discoverRuntimeCommitMessageModels'] =
+    this.gitCommands.discoverRuntimeCommitMessageModels.bind(this.gitCommands)
   cancelRuntimeGenerateCommitMessage: RuntimeGitCommands['cancelRuntimeGenerateCommitMessage'] =
     this.gitCommands.cancelRuntimeGenerateCommitMessage.bind(this.gitCommands)
   generateRuntimePullRequestFields: RuntimeGitCommands['generateRuntimePullRequestFields'] =
@@ -5558,19 +5765,33 @@ export class OrcaRuntimeService {
     const wslHome = wslInfo ? getWslHome(wslInfo.distro) : null
     const workspaceRoot = wslHome ? join(wslHome, 'orca', 'workspaces') : settings.workspaceDir
     worktreePath = ensurePathWithinWorkspace(worktreePath, workspaceRoot)
-    const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
-    // Why (§3.3 Lifecycle): route through the shared fetch cache so back-to-back
-    // CLI creates on the same repo don't each pay the round-trip, and so a
-    // subsequent dispatch probe within the 30s window reuses this result. The
-    // helper swallows rejection (log-and-proceed) so a DNS hiccup never wedges
-    // future creates and CLI creation stays usable offline — same intent as
-    // the previous try/catch around gitExecFileSync.
-    try {
-      await this.fetchRemoteWithCache(repo.path, remote)
-    } catch {
-      // Why: belt-and-suspenders. fetchRemoteWithCache already logs and does
-      // not throw; the outer try/catch guarantees create-path tolerance even
-      // if future refactors change that contract.
+    const remoteTrackingBase = await this.resolveRemoteTrackingBase(repo.path, baseBranch)
+    if (remoteTrackingBase) {
+      const hadLocalBaseRef = await this.hasRemoteTrackingRef(repo.path, remoteTrackingBase)
+      const refreshResult = await this.getOrStartRemoteTrackingBaseRefresh(
+        repo.path,
+        remoteTrackingBase
+      )
+      if (!refreshResult.ok) {
+        throw new Error(
+          `Could not refresh base ref "${baseBranch}" from "${remoteTrackingBase.remote}". Check your network and try again.`
+        )
+      }
+      if (!hadLocalBaseRef && !(await this.hasRemoteTrackingRef(repo.path, remoteTrackingBase))) {
+        throw new Error(`Base ref "${baseBranch}" was not found after fetching.`)
+      }
+    } else {
+      const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
+      // Why: local bases keep legacy best-effort fetch behavior. Remote-tracking
+      // bases fail closed above because stale create-from-base is worse than a
+      // clear retryable error.
+      try {
+        await this.fetchRemoteWithCache(repo.path, remote)
+      } catch {
+        // Why: belt-and-suspenders. fetchRemoteWithCache already logs and does
+        // not throw; the outer try/catch guarantees create-path tolerance even
+        // if future refactors change that contract.
+      }
     }
 
     const sparseDirectories = args.sparseCheckout
@@ -5923,9 +6144,8 @@ export class OrcaRuntimeService {
 
   /**
    * Fetch `remote` in `repoPath`, sharing the 30s freshness window + in-flight
-   * serialization with all other callers (renderer-create path, CLI create,
-   * dispatch drift probe). Never rejects — callers log-and-proceed on offline
-   * failures (§3.3 Lifecycle).
+   * serialization with all other callers. Never rejects — callers
+   * log-and-proceed on offline failures (§3.3 Lifecycle).
    *
    * Why a shared cache on the runtime instead of module-scoped: §7.1 relies on
    * one cache for BOTH the renderer create path and `probeWorktreeDrift`. A
@@ -5957,10 +6177,19 @@ export class OrcaRuntimeService {
     return resolved
   }
 
-  async isRemoteFetchFresh(repoPath: string, remote: string): Promise<boolean> {
-    const key = await this.getCanonicalFetchKey(repoPath, remote)
-    const lastAt = this.fetchLastCompletedAt.get(key)
-    return lastAt !== undefined && Date.now() - lastAt < FETCH_FRESHNESS_MS
+  private enqueueRemoteFetch(
+    remoteKey: string,
+    runFetch: () => Promise<RemoteFetchResult>
+  ): Promise<RemoteFetchResult> {
+    const previous = this.remoteFetchQueueTail.get(remoteKey)
+    const promise = previous ? previous.then(runFetch, runFetch) : runFetch()
+    this.remoteFetchQueueTail.set(remoteKey, promise)
+    promise.finally(() => {
+      if (this.remoteFetchQueueTail.get(remoteKey) === promise) {
+        this.remoteFetchQueueTail.delete(remoteKey)
+      }
+    })
+    return promise
   }
 
   async getOrStartRemoteFetch(repoPath: string, remote: string): Promise<RemoteFetchResult> {
@@ -5980,26 +6209,59 @@ export class OrcaRuntimeService {
       return existing
     }
 
-    const promise = gitExecFileAsync(['fetch', remote], { cwd: repoPath })
-      .then((): RemoteFetchResult => {
-        // Why (§3.3 Lifecycle): timestamp on success ONLY. Writing on rejection
-        // would make the freshness cache lie about the last known remote state.
-        this.fetchLastCompletedAt.set(key, Date.now())
-        return { ok: true }
-      })
-      .catch((err): RemoteFetchResult => {
-        // Why: swallow here so awaiters don't throw at the await site. Outer
-        // create/dispatch paths are already tolerant of offline fetch failure;
-        // this is the behavioral contract of this helper.
-        console.warn(`[fetchRemoteWithCache] ${remote} fetch failed for ${repoPath}:`, err)
-        return { ok: false, errorKind: 'git_error' }
-      })
-      .finally(() => {
-        // Why (§3.3 Lifecycle): evict on BOTH success and rejection. A
-        // rejected entry that survived in the Map would wedge every future
-        // create on this repo until Orca restarted (the F2 bug §3.3 pins).
-        this.fetchInflight.delete(key)
-      })
+    const promise = this.enqueueRemoteFetch(key, () =>
+      gitExecFileAsync(['fetch', remote], { cwd: repoPath })
+        .then((): RemoteFetchResult => {
+          // Why (§3.3 Lifecycle): timestamp on success ONLY. Writing on rejection
+          // would make the freshness cache lie about the last known remote state.
+          this.fetchLastCompletedAt.set(key, Date.now())
+          return { ok: true }
+        })
+        .catch((err): RemoteFetchResult => {
+          // Why: swallow here so awaiters don't throw at the await site. Outer
+          // create/dispatch paths are already tolerant of offline fetch failure;
+          // this is the behavioral contract of this helper.
+          console.warn(`[fetchRemoteWithCache] ${remote} fetch failed for ${repoPath}:`, err)
+          return { ok: false, errorKind: 'git_error' }
+        })
+    ).finally(() => {
+      // Why (§3.3 Lifecycle): evict on BOTH success and rejection. A
+      // rejected entry that survived in the Map would wedge every future
+      // create on this repo until Orca restarted (the F2 bug §3.3 pins).
+      this.fetchInflight.delete(key)
+    })
+
+    this.fetchInflight.set(key, promise)
+    return promise
+  }
+
+  async getOrStartRemoteTrackingBaseRefresh(
+    repoPath: string,
+    base: RemoteTrackingBase
+  ): Promise<RemoteFetchResult> {
+    const remoteKey = await this.getCanonicalFetchKey(repoPath, base.remote)
+    const key = await this.getCanonicalFetchKey(repoPath, `base:${base.remote}:${base.branch}`)
+    const existing = this.fetchInflight.get(key)
+    if (existing) {
+      return existing
+    }
+
+    const promise = this.enqueueRemoteFetch(remoteKey, () =>
+      gitExecFileAsync(
+        ['fetch', '--no-tags', base.remote, `+refs/heads/${base.branch}:${base.ref}`],
+        { cwd: repoPath }
+      )
+        .then((): RemoteFetchResult => ({ ok: true }))
+        .catch((err): RemoteFetchResult => {
+          console.warn(
+            `[refreshRemoteTrackingBase] ${base.base} refresh failed for ${repoPath}:`,
+            err
+          )
+          return { ok: false, errorKind: 'git_error' }
+        })
+    ).finally(() => {
+      this.fetchInflight.delete(key)
+    })
 
     this.fetchInflight.set(key, promise)
     return promise

@@ -6,7 +6,7 @@ describe('planCommitMessageGeneration', () => {
     const result = planCommitMessageGeneration(
       {
         agentId: 'claude',
-        model: 'claude-sonnet-4-6',
+        model: 'sonnet',
         thinkingLevel: 'high'
       },
       'PROMPT'
@@ -16,9 +16,82 @@ describe('planCommitMessageGeneration', () => {
       ok: true,
       plan: {
         binary: 'claude',
-        args: ['-p', '--output-format', 'text', '--model', 'claude-sonnet-4-6', '--effort', 'high'],
+        args: [
+          '-p',
+          '--output-format',
+          'text',
+          '--model',
+          'sonnet',
+          '--permission-mode',
+          'plan',
+          '--effort',
+          'high'
+        ],
         stdinPayload: 'PROMPT',
         label: 'Claude'
+      }
+    })
+  })
+
+  it('plans OpenCode run with prompt in argv and model variant', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'opencode',
+        model: 'opencode/gpt-5.4-mini',
+        thinkingLevel: 'high'
+      },
+      'PROMPT'
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'opencode',
+        args: [
+          'run',
+          '--model',
+          'opencode/gpt-5.4-mini',
+          '--agent',
+          'build',
+          '--format',
+          'default',
+          '--variant',
+          'high',
+          'PROMPT'
+        ],
+        stdinPayload: null,
+        label: 'OpenCode'
+      }
+    })
+  })
+
+  it('allows discovered dynamic models that are not in the seed catalog', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'cursor',
+        model: 'gpt-5.2',
+        thinkingLevel: 'xhigh'
+      },
+      'PROMPT'
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'cursor-agent',
+        args: [
+          '--print',
+          '--mode',
+          'ask',
+          '--trust',
+          '--output-format',
+          'text',
+          '--model',
+          'gpt-5.2',
+          'PROMPT'
+        ],
+        stdinPayload: null,
+        label: 'Cursor'
       }
     })
   })
@@ -87,7 +160,7 @@ describe('planCommitMessageGeneration', () => {
     const result = planCommitMessageGeneration(
       {
         agentId: 'claude',
-        model: 'claude-haiku-4-5',
+        model: 'haiku',
         agentCommandOverride: 'claude "unterminated'
       },
       'PROMPT'

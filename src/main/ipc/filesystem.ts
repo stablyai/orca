@@ -17,7 +17,8 @@ import type {
   GitStatusResult,
   MarkdownDocument,
   SearchOptions,
-  SearchResult
+  SearchResult,
+  TuiAgent
 } from '../../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import {
@@ -49,9 +50,12 @@ import { getHistory } from '../git/history'
 import {
   cancelGenerateCommitMessageLocal,
   cancelGeneratePullRequestFieldsLocal,
+  discoverCommitMessageModelsLocal,
+  discoverCommitMessageModelsRemote,
   generateCommitMessageFromContext,
   generatePullRequestFieldsFromContext,
   resolveCommitMessageSettings,
+  type DiscoverCommitMessageModelsResult,
   type GenerateCommitMessageResult,
   type GeneratePullRequestFieldsResult
 } from '../text-generation/commit-message-text-generation'
@@ -60,6 +64,7 @@ import { getUpstreamStatus } from '../git/upstream'
 import { gitFetch, gitPull, gitPush } from '../git/remote'
 import { checkIgnoredPaths } from '../git/check-ignored-paths'
 import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
+import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
 import { validateGitPushTarget } from '../git/push-target-validation'
 import { getRemoteFileUrl } from '../git/repo'
 import {
@@ -623,7 +628,8 @@ export function registerFilesystemHandlers(
         connectionId?: string
       }
     ): Promise<GenerateCommitMessageResult> => {
-      const resolvedSettings = resolveCommitMessageSettings(store.getSettings())
+      const discoveryHostKey = getCommitMessageModelDiscoveryHostKey(args.connectionId ?? null)
+      const resolvedSettings = resolveCommitMessageSettings(store.getSettings(), discoveryHostKey)
       if (!resolvedSettings.ok) {
         return { success: false, error: resolvedSettings.error }
       }
@@ -702,6 +708,44 @@ export function registerFilesystemHandlers(
   )
 
   ipcMain.handle(
+    'git:discoverCommitMessageModels',
+    async (
+      _event,
+      args: { agentId: string; worktreePath?: string; connectionId?: string }
+    ): Promise<DiscoverCommitMessageModelsResult> => {
+      const agentId = args.agentId
+      const agentCommandOverride = store.getSettings().agentCmdOverrides?.[agentId as TuiAgent]
+      if (args.connectionId) {
+        if (!args.worktreePath) {
+          return { success: false, error: 'Missing worktree path for remote model discovery.' }
+        }
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          return {
+            success: false,
+            error: `No git provider for connection "${args.connectionId}"`
+          }
+        }
+        return discoverCommitMessageModelsRemote(
+          agentId as TuiAgent,
+          args.worktreePath,
+          (plan, cwd, timeoutMs) => provider.executeCommitMessagePlan(plan, cwd, timeoutMs),
+          agentCommandOverride
+        )
+      }
+      const localEnv = await prepareLocalCommitMessageAgentEnv(agentId, commitMessageAgentEnv)
+      if (!localEnv.ok) {
+        return { success: false, error: localEnv.error }
+      }
+      return discoverCommitMessageModelsLocal(
+        agentId as TuiAgent,
+        localEnv.env,
+        agentCommandOverride
+      )
+    }
+  )
+
+  ipcMain.handle(
     'git:generatePullRequestFields',
     async (
       _event,
@@ -714,7 +758,8 @@ export function registerFilesystemHandlers(
         connectionId?: string
       }
     ): Promise<GeneratePullRequestFieldsResult> => {
-      const resolvedSettings = resolveCommitMessageSettings(store.getSettings())
+      const discoveryHostKey = getCommitMessageModelDiscoveryHostKey(args.connectionId ?? null)
+      const resolvedSettings = resolveCommitMessageSettings(store.getSettings(), discoveryHostKey)
       if (!resolvedSettings.ok) {
         return { success: false, error: resolvedSettings.error }
       }

@@ -73,6 +73,13 @@ describe('cleanGeneratedCommitMessage', () => {
     expect(cleanGeneratedCommitMessage('feat: a\r\nbody line\r\n')).toBe('feat: a\nbody line')
   })
 
+  it('strips a leading list marker from the commit subject', () => {
+    expect(cleanGeneratedCommitMessage('● Add Copilot entry to agent results')).toBe(
+      'Add Copilot entry to agent results'
+    )
+    expect(cleanGeneratedCommitMessage('1. Add numbered entry')).toBe('Add numbered entry')
+  })
+
   it('returns empty string when input is whitespace', () => {
     expect(cleanGeneratedCommitMessage('   \n\t')).toBe('')
   })
@@ -109,6 +116,32 @@ describe('extractAgentErrorMessage', () => {
 
   it('matches an `Error:` line emitted on stdout', () => {
     expect(extractAgentErrorMessage('Error: model unavailable\n', '')).toBe('model unavailable')
+  })
+
+  it('matches ANSI-colored `Error:` lines emitted by CLIs', () => {
+    expect(
+      extractAgentErrorMessage('', '\u001b[91m\u001b[1mError: \u001b[0mNo payment method\n')
+    ).toBe('No payment method')
+  })
+
+  it('matches tool-specific `Error during ...:` lines', () => {
+    expect(
+      extractAgentErrorMessage(
+        '',
+        'Error during droid execution: Authentication failed. Please log into Factory.\n'
+      )
+    ).toBe('Authentication failed. Please log into Factory.')
+  })
+
+  it('matches wrapped provider error-code payloads with quoted message fields', () => {
+    const stdout = [
+      "Error code: 401 - {'error': {'message': 'The API Key appears to be invalid or ma",
+      "y have expired. Please verify your credentials and try again.', 'type': 'invalid",
+      "_authentication_error'}}"
+    ].join('\n')
+    expect(extractAgentErrorMessage(stdout, '')).toBe(
+      'The API Key appears to be invalid or may have expired. Please verify your credentials and try again.'
+    )
   })
 
   it('returns null when no ERROR line is present', () => {

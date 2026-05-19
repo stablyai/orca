@@ -48,13 +48,6 @@ import { invalidateAuthorizedRootsCache } from './filesystem-auth'
 import { createWorktreeSymlinks } from './worktree-symlinks'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 
-async function readCommitSha(repoPath: string, ref: string): Promise<string> {
-  const { stdout } = await gitExecFileAsync(['rev-parse', '--verify', `${ref}^{commit}`], {
-    cwd: repoPath
-  })
-  return stdout.trim()
-}
-
 async function findRemoteForUrl(repoPath: string, remoteUrl: string): Promise<string | null> {
   const target = parseGitHubOwnerRepo(remoteUrl)
   try {
@@ -289,17 +282,50 @@ async function configureCreatedWorktreePushTargetSsh(
   return target
 }
 
+async function resolveRemoteTrackingBaseSsh(
+  provider: SshGitProvider,
+  repoPath: string,
+  baseBranch: string
+): Promise<RemoteTrackingBase | null> {
+  let remotes: string[]
+  try {
+    const { stdout } = await provider.exec(['remote'], repoPath)
+    remotes = stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+  } catch {
+    return null
+  }
+
+  const remote = remotes
+    .filter((candidate) => baseBranch.startsWith(`${candidate}/`))
+    .sort((a, b) => b.length - a.length)[0]
+  if (!remote) {
+    return null
+  }
+  const branch = baseBranch.slice(remote.length + 1)
+  if (!branch) {
+    return null
+  }
+  return {
+    remote,
+    branch,
+    ref: `refs/remotes/${remote}/${branch}`,
+    base: baseBranch
+  }
+}
+
 export function notifyWorktreesChanged(mainWindow: BrowserWindow, repoId: string): void {
   if (!mainWindow.isDestroyed()) {
     mainWindow.webContents.send('worktrees:changed', { repoId })
   }
 }
 
-// Why (§3.3): two-phase spinner. Main process fires `'fetching'` immediately
-// after kicking off `git fetch` and `'creating'` after that fetch resolves
-// (or is determined to be cache-fresh). Renderer swaps its spinner label in
-// response; fallback is the static "Creating worktree..." label if no event
-// arrives (e.g. renderer races destruction of the window).
+// Why: two-phase spinner. Main process fires `'fetching'` before waiting on
+// pre-create fetch work and `'creating'` immediately before `git worktree add`.
+// Renderer swaps its spinner label in response; fallback is the static
+// "Creating worktree..." label if no event arrives.
 export function emitCreateWorktreeProgress(
   mainWindow: BrowserWindow,
   phase: 'fetching' | 'creating'
@@ -385,12 +411,33 @@ export async function createRemoteWorktree(
     )
   }
 
-  // Fetch latest
-  const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
-  try {
-    await provider.exec(['fetch', remote], repo.path)
-  } catch {
-    /* best-effort */
+  const remoteTrackingBase = await resolveRemoteTrackingBaseSsh(provider, repo.path, baseBranch)
+  if (remoteTrackingBase) {
+    try {
+      await provider.exec(
+        [
+          'fetch',
+          '--no-tags',
+          remoteTrackingBase.remote,
+          `+refs/heads/${remoteTrackingBase.branch}:${remoteTrackingBase.ref}`
+        ],
+        repo.path
+      )
+    } catch {
+      throw new Error(
+        `Could not refresh base ref "${baseBranch}" from "${remoteTrackingBase.remote}". Check your network and try again.`
+      )
+    }
+  } else {
+    // Why: local or otherwise non-remote-tracking bases preserve legacy
+    // best-effort fetch behavior. Only remote-tracking bases must fail closed,
+    // because creating from them after a failed refresh silently makes stale worktrees.
+    const fallbackRemote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
+    try {
+      await provider.exec(['fetch', fallbackRemote], repo.path)
+    } catch {
+      /* best-effort */
+    }
   }
 
   let preparedPushTarget: GitPushTarget | undefined
@@ -524,10 +571,9 @@ export async function createLocalWorktree(
     ? sanitizeWorktreeDisplayName(args.displayName)
     : undefined
 
-  // Why (§3.3): determine the base branch (and therefore the remote we need to
-  // fetch) FIRST, so the fetch can overlap all pre-create work below. Neither
-  // of these calls depends on the suffix loop / PR probe / branch-conflict
-  // resolution, so they are safe to hoist.
+  // Why: resolve the base before branch/path selection so remote-tracking bases
+  // can be refreshed before `git worktree add`. Creating first and repairing
+  // later races setup scripts, agents, and user edits.
   const baseBranch = args.baseBranch || repo.worktreeBaseRef || getDefaultBaseRef(repo.path)
   if (!baseBranch) {
     // Why: getDefaultBaseRef may return null when none of origin/HEAD,
@@ -540,31 +586,23 @@ export async function createLocalWorktree(
     )
   }
 
-  let optimisticBase: RemoteTrackingBase | null = null
-  let optimisticFetchPromise: Promise<RemoteFetchResult> | null = null
-  let initialBaseStatus: CreateWorktreeResult['initialBaseStatus']
+  let remoteTrackingBase: RemoteTrackingBase | null = null
+  let remoteTrackingRefresh: {
+    base: RemoteTrackingBase
+    hadLocalBaseRef: boolean
+    promise: Promise<RemoteFetchResult>
+  } | null = null
   let legacyFetchPromise: Promise<void> | null = null
 
   if (runtime) {
-    optimisticBase = await runtime.resolveRemoteTrackingBase(repo.path, baseBranch)
-    if (optimisticBase) {
-      const hasLocalBaseRef = await runtime.hasRemoteTrackingRef(repo.path, optimisticBase)
-      if (hasLocalBaseRef) {
-        const isFresh = await runtime.isRemoteFetchFresh(repo.path, optimisticBase.remote)
-        if (!isFresh) {
-          optimisticFetchPromise = runtime.getOrStartRemoteFetch(repo.path, optimisticBase.remote)
-        }
-      } else {
-        emitCreateWorktreeProgress(mainWindow, 'fetching')
-        const result = await runtime.getOrStartRemoteFetch(repo.path, optimisticBase.remote)
-        if (!(await runtime.hasRemoteTrackingRef(repo.path, optimisticBase))) {
-          if (!result.ok) {
-            throw new Error(
-              `Could not fetch base ref "${baseBranch}" from "${optimisticBase.remote}". Check your network and try again.`
-            )
-          }
-          throw new Error(`Base ref "${baseBranch}" was not found after fetching.`)
-        }
+    remoteTrackingBase = await runtime.resolveRemoteTrackingBase(repo.path, baseBranch)
+    if (remoteTrackingBase) {
+      const hasLocalBaseRef = await runtime.hasRemoteTrackingRef(repo.path, remoteTrackingBase)
+      emitCreateWorktreeProgress(mainWindow, 'fetching')
+      remoteTrackingRefresh = {
+        base: remoteTrackingBase,
+        hadLocalBaseRef: hasLocalBaseRef,
+        promise: runtime.getOrStartRemoteTrackingBaseRefresh(repo.path, remoteTrackingBase)
       }
     } else {
       // Why: when the base branch does not match a configured remote prefix
@@ -593,6 +631,40 @@ export async function createLocalWorktree(
   const wslInfo = isWslPath(repo.path) ? parseWslPath(repo.path) : null
   const wslHome = wslInfo ? getWslHome(wslInfo.distro) : null
   const workspaceRoot = wslHome ? join(wslHome, 'orca', 'workspaces') : settings.workspaceDir
+
+  // Why: this validation does not depend on remote refs, so it can overlap a
+  // required remote-tracking base refresh.
+  const primarySetupScript = getEffectiveHooks(repo)?.scripts.setup
+  if (primarySetupScript) {
+    shouldRunSetupForCreate(repo, args.setupDecision)
+  }
+  const sparseDirectories = args.sparseCheckout
+    ? normalizeSparseDirectories(args.sparseCheckout.directories)
+    : []
+  if (args.sparseCheckout && sparseDirectories.length === 0) {
+    throw new Error('Sparse checkout requires at least one repo-relative directory.')
+  }
+  let sparsePresetId: string | undefined
+  if (args.sparseCheckout?.presetId) {
+    const preset = store
+      .getSparsePresets(repo.id)
+      .find((entry) => entry.id === args.sparseCheckout?.presetId)
+    if (preset?.repoId === repo.id) {
+      try {
+        const presetDirectories = normalizeSparseDirectories(preset.directories)
+        // Why: use Set-based comparison so directory order does not affect
+        // attribution — matches the renderer's sparseDirectoriesMatch logic.
+        const presetSet = new Set(presetDirectories)
+        const directoriesMatch =
+          presetDirectories.length === sparseDirectories.length &&
+          sparseDirectories.every((entry) => presetSet.has(entry))
+        sparsePresetId = directoriesMatch ? preset.id : undefined
+      } catch {
+        // Why: corrupt preset data should not block creation or falsely label the new worktree.
+      }
+    }
+  }
+
   let effectiveRequestedName = requestedName
   let effectiveSanitizedName = sanitizedName
   let branchName = ''
@@ -682,39 +754,18 @@ export async function createLocalWorktree(
     )
   }
 
-  // Why: `ask` is a pre-create choice gate, not a post-create side effect.
-  // Resolve it before mutating git state so missing UI input cannot strand
-  // a real worktree on disk while the renderer reports "create failed". The
-  // actual run/skip decision is recomputed after the worktree exists against
-  // the worktree-bound setup script.
-  const primarySetupScript = getEffectiveHooks(repo)?.scripts.setup
-  if (primarySetupScript) {
-    shouldRunSetupForCreate(repo, args.setupDecision)
-  }
-  const sparseDirectories = args.sparseCheckout
-    ? normalizeSparseDirectories(args.sparseCheckout.directories)
-    : []
-  if (args.sparseCheckout && sparseDirectories.length === 0) {
-    throw new Error('Sparse checkout requires at least one repo-relative directory.')
-  }
-  let sparsePresetId: string | undefined
-  if (args.sparseCheckout?.presetId) {
-    const preset = store
-      .getSparsePresets(repo.id)
-      .find((entry) => entry.id === args.sparseCheckout?.presetId)
-    if (preset?.repoId === repo.id) {
-      try {
-        const presetDirectories = normalizeSparseDirectories(preset.directories)
-        // Why: use Set-based comparison so directory order does not affect
-        // attribution — matches the renderer's sparseDirectoriesMatch logic.
-        const presetSet = new Set(presetDirectories)
-        const directoriesMatch =
-          presetDirectories.length === sparseDirectories.length &&
-          sparseDirectories.every((entry) => presetSet.has(entry))
-        sparsePresetId = directoriesMatch ? preset.id : undefined
-      } catch {
-        // Why: corrupt preset data should not block creation or falsely label the new worktree.
-      }
+  if (remoteTrackingRefresh) {
+    const result = await remoteTrackingRefresh.promise
+    if (!result.ok) {
+      throw new Error(
+        `Could not refresh base ref "${baseBranch}" from "${remoteTrackingRefresh.base.remote}". Check your network and try again.`
+      )
+    }
+    if (
+      !remoteTrackingRefresh.hadLocalBaseRef &&
+      !(await runtime?.hasRemoteTrackingRef(repo.path, remoteTrackingRefresh.base))
+    ) {
+      throw new Error(`Base ref "${baseBranch}" was not found after fetching.`)
     }
   }
 
@@ -860,53 +911,9 @@ export async function createLocalWorktree(
     }
   }
 
-  if (runtime && optimisticBase && optimisticFetchPromise) {
-    initialBaseStatus = {
-      repoId: repo.id,
-      worktreeId,
-      status: 'checking',
-      base: optimisticBase.base,
-      remote: optimisticBase.remote
-    }
-    runtime.emitWorktreeBaseStatus(initialBaseStatus)
-    // Why: record the reconcile token BEFORE the rev-parse await so a racing
-    // worktree remove during the await isn't a no-op (its
-    // clearOptimisticReconcileToken would then run before the token exists,
-    // letting the post-await record install a fresh token whose reconcile
-    // would re-populate base status for a worktree that no longer exists).
-    const token = runtime.recordOptimisticReconcileToken(worktreeId)
-    try {
-      const createdBaseSha = await readCommitSha(created.path, 'HEAD')
-      void runtime
-        .reconcileWorktreeBaseStatus({
-          repoId: repo.id,
-          repoPath: repo.path,
-          worktreeId,
-          base: optimisticBase,
-          branchName,
-          createdBaseSha,
-          token,
-          fetchPromise: optimisticFetchPromise
-        })
-        .catch((error) => {
-          console.warn(`[worktree-base-status] reconcile failed for ${worktreeId}:`, error)
-        })
-    } catch (error) {
-      console.warn(`[worktree-base-status] failed to read created base for ${worktreeId}:`, error)
-      runtime.emitWorktreeBaseStatus({
-        repoId: repo.id,
-        worktreeId,
-        status: 'unknown',
-        base: optimisticBase.base,
-        remote: optimisticBase.remote
-      })
-    }
-  }
-
   notifyWorktreesChanged(mainWindow, repo.id)
   return {
     worktree,
-    ...(setup ? { setup } : {}),
-    ...(initialBaseStatus ? { initialBaseStatus } : {})
+    ...(setup ? { setup } : {})
   }
 }
