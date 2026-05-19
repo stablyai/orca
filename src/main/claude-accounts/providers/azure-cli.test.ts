@@ -11,21 +11,19 @@ function fakeProcess(
   stdout = '',
   stderr = ''
 ): { mock: unknown; close: () => void } {
-  const listeners: Record<string, Array<(arg?: unknown) => void>> = {}
+  type Listener = (arg: Buffer | number) => void
+  const listeners: Record<string, Listener[]> = {}
+  const addListener = (key: string, cb: Listener): void => {
+    listeners[key] = [...(listeners[key] ?? []), cb]
+  }
   const proc = {
     stdout: {
-      on: (e: string, cb: (b: Buffer) => void) => {
-        listeners[`stdout:${e}`] = [...(listeners[`stdout:${e}`] ?? []), cb]
-      }
+      on: (e: string, cb: (b: Buffer) => void) => addListener(`stdout:${e}`, cb as Listener)
     },
     stderr: {
-      on: (e: string, cb: (b: Buffer) => void) => {
-        listeners[`stderr:${e}`] = [...(listeners[`stderr:${e}`] ?? []), cb]
-      }
+      on: (e: string, cb: (b: Buffer) => void) => addListener(`stderr:${e}`, cb as Listener)
     },
-    on: (e: string, cb: (arg?: unknown) => void) => {
-      listeners[e] = [...(listeners[e] ?? []), cb]
-    }
+    on: (e: string, cb: (arg?: unknown) => void) => addListener(e, cb as Listener)
   }
   return {
     mock: proc,
