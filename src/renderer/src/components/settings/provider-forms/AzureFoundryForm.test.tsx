@@ -51,9 +51,11 @@ describe('AzureFoundryFormView markup — API key tab', () => {
         apiKey=""
         useEntraId={false}
         validation={{ status: 'idle' }}
+        showApiKey={false}
         onLabelChange={() => {}}
         onResourceChange={() => {}}
         onApiKeyChange={() => {}}
+        onShowApiKeyChange={() => {}}
         onTabChange={() => {}}
         onValidate={() => {}}
         onSubmit={() => {}}
@@ -104,9 +106,11 @@ describe('AzureFoundryFormView markup — Entra ID tab', () => {
         apiKey=""
         useEntraId
         validation={{ status: 'idle' }}
+        showApiKey={false}
         onLabelChange={() => {}}
         onResourceChange={() => {}}
         onApiKeyChange={() => {}}
+        onShowApiKeyChange={() => {}}
         onTabChange={() => {}}
         onValidate={() => {}}
         onSubmit={() => {}}

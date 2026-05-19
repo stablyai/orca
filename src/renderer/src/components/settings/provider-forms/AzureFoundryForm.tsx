@@ -24,12 +24,16 @@ export type AzureFoundryBuilderInput = {
  */
 export function buildAzureFoundrySubmit(input: AzureFoundryBuilderInput): AzureFoundrySubmit {
   const resource = input.resource.trim()
-  if (!resource) throw new Error('Azure Foundry resource name is required.')
+  if (!resource) {
+    throw new Error('Azure Foundry resource name is required.')
+  }
   const trimmedLabel = input.label.trim()
   const label = trimmedLabel === '' ? undefined : trimmedLabel
   if (input.tab === 'api-key') {
     const apiKey = input.apiKey.trim()
-    if (!apiKey) throw new Error('Azure Foundry API key is required.')
+    if (!apiKey) {
+      throw new Error('Azure Foundry API key is required.')
+    }
     return {
       authMethod: 'azure-foundry',
       label,
@@ -52,11 +56,13 @@ export type AzureFoundryFormViewProps = {
   resource: string
   apiKey: string
   useEntraId: boolean
+  showApiKey: boolean
   validation: { status: 'idle' | 'pending' | 'ok' | 'error'; message?: string }
   onTabChange: (tab: AzureFoundryTab) => void
   onLabelChange: (value: string) => void
   onResourceChange: (value: string) => void
   onApiKeyChange: (value: string) => void
+  onShowApiKeyChange: (value: boolean) => void
   onValidate: () => void
   onSubmit: () => void
   onBack: () => void
@@ -73,11 +79,13 @@ export function AzureFoundryFormView({
   label,
   resource,
   apiKey,
+  showApiKey,
   validation,
   onTabChange,
   onLabelChange,
   onResourceChange,
   onApiKeyChange,
+  onShowApiKeyChange,
   onValidate,
   onSubmit,
   onBack
@@ -138,16 +146,28 @@ export function AzureFoundryFormView({
       {tab === 'api-key' && (
         <div className="flex flex-col gap-1">
           <Label htmlFor="afy-apikey">API key</Label>
-          <Input
-            id="afy-apikey"
-            aria-label="API key"
-            type="password"
-            placeholder="Foundry API key"
-            value={apiKey}
-            onChange={(e) => onApiKeyChange(e.target.value)}
-            aria-invalid={errorMessage ? true : undefined}
-            aria-describedby={errorMessage ? 'afy-apikey-error' : undefined}
-          />
+          <div className="flex gap-2">
+            <Input
+              id="afy-apikey"
+              aria-label="API key"
+              type={showApiKey ? 'text' : 'password'}
+              placeholder="Foundry API key"
+              value={apiKey}
+              onChange={(e) => onApiKeyChange(e.target.value)}
+              aria-invalid={errorMessage ? true : undefined}
+              aria-describedby={errorMessage ? 'afy-apikey-error' : undefined}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onShowApiKeyChange(!showApiKey)}
+              aria-pressed={showApiKey}
+              aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
+            >
+              {showApiKey ? 'Hide' : 'Show'}
+            </Button>
+          </div>
         </div>
       )}
       {tab === 'entra-id' && (
@@ -198,6 +218,7 @@ export function AzureFoundryForm({
   const [label, setLabel] = React.useState('')
   const [resource, setResource] = React.useState('')
   const [apiKey, setApiKey] = React.useState('')
+  const [showApiKey, setShowApiKey] = React.useState(false)
   const [validation, setValidation] = React.useState<AzureFoundryFormViewProps['validation']>({
     status: 'idle'
   })
@@ -228,11 +249,13 @@ export function AzureFoundryForm({
       resource={resource}
       apiKey={apiKey}
       useEntraId={tab === 'entra-id'}
+      showApiKey={showApiKey}
       validation={validation}
       onTabChange={setTab}
       onLabelChange={setLabel}
       onResourceChange={setResource}
       onApiKeyChange={setApiKey}
+      onShowApiKeyChange={setShowApiKey}
       onValidate={handleValidate}
       onSubmit={handleSubmit}
       onBack={onBack}
