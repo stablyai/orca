@@ -107,7 +107,7 @@ const documentComponents: Components = {
       href={href}
       target="_blank"
       rel="noreferrer"
-      className="text-primary underline underline-offset-2 hover:text-primary/80"
+      className="break-all text-primary underline underline-offset-2 hover:text-primary/80"
       onClick={(e) => e.stopPropagation()}
     >
       {children}

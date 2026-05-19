@@ -80,6 +80,7 @@ import type {
   PathSource,
   PersistedUIState,
   PRCheckDetail,
+  PRCheckRunDetails,
   PRComment,
   PRInfo,
   Repo,
@@ -825,6 +826,15 @@ export type PreloadApi = {
       prRepo?: GitHubOwnerRepo | null
       noCache?: boolean
     }) => Promise<PRCheckDetail[]>
+    prCheckDetails: (args: {
+      repoPath: string
+      repoId?: string
+      checkRunId?: number
+      workflowRunId?: number
+      checkName?: string
+      url?: string | null
+      prRepo?: GitHubOwnerRepo | null
+    }) => Promise<PRCheckRunDetails | null>
     rerunPRChecks: (args: {
       repoPath: string
       repoId?: string

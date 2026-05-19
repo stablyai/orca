@@ -89,7 +89,7 @@ import {
 import { stripRepoQualifiers } from '../../../shared/task-query'
 import { parseGitHubIssueOrPRLink } from '@/lib/github-links'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import GitHubItemDialog from '@/components/GitHubItemDialog'
+import GitHubItemDialog, { type ItemDialogTab } from '@/components/GitHubItemDialog'
 import GitLabItemDialog from '@/components/GitLabItemDialog'
 import ProjectViewWrapper from '@/components/github-project/ProjectViewWrapper'
 import LinearIssueWorkspace from '@/components/LinearIssueWorkspace'
@@ -1395,7 +1395,7 @@ function PRChecksCell({
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
-        Open PR conversation and checks
+        Open PR checks
       </TooltipContent>
     </Tooltip>
   )
@@ -1893,11 +1893,12 @@ export default function TaskPage(): React.JSX.Element {
   // this dialog for a read/review surface. The dialog's "Use" button routes
   // through the same direct-launch flow as the row-level "Use" CTA so
   // behavior is consistent regardless of entry point.
-  const [dialogWorkItemKey, setDialogWorkItemKey] = useState<{
-    id: string
-    repoId: string
-  } | null>(null)
-  const [dialogWorkItemFallback, setDialogWorkItemFallback] = useState<GitHubWorkItem | null>(null)
+  const githubTaskDrawerWorkItem = useAppStore((s) => s.githubTaskDrawerWorkItem)
+  const setGithubTaskDrawerWorkItem = useAppStore((s) => s.setGithubTaskDrawerWorkItem)
+  const [dialogInitialTab, setDialogInitialTab] = useState<ItemDialogTab>('conversation')
+  const dialogWorkItemKey = githubTaskDrawerWorkItem
+    ? { id: githubTaskDrawerWorkItem.id, repoId: githubTaskDrawerWorkItem.repoId }
+    : null
 
   const appliedWorkItemsCacheQuery = useMemo(
     () => stripRepoQualifiers(appliedTaskSearch.trim()),
@@ -1923,12 +1924,17 @@ export default function TaskPage(): React.JSX.Element {
   const cachedDialogWorkItem = useAppStore((s) =>
     findTaskPageDialogWorkItem(s.workItemsCache, dialogWorkItemKey)
   )
-  const dialogWorkItem = dialogWorkItemKey ? (cachedDialogWorkItem ?? dialogWorkItemFallback) : null
+  const dialogWorkItem = dialogWorkItemKey
+    ? (cachedDialogWorkItem ?? githubTaskDrawerWorkItem)
+    : null
 
-  const setDialogWorkItem = useCallback((item: GitHubWorkItem | null) => {
-    setDialogWorkItemKey(item ? { id: item.id, repoId: item.repoId } : null)
-    setDialogWorkItemFallback(item)
-  }, [])
+  const setDialogWorkItem = useCallback(
+    (item: GitHubWorkItem | null, initialTab: ItemDialogTab = 'conversation') => {
+      setDialogInitialTab(item ? initialTab : 'conversation')
+      setGithubTaskDrawerWorkItem(item)
+    },
+    [setGithubTaskDrawerWorkItem]
+  )
 
   const patchTaskPageWorkItemRows = useCallback(
     (itemKey: { id: string; repoId: string }, patch: Partial<GitHubWorkItem>): void => {
@@ -4314,7 +4320,10 @@ export default function TaskPage(): React.JSX.Element {
                             </div>
 
                             <div className="flex min-w-0 items-center">
-                              <PRChecksCell item={item} onOpen={() => setDialogWorkItem(item)} />
+                              <PRChecksCell
+                                item={item}
+                                onOpen={() => setDialogWorkItem(item, 'checks')}
+                              />
                             </div>
 
                             <div className="flex min-w-0 items-center">
@@ -5399,6 +5408,7 @@ export default function TaskPage(): React.JSX.Element {
 
       <GitHubItemDialog
         workItem={dialogWorkItem}
+        initialTab={dialogInitialTab}
         repoPath={
           // Why: the dialog is for a single item — resolve its repoPath from the
           // item's own repoId (set when fan-out merged the list) so it works in

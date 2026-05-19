@@ -5,6 +5,7 @@ import { findPrevLiveWorktreeHistoryIndex } from './worktree-nav-history'
 import type {
   ChangelogData,
   CustomPet,
+  GitHubWorkItem,
   PersistedTrustedOrcaHooks,
   PersistedUIState,
   StatusBarItem,
@@ -265,6 +266,8 @@ export type UISlice = {
   }
   taskResumeState: TaskResumeState | undefined
   setTaskResumeState: (updates: Partial<TaskResumeState>) => void
+  githubTaskDrawerWorkItem: GitHubWorkItem | null
+  setGithubTaskDrawerWorkItem: (item: GitHubWorkItem | null) => void
   newWorkspaceDraft: {
     repoId: string | null
     name: string
@@ -506,6 +509,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
   taskResumeState: undefined,
+  githubTaskDrawerWorkItem: null,
   newWorkspaceDraft: null,
   openTaskPage: (data = {}) => {
     // Why: record a Tasks visit in the shared back/forward history so the
@@ -586,6 +590,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       window.api.ui.set({ taskResumeState: next }).catch(console.error)
       return { taskResumeState: next }
     }),
+  setGithubTaskDrawerWorkItem: (item) => set({ githubTaskDrawerWorkItem: item }),
   closeTaskPage: () =>
     set((state) => {
       // Why: Esc-close from Tasks must rewind the history index if we're

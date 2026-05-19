@@ -625,6 +625,49 @@ export type PRCheckDetail = {
   workflowRunId?: number
 }
 
+export type PRCheckAnnotation = {
+  path: string | null
+  startLine: number | null
+  endLine: number | null
+  annotationLevel: string | null
+  title: string | null
+  message: string
+  rawDetails: string | null
+}
+
+export type PRCheckStep = {
+  name: string
+  status: string | null
+  conclusion: string | null
+  startedAt: string | null
+  completedAt: string | null
+}
+
+export type PRCheckJob = {
+  name: string
+  status: string | null
+  conclusion: string | null
+  startedAt: string | null
+  completedAt: string | null
+  url: string | null
+  steps: PRCheckStep[]
+}
+
+export type PRCheckRunDetails = {
+  name: string
+  status: PRCheckDetail['status'] | string | null
+  conclusion: PRCheckDetail['conclusion'] | string | null
+  url: string | null
+  detailsUrl: string | null
+  startedAt: string | null
+  completedAt: string | null
+  title: string | null
+  summary: string | null
+  text: string | null
+  annotations: PRCheckAnnotation[]
+  jobs: PRCheckJob[]
+}
+
 export type GitHubRerunPRChecksResult = { ok: true; count: number } | { ok: false; error: string }
 
 export type GitHubReactionContent =

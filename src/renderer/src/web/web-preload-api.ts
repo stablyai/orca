@@ -696,6 +696,7 @@ function createGitHubApi(): NonNullable<Partial<PreloadApi>['gh']> {
     countWorkItems: direct('github.countWorkItems'),
     listWorkItems: direct('github.listWorkItems'),
     prChecks: direct('github.prChecks'),
+    prCheckDetails: direct('github.prCheckDetails'),
     rerunPRChecks: direct('github.rerunPRChecks'),
     prComments: direct('github.prComments'),
     resolveReviewThread: direct('github.resolveReviewThread'),

@@ -63,6 +63,14 @@ const PullRequestChecks = PullRequest.extend({
   headSha: OptionalString
 })
 
+const PullRequestCheckDetails = RepoSelector.extend({
+  checkRunId: z.number().int().positive().optional(),
+  workflowRunId: z.number().int().positive().optional(),
+  checkName: OptionalString,
+  url: OptionalString.nullable().optional(),
+  prRepo: SlugRepo.nullable().optional()
+})
+
 const RerunPullRequestChecks = PullRequest.extend({
   headSha: OptionalString,
   failedOnly: z.boolean().optional()
@@ -313,6 +321,18 @@ export const GITHUB_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) =>
       runtime.getRepoPRChecks(params.repo, params.prNumber, params.headSha, params.prRepo ?? null, {
         noCache: params.noCache
+      })
+  }),
+  defineMethod({
+    name: 'github.prCheckDetails',
+    params: PullRequestCheckDetails,
+    handler: async (params, { runtime }) =>
+      runtime.getRepoPRCheckDetails(params.repo, {
+        checkRunId: params.checkRunId,
+        workflowRunId: params.workflowRunId,
+        checkName: params.checkName,
+        url: params.url,
+        prRepo: params.prRepo ?? null
       })
   }),
   defineMethod({

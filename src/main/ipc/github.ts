@@ -28,6 +28,7 @@ import {
   listAssignableUsers,
   getAuthenticatedViewer,
   getPRChecks,
+  getPRCheckDetails,
   getPRComments,
   resolveReviewThread,
   setPRFileViewed,
@@ -295,6 +296,34 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         args.prRepo ?? null,
         {
           noCache: args.noCache
+        },
+        repoConnectionId(repo)
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'gh:prCheckDetails',
+    (
+      _event,
+      args: {
+        repoPath: string
+        checkRunId?: number
+        workflowRunId?: number
+        checkName?: string
+        url?: string | null
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ) => {
+      const repo = assertRegisteredRepo(args, store)
+      return getPRCheckDetails(
+        repo.path,
+        {
+          checkRunId: args.checkRunId,
+          workflowRunId: args.workflowRunId,
+          checkName: args.checkName,
+          url: args.url,
+          prRepo: args.prRepo ?? null
         },
         repoConnectionId(repo)
       )

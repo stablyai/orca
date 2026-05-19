@@ -124,6 +124,7 @@ import {
   listWorkItems,
   countWorkItems,
   getPRChecks,
+  getPRCheckDetails,
   rerunPRChecks,
   getPRComments,
   getIssue,
@@ -5193,6 +5194,21 @@ export class OrcaRuntimeService {
     const repo = await this.resolveRepoSelector(repoSelector)
     this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_checks_rerun')
     return rerunPRChecks(repo.path, prNumber, options)
+  }
+
+  async getRepoPRCheckDetails(
+    repoSelector: string,
+    args: {
+      checkRunId?: number
+      workflowRunId?: number
+      checkName?: string
+      url?: string | null
+      prRepo?: GitHubOwnerRepo | null
+    }
+  ): Promise<Awaited<ReturnType<typeof getPRCheckDetails>>> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_check_details')
+    return getPRCheckDetails(repo.path, { ...args, prRepo: args.prRepo ?? null })
   }
 
   async getRepoPRComments(
