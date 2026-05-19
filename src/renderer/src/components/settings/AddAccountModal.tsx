@@ -9,6 +9,15 @@ import {
   DialogTitle
 } from '../ui/dialog'
 import { cn } from '@/lib/utils'
+import {
+  AnthropicApiKeyForm,
+  type AnthropicApiKeySubmit
+} from './provider-forms/AnthropicApiKeyForm'
+
+// Discriminated union for the AddAccountModal submit payload. Other variants
+// (compat, oauth-result) join this union in T15+; for P1 the only concrete
+// shape is the Anthropic API key form's payload.
+export type AddAccountSubmit = AnthropicApiKeySubmit
 
 // Cards rendered in step 1. Disabled providers carry a "Coming in P2/P3" hint
 // but no authMethod (those Edge providers are scheduled for later phases).
@@ -182,6 +191,7 @@ type AddAccountModalBodyProps = {
   onActiveIndexChange: (index: number) => void
   onPickProvider: (provider: ClaudeAuthMethod) => void
   onBack: () => void
+  onSubmit?: (input: AddAccountSubmit) => void
 }
 
 /**
@@ -197,7 +207,8 @@ export function AddAccountModalBody({
   activeIndex,
   onActiveIndexChange,
   onPickProvider,
-  onBack
+  onBack,
+  onSubmit
 }: AddAccountModalBodyProps): React.JSX.Element {
   if (step === 'pick') {
     return renderProviderGrid({
@@ -207,7 +218,18 @@ export function AddAccountModalBody({
     })
   }
 
-  // Step 2 form placeholder. The actual auth forms ship in Tasks 14-15.
+  // Step 2: render the provider-specific form. Only anthropic-api-key has a
+  // real form in P1 — compat lands in T15, OAuth opens an external browser
+  // flow, and the disabled (Bedrock/Vertex/Foundry) cards never reach step 2.
+  if (pickedProvider === 'anthropic-api-key') {
+    return (
+      <AnthropicApiKeyForm
+        onSubmit={(payload) => onSubmit?.(payload)}
+        onCancel={onBack}
+      />
+    )
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <div className="text-xs text-muted-foreground">
@@ -225,15 +247,13 @@ export function AddAccountModalBody({
 type AddAccountModalProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  // The actual submit payload type lands in Task 17 when this modal is wired
-  // into AccountsPane behind the feature flag.
-  onSubmit: (input: never) => void
+  onSubmit: (input: AddAccountSubmit) => void
 }
 
 export function AddAccountModal({
   open,
   onOpenChange,
-  onSubmit: _onSubmit
+  onSubmit
 }: AddAccountModalProps): React.JSX.Element {
   const [step, setStep] = useState<Step>('pick')
   const [pickedProvider, setPickedProvider] = useState<ClaudeAuthMethod | null>(null)
@@ -272,6 +292,7 @@ export function AddAccountModal({
           onActiveIndexChange={setActiveIndex}
           onPickProvider={handlePick}
           onBack={handleBack}
+          onSubmit={onSubmit}
         />
       </DialogContent>
     </Dialog>

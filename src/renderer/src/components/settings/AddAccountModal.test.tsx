@@ -3,6 +3,10 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { ClaudeAuthMethod } from '../../../../shared/types'
 import { AddAccountModal, AddAccountModalBody } from './AddAccountModal'
+import {
+  AnthropicApiKeyFormView,
+  buildAnthropicApiKeySubmit
+} from './provider-forms/AnthropicApiKeyForm'
 
 type ReactElementLike = {
   type: unknown
@@ -72,15 +76,57 @@ function renderPickBody(onPick: (p: ClaudeAuthMethod) => void = () => {}): unkno
   })
 }
 
-function renderFormBody(provider: ClaudeAuthMethod = 'anthropic-api-key'): unknown {
+function renderFormBody(
+  provider: ClaudeAuthMethod = 'anthropic-api-key',
+  onSubmit: (input: unknown) => void = () => {}
+): unknown {
   return AddAccountModalBody({
     step: 'form',
     pickedProvider: provider,
     activeIndex: 0,
     onActiveIndexChange: () => {},
     onPickProvider: () => {},
-    onBack: () => {}
+    onBack: () => {},
+    onSubmit: onSubmit as never
   })
+}
+
+// Renders the API-key form view directly with explicit state so tests can
+// inspect the resulting tree without hooks.
+function renderApiKeyFormView(overrides: Partial<{
+  label: string
+  apiKey: string
+  showKey: boolean
+  error: string | null
+  onLabelChange: (v: string) => void
+  onApiKeyChange: (v: string) => void
+  onToggleShowKey: () => void
+  onSubmit: () => void
+  onCancel: () => void
+}> = {}): unknown {
+  return AnthropicApiKeyFormView({
+    label: '',
+    apiKey: '',
+    showKey: false,
+    error: null,
+    onLabelChange: () => {},
+    onApiKeyChange: () => {},
+    onToggleShowKey: () => {},
+    onSubmit: () => {},
+    onCancel: () => {},
+    ...overrides
+  })
+}
+
+function findById(node: unknown, id: string): ReactElementLike | null {
+  let found: ReactElementLike | null = null
+  visit(node, (entry) => {
+    if (found) return
+    if (entry.props.id === id) {
+      found = entry
+    }
+  })
+  return found
 }
 
 describe('AddAccountModal step 1: provider grid', () => {
@@ -113,11 +159,25 @@ describe('AddAccountModal step 1: provider grid', () => {
     onClick()
     expect(onPick).toHaveBeenCalledWith('anthropic-api-key')
 
-    // After picking, the form view renders a Back button.
-    const formTree = renderFormBody('anthropic-api-key')
-    const backButton = findByAriaLabel(formTree, /back/i)
-    expect(backButton).not.toBeNull()
-    expect(collectText(backButton).toLowerCase()).toMatch(/back/)
+    // After picking, the form view renders an AnthropicApiKeyForm with a
+    // wired onCancel prop (which the form's internal "Back" button invokes).
+    // Render the stateless view directly to inspect its Back button.
+    const back = findByAriaLabel(
+      AnthropicApiKeyFormView({
+        label: '',
+        apiKey: '',
+        showKey: false,
+        error: null,
+        onLabelChange: () => {},
+        onApiKeyChange: () => {},
+        onToggleShowKey: () => {},
+        onSubmit: () => {},
+        onCancel: () => {}
+      }),
+      /^back$/i
+    )
+    expect(back).not.toBeNull()
+    expect(collectText(back).toLowerCase()).toMatch(/back/)
   })
 
   it('shows Bedrock/Vertex/Azure Foundry cards as disabled with "Coming in P2/P3"', () => {
@@ -171,5 +231,132 @@ describe('AddAccountModal step 1: provider grid', () => {
         <AddAccountModal open onOpenChange={() => {}} onSubmit={vi.fn() as never} />
       )
     ).not.toThrow()
+  })
+})
+
+describe('AddAccountModal step 2: Anthropic API key form', () => {
+  it('renders a Label text input and a password-type API key input', () => {
+    const tree = renderApiKeyFormView()
+
+    const labelInput = findById(tree, 'aak-label')
+    const keyInput = findById(tree, 'aak-key')
+
+    expect(labelInput).not.toBeNull()
+    expect(keyInput).not.toBeNull()
+    // Default Label input renders as a plain text input (no explicit type).
+    expect(labelInput?.props.type).not.toBe('password')
+    expect(keyInput?.props.type).toBe('password')
+
+    // Both inputs have visible <label htmlFor> partners.
+    const markup = renderToStaticMarkup(tree as React.ReactElement)
+    expect(markup.toLowerCase()).toMatch(/label/)
+    expect(markup.toLowerCase()).toMatch(/api key/)
+  })
+
+  it('AddAccountModalBody wires the API key form into step 2 for anthropic-api-key', () => {
+    // The body returns the form element with onSubmit + onCancel props wired
+    // to the parent. We assert wiring shape — the form internals are tested
+    // separately via renderApiKeyFormView.
+    const parent = vi.fn()
+    const tree = renderFormBody('anthropic-api-key', parent)
+    const formEl = tree as ReactElementLike
+    expect(typeof formEl.props.onSubmit).toBe('function')
+    expect(typeof formEl.props.onCancel).toBe('function')
+  })
+
+  it('buildAnthropicApiKeySubmit produces the wire-shape payload', () => {
+    const result = buildAnthropicApiKeySubmit({ label: 'Work', apiKey: 'sk-ant-abc' })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.payload).toEqual({
+        authMethod: 'anthropic-api-key',
+        label: 'Work',
+        secretFromUser: 'sk-ant-abc'
+      })
+    }
+  })
+
+  it('omits the label field when blank and trims whitespace', () => {
+    const result = buildAnthropicApiKeySubmit({ label: '   ', apiKey: '  sk-ant-xyz  ' })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.payload.label).toBeUndefined()
+      expect(result.payload.secretFromUser).toBe('sk-ant-xyz')
+    }
+  })
+
+  it('submitting the form with valid inputs flows the payload to the parent onSubmit', () => {
+    // Simulate the wiring path: the modal body renders <AnthropicApiKeyForm>,
+    // which calls onSubmit with the built payload. We exercise the pure
+    // builder here and assert the body wires onSubmit through correctly by
+    // invoking the form's onSubmit prop directly.
+    const parent = vi.fn()
+    const tree = renderFormBody('anthropic-api-key', parent)
+    // The body returns an <AnthropicApiKeyForm /> element. Invoke its
+    // onSubmit prop with a built payload — this is exactly what the form
+    // does internally after validating user input.
+    const formEl = tree as ReactElementLike
+    const onSubmitProp = formEl.props.onSubmit as (p: unknown) => void
+    const built = buildAnthropicApiKeySubmit({ label: 'Work', apiKey: 'sk-ant-abc' })
+    expect(built.ok).toBe(true)
+    if (built.ok) {
+      onSubmitProp(built.payload)
+    }
+    expect(parent).toHaveBeenCalledWith({
+      authMethod: 'anthropic-api-key',
+      label: 'Work',
+      secretFromUser: 'sk-ant-abc'
+    })
+  })
+
+  it('empty key surfaces an inline error containing "required"', () => {
+    const result = buildAnthropicApiKeySubmit({ label: 'Work', apiKey: '' })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toMatch(/required/i)
+    }
+    // And the rendered view shows that error inline when provided.
+    const tree = renderApiKeyFormView({ error: 'API key is required.' })
+    const markup = renderToStaticMarkup(tree as React.ReactElement)
+    expect(markup).toMatch(/required/i)
+  })
+
+  it('whitespace-only key is treated as empty and fails validation', () => {
+    const result = buildAnthropicApiKeySubmit({ label: '', apiKey: '   ' })
+    expect(result.ok).toBe(false)
+  })
+
+  it('key input is password by default and the Show button toggles to type=text', () => {
+    const masked = renderApiKeyFormView({ showKey: false })
+    const revealed = renderApiKeyFormView({ showKey: true })
+
+    expect(findById(masked, 'aak-key')?.props.type).toBe('password')
+    expect(findById(revealed, 'aak-key')?.props.type).toBe('text')
+
+    // The toggle button advertises its state via aria-pressed and visible
+    // label text alternates between "Show" and "Hide".
+    const toggle = findByAriaLabel(masked, /show api key/i)
+    expect(toggle).not.toBeNull()
+    expect(toggle?.props['aria-pressed']).toBe(false)
+    const toggleOn = findByAriaLabel(revealed, /hide api key/i)
+    expect(toggleOn).not.toBeNull()
+    expect(toggleOn?.props['aria-pressed']).toBe(true)
+
+    // Invoking the toggle handler calls back as expected.
+    const onToggle = vi.fn()
+    const interactiveTree = renderApiKeyFormView({ showKey: false, onToggleShowKey: onToggle })
+    const button = findByAriaLabel(interactiveTree, /show api key/i)
+    expect(button).not.toBeNull()
+    ;(button?.props.onClick as () => void)()
+    expect(onToggle).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancel button invokes the back/cancel handler', () => {
+    const onCancel = vi.fn()
+    const tree = renderApiKeyFormView({ onCancel })
+    const back = findByAriaLabel(tree, /^back$/i)
+    expect(back).not.toBeNull()
+    ;(back?.props.onClick as () => void)()
+    expect(onCancel).toHaveBeenCalledTimes(1)
   })
 })
