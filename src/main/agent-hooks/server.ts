@@ -597,7 +597,11 @@ export class AgentHookServer {
     this.applyNormalizedStatus(event)
   }
 
-  async start(options?: { env?: string; userDataPath?: string }): Promise<void> {
+  async start(options?: {
+    env?: string
+    userDataPath?: string
+    endpointNamespace?: string
+  }): Promise<void> {
     if (this.server) {
       return
     }
@@ -606,7 +610,12 @@ export class AgentHookServer {
       this.env = options.env
     }
     if (options?.userDataPath) {
-      this.endpointDir = join(options.userDataPath, 'agent-hooks')
+      // Why: dev builds share one userData path, so callers can namespace the
+      // endpoint file by dev instance while packaged builds keep the stable path
+      // that lets long-lived PTYs reconnect after app restart.
+      this.endpointDir = options.endpointNamespace
+        ? join(options.userDataPath, 'agent-hooks', options.endpointNamespace)
+        : join(options.userDataPath, 'agent-hooks')
       this.endpointFilePathCache = join(this.endpointDir, getEndpointFileName())
       this.lastStatusFilePath = join(this.endpointDir, LAST_STATUS_FILE_NAME)
     }
@@ -781,6 +790,9 @@ export class AgentHookServer {
       ORCA_AGENT_HOOK_ENV: this.env,
       ORCA_AGENT_HOOK_VERSION: ORCA_HOOK_PROTOCOL_VERSION
     }
+    // Why: managed hooks source this file at invocation time. Packaged builds
+    // use a stable file for restart handoff; dev callers pass a per-instance
+    // namespace so parallel `pnpm dev` runs do not steal each other's hooks.
     if (this.endpointFileWritten && this.endpointFilePathCache) {
       env.ORCA_AGENT_HOOK_ENDPOINT = this.endpointFilePathCache
     }

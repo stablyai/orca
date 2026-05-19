@@ -3,9 +3,12 @@ import { readFileSync, existsSync, mkdirSync, writeFileSync, chmodSync, rmSync }
 import { dirname, join } from 'path'
 import { exec, execFile } from 'child_process'
 import { getDefaultRepoHookSettings } from '../shared/constants'
+import { getRuntimePathBasename } from '../shared/cross-platform-path'
+import { normalizeHookCommandSourcePolicy } from '../shared/hook-command-source-policy'
 import { gitExecFileSync } from './git/runner'
 import { isWslPath, parseWslPath, toWindowsWslPath, toLinuxPath } from './wsl'
 import type {
+  HookCommandSourcePolicy,
   OrcaHooks,
   Repo,
   SetupDecision,
@@ -261,21 +264,63 @@ function ensureOrcaDirIgnored(repoPath: string): void {
   }
 }
 
+function getEffectiveHookScript(
+  yamlScript: string | undefined,
+  localScript: string | undefined,
+  policy: HookCommandSourcePolicy,
+  legacyFallback: boolean
+): string | undefined {
+  const shared = yamlScript?.trim()
+  const local = localScript?.trim()
+
+  if (policy === 'local-only') {
+    return local || undefined
+  }
+
+  if (policy === 'run-both') {
+    return [shared, local].filter(Boolean).join('\n') || undefined
+  }
+
+  // Why: existing users persisted local setup/archive scripts before
+  // commandSourcePolicy existed. Without a fallback the new default
+  // 'shared-only' would silently drop those scripts when orca.yaml is missing.
+  if (legacyFallback) {
+    return shared || local || undefined
+  }
+
+  return shared || undefined
+}
+
+function hasLegacyLocalScripts(repo: Repo): boolean {
+  return Boolean(
+    repo.hookSettings?.scripts.setup?.trim() || repo.hookSettings?.scripts.archive?.trim()
+  )
+}
+
 export function getEffectiveHooks(repo: Repo, worktreePath?: string): OrcaHooks | null {
-  const yamlHooks = loadHooks(worktreePath ?? repo.path)
-  const legacySetup = repo.hookSettings?.scripts.setup?.trim()
-  const legacyArchive = repo.hookSettings?.scripts.archive?.trim()
-  const setup = yamlHooks?.scripts.setup?.trim() || legacySetup
-  const archive = yamlHooks?.scripts.archive?.trim() || legacyArchive
+  const hooksRoot = worktreePath ?? repo.path
+  const yamlHooks = loadHooks(hooksRoot)
+  const yamlFileExists = hasHooksFile(hooksRoot)
+  const localSetup = repo.hookSettings?.scripts.setup
+  const localArchive = repo.hookSettings?.scripts.archive
+  const rawPolicy = repo.hookSettings?.commandSourcePolicy
+  const policy = normalizeHookCommandSourcePolicy(rawPolicy)
+  const legacyFallback = rawPolicy === undefined && !yamlFileExists && hasLegacyLocalScripts(repo)
+  const setup = getEffectiveHookScript(yamlHooks?.scripts.setup, localSetup, policy, legacyFallback)
+  const archive = getEffectiveHookScript(
+    yamlHooks?.scripts.archive,
+    localArchive,
+    policy,
+    legacyFallback
+  )
 
   if (!setup && !archive) {
     return null
   }
 
-  // Why: `orca.yaml` is the preferred source going forward, but existing users may
-  // still have setup/archive commands persisted only in repo settings. Resolve each
-  // hook independently so a repo that has only migrated one command into `orca.yaml`
-  // does not silently lose the other legacy hook until the migration is complete.
+  // Why: committed `orca.yaml` and local Settings commands can intentionally
+  // coexist, but the source policy defines whether the committed file is an
+  // authoritative boundary, local settings are authoritative, or both run.
   return {
     scripts: {
       ...(setup ? { setup } : {}),
@@ -307,11 +352,31 @@ export function shouldRunSetupForCreate(repo: Repo, decision: SetupDecision = 'i
 export function getSetupCommandSource(
   repo: Repo,
   worktreePath?: string
-): { source: 'yaml'; command: string } | null {
-  const yamlSetup = loadHooks(worktreePath ?? repo.path)?.scripts.setup?.trim()
+): { source: 'yaml' | 'local' | 'both'; command: string } | null {
+  const hooksRoot = worktreePath ?? repo.path
+  const yamlHooks = loadHooks(hooksRoot)
+  const yamlFileExists = hasHooksFile(hooksRoot)
+  const yamlSetup = yamlHooks?.scripts.setup?.trim()
+  const localSetup = repo.hookSettings?.scripts.setup?.trim()
+  const rawPolicy = repo.hookSettings?.commandSourcePolicy
+  const policy = normalizeHookCommandSourcePolicy(rawPolicy)
+
+  if (policy === 'local-only') {
+    return localSetup ? { source: 'local', command: localSetup } : null
+  }
+
+  if (policy === 'run-both' && yamlSetup && localSetup) {
+    return { source: 'both', command: `${yamlSetup}\n${localSetup}` }
+  }
 
   if (yamlSetup) {
     return { source: 'yaml', command: yamlSetup }
+  }
+
+  // Why: pre-policy persisted local setup scripts must keep working when
+  // orca.yaml is missing; otherwise upgrading silently drops the legacy hook.
+  if (rawPolicy === undefined && !yamlFileExists && localSetup && hasLegacyLocalScripts(repo)) {
+    return { source: 'local', command: localSetup }
   }
 
   return null
@@ -321,6 +386,7 @@ function getSetupEnvVars(repo: Repo, worktreePath: string): Record<string, strin
   return {
     ORCA_ROOT_PATH: repo.path,
     ORCA_WORKTREE_PATH: worktreePath,
+    ORCA_WORKSPACE_NAME: getRuntimePathBasename(worktreePath),
     // Compat with conductor.json users
     CONDUCTOR_ROOT_PATH: repo.path,
     GHOSTX_ROOT_PATH: repo.path

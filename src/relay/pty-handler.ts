@@ -10,6 +10,7 @@ import {
   listShellProfiles
 } from './pty-shell-utils'
 import { getRelayShellLaunchConfig } from './pty-shell-launch'
+import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 
 // Why: node-pty is a native addon that may not be installed on the remote.
 // Dynamic import keeps the require() lazy so loadPty() returns null gracefully
@@ -81,7 +82,7 @@ function disposeManagedPty(managed: ManagedPty): void {
     /* swallow */
   }
 }
-const DEFAULT_GRACE_TIME_MS = 5 * 60 * 1000
+const DEFAULT_GRACE_TIME_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 export const REPLAY_BUFFER_MAX = 100 * 1024
 const ALLOWED_SIGNALS = new Set([
   'SIGINT',

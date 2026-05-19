@@ -21,10 +21,17 @@ import { scheduleSplitScrollRestore } from './pane-split-scroll'
 import { reattachWebglIfNeeded } from './pane-webgl-reattach'
 import { toPublicPane } from './pane-public-view'
 
+type MovedPaneSplitState = {
+  pane: ManagedPaneInternal
+  scrollState: ReturnType<typeof captureScrollState>
+  hadWebgl: boolean
+}
+
 type SplitManagedPaneArgs = {
   paneId: number
   direction: 'vertical' | 'horizontal'
-  opts?: { ratio?: number; cwd?: string; leafId?: string }
+  opts?: { ratio?: number; cwd?: string; leafId?: string; ptyId?: string }
+  sourceContainer?: HTMLElement
   panes: Map<number, ManagedPaneInternal>
   root: HTMLElement
   styleOptions: PaneStyleOptions
@@ -45,7 +52,8 @@ export function splitManagedPane(args: SplitManagedPaneArgs): ManagedPane | null
   if (!existing) {
     return null
   }
-  const parent = existing.container.parentElement
+  const existingContainer = args.sourceContainer ?? existing.container
+  const parent = existingContainer.parentElement
   if (!parent) {
     return null
   }
@@ -53,30 +61,76 @@ export function splitManagedPane(args: SplitManagedPaneArgs): ManagedPane | null
   const isVertical = args.direction === 'vertical'
   const divider = args.createDivider(isVertical)
 
-  // Why: wrapInSplit reparents the existing container, resetting scrollTop.
-  const scrollState = captureScrollState(existing.terminal)
-  // Why: lock prevents safeFit/fitAllPanes from restoring scroll during the
-  // async settle window; scheduleSplitScrollRestore owns the restore.
-  existing.pendingSplitScrollState = scrollState
+  const movedPaneStates = prepareMovedPanesForSplit(existingContainer, existing, args.panes)
 
-  // Why: DOM reparenting can silently invalidate a WebGL context without
-  // firing contextlost, so dispose before the move and reattach after settle.
-  const hadWebgl = !!existing.webglAddon
-  disposeWebgl(existing)
-
-  wrapInSplit(existing.container, newPane.container, isVertical, divider, args.opts)
+  wrapInSplit(existingContainer, newPane.container, isVertical, divider, args.opts)
   args.setActivePaneId(newPane.id)
   openSplitPane(args, newPane, args.opts?.cwd)
 
-  scheduleSplitScrollRestore(
-    (id) => args.panes.get(id),
-    existing.id,
-    scrollState,
-    args.isDestroyed,
-    hadWebgl ? reattachWebglIfNeeded : undefined
-  )
+  for (const movedPaneState of movedPaneStates) {
+    scheduleSplitScrollRestore(
+      (id) => args.panes.get(id),
+      movedPaneState.pane.id,
+      movedPaneState.scrollState,
+      args.isDestroyed,
+      movedPaneState.hadWebgl ? reattachWebglIfNeeded : undefined
+    )
+  }
 
   return toPublicPane(newPane)
+}
+
+function prepareMovedPanesForSplit(
+  sourceContainer: HTMLElement,
+  fallbackPane: ManagedPaneInternal,
+  panes: Map<number, ManagedPaneInternal>
+): MovedPaneSplitState[] {
+  const movedPanes = findManagedPanesInContainer(sourceContainer, panes)
+  if (movedPanes.length === 0) {
+    movedPanes.push(fallbackPane)
+  }
+
+  return movedPanes.map((pane) => {
+    // Why: wrapInSplit reparents moved containers, resetting browser scrollTop.
+    const scrollState = captureScrollState(pane.terminal)
+    // Why: lock prevents safeFit/fitAllPanes from restoring scroll during the
+    // async settle window; scheduleSplitScrollRestore owns the restore.
+    pane.pendingSplitScrollState = scrollState
+
+    // Why: DOM reparenting can silently invalidate a WebGL context without
+    // firing contextlost, so dispose before the move and reattach after settle.
+    const hadWebgl = !!pane.webglAddon
+    disposeWebgl(pane)
+    return { pane, scrollState, hadWebgl }
+  })
+}
+
+function findManagedPanesInContainer(
+  sourceContainer: HTMLElement,
+  panes: Map<number, ManagedPaneInternal>
+): ManagedPaneInternal[] {
+  const movedPanes: ManagedPaneInternal[] = []
+  const appendPaneById = (paneIdValue: string | undefined): void => {
+    if (!paneIdValue) {
+      return
+    }
+    const paneId = Number(paneIdValue)
+    if (!Number.isFinite(paneId)) {
+      return
+    }
+    const pane = panes.get(paneId)
+    if (pane && !movedPanes.includes(pane)) {
+      movedPanes.push(pane)
+    }
+  }
+
+  if (sourceContainer.classList.contains('pane')) {
+    appendPaneById(sourceContainer.dataset.paneId)
+  }
+  for (const paneElement of sourceContainer.querySelectorAll<HTMLElement>('.pane[data-pane-id]')) {
+    appendPaneById(paneElement.dataset.paneId)
+  }
+  return movedPanes
 }
 
 function openSplitPane(
@@ -89,8 +143,13 @@ function openSplitPane(
   applyDividerStyles(args.root, args.styleOptions)
   newPane.terminal.focus()
   updateMultiPaneState(args.getDragCallbacks())
-  // Why: forward cwd hint so the new PTY spawns in the source pane's cwd.
-  args.publishPaneCreated(newPane, cwd ? { cwd } : undefined)
+  // Why: forward one-shot spawn/adoption hints so the new pane inherits the
+  // source cwd for local splits or attaches a runtime-spawned PTY for web splits.
+  const spawnHints = {
+    ...(cwd ? { cwd } : {}),
+    ...(args.opts?.ptyId ? { ptyId: args.opts.ptyId } : {})
+  }
+  args.publishPaneCreated(newPane, Object.keys(spawnHints).length > 0 ? spawnHints : undefined)
   args.managerOptions.onLayoutChanged?.()
 }
 

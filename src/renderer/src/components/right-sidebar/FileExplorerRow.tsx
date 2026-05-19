@@ -12,11 +12,13 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
+  Globe,
   ListCollapse,
   Loader2,
   Pencil,
   Trash2
 } from 'lucide-react'
+import { toast } from 'sonner'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -29,13 +31,13 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { detectLanguage } from '@/lib/language-detect'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { openFileInBrowserTab } from '@/lib/file-preview'
+import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import type { GitFileStatus } from '../../../../shared/types'
 import { STATUS_LABELS } from './status-display'
 import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerRowDrag } from './useFileExplorerRowDrag'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
-
-const ORCA_PATH_MIME = 'text/x-orca-file-path'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -46,6 +48,16 @@ const revealLabel = isMac
   : isLinux
     ? 'Open Containing Folder'
     : 'Reveal in File Explorer'
+
+function stopRightButtonMenuSelection(event: React.PointerEvent): void {
+  if (event.button !== 2) {
+    return
+  }
+  // Why: Radix opens context menus under the pointer; on some macOS/Electron
+  // paths the right-button release lands on the first item and selects it.
+  event.preventDefault()
+  event.stopPropagation()
+}
 
 export type InlineInput = {
   parentPath: string
@@ -271,6 +283,15 @@ export function FileExplorerRow({
     onNativeDragExpandDir,
     onMoveDrop
   })
+  const handleOpenInOrcaBrowser = useCallback(() => {
+    if (!activeWorktreeId) {
+      return
+    }
+    const result = openFileInBrowserTab({ filePath: node.path, worktreeId: activeWorktreeId })
+    if (result.status === 'unsupported') {
+      toast.error(result.message)
+    }
+  }, [activeWorktreeId, node.path])
 
   return (
     <ContextMenu>
@@ -285,7 +306,7 @@ export function FileExplorerRow({
           data-native-file-drop-dir={rowDropDir}
           draggable
           onDragStart={(event) => {
-            event.dataTransfer.setData(ORCA_PATH_MIME, node.path)
+            event.dataTransfer.setData(WORKSPACE_FILE_PATH_MIME, node.path)
             // Allow both file explorer moving and copying to terminal
             event.dataTransfer.effectAllowed = 'copyMove'
             onDragSourceChange(node.path)
@@ -363,6 +384,7 @@ export function FileExplorerRow({
       </ContextMenuTrigger>
       <ContextMenuContent
         className="w-64 bg-[rgba(255,255,255,0.82)] dark:bg-[rgba(0,0,0,0.72)]"
+        onPointerUpCapture={stopRightButtonMenuSelection}
         onCloseAutoFocus={(e) => e.preventDefault()}
       >
         <ContextMenuItem onSelect={() => onStartNew('file', targetDir, targetDepth)}>
@@ -388,6 +410,12 @@ export function FileExplorerRow({
           <ContextMenuItem onSelect={() => onDuplicate(node)}>
             <Files />
             Duplicate
+          </ContextMenuItem>
+        )}
+        {!node.isDirectory && activeWorktreeId && (
+          <ContextMenuItem onSelect={handleOpenInOrcaBrowser}>
+            <Globe />
+            Open in Orca Browser
           </ContextMenuItem>
         )}
         {!node.isDirectory && activeWorktreeId && detectLanguage(node.path) === 'markdown' && (

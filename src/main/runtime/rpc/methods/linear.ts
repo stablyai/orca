@@ -36,7 +36,9 @@ const CreateIssue = z.object({
   teamId: requiredString('Team ID is required'),
   title: requiredString('Title is required'),
   description: OptionalString,
-  workspaceId: OptionalString
+  workspaceId: OptionalString,
+  parentIssueId: OptionalString,
+  projectId: z.union([z.string(), z.null()]).optional()
 })
 
 const IssueId = z.object({
@@ -50,6 +52,14 @@ const IssueComment = z.object({
   workspaceId: OptionalString
 })
 
+const ListProjects = z
+  .object({
+    query: OptionalString,
+    limit: OptionalFiniteNumber,
+    workspaceId: OptionalString
+  })
+  .optional()
+
 const TeamId = z.object({
   teamId: requiredString('Team ID is required'),
   workspaceId: OptionalString
@@ -62,8 +72,10 @@ const IssueUpdate = z.object({
     stateId: OptionalString,
     title: OptionalString,
     assigneeId: z.union([z.string(), z.null()]).optional(),
+    estimate: z.union([z.number().int().min(0), z.null()]).optional(),
     priority: z.number().int().min(0).max(4).optional(),
-    labelIds: z.array(z.string()).optional()
+    labelIds: z.array(z.string()).optional(),
+    projectId: z.union([z.string(), z.null()]).optional()
   })
 })
 
@@ -113,7 +125,9 @@ export const LINEAR_METHODS: RpcMethod[] = [
         params.teamId.trim(),
         params.title.trim(),
         params.description?.trim() || undefined,
-        params.workspaceId
+        params.workspaceId,
+        params.parentIssueId,
+        params.projectId
       )
   }),
   defineMethod({
@@ -147,6 +161,12 @@ export const LINEAR_METHODS: RpcMethod[] = [
     name: 'linear.listTeams',
     params: WorkspaceSelection,
     handler: async (params, { runtime }) => runtime.linearListTeams(params?.workspaceId)
+  }),
+  defineMethod({
+    name: 'linear.listProjects',
+    params: ListProjects,
+    handler: async (params, { runtime }) =>
+      runtime.linearListProjects(params?.query, params?.limit, params?.workspaceId)
   }),
   defineMethod({
     name: 'linear.teamStates',

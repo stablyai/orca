@@ -18,6 +18,7 @@ import AgentCombobox from '@/components/agent/AgentCombobox'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
+import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import type {
   GitHubWorkItem,
   GitLabWorkItem,
@@ -29,6 +30,7 @@ import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPreset
 import SmartWorkspaceNameField, {
   type SmartWorkspaceNameSelection
 } from '@/components/new-workspace/SmartWorkspaceNameField'
+import type { SetupConfig } from '@/lib/new-workspace'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 
@@ -62,7 +64,7 @@ type NewWorkspaceComposerCardProps = {
   onCreate: () => void
   note: string
   onNoteChange: (value: string) => void
-  setupConfig: { source: 'yaml' | 'legacy'; command: string } | null
+  setupConfig: SetupConfig | null
   requiresExplicitSetupChoice: boolean
   setupDecision: 'run' | 'skip' | null
   onSetupDecisionChange: (value: 'run' | 'skip') => void
@@ -95,7 +97,7 @@ function SetupCommandPreview({
   setupConfig,
   headerAction
 }: {
-  setupConfig: { source: 'yaml' | 'legacy'; command: string }
+  setupConfig: SetupConfig
   headerAction?: React.ReactNode
 }): React.JSX.Element {
   if (setupConfig.source === 'yaml') {
@@ -116,7 +118,7 @@ function SetupCommandPreview({
     <div className="rounded-2xl border border-border/60 bg-muted/35 px-4 py-3 shadow-inner">
       <div className="mb-2 flex items-center justify-between gap-3">
         <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-          Legacy setup command
+          {setupConfig.source === 'both' ? 'Combined setup command' : 'Local setup command'}
         </div>
         {headerAction}
       </div>
@@ -144,12 +146,12 @@ function useComposerFileDragOver(): {
 
   const onDragEnter = React.useCallback((event: React.DragEvent<HTMLDivElement>): void => {
     // Why: "Files" is the DataTransfer type the OS adds for native file drags;
-    // internal in-app drags (text/x-orca-file-path) must not trigger the
+    // internal in-app drags must not trigger the
     // attachment-drop highlight so they still route to their own handlers.
     if (!event.dataTransfer.types.includes('Files')) {
       return
     }
-    if (event.dataTransfer.types.includes('text/x-orca-file-path')) {
+    if (event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)) {
       return
     }
     dragCounterRef.current += 1
@@ -162,10 +164,10 @@ function useComposerFileDragOver(): {
         return
       }
       // Why: mirror the onDragEnter guard so internal in-app drags (which may
-      // carry both 'Files' and 'text/x-orca-file-path' types) don't decrement
+      // carry both "Files" and the workspace path MIME type) don't decrement
       // the counter when enter skipped incrementing it — otherwise the counter
       // goes negative and the native-drag highlight state desyncs.
-      if (event.dataTransfer.types.includes('text/x-orca-file-path')) {
+      if (event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)) {
         return
       }
       dragCounterRef.current -= 1
@@ -518,7 +520,11 @@ export default function NewWorkspaceComposerCard({
                       Setup script
                     </label>
                     <span className="rounded-full border border-border/70 bg-muted/45 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-foreground/70">
-                      {setupConfig.source === 'yaml' ? 'orca.yaml' : 'legacy hooks'}
+                      {setupConfig.source === 'yaml'
+                        ? 'orca.yaml'
+                        : setupConfig.source === 'both'
+                          ? 'orca.yaml + local'
+                          : 'local settings'}
                     </span>
                   </div>
 

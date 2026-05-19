@@ -38,6 +38,8 @@ import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult } from '../shared/skills'
 import type {
+  RuntimeBrowserDriverState,
+  RuntimeMobileSessionTabMove,
   RuntimeStatus,
   RuntimeSyncWindowGraph,
   RuntimeTerminalDriverState
@@ -95,7 +97,13 @@ import type {
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
 } from '../shared/agent-status-types'
-import type { SpeechModelManifest, SpeechModelState } from '../shared/speech-types'
+import type {
+  SpeechErrorEvent,
+  SpeechLifecycleEvent,
+  SpeechModelManifest,
+  SpeechModelState,
+  SpeechTranscriptEvent
+} from '../shared/speech-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { RefreshAgentsResult } from './api-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
@@ -814,13 +822,24 @@ const api = {
       repoId?: string
       prNumber: number
       headSha?: string
+      prRepo?: { owner: string; repo: string } | null
       noCache?: boolean
     }): Promise<unknown[]> => ipcRenderer.invoke('gh:prChecks', args),
+
+    rerunPRChecks: (args: {
+      repoPath: string
+      repoId?: string
+      prNumber: number
+      headSha?: string
+      failedOnly?: boolean
+    }): Promise<{ ok: true; count: number } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gh:rerunPRChecks', args),
 
     prComments: (args: {
       repoPath: string
       repoId?: string
       prNumber: number
+      prRepo?: { owner: string; repo: string } | null
       noCache?: boolean
     }): Promise<unknown[]> => ipcRenderer.invoke('gh:prComments', args),
 
@@ -845,6 +864,7 @@ const api = {
       repoId?: string
       prNumber: number
       title: string
+      prRepo?: { owner: string; repo: string } | null
     }): Promise<boolean> => ipcRenderer.invoke('gh:updatePRTitle', args),
 
     mergePR: (args: {
@@ -852,8 +872,25 @@ const api = {
       repoId?: string
       prNumber: number
       method?: 'merge' | 'squash' | 'rebase'
+      prRepo?: { owner: string; repo: string } | null
     }): Promise<{ ok: true } | { ok: false; error: string }> =>
       ipcRenderer.invoke('gh:mergePR', args),
+
+    updatePRState: (args: {
+      repoPath: string
+      repoId?: string
+      prNumber: number
+      updates: { state: 'open' | 'closed' }
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gh:updatePRState', args),
+
+    requestPRReviewers: (args: {
+      repoPath: string
+      repoId?: string
+      prNumber: number
+      reviewers: string[]
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gh:requestPRReviewers', args),
 
     updateIssue: (args: {
       repoPath: string
@@ -1032,8 +1069,11 @@ const api = {
       title: string
       description?: string
       workspaceId?: string
+      parentIssueId?: string
+      projectId?: string | null
     }): Promise<
-      { ok: true; id: string; identifier: string; url: string } | { ok: false; error: string }
+      | { ok: true; id: string; identifier: string; title: string; url: string }
+      | { ok: false; error: string }
     > => ipcRenderer.invoke('linear:createIssue', args),
 
     getIssue: (args: { id: string; workspaceId?: string }): Promise<unknown> =>
@@ -1058,6 +1098,12 @@ const api = {
 
     listTeams: (args?: { workspaceId?: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('linear:listTeams', args),
+
+    listProjects: (args?: {
+      query?: string
+      limit?: number
+      workspaceId?: string
+    }): Promise<unknown[]> => ipcRenderer.invoke('linear:listProjects', args),
 
     teamStates: (args: { teamId: string; workspaceId?: string }): Promise<unknown[]> =>
       ipcRenderer.invoke('linear:teamStates', args),
@@ -1192,9 +1238,10 @@ const api = {
       }
       linear: { connected: boolean }
     }> => ipcRenderer.invoke('preflight:check', args),
-    detectAgents: (): Promise<string[]> => ipcRenderer.invoke('preflight:detectAgents'),
-    refreshAgents: (): Promise<RefreshAgentsResult> =>
-      ipcRenderer.invoke('preflight:refreshAgents'),
+    detectAgents: (args?: { wslDistro?: string | null }): Promise<string[]> =>
+      ipcRenderer.invoke('preflight:detectAgents', args),
+    refreshAgents: (args?: { wslDistro?: string | null }): Promise<RefreshAgentsResult> =>
+      ipcRenderer.invoke('preflight:refreshAgents', args),
     detectRemoteAgents: (args: { connectionId: string }): Promise<string[]> =>
       ipcRenderer.invoke('preflight:detectRemoteAgents', args)
   },
@@ -2260,6 +2307,9 @@ const api = {
         ptyId?: string
         activate?: boolean
         tabId?: string
+        leafId?: string
+        splitFromLeafId?: string
+        splitDirection?: 'horizontal' | 'vertical'
       }) => void
     ): (() => void) => {
       const listener = (
@@ -2273,6 +2323,8 @@ const api = {
           activate?: boolean
           tabId?: string
           leafId?: string
+          splitFromLeafId?: string
+          splitDirection?: 'horizontal' | 'vertical'
         }
       ) => callback(data)
       ipcRenderer.on('ui:createTerminal', listener)
@@ -2283,6 +2335,7 @@ const api = {
         requestId: string
         worktreeId?: string
         afterTabId?: string
+        targetGroupId?: string
         command?: string
         title?: string
         activate?: boolean
@@ -2294,6 +2347,7 @@ const api = {
           requestId: string
           worktreeId?: string
           afterTabId?: string
+          targetGroupId?: string
           command?: string
           title?: string
           activate?: boolean
@@ -2370,6 +2424,16 @@ const api = {
       ipcRenderer.on('ui:closeSessionTab', listener)
       return () => ipcRenderer.removeListener('ui:closeSessionTab', listener)
     },
+    onMoveSessionTab: (
+      callback: (data: { worktreeId: string } & RuntimeMobileSessionTabMove) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { worktreeId: string } & RuntimeMobileSessionTabMove
+      ) => callback(data)
+      ipcRenderer.on('ui:moveSessionTab', listener)
+      return () => ipcRenderer.removeListener('ui:moveSessionTab', listener)
+    },
     onOpenFileFromMobile: (
       callback: (data: { worktreeId: string; filePath: string; relativePath: string }) => void
     ): (() => void) => {
@@ -2379,6 +2443,21 @@ const api = {
       ) => callback(data)
       ipcRenderer.on('ui:openFileFromMobile', listener)
       return () => ipcRenderer.removeListener('ui:openFileFromMobile', listener)
+    },
+    onOpenDiffFromMobile: (
+      callback: (data: {
+        worktreeId: string
+        filePath: string
+        relativePath: string
+        staged: boolean
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { worktreeId: string; filePath: string; relativePath: string; staged: boolean }
+      ) => callback(data)
+      ipcRenderer.on('ui:openDiffFromMobile', listener)
+      return () => ipcRenderer.removeListener('ui:openDiffFromMobile', listener)
     },
     onMobileMarkdownRequest: (
       callback: (request: RuntimeMobileMarkdownRequest) => void
@@ -2416,8 +2495,9 @@ const api = {
     readClipboardText: (): Promise<string> => ipcRenderer.invoke('clipboard:readText'),
     readSelectionClipboardText: (): Promise<string> =>
       ipcRenderer.invoke('clipboard:readSelectionText'),
-    saveClipboardImageAsTempFile: (): Promise<string | null> =>
-      ipcRenderer.invoke('clipboard:saveImageAsTempFile'),
+    saveClipboardImageAsTempFile: (args?: {
+      connectionId?: string | null
+    }): Promise<string | null> => ipcRenderer.invoke('clipboard:saveImageAsTempFile', args),
     writeClipboardText: (text: string): Promise<void> =>
       ipcRenderer.invoke('clipboard:writeText', text),
     writeSelectionClipboardText: (text: string): Promise<void> =>
@@ -2579,8 +2659,16 @@ const api = {
         driver: RuntimeTerminalDriverState
       }[]
     > => ipcRenderer.invoke('runtime:getTerminalDrivers'),
+    getBrowserDrivers: (): Promise<
+      {
+        browserPageId: string
+        driver: RuntimeBrowserDriverState
+      }[]
+    > => ipcRenderer.invoke('runtime:getBrowserDrivers'),
     restoreTerminalFit: (ptyId: string): Promise<{ restored: boolean }> =>
       ipcRenderer.invoke('runtime:restoreTerminalFit', { ptyId }),
+    reclaimBrowserForDesktop: (browserPageId: string): Promise<{ reclaimed: boolean }> =>
+      ipcRenderer.invoke('runtime:reclaimBrowserForDesktop', { browserPageId }),
     onTerminalFitOverrideChanged: (
       callback: (event: {
         ptyId: string
@@ -2608,6 +2696,19 @@ const api = {
       ) => callback(data)
       ipcRenderer.on('runtime:terminalDriverChanged', listener)
       return () => ipcRenderer.removeListener('runtime:terminalDriverChanged', listener)
+    },
+    onBrowserDriverChanged: (
+      callback: (event: { browserPageId: string; driver: RuntimeBrowserDriverState }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          browserPageId: string
+          driver: RuntimeBrowserDriverState
+        }
+      ) => callback(data)
+      ipcRenderer.on('runtime:browserDriverChanged', listener)
+      return () => ipcRenderer.removeListener('runtime:browserDriverChanged', listener)
     }
   },
 
@@ -2692,6 +2793,9 @@ const api = {
 
     terminateSessions: (args: { targetId: string }): Promise<void> =>
       ipcRenderer.invoke('ssh:terminateSessions', args),
+
+    resetRelay: (args: { targetId: string }): Promise<void> =>
+      ipcRenderer.invoke('ssh:resetRelay', args),
 
     getState: (args: { targetId: string }): Promise<SshConnectionState | null> =>
       ipcRenderer.invoke('ssh:getState', args),
@@ -2881,6 +2985,11 @@ const api = {
     revokeDevice: (args: { deviceId: string }): Promise<{ revoked: boolean }> =>
       ipcRenderer.invoke('mobile:revokeDevice', args),
 
+    listRuntimeAccessGrants: () => ipcRenderer.invoke('mobile:listRuntimeAccessGrants'),
+
+    revokeRuntimeAccess: (args: { deviceId: string }): Promise<{ revoked: boolean }> =>
+      ipcRenderer.invoke('mobile:revokeRuntimeAccess', args),
+
     isWebSocketReady: (): Promise<{ ready: boolean; endpoint: string | null }> =>
       ipcRenderer.invoke('mobile:isWebSocketReady')
   },
@@ -2932,25 +3041,32 @@ const api = {
       ipcRenderer.invoke('speech:cancelDownload', modelId),
     deleteModel: (modelId: string): Promise<void> =>
       ipcRenderer.invoke('speech:deleteModel', modelId),
-    startDictation: (modelId: string, hotwords?: string[]): Promise<void> =>
-      ipcRenderer.invoke('speech:startDictation', modelId, hotwords),
-    feedAudio: (samples: Float32Array, sampleRate: number): Promise<void> =>
+    startDictation: (
+      modelId: string,
+      hotwords: string[] | undefined,
+      sessionId: string
+    ): Promise<void> => ipcRenderer.invoke('speech:startDictation', modelId, hotwords, sessionId),
+    feedAudio: (samples: Float32Array, sampleRate: number, sessionId = 'desktop'): Promise<void> =>
       // Why: Float32Array data gets zeroed out when crossing the contextBridge
       // + IPC boundary. Wrapping in a Buffer preserves the raw bytes reliably.
       ipcRenderer.invoke(
         'speech:feedAudio',
         Buffer.from(samples.buffer, samples.byteOffset, samples.byteLength),
-        sampleRate
+        sampleRate,
+        sessionId
       ),
-    stopDictation: (): Promise<void> => ipcRenderer.invoke('speech:stopDictation'),
+    stopDictation: (sessionId = 'desktop'): Promise<void> =>
+      ipcRenderer.invoke('speech:stopDictation', sessionId),
 
-    onPartialTranscript: (callback: (text: string) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, text: string): void => callback(text)
+    onPartialTranscript: (callback: (data: SpeechTranscriptEvent) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: SpeechTranscriptEvent): void =>
+        callback(data)
       ipcRenderer.on('speech:partial', listener)
       return () => ipcRenderer.removeListener('speech:partial', listener)
     },
-    onFinalTranscript: (callback: (text: string) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, text: string): void => callback(text)
+    onFinalTranscript: (callback: (data: SpeechTranscriptEvent) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: SpeechTranscriptEvent): void =>
+        callback(data)
       ipcRenderer.on('speech:final', listener)
       return () => ipcRenderer.removeListener('speech:final', listener)
     },
@@ -2964,18 +3080,21 @@ const api = {
       ipcRenderer.on('speech:downloadProgress', listener)
       return () => ipcRenderer.removeListener('speech:downloadProgress', listener)
     },
-    onReady: (callback: () => void): (() => void) => {
-      const listener = (): void => callback()
+    onReady: (callback: (data: SpeechLifecycleEvent) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: SpeechLifecycleEvent): void =>
+        callback(data)
       ipcRenderer.on('speech:ready', listener)
       return () => ipcRenderer.removeListener('speech:ready', listener)
     },
-    onStopped: (callback: () => void): (() => void) => {
-      const listener = (): void => callback()
+    onStopped: (callback: (data: SpeechLifecycleEvent) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: SpeechLifecycleEvent): void =>
+        callback(data)
       ipcRenderer.on('speech:stopped', listener)
       return () => ipcRenderer.removeListener('speech:stopped', listener)
     },
-    onError: (callback: (error: string) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, error: string): void => callback(error)
+    onError: (callback: (data: SpeechErrorEvent) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: SpeechErrorEvent): void =>
+        callback(data)
       ipcRenderer.on('speech:error', listener)
       return () => ipcRenderer.removeListener('speech:error', listener)
     }

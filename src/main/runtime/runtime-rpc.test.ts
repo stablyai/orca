@@ -519,6 +519,97 @@ describe('OrcaRuntimeRpcServer', () => {
     }
   })
 
+  it('terminates active WebSockets for a revoked runtime access grant', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+
+    try {
+      const offer = server.createPairingOffer({
+        address: '127.0.0.1',
+        name: 'runtime-test',
+        scope: 'runtime'
+      })
+      expect(offer.available).toBe(true)
+      if (!offer.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      const first = await authenticateMobileWs(offer.pairingUrl)
+      const second = await authenticateMobileWs(offer.pairingUrl)
+
+      expect(server.revokeRuntimeAccess(offer.deviceId)).toBe(true)
+      await Promise.all([waitForWsClose(first), waitForWsClose(second)])
+      await waitFor(() => server['e2eeChannels'].size === 0 && server['wsConnectionIds'].size === 0)
+
+      expect(server.getDeviceRegistry()?.getDevice(offer.deviceId)).toBeNull()
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('rotates unused runtime pairing links without revoking already-used grants', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+
+    try {
+      const first = server.createPairingOffer({
+        address: '127.0.0.1',
+        name: 'runtime-test',
+        rotate: true,
+        scope: 'runtime'
+      })
+      const second = server.createPairingOffer({
+        address: '127.0.0.1',
+        name: 'runtime-test',
+        rotate: true,
+        scope: 'runtime'
+      })
+      expect(first.available).toBe(true)
+      expect(second.available).toBe(true)
+      if (!first.available || !second.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+
+      expect(first.deviceId).not.toBe(second.deviceId)
+      expect(parsePairingCode(first.pairingUrl)?.deviceToken).not.toBe(
+        parsePairingCode(second.pairingUrl)?.deviceToken
+      )
+      expect(server.getDeviceRegistry()?.getDevice(first.deviceId)).toBeNull()
+
+      server.getDeviceRegistry()?.updateLastSeen(second.deviceId)
+      const third = server.createPairingOffer({
+        address: '127.0.0.1',
+        name: 'runtime-test',
+        rotate: true,
+        scope: 'runtime'
+      })
+      expect(third.available).toBe(true)
+      if (!third.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+
+      expect(server.getDeviceRegistry()?.getDevice(second.deviceId)).not.toBeNull()
+      expect(server.getDeviceRegistry()?.getDevice(third.deviceId)).not.toBeNull()
+    } finally {
+      await server.stop()
+    }
+  })
+
   it('caps WebSocket long-polls and aborts them when the socket closes', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
@@ -588,6 +679,74 @@ describe('OrcaRuntimeRpcServer', () => {
     }
   })
 
+  it('shares one socket close listener across concurrent WebSocket dispatches', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
+    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+    const entry = server['deviceRegistry']!.addDevice('runtime-test', 'runtime')
+    const ws = new FakeWebSocket()
+    server['wsConnectionIds'].set(ws as unknown as WebSocket, 'conn-test')
+    let activeDispatches = 0
+    ;(
+      server as unknown as {
+        dispatcher: {
+          dispatchStreaming: (
+            request: unknown,
+            reply: unknown,
+            context: { signal?: AbortSignal }
+          ) => Promise<void>
+        }
+      }
+    ).dispatcher = {
+      dispatchStreaming: vi.fn(
+        async (
+          _request: unknown,
+          _reply: unknown,
+          context: { signal?: AbortSignal }
+        ): Promise<void> => {
+          activeDispatches += 1
+          await new Promise<void>((resolve) => {
+            context.signal?.addEventListener(
+              'abort',
+              () => {
+                activeDispatches -= 1
+                resolve()
+              },
+              { once: true }
+            )
+          })
+        }
+      )
+    } as never
+
+    const pending = Array.from({ length: 12 }, (_entry, index) =>
+      server['handleWebSocketMessage'](
+        JSON.stringify({
+          id: `req_${index}`,
+          method: 'status.get',
+          deviceToken: entry.token
+        }),
+        () => {},
+        () => {},
+        undefined,
+        ws as unknown as WebSocket
+      )
+    )
+
+    await waitFor(() => activeDispatches === 12)
+    expect(ws.listenerCount('close')).toBe(1)
+    expect(ws.listenerCount('error')).toBe(1)
+
+    ws.readyState = 3
+    ws.emit('close')
+    await Promise.all(pending)
+
+    expect(activeDispatches).toBe(0)
+    expect(ws.listenerCount('close')).toBe(0)
+    expect(ws.listenerCount('error')).toBe(0)
+  })
+
   it('limits mobile-scoped WebSocket tokens to the mobile RPC surface', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const pushRuntimeGit = vi.fn().mockResolvedValue({ ok: true })
@@ -595,6 +754,31 @@ describe('OrcaRuntimeRpcServer', () => {
     const selectCodexAccount = vi.fn().mockResolvedValue({ ok: true })
     const removeClaudeAccount = vi.fn().mockResolvedValue({ ok: true })
     const readTerminal = vi.fn().mockResolvedValue({ tail: ['ok'] })
+    const getRuntimeGitStatus = vi
+      .fn()
+      .mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    const getRuntimeGitUpstreamStatus = vi
+      .fn()
+      .mockResolvedValue({ hasUpstream: true, ahead: 1, behind: 0 })
+    const bulkStageRuntimeGitPaths = vi.fn().mockResolvedValue({ ok: true })
+    const bulkUnstageRuntimeGitPaths = vi.fn().mockResolvedValue({ ok: true })
+    const getRuntimeGitDiff = vi.fn().mockResolvedValue({
+      kind: 'text',
+      originalContent: 'before\n',
+      modifiedContent: 'after\n',
+      originalIsBinary: false,
+      modifiedIsBinary: false
+    })
+    const openMobileDiff = vi.fn().mockResolvedValue({
+      worktree: 'wt-1',
+      relativePath: 'docs/readme.md',
+      kind: 'markdown',
+      opened: true
+    })
+    const browserTabCreate = vi.fn().mockResolvedValue({ page: 'page-1' })
+    const browserSetViewport = vi.fn().mockResolvedValue({ ok: true })
+    const browserDialogAccept = vi.fn().mockResolvedValue({ ok: true })
+    const browserDialogDismiss = vi.fn().mockResolvedValue({ ok: true })
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getStatus: vi.fn().mockResolvedValue({ graphStatus: 'ok' }),
@@ -602,7 +786,17 @@ describe('OrcaRuntimeRpcServer', () => {
       selectClaudeAccount,
       selectCodexAccount,
       removeClaudeAccount,
-      readTerminal
+      readTerminal,
+      getRuntimeGitStatus,
+      getRuntimeGitUpstreamStatus,
+      bulkStageRuntimeGitPaths,
+      bulkUnstageRuntimeGitPaths,
+      getRuntimeGitDiff,
+      openMobileDiff,
+      browserTabCreate,
+      browserSetViewport,
+      browserDialogAccept,
+      browserDialogDismiss
     } as unknown as OrcaRuntimeService
     const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
@@ -612,7 +806,7 @@ describe('OrcaRuntimeRpcServer', () => {
     await server['handleWebSocketMessage'](
       JSON.stringify({
         id: 'req_forbidden',
-        method: 'git.push',
+        method: 'git.generateCommitMessage',
         deviceToken: mobile.token,
         params: { worktree: 'id:wt-1' }
       }),
@@ -624,6 +818,56 @@ describe('OrcaRuntimeRpcServer', () => {
         id: 'req_allowed',
         method: 'status.get',
         deviceToken: mobile.token
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_git_status',
+        method: 'git.status',
+        deviceToken: mobile.token,
+        params: { worktree: 'id:wt-1' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_git_push',
+        method: 'git.push',
+        deviceToken: mobile.token,
+        params: { worktree: 'id:wt-1', publish: true }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_git_upstream',
+        method: 'git.upstreamStatus',
+        deviceToken: mobile.token,
+        params: { worktree: 'id:wt-1' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_git_bulk_stage',
+        method: 'git.bulkStage',
+        deviceToken: mobile.token,
+        params: { worktree: 'id:wt-1', filePaths: ['a.ts', 'b.ts'] }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_git_bulk_unstage',
+        method: 'git.bulkUnstage',
+        deviceToken: mobile.token,
+        params: { worktree: 'id:wt-1', filePaths: ['c.ts'] }
       }),
       (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
       () => {}
@@ -668,6 +912,66 @@ describe('OrcaRuntimeRpcServer', () => {
       (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
       () => {}
     )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_files_open_diff',
+        method: 'files.openDiff',
+        deviceToken: mobile.token,
+        params: { worktree: 'id:wt-1', relativePath: 'docs/readme.md', staged: true }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_git_diff',
+        method: 'git.diff',
+        deviceToken: mobile.token,
+        params: { worktree: 'id:wt-1', filePath: 'docs/readme.md', staged: false }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_browser_tab_create',
+        method: 'browser.tabCreate',
+        deviceToken: mobile.token,
+        params: { worktree: 'id:wt-1', url: 'about:blank' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_browser_viewport',
+        method: 'browser.viewport',
+        deviceToken: mobile.token,
+        params: { worktree: 'id:wt-1', page: 'page-1', width: 390, height: 844 }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_browser_dialog_accept',
+        method: 'browser.dialogAccept',
+        deviceToken: mobile.token,
+        params: { worktree: 'id:wt-1', page: 'page-1', text: 'ok' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_browser_dialog_dismiss',
+        method: 'browser.dialogDismiss',
+        deviceToken: mobile.token,
+        params: { worktree: 'id:wt-1', page: 'page-1' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
 
     expect(replies).toContainEqual(
       expect.objectContaining({
@@ -677,9 +981,30 @@ describe('OrcaRuntimeRpcServer', () => {
       })
     )
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_allowed', ok: true }))
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_status', ok: true }))
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_push', ok: true }))
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_upstream', ok: true }))
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_bulk_stage', ok: true }))
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_git_bulk_unstage', ok: true })
+    )
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_select_claude', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_select_codex', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_terminal_read', ok: true }))
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_files_open_diff', ok: true }))
+    expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_diff', ok: true }))
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_browser_tab_create', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_browser_viewport', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_browser_dialog_accept', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_browser_dialog_dismiss', ok: true })
+    )
     expect(replies).toContainEqual(
       expect.objectContaining({
         id: 'req_remove_claude',
@@ -690,8 +1015,30 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(selectClaudeAccount).toHaveBeenCalledWith('claude-account')
     expect(selectCodexAccount).toHaveBeenCalledWith(null)
     expect(readTerminal).toHaveBeenCalledWith('term-1', { cursor: undefined })
+    expect(getRuntimeGitStatus).toHaveBeenCalledWith('id:wt-1')
+    expect(pushRuntimeGit).toHaveBeenCalledWith('id:wt-1', true, undefined)
+    expect(getRuntimeGitUpstreamStatus).toHaveBeenCalledWith('id:wt-1')
+    expect(bulkStageRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['a.ts', 'b.ts'])
+    expect(bulkUnstageRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['c.ts'])
+    expect(openMobileDiff).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md', true)
+    expect(getRuntimeGitDiff).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md', false, undefined)
+    expect(browserTabCreate).toHaveBeenCalledWith({ worktree: 'id:wt-1', url: 'about:blank' })
+    expect(browserSetViewport).toHaveBeenCalledWith({
+      worktree: 'id:wt-1',
+      page: 'page-1',
+      width: 390,
+      height: 844
+    })
+    expect(browserDialogAccept).toHaveBeenCalledWith({
+      worktree: 'id:wt-1',
+      page: 'page-1',
+      text: 'ok'
+    })
+    expect(browserDialogDismiss).toHaveBeenCalledWith({
+      worktree: 'id:wt-1',
+      page: 'page-1'
+    })
     expect(removeClaudeAccount).not.toHaveBeenCalled()
-    expect(pushRuntimeGit).not.toHaveBeenCalled()
   })
 
   it('rejects WebSocket requests whose request token differs from the authenticated channel token', async () => {

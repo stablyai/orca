@@ -87,6 +87,8 @@ function createTestStore() {
         browserTabsByWorktree: {},
         recentlyClosedBrowserTabsByWorktree: {},
         activeTabTypeByWorktree: {},
+        rightSidebarTab: 'explorer' as const,
+        rightSidebarTabByWorktree: {},
         activeWorktreeId: null,
         activeTabId: null,
         activeFileId: null,
@@ -219,6 +221,54 @@ describe('fetchWorktrees', () => {
     expect(store.getState().sortEpoch).toBe(7)
   })
 
+  it('purges remembered right sidebar tabs for worktrees removed by a committed refresh', async () => {
+    const store = createTestStore()
+    const removed = makeWorktree({
+      id: 'repo1::/path/removed',
+      repoId: 'repo1',
+      path: '/path/removed'
+    })
+    const surviving = makeWorktree({
+      id: 'repo1::/path/surviving',
+      repoId: 'repo1',
+      path: '/path/surviving'
+    })
+
+    mockApi.worktrees.list.mockResolvedValue([surviving])
+    store.setState({
+      worktreesByRepo: { repo1: [removed, surviving] },
+      sortEpoch: 7,
+      rightSidebarTabByWorktree: {
+        [removed.id]: 'search',
+        [surviving.id]: 'checks'
+      }
+    } as Partial<AppState>)
+
+    await store.getState().fetchWorktrees('repo1')
+
+    expect(store.getState().worktreesByRepo.repo1).toEqual([surviving])
+    expect(store.getState().rightSidebarTabByWorktree).toEqual({ [surviving.id]: 'checks' })
+    expect(store.getState().sortEpoch).toBe(8)
+  })
+
+  it('does not purge remembered right sidebar tabs on a transient empty refresh', async () => {
+    const store = createTestStore()
+    const existing = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+
+    mockApi.worktrees.list.mockResolvedValue([])
+    store.setState({
+      worktreesByRepo: { repo1: [existing] },
+      sortEpoch: 7,
+      rightSidebarTabByWorktree: { [existing.id]: 'search' }
+    } as Partial<AppState>)
+
+    await store.getState().fetchWorktrees('repo1')
+
+    expect(store.getState().worktreesByRepo.repo1).toEqual([existing])
+    expect(store.getState().rightSidebarTabByWorktree).toEqual({ [existing.id]: 'search' })
+    expect(store.getState().sortEpoch).toBe(7)
+  })
+
   it('accepts an empty refresh when the repo had no cached worktrees', async () => {
     const store = createTestStore()
 
@@ -253,7 +303,7 @@ describe('fetchWorktrees', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'worktree.list',
-      params: { repo: 'repo1' },
+      params: { repo: 'repo1', limit: 10_000 },
       timeoutMs: 15_000
     })
     expect(mockApi.worktrees.list).not.toHaveBeenCalled()
@@ -496,7 +546,7 @@ describe('worktree lineage state', () => {
       selector: 'env-1',
       method: 'worktree.set',
       params: {
-        worktree: lineage.worktreeId,
+        worktree: `id:${lineage.worktreeId}`,
         parentWorktree: `id:${lineage.parentWorktreeId}`
       },
       timeoutMs: 15_000
@@ -535,7 +585,7 @@ describe('worktree lineage state', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'worktree.set',
-      params: { worktree: lineage.worktreeId, noParent: true },
+      params: { worktree: `id:${lineage.worktreeId}`, noParent: true },
       timeoutMs: 15_000
     })
     expect(store.getState().worktreeLineageById).toEqual({})
@@ -1254,11 +1304,59 @@ describe('worktree remote runtime mutations', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'worktree.set',
-      params: expect.objectContaining({ worktree: wt.id, comment: 'remote note' }),
+      params: expect.objectContaining({ worktree: `id:${wt.id}`, comment: 'remote note' }),
       timeoutMs: 15_000
     })
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo.repo1[0]?.comment).toBe('remote note')
+  })
+
+  it('does not surface remote selector misses while persisting activity timestamps', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-set',
+      ok: false,
+      error: { code: 'selector_not_found', message: 'selector_not_found' },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [wt] }
+    } as Partial<AppState>)
+
+    try {
+      store.getState().bumpWorktreeActivity(wt.id)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'worktree.set',
+        params: expect.objectContaining({
+          worktree: `id:${wt.id}`,
+          lastActivityAt: expect.any(Number)
+        }),
+        timeoutMs: 15_000
+      })
+      expect(errorSpy).not.toHaveBeenCalled()
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+
+  it('does not persist activity for a missing worktree', async () => {
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+
+    store.getState().bumpWorktreeActivity('repo1::/missing')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })
 
   it('clears stale hosted review cache and force-refetches when removing linked PR metadata', async () => {
@@ -1628,6 +1726,10 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
         'repoA::/a/wt1': ['dist/'],
         'repoA::/a/wt2': ['coverage/']
       },
+      rightSidebarTabByWorktree: {
+        'repoA::/a/wt1': 'search',
+        'repoA::/a/wt2': 'checks'
+      },
       activeWorktreeId: 'repoA::/a/wt1',
       worktreeLineageById: {
         'repoA::/a/wt1': makeLineage({ worktreeId: 'repoA::/a/wt1' }),
@@ -1653,6 +1755,7 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
     expect(s.openFiles).toEqual([])
     expect(s.editorDrafts).toEqual({ 'file-99': 'other' })
     expect(s.gitIgnoredPathsByWorktree).toEqual({ 'repoA::/a/wt2': ['coverage/'] })
+    expect(s.rightSidebarTabByWorktree).toEqual({ 'repoA::/a/wt2': 'checks' })
     expect(s.activeWorktreeId).toBeNull()
     expect(s.activeFileId).toBeNull()
     expect(s.activeTabId).toBeNull()

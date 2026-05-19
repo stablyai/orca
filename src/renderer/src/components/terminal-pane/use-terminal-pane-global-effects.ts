@@ -15,6 +15,10 @@ import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-sch
 import { handleFocusTerminalPaneDetail } from './focus-terminal-pane-event'
 import { surfaceStaleAgentRow } from './stale-agent-row'
 import { useAppStore } from '@/store'
+import {
+  captureScrollViewportPosition,
+  restoreScrollViewportPosition
+} from '@/lib/pane-manager/pane-scroll'
 
 type UseTerminalPaneGlobalEffectsArgs = {
   tabId: string
@@ -59,6 +63,15 @@ export function useTerminalPaneGlobalEffects({
       return
     }
     if (isVisible) {
+      // Why: WebGL resume can disturb xterm's viewport bookkeeping before the
+      // post-resume fit runs. Capture numeric viewport positions first; the
+      // restore path avoids content matching so duplicate agent log lines do
+      // not jump to the wrong history entry.
+      const viewportPositions = new Map(
+        manager
+          .getPanes()
+          .map((pane) => [pane.id, captureScrollViewportPosition(pane.terminal)] as const)
+      )
       // Why: background PTY output is throttled while a pane is not focused;
       // flush it before fitting so newly visible terminals paint current state.
       for (const pane of manager.getPanes()) {
@@ -76,6 +89,12 @@ export function useTerminalPaneGlobalEffects({
         fitAndFocusPanes(manager)
       } else {
         fitPanes(manager)
+      }
+      for (const pane of manager.getPanes()) {
+        const position = viewportPositions.get(pane.id)
+        if (position) {
+          restoreScrollViewportPosition(pane.terminal, position)
+        }
       }
     } else if (wasVisibleRef.current) {
       // Suspend WebGL when going hidden. xterm.write() continues to land in

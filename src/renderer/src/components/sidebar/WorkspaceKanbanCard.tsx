@@ -5,13 +5,11 @@ import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { getWorktreeStatusLabel } from '@/lib/worktree-status'
 import { cn } from '@/lib/utils'
 import type { Repo, Worktree } from '../../../../shared/types'
-import StatusIndicator from './StatusIndicator'
 import WorktreeCard from './WorktreeCard'
+import { WorktreeActivityStatusIndicator } from './WorktreeActivityStatusIndicator'
 import WorktreeContextMenu from './WorktreeContextMenu'
-import { useWorktreeActivityStatus } from './use-worktree-activity-status'
 import { writeWorkspaceDragData } from './workspace-status'
 
 type WorkspaceKanbanCardProps = {
@@ -84,7 +82,6 @@ function WorkspaceKanbanCard({
         isActive={isActive}
         isMultiSelected={isSelected}
         selectedWorktrees={contextWorktrees}
-        hideCiCheck={worktree.isPinned}
         nativeDragEnabled={nativeDragEnabled}
         onActivate={onActivate}
         onSelectionGesture={onSelectionGesture}
@@ -109,7 +106,6 @@ function WorkspaceKanbanCompactCard({
 }: Omit<WorkspaceKanbanCardProps, 'compact'>): React.JSX.Element {
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const isDeleting = deleteState?.isDeleting ?? false
-  const status = useWorktreeActivityStatus(worktree.id)
   const contextWorktrees = useMemo(
     () =>
       isSelected && selectedWorktrees && selectedWorktrees.length > 0
@@ -188,8 +184,7 @@ function WorkspaceKanbanCompactCard({
             aria-label={`Open ${worktree.displayName}`}
             aria-busy={isDeleting}
           >
-            <StatusIndicator status={status} aria-hidden="true" className="mr-1" />
-            <span className="sr-only">{getWorktreeStatusLabel(status)}</span>
+            <WorktreeActivityStatusIndicator worktreeId={worktree.id} className="mr-1" />
             <span className="min-w-0 flex-1 truncate">{worktree.displayName}</span>
             {repo ? (
               <Tooltip>

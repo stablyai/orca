@@ -1,4 +1,9 @@
 import type { SettingsSearchEntry } from './settings-search'
+import {
+  AGENT_AWAKE_TITLE,
+  getAgentAwakeDescription,
+  getAgentAwakeSearchKeywords
+} from './agent-awake-copy'
 
 export const AGENTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
@@ -41,9 +46,8 @@ export const AGENTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     ]
   },
   {
-    title: 'Keep computer awake when Orca sees agents running',
-    description:
-      'Prevents this computer from sleeping while Orca sees an agent working. The display can still turn off.',
-    keywords: ['awake', 'sleep', 'power', 'agent', 'running']
+    title: AGENT_AWAKE_TITLE,
+    description: getAgentAwakeDescription(),
+    keywords: getAgentAwakeSearchKeywords()
   }
 ]

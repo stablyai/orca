@@ -84,6 +84,7 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
       try {
         const result = await submitFeedback({
           feedback: formatCrashReportText(report, args.notes),
+          submissionType: 'crash',
           submitAnonymously: args.submitAnonymously,
           githubLogin: args.githubLogin,
           githubEmail: args.githubEmail

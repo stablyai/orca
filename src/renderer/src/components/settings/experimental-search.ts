@@ -16,17 +16,19 @@ export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     ]
   },
   {
-    title: 'Activity Page',
-    description: 'Slack-style worktree activity feed for agent completions and blocking states.',
+    title: 'Agents View',
+    description: 'Threaded left-sidebar feed for agent completions and blocking states.',
     keywords: [
       'experimental',
+      'agents',
+      'agents view',
       'activity',
       'notifications',
-      'agents',
       'worktrees',
       'timeline',
       'unread',
-      'bell'
+      'bell',
+      'sidebar'
     ]
   },
   {
@@ -61,6 +63,6 @@ function findEntry(title: string): SettingsSearchEntry {
 
 export const EXPERIMENTAL_SEARCH_ENTRY = {
   pet: findEntry('Pet'),
-  activity: findEntry('Activity Page'),
+  activity: findEntry('Agents View'),
   symlinks: findEntry('Symlinks on worktrees')
 } as const

@@ -21,11 +21,11 @@ import {
 } from '../git/worktree'
 import { gitExecFileAsync } from '../git/runner'
 import { getDefaultRemote } from '../git/repo'
-import { getPullRequestPushTarget, getWorkItem } from '../github/client'
+import { resolveGitHubPrStartPoint } from '../github/pr-start-point'
 import { getProjectRef as getGlabProjectRef, getGlabKnownHosts } from '../gitlab/gl-utils'
 import { getWorkItemByProjectRef as getGitLabWorkItemByProjectRef } from '../gitlab/client'
 import { listRepoWorktrees, createFolderWorktree } from '../repo-worktrees'
-import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import { getSshGitProvider, requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import {
   createIssueCommandRunnerScript,
   getEffectiveHooks,
@@ -443,115 +443,26 @@ export function registerWorktreeHandlers(
         return provider.exec(args, repo.path)
       }
 
-      let headRefName = args.headRefName?.trim() ?? ''
-      let isCrossRepository = args.isCrossRepository === true
-      let pushTarget: CreateWorktreeArgs['pushTarget'] | undefined
-
-      // Skip the gh lookup when both hints are present (picker already has them).
-      if (!headRefName) {
-        // Why: the caller already knows this is a PR number, so scope the
-        // lookup to `type: 'pr'` and skip the speculative issue-first probe
-        // that would hit the upstream issue tracker for fork checkouts.
-        const item = await getWorkItem(repo.path, args.prNumber, 'pr', repo.connectionId ?? null)
-        if (!item || item.type !== 'pr') {
-          return { error: `PR #${args.prNumber} not found.` }
-        }
-        headRefName = (item.branchName ?? '').trim()
-        if (!headRefName) {
-          return { error: `PR #${args.prNumber} has no head branch.` }
-        }
-        if (item.isCrossRepository === true) {
-          isCrossRepository = true
-        }
-      }
-      if (isCrossRepository) {
-        try {
-          pushTarget =
-            (await getPullRequestPushTarget(repo.path, args.prNumber, repo.connectionId ?? null)) ??
-            undefined
-        } catch (error) {
-          return {
-            error:
-              error instanceof Error
-                ? error.message
-                : `Could not resolve PR #${args.prNumber} head push target.`
+      return resolveGitHubPrStartPoint({
+        repoPath: repo.path,
+        prNumber: args.prNumber,
+        headRefName: args.headRefName,
+        isCrossRepository: args.isCrossRepository,
+        connectionId: repo.connectionId ?? null,
+        gitExec,
+        resolveRemote: async () => {
+          if (repo.connectionId) {
+            const { stdout } = await gitExec(['remote'])
+            return (
+              stdout
+                .split('\n')
+                .map((line) => line.trim())
+                .find(Boolean) ?? 'origin'
+            )
           }
+          return getDefaultRemote(repo.path)
         }
-        if (!pushTarget) {
-          return { error: `Could not resolve PR #${args.prNumber} head push target.` }
-        }
-      }
-
-      let remote: string
-      try {
-        if (repo.connectionId) {
-          const { stdout } = await gitExec(['remote'])
-          remote =
-            stdout
-              .split('\n')
-              .map((line) => line.trim())
-              .find(Boolean) ?? 'origin'
-        } else {
-          remote = await getDefaultRemote(repo.path)
-        }
-      } catch (error) {
-        return { error: error instanceof Error ? error.message : 'Could not resolve git remote.' }
-      }
-
-      // Why: fork PR heads live on a remote we don't have configured, so
-      // `git fetch <remote> <headRefName>` would fail. GitHub exposes every
-      // PR head (fork or same-repo) as refs/pull/<N>/head on the upstream
-      // repo. Fetch that and snapshot the SHA — the new worktree branch is
-      // derived from the workspace name, so there's no tracking ref to set
-      // up, which makes SHA semantics ("branch from this commit") cleaner
-      // than returning a ref that would go stale on force-push.
-      if (isCrossRepository) {
-        const pullRef = `refs/pull/${args.prNumber}/head`
-        try {
-          await gitExec(['fetch', remote, pullRef])
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error)
-          return {
-            error: `Failed to fetch ${pullRef}: ${message.split('\n')[0]}`
-          }
-        }
-        let sha: string
-        try {
-          const { stdout } = await gitExec(['rev-parse', '--verify', 'FETCH_HEAD'])
-          sha = stdout.trim()
-        } catch {
-          return { error: `Could not resolve fork PR #${args.prNumber} head after fetch.` }
-        }
-        if (!sha) {
-          return { error: `Empty SHA resolving fork PR #${args.prNumber} head.` }
-        }
-        return { baseBranch: sha, ...(pushTarget ? { pushTarget } : {}) }
-      }
-
-      try {
-        await gitExec([
-          'fetch',
-          remote,
-          `+refs/heads/${headRefName}:refs/remotes/${remote}/${headRefName}`
-        ])
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        return {
-          error: `Failed to fetch ${remote}/${headRefName}: ${message.split('\n')[0]}`
-        }
-      }
-
-      const remoteRef = `${remote}/${headRefName}`
-      try {
-        await gitExec(['rev-parse', '--verify', remoteRef])
-      } catch {
-        return { error: `Remote ref ${remoteRef} does not exist after fetch.` }
-      }
-
-      if (!pushTarget) {
-        pushTarget = { remoteName: remote, branchName: headRefName }
-      }
-      return { baseBranch: remoteRef, pushTarget }
+      })
     }
   )
 
@@ -674,10 +585,7 @@ export function registerWorktreeHandlers(
 
       // Why: the renderer-supplied worktreeId contains a filesystem path.
       // Re-derive the canonical path from git before any destructive action.
-      const provider = repo.connectionId ? getSshGitProvider(repo.connectionId) : null
-      if (repo.connectionId && !provider) {
-        throw new Error(`No git provider for connection "${repo.connectionId}"`)
-      }
+      const provider = repo.connectionId ? requireSshGitProvider(repo.connectionId) : null
       const registeredWorktrees = repo.connectionId
         ? await provider!.listWorktrees(repo.path)
         : await listGitWorktrees(repo.path)

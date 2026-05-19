@@ -27,6 +27,7 @@ import os from 'os'
 import path from 'path'
 import { TEST_REPO_PATH_FILE } from '../global-setup'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
+import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 
 type OrcaTestFixtures = {
   electronApp: ElectronApplication
@@ -173,29 +174,12 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     if (dismissOnboarding) {
       // Why: onboarding renders a fullscreen `fixed inset-0 z-[100]` overlay
       // when persisted `closedAt` is null, which intercepts pointer events for
-      // every other test. Seed explicit fresh-user state: an empty file would
-      // make persistence treat the profile as an existing-user upgrade cohort
-      // and mount the telemetry notice overlay instead.
+      // every other test. Seed a completed-onboarding fresh-install profile:
+      // an empty file would make persistence treat the profile as an
+      // existing-user upgrade cohort and mount the telemetry notice overlay.
       writeFileSync(
         path.join(userDataDir, 'orca-data.json'),
-        `${JSON.stringify(
-          {
-            settings: {
-              telemetry: {
-                optedIn: true,
-                installId: '00000000-0000-4000-8000-000000000000',
-                existedBeforeTelemetryRelease: false
-              }
-            },
-            onboarding: {
-              closedAt: 1,
-              outcome: 'completed',
-              lastCompletedStep: 4
-            }
-          },
-          null,
-          2
-        )}\n`
+        `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
       )
     }
     const headful = shouldLaunchHeadful(testInfo)

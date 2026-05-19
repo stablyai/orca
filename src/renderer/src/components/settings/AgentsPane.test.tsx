@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/types'
 import { useAppStore } from '../../store'
+import { getAgentAwakeDescription } from './agent-awake-copy'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import { AgentsPane, AGENTS_PANE_SEARCH_ENTRIES } from './AgentsPane'
 import { matchesSettingsSearch } from './settings-search'
@@ -63,11 +64,17 @@ describe('AgentsPane', () => {
   it('renders the keep-awake toggle from settings', () => {
     const markup = renderPane(getDefaultSettings('/tmp'))
 
-    expect(markup).toContain('Keep computer awake when Orca sees agents running')
+    expect(markup).toContain('Keep computer awake while agents are working')
     expect(markup).toContain(
-      'Prevents this computer from sleeping while Orca sees an agent working. The display can still turn off.'
+      'Keeps this computer and display awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.'
     )
     expect(markup).toContain('aria-checked="false"')
+  })
+
+  it('describes Windows lid behavior according to the device', () => {
+    expect(getAgentAwakeDescription('Windows')).toBe(
+      "Keeps this computer and display awake while agents are working. Lid-close behavior follows this device's power settings."
+    )
   })
 
   it('toggles the keep-awake setting with the next value', () => {
@@ -81,9 +88,7 @@ describe('AgentsPane', () => {
     })
 
     const keepAwakeSwitch = findSwitch(element)
-    expect(keepAwakeSwitch.props['aria-label']).toBe(
-      'Keep computer awake when Orca sees agents running'
-    )
+    expect(keepAwakeSwitch.props['aria-label']).toBe('Keep computer awake while agents are working')
     expect(keepAwakeSwitch.props['aria-checked']).toBe(false)
 
     const onClick = keepAwakeSwitch.props.onClick as () => void
@@ -97,5 +102,6 @@ describe('AgentsPane', () => {
   it('includes awake and sleep search metadata for the setting', () => {
     expect(matchesSettingsSearch('awake', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
     expect(matchesSettingsSearch('sleep', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+    expect(matchesSettingsSearch('lid', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
   })
 })

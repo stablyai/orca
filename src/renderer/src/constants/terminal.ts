@@ -45,6 +45,9 @@ export type SplitTerminalPaneDetail = {
   paneRuntimeId: number
   direction: 'horizontal' | 'vertical'
   command?: string
+  sourceLeafId?: string
+  newLeafId?: string
+  ptyId?: string
 }
 
 export type CloseTerminalPaneDetail = {

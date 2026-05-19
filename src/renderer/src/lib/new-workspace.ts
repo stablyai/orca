@@ -7,6 +7,7 @@ import {
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import { isShellProcess } from '@/lib/tui-agent-startup'
 import type { OrcaHooks, TaskViewPresetId } from '../../../shared/types'
+import { normalizeHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 
 /**
  * Why: the TaskPage's preset buttons and the openTaskPage prefetcher both need
@@ -18,6 +19,7 @@ export { PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT } from '../../../shared/
 
 export function getTaskPresetQuery(presetId: TaskViewPresetId | null): string {
   switch (presetId) {
+    case 'all':
     case 'issues':
       return 'is:issue is:open'
     case 'my-issues':
@@ -29,7 +31,7 @@ export function getTaskPresetQuery(presetId: TaskViewPresetId | null): string {
     case 'review':
       return 'review-requested:@me is:pr is:open'
     default:
-      return 'is:open'
+      return 'is:issue is:open'
   }
 }
 
@@ -59,6 +61,8 @@ export type LinkedWorkItemSummary = {
 // attaches a linked work item without typing anything else. "Complete <url>"
 // is the minimum viable instruction that always produces a coherent agent task.
 export const DEFAULT_ISSUE_COMMAND_TEMPLATE = 'Complete {{artifact_url}}'
+
+export type SetupConfig = { source: 'yaml' | 'local' | 'both'; command: string }
 
 /**
  * Substitute the issue-command template variables. Prefers `{{artifact_url}}`
@@ -114,16 +118,30 @@ export function getAttachmentLabel(pathValue: string): string {
 }
 
 export function getSetupConfig(
-  repo: { hookSettings?: { scripts?: { setup?: string } } } | undefined,
+  repo:
+    | {
+        hookSettings?: {
+          commandSourcePolicy?: unknown
+          scripts?: { setup?: string }
+        }
+      }
+    | undefined,
   yamlHooks: OrcaHooks | null
-): { source: 'yaml' | 'legacy'; command: string } | null {
+): SetupConfig | null {
   const yamlSetup = yamlHooks?.scripts?.setup?.trim()
+  const localSetup = repo?.hookSettings?.scripts?.setup?.trim()
+  const sourcePolicy = normalizeHookCommandSourcePolicy(repo?.hookSettings?.commandSourcePolicy)
+
+  if (sourcePolicy === 'local-only') {
+    return localSetup ? { source: 'local', command: localSetup } : null
+  }
+
+  if (sourcePolicy === 'run-both' && yamlSetup && localSetup) {
+    return { source: 'both', command: `${yamlSetup}\n${localSetup}` }
+  }
+
   if (yamlSetup) {
     return { source: 'yaml', command: yamlSetup }
-  }
-  const legacySetup = repo?.hookSettings?.scripts?.setup?.trim()
-  if (legacySetup) {
-    return { source: 'legacy', command: legacySetup }
   }
   return null
 }

@@ -10,8 +10,11 @@ import { getBitbucketAuthStatus } from '../bitbucket/client'
 import { getGiteaAuthStatus } from '../gitea/client'
 import { _resetKnownHostsCache } from '../gitlab/gl-utils'
 import { getActiveMultiplexer } from './ssh'
-
 const execFileAsync = promisify(execFile)
+
+type PreflightRuntimeContext = {
+  wslDistro?: string | null
+}
 
 export type PreflightStatus = {
   git: { installed: boolean }
@@ -47,9 +50,25 @@ export function _resetPreflightCache(): void {
   cached = null
 }
 
-async function isCommandAvailable(command: string): Promise<boolean> {
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`
+}
+
+async function execCommandInWsl(
+  distro: string,
+  command: string
+): Promise<{ stdout: string; stderr: string }> {
+  return execFileAsync('wsl.exe', ['-d', distro, '--', 'bash', '-lc', command], {
+    encoding: 'utf-8',
+    timeout: 5000
+  }) as Promise<{ stdout: string; stderr: string }>
+}
+
+async function isCommandAvailable(command: string, wslDistro?: string): Promise<boolean> {
   try {
-    await execFileAsync(command, ['--version'])
+    await (wslDistro
+      ? execCommandInWsl(wslDistro, `${shellQuote(command)} --version`)
+      : execFileAsync(command, ['--version']))
     return true
   } catch {
     return false
@@ -59,10 +78,12 @@ async function isCommandAvailable(command: string): Promise<boolean> {
 // Why: `which`/`where` is faster than spawning the agent binary itself and avoids
 // triggering any agent-specific startup side-effects. This gives a reliable
 // PATH-based check without requiring `--version` support from each agent.
-async function isCommandOnPath(command: string): Promise<boolean> {
+async function isCommandOnPath(command: string, wslDistro?: string): Promise<boolean> {
   const finder = process.platform === 'win32' ? 'where' : 'which'
   try {
-    const { stdout } = await execFileAsync(finder, [command], { encoding: 'utf-8' })
+    const { stdout } = wslDistro
+      ? await execCommandInWsl(wslDistro, `command -v ${shellQuote(command)}`)
+      : await execFileAsync(finder, [command], { encoding: 'utf-8' })
     return stdout
       .split(/\r?\n/)
       .map((line) => line.trim())
@@ -77,11 +98,32 @@ const KNOWN_AGENT_COMMANDS = Object.entries(TUI_AGENT_CONFIG).map(([id, config])
   cmd: config.detectCmd
 }))
 
-export async function detectInstalledAgents(): Promise<string[]> {
+function getPreflightWslDistro(context?: PreflightRuntimeContext): string | null {
+  const distro = context?.wslDistro?.trim()
+  return process.platform === 'win32' && distro ? distro : null
+}
+
+async function detectCommandRuntime(
+  command: string,
+  context?: PreflightRuntimeContext
+): Promise<{ installed: boolean; wslDistro?: string }> {
+  const wslDistro = getPreflightWslDistro(context)
+  if (wslDistro && (await isCommandAvailable(command, wslDistro))) {
+    return { installed: true, wslDistro }
+  }
+  if (await isCommandAvailable(command)) {
+    return { installed: true }
+  }
+  return { installed: false }
+}
+
+export async function detectInstalledAgents(context?: PreflightRuntimeContext): Promise<string[]> {
+  const wslDistro = getPreflightWslDistro(context)
   const checks = await Promise.all(
     KNOWN_AGENT_COMMANDS.map(async ({ id, cmd }) => ({
       id,
-      installed: await isCommandOnPath(cmd)
+      installed:
+        (wslDistro ? await isCommandOnPath(cmd, wslDistro) : false) || (await isCommandOnPath(cmd))
     }))
   )
   return checks.filter((c) => c.installed).map((c) => c.id)
@@ -110,10 +152,12 @@ export type RefreshAgentsResult = {
  * Refresh — handles the "installed a new CLI, Orca doesn't see it yet" case
  * without requiring an app restart.
  */
-export async function refreshShellPathAndDetectAgents(): Promise<RefreshAgentsResult> {
+export async function refreshShellPathAndDetectAgents(
+  context?: PreflightRuntimeContext
+): Promise<RefreshAgentsResult> {
   const hydration = await hydrateShellPath({ force: true })
   const added = hydration.ok ? mergePathSegments(hydration.segments) : []
-  const agents = await detectInstalledAgents()
+  const agents = await detectInstalledAgents(context)
   return {
     agents,
     addedPathSegments: added,
@@ -134,11 +178,13 @@ export async function detectRemoteAgents(args: { connectionId: string }): Promis
   return result.agents
 }
 
-async function isGhAuthenticated(): Promise<boolean> {
+async function isGhAuthenticated(wslDistro?: string): Promise<boolean> {
   try {
-    await execFileAsync('gh', ['auth', 'status'], {
-      encoding: 'utf-8'
-    })
+    await (wslDistro
+      ? execCommandInWsl(wslDistro, `${shellQuote('gh')} auth status`)
+      : execFileAsync('gh', ['auth', 'status'], {
+          encoding: 'utf-8'
+        }))
     // Why: for plain-text `gh auth status`, exit 0 means gh did not detect any
     // authentication issues for the checked hosts/accounts.
     return true
@@ -155,9 +201,11 @@ async function isGhAuthenticated(): Promise<boolean> {
 
 // Why: parallel to isGhAuthenticated for the glab CLI. glab writes auth
 // status to stderr in some versions and stdout in others; check both.
-async function isGlabAuthenticated(): Promise<boolean> {
+async function isGlabAuthenticated(wslDistro?: string): Promise<boolean> {
   try {
-    await execFileAsync('glab', ['auth', 'status'], { encoding: 'utf-8' })
+    await (wslDistro
+      ? execCommandInWsl(wslDistro, `${shellQuote('glab')} auth status`)
+      : execFileAsync('glab', ['auth', 'status'], { encoding: 'utf-8' }))
     return true
   } catch (error) {
     const stdout = (error as { stdout?: string }).stdout ?? ''
@@ -167,8 +215,12 @@ async function isGlabAuthenticated(): Promise<boolean> {
   }
 }
 
-export async function runPreflightCheck(force = false): Promise<PreflightStatus> {
-  if (cached && !force) {
+export async function runPreflightCheck(
+  force = false,
+  context?: PreflightRuntimeContext
+): Promise<PreflightStatus> {
+  const cacheable = !getPreflightWslDistro(context)
+  if (cacheable && cached && !force) {
     return cached
   }
 
@@ -182,46 +234,56 @@ export async function runPreflightCheck(force = false): Promise<PreflightStatus>
     _resetKnownHostsCache()
   }
 
-  const [gitInstalled, ghInstalled, glabInstalled] = await Promise.all([
-    isCommandAvailable('git'),
-    isCommandAvailable('gh'),
-    isCommandAvailable('glab')
+  const [gitProbe, ghProbe, glabProbe] = await Promise.all([
+    detectCommandRuntime('git', context),
+    detectCommandRuntime('gh', context),
+    detectCommandRuntime('glab', context)
   ])
 
   const [ghAuthenticated, glabAuthenticated, bitbucket, azureDevOps, gitea] = await Promise.all([
-    ghInstalled ? isGhAuthenticated() : Promise.resolve(false),
-    glabInstalled ? isGlabAuthenticated() : Promise.resolve(false),
+    ghProbe.installed ? isGhAuthenticated(ghProbe.wslDistro) : Promise.resolve(false),
+    glabProbe.installed ? isGlabAuthenticated(glabProbe.wslDistro) : Promise.resolve(false),
     getBitbucketAuthStatus(),
     getAzureDevOpsAuthStatus(),
     getGiteaAuthStatus()
   ])
 
-  cached = {
-    git: { installed: gitInstalled },
-    gh: { installed: ghInstalled, authenticated: ghAuthenticated },
-    glab: { installed: glabInstalled, authenticated: glabAuthenticated },
+  const result = {
+    git: { installed: gitProbe.installed },
+    gh: { installed: ghProbe.installed, authenticated: ghAuthenticated },
+    glab: { installed: glabProbe.installed, authenticated: glabAuthenticated },
     bitbucket,
     azureDevOps,
     gitea
   }
 
-  return cached
+  if (cacheable) {
+    cached = result
+  }
+
+  return result
 }
 
 export function registerPreflightHandlers(): void {
   ipcMain.handle(
     'preflight:check',
-    async (_event, args?: { force?: boolean }): Promise<PreflightStatus> => {
-      return runPreflightCheck(args?.force)
+    async (
+      _event,
+      args?: PreflightRuntimeContext & { force?: boolean }
+    ): Promise<PreflightStatus> => {
+      return runPreflightCheck(args?.force, args)
     }
   )
 
-  ipcMain.handle('preflight:detectAgents', async (): Promise<string[]> => {
-    return detectInstalledAgents()
-  })
+  ipcMain.handle(
+    'preflight:detectAgents',
+    async (_event, args?: PreflightRuntimeContext): Promise<string[]> => {
+      return detectInstalledAgents(args)
+    }
+  )
 
-  ipcMain.handle('preflight:refreshAgents', async (): Promise<RefreshAgentsResult> => {
-    return refreshShellPathAndDetectAgents()
+  ipcMain.handle('preflight:refreshAgents', async (_event, args?: PreflightRuntimeContext) => {
+    return refreshShellPathAndDetectAgents(args)
   })
 
   // Why: remote worktrees need agent detection on the SSH host, not the local

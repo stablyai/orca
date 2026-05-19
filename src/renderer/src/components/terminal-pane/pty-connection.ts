@@ -18,6 +18,7 @@ import { POST_REPLAY_MODE_RESET, POST_REPLAY_FOCUS_REPORTING_RESET } from './lay
 import { warnTerminalLifecycleAnomaly } from './terminal-lifecycle-diagnostics'
 import { registerPtySerializer, registerPtyTitleSource } from './pty-buffer-serializer'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
+import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import {
   discardTerminalOutput,
   flushTerminalOutput,
@@ -28,6 +29,8 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 import { e2eConfig } from '@/lib/e2e-config'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
+import { createAgentCompletionCoordinator } from './agent-completion-coordinator'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -166,6 +169,9 @@ export function connectPanePty(
   let agentTaskCompleteNotificationGraceTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteNotificationMaxTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteStatusUnsubscribe: (() => void) | null = null
+  let agentTaskCompleteSettingsUnsubscribe: (() => void) | null = null
+  let agentTaskCompleteNotificationGeneration = 0
+  let wasAgentTaskCompleteNotificationEnabled = isAgentTaskCompleteNotificationEnabled()
   let terminalBellNotificationTimer: ReturnType<typeof setTimeout> | null = null
   let pendingTerminalBellNotification = false
   // Why: passphrase-gate waits register a teardown here so dispose() can
@@ -201,7 +207,25 @@ export function connectPanePty(
   })
   commandLifecycle.attachXtermConsumer(pane.terminal)
 
+  const agentCompletionCoordinator = createAgentCompletionCoordinator({
+    paneKey: cacheKey,
+    getPtyId: () => transport.getPtyId(),
+    getSettings: () => useAppStore.getState().settings,
+    inspectProcess: inspectRuntimeTerminalProcess,
+    dispatchCompletion: (title) => scheduleAgentTaskCompleteNotification(title),
+    isLive: () => {
+      if (disposed) {
+        return false
+      }
+      if (transport.getPtyId()) {
+        return true
+      }
+      return (useAppStore.getState().ptyIdsByTabId[deps.tabId] ?? []).length > 0
+    }
+  })
+
   const onExit = (ptyId: string): void => {
+    agentCompletionCoordinator.dispose()
     deps.syncPanePtyLayoutBinding(pane.id, null)
     deps.clearRuntimePaneTitle(deps.tabId, pane.id)
     deps.clearTabPtyId(deps.tabId, ptyId)
@@ -244,6 +268,9 @@ export function connectPanePty(
   const onTitleChange = (title: string, rawTitle: string): void => {
     manager.setPaneGpuRendering(pane.id, !isGeminiTerminalTitle(rawTitle))
     deps.setRuntimePaneTitle(deps.tabId, pane.id, title)
+    if (syncAgentTaskCompleteNotificationEnabled()) {
+      agentCompletionCoordinator.observeTitle(rawTitle)
+    }
     // Why: only the focused pane should drive the tab title — otherwise two
     // agents in split panes cause rapid title flickering as each emits OSC
     // sequences. Only the active split's title propagates to the tab. When
@@ -277,6 +304,7 @@ export function connectPanePty(
     // Spawn completion is when a pane gains a concrete PTY ID. The initial
     // frame-level sync often runs before that async result arrives.
     scheduleRuntimeGraphSync()
+    agentCompletionCoordinator.startProcessTracking()
   }
   // ─── Attention signal: BEL ────────────────────────────────────────────
   //
@@ -356,12 +384,43 @@ export function connectPanePty(
     }
   }
 
+  const syncAgentTaskCompleteNotificationEnabled = (): boolean => {
+    const enabled = isAgentTaskCompleteNotificationEnabled()
+    if (!enabled && wasAgentTaskCompleteNotificationEnabled) {
+      // Why: disabling notifications is an event-time boundary. Drop pending
+      // timers and coordinator state so completions observed while off cannot
+      // replay if the user turns the setting back on.
+      agentTaskCompleteNotificationGeneration += 1
+      clearPendingAgentTaskCompleteNotification()
+      agentCompletionCoordinator.resetCompletionState({ requireFreshWorking: true })
+      if (pendingTerminalBellNotification) {
+        scheduleTerminalBellNotification()
+      }
+    } else if (enabled && !wasAgentTaskCompleteNotificationEnabled) {
+      // Why: a pane may have observed work while agent-complete was disabled.
+      // Re-enabling should not let the next idle event notify for that old task.
+      agentCompletionCoordinator.resetCompletionState({ requireFreshWorking: true })
+    }
+    wasAgentTaskCompleteNotificationEnabled = enabled
+    return enabled
+  }
+
   const scheduleAgentTaskCompleteNotification = (title: string): void => {
+    if (!syncAgentTaskCompleteNotificationEnabled()) {
+      return
+    }
     clearPendingAgentTaskCompleteNotification()
     let graceElapsed = false
+    const generationAtSchedule = agentTaskCompleteNotificationGeneration
 
     const dispatch = (): void => {
       clearPendingAgentTaskCompleteNotification()
+      if (
+        generationAtSchedule !== agentTaskCompleteNotificationGeneration ||
+        !syncAgentTaskCompleteNotificationEnabled()
+      ) {
+        return
+      }
       pendingTerminalBellNotification = false
       clearTerminalBellNotificationTimer()
       if (disposed) {
@@ -397,6 +456,9 @@ export function connectPanePty(
       AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS
     )
   }
+  agentTaskCompleteSettingsUnsubscribe = useAppStore.subscribe(() => {
+    syncAgentTaskCompleteNotificationEnabled()
+  })
 
   // ─── Agent task-complete: OS notification, not tab attention ──────────
   //
@@ -428,18 +490,14 @@ export function connectPanePty(
     if (isClaudeAgent(title) && (settings === null || settings.promptCacheTimerEnabled)) {
       deps.setCacheTimerStartedAt(cacheKey, Date.now())
     }
-    // Why: this is the sole producer of 'agent-task-complete' in the renderer;
-    // removing it (as #944 did) leaves the user-facing Settings toggle with no
-    // events to fire. Dispatch is gated per-source in main; the main-process
-    // dedupe also collapses concurrent BEL + task-complete for the same
-    // worktree into a single notification.
-    // Why: title idle can beat the final hook status update by one event-loop
-    // turn; delay slightly so the notification can snapshot the richer status.
-    if (isAgentTaskCompleteNotificationEnabled()) {
-      scheduleAgentTaskCompleteNotification(title)
+    if (syncAgentTaskCompleteNotificationEnabled()) {
+      agentCompletionCoordinator.observeClassifiedTitleCompletion(title)
     }
   }
   const onAgentBecameWorking = (): void => {
+    if (syncAgentTaskCompleteNotificationEnabled()) {
+      agentCompletionCoordinator.observeTitleWorking()
+    }
     // Why: a new API call refreshes the prompt-cache TTL, so clear any running
     // countdown. The timer will restart when the agent becomes idle again.
     deps.setCacheTimerStartedAt(cacheKey, null)
@@ -501,6 +559,7 @@ export function connectPanePty(
     // and the main-side guard short-circuits.
     tabId: deps.tabId,
     leafId: pane.leafId,
+    activate: deps.isActiveRef.current && deps.isVisibleRef.current,
     ...(shellOverride ? { shellOverride } : {}),
     ...(paneStartup?.telemetry ? { telemetry: paneStartup.telemetry } : {}),
     onPtyExit: onExit,
@@ -522,6 +581,9 @@ export function connectPanePty(
       const currentState = useAppStore.getState()
       const title = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
       currentState.setAgentStatus(cacheKey, payload, title)
+      if (syncAgentTaskCompleteNotificationEnabled()) {
+        agentCompletionCoordinator.observeHookStatus(payload)
+      }
     }
   }
   const transport = runtimeEnvironmentId
@@ -785,6 +847,7 @@ export function connectPanePty(
     // sequences don't leak into the shell. xterm.write() buffers internally
     // regardless of DOM visibility and the guard stays engaged via the
     // write-completion callback until xterm finishes parsing.
+    let replayEndsWithLineBreak = true
     const writeReplayData = (data: string): void => {
       // Why: drain any queued background bytes BEFORE the replay paint, so the
       // scheduler's deferred drain cannot land older bytes on top of the replay.
@@ -793,6 +856,12 @@ export function connectPanePty(
         manager.markPaneHasComplexScriptOutput(pane.id)
       }
       replayIntoTerminal(pane, deps.replayingPanesRef, data)
+      replayEndsWithLineBreak = /[\r\n]$/.test(data)
+    }
+    const terminateReplayLine = (): void => {
+      if (!replayEndsWithLineBreak) {
+        writeReplayData('\r\n')
+      }
     }
 
     const replayDataCallback = (data: string): void => {
@@ -874,6 +943,7 @@ export function connectPanePty(
       pane.container.dataset.ptyId = ptyId
       deps.syncPanePtyLayoutBinding(pane.id, ptyId)
       deps.updateTabPtyId(deps.tabId, ptyId)
+      agentCompletionCoordinator.startProcessTracking()
 
       // Why: mobile terminal streaming needs the exact screen state from
       // xterm.js. The shared helper installs both the SerializeAddon-backed
@@ -894,6 +964,7 @@ export function connectPanePty(
       if (connectResult?.snapshot) {
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
         writeReplayData(connectResult.snapshot)
+        terminateReplayLine()
         // Snapshot reattach keeps a live session, so avoid the broader mode
         // reset. Focus reporting is the unsafe exception: preserving `?1004h`
         // can make restored shells ring BEL on pane focus/blur.
@@ -912,6 +983,7 @@ export function connectPanePty(
         // bits in the replayed data.
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
         writeReplayData(connectResult.replay)
+        terminateReplayLine()
         writeReplayData(POST_REPLAY_FOCUS_REPORTING_RESET)
         if (connectResult.coldRestore) {
           if (!isRemoteRuntimePtyId(ptyId)) {
@@ -1213,6 +1285,8 @@ export function connectPanePty(
             : null
           : existingPtyId
         : null
+    const detachedRemoteLeafPtyId =
+      restoredSessionId && isRemoteRuntimePtyId(restoredSessionId) ? restoredSessionId : null
     const candidateReattachSessionId =
       restoredSessionId && restoredSessionId !== detachedLivePtyId
         ? restoredSessionId
@@ -1229,7 +1303,7 @@ export function connectPanePty(
         ? candidateReattachSessionId
         : null
     recordPtyConnectDiagnostic(
-      `pane=${pane.id} tab=${deps.tabId} restored=${restoredPtyId} existing=${existingPtyId} detached=${detachedLivePtyId} reattach=${deferredReattachSessionId} hasTransport=${hasExistingPaneTransport} pendingKey=${pendingSpawnKey}`
+      `pane=${pane.id} tab=${deps.tabId} restored=${restoredPtyId} existing=${existingPtyId} detached=${detachedRemoteLeafPtyId ?? detachedLivePtyId} reattach=${deferredReattachSessionId} hasTransport=${hasExistingPaneTransport} pendingKey=${pendingSpawnKey}`
     )
 
     if (deferredReattachSessionId) {
@@ -1314,8 +1388,12 @@ export function connectPanePty(
           reportError(message)
           startFreshSpawn()
         })
-    } else if (detachedLivePtyId) {
-      recordPtyConnectDiagnostic(`pane=${pane.id} -> ATTACH detached=${detachedLivePtyId}`)
+    } else if (detachedRemoteLeafPtyId || detachedLivePtyId) {
+      // Why: mirrored web terminal layouts mount one pane per host leaf.
+      // Later leaves already have a pane transport, but must still attach to
+      // their exact remote PTY instead of spawning replacement host tabs.
+      const attachPtyId = detachedRemoteLeafPtyId ?? detachedLivePtyId!
+      recordPtyConnectDiagnostic(`pane=${pane.id} -> ATTACH detached=${attachPtyId}`)
       allowInitialIdleCacheSeed = false
       // Why: surface synchronous attach failures (e.g., the PTY died between
       // mount and remount, so window.api.pty.resize rejects) through
@@ -1328,7 +1406,7 @@ export function connectPanePty(
       // the store and lands in this branch again in a loop.
       try {
         transport.attach({
-          existingPtyId: detachedLivePtyId,
+          existingPtyId: attachPtyId,
           cols,
           rows,
           callbacks: {
@@ -1337,11 +1415,12 @@ export function connectPanePty(
             onError: reportError
           }
         })
-        deps.syncPanePtyLayoutBinding(pane.id, detachedLivePtyId)
-        deps.updateTabPtyId(deps.tabId, detachedLivePtyId)
+        deps.syncPanePtyLayoutBinding(pane.id, attachPtyId)
+        deps.updateTabPtyId(deps.tabId, attachPtyId)
+        agentCompletionCoordinator.startProcessTracking()
       } catch (err) {
         reportError(err instanceof Error ? err.message : String(err))
-        deps.clearTabPtyId(deps.tabId, detachedLivePtyId)
+        deps.clearTabPtyId(deps.tabId, attachPtyId)
         startFreshSpawn()
       }
     } else {
@@ -1363,9 +1442,11 @@ export function connectPanePty(
               // produced a usable PTY ID, the remounted pane must issue its own
               // spawn instead of staying attached to a completed-but-empty
               // promise and rendering a dead terminal surface.
-              console.warn(
-                `Pending PTY spawn for tab ${deps.tabId} resolved without a PTY id, retrying fresh spawn`
-              )
+              if (!isWebTerminalSurfaceTabId(deps.tabId)) {
+                console.warn(
+                  `Pending PTY spawn for tab ${deps.tabId} resolved without a PTY id, retrying fresh spawn`
+                )
+              }
               startFreshSpawn()
               return
             }
@@ -1384,6 +1465,9 @@ export function connectPanePty(
                 onError: reportError
               }
             })
+            // Why: attach sets the transport's PTY id; starting process
+            // tracking before this point no-ops because getPtyId() is empty.
+            agentCompletionCoordinator.startProcessTracking()
           })
           .catch((err) => {
             reportError(err instanceof Error ? err.message : String(err))
@@ -1414,6 +1498,10 @@ export function connectPanePty(
       pendingTerminalBellNotification = false
       clearTerminalBellNotificationTimer()
       discardTerminalOutput(pane.terminal)
+      if (agentTaskCompleteSettingsUnsubscribe !== null) {
+        agentTaskCompleteSettingsUnsubscribe()
+        agentTaskCompleteSettingsUnsubscribe = null
+      }
       if (connectFrame !== null) {
         // Why: StrictMode and split-group remounts can dispose a pane binding
         // before its deferred PTY attach/spawn work runs. Cancel that queued
@@ -1430,6 +1518,7 @@ export function connectPanePty(
         pendingGeometryReportRaf = null
       }
       commandLifecycle.dispose()
+      agentCompletionCoordinator.dispose()
     }
   }
 }

@@ -91,7 +91,18 @@ vi.mock('../github/client', () => ({
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock
+  getSshGitProvider: getSshGitProviderMock,
+  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE:
+    'Remote connection dropped. Click Reconnect on the SSH target before retrying.',
+  requireSshGitProvider: (connectionId: string) => {
+    const provider = getSshGitProviderMock(connectionId)
+    if (!provider) {
+      throw new Error(
+        'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
+      )
+    }
+    return provider
+  }
 }))
 
 vi.mock('./ssh', () => ({
@@ -165,7 +176,7 @@ describe('registerWorktreeHandlers', () => {
   let runtimeStub: {
     resolveRemoteTrackingBase: ReturnType<typeof vi.fn>
     hasRemoteTrackingRef: ReturnType<typeof vi.fn>
-    isRemoteFetchFresh: ReturnType<typeof vi.fn>
+    getOrStartRemoteTrackingBaseRefresh: ReturnType<typeof vi.fn>
     getOrStartRemoteFetch: ReturnType<typeof vi.fn>
     fetchRemoteWithCache: ReturnType<typeof vi.fn>
     emitWorktreeBaseStatus: ReturnType<typeof vi.fn>
@@ -308,7 +319,7 @@ describe('registerWorktreeHandlers', () => {
     runtimeStub = {
       resolveRemoteTrackingBase: vi.fn().mockResolvedValue(null),
       hasRemoteTrackingRef: vi.fn().mockResolvedValue(false),
-      isRemoteFetchFresh: vi.fn().mockResolvedValue(false),
+      getOrStartRemoteTrackingBaseRefresh: vi.fn().mockResolvedValue({ ok: true }),
       getOrStartRemoteFetch: vi.fn().mockResolvedValue({ ok: true }),
       fetchRemoteWithCache: vi.fn().mockResolvedValue(undefined),
       emitWorktreeBaseStatus: vi.fn(),
@@ -652,6 +663,93 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('resolves a fork PR base even when push-target discovery fails', async () => {
+    getPullRequestPushTargetMock.mockRejectedValueOnce(new Error('lookup failed'))
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: 'abc123\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    const result = await handlers['worktrees:resolvePrBase'](null, {
+      repoId: 'repo-1',
+      prNumber: 1849,
+      headRefName: 'feat/onboarding-model-choice-782',
+      isCrossRepository: true
+    })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['fetch', 'origin', 'refs/pull/1849/head'], {
+      cwd: '/workspace/repo'
+    })
+    expect(result).toEqual({ baseBranch: 'abc123' })
+  })
+
+  it('falls back to refs/pull/<N>/head when branch fetch fails for a PR', async () => {
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (
+        args[0] === 'fetch' &&
+        args[2] ===
+          '+refs/heads/feat/onboarding-model-choice-782:refs/remotes/origin/feat/onboarding-model-choice-782'
+      ) {
+        throw new Error(
+          'fatal: could not find remote ref refs/heads/feat/onboarding-model-choice-782'
+        )
+      }
+      if (args[0] === 'rev-parse') {
+        return { stdout: 'abc123\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    const result = await handlers['worktrees:resolvePrBase'](null, {
+      repoId: 'repo-1',
+      prNumber: 1849,
+      headRefName: 'feat/onboarding-model-choice-782'
+    })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        'fetch',
+        'origin',
+        '+refs/heads/feat/onboarding-model-choice-782:refs/remotes/origin/feat/onboarding-model-choice-782'
+      ],
+      { cwd: '/workspace/repo' }
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['fetch', 'origin', 'refs/pull/1849/head'], {
+      cwd: '/workspace/repo'
+    })
+    expect(result).toEqual({ baseBranch: 'abc123' })
+  })
+
+  it('does not fall back to refs/pull/<N>/head when branch fetch hits a network failure', async () => {
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (
+        args[0] === 'fetch' &&
+        args[2] ===
+          '+refs/heads/feat/onboarding-model-choice-782:refs/remotes/origin/feat/onboarding-model-choice-782'
+      ) {
+        throw new Error('fatal: unable to access repo: Could not resolve host: github.com')
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    const result = await handlers['worktrees:resolvePrBase'](null, {
+      repoId: 'repo-1',
+      prNumber: 1849,
+      headRefName: 'feat/onboarding-model-choice-782'
+    })
+
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
+      ['fetch', 'origin', 'refs/pull/1849/head'],
+      expect.anything()
+    )
+    expect(result).toEqual({
+      error:
+        'Failed to fetch origin/feat/onboarding-model-choice-782: fatal: unable to access repo: Could not resolve host: github.com'
+    })
+  })
+
   it('persists linked issue, PR, and selected agent metadata during remote create', async () => {
     const repo = {
       id: 'repo-ssh',
@@ -663,7 +761,12 @@ describe('registerWorktreeHandlers', () => {
       worktreeBaseRef: 'origin/main'
     }
     const provider = {
-      exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      }),
       addWorktree: vi.fn().mockResolvedValue(undefined),
       listWorktrees: vi.fn().mockResolvedValue([
         {
@@ -711,6 +814,50 @@ describe('registerWorktreeHandlers', () => {
         linkedLinearIssue: 'ENG-123'
       })
     })
+  })
+
+  it('does not create an SSH worktree when remote-tracking base refresh fails', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'fetch') {
+          throw new Error('network unavailable')
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      addWorktree: vi.fn(),
+      listWorktrees: vi.fn()
+    }
+    const mux = {
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-ssh',
+        name: 'improve-dashboard'
+      })
+    ).rejects.toThrow(
+      'Could not refresh base ref "origin/main" from "origin". Check your network and try again.'
+    )
+
+    expect(provider.addWorktree).not.toHaveBeenCalled()
   })
 
   it('prunes stale child lineage after a successful SSH worktree scan proves the child is missing', async () => {
@@ -811,7 +958,7 @@ describe('registerWorktreeHandlers', () => {
     )
   })
 
-  it('does not await a cold fetch when the remote-tracking base exists locally', async () => {
+  it('awaits a cold refresh before creating from an existing remote-tracking base', async () => {
     const remoteBase = {
       remote: 'origin',
       branch: 'main',
@@ -824,7 +971,7 @@ describe('registerWorktreeHandlers', () => {
     })
     runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(remoteBase)
     runtimeStub.hasRemoteTrackingRef.mockResolvedValue(true)
-    runtimeStub.getOrStartRemoteFetch.mockReturnValue(pendingFetch)
+    runtimeStub.getOrStartRemoteTrackingBaseRefresh.mockReturnValue(pendingFetch)
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/improve-dashboard',
@@ -841,33 +988,88 @@ describe('registerWorktreeHandlers', () => {
       name: 'improve-dashboard'
     }) as Promise<unknown>
 
-    const result = await Promise.race([
-      createPromise,
-      new Promise((resolve) => setTimeout(() => resolve('timed-out'), 0))
+    const earlyResult = await Promise.race([
+      createPromise.then(() => 'resolved'),
+      new Promise((resolve) => setTimeout(() => resolve('pending'), 0))
     ])
-    expect(result).not.toBe('timed-out')
+    expect(earlyResult).toBe('pending')
+    expect(addWorktreeMock).not.toHaveBeenCalled()
 
-    expect(runtimeStub.getOrStartRemoteFetch).toHaveBeenCalledWith('/workspace/repo', 'origin')
+    expect(runtimeStub.getOrStartRemoteTrackingBaseRefresh).toHaveBeenCalledWith(
+      '/workspace/repo',
+      remoteBase
+    )
     expect(runtimeStub.fetchRemoteWithCache).not.toHaveBeenCalled()
-    expect(runtimeStub.emitWorktreeBaseStatus).toHaveBeenCalledWith({
-      repoId: 'repo-1',
-      worktreeId: 'repo-1::/workspace/improve-dashboard',
-      status: 'checking',
-      base: 'origin/main',
-      remote: 'origin'
-    })
-    expect(runtimeStub.reconcileWorktreeBaseStatus).toHaveBeenCalledWith(
+    resolveFetch()
+    const result = await createPromise
+    expect(addWorktreeMock).toHaveBeenCalled()
+    expect(result).toEqual(
       expect.objectContaining({
-        createdBaseSha: 'created-sha',
-        fetchPromise: pendingFetch
+        worktree: expect.objectContaining({ id: 'repo-1::/workspace/improve-dashboard' })
       })
+    )
+  })
+
+  it('does not create when the pre-create remote-tracking refresh fails', async () => {
+    const remoteBase = {
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main',
+      base: 'origin/main'
+    }
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(remoteBase)
+    runtimeStub.hasRemoteTrackingRef.mockResolvedValue(true)
+    runtimeStub.getOrStartRemoteTrackingBaseRefresh.mockResolvedValue({
+      ok: false,
+      errorKind: 'git_error'
+    })
+
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        name: 'improve-dashboard'
+      })
+    ).rejects.toThrow(
+      'Could not refresh base ref "origin/main" from "origin". Check your network and try again.'
+    )
+
+    expect(addWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('refreshes before create even when the remote-tracking base was recently fetched', async () => {
+    const remoteBase = {
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main',
+      base: 'origin/main'
+    }
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(remoteBase)
+    runtimeStub.hasRemoteTrackingRef.mockResolvedValue(true)
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/improve-dashboard',
+        head: 'created-sha',
+        branch: 'improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'created-sha\n', stderr: '' })
+
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard'
+    })
+
+    expect(runtimeStub.getOrStartRemoteTrackingBaseRefresh).toHaveBeenCalledWith(
+      '/workspace/repo',
+      remoteBase
     )
     expect(result).toEqual(
       expect.objectContaining({
-        initialBaseStatus: expect.objectContaining({ status: 'checking', base: 'origin/main' })
+        worktree: expect.objectContaining({ id: 'repo-1::/workspace/improve-dashboard' })
       })
     )
-    resolveFetch()
   })
 
   it('throws a clear error when no default base ref can be resolved', async () => {

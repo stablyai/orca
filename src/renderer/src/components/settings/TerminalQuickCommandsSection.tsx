@@ -1,23 +1,30 @@
 import { useEffect, useState } from 'react'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
-import type { TerminalQuickCommand } from '../../../../shared/types'
-import { createBrowserUuid } from '@/lib/browser-uuid'
-import { Button } from '../ui/button'
+import type {
+  Repo,
+  TerminalQuickCommand,
+  TerminalQuickCommandScope
+} from '../../../../shared/types'
+import { getTerminalQuickCommandScope } from '../../../../shared/terminal-quick-commands'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '../ui/dialog'
-import { Input } from '../ui/input'
+  createTerminalQuickCommandDraft,
+  TerminalQuickCommandDialog
+} from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
+import { Badge } from '../ui/badge'
+import { Button } from '../ui/button'
 import { Label } from '../ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group'
+import RepoDotLabel from '../repo/RepoDotLabel'
 
 type TerminalQuickCommandsSectionProps = {
   commands: TerminalQuickCommand[]
+  repos: Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
+  activeRepoId: string | null
   onChange: (commands: TerminalQuickCommand[]) => void
 }
+
+type ScopeFilter = 'all' | 'global' | 'repo'
 
 type EditorState =
   | {
@@ -30,50 +37,93 @@ type EditorState =
     }
   | null
 
-function createQuickCommand(): TerminalQuickCommand {
-  return {
-    id: `quick-command-${createBrowserUuid()}`,
-    label: '',
-    command: '',
-    appendEnter: true
+function getRepoLabel(repo: Pick<Repo, 'displayName' | 'path'>): string {
+  return repo.displayName || repo.path
+}
+
+function getScopeLabel(
+  scope: TerminalQuickCommandScope,
+  repoById: Map<string, Pick<Repo, 'displayName' | 'path' | 'badgeColor'>>
+): string {
+  if (scope.type === 'global') {
+    return 'Global'
   }
+  const repo = repoById.get(scope.repoId)
+  return repo ? getRepoLabel(repo) : 'Missing repo'
 }
 
 export function TerminalQuickCommandsSection({
   commands,
+  repos,
+  activeRepoId,
   onChange
 }: TerminalQuickCommandsSectionProps): React.JSX.Element {
   const [editor, setEditor] = useState<EditorState>(null)
-  const [draft, setDraft] = useState<TerminalQuickCommand>(createQuickCommand)
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all')
+  const [repoFilterId, setRepoFilterId] = useState(activeRepoId ?? '')
+  const [repoFilterManuallyChanged, setRepoFilterManuallyChanged] = useState(false)
+  const repoById = new Map(repos.map((repo) => [repo.id, repo]))
+  const activeRepoFilterId = activeRepoId && repoById.has(activeRepoId) ? activeRepoId : ''
+  const repoFilterIsValid = repoFilterId !== '' && repoById.has(repoFilterId)
+  const selectedRepoId =
+    activeRepoFilterId && (!repoFilterManuallyChanged || !repoFilterIsValid)
+      ? activeRepoFilterId
+      : repoFilterIsValid
+        ? repoFilterId
+        : (repos[0]?.id ?? '')
+  const visibleCommands = commands.filter((command) => {
+    const scope = getTerminalQuickCommandScope(command)
+    if (scopeFilter === 'global') {
+      return scope.type === 'global'
+    }
+    if (scopeFilter === 'repo') {
+      return scope.type === 'repo' && (!selectedRepoId || scope.repoId === selectedRepoId)
+    }
+    return true
+  })
 
+  const createDraftForCurrentFilter = (): TerminalQuickCommand => {
+    if (scopeFilter === 'repo' && selectedRepoId) {
+      return createTerminalQuickCommandDraft({ type: 'repo', repoId: selectedRepoId })
+    }
+    return createTerminalQuickCommandDraft({ type: 'global' })
+  }
+
+  // Follow the active worktree until the user picks a repo; resume if that repo disappears.
   useEffect(() => {
-    if (editor) {
-      setDraft({ ...editor.command })
-    }
-  }, [editor])
-
-  const saveDraft = (): void => {
-    const next = {
-      ...draft,
-      label: draft.label.trim(),
-      command: draft.command.trimEnd()
-    }
-    if (!next.label || !next.command) {
+    if (!activeRepoFilterId) {
       return
     }
+
+    if (!repoFilterManuallyChanged) {
+      if (repoFilterId !== activeRepoFilterId) {
+        setRepoFilterId(activeRepoFilterId)
+      }
+      return
+    }
+
+    if (!repoFilterIsValid) {
+      setRepoFilterId(activeRepoFilterId)
+      setRepoFilterManuallyChanged(false)
+    }
+  }, [activeRepoFilterId, repoFilterId, repoFilterIsValid, repoFilterManuallyChanged])
+
+  const changeRepoFilter = (nextRepoId: string): void => {
+    setRepoFilterManuallyChanged(true)
+    setRepoFilterId(nextRepoId)
+  }
+
+  const saveCommand = (next: TerminalQuickCommand): void => {
     if (editor?.mode === 'edit') {
       onChange(commands.map((command) => (command.id === next.id ? next : command)))
     } else {
       onChange([...commands, next])
     }
-    setEditor(null)
   }
 
   const removeCommand = (id: string): void => {
     onChange(commands.filter((command) => command.id !== id))
   }
-
-  const canSave = draft.label.trim().length > 0 && draft.command.trimEnd().length > 0
 
   return (
     <div className="space-y-3">
@@ -88,128 +138,111 @@ export function TerminalQuickCommandsSection({
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => setEditor({ mode: 'add', command: createQuickCommand() })}
+          onClick={() => setEditor({ mode: 'add', command: createDraftForCurrentFilter() })}
         >
           <Plus />
           Add Command
         </Button>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <ToggleGroup
+          type="single"
+          value={scopeFilter}
+          onValueChange={(value) => {
+            if (value === 'all' || value === 'global' || value === 'repo') {
+              setScopeFilter(value)
+            }
+          }}
+          className="justify-start"
+        >
+          <ToggleGroupItem value="all">All</ToggleGroupItem>
+          <ToggleGroupItem value="global">Global</ToggleGroupItem>
+          <ToggleGroupItem value="repo" disabled={repos.length === 0}>
+            Repository
+          </ToggleGroupItem>
+        </ToggleGroup>
+        {scopeFilter === 'repo' && repos.length > 0 ? (
+          <Select value={selectedRepoId} onValueChange={changeRepoFilter}>
+            <SelectTrigger size="sm" className="min-w-52">
+              <SelectValue placeholder="Choose repository" />
+            </SelectTrigger>
+            <SelectContent>
+              {repos.map((repo) => (
+                <SelectItem key={repo.id} value={repo.id}>
+                  <RepoDotLabel
+                    name={getRepoLabel(repo)}
+                    color={repo.badgeColor}
+                    className="max-w-full"
+                  />
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : null}
+      </div>
+
       <div className="overflow-hidden rounded-lg border border-border/50">
-        {commands.length === 0 ? (
-          <div className="px-3 py-6 text-sm text-muted-foreground">No quick commands saved.</div>
+        {visibleCommands.length === 0 ? (
+          <div className="px-3 py-6 text-sm text-muted-foreground">
+            {commands.length === 0 ? 'No quick commands saved.' : 'No commands match this scope.'}
+          </div>
         ) : (
           <div className="divide-y divide-border/50">
-            {commands.map((command) => (
-              <div key={command.id} className="flex items-center gap-3 px-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{command.label || 'Untitled'}</div>
-                  <div className="truncate font-mono text-xs text-muted-foreground">
-                    {command.command || 'No command text'}
+            {visibleCommands.map((command) => {
+              const scope = getTerminalQuickCommandScope(command)
+              return (
+                <div key={command.id} className="flex items-center gap-3 px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <div className="truncate text-sm font-medium">
+                        {command.label || 'Untitled'}
+                      </div>
+                      <Badge variant="outline" className="max-w-44">
+                        <span className="truncate">{getScopeLabel(scope, repoById)}</span>
+                      </Badge>
+                    </div>
+                    <div className="truncate font-mono text-xs text-muted-foreground">
+                      {command.command || 'No command text'}
+                    </div>
                   </div>
+                  <div className="shrink-0 text-[11px] text-muted-foreground">
+                    {command.appendEnter ? 'Enter' : 'Insert'}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Edit ${command.label || 'quick command'}`}
+                    onClick={() => setEditor({ mode: 'edit', command })}
+                  >
+                    <Pencil />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Remove ${command.label || 'quick command'}`}
+                    onClick={() => removeCommand(command.id)}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 />
+                  </Button>
                 </div>
-                <div className="shrink-0 text-[11px] text-muted-foreground">
-                  {command.appendEnter ? 'Enter' : 'Insert'}
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Edit ${command.label || 'quick command'}`}
-                  onClick={() => setEditor({ mode: 'edit', command })}
-                >
-                  <Pencil />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Remove ${command.label || 'quick command'}`}
-                  onClick={() => removeCommand(command.id)}
-                  className="text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 />
-                </Button>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
 
-      <Dialog open={editor !== null} onOpenChange={(open) => !open && setEditor(null)}>
-        <DialogContent className="max-w-md sm:max-w-md" showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle className="text-sm">
-              {editor?.mode === 'edit' ? 'Edit Quick Command' : 'Add Quick Command'}
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              Save terminal input text for the context menu.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Label</Label>
-              <Input
-                value={draft.label}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, label: event.target.value }))
-                }
-                placeholder="Restart server"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Command Text</Label>
-              <textarea
-                value={draft.command}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, command: event.target.value }))
-                }
-                placeholder="npm run dev"
-                rows={4}
-                className="min-h-24 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm font-mono shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              />
-            </div>
-
-            <div className="flex items-center justify-between gap-4 rounded-md border border-border/50 px-3 py-2">
-              <div className="space-y-0.5">
-                <div className="text-sm font-medium">Append Enter</div>
-                <div className="text-xs text-muted-foreground">
-                  Submit immediately instead of only inserting text.
-                </div>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={draft.appendEnter}
-                aria-label="Toggle append Enter"
-                onClick={() =>
-                  setDraft((current) => ({ ...current, appendEnter: !current.appendEnter }))
-                }
-                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-                  draft.appendEnter ? 'bg-foreground' : 'bg-muted-foreground/30'
-                }`}
-              >
-                <span
-                  className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                    draft.appendEnter ? 'translate-x-4' : 'translate-x-0.5'
-                  }`}
-                />
-              </button>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setEditor(null)}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={saveDraft} disabled={!canSave}>
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <TerminalQuickCommandDialog
+        open={editor !== null}
+        mode={editor?.mode ?? 'add'}
+        command={editor?.command ?? createTerminalQuickCommandDraft()}
+        repos={repos}
+        onOpenChange={(open) => !open && setEditor(null)}
+        onSave={saveCommand}
+      />
     </div>
   )
 }

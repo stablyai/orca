@@ -40,7 +40,6 @@ import type { AppMemory, UsageValues, Worktree } from '../../../../shared/types'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { isWorkspaceOldForCleanup } from '../../../../shared/workspace-cleanup'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import {
   mergeSnapshotAndSessions,
   UNATTRIBUTED_REPO_ID,
@@ -52,6 +51,10 @@ import {
 } from './mergeSnapshotAndSessions'
 import { WorkspaceSpaceCompactPanel } from './WorkspaceSpaceCompactPanel'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
+import {
+  isResourceSessionActivationKey,
+  navigateResourceSessionToTab
+} from './resource-session-navigation'
 
 const POLL_MS = 2_000
 const SESSIONS_POLL_MS = 10_000
@@ -334,7 +337,7 @@ function SessionRow({
       onKeyDown={
         clickable
           ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
+              if (isResourceSessionActivationKey(e.key)) {
                 e.preventDefault()
                 handleClick()
               }
@@ -949,10 +952,9 @@ export function ResourceUsageStatusSegment({
     })
   }, [])
 
-  // Why: navigation handlers leave the popover open so users can chain
-  // multiple jumps (e.g. browse worktrees, hop between terminals) without
-  // having to re-open the popover each time. The popover still closes via
-  // its own outside-click / Escape handlers.
+  // Why: worktree navigation leaves the popover open so users can browse the
+  // tree without reopening it; bound terminal rows close explicitly because
+  // focus transfer is intentionally suppressed by onFocusOutside below.
   const navigateToWorktree = useCallback((worktreeId: string): void => {
     if (worktreeId === ORPHAN_WORKTREE_ID || worktreeId.startsWith(`${UNATTRIBUTED_REPO_ID}::`)) {
       return
@@ -962,19 +964,13 @@ export function ResourceUsageStatusSegment({
 
   const navigateToTab = useCallback(
     (tabId: string, paneKey: string | null) => {
-      // Resolve the tab → worktree from the store so we can also reveal the
-      // worktree in the sidebar before flipping the active tab.
-      for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-        if (tabs.some((t) => t.id === tabId)) {
-          activateAndRevealWorktree(worktreeId)
-          break
-        }
-      }
-      setActiveView('terminal')
-      // Why: paneKey suffixes are stable UUID leaf ids after replay/reload.
-      // Legacy numeric keys degrade to tab-only activation instead of guessing.
-      const parsed = paneKey ? parsePaneKey(paneKey) : null
-      activateTabAndFocusPane(tabId, parsed?.tabId === tabId ? parsed.leafId : null)
+      navigateResourceSessionToTab(tabId, paneKey, {
+        tabsByWorktree,
+        setOpen,
+        setActiveView,
+        activateAndRevealWorktree,
+        activateTabAndFocusPane
+      })
     },
     [tabsByWorktree, setActiveView]
   )
@@ -1392,7 +1388,7 @@ export function ResourceUsageStatusSegment({
                 className="relative inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
               >
                 <span className="min-w-0 truncate px-4 text-center">
-                  delete inactive workspaces ({oldWorkspaceCount})
+                  Delete inactive workspaces ({oldWorkspaceCount})
                 </span>
                 <ChevronRight
                   className="absolute right-2.5 size-3.5 text-muted-foreground"

@@ -18,14 +18,14 @@ describe('getMarkdownViewModes', () => {
     ).toEqual(['source', 'rich'])
   })
 
-  it('offers source and preview for single-file markdown diffs', () => {
+  it('offers source and rich for single-file markdown diffs', () => {
     expect(
       getMarkdownViewModes({
         language: 'markdown',
         mode: 'diff',
         diffSource: 'unstaged'
       })
-    ).toEqual(['source', 'preview'])
+    ).toEqual(['source', 'rich'])
   })
 
   it('does not offer preview for mermaid edit tabs', () => {

@@ -40,6 +40,7 @@ describe('submitFeedback', () => {
     const body = postedBody()
     expect(body).toMatchObject({
       feedback: 'private bug report',
+      submissionType: 'feedback',
       githubLogin: null,
       githubEmail: null,
       appVersion: '1.2.3-test'
@@ -60,9 +61,27 @@ describe('submitFeedback', () => {
     const body = postedBody()
     expect(body).toMatchObject({
       feedback: 'public bug report',
+      submissionType: 'feedback',
       githubLogin: 'trusted-user',
       githubEmail: 'trusted@example.com',
       appVersion: '1.2.3-test'
+    })
+  })
+
+  it('marks crash submissions so the backend can route them separately', async () => {
+    await submitFeedback({
+      feedback: '[Crash Report]',
+      submissionType: 'crash',
+      submitAnonymously: false,
+      githubLogin: 'trusted-user',
+      githubEmail: null
+    })
+
+    expect(postedBody()).toMatchObject({
+      feedback: '[Crash Report]',
+      submissionType: 'crash',
+      githubLogin: 'trusted-user',
+      githubEmail: null
     })
   })
 })

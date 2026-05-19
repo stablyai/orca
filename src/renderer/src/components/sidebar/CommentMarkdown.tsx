@@ -38,11 +38,13 @@ const compactComponents: Components = {
   // more reliable than checking `className` — which is only set when
   // the fenced block specifies a language (```js), not for bare ```.
   code: ({ children }) => (
-    <code className="rounded bg-accent px-1 py-px text-[10px] font-mono">{children}</code>
+    <code className="rounded bg-accent px-1 py-px text-[10px] font-mono [overflow-wrap:anywhere]">
+      {children}
+    </code>
   ),
   // Compact pre blocks — no syntax highlighting needed for short comments
   pre: ({ children }) => (
-    <pre className="my-1 rounded bg-accent p-1.5 text-[10px] font-mono overflow-x-auto max-h-32">
+    <pre className="my-1 max-h-32 max-w-full overflow-x-auto rounded bg-accent p-1.5 text-[10px] font-mono">
       {children}
     </pre>
   ),
@@ -90,7 +92,7 @@ const compactComponents: Components = {
   // overflow container keeps the card layout stable while still letting the
   // user scroll to see the full table.
   table: ({ children }) => (
-    <div className="my-1 overflow-x-auto">
+    <div className="my-1 max-w-full overflow-x-auto">
       <table className="text-[10px] border-collapse [&_td]:border [&_td]:border-border/40 [&_td]:px-1 [&_td]:py-0.5 [&_th]:border [&_th]:border-border/40 [&_th]:px-1 [&_th]:py-0.5 [&_th]:font-semibold [&_th]:text-left">
         {children}
       </table>
@@ -112,10 +114,12 @@ const documentComponents: Components = {
     </a>
   ),
   code: ({ children }) => (
-    <code className="rounded bg-accent px-1.5 py-0.5 font-mono text-[0.92em]">{children}</code>
+    <code className="rounded bg-accent px-1.5 py-0.5 font-mono text-[0.92em] [overflow-wrap:anywhere]">
+      {children}
+    </code>
   ),
   pre: ({ children }) => (
-    <pre className="my-3 max-h-80 overflow-x-auto rounded-md bg-accent p-3 font-mono text-[12px]">
+    <pre className="my-3 max-h-80 max-w-full overflow-x-auto rounded-md bg-accent p-3 font-mono text-[12px]">
       {children}
     </pre>
   ),
@@ -207,6 +211,7 @@ const CommentMarkdown = React.memo(
           // The descendant selector (pre code) has higher specificity than the
           // direct utility classes on <code>, so these overrides win reliably.
           '[&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:rounded-none',
+          'min-w-0 max-w-full [overflow-wrap:anywhere]',
           className
         )}
         {...rest}

@@ -138,10 +138,10 @@ describe('launchAgentBackgroundSession', () => {
       expect.objectContaining({
         root: { type: 'leaf', leafId },
         activeLeafId: leafId,
-        ptyIdsByLeafId: { [leafId]: 'pty-1' },
-        titlesByLeafId: { [leafId]: 'Nightly audit' }
+        ptyIdsByLeafId: { [leafId]: 'pty-1' }
       })
     )
+    expect(mockSetTabLayout.mock.calls.at(-1)?.[1]).not.toHaveProperty('titlesByLeafId')
     expect(mockSetTabCustomTitle).toHaveBeenCalledWith('tab-1', 'Nightly audit')
     expect(mockUpdateTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-1')
     expect(mockRegisterEagerPtyBuffer).toHaveBeenCalledWith('pty-1', expect.any(Function))

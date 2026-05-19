@@ -34,7 +34,18 @@ vi.mock('sonner', () => ({
 }))
 
 import { toast } from 'sonner'
-import { runWorktreeBatchDelete } from './delete-worktree-flow'
+import { runWorktreeBatchDelete, runWorktreeDeletesInParallel } from './delete-worktree-flow'
+
+function deferredDeleteResult(): {
+  promise: Promise<{ ok: true }>
+  resolve: (value: { ok: true }) => void
+} {
+  let resolve: (value: { ok: true }) => void = () => {}
+  const promise = new Promise<{ ok: true }>((innerResolve) => {
+    resolve = innerResolve
+  })
+  return { promise, resolve }
+}
 
 function setWorktrees(
   worktrees: { id: string; displayName?: string; isMainWorktree?: boolean }[]
@@ -148,5 +159,37 @@ describe('runWorktreeBatchDelete', () => {
     expect(toast.info).toHaveBeenCalledWith('No deletable workspaces selected', {
       description: 'Refresh Space and try again if the workspace list looks stale.'
     })
+  })
+})
+
+describe('runWorktreeDeletesInParallel', () => {
+  beforeEach(() => {
+    mocks.state.removeWorktree.mockClear().mockResolvedValue({ ok: true })
+    mocks.state.deleteStateByWorktreeId = {}
+    vi.mocked(toast.error).mockClear()
+    vi.mocked(toast.info).mockClear()
+  })
+
+  it('starts every selected delete before waiting for earlier deletes to finish', async () => {
+    const first = deferredDeleteResult()
+    const second = deferredDeleteResult()
+    mocks.state.removeWorktree
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+
+    const deleted = runWorktreeDeletesInParallel([
+      { id: 'wt-1', displayName: 'one', repoId: 'repo-a' },
+      { id: 'wt-2', displayName: 'two', repoId: 'repo-b' }
+    ])
+
+    expect(mocks.state.removeWorktree).toHaveBeenCalledTimes(2)
+    expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(1, 'wt-1', false)
+    expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(2, 'wt-2', false)
+
+    second.resolve({ ok: true })
+    await Promise.resolve()
+    first.resolve({ ok: true })
+
+    await expect(deleted).resolves.toEqual(['wt-1', 'wt-2'])
   })
 })

@@ -23,7 +23,6 @@ async function seedLineageScenario(page: Page): Promise<LineageScenario> {
     state.setSidebarOpen(true)
     state.setGroupBy('none')
     state.setSortBy('recent')
-    state.setShowWorkspaceLineage(true)
 
     const worktrees = Object.values(state.worktreesByRepo)
       .flat()
@@ -111,6 +110,63 @@ async function seedWorkspaceAgentStatus(
   )
 }
 
+async function seedWorkspaceLiveTerminal(page: Page, worktreeId: string): Promise<string> {
+  return page.evaluate((worktreeId) => {
+    const store = window.__store
+    if (!store) {
+      throw new Error('window.__store is not available')
+    }
+
+    const state = store.getState()
+    if ((state.tabsByWorktree[worktreeId] ?? []).length === 0) {
+      state.createTab(worktreeId)
+    }
+
+    const next = store.getState()
+    const tab = next.tabsByWorktree[worktreeId]?.[0]
+    if (!tab) {
+      throw new Error('Worktree lineage E2E failed to create a live terminal tab')
+    }
+
+    next.dropAgentStatusByWorktree(worktreeId)
+    store.setState((current) => ({
+      ptyIdsByTabId: {
+        ...current.ptyIdsByTabId,
+        [tab.id]: [`e2e-live-pty-${Date.now()}`]
+      },
+      browserTabsByWorktree: {
+        ...current.browserTabsByWorktree,
+        [worktreeId]: []
+      }
+    }))
+    return tab.id
+  }, worktreeId)
+}
+
+async function markWorkspaceTerminalSlept(
+  page: Page,
+  args: { worktreeId: string; tabId: string }
+): Promise<void> {
+  await page.evaluate(({ worktreeId, tabId }) => {
+    const store = window.__store
+    if (!store) {
+      throw new Error('window.__store is not available')
+    }
+
+    store.getState().dropAgentStatusByWorktree(worktreeId)
+    store.setState((current) => ({
+      ptyIdsByTabId: {
+        ...current.ptyIdsByTabId,
+        [tabId]: []
+      },
+      browserTabsByWorktree: {
+        ...current.browserTabsByWorktree,
+        [worktreeId]: []
+      }
+    }))
+  }, args)
+}
+
 test.describe('Worktree Lineage', () => {
   test.describe.configure({ mode: 'serial' })
 
@@ -174,6 +230,35 @@ test.describe('Worktree Lineage', () => {
     await expect(
       orcaPage.getByRole('menuitem', { name: 'Group under Active Workspace' })
     ).toHaveCount(0)
+  })
+
+  test('updates nested child preview status when the child terminal sleeps', async ({
+    orcaPage
+  }) => {
+    const { parentId, childId } = await seedLineageScenario(orcaPage)
+    const parentRow = worktreeOption(orcaPage, parentId)
+    const childRow = worktreeOption(orcaPage, childId)
+
+    await expect(parentRow).toContainText('E2E lineage parent')
+    await expect(childRow).toBeVisible()
+
+    const childTabId = await seedWorkspaceLiveTerminal(orcaPage, childId)
+    await expect(childRow).toContainText('Active')
+    await childRow.click({ button: 'right' })
+    await expect(orcaPage.getByRole('menuitem', { name: 'Sleep' })).not.toHaveAttribute(
+      'data-disabled',
+      ''
+    )
+    await orcaPage.keyboard.press('Escape')
+
+    await markWorkspaceTerminalSlept(orcaPage, { worktreeId: childId, tabId: childTabId })
+    await expect(childRow).toContainText('Inactive')
+    await childRow.click({ button: 'right' })
+    await expect(orcaPage.getByRole('menuitem', { name: 'Sleep' })).toHaveAttribute(
+      'data-disabled',
+      ''
+    )
+    await orcaPage.keyboard.press('Escape')
   })
 
   test('shows parent and child agent rows while the parent workspace is active', async ({

@@ -4,7 +4,12 @@ reviewable as one surface. Splitting by feature area would risk drifting
 validation/gate conventions across handler files. */
 import { ipcMain, webContents } from 'electron'
 import { resolve } from 'path'
-import type { Repo, GitHubIssueUpdate } from '../../shared/types'
+import type {
+  Repo,
+  GitHubIssueUpdate,
+  GitHubOwnerRepo,
+  GitHubPullRequestStateUpdate
+} from '../../shared/types'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
 import {
@@ -30,6 +35,9 @@ import {
   addPRReviewCommentReply,
   updatePRTitle,
   mergePR,
+  updatePRState,
+  rerunPRChecks,
+  requestPRReviewers,
   checkOrcaStarred,
   starOrca
 } from '../github/client'
@@ -275,6 +283,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         repoPath: string
         prNumber: number
         headSha?: string
+        prRepo?: GitHubOwnerRepo | null
         noCache?: boolean
       }
     ) => {
@@ -283,6 +292,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         repo.path,
         args.prNumber,
         args.headSha,
+        args.prRepo ?? null,
         {
           noCache: args.noCache
         },
@@ -293,12 +303,20 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   ipcMain.handle(
     'gh:prComments',
-    (_event, args: { repoPath: string; prNumber: number; noCache?: boolean }) => {
+    (
+      _event,
+      args: {
+        repoPath: string
+        prNumber: number
+        prRepo?: GitHubOwnerRepo | null
+        noCache?: boolean
+      }
+    ) => {
       const repo = assertRegisteredRepo(args, store)
       return getPRComments(
         repo.path,
         args.prNumber,
-        { noCache: args.noCache },
+        { noCache: args.noCache, prRepo: args.prRepo ?? null },
         repoConnectionId(repo)
       )
     }
@@ -475,9 +493,18 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   ipcMain.handle(
     'gh:updatePRTitle',
-    async (event, args: { repoPath: string; prNumber: number; title: string }) => {
+    async (
+      event,
+      args: { repoPath: string; prNumber: number; title: string; prRepo?: GitHubOwnerRepo | null }
+    ) => {
       const repo = assertRegisteredRepo(args, store)
-      const ok = await updatePRTitle(repo.path, args.prNumber, args.title, repoConnectionId(repo))
+      const ok = await updatePRTitle(
+        repo.path,
+        args.prNumber,
+        args.title,
+        repoConnectionId(repo),
+        args.prRepo ?? null
+      )
       if (ok) {
         broadcastWorkItemMutated(
           { repoPath: repo.path, repoId: repo.id, type: 'pr', number: args.prNumber },
@@ -492,10 +519,94 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     'gh:mergePR',
     async (
       event,
-      args: { repoPath: string; prNumber: number; method?: 'merge' | 'squash' | 'rebase' }
+      args: {
+        repoPath: string
+        prNumber: number
+        method?: 'merge' | 'squash' | 'rebase'
+        prRepo?: GitHubOwnerRepo | null
+      }
     ) => {
       const repo = assertRegisteredRepo(args, store)
-      const result = await mergePR(repo.path, args.prNumber, args.method, repoConnectionId(repo))
+      const result = await mergePR(
+        repo.path,
+        args.prNumber,
+        args.method,
+        repoConnectionId(repo),
+        args.prRepo ?? null
+      )
+      if (result.ok) {
+        broadcastWorkItemMutated(
+          { repoPath: repo.path, repoId: repo.id, type: 'pr', number: args.prNumber },
+          event.sender.id
+        )
+      }
+      return result
+    }
+  )
+
+  ipcMain.handle(
+    'gh:updatePRState',
+    async (
+      event,
+      args: { repoPath: string; prNumber: number; updates: GitHubPullRequestStateUpdate }
+    ) => {
+      const repo = assertRegisteredRepo(args, store)
+      if (
+        typeof args.prNumber !== 'number' ||
+        !Number.isInteger(args.prNumber) ||
+        args.prNumber < 1
+      ) {
+        return { ok: false, error: 'Invalid pull request number' }
+      }
+      const result = await updatePRState(
+        repo.path,
+        args.prNumber,
+        args.updates,
+        repoConnectionId(repo)
+      )
+      if (result.ok) {
+        broadcastWorkItemMutated(
+          { repoPath: repo.path, repoId: repo.id, type: 'pr', number: args.prNumber },
+          event.sender.id
+        )
+      }
+      return result
+    }
+  )
+
+  ipcMain.handle(
+    'gh:rerunPRChecks',
+    async (
+      _event,
+      args: { repoPath: string; prNumber: number; headSha?: string; failedOnly?: boolean }
+    ) => {
+      const repo = assertRegisteredRepo(args, store)
+      if (
+        typeof args.prNumber !== 'number' ||
+        !Number.isInteger(args.prNumber) ||
+        args.prNumber < 1
+      ) {
+        return { ok: false, error: 'Invalid pull request number' }
+      }
+      return rerunPRChecks(
+        repo.path,
+        args.prNumber,
+        { headSha: args.headSha, failedOnly: args.failedOnly },
+        repoConnectionId(repo)
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'gh:requestPRReviewers',
+    async (event, args: { repoPath: string; prNumber: number; reviewers: string[] }) => {
+      const repo = assertRegisteredRepo(args, store)
+      const result = await requestPRReviewers(
+        repo.path,
+        args.prNumber,
+        args.reviewers,
+        repoConnectionId(repo)
+      )
       if (result.ok) {
         broadcastWorkItemMutated(
           { repoPath: repo.path, repoId: repo.id, type: 'pr', number: args.prNumber },

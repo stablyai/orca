@@ -108,6 +108,20 @@ describe('resolveWorktreeStatus', () => {
     expect(status).toBe('done')
   })
 
+  it('treats paired web host terminal mirrors as active while their stream handle is pending', () => {
+    const status = resolveWorktreeStatus({
+      tabs: [{ id: 'web-terminal-host-tab-1', title: 'Terminal 1' }],
+      browserTabs: [],
+      ptyIdsByTabId: {},
+      hasPermission: false,
+      hasLiveWorking: false,
+      hasLiveDone: false,
+      hasRetainedDone: false
+    })
+
+    expect(status).toBe('active')
+  })
+
   it('promotes to permission when an explicit agent row needs input, even without a live pty', () => {
     const status = resolveWorktreeStatus({
       tabs: [{ id: 'tab-1', title: 'claude [permission]' }],

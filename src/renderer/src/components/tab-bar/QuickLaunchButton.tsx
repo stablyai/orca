@@ -21,6 +21,8 @@ export type QuickLaunchAgentMenuItemsProps = {
    *  the picked agent boots with this prompt — argv/flag agents auto-submit,
    *  followup-path agents land it as a draft for the user to confirm. */
   prompt?: string
+  /** Use `'draft'` for generated context that must not become shell syntax. */
+  promptDelivery?: 'auto-submit' | 'draft'
   /** Telemetry surface for `agent_started.launch_source`. Defaults to
    *  `'tab_bar_quick_launch'` so the existing tab-bar `+` callsite is
    *  unchanged. */
@@ -46,11 +48,35 @@ function orderAgents(
   return [defaultAgent, ...inCatalogOrder.filter((id) => id !== defaultAgent)]
 }
 
+export function shouldShowLaunchWatchdogTimeout({
+  launchSource,
+  prompt,
+  pasteDraftAfterLaunch,
+  hasPty
+}: {
+  launchSource?: LaunchSource
+  prompt?: string
+  pasteDraftAfterLaunch: boolean
+  hasPty: boolean
+}): boolean {
+  return !(
+    launchSource === 'notes_send' &&
+    (prompt?.trim().length ?? 0) > 0 &&
+    pasteDraftAfterLaunch &&
+    hasPty
+  )
+}
+
+function getLaunchWatchdogTimeoutMessage(label: string): string {
+  return `Couldn't launch ${label} — the terminal is still open.`
+}
+
 function QuickLaunchAgentMenuItemsInner({
   worktreeId,
   groupId,
   onFocusTerminal,
   prompt,
+  promptDelivery,
   launchSource
 }: QuickLaunchAgentMenuItemsProps): React.JSX.Element | null {
   // Why: must be a reactive selector (not getConnectionId() which reads a
@@ -85,6 +111,7 @@ function QuickLaunchAgentMenuItemsInner({
         worktreeId,
         groupId,
         ...(prompt !== undefined ? { prompt } : {}),
+        ...(promptDelivery !== undefined ? { promptDelivery } : {}),
         ...(launchSource !== undefined ? { launchSource } : {})
       })
       if (!result) {
@@ -114,10 +141,21 @@ function QuickLaunchAgentMenuItemsInner({
         if (state.activeWorktreeId !== worktreeId) {
           return
         }
-        toast.message(`Couldn't launch ${label} — the terminal is still open.`)
+        const hasPty = (state.ptyIdsByTabId[result.tabId]?.length ?? 0) > 0
+        if (
+          !shouldShowLaunchWatchdogTimeout({
+            launchSource,
+            prompt,
+            pasteDraftAfterLaunch: result.pasteDraftAfterLaunch,
+            hasPty
+          })
+        ) {
+          return
+        }
+        toast.message(getLaunchWatchdogTimeoutMessage(label))
       })
     },
-    [worktreeId, groupId, onFocusTerminal, prompt, launchSource]
+    [worktreeId, groupId, onFocusTerminal, prompt, promptDelivery, launchSource]
   )
 
   const agents = detectedIds ? orderAgents(defaultAgent, detectedIds) : []

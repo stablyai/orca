@@ -41,11 +41,6 @@ function createTestState(overrides?: Partial<AppState>): {
   return { state, pending }
 }
 
-async function flush(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0))
-  await new Promise((resolve) => setTimeout(resolve, 0))
-}
-
 describe('ensureHooksConfirmed', () => {
   beforeEach(() => {
     hooksCheckMock.mockReset()
@@ -86,9 +81,8 @@ describe('ensureHooksConfirmed', () => {
     })
 
     const promise = ensureHooksConfirmed(state, 'repo-1', 'setup')
-    await flush()
 
-    expect(pending).toHaveLength(1)
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
     expect(pending[0].data.scriptContent).toBe('new script')
     // The dialog uses this flag to tell the user we're re-prompting *because*
     // orca.yaml changed, not because they've never approved this hook.
@@ -126,6 +120,33 @@ describe('ensureHooksConfirmed', () => {
     expect(pending).toHaveLength(0)
   })
 
+  it('does not prompt for orca.yaml when the repo uses local commands only', async () => {
+    const { state, pending } = createTestState({
+      repos: [
+        {
+          id: 'repo-1',
+          displayName: 'Repo One',
+          hookSettings: {
+            mode: 'auto',
+            commandSourcePolicy: 'local-only',
+            scripts: { setup: 'echo local', archive: '' }
+          }
+        }
+      ]
+    } as Partial<AppState>)
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: { scripts: { setup: 'echo shared' } },
+      mayNeedUpdate: false
+    })
+
+    const decision = await ensureHooksConfirmed(state, 'repo-1', 'setup')
+
+    expect(decision).toBe('run')
+    expect(hooksCheckMock).not.toHaveBeenCalled()
+    expect(pending).toHaveLength(0)
+  })
+
   it('returns run without prompting when issueCommand source is local (user-owned)', async () => {
     const { state, pending } = createTestState()
     readIssueCommandMock.mockResolvedValue({
@@ -151,9 +172,8 @@ describe('ensureHooksConfirmed', () => {
     })
 
     const promise = ensureHooksConfirmed(state, 'repo-1', 'setup')
-    await flush()
 
-    expect(pending).toHaveLength(1)
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
     expect(pending[0].data).toMatchObject({
       repoId: 'repo-1',
       repoName: 'Repo One',

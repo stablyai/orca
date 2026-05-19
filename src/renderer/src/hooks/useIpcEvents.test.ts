@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: this test file keeps the hook wiring mocks close to the assertions so IPC event behavior stays understandable and maintainable. */
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { resolveZoomTarget } from './useIpcEvents'
+import { resolveBrowserSessionTabTarget, resolveZoomTarget } from './useIpcEvents'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 
 const FUTURE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -65,6 +65,55 @@ describe('resolveZoomTarget', () => {
         activeElement: makeTarget({ hasXtermClass: true })
       })
     ).toBe('ui')
+  })
+})
+
+describe('resolveBrowserSessionTabTarget', () => {
+  it('resolves unified browser tabs to their browser workspace', () => {
+    expect(
+      resolveBrowserSessionTabTarget(
+        {
+          unifiedTabsByWorktree: {
+            'wt-1': [
+              {
+                id: 'unified-browser',
+                groupId: 'group-1',
+                contentType: 'browser',
+                entityId: 'browser-workspace'
+              }
+            ]
+          },
+          browserTabsByWorktree: {
+            'wt-1': [{ id: 'browser-workspace' }]
+          }
+        } as never,
+        'wt-1',
+        'unified-browser'
+      )
+    ).toEqual({
+      kind: 'unified-browser',
+      unifiedTabId: 'unified-browser',
+      workspaceId: 'browser-workspace',
+      groupId: 'group-1'
+    })
+  })
+
+  it('resolves fallback mobile browser tabs by workspace id', () => {
+    expect(
+      resolveBrowserSessionTabTarget(
+        {
+          unifiedTabsByWorktree: { 'wt-1': [] },
+          browserTabsByWorktree: {
+            'wt-1': [{ id: 'browser-workspace' }]
+          }
+        } as never,
+        'wt-1',
+        'browser-workspace'
+      )
+    ).toEqual({
+      kind: 'fallback-browser',
+      workspaceId: 'browser-workspace'
+    })
   })
 })
 
@@ -182,7 +231,9 @@ describe('useIpcEvents updater integration', () => {
           onFocusTerminal: () => () => {},
           onFocusEditorTab: () => () => {},
           onCloseSessionTab: () => () => {},
+          onMoveSessionTab: () => () => {},
           onOpenFileFromMobile: () => () => {},
+          onOpenDiffFromMobile: () => () => {},
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
@@ -228,8 +279,10 @@ describe('useIpcEvents updater integration', () => {
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
           getTerminalDrivers: () => Promise.resolve([]),
+          getBrowserDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
-          onTerminalDriverChanged: () => () => {}
+          onTerminalDriverChanged: () => () => {},
+          onBrowserDriverChanged: () => () => {}
         },
         ssh: {
           listTargets: () => Promise.resolve([]),
@@ -394,7 +447,9 @@ describe('useIpcEvents updater integration', () => {
           onFocusTerminal: () => () => {},
           onFocusEditorTab: () => () => {},
           onCloseSessionTab: () => () => {},
+          onMoveSessionTab: () => () => {},
           onOpenFileFromMobile: () => () => {},
+          onOpenDiffFromMobile: () => () => {},
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
@@ -437,8 +492,10 @@ describe('useIpcEvents updater integration', () => {
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
           getTerminalDrivers: () => Promise.resolve([]),
+          getBrowserDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
-          onTerminalDriverChanged: () => () => {}
+          onTerminalDriverChanged: () => () => {},
+          onBrowserDriverChanged: () => () => {}
         },
         ssh: {
           listTargets: () => Promise.resolve([]),
@@ -490,6 +547,8 @@ describe('useIpcEvents updater integration', () => {
     const revealWorktreeInSidebar = vi.fn()
     const setTabCustomTitle = vi.fn()
     const queueTabStartupCommand = vi.fn()
+    const updateTabPtyId = vi.fn()
+    const setTabLayout = vi.fn()
     const replyTerminalCreate = vi.fn()
     const dispatchEvent = vi.fn()
     const storeState = {
@@ -503,8 +562,11 @@ describe('useIpcEvents updater integration', () => {
       revealWorktreeInSidebar,
       setTabCustomTitle,
       queueTabStartupCommand,
+      updateTabPtyId,
+      setTabLayout,
       tabsByWorktree: {} as Record<string, { id: string; ptyId?: string | null; title?: string }[]>,
       ptyIdsByTabId: {} as Record<string, string[]>,
+      terminalLayoutsByTabId: {} as Record<string, unknown>,
       fetchRepos: vi.fn(),
       fetchWorktrees: vi.fn(),
       activeModal: null,
@@ -539,6 +601,9 @@ describe('useIpcEvents updater integration', () => {
             ptyId?: string
             activate?: boolean
             tabId?: string
+            leafId?: string
+            splitFromLeafId?: string
+            splitDirection?: 'horizontal' | 'vertical'
           }) => void)
         | null
     } = { current: null }
@@ -548,6 +613,7 @@ describe('useIpcEvents updater integration', () => {
             requestId: string
             worktreeId?: string
             afterTabId?: string
+            targetGroupId?: string
             command?: string
             title?: string
             activate?: boolean
@@ -629,6 +695,9 @@ describe('useIpcEvents updater integration', () => {
               ptyId?: string
               activate?: boolean
               tabId?: string
+              leafId?: string
+              splitFromLeafId?: string
+              splitDirection?: 'horizontal' | 'vertical'
             }) => void
           ) => {
             createTerminalListenerRef.current = listener
@@ -639,6 +708,7 @@ describe('useIpcEvents updater integration', () => {
               requestId: string
               worktreeId?: string
               afterTabId?: string
+              targetGroupId?: string
               command?: string
               title?: string
               activate?: boolean
@@ -653,7 +723,9 @@ describe('useIpcEvents updater integration', () => {
           onFocusTerminal: () => () => {},
           onFocusEditorTab: () => () => {},
           onCloseSessionTab: () => () => {},
+          onMoveSessionTab: () => () => {},
           onOpenFileFromMobile: () => () => {},
+          onOpenDiffFromMobile: () => () => {},
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
@@ -696,8 +768,10 @@ describe('useIpcEvents updater integration', () => {
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
           getTerminalDrivers: () => Promise.resolve([]),
+          getBrowserDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
-          onTerminalDriverChanged: () => () => {}
+          onTerminalDriverChanged: () => () => {},
+          onBrowserDriverChanged: () => () => {}
         },
         ssh: {
           listTargets: () => Promise.resolve([]),
@@ -752,12 +826,13 @@ describe('useIpcEvents updater integration', () => {
     requestTerminalCreateListenerRef.current({
       requestId: 'req-renderer-backed',
       worktreeId: 'wt-2',
+      targetGroupId: 'group-left',
       title: 'Codex',
       command: 'codex',
       activate: false
     })
 
-    expect(createTab).toHaveBeenCalledWith('wt-2', undefined, undefined, { activate: false })
+    expect(createTab).toHaveBeenCalledWith('wt-2', 'group-left', undefined, { activate: false })
     expect(setActiveView).not.toHaveBeenCalled()
     expect(setActiveWorktree).not.toHaveBeenCalled()
     expect(setActiveTabType).not.toHaveBeenCalled()
@@ -840,6 +915,97 @@ describe('useIpcEvents updater integration', () => {
       tabId: 'tab-existing',
       title: 'Terminal 1'
     })
+
+    storeState.tabsByWorktree = {
+      'wt-2': [{ id: 'tab-existing', ptyId: 'pty-bg', title: 'Terminal 1' }]
+    }
+    storeState.ptyIdsByTabId = { 'tab-existing': ['pty-bg'] }
+    storeState.terminalLayoutsByTabId = {
+      'tab-existing': {
+        root: { type: 'leaf', leafId: 'leaf-source' },
+        activeLeafId: 'leaf-source',
+        expandedLeafId: null,
+        ptyIdsByLeafId: { 'leaf-source': 'pty-bg' }
+      }
+    }
+    createTab.mockClear()
+    updateTabPtyId.mockClear()
+    setTabLayout.mockClear()
+    replyTerminalCreate.mockClear()
+    createTerminalListenerRef.current({
+      requestId: 'req-split',
+      worktreeId: 'wt-2',
+      ptyId: 'pty-split',
+      tabId: 'tab-existing',
+      leafId: 'leaf-split',
+      splitFromLeafId: 'leaf-source',
+      splitDirection: 'vertical'
+    })
+
+    expect(createTab).not.toHaveBeenCalled()
+    expect(updateTabPtyId).toHaveBeenCalledWith('tab-existing', 'pty-split')
+    expect(setTabLayout).toHaveBeenCalledWith('tab-existing', {
+      root: {
+        type: 'split',
+        direction: 'vertical',
+        first: { type: 'leaf', leafId: 'leaf-source' },
+        second: { type: 'leaf', leafId: 'leaf-split' },
+        ratio: 0.5
+      },
+      activeLeafId: 'leaf-split',
+      expandedLeafId: null,
+      ptyIdsByLeafId: {
+        'leaf-source': 'pty-bg',
+        'leaf-split': 'pty-split'
+      }
+    })
+    expect(dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'orca-split-terminal-pane',
+        detail: {
+          tabId: 'tab-existing',
+          paneRuntimeId: -1,
+          direction: 'vertical',
+          sourceLeafId: 'leaf-source',
+          newLeafId: 'leaf-split',
+          ptyId: 'pty-split'
+        }
+      })
+    )
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-split',
+      tabId: 'tab-existing',
+      title: 'Terminal 1'
+    })
+
+    const splitLayout = {
+      root: {
+        type: 'split',
+        direction: 'vertical',
+        first: { type: 'leaf', leafId: 'leaf-source' },
+        second: { type: 'leaf', leafId: 'leaf-split' },
+        ratio: 0.5
+      },
+      activeLeafId: 'leaf-split',
+      expandedLeafId: null,
+      ptyIdsByLeafId: {
+        'leaf-source': 'pty-bg',
+        'leaf-split': 'pty-split'
+      }
+    }
+    storeState.ptyIdsByTabId = { 'tab-existing': ['pty-bg', 'pty-split'] }
+    storeState.terminalLayoutsByTabId = { 'tab-existing': splitLayout }
+    updateTabPtyId.mockClear()
+    setTabLayout.mockClear()
+    createTerminalListenerRef.current({
+      worktreeId: 'wt-2',
+      ptyId: 'pty-split',
+      tabId: 'tab-existing',
+      leafId: 'leaf-split'
+    })
+
+    expect(updateTabPtyId).toHaveBeenCalledWith('tab-existing', 'pty-split')
+    expect(setTabLayout).toHaveBeenCalledWith('tab-existing', splitLayout)
   })
 })
 
@@ -970,7 +1136,9 @@ describe('useIpcEvents browser tab close routing', () => {
           onFocusTerminal: () => () => {},
           onFocusEditorTab: () => () => {},
           onCloseSessionTab: () => () => {},
+          onMoveSessionTab: () => () => {},
           onOpenFileFromMobile: () => () => {},
+          onOpenDiffFromMobile: () => () => {},
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
@@ -1033,8 +1201,10 @@ describe('useIpcEvents browser tab close routing', () => {
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
           getTerminalDrivers: () => Promise.resolve([]),
+          getBrowserDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
-          onTerminalDriverChanged: () => () => {}
+          onTerminalDriverChanged: () => () => {},
+          onBrowserDriverChanged: () => () => {}
         },
         agentStatus: { onSet: () => () => {} }
       }
@@ -1177,7 +1347,9 @@ describe('useIpcEvents browser tab close routing', () => {
           onFocusTerminal: () => () => {},
           onFocusEditorTab: () => () => {},
           onCloseSessionTab: () => () => {},
+          onMoveSessionTab: () => () => {},
           onOpenFileFromMobile: () => () => {},
+          onOpenDiffFromMobile: () => () => {},
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
@@ -1240,8 +1412,10 @@ describe('useIpcEvents browser tab close routing', () => {
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
           getTerminalDrivers: () => Promise.resolve([]),
+          getBrowserDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
-          onTerminalDriverChanged: () => () => {}
+          onTerminalDriverChanged: () => () => {},
+          onBrowserDriverChanged: () => () => {}
         },
         agentStatus: { onSet: () => () => {} }
       }
@@ -1379,7 +1553,9 @@ describe('useIpcEvents browser tab close routing', () => {
           onFocusTerminal: () => () => {},
           onFocusEditorTab: () => () => {},
           onCloseSessionTab: () => () => {},
+          onMoveSessionTab: () => () => {},
           onOpenFileFromMobile: () => () => {},
+          onOpenDiffFromMobile: () => () => {},
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
@@ -1442,8 +1618,10 @@ describe('useIpcEvents browser tab close routing', () => {
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
           getTerminalDrivers: () => Promise.resolve([]),
+          getBrowserDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
-          onTerminalDriverChanged: () => () => {}
+          onTerminalDriverChanged: () => () => {},
+          onBrowserDriverChanged: () => () => {}
         },
         agentStatus: { onSet: () => () => {} }
       }
@@ -1599,7 +1777,9 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onFocusTerminal: () => () => {},
           onFocusEditorTab: () => () => {},
           onCloseSessionTab: () => () => {},
+          onMoveSessionTab: () => () => {},
           onOpenFileFromMobile: () => () => {},
+          onOpenDiffFromMobile: () => () => {},
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
@@ -1653,8 +1833,10 @@ describe('useIpcEvents CLI-created worktree activation', () => {
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
           getTerminalDrivers: () => Promise.resolve([]),
+          getBrowserDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
-          onTerminalDriverChanged: () => () => {}
+          onTerminalDriverChanged: () => () => {},
+          onBrowserDriverChanged: () => () => {}
         },
         agentStatus: { onSet: () => () => {} }
       }
@@ -1796,7 +1978,9 @@ describe('useIpcEvents agent status snapshot integration', () => {
           onFocusTerminal: () => () => {},
           onFocusEditorTab: () => () => {},
           onCloseSessionTab: () => () => {},
+          onMoveSessionTab: () => () => {},
           onOpenFileFromMobile: () => () => {},
+          onOpenDiffFromMobile: () => () => {},
           onCloseTerminal: () => () => {},
           onSleepWorktree: () => () => {},
           onNewBrowserTab: () => () => {},
@@ -1837,8 +2021,10 @@ describe('useIpcEvents agent status snapshot integration', () => {
         runtime: {
           getTerminalFitOverrides: () => Promise.resolve([]),
           getTerminalDrivers: () => Promise.resolve([]),
+          getBrowserDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
-          onTerminalDriverChanged: () => () => {}
+          onTerminalDriverChanged: () => () => {},
+          onBrowserDriverChanged: () => () => {}
         },
         ssh: {
           listTargets: () => Promise.resolve([]),

@@ -22,19 +22,37 @@ function viewWorktreeDiff(worktreeId: string): void {
   state.setRightSidebarOpen(true)
 }
 
-export async function runWorktreeDeletesSequentially(
-  targets: readonly Pick<Worktree, 'id' | 'displayName'>[]
+export async function runWorktreeDeletesInParallel(
+  targets: readonly Pick<Worktree, 'id' | 'displayName' | 'repoId'>[]
 ): Promise<string[]> {
-  const deletedIds: string[] = []
+  // Why: `git worktree remove`/`prune`/`branch -D` mutate repo-wide ref state
+  // and contend on `.git/packed-refs.lock` and per-worktree HEAD.lock. Running
+  // every target through Promise.all races those locks on the same repo and
+  // intermittently fails one or more deletes. Serialize per repoId while
+  // still letting deletes across different repos run concurrently.
+  const groups = new Map<string, (typeof targets)[number][]>()
   for (const target of targets) {
-    // Why: git worktree removals for one repo contend on git lock files.
-    // Running the user-selected batch sequentially avoids partial lock races.
-    const deleted = await runWorktreeDeleteWithToast(target.id, target.displayName)
-    if (deleted) {
-      deletedIds.push(target.id)
+    const group = groups.get(target.repoId)
+    if (group) {
+      group.push(target)
+    } else {
+      groups.set(target.repoId, [target])
     }
   }
-  return deletedIds
+  const groupResults = await Promise.all(
+    Array.from(groups.values()).map(async (group) => {
+      const deletedInGroup: string[] = []
+      for (const target of group) {
+        const deleted = await runWorktreeDeleteWithToast(target.id, target.displayName)
+        if (deleted) {
+          deletedInGroup.push(target.id)
+        }
+      }
+      return deletedInGroup
+    })
+  )
+  const deletedSet = new Set(groupResults.flat())
+  return targets.filter((target) => deletedSet.has(target.id)).map((target) => target.id)
 }
 
 /**
@@ -181,7 +199,7 @@ export function runWorktreeBatchDelete(
     targets.length === 1 &&
     (state.settings?.skipDeleteWorktreeConfirm ?? false)
   if (skipConfirm) {
-    void runWorktreeDeletesSequentially(targets).then((deletedIds) => {
+    void runWorktreeDeletesInParallel(targets).then((deletedIds) => {
       if (deletedIds.length > 0) {
         options.onDeleted?.(deletedIds)
       }

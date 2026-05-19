@@ -74,6 +74,81 @@ async function focusActiveTerminal(page: Page): Promise<void> {
   })
 }
 
+async function enableKittyKeyboardReporting(page: Page, flags: number): Promise<void> {
+  await page.evaluate(async (flags) => {
+    const state = window.__store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId =
+      state?.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    if (!pane) {
+      throw new Error('No active terminal pane for kitty keyboard setup')
+    }
+    await new Promise<void>((resolve) => {
+      pane.terminal.write(`\x1b[=${flags}u`, resolve)
+    })
+  }, flags)
+}
+
+async function pressShiftedRussianLayoutKey(page: Page): Promise<{
+  keydownDefaultPrevented: boolean
+  keypressSent: boolean
+  keyupSent: boolean
+}> {
+  return page.evaluate(() => {
+    const textarea = document.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null
+    if (!textarea) {
+      throw new Error('No xterm helper textarea to receive keyboard input')
+    }
+    textarea.focus()
+
+    const keydown = new KeyboardEvent('keydown', {
+      key: 'Ф',
+      code: 'KeyA',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true
+    })
+    Object.defineProperty(keydown, 'keyCode', { get: () => 65 })
+    Object.defineProperty(keydown, 'which', { get: () => 65 })
+    textarea.dispatchEvent(keydown)
+
+    if (keydown.defaultPrevented) {
+      return { keydownDefaultPrevented: true, keypressSent: false, keyupSent: false }
+    }
+
+    const keypress = new KeyboardEvent('keypress', {
+      key: 'Ф',
+      code: 'KeyA',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true
+    })
+    Object.defineProperty(keypress, 'keyCode', { get: () => 1060 })
+    Object.defineProperty(keypress, 'charCode', { get: () => 1060 })
+    Object.defineProperty(keypress, 'which', { get: () => 1060 })
+    textarea.dispatchEvent(keypress)
+
+    const keyup = new KeyboardEvent('keyup', {
+      key: 'Ф',
+      code: 'KeyA',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true
+    })
+    Object.defineProperty(keyup, 'keyCode', { get: () => 65 })
+    Object.defineProperty(keyup, 'which', { get: () => 65 })
+    textarea.dispatchEvent(keyup)
+
+    return { keydownDefaultPrevented: false, keypressSent: true, keyupSent: true }
+  })
+}
+
 // Why: handleRequestClosePane pops a "Close Terminal?" dialog when the pane
 // reports a running child process. Under E2E, a freshly split pane's
 // proc.process is briefly unset so the check returns true spuriously. Click
@@ -270,5 +345,32 @@ test.describe('Terminal Shortcuts', () => {
     await expect(orcaPage.locator('[data-terminal-search-root]').first()).toBeHidden({
       timeout: 3_000
     })
+  })
+
+  test('Shift with Russian layout text reaches the PTY as Cyrillic under kitty keyboard reporting', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    await installMainProcessPtyWriteSpy(electronApp)
+    await enableKittyKeyboardReporting(orcaPage, 31)
+    await clearPtyWriteLog(electronApp)
+
+    const dispatch = await pressShiftedRussianLayoutKey(orcaPage)
+
+    expect(dispatch).toEqual({
+      keydownDefaultPrevented: false,
+      keypressSent: true,
+      keyupSent: true
+    })
+    await expect
+      .poll(async () => (await getPtyWrites(electronApp)).some((write) => write.includes('Ф')), {
+        timeout: 5_000,
+        message: 'Shift+Russian layout text did not reach the PTY as Cyrillic'
+      })
+      .toBe(true)
+    const writes = await getPtyWrites(electronApp)
+    const joinedWrites = writes.join('')
+    expect(joinedWrites).not.toContain('\x1b[97:1060;2;1060u')
+    expect(joinedWrites).not.toContain('\x1b[97:1060;2:3u')
   })
 })

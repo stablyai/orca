@@ -11,6 +11,7 @@ export type SshConfigHost = {
   user?: string
   identityFile?: string
   proxyCommand?: string
+  proxyUseFdpass?: boolean
   proxyJump?: string
 }
 
@@ -83,6 +84,9 @@ export function parseSshConfig(content: string): SshConfigHost[] {
         break
       case 'proxycommand':
         current.proxyCommand = value
+        break
+      case 'proxyusefdpass':
+        current.proxyUseFdpass = value.toLowerCase() === 'yes'
         break
       case 'proxyjump':
         current.proxyJump = value
@@ -160,6 +164,7 @@ export type SshResolvedConfig = {
   identityFile: string[]
   forwardAgent: boolean
   proxyCommand?: string
+  proxyUseFdpass: boolean
   proxyJump?: string
 }
 
@@ -215,6 +220,7 @@ export function parseSshGOutput(stdout: string): SshResolvedConfig {
     identityFile: identityFiles,
     forwardAgent: map.get('forwardagent') === 'yes',
     proxyCommand,
+    proxyUseFdpass: map.get('proxyusefdpass') === 'yes',
     proxyJump
   }
 }

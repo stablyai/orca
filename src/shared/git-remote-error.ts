@@ -64,6 +64,17 @@ export function normalizeGitErrorMessage(error: unknown, operation?: GitRemoteOp
     return 'Branch has no upstream. Publish the branch first.'
   }
 
+  if (
+    raw.includes('Your local changes to the following files would be overwritten') ||
+    raw.includes('Your local changes would be overwritten')
+  ) {
+    return 'Pull would overwrite local changes. Commit, stash, or discard them before pulling.'
+  }
+
+  if (raw.includes('untracked working tree files would be overwritten')) {
+    return 'Pull would overwrite untracked files. Move, remove, or add them before pulling.'
+  }
+
   // Fallthrough: extract only the tail stderr line. `raw` was already
   // credential-scrubbed at the top of the function, so no further scrub needed.
   return extractTailLine(raw)

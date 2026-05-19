@@ -116,6 +116,7 @@ import { createSettingsSlice } from './settings'
 import { createGitHubSlice } from './github'
 import { createHostedReviewSlice } from './hosted-review'
 import { createLinearSlice } from './linear'
+import { createPreflightSlice } from './preflight'
 import { createEditorSlice } from './editor'
 import { createStatsSlice } from './stats'
 import { createMemorySlice } from './memory'
@@ -145,6 +146,7 @@ function createTestStore() {
     ...createGitHubSlice(...a),
     ...createHostedReviewSlice(...a),
     ...createLinearSlice(...a),
+    ...createPreflightSlice(...a),
     ...createEditorSlice(...a),
     ...createStatsSlice(...a),
     ...createMemorySlice(...a),
@@ -698,6 +700,168 @@ describe('terminal slice behaviors', () => {
     const tab = store.getState().tabsByWorktree[worktreeId][0]
     expect(tab.ptyId).toBe('pty-1')
     expect(store.getState().ptyIdsByTabId['tab-1']).toEqual(['pty-1', 'pty-2'])
+  })
+
+  it('preserves unrelated worktree tab arrays when recording a spawned PTY', () => {
+    const store = createTestStore()
+    const targetWorktreeId = 'repo1::/path/wt1'
+    const otherWorktreeId = 'repo1::/path/wt2'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: targetWorktreeId, repoId: 'repo1', path: '/path/wt1' }),
+          makeWorktree({ id: otherWorktreeId, repoId: 'repo1', path: '/path/wt2' })
+        ]
+      },
+      tabsByWorktree: {
+        [targetWorktreeId]: [makeTab({ id: 'tab-1', worktreeId: targetWorktreeId })],
+        [otherWorktreeId]: [makeTab({ id: 'tab-2', worktreeId: otherWorktreeId })]
+      }
+    })
+
+    const before = store.getState().tabsByWorktree
+    const beforeOtherTabs = before[otherWorktreeId]
+
+    store.getState().updateTabPtyId('tab-1', 'pty-fresh')
+
+    const after = store.getState().tabsByWorktree
+    expect(after[targetWorktreeId]).not.toBe(before[targetWorktreeId])
+    expect(after[otherWorktreeId]).toBe(beforeOtherTabs)
+  })
+
+  it('does not persist worktree activity when attaching a mirrored remote runtime PTY', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/path/wt1', lastActivityAt: 1000 })
+        ]
+      },
+      tabsByWorktree: {
+        [worktreeId]: [makeTab({ id: 'tab-1', worktreeId })]
+      }
+    })
+
+    store.getState().updateTabPtyId('tab-1', 'remote:web-env@@terminal-1')
+
+    expect(store.getState().worktreesByRepo.repo1[0].lastActivityAt).toBe(1000)
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+  })
+
+  it('preserves unrelated worktree tab arrays when clearing a PTY', () => {
+    const store = createTestStore()
+    const targetWorktreeId = 'repo1::/path/wt1'
+    const otherWorktreeId = 'repo1::/path/wt2'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: targetWorktreeId, repoId: 'repo1', path: '/path/wt1' }),
+          makeWorktree({ id: otherWorktreeId, repoId: 'repo1', path: '/path/wt2' })
+        ]
+      },
+      tabsByWorktree: {
+        [targetWorktreeId]: [
+          makeTab({ id: 'tab-1', worktreeId: targetWorktreeId, ptyId: 'pty-fresh' })
+        ],
+        [otherWorktreeId]: [makeTab({ id: 'tab-2', worktreeId: otherWorktreeId })]
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['pty-fresh']
+      }
+    })
+
+    const before = store.getState().tabsByWorktree
+    const beforeOtherTabs = before[otherWorktreeId]
+
+    store.getState().clearTabPtyId('tab-1', 'pty-fresh')
+
+    const after = store.getState().tabsByWorktree
+    expect(after[targetWorktreeId]).not.toBe(before[targetWorktreeId])
+    expect(after[otherWorktreeId]).toBe(beforeOtherTabs)
+  })
+
+  it('changes only the owning worktree tab array when recording a PTY in a large session', () => {
+    const store = createTestStore()
+    const worktreeCount = 125
+    const targetIndex = 73
+    const worktrees = Array.from({ length: worktreeCount }, (_, index) =>
+      makeWorktree({
+        id: `repo1::/path/wt-${index}`,
+        repoId: 'repo1',
+        path: `/path/wt-${index}`
+      })
+    )
+    const tabsByWorktree = Object.fromEntries(
+      worktrees.map((worktree, index) => [
+        worktree.id,
+        [makeTab({ id: `tab-${index}`, worktreeId: worktree.id })]
+      ])
+    )
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: worktrees },
+      tabsByWorktree
+    })
+
+    const targetTabId = `tab-${targetIndex}`
+    const before = store.getState().tabsByWorktree
+
+    store.getState().updateTabPtyId(targetTabId, 'pty-fresh')
+
+    const after = store.getState().tabsByWorktree
+    const changedWorktreeIds = Object.keys(after).filter(
+      (worktreeId) => after[worktreeId] !== before[worktreeId]
+    )
+    expect(changedWorktreeIds).toEqual([`repo1::/path/wt-${targetIndex}`])
+  })
+
+  it('does not persist worktree activity when clearing a mirrored remote runtime PTY', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/path/wt1', lastActivityAt: 1000 })
+        ]
+      },
+      tabsByWorktree: {
+        [worktreeId]: [
+          makeTab({
+            id: 'tab-1',
+            worktreeId,
+            ptyId: 'remote:web-env@@terminal-1'
+          })
+        ]
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['remote:web-env@@terminal-1']
+      }
+    })
+
+    store.getState().clearTabPtyId('tab-1', 'remote:web-env@@terminal-1')
+
+    expect(store.getState().worktreesByRepo.repo1[0].lastActivityAt).toBe(1000)
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })
 
   // Why: clicking a worktree in the sidebar triggers a generation bump on

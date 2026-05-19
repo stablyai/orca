@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { OrcaHooks, Repo, RepoHookSettings, SetupRunPolicy } from '../../../../shared/types'
+import type { OrcaHooks, Repo, RepoHookSettings } from '../../../../shared/types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import { REPO_COLORS } from '../../../../shared/constants'
 import { Button } from '../ui/button'
@@ -7,7 +7,6 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
 import { Trash2 } from 'lucide-react'
-import { DEFAULT_REPO_HOOK_SETTINGS } from './SettingsConstants'
 import { BaseRefPicker } from './BaseRefPicker'
 import { RepositoryHooksSection } from './RepositoryHooksSection'
 import { McpConfigSection } from './McpConfigSection'
@@ -103,9 +102,23 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
             keywords: [repo.displayName, 'hooks', 'setup', 'archive', 'yaml']
           },
           {
-            title: 'Legacy Repo-Local Hooks',
-            description: 'Older setup and archive hook scripts stored in local repo settings.',
-            keywords: [repo.displayName, 'legacy', 'fallback', 'hooks']
+            title: 'Local Settings Commands',
+            description: 'Personal setup and archive commands stored locally on this machine.',
+            keywords: [repo.displayName, 'local', 'personal', 'hooks']
+          },
+          {
+            title: 'Command Source',
+            description:
+              'Choose whether Orca runs commands from `orca.yaml`, local Settings, or both.',
+            keywords: [
+              repo.displayName,
+              'local',
+              'orca.yaml',
+              'shared',
+              'both',
+              'source',
+              'authoritative'
+            ]
           },
           {
             title: 'When to Run Setup',
@@ -160,18 +173,7 @@ export function RepositoryPane({
     setConfirmingRemove(repoId)
   }
 
-  const updateSelectedRepoHookSettings = (
-    updates: Partial<Pick<RepoHookSettings, 'setupRunPolicy'>>
-  ) => {
-    // Why: persisted repos may still carry legacy UI hook fields from the old dual-source
-    // design. We preserve them when saving so existing local state stays loadable, but the
-    // product now treats `orca.yaml` as the only supported hook definition surface.
-    const nextSettings: RepoHookSettings = {
-      ...DEFAULT_REPO_HOOK_SETTINGS,
-      ...repo.hookSettings,
-      ...updates
-    }
-
+  const updateSelectedRepoHookSettings = (nextSettings: RepoHookSettings) => {
     updateRepo(repo.id, {
       hookSettings: nextSettings
     })
@@ -189,22 +191,6 @@ export function RepositoryPane({
     window.setTimeout(() => setCopiedTemplate(false), 1500)
   }
 
-  const handleClearLegacyHooks = () => {
-    // Why: legacy repo-local commands are still honored as a compatibility fallback.
-    // Keep them visible and removable here so the settings surface matches runtime behavior.
-    updateRepo(repo.id, {
-      hookSettings: {
-        ...DEFAULT_REPO_HOOK_SETTINGS,
-        ...repo.hookSettings,
-        scripts: {
-          ...DEFAULT_REPO_HOOK_SETTINGS.scripts,
-          setup: '',
-          archive: ''
-        }
-      }
-    })
-  }
-
   const allEntries = getRepositoryPaneSearchEntries(repo)
   const identityEntries = allEntries.filter((entry) =>
     ['Display Name', 'Badge Color', 'Default Worktree Base', 'Remove Repo'].includes(entry.title)
@@ -215,7 +201,8 @@ export function RepositoryPane({
   const hooksEntries = allEntries.filter((entry) =>
     [
       'orca.yaml hooks',
-      'Legacy Repo-Local Hooks',
+      'Local Settings Commands',
+      'Command Source',
       'When to Run Setup',
       'Custom GitHub Issue Command'
     ].includes(entry.title)
@@ -340,10 +327,7 @@ export function RepositoryPane({
         mayNeedUpdate={mayNeedUpdate}
         copiedTemplate={copiedTemplate}
         onCopyTemplate={() => void handleCopyTemplate()}
-        onClearLegacyHooks={handleClearLegacyHooks}
-        onUpdateSetupRunPolicy={(policy) =>
-          updateSelectedRepoHookSettings({ setupRunPolicy: policy as SetupRunPolicy })
-        }
+        onUpdateHookSettings={updateSelectedRepoHookSettings}
       />
     ) : null
   ].filter(Boolean)

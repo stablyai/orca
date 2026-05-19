@@ -33,7 +33,7 @@ export function selectTaskPageWorkItemsCacheEntries(
   limit: number,
   query: string
 ): (CacheEntry<GitHubWorkItem[]> | undefined)[] {
-  return repos.map((repo) => workItemsCache[workItemsCacheKey(repo.path, limit, query)])
+  return repos.map((repo) => workItemsCache[workItemsCacheKey(repo.id, limit, query)])
 }
 
 export function buildTaskPageRepoSourceState(
@@ -49,6 +49,39 @@ export function buildTaskPageRepoSourceState(
       error: entry?.error ?? null
     }
   })
+}
+
+function taskPageWorkItemCacheKey(item: GitHubWorkItem): string {
+  return `${item.repoId}\u0000${item.id}`
+}
+
+export function reconcileTaskPagePagesWithWorkItemsCache(
+  pages: readonly GitHubWorkItem[][],
+  entries: readonly (CacheEntry<GitHubWorkItem[]> | undefined)[]
+): GitHubWorkItem[][] {
+  const cachedItems = new Map<string, GitHubWorkItem>()
+  for (const entry of entries) {
+    for (const item of entry?.data ?? []) {
+      cachedItems.set(taskPageWorkItemCacheKey(item), item)
+    }
+  }
+
+  let changed = false
+  const nextPages = pages.map((page) => {
+    let pageChanged = false
+    const nextPage = page.map((item) => {
+      const cached = cachedItems.get(taskPageWorkItemCacheKey(item))
+      if (!cached || cached === item) {
+        return item
+      }
+      pageChanged = true
+      changed = true
+      return cached
+    })
+    return pageChanged ? nextPage : page
+  })
+
+  return changed ? nextPages : (pages as GitHubWorkItem[][])
 }
 
 export function findTaskPageDialogWorkItem(

@@ -301,14 +301,19 @@ function RightSidebarInner(): React.JSX.Element {
         {activityBarPosition === 'top' ? (
           /* ── Top activity bar: horizontal icon row ── */
           <ContextMenu>
-            <div className="flex items-center justify-between border-b border-border h-[36px] min-h-[36px] pl-2 pr-1 right-sidebar-header-inset right-sidebar-header-drag">
+            <div className="flex items-center border-b border-border h-[36px] min-h-[36px] pl-2 pr-1 right-sidebar-header-inset right-sidebar-header-drag overflow-hidden">
               <TooltipProvider delayDuration={400}>
                 <ContextMenuTrigger asChild>
-                  <div className="flex items-center right-sidebar-header-no-drag">
-                    {activityBarIcons}
+                  <div className="right-sidebar-activity-strip flex min-w-0 flex-1 items-center overflow-x-auto overflow-y-hidden scrollbar-sleek right-sidebar-header-no-drag">
+                    {/* Why: Windows window controls can leave less safe header width
+                        than the activity buttons need; scroll inside the safe area
+                        instead of letting buttons extend under the overlay. */}
+                    <div className="flex shrink-0">{activityBarIcons}</div>
                   </div>
                 </ContextMenuTrigger>
-                <div className="flex items-center">{closeButton}</div>
+                <div className="flex shrink-0 items-center right-sidebar-header-no-drag">
+                  {closeButton}
+                </div>
               </TooltipProvider>
             </div>
             <ActivityBarPositionMenu

@@ -74,7 +74,9 @@ import {
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
 } from './runtime/sync-runtime-graph'
+import { useWebSessionTabsSync } from './runtime/web-session-tabs-sync'
 import { useGlobalFileDrop } from './hooks/useGlobalFileDrop'
+import { useRadixBodyPointerEventsRecovery } from './hooks/useRadixBodyPointerEventsRecovery'
 import { registerUpdaterBeforeUnloadBypass } from './lib/updater-beforeunload'
 import {
   buildWorkspaceSessionPayload,
@@ -95,6 +97,7 @@ import {
 import type { VirtualizedScrollAnchor } from './hooks/useVirtualizedScrollAnchor'
 import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
 import type { OnboardingState } from '../../shared/types'
+import { getFeatureTipsAppOpenDecision } from './components/feature-tips/feature-tip-startup-gate'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')
@@ -179,6 +182,7 @@ const WorkspaceCleanupDialog = lazy(
   () => import('./components/workspace-cleanup/WorkspaceCleanupDialog')
 )
 const FeatureWallModal = lazy(() => import('./components/feature-wall/FeatureWallModal'))
+const FeatureTipsModal = lazy(() => import('./components/feature-tips/FeatureTipsModal'))
 // Why: lazy-loaded so the WebP asset + overlay module aren't fetched unless
 // the user opts into the experimental flag.
 const PetOverlay = lazy(() => import('./components/pet/PetOverlay'))
@@ -219,6 +223,8 @@ function applyRemoteWorkspacePatchStatus(
 
 function App(): React.JSX.Element {
   useUnreadDockBadge()
+  useRadixBodyPointerEventsRecovery()
+  useWebSessionTabsSync()
   const [floatingTerminalOpen, setFloatingTerminalOpen] = useState(false)
 
   // Why: Zustand actions are referentially stable, but each individual
@@ -246,6 +252,7 @@ function App(): React.JSX.Element {
       setHydrationSucceeded: s.setHydrationSucceeded,
       openModal: s.openModal,
       closeModal: s.closeModal,
+      markFeatureTipsSeen: s.markFeatureTipsSeen,
       toggleRightSidebar: s.toggleRightSidebar,
       setRightSidebarOpen: s.setRightSidebarOpen,
       setRightSidebarTab: s.setRightSidebarTab,
@@ -259,6 +266,7 @@ function App(): React.JSX.Element {
 
   const activeView = useAppStore((s) => s.activeView)
   const activeModal = useAppStore((s) => s.activeModal)
+  const featureTipsSeenIds = useAppStore((s) => s.featureTipsSeenIds)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   // Why: App swaps the sidebar between workspace and landing layouts when the
   // active workspace is slept/deleted. Keep virtualized scroll memory above
@@ -363,6 +371,9 @@ function App(): React.JSX.Element {
   const [collapsedSidebarHeaderWidth, setCollapsedSidebarHeaderWidth] = useState(0)
   const [mountedLazyModalIds, setMountedLazyModalIds] = useState(() => new Set<string>())
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
+  const featureTipsPromptedThisSessionRef = useRef(false)
+  const featureTipsSuppressedByOnboardingThisSessionRef = useRef(false)
+  const [onboardingSettingsDetour, setOnboardingSettingsDetour] = useState(false)
 
   // Subscribe to IPC push events
   useIpcEvents()
@@ -392,6 +403,45 @@ function App(): React.JSX.Element {
 
   useEffect(() => {
     return onOnboardingReopened(setOnboarding)
+  }, [])
+
+  useEffect(() => {
+    const featureTipsDecision = getFeatureTipsAppOpenDecision({
+      activeModal,
+      featureTipsSeenIds,
+      onboarding,
+      persistedUIReady,
+      promptedThisSession: featureTipsPromptedThisSessionRef.current,
+      settings,
+      suppressedByOnboardingThisSession: featureTipsSuppressedByOnboardingThisSessionRef.current
+    })
+
+    if (featureTipsDecision.kind === 'suppress-for-onboarding') {
+      // Why: first-download users should finish onboarding without a second
+      // education modal appearing later in the same first-run session.
+      featureTipsSuppressedByOnboardingThisSessionRef.current = true
+      return
+    }
+
+    if (featureTipsDecision.kind !== 'open') {
+      return
+    }
+
+    featureTipsPromptedThisSessionRef.current = true
+    // Why: once a tip is visible, app quit/crash should not make it reappear
+    // on the next launch just because the user never clicked a dismiss button.
+    actions.markFeatureTipsSeen([featureTipsDecision.tipId])
+    actions.openModal('feature-tips', { source: 'app_open', tipId: featureTipsDecision.tipId })
+  }, [activeModal, actions, featureTipsSeenIds, onboarding, persistedUIReady, settings])
+
+  useEffect(() => {
+    if (activeView !== 'settings' || !shouldShowOnboarding(onboarding)) {
+      setOnboardingSettingsDetour(false)
+    }
+  }, [activeView, onboarding])
+
+  const beginOnboardingSettingsDetour = useCallback(() => {
+    setOnboardingSettingsDetour(true)
   }, [])
 
   // Why: sidebar open/close flips width instantaneously. useLayoutEffect
@@ -689,10 +739,14 @@ function App(): React.JSX.Element {
         state.tabsByWorktree === previousState.tabsByWorktree &&
         state.groupsByWorktree === previousState.groupsByWorktree &&
         state.activeGroupIdByWorktree === previousState.activeGroupIdByWorktree &&
+        state.layoutByWorktree === previousState.layoutByWorktree &&
         state.unifiedTabsByWorktree === previousState.unifiedTabsByWorktree &&
         state.tabBarOrderByWorktree === previousState.tabBarOrderByWorktree &&
         state.activeFileId === previousState.activeFileId &&
         state.activeFileIdByWorktree === previousState.activeFileIdByWorktree &&
+        state.browserTabsByWorktree === previousState.browserTabsByWorktree &&
+        state.browserPagesByWorkspace === previousState.browserPagesByWorkspace &&
+        state.activeBrowserTabIdByWorktree === previousState.activeBrowserTabIdByWorktree &&
         state.openFiles === previousState.openFiles &&
         state.editorDrafts === previousState.editorDrafts &&
         state.activeTabId === previousState.activeTabId &&
@@ -1102,7 +1156,8 @@ function App(): React.JSX.Element {
       activeModal !== 'worktree-palette' &&
       activeModal !== 'new-workspace-composer' &&
       activeModal !== 'workspace-cleanup' &&
-      activeModal !== 'feature-wall'
+      activeModal !== 'feature-wall' &&
+      activeModal !== 'feature-tips'
     ) {
       return
     }
@@ -1493,6 +1548,7 @@ function App(): React.JSX.Element {
           {mountedLazyModalIds.has('quick-open') ? <QuickOpen /> : null}
           {mountedLazyModalIds.has('worktree-palette') ? <WorktreeJumpPalette /> : null}
           {mountedLazyModalIds.has('feature-wall') ? <FeatureWallModal /> : null}
+          {mountedLazyModalIds.has('feature-tips') ? <FeatureTipsModal /> : null}
         </Suspense>
         {/* Why: mount PetOverlay only when the experimental flag is on AND
           the user hasn't hit "Hide pet" in the status-bar menu. Both
@@ -1518,9 +1574,13 @@ function App(): React.JSX.Element {
         <SshPassphraseDialog />
         <DeleteWorktreeDialog />
         <CrashReportDialog />
-        {onboarding && shouldShowOnboarding(onboarding) ? (
+        {onboarding && shouldShowOnboarding(onboarding) && !onboardingSettingsDetour ? (
           <Suspense fallback={null}>
-            <OnboardingFlow onboarding={onboarding} onOnboardingChange={setOnboarding} />
+            <OnboardingFlow
+              onboarding={onboarding}
+              onOnboardingChange={setOnboarding}
+              onSettingsDetourStart={beginOnboardingSettingsDetour}
+            />
           </Suspense>
         ) : null}
         <DictationController />

@@ -6,10 +6,7 @@ type MarkdownPreviewTarget = Pick<OpenFile, 'mode' | 'diffSource'> & {
 }
 
 const MARKDOWN_EDIT_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
-const MARKDOWN_DIFF_VIEW_MODES = [
-  'source',
-  'preview'
-] as const satisfies readonly MarkdownViewMode[]
+const MARKDOWN_DIFF_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
 const MERMAID_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
 const CSV_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
 const NOTEBOOK_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
@@ -70,6 +67,9 @@ export function getMarkdownViewModes(target: MarkdownPreviewTarget): readonly Ma
 }
 
 export function getDefaultMarkdownViewMode(target: MarkdownPreviewTarget): MarkdownViewMode {
+  if (target.language === 'markdown' && target.mode === 'diff') {
+    return 'source'
+  }
   const modes = getMarkdownViewModes(target)
   return modes.includes('rich') ? 'rich' : 'source'
 }

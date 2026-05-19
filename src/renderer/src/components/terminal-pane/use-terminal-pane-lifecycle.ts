@@ -14,6 +14,7 @@ import type { LinkHandlerDeps } from './terminal-link-handlers'
 import type {
   GlobalSettings,
   SetupSplitDirection,
+  TerminalTab,
   TerminalLayoutSnapshot
 } from '../../../../shared/types'
 import type { EventProps } from '../../../../shared/telemetry-events'
@@ -33,7 +34,7 @@ import {
 } from './terminal-appearance'
 import { parseOsc52 } from './osc52-clipboard'
 import { parseOsc7 } from './parse-osc7'
-import { shouldBypassXtermKeydown } from './xterm-bypass-policy'
+import { shouldBypassXtermKeyboardEvent } from './xterm-bypass-policy'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
@@ -140,6 +141,17 @@ type UseTerminalPaneLifecycleDeps = {
   setPaneCount: React.Dispatch<React.SetStateAction<number>>
 }
 
+export function suppressIntentionalPaneCloseExit(
+  transport: Pick<PtyTransport, 'getPtyId'> | null | undefined,
+  suppressPtyExit: (ptyId: string) => void
+): string | null {
+  const ptyId = transport?.getPtyId() ?? null
+  if (ptyId) {
+    suppressPtyExit(ptyId)
+  }
+  return ptyId
+}
+
 function terminalSelectionExceedsPrimaryLimit(terminal: Terminal): boolean {
   const range = terminal.getSelectionPosition()
   if (!range) {
@@ -181,6 +193,23 @@ export function splitPaneWithOneShotStartup<TPane>(
   } finally {
     deps.startup = null
   }
+}
+
+export function shouldDetachPaneTransportOnUnmount(args: {
+  tabStillExists: boolean
+  tabId: string
+  ptyId: string | null
+  worktreeTabs: readonly TerminalTab[] | undefined
+}): boolean {
+  if (!args.ptyId) {
+    return false
+  }
+  if (args.tabStillExists) {
+    return true
+  }
+  return Boolean(
+    args.worktreeTabs?.some((tab) => tab.id !== args.tabId && tab.ptyId === args.ptyId)
+  )
 }
 
 export function useTerminalPaneLifecycle({
@@ -472,20 +501,18 @@ export function useTerminalPaneLifecycle({
         })
         osc7DisposablesRef.current.set(pane.id, osc7Disposable)
 
-        // Why: let clipboard chords bypass xterm's kitty CSI-u encoder.
+        // Why: let host-handled keys bypass xterm's kitty CSI-u encoder.
         // With vtExtensions.kittyKeyboard on, a CLI that activates progressive
         // enhancement (Codex does, Claude Code does not) makes xterm encode
         // Cmd+C as a CSI-u sequence with cancel=true, which preventDefaults
         // the keydown and suppresses Chromium's native copy event — so the
-        // selection never reaches the clipboard. Returning false here short-
-        // circuits xterm's _keyDown before the encoder runs, letting the
-        // browser copy pipeline and Electron menu accelerators fire normally.
+        // selection never reaches the clipboard. The same hook also bypasses
+        // matching keyups so kitty release sequences do not leak after a
+        // bypassed press. Returning false here short-circuits xterm before the
+        // encoder runs, letting the browser and Electron paths fire normally.
         // See xterm-bypass-policy.ts for the rule derivation (Ghostty/VS Code).
         pane.terminal.attachCustomKeyEventHandler((e) => {
-          if (e.type !== 'keydown') {
-            return true
-          }
-          return !shouldBypassXtermKeydown(e, {
+          return !shouldBypassXtermKeyboardEvent(e, {
             isMac: navigator.userAgent.includes('Mac'),
             hasSelection: pane.terminal.hasSelection()
           })
@@ -590,6 +617,12 @@ export function useTerminalPaneLifecycle({
           // source pane) must override the tab-level ptyDeps.cwd (worktree
           // root) so Cmd+D splits boot in the live cwd.
           ...(spawnHints?.cwd ? { cwd: spawnHints.cwd } : {}),
+          restoredPtyIdByLeafId: spawnHints?.ptyId
+            ? {
+                ...ptyDeps.restoredPtyIdByLeafId,
+                [pane.leafId]: spawnHints.ptyId
+              }
+            : ptyDeps.restoredPtyIdByLeafId,
           restoredLeafId: pane.leafId
         })
         // Why: connectPanePty receives a spread copy of ptyDeps, so the
@@ -659,8 +692,14 @@ export function useTerminalPaneLifecycle({
           panePtyBindings.delete(paneId)
         }
         if (transport) {
-          const ptyId = transport.getPtyId()
+          const ptyId = suppressIntentionalPaneCloseExit(
+            transport,
+            useAppStore.getState().suppressPtyExit
+          )
           if (ptyId) {
+            // Why: user/CLI pane closes intentionally tear down this PTY after
+            // PaneManager has already promoted the sibling. Suppress that exit
+            // so the last-surviving pane is not mistaken for an exited tab.
             syncPanePtyLayoutBinding(paneId, null)
             clearTabPtyId(tabId, ptyId)
           }
@@ -824,6 +863,10 @@ export function useTerminalPaneLifecycle({
         // Merge (not replace) so we don't discard any concurrent state
         // updates from onPaneClosed that React may have batched.
         setPaneTitles((prev) => ({ ...prev, ...restored }))
+        // Why: the lifecycle immediately persists a fresh layout after restore,
+        // before React state has flushed. Keep the ref in sync now so that
+        // persist preserves restored titles instead of rewriting them away.
+        paneTitlesRef.current = { ...paneTitlesRef.current, ...restored }
       }
     }
 
@@ -928,12 +971,25 @@ export function useTerminalPaneLifecycle({
       if (!mgr) {
         return
       }
+      if (detail.newLeafId && mgr.getNumericIdForLeaf(detail.newLeafId) !== null) {
+        return
+      }
+      const sourcePaneId = detail.sourceLeafId
+        ? (mgr.getNumericIdForLeaf(detail.sourceLeafId) ?? detail.paneRuntimeId)
+        : detail.paneRuntimeId
+      if (sourcePaneId < 0) {
+        return
+      }
+      const splitOptions = {
+        ...(detail.newLeafId ? { leafId: detail.newLeafId } : {}),
+        ...(detail.ptyId ? { ptyId: detail.ptyId } : {})
+      }
       if (detail.command) {
         splitPaneWithOneShotStartup(ptyDeps, { command: detail.command }, () =>
-          mgr.splitPane(detail.paneRuntimeId, detail.direction)
+          mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
         )
       } else {
-        mgr.splitPane(detail.paneRuntimeId, detail.direction)
+        mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
       }
     }
     window.addEventListener(SPLIT_TERMINAL_PANE_EVENT, onCliSplitPane)
@@ -965,10 +1021,9 @@ export function useTerminalPaneLifecycle({
     return () => {
       window.removeEventListener(SPLIT_TERMINAL_PANE_EVENT, onCliSplitPane)
       window.removeEventListener(CLOSE_TERMINAL_PANE_EVENT, onCliClosePane)
+      const currentWorktreeTabs = useAppStore.getState().tabsByWorktree[worktreeId]
       const tabStillExists = Boolean(
-        useAppStore
-          .getState()
-          .tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
+        currentWorktreeTabs?.some((candidate) => candidate.id === tabId)
       )
       unregisterRuntimeTab()
       if (resizeRaf !== null) {
@@ -992,11 +1047,21 @@ export function useTerminalPaneLifecycle({
       }
       mouseHideDisposables.clear()
       for (const transport of paneTransports.values()) {
-        if (tabStillExists && transport.getPtyId()) {
+        const ptyId = transport.getPtyId()
+        if (
+          shouldDetachPaneTransportOnUnmount({
+            tabStillExists,
+            tabId,
+            ptyId,
+            worktreeTabs: currentWorktreeTabs
+          })
+        ) {
           // Why: moving a terminal tab between groups currently rehomes the
           // React subtree, which unmounts this TerminalPane even though the tab
-          // itself is still alive. Detaching preserves the running PTY so the
-          // remounted pane can reattach without restarting the user's shell.
+          // itself is still alive. Web session mirroring can also replace a
+          // temporary local tab with a host surface that owns the same PTY.
+          // Detaching preserves the running PTY so the remounted pane can
+          // reattach without restarting the user's shell.
           // Transports that have not attached yet still have no PTY ID; those
           // must be destroyed so any in-flight spawn resolves into a killed PTY
           // instead of reviving a stale binding after unmount.

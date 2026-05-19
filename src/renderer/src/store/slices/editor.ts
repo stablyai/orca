@@ -101,6 +101,7 @@ export type ConflictReviewState = {
   source: 'live-summary' | 'combined-diff-exclusion'
   snapshotTimestamp: number
   entries: ConflictReviewEntry[]
+  selectedFileId?: string
 }
 
 export type CombinedDiffSkippedConflict = {
@@ -231,6 +232,7 @@ export type EditorSlice = {
   rightSidebarOpen: boolean
   rightSidebarWidth: number
   rightSidebarTab: RightSidebarTab
+  rightSidebarTabByWorktree: Record<string, RightSidebarTab>
   activityBarPosition: ActivityBarPosition
   toggleRightSidebar: () => void
   setRightSidebarOpen: (open: boolean) => void
@@ -327,6 +329,13 @@ export type EditorSlice = {
     areaFilter?: string
   ) => void
   openConflictFile: (
+    worktreeId: string,
+    worktreePath: string,
+    entry: GitStatusEntry,
+    language: string
+  ) => void
+  openConflictReviewFile: (
+    reviewFileId: string,
     worktreeId: string,
     worktreePath: string,
     entry: GitStatusEntry,
@@ -699,11 +708,18 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   rightSidebarOpen: false,
   rightSidebarWidth: 280,
   rightSidebarTab: 'explorer',
+  rightSidebarTabByWorktree: {},
   activityBarPosition: 'top',
   toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
   setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
   setRightSidebarWidth: (width) => set({ rightSidebarWidth: width }),
-  setRightSidebarTab: (tab) => set({ rightSidebarTab: tab }),
+  setRightSidebarTab: (tab) =>
+    set((s) => ({
+      rightSidebarTab: tab,
+      rightSidebarTabByWorktree: s.activeWorktreeId
+        ? { ...s.rightSidebarTabByWorktree, [s.activeWorktreeId]: tab }
+        : s.rightSidebarTabByWorktree
+    })),
   setActivityBarPosition: (position) => set({ activityBarPosition: position }),
 
   // File explorer
@@ -748,11 +764,15 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     }),
   pendingExplorerReveal: null,
   revealInExplorer: (worktreeId, filePath) =>
-    set({
+    set((s) => ({
       rightSidebarOpen: true,
       rightSidebarTab: 'explorer',
+      rightSidebarTabByWorktree: {
+        ...s.rightSidebarTabByWorktree,
+        [worktreeId]: 'explorer'
+      },
       pendingExplorerReveal: { worktreeId, filePath, requestId: Date.now() }
-    }),
+    })),
   clearPendingExplorerReveal: () => set({ pendingExplorerReveal: null }),
 
   // Open files
@@ -1852,6 +1872,104 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       }
     })
     void openWorkspaceEditorItem(get(), absolutePath, worktreeId, entry.path, 'editor')
+  },
+
+  openConflictReviewFile: (reviewFileId, worktreeId, worktreePath, entry, language) => {
+    const absolutePath = joinPath(worktreePath, entry.path)
+    const reviewTab = (get().unifiedTabsByWorktree?.[worktreeId] ?? []).find(
+      (tab) => tab.entityId === reviewFileId && tab.contentType === 'conflict-review'
+    )
+    set((s) => {
+      const conflict = toOpenConflictMetadata(entry)
+      const existing = s.openFiles.find((f) => f.id === absolutePath)
+      const nextTracked =
+        entry.conflictStatus === 'unresolved' && entry.conflictKind
+          ? {
+              ...s.trackedConflictPathsByWorktree[worktreeId],
+              [entry.path]: entry.conflictKind
+            }
+          : s.trackedConflictPathsByWorktree[worktreeId]
+
+      if (!conflict) {
+        return s
+      }
+
+      const nextOpenFiles = existing
+        ? s.openFiles.map((f) =>
+            f.id === absolutePath
+              ? {
+                  ...f,
+                  mode: 'edit' as const,
+                  language,
+                  relativePath: entry.path,
+                  filePath: absolutePath,
+                  conflict,
+                  diffSource: undefined,
+                  skippedConflicts: undefined,
+                  conflictReview: undefined
+                }
+              : f.id === reviewFileId && f.conflictReview
+                ? {
+                    ...f,
+                    conflictReview: {
+                      ...f.conflictReview,
+                      selectedFileId: absolutePath
+                    }
+                  }
+                : f
+          )
+        : [
+            ...s.openFiles.map((f) =>
+              f.id === reviewFileId && f.conflictReview
+                ? {
+                    ...f,
+                    conflictReview: {
+                      ...f.conflictReview,
+                      selectedFileId: absolutePath
+                    }
+                  }
+                : f
+            ),
+            {
+              id: absolutePath,
+              filePath: absolutePath,
+              relativePath: entry.path,
+              worktreeId,
+              language,
+              isDirty: false,
+              mode: 'edit' as const,
+              conflict
+            }
+          ]
+
+      return {
+        openFiles: nextOpenFiles,
+        activeFileId: reviewFileId,
+        activeTabType: 'editor',
+        activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: reviewFileId },
+        activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' },
+        trackedConflictPathsByWorktree:
+          nextTracked === s.trackedConflictPathsByWorktree[worktreeId]
+            ? s.trackedConflictPathsByWorktree
+            : { ...s.trackedConflictPathsByWorktree, [worktreeId]: nextTracked }
+      }
+    })
+
+    // Why: the conflict file needs a normal editor backing tab for save/close
+    // flows, but selecting it from Conflict Review must keep the review tab
+    // visible. Create the backing tab beside the review tab, then restore focus.
+    void openWorkspaceEditorItem(
+      get(),
+      absolutePath,
+      worktreeId,
+      entry.path,
+      'editor',
+      undefined,
+      reviewTab?.groupId
+    )
+    if (reviewTab) {
+      get().activateTab?.(reviewTab.id)
+    }
   },
 
   // Why: Review conflicts is launched from Source Control into the editor area,

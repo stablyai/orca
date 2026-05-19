@@ -280,6 +280,7 @@ export default function SortableTab({
           {isEditing ? (
             <Input
               ref={renameInputRef}
+              data-tab-rename-input="true"
               value={renameValue}
               aria-label={`Rename tab ${tab.customTitle ?? tab.title}`}
               onChange={(event) => setRenameValue(event.target.value)}

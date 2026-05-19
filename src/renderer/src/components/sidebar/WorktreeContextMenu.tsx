@@ -34,6 +34,7 @@ import { isFolderRepo } from '../../../../shared/repo-kind'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import { getLineageRenderInfo } from './worktree-list-groups'
 import { getWorkspaceStatus, getWorkspaceStatusVisualMeta } from './workspace-status'
@@ -72,6 +73,18 @@ function shouldSuppressContextMenuFollowUpClick(contextMenuOpenedAt: number, now
   return (
     now - contextMenuOpenedAt >= 0 && now - contextMenuOpenedAt <= CONTEXT_MENU_CLICK_SUPPRESSION_MS
   )
+}
+
+function hasSleepableWorkspaceActivity(
+  worktreeId: string,
+  tabsByWorktree: Record<string, { id: string }[]>,
+  ptyIdsByTabId: Record<string, string[]>,
+  browserTabsByWorktree: Record<string, { id: string }[]>
+): boolean {
+  const tabs = tabsByWorktree[worktreeId] ?? []
+  const hasLiveTerminal = tabs.some((tab) => tabHasLivePty(ptyIdsByTabId, tab.id))
+  const hasBrowser = (browserTabsByWorktree[worktreeId] ?? []).length > 0
+  return hasLiveTerminal || hasBrowser
 }
 
 function findSidebarVirtualRowByKey(sidebar: Element, rowKey: string): HTMLElement | null {
@@ -167,12 +180,9 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const isMultiContext = activeContextWorktrees.length > 1
   const sleepableWorktrees = useMemo(
     () =>
-      activeContextWorktrees.filter((item) => {
-        const tabs = tabsByWorktree[item.id] ?? []
-        const hasLiveTerminal = tabs.some((tab) => ptyIdsByTabId[tab.id] != null)
-        const hasBrowser = (browserTabsByWorktree[item.id] ?? []).length > 0
-        return hasLiveTerminal || hasBrowser
-      }),
+      activeContextWorktrees.filter((item) =>
+        hasSleepableWorkspaceActivity(item.id, tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree)
+      ),
     [activeContextWorktrees, browserTabsByWorktree, ptyIdsByTabId, tabsByWorktree]
   )
   const deletingContext = useMemo(
@@ -542,6 +552,7 @@ export default WorktreeContextMenu
 export {
   CLOSE_ALL_CONTEXT_MENUS_EVENT,
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR,
+  hasSleepableWorkspaceActivity,
   shouldSuppressContextMenuFollowUpClick,
   shouldIgnoreNestedWorktreeContextMenuScope
 }

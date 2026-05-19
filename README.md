@@ -22,9 +22,7 @@
   <a href="#install"><strong>Download 🐋</strong></a>
 </p>
 
-<p align="center">
-  <img src="docs/assets/file-drag.gif" alt="Orca Screenshot" width="800" />
-</p>
+![Orca worktree IDE demo showing Claude Code, Codex, and OpenCode running in parallel across isolated git worktrees](docs/assets/file-drag.gif)
 
 ## Supported Agents
 
@@ -107,7 +105,7 @@ Control your agents from your phone.
 </p>
 
 - **iOS:** [Download from App Store](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [Download from GH release](https://github.com/stablyai/orca/releases/tag/mobile-v0.0.7)
+- **Android:** [Download from GH release](https://github.com/stablyai/orca/releases/tag/mobile-v0.0.8)
 
 ---
 

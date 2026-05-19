@@ -61,6 +61,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalScrollbackBytes: 10_000_000,
     openLinksInApp: false,
     rightSidebarOpenByDefault: true,
+    sourceControlViewMode: 'list',
     showTitlebarAppName: true,
     showTasksButton: true,
     floatingTerminalEnabled: false,

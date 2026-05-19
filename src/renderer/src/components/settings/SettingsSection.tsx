@@ -41,16 +41,14 @@ export function SettingsSection({
       id={id}
       data-settings-section={id}
       className={
-        // Why: these sections already contain many internal borders and cards, so a lone divider
-        // line gets lost in the visual noise. Giving each section its own padded surface creates a
-        // clear outer silhouette that still works when the inner content changes.
-        className ??
-        'scroll-mt-6 space-y-8 rounded-2xl border border-border/60 bg-card/35 px-6 py-6 shadow-sm'
+        // Why: each pane already owns internal cards and borders. A stronger unframed section
+        // break keeps top-level settings pages distinct without nesting everything in cards.
+        className ?? 'scroll-mt-6 space-y-6 border-b-2 border-foreground/20 pb-10 last:border-b-0'
       }
     >
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
-          <h2 className="flex items-center gap-2 text-xl font-semibold">
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
             {title}
             {badge ? (
               <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">

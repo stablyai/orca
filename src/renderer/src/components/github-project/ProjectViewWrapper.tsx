@@ -24,6 +24,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import GitHubItemDialog, { type GitHubItemDialogProjectOrigin } from '@/components/GitHubItemDialog'
 import { GhAuthErrorHelp } from '@/components/github-project/GhAuthErrorHelp'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
@@ -46,8 +47,11 @@ import type { GitHubWorkItem } from '../../../../shared/types'
 import ProjectPicker, { type ResolvedProjectSelection } from './ProjectPicker'
 import ProjectViewList from './ProjectViewList'
 import ProjectItemSlugDialog from './ProjectItemSlugDialog'
+import { filterProjectTableRowsByOpenRepos } from './project-row-filtering'
 
 type Props = Record<string, never>
+
+const ORCA_FEATURE_REQUEST_URL = 'https://github.com/stablyai/orca/issues/new'
 
 function listProjectViewsForRuntime(
   settings: Parameters<typeof getActiveRuntimeTarget>[0],
@@ -70,7 +74,8 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
   const patchProjectIssueOrPr = useAppStore((s) => s.patchProjectIssueOrPr)
   const patchProjectRowIssueType = useAppStore((s) => s.patchProjectRowIssueType)
   const addRepoFromStore = useAppStore((s) => s.addRepo)
-  const lookupSlug = useRepoSlugIndex()
+  const repos = useAppStore((s) => s.repos)
+  const { lookupSlug, ready: slugIndexReady } = useRepoSlugIndex()
 
   const activeProject = settings?.githubProjects?.activeProject ?? null
   const lastViewByProject = useMemo(
@@ -79,6 +84,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
   )
 
   const [loading, setLoading] = useState(false)
+  const fetchRunIdRef = useRef(0)
   const [error, setError] = useState<{
     error: GitHubProjectViewError
     totalCount?: number
@@ -106,6 +112,8 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
 
   const doFetch = useCallback(
     async (selection: ResolvedProjectSelection, force = false, queryOverride?: string) => {
+      const runId = fetchRunIdRef.current + 1
+      fetchRunIdRef.current = runId
       setLoading(true)
       setError(null)
       try {
@@ -123,7 +131,11 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
           setError({ error: res.error, totalCount: res.totalCount })
         }
       } finally {
-        setLoading(false)
+        // Why: a manual refresh can overlap with a tab/search fetch; an older
+        // request finishing first must not clear the newer refresh indicator.
+        if (fetchRunIdRef.current === runId) {
+          setLoading(false)
+        }
       }
     },
     [fetchProjectViewTable]
@@ -288,6 +300,31 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
   const table: GitHubProjectTable | null = currentCacheKey
     ? (projectViewCache[currentCacheKey]?.data ?? null)
     : null
+  const filteredTable = useMemo(
+    () => (table && slugIndexReady ? filterProjectTableRowsByOpenRepos(table, lookupSlug) : null),
+    [table, slugIndexReady, lookupSlug]
+  )
+  const [lastFilteredTable, setLastFilteredTable] = useState<{
+    cacheKey: string
+    table: GitHubProjectTable
+  } | null>(null)
+
+  useEffect(() => {
+    if (!currentCacheKey || !table) {
+      setLastFilteredTable(null)
+      return
+    }
+    if (slugIndexReady && filteredTable) {
+      setLastFilteredTable({ cacheKey: currentCacheKey, table: filteredTable })
+    }
+  }, [currentCacheKey, table, slugIndexReady, filteredTable])
+
+  const visibleTable =
+    slugIndexReady || !currentCacheKey
+      ? filteredTable
+      : lastFilteredTable?.cacheKey === currentCacheKey
+        ? lastFilteredTable.table
+        : null
 
   // Parent-dropped toast, once per table.
   useEffect(() => {
@@ -332,6 +369,28 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
     repo: string
     url: string | null
   } | null>(null)
+  const liveRepoIds = useMemo(() => new Set(repos.map((repo) => repo.id)), [repos])
+
+  useEffect(() => {
+    if (dialogRepoItem && !liveRepoIds.has(dialogRepoItem.repoId)) {
+      setDialogRepoItem(null)
+    }
+  }, [dialogRepoItem, liveRepoIds])
+
+  useEffect(() => {
+    if (!slugIndexReady) {
+      return
+    }
+    if (
+      slugDialog &&
+      lookupSlug(`${slugDialog.origin.owner}/${slugDialog.origin.repo}`).length > 0
+    ) {
+      setSlugDialog(null)
+    }
+    if (repoNotInOrca && lookupSlug(`${repoNotInOrca.owner}/${repoNotInOrca.repo}`).length > 0) {
+      setRepoNotInOrca(null)
+    }
+  }, [slugIndexReady, lookupSlug, slugDialog, repoNotInOrca])
 
   const buildWorkItem = useCallback(
     (row: GitHubProjectRow, repoId: string): GitHubWorkItem | null => {
@@ -530,7 +589,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex flex-none items-center gap-2 border-b border-border/50 bg-muted/30 px-3 py-2">
+      <div className="flex min-w-0 flex-none flex-wrap items-center gap-2 border-b border-border/50 bg-muted/30 px-3 py-2">
         <ProjectPicker
           activeProject={
             activeProject && table
@@ -597,7 +656,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
         {table ? (
           <>
             <span className="ml-auto rounded-full border border-border/50 bg-background px-2 py-0.5 text-[11px]">
-              {table.totalCount}
+              {visibleTable?.totalCount ?? table.totalCount}
             </span>
             {selectedViewUrl ? (
               <Button
@@ -613,7 +672,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
             <Button
               variant="outline"
               size="icon"
-              className="h-7 w-7"
+              className="h-7 w-7 cursor-pointer disabled:pointer-events-auto disabled:cursor-wait"
               onClick={() => {
                 if (!activeProject || !currentCacheKey) {
                   return
@@ -634,7 +693,10 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
                   currentAppliedOverride
                 )
               }}
-              aria-label="Refresh"
+              disabled={loading}
+              aria-busy={loading}
+              aria-label={loading ? 'Refreshing' : 'Refresh'}
+              title={loading ? 'Refreshing' : 'Refresh'}
             >
               <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
             </Button>
@@ -646,9 +708,6 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
         ? (() => {
             const projectKey = `${activeProject.ownerType}:${activeProject.owner}:${activeProject.number}`
             const views = viewListByProject[projectKey] ?? []
-            if (views.length === 0) {
-              return null
-            }
             const activeViewId = lastViewByProject[projectKey]?.viewId ?? null
             return (
               <ViewTabStrip
@@ -679,9 +738,9 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
             }
           }}
         />
-      ) : table ? (
+      ) : visibleTable ? (
         <ProjectViewList
-          table={table}
+          table={visibleTable}
           onOpenDialog={handleOpenDialog}
           onEditField={handleEditField}
           onEditAssignees={(row, add, remove) => void handleEditAssignees(row, add, remove)}
@@ -850,7 +909,7 @@ function ProjectSearchInput({
   }, [])
 
   return (
-    <div className="relative min-w-[280px] flex-1 max-w-xl">
+    <div className="relative min-w-0 max-w-xl flex-1 basis-64">
       <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
       <Input
         ref={inputRef}
@@ -913,17 +972,23 @@ function ViewTabStrip({
   // tabs are flat text; active gets a card background + outline. Disabled
   // (non-table) layouts stay visible at low opacity.
   return (
-    <div className="flex flex-none items-end gap-1 overflow-x-auto border-b border-border/50 bg-muted/20 px-3 pt-3">
+    <div className="project-view-tab-strip flex min-h-[41px] min-w-0 flex-none items-end gap-1 overflow-x-auto overflow-y-hidden border-b border-border/50 bg-muted/20 px-3 pt-3">
       {views.map((v) => {
         const supported = v.layout === 'TABLE_LAYOUT'
         const active = v.id === activeViewId
+        const layoutLabel =
+          v.layout === 'BOARD_LAYOUT'
+            ? 'Board'
+            : v.layout === 'ROADMAP_LAYOUT'
+              ? 'Roadmap'
+              : 'Table'
         const Icon =
           v.layout === 'BOARD_LAYOUT'
             ? KanbanSquare
             : v.layout === 'ROADMAP_LAYOUT'
               ? MapIcon
               : TableIcon
-        return (
+        const tab = (
           <button
             key={v.id}
             type="button"
@@ -932,22 +997,53 @@ function ViewTabStrip({
             title={
               supported
                 ? v.name
-                : `${v.name} — ${
-                    v.layout === 'BOARD_LAYOUT' ? 'Board' : 'Roadmap'
-                  } layouts aren't supported in Orca yet. Open this view on GitHub to see it, or switch to a Table view to work with it here.`
+                : `${v.name} — Orca doesn't support ${layoutLabel} project views yet. File a feature request at ${ORCA_FEATURE_REQUEST_URL}.`
             }
             className={cn(
-              'inline-flex shrink-0 items-center gap-1.5 rounded-t-md border-x border-t px-3 py-1.5 text-xs',
+              'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-md border-x border-t px-3 py-1.5 text-xs',
               active
                 ? '-mb-px border-border/60 bg-background text-foreground'
                 : 'border-transparent text-muted-foreground hover:bg-background/40 hover:text-foreground',
               !supported &&
-                'cursor-not-allowed opacity-50 hover:bg-transparent hover:text-muted-foreground'
+                'pointer-events-none cursor-not-allowed opacity-50 hover:bg-transparent hover:text-muted-foreground'
             )}
           >
             <Icon className="size-3.5 shrink-0 text-muted-foreground" />
             <span className={cn(active && 'font-medium')}>{v.name}</span>
           </button>
+        )
+        if (supported) {
+          return tab
+        }
+        const unsupportedMessage = `Orca doesn't support ${layoutLabel} project views yet.`
+        return (
+          <HoverCard key={v.id} openDelay={200} closeDelay={100}>
+            <HoverCardTrigger asChild>
+              <span
+                tabIndex={0}
+                aria-label={`${v.name}. ${unsupportedMessage} File a feature request at ${ORCA_FEATURE_REQUEST_URL}.`}
+                className="inline-flex shrink-0 cursor-not-allowed rounded-t-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                {tab}
+              </span>
+            </HoverCardTrigger>
+            <HoverCardContent side="bottom" align="start" sideOffset={8} className="w-72 p-3">
+              <div className="space-y-2">
+                <p className="text-xs leading-5 text-muted-foreground">
+                  {unsupportedMessage} Switch to a Table view to work with this project in Orca.
+                </p>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="outline"
+                  onClick={() => void window.api.shell.openUrl(ORCA_FEATURE_REQUEST_URL)}
+                >
+                  File feature request
+                  <ExternalLink className="size-3" />
+                </Button>
+              </div>
+            </HoverCardContent>
+          </HoverCard>
         )
       })}
     </div>

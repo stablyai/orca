@@ -2179,6 +2179,43 @@ describe('Endpoint file lifecycle', () => {
     }
   })
 
+  it('buildPtyEnv includes namespaced ORCA_AGENT_HOOK_ENDPOINT for development servers', async () => {
+    const server = new AgentHookServer()
+    await server.start({
+      env: 'development',
+      userDataPath,
+      endpointNamespace: 'com.stablyai.orca.dev.test123'
+    })
+    try {
+      const env = server.buildPtyEnv()
+      expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBe(server.endpointFilePath)
+      expect(env.ORCA_AGENT_HOOK_ENDPOINT).toContain('com.stablyai.orca.dev.test123')
+      expect(env.ORCA_AGENT_HOOK_PORT).toBeTruthy()
+      expect(env.ORCA_AGENT_HOOK_TOKEN).toBeTruthy()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('keeps endpoint files separate for parallel dev namespaces', async () => {
+    const firstServer = new AgentHookServer()
+    const secondServer = new AgentHookServer()
+    await firstServer.start({ env: 'development', userDataPath, endpointNamespace: 'dev-a' })
+    await secondServer.start({ env: 'development', userDataPath, endpointNamespace: 'dev-b' })
+    try {
+      expect(firstServer.endpointFilePath).not.toBe(secondServer.endpointFilePath)
+      expect(firstServer.buildPtyEnv().ORCA_AGENT_HOOK_ENDPOINT).toBe(firstServer.endpointFilePath)
+      expect(secondServer.buildPtyEnv().ORCA_AGENT_HOOK_ENDPOINT).toBe(
+        secondServer.endpointFilePath
+      )
+      expect(existsSync(firstServer.endpointFilePath!)).toBe(true)
+      expect(existsSync(secondServer.endpointFilePath!)).toBe(true)
+    } finally {
+      firstServer.stop()
+      secondServer.stop()
+    }
+  })
+
   it('buildPtyEnv omits ORCA_AGENT_HOOK_ENDPOINT when no userDataPath was provided', async () => {
     // Why: the endpoint file is opt-in via start({ userDataPath }). In tests
     // and in the packaged main-process path where userData is unset for any

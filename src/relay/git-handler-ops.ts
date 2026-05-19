@@ -23,8 +23,10 @@ export async function readBlobAtOid(
   oid: string,
   filePath: string
 ): Promise<{ content: string; isBinary: boolean }> {
+  // Why: Git's `<oid>:<path>` syntax expects forward slashes even on Windows.
+  const gitPath = filePath.replace(/\\/g, '/')
   try {
-    const buf = await gitBuffer(['show', `${oid}:${filePath}`], cwd)
+    const buf = await gitBuffer(['show', '--end-of-options', `${oid}:${gitPath}`], cwd)
     return bufferToBlob(buf, filePath)
   } catch {
     return { content: '', isBinary: false }
@@ -36,8 +38,10 @@ export async function readBlobAtIndex(
   cwd: string,
   filePath: string
 ): Promise<{ content: string; isBinary: boolean }> {
+  // Why: Git's `:<path>` syntax expects forward slashes even on Windows.
+  const gitPath = filePath.replace(/\\/g, '/')
   try {
-    const buf = await gitBuffer(['show', `:${filePath}`], cwd)
+    const buf = await gitBuffer(['show', '--end-of-options', `:${gitPath}`], cwd)
     return bufferToBlob(buf, filePath)
   } catch {
     return { content: '', isBinary: false }

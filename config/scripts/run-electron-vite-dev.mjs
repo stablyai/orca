@@ -5,8 +5,10 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync
 } from 'node:fs'
 import net from 'node:net'
@@ -246,6 +248,86 @@ if (!useStableElectronName && process.env.ORCA_SKIP_DEV_ELECTRON_APP_PREPARE !==
 const electronViteCli =
   process.env.ORCA_ELECTRON_VITE_CLI ||
   path.join(path.dirname(require.resolve('electron-vite/package.json')), 'bin', 'electron-vite.js')
+const viteCli =
+  process.env.ORCA_VITE_CLI ||
+  path.join(path.dirname(require.resolve('vite/package.json')), 'bin', 'vite.js')
+
+function getMtimeMs(filePath) {
+  try {
+    return statSync(filePath).mtimeMs
+  } catch {
+    return 0
+  }
+}
+
+function getDevWebClientIndexPath() {
+  return path.join(repoRoot, 'out', 'web', 'web-index.html')
+}
+
+function latestMtimeMs(targetPath) {
+  const stat = (() => {
+    try {
+      return statSync(targetPath)
+    } catch {
+      return null
+    }
+  })()
+  if (!stat) {
+    return 0
+  }
+  if (!stat.isDirectory()) {
+    return stat.mtimeMs
+  }
+  let latest = stat.mtimeMs
+  for (const entry of readdirSync(targetPath, { withFileTypes: true })) {
+    if (entry.name === 'node_modules' || entry.name.startsWith('.')) {
+      continue
+    }
+    latest = Math.max(latest, latestMtimeMs(path.join(targetPath, entry.name)))
+  }
+  return latest
+}
+
+function isDevWebClientFresh() {
+  const outputMtime = getMtimeMs(getDevWebClientIndexPath())
+  if (outputMtime === 0) {
+    return false
+  }
+  const sourceMtime = Math.max(
+    latestMtimeMs(path.join(repoRoot, 'vite.web.config.ts')),
+    latestMtimeMs(path.join(repoRoot, 'src', 'renderer')),
+    latestMtimeMs(path.join(repoRoot, 'src', 'shared')),
+    latestMtimeMs(path.join(repoRoot, 'src', 'preload', 'api-types.ts'))
+  )
+  return sourceMtime <= outputMtime
+}
+
+function prepareDevWebClient() {
+  if (process.env.ORCA_SKIP_DEV_WEB_PREPARE === '1' || isHelpOrVersion) {
+    return
+  }
+  // Why: fresh worktrees should start Electron immediately; pairing already
+  // falls back to non-browser URLs when the optional web bundle is unavailable.
+  if (!existsSync(getDevWebClientIndexPath()) && process.env.ORCA_DEV_WEB_PREPARE !== '1') {
+    console.error(
+      '[orca-dev] Web client bundle missing; skipping pairing web build. Run `pnpm run build:web` or set ORCA_DEV_WEB_PREPARE=1 when you need browser pairing.'
+    )
+    return
+  }
+  if (isDevWebClientFresh()) {
+    return
+  }
+  console.error('[orca-dev] Building web client for pairing...')
+  execFileSync(
+    process.execPath,
+    [viteCli, 'build', '--config', path.join(repoRoot, 'vite.web.config.ts')],
+    {
+      cwd: repoRoot,
+      stdio: 'inherit',
+      env: process.env
+    }
+  )
+}
 
 // Why: every `pn dev` should be attachable from agent-browser/playwright-cli
 // without manual port juggling. Pick a best-effort deterministic port per
@@ -329,6 +411,7 @@ if (!userPassedPort && !isHelpOrVersion) {
     )
   }
 }
+prepareDevWebClient()
 const forwardedArgs = ['dev', ...forwardedRaw, ...forwardedExtras]
 const child = spawn(process.execPath, [electronViteCli, ...forwardedArgs], {
   stdio: 'inherit',

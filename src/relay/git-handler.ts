@@ -20,6 +20,7 @@ import { checkIgnoredPathsOp, detectConflictOperation, getStatusOp } from './git
 import { resolveRelayPushTarget } from './git-handler-push-target'
 import { normalizeGitErrorMessage, isNoUpstreamError } from '../shared/git-remote-error'
 import { loadGitHistoryFromExecutor } from '../shared/git-history'
+import { buildRelayCommandEnv } from './relay-command-env'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
@@ -70,6 +71,7 @@ export class GitHandler {
   ): Promise<{ stdout: string; stderr: string }> {
     return execFileAsync('git', args, {
       cwd: expandTilde(cwd),
+      env: buildRelayCommandEnv(),
       encoding: 'utf-8',
       maxBuffer: opts?.maxBuffer ?? MAX_GIT_BUFFER
     })
@@ -78,6 +80,7 @@ export class GitHandler {
   private async gitBuffer(args: string[], cwd: string): Promise<Buffer> {
     const { stdout } = (await execFileAsync('git', args, {
       cwd,
+      env: buildRelayCommandEnv(),
       encoding: 'buffer',
       maxBuffer: MAX_GIT_BUFFER
     })) as { stdout: Buffer }

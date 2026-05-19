@@ -9,6 +9,13 @@ export type VirtualizedScrollAnchor = {
 export const VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT = 'orca-record-virtualized-scroll-anchor'
 const RECORD_ANCHOR_SCROLL_IDLE_DELAY_MS = 150
 
+export function shouldCancelVirtualizedScrollOffsetRestore(args: {
+  hasDirectScrollInput?: () => boolean
+  restoring: boolean
+}): boolean {
+  return args.restoring && args.hasDirectScrollInput?.() === true
+}
+
 type UseVirtualizedScrollAnchorOptions<
   TRow,
   TScrollElement extends Element,
@@ -17,10 +24,12 @@ type UseVirtualizedScrollAnchorOptions<
   anchorRef: MutableRefObject<VirtualizedScrollAnchor>
   getItemElementKey?: (element: TItemElement) => string | null
   getRowKey: (row: TRow) => string
+  hasDirectScrollInput?: () => boolean
   itemElementSelector?: string
   rows: readonly TRow[]
   scrollElementRef: RefObject<TScrollElement | null>
   scrollOffsetRef: MutableRefObject<number>
+  shouldSkipRestore?: () => boolean
   totalSize: number
   virtualizer: Virtualizer<TScrollElement, TItemElement>
 }
@@ -41,10 +50,12 @@ export function useVirtualizedScrollAnchor<
   anchorRef,
   getItemElementKey,
   getRowKey,
+  hasDirectScrollInput,
   itemElementSelector,
   rows,
   scrollElementRef,
   scrollOffsetRef,
+  shouldSkipRestore,
   totalSize,
   virtualizer
 }: UseVirtualizedScrollAnchorOptions<TRow, TScrollElement, TItemElement>): void {
@@ -176,6 +187,19 @@ export function useVirtualizedScrollAnchor<
       recordScrollAnchor(el.scrollTop)
     }
     const onScroll = (): void => {
+      if (
+        shouldCancelVirtualizedScrollOffsetRestore({
+          hasDirectScrollInput,
+          restoring
+        })
+      ) {
+        // Why: direct wheel/touch input means the user has taken control of the
+        // viewport. Treat the current offset as intentional instead of snapping
+        // back to a stale persisted offset while restoration is still pending.
+        restoring = false
+        recordCurrentAnchor()
+        return
+      }
       if (restoring) {
         // Why: during a fresh virtualizer mount, total height may still be
         // estimate-based. Avoid persisting a browser-clamped offset as the
@@ -208,7 +232,13 @@ export function useVirtualizedScrollAnchor<
       el.removeEventListener(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, recordCurrentAnchor)
       el.removeEventListener('scroll', onScroll)
     }
-  }, [recordScrollAnchor, recordVirtualScrollAnchor, scrollElementRef, scrollOffsetRef])
+  }, [
+    recordScrollAnchor,
+    recordVirtualScrollAnchor,
+    scrollElementRef,
+    scrollOffsetRef,
+    hasDirectScrollInput
+  ])
 
   useLayoutEffect(() => {
     const anchor = anchorRef.current
@@ -219,6 +249,9 @@ export function useVirtualizedScrollAnchor<
     if (virtualizer.isScrolling) {
       // Why: remeasurement during wheel scrolling can change totalSize. Restoring
       // the anchor in that window writes scrollTop and fights the user's wheel.
+      return
+    }
+    if (shouldSkipRestore?.()) {
       return
     }
 
@@ -298,6 +331,7 @@ export function useVirtualizedScrollAnchor<
     rowIndexByKey,
     scrollElementRef,
     scrollOffsetRef,
+    shouldSkipRestore,
     totalSize,
     virtualizer,
     virtualizer.isScrolling

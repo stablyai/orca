@@ -10,6 +10,7 @@ import {
   addIssueComment,
   getIssueComments
 } from '../linear/issues'
+import { listProjects } from '../linear/projects'
 import { listTeams, getTeamStates, getTeamLabels, getTeamMembers } from '../linear/teams'
 import type { LinearListFilter } from '../linear/issues'
 import type { LinearIssueUpdate, LinearWorkspaceSelection } from '../../shared/types'
@@ -90,7 +91,14 @@ export function registerLinearHandlers(): void {
     'linear:createIssue',
     async (
       _event,
-      args: { teamId: string; title: string; description?: string; workspaceId?: string }
+      args: {
+        teamId: string
+        title: string
+        description?: string
+        workspaceId?: string
+        parentIssueId?: string
+        projectId?: string | null
+      }
     ) => {
       if (typeof args?.teamId !== 'string' || !args.teamId.trim()) {
         return { ok: false, error: 'Team ID is required' }
@@ -102,7 +110,11 @@ export function registerLinearHandlers(): void {
         args.teamId.trim(),
         args.title.trim(),
         args.description?.trim() || undefined,
-        normalizeWorkspaceId(args.workspaceId)
+        normalizeWorkspaceId(args.workspaceId),
+        {
+          parentId: typeof args.parentIssueId === 'string' ? args.parentIssueId.trim() : undefined,
+          projectId: typeof args.projectId === 'string' ? args.projectId.trim() : null
+        }
       )
     }
   )
@@ -137,10 +149,24 @@ export function registerLinearHandlers(): void {
         return { ok: false, error: 'Priority must be an integer 0-4' }
       }
       if (
+        u.estimate !== undefined &&
+        u.estimate !== null &&
+        (!Number.isInteger(u.estimate) || u.estimate < 0)
+      ) {
+        return { ok: false, error: 'Estimate must be a non-negative integer' }
+      }
+      if (
         u.labelIds !== undefined &&
         (!Array.isArray(u.labelIds) || !u.labelIds.every((id: unknown) => typeof id === 'string'))
       ) {
         return { ok: false, error: 'Label IDs must be an array of strings' }
+      }
+      if (
+        u.projectId !== undefined &&
+        u.projectId !== null &&
+        (typeof u.projectId !== 'string' || !u.projectId.trim())
+      ) {
+        return { ok: false, error: 'Invalid project ID' }
       }
       return updateIssue(args.id.trim(), args.updates, normalizeWorkspaceId(args.workspaceId))
     }
@@ -177,6 +203,17 @@ export function registerLinearHandlers(): void {
     'linear:listTeams',
     async (_event, args?: { workspaceId?: LinearWorkspaceSelection }) => {
       return listTeams(normalizeWorkspaceSelection(args?.workspaceId))
+    }
+  )
+
+  ipcMain.handle(
+    'linear:listProjects',
+    async (
+      _event,
+      args?: { query?: string; limit?: number; workspaceId?: LinearWorkspaceSelection }
+    ) => {
+      const limit = Math.min(Math.max(1, args?.limit ?? 20), 50)
+      return listProjects(args?.query, limit, normalizeWorkspaceSelection(args?.workspaceId))
     }
   )
 

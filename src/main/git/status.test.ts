@@ -213,6 +213,18 @@ describe('getDiff', () => {
     })
   })
 
+  it('normalizes Windows separators before reading git blobs', async () => {
+    gitExecFileAsyncBufferMock.mockResolvedValueOnce({ stdout: Buffer.from('index-content\n') })
+    readFileMock.mockResolvedValue(Buffer.from('working-tree-content'))
+
+    await getDiff('/repo', 'src\\file.ts', false)
+
+    expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(['show', ':src/file.ts'], {
+      cwd: '/repo',
+      maxBuffer: 10 * 1024 * 1024
+    })
+  })
+
   it('falls back to HEAD for unstaged diffs when the file is not in the index', async () => {
     gitExecFileAsyncBufferMock
       .mockRejectedValueOnce(new Error('missing index'))

@@ -37,6 +37,7 @@ import {
   requestKindSchema
 } from '../../shared/telemetry-events'
 import { isRemoteAgentHooksEnabled } from '../../shared/agent-hook-relay'
+import { createTerminalSessionStateSaveFailureMessage } from '../../shared/terminal-session-state-save-failure'
 import { readShellStartupEnvVar } from '../pty/shell-startup-env'
 import {
   isTerminalLeafId,
@@ -63,6 +64,10 @@ const ptyOwnership = new Map<string, string | null>()
 // Why: mobile clients must mirror desktop PTY geometry even when the renderer
 // cannot provide an xterm snapshot yet, such as immediately after tab creation.
 const ptySizes = new Map<string, { cols: number; rows: number }>()
+// Why: PTY data batching is window-bound, but the "recent user input" signal
+// is PTY-scoped and must be cleared by every teardown path, including SSH and
+// daemon shutdowns that do not flow through the local provider exit listener.
+const lastInputAtByPty = new Map<string, number>()
 // Why: the agent-hooks server caches per-paneKey state (last prompt, last
 // tool) that otherwise grows unbounded as panes come and go. Track the
 // spawn-time paneKey so clearProviderPtyState can clear that cache on PTY
@@ -74,6 +79,14 @@ const ptyPaneKey = new Map<string, string>()
 // back into the pane's data stream) need to find the ptyId for that paneKey.
 // Kept in lock-step with ptyPaneKey via the same spawn and teardown sites.
 const paneKeyPtyId = new Map<string, string>()
+
+const AGENT_HOOK_RUNTIME_ENV_KEYS = [
+  'ORCA_AGENT_HOOK_PORT',
+  'ORCA_AGENT_HOOK_TOKEN',
+  'ORCA_AGENT_HOOK_ENV',
+  'ORCA_AGENT_HOOK_VERSION',
+  'ORCA_AGENT_HOOK_ENDPOINT'
+] as const
 
 export function getPtyIdForPaneKey(paneKey: string): string | undefined {
   return paneKeyPtyId.get(paneKey)
@@ -300,6 +313,9 @@ export function buildPtyHostEnv(
   // must inject the loopback receiver coordinates before the agent starts.
   // Without these env vars the global hook config cannot map callbacks back
   // to the correct Orca pane.
+  for (const key of AGENT_HOOK_RUNTIME_ENV_KEYS) {
+    delete baseEnv[key]
+  }
   Object.assign(baseEnv, agentHookServer.buildPtyEnv())
 
   // Why: PI_CODING_AGENT_DIR owns Pi's full config/session root. Build a
@@ -449,6 +465,7 @@ export function clearProviderPtyState(id: string): void {
   openCodeHookService.clearPty(id)
   piTitlebarExtensionService.clearPty(id)
   ptySizes.delete(id)
+  lastInputAtByPty.delete(id)
   const paneKey = ptyPaneKey.get(id)
   const stillOwnsPaneKey = paneKey ? paneKeyPtyId.get(paneKey) === id : false
   // Why: drop the memory-collector registration so a dead PTY does not keep
@@ -619,11 +636,16 @@ export function registerPtyHandlers(
 
   // Why: batching PTY data into short flush windows (8ms ≈ half a frame)
   // reduces IPC round-trips from hundreds/sec to ~120/sec under high
-  // throughput, with no perceptible latency increase for interactive use.
+  // throughput. Keystroke echo/redraws bypass this below because agent TUIs
+  // already spend tens of ms producing their redraw.
   const pendingData = new Map<string, string>()
   const trustedTerminalHandleEnv = new Set<string>()
   let flushTimer: ReturnType<typeof setTimeout> | null = null
   const PTY_BATCH_INTERVAL_MS = 8
+  // Why: keep the immediate path bounded to keystroke-sized TUI redraws;
+  // large output and non-interactive output must still use the batcher.
+  const INTERACTIVE_OUTPUT_WINDOW_MS = 100
+  const INTERACTIVE_OUTPUT_MAX_CHARS = 1024
 
   const flushPendingData = (): void => {
     flushTimer = null
@@ -635,6 +657,14 @@ export function registerPtyHandlers(
       mainWindow.webContents.send('pty:data', { id, data })
     }
     pendingData.clear()
+  }
+
+  const clearFlushTimerIfIdle = (): void => {
+    if (pendingData.size > 0 || flushTimer === null) {
+      return
+    }
+    clearTimeout(flushTimer)
+    flushTimer = null
   }
 
   // Why: extracted so the "Restart daemon" flow can rebind against the fresh
@@ -669,7 +699,24 @@ export function registerPtyHandlers(
         return
       }
       const existing = pendingData.get(payload.id)
-      pendingData.set(payload.id, existing ? existing + payload.data : payload.data)
+      const nextData = existing ? existing + payload.data : payload.data
+      const lastInputAt = lastInputAtByPty.get(payload.id)
+      const isInteractiveOutput =
+        nextData.length <= INTERACTIVE_OUTPUT_MAX_CHARS &&
+        lastInputAt !== undefined &&
+        performance.now() - lastInputAt <= INTERACTIVE_OUTPUT_WINDOW_MS
+      if (isInteractiveOutput) {
+        pendingData.delete(payload.id)
+        clearFlushTimerIfIdle()
+        // Why: agent TUIs redraw small prompt regions after every keystroke.
+        // Waiting for the throughput batch timer adds visible input latency.
+        mainWindow.webContents.send('pty:data', {
+          id: payload.id,
+          data: nextData
+        })
+        return
+      }
+      pendingData.set(payload.id, nextData)
       if (!flushTimer) {
         flushTimer = setTimeout(flushPendingData, PTY_BATCH_INTERVAL_MS)
       }
@@ -690,6 +737,7 @@ export function registerPtyHandlers(
           mainWindow.webContents.send('pty:data', { id: payload.id, data: remaining })
           pendingData.delete(payload.id)
         }
+        lastInputAtByPty.delete(payload.id)
         mainWindow.webContents.send('pty:exit', payload)
       }
     })
@@ -1392,9 +1440,7 @@ export function registerPtyHandlers(
           if (!result.isReattach && args.connectionId && store) {
             store.removeSshRemotePtyLease(args.connectionId, result.id)
           }
-          throw new Error(
-            'Failed to save terminal session state. Check disk space and Orca data directory permissions, then try again.'
-          )
+          throw new Error(createTerminalSessionStateSaveFailureMessage())
         }
       }
       // Why: pre-signal cooperation gate — when the renderer has declared it
@@ -1548,7 +1594,12 @@ export function registerPtyHandlers(
     if (runtime?.getDriver(args.id).kind === 'mobile') {
       return
     }
-    tryGetProviderForPty(args.id)?.write(args.id, args.data)
+    const provider = ptyOwnership.has(args.id) ? tryGetProviderForPty(args.id) : undefined
+    if (!provider) {
+      return
+    }
+    lastInputAtByPty.set(args.id, performance.now())
+    provider.write(args.id, args.data)
   })
 
   // Why: resize is fire-and-forget — the renderer doesn't need a reply.

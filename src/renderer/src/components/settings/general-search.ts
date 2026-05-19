@@ -12,13 +12,13 @@ export const GENERAL_WORKSPACE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     keywords: ['nested', 'subfolder', 'directory']
   },
   {
-    title: 'Skip Delete Worktree Confirmation',
-    description: 'Delete worktrees from the context menu without a confirmation dialog.',
+    title: 'Ask Before Deleting Worktrees',
+    description: 'Show a confirmation dialog before deleting a worktree.',
     keywords: ['delete', 'worktree', 'confirm', 'dialog', 'skip', 'prompt']
   },
   {
-    title: 'Skip Delete Automation Confirmation',
-    description: 'Delete automations without a confirmation dialog.',
+    title: 'Ask Before Deleting Automations',
+    description: 'Show a confirmation dialog before deleting an automation and its run history.',
     keywords: ['delete', 'automation', 'confirm', 'dialog', 'skip', 'prompt']
   },
   {
@@ -56,7 +56,7 @@ export const GENERAL_EDITOR_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   },
   {
     title: 'Markdown Review Notes',
-    description: 'Show local markdown review note controls and the review panel.',
+    description: 'Show local markdown review note controls in rich editor mode.',
     keywords: ['markdown', 'review', 'notes', 'annotations', 'agents']
   }
 ]

@@ -58,18 +58,16 @@ type EditorPanelHeaderProps = {
   canShowMarkdownTableOfContents: boolean
   isMarkdownTableOfContentsDisabled: boolean
   showMarkdownTableOfContents: boolean
-  markdownReviewToolsEnabled: boolean
   sideBySide: boolean
   openFileState: EditorHeaderOpenFileState
   onCopyPath: () => void
-  onOpenDiffTargetFile: () => void
+  onOpenDiffTargetFile: (preferredMarkdownViewMode?: 'rich') => void
   onOpenPreviewToSide: () => void
   onOpenMarkdownPreview: () => void
   onOpenContainingFolder: () => void
   onToggleSideBySide: () => void
   onEditorToggleChange: (next: EditorToggleValue) => void
   onToggleMarkdownTableOfContents: () => void
-  onToggleMarkdownReviewTools: () => void
   onExportMarkdownToPdf: () => void
 }
 
@@ -91,7 +89,6 @@ export function EditorPanelHeader({
   canShowMarkdownTableOfContents,
   isMarkdownTableOfContentsDisabled,
   showMarkdownTableOfContents,
-  markdownReviewToolsEnabled,
   sideBySide,
   openFileState,
   onCopyPath,
@@ -102,7 +99,6 @@ export function EditorPanelHeader({
   onToggleSideBySide,
   onEditorToggleChange,
   onToggleMarkdownTableOfContents,
-  onToggleMarkdownReviewTools,
   onExportMarkdownToPdf
 }: EditorPanelHeaderProps): React.JSX.Element {
   const [pathMenuOpen, setPathMenuOpen] = useState(false)
@@ -191,7 +187,7 @@ export function EditorPanelHeader({
               <button
                 type="button"
                 className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-                onClick={onOpenDiffTargetFile}
+                onClick={() => onOpenDiffTargetFile(isMarkdown ? 'rich' : undefined)}
                 aria-label="Open file"
                 disabled={!openFileState.canOpen}
               >
@@ -307,10 +303,6 @@ export function EditorPanelHeader({
               onSelect={onExportMarkdownToPdf}
             >
               Export as PDF
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={onToggleMarkdownReviewTools}>
-              {markdownReviewToolsEnabled ? 'Hide Review Notes' : 'Show Review Notes'}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

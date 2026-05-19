@@ -33,6 +33,8 @@ import type {
   RuntimeWorktreePsResult,
   RuntimeWorktreeRecord
 } from '../shared/runtime-types'
+import type { Automation, AutomationRun } from '../shared/automations-types'
+import { formatAutomationSchedule } from '../shared/automation-schedules'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
 import type { RuntimeRpcFailure, RuntimeRpcSuccess } from './runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
@@ -280,6 +282,68 @@ export function formatWorktreeShow(result: { worktree: RuntimeWorktreeRecord }):
         `${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`
     )
     .join('\n')
+}
+
+export function formatAutomationList(result: { automations: Automation[] }): string {
+  if (result.automations.length === 0) {
+    return 'No automations found.'
+  }
+  return result.automations
+    .map((automation) => {
+      const status = automation.enabled ? 'enabled' : 'disabled'
+      return `${automation.id}  ${automation.name}  ${automation.agentId}  ${status}\n${formatAutomationSchedule(automation.rrule)}  next: ${new Date(automation.nextRunAt).toISOString()}`
+    })
+    .join('\n\n')
+}
+
+export function formatAutomationShow(result: { automation: Automation }): string {
+  const automation = result.automation
+  return [
+    `id: ${automation.id}`,
+    `name: ${automation.name}`,
+    `provider: ${automation.agentId}`,
+    `enabled: ${automation.enabled}`,
+    `schedule: ${formatAutomationSchedule(automation.rrule)}`,
+    `rrule: ${automation.rrule}`,
+    `nextRunAt: ${new Date(automation.nextRunAt).toISOString()}`,
+    `projectId: ${automation.projectId}`,
+    `workspaceMode: ${automation.workspaceMode}`,
+    `workspaceId: ${automation.workspaceId ?? 'null'}`,
+    `baseBranch: ${automation.baseBranch ?? 'null'}`,
+    `target: ${automation.executionTargetType}:${automation.executionTargetId}`,
+    `prompt: ${automation.prompt}`
+  ].join('\n')
+}
+
+export function formatAutomationRemoved(result: { removed: boolean; id: string }): string {
+  return result.removed
+    ? `Removed automation ${result.id}.`
+    : `Automation ${result.id} not removed.`
+}
+
+export function formatAutomationRun(result: { run: AutomationRun }): string {
+  return [
+    `id: ${result.run.id}`,
+    `automationId: ${result.run.automationId}`,
+    `title: ${result.run.title}`,
+    `status: ${result.run.status}`,
+    `trigger: ${result.run.trigger}`,
+    `scheduledFor: ${new Date(result.run.scheduledFor).toISOString()}`,
+    `workspaceId: ${result.run.workspaceId ?? 'null'}`,
+    `error: ${result.run.error ?? 'null'}`
+  ].join('\n')
+}
+
+export function formatAutomationRuns(result: { runs: AutomationRun[] }): string {
+  if (result.runs.length === 0) {
+    return 'No automation runs found.'
+  }
+  return result.runs
+    .map(
+      (run) =>
+        `${run.id}  ${run.automationId}  ${run.status}  ${run.trigger}  ${new Date(run.scheduledFor).toISOString()}\n${run.title}${run.error ? `\nerror: ${run.error}` : ''}`
+    )
+    .join('\n\n')
 }
 
 export function formatSnapshot(result: BrowserSnapshotResult): string {

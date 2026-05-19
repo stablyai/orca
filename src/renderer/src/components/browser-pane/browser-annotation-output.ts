@@ -104,7 +104,6 @@ export function formatBrowserAnnotationsAsMarkdown(annotations: BrowserPageAnnot
 
     lines.push(`### ${index + 1}. ${annotationElementLabel(payload)}`)
     lines.push(`**Intent:** ${annotation.intent}`)
-    lines.push(`**Priority:** ${annotation.priority}`)
     lines.push(`**Selector:** ${inlineCode(target.selector)}`)
     if (target.elementPath) {
       lines.push(`**Location:** ${inlineCode(target.elementPath)}`)

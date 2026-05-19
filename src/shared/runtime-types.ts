@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Why: shared type definitions for all runtime RPC methods live in one file for discoverability and import simplicity. */
+import type { AgentStatusEntry } from './agent-status-types'
 import type {
   BaseRefSearchResult,
   BrowserCookieImportResult,
@@ -6,6 +7,8 @@ import type {
   BrowserSessionProfileSource,
   GitWorktreeInfo,
   Repo,
+  TabGroupLayoutNode,
+  TerminalLayoutSnapshot,
   Worktree,
   WorktreeLineage,
   WorktreeLineageWarning
@@ -27,6 +30,8 @@ export type RuntimeTerminalDriverState =
   | { kind: 'idle' }
   | { kind: 'desktop' }
   | { kind: 'mobile'; clientId: string }
+
+export type RuntimeBrowserDriverState = RuntimeTerminalDriverState
 
 export type RuntimeStatus = {
   runtimeId: string
@@ -98,6 +103,9 @@ export type RuntimeMobileSessionTerminalTab = {
   title: string
   parentTabId: string
   leafId: string
+  ptyId?: string | null
+  agentStatus?: AgentStatusEntry | null
+  parentLayout?: TerminalLayoutSnapshot
   isActive: boolean
 }
 
@@ -124,7 +132,22 @@ export type RuntimeMobileSessionFileTab = {
   filePath: string
   relativePath: string
   language: string
+  mode?: 'edit' | 'diff'
+  diffSource?: 'staged' | 'unstaged'
   isDirty: boolean
+  isActive: boolean
+}
+
+export type RuntimeMobileSessionBrowserTab = {
+  type: 'browser'
+  id: string
+  title: string
+  browserWorkspaceId: string
+  browserPageId: string | null
+  url: string
+  loading: boolean
+  canGoBack: boolean
+  canGoForward: boolean
   isActive: boolean
 }
 
@@ -132,6 +155,7 @@ export type RuntimeMobileSessionSnapshotTab =
   | RuntimeMobileSessionTerminalTab
   | RuntimeMobileSessionMarkdownTab
   | RuntimeMobileSessionFileTab
+  | RuntimeMobileSessionBrowserTab
 
 export type RuntimeMobileSessionTerminalClientTab =
   | (RuntimeMobileSessionTerminalTab & {
@@ -147,6 +171,37 @@ export type RuntimeMobileSessionClientTab =
   | RuntimeMobileSessionTerminalClientTab
   | RuntimeMobileSessionMarkdownTab
   | RuntimeMobileSessionFileTab
+  | RuntimeMobileSessionBrowserTab
+
+export type RuntimeMobileSessionTabGroup = {
+  id: string
+  activeTabId: string | null
+  tabOrder: string[]
+  recentTabIds?: string[]
+}
+
+type RuntimeMobileSessionTabMoveBase = {
+  tabId: string
+  targetGroupId: string
+}
+
+export type RuntimeMobileSessionTabMove =
+  | (RuntimeMobileSessionTabMoveBase & {
+      kind: 'reorder'
+      tabOrder: string[]
+    })
+  | (RuntimeMobileSessionTabMoveBase & {
+      kind: 'move-to-group'
+      index?: number
+    })
+  | (RuntimeMobileSessionTabMoveBase & {
+      kind: 'split'
+      splitDirection: 'left' | 'right' | 'up' | 'down'
+    })
+
+export type RuntimeMobileSessionTabMoveResult = {
+  moved: true
+}
 
 export type RuntimeMobileSessionTabsSnapshot = {
   worktree: string
@@ -154,7 +209,9 @@ export type RuntimeMobileSessionTabsSnapshot = {
   snapshotVersion: number
   activeGroupId: string | null
   activeTabId: string | null
-  activeTabType: 'terminal' | 'markdown' | 'file' | null
+  activeTabType: 'terminal' | 'markdown' | 'file' | 'browser' | null
+  tabGroups?: RuntimeMobileSessionTabGroup[]
+  tabGroupLayout?: TabGroupLayoutNode | null
   tabs: RuntimeMobileSessionSnapshotTab[]
 }
 
@@ -164,7 +221,9 @@ export type RuntimeMobileSessionTabsResult = {
   snapshotVersion: number
   activeGroupId: string | null
   activeTabId: string | null
-  activeTabType: 'terminal' | 'markdown' | 'file' | null
+  activeTabType: 'terminal' | 'markdown' | 'file' | 'browser' | null
+  tabGroups?: RuntimeMobileSessionTabGroup[]
+  tabGroupLayout?: TabGroupLayoutNode | null
   tabs: RuntimeMobileSessionClientTab[]
 }
 
@@ -414,6 +473,41 @@ export type BrowserScreenshotResult = {
   data: string
   format: 'png' | 'jpeg'
 }
+
+export type BrowserScreencastReadyResult = {
+  type: 'ready'
+  subscriptionId: string
+  browserPageId: string
+  format: 'jpeg' | 'png'
+  tab: BrowserTabInfo
+}
+
+export type BrowserScreencastEndResult = {
+  type: 'end'
+  subscriptionId: string
+}
+
+export type BrowserScreencastDialogResult = {
+  type: 'dialog'
+  dialogType: string
+  message: string
+}
+
+export type BrowserScreencastDialogClosedResult = {
+  type: 'dialogClosed'
+}
+
+export type BrowserScreencastErrorResult = {
+  type: 'error'
+  message: string
+}
+
+export type BrowserScreencastResult =
+  | BrowserScreencastReadyResult
+  | BrowserScreencastEndResult
+  | BrowserScreencastDialogResult
+  | BrowserScreencastDialogClosedResult
+  | BrowserScreencastErrorResult
 
 export type BrowserEvalResult = {
   result: string

@@ -1,12 +1,21 @@
 /* eslint-disable max-lines -- Why: the YAML status card, issue-command editor, policy grid, and legacy-hook section form one cohesive settings surface; splitting them across files would scatter tightly coupled state and prop drilling. */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { OrcaHooks, Repo, SetupRunPolicy } from '../../../../shared/types'
-import { AlertTriangle } from 'lucide-react'
+import type {
+  HookCommandSourcePolicy,
+  OrcaHooks,
+  Repo,
+  RepoHookSettings,
+  SetupRunPolicy
+} from '../../../../shared/types'
+import { AlertTriangle, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '../ui/button'
+import { Input } from '../ui/input'
 import { SearchableSetting } from './SearchableSetting'
 import { useAppStore } from '@/store'
 import { readRuntimeIssueCommand, writeRuntimeIssueCommand } from '@/runtime/runtime-hooks-client'
+import { DEFAULT_REPO_HOOK_SETTINGS } from './SettingsConstants'
+import { normalizeHookCommandSourcePolicy } from '../../../../shared/hook-command-source-policy'
 
 type RepositoryHooksSectionProps = {
   repo: Repo
@@ -15,11 +24,17 @@ type RepositoryHooksSectionProps = {
   mayNeedUpdate: boolean
   copiedTemplate: boolean
   onCopyTemplate: () => void
-  onClearLegacyHooks: () => void
-  onUpdateSetupRunPolicy: (policy: SetupRunPolicy) => void
+  onUpdateHookSettings: (settings: RepoHookSettings) => void
 }
 
 type PolicyOption<P> = { policy: P; label: string; description: string }
+export type LocalCommandRow = { value: string; isPlaceholder: boolean }
+const LOCAL_HOOK_NAMES = ['setup', 'archive'] as const
+type LocalHookName = (typeof LOCAL_HOOK_NAMES)[number]
+export type LocalCommandDraft = Record<LocalHookName, LocalCommandRow[]>
+type HookSettingsPolicyDraft = Partial<
+  Pick<RepoHookSettings, 'setupRunPolicy' | 'commandSourcePolicy'>
+>
 
 const SETUP_RUN_POLICY_OPTIONS: PolicyOption<SetupRunPolicy>[] = [
   { policy: 'ask', label: 'Ask every time', description: 'Prompt before running setup.' },
@@ -30,6 +45,92 @@ const SETUP_RUN_POLICY_OPTIONS: PolicyOption<SetupRunPolicy>[] = [
     description: 'Only run setup when chosen.'
   }
 ]
+
+const COMMAND_SOURCE_POLICY_OPTIONS: PolicyOption<HookCommandSourcePolicy>[] = [
+  {
+    policy: 'shared-only',
+    label: 'Use orca.yaml only',
+    description: 'Run only committed repo commands; ignore local Settings commands.'
+  },
+  {
+    policy: 'local-only',
+    label: 'Use local only',
+    description: 'Ignore repo commands and run only your local Settings commands.'
+  },
+  {
+    policy: 'run-both',
+    label: 'Run both',
+    description: 'Run orca.yaml first, then your local Settings command.'
+  }
+]
+
+const LOCAL_HOOK_FIELDS: {
+  name: LocalHookName
+  label: string
+  description: string
+  placeholder: string
+}[] = [
+  {
+    name: 'setup',
+    label: 'Local setup command',
+    description: 'Runs after a new workspace is created when the source policy includes local.',
+    placeholder: 'cp "$ORCA_ROOT_PATH/.env" "$ORCA_WORKTREE_PATH/.env"'
+  },
+  {
+    name: 'archive',
+    label: 'Local archive command',
+    description: 'Runs before a local worktree is archived or removed.',
+    placeholder: 'echo "Cleaning up $ORCA_WORKSPACE_NAME"'
+  }
+]
+
+export function scriptToCommandRows(script: string | undefined): LocalCommandRow[] {
+  if (!script) {
+    return []
+  }
+
+  return script.split('\n').map((line) => ({
+    value: line.endsWith('\r') ? line.slice(0, -1) : line,
+    isPlaceholder: false
+  }))
+}
+
+export function commandRowsToScript(commands: LocalCommandRow[]): string {
+  return commands
+    .filter((command) => !(command.isPlaceholder && command.value.length === 0))
+    .map((command) => command.value)
+    .join('\n')
+}
+
+function pruneLocalCommandPlaceholders(commands: LocalCommandRow[]): LocalCommandRow[] {
+  return commands.filter((command) => !(command.isPlaceholder && command.value.length === 0))
+}
+
+export function localCommandDraftToScripts(draft: LocalCommandDraft): RepoHookSettings['scripts'] {
+  return {
+    setup: commandRowsToScript(pruneLocalCommandPlaceholders(draft.setup)),
+    archive: commandRowsToScript(pruneLocalCommandPlaceholders(draft.archive))
+  }
+}
+
+function getHookSettingsDraft(hookSettings: Repo['hookSettings']): RepoHookSettings {
+  return {
+    ...DEFAULT_REPO_HOOK_SETTINGS,
+    ...hookSettings,
+    scripts: {
+      ...DEFAULT_REPO_HOOK_SETTINGS.scripts,
+      ...hookSettings?.scripts
+    }
+  }
+}
+
+function getLocalCommandsDraft(hookSettings: Repo['hookSettings']): LocalCommandDraft {
+  const draft = getHookSettingsDraft(hookSettings)
+  return {
+    setup: scriptToCommandRows(draft.scripts.setup),
+    archive: scriptToCommandRows(draft.scripts.archive)
+  }
+}
 
 const EXAMPLE_TEMPLATE = `scripts:
   setup: |
@@ -153,8 +254,7 @@ export function RepositoryHooksSection({
   mayNeedUpdate,
   copiedTemplate,
   onCopyTemplate,
-  onClearLegacyHooks,
-  onUpdateSetupRunPolicy
+  onUpdateHookSettings
 }: RepositoryHooksSectionProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   // Why: distinguish "file has unrecognised top-level keys" from "file is
@@ -167,14 +267,31 @@ export function RepositoryHooksSection({
         ? 'update-available'
         : 'invalid'
       : 'missing'
-  const hs = repo.hookSettings
-  const legacyHookEntries = (['setup', 'archive'] as const)
-    .map((hookName) => [hookName, hs?.scripts[hookName]?.trim() ?? ''] as const)
+  const [hookSettingsDraft, setHookSettingsDraft] = useState(() =>
+    getHookSettingsDraft(repo.hookSettings)
+  )
+  const hookSettingsDraftRef = useRef(hookSettingsDraft)
+  hookSettingsDraftRef.current = hookSettingsDraft
+  const [localCommandsDraft, setLocalCommandsDraft] = useState(() =>
+    getLocalCommandsDraft(repo.hookSettings)
+  )
+  const localCommandsDraftRef = useRef(localCommandsDraft)
+  localCommandsDraftRef.current = localCommandsDraft
+  const localCommandsRepoHookSettingsRef = useRef(repo.hookSettings)
+  const localCommandsDraftDirtyRef = useRef(false)
+  const localCommandsPersistForRepoRef = useRef(onUpdateHookSettings)
+  const localHookEntries = (['setup', 'archive'] as const)
+    .map((hookName) => [hookName, hookSettingsDraft.scripts[hookName] ?? ''] as const)
     .filter(([, script]) => Boolean(script))
   // Why: the type allows `undefined` in persisted settings for backward compatibility,
   // but the UI always needs a concrete value so the policy grid has an active selection.
-  const selectedSetupRunPolicy: SetupRunPolicy = hs?.setupRunPolicy ?? 'run-by-default'
+  const selectedSetupRunPolicy: SetupRunPolicy =
+    hookSettingsDraft.setupRunPolicy ?? 'run-by-default'
+  const selectedCommandSourcePolicy: HookCommandSourcePolicy = normalizeHookCommandSourcePolicy(
+    hookSettingsDraft.commandSourcePolicy
+  )
   const [issueCommandDraft, setIssueCommandDraft] = useState('')
+  const localCommandsRepoIdRef = useRef(repo.id)
   const [hasSharedIssueCommand, setHasSharedIssueCommand] = useState(false)
   const [issueCommandSaveError, setIssueCommandSaveError] = useState<string | null>(null)
   // Why: track the latest draft across blur/unmount so repo switches still
@@ -182,6 +299,122 @@ export function RepositoryHooksSection({
   const issueCommandDraftRef = useRef(issueCommandDraft)
   issueCommandDraftRef.current = issueCommandDraft
   const lastCommittedIssueCommandRef = useRef('')
+
+  localCommandsRepoHookSettingsRef.current = repo.hookSettings
+
+  const setAndMaybePersistHookSettings = useCallback(
+    (nextSettings: RepoHookSettings, shouldPersist: boolean) => {
+      hookSettingsDraftRef.current = nextSettings
+      setHookSettingsDraft(nextSettings)
+      if (shouldPersist) {
+        localCommandsDraftDirtyRef.current = false
+        onUpdateHookSettings(nextSettings)
+      }
+    },
+    [onUpdateHookSettings]
+  )
+
+  const updateLocalCommandsDraft = useCallback(
+    (hookName: LocalHookName, commands: LocalCommandRow[], shouldPersist: boolean) => {
+      const nextCommandsDraft = { ...localCommandsDraftRef.current, [hookName]: commands }
+      localCommandsDraftRef.current = nextCommandsDraft
+      setLocalCommandsDraft(nextCommandsDraft)
+      if (!shouldPersist) {
+        localCommandsDraftDirtyRef.current = true
+      }
+
+      const nextSettings = {
+        ...hookSettingsDraftRef.current,
+        scripts: {
+          ...hookSettingsDraftRef.current.scripts,
+          [hookName]: commandRowsToScript(commands)
+        }
+      }
+      setAndMaybePersistHookSettings(nextSettings, shouldPersist)
+    },
+    [setAndMaybePersistHookSettings]
+  )
+
+  const commitLocalCommandsDraft = useCallback(
+    (hookName: LocalHookName) => {
+      // Why: Add Command creates an unsaved empty editor row. Existing blank script
+      // lines are real rows and must round-trip, so only placeholder blanks are pruned.
+      const next = pruneLocalCommandPlaceholders(localCommandsDraftRef.current[hookName])
+      updateLocalCommandsDraft(hookName, next, true)
+    },
+    [updateLocalCommandsDraft]
+  )
+
+  const flushDirtyLocalCommandsDraft = useCallback(
+    (persistHookSettings: (settings: RepoHookSettings) => void) => {
+      if (!localCommandsDraftDirtyRef.current) {
+        return
+      }
+
+      const nextSettings = {
+        ...hookSettingsDraftRef.current,
+        scripts: {
+          ...hookSettingsDraftRef.current.scripts,
+          ...localCommandDraftToScripts(localCommandsDraftRef.current)
+        }
+      }
+      hookSettingsDraftRef.current = nextSettings
+      localCommandsDraftDirtyRef.current = false
+      persistHookSettings(nextSettings)
+    },
+    []
+  )
+
+  const updateHookSettingsPolicyDraft = useCallback(
+    (updates: HookSettingsPolicyDraft) => {
+      const nextSettings = {
+        ...hookSettingsDraftRef.current,
+        ...updates
+      }
+      setAndMaybePersistHookSettings(nextSettings, true)
+    },
+    [setAndMaybePersistHookSettings]
+  )
+
+  const handleClearLocalCommands = useCallback(() => {
+    const nextCommandsDraft = { setup: [], archive: [] }
+    localCommandsDraftRef.current = nextCommandsDraft
+    setLocalCommandsDraft(nextCommandsDraft)
+    const nextSettings = {
+      ...hookSettingsDraftRef.current,
+      scripts: {
+        ...hookSettingsDraftRef.current.scripts,
+        setup: '',
+        archive: ''
+      }
+    }
+    setAndMaybePersistHookSettings(nextSettings, true)
+  }, [setAndMaybePersistHookSettings])
+
+  useEffect(() => {
+    if (localCommandsRepoIdRef.current === repo.id) {
+      localCommandsPersistForRepoRef.current = onUpdateHookSettings
+      return
+    }
+    // Why: repo switches reset the local editor state before inputs can blur,
+    // so flush dirty row drafts through the previous repo's captured updater.
+    flushDirtyLocalCommandsDraft(localCommandsPersistForRepoRef.current)
+    localCommandsRepoIdRef.current = repo.id
+    const nextSettingsDraft = getHookSettingsDraft(localCommandsRepoHookSettingsRef.current)
+    const nextCommandsDraft = getLocalCommandsDraft(localCommandsRepoHookSettingsRef.current)
+    hookSettingsDraftRef.current = nextSettingsDraft
+    localCommandsDraftRef.current = nextCommandsDraft
+    localCommandsDraftDirtyRef.current = false
+    localCommandsPersistForRepoRef.current = onUpdateHookSettings
+    setHookSettingsDraft(nextSettingsDraft)
+    setLocalCommandsDraft(nextCommandsDraft)
+  }, [flushDirtyLocalCommandsDraft, onUpdateHookSettings, repo.id])
+
+  useEffect(() => {
+    return () => {
+      flushDirtyLocalCommandsDraft(localCommandsPersistForRepoRef.current)
+    }
+  }, [flushDirtyLocalCommandsDraft])
 
   // Keep the local override editor in sync with the selected repo and flush unsaved edits on exit.
   useEffect(() => {
@@ -244,8 +477,8 @@ export function RepositoryHooksSection({
       <div className="space-y-1">
         <h2 className="text-sm font-semibold">Worktree Hooks</h2>
         <p className="text-xs text-muted-foreground">
-          Orca prefers shared hooks from `orca.yaml` and still honors older repo-local hook scripts
-          until you clear them.
+          Configure shared repo hooks from `orca.yaml` and personal commands stored locally on this
+          machine.
         </p>
       </div>
 
@@ -326,45 +559,156 @@ export function RepositoryHooksSection({
         </div>
       </SearchableSetting>
 
-      {legacyHookEntries.length > 0 ? (
-        <SearchableSetting
-          title="Legacy Repo-Local Hooks"
-          description="Older setup and archive hook scripts stored in local repo settings."
-          keywords={['legacy', 'fallback', 'setup', 'archive']}
-        >
-          <div className="space-y-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 shadow-sm">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <h5 className="text-sm font-semibold text-amber-700 dark:text-amber-300">
-                  Legacy Repo-Local Hooks
-                </h5>
-                <p className="text-xs text-muted-foreground">
-                  These older commands still run as a fallback when `orca.yaml` does not provide a
-                  hook. Clear them after you migrate the behavior into `orca.yaml`.
-                </p>
-              </div>
-              <Button type="button" variant="outline" size="sm" onClick={onClearLegacyHooks}>
-                Clear Legacy Hooks
-              </Button>
+      <SearchableSetting
+        title="Local Settings Commands"
+        description="Personal setup and archive commands stored locally on this machine."
+        keywords={['local', 'personal', 'setup', 'archive']}
+      >
+        <div className="space-y-4 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <h5 className="text-sm font-semibold">Local Settings Commands</h5>
+              <p className="text-xs text-muted-foreground">
+                Stored in Orca on this machine. These commands are not committed to the repository.
+              </p>
             </div>
+            {localHookEntries.length > 0 ? (
+              <Button type="button" variant="outline" size="sm" onClick={handleClearLocalCommands}>
+                Clear Local
+              </Button>
+            ) : null}
+          </div>
 
-            {legacyHookEntries.map(([hookName, script]) => (
-              <div
-                key={hookName}
-                className="space-y-2 rounded-xl border border-amber-500/20 bg-background/70 p-3"
+          <div className="flex flex-wrap gap-1.5">
+            {['$ORCA_ROOT_PATH', '$ORCA_WORKTREE_PATH', '$ORCA_WORKSPACE_NAME'].map((name) => (
+              <code
+                key={name}
+                className="rounded-md border border-border/50 bg-muted/35 px-2 py-1 font-mono text-[11px] text-muted-foreground"
               >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-medium capitalize text-foreground">{hookName}</p>
-                  <span className="text-[10px] text-muted-foreground">Compatibility fallback</span>
-                </div>
-                <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-lg bg-background p-3 font-mono text-[11px] leading-5 text-foreground">
-                  {script}
-                </pre>
-              </div>
+                {name}
+              </code>
             ))}
           </div>
-        </SearchableSetting>
-      ) : null}
+
+          <div className="grid gap-3">
+            {LOCAL_HOOK_FIELDS.map((field) => {
+              const commands = localCommandsDraft[field.name]
+              return (
+                <div key={field.name} className="space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-foreground">{field.label}</label>
+                      <p className="text-[11px] text-muted-foreground">{field.description}</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        updateLocalCommandsDraft(
+                          field.name,
+                          [...commands, { value: '', isPlaceholder: true }],
+                          false
+                        )
+                      }
+                    >
+                      <Plus />
+                      Add Command
+                    </Button>
+                  </div>
+
+                  <div className="overflow-hidden rounded-lg border border-border/50">
+                    {commands.length === 0 ? (
+                      <div className="px-3 py-4 text-sm text-muted-foreground">
+                        No local {field.name} commands configured.
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-border/50">
+                        {commands.map((command, index) => (
+                          <div
+                            key={`${field.name}-${index}`}
+                            className="grid grid-cols-[auto_1fr_auto] items-center gap-2 px-3 py-2"
+                          >
+                            <span className="w-5 text-right font-mono text-[11px] text-muted-foreground">
+                              {index + 1}
+                            </span>
+                            <Input
+                              value={command.value}
+                              onChange={(event) => {
+                                const next = [...commands]
+                                next[index] = {
+                                  value: event.target.value,
+                                  isPlaceholder: false
+                                }
+                                updateLocalCommandsDraft(field.name, next, false)
+                              }}
+                              onBlur={() => commitLocalCommandsDraft(field.name)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  event.preventDefault()
+                                  updateLocalCommandsDraft(
+                                    field.name,
+                                    [
+                                      ...commands.slice(0, index + 1),
+                                      { value: '', isPlaceholder: true },
+                                      ...commands.slice(index + 1)
+                                    ],
+                                    false
+                                  )
+                                }
+                              }}
+                              placeholder={index === 0 ? field.placeholder : 'Command'}
+                              className="h-8 font-mono text-xs"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label={`Remove ${field.label} ${index + 1}`}
+                              onClick={() =>
+                                updateLocalCommandsDraft(
+                                  field.name,
+                                  commands.filter((_, commandIndex) => commandIndex !== index),
+                                  true
+                                )
+                              }
+                              className="text-muted-foreground hover:text-destructive"
+                            >
+                              <Trash2 />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </SearchableSetting>
+
+      <SearchableSetting
+        title="Command Source"
+        description="Choose whether Orca runs commands from `orca.yaml`, local Settings, or both."
+        keywords={['command source', 'local', 'shared', 'orca.yaml', 'both', 'authoritative']}
+      >
+        <div className="space-y-3 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm">
+          <div className="space-y-1">
+            <h5 className="text-sm font-semibold">Command Source</h5>
+            <p className="text-xs text-muted-foreground">
+              Choose whether Orca runs commands from `orca.yaml`, local Settings, or both.
+            </p>
+          </div>
+
+          <PolicyOptionGrid
+            options={COMMAND_SOURCE_POLICY_OPTIONS}
+            selected={selectedCommandSourcePolicy}
+            onSelect={(policy) => updateHookSettingsPolicyDraft({ commandSourcePolicy: policy })}
+            columns="md:grid-cols-3"
+          />
+        </div>
+      </SearchableSetting>
 
       <SearchableSetting
         title="When to Run Setup"
@@ -382,7 +726,7 @@ export function RepositoryHooksSection({
           <PolicyOptionGrid
             options={SETUP_RUN_POLICY_OPTIONS}
             selected={selectedSetupRunPolicy}
-            onSelect={onUpdateSetupRunPolicy}
+            onSelect={(policy) => updateHookSettingsPolicyDraft({ setupRunPolicy: policy })}
             columns="md:grid-cols-3"
           />
         </div>

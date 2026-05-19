@@ -132,4 +132,68 @@ describe('registerMobileHandlers', () => {
       scope: 'runtime'
     })
   })
+
+  it('lists runtime access grants including unused generated links', () => {
+    const rpcServer = {
+      getDeviceRegistry: () => ({
+        listDevices: () => [
+          {
+            deviceId: 'mobile-1',
+            name: 'Phone',
+            scope: 'mobile',
+            pairedAt: 1,
+            lastSeenAt: 2
+          },
+          {
+            deviceId: 'runtime-1',
+            name: 'Browser',
+            scope: 'runtime',
+            pairedAt: 3,
+            lastSeenAt: 4
+          },
+          {
+            deviceId: 'pending-runtime',
+            name: 'Copied link',
+            scope: 'runtime',
+            pairedAt: 5,
+            lastSeenAt: 0
+          }
+        ]
+      })
+    }
+
+    registerMobileHandlers(rpcServer as never)
+
+    expect(handlers.get('mobile:listRuntimeAccessGrants')?.()).toEqual({
+      grants: [
+        {
+          deviceId: 'pending-runtime',
+          name: 'Copied link',
+          createdAt: 5,
+          lastSeenAt: null
+        },
+        {
+          deviceId: 'runtime-1',
+          name: 'Browser',
+          createdAt: 3,
+          lastSeenAt: 4
+        }
+      ]
+    })
+  })
+
+  it('revokes runtime access through the runtime server', () => {
+    const revokeRuntimeAccess = vi.fn().mockReturnValue(true)
+    const rpcServer = {
+      getDeviceRegistry: () => ({}),
+      revokeRuntimeAccess
+    }
+
+    registerMobileHandlers(rpcServer as never)
+
+    expect(handlers.get('mobile:revokeRuntimeAccess')?.(null, { deviceId: 'runtime-1' })).toEqual({
+      revoked: true
+    })
+    expect(revokeRuntimeAccess).toHaveBeenCalledWith('runtime-1')
+  })
 })

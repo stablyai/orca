@@ -355,6 +355,62 @@ function repoScopedCacheKey(repoPath: string, repoId: string | undefined, suffix
   return `${repoId ?? repoPath}::${suffix}`
 }
 
+function repoCacheKeyPrefixes(repoId: string, repoPath?: string): string[] {
+  const prefixes = [`${repoId}::`]
+  if (repoPath && repoPath !== repoId) {
+    prefixes.push(`${repoPath}::`)
+  }
+  return prefixes
+}
+
+function matchesRepoCacheKey(key: string, prefixes: readonly string[]): boolean {
+  return prefixes.some((prefix) => key.startsWith(prefix))
+}
+
+function clearInflightWorkItemsForRepo(repoId: string, repoPath?: string): void {
+  const prefixes = repoCacheKeyPrefixes(repoId, repoPath)
+  for (const key of Array.from(inflightWorkItemsRequests.keys())) {
+    if (matchesRepoCacheKey(key, prefixes)) {
+      inflightWorkItemsRequests.delete(key)
+    }
+  }
+}
+
+function evictRepoCacheEntries<T>(
+  cache: Record<string, CacheEntry<T>>,
+  prefixes: readonly string[]
+): { cache: Record<string, CacheEntry<T>>; evicted: boolean } {
+  let next: Record<string, CacheEntry<T>> | null = null
+  for (const key of Object.keys(cache)) {
+    if (!matchesRepoCacheKey(key, prefixes)) {
+      continue
+    }
+    if (!next) {
+      next = { ...cache }
+    }
+    delete next[key]
+  }
+  return next ? { cache: next, evicted: true } : { cache, evicted: false }
+}
+
+function normalizedRepoIdentity(repo: GitHubOwnerRepo): string {
+  return `${repo.owner.toLowerCase()}/${repo.repo.toLowerCase()}`
+}
+
+export function prChecksCacheSuffix(prNumber: number, prRepo?: GitHubOwnerRepo | null): string {
+  if (!prRepo) {
+    return `pr-checks::${prNumber}`
+  }
+  return `pr-checks::${normalizedRepoIdentity(prRepo)}::${prNumber}`
+}
+
+export function prCommentsCacheSuffix(prNumber: number, prRepo?: GitHubOwnerRepo | null): string {
+  if (!prRepo) {
+    return `pr-comments::${prNumber}`
+  }
+  return `pr-comments::${normalizedRepoIdentity(prRepo)}::${prNumber}`
+}
+
 // Why: 500 entries is generous enough that active developers will never hit it
 // during normal use, but prevents the cache from growing without bound across
 // many repos and branches over a long-running session.
@@ -429,19 +485,20 @@ export type GitHubSlice = {
     prNumber: number,
     branch?: string,
     headSha?: string,
+    prRepo?: GitHubOwnerRepo | null,
     options?: RepoScopedFetchOptions
   ) => Promise<PRCheckDetail[]>
   fetchPRComments: (
     repoPath: string,
     prNumber: number,
-    options?: RepoScopedFetchOptions
+    options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null }
   ) => Promise<PRComment[]>
   resolveReviewThread: (
     repoPath: string,
     prNumber: number,
     threadId: string,
     resolve: boolean,
-    options?: RepoScopedFetchOptions
+    options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null }
   ) => Promise<boolean>
   initGitHubCache: () => Promise<void>
   refreshAllGitHub: () => void
@@ -528,7 +585,7 @@ export type GitHubSlice = {
    * "new workspace" buttons) to warm the cache before the page mounts.
    */
   prefetchWorkItems: (repoId: string, repoPath: string, limit?: number, query?: string) => void
-  patchWorkItem: (itemId: string, patch: Partial<GitHubWorkItem>) => void
+  patchWorkItem: (itemId: string, patch: Partial<GitHubWorkItem>, repoId?: string | null) => void
   /**
    * Monotonic counter bumped whenever a repo's issue-source preference is
    * flipped. Subscribers (TaskPage's fetch effect) include this in their
@@ -553,6 +610,7 @@ export type GitHubSlice = {
     repoPath: string,
     preference: IssueSourcePreference
   ) => Promise<void>
+  evictGitHubRepoCaches: (repoId: string, repoPath?: string) => void
   // ── ProjectV2 view cache ─────────────────────────────────────────────
   projectViewCache: Record<string, ProjectViewCacheEntry<GitHubProjectTable>>
   fetchProjectViewTable: (
@@ -1358,13 +1416,27 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     return request
   },
 
-  fetchPRChecks: async (repoPath, prNumber, branch, headSha, options): Promise<PRCheckDetail[]> => {
+  fetchPRChecks: async (
+    repoPath,
+    prNumber,
+    branch,
+    headSha,
+    prRepo,
+    options
+  ): Promise<PRCheckDetail[]> => {
     const repoId = options?.repoId ?? get().repos?.find((repo) => repo.path === repoPath)?.id
-    const cacheKey = repoScopedCacheKey(repoPath, repoId, `pr-checks::${prNumber}`)
+    const cacheKey = repoScopedCacheKey(repoPath, repoId, prChecksCacheSuffix(prNumber, prRepo))
     const cached = get().checksCache[cacheKey]
     if (!options?.force && isFresh(cached, CHECKS_CACHE_TTL)) {
       const cachedChecks = cached.data ?? []
-      const prStatusUpdate = syncPRChecksStatus(get(), repoPath, repoId, branch, cachedChecks)
+      const prStatusUpdate = syncPRChecksStatus(
+        get(),
+        repoPath,
+        repoId,
+        branch,
+        cachedChecks,
+        prRepo
+      )
       if (prStatusUpdate) {
         set(prStatusUpdate)
         debouncedSaveCache(get())
@@ -1384,6 +1456,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           repoId,
           prNumber,
           headSha,
+          prRepo: prRepo ?? null,
           noCache: options?.force
         })) as PRCheckDetail[]
         set((s) => {
@@ -1391,7 +1464,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             checksCache: { ...s.checksCache, [cacheKey]: { data: checks, fetchedAt: Date.now() } }
           }
 
-          const prStatusUpdate = syncPRChecksStatus(s, repoPath, repoId, branch, checks)
+          const prStatusUpdate = syncPRChecksStatus(s, repoPath, repoId, branch, checks, prRepo)
           if (prStatusUpdate?.prCache) {
             nextState.prCache = prStatusUpdate.prCache
           }
@@ -1414,7 +1487,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
   fetchPRComments: async (repoPath, prNumber, options): Promise<PRComment[]> => {
     const repoId = options?.repoId ?? get().repos?.find((repo) => repo.path === repoPath)?.id
-    const cacheKey = repoScopedCacheKey(repoPath, repoId, `pr-comments::${prNumber}`)
+    const cacheKey = repoScopedCacheKey(
+      repoPath,
+      repoId,
+      prCommentsCacheSuffix(prNumber, options?.prRepo)
+    )
     const cached = get().commentsCache[cacheKey]
     if (!options?.force && isFresh(cached)) {
       return cached.data ?? []
@@ -1431,6 +1508,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           repoPath,
           repoId,
           prNumber,
+          prRepo: options?.prRepo ?? null,
           noCache: options?.force
         })) as PRComment[]
         set((s) => ({
@@ -1454,7 +1532,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
   resolveReviewThread: async (repoPath, prNumber, threadId, resolve, options) => {
     const repoId = options?.repoId ?? get().repos?.find((repo) => repo.path === repoPath)?.id
-    const cacheKey = repoScopedCacheKey(repoPath, repoId, `pr-comments::${prNumber}`)
+    const cacheKey = repoScopedCacheKey(
+      repoPath,
+      repoId,
+      prCommentsCacheSuffix(prNumber, options?.prRepo)
+    )
 
     // Optimistic update: toggle isResolved on all comments in this thread immediately
     // so the UI feels instant. Reverts if the API call fails.
@@ -1581,7 +1663,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     }
   },
 
-  patchWorkItem: (itemId, patch) => {
+  patchWorkItem: (itemId, patch, repoId) => {
     set((s) => {
       const nextCache = { ...s.workItemsCache }
       let changed = false
@@ -1590,7 +1672,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         if (!entry?.data) {
           continue
         }
-        const idx = entry.data.findIndex((item) => item.id === itemId)
+        // Why: GitHub issue/PR ids are only unique within a repo. Cross-repo
+        // task views can contain the same `pr:42` id from multiple repos.
+        const idx = entry.data.findIndex(
+          (item) => item.id === itemId && (!repoId || item.repoId === repoId)
+        )
         if (idx === -1) {
           continue
         }
@@ -1650,11 +1736,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     // dispatch could collapse onto it and skip the source swap. Clearing
     // first makes the "new fetch gets a fresh request" invariant impossible
     // to trip on later refactors that change zustand or React flush timing.
-    for (const key of Array.from(inflightWorkItemsRequests.keys())) {
-      if (key.startsWith(`${repoId}::`) || key.startsWith(`${repoPath}::`)) {
-        inflightWorkItemsRequests.delete(key)
-      }
-    }
+    clearInflightWorkItemsForRepo(repoId, repoPath)
     // Why: evict every cache entry keyed on this repo AFTER the IPC
     // resolves. If we evicted before awaiting, an overlapping fetch triggered
     // by a different subscriber would hit main with the pre-flip persisted
@@ -1676,6 +1758,38 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       // the just-evicted entries. Evicting alone wouldn't trigger the effect
       // because it doesn't depend on the cache.
       return { workItemsCache: next, workItemsInvalidationNonce: s.workItemsInvalidationNonce + 1 }
+    })
+  },
+
+  evictGitHubRepoCaches: (repoId, repoPath) => {
+    clearInflightWorkItemsForRepo(repoId, repoPath)
+    set((s) => {
+      const prefixes = repoCacheKeyPrefixes(repoId, repoPath)
+      const workItems = evictRepoCacheEntries(s.workItemsCache, prefixes)
+      const prs = evictRepoCacheEntries(s.prCache, prefixes)
+      const issues = evictRepoCacheEntries(s.issueCache, prefixes)
+      const checks = evictRepoCacheEntries(s.checksCache, prefixes)
+      const comments = evictRepoCacheEntries(s.commentsCache, prefixes)
+      const updates: Partial<AppState> = {}
+
+      if (workItems.evicted) {
+        updates.workItemsCache = workItems.cache
+        updates.workItemsInvalidationNonce = s.workItemsInvalidationNonce + 1
+      }
+      if (prs.evicted) {
+        updates.prCache = prs.cache
+      }
+      if (issues.evicted) {
+        updates.issueCache = issues.cache
+      }
+      if (checks.evicted) {
+        updates.checksCache = checks.cache
+      }
+      if (comments.evicted) {
+        updates.commentsCache = comments.cache
+      }
+
+      return updates
     })
   },
 

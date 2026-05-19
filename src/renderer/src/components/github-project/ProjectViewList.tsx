@@ -8,7 +8,7 @@ import ProjectRow from './ProjectRow'
 import { groupRows, sortRows } from './group-sort'
 import { getAvailableColumns, loadHiddenColumns, saveHiddenColumns } from './columns'
 import {
-  buildGridTemplate,
+  ACTION_COLUMN_WIDTH,
   loadColumnWidths,
   MIN_COLUMN_WIDTH,
   resolveWidth,
@@ -24,6 +24,24 @@ import type {
 } from '../../../../shared/github-project-types'
 
 type SortOverride = { fieldId: string; direction: GitHubProjectSortDirection }
+
+const PROJECT_FROZEN_COLUMN_HEADER_SURFACE_CLASS =
+  '[background:color-mix(in_srgb,var(--background)_95%,var(--muted))]'
+
+function buildProjectGridTemplate(
+  fields: GitHubProjectField[],
+  widths: Readonly<Record<string, number>>
+): string {
+  // Why: the first two columns are frozen during horizontal scroll, so their
+  // actual widths must be deterministic for the second sticky offset.
+  const cols = fields.map((field, index) =>
+    index < 2
+      ? `${resolveWidth(field, widths)}px`
+      : `minmax(${MIN_COLUMN_WIDTH}px, ${resolveWidth(field, widths)}fr)`
+  )
+  cols.push(`${ACTION_COLUMN_WIDTH}px`)
+  return cols.join(' ')
+}
 
 type Props = {
   table: GitHubProjectTable
@@ -94,7 +112,16 @@ export default function ProjectViewList({
     [scopeKey]
   )
 
-  const gridTemplate = useMemo(() => buildGridTemplate(fields, widths), [fields, widths])
+  const gridTemplate = useMemo(() => buildProjectGridTemplate(fields, widths), [fields, widths])
+
+  const handleListScroll = useCallback((event: React.UIEvent<HTMLDivElement>): void => {
+    // Why: frozen columns need the horizontal offset, but piping every scroll
+    // tick through React state rerenders the entire project row set.
+    event.currentTarget.style.setProperty(
+      '--project-scroll-left',
+      `${event.currentTarget.scrollLeft}px`
+    )
+  }, [])
 
   const toggleColumn = (fieldId: string): void => {
     setHidden((prev) => {
@@ -167,7 +194,11 @@ export default function ProjectViewList({
       : null
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
+    <div
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto scrollbar-sleek"
+      style={{ '--project-scroll-left': '0px' } as React.CSSProperties}
+      onScroll={handleListScroll}
+    >
       <ProjectHeaderRow
         fields={fields}
         availableFields={availableFields}
@@ -265,8 +296,24 @@ function ProjectHeaderRow({
         // user-resizable pair set), so omit its handle to keep the total
         // table width invariant.
         const next = fields[idx + 1]
+        const frozen = idx < 2
         return (
-          <div key={f.id} className="relative flex min-w-0 items-center">
+          <div
+            key={f.id}
+            className={cn(
+              'flex min-w-0 items-center',
+              !frozen && 'relative',
+              frozen &&
+                cn(
+                  'relative z-20 backdrop-blur before:absolute before:-left-3 before:top-0 before:bottom-0 before:w-3 before:bg-inherit',
+                  PROJECT_FROZEN_COLUMN_HEADER_SURFACE_CLASS
+                ),
+              idx === 1 && 'border-r border-border/50'
+            )}
+            style={
+              frozen ? { transform: 'translateX(var(--project-scroll-left, 0px))' } : undefined
+            }
+          >
             <button
               type="button"
               onClick={() => onSortClick(f.id)}

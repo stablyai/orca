@@ -49,6 +49,8 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
             done = true
           }
         }
+        // Why: focused hook tests and older hydrated snapshots may not carry
+        // this newer map yet; absence means there are no unsupported agents.
         for (const unsupported of Object.values(s.migrationUnsupportedByPtyId ?? {})) {
           const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
           if (!entry) {
