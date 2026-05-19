@@ -35,17 +35,9 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     ])
   })
 
-  it('lists Copilot hosted CLI models even when account policy filters the picker', () => {
+  it('lists Copilot OpenAI-family models and omits policy-filtered Claude models', () => {
     expect(COMMIT_MESSAGE_AGENT_SPECS.copilot?.defaultModelId).toBe('gpt-5.4')
     expect(COMMIT_MESSAGE_AGENT_SPECS.copilot?.models.map((m) => m.id)).toEqual([
-      'auto',
-      'claude-haiku-4.5',
-      'claude-sonnet-4.5',
-      'claude-sonnet-4.6',
-      'claude-opus-4.5',
-      'claude-opus-4.6',
-      'claude-opus-4.6-fast',
-      'claude-opus-4.7',
       'gpt-4.1',
       'gpt-5-mini',
       'gpt-5.2',
@@ -55,6 +47,9 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
       'gpt-5.4-mini',
       'gpt-5.5'
     ])
+    expect(COMMIT_MESSAGE_AGENT_SPECS.copilot?.models.map((m) => m.id)).not.toContain(
+      'claude-sonnet-4.5'
+    )
   })
 
   it('defaults the agent picker to Claude', () => {

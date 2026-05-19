@@ -486,38 +486,10 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
       ...(thinkingLevel ? ['--effort', thinkingLevel] : [])
     ],
     modelSource: 'static',
-    // Why: Copilot CLI's picker is policy-filtered per account/org. Keep the
-    // full hosted CLI catalog here so users can select models enabled for them.
+    // Why: Copilot exposes Anthropic models in its global config docs, but
+    // org/account policy can reject them at runtime. Keep this static picker
+    // to the OpenAI-family models that are broadly available through Copilot.
     models: [
-      { id: 'auto', label: 'Auto' },
-      {
-        id: 'claude-haiku-4.5',
-        label: 'Claude Haiku 4.5'
-      },
-      {
-        id: 'claude-sonnet-4.5',
-        label: 'Claude Sonnet 4.5'
-      },
-      {
-        id: 'claude-sonnet-4.6',
-        label: 'Claude Sonnet 4.6'
-      },
-      {
-        id: 'claude-opus-4.5',
-        label: 'Claude Opus 4.5'
-      },
-      {
-        id: 'claude-opus-4.6',
-        label: 'Claude Opus 4.6'
-      },
-      {
-        id: 'claude-opus-4.6-fast',
-        label: 'Claude Opus 4.6 Fast'
-      },
-      {
-        id: 'claude-opus-4.7',
-        label: 'Claude Opus 4.7'
-      },
       {
         id: 'gpt-4.1',
         label: 'GPT-4.1'
