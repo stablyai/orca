@@ -14,7 +14,10 @@ import type {
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
 import { resolveClaudeCommand } from '../codex-cli/command'
-import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
+import type {
+  ClaudeRuntimeAuthPreparation,
+  ClaudeRuntimeAuthService
+} from './runtime-auth-service'
 import {
   getClaudeManagedAccountsRoot,
   readClaudeManagedAuthFile,
@@ -73,6 +76,15 @@ export class ClaudeAccountService {
   listAccounts(): ClaudeRateLimitAccountsState {
     this.normalizeActiveSelection()
     return this.getSnapshot()
+  }
+
+  // Why: PTY launch is the only surface that knows the live worktree id.
+  // Threading it through here keeps the active-account selection itself a pure
+  // global concept while letting per-worktree overrides materialize at spawn
+  // time. Mirrors prepareForClaudeLaunch but is intentionally a separate entry
+  // point so callers without worktree context keep using the no-arg form. (P2)
+  async prepareForWorktreeLaunch(worktreeId: string): Promise<ClaudeRuntimeAuthPreparation> {
+    return this.runtimeAuth.prepareForClaudeLaunch(worktreeId)
   }
 
   async addAccount(): Promise<ClaudeRateLimitAccountsState>
