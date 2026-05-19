@@ -1287,6 +1287,20 @@ export type ClaudeRateLimitAccountsState = {
   activeAccountId: string | null
 }
 
+/** Polymorphic input for `claudeAccounts:add`. Shared across main/preload/renderer
+ *  so the IPC bridge can pass a discriminated value through without leaking
+ *  main-only types into the renderer. OAuth no-arg legacy call site uses
+ *  `undefined`; new providers pass the matching discriminator. */
+export type AddClaudeAccountInput =
+  | { authMethod: 'subscription-oauth' }
+  | { authMethod: 'anthropic-api-key'; label?: string; secretFromUser: string }
+  | {
+      authMethod: 'anthropic-compat'
+      label?: string
+      secretFromUser: string
+      providerConfig: { preset: AnthropicCompatPreset; baseUrl?: string }
+    }
+
 /** All AI coding agents Orca knows how to launch. Used for the agent picker in the new-workspace
  *  flow and for the default-agent setting. Extend this union as new agents are added. */
 export type TuiAgent =

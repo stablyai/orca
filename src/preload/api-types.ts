@@ -9,6 +9,7 @@ import type {
 } from '../shared/hosted-review'
 import type { AppIdentity } from '../shared/app-identity'
 import type {
+  AddClaudeAccountInput,
   BaseRefDefaultResult,
   BaseRefSearchResult,
   BrowserCookieImportResult,
@@ -1150,7 +1151,7 @@ export type PreloadApi = {
   }
   claudeAccounts: {
     list: () => Promise<ClaudeRateLimitAccountsState>
-    add: () => Promise<ClaudeRateLimitAccountsState>
+    add: (input?: AddClaudeAccountInput) => Promise<ClaudeRateLimitAccountsState>
     reauthenticate: (args: { accountId: string }) => Promise<ClaudeRateLimitAccountsState>
     remove: (args: { accountId: string }) => Promise<ClaudeRateLimitAccountsState>
     select: (args: { accountId: string | null }) => Promise<ClaudeRateLimitAccountsState>

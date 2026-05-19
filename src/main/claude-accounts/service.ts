@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join, relative, resolve, sep } from 'node:path'
 import type {
-  AnthropicCompatPreset,
+  AddClaudeAccountInput,
   ClaudeManagedAccount,
   ClaudeManagedAccountSummary,
   ClaudeRateLimitAccountsState
@@ -35,15 +35,10 @@ import { migrateClaudeAccount, migrateClaudeAccountList } from './migration'
 import { handlerFor } from './providers'
 import { getDefaultModelMapping } from './model-defaults'
 
-export type AddAccountInput =
-  | { authMethod: 'subscription-oauth' }
-  | { authMethod: 'anthropic-api-key'; label?: string; secretFromUser: string }
-  | {
-      authMethod: 'anthropic-compat'
-      label?: string
-      secretFromUser: string
-      providerConfig: { preset: AnthropicCompatPreset; baseUrl?: string }
-    }
+// Why: the canonical type now lives in src/shared/types.ts so preload + renderer
+// can use it without importing main-only code. Re-exported under the original
+// name to preserve existing import sites.
+export type AddAccountInput = AddClaudeAccountInput
 
 const LOGIN_TIMEOUT_MS = 180_000
 const STATUS_TIMEOUT_MS = 20_000

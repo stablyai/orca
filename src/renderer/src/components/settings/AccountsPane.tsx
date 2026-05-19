@@ -5,10 +5,12 @@
    would scatter those flows without a meaningful abstraction boundary. */
 import { useEffect, useState } from 'react'
 import type {
+  AddClaudeAccountInput,
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
   GlobalSettings
 } from '../../../../shared/types'
+import { AddAccountModal, type AddAccountSubmit } from './AddAccountModal'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -108,6 +110,33 @@ function getClaudeAccountErrorDescription(error: unknown): string {
   )
 }
 
+/**
+ * Decide what the Claude "Add account" button should do.
+ *
+ * Flag off: trigger the legacy OAuth no-arg `add()` flow inline.
+ * Flag on: open the multi-provider AddAccountModal instead.
+ *
+ * Extracted as a pure helper so the routing logic is unit-testable without
+ * rendering the full AccountsPane tree.
+ */
+export function resolveClaudeAddAccountAction(
+  multiProviderEnabled: boolean | undefined
+): 'open-modal' | 'run-oauth' {
+  return multiProviderEnabled === true ? 'open-modal' : 'run-oauth'
+}
+
+/**
+ * Map an AddAccountModal submit payload to the IPC `claudeAccounts.add` input.
+ *
+ * The modal's submit shape is a subset of the polymorphic IPC input (OAuth
+ * never reaches submit — it would open an external browser flow), so the
+ * mapping is mostly identity. Centralized here so the IPC contract stays
+ * provable in one place.
+ */
+export function buildClaudeAddAccountInput(submit: AddAccountSubmit): AddClaudeAccountInput {
+  return submit
+}
+
 export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
@@ -128,6 +157,9 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
   >('idle')
   const [removeAccountId, setRemoveAccountId] = useState<string | null>(null)
   const [removeClaudeAccountId, setRemoveClaudeAccountId] = useState<string | null>(null)
+  // Why: gated behind `claudeMultiProviderEnabled`. With the flag off this
+  // state is unused and the "Add account" button keeps its legacy OAuth path.
+  const [addClaudeModalOpen, setAddClaudeModalOpen] = useState(false)
 
   useEffect(() => {
     let stale = false
@@ -273,9 +305,13 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
             <Button
               variant="outline"
               size="xs"
-              onClick={() =>
+              onClick={() => {
+                if (resolveClaudeAddAccountAction(settings.claudeMultiProviderEnabled) === 'open-modal') {
+                  setAddClaudeModalOpen(true)
+                  return
+                }
                 void runClaudeAccountAction('adding', () => window.api.claudeAccounts.add())
-              }
+              }}
               disabled={claudeAction !== 'idle'}
               className="gap-1.5"
             >
@@ -813,6 +849,17 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <AddAccountModal
+        open={addClaudeModalOpen}
+        onOpenChange={setAddClaudeModalOpen}
+        onSubmit={(submit) => {
+          // Why: modal submit always carries an enabled provider variant; OAuth
+          // is the no-arg legacy path that never round-trips through the modal.
+          const input = buildClaudeAddAccountInput(submit)
+          setAddClaudeModalOpen(false)
+          void runClaudeAccountAction('adding', () => window.api.claudeAccounts.add(input))
+        }}
+      />
       {visibleSections.map((section, index) => (
         <div key={index} className="space-y-8">
           {index > 0 ? <Separator /> : null}
