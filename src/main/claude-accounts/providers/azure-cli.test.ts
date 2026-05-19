@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { detectAzureEntraIdSignIn } from './azure-cli'
+import { detectAzureEntraIdSignIn, getEntraAccessTokenForCognitiveServices } from './azure-cli'
 
 const spawnMock = vi.fn()
 vi.mock('node:child_process', () => ({
@@ -79,5 +79,19 @@ describe('detectAzureEntraIdSignIn', () => {
     const result = await promise
     if (result.ok) throw new Error('expected fail')
     expect(result.reason).toBe('malformed-output')
+  })
+})
+
+describe('getEntraAccessTokenForCognitiveServices', () => {
+  beforeEach(() => spawnMock.mockReset())
+
+  it('returns { ok: true, token } on exit 0 parsing accessToken from JSON', async () => {
+    const { mock, close } = fakeProcess(0, JSON.stringify({ accessToken: 'jwt-token-xyz' }))
+    spawnMock.mockReturnValue(mock)
+    const promise = getEntraAccessTokenForCognitiveServices()
+    close()
+    const result = await promise
+    if (!result.ok) throw new Error('expected ok')
+    expect(result.token).toBe('jwt-token-xyz')
   })
 })

@@ -165,3 +165,94 @@ describe('azureFoundryHandler.materialize — Entra ID path', () => {
     expect(out.envPatch.ANTHROPIC_FOUNDRY_API_KEY).toBeUndefined()
   })
 })
+
+describe('azureFoundryHandler.validate', () => {
+  const fetchMock = vi.fn()
+  const originalFetch = globalThis.fetch
+
+  beforeEach(() => {
+    fetchMock.mockReset()
+    readKeychainMock.mockReset()
+    readKeychainMock.mockResolvedValue('foundry-key')
+    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch
+  })
+
+  function restoreFetch(): void {
+    globalThis.fetch = originalFetch
+  }
+
+  it('returns { ok: true } on HTTP 200 from /anthropic/v1/models', async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200 } as Response)
+    const handler = createAzureFoundryHandler()
+    const result = await handler.validate(foundryAccount())
+    restoreFetch()
+    expect(result).toEqual({ ok: true })
+  })
+
+  it('returns locked 401 reason string', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 401 } as Response)
+    const handler = createAzureFoundryHandler()
+    const result = await handler.validate(foundryAccount())
+    restoreFetch()
+    if (result.ok) throw new Error('expected fail')
+    expect(result.reason).toBe('Azure Foundry token invalid or expired. Run `az login` and try again.')
+  })
+
+  it('returns locked 403 reason string', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 403 } as Response)
+    const handler = createAzureFoundryHandler()
+    const result = await handler.validate(foundryAccount())
+    restoreFetch()
+    if (result.ok) throw new Error('expected fail')
+    expect(result.reason).toBe("Foundry deployment does not allow Claude access. Check your workspace's model deployment.")
+  })
+
+  it('returns locked network-error reason on fetch rejection', async () => {
+    fetchMock.mockRejectedValue(new Error('ECONNREFUSED'))
+    const handler = createAzureFoundryHandler()
+    const result = await handler.validate(foundryAccount())
+    restoreFetch()
+    if (result.ok) throw new Error('expected fail')
+    expect(result.reason).toBe('Unable to reach Foundry endpoint. Check resource name and network.')
+  })
+
+  it('targets https://<resource>.services.ai.azure.com/anthropic/v1/models', async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200 } as Response)
+    const handler = createAzureFoundryHandler()
+    await handler.validate(foundryAccount({
+      credentials: { authMethod: 'azure-foundry', resource: 'my-fdry', useEntraId: false }
+    }))
+    restoreFetch()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [calledUrl] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(calledUrl).toBe('https://my-fdry.services.ai.azure.com/anthropic/v1/models')
+  })
+
+  it('Entra ID path: sends Authorization: Bearer <jwt> from getEntraAccessTokenForCognitiveServices', async () => {
+    vi.resetModules()
+    vi.doMock('./azure-cli', () => ({
+      detectAzureEntraIdSignIn: vi.fn(async () => ({
+        ok: true,
+        account: { user: 'alice@x.com', tenantId: 't1' }
+      })),
+      getEntraAccessTokenForCognitiveServices: vi.fn(async () => ({
+        ok: true,
+        token: 'jwt-abc-123'
+      }))
+    }))
+    const localFetch = vi.fn().mockResolvedValue({ ok: true, status: 200 } as Response)
+    globalThis.fetch = localFetch as unknown as typeof globalThis.fetch
+    const { createAzureFoundryHandler: createFresh } = await import('./azure-foundry-handler')
+    const handler = createFresh()
+    await handler.validate(foundryAccount({
+      credentials: { authMethod: 'azure-foundry', resource: 'entra-rsrc', useEntraId: true }
+    }))
+    restoreFetch()
+    vi.doUnmock('./azure-cli')
+    vi.resetModules()
+    expect(localFetch).toHaveBeenCalledTimes(1)
+    const [, init] = localFetch.mock.calls[0] as [string, RequestInit]
+    const headers = init.headers as Record<string, string>
+    expect(headers.Authorization).toBe('Bearer jwt-abc-123')
+  })
+})

@@ -62,3 +62,52 @@ export async function detectAzureEntraIdSignIn(): Promise<AzureEntraDetection> {
     void stderr
   })
 }
+
+const COGNITIVE_SCOPE = 'https://cognitiveservices.azure.com/.default'
+
+export type EntraAccessToken =
+  | { ok: true; token: string }
+  | { ok: false; reason: 'not-logged-in' | 'az-not-installed' | 'malformed-output' | 'timeout' }
+
+export async function getEntraAccessTokenForCognitiveServices(): Promise<EntraAccessToken> {
+  let child: ReturnType<typeof spawn>
+  try {
+    child = spawn(
+      'az',
+      ['account', 'get-access-token', '--scope', COGNITIVE_SCOPE, '--output', 'json'],
+      { stdio: ['ignore', 'pipe', 'pipe'] }
+    )
+  } catch (error) {
+    if ((error as { code?: string }).code === 'ENOENT') {
+      return { ok: false, reason: 'az-not-installed' }
+    }
+    throw error
+  }
+  let stdout = ''
+  child.stdout?.on('data', (chunk: Buffer) => {
+    stdout += chunk.toString('utf8')
+  })
+  return await new Promise<EntraAccessToken>((resolve) => {
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM')
+      resolve({ ok: false, reason: 'timeout' })
+    }, PROBE_TIMEOUT_MS)
+    child.on('close', (code: number) => {
+      clearTimeout(timer)
+      if (code !== 0) {
+        resolve({ ok: false, reason: 'not-logged-in' })
+        return
+      }
+      try {
+        const parsed = JSON.parse(stdout) as { accessToken?: string }
+        if (!parsed.accessToken) {
+          resolve({ ok: false, reason: 'malformed-output' })
+          return
+        }
+        resolve({ ok: true, token: parsed.accessToken })
+      } catch {
+        resolve({ ok: false, reason: 'malformed-output' })
+      }
+    })
+  })
+}

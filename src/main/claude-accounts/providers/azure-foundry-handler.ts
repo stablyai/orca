@@ -3,7 +3,9 @@ import {
   writeManagedClaudeKeychainCredentials
 } from '../keychain'
 import { getDefaultModelMapping } from '../model-defaults'
-import { detectAzureEntraIdSignIn } from './azure-cli'
+import { detectAzureEntraIdSignIn, getEntraAccessTokenForCognitiveServices } from './azure-cli'
+
+const VALIDATE_TIMEOUT_MS = 500
 import type { ProviderHandler } from './types'
 import type { ClaudeManagedAccount, ClaudeModelMapping } from '../../../shared/types'
 
@@ -76,6 +78,59 @@ export function createAzureFoundryHandler(): ProviderHandler {
       }
       return { envPatch: env }
     },
-    validate: async () => ({ ok: true })  // expanded in T7
+    validate: async (account) => {
+      const creds = account.credentials
+      if (creds.authMethod !== 'azure-foundry') {
+        return { ok: false, reason: 'Azure Foundry validate invoked on non-foundry account.' }
+      }
+      const url = `https://${creds.resource}.services.ai.azure.com/anthropic/v1/models`
+      let headers: Record<string, string>
+      if (creds.useEntraId) {
+        const tokenResult = await getEntraAccessTokenForCognitiveServices()
+        if (!tokenResult.ok) {
+          // Why: surface the same locked string the 401 path uses so UI copy stays consistent.
+          return {
+            ok: false,
+            reason: 'Azure Foundry token invalid or expired. Run `az login` and try again.',
+            rescueHint: 'Run `az login` in your terminal.'
+          }
+        }
+        headers = { Authorization: `Bearer ${tokenResult.token}` }
+      } else {
+        const key = await readManagedClaudeKeychainCredentials(account.id)
+        if (!key) {
+          return { ok: false, reason: 'Azure Foundry API key for this account is missing from Keychain.' }
+        }
+        headers = { 'api-key': key }
+      }
+      try {
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), VALIDATE_TIMEOUT_MS)
+        const response = await fetch(url, { method: 'GET', headers, signal: controller.signal })
+        clearTimeout(timer)
+        if (response.ok) return { ok: true }
+        if (response.status === 401) {
+          return {
+            ok: false,
+            reason: 'Azure Foundry token invalid or expired. Run `az login` and try again.',
+            rescueHint: 'Run `az login` or re-paste the API key.'
+          }
+        }
+        if (response.status === 403) {
+          return {
+            ok: false,
+            reason: "Foundry deployment does not allow Claude access. Check your workspace's model deployment.",
+            rescueHint: 'Verify the Anthropic model is deployed in this Foundry resource.'
+          }
+        }
+        return { ok: false, reason: `Foundry endpoint returned HTTP ${response.status}.` }
+      } catch {
+        return {
+          ok: false,
+          reason: 'Unable to reach Foundry endpoint. Check resource name and network.',
+          rescueHint: 'Verify the resource name and your network connection.'
+        }
+      }
+    }
   }
 }
