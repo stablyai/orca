@@ -730,6 +730,10 @@ export function registerSshHandlers(
         clearProviderPtyState(ptyId)
         deletePtyOwnership(ptyId)
       }
+      // Why: reset's connect() can trip onCredentialRequest, which adds to
+      // credentialRequestedForTarget. Without this delete, a later doConnect
+      // that doesn't prompt would still persist lastRequiredPassphrase=true.
+      credentialRequestedForTarget.delete(targetId)
       await connectionManager!.disconnect(targetId)
     }
   }
