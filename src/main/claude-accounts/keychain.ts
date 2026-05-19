@@ -1,23 +1,26 @@
-import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createKeychainCache } from './keychain-cache'
+import { getSecretsBackend } from './secrets-storage'
 
 const ACTIVE_CLAUDE_SERVICE = 'Claude Code-credentials'
 const ORCA_CLAUDE_SERVICE = 'Orca Claude Code Managed Credentials'
 
 // Why: every workspace PTY spawn calls into runtime-auth which probes the
-// Keychain per active account; without caching this becomes an N+1
-// `security` shell-out that stalls workspace launch (autoplan E2). Size 50
-// covers practical multi-account fleets and bounds memory.
+// secrets backend per active account; without caching this becomes an N+1
+// shell-out (keychain backend) that stalls workspace launch (autoplan E2).
+// Size 50 covers practical multi-account fleets and bounds memory. The
+// encrypted-file backend doesn't need this cache (file is in memory after
+// first read), but it's cheap to leave on and avoids re-decrypts.
 const managedKeychainCache = createKeychainCache(50)
 
 export async function readActiveClaudeKeychainCredentials(
   configDir?: string
 ): Promise<string | null> {
+  const backend = await getSecretsBackend()
   for (const service of getActiveClaudeServices(configDir)) {
-    const credentials = await readKeychainPassword(service, getKeychainUser())
-    if (credentials) {
-      return credentials
+    const value = await backend.read(service, getKeychainUser())
+    if (value) {
+      return value
     }
   }
   return null
@@ -26,40 +29,43 @@ export async function readActiveClaudeKeychainCredentials(
 export async function readActiveClaudeKeychainCredentialsStrict(
   configDir?: string
 ): Promise<string | null> {
-  return readKeychainPassword(getActiveClaudeService(configDir), getKeychainUser())
+  const backend = await getSecretsBackend()
+  return backend.read(getActiveClaudeService(configDir), getKeychainUser())
 }
 
 export async function writeActiveClaudeKeychainCredentials(
   contents: string,
   configDir?: string
 ): Promise<void> {
-  await writeKeychainPassword(getActiveClaudeService(configDir), getKeychainUser(), contents)
+  const backend = await getSecretsBackend()
+  await backend.write(getActiveClaudeService(configDir), getKeychainUser(), contents)
 }
 
 export async function writeActiveClaudeKeychainCredentialsForRuntime(
   contents: string,
   configDir: string
 ): Promise<void> {
+  const backend = await getSecretsBackend()
   const user = getKeychainUser()
   const scopedService = getActiveClaudeService(configDir)
-  await writeKeychainPassword(scopedService, user, contents)
+  await backend.write(scopedService, user, contents)
   if (scopedService !== ACTIVE_CLAUDE_SERVICE) {
-    await writeKeychainPassword(ACTIVE_CLAUDE_SERVICE, user, contents)
+    await backend.write(ACTIVE_CLAUDE_SERVICE, user, contents)
   }
 }
 
 export async function deleteActiveClaudeKeychainCredentials(configDir?: string): Promise<void> {
+  const backend = await getSecretsBackend()
   for (const service of getActiveClaudeServices(configDir)) {
-    await deleteKeychainPassword(service, getKeychainUser())
+    await backend.delete(service, getKeychainUser())
   }
 }
 
 export async function deleteActiveClaudeKeychainCredentialsStrict(
   configDir?: string
 ): Promise<void> {
-  await deleteKeychainPassword(getActiveClaudeService(configDir), getKeychainUser(), {
-    failOnAccessError: true
-  })
+  const backend = await getSecretsBackend()
+  await backend.delete(getActiveClaudeService(configDir), getKeychainUser())
 }
 
 export async function readManagedClaudeKeychainCredentials(
@@ -68,7 +74,8 @@ export async function readManagedClaudeKeychainCredentials(
   if (managedKeychainCache.has(accountId)) {
     return managedKeychainCache.get(accountId) ?? null
   }
-  const value = await readKeychainPassword(ORCA_CLAUDE_SERVICE, accountId)
+  const backend = await getSecretsBackend()
+  const value = await backend.read(ORCA_CLAUDE_SERVICE, accountId)
   // Cache misses too — the null sentinel suppresses re-probes for missing
   // accounts on the workspace-launch hot path.
   managedKeychainCache.set(accountId, value)
@@ -79,13 +86,15 @@ export async function writeManagedClaudeKeychainCredentials(
   accountId: string,
   contents: string
 ): Promise<void> {
-  await writeKeychainPassword(ORCA_CLAUDE_SERVICE, accountId, contents)
+  const backend = await getSecretsBackend()
+  await backend.write(ORCA_CLAUDE_SERVICE, accountId, contents)
   // Invalidate; let the next read re-fetch from the source of truth.
   managedKeychainCache.invalidate(accountId)
 }
 
 export async function deleteManagedClaudeKeychainCredentials(accountId: string): Promise<void> {
-  await deleteKeychainPassword(ORCA_CLAUDE_SERVICE, accountId)
+  const backend = await getSecretsBackend()
+  await backend.delete(ORCA_CLAUDE_SERVICE, accountId)
   managedKeychainCache.invalidate(accountId)
 }
 
@@ -114,87 +123,4 @@ function getActiveClaudeServices(configDir?: string): string[] {
   return scopedService === ACTIVE_CLAUDE_SERVICE
     ? [ACTIVE_CLAUDE_SERVICE]
     : [scopedService, ACTIVE_CLAUDE_SERVICE]
-}
-
-async function readKeychainPassword(service: string, account: string): Promise<string | null> {
-  if (process.platform !== 'darwin') {
-    return null
-  }
-  return new Promise((resolve, reject) => {
-    execFile(
-      'security',
-      ['find-generic-password', '-s', service, '-a', account, '-w'],
-      { timeout: 3_000 },
-      (error, stdout, stderr) => {
-        if (!error && stdout.trim()) {
-          resolve(stdout.trim())
-          return
-        }
-        const message = `${stderr} ${error?.message ?? ''}`.toLowerCase()
-        const code = (error as { code?: unknown } | null)?.code
-        if (
-          code === 44 ||
-          message.includes('could not be found') ||
-          message.includes('not be found')
-        ) {
-          resolve(null)
-          return
-        }
-        reject(error ?? new Error(`Could not read macOS Keychain item ${service}/${account}.`))
-      }
-    )
-  })
-}
-
-async function writeKeychainPassword(
-  service: string,
-  account: string,
-  contents: string
-): Promise<void> {
-  if (process.platform !== 'darwin') {
-    return
-  }
-  await execSecurity(['add-generic-password', '-U', '-s', service, '-a', account, '-w', contents])
-}
-
-async function deleteKeychainPassword(
-  service: string,
-  account: string,
-  options?: { failOnAccessError?: boolean }
-): Promise<void> {
-  if (process.platform !== 'darwin') {
-    return
-  }
-  await execSecurity(['delete-generic-password', '-s', service, '-a', account], {
-    ignoreNotFound: true,
-    ignoreFailure: !options?.failOnAccessError
-  })
-}
-
-function execSecurity(
-  args: string[],
-  options?: { ignoreFailure?: boolean; ignoreNotFound?: boolean }
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    execFile('security', args, { timeout: 3_000 }, (error, _stdout, stderr) => {
-      if (!error) {
-        resolve()
-        return
-      }
-      const code = (error as { code?: unknown }).code
-      const message = `${stderr} ${error.message}`.toLowerCase()
-      if (
-        options?.ignoreNotFound &&
-        (code === 44 || message.includes('could not be found') || message.includes('not be found'))
-      ) {
-        resolve()
-        return
-      }
-      if (!options?.ignoreFailure) {
-        reject(error)
-        return
-      }
-      resolve()
-    })
-  })
 }

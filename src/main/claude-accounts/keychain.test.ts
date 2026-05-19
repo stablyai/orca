@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- test suite covers macOS keychain credential flows
+plus the P4 SecretsStorage indirection cases that route through the abstraction. */
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -12,9 +14,18 @@ import {
   writeActiveClaudeKeychainCredentialsForRuntime,
   writeManagedClaudeKeychainCredentials
 } from './keychain'
+import { setSecretsBackendForTest } from './secrets-storage'
+import { createKeychainBackend } from './secrets-storage/keychain-backend'
 
 vi.mock('node:child_process', () => ({
   execFile: vi.fn()
+}))
+
+// Why: secrets-storage/index.ts imports `app` from electron at module load
+// (for the production path that reads userData). Tests inject a backend via
+// setSecretsBackendForTest, so we just need the import to resolve.
+vi.mock('electron', () => ({
+  app: { getPath: () => '/tmp/orca-keychain-test' }
 }))
 
 const execFileMock = vi.mocked(execFile)
@@ -46,9 +57,13 @@ describe('Claude Keychain credentials', () => {
   beforeEach(() => {
     setPlatform('darwin')
     execFileMock.mockReset()
+    // Inject the macOS keychain backend so the test exercises the shell-out
+    // path without going through selectSecretsBackend (which adds a probe).
+    setSecretsBackendForTest(createKeychainBackend())
   })
 
   afterEach(() => {
+    setSecretsBackendForTest(null)
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
     }
@@ -213,9 +228,13 @@ describe('managed Claude keychain LRU integration (autoplan E2)', () => {
     setPlatform('darwin')
     execFileMock.mockReset()
     __resetKeychainCacheForTests()
+    // Inject the macOS keychain backend so the LRU wrap-call counts still
+    // line up against the existing execFile mock expectations.
+    setSecretsBackendForTest(createKeychainBackend())
   })
 
   afterEach(() => {
+    setSecretsBackendForTest(null)
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
     }
@@ -302,5 +321,47 @@ describe('managed Claude keychain LRU integration (autoplan E2)', () => {
     expect(v1).toBeNull()
     expect(v2).toBeNull()
     expect(execFileMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('keychain.ts routes through the injected SecretsStorage backend (P4)', () => {
+  beforeEach(() => {
+    setPlatform('darwin')
+    execFileMock.mockReset()
+    __resetKeychainCacheForTests()
+  })
+
+  afterEach(() => {
+    setSecretsBackendForTest(null)
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
+  })
+
+  it('readActiveClaudeKeychainCredentials uses the injected backend', async () => {
+    const fake = {
+      backendId: 'encrypted-file' as const,
+      read: vi.fn().mockResolvedValue('encoded-creds'),
+      write: vi.fn(),
+      delete: vi.fn()
+    }
+    setSecretsBackendForTest(fake)
+    expect(await readActiveClaudeKeychainCredentials('/tmp/dir')).toBe('encoded-creds')
+  })
+
+  it('writeManagedClaudeKeychainCredentials routes to backend', async () => {
+    const fake = {
+      backendId: 'keychain' as const,
+      read: vi.fn(),
+      write: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn()
+    }
+    setSecretsBackendForTest(fake)
+    await writeManagedClaudeKeychainCredentials('acct-1', 'token-xyz')
+    expect(fake.write).toHaveBeenCalledWith(
+      'Orca Claude Code Managed Credentials',
+      'acct-1',
+      'token-xyz'
+    )
   })
 })

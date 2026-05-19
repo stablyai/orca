@@ -11,7 +11,9 @@
 //     invalidates).
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, rmSync } from 'node:fs'
+import type * as ChildProcess from 'node:child_process'
 import type { ClaudeManagedAccount, GlobalSettings } from '../../shared/types'
+import type { ClaudeAccountService } from './service'
 
 vi.mock('electron', () => ({
   app: {
@@ -31,7 +33,7 @@ const securityStore = new Map<string, string>()
 const keyFor = (service: string, account: string): string => `${service}::${account}`
 
 vi.mock('node:child_process', async () => {
-  const actual = await vi.importActual<typeof import('node:child_process')>('node:child_process')
+  const actual = await vi.importActual<typeof ChildProcess>('node:child_process')
   type Cb = (err: NodeJS.ErrnoException | null, stdout: string, stderr: string) => void
   // keychain.ts calls execFile in the 4-arg callback form:
   //   execFile('security', args, { timeout }, cb)
@@ -43,13 +45,18 @@ vi.mock('node:child_process', async () => {
       // Pass through anything that isn't a Keychain probe (e.g. aws / gcloud)
       // — tests that need those mock `./providers/*` directly.
       const err = new Error(`execFile not stubbed for ${cmd}`)
-      if (cb) cb(err, '', '')
-      else throw err
+      if (cb) {
+        cb(err, '', '')
+      } else {
+        throw err
+      }
       return
     }
     const sub = args[0]
     const finish = (err: NodeJS.ErrnoException | null, stdout: string, stderr: string): void => {
-      if (cb) cb(err, stdout, stderr)
+      if (cb) {
+        cb(err, stdout, stderr)
+      }
     }
     if (sub === 'find-generic-password') {
       const sIdx = args.indexOf('-s')
@@ -112,7 +119,7 @@ vi.mock('./preset-registry', () => ({
 const TEST_ROOT = '/tmp/orca-claude-p3-integration-test'
 
 type IntegrationFixture = {
-  service: import('./service').ClaudeAccountService
+  service: ClaudeAccountService
   getSettings: () => GlobalSettings
   setSettings: (next: Partial<GlobalSettings>) => void
 }
@@ -173,9 +180,13 @@ async function materializeActiveEnv(fixture: IntegrationFixture): Promise<Record
 
   const settings = fixture.getSettings()
   const activeId = settings.activeClaudeManagedAccountId
-  if (!activeId) return {}
+  if (!activeId) {
+    return {}
+  }
   const raw = settings.claudeManagedAccounts.find((acct) => acct.id === activeId)
-  if (!raw) return {}
+  if (!raw) {
+    return {}
+  }
   const account = migrateClaudeAccount(raw)
   const handler = handlerFor(account.authMethod)
   const materialization = await handler.materialize(account)
@@ -190,6 +201,12 @@ beforeEach(async () => {
   // between tests so cache state from a prior case can't mask a real miss.
   const { __resetKeychainCacheForTests } = await import('./keychain')
   __resetKeychainCacheForTests()
+  // Inject the macOS keychain backend so calls hit the `security` mock above
+  // without going through selectSecretsBackend (which probes `list-keychains`
+  // and would fall back to the encrypted-file backend in this test env).
+  const { setSecretsBackendForTest } = await import('./secrets-storage')
+  const { createKeychainBackend } = await import('./secrets-storage/keychain-backend')
+  setSecretsBackendForTest(createKeychainBackend())
 })
 
 describe('P3 integration — Bedrock + Vertex end-to-end', () => {
