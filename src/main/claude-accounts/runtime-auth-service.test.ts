@@ -3280,4 +3280,143 @@ describe('ClaudeRuntimeAuthService', () => {
     expect(readManagedCredentialsForTest('account-1', managedAuthPath)).toBe(reauthedCredentials)
     expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(reauthedCredentials)
   })
+
+  describe('non-OAuth providers — runtime-auth branches on authMethod (autoplan E5)', () => {
+    function createApiKeyAccount(
+      id: string,
+      managedAuthPath: string,
+      overrides: Partial<ClaudeManagedAccount> = {}
+    ): ClaudeManagedAccount {
+      return createClaudeAccount(id, managedAuthPath, {
+        authMethod: 'anthropic-api-key',
+        credentials: { authMethod: 'anthropic-api-key' },
+        email: 'apikey-user@example.com',
+        ...overrides
+      })
+    }
+
+    function createApiKeyManagedAuthDir(rootDir: string, accountId: string): string {
+      // Why: non-OAuth providers still get an owned managed-auth dir (marker
+      // file), but they DO NOT have .credentials.json / oauth-account.json.
+      // The handler stores the secret only in Keychain.
+      const managedAuthPath = join(rootDir, 'claude-accounts', accountId, 'auth')
+      mkdirSync(managedAuthPath, { recursive: true })
+      writeFileSync(join(managedAuthPath, '.orca-managed-claude-auth'), `${accountId}\n`, 'utf-8')
+      return managedAuthPath
+    }
+
+    it('skips credentials.json read-back and runtime writes for anthropic-api-key', async () => {
+      const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+      const managedAuthPath = createApiKeyManagedAuthDir(testState.userDataDir, 'account-api')
+      // The handler stores the bare API key, not OAuth JSON.
+      testState.managedKeychainCredentials.set('account-api', 'sk-ant-test-api-key-12345')
+      const settings = createSettings({
+        claudeManagedAccounts: [createApiKeyAccount('account-api', managedAuthPath)],
+        activeClaudeManagedAccountId: 'account-api'
+      })
+      const store = createStore(settings)
+
+      const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+      const service = new ClaudeRuntimeAuthService(store as never)
+      await service.syncForCurrentSelection()
+
+      // No runtime credentials file written for non-OAuth providers.
+      expect(existsSync(runtimeCredentialsPath)).toBe(false)
+      // No legacy/scoped keychain writes happened either.
+      expect(testState.scopedKeychainCredentials).toBeNull()
+      expect(testState.legacyKeychainCredentials).toBeNull()
+      // Setting remains selected.
+      expect(store.getSettings().activeClaudeManagedAccountId).toBe('account-api')
+    })
+
+    it('prepareForClaudeLaunch returns materialization for anthropic-api-key', async () => {
+      const managedAuthPath = createApiKeyManagedAuthDir(testState.userDataDir, 'account-api')
+      testState.managedKeychainCredentials.set('account-api', 'sk-ant-test-api-key-67890')
+      const settings = createSettings({
+        claudeManagedAccounts: [createApiKeyAccount('account-api', managedAuthPath)],
+        activeClaudeManagedAccountId: 'account-api'
+      })
+      const store = createStore(settings)
+
+      const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+      const service = new ClaudeRuntimeAuthService(store as never)
+      const preparation = await service.prepareForClaudeLaunch()
+
+      expect(preparation.provenance).toBe('managed:account-api')
+      expect(preparation.stripAuthEnv).toBe(true)
+      expect(preparation.materialization).toBeDefined()
+      expect(preparation.materialization?.envPatch).toMatchObject({
+        ANTHROPIC_API_KEY: 'sk-ant-test-api-key-67890'
+      })
+      // No OAuth-only env keys leak from the non-OAuth handler.
+      expect(preparation.materialization?.envPatch.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined()
+      expect(preparation.materialization?.envPatch.AWS_BEARER_TOKEN_BEDROCK).toBeUndefined()
+      // Non-OAuth doesn't manage a CLAUDE_CONFIG_DIR (CLI inherits its own).
+      expect(preparation.materialization?.configDirPath).toBeUndefined()
+    })
+
+    it('OAuth materialization unchanged for back-compat regression check', async () => {
+      const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+      const managedCredentials = createClaudeCredentialsJson('user@example.com', 'managed')
+      const managedAuthPath = createManagedClaudeAuth(
+        testState.userDataDir,
+        'account-oauth',
+        managedCredentials
+      )
+      const settings = createSettings({
+        claudeManagedAccounts: [createClaudeAccount('account-oauth', managedAuthPath)],
+        activeClaudeManagedAccountId: 'account-oauth'
+      })
+      const store = createStore(settings)
+
+      const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+      const service = new ClaudeRuntimeAuthService(store as never)
+      const preparation = await service.prepareForClaudeLaunch()
+
+      // OAuth path returns no materialization — consumers fall back to
+      // applyClaudeEnvPatch with envPatch.
+      expect(preparation.materialization).toBeUndefined()
+      expect(preparation.provenance).toBe('managed:account-oauth')
+      expect(preparation.stripAuthEnv).toBe(true)
+      // OAuth path still writes runtime credentials.
+      expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(managedCredentials)
+    })
+
+    it('switching from OAuth to anthropic-api-key does not crash on read-back', async () => {
+      // Why: this is the autoplan E5 failure mode — if the previous-account
+      // read-back tried to parse a non-OAuth Keychain secret as credentials
+      // JSON, it would corrupt state. Verify the switch succeeds.
+      const oauthManagedCreds = createClaudeCredentialsJson('user@example.com', 'managed-token')
+      const oauthAuthPath = createManagedClaudeAuth(
+        testState.userDataDir,
+        'account-oauth',
+        oauthManagedCreds
+      )
+      const apiKeyAuthPath = createApiKeyManagedAuthDir(testState.userDataDir, 'account-api')
+      testState.managedKeychainCredentials.set('account-api', 'sk-ant-api-key-switch')
+
+      const settings = createSettings({
+        claudeManagedAccounts: [
+          createClaudeAccount('account-oauth', oauthAuthPath),
+          createApiKeyAccount('account-api', apiKeyAuthPath)
+        ],
+        activeClaudeManagedAccountId: 'account-oauth'
+      })
+      const store = createStore(settings)
+
+      const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+      const service = new ClaudeRuntimeAuthService(store as never)
+      await service.syncForCurrentSelection()
+
+      // Now flip active to the API-key account.
+      store.updateSettings({ activeClaudeManagedAccountId: 'account-api' })
+      await service.syncForCurrentSelection()
+
+      const preparation = await service.prepareForClaudeLaunch()
+      expect(preparation.provenance).toBe('managed:account-api')
+      expect(preparation.materialization?.envPatch).toMatchObject({
+        ANTHROPIC_API_KEY: 'sk-ant-api-key-switch'
+      })
+    })
+  })
 })

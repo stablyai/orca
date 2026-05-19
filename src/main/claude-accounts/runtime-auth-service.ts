@@ -24,12 +24,19 @@ import {
   writeActiveClaudeKeychainCredentialsForRuntime,
   writeManagedClaudeKeychainCredentials
 } from './keychain'
+import { handlerFor } from './providers'
+import type { MaterializedEnvPatch } from './providers'
 
 export type ClaudeRuntimeAuthPreparation = {
   configDir: string
   envPatch: ClaudeEnvPatch
   stripAuthEnv: boolean
   provenance: string
+  // Set for non-OAuth providers (anthropic-api-key, anthropic-compat, ...).
+  // When present, consumers should build the launch env via
+  // applyEnvFromMaterialization() instead of applyClaudeEnvPatch() — the
+  // OAuth path leaves this undefined for back-compat (autoplan E5).
+  materialization?: MaterializedEnvPatch
 }
 
 type ClaudeSystemDefaultSnapshot = {
@@ -84,12 +91,12 @@ export class ClaudeRuntimeAuthService {
 
   async prepareForClaudeLaunch(): Promise<ClaudeRuntimeAuthPreparation> {
     await this.syncForCurrentSelection()
-    return this.getPreparation()
+    return await this.getPreparation()
   }
 
   async prepareForRateLimitFetch(): Promise<ClaudeRuntimeAuthPreparation> {
     await this.syncForCurrentSelection()
-    return this.getPreparation()
+    return await this.getPreparation()
   }
 
   async syncForCurrentSelection(): Promise<void> {
@@ -104,9 +111,17 @@ export class ClaudeRuntimeAuthService {
           settings.claudeManagedAccounts,
           this.lastSyncedAccountId
         )
+        // Why: only subscription-oauth accounts have credentials.json /
+        // oauth-account.json to restore from; non-OAuth providers carry no
+        // such files (autoplan E5).
+        const previousIsOauth = previousAccount?.authMethod === 'subscription-oauth'
         await this.restoreSystemDefaultSnapshot(
-          previousAccount ? await this.readManagedCredentials(previousAccount) : null,
-          previousAccount ? this.readManagedOauthAccount(previousAccount) : undefined
+          previousAccount && previousIsOauth
+            ? await this.readManagedCredentials(previousAccount)
+            : null,
+          previousAccount && previousIsOauth
+            ? this.readManagedOauthAccount(previousAccount)
+            : undefined
         )
         this.lastSyncedAccountId = null
         return
@@ -148,13 +163,17 @@ export class ClaudeRuntimeAuthService {
       settings.claudeManagedAccounts,
       this.lastSyncedAccountId
     )
-    const previousManagedCredentialsJson = previousAccount
-      ? await this.readManagedCredentials(previousAccount)
-      : null
-    const previousManagedOauthAccount = previousAccount
-      ? this.readManagedOauthAccount(previousAccount)
-      : null
-    if (previousAccount && previousAccount.id !== activeAccount?.id) {
+    // Why: read-back / OAuth-account metadata only applies to subscription-oauth
+    // accounts. Non-OAuth providers (anthropic-api-key, anthropic-compat) store
+    // a plain secret in Keychain, not OAuth credentials JSON — reading that as
+    // credentials.json crashes parsing and corrupts state (autoplan E5).
+    const previousIsOauth =
+      previousAccount?.authMethod === 'subscription-oauth' || previousAccount === null
+    const previousManagedCredentialsJson =
+      previousAccount && previousIsOauth ? await this.readManagedCredentials(previousAccount) : null
+    const previousManagedOauthAccount =
+      previousAccount && previousIsOauth ? this.readManagedOauthAccount(previousAccount) : null
+    if (previousAccount && previousIsOauth && previousAccount.id !== activeAccount?.id) {
       if (previousManagedCredentialsJson) {
         await this.readBackRefreshedTokens(previousManagedCredentialsJson, {
           updateLastWrittenCredentialsJson: true
@@ -198,6 +217,18 @@ export class ClaudeRuntimeAuthService {
       }
       this.store.updateSettings({ activeClaudeManagedAccountId: null })
       this.lastSyncedAccountId = null
+      return
+    }
+
+    // Why: non-OAuth providers (anthropic-api-key, anthropic-compat) feed the
+    // CLI through env vars, not by writing .credentials.json. Skip ALL of the
+    // OAuth read-back / file-write / Keychain machinery below — calling it
+    // against a plain API-key secret crashes credentials-shape parsing and
+    // corrupts state (autoplan E5). Env materialization happens in
+    // getPreparation() instead.
+    if (activeAccount.authMethod !== 'subscription-oauth') {
+      this.lastSyncedAccountId = activeAccount.id
+      this.skipNextReadBackForAccountId = null
       return
     }
 
@@ -445,16 +476,29 @@ export class ClaudeRuntimeAuthService {
     return candidates
   }
 
-  private getPreparation(): ClaudeRuntimeAuthPreparation {
+  private async getPreparation(): Promise<ClaudeRuntimeAuthPreparation> {
     const settings = this.store.getSettings()
     const paths = this.pathResolver.getRuntimePaths()
-    const activeAccountId = settings.activeClaudeManagedAccountId
-    return {
+    const activeAccount = this.getActiveAccount(
+      settings.claudeManagedAccounts,
+      settings.activeClaudeManagedAccountId
+    )
+    const activeAccountId = activeAccount?.id ?? null
+    const base: ClaudeRuntimeAuthPreparation = {
       configDir: paths.configDir,
       envPatch: paths.envPatch,
       stripAuthEnv: Boolean(activeAccountId),
       provenance: activeAccountId ? `managed:${activeAccountId}` : 'system'
     }
+    // Why: for non-OAuth providers, hand the consumer a MaterializedEnvPatch so
+    // it can apply the allowlist-replace model in environment.ts. The OAuth
+    // path keeps its existing envPatch shape (CLAUDE_CONFIG_DIR only).
+    if (activeAccount && activeAccount.authMethod !== 'subscription-oauth') {
+      const handler = handlerFor(activeAccount.authMethod)
+      const materialization = await handler.materialize(activeAccount)
+      return { ...base, materialization }
+    }
+    return base
   }
 
   private getActiveAccount(
@@ -473,6 +517,11 @@ export class ClaudeRuntimeAuthService {
     const matches: { account: ClaudeManagedAccount; managedCredentialsJson: string }[] = []
     let unverifiableCount = 0
     for (const account of this.store.getSettings().claudeManagedAccounts) {
+      // Why: only OAuth accounts have credentials.json to match against. The
+      // Keychain entry for non-OAuth providers is a bare secret (autoplan E5).
+      if (account.authMethod !== 'subscription-oauth') {
+        continue
+      }
       const managedCredentialsJson = await this.readManagedCredentials(account)
       if (!managedCredentialsJson) {
         continue
