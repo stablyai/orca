@@ -13,7 +13,69 @@ import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { parseGitHubIssueOrPRLink, parseGitHubIssueOrPRNumber } from '@/lib/github-links'
 import { ExternalLink, LoaderCircle } from 'lucide-react'
-import type { WorktreeMeta } from '../../../../shared/types'
+import type {
+  ClaudeManagedAccountSummary,
+  WorktreeMeta
+} from '../../../../shared/types'
+import {
+  WorktreeClaudeAccountPicker,
+  type AccountSummary
+} from './WorktreeClaudeAccountPicker'
+
+export type WorktreeClaudeAccountSectionProps = {
+  /** When false (default settings) the section is omitted entirely. */
+  multiProviderEnabled: boolean
+  worktreeId: string
+  accounts: AccountSummary[]
+  currentOverride: string | null
+  onSetOverride: (args: { worktreeId: string; accountId: string }) => void
+  onClearOverride: (args: { worktreeId: string }) => void
+}
+
+/**
+ * Stateless renderer for the Claude-account picker section inside
+ * `WorktreeMetaDialog`. Returns `null` when the multi-provider flag is off
+ * or when there's no worktree target so the flag-gated, no-data states are
+ * unit-testable without rendering the full dialog.
+ *
+ * Exported so the dialog can mount it directly and so the renderer test
+ * suite (no jsdom, no RTL) can verify the section's shape by calling this
+ * helper as a plain function.
+ */
+export function renderWorktreeClaudeAccountSection(
+  props: WorktreeClaudeAccountSectionProps
+): React.JSX.Element | null {
+  if (!props.multiProviderEnabled) {
+    return null
+  }
+  if (!props.worktreeId) {
+    return null
+  }
+  return (
+    <div className="space-y-1">
+      <label className="text-[11px] font-medium text-muted-foreground">Claude account</label>
+      <WorktreeClaudeAccountPicker
+        worktreeId={props.worktreeId}
+        accounts={props.accounts}
+        currentOverride={props.currentOverride}
+        onApply={(update) => {
+          if (update.action === 'clear') {
+            props.onClearOverride({ worktreeId: update.worktreeId })
+          } else {
+            props.onSetOverride({
+              worktreeId: update.worktreeId,
+              accountId: update.accountId
+            })
+          }
+        }}
+      />
+      <p className="text-[10px] text-muted-foreground">
+        Override which Claude account is used when launching agents from this worktree. Falls
+        back to the global default when set to &quot;Use global default&quot;.
+      </p>
+    </div>
+  )
+}
 
 function parseExplicitGitHubIssueUrl(input: string): string | null {
   const trimmed = input.trim()
@@ -31,6 +93,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const closeModal = useAppStore((s) => s.closeModal)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const fetchIssue = useAppStore((s) => s.fetchIssue)
+  const settings = useAppStore((s) => s.settings)
 
   const isEditMeta = activeModal === 'edit-meta'
   const isOpen = isEditMeta
@@ -51,6 +114,11 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const [commentInput, setCommentInput] = useState('')
   const [saving, setSaving] = useState(false)
   const [openingIssue, setOpeningIssue] = useState(false)
+  // Claude managed accounts for the picker — only fetched when the dialog is
+  // open and the multi-provider flag is on. P2 reuses the existing
+  // `claudeAccounts.list` IPC; the per-workspace override IPC lands in T19.
+  const multiProviderEnabled = settings?.claudeMultiProviderEnabled === true
+  const [claudeAccounts, setClaudeAccounts] = useState<ClaudeManagedAccountSummary[]>([])
   const isMac = navigator.userAgent.includes('Mac')
 
   const issueInputRef = useRef<HTMLInputElement>(null)
@@ -106,6 +174,43 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
       autoResize()
     }
   }, [isEditMeta, commentInput, autoResize])
+
+  // Load Claude accounts only when the dialog is open + multi-provider is on.
+  // Keeps the legacy single-account flow free of any new IPC traffic.
+  useEffect(() => {
+    if (!isOpen || !multiProviderEnabled) {
+      return
+    }
+    let stale = false
+    void (async () => {
+      try {
+        const state = await window.api.claudeAccounts.list()
+        if (!stale) {
+          setClaudeAccounts(state.accounts)
+        }
+      } catch {
+        // Non-fatal: the picker simply shows "Use global default" with no
+        // per-account options when the list fails to load.
+      }
+    })()
+    return () => {
+      stale = true
+    }
+  }, [isOpen, multiProviderEnabled])
+
+  const pickerAccounts = useMemo<AccountSummary[]>(
+    () =>
+      claudeAccounts.map((account) => ({
+        id: account.id,
+        // Prefer the email as a recognisable label; fall back to the account id
+        // so the picker never renders a blank row.
+        label: account.email ?? account.id
+      })),
+    [claudeAccounts]
+  )
+
+  const currentClaudeOverride =
+    (worktreeId && settings?.claudeAccountIdByWorkspace?.[worktreeId]) || null
 
   const canSave = useMemo(() => {
     if (!worktreeId) {
@@ -347,6 +452,23 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
               {isMac ? 'Cmd' : 'Ctrl'}+Enter to save, Shift+Enter for a new line.
             </p>
           </div>
+
+          {/* Multi-provider Claude account override (P2). Renders null when the
+              feature flag is off, so single-provider users see no change. The
+              setWorkspaceOverride / clearWorkspaceOverride IPCs land in T19;
+              until then the apply handlers are no-ops at the renderer edge. */}
+          {renderWorktreeClaudeAccountSection({
+            multiProviderEnabled,
+            worktreeId,
+            accounts: pickerAccounts,
+            currentOverride: currentClaudeOverride,
+            onSetOverride: () => {
+              // T19 wires this to api.claudeAccounts.setWorkspaceOverride.
+            },
+            onClearOverride: () => {
+              // T19 wires this to api.claudeAccounts.clearWorkspaceOverride.
+            }
+          })}
         </div>
 
         <DialogFooter>
