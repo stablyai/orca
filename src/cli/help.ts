@@ -26,6 +26,12 @@ Automations:
   automations run           Run an Orca automation now
   automations runs          List automation run history
 
+Claude Accounts:
+  claude-accounts add        Add a Claude managed account (env-var secrets)
+  claude-accounts list       List Claude managed accounts
+  claude-accounts select     Select the active Claude managed account
+  claude-accounts remove     Remove a Claude managed account
+
 Repos:
   repo list                 List repos registered in Orca
   repo add                  Add a project to Orca by filesystem path

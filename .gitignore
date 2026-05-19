@@ -84,6 +84,7 @@ docs/**
 !docs/STYLEGUIDE.md
 !docs/configurable-open-in-menu.md
 !docs/task-provider-availability.md
+!docs/claude-accounts.md
 
 # Stably CLI (only docs/ are tracked)
 .stably/*
