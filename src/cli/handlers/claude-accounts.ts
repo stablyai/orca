@@ -103,6 +103,28 @@ async function handleAdd(ctx: Parameters<CommandHandler>[0]): Promise<void> {
       emitOk(result.result.accountId, result.result.email)
       return
     }
+    if (provider === 'aws-bedrock') {
+      const region = getRequiredStringFlag(ctx.flags, 'region')
+      const tokenEnv = getOptionalStringFlag(ctx.flags, 'token-env')
+      const label = getOptionalStringFlag(ctx.flags, 'label') ?? region
+      // Why: presence of --token-env picks bearer-token mode; absence falls
+      // through to the SDK's IAM credential chain (env / SSO / role).
+      const providerConfig: Record<string, unknown> = {
+        region,
+        authMode: tokenEnv ? 'bearer-token' : 'iam-chain'
+      }
+      const payload: Record<string, unknown> = {
+        authMethod: 'aws-bedrock',
+        label,
+        providerConfig
+      }
+      if (tokenEnv) {
+        payload.secretFromUser = readSecretFromEnv(ctx.flags, 'token-env')
+      }
+      const result = await ctx.client.call<AddResult>('claudeAccounts.add', payload)
+      emitOk(result.result.accountId, result.result.email)
+      return
+    }
     throw new RuntimeClientError('invalid_argument', `Unknown --provider value: ${provider}`)
   } catch (error) {
     emitFail(error)

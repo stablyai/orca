@@ -171,3 +171,55 @@ describe('claude-accounts add — azure-foundry', () => {
     ).rejects.toThrow(/either.*--use-entra-id.*--key-env/i)
   })
 })
+
+describe('claude-accounts add — aws-bedrock', () => {
+  it('with --token-env stores bearer token', async () => {
+    process.env.SECRET_ENV = 'bedrock-token'
+    callMock.mockResolvedValueOnce({
+      result: {
+        accountId: 'acct-bed',
+        email: 'us-east-1',
+        accounts: [],
+        activeAccountId: 'acct-bed'
+      }
+    })
+    await CLAUDE_ACCOUNTS_HANDLERS['claude-accounts add'](
+      buildCtx({
+        provider: 'aws-bedrock',
+        region: 'us-east-1',
+        'token-env': 'SECRET_ENV'
+      })
+    )
+    expect(callMock).toHaveBeenCalledWith('claudeAccounts.add', {
+      authMethod: 'aws-bedrock',
+      label: 'us-east-1',
+      secretFromUser: 'bedrock-token',
+      providerConfig: { region: 'us-east-1', authMode: 'bearer-token' }
+    })
+  })
+
+  it('without --token-env falls back to IAM credential chain (no secret)', async () => {
+    callMock.mockResolvedValueOnce({
+      result: {
+        accountId: 'acct-bed-iam',
+        email: 'us-east-1',
+        accounts: [],
+        activeAccountId: 'acct-bed-iam'
+      }
+    })
+    await CLAUDE_ACCOUNTS_HANDLERS['claude-accounts add'](
+      buildCtx({ provider: 'aws-bedrock', region: 'us-east-1' })
+    )
+    expect(callMock).toHaveBeenCalledWith('claudeAccounts.add', {
+      authMethod: 'aws-bedrock',
+      label: 'us-east-1',
+      providerConfig: { region: 'us-east-1', authMode: 'iam-chain' }
+    })
+  })
+
+  it('requires --region', async () => {
+    await expect(
+      CLAUDE_ACCOUNTS_HANDLERS['claude-accounts add'](buildCtx({ provider: 'aws-bedrock' }))
+    ).rejects.toThrow(/--region/)
+  })
+})
