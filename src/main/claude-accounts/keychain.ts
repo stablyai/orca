@@ -1,8 +1,15 @@
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
+import { createKeychainCache } from './keychain-cache'
 
 const ACTIVE_CLAUDE_SERVICE = 'Claude Code-credentials'
 const ORCA_CLAUDE_SERVICE = 'Orca Claude Code Managed Credentials'
+
+// Why: every workspace PTY spawn calls into runtime-auth which probes the
+// Keychain per active account; without caching this becomes an N+1
+// `security` shell-out that stalls workspace launch (autoplan E2). Size 50
+// covers practical multi-account fleets and bounds memory.
+const managedKeychainCache = createKeychainCache(50)
 
 export async function readActiveClaudeKeychainCredentials(
   configDir?: string
@@ -58,7 +65,14 @@ export async function deleteActiveClaudeKeychainCredentialsStrict(
 export async function readManagedClaudeKeychainCredentials(
   accountId: string
 ): Promise<string | null> {
-  return readKeychainPassword(ORCA_CLAUDE_SERVICE, accountId)
+  if (managedKeychainCache.has(accountId)) {
+    return managedKeychainCache.get(accountId) ?? null
+  }
+  const value = await readKeychainPassword(ORCA_CLAUDE_SERVICE, accountId)
+  // Cache misses too — the null sentinel suppresses re-probes for missing
+  // accounts on the workspace-launch hot path.
+  managedKeychainCache.set(accountId, value)
+  return value
 }
 
 export async function writeManagedClaudeKeychainCredentials(
@@ -66,10 +80,19 @@ export async function writeManagedClaudeKeychainCredentials(
   contents: string
 ): Promise<void> {
   await writeKeychainPassword(ORCA_CLAUDE_SERVICE, accountId, contents)
+  // Invalidate; let the next read re-fetch from the source of truth.
+  managedKeychainCache.invalidate(accountId)
 }
 
 export async function deleteManagedClaudeKeychainCredentials(accountId: string): Promise<void> {
   await deleteKeychainPassword(ORCA_CLAUDE_SERVICE, accountId)
+  managedKeychainCache.invalidate(accountId)
+}
+
+// Test-only escape hatch — not exported from index. Used by integration tests
+// to reset cache state between cases.
+export function __resetKeychainCacheForTests(): void {
+  managedKeychainCache.clear()
 }
 
 function getKeychainUser(): string {

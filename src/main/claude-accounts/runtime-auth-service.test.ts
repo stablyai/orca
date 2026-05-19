@@ -3418,6 +3418,65 @@ describe('ClaudeRuntimeAuthService', () => {
         ANTHROPIC_API_KEY: 'sk-ant-api-key-switch'
       })
     })
+
+    it('skips credentials.json read-back and runtime writes for aws-bedrock (P3 T14)', async () => {
+      // Why: P3 T14 — non-OAuth providers (aws-bedrock, google-vertex) must
+      // bypass the OAuth read-back / runtime file-write path. The Keychain
+      // secret here is the bearer token (or empty for IAM chain), not OAuth
+      // credentials JSON. Re-reading and parsing would crash (autoplan E5).
+      const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+      const managedAuthPath = createApiKeyManagedAuthDir(testState.userDataDir, 'account-bedrock')
+      testState.managedKeychainCredentials.set('account-bedrock', 'bedrock-bearer-token')
+      const settings = createSettings({
+        claudeManagedAccounts: [
+          createApiKeyAccount('account-bedrock', managedAuthPath, {
+            authMethod: 'aws-bedrock',
+            credentials: { authMethod: 'aws-bedrock', region: 'us-east-1' }
+          })
+        ],
+        activeClaudeManagedAccountId: 'account-bedrock'
+      })
+      const store = createStore(settings)
+
+      const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+      const service = new ClaudeRuntimeAuthService(store as never)
+      await service.syncForCurrentSelection()
+
+      expect(existsSync(runtimeCredentialsPath)).toBe(false)
+      expect(testState.scopedKeychainCredentials).toBeNull()
+      expect(testState.legacyKeychainCredentials).toBeNull()
+      expect(store.getSettings().activeClaudeManagedAccountId).toBe('account-bedrock')
+    })
+
+    it('skips credentials.json read-back and runtime writes for google-vertex (P3 T14)', async () => {
+      // Why: same as bedrock above — Vertex uses gcloud ADC, not OAuth JSON.
+      const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+      const managedAuthPath = createApiKeyManagedAuthDir(testState.userDataDir, 'account-vertex')
+      // Vertex stores no secret (ADC-based) — leave keychain unset.
+      const settings = createSettings({
+        claudeManagedAccounts: [
+          createApiKeyAccount('account-vertex', managedAuthPath, {
+            authMethod: 'google-vertex',
+            credentials: {
+              authMethod: 'google-vertex',
+              projectId: 'my-project',
+              region: 'us-east5'
+            }
+          })
+        ],
+        activeClaudeManagedAccountId: 'account-vertex'
+      })
+      const store = createStore(settings)
+
+      const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+      const service = new ClaudeRuntimeAuthService(store as never)
+      await service.syncForCurrentSelection()
+
+      expect(existsSync(runtimeCredentialsPath)).toBe(false)
+      expect(testState.scopedKeychainCredentials).toBeNull()
+      expect(testState.legacyKeychainCredentials).toBeNull()
+      expect(store.getSettings().activeClaudeManagedAccountId).toBe('account-vertex')
+    })
   })
 
   describe('prepareForClaudeLaunch — worktree-scoped resolver (P2)', () => {

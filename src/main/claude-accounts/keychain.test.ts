@@ -2,11 +2,15 @@ import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  __resetKeychainCacheForTests,
   deleteActiveClaudeKeychainCredentials,
+  deleteManagedClaudeKeychainCredentials,
   readActiveClaudeKeychainCredentials,
   readActiveClaudeKeychainCredentialsStrict,
+  readManagedClaudeKeychainCredentials,
   writeActiveClaudeKeychainCredentials,
-  writeActiveClaudeKeychainCredentialsForRuntime
+  writeActiveClaudeKeychainCredentialsForRuntime,
+  writeManagedClaudeKeychainCredentials
 } from './keychain'
 
 vi.mock('node:child_process', () => ({
@@ -201,5 +205,102 @@ describe('Claude Keychain credentials', () => {
         process.env.USER || process.env.USERNAME || 'user'
       ]
     ])
+  })
+})
+
+describe('managed Claude keychain LRU integration (autoplan E2)', () => {
+  beforeEach(() => {
+    setPlatform('darwin')
+    execFileMock.mockReset()
+    __resetKeychainCacheForTests()
+  })
+
+  afterEach(() => {
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
+  })
+
+  it('reads from keychain on first call, then serves from cache (suppresses N+1)', async () => {
+    execFileMock.mockImplementationOnce((_file, _args, _options, callback) => {
+      invokeExecFileCallback(callback, null, 'secret-1\n', '')
+      return null as never
+    })
+
+    const v1 = await readManagedClaudeKeychainCredentials('a1')
+    const v2 = await readManagedClaudeKeychainCredentials('a1')
+    const v3 = await readManagedClaudeKeychainCredentials('a1')
+
+    expect(v1).toBe('secret-1')
+    expect(v2).toBe('secret-1')
+    expect(v3).toBe('secret-1')
+    expect(execFileMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('write invalidates the cached entry for that accountId', async () => {
+    execFileMock
+      .mockImplementationOnce((_file, _args, _options, callback) => {
+        invokeExecFileCallback(callback, null, 'old\n', '')
+        return null as never
+      })
+      .mockImplementationOnce((_file, _args, _options, callback) => {
+        // add-generic-password
+        invokeExecFileCallback(callback, null, '', '')
+        return null as never
+      })
+      .mockImplementationOnce((_file, _args, _options, callback) => {
+        invokeExecFileCallback(callback, null, 'new\n', '')
+        return null as never
+      })
+
+    await readManagedClaudeKeychainCredentials('a1')
+    await writeManagedClaudeKeychainCredentials('a1', 'new')
+    const v = await readManagedClaudeKeychainCredentials('a1')
+
+    expect(v).toBe('new')
+    // Two find-generic-password reads (cache invalidated after write) + one
+    // add-generic-password write.
+    expect(execFileMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('remove invalidates the cached entry for that accountId', async () => {
+    execFileMock
+      .mockImplementationOnce((_file, _args, _options, callback) => {
+        invokeExecFileCallback(callback, null, 'val\n', '')
+        return null as never
+      })
+      .mockImplementationOnce((_file, _args, _options, callback) => {
+        // delete-generic-password
+        invokeExecFileCallback(callback, null, '', '')
+        return null as never
+      })
+      .mockImplementationOnce((_file, _args, _options, callback) => {
+        const notFound = Object.assign(new Error('not found'), { code: 44 })
+        invokeExecFileCallback(callback, notFound, '', 'could not be found')
+        return null as never
+      })
+
+    await readManagedClaudeKeychainCredentials('a1')
+    await deleteManagedClaudeKeychainCredentials('a1')
+    const v = await readManagedClaudeKeychainCredentials('a1')
+
+    expect(v).toBeNull()
+    // Read + delete + post-delete read (cache invalidated).
+    expect(execFileMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('caches the missing/null sentinel — does not re-probe on subsequent reads', async () => {
+    execFileMock.mockImplementationOnce((_file, _args, _options, callback) => {
+      const notFound = Object.assign(new Error('not found'), { code: 44 })
+      invokeExecFileCallback(callback, notFound, '', 'could not be found')
+      return null as never
+    })
+
+    const v1 = await readManagedClaudeKeychainCredentials('missing')
+    const v2 = await readManagedClaudeKeychainCredentials('missing')
+
+    expect(v1).toBeNull()
+    expect(v2).toBeNull()
+    expect(execFileMock).toHaveBeenCalledTimes(1)
   })
 })
