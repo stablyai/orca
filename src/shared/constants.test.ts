@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getDefaultPrimarySelectionMiddleClickPaste, getDefaultSettings } from './constants'
 
 describe('getDefaultSettings', () => {
@@ -25,6 +25,44 @@ describe('getDefaultSettings', () => {
   it('default settings include empty claudeAccountIdByWorkspace map (P2)', () => {
     const settings = getDefaultSettings('/tmp')
     expect(settings.claudeAccountIdByWorkspace).toEqual({})
+  })
+})
+
+describe('claudeMultiProviderEnabled default', () => {
+  const original = process.env.ORCA_RELEASE_CHANNEL
+  beforeEach(() => {
+    delete process.env.ORCA_RELEASE_CHANNEL
+  })
+  afterEach(() => {
+    if (original === undefined) {
+      delete process.env.ORCA_RELEASE_CHANNEL
+    } else {
+      process.env.ORCA_RELEASE_CHANNEL = original
+    }
+  })
+
+  // Why: P4 ships multi-provider on by default. The release-channel env var is
+  // a hot-fix release valve — a single-line override can re-disable shipped
+  // binaries without a re-release.
+
+  it('defaults true when ORCA_RELEASE_CHANNEL=canary', () => {
+    process.env.ORCA_RELEASE_CHANNEL = 'canary'
+    expect(getDefaultSettings('/tmp').claudeMultiProviderEnabled).toBe(true)
+  })
+
+  it('defaults true when ORCA_RELEASE_CHANNEL=stable', () => {
+    process.env.ORCA_RELEASE_CHANNEL = 'stable'
+    expect(getDefaultSettings('/tmp').claudeMultiProviderEnabled).toBe(true)
+  })
+
+  it('defaults true when ORCA_RELEASE_CHANNEL is unset (dev builds)', () => {
+    delete process.env.ORCA_RELEASE_CHANNEL
+    expect(getDefaultSettings('/tmp').claudeMultiProviderEnabled).toBe(true)
+  })
+
+  it('defaults false when ORCA_RELEASE_CHANNEL=disabled (release valve)', () => {
+    process.env.ORCA_RELEASE_CHANNEL = 'disabled'
+    expect(getDefaultSettings('/tmp').claudeMultiProviderEnabled).toBe(false)
   })
 })
 

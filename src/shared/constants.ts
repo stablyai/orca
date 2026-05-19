@@ -222,7 +222,10 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     activeCodexManagedAccountId: null,
     claudeManagedAccounts: [],
     activeClaudeManagedAccountId: null,
-    claudeMultiProviderEnabled: false,
+    // Why: P4 ships multi-provider on by default. The env-var check is a release
+    // valve — a hotfix can downgrade canary/stable in isolation without touching
+    // shipped binaries.
+    claudeMultiProviderEnabled: process.env.ORCA_RELEASE_CHANNEL !== 'disabled',
     claudeAccountIdByWorkspace: {},
     terminalScopeHistoryByWorktree: true,
     defaultTuiAgent: null,
