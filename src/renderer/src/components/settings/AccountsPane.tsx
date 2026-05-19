@@ -252,14 +252,14 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
             Claude
           </h3>
           <p className="text-xs text-muted-foreground">
-            Add and switch Claude Code accounts without moving chat sessions to account-specific
-            config directories.
+            Optional. Orca can use your normal Claude login; add accounts only if you want quick
+            switching without moving chat sessions.
           </p>
         </div>
 
         <SearchableSetting
           title="Claude Accounts"
-          description="Manage which Claude account Orca materializes into the shared Claude auth files."
+          description="Optional account switcher for the shared Claude auth files."
           keywords={['claude', 'account', 'rate limit', 'status bar', 'quota']}
           className="space-y-3 px-1 py-2"
         >
@@ -419,7 +419,8 @@ export function AccountsPane({ settings, updateSettings }: AccountsPaneProps): R
             Codex
           </h3>
           <p className="text-xs text-muted-foreground">
-            Add and switch between Codex accounts in Orca.
+            Optional. Orca can use your normal Codex login; add accounts only if you want quick
+            switching in Orca.
           </p>
           <p className="text-xs text-muted-foreground">
             Each account keeps its own local sign-in context in Orca. Account auth stays on this

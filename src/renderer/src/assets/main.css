@@ -807,19 +807,18 @@
 @keyframes settings-section-flash {
   0% {
     border-color: var(--ring);
-    box-shadow:
-      0 0 0 2px color-mix(in srgb, var(--ring) 45%, transparent),
-      0 1px 2px 0 rgb(0 0 0 / 0.05);
+    background: color-mix(in srgb, var(--ring) 8%, transparent);
+    box-shadow: inset 3px 0 0 var(--ring);
   }
   60% {
     border-color: var(--ring);
-    box-shadow:
-      0 0 0 2px color-mix(in srgb, var(--ring) 30%, transparent),
-      0 1px 2px 0 rgb(0 0 0 / 0.05);
+    background: color-mix(in srgb, var(--ring) 5%, transparent);
+    box-shadow: inset 3px 0 0 color-mix(in srgb, var(--ring) 70%, transparent);
   }
   100% {
     border-color: var(--border);
-    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    background: transparent;
+    box-shadow: inset 0 0 0 transparent;
   }
 }
 

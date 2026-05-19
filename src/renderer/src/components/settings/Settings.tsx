@@ -116,8 +116,25 @@ type SettingsNavSection = {
   description: string
   icon: typeof SlidersHorizontal
   searchEntries: SettingsSearchEntry[]
+  group: string
   badge?: string
 }
+
+type SettingsNavGroup = {
+  id: string
+  title: string
+  sections: SettingsNavSection[]
+}
+
+const SETTINGS_NAV_GROUPS = [
+  { id: 'setup', title: 'Set Up' },
+  { id: 'workflows', title: 'Workflows' },
+  { id: 'interface', title: 'Interface' },
+  { id: 'capabilities', title: 'AI Capabilities' },
+  { id: 'remote', title: 'Remote Access' },
+  { id: 'safety', title: 'Safety' },
+  { id: 'experimental', title: 'Experimental' }
+] as const
 
 function getSettingsSectionId(pane: SettingsNavTarget, repoId: string | null): string {
   if (pane === 'repo' && repoId) {
@@ -416,61 +433,78 @@ function Settings(): React.JSX.Element {
       {
         id: 'general',
         title: 'General',
-        description: 'Workspace, editor, and updates.',
+        description: 'Workspace defaults, app setup, and maintenance.',
         icon: SlidersHorizontal,
-        searchEntries: GENERAL_PANE_SEARCH_ENTRIES
+        searchEntries: GENERAL_PANE_SEARCH_ENTRIES,
+        group: 'setup'
       },
       {
         id: 'agents',
         title: 'Agents',
         description: 'Manage AI agents, set a default, and customize commands.',
         icon: Bot,
-        searchEntries: AGENTS_PANE_SEARCH_ENTRIES
+        searchEntries: AGENTS_PANE_SEARCH_ENTRIES,
+        group: 'setup'
       },
       {
         id: 'accounts',
-        title: 'Agent Accounts',
-        description: 'Sign in and switch between Claude, Codex, Gemini, and OpenCode Go accounts.',
+        title: 'AI Provider Accounts',
+        description: 'Optional account switching for Claude, Codex, Gemini, and OpenCode Go.',
         icon: UserCog,
-        searchEntries: ACCOUNTS_PANE_SEARCH_ENTRIES
+        searchEntries: ACCOUNTS_PANE_SEARCH_ENTRIES,
+        group: 'setup',
+        badge: 'Optional'
+      },
+      {
+        id: 'integrations',
+        title: 'Integrations',
+        description: 'Connect GitHub, GitLab, Linear, and source-hosting services.',
+        icon: Blocks,
+        searchEntries: INTEGRATIONS_PANE_SEARCH_ENTRIES,
+        group: 'setup'
       },
       {
         id: 'git',
-        title: 'Git',
-        description: 'Branch naming, local ref behavior, and AI commit messages.',
+        title: 'Git & Source Control',
+        description: 'Branch naming, base refs, attribution, and AI commit messages.',
         icon: GitBranch,
         // Why: the AI commit messages pane is rendered inside the Git section,
         // so its search entries belong to Git too — that way a query like
         // "claude" or "thinking" still surfaces the section.
-        searchEntries: [...GIT_PANE_SEARCH_ENTRIES, ...COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES]
+        searchEntries: [...GIT_PANE_SEARCH_ENTRIES, ...COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES],
+        group: 'workflows'
       },
       {
         id: 'tasks',
-        title: 'Tasks',
+        title: 'Task Sources',
         description: 'Choose which task providers appear in the Tasks page and sidebar.',
         icon: ListChecks,
-        searchEntries: TASKS_PANE_SEARCH_ENTRIES
+        searchEntries: TASKS_PANE_SEARCH_ENTRIES,
+        group: 'workflows'
       },
       {
         id: 'appearance',
         title: 'Appearance',
-        description: 'Theme and UI scaling.',
+        description: 'Theme, zoom, app font, sidebars, and status bar.',
         icon: Palette,
-        searchEntries: APPEARANCE_PANE_SEARCH_ENTRIES
+        searchEntries: APPEARANCE_PANE_SEARCH_ENTRIES,
+        group: 'interface'
       },
       {
         id: 'input',
         title: 'Input & Editing',
         description: 'Selection and editing behavior.',
         icon: TextCursorInput,
-        searchEntries: INPUT_PANE_SEARCH_ENTRIES
+        searchEntries: INPUT_PANE_SEARCH_ENTRIES,
+        group: 'interface'
       },
       {
         id: 'terminal',
         title: 'Terminal',
-        description: 'Terminal appearance, previews, and defaults for new panes.',
+        description: 'Shells, terminal appearance, quick commands, and pane behavior.',
         icon: SquareTerminal,
-        searchEntries: terminalPaneSearchEntries
+        searchEntries: terminalPaneSearchEntries,
+        group: 'workflows'
       },
       ...(showDesktopOnlySettings
         ? [
@@ -479,14 +513,16 @@ function Settings(): React.JSX.Element {
               title: 'Browser',
               description: 'Home page, link routing, and session cookies.',
               icon: Globe,
-              searchEntries: BROWSER_PANE_SEARCH_ENTRIES
+              searchEntries: BROWSER_PANE_SEARCH_ENTRIES,
+              group: 'workflows'
             },
             {
               id: 'notifications' as const,
               title: 'Notifications',
               description: 'Native desktop notifications for agent and terminal events.',
               icon: Bell,
-              searchEntries: NOTIFICATIONS_PANE_SEARCH_ENTRIES
+              searchEntries: NOTIFICATIONS_PANE_SEARCH_ENTRIES,
+              group: 'interface'
             }
           ]
         : []),
@@ -495,26 +531,37 @@ function Settings(): React.JSX.Element {
         title: 'Orchestration',
         description: 'Coordinate multiple coding agents through Orca.',
         icon: Network,
-        searchEntries: ORCHESTRATION_PANE_SEARCH_ENTRIES
+        searchEntries: ORCHESTRATION_PANE_SEARCH_ENTRIES,
+        group: 'capabilities'
       },
       {
         id: 'servers',
-        title: 'Servers',
+        title: 'Remote Orca Servers',
         description: isWebClient
           ? 'Connect this browser to a saved Orca server.'
-          : 'Run this client locally or through a remote Orca server.',
+          : 'Switch between local desktop mode and paired remote Orca runtimes.',
         icon: Server,
         searchEntries: [runtimeEnvironmentsSearchEntry],
+        group: 'remote',
         badge: 'Beta'
       },
       ...(showDesktopOnlySettings
         ? [
+            {
+              id: 'ssh' as const,
+              title: 'SSH Hosts',
+              description: 'Remote SSH hosts for files, terminals, and git.',
+              icon: Cable,
+              searchEntries: SSH_PANE_SEARCH_ENTRIES,
+              group: 'remote'
+            },
             {
               id: 'mobile' as const,
               title: 'Mobile',
               description: 'Control terminals and agents from your phone.',
               icon: Smartphone,
               searchEntries: MOBILE_SETTINGS_PANE_SEARCH_ENTRIES,
+              group: 'remote',
               badge: 'Beta'
             },
             {
@@ -523,6 +570,7 @@ function Settings(): React.JSX.Element {
               description: 'Enable agents to control any app on your computer.',
               icon: MousePointerClick,
               searchEntries: COMPUTER_USE_PANE_SEARCH_ENTRIES,
+              group: 'capabilities',
               badge: 'Beta'
             },
             {
@@ -531,6 +579,7 @@ function Settings(): React.JSX.Element {
               description: 'Local speech-to-text dictation with on-device models.',
               icon: Mic,
               searchEntries: VOICE_PANE_SEARCH_ENTRIES,
+              group: 'capabilities',
               badge: 'Beta'
             }
           ]
@@ -539,10 +588,11 @@ function Settings(): React.JSX.Element {
         ? [
             {
               id: 'developer-permissions' as const,
-              title: 'Permissions',
+              title: 'macOS Permissions',
               description: 'macOS privacy access for terminal-launched developer tools.',
               icon: ShieldCheck,
-              searchEntries: DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES
+              searchEntries: DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES,
+              group: 'safety'
             }
           ]
         : []),
@@ -551,53 +601,40 @@ function Settings(): React.JSX.Element {
         title: 'Privacy & Telemetry',
         description: 'Anonymous usage data and telemetry controls.',
         icon: Lock,
-        searchEntries: PRIVACY_PANE_SEARCH_ENTRIES
+        searchEntries: PRIVACY_PANE_SEARCH_ENTRIES,
+        group: 'safety'
       },
       {
         id: 'shortcuts',
         title: 'Shortcuts',
         description: 'Keyboard shortcuts for common actions.',
         icon: Keyboard,
-        searchEntries: SHORTCUTS_PANE_SEARCH_ENTRIES
-      },
-      {
-        id: 'integrations',
-        title: 'Integrations',
-        description: 'GitHub, Linear, and other service connections.',
-        icon: Blocks,
-        searchEntries: INTEGRATIONS_PANE_SEARCH_ENTRIES
+        searchEntries: SHORTCUTS_PANE_SEARCH_ENTRIES,
+        group: 'interface'
       },
       {
         id: 'stats',
         title: 'Stats & Usage',
         description: 'Orca stats plus Claude, Codex, and OpenCode usage analytics.',
         icon: BarChart3,
-        searchEntries: STATS_PANE_SEARCH_ENTRIES
+        searchEntries: STATS_PANE_SEARCH_ENTRIES,
+        group: 'interface'
       },
-      ...(showDesktopOnlySettings
-        ? [
-            {
-              id: 'ssh' as const,
-              title: 'SSH',
-              description: 'Remote SSH connections.',
-              icon: Cable,
-              searchEntries: SSH_PANE_SEARCH_ENTRIES
-            }
-          ]
-        : []),
       {
         id: 'experimental',
         title: 'Experimental',
         description: 'New features that are still taking shape. Give them a try.',
         icon: FlaskConical,
-        searchEntries: EXPERIMENTAL_PANE_SEARCH_ENTRIES
+        searchEntries: EXPERIMENTAL_PANE_SEARCH_ENTRIES,
+        group: 'experimental'
       },
       ...repos.map((repo) => ({
         id: `repo-${repo.id}`,
         title: repo.displayName,
         description: `${getRepoKindLabel(repo)} • ${repo.path}`,
         icon: SlidersHorizontal,
-        searchEntries: getRepositoryPaneSearchEntries(repo)
+        searchEntries: getRepositoryPaneSearchEntries(repo),
+        group: 'repositories'
       }))
     ],
     [
@@ -958,6 +995,10 @@ function Settings(): React.JSX.Element {
   }
 
   const generalNavSections = visibleNavSections.filter((section) => !section.id.startsWith('repo-'))
+  const generalNavGroups: SettingsNavGroup[] = SETTINGS_NAV_GROUPS.map((group) => ({
+    ...group,
+    sections: generalNavSections.filter((section) => section.group === group.id)
+  })).filter((group) => group.sections.length > 0)
   const repoNavSections = visibleNavSections
     .filter((section) => section.id.startsWith('repo-'))
     .map((section) => {
@@ -970,7 +1011,7 @@ function Settings(): React.JSX.Element {
     <div className="settings-view-shell flex min-h-0 flex-1 overflow-hidden bg-background">
       <SettingsSidebar
         activeSectionId={activeSectionId}
-        generalSections={generalNavSections}
+        generalGroups={generalNavGroups}
         repoSections={repoNavSections}
         hasRepos={repos.length > 0}
         searchQuery={settingsSearchInputQuery}
@@ -992,21 +1033,12 @@ function Settings(): React.JSX.Element {
                 <SettingsSection
                   id="general"
                   title="General"
-                  description="Workspace, editor, and updates."
+                  description="Workspace defaults, app setup, and maintenance."
                   searchEntries={GENERAL_PANE_SEARCH_ENTRIES}
                 >
                   {isSectionMounted('general') ? (
                     <GeneralPane settings={settings} updateSettings={updateSettings} />
                   ) : null}
-                </SettingsSection>
-
-                <SettingsSection
-                  id="integrations"
-                  title="Integrations"
-                  description="GitHub, Linear, and other service connections."
-                  searchEntries={INTEGRATIONS_PANE_SEARCH_ENTRIES}
-                >
-                  {isSectionMounted('integrations') ? <IntegrationsPane /> : null}
                 </SettingsSection>
 
                 <SettingsSection
@@ -1022,8 +1054,9 @@ function Settings(): React.JSX.Element {
 
                 <SettingsSection
                   id="accounts"
-                  title="Agent Accounts"
-                  description="Sign in and switch between Claude, Codex, Gemini, and OpenCode Go accounts."
+                  title="AI Provider Accounts"
+                  description="Optional. Orca works with your existing provider logins; add accounts only if you want Orca to help switch between them."
+                  badge="Optional"
                   searchEntries={ACCOUNTS_PANE_SEARCH_ENTRIES}
                 >
                   {isSectionMounted('accounts') ? (
@@ -1032,9 +1065,18 @@ function Settings(): React.JSX.Element {
                 </SettingsSection>
 
                 <SettingsSection
+                  id="integrations"
+                  title="Integrations"
+                  description="Connect GitHub, GitLab, Linear, and source-hosting services."
+                  searchEntries={INTEGRATIONS_PANE_SEARCH_ENTRIES}
+                >
+                  {isSectionMounted('integrations') ? <IntegrationsPane /> : null}
+                </SettingsSection>
+
+                <SettingsSection
                   id="git"
-                  title="Git"
-                  description="Branch naming, local ref behavior, and AI commit messages."
+                  title="Git & Source Control"
+                  description="Branch naming, base refs, attribution, and AI commit messages."
                   searchEntries={[
                     ...GIT_PANE_SEARCH_ENTRIES,
                     ...COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES
@@ -1060,7 +1102,7 @@ function Settings(): React.JSX.Element {
 
                 <SettingsSection
                   id="tasks"
-                  title="Tasks"
+                  title="Task Sources"
                   description="Choose which task providers appear in the Tasks page and sidebar."
                   searchEntries={TASKS_PANE_SEARCH_ENTRIES}
                 >
@@ -1070,34 +1112,9 @@ function Settings(): React.JSX.Element {
                 </SettingsSection>
 
                 <SettingsSection
-                  id="appearance"
-                  title="Appearance"
-                  description="Theme and UI scaling."
-                  searchEntries={APPEARANCE_PANE_SEARCH_ENTRIES}
-                >
-                  {isSectionMounted('appearance') ? (
-                    <AppearancePane
-                      settings={settings}
-                      updateSettings={updateSettings}
-                      applyTheme={applyTheme}
-                      fontSuggestions={fontSuggestions}
-                    />
-                  ) : null}
-                </SettingsSection>
-
-                <SettingsSection
-                  id="input"
-                  title="Input & Editing"
-                  description="Selection and editing behavior."
-                  searchEntries={INPUT_PANE_SEARCH_ENTRIES}
-                >
-                  <InputPane settings={settings} updateSettings={updateSettings} />
-                </SettingsSection>
-
-                <SettingsSection
                   id="terminal"
                   title="Terminal"
-                  description="Terminal appearance, previews, and defaults for new panes."
+                  description="Shells, terminal appearance, quick commands, and pane behavior."
                   searchEntries={terminalPaneSearchEntries}
                   headerAction={
                     <Button
@@ -1129,34 +1146,77 @@ function Settings(): React.JSX.Element {
                 </SettingsSection>
 
                 {showDesktopOnlySettings ? (
-                  <>
-                    <SettingsSection
-                      id="browser"
-                      title="Browser"
-                      description="Home page, link routing, and session cookies."
-                      searchEntries={BROWSER_PANE_SEARCH_ENTRIES}
-                    >
-                      {isSectionMounted('browser') ? (
-                        <BrowserPane
-                          settings={settings}
-                          updateSettings={updateSettings}
-                          onOpenComputerUse={openComputerUseFromBrowser}
-                        />
-                      ) : null}
-                    </SettingsSection>
-
-                    <SettingsSection
-                      id="notifications"
-                      title="Notifications"
-                      description="Native desktop notifications for agent activity and terminal events."
-                      searchEntries={NOTIFICATIONS_PANE_SEARCH_ENTRIES}
-                    >
-                      {isSectionMounted('notifications') ? (
-                        <NotificationsPane settings={settings} updateSettings={updateSettings} />
-                      ) : null}
-                    </SettingsSection>
-                  </>
+                  <SettingsSection
+                    id="browser"
+                    title="Browser"
+                    description="Home page, link routing, and session cookies."
+                    searchEntries={BROWSER_PANE_SEARCH_ENTRIES}
+                  >
+                    {isSectionMounted('browser') ? (
+                      <BrowserPane
+                        settings={settings}
+                        updateSettings={updateSettings}
+                        onOpenComputerUse={openComputerUseFromBrowser}
+                      />
+                    ) : null}
+                  </SettingsSection>
                 ) : null}
+
+                <SettingsSection
+                  id="appearance"
+                  title="Appearance"
+                  description="Theme, zoom, app font, sidebars, and status bar."
+                  searchEntries={APPEARANCE_PANE_SEARCH_ENTRIES}
+                >
+                  {isSectionMounted('appearance') ? (
+                    <AppearancePane
+                      settings={settings}
+                      updateSettings={updateSettings}
+                      applyTheme={applyTheme}
+                      fontSuggestions={fontSuggestions}
+                    />
+                  ) : null}
+                </SettingsSection>
+
+                <SettingsSection
+                  id="input"
+                  title="Input & Editing"
+                  description="Selection and editing behavior."
+                  searchEntries={INPUT_PANE_SEARCH_ENTRIES}
+                >
+                  <InputPane settings={settings} updateSettings={updateSettings} />
+                </SettingsSection>
+
+                {showDesktopOnlySettings ? (
+                  <SettingsSection
+                    id="notifications"
+                    title="Notifications"
+                    description="Native desktop notifications for agent activity and terminal events."
+                    searchEntries={NOTIFICATIONS_PANE_SEARCH_ENTRIES}
+                  >
+                    {isSectionMounted('notifications') ? (
+                      <NotificationsPane settings={settings} updateSettings={updateSettings} />
+                    ) : null}
+                  </SettingsSection>
+                ) : null}
+
+                <SettingsSection
+                  id="shortcuts"
+                  title="Shortcuts"
+                  description="Keyboard shortcuts for common actions."
+                  searchEntries={SHORTCUTS_PANE_SEARCH_ENTRIES}
+                >
+                  {isSectionMounted('shortcuts') ? <ShortcutsPane /> : null}
+                </SettingsSection>
+
+                <SettingsSection
+                  id="stats"
+                  title="Stats & Usage"
+                  description="Orca stats plus Claude, Codex, and OpenCode usage analytics."
+                  searchEntries={STATS_PANE_SEARCH_ENTRIES}
+                >
+                  {isSectionMounted('stats') ? <StatsPane /> : null}
+                </SettingsSection>
 
                 <SettingsSection
                   id="orchestration"
@@ -1167,41 +1227,8 @@ function Settings(): React.JSX.Element {
                   {isSectionMounted('orchestration') ? <OrchestrationPane /> : null}
                 </SettingsSection>
 
-                <SettingsSection
-                  id="servers"
-                  title="Servers"
-                  badge="Beta"
-                  description={
-                    isWebClient
-                      ? 'Connect this browser to a saved Orca server.'
-                      : 'Run this desktop client locally or through a remote Orca server.'
-                  }
-                  searchEntries={[runtimeEnvironmentsSearchEntry]}
-                >
-                  {isSectionMounted('servers') ? (
-                    <RuntimeEnvironmentsPane
-                      settings={settings}
-                      switchRuntimeEnvironment={switchRuntimeEnvironment}
-                      canGeneratePairingUrl={!isWebClient}
-                      allowLocalRuntime={!isWebClient}
-                    />
-                  ) : null}
-                </SettingsSection>
-
                 {showDesktopOnlySettings ? (
                   <>
-                    <SettingsSection
-                      id="mobile"
-                      title="Mobile"
-                      badge="Beta"
-                      description="Control terminals and agents from your phone."
-                      searchEntries={MOBILE_SETTINGS_PANE_SEARCH_ENTRIES}
-                    >
-                      {isSectionMounted('mobile') ? (
-                        <MobileSettingsPane settings={settings} updateSettings={updateSettings} />
-                      ) : null}
-                    </SettingsSection>
-
                     <SettingsSection
                       id="computer-use"
                       title="Computer Use"
@@ -1249,10 +1276,56 @@ function Settings(): React.JSX.Element {
                   </>
                 ) : null}
 
+                <SettingsSection
+                  id="servers"
+                  title="Remote Orca Servers"
+                  badge="Beta"
+                  description={
+                    isWebClient
+                      ? 'Connect this browser to a saved Orca server.'
+                      : 'Switch between local desktop mode and paired remote Orca runtimes.'
+                  }
+                  searchEntries={[runtimeEnvironmentsSearchEntry]}
+                >
+                  {isSectionMounted('servers') ? (
+                    <RuntimeEnvironmentsPane
+                      settings={settings}
+                      switchRuntimeEnvironment={switchRuntimeEnvironment}
+                      canGeneratePairingUrl={!isWebClient}
+                      allowLocalRuntime={!isWebClient}
+                    />
+                  ) : null}
+                </SettingsSection>
+
+                {showDesktopOnlySettings ? (
+                  <>
+                    <SettingsSection
+                      id="ssh"
+                      title="SSH Hosts"
+                      description="Remote SSH hosts for files, terminals, and git."
+                      searchEntries={SSH_PANE_SEARCH_ENTRIES}
+                    >
+                      {isSectionMounted('ssh') ? <SshPane /> : null}
+                    </SettingsSection>
+
+                    <SettingsSection
+                      id="mobile"
+                      title="Mobile"
+                      badge="Beta"
+                      description="Control terminals and agents from your phone."
+                      searchEntries={MOBILE_SETTINGS_PANE_SEARCH_ENTRIES}
+                    >
+                      {isSectionMounted('mobile') ? (
+                        <MobileSettingsPane settings={settings} updateSettings={updateSettings} />
+                      ) : null}
+                    </SettingsSection>
+                  </>
+                ) : null}
+
                 {showDesktopOnlySettings && isMac ? (
                   <SettingsSection
                     id="developer-permissions"
-                    title="Permissions"
+                    title="macOS Permissions"
                     description="macOS privacy access for terminal-launched developer tools."
                     searchEntries={DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES}
                   >
@@ -1270,35 +1343,6 @@ function Settings(): React.JSX.Element {
                 >
                   {isSectionMounted('privacy') ? <PrivacyPane settings={settings} /> : null}
                 </SettingsSection>
-
-                <SettingsSection
-                  id="shortcuts"
-                  title="Shortcuts"
-                  description="Keyboard shortcuts for common actions."
-                  searchEntries={SHORTCUTS_PANE_SEARCH_ENTRIES}
-                >
-                  {isSectionMounted('shortcuts') ? <ShortcutsPane /> : null}
-                </SettingsSection>
-
-                <SettingsSection
-                  id="stats"
-                  title="Stats"
-                  description="How much Orca has helped you."
-                  searchEntries={STATS_PANE_SEARCH_ENTRIES}
-                >
-                  {isSectionMounted('stats') ? <StatsPane /> : null}
-                </SettingsSection>
-
-                {showDesktopOnlySettings ? (
-                  <SettingsSection
-                    id="ssh"
-                    title="SSH"
-                    description="Manage remote SSH connections. Connect to remote servers to browse files, run terminals, and use git."
-                    searchEntries={SSH_PANE_SEARCH_ENTRIES}
-                  >
-                    {isSectionMounted('ssh') ? <SshPane /> : null}
-                  </SettingsSection>
-                ) : null}
 
                 <SettingsSection
                   id="experimental"

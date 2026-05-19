@@ -13,6 +13,12 @@ type NavSection = {
   badge?: string
 }
 
+type NavGroup = {
+  id: string
+  title: string
+  sections: NavSection[]
+}
+
 type RepoNavSection = NavSection & {
   badgeColor?: string
   isRemote?: boolean
@@ -20,7 +26,7 @@ type RepoNavSection = NavSection & {
 
 type SettingsSidebarProps = {
   activeSectionId: string
-  generalSections: NavSection[]
+  generalGroups: NavGroup[]
   repoSections: RepoNavSection[]
   hasRepos: boolean
   searchQuery: string
@@ -35,7 +41,7 @@ type SettingsSidebarProps = {
 
 export function SettingsSidebar({
   activeSectionId,
-  generalSections,
+  generalGroups,
   repoSections,
   hasRepos,
   searchQuery,
@@ -78,39 +84,46 @@ export function SettingsSidebar({
 
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek px-3 py-4">
         <div className="space-y-5">
-          <div className="space-y-1">
-            {generalSections.map((section) => {
-              const Icon = section.icon
-              const isActive = activeSectionId === section.id
+          {generalGroups.map((group) => (
+            <div key={group.id} className="space-y-2">
+              <p className="px-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                {group.title}
+              </p>
+              <div className="space-y-1">
+                {group.sections.map((section) => {
+                  const Icon = section.icon
+                  const isActive = activeSectionId === section.id
 
-              return (
-                <button
-                  key={section.id}
-                  onClick={(event) =>
-                    onSelectSection(section.id, {
-                      metaKey: event.metaKey,
-                      ctrlKey: event.ctrlKey,
-                      shiftKey: event.shiftKey,
-                      altKey: event.altKey
-                    })
-                  }
-                  className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                    isActive
-                      ? 'bg-accent font-medium text-accent-foreground'
-                      : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-                  }`}
-                >
-                  <Icon className="mr-2 size-4" />
-                  {section.title}
-                  {section.badge ? (
-                    <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
-                      {section.badge}
-                    </span>
-                  ) : null}
-                </button>
-              )
-            })}
-          </div>
+                  return (
+                    <button
+                      key={section.id}
+                      onClick={(event) =>
+                        onSelectSection(section.id, {
+                          metaKey: event.metaKey,
+                          ctrlKey: event.ctrlKey,
+                          shiftKey: event.shiftKey,
+                          altKey: event.altKey
+                        })
+                      }
+                      className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                        isActive
+                          ? 'bg-accent font-medium text-accent-foreground'
+                          : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                      }`}
+                    >
+                      <Icon className="mr-2 size-4" />
+                      <span className="truncate">{section.title}</span>
+                      {section.badge ? (
+                        <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+                          {section.badge}
+                        </span>
+                      ) : null}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
 
           <div className="space-y-2">
             <p className="px-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">

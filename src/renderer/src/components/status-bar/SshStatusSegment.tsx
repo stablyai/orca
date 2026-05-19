@@ -300,7 +300,7 @@ export function SshStatusSegment({
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={() => {
-            openSettingsTarget({ pane: 'general', repoId: null, sectionId: 'ssh' })
+            openSettingsTarget({ pane: 'ssh', repoId: null, sectionId: 'ssh' })
             setActiveView('settings')
           }}
         >
