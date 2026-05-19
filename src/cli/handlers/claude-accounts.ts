@@ -125,6 +125,20 @@ async function handleAdd(ctx: Parameters<CommandHandler>[0]): Promise<void> {
       emitOk(result.result.accountId, result.result.email)
       return
     }
+    if (provider === 'google-vertex') {
+      // Why: Vertex uses Application Default Credentials — no secret to store.
+      // The runtime authenticates via gcloud ADC / workload identity.
+      const projectId = getRequiredStringFlag(ctx.flags, 'project-id')
+      const region = getRequiredStringFlag(ctx.flags, 'region')
+      const label = getOptionalStringFlag(ctx.flags, 'label') ?? projectId
+      const result = await ctx.client.call<AddResult>('claudeAccounts.add', {
+        authMethod: 'google-vertex',
+        label,
+        providerConfig: { projectId, region, authMode: 'adc' }
+      })
+      emitOk(result.result.accountId, result.result.email)
+      return
+    }
     throw new RuntimeClientError('invalid_argument', `Unknown --provider value: ${provider}`)
   } catch (error) {
     emitFail(error)

@@ -223,3 +223,32 @@ describe('claude-accounts add — aws-bedrock', () => {
     ).rejects.toThrow(/--region/)
   })
 })
+
+describe('claude-accounts add — google-vertex', () => {
+  it('with --project-id and --region sends ADC config (no secret)', async () => {
+    callMock.mockResolvedValueOnce({
+      result: { accountId: 'acct-gv', email: 'my-proj', accounts: [], activeAccountId: 'acct-gv' }
+    })
+    await CLAUDE_ACCOUNTS_HANDLERS['claude-accounts add'](
+      buildCtx({ provider: 'google-vertex', 'project-id': 'my-proj', region: 'us' })
+    )
+    expect(callMock).toHaveBeenCalledWith('claudeAccounts.add', {
+      authMethod: 'google-vertex',
+      label: 'my-proj',
+      providerConfig: { projectId: 'my-proj', region: 'us', authMode: 'adc' }
+    })
+  })
+
+  it('requires --project-id and --region', async () => {
+    await expect(
+      CLAUDE_ACCOUNTS_HANDLERS['claude-accounts add'](
+        buildCtx({ provider: 'google-vertex', region: 'us' })
+      )
+    ).rejects.toThrow(/--project-id/)
+    await expect(
+      CLAUDE_ACCOUNTS_HANDLERS['claude-accounts add'](
+        buildCtx({ provider: 'google-vertex', 'project-id': 'p' })
+      )
+    ).rejects.toThrow(/--region/)
+  })
+})
