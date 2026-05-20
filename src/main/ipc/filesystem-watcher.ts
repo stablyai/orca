@@ -12,6 +12,7 @@ import { isWslPath } from '../wsl'
 import { createWslWatcher } from './filesystem-watcher-wsl'
 import type { WatchedRoot } from './filesystem-watcher-wsl'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { appendWatcherEvents } from './filesystem-watcher-event-batch'
 
 // ── Ignore patterns ──────────────────────────────────────────────────
 // Why: high-churn directories are suppressed at the native watcher level
@@ -285,7 +286,7 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
           return
         }
 
-        root.batch.events.push(...events)
+        appendWatcherEvents(root.batch.events, events)
         scheduleBatchFlush(rootKey, root)
       },
       watcherOptions
