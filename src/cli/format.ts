@@ -212,13 +212,17 @@ export function formatTerminalClose(result: { close: RuntimeTerminalClose }): st
 }
 
 export function formatTerminalWait(result: { wait: RuntimeTerminalWait }): string {
-  return [
+  const lines = [
     `handle: ${result.wait.handle}`,
     `condition: ${result.wait.condition}`,
     `satisfied: ${result.wait.satisfied}`,
     `status: ${result.wait.status}`,
     `exitCode: ${result.wait.exitCode ?? 'null'}`
-  ].join('\n')
+  ]
+  if (result.wait.blockedReason) {
+    lines.push(`blockedReason: ${result.wait.blockedReason}`)
+  }
+  return lines.join('\n')
 }
 
 export function formatWorktreePs(result: RuntimeWorktreePsResult): string {

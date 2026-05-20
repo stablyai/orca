@@ -351,6 +351,7 @@ export type RuntimeTerminalClose = {
 }
 
 export type RuntimeTerminalWaitCondition = 'exit' | 'tui-idle'
+export type RuntimeTerminalWaitBlockedReason = 'codex-update-prompt' | 'codex-trust-workspace'
 
 export type RuntimeTerminalWait = {
   handle: string
@@ -358,6 +359,7 @@ export type RuntimeTerminalWait = {
   satisfied: boolean
   status: RuntimeTerminalState
   exitCode: number | null
+  blockedReason?: RuntimeTerminalWaitBlockedReason
 }
 
 export type RuntimeWorktreePsSummary = {

@@ -83,6 +83,7 @@ import type {
   RuntimeTerminalState,
   RuntimeStatus,
   RuntimeTerminalWait,
+  RuntimeTerminalWaitBlockedReason,
   RuntimeTerminalWaitCondition,
   RuntimeWorktreePsSummary,
   RuntimeWorktreeStatus,
@@ -4315,7 +4316,23 @@ export class OrcaRuntimeService {
       if (condition === 'exit' && !pty.pty.connected) {
         return buildPtyTerminalWaitResult(handle, condition, pty.pty)
       }
+      const ptyWaitText = buildTerminalWaitText(
+        pty.pty.tailBuffer,
+        pty.pty.tailPartialLine,
+        pty.pty.preview
+      )
+      const ptyBlockedReason = detectTerminalWaitBlockedReason(ptyWaitText)
+      if (condition === 'tui-idle' && ptyBlockedReason) {
+        return buildPtyTerminalWaitBlockedResult(handle, condition, pty.pty, ptyBlockedReason)
+      }
       if (condition === 'tui-idle' && pty.pty.lastAgentStatus === 'idle') {
+        return buildPtyTerminalWaitResult(handle, condition, pty.pty)
+      }
+      if (
+        condition === 'tui-idle' &&
+        (this.getAdoptedPtyExplicitIdleStatus(pty.pty) === 'idle' ||
+          isCodexReadyPromptPreview(ptyWaitText))
+      ) {
         return buildPtyTerminalWaitResult(handle, condition, pty.pty)
       }
       return await new Promise<RuntimeTerminalWait>((resolve, reject) => {
@@ -4356,8 +4373,28 @@ export class OrcaRuntimeService {
           reject(new Error('terminal_handle_stale'))
         } else if (condition === 'exit' && !live.pty.connected) {
           this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
-        } else if (condition === 'tui-idle' && live.pty.lastAgentStatus === 'idle') {
-          this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
+        } else if (condition === 'tui-idle') {
+          const livePtyWaitText = buildTerminalWaitText(
+            live.pty.tailBuffer,
+            live.pty.tailPartialLine,
+            live.pty.preview
+          )
+          const blockedReason = detectTerminalWaitBlockedReason(livePtyWaitText)
+          if (blockedReason) {
+            this.resolveWaiter(
+              waiter,
+              buildPtyTerminalWaitBlockedResult(handle, condition, live.pty, blockedReason)
+            )
+          } else if (live.pty.lastAgentStatus === 'idle') {
+            this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
+          } else if (
+            this.getAdoptedPtyExplicitIdleStatus(live.pty) === 'idle' ||
+            isCodexReadyPromptPreview(livePtyWaitText)
+          ) {
+            this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
+          } else {
+            this.startPtyTuiIdleFallbackPoll(waiter, live.pty)
+          }
         }
       })
     }
@@ -4367,6 +4404,12 @@ export class OrcaRuntimeService {
       return buildTerminalWaitResult(handle, condition, leaf)
     }
 
+    const leafWaitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
+    const leafBlockedReason = detectTerminalWaitBlockedReason(leafWaitText)
+    if (condition === 'tui-idle' && leafBlockedReason) {
+      return buildTerminalWaitBlockedResult(handle, condition, leaf, leafBlockedReason)
+    }
+
     // Why: if the agent already transitioned to idle (or permission) before the
     // waiter was registered, resolve immediately. This uses the same OSC title
     // detection that powers the renderer's "Task complete" notifications.
@@ -4374,6 +4417,15 @@ export class OrcaRuntimeService {
     // agent is blocked on user approval, not finished with its task.
     if (condition === 'tui-idle' && leaf.lastAgentStatus === 'idle') {
       return buildTerminalWaitResult(handle, condition, leaf)
+    }
+    if (condition === 'tui-idle') {
+      const fastPathTitle = leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title
+      if (
+        (fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
+        isCodexReadyPromptPreview(leafWaitText)
+      ) {
+        return buildTerminalWaitResult(handle, condition, leaf)
+      }
     }
 
     return await new Promise<RuntimeTerminalWait>((resolve, reject) => {
@@ -4423,21 +4475,37 @@ export class OrcaRuntimeService {
         const live = this.getLiveLeafForHandle(handle)
         if (getTerminalState(live.leaf) === 'exited') {
           this.resolveWaiter(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
-        } else if (condition === 'tui-idle' && live.leaf.lastAgentStatus === 'idle') {
-          // Why: don't clear lastAgentStatus here. It's a factual record of the
-          // last detected OSC state, not a one-shot signal. Clearing it causes
-          // subsequent tui-idle waiters to hang even though the agent is idle —
-          // the first waiter consumes the status and all later ones see null.
-          this.resolveWaiter(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
-        } else if (condition === 'tui-idle' && live.leaf.lastAgentStatus === null) {
-          // Why: for daemon-hosted terminals, lastAgentStatus stays null because
-          // PTY data doesn't flow through onPtyData. Check the renderer-synced
-          // title as a fast path before falling back to polling.
-          const fastPathTitle = live.leaf.paneTitle ?? this.tabs.get(live.leaf.tabId)?.title
-          if (fastPathTitle && detectAgentStatusFromTitle(fastPathTitle) === 'idle') {
+        } else if (condition === 'tui-idle') {
+          const liveLeafWaitText = buildTerminalWaitText(
+            live.leaf.tailBuffer,
+            live.leaf.tailPartialLine,
+            live.leaf.preview
+          )
+          const blockedReason = detectTerminalWaitBlockedReason(liveLeafWaitText)
+          if (blockedReason) {
+            this.resolveWaiter(
+              waiter,
+              buildTerminalWaitBlockedResult(handle, condition, live.leaf, blockedReason)
+            )
+          } else if (live.leaf.lastAgentStatus === 'idle') {
+            // Why: don't clear lastAgentStatus here. It's a factual record of the
+            // last detected OSC state, not a one-shot signal. Clearing it causes
+            // subsequent tui-idle waiters to hang even though the agent is idle —
+            // the first waiter consumes the status and all later ones see null.
             this.resolveWaiter(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
           } else {
-            this.startTuiIdleFallbackPoll(waiter, live.leaf)
+            // Why: renderer-synced previews can show Codex's ready prompt even
+            // while the last OSC title is still "working"; keep polling the
+            // preview/title until the waiter resolves or hits its timeout.
+            const fastPathTitle = live.leaf.paneTitle ?? this.tabs.get(live.leaf.tabId)?.title
+            if (
+              (fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
+              isCodexReadyPromptPreview(liveLeafWaitText)
+            ) {
+              this.resolveWaiter(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
+            } else {
+              this.startTuiIdleFallbackPoll(waiter, live.leaf)
+            }
           }
         }
       } catch (error) {
@@ -9058,20 +9126,19 @@ export class OrcaRuntimeService {
   private startTuiIdleFallbackPoll(waiter: TerminalWaiter, leaf: RuntimeLeafRecord): void {
     waiter.pollInterval = setInterval(async () => {
       try {
-        // If OSC detection via onPtyData kicked in, stop — the primary path
-        // will handle (or has already handled) resolution.
-        if (leaf.lastAgentStatus !== null) {
+        if (leaf.lastAgentStatus === 'idle') {
           if (waiter.pollInterval) {
             clearInterval(waiter.pollInterval)
             waiter.pollInterval = null
           }
+          this.resolveWaiter(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf))
           return
         }
         // Why: check the renderer-synced title. For daemon-hosted terminals,
         // this is the only path where OSC titles are visible to the runtime.
         const pollTitle = leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title
         if (pollTitle) {
-          const titleStatus = detectAgentStatusFromTitle(pollTitle)
+          const titleStatus = detectExplicitIdleStatusFromTitle(pollTitle)
           if (titleStatus === 'idle') {
             if (waiter.pollInterval) {
               clearInterval(waiter.pollInterval)
@@ -9081,9 +9148,34 @@ export class OrcaRuntimeService {
             return
           }
         }
+        const leafWaitText = buildTerminalWaitText(
+          leaf.tailBuffer,
+          leaf.tailPartialLine,
+          leaf.preview
+        )
+        const blockedReason = detectTerminalWaitBlockedReason(leafWaitText)
+        if (blockedReason) {
+          if (waiter.pollInterval) {
+            clearInterval(waiter.pollInterval)
+            waiter.pollInterval = null
+          }
+          this.resolveWaiter(
+            waiter,
+            buildTerminalWaitBlockedResult(waiter.handle, 'tui-idle', leaf, blockedReason)
+          )
+          return
+        }
+        if (isCodexReadyPromptPreview(leafWaitText)) {
+          if (waiter.pollInterval) {
+            clearInterval(waiter.pollInterval)
+            waiter.pollInterval = null
+          }
+          this.resolveWaiter(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf))
+          return
+        }
         // Foreground process fallback: if the daemon/local provider can report
         // the process and it's a non-shell with quiet output, treat as idle.
-        if (leaf.ptyId && this.ptyController) {
+        if (leaf.lastAgentStatus === null && leaf.ptyId && this.ptyController) {
           const fg = await this.ptyController.getForegroundProcess(leaf.ptyId)
           if (fg && !isShellProcess(fg)) {
             const quietMs = leaf.lastOutputAt ? Date.now() - leaf.lastOutputAt : 0
@@ -9100,6 +9192,79 @@ export class OrcaRuntimeService {
         // Swallow transient PTY inspection errors and keep polling.
       }
     }, TUI_IDLE_POLL_INTERVAL_MS)
+  }
+
+  private startPtyTuiIdleFallbackPoll(waiter: TerminalWaiter, pty: RuntimePtyWorktreeRecord): void {
+    waiter.pollInterval = setInterval(async () => {
+      try {
+        if (pty.lastAgentStatus === 'idle') {
+          if (waiter.pollInterval) {
+            clearInterval(waiter.pollInterval)
+            waiter.pollInterval = null
+          }
+          this.resolveWaiter(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
+          return
+        }
+        const ptyWaitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+        const blockedReason = detectTerminalWaitBlockedReason(ptyWaitText)
+        if (blockedReason) {
+          if (waiter.pollInterval) {
+            clearInterval(waiter.pollInterval)
+            waiter.pollInterval = null
+          }
+          this.resolveWaiter(
+            waiter,
+            buildPtyTerminalWaitBlockedResult(waiter.handle, 'tui-idle', pty, blockedReason)
+          )
+          return
+        }
+        // Why: background PTY handles can later be adopted by the renderer.
+        // Use that live xterm title as the same readiness signal as leaf handles.
+        if (
+          this.getAdoptedPtyExplicitIdleStatus(pty) === 'idle' ||
+          isCodexReadyPromptPreview(ptyWaitText)
+        ) {
+          if (waiter.pollInterval) {
+            clearInterval(waiter.pollInterval)
+            waiter.pollInterval = null
+          }
+          this.resolveWaiter(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
+          return
+        }
+        if (pty.lastAgentStatus === null && this.ptyController) {
+          const fg = await this.ptyController.getForegroundProcess(pty.ptyId)
+          if (fg && !isShellProcess(fg)) {
+            const quietMs = pty.lastOutputAt ? Date.now() - pty.lastOutputAt : 0
+            if (quietMs >= TUI_IDLE_QUIESCENCE_MS) {
+              if (waiter.pollInterval) {
+                clearInterval(waiter.pollInterval)
+                waiter.pollInterval = null
+              }
+              this.resolveWaiter(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
+            }
+          }
+        }
+      } catch {
+        // Swallow transient PTY inspection errors and keep polling.
+      }
+    }, TUI_IDLE_POLL_INTERVAL_MS)
+  }
+
+  private getAdoptedPtyExplicitIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null {
+    for (const leaf of this.leaves.values()) {
+      if (leaf.ptyId !== pty.ptyId) {
+        continue
+      }
+      const title = leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title
+      if (!title) {
+        continue
+      }
+      const status = detectExplicitIdleStatusFromTitle(title)
+      if (status !== null) {
+        return status
+      }
+    }
+    return null
   }
 
   // Why: push-on-idle delivery — when an agent transitions working→idle, check
@@ -9823,6 +9988,16 @@ function buildPreview(lines: string[], partialLine: string): string {
     : preview
 }
 
+function buildTerminalWaitText(lines: string[], partialLine: string, preview: string): string {
+  const waitText = buildTailLines(lines, partialLine)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join('\n')
+  // Why: the user-facing preview is intentionally short, but wait readiness
+  // needs the retained terminal tail so Codex headers are not truncated away.
+  return waitText.length > 0 ? waitText : preview
+}
+
 function appendToTailBuffer(
   previousLines: string[],
   previousPartialLine: string,
@@ -9908,6 +10083,10 @@ const TUI_IDLE_DEFAULT_TIMEOUT_MS = 5 * 60 * 1000
 const TUI_IDLE_POLL_INTERVAL_MS = 2000
 const TUI_IDLE_QUIESCENCE_MS = 3000
 const MESSAGE_WAIT_DEFAULT_TIMEOUT_MS = 2 * 60 * 1000
+const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
+const CLAUDE_IDLE_PREFIX = '\u2733'
+const GEMINI_IDLE_PREFIX = '\u25c7'
+const PI_IDLE_PREFIX = '\u03c0 - '
 
 // Clamp range for the user-facing mobileAutoRestoreFitMs preference.
 // MIN floor: a couple of seconds is the smallest useful auto-restore
@@ -9916,6 +10095,59 @@ const MESSAGE_WAIT_DEFAULT_TIMEOUT_MS = 2 * 60 * 1000
 // "I forgot" rather than intentional.
 const MOBILE_AUTO_RESTORE_FIT_MIN_MS = 5_000
 const MOBILE_AUTO_RESTORE_FIT_MAX_MS = 60 * 60 * 1000
+
+function detectExplicitIdleStatusFromTitle(title: string): AgentStatus | null {
+  const status = detectAgentStatusFromTitle(title)
+  if (status !== 'idle') {
+    return null
+  }
+  // Why: user-supplied launch titles like "Codex YOLO" contain an agent name
+  // but are not readiness signals. terminal.wait needs explicit idle evidence.
+  if (
+    EXPLICIT_IDLE_TITLE_RE.test(title) ||
+    title.startsWith(CLAUDE_IDLE_PREFIX) ||
+    title.startsWith('* ') ||
+    title.includes(GEMINI_IDLE_PREFIX) ||
+    title.startsWith(PI_IDLE_PREFIX)
+  ) {
+    return 'idle'
+  }
+  return null
+}
+
+function isCodexReadyPromptPreview(preview: string): boolean {
+  const normalized = preview.toLowerCase()
+  if (!normalized.includes('openai codex')) {
+    return false
+  }
+  if (detectTerminalWaitBlockedReason(preview) !== null) {
+    return false
+  }
+  return (
+    normalized.includes('model:') &&
+    normalized.includes('directory:') &&
+    normalized.includes('permissions:')
+  )
+}
+
+function detectTerminalWaitBlockedReason(preview: string): RuntimeTerminalWaitBlockedReason | null {
+  const normalized = preview.toLowerCase()
+  if (normalized.includes('update available') && normalized.includes('press enter to continue')) {
+    return 'codex-update-prompt'
+  }
+  if (
+    (normalized.includes('do you trust') ||
+      normalized.includes('trust this') ||
+      normalized.includes('trusted workspace')) &&
+    (normalized.includes('workspace') ||
+      normalized.includes('folder') ||
+      normalized.includes('directory') ||
+      normalized.includes('repo'))
+  ) {
+    return 'codex-trust-workspace'
+  }
+  return null
+}
 
 function buildTerminalWaitResult(
   handle: string,
@@ -9931,6 +10163,22 @@ function buildTerminalWaitResult(
   }
 }
 
+function buildTerminalWaitBlockedResult(
+  handle: string,
+  condition: RuntimeTerminalWaitCondition,
+  leaf: RuntimeLeafRecord,
+  blockedReason: RuntimeTerminalWaitBlockedReason
+): RuntimeTerminalWait {
+  return {
+    handle,
+    condition,
+    satisfied: false,
+    status: getTerminalState(leaf),
+    exitCode: leaf.lastExitCode,
+    blockedReason
+  }
+}
+
 function buildPtyTerminalWaitResult(
   handle: string,
   condition: RuntimeTerminalWaitCondition,
@@ -9942,6 +10190,22 @@ function buildPtyTerminalWaitResult(
     satisfied: true,
     status: pty.connected ? 'running' : pty.lastExitCode !== null ? 'exited' : 'unknown',
     exitCode: pty.lastExitCode
+  }
+}
+
+function buildPtyTerminalWaitBlockedResult(
+  handle: string,
+  condition: RuntimeTerminalWaitCondition,
+  pty: RuntimePtyWorktreeRecord,
+  blockedReason: RuntimeTerminalWaitBlockedReason
+): RuntimeTerminalWait {
+  return {
+    handle,
+    condition,
+    satisfied: false,
+    status: pty.connected ? 'running' : pty.lastExitCode !== null ? 'exited' : 'unknown',
+    exitCode: pty.lastExitCode,
+    blockedReason
   }
 }
 
