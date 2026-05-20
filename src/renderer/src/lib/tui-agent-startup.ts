@@ -1,11 +1,11 @@
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
-import type { TuiAgent } from '../../../shared/types'
+import { getEffectiveTuiAgent } from '../../../shared/effective-tui-agent'
+import type { CustomTuiAgent, TuiAgentId } from '../../../shared/types'
 
 export type AgentStartupPlan = {
   /** Why: surfaces the agent id so downstream paste-draft logic can resolve
    * the per-agent draft injection strategy without re-deriving from the
    * launch command string. */
-  agent: TuiAgent
+  agent: TuiAgentId
   launchCommand: string
   expectedProcess: string
   followupPrompt: string | null
@@ -32,15 +32,27 @@ function quoteStartupArg(value: string, platform: NodeJS.Platform): string {
 }
 
 export function buildAgentStartupPlan(args: {
-  agent: TuiAgent
+  agent: TuiAgentId
   prompt: string
-  cmdOverrides: Partial<Record<TuiAgent, string>>
+  cmdOverrides: Partial<Record<TuiAgentId, string>>
+  /** Optional: required to resolve `custom:*` ids; empty/omitted for built-in-only callers. */
+  customTuiAgents?: readonly CustomTuiAgent[]
   platform: NodeJS.Platform
   allowEmptyPromptLaunch?: boolean
 }): AgentStartupPlan | null {
-  const { agent, prompt, cmdOverrides, platform, allowEmptyPromptLaunch = false } = args
+  const {
+    agent,
+    prompt,
+    cmdOverrides,
+    customTuiAgents = [],
+    platform,
+    allowEmptyPromptLaunch = false
+  } = args
   const trimmedPrompt = prompt.trim()
-  const config = TUI_AGENT_CONFIG[agent]
+  const config = getEffectiveTuiAgent(agent, customTuiAgents)
+  if (!config) {
+    return null
+  }
   const baseCommand = cmdOverrides[agent] ?? config.launchCmd
 
   if (!trimmedPrompt) {
@@ -106,7 +118,7 @@ export function buildAgentStartupPlan(args: {
 }
 
 export type AgentDraftLaunchPlan = {
-  agent: TuiAgent
+  agent: TuiAgentId
   launchCommand: string
   expectedProcess: string
   /** Why: env-var-based prefill (currently pi via the overlay-installed
@@ -129,13 +141,17 @@ export type AgentDraftLaunchPlan = {
  * back to the paste-after-ready path.
  */
 export function buildAgentDraftLaunchPlan(args: {
-  agent: TuiAgent
+  agent: TuiAgentId
   draft: string
-  cmdOverrides: Partial<Record<TuiAgent, string>>
+  cmdOverrides: Partial<Record<TuiAgentId, string>>
+  customTuiAgents?: readonly CustomTuiAgent[]
   platform: NodeJS.Platform
 }): AgentDraftLaunchPlan | null {
-  const { agent, draft, cmdOverrides, platform } = args
-  const config = TUI_AGENT_CONFIG[agent]
+  const { agent, draft, cmdOverrides, customTuiAgents = [], platform } = args
+  const config = getEffectiveTuiAgent(agent, customTuiAgents)
+  if (!config) {
+    return null
+  }
   const trimmed = draft.trim()
   if (!trimmed) {
     return null

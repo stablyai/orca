@@ -9,7 +9,7 @@
 // not a sweep across renderer + main.
 
 import type { AgentKind } from './telemetry-events'
-import type { TuiAgent } from './types'
+import type { TuiAgent, TuiAgentId } from './types'
 
 type ConcreteAgentKind = Exclude<AgentKind, 'other'>
 
@@ -47,6 +47,8 @@ const TUI_AGENT_KIND_BY_AGENT = {
 // time, but stale persisted settings or unsafe IPC casts can carry a string
 // outside the union at runtime — fall back to `'other'` so the event still
 // emits instead of failing validation and dropping silently.
-export function tuiAgentToAgentKind(agent: TuiAgent): AgentKind {
-  return TUI_AGENT_KIND_BY_AGENT[agent] ?? 'other'
+// Custom agent presets (issue #2284) are intentionally bucketed into `'other'`
+// — keeps the closed telemetry schema closed while still emitting the event.
+export function tuiAgentToAgentKind(agent: TuiAgentId): AgentKind {
+  return TUI_AGENT_KIND_BY_AGENT[agent as TuiAgent] ?? 'other'
 }

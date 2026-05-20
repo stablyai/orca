@@ -29,4 +29,8 @@ describe('tuiAgentToAgentKind', () => {
     expect(tuiAgentToAgentKind('claude')).toBe('claude-code')
     expect(tuiAgentToAgentKind('pi')).toBe('pi')
   })
+
+  it('maps custom agent ids to other (issue #2284 plan §9)', () => {
+    expect(tuiAgentToAgentKind('custom:my-wrapper-abc123')).toBe('other')
+  })
 })

@@ -313,6 +313,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
             agent: effectiveAgent,
             draft: draftContent,
             cmdOverrides: settings?.agentCmdOverrides ?? {},
+            customTuiAgents: settings?.customTuiAgents ?? [],
             platform: CLIENT_PLATFORM
           })
     if (draftLaunchPlan) {
@@ -329,6 +330,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
         agent: effectiveAgent,
         prompt: '',
         cmdOverrides: settings?.agentCmdOverrides ?? {},
+        customTuiAgents: settings?.customTuiAgents ?? [],
         platform: CLIENT_PLATFORM,
         allowEmptyPromptLaunch: true
       })

@@ -1,5 +1,6 @@
-import type { TuiAgent } from '../../../shared/types'
-import { TUI_AGENT_CONFIG, type DraftPasteReadySignal } from '../../../shared/tui-agent-config'
+import type { TuiAgentId } from '../../../shared/types'
+import { type DraftPasteReadySignal } from '../../../shared/tui-agent-config'
+import { getEffectiveTuiAgent } from '../../../shared/effective-tui-agent'
 import { useAppStore } from '@/store'
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-dispatcher'
 import {
@@ -62,7 +63,7 @@ const READINESS_TIMEOUT_MS = 8000
 export async function pasteDraftWhenAgentReady(args: {
   tabId: string
   content: string
-  agent?: TuiAgent
+  agent?: TuiAgentId
   submit?: boolean
   forcePaste?: boolean
   timeoutMs?: number
@@ -70,7 +71,11 @@ export async function pasteDraftWhenAgentReady(args: {
 }): Promise<boolean> {
   const { tabId, content, agent, submit, forcePaste, timeoutMs, onTimeout } = args
 
-  const agentConfig = agent ? TUI_AGENT_CONFIG[agent] : null
+  // Why: custom agent presets (issue #2284) never carry draftPromptFlag/EnvVar
+  // and have no per-agent readiness signal, so the effective lookup returns
+  // the safe defaults below (paste once render-quiet timer fires).
+  const customTuiAgents = useAppStore.getState().settings?.customTuiAgents ?? []
+  const agentConfig = agent ? getEffectiveTuiAgent(agent, customTuiAgents) : null
 
   // Why: agents with a native draft prefill mechanism (flag or env var)
   // launch with the URL already in their input box. Pasting again would

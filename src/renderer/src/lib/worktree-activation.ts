@@ -92,10 +92,12 @@ function buildCreatedAgentReopenStartup(worktree: Worktree):
     return undefined
   }
 
+  const settings = useAppStore.getState().settings
   const startupPlan = buildAgentStartupPlan({
     agent,
     prompt: '',
-    cmdOverrides: useAppStore.getState().settings?.agentCmdOverrides ?? {},
+    cmdOverrides: settings?.agentCmdOverrides ?? {},
+    customTuiAgents: settings?.customTuiAgents ?? [],
     platform: CLIENT_PLATFORM,
     allowEmptyPromptLaunch: true
   })

@@ -28,6 +28,7 @@ export function buildOnboardingFolderAgentStartup(
     agent,
     prompt: '',
     cmdOverrides: settings.agentCmdOverrides ?? {},
+    customTuiAgents: settings.customTuiAgents ?? [],
     platform: getClientPlatform(),
     allowEmptyPromptLaunch: true
   })

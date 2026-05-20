@@ -1739,6 +1739,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         agent: tuiAgent,
         prompt: startupPrompt,
         cmdOverrides: settings?.agentCmdOverrides ?? {},
+        customTuiAgents: settings?.customTuiAgents ?? [],
         platform: CLIENT_PLATFORM
       })
 
@@ -1815,6 +1816,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     selectedRepo,
     selectedRepoRequiresConnection,
     settings?.agentCmdOverrides,
+    settings?.customTuiAgents,
     settings?.rightSidebarOpenByDefault,
     setRightSidebarOpen,
     setRightSidebarTab,
@@ -1959,6 +1961,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 agent,
                 draft: quickDraftPrompt,
                 cmdOverrides: settings?.agentCmdOverrides ?? {},
+                customTuiAgents: settings?.customTuiAgents ?? [],
                 platform: CLIENT_PLATFORM
               })
 
@@ -1976,6 +1979,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             agent,
             prompt: quickPrompt,
             cmdOverrides: settings?.agentCmdOverrides ?? {},
+            customTuiAgents: settings?.customTuiAgents ?? [],
             platform: CLIENT_PLATFORM,
             allowEmptyPromptLaunch: true
           })
@@ -2056,6 +2060,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       selectedRepo,
       selectedRepoRequiresConnection,
       settings?.agentCmdOverrides,
+      settings?.customTuiAgents,
       settings?.rightSidebarOpenByDefault,
       setRightSidebarOpen,
       setRightSidebarTab,

@@ -9,12 +9,12 @@ import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
-import type { TuiAgent } from '../../../shared/types'
+import { getEffectiveTuiAgent } from '../../../shared/effective-tui-agent'
+import type { TuiAgentId } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 
 export type LaunchAgentInNewTabArgs = {
-  agent: TuiAgent
+  agent: TuiAgentId
   worktreeId: string
   /** The tab group the user clicked from. Keeps split-group launches in the
    *  pane the user initiated from instead of falling through to the active group. */
@@ -72,9 +72,14 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   } = args
   const store = useAppStore.getState()
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
+  const customTuiAgents = store.settings?.customTuiAgents ?? []
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
-  const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
+  // Why: a missing effective agent (unknown custom id) is treated as
+  // followup-path because we have no other strategy for it.
+  const effective = getEffectiveTuiAgent(agent, customTuiAgents)
+  const isFollowupPath =
+    effective?.promptInjectionMode === 'stdin-after-start' || effective === null
 
   // Why: argv/flag agents fold the prompt into the launch command and
   // auto-submit — keeping behavior consistent with the composer/tab-bar `+`
@@ -94,6 +99,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       prompt: '',
       cmdOverrides,
+      customTuiAgents,
       platform: CLIENT_PLATFORM,
       allowEmptyPromptLaunch: true
     })
@@ -105,6 +111,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       draft: trimmedPrompt,
       cmdOverrides,
+      customTuiAgents,
       platform: CLIENT_PLATFORM
     })
     if (draftLaunchPlan) {
@@ -130,6 +137,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       prompt: '',
       cmdOverrides,
+      customTuiAgents,
       platform: CLIENT_PLATFORM,
       allowEmptyPromptLaunch: true
     })
@@ -139,6 +147,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       prompt: hasPrompt ? trimmedPrompt : '',
       cmdOverrides,
+      customTuiAgents,
       platform: CLIENT_PLATFORM,
       allowEmptyPromptLaunch: !hasPrompt
     })

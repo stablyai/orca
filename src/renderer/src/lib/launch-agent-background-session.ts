@@ -4,8 +4,8 @@ import { buildAgentStartupPlan, type AgentStartupPlan } from '@/lib/tui-agent-st
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
-import type { TuiAgent } from '../../../shared/types'
+import { getEffectiveTuiAgent } from '../../../shared/effective-tui-agent'
+import type { TuiAgentId } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
@@ -25,7 +25,7 @@ import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-type
 import type { RuntimeTerminalCreate } from '../../../shared/runtime-types'
 
 export type LaunchAgentBackgroundSessionArgs = {
-  agent: TuiAgent
+  agent: TuiAgentId
   worktreeId: string
   prompt?: string
   launchSource?: LaunchSource
@@ -51,7 +51,14 @@ export async function launchAgentBackgroundSession(
   if (!worktree) {
     throw new Error('The target workspace is no longer available.')
   }
-  const preflight = TUI_AGENT_CONFIG[agent].preflightTrust
+  const customTuiAgents = store.settings?.customTuiAgents ?? []
+  const effective = getEffectiveTuiAgent(agent, customTuiAgents)
+  if (!effective) {
+    return null
+  }
+  // Why: trust preflight is built-in only (issue #2284 plan §9). Custom presets
+  // have `preflightTrust = undefined`, so this branch is naturally skipped for them.
+  const preflight = effective.preflightTrust
   if (preflight && worktree.path && window.api.agentTrust?.markTrusted) {
     try {
       await window.api.agentTrust.markTrusted({
@@ -65,7 +72,7 @@ export async function launchAgentBackgroundSession(
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
-  const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
+  const isFollowupPath = effective.promptInjectionMode === 'stdin-after-start'
 
   let startupPlan: AgentStartupPlan | null = null
   let pasteDraftAfterLaunch: string | null = null
@@ -74,6 +81,7 @@ export async function launchAgentBackgroundSession(
       agent,
       prompt: '',
       cmdOverrides,
+      customTuiAgents,
       platform: CLIENT_PLATFORM,
       allowEmptyPromptLaunch: true
     })
@@ -83,6 +91,7 @@ export async function launchAgentBackgroundSession(
       agent,
       prompt: hasPrompt ? trimmedPrompt : '',
       cmdOverrides,
+      customTuiAgents,
       platform: CLIENT_PLATFORM,
       allowEmptyPromptLaunch: !hasPrompt
     })
