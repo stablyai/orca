@@ -1108,7 +1108,6 @@ export function connectPanePty(
     // sequences don't leak into the shell. xterm.write() buffers internally
     // regardless of DOM visibility and the guard stays engaged via the
     // write-completion callback until xterm finishes parsing.
-    let replayEndsWithLineBreak = true
     const writeReplayData = (data: string): void => {
       // Why: drain any queued background bytes BEFORE the replay paint, so the
       // scheduler's deferred drain cannot land older bytes on top of the replay.
@@ -1117,12 +1116,6 @@ export function connectPanePty(
         manager.markPaneHasComplexScriptOutput(pane.id)
       }
       replayIntoTerminal(pane, deps.replayingPanesRef, data)
-      replayEndsWithLineBreak = /[\r\n]$/.test(data)
-    }
-    const terminateReplayLine = (): void => {
-      if (!replayEndsWithLineBreak) {
-        writeReplayData('\r\n')
-      }
     }
 
     const replayDataCallback = (data: string): void => {
@@ -1226,7 +1219,6 @@ export function connectPanePty(
       if (connectResult?.snapshot) {
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
         writeReplayData(connectResult.snapshot)
-        terminateReplayLine()
         // Snapshot reattach keeps a live session, so avoid the broader mode
         // reset. Focus reporting is the unsafe exception: preserving `?1004h`
         // can make restored shells ring BEL on pane focus/blur.
@@ -1245,7 +1237,6 @@ export function connectPanePty(
         // bits in the replayed data.
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
         writeReplayData(connectResult.replay)
-        terminateReplayLine()
         writeReplayData(POST_REPLAY_FOCUS_REPORTING_RESET)
         if (connectResult.coldRestore) {
           if (!isRemoteRuntimePtyId(ptyId)) {

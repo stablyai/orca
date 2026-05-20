@@ -135,6 +135,38 @@ async function getTabCustomTitle(
   )
 }
 
+async function readTerminalActiveLine(page: Page): Promise<string | null> {
+  const tabId = await getActiveTabId(page)
+  if (!tabId) {
+    return null
+  }
+  return page.evaluate((tabId) => {
+    const manager = window.__paneManagers?.get(tabId)
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    const buffer = pane?.terminal?.buffer.active
+    if (!buffer) {
+      return null
+    }
+    const cursorLine = buffer.baseY + buffer.cursorY
+    return buffer.getLine(cursorLine)?.translateToString(true) ?? null
+  }, tabId)
+}
+
+async function waitForTerminalActiveLine(page: Page, expectedText: string): Promise<string> {
+  await expect
+    .poll(async () => (await readTerminalActiveLine(page))?.includes(expectedText), {
+      timeout: 15_000,
+      message: `Terminal cursor line did not contain "${expectedText}"`
+    })
+    .toBe(true)
+
+  const activeLine = await readTerminalActiveLine(page)
+  if (activeLine === null) {
+    throw new Error('Terminal cursor line disappeared after settling')
+  }
+  return activeLine
+}
+
 async function expectSavedLayoutToContainTitle(
   page: Page,
   tabId: string,
@@ -205,6 +237,52 @@ test.describe('Terminal restart persistence', () => {
           message: 'Restored terminal did not contain the pre-quit scrollback marker'
         })
         .toBe(true)
+    } finally {
+      if (secondApp) {
+        await session.close(secondApp)
+      }
+      if (firstApp) {
+        await session.close(firstApp)
+      }
+      await session.dispose()
+    }
+  })
+
+  test('daemon snapshot relaunch preserves the cursor on the shell prompt', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
+  {}, testInfo) => {
+    const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
+    if (!repoPath || !existsSync(repoPath)) {
+      test.skip(true, 'Global setup did not produce a seeded test repo')
+      return
+    }
+
+    const session = createRestartSession(testInfo)
+    let firstApp: ElectronApplication | null = null
+    let secondApp: ElectronApplication | null = null
+
+    try {
+      const firstLaunch = await session.launch()
+      firstApp = firstLaunch.app
+      const { worktreeId, ptyId } = await bootstrapFirstLaunch(firstLaunch.page, repoPath)
+      expect(ptyId).toContain(PTY_SESSION_ID_SEPARATOR)
+
+      const prompt = `ORCA_RESTART_PROMPT_${Date.now()}_GT `
+      const marker = `ORCA_CURSOR_RESTART_${Date.now()}`
+      await execInTerminal(firstLaunch.page, ptyId, `export PS1='${prompt}'; PROMPT='${prompt}'`)
+      await waitForTerminalActiveLine(firstLaunch.page, prompt.trim())
+      await execInTerminal(firstLaunch.page, ptyId, `echo ${marker}`)
+      await waitForTerminalOutput(firstLaunch.page, marker)
+
+      const beforeActiveLine = await waitForTerminalActiveLine(firstLaunch.page, prompt.trim())
+      await session.close(firstApp)
+      firstApp = null
+
+      const secondLaunch = await session.launch()
+      secondApp = secondLaunch.app
+      await bootstrapRestoredLaunch(secondLaunch.page, worktreeId)
+      await waitForTerminalOutput(secondLaunch.page, marker, 15_000)
+
+      await expect.poll(() => readTerminalActiveLine(secondLaunch.page)).toBe(beforeActiveLine)
     } finally {
       if (secondApp) {
         await session.close(secondApp)
