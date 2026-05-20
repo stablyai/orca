@@ -6,7 +6,7 @@ import {
   useVirtualizer
 } from '@tanstack/react-virtual'
 import type { Range } from '@tanstack/react-virtual'
-import { ChevronDown, CircleX, Crosshair, Ellipsis, Plus, Trash2, Workflow } from 'lucide-react'
+import { ChevronDown, CircleX, Ellipsis, Plus, Trash2, Workflow } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
   getAllWorktreesFromState,
@@ -91,7 +91,6 @@ import {
 import { branchDisplayName } from './WorktreeCardHelpers'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getRepoHeaderCreateState } from './repo-header-create-state'
-import { revealCurrentSidebarWorktree } from './reveal-sidebar-worktree'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
 
 // How long to wait after a sortEpoch bump before actually re-sorting.
@@ -105,49 +104,12 @@ const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
   overflowAnchor: 'none'
 }
 
-type ScrollVisibilityItem = {
-  start: number
-  end: number
-}
-
 export function shouldAdjustWorktreeSidebarMeasuredRowScroll(args: {
   isScrolling: boolean
   now: number
   suppressUntil: number
 }): boolean {
   return !args.isScrolling && args.now >= args.suppressUntil
-}
-
-export function shouldQueueStartupSidebarReveal(args: {
-  hasQueuedStartupReveal: boolean
-  workspaceSessionReady: boolean
-  persistedUIReady: boolean
-  activeWorktreeId: string | null
-  pendingRevealWorktree: PendingSidebarWorktreeReveal | null
-  renderRowCount: number
-}): boolean {
-  return (
-    !args.hasQueuedStartupReveal &&
-    args.workspaceSessionReady &&
-    args.persistedUIReady &&
-    args.activeWorktreeId !== null &&
-    args.pendingRevealWorktree === null &&
-    args.renderRowCount > 0
-  )
-}
-
-export function shouldConsumeStartupRevealForPendingReveal(args: {
-  hasQueuedStartupReveal: boolean
-  workspaceSessionReady: boolean
-  persistedUIReady: boolean
-  pendingRevealWorktree: PendingSidebarWorktreeReveal | null
-}): boolean {
-  return (
-    !args.hasQueuedStartupReveal &&
-    args.workspaceSessionReady &&
-    args.persistedUIReady &&
-    args.pendingRevealWorktree !== null
-  )
 }
 
 export function resolvePendingSidebarReveal(args: {
@@ -158,31 +120,6 @@ export function resolvePendingSidebarReveal(args: {
     return 'scroll-and-clear'
   }
   return args.targetWorktreeStillExists ? 'keep-pending' : 'clear'
-}
-
-export function shouldShowFloatingCurrentWorkspaceButton(args: {
-  currentWorktreeId: string | null
-  currentRowIndex: number
-  currentItem: ScrollVisibilityItem | null
-  scrollTop: number
-  viewportHeight: number
-  pendingRevealWorktreeId: string | null
-}): boolean {
-  if (!args.currentWorktreeId || args.pendingRevealWorktreeId === args.currentWorktreeId) {
-    return false
-  }
-  if (args.currentRowIndex === -1) {
-    return true
-  }
-  if (args.viewportHeight <= 0) {
-    return false
-  }
-  if (!args.currentItem) {
-    return true
-  }
-
-  const viewportBottom = args.scrollTop + args.viewportHeight
-  return args.currentItem.start < args.scrollTop || args.currentItem.end > viewportBottom
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -216,30 +153,6 @@ function stopNestedWorktreeCardBubble(event: React.SyntheticEvent<HTMLElement>):
   event.stopPropagation()
 }
 
-function FloatingCurrentWorkspaceButton({ onClick }: { onClick: () => void }): React.JSX.Element {
-  return (
-    <div className="pointer-events-none absolute bottom-1.5 right-2 z-30 flex justify-end">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Scroll to the open workspace"
-            className="pointer-events-auto size-6 rounded-md bg-sidebar/90 text-muted-foreground shadow-xs ring-1 ring-sidebar-border/80 backdrop-blur hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-sidebar-ring"
-            onClick={onClick}
-          >
-            <Crosshair className="size-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={4}>
-          Scroll to the open workspace
-        </TooltipContent>
-      </Tooltip>
-    </div>
-  )
-}
-
 function getWorktreeOptionId(worktreeId: string): string {
   return `worktree-list-option-${encodeURIComponent(worktreeId)}`
 }
@@ -249,7 +162,6 @@ const LINEAGE_INDENT = 18
 type VirtualizedWorktreeViewportProps = {
   rows: Row[]
   activeWorktreeId: string | null
-  currentWorktreeId: string | null
   groupBy: WorktreeGroupBy
   repoGroupOrdering: RepoGroupOrdering
   toggleGroup: (key: string) => void
@@ -284,7 +196,6 @@ type VirtualizedWorktreeViewportProps = {
   onPinWorktree: (worktreeId: string) => void
   onPinWorktrees: (worktreeIds: readonly string[]) => void
   showInlineAgentCards: boolean
-  onRevealCurrentWorkspace: () => void
   // Why: broad grouping changes still remount the viewport, while add/delete
   // stays mounted for row-key anchoring and layout animation. These refs bridge
   // both paths so the virtualizer never falls back to scrollTop 0.
@@ -365,7 +276,6 @@ function getVirtualRowKey(element: Element): string | null {
 const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewport({
   rows,
   activeWorktreeId,
-  currentWorktreeId,
   groupBy,
   repoGroupOrdering,
   toggleGroup,
@@ -393,18 +303,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   onPinWorktree,
   onPinWorktrees,
   showInlineAgentCards,
-  onRevealCurrentWorkspace,
   scrollOffsetRef,
   scrollAnchorRef
 }: VirtualizedWorktreeViewportProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
-  const scrollViewportFrameRef = useRef<number | null>(null)
   const suppressMeasurementAdjustmentUntilRef = useRef(0)
   const directScrollInputUntilRef = useRef(0)
-  const [scrollViewport, setScrollViewport] = useState({
-    scrollTop: scrollOffsetRef.current,
-    height: 0
-  })
   const [dragOverStatus, setDragOverStatus] = useState<WorkspaceStatus | null>(null)
   const [pinDragOver, setPinDragOver] = useState(false)
   const [lineageReconnectWorktreeId, setLineageReconnectWorktreeId] = useState<string | null>(null)
@@ -438,10 +342,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const activeWorktreeRowIndex = useMemo(
     () => renderRows.findIndex((row) => renderRowContainsWorktree(row, activeWorktreeId)),
     [renderRows, activeWorktreeId]
-  )
-  const currentWorktreeRowIndex = useMemo(
-    () => renderRows.findIndex((row) => renderRowContainsWorktree(row, currentWorktreeId)),
-    [renderRows, currentWorktreeId]
   )
   const activeLineageChildRow = useMemo(() => {
     if (activeWorktreeId === null) {
@@ -544,28 +444,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     suppressMeasurementAdjustmentUntilRef.current = suppressUntil
     directScrollInputUntilRef.current = suppressUntil
   }, [])
-  const updateScrollViewport = useCallback(() => {
-    const element = scrollRef.current
-    if (!element) {
-      return
-    }
-    const next = {
-      scrollTop: element.scrollTop,
-      height: element.clientHeight
-    }
-    setScrollViewport((previous) =>
-      previous.scrollTop === next.scrollTop && previous.height === next.height ? previous : next
-    )
-  }, [])
-  const requestScrollViewportUpdate = useCallback(() => {
-    if (scrollViewportFrameRef.current !== null) {
-      return
-    }
-    scrollViewportFrameRef.current = window.requestAnimationFrame(() => {
-      scrollViewportFrameRef.current = null
-      updateScrollViewport()
-    })
-  }, [updateScrollViewport])
   const hasDirectScrollInput = useCallback(
     () => window.performance.now() < directScrollInputUntilRef.current,
     []
@@ -732,48 +610,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   )
   const totalSize = virtualizer.getTotalSize()
   const virtualItems = virtualizer.getVirtualItems()
-  const currentWorktreeVirtualItem = useMemo(() => {
-    if (currentWorktreeRowIndex === -1) {
-      return null
-    }
-    const item = virtualItems.find((virtualItem) => virtualItem.index === currentWorktreeRowIndex)
-    return item ? { start: item.start, end: item.end } : null
-  }, [currentWorktreeRowIndex, virtualItems])
-  const showFloatingCurrentWorkspaceButton = shouldShowFloatingCurrentWorkspaceButton({
-    currentWorktreeId,
-    currentRowIndex: currentWorktreeRowIndex,
-    currentItem: currentWorktreeVirtualItem,
-    scrollTop: scrollViewport.scrollTop,
-    viewportHeight: scrollViewport.height,
-    pendingRevealWorktreeId: pendingRevealWorktree?.worktreeId ?? null
-  })
-  const handleRevealCurrentWorkspace = useCallback(() => {
-    // Why: the reveal request hides this focused button while the list scrolls.
-    // Hand focus to the listbox first so keyboard users keep their context.
-    scrollRef.current?.focus({ preventScroll: true })
-    onRevealCurrentWorkspace()
-  }, [onRevealCurrentWorkspace])
-  useLayoutEffect(() => {
-    updateScrollViewport()
-    const element = scrollRef.current
-    if (!element || typeof ResizeObserver === 'undefined') {
-      return
-    }
-
-    const observer = new ResizeObserver(requestScrollViewportUpdate)
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [requestScrollViewportUpdate, updateScrollViewport])
-
-  useEffect(
-    () => () => {
-      if (scrollViewportFrameRef.current !== null) {
-        window.cancelAnimationFrame(scrollViewportFrameRef.current)
-        scrollViewportFrameRef.current = null
-      }
-    },
-    []
-  )
 
   const measureMountedRows = useCallback(() => {
     virtualizer.elementsCache.forEach((element) => {
@@ -971,11 +807,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     [markDirectScrollInput]
   )
   const handleScroll = useCallback(() => {
-    // Why: the floating "Current" affordance depends on scrollport visibility,
-    // not just TanStack's overscanned virtual row window.
     markScrollMovement()
-    requestScrollViewportUpdate()
-  }, [markScrollMovement, requestScrollViewportUpdate])
+  }, [markScrollMovement])
 
   useEffect(() => {
     if (document.visibilityState !== 'visible') {
@@ -1655,9 +1488,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           })}
         </div>
       </div>
-      {showFloatingCurrentWorkspaceButton ? (
-        <FloatingCurrentWorkspaceButton onClick={handleRevealCurrentWorkspace} />
-      ) : null}
     </div>
   )
 })
@@ -1691,8 +1521,6 @@ const WorktreeList = React.memo(function WorktreeList({
   const activeModal = useAppStore((s) => s.activeModal)
   const pendingRevealWorktree = useAppStore((s) => s.pendingRevealWorktree)
   const clearPendingRevealWorktreeId = useAppStore((s) => s.clearPendingRevealWorktreeId)
-  const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
-  const persistedUIReady = useAppStore((s) => s.persistedUIReady)
 
   // Read tabsByWorktree when needed for filtering or sorting
   const needsTabs = showActiveOnly || sortBy === 'smart'
@@ -2129,49 +1957,6 @@ const WorktreeList = React.memo(function WorktreeList({
   // sidebar card should appear selected while one of them is active.
   const selectedSidebarWorktreeId =
     activeView === 'tasks' || activeView === 'activity' ? null : activeWorktreeId
-  const hasQueuedStartupRevealRef = useRef(false)
-
-  useEffect(() => {
-    if (!workspaceSessionReady || !persistedUIReady) {
-      return
-    }
-    if (
-      shouldConsumeStartupRevealForPendingReveal({
-        hasQueuedStartupReveal: hasQueuedStartupRevealRef.current,
-        workspaceSessionReady,
-        persistedUIReady,
-        pendingRevealWorktree
-      })
-    ) {
-      // Why: explicit activation/manual reveals should win startup. Treat them
-      // as consuming the one-shot startup pass so it cannot fire afterward.
-      hasQueuedStartupRevealRef.current = true
-      return
-    }
-    if (
-      !shouldQueueStartupSidebarReveal({
-        hasQueuedStartupReveal: hasQueuedStartupRevealRef.current,
-        workspaceSessionReady,
-        persistedUIReady,
-        activeWorktreeId,
-        pendingRevealWorktree,
-        renderRowCount: rows.length
-      })
-    ) {
-      return
-    }
-
-    // Why: session hydration restores the active workspace selection without
-    // going through the normal activation helper, so queue one non-animated
-    // reveal here to correct any stale virtualized scroll offset on startup.
-    hasQueuedStartupRevealRef.current = revealCurrentSidebarWorktree({ behavior: 'auto' })
-  }, [
-    activeWorktreeId,
-    pendingRevealWorktree,
-    persistedUIReady,
-    rows.length,
-    workspaceSessionReady
-  ])
 
   // Why layout effect instead of effect: the global Cmd/Ctrl+1–9 key handler
   // can fire immediately after React commits the new grouped/collapsed order.
@@ -2281,16 +2066,6 @@ const WorktreeList = React.memo(function WorktreeList({
     }
   }, [setShowActiveOnly, setFilterRepoIds, setHideDefaultBranchWorkspace, filterState])
 
-  const activeWorktreeIsFilteredOut =
-    activeWorktreeId !== null && !worktrees.some((worktree) => worktree.id === activeWorktreeId)
-  const canRevealCurrentWorkspace = !activeWorktreeIsFilteredOut || !hasFilters
-  const revealCurrentWorkspaceFromFloatingButton = useCallback(() => {
-    if (!canRevealCurrentWorkspace) {
-      return
-    }
-    revealCurrentSidebarWorktree({ behavior: 'smooth' })
-  }, [canRevealCurrentWorkspace])
-
   if (worktrees.length === 0) {
     return (
       <div data-worktree-sidebar-container className="relative min-h-0 flex-1">
@@ -2308,9 +2083,6 @@ const WorktreeList = React.memo(function WorktreeList({
             )}
           </div>
         </div>
-        {canRevealCurrentWorkspace && activeWorktreeIsFilteredOut ? (
-          <FloatingCurrentWorkspaceButton onClick={revealCurrentWorkspaceFromFloatingButton} />
-        ) : null}
       </div>
     )
   }
@@ -2320,7 +2092,6 @@ const WorktreeList = React.memo(function WorktreeList({
       key={viewportResetKey}
       rows={rows}
       activeWorktreeId={selectedSidebarWorktreeId}
-      currentWorktreeId={canRevealCurrentWorkspace ? activeWorktreeId : null}
       groupBy={groupBy}
       repoGroupOrdering={repoGroupOrdering}
       toggleGroup={toggleGroup}
@@ -2350,7 +2121,6 @@ const WorktreeList = React.memo(function WorktreeList({
       onPinWorktree={pinWorktree}
       onPinWorktrees={pinWorktrees}
       showInlineAgentCards={cardProps.includes('inline-agents')}
-      onRevealCurrentWorkspace={revealCurrentWorkspaceFromFloatingButton}
       scrollOffsetRef={scrollOffsetRef}
       scrollAnchorRef={scrollAnchorRef}
     />
