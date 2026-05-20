@@ -29,6 +29,11 @@ export type QuickLaunchAgentMenuItemsProps = {
   launchSource?: LaunchSource
   /** Called after a prompt is queued into the agent, or immediately for argv prompt launches. */
   onPromptDelivered?: () => void
+  /** Fires synchronously before `launchAgentInNewTab` runs. Used by callers
+   *  outside the active workspace (e.g. the sidebar context menu) to activate
+   *  and reveal the target worktree so the new tab and focus handoff land in
+   *  the freshly-mounted pane instead of silently in the background. */
+  onBeforeLaunch?: () => void
 }
 
 function getCatalogEntry(agent: TuiAgent): { id: TuiAgent; label: string } | null {
@@ -95,7 +100,8 @@ function QuickLaunchAgentMenuItemsInner({
   prompt,
   promptDelivery,
   launchSource,
-  onPromptDelivered
+  onPromptDelivered,
+  onBeforeLaunch
 }: QuickLaunchAgentMenuItemsProps): React.JSX.Element | null {
   // Why: must be a reactive selector (not getConnectionId() which reads a
   // snapshot via getState()). This ensures the component re-renders when the
@@ -125,6 +131,10 @@ function QuickLaunchAgentMenuItemsInner({
     (agent: TuiAgent) => {
       const entry = getCatalogEntry(agent)
       const label = entry?.label ?? agent
+      // Why: must run before createTab so the target worktree is the active
+      // one when launchAgentInNewTab flips activeTabType — otherwise the new
+      // tab lands behind a different workspace and the focus handoff misses.
+      onBeforeLaunch?.()
       const result = launchAgentInNewTab({
         agent,
         worktreeId,
@@ -160,7 +170,16 @@ function QuickLaunchAgentMenuItemsInner({
         toast.message(getLaunchWatchdogTimeoutMessage(label))
       })
     },
-    [worktreeId, groupId, onFocusTerminal, prompt, promptDelivery, launchSource, onPromptDelivered]
+    [
+      worktreeId,
+      groupId,
+      onFocusTerminal,
+      prompt,
+      promptDelivery,
+      launchSource,
+      onPromptDelivered,
+      onBeforeLaunch
+    ]
   )
 
   const enabledDetectedIds = detectedIds ? filterEnabledTuiAgents(detectedIds, disabledAgents) : []
