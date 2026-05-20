@@ -618,6 +618,31 @@ describe('getPRForBranch', () => {
     })
   })
 
+  it('omits conflict summaries for SSH-backed repos', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify([
+        {
+          number: 42,
+          title: 'Fix PR discovery',
+          state: 'open',
+          html_url: 'https://github.com/acme/widgets/pull/42',
+          updated_at: '2026-03-28T00:00:00Z',
+          draft: false,
+          mergeable_state: 'dirty',
+          base: { ref: 'main', sha: 'base-oid' },
+          head: { ref: 'feature/test', sha: 'head-oid' }
+        }
+      ])
+    })
+
+    const pr = await getPRForBranch('/remote/repo-root', 'feature/test', undefined, 'ssh-1')
+
+    expect(pr?.mergeable).toBe('CONFLICTING')
+    expect(pr?.conflictSummary).toBeUndefined()
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
   it('keeps conflicted file paths when git merge-tree exits 1 with stdout', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock.mockResolvedValueOnce({
@@ -972,7 +997,23 @@ describe('GitHub GraphQL rate-limit guard', () => {
   })
 
   it('uses explicit PR repo for merge and title mutations', async () => {
-    ghExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 7,
+          title: 'PR',
+          state: 'OPEN',
+          url: 'https://github.com/stablyai/orca/pull/7',
+          statusCheckRollup: [],
+          updatedAt: '2026-04-01T00:00:00Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'main',
+          baseRefOid: 'base-oid',
+          headRefOid: 'head-oid'
+        })
+      })
+      .mockResolvedValue({ stdout: '', stderr: '' })
 
     await expect(
       mergePR('/repo-root', 7, 'squash', undefined, { owner: 'stablyai', repo: 'orca' })
@@ -984,6 +1025,19 @@ describe('GitHub GraphQL rate-limit guard', () => {
     expect(getOwnerRepoMock).not.toHaveBeenCalled()
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
+      [
+        'pr',
+        'view',
+        '7',
+        '--repo',
+        'stablyai/orca',
+        '--json',
+        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
+      ],
+      { cwd: '/repo-root' }
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
       ['pr', 'merge', '7', '--squash', '--repo', 'stablyai/orca'],
       expect.objectContaining({
         cwd: '/repo-root',
@@ -991,10 +1045,65 @@ describe('GitHub GraphQL rate-limit guard', () => {
       })
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       ['pr', 'edit', '7', '--title', 'New title', '--repo', 'stablyai/orca'],
       { cwd: '/repo-root' }
     )
+  })
+
+  it('returns conflicting file details instead of running gh merge when PR is dirty', async () => {
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        number: 7,
+        title: 'PR',
+        state: 'OPEN',
+        url: 'https://github.com/stablyai/orca/pull/7',
+        statusCheckRollup: [],
+        updatedAt: '2026-04-01T00:00:00Z',
+        isDraft: false,
+        mergeable: 'CONFLICTING',
+        baseRefName: 'main',
+        baseRefOid: 'base-oid',
+        headRefOid: 'head-oid'
+      })
+    })
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '' })
+      .mockResolvedValueOnce({ stdout: 'latest-base-oid\n' })
+      .mockResolvedValueOnce({ stdout: 'merge-base-oid\n' })
+      .mockResolvedValueOnce({ stdout: '3\n' })
+      .mockResolvedValueOnce({ stdout: 'result-tree-oid\u0000src/conflict.ts\u0000' })
+
+    await expect(
+      mergePR('/repo-root', 7, 'squash', undefined, { owner: 'stablyai', repo: 'orca' })
+    ).resolves.toEqual({
+      ok: false,
+      error:
+        'This pull request has merge conflicts and cannot be merged yet.\n' +
+        '3 commits behind main (base commit: latest-).\n\n' +
+        'Conflicting files:\n' +
+        '- src/conflict.ts'
+    })
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not run merge conflict preflight for SSH-backed repos', async () => {
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await expect(
+      mergePR('/remote/repo-root', 7, 'squash', 'ssh-1', { owner: 'stablyai', repo: 'orca' })
+    ).resolves.toEqual({ ok: true })
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      ['pr', 'merge', '7', '--squash', '--repo', 'stablyai/orca'],
+      expect.objectContaining({
+        env: expect.objectContaining({ GH_PROMPT_DISABLED: '1' })
+      })
+    )
+    expect(ghExecFileAsyncMock.mock.calls[0]?.[1]).not.toHaveProperty('cwd')
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
   it('blocks review-thread resolve mutations before spawning gh when GraphQL is low', async () => {

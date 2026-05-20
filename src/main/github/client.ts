@@ -6,6 +6,7 @@ import type {
   IssueSourcePreference,
   ListWorkItemsResult,
   PRInfo,
+  PRConflictSummary,
   PRRefreshOutcome,
   PRMergeableState,
   PRCheckDetail,
@@ -73,6 +74,8 @@ import {
   rateLimitGuard,
   type RateLimitBucketKind
 } from './rate-limit'
+
+type GhExecOptions = ReturnType<typeof ghRepoExecOptions>
 
 const ORCA_REPO = 'stablyai/orca'
 
@@ -2694,6 +2697,17 @@ export async function mergePR(
   const ownerRepo = prRepo ?? (await getOwnerRepo(repoPath, connectionId))
   await acquire()
   try {
+    const mergeBlocker = await getPRMergeBlocker(
+      repoPath,
+      prNumber,
+      ownerRepo,
+      ghOptions,
+      connectionId
+    )
+    if (mergeBlocker) {
+      return { ok: false, error: mergeBlocker }
+    }
+
     // Don't use --delete-branch: it tries to delete the local branch which
     // fails when the user's worktree is checked out on it. Branch cleanup
     // is handled by worktree deletion (local) and GitHub's auto-delete setting (remote).
@@ -2713,6 +2727,53 @@ export async function mergePR(
   } finally {
     release()
   }
+}
+
+async function getPRMergeBlocker(
+  repoPath: string,
+  prNumber: number,
+  ownerRepo: OwnerRepo | null,
+  ghOptions: GhExecOptions,
+  connectionId?: string | null
+): Promise<string | null> {
+  // Why: conflict summaries shell out to local git; SSH repo paths are remote-only
+  // until that helper is routed through the SSH git provider.
+  if (!ownerRepo || connectionId) {
+    return null
+  }
+
+  try {
+    const pr = await getPRByNumber(ownerRepo, prNumber, ghOptions)
+    if (pr?.mergeable !== 'CONFLICTING' || !pr.baseRefName || !pr.baseRefOid || !pr.headRefOid) {
+      return null
+    }
+
+    const summary = await getPRConflictSummary(
+      repoPath,
+      pr.baseRefName,
+      pr.baseRefOid,
+      pr.headRefOid
+    )
+    return formatMergeConflictBlocker(pr.baseRefName, summary)
+  } catch {
+    // Why: conflict preflight should improve stale UI diagnostics, not make
+    // merge impossible when the lookup endpoint has a transient failure.
+    return null
+  }
+}
+
+function formatMergeConflictBlocker(
+  baseRefName: string,
+  summary: PRConflictSummary | undefined
+): string {
+  const heading = 'This pull request has merge conflicts and cannot be merged yet.'
+  if (!summary || summary.files.length === 0) {
+    return `${heading}\nUpdate the branch with ${baseRefName} and resolve the conflicts before merging.`
+  }
+
+  const files = summary.files.map((file) => `- ${file}`).join('\n')
+  const behind = `${summary.commitsBehind} commit${summary.commitsBehind === 1 ? '' : 's'} behind ${baseRefName}`
+  return `${heading}\n${behind} (base commit: ${summary.baseCommit}).\n\nConflicting files:\n${files}`
 }
 
 export async function updatePRState(

@@ -2806,7 +2806,6 @@ function PRActionsPanel({
                     'w-full justify-center gap-2 bg-green-600 text-white hover:bg-green-700',
                     'disabled:cursor-not-allowed disabled:opacity-50'
                   )}
-                  disabled={mergePending || localState === 'closed' || localState === 'merged'}
                 >
                   {mergePending ? (
                     <LoaderCircle className="size-3.5 animate-spin" />
