@@ -225,7 +225,7 @@ export default function PdfViewer({ content, filePath }: PdfViewerProps): JSX.El
               overflow: 'auto',
               background: 'var(--pdf-viewer-bg, #e4e4e7)'
             }}
-            className="dark:[--pdf-viewer-bg:#18181b]"
+            className="scrollbar-editor dark:[--pdf-viewer-bg:#18181b]"
           >
             <div ref={viewerDivRef} className="pdfViewer" />
           </div>
