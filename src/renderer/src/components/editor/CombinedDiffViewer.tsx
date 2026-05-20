@@ -1283,7 +1283,7 @@ function DiffNotesPreviewPopover({
           </Button>
         </div>
       </div>
-      <div className="max-h-72 overflow-y-auto p-2">
+      <div className="max-h-72 overflow-y-auto p-2 scrollbar-sleek">
         {comments.map((comment) => (
           <div key={comment.id} className="rounded-md px-2 py-1.5 hover:bg-accent/50">
             <div className="flex items-center gap-1.5 text-[11px] leading-none text-muted-foreground">

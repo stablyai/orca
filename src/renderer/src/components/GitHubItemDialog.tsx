@@ -3749,7 +3749,7 @@ function ChecksTab({
                 <div className="border-b border-border/40 px-2.5 py-1.5 text-[11px] font-medium text-foreground">
                   Annotations
                 </div>
-                <div className="flex max-h-48 flex-col overflow-y-auto">
+                <div className="flex max-h-48 flex-col overflow-y-auto scrollbar-sleek">
                   {details!.annotations.map((annotation, index) => (
                     <div
                       key={`${annotation.path ?? 'annotation'}-${index}`}
@@ -3778,7 +3778,7 @@ function ChecksTab({
                         {annotation.message}
                       </div>
                       {annotation.rawDetails && (
-                        <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-[11px] text-muted-foreground">
+                        <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-[11px] text-muted-foreground scrollbar-sleek">
                           {annotation.rawDetails}
                         </pre>
                       )}
@@ -3793,7 +3793,7 @@ function ChecksTab({
                 <div className="border-b border-border/40 px-2.5 py-1.5 text-[11px] font-medium text-foreground">
                   Jobs
                 </div>
-                <div className="flex max-h-64 flex-col overflow-y-auto">
+                <div className="flex max-h-64 flex-col overflow-y-auto scrollbar-sleek">
                   {details!.jobs.map((job, index) => (
                     <div
                       key={`${job.name}-${index}`}
@@ -3952,7 +3952,9 @@ function ChecksTab({
   return (
     <>
       {compactHeader}
-      <div className="max-h-[280px] overflow-y-auto p-1">{sorted.map(renderCheckRow)}</div>
+      <div className="max-h-[280px] overflow-y-auto p-1 scrollbar-sleek">
+        {sorted.map(renderCheckRow)}
+      </div>
     </>
   )
 }
@@ -4017,7 +4019,7 @@ function MentionTextarea({
   return (
     <div className={cn('relative min-w-0 flex-1', wrapperClassName)}>
       {showSuggestions && (
-        <div className="absolute right-0 bottom-[calc(100%+6px)] left-0 z-50 max-h-64 overflow-y-auto rounded-md border border-border/70 bg-popover p-1 text-popover-foreground shadow-lg">
+        <div className="absolute right-0 bottom-[calc(100%+6px)] left-0 z-50 max-h-64 overflow-y-auto rounded-md border border-border/70 bg-popover p-1 text-popover-foreground shadow-lg scrollbar-sleek">
           {suggestions.map((option, index) => (
             <button
               key={option.login}

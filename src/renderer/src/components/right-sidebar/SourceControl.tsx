@@ -3778,7 +3778,7 @@ export function CommitArea({
               <DialogTitle>Commit Failed</DialogTitle>
               <DialogDescription>{commitFailureSummary}</DialogDescription>
             </DialogHeader>
-            <pre className="max-h-[60vh] overflow-auto rounded-md border border-border bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap text-foreground">
+            <pre className="max-h-[60vh] overflow-auto rounded-md border border-border bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap text-foreground scrollbar-sleek">
               {commitError}
             </pre>
             <DialogFooter>

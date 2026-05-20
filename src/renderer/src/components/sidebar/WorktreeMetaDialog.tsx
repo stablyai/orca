@@ -340,7 +340,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
               onKeyDown={handleCommentKeyDown}
               placeholder="Notes about this worktree..."
               rows={3}
-              className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-xs shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto"
+              className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-xs shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto scrollbar-sleek"
             />
             <p className="text-[10px] text-muted-foreground">
               Supports **markdown** — bold, lists, `code`, links. Press Enter or{' '}

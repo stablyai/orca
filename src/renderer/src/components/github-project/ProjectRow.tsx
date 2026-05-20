@@ -152,7 +152,7 @@ export default function ProjectRow({
         <HoverCardContent
           align="start"
           sideOffset={4}
-          className="max-h-80 w-96 overflow-y-auto whitespace-pre-wrap text-xs"
+          className="max-h-80 w-96 overflow-y-auto whitespace-pre-wrap text-xs scrollbar-sleek"
         >
           {draftBody}
         </HoverCardContent>

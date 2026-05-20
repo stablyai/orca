@@ -363,7 +363,7 @@ function PreformattedOutput({
   return (
     <pre
       className={cn(
-        'max-h-[420px] overflow-auto whitespace-pre-wrap px-3 py-2 font-mono text-xs leading-5',
+        'max-h-[420px] overflow-auto whitespace-pre-wrap px-3 py-2 font-mono text-xs leading-5 scrollbar-editor',
         error ? 'text-destructive' : 'text-foreground'
       )}
     >
@@ -395,7 +395,7 @@ function OutputItem({ item }: { item: IpynbOutputItem }): React.JSX.Element | nu
       return null
     }
     return (
-      <div className="flex max-w-full overflow-auto p-3">
+      <div className="flex max-w-full overflow-auto p-3 scrollbar-editor">
         <img src={uri} alt={item.mime} className="max-h-[520px] max-w-full object-contain" />
       </div>
     )

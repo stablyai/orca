@@ -251,7 +251,7 @@ export function RemoteStep({
               </Button>
             </div>
           ) : (
-            <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+            <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1 scrollbar-sleek">
               {sshTargets.map((target) => (
                 <SshTargetRow
                   key={target.id}

@@ -89,7 +89,7 @@ export default function ImageDiffViewer({
         'grid min-h-0 gap-3 p-3',
         isIntrinsicLayout ? 'h-auto' : 'h-full',
         sideBySide ? 'grid-cols-2' : 'grid-cols-1',
-        !sideBySide && !isIntrinsicLayout && 'overflow-y-auto'
+        !sideBySide && !isIntrinsicLayout && 'overflow-y-auto scrollbar-editor'
       )}
       style={gridRowStyle}
     >

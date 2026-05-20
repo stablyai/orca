@@ -106,7 +106,9 @@ export default function ImageViewer({
         <div
           className={cn(
             'flex justify-center bg-muted/20 p-4 cursor-pointer',
-            isIntrinsicLayout ? 'items-start overflow-visible' : 'flex-1 items-center overflow-auto'
+            isIntrinsicLayout
+              ? 'items-start overflow-visible'
+              : 'flex-1 items-center overflow-auto scrollbar-editor'
           )}
           onClick={() => setIsPopupOpen(true)}
           title="Open image in popup"
@@ -193,7 +195,7 @@ export default function ImageViewer({
               <span>Close</span>
             </button>
           </div>
-          <div className="flex h-[calc(100%-4.5rem)] w-full min-h-0 items-center justify-center overflow-auto bg-muted/20 p-4">
+          <div className="flex h-[calc(100%-4.5rem)] w-full min-h-0 items-center justify-center overflow-auto bg-muted/20 p-4 scrollbar-editor">
             <div
               className="flex items-center justify-center"
               style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}

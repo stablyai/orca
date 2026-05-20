@@ -271,7 +271,7 @@ export function WorktreeCardDetailsHover({
         side="right"
         align="start"
         sideOffset={8}
-        className="w-80 max-h-[28rem] overflow-y-auto p-3 text-xs"
+        className="w-80 max-h-[28rem] overflow-y-auto p-3 text-xs scrollbar-sleek"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="space-y-3">

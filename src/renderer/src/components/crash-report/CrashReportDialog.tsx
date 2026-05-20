@@ -194,7 +194,7 @@ export function CrashReportDialog(): React.JSX.Element {
             />
             <div className="space-y-1.5">
               <div className="text-[11px] font-medium text-muted-foreground">Diagnostic text</div>
-              <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-muted/20 p-3 font-mono text-[11px] leading-5 text-muted-foreground">
+              <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-muted/20 p-3 font-mono text-[11px] leading-5 text-muted-foreground scrollbar-sleek">
                 {diagnosticText}
               </pre>
             </div>

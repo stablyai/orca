@@ -167,7 +167,7 @@ function ClaudeSwitcherMenu({
           <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Switch to
           </div>
-          <div className="max-h-[220px] overflow-y-auto rounded-md border border-border/60 bg-accent/5 p-1">
+          <div className="max-h-[220px] overflow-y-auto rounded-md border border-border/60 bg-accent/5 p-1 scrollbar-sleek">
             {availableSwitchTargets.length === 0 ? (
               <div className="px-2 py-1.5 text-[11px] text-muted-foreground">No other accounts</div>
             ) : null}
@@ -557,7 +557,7 @@ function CodexSwitcherMenu({
           <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Switch to
           </div>
-          <div className="max-h-[220px] overflow-y-auto rounded-md border border-border/60 bg-accent/5 p-1">
+          <div className="max-h-[220px] overflow-y-auto rounded-md border border-border/60 bg-accent/5 p-1 scrollbar-sleek">
             {availableSwitchTargets.length === 0 ? (
               <div className="px-2 py-1.5 text-[11px] text-muted-foreground">No other accounts</div>
             ) : null}

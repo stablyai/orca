@@ -410,7 +410,7 @@ export function ManageSessionsSection(): React.JSX.Element {
               No sessions.
             </div>
           ) : (
-            <div className="max-h-[360px] overflow-y-auto">
+            <div className="max-h-[360px] overflow-y-auto scrollbar-sleek">
               <table className="w-full text-xs">
                 <tbody>
                   {sessions.map((session) => {

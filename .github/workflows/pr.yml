@@ -51,6 +51,9 @@ jobs:
       - name: Lint
         run: pnpm exec oxlint --format github
 
+      - name: Check styled scrollbars
+        run: pnpm check:styled-scrollbars
+
       # Why: project-owned type declarations must live in .ts so tsc
       # actually checks them. TypeScript's skipLibCheck: true (inherited
       # from @electron-toolkit/tsconfig) silently widens unresolved names

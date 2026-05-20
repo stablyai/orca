@@ -193,7 +193,7 @@ export function AutomationEditorDialog({
           </div>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-auto px-5 py-4">
+        <div className="min-h-0 flex-1 overflow-auto px-5 py-4 scrollbar-sleek">
           {draft.scheduleWarning ? (
             <div className="mb-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
               {draft.scheduleWarning}
