@@ -114,9 +114,15 @@
 
 .rich-markdown-review-rail-toggle:hover,
 .rich-markdown-review-rail-toggle[aria-expanded='true'],
-.rich-markdown-review-rail-send:hover {
+.rich-markdown-review-rail-send:hover:not(:disabled) {
   background: var(--accent);
   color: var(--foreground);
+}
+
+.rich-markdown-review-rail-send:disabled,
+.rich-markdown-review-note-send:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .rich-markdown-review-note-layer {
@@ -151,7 +157,7 @@
   z-index: 1;
 }
 
-.rich-markdown-review-note-send:hover {
+.rich-markdown-review-note-send:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--foreground) 20%, transparent);
   background: color-mix(in srgb, var(--foreground) 6%, transparent);
   color: var(--foreground);

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as monaco from 'monaco-editor'
 import type { editor as monacoEditor, IDisposable } from 'monaco-editor'
 import { createRoot, type Root } from 'react-dom/client'
@@ -19,6 +19,7 @@ type DecoratorArgs = {
   filePath: string
   worktreeId: string
   comments: DiffComment[]
+  commentableLineNumbers?: readonly number[]
   addButtonLabel?: string
   onAddCommentClick: (args: { lineNumber: number; startLine?: number; top: number }) => void
   onDeleteComment: (commentId: string) => void
@@ -65,6 +66,7 @@ export function useDiffCommentDecorator({
   filePath,
   worktreeId,
   comments,
+  commentableLineNumbers,
   addButtonLabel = 'Add note for the AI',
   onAddCommentClick,
   onDeleteComment,
@@ -106,6 +108,10 @@ export function useDiffCommentDecorator({
   onDeleteCommentRef.current = onDeleteComment
   onUpdateCommentRef.current = onUpdateComment
   onPendingScrollConsumedRef.current = onPendingScrollConsumed
+  const commentableLineSet = useMemo(
+    () => (commentableLineNumbers ? new Set(commentableLineNumbers) : null),
+    [commentableLineNumbers]
+  )
 
   useEffect(() => {
     if (!editor) {
@@ -181,6 +187,24 @@ export function useDiffCommentDecorator({
       return editor.getTargetAtClientPoint(clientX, clientY)?.position?.lineNumber ?? null
     }
 
+    const canCommentOnLine = (lineNumber: number): boolean => {
+      return commentableLineSet === null || commentableLineSet.has(lineNumber)
+    }
+
+    const canCommentOnRange = (startLine: number, endLine: number): boolean => {
+      if (commentableLineSet === null) {
+        return true
+      }
+      const from = Math.min(startLine, endLine)
+      const to = Math.max(startLine, endLine)
+      for (let line = from; line <= to; line++) {
+        if (!commentableLineSet.has(line)) {
+          return false
+        }
+      }
+      return true
+    }
+
     const positionAtLine = (lineNumber: number): void => {
       const lineTop = editor.getTopForLineNumber(lineNumber) - editor.getScrollTop()
       const top = Math.round(lineTop + (getLineHeight() - BUTTON_SIZE) / 2)
@@ -202,6 +226,9 @@ export function useDiffCommentDecorator({
       if (!currentDrag) {
         return
       }
+      if (!canCommentOnRange(currentDrag.startLine, currentDrag.endLine)) {
+        return
+      }
       const startLine = Math.min(currentDrag.startLine, currentDrag.endLine)
       const lineNumber = Math.max(currentDrag.startLine, currentDrag.endLine)
       const top = getDiffCommentPopoverTop(editor, lineNumber, getLineHeight())
@@ -220,7 +247,12 @@ export function useDiffCommentDecorator({
         return
       }
       const line = getLineAtClientPoint(ev.clientX, ev.clientY)
-      if (line == null || line === dragState.endLine) {
+      if (
+        line == null ||
+        line === dragState.endLine ||
+        !canCommentOnLine(line) ||
+        !canCommentOnRange(dragState.startLine, line)
+      ) {
         return
       }
       dragState = { ...dragState, endLine: line }
@@ -231,7 +263,7 @@ export function useDiffCommentDecorator({
       ev.preventDefault()
       ev.stopPropagation()
       const line = hoverLineRef.current
-      if (line == null) {
+      if (line == null || !canCommentOnLine(line)) {
         return
       }
       dragState = { startLine: line, endLine: line }
@@ -253,7 +285,8 @@ export function useDiffCommentDecorator({
         return
       }
       const ln = e.target.position?.lineNumber ?? null
-      if (ln == null) {
+      if (ln == null || !canCommentOnLine(ln)) {
+        hoverLineRef.current = null
         setDisplay('none')
         return
       }
@@ -316,7 +349,7 @@ export function useDiffCommentDecorator({
       pendingScrollRef.current = null
       scrollToZoneRef.current = null
     }
-  }, [addButtonLabel, editor])
+  }, [addButtonLabel, commentableLineSet, editor])
 
   useEffect(() => {
     if (!editor) {
@@ -401,6 +434,7 @@ export function useDiffCommentDecorator({
           lineNumber={comment.lineNumber}
           startLine={comment.startLine}
           body={comment.body}
+          sentAt={comment.sentAt}
           onDelete={() => onDeleteCommentRef.current(comment.id)}
           onSubmitEdit={
             onUpdateCommentRef.current

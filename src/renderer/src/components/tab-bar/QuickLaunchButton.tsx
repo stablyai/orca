@@ -27,6 +27,8 @@ export type QuickLaunchAgentMenuItemsProps = {
    *  `'tab_bar_quick_launch'` so the existing tab-bar `+` callsite is
    *  unchanged. */
   launchSource?: LaunchSource
+  /** Called after a prompt is queued into the agent, or immediately for argv prompt launches. */
+  onPromptDelivered?: () => void
 }
 
 function getCatalogEntry(agent: TuiAgent): { id: TuiAgent; label: string } | null {
@@ -77,7 +79,8 @@ function QuickLaunchAgentMenuItemsInner({
   onFocusTerminal,
   prompt,
   promptDelivery,
-  launchSource
+  launchSource,
+  onPromptDelivered
 }: QuickLaunchAgentMenuItemsProps): React.JSX.Element | null {
   // Why: must be a reactive selector (not getConnectionId() which reads a
   // snapshot via getState()). This ensures the component re-renders when the
@@ -112,7 +115,8 @@ function QuickLaunchAgentMenuItemsInner({
         groupId,
         ...(prompt !== undefined ? { prompt } : {}),
         ...(promptDelivery !== undefined ? { promptDelivery } : {}),
-        ...(launchSource !== undefined ? { launchSource } : {})
+        ...(launchSource !== undefined ? { launchSource } : {}),
+        ...(onPromptDelivered !== undefined ? { onPromptDelivered } : {})
       })
       if (!result) {
         toast.error(`Could not build launch command for ${label}.`)
@@ -155,7 +159,7 @@ function QuickLaunchAgentMenuItemsInner({
         toast.message(getLaunchWatchdogTimeoutMessage(label))
       })
     },
-    [worktreeId, groupId, onFocusTerminal, prompt, promptDelivery, launchSource]
+    [worktreeId, groupId, onFocusTerminal, prompt, promptDelivery, launchSource, onPromptDelivered]
   )
 
   const agents = detectedIds ? orderAgents(defaultAgent, detectedIds) : []

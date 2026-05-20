@@ -9,6 +9,7 @@ import {
   MoreHorizontal,
   Rows2
 } from 'lucide-react'
+import { useAppStore } from '@/store'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
 import {
   DropdownMenu,
@@ -28,6 +29,7 @@ import type { EditorToggleValue } from './EditorViewToggle'
 import type { EditorHeaderOpenFileState } from './editor-header'
 import { getEditorHeaderCopyState } from './editor-header'
 import { getMarkdownPreviewShortcutLabel } from './markdown-preview-controls'
+import { DiffNotesSendMenu } from './DiffNotesSendMenu'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -104,6 +106,8 @@ export function EditorPanelHeader({
   const [pathMenuOpen, setPathMenuOpen] = useState(false)
   const [pathMenuPoint, setPathMenuPoint] = useState({ x: 0, y: 0 })
   const headerCopyState = getEditorHeaderCopyState(activeFile)
+  const diffComments = useAppStore((s) => s.getDiffComments(activeFile.worktreeId))
+  const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[activeFile.worktreeId])
 
   useEffect(() => {
     const closeMenu = (): void => setPathMenuOpen(false)
@@ -203,6 +207,16 @@ export function EditorPanelHeader({
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
+      )}
+      {isSingleDiff && diffComments.length > 0 && (
+        <DiffNotesSendMenu
+          worktreeId={activeFile.worktreeId}
+          groupId={activeGroupId ?? activeFile.worktreeId}
+          comments={diffComments}
+          filePath={activeFile.relativePath}
+          showFileScope
+          triggerClassName="p-1 flex-shrink-0"
+        />
       )}
       {canOpenPreviewToSide && (
         <TooltipProvider delayDuration={300}>

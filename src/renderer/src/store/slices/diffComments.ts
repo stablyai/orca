@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: this slice keeps optimistic note
+mutation, rollback, persistence ordering, and sent-state transitions together
+so every write follows the same queue and rollback invariants. */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { DiffComment, Worktree } from '../../../../shared/types'
@@ -9,6 +12,11 @@ export type DiffCommentsSlice = {
   getDiffComments: (worktreeId: string | null | undefined) => DiffComment[]
   addDiffComment: (input: Omit<DiffComment, 'id' | 'createdAt'>) => Promise<DiffComment | null>
   updateDiffComment: (worktreeId: string, commentId: string, body: string) => Promise<boolean>
+  markDiffCommentsSent: (
+    worktreeId: string,
+    commentIds: readonly string[],
+    sentAt?: number
+  ) => Promise<boolean>
   deleteDiffComment: (worktreeId: string, commentId: string) => Promise<void>
   clearDiffComments: (worktreeId: string) => Promise<boolean>
   clearDiffCommentsForFile: (worktreeId: string, filePath: string) => Promise<boolean>
@@ -34,6 +42,11 @@ function normalizeDiffComment(comment: DiffComment): DiffComment {
     typeof rawSelectedText === 'string' && rawSelectedText.trim().length > 0
       ? rawSelectedText.trim()
       : undefined
+  const rawSentAt = (comment as { sentAt?: unknown }).sentAt
+  const sentAt =
+    typeof rawSentAt === 'number' && Number.isFinite(rawSentAt) && rawSentAt > 0
+      ? rawSentAt
+      : undefined
 
   return {
     ...comment,
@@ -42,7 +55,9 @@ function normalizeDiffComment(comment: DiffComment): DiffComment {
     ...(selectedText !== undefined ? { selectedText } : {}),
     ...(selectedText === undefined ? { selectedText: undefined } : {}),
     ...(startLine !== undefined ? { startLine } : {}),
-    ...(startLine === undefined ? { startLine: undefined } : {})
+    ...(startLine === undefined ? { startLine: undefined } : {}),
+    ...(sentAt !== undefined ? { sentAt } : {}),
+    ...(sentAt === undefined ? { sentAt: undefined } : {})
   }
 }
 
@@ -288,13 +303,44 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
         return null
       }
       const next = current.slice()
-      next[idx] = { ...current[idx], body: trimmed }
+      // Why: editing a previously-sent note makes the agent's copy stale, so
+      // the note should become eligible for the next Send notes action.
+      next[idx] = { ...current[idx], body: trimmed, sentAt: undefined }
       return next
     })
     if (!result) {
       // Why: between the pre-check and the set updater, the comment vanished
       // or another mutation already wrote the same body. Treat as success so
       // the caller closes its editor.
+      return true
+    }
+    try {
+      await enqueuePersist(worktreeId, get)
+      return true
+    } catch (err) {
+      console.error('Failed to persist diff comments:', err)
+      rollback(set, worktreeId, result.previous, result.next)
+      return false
+    }
+  },
+
+  markDiffCommentsSent: async (worktreeId, commentIds, sentAt = Date.now()) => {
+    if (commentIds.length === 0) {
+      return true
+    }
+    const ids = new Set(commentIds)
+    const result = mutateComments(set, worktreeId, (existing) => {
+      let changed = false
+      const next = existing.map((comment) => {
+        if (!ids.has(comment.id) || comment.sentAt === sentAt) {
+          return comment
+        }
+        changed = true
+        return { ...comment, sentAt }
+      })
+      return changed ? next : null
+    })
+    if (!result) {
       return true
     }
     try {

@@ -22,7 +22,6 @@ import {
   List,
   ListTree,
   MessageSquare,
-  Send,
   Trash,
   Trash2,
   TriangleAlert,
@@ -103,8 +102,8 @@ import {
 import { BaseRefPicker } from '@/components/settings/BaseRefPicker'
 import { formatDiffComment, formatDiffComments } from '@/lib/diff-comments-format'
 import { getDiffCommentLineLabel, getDiffCommentSource } from '@/lib/diff-comment-compat'
-import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { DiffNotesSendMenu } from '@/components/editor/DiffNotesSendMenu'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import {
@@ -2824,36 +2823,12 @@ function SourceControlInner(): React.JSX.Element {
                   </span>
                 )}
               </button>
-              <DropdownMenu>
-                <TooltipProvider delayDuration={400}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          type="button"
-                          className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                          aria-label="Send notes to a new agent"
-                        >
-                          <Send className="size-3.5" />
-                        </button>
-                      </DropdownMenuTrigger>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" sideOffset={6}>
-                      Send notes to a new agent
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-                <DropdownMenuContent align="end" className="min-w-[180px]">
-                  <QuickLaunchAgentMenuItems
-                    worktreeId={activeWorktreeId}
-                    groupId={activeGroupId ?? activeWorktreeId}
-                    onFocusTerminal={focusTerminalTabSurface}
-                    prompt={diffCommentsPrompt}
-                    promptDelivery="submit-after-ready"
-                    launchSource="notes_send"
-                  />
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <DiffNotesSendMenu
+                worktreeId={activeWorktreeId}
+                groupId={activeGroupId ?? activeWorktreeId}
+                comments={diffCommentsForActive}
+                triggerClassName="size-6"
+              />
               {diffCommentCount > 0 && (
                 <TooltipProvider delayDuration={400}>
                   <Tooltip>
@@ -4149,6 +4124,11 @@ function DiffCommentsInlineList({
                   <span className="shrink-0 rounded bg-muted/70 px-1 py-0.5 text-[10px] leading-none text-muted-foreground">
                     {getDiffCommentSource(c) === 'markdown' ? 'MD' : 'Diff'}
                   </span>
+                  {c.sentAt ? (
+                    <span className="shrink-0 rounded bg-muted/70 px-1 py-0.5 text-[10px] leading-none text-muted-foreground">
+                      Sent
+                    </span>
+                  ) : null}
                   <span className="block min-w-0 flex-1 whitespace-pre-wrap break-words text-[11px] leading-snug text-foreground">
                     {c.body}
                   </span>

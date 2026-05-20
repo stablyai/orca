@@ -31,15 +31,8 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import type { OpenFile } from '@/store/slices/editor'
 import type {
   DiffComment,
@@ -47,9 +40,10 @@ import type {
   GitDiffResult,
   GitStatusEntry
 } from '../../../../shared/types'
-import { Check, Copy, MessageSquare, PanelLeftOpen, Send, Trash2 } from 'lucide-react'
+import { Check, Copy, MessageSquare, PanelLeftOpen, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { DiffSectionItem } from './DiffSectionItem'
+import { DiffNotesSendMenu } from './DiffNotesSendMenu'
 import {
   CombinedDiffFileTree,
   createCombinedDiffSectionIndexMap,
@@ -1084,36 +1078,13 @@ export default function CombinedDiffViewer({
                     />
                   </PopoverContent>
                 </Popover>
-                <DropdownMenu>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          className="h-7 rounded-none border-l border-border/60 text-muted-foreground hover:text-foreground"
-                          aria-label="Send AI notes to a new agent"
-                        >
-                          <Send className="size-3" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" sideOffset={6}>
-                      Send notes to AI
-                    </TooltipContent>
-                  </Tooltip>
-                  <DropdownMenuContent align="end" className="min-w-[180px]">
-                    <QuickLaunchAgentMenuItems
-                      worktreeId={file.worktreeId}
-                      groupId={activeGroupId ?? file.worktreeId}
-                      onFocusTerminal={focusTerminalTabSurface}
-                      prompt={diffCommentsPrompt}
-                      promptDelivery="submit-after-ready"
-                      launchSource="notes_send"
-                    />
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <DiffNotesSendMenu
+                  worktreeId={file.worktreeId}
+                  groupId={activeGroupId ?? file.worktreeId}
+                  comments={diffCommentsForWorktree}
+                  triggerClassName="h-7 rounded-none border-l border-border/60 px-2"
+                  iconClassName="size-3"
+                />
               </div>
             )}
           </div>
@@ -1196,6 +1167,21 @@ export default function CombinedDiffViewer({
                       setSections={setSections}
                       modifiedEditorsRef={modifiedEditorsRef}
                       handleSectionSaveRef={handleSectionSaveRef}
+                      renderHeaderTrailingContent={(section) => {
+                        const fileNotes = diffCommentsForWorktree.filter(
+                          (comment) => comment.filePath === section.path
+                        )
+                        return fileNotes.length > 0 ? (
+                          <DiffNotesSendMenu
+                            worktreeId={file.worktreeId}
+                            groupId={activeGroupId ?? file.worktreeId}
+                            comments={diffCommentsForWorktree}
+                            filePath={section.path}
+                            showFileScope
+                            triggerClassName="p-0.5 opacity-0 group-hover:opacity-100"
+                          />
+                        ) : null
+                      }}
                     />
                   </div>
                 )
@@ -1302,6 +1288,11 @@ function DiffNotesPreviewPopover({
           <div key={comment.id} className="rounded-md px-2 py-1.5 hover:bg-accent/50">
             <div className="flex items-center gap-1.5 text-[11px] leading-none text-muted-foreground">
               <span className="min-w-0 flex-1 truncate font-mono">{comment.filePath}</span>
+              {comment.sentAt ? (
+                <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] leading-none">
+                  Sent
+                </span>
+              ) : null}
               <span className="shrink-0 tabular-nums">
                 {getDiffCommentLineLabel(comment, true)}
               </span>

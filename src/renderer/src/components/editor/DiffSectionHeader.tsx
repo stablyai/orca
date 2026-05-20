@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
-import type { MouseEvent, ReactElement } from 'react'
+import type { MouseEvent, ReactElement, ReactNode } from 'react'
 
 export function DiffSectionHeader({
   path,
@@ -9,7 +9,8 @@ export function DiffSectionHeader({
   removed,
   onToggle,
   onOpenSection,
-  openSectionTitle
+  openSectionTitle,
+  trailingContent
 }: {
   path: string
   dirty: boolean
@@ -19,6 +20,7 @@ export function DiffSectionHeader({
   onToggle: () => void
   onOpenSection: (event: MouseEvent) => void
   openSectionTitle: string
+  trailingContent?: ReactNode
 }): ReactElement {
   return (
     <div
@@ -67,6 +69,7 @@ export function DiffSectionHeader({
         )}
       </span>
       <div className="flex items-center gap-1 shrink-0 ml-2">
+        {trailingContent}
         <button
           className="p-0.5 rounded text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
           onClick={onOpenSection}

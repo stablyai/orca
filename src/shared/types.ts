@@ -289,6 +289,8 @@ export type DiffComment = {
   lineNumber: number
   body: string
   createdAt: number
+  /** Set after the note has been handed to an agent. Edits clear it. */
+  sentAt?: number
   // Reserved for future "comments on the original side" — always 'modified' in v1.
   side: 'modified'
 }
@@ -877,6 +879,8 @@ export type GitHubPRFile = {
   deletions: number
   /** GitHub marks files above its diff size limit as binary-like; we skip content fetches for these. */
   isBinary: boolean
+  /** Modified-side line numbers that GitHub accepts for inline review comments. */
+  reviewCommentLineNumbers?: number[]
   /** GitHub's per-viewer review state. DISMISSED means new changes arrived after the file was viewed. */
   viewerViewedState?: GitHubPRFileViewedState
 }

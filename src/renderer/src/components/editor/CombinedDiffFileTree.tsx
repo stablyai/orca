@@ -193,88 +193,90 @@ export function CombinedDiffFileTree({
   }
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-r border-border bg-background">
-      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-          Files
+    <aside className="sticky top-0 flex h-full max-h-full w-64 shrink-0 self-start flex-col border-r border-border bg-background">
+      <div className="sticky top-0 z-20 shrink-0 bg-background">
+        <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+            Files
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Collapse file tree"
+            onClick={() => onCollapsedChange(true)}
+          >
+            <PanelLeftClose className="size-3.5" />
+          </Button>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          aria-label="Collapse file tree"
-          onClick={() => onCollapsedChange(true)}
-        >
-          <PanelLeftClose className="size-3.5" />
-        </Button>
-      </div>
-      <div className="flex shrink-0 items-center gap-2 border-b border-border px-2 py-2">
-        <div className="relative min-w-0 flex-1">
-          <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Filter files..."
-            className="h-8 pl-7 text-xs"
-          />
-        </div>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon-sm"
-              aria-label="Filter diff files"
-              className={cn(activeFilterCount > 0 && 'border-foreground/30 text-foreground')}
-            >
-              <Filter className="size-3.5" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" side="bottom" sideOffset={6} className="w-56 p-0">
-            <div className="border-b border-border px-3 py-2 text-xs font-semibold text-foreground">
-              File extensions
-            </div>
-            <div className="max-h-60 overflow-auto py-1 scrollbar-sleek">
-              {availableExtensions.map((extension) => {
-                const checked = !excludedExtensions.has(extension)
-                return (
-                  <button
-                    key={extension}
-                    type="button"
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground"
-                    onClick={() => toggleExtension(extension)}
-                  >
-                    <Check
-                      className={cn('size-3.5 shrink-0', checked ? 'opacity-100' : 'opacity-0')}
-                    />
-                    <span className="min-w-0 flex-1 truncate">{extension}</span>
-                  </button>
-                )
-              })}
-            </div>
-            <div className="border-t border-border py-1">
-              <button
+        <div className="flex items-center gap-2 border-b border-border px-2 py-2">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Filter files..."
+              className="h-8 pl-7 text-xs"
+            />
+          </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
                 type="button"
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground"
-                onClick={() => setIncludeViewed((prev) => !prev)}
+                variant="outline"
+                size="icon-sm"
+                aria-label="Filter diff files"
+                className={cn(activeFilterCount > 0 && 'border-foreground/30 text-foreground')}
               >
-                <Check
-                  className={cn('size-3.5 shrink-0', includeViewed ? 'opacity-100' : 'opacity-0')}
-                />
-                <span className="min-w-0 flex-1 truncate">Viewed files</span>
-              </button>
-              {activeFilterCount > 0 && (
+                <Filter className="size-3.5" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" side="bottom" sideOffset={6} className="w-56 p-0">
+              <div className="border-b border-border px-3 py-2 text-xs font-semibold text-foreground">
+                File extensions
+              </div>
+              <div className="max-h-60 overflow-auto py-1 scrollbar-sleek">
+                {availableExtensions.map((extension) => {
+                  const checked = !excludedExtensions.has(extension)
+                  return (
+                    <button
+                      key={extension}
+                      type="button"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground"
+                      onClick={() => toggleExtension(extension)}
+                    >
+                      <Check
+                        className={cn('size-3.5 shrink-0', checked ? 'opacity-100' : 'opacity-0')}
+                      />
+                      <span className="min-w-0 flex-1 truncate">{extension}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="border-t border-border py-1">
                 <button
                   type="button"
-                  className="w-full px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                  onClick={resetFilters}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground"
+                  onClick={() => setIncludeViewed((prev) => !prev)}
                 >
-                  Reset filters
+                  <Check
+                    className={cn('size-3.5 shrink-0', includeViewed ? 'opacity-100' : 'opacity-0')}
+                  />
+                  <span className="min-w-0 flex-1 truncate">Viewed files</span>
                 </button>
-              )}
-            </div>
-          </PopoverContent>
-        </Popover>
+                {activeFilterCount > 0 && (
+                  <button
+                    type="button"
+                    className="w-full px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    onClick={resetFilters}
+                  >
+                    Reset filters
+                  </button>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
       <div className="min-h-0 flex-1 overflow-auto py-1 scrollbar-sleek">
         {filteredEntries.length === 0 ? (

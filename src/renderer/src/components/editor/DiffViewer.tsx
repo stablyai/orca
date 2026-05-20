@@ -37,6 +37,7 @@ type DiffViewerProps = {
     startLine?: number
     body: string
   }) => Promise<boolean>
+  commentableLineNumbers?: readonly number[]
   addLineCommentLabel?: string
   addLineCommentPlaceholder?: string
   onContentChange?: (content: string) => void
@@ -56,6 +57,7 @@ export default function DiffViewer({
   editable,
   worktreeId,
   onAddLineComment,
+  commentableLineNumbers,
   addLineCommentLabel,
   addLineCommentPlaceholder,
   onContentChange,
@@ -117,6 +119,7 @@ export default function DiffViewer({
     filePath: relativePath,
     worktreeId: worktreeId ?? '',
     comments: worktreeId ? diffComments : [],
+    commentableLineNumbers,
     addButtonLabel: addLineCommentLabel,
     onAddCommentClick: ({ lineNumber, startLine, top }) =>
       setPopover({

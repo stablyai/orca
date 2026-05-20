@@ -499,6 +499,7 @@ export default function RichMarkdownEditor({
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
+  const markDiffCommentsSent = useAppStore((s) => s.markDiffCommentsSent)
   const allDiffComments = useAppStore((s): DiffComment[] | undefined => {
     for (const list of Object.values(s.worktreesByRepo)) {
       const worktree = list.find((candidate) => candidate.id === worktreeId)
@@ -586,9 +587,17 @@ export default function RichMarkdownEditor({
     () => sortMarkdownReviewNotes(markdownComments as MarkdownReviewNote[]),
     [markdownComments]
   )
-  const markdownReviewPrompt = useMemo(
-    () => formatMarkdownReviewNotes(markdownReviewNotes, markdownReviewContent),
-    [markdownReviewContent, markdownReviewNotes]
+  const unsentMarkdownReviewNotes = useMemo(
+    () => markdownReviewNotes.filter((note) => !note.sentAt),
+    [markdownReviewNotes]
+  )
+  const unsentMarkdownReviewNoteIds = useMemo(
+    () => unsentMarkdownReviewNotes.map((note) => note.id),
+    [unsentMarkdownReviewNotes]
+  )
+  const unsentMarkdownReviewPrompt = useMemo(
+    () => formatMarkdownReviewNotes(unsentMarkdownReviewNotes, markdownReviewContent),
+    [markdownReviewContent, unsentMarkdownReviewNotes]
   )
   const hasMarkdownComments = markdownComments.length > 0
   const reviewRailVisible = hasMarkdownComments && reviewRailOpen
@@ -1567,7 +1576,12 @@ export default function RichMarkdownEditor({
                 <button
                   type="button"
                   className="rich-markdown-review-rail-send"
-                  title="Send notes to a new agent"
+                  disabled={unsentMarkdownReviewNotes.length === 0}
+                  title={
+                    unsentMarkdownReviewNotes.length === 0
+                      ? 'All notes sent'
+                      : 'Send notes to a new agent'
+                  }
                   aria-label="Send notes to a new agent"
                 >
                   <Send className="size-3.5" />
@@ -1578,9 +1592,12 @@ export default function RichMarkdownEditor({
                   worktreeId={worktreeId}
                   groupId={worktreeId}
                   onFocusTerminal={focusTerminalTabSurface}
-                  prompt={markdownReviewPrompt}
+                  prompt={unsentMarkdownReviewPrompt}
                   promptDelivery="submit-after-ready"
                   launchSource="notes_send"
+                  onPromptDelivered={() =>
+                    void markDiffCommentsSent(worktreeId, unsentMarkdownReviewNoteIds)
+                  }
                 />
               </DropdownMenuContent>
             </DropdownMenu>
@@ -1599,6 +1616,7 @@ export default function RichMarkdownEditor({
                   lineNumber={comment.lineNumber}
                   startLine={comment.startLine}
                   body={comment.body}
+                  sentAt={comment.sentAt}
                   onDelete={() => void deleteDiffComment(worktreeId, comment.id)}
                   onSubmitEdit={(body) => updateDiffComment(worktreeId, comment.id, body)}
                   onContentResize={syncNotePositions}
@@ -1608,7 +1626,8 @@ export default function RichMarkdownEditor({
                         <button
                           type="button"
                           className="rich-markdown-review-note-send"
-                          title="Send note to a new agent"
+                          disabled={Boolean(comment.sentAt)}
+                          title={comment.sentAt ? 'Note already sent' : 'Send note to a new agent'}
                           aria-label="Send note to a new agent"
                           onMouseDown={(event) => event.stopPropagation()}
                           onClick={(event) => event.stopPropagation()}
@@ -1627,6 +1646,9 @@ export default function RichMarkdownEditor({
                           )}
                           promptDelivery="submit-after-ready"
                           launchSource="notes_send"
+                          onPromptDelivered={() =>
+                            void markDiffCommentsSent(worktreeId, [comment.id])
+                          }
                         />
                       </DropdownMenuContent>
                     </DropdownMenu>

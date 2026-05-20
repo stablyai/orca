@@ -249,6 +249,7 @@ export default function MarkdownPreview({
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
+  const markDiffCommentsSent = useAppStore((s) => s.markDiffCommentsSent)
   const allDiffComments = useAppStore((s): DiffComment[] | undefined => {
     const worktree = findWorktreeForMarkdownPreviewPath(s.worktreesByRepo, filePath)
     return worktree?.diffComments
@@ -332,6 +333,18 @@ export default function MarkdownPreview({
   const markdownReviewPrompt = useMemo(
     () => formatMarkdownReviewNotes(markdownReviewNotes, renderedContent),
     [markdownReviewNotes, renderedContent]
+  )
+  const unsentMarkdownReviewNotes = useMemo(
+    () => markdownReviewNotes.filter((note) => !note.sentAt),
+    [markdownReviewNotes]
+  )
+  const unsentMarkdownReviewNoteIds = useMemo(
+    () => unsentMarkdownReviewNotes.map((note) => note.id),
+    [unsentMarkdownReviewNotes]
+  )
+  const unsentMarkdownReviewPrompt = useMemo(
+    () => formatMarkdownReviewNotes(unsentMarkdownReviewNotes, renderedContent),
+    [renderedContent, unsentMarkdownReviewNotes]
   )
   const canShowReviewTools = Boolean(
     markdownAnnotationsEnabled && sourceWorktree && sourceRelativePath !== null
@@ -669,6 +682,7 @@ export default function MarkdownPreview({
                 lineNumber={comment.lineNumber}
                 startLine={comment.startLine}
                 body={comment.body}
+                sentAt={comment.sentAt}
                 onDelete={() => void deleteDiffComment(sourceWorktree.id, comment.id)}
                 onSubmitEdit={(body) => updateDiffComment(sourceWorktree.id, comment.id, body)}
               />
@@ -1259,8 +1273,12 @@ export default function MarkdownPreview({
                   <button
                     type="button"
                     className="markdown-review-icon-button"
-                    disabled={markdownReviewNotes.length === 0}
-                    title="Send notes to a new agent"
+                    disabled={unsentMarkdownReviewNotes.length === 0}
+                    title={
+                      unsentMarkdownReviewNotes.length === 0
+                        ? 'All notes sent'
+                        : 'Send notes to a new agent'
+                    }
                     aria-label="Send notes to a new agent"
                   >
                     <Send className="size-3.5" />
@@ -1271,9 +1289,12 @@ export default function MarkdownPreview({
                     worktreeId={sourceWorktree.id}
                     groupId={sourceWorktree.id}
                     onFocusTerminal={focusTerminalTabSurface}
-                    prompt={markdownReviewPrompt}
+                    prompt={unsentMarkdownReviewPrompt}
                     promptDelivery="submit-after-ready"
                     launchSource="notes_send"
+                    onPromptDelivered={() =>
+                      void markDiffCommentsSent(sourceWorktree.id, unsentMarkdownReviewNoteIds)
+                    }
                   />
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -1333,8 +1354,9 @@ export default function MarkdownPreview({
           onSelect={scrollToReviewNote}
           onDelete={(id) => void deleteDiffComment(sourceWorktree.id, id)}
           onSubmitEdit={(id, body) => updateDiffComment(sourceWorktree.id, id, body)}
-          prompt={markdownReviewPrompt}
+          sendPrompt={unsentMarkdownReviewPrompt}
           worktreeId={sourceWorktree.id}
+          unsentNoteIds={unsentMarkdownReviewNoteIds}
         />
       ) : null}
       {showTableOfContents ? (
@@ -1358,8 +1380,9 @@ function MarkdownReviewNotesPanel({
   onSelect,
   onDelete,
   onSubmitEdit,
-  prompt,
-  worktreeId
+  sendPrompt,
+  worktreeId,
+  unsentNoteIds
 }: {
   notes: MarkdownReviewNote[]
   content: string
@@ -1370,9 +1393,11 @@ function MarkdownReviewNotesPanel({
   onSelect: (note: MarkdownReviewNote) => void
   onDelete: (id: string) => void
   onSubmitEdit: (id: string, body: string) => Promise<boolean>
-  prompt: string
+  sendPrompt: string
   worktreeId: string
+  unsentNoteIds: readonly string[]
 }): React.JSX.Element {
+  const markDiffCommentsSent = useAppStore((s) => s.markDiffCommentsSent)
   return (
     <aside className="markdown-review-panel">
       <div className="markdown-review-panel-header">
@@ -1397,8 +1422,8 @@ function MarkdownReviewNotesPanel({
               <button
                 type="button"
                 className="markdown-review-icon-button"
-                disabled={notes.length === 0}
-                title="Send notes to a new agent"
+                disabled={unsentNoteIds.length === 0}
+                title={unsentNoteIds.length === 0 ? 'All notes sent' : 'Send notes to a new agent'}
                 aria-label="Send notes to a new agent"
               >
                 <Send className="size-3.5" />
@@ -1409,9 +1434,10 @@ function MarkdownReviewNotesPanel({
                 worktreeId={worktreeId}
                 groupId={worktreeId}
                 onFocusTerminal={focusTerminalTabSurface}
-                prompt={prompt}
+                prompt={sendPrompt}
                 promptDelivery="submit-after-ready"
                 launchSource="notes_send"
+                onPromptDelivered={() => void markDiffCommentsSent(worktreeId, unsentNoteIds)}
               />
             </DropdownMenuContent>
           </DropdownMenu>
@@ -1451,6 +1477,7 @@ function MarkdownReviewNotesPanel({
                 lineNumber={note.lineNumber}
                 startLine={note.startLine}
                 body={note.body}
+                sentAt={note.sentAt}
                 onDelete={() => onDelete(note.id)}
                 onSubmitEdit={(body) => onSubmitEdit(note.id, body)}
               />

@@ -4,35 +4,34 @@ import React, {
   lazy,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore
 } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
+import type { editor as monacoEditor } from 'monaco-editor'
 import {
-  AlignJustify,
   ArrowDown,
   ArrowRight,
   ArrowUp,
   Braces,
   Check,
   ChevronDown,
-  ChevronRight,
   CircleDashed,
   CircleDot,
   Copy,
   ExternalLink,
   FileText,
-  Folder,
-  FolderOpen,
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
-  LayoutList,
   ListChecks,
   LoaderCircle,
   MessageSquare,
   MessageSquarePlus,
+  PanelLeftOpen,
   Pencil,
   RefreshCw,
   Send,
@@ -66,7 +65,18 @@ import {
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { detectLanguage } from '@/lib/language-detect'
 import { cn } from '@/lib/utils'
-import { buildDiffTree, type DiffTreeNode } from '@/components/pr-diff-tree'
+import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
+import {
+  CombinedDiffFileTree,
+  createCombinedDiffSectionIndexMap,
+  handleCombinedDiffFileTreeNavigation
+} from '@/components/editor/CombinedDiffFileTree'
+import {
+  getDiffSectionEstimatedHeight,
+  isIntrinsicHeightImageDiff
+} from '@/components/editor/diff-section-layout'
+import type { DiffSection } from '@/components/editor/diff-section-types'
+import type { CombinedDiffFileTreeEntry } from '@/components/editor/combined-diff-file-tree-model'
 import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel-content'
 import {
   filterPRCommentsByAudience,
@@ -110,6 +120,8 @@ import type {
   GitHubWorkItemDetails,
   GitHubAssignableUser,
   GitHubReaction,
+  GitBranchChangeEntry,
+  GitDiffResult,
   PRCheckDetail,
   PRCheckRunDetails,
   PRComment,
@@ -142,9 +154,6 @@ function parseOwnerRepoFromItemUrl(url: string): GitHubOwnerRepo | null {
   }
 }
 
-// Why: the editor's DiffViewer loads Monaco, which is heavy and should not be
-// pulled into the dialog's bundle until the user actually opens the Files tab.
-const DiffViewer = lazy(() => import('@/components/editor/DiffViewer'))
 const MonacoCodeExcerpt = lazy(() => import('@/components/editor/MonacoCodeExcerpt'))
 
 export type ItemDialogTab = 'conversation' | 'checks' | 'files'
@@ -1004,45 +1013,8 @@ function PRReviewersPanel({
   )
 }
 
-function fileStatusTone(status: GitHubPRFile['status']): string {
-  switch (status) {
-    case 'added':
-      return 'text-emerald-500'
-    case 'removed':
-      return 'text-rose-500'
-    case 'renamed':
-    case 'copied':
-      return 'text-sky-500'
-    default:
-      return 'text-amber-500'
-  }
-}
-
-function fileStatusLabel(status: GitHubPRFile['status']): string {
-  switch (status) {
-    case 'added':
-      return 'A'
-    case 'removed':
-      return 'D'
-    case 'renamed':
-      return 'R'
-    case 'copied':
-      return 'C'
-    case 'unchanged':
-      return '·'
-    default:
-      return 'M'
-  }
-}
-
 function isPRFileViewed(file: GitHubPRFile): boolean {
   return file.viewerViewedState === 'VIEWED'
-}
-
-// Why: GitHub's viewed toggle auto-collapses the file; keying rows by the
-// viewed state resets the row's local expanded/content state without an Effect.
-function getPRFileRowKey(file: GitHubPRFile): string {
-  return `${file.path}:${file.viewerViewedState ?? 'UNVIEWED'}`
 }
 
 function findNearestBraceBlock(
@@ -1080,164 +1052,6 @@ function findNearestBraceBlock(
         (range) => range.startLine - 1 >= targetIndex && range.startLine - 1 - targetIndex <= 8
       )
       .sort((a, b) => a.startLine - b.startLine)[0] ?? null
-  )
-}
-
-type FileRowProps = {
-  file: GitHubPRFile
-  repoPath: string
-  repoId: string
-  prNumber: number
-  headSha: string | undefined
-  baseSha: string | undefined
-  viewed: boolean
-  viewedPending: boolean
-  onViewedChange: (path: string, viewed: boolean) => Promise<boolean>
-}
-
-type DiffViewMode = 'flat' | 'tree'
-
-// ─── Tree view components ────────────────────────────────────────────
-
-type DiffTreeNodeProps = {
-  node: DiffTreeNode
-  depth: number
-  repoPath: string
-  repoId: string
-  prNumber: number
-  headSha: string | undefined
-  baseSha: string | undefined
-  pendingViewedPaths: ReadonlySet<string>
-  onCommentAdded: (comment: PRComment) => void
-  onViewedChange: (path: string, viewed: boolean) => Promise<boolean>
-}
-
-function PRDiffTreeNode({
-  node,
-  depth,
-  repoPath,
-  repoId,
-  prNumber,
-  headSha,
-  baseSha,
-  pendingViewedPaths,
-  onCommentAdded,
-  onViewedChange
-}: DiffTreeNodeProps): React.JSX.Element {
-  const [open, setOpen] = useState(true)
-
-  if (node.kind === 'file') {
-    return (
-      <PRFileRow
-        file={node.file}
-        repoPath={repoPath}
-        repoId={repoId}
-        prNumber={prNumber}
-        headSha={headSha}
-        baseSha={baseSha}
-        viewed={isPRFileViewed(node.file)}
-        viewedPending={pendingViewedPaths.has(node.file.path)}
-        onCommentAdded={onCommentAdded}
-        onViewedChange={onViewedChange}
-        // Why: tree-view file rows are indented by a CSS left-padding proportional
-        // to depth so the expand chevron of PRFileRow stays at position 0 while
-        // the folder hierarchy is communicated purely through indentation.
-        indentDepth={depth}
-        label={node.name}
-      />
-    )
-  }
-
-  // Directory node
-  return (
-    <div role="treeitem" aria-expanded={open}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left transition hover:bg-muted/40"
-        style={{ paddingLeft: `${12 + depth * 16}px` }}
-        aria-label={`${open ? 'Collapse' : 'Expand'} folder ${node.name}`}
-      >
-        {open ? (
-          <>
-            <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
-            <FolderOpen className="size-3.5 shrink-0 text-amber-400" />
-          </>
-        ) : (
-          <>
-            <ChevronRight className="size-3 shrink-0 text-muted-foreground" />
-            <Folder className="size-3.5 shrink-0 text-amber-400" />
-          </>
-        )}
-        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
-          {node.name}
-        </span>
-      </button>
-      {open && (
-        <div role="group">
-          {node.children.map((child) => (
-            <PRDiffTreeNode
-              key={child.kind === 'file' ? getPRFileRowKey(child.file) : child.path}
-              node={child}
-              depth={depth + 1}
-              repoPath={repoPath}
-              repoId={repoId}
-              prNumber={prNumber}
-              headSha={headSha}
-              baseSha={baseSha}
-              pendingViewedPaths={pendingViewedPaths}
-              onCommentAdded={onCommentAdded}
-              onViewedChange={onViewedChange}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-type PRDiffTreeViewProps = {
-  files: GitHubPRFile[]
-  repoPath: string
-  repoId: string
-  prNumber: number
-  headSha: string | undefined
-  baseSha: string | undefined
-  pendingViewedPaths: ReadonlySet<string>
-  onCommentAdded: (comment: PRComment) => void
-  onViewedChange: (path: string, viewed: boolean) => Promise<boolean>
-}
-
-function PRDiffTreeView({
-  files,
-  repoPath,
-  repoId,
-  prNumber,
-  headSha,
-  baseSha,
-  pendingViewedPaths,
-  onCommentAdded,
-  onViewedChange
-}: PRDiffTreeViewProps): React.JSX.Element {
-  const tree = useMemo(() => buildDiffTree(files), [files])
-  return (
-    <div role="tree" aria-label="Changed files">
-      {tree.map((node) => (
-        <PRDiffTreeNode
-          key={node.kind === 'file' ? getPRFileRowKey(node.file) : node.path}
-          node={node}
-          depth={0}
-          repoPath={repoPath}
-          repoId={repoId}
-          prNumber={prNumber}
-          headSha={headSha}
-          baseSha={baseSha}
-          pendingViewedPaths={pendingViewedPaths}
-          onCommentAdded={onCommentAdded}
-          onViewedChange={onViewedChange}
-        />
-      ))}
-    </div>
   )
 }
 
@@ -1666,38 +1480,213 @@ function PRViewedCheckbox({
   )
 }
 
-function PRFileRow({
-  file,
+const PR_DIFF_OVERSCAN = 5
+
+function mapPRFileStatus(status: GitHubPRFile['status']): GitBranchChangeEntry['status'] {
+  switch (status) {
+    case 'added':
+      return 'added'
+    case 'removed':
+      return 'deleted'
+    case 'renamed':
+      return 'renamed'
+    case 'copied':
+      return 'copied'
+    default:
+      return 'modified'
+  }
+}
+
+function getPRFileSectionKey(path: string): string {
+  return `combined-commit:${path}`
+}
+
+function gitHubPRFileToBranchEntry(file: GitHubPRFile): GitBranchChangeEntry {
+  return {
+    path: file.path,
+    oldPath: file.oldPath,
+    status: mapPRFileStatus(file.status),
+    added: file.additions,
+    removed: file.deletions
+  }
+}
+
+function getPRFileDiffResult(contents: GitHubPRFileContents): GitDiffResult {
+  if (contents.originalIsBinary) {
+    return {
+      kind: 'binary',
+      originalContent: contents.original,
+      modifiedContent: contents.modified,
+      originalIsBinary: true,
+      modifiedIsBinary: contents.modifiedIsBinary
+    }
+  }
+  if (contents.modifiedIsBinary) {
+    return {
+      kind: 'binary',
+      originalContent: contents.original,
+      modifiedContent: contents.modified,
+      originalIsBinary: false,
+      modifiedIsBinary: true
+    }
+  }
+
+  return {
+    kind: 'text',
+    originalContent: contents.original,
+    modifiedContent: contents.modified,
+    originalIsBinary: false,
+    modifiedIsBinary: false
+  }
+}
+
+type PRFilesCombinedDiffViewerProps = {
+  files: GitHubPRFile[]
+  repoPath: string
+  repoId: string
+  prNumber: number
+  prUrl: string
+  headSha: string | undefined
+  baseSha: string | undefined
+  pendingViewedPaths: ReadonlySet<string>
+  onCommentAdded: (comment: PRComment) => void
+  onViewedChange: (path: string, viewed: boolean) => Promise<boolean>
+}
+
+function PRFilesCombinedDiffViewer({
+  files,
   repoPath,
   repoId,
   prNumber,
+  prUrl,
   headSha,
   baseSha,
-  viewed,
-  viewedPending,
-  onViewedChange,
+  pendingViewedPaths,
   onCommentAdded,
-  indentDepth = 0,
-  label
-}: FileRowProps & {
-  onCommentAdded: (comment: PRComment) => void
-  indentDepth?: number
-  label?: string
-}): React.JSX.Element {
-  const [expanded, setExpanded] = useState(false)
-  const [contents, setContents] = useState<GitHubPRFileContents | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  onViewedChange
+}: PRFilesCombinedDiffViewerProps): React.JSX.Element {
+  const settings = useAppStore((s) => s.settings)
+  const isDark =
+    settings?.theme === 'dark' ||
+    (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const entriesCacheRef = useRef<{
+    signature: string
+    entries: GitBranchChangeEntry[]
+  } | null>(null)
+  const diffEntrySignature = useMemo(
+    () =>
+      JSON.stringify(
+        files.map((file) => ({
+          path: file.path,
+          oldPath: file.oldPath ?? null,
+          status: file.status,
+          additions: file.additions,
+          deletions: file.deletions,
+          isBinary: file.isBinary
+        }))
+      ),
+    [files]
+  )
+  const entries = useMemo(() => {
+    if (entriesCacheRef.current?.signature === diffEntrySignature) {
+      return entriesCacheRef.current.entries
+    }
+    const nextEntries = files.map(gitHubPRFileToBranchEntry)
+    entriesCacheRef.current = { signature: diffEntrySignature, entries: nextEntries }
+    return nextEntries
+  }, [diffEntrySignature, files])
+  const fileByPath = useMemo(() => new Map(files.map((file) => [file.path, file])), [files])
+  const entrySignature = useMemo(
+    () =>
+      JSON.stringify({
+        repoId,
+        prNumber,
+        headSha: headSha ?? null,
+        baseSha: baseSha ?? null,
+        files: diffEntrySignature
+      }),
+    [baseSha, diffEntrySignature, headSha, prNumber, repoId]
+  )
+  const [sections, setSections] = useState<DiffSection[]>([])
+  const [sideBySide, setSideBySide] = useState(false)
+  const [fileTreeCollapsed, setFileTreeCollapsed] = useState(false)
+  const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
+  const [activeTreeSectionKey, setActiveTreeSectionKey] = useState<string | null>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const loadedIndicesRef = useRef<Set<number>>(new Set())
+  const loadingIndicesRef = useRef<Set<number>>(new Set())
+  const sectionsRef = useRef<DiffSection[]>([])
+  const generationRef = useRef(0)
+  const modifiedEditorsRef = useRef<Map<number, monacoEditor.IStandaloneCodeEditor>>(new Map())
+  const handleSectionSaveRef = useRef<(index: number) => Promise<void>>(async () => {})
+  sectionsRef.current = sections
 
-  const canLoadDiff = Boolean(headSha && baseSha) && !file.isBinary
+  useEffect(() => {
+    generationRef.current += 1
+    loadedIndicesRef.current.clear()
+    loadingIndicesRef.current.clear()
+    setSectionHeights({})
+    setActiveTreeSectionKey(null)
+    setSections(
+      entries.map((entry) => ({
+        key: getPRFileSectionKey(entry.path),
+        path: entry.path,
+        oldPath: entry.oldPath,
+        status: entry.status,
+        added: entry.added,
+        removed: entry.removed,
+        originalContent: '',
+        modifiedContent: '',
+        collapsed: false,
+        loading: true,
+        error: undefined,
+        dirty: false,
+        diffResult: null
+      }))
+    )
+  }, [entries, entrySignature])
 
-  const handleToggle = useCallback(() => {
-    setExpanded((prev) => {
-      const next = !prev
-      if (next && !contents && !loading && canLoadDiff && headSha && baseSha) {
-        setLoading(true)
-        setError(null)
-        loadPRFileContents({
+  const loadSection = useCallback(
+    (index: number) => {
+      const section = sectionsRef.current[index]
+      if (!section || section.collapsed) {
+        return
+      }
+      if (loadedIndicesRef.current.has(index) || loadingIndicesRef.current.has(index)) {
+        return
+      }
+      const file = fileByPath.get(section.path)
+      if (!file) {
+        return
+      }
+      const generation = generationRef.current
+      loadingIndicesRef.current.add(index)
+
+      const load = async (): Promise<{ result: GitDiffResult; error?: string }> => {
+        if (file.isBinary) {
+          return {
+            result: {
+              kind: 'binary',
+              originalContent: '',
+              modifiedContent: '',
+              originalIsBinary: true,
+              modifiedIsBinary: true
+            }
+          }
+        }
+        if (!headSha || !baseSha) {
+          return {
+            result: {
+              kind: 'text',
+              originalContent: '',
+              modifiedContent: '',
+              originalIsBinary: false,
+              modifiedIsBinary: false
+            },
+            error: 'Diff unavailable because the PR commit SHAs are missing.'
+          }
+        }
+        const contents = await loadPRFileContents({
           repoPath,
           repoId,
           prNumber,
@@ -1705,32 +1694,169 @@ function PRFileRow({
           headSha,
           baseSha
         })
-          .then((result) => {
-            setContents(result)
-          })
-          .catch((err) => {
-            setError(err instanceof Error ? err.message : 'Failed to load diff')
-          })
-          .finally(() => {
-            setLoading(false)
-          })
+        return { result: getPRFileDiffResult(contents) }
       }
-      return next
-    })
-  }, [baseSha, canLoadDiff, contents, file, headSha, loading, prNumber, repoId, repoPath])
 
-  const language = useMemo(() => detectLanguage(file.path), [file.path])
-  const modelKey = `gh-dialog:pr:${prNumber}:${file.path}`
+      load()
+        .catch((error) => ({
+          result: {
+            kind: 'text',
+            originalContent: '',
+            modifiedContent: '',
+            originalIsBinary: false,
+            modifiedIsBinary: false
+          } as GitDiffResult,
+          error: error instanceof Error ? error.message : 'Failed to load diff.'
+        }))
+        .then(({ result, error }) => {
+          loadingIndicesRef.current.delete(index)
+          if (generationRef.current !== generation) {
+            return
+          }
+          loadedIndicesRef.current.add(index)
+          setSections((prev) =>
+            prev.map((current, currentIndex) =>
+              currentIndex === index
+                ? {
+                    ...current,
+                    diffResult: result,
+                    originalContent: result.kind === 'text' ? result.originalContent : '',
+                    modifiedContent: result.kind === 'text' ? result.modifiedContent : '',
+                    loading: false,
+                    error
+                  }
+                : current
+            )
+          )
+        })
+    },
+    [baseSha, fileByPath, headSha, prNumber, repoId, repoPath]
+  )
+
+  const retrySection = useCallback(
+    (index: number) => {
+      loadedIndicesRef.current.delete(index)
+      loadingIndicesRef.current.delete(index)
+      setSections((prev) =>
+        prev.map((section, sectionIndex) =>
+          sectionIndex === index
+            ? {
+                ...section,
+                diffResult: null,
+                originalContent: '',
+                modifiedContent: '',
+                loading: true,
+                error: undefined
+              }
+            : section
+        )
+      )
+      loadSection(index)
+    },
+    [loadSection]
+  )
+
+  const toggleSection = useCallback(
+    (index: number) => {
+      const shouldLoadAfterExpand = sectionsRef.current[index]?.collapsed ?? false
+      setSections((prev) =>
+        prev.map((section, sectionIndex) =>
+          sectionIndex === index ? { ...section, collapsed: !section.collapsed } : section
+        )
+      )
+      if (shouldLoadAfterExpand) {
+        window.requestAnimationFrame(() => loadSection(index))
+      }
+    },
+    [loadSection]
+  )
+
+  const setAllSectionsCollapsed = useCallback(
+    (collapsed: boolean) => {
+      setSections((prev) => prev.map((section) => ({ ...section, collapsed })))
+      if (!collapsed) {
+        window.requestAnimationFrame(() => {
+          sectionsRef.current.forEach((_, index) => loadSection(index))
+        })
+      }
+    },
+    [loadSection]
+  )
+
+  const allSectionsCollapsed = sections.length > 0 && sections.every((section) => section.collapsed)
+  const sectionIndexByKey = useMemo(() => createCombinedDiffSectionIndexMap(sections), [sections])
+  const viewedSectionKeys = useMemo(
+    () => new Set(files.filter(isPRFileViewed).map((file) => getPRFileSectionKey(file.path))),
+    [files]
+  )
+
+  const virtualizer = useVirtualizer({
+    count: sections.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: (index) => {
+      const section = sections[index]
+      if (!section) {
+        return 88
+      }
+      return getDiffSectionEstimatedHeight({
+        collapsed: section.collapsed,
+        measuredContentHeight: sectionHeights[index],
+        originalContent: section.originalContent,
+        modifiedContent: section.modifiedContent,
+        changedLineCount:
+          section.added === undefined && section.removed === undefined
+            ? undefined
+            : (section.added ?? 0) + (section.removed ?? 0),
+        useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult)
+      })
+    },
+    overscan: PR_DIFF_OVERSCAN,
+    getItemKey: (index) => {
+      const section = sections[index]
+      return section
+        ? `${section.key}:${section.collapsed ? 'collapsed' : 'expanded'}:${entrySignature}`
+        : `${index}:${entrySignature}`
+    }
+  })
+
+  useLayoutEffect(() => {
+    virtualizer.measure()
+  }, [sideBySide, virtualizer])
+
+  const handleTreeNavigate = useCallback(
+    (entry: CombinedDiffFileTreeEntry) => {
+      const navigatedIndex = handleCombinedDiffFileTreeNavigation({
+        mode: 'commit',
+        entry,
+        sections: sectionsRef.current,
+        sectionIndexByKey,
+        toggleSection,
+        scrollToIndex: (index) => virtualizer.scrollToIndex(index, { align: 'start' })
+      })
+      if (navigatedIndex !== null) {
+        setActiveTreeSectionKey(sectionsRef.current[navigatedIndex]?.key ?? null)
+      }
+    },
+    [sectionIndexByKey, toggleSection, virtualizer]
+  )
+
+  const openFilesOnGitHub = useCallback(() => {
+    void window.api.shell.openUrl(`${prUrl.replace(/\/$/, '')}/files`)
+  }, [prUrl])
+
   const handleAddLineComment = useCallback(
-    async ({
-      lineNumber,
-      startLine,
-      body: commentBody
-    }: {
-      lineNumber: number
-      startLine?: number
-      body: string
-    }) => {
+    async (
+      section: DiffSection,
+      {
+        lineNumber,
+        startLine,
+        body
+      }: {
+        lineNumber: number
+        startLine?: number
+        body: string
+      }
+    ) => {
       if (!headSha) {
         toast.error('Unable to comment without the PR head SHA.')
         return false
@@ -1740,10 +1866,10 @@ function PRFileRow({
         repoId,
         prNumber,
         commitId: headSha,
-        path: file.path,
+        path: section.path,
         line: lineNumber,
         startLine,
-        body: commentBody
+        body
       })
       if (!result.ok) {
         toast.error(result.error || 'Failed to add review comment.')
@@ -1753,152 +1879,135 @@ function PRFileRow({
       toast.success('Review comment added.')
       return true
     },
-    [file.path, headSha, onCommentAdded, prNumber, repoId, repoPath]
+    [headSha, onCommentAdded, prNumber, repoId, repoPath]
   )
 
-  const handleViewedToggle = useCallback(async () => {
-    if (viewedPending) {
-      return
-    }
-    await onViewedChange(file.path, !viewed)
-  }, [file.path, onViewedChange, viewed, viewedPending])
-
-  return (
-    <div
-      className={cn('border-b border-border/50', viewed && 'bg-muted/15')}
-      {...(label != null ? { role: 'treeitem' } : {})}
-    >
-      <div
-        className={cn(
-          'flex w-full items-center gap-2 py-2 pr-3 text-left transition hover:bg-muted/40',
-          viewed && 'opacity-60'
-        )}
-        style={{ paddingLeft: `${12 + indentDepth * 16}px` }}
-      >
-        <button
-          type="button"
-          onClick={handleToggle}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {expanded ? (
-            <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
-          )}
-          <span
-            className={cn(
-              'inline-flex size-5 shrink-0 items-center justify-center rounded border border-border/60 font-mono text-[10px]',
-              fileStatusTone(file.status)
-            )}
-            aria-label={file.status}
-          >
-            {fileStatusLabel(file.status)}
-          </span>
-          <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-foreground">
-            {file.oldPath && file.oldPath !== file.path ? (
-              label ? (
-                // Why: in tree view we only have room for basenames, but still need to
-                // communicate the rename so the user doesn't have to expand or switch
-                // to flat view to discover what was renamed. When basenames match (i.e.
-                // only the directory changed), we include the parent directory so the
-                // display isn't a meaningless "foo.ts → foo.ts".
-                (() => {
-                  const oldBase = file.oldPath!.split('/').pop() ?? file.oldPath!
-                  if (oldBase === label) {
-                    const oldParts = file.oldPath!.split('/')
-                    const newParts = file.path.split('/')
-                    const oldShort = oldParts.slice(-2).join('/')
-                    const newShort = newParts.slice(-2).join('/')
-                    return (
-                      <>
-                        <span className="text-muted-foreground">{oldShort}</span>
-                        <span className="mx-1 text-muted-foreground">→</span>
-                        {newShort}
-                      </>
-                    )
-                  }
-                  return (
-                    <>
-                      <span className="text-muted-foreground">{oldBase}</span>
-                      <span className="mx-1 text-muted-foreground">→</span>
-                      {label}
-                    </>
-                  )
-                })()
-              ) : (
-                <>
-                  <span className="text-muted-foreground">{file.oldPath}</span>
-                  <span className="mx-1 text-muted-foreground">→</span>
-                  {file.path}
-                </>
-              )
-            ) : (
-              (label ?? file.path)
-            )}
-          </span>
-        </button>
-        <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
-          <span className="text-emerald-500">+{file.additions}</span>
-          <span className="mx-1">/</span>
-          <span className="text-rose-500">−{file.deletions}</span>
-        </span>
+  const renderViewedCheckbox = useCallback(
+    (section: DiffSection) => {
+      const file = fileByPath.get(section.path)
+      if (!file) {
+        return null
+      }
+      const viewed = isPRFileViewed(file)
+      const pending = pendingViewedPaths.has(file.path)
+      return (
         <PRViewedCheckbox
           checked={viewed}
-          pending={viewedPending}
+          pending={pending}
           filePath={file.path}
-          onToggle={handleViewedToggle}
+          onToggle={() => {
+            if (!pending) {
+              void onViewedChange(file.path, !viewed)
+            }
+          }}
         />
-      </div>
+      )
+    },
+    [fileByPath, onViewedChange, pendingViewedPaths]
+  )
 
-      {expanded && (
-        // Why: DiffViewer's inner layout uses flex-1/min-h-0, so this wrapper
-        // must be a flex column with a fixed height for Monaco to size itself
-        // correctly. A plain block div collapses flex-1 to 0 and renders empty.
-        <div className="flex h-[420px] flex-col border-t border-border/40 bg-background">
-          {!canLoadDiff ? (
-            <div className="flex h-full items-center justify-center px-4 text-center text-[12px] text-muted-foreground">
-              {file.isBinary
-                ? 'Binary file — diff not shown.'
-                : 'Diff unavailable (missing commit SHAs).'}
-            </div>
-          ) : loading ? (
-            <div className="flex h-full items-center justify-center">
-              <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : error ? (
-            <div className="flex h-full items-center justify-center px-4 text-center text-[12px] text-destructive">
-              {error}
-            </div>
-          ) : contents ? (
-            contents.originalIsBinary || contents.modifiedIsBinary ? (
-              <div className="flex h-full items-center justify-center px-4 text-center text-[12px] text-muted-foreground">
-                Binary file — diff not shown.
-              </div>
-            ) : (
-              <Suspense
-                fallback={
-                  <div className="flex h-full items-center justify-center">
-                    <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
-                  </div>
-                }
-              >
-                <DiffViewer
-                  modelKey={modelKey}
-                  originalContent={contents.original}
-                  modifiedContent={contents.modified}
-                  language={language}
-                  filePath={file.path}
-                  relativePath={file.path}
-                  sideBySide={false}
-                  onAddLineComment={handleAddLineComment}
-                  addLineCommentLabel="Comment"
-                  addLineCommentPlaceholder="Add a review comment"
-                />
-              </Suspense>
-            )
-          ) : null}
+  return (
+    <div className="flex min-h-[520px] flex-1 flex-col">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-background/50 px-3 py-1.5">
+        <div className="flex min-w-0 items-center gap-2">
+          {fileTreeCollapsed && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="Show file tree"
+                  onClick={() => setFileTreeCollapsed(false)}
+                >
+                  <PanelLeftOpen className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                Show file tree
+              </TooltipContent>
+            </Tooltip>
+          )}
+          <span className="truncate text-xs text-muted-foreground">
+            {files.filter(isPRFileViewed).length} / {files.length} files viewed
+          </span>
         </div>
-      )}
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            className="w-20 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
+            onClick={() => setAllSectionsCollapsed(!allSectionsCollapsed)}
+          >
+            {allSectionsCollapsed ? 'Expand All' : 'Collapse All'}
+          </button>
+          <button
+            type="button"
+            className="w-24 rounded border border-border px-2 py-0.5 text-center text-xs text-muted-foreground transition-colors hover:text-foreground"
+            onClick={() => setSideBySide((prev) => !prev)}
+          >
+            {sideBySide ? 'Inline' : 'Side by Side'}
+          </button>
+        </div>
+      </div>
+      <div className="flex min-h-0 flex-1">
+        <CombinedDiffFileTree
+          mode="commit"
+          worktreePath={repoPath}
+          entries={entries}
+          sectionIndexByKey={sectionIndexByKey}
+          activeSectionKey={activeTreeSectionKey}
+          viewedSectionKeys={viewedSectionKeys}
+          collapsed={fileTreeCollapsed}
+          onCollapsedChange={setFileTreeCollapsed}
+          onNavigate={handleTreeNavigate}
+        />
+        <div ref={scrollContainerRef} className="min-w-0 flex-1 overflow-auto scrollbar-editor">
+          <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
+            {virtualizer.getVirtualItems().map((virtualItem) => {
+              const section = sections[virtualItem.index]
+              if (!section) {
+                return null
+              }
+              return (
+                <div
+                  key={virtualItem.key}
+                  data-index={virtualItem.index}
+                  ref={virtualizer.measureElement}
+                  className="absolute left-0 top-0 w-full"
+                  style={{ top: `${virtualItem.start}px` }}
+                >
+                  <DiffSectionItem
+                    section={section}
+                    index={virtualItem.index}
+                    isBranchMode={false}
+                    sideBySide={sideBySide}
+                    isDark={isDark}
+                    settings={settings}
+                    sectionHeight={sectionHeights[virtualItem.index]}
+                    worktreeId={`github-pr:${repoId}:${prNumber}`}
+                    loadSection={loadSection}
+                    retrySection={retrySection}
+                    toggleSection={toggleSection}
+                    openSection={openFilesOnGitHub}
+                    openSectionTitle="Open files on GitHub"
+                    renderHeaderTrailingContent={renderViewedCheckbox}
+                    onAddLineComment={handleAddLineComment}
+                    addLineCommentLabel="Comment"
+                    addLineCommentPlaceholder="Add a review comment"
+                    getCommentableLineNumbers={(section) =>
+                      fileByPath.get(section.path)?.reviewCommentLineNumbers
+                    }
+                    setSectionHeights={setSectionHeights}
+                    setSections={setSections}
+                    modifiedEditorsRef={modifiedEditorsRef}
+                    handleSectionSaveRef={handleSectionSaveRef}
+                  />
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -4735,7 +4844,6 @@ export default function GitHubItemDialog({
   const [tab, setTab] = useState<ItemDialogTab>(() => normalizeItemDialogTab(workItem, initialTab))
   const [localState, setLocalState] = useState<GitHubWorkItem['state']>(workItem?.state ?? 'open')
   const [localLabels, setLocalLabels] = useState<string[]>(workItem?.labels ?? [])
-  const [diffViewMode, setDiffViewMode] = useState<DiffViewMode>('flat')
   const [linkCopied, setLinkCopied] = useState(false)
   const workItemId = workItem?.id
   const workItemState = workItem?.state
@@ -5002,7 +5110,6 @@ export default function GitHubItemDialog({
   const comments = details?.comments ?? []
   const files = details?.files ?? []
   const checks = details?.checks ?? []
-  const viewedFileCount = files.filter(isPRFileViewed).length
   const [pendingViewedPaths, setPendingViewedPaths] = useState<Set<string>>(() => new Set())
 
   useEffect(() => {
@@ -5111,14 +5218,21 @@ export default function GitHubItemDialog({
         side="right"
         showCloseButton={false}
         className={cn(
-          'flex w-full flex-col gap-0 overflow-hidden p-0 xl:max-w-[1120px] 2xl:max-w-[1240px]',
+          'flex w-full flex-col gap-0 overflow-hidden p-0 lg:max-w-[var(--github-item-dialog-max-width)]',
           // Why: native macOS traffic lights are drawn above web content, so a
           // nearly full-width right sheet must leave the titlebar's 80px
           // traffic-light pad uncovered instead of relying on z-index.
           IS_MAC
-            ? 'max-w-[calc(100vw-(80px/var(--ui-zoom-factor,1)))] sm:max-w-[calc(100vw-(80px/var(--ui-zoom-factor,1)))] lg:max-w-[calc(100vw-(80px/var(--ui-zoom-factor,1)))]'
-            : 'max-w-[calc(100vw-1rem)] sm:max-w-[calc(100vw-1rem)] lg:max-w-[calc(100vw-2rem)]'
+            ? 'max-w-[calc(100vw-(80px/var(--ui-zoom-factor,1)))] sm:max-w-[calc(100vw-(80px/var(--ui-zoom-factor,1)))]'
+            : 'max-w-[calc(100vw-1rem)] sm:max-w-[calc(100vw-1rem)]'
         )}
+        style={
+          {
+            '--github-item-dialog-max-width': IS_MAC
+              ? 'min(calc(100vw - (80px / var(--ui-zoom-factor, 1))), 1600px)'
+              : 'min(calc(100vw - 2rem), 1600px)'
+          } as React.CSSProperties
+        }
         onOpenAutoFocus={(event) => {
           // Why: focusing the first actionable element inside the drawer
           // causes the "Start workspace" action to receive focus and
@@ -5386,89 +5500,18 @@ export default function GitHubItemDialog({
                               No files changed.
                             </div>
                           ) : (
-                            <div>
-                              {/* Files-tab toolbar: view-mode toggle */}
-                              <div className="flex items-center justify-between gap-3 border-b border-border/40 px-3 py-1.5">
-                                <span className="text-[11px] text-muted-foreground">
-                                  {viewedFileCount} / {files.length} files viewed
-                                </span>
-                                <div className="flex items-center gap-1">
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <button
-                                        id="pr-files-flat-view"
-                                        type="button"
-                                        onClick={() => setDiffViewMode('flat')}
-                                        aria-label="Flat view"
-                                        aria-pressed={diffViewMode === 'flat'}
-                                        className={cn(
-                                          'flex size-6 items-center justify-center rounded transition hover:bg-muted',
-                                          diffViewMode === 'flat'
-                                            ? 'bg-muted text-foreground'
-                                            : 'text-muted-foreground'
-                                        )}
-                                      >
-                                        <AlignJustify className="size-3.5" />
-                                      </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="bottom" sideOffset={4}>
-                                      Flat view
-                                    </TooltipContent>
-                                  </Tooltip>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <button
-                                        id="pr-files-tree-view"
-                                        type="button"
-                                        onClick={() => setDiffViewMode('tree')}
-                                        aria-label="Tree view"
-                                        aria-pressed={diffViewMode === 'tree'}
-                                        className={cn(
-                                          'flex size-6 items-center justify-center rounded transition hover:bg-muted',
-                                          diffViewMode === 'tree'
-                                            ? 'bg-muted text-foreground'
-                                            : 'text-muted-foreground'
-                                        )}
-                                      >
-                                        <LayoutList className="size-3.5" />
-                                      </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="bottom" sideOffset={4}>
-                                      Tree view
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </div>
-                              </div>
-                              {diffViewMode === 'flat' ? (
-                                files.map((file) => (
-                                  <PRFileRow
-                                    key={getPRFileRowKey(file)}
-                                    file={file}
-                                    repoPath={repoPath ?? ''}
-                                    repoId={effectiveRepoId ?? ''}
-                                    prNumber={workItem.number}
-                                    headSha={details?.headSha}
-                                    baseSha={details?.baseSha}
-                                    viewed={isPRFileViewed(file)}
-                                    viewedPending={pendingViewedPaths.has(file.path)}
-                                    onCommentAdded={appendOptimisticComment}
-                                    onViewedChange={handlePRFileViewedChange}
-                                  />
-                                ))
-                              ) : (
-                                <PRDiffTreeView
-                                  files={files}
-                                  repoPath={repoPath ?? ''}
-                                  repoId={effectiveRepoId ?? ''}
-                                  prNumber={workItem.number}
-                                  headSha={details?.headSha}
-                                  baseSha={details?.baseSha}
-                                  pendingViewedPaths={pendingViewedPaths}
-                                  onCommentAdded={appendOptimisticComment}
-                                  onViewedChange={handlePRFileViewedChange}
-                                />
-                              )}
-                            </div>
+                            <PRFilesCombinedDiffViewer
+                              files={files}
+                              repoPath={repoPath ?? ''}
+                              repoId={effectiveRepoId ?? ''}
+                              prNumber={workItem.number}
+                              prUrl={workItem.url}
+                              headSha={details?.headSha}
+                              baseSha={details?.baseSha}
+                              pendingViewedPaths={pendingViewedPaths}
+                              onCommentAdded={appendOptimisticComment}
+                              onViewedChange={handlePRFileViewedChange}
+                            />
                           )}
                         </TabsContent>
                       </>

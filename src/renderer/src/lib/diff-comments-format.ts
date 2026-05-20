@@ -23,6 +23,6 @@ export function formatDiffComment(c: DiffComment): string {
   )
 }
 
-export function formatDiffComments(comments: DiffComment[]): string {
+export function formatDiffComments(comments: readonly DiffComment[]): string {
   return comments.map(formatDiffComment).join('\n\n')
 }

@@ -22,6 +22,7 @@ import {
 } from './gh-utils'
 import { getWorkItem, getPRChecks, getPRComments } from './client'
 import { noteRateLimitSpend, rateLimitGuard } from './rate-limit'
+import { getPRReviewCommentLineNumbersFromPatch } from './pr-review-comment-lines'
 
 // Why: a PR "changed file" listing returned by the REST endpoint is paginated
 // at 100 per page; we cap at a reasonable total so a massive PR cannot starve
@@ -328,7 +329,8 @@ async function getPRFiles(
       status: mapFileStatus(file.status),
       additions: file.additions,
       deletions: file.deletions,
-      isBinary: isBinaryHint(file)
+      isBinary: isBinaryHint(file),
+      reviewCommentLineNumbers: getPRReviewCommentLineNumbersFromPatch(file.patch)
     }))
   } catch {
     return []

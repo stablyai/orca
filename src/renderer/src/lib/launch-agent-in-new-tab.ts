@@ -28,6 +28,8 @@ export type LaunchAgentInNewTabArgs = {
   /** Telemetry surface that initiated this launch. Defaults to the tab-bar
    *  quick-launch entry point so existing callers stay unchanged. */
   launchSource?: LaunchSource
+  /** Called after the prompt is actually delivered to the agent input path. */
+  onPromptDelivered?: () => void
 }
 
 export type LaunchAgentInNewTabResult = {
@@ -59,7 +61,15 @@ export type LaunchAgentInNewTabResult = {
  * surface that as a launch failure (see `QuickLaunchButton.runLaunch`).
  */
 export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentInNewTabResult {
-  const { agent, worktreeId, groupId, prompt, promptDelivery = 'auto-submit', launchSource } = args
+  const {
+    agent,
+    worktreeId,
+    groupId,
+    prompt,
+    promptDelivery = 'auto-submit',
+    launchSource,
+    onPromptDelivered
+  } = args
   const store = useAppStore.getState()
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
   const trimmedPrompt = prompt?.trim() ?? ''
@@ -201,7 +211,13 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
           agent_kind: tuiAgentToAgentKind(agent)
         })
       }
+    }).then((delivered) => {
+      if (delivered) {
+        onPromptDelivered?.()
+      }
     })
+  } else if (hasPrompt) {
+    onPromptDelivered?.()
   }
 
   // Why: match the `+` button's `createNewTerminalTab` sequence — without

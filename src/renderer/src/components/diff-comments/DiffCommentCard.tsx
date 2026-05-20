@@ -18,6 +18,7 @@ type Props = {
   startLine?: number
   label?: string
   body: string
+  sentAt?: number
   onDelete: () => void
   // Why: Monaco view zones have a fixed `heightInPx` set at insertion time
   // and aren't auto-measured. While the user is in edit mode the textarea
@@ -33,6 +34,7 @@ export function DiffCommentCard({
   startLine,
   label,
   body,
+  sentAt,
   onDelete,
   onContentResize,
   onSubmitEdit,
@@ -132,6 +134,7 @@ export function DiffCommentCard({
       <div className="orca-diff-comment-header">
         <span className="orca-diff-comment-meta">
           Note · {label ?? getDiffCommentLineLabel({ lineNumber, startLine }).toLowerCase()}
+          {sentAt ? ' · sent' : ''}
         </span>
         <div className="orca-diff-comment-actions">
           {!editing && headerActions}
