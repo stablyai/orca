@@ -16,18 +16,11 @@ type FloatingWorkspacePaneProps = {
 }
 
 export function getFloatingWorkspaceDirectoryInputValue({
-  configuredDirectory,
-  defaultFloatingWorkspacePath,
-  directoryDraft
+  resolvedFloatingWorkspacePath
 }: {
-  configuredDirectory: string | null | undefined
-  defaultFloatingWorkspacePath: string
-  directoryDraft: string | null
+  resolvedFloatingWorkspacePath: string
 }): string {
-  const configured = configuredDirectory ?? ''
-  return (
-    directoryDraft ?? (configured.trim().length > 0 ? configured : defaultFloatingWorkspacePath)
-  )
+  return resolvedFloatingWorkspacePath
 }
 
 export function FloatingWorkspacePane({
@@ -35,30 +28,32 @@ export function FloatingWorkspacePane({
   updateSettings
 }: FloatingWorkspacePaneProps): React.JSX.Element | null {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
-  const [defaultFloatingWorkspacePath, setDefaultFloatingWorkspacePath] = useState('')
-  const [directoryDraft, setDirectoryDraft] = useState<string | null>(null)
+  const [resolvedFloatingWorkspacePath, setResolvedFloatingWorkspacePath] = useState('')
 
   useEffect(() => {
     let cancelled = false
     void window.api.app
-      .getFloatingTerminalCwd()
+      .getFloatingTerminalCwd({
+        path: settings.floatingTerminalCwd,
+        requireTrusted: true
+      })
       .then((path) => {
         if (!cancelled) {
-          setDefaultFloatingWorkspacePath(path)
+          setResolvedFloatingWorkspacePath(path)
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setDefaultFloatingWorkspacePath('')
+          setResolvedFloatingWorkspacePath('')
         }
       })
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [settings.floatingTerminalCwd])
 
   const pickFloatingWorkspaceDirectory = async (): Promise<void> => {
-    const path = await window.api.repos.pickFolder()
+    const path = await window.api.app.pickFloatingWorkspaceDirectory()
     if (!path) {
       return
     }
@@ -66,9 +61,7 @@ export function FloatingWorkspacePane({
   }
 
   const directoryInputValue = getFloatingWorkspaceDirectoryInputValue({
-    configuredDirectory: settings.floatingTerminalCwd,
-    defaultFloatingWorkspacePath,
-    directoryDraft
+    resolvedFloatingWorkspacePath
   })
 
   if (!matchesSettingsSearch(searchQuery, FLOATING_WORKSPACE_SEARCH_ENTRIES)) {
@@ -103,6 +96,7 @@ export function FloatingWorkspacePane({
           <button
             type="button"
             role="switch"
+            aria-label="Enable Floating Workspace"
             aria-checked={settings.floatingTerminalEnabled}
             onClick={() =>
               updateSettings({
@@ -126,13 +120,7 @@ export function FloatingWorkspacePane({
           <div className="flex max-w-xl gap-2">
             <Input
               value={directoryInputValue}
-              onChange={(event) => {
-                setDirectoryDraft(event.target.value)
-                updateSettings({
-                  floatingTerminalCwd: event.target.value
-                })
-              }}
-              onBlur={() => setDirectoryDraft(null)}
+              readOnly
               placeholder="Orca floating workspace"
               className="min-w-0 flex-1"
             />
@@ -147,8 +135,7 @@ export function FloatingWorkspacePane({
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            New floating workspace tabs start here. The default is the Orca app-owned workspace; use
-            ~ only if you want your home directory.
+            New floating workspace tabs start here. The default is the Orca app-owned workspace.
           </p>
         </div>
 

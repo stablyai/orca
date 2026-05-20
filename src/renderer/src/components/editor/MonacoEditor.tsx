@@ -39,6 +39,7 @@ import { getDiffCommentPopoverLeft } from '../diff-comments/diff-comment-popover
 import { isLinuxUserAgent } from '../terminal-pane/pane-helpers'
 
 type MonacoEditorProps = {
+  fileId: string
   filePath: string
   viewStateKey: string
   relativePath: string
@@ -58,6 +59,7 @@ type MonacoEditorProps = {
 }
 
 export default function MonacoEditor({
+  fileId,
   filePath,
   viewStateKey,
   relativePath,
@@ -418,7 +420,10 @@ export default function MonacoEditor({
       // Why: search-result navigation sets the reveal before openFile switches
       // the active tab. Without scoping consumption to the destination file,
       // the previously mounted editor can clear the reveal on the first click.
-      if (reveal?.filePath === filePath) {
+      const revealMatchesEditor = reveal?.fileId
+        ? reveal.fileId === fileId
+        : reveal?.filePath === filePath
+      if (reveal && revealMatchesEditor) {
         queueReveal(editorInstance, reveal.line, reveal.column, reveal.matchLength, () => {
           useAppStore.getState().setPendingEditorReveal(null)
         })
@@ -448,6 +453,7 @@ export default function MonacoEditor({
     [
       queueReveal,
       setupCopy,
+      fileId,
       filePath,
       setEditorCursorLine,
       updateMarkdownCompletionDocuments,

@@ -562,6 +562,9 @@ export type AppApi = {
   pickFloatingMarkdownDocument: (
     args?: FloatingTerminalCwdRequest
   ) => Promise<MarkdownDocument | null>
+  /** Opens a native directory picker and authorizes the selected directory
+   *  for Floating Workspace markdown file creation. */
+  pickFloatingWorkspaceDirectory: () => Promise<string | null>
 }
 
 export type PreloadApi = {

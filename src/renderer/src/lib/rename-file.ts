@@ -1,11 +1,11 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { detectLanguage } from '@/lib/language-detect'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { getConnectionId } from '@/lib/connection-context'
 import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
 import { commitFileExplorerOp } from '@/components/right-sidebar/fileExplorerUndoRedo'
 import { renameRuntimePath } from '@/runtime/runtime-file-client'
+import { remapOpenEditorTabsForPathChange } from '@/lib/remap-open-editor-tabs-for-path-change'
 
 /**
  * Electron's ipcRenderer.invoke wraps errors as:
@@ -18,90 +18,6 @@ export function extractIpcErrorMessage(err: unknown, fallback: string): string {
   }
   const match = err.message.match(/Error invoking remote method '[^']*': (?:Error: )?(.+)/)
   return match ? match[1] : err.message
-}
-
-/**
- * Walk every open file whose path is `fromPath` or a descendant of it
- * and rehome it to `toPath`. Closes and re-opens each tab to preserve
- * drafts and dirty state under the new path. Directory renames remap
- * all descendants, which is why we check both `/` and `\` separators.
- */
-function remapOpenTabsForRenamedPath(fromPath: string, toPath: string, worktreePath: string): void {
-  const state = useAppStore.getState()
-  const filesToMove = state.openFiles.filter((file) => {
-    if (file.filePath === fromPath) {
-      return true
-    }
-    return file.filePath.startsWith(`${fromPath}/`) || file.filePath.startsWith(`${fromPath}\\`)
-  })
-
-  const remappedFileIds = new Map<string, string>()
-  const orderedFilesToMove = [...filesToMove].sort((a, b) =>
-    a.mode === 'markdown-preview' && b.mode !== 'markdown-preview' ? 1 : -1
-  )
-
-  for (const file of orderedFilesToMove) {
-    const oldFilePath = file.filePath
-    const suffix = oldFilePath.slice(fromPath.length)
-    const updatedPath = toPath + suffix
-    const updatedRelative = updatedPath.slice(worktreePath.length + 1)
-    const draft = state.editorDrafts[file.id]
-    const wasDirty = file.isDirty
-
-    // Why: preview tabs use a synthetic tab id (`markdown-preview::...`) that
-    // does not equal filePath. Closing by the real tab id keeps rename/move
-    // remaps correct for both editable and read-only markdown preview tabs.
-    state.closeFile(file.id)
-    if (file.mode === 'edit') {
-      state.openFile(
-        {
-          filePath: updatedPath,
-          relativePath: updatedRelative,
-          worktreeId: file.worktreeId,
-          runtimeEnvironmentId: file.runtimeEnvironmentId,
-          language: detectLanguage(basename(updatedPath)),
-          mode: 'edit'
-        },
-        { suppressActiveRuntimeFallback: file.runtimeEnvironmentId === null }
-      )
-    } else if (file.mode === 'markdown-preview') {
-      state.openMarkdownPreview(
-        {
-          filePath: updatedPath,
-          relativePath: updatedRelative,
-          worktreeId: file.worktreeId,
-          runtimeEnvironmentId: file.runtimeEnvironmentId,
-          language: 'markdown'
-        },
-        {
-          anchor: file.markdownPreviewAnchor ?? null,
-          sourceFileId: file.markdownPreviewSourceFileId
-            ? (remappedFileIds.get(file.markdownPreviewSourceFileId) ??
-              file.markdownPreviewSourceFileId)
-            : undefined
-        }
-      )
-    } else {
-      continue
-    }
-
-    const freshState = useAppStore.getState()
-    const reopenedFile = freshState.openFiles.find(
-      (entry) =>
-        entry.filePath === updatedPath &&
-        entry.worktreeId === file.worktreeId &&
-        entry.mode === file.mode &&
-        (entry.runtimeEnvironmentId ?? null) === (file.runtimeEnvironmentId ?? null)
-    )
-    const reopenedFileId = reopenedFile?.id ?? updatedPath
-    remappedFileIds.set(file.id, reopenedFileId)
-    if (draft !== undefined) {
-      freshState.setEditorDraft(reopenedFileId, draft)
-    }
-    if (wasDirty) {
-      freshState.markFileDirty(reopenedFileId, true)
-    }
-  }
 }
 
 type RenameFileArgs = {
@@ -160,21 +76,21 @@ export async function renameFileOnDisk(args: RenameFileArgs): Promise<void> {
 
   try {
     await renameRuntimePath(fileContext, oldPath, newPath)
-    remapOpenTabsForRenamedPath(oldPath, newPath, worktreePath)
+    remapOpenEditorTabsForPathChange({ fromPath: oldPath, toPath: newPath, worktreePath })
     commitFileExplorerOp({
       undo: async () => {
         await renameRuntimePath(fileContext, newPath, oldPath)
         if (refreshDir) {
           await refreshDir(parentDir)
         }
-        remapOpenTabsForRenamedPath(newPath, oldPath, worktreePath)
+        remapOpenEditorTabsForPathChange({ fromPath: newPath, toPath: oldPath, worktreePath })
       },
       redo: async () => {
         await renameRuntimePath(fileContext, oldPath, newPath)
         if (refreshDir) {
           await refreshDir(parentDir)
         }
-        remapOpenTabsForRenamedPath(oldPath, newPath, worktreePath)
+        remapOpenEditorTabsForPathChange({ fromPath: oldPath, toPath: newPath, worktreePath })
       }
     })
   } catch (err) {

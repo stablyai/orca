@@ -81,6 +81,7 @@ import {
 import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { dirname } from '@/lib/path'
 
 type MarkdownPreviewProps = {
   content: string
@@ -104,6 +105,74 @@ type MarkdownPreviewPositionNode = {
     end?: { line?: number }
   }
   children?: MarkdownPreviewPositionNode[]
+}
+
+type MarkdownPreviewSourceOpenFile = {
+  id: string
+  filePath: string
+  relativePath: string
+  worktreeId: string
+  runtimeEnvironmentId?: string | null
+  mode: string
+  markdownPreviewSourceFileId?: string
+}
+
+export function findMarkdownPreviewSourceOpenFile(
+  openFiles: MarkdownPreviewSourceOpenFile[],
+  params: {
+    sourceFileId: string | null
+    filePath: string
+    sourceWorktreeId: string | null
+    sourceRuntimeEnvironmentId: string | null | undefined
+  }
+): MarkdownPreviewSourceOpenFile | undefined {
+  const ownerMatches = (file: MarkdownPreviewSourceOpenFile): boolean =>
+    (!params.sourceWorktreeId || file.worktreeId === params.sourceWorktreeId) &&
+    (params.sourceRuntimeEnvironmentId === undefined ||
+      (file.runtimeEnvironmentId ?? null) === (params.sourceRuntimeEnvironmentId ?? null))
+
+  if (params.sourceFileId) {
+    const idMatch = openFiles.find((file) => file.id === params.sourceFileId && ownerMatches(file))
+    return (
+      idMatch ??
+      openFiles.find(
+        (file) =>
+          file.mode === 'markdown-preview' &&
+          file.filePath === params.filePath &&
+          file.markdownPreviewSourceFileId === params.sourceFileId &&
+          ownerMatches(file)
+      ) ??
+      openFiles.find((file) => file.id === params.sourceFileId)
+    )
+  }
+
+  return openFiles.find((file) => file.filePath === params.filePath && ownerMatches(file))
+}
+
+export function findMarkdownPreviewOpenedEditFileId(
+  openFiles: MarkdownPreviewSourceOpenFile[],
+  activeFileIdByWorktree: Record<string, string | null>,
+  params: { filePath: string; worktreeId: string }
+): string {
+  const activeFileId = activeFileIdByWorktree[params.worktreeId]
+  const activeFile = openFiles.find(
+    (file) =>
+      file.id === activeFileId &&
+      file.filePath === params.filePath &&
+      file.worktreeId === params.worktreeId &&
+      file.mode === 'edit'
+  )
+  if (activeFile) {
+    return activeFile.id
+  }
+  return (
+    openFiles.find(
+      (file) =>
+        file.filePath === params.filePath &&
+        file.worktreeId === params.worktreeId &&
+        file.mode === 'edit'
+    )?.id ?? params.filePath
+  )
 }
 
 function getMarkdownPreviewBlockRange(
@@ -198,6 +267,44 @@ function normalizeMarkdownPreviewAbsolutePath(absolutePath: string): string {
   return absolutePath.replaceAll('\\', '/')
 }
 
+function normalizeMarkdownPreviewRelativePath(relativePath: string): string {
+  return relativePath.replaceAll('\\', '/').replace(/^\/+/, '')
+}
+
+function isMarkdownPreviewAbsolutePathLike(path: string): boolean {
+  return path.startsWith('/') || /^[A-Za-z]:[\\/]/.test(path) || path.startsWith('\\\\')
+}
+
+function formatMarkdownPreviewRootPath(rootPath: string): string {
+  if (rootPath === '') {
+    return '/'
+  }
+  if (/^[A-Za-z]:$/.test(rootPath)) {
+    return `${rootPath}/`
+  }
+  return rootPath
+}
+
+export function deriveMarkdownPreviewSourceRoot(
+  filePath: string,
+  relativePath: string | null | undefined
+): string {
+  const normalizedFilePath = normalizeMarkdownPreviewAbsolutePath(filePath)
+  const normalizedRelativePath =
+    relativePath && !isMarkdownPreviewAbsolutePathLike(relativePath)
+      ? normalizeMarkdownPreviewRelativePath(relativePath)
+      : ''
+
+  if (normalizedRelativePath) {
+    const suffix = `/${normalizedRelativePath}`
+    if (normalizedFilePath.endsWith(suffix)) {
+      return formatMarkdownPreviewRootPath(normalizedFilePath.slice(0, -suffix.length))
+    }
+  }
+
+  return formatMarkdownPreviewRootPath(normalizeMarkdownPreviewAbsolutePath(dirname(filePath)))
+}
+
 function findWorktreeForMarkdownPreviewPath(
   worktreesByRepo: Record<string, Worktree[]>,
   absolutePath: string
@@ -222,6 +329,18 @@ function findWorktreeForMarkdownPreviewPath(
   }
 
   return bestMatch
+}
+
+export function resolveMarkdownPreviewSourceWorktree(
+  worktreesByRepo: Record<string, Worktree[]>,
+  sourceWorktreeId: string | null | undefined,
+  filePath: string
+): Worktree | null {
+  const sourceWorktree = sourceWorktreeId
+    ? (findWorktreeById(worktreesByRepo, sourceWorktreeId) ?? null)
+    : null
+
+  return sourceWorktree ?? findWorktreeForMarkdownPreviewPath(worktreesByRepo, filePath)
 }
 
 export default function MarkdownPreview({
@@ -259,27 +378,33 @@ export default function MarkdownPreview({
   const markDiffCommentsSent = useAppStore((s) => s.markDiffCommentsSent)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const sourceOpenFile = useAppStore((s) =>
-    sourceFileId
-      ? s.openFiles.find((file) => file.id === sourceFileId)
-      : s.openFiles.find(
-          (file) =>
-            file.filePath === filePath &&
-            (!sourceWorktreeId || file.worktreeId === sourceWorktreeId) &&
-            (sourceRuntimeEnvironmentId === undefined ||
-              (file.runtimeEnvironmentId ?? null) === (sourceRuntimeEnvironmentId ?? null))
-        )
+    findMarkdownPreviewSourceOpenFile(s.openFiles, {
+      sourceFileId,
+      filePath,
+      sourceWorktreeId,
+      sourceRuntimeEnvironmentId
+    })
   )
   const resolvedSourceWorktreeId = sourceWorktreeId ?? sourceOpenFile?.worktreeId ?? null
   const resolvedSourceRuntimeEnvironmentId =
     sourceRuntimeEnvironmentId !== undefined
       ? sourceRuntimeEnvironmentId
       : sourceOpenFile?.runtimeEnvironmentId
-  const sourceWorktree = resolvedSourceWorktreeId
-    ? findWorktreeById(worktreesByRepo, resolvedSourceWorktreeId)
-    : findWorktreeForMarkdownPreviewPath(worktreesByRepo, filePath)
+  const sourceWorktree = resolveMarkdownPreviewSourceWorktree(
+    worktreesByRepo,
+    resolvedSourceWorktreeId,
+    filePath
+  )
   const allDiffComments = sourceWorktree?.diffComments
-  const sourceConnectionId = sourceWorktree ? getConnectionId(sourceWorktree.id) : null
-  const worktreeRoot = sourceWorktree?.path ?? null
+  const sourceRoutingWorktreeId = sourceWorktree?.id ?? resolvedSourceWorktreeId
+  const sourceConnectionId = sourceRoutingWorktreeId
+    ? (getConnectionId(sourceRoutingWorktreeId) ?? null)
+    : null
+  const worktreeRoot =
+    sourceWorktree?.path ??
+    (sourceRoutingWorktreeId
+      ? deriveMarkdownPreviewSourceRoot(filePath, sourceOpenFile?.relativePath)
+      : null)
   const sourceRelativePath = useMemo(() => {
     if (!sourceWorktree) {
       return null
@@ -304,15 +429,21 @@ export default function MarkdownPreview({
   const settings = useAppStore((s) => s.settings)
   const imageRuntimeContext = useMemo(
     () =>
-      sourceWorktree
+      sourceRoutingWorktreeId && worktreeRoot
         ? {
             settings: settingsForRuntimeOwner(settings, resolvedSourceRuntimeEnvironmentId),
-            worktreeId: sourceWorktree.id,
-            worktreePath: sourceWorktree.path,
+            worktreeId: sourceRoutingWorktreeId,
+            worktreePath: worktreeRoot,
             connectionId: sourceConnectionId
           }
         : undefined,
-    [settings, sourceConnectionId, resolvedSourceRuntimeEnvironmentId, sourceWorktree]
+    [
+      settings,
+      sourceConnectionId,
+      resolvedSourceRuntimeEnvironmentId,
+      sourceRoutingWorktreeId,
+      worktreeRoot
+    ]
   )
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const editorFontSize = computeEditorFontSize(14, editorFontZoomLevel)
@@ -890,11 +1021,14 @@ export default function MarkdownPreview({
 
           const targetWorktree = findWorktreeForMarkdownPreviewPath(worktreesByRepo, absolutePath)
           if (!targetWorktree) {
-            if (sourceWorktree) {
+            if (sourceRoutingWorktreeId && worktreeRoot) {
+              // Why: floating markdown files are owned by a synthetic workspace,
+              // so there may be no repo worktree even though Orca can stat/open
+              // links relative to the source file root.
               void activateMarkdownLink(href, {
                 sourceFilePath: filePath,
-                worktreeId: sourceWorktree.id,
-                worktreeRoot: sourceWorktree.path,
+                worktreeId: sourceRoutingWorktreeId,
+                worktreeRoot,
                 runtimeEnvironmentId: resolvedSourceRuntimeEnvironmentId
               })
               return
@@ -944,9 +1078,6 @@ export default function MarkdownPreview({
           // Why: line targets like #L10 and path.ts:10 should reveal in Monaco,
           // not open a preview tab or a literal path with the suffix included.
           if (lineTarget) {
-            if (language === 'markdown') {
-              setMarkdownViewMode(absolutePath, 'source')
-            }
             openFile({
               filePath: absolutePath,
               relativePath,
@@ -955,11 +1086,21 @@ export default function MarkdownPreview({
               language,
               mode: 'edit'
             })
+            const openedState = useAppStore.getState()
+            const targetFileId = findMarkdownPreviewOpenedEditFileId(
+              openedState.openFiles,
+              openedState.activeFileIdByWorktree,
+              { filePath: absolutePath, worktreeId: targetWorktree.id }
+            )
+            if (language === 'markdown') {
+              setMarkdownViewMode(targetFileId, 'source')
+            }
             setPendingEditorReveal(null)
             requestAnimationFrame(() => {
               requestAnimationFrame(() => {
                 setPendingEditorReveal({
                   filePath: absolutePath,
+                  fileId: targetFileId,
                   line: lineTarget.line,
                   column: lineTarget.column ?? 1,
                   matchLength: 0
@@ -1015,7 +1156,7 @@ export default function MarkdownPreview({
             return
           }
 
-          if (!src || !sourceWorktree) {
+          if (!src || !sourceRoutingWorktreeId || !worktreeRoot) {
             return
           }
 
@@ -1023,8 +1164,8 @@ export default function MarkdownPreview({
           event.stopPropagation()
           void activateMarkdownLink(src, {
             sourceFilePath: filePath,
-            worktreeId: sourceWorktree.id,
-            worktreeRoot: sourceWorktree.path,
+            worktreeId: sourceRoutingWorktreeId,
+            worktreeRoot,
             runtimeEnvironmentId: resolvedSourceRuntimeEnvironmentId
           })
         }
@@ -1177,7 +1318,7 @@ export default function MarkdownPreview({
     setPendingEditorReveal,
     sourceConnectionId,
     resolvedSourceRuntimeEnvironmentId,
-    sourceWorktree,
+    sourceRoutingWorktreeId,
     worktreeRoot,
     worktreesByRepo,
     wrapAnnotatedBlock

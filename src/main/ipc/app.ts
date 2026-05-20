@@ -1,91 +1,41 @@
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
-import { app, dialog, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import type { AppIdentity } from '../../shared/app-identity'
 import type { FloatingTerminalCwdRequest, MarkdownDocument } from '../../shared/types'
+import type { Store } from '../persistence'
 import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
 import { isPwshAvailable } from '../pwsh'
 import { isWslAvailable } from '../wsl'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
-import { authorizeExternalPath, isDescendantOrEqual } from './filesystem-auth'
+import { authorizeExternalPath } from './filesystem-auth'
+import {
+  grantFloatingWorkspaceDirectory,
+  resolveFloatingTerminalCwd
+} from './floating-workspace-directory'
+import { isMarkdownDocumentName, markdownDocumentFromFilePath } from './markdown-documents'
 
 const execFileAsync = promisify(execFile)
-const FLOATING_WORKSPACE_DIRNAME = 'floating-workspace'
-
-function expandHomePath(input: string, home: string): string {
-  if (input === '~') {
-    return home
-  }
-  if (input.startsWith(`~${path.sep}`)) {
-    return path.join(home, input.slice(2))
-  }
-  if (process.platform === 'win32' && input.startsWith('~/')) {
-    return path.join(home, input.slice(2))
-  }
-  return input
-}
-
-async function resolveFloatingTerminalCwd(args?: FloatingTerminalCwdRequest): Promise<string> {
-  const configuredPath = args?.path?.trim()
-  if (!configuredPath) {
-    return ensureDefaultFloatingWorkspacePath()
-  }
-  const home = app.getPath('home')
-  const expanded = expandHomePath(configuredPath, home)
-  const cwd = path.isAbsolute(expanded) ? expanded : path.resolve(home, expanded)
-  try {
-    await mkdir(cwd, { recursive: true })
-    authorizeExternalPath(cwd)
-    return cwd
-  } catch {
-    return ensureDefaultFloatingWorkspacePath()
-  }
-}
-
-async function ensureDefaultFloatingWorkspacePath(): Promise<string> {
-  const cwd = path.join(app.getPath('userData'), FLOATING_WORKSPACE_DIRNAME)
-  await mkdir(cwd, { recursive: true })
-  // Why: the default floating workspace lives outside repo roots by design;
-  // authorize only this app-owned directory instead of widening access to ~.
-  authorizeExternalPath(cwd)
-  return cwd
-}
-
-function isMarkdownDocumentName(filePath: string): boolean {
-  const extension = path.extname(filePath).toLowerCase()
-  return extension === '.md' || extension === '.mdx' || extension === '.markdown'
-}
-
-function createFloatingMarkdownDocument(rootPath: string, filePath: string): MarkdownDocument {
-  const basename = path.basename(filePath)
-  const extension = path.extname(basename)
-  const resolvedRoot = path.resolve(rootPath)
-  const resolvedFile = path.resolve(filePath)
-  const relativePath = isDescendantOrEqual(resolvedFile, resolvedRoot)
-    ? path.relative(resolvedRoot, resolvedFile).replace(/[\\/]+/g, '/')
-    : basename
-  return {
-    filePath,
-    relativePath,
-    basename,
-    name: extension ? basename.slice(0, -extension.length) : basename
-  }
-}
 
 async function pickFloatingMarkdownDocument(
+  event: IpcMainInvokeEvent,
+  store: Store,
   args?: FloatingTerminalCwdRequest
 ): Promise<MarkdownDocument | null> {
-  const cwd = await resolveFloatingTerminalCwd(args)
-  const result = await dialog.showOpenDialog({
+  const cwd = await resolveFloatingTerminalCwd(store, args)
+  const options = {
     defaultPath: cwd,
     properties: ['openFile'],
     filters: [{ name: 'Markdown', extensions: ['md', 'mdx', 'markdown'] }]
-  })
+  } satisfies Electron.OpenDialogOptions
+  const parentWindow = BrowserWindow.fromWebContents(event.sender)
+  const result = parentWindow
+    ? await dialog.showOpenDialog(parentWindow, options)
+    : await dialog.showOpenDialog(options)
   if (result.canceled || result.filePaths.length === 0) {
     return null
   }
@@ -94,7 +44,28 @@ async function pickFloatingMarkdownDocument(
     throw new Error('Selected file is not a markdown document.')
   }
   authorizeExternalPath(filePath)
-  return createFloatingMarkdownDocument(cwd, filePath)
+  return markdownDocumentFromFilePath(cwd, filePath, { outsideRootRelativePath: 'basename' })
+}
+
+async function pickFloatingWorkspaceDirectory(
+  event: IpcMainInvokeEvent,
+  store: Store
+): Promise<string | null> {
+  const parentWindow = BrowserWindow.fromWebContents(event.sender)
+  const options = {
+    properties: ['openDirectory', 'createDirectory']
+  } satisfies Electron.OpenDialogOptions
+  const result = parentWindow
+    ? await dialog.showOpenDialog(parentWindow, options)
+    : await dialog.showOpenDialog(options)
+  if (result.canceled || result.filePaths.length === 0) {
+    return null
+  }
+  const selectedDir = result.filePaths[0]
+  // Why: a user-approved picker selection is a trust grant for later Floating
+  // Workspace markdown creation, unlike arbitrary typed settings text.
+  await grantFloatingWorkspaceDirectory(store, selectedDir)
+  return selectedDir
 }
 
 function getFeatureWallAssetBaseUrl(): string {
@@ -126,7 +97,7 @@ function resolveDevFeatureWallAssetDir(): string {
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]
 }
 
-export function registerAppHandlers(): void {
+export function registerAppHandlers(store: Store): void {
   ipcMain.handle('app:getFeatureWallAssetBaseUrl', (): string => getFeatureWallAssetBaseUrl())
 
   ipcMain.handle('app:getIdentity', (): AppIdentity => {
@@ -207,10 +178,14 @@ export function registerAppHandlers(): void {
   })
 
   ipcMain.handle('app:getFloatingTerminalCwd', (_event, args?: FloatingTerminalCwdRequest) =>
-    resolveFloatingTerminalCwd(args)
+    resolveFloatingTerminalCwd(store, args)
   )
 
-  ipcMain.handle('app:pickFloatingMarkdownDocument', (_event, args?: FloatingTerminalCwdRequest) =>
-    pickFloatingMarkdownDocument(args)
+  ipcMain.handle('app:pickFloatingMarkdownDocument', (event, args?: FloatingTerminalCwdRequest) =>
+    pickFloatingMarkdownDocument(event, store, args)
+  )
+
+  ipcMain.handle('app:pickFloatingWorkspaceDirectory', (event) =>
+    pickFloatingWorkspaceDirectory(event, store)
   )
 }

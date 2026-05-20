@@ -2,36 +2,20 @@ import { describe, expect, it } from 'vitest'
 import { getFloatingWorkspaceDirectoryInputValue } from './FloatingWorkspacePane'
 
 describe('getFloatingWorkspaceDirectoryInputValue', () => {
-  it('shows the resolved app-owned default when no directory is configured', () => {
+  it('shows the resolved app-owned default', () => {
     expect(
       getFloatingWorkspaceDirectoryInputValue({
-        configuredDirectory: '',
-        defaultFloatingWorkspacePath:
-          '/Users/example/Library/Application Support/Orca/floating-workspace',
-        directoryDraft: null
+        resolvedFloatingWorkspacePath:
+          '/Users/example/Library/Application Support/Orca/floating-workspace'
       })
     ).toBe('/Users/example/Library/Application Support/Orca/floating-workspace')
   })
 
-  it('keeps the editable draft visible while the user clears the field', () => {
+  it('shows the main-resolved trusted custom directory', () => {
     expect(
       getFloatingWorkspaceDirectoryInputValue({
-        configuredDirectory: '',
-        defaultFloatingWorkspacePath:
-          '/Users/example/Library/Application Support/Orca/floating-workspace',
-        directoryDraft: ''
+        resolvedFloatingWorkspacePath: '/Users/example/notes'
       })
-    ).toBe('')
-  })
-
-  it('prefers a configured custom directory over the default', () => {
-    expect(
-      getFloatingWorkspaceDirectoryInputValue({
-        configuredDirectory: '~/notes',
-        defaultFloatingWorkspacePath:
-          '/Users/example/Library/Application Support/Orca/floating-workspace',
-        directoryDraft: null
-      })
-    ).toBe('~/notes')
+    ).toBe('/Users/example/notes')
   })
 })

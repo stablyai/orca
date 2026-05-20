@@ -2,7 +2,16 @@
 migration, mutation, and flush behavior in one file so schema changes are
 reviewed against the full storage contract instead of being scattered. */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { writeFileSync, readFileSync, rmSync, mkdtempSync, mkdirSync, existsSync } from 'fs'
+import {
+  writeFileSync,
+  readFileSync,
+  rmSync,
+  mkdtempSync,
+  mkdirSync,
+  existsSync,
+  realpathSync,
+  symlinkSync
+} from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import type { Repo, TerminalTab, WorktreeLineage, WorkspaceSessionState } from '../shared/types'
@@ -84,6 +93,10 @@ function writeDataFile(data: unknown): void {
 
 function readDataFile(): unknown {
   return JSON.parse(readFileSync(dataFile(), 'utf-8'))
+}
+
+function symlinkDirectorySync(target: string, linkPath: string): void {
+  symlinkSync(target, linkPath, process.platform === 'win32' ? 'junction' : 'dir')
 }
 
 function collectPropertyPaths(value: unknown, property: string, prefix = ''): string[] {
@@ -738,6 +751,155 @@ describe('Store', () => {
     const store = await createStore()
     expect(store.getSettings().floatingTerminalEnabled).toBe(false)
     expect(store.getSettings().floatingTerminalDefaultedForAllUsers).toBe(true)
+  })
+
+  it('seeds trusted floating workspace directories from legacy explicit cwd values', async () => {
+    const legacyFloatingCwd = join(testState.dir, 'legacy-floating-cwd')
+    mkdirSync(legacyFloatingCwd)
+    const canonicalLegacyFloatingCwd = realpathSync(legacyFloatingCwd)
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        floatingTerminalCwd: legacyFloatingCwd
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().floatingTerminalCwd).toBe(legacyFloatingCwd)
+    expect(store.getSettings().floatingTerminalTrustedCwds).toEqual([canonicalLegacyFloatingCwd])
+    store.flush()
+    expect(
+      (readDataFile() as { settings?: { floatingTerminalTrustedCwds?: string[] } }).settings
+        ?.floatingTerminalTrustedCwds
+    ).toEqual([canonicalLegacyFloatingCwd])
+  })
+
+  it('persists the floating cwd migration marker when a legacy explicit cwd is unavailable', async () => {
+    const unavailableLegacyFloatingCwd = join(testState.dir, 'missing-floating-cwd')
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        floatingTerminalCwd: unavailableLegacyFloatingCwd
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().floatingTerminalCwd).toBe(unavailableLegacyFloatingCwd)
+    expect(store.getSettings().floatingTerminalTrustedCwds).toEqual([])
+    store.flush()
+    expect(
+      (readDataFile() as { settings?: { floatingTerminalCwdMigratedToAppWorkspace?: boolean } })
+        .settings?.floatingTerminalCwdMigratedToAppWorkspace
+    ).toBe(true)
+  })
+
+  it('does not seed trusted floating workspace directories after the cwd migration has run', async () => {
+    const postMigrationCwd = join(testState.dir, 'post-migration-cwd')
+    mkdirSync(postMigrationCwd)
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        floatingTerminalCwd: postMigrationCwd,
+        floatingTerminalCwdMigratedToAppWorkspace: true
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().floatingTerminalCwd).toBe(postMigrationCwd)
+    expect(store.getSettings().floatingTerminalTrustedCwds).toEqual([])
+  })
+
+  it('canonicalizes persisted floating workspace trust paths on load', async () => {
+    const trustedTarget = join(testState.dir, 'trusted-target')
+    const trustedLink = join(testState.dir, 'trusted-link')
+    mkdirSync(trustedTarget)
+    symlinkDirectorySync(trustedTarget, trustedLink)
+    const canonicalTrustedTarget = realpathSync(trustedTarget)
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        floatingTerminalTrustedCwds: [trustedLink]
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().floatingTerminalTrustedCwds).toEqual([canonicalTrustedTarget])
+    store.flush()
+    expect(
+      (readDataFile() as { settings?: { floatingTerminalTrustedCwds?: string[] } }).settings
+        ?.floatingTerminalTrustedCwds
+    ).toEqual([canonicalTrustedTarget])
+  })
+
+  it('preserves temporarily unavailable floating workspace trust paths on load', async () => {
+    const unavailableTrustedPath = join(testState.dir, 'offline-drive', 'notes')
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        floatingTerminalTrustedCwds: [unavailableTrustedPath]
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().floatingTerminalTrustedCwds).toEqual([unavailableTrustedPath])
+    store.flush()
+    expect(
+      (readDataFile() as { settings?: { floatingTerminalTrustedCwds?: string[] } }).settings
+        ?.floatingTerminalTrustedCwds
+    ).toEqual([unavailableTrustedPath])
+  })
+
+  it('drops blank floating workspace trust paths on load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        floatingTerminalTrustedCwds: ['', '   ']
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().floatingTerminalTrustedCwds).toEqual([])
+    store.flush()
+    expect(
+      (readDataFile() as { settings?: { floatingTerminalTrustedCwds?: string[] } }).settings
+        ?.floatingTerminalTrustedCwds
+    ).toEqual([])
   })
 
   it('preserves custom notification sound paths from persisted settings', async () => {

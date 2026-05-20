@@ -213,6 +213,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     floatingTerminalEnabled: true,
     floatingTerminalDefaultedForAllUsers: true,
     floatingTerminalCwd: '',
+    floatingTerminalTrustedCwds: [],
     floatingTerminalCwdMigratedToAppWorkspace: true,
     floatingTerminalTriggerLocation: 'floating-button',
     notifications: getDefaultNotificationSettings(),

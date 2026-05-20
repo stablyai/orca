@@ -225,6 +225,15 @@ function makeBrowserTab(
   }
 }
 
+function ownedEditorFileId(
+  filePath: string,
+  worktreeId: string,
+  runtimeEnvironmentId: string | null | undefined
+): string {
+  const runtimeKey = runtimeEnvironmentId?.trim() || 'local'
+  return `editor:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(filePath)}`
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────
 
 describe('removeRepo cascade', () => {
@@ -1595,6 +1604,8 @@ describe('hydrateEditorSession', () => {
 
   it('restores floating workspace markdown files without a repo worktree', () => {
     const store = createTestStore()
+    const filePath = '/orca/userData/floating-workspace/note.md'
+    const fileId = ownedEditorFileId(filePath, FLOATING_TERMINAL_WORKTREE_ID, null)
 
     store.setState({ activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID })
 
@@ -1607,7 +1618,7 @@ describe('hydrateEditorSession', () => {
       openFilesByWorktree: {
         [FLOATING_TERMINAL_WORKTREE_ID]: [
           {
-            filePath: '/orca/userData/floating-workspace/note.md',
+            filePath,
             relativePath: 'note.md',
             worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
             language: 'markdown',
@@ -1624,14 +1635,13 @@ describe('hydrateEditorSession', () => {
     const s = store.getState()
     expect(s.openFiles).toEqual([
       expect.objectContaining({
-        filePath: '/orca/userData/floating-workspace/note.md',
+        id: fileId,
+        filePath,
         worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
         runtimeEnvironmentId: null
       })
     ])
-    expect(s.activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(
-      '/orca/userData/floating-workspace/note.md'
-    )
+    expect(s.activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(fileId)
   })
 
   it('falls back to the floating workspace file id when duplicate paths are owner-qualified', () => {
@@ -1695,6 +1705,285 @@ describe('hydrateEditorSession', () => {
             file.id === floatingActiveFileId && file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID
         )
     ).toBe(true)
+  })
+
+  it('keeps same-path local and runtime legacy references on their original owners', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const filePath = '/path/wt1/src/app.ts'
+    const runtimeEnvironmentId = 'runtime-1'
+    const runtimeFileId = ownedEditorFileId(filePath, wt, runtimeEnvironmentId)
+    const groupId = 'group-same-path-owners'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt
+    })
+
+    const session = {
+      activeRepoId: 'repo1',
+      activeWorktreeId: wt,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        [wt]: [
+          {
+            filePath,
+            relativePath: 'src/app.ts',
+            worktreeId: wt,
+            language: 'typescript'
+          },
+          {
+            filePath,
+            relativePath: 'src/app.ts',
+            worktreeId: wt,
+            language: 'typescript',
+            runtimeEnvironmentId
+          }
+        ]
+      },
+      activeFileIdByWorktree: { [wt]: filePath },
+      activeTabTypeByWorktree: { [wt]: 'editor' as const },
+      unifiedTabs: {
+        [wt]: [
+          {
+            id: filePath,
+            entityId: filePath,
+            groupId,
+            worktreeId: wt,
+            contentType: 'editor' as const,
+            label: 'app.ts',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          },
+          {
+            id: runtimeFileId,
+            entityId: runtimeFileId,
+            groupId,
+            worktreeId: wt,
+            contentType: 'editor' as const,
+            label: 'app.ts',
+            customLabel: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 2
+          }
+        ]
+      },
+      tabGroups: {
+        [wt]: [
+          {
+            id: groupId,
+            worktreeId: wt,
+            activeTabId: filePath,
+            tabOrder: [filePath, runtimeFileId],
+            recentTabIds: [runtimeFileId, filePath]
+          }
+        ]
+      },
+      activeGroupIdByWorktree: { [wt]: groupId }
+    }
+
+    store.getState().hydrateTabsSession(session)
+    store.getState().hydrateEditorSession(session)
+
+    const s = store.getState()
+    expect(s.openFiles).toEqual([
+      expect.objectContaining({
+        id: filePath,
+        filePath,
+        worktreeId: wt,
+        runtimeEnvironmentId: undefined
+      }),
+      expect.objectContaining({
+        id: runtimeFileId,
+        filePath,
+        worktreeId: wt,
+        runtimeEnvironmentId
+      })
+    ])
+    expect(s.activeFileIdByWorktree[wt]).toBe(filePath)
+    expect(s.unifiedTabsByWorktree[wt]?.map((tab) => tab.id)).toEqual([filePath, runtimeFileId])
+    expect(s.unifiedTabsByWorktree[wt]?.map((tab) => tab.entityId)).toEqual([
+      filePath,
+      runtimeFileId
+    ])
+    expect(s.groupsByWorktree[wt]?.[0]).toEqual(
+      expect.objectContaining({
+        activeTabId: filePath,
+        tabOrder: [filePath, runtimeFileId],
+        recentTabIds: [runtimeFileId, filePath]
+      })
+    )
+  })
+
+  it('keeps floating owner-qualified editor ids aligned with restored unified tabs', () => {
+    const store = createTestStore()
+    const sharedPath = '/path/wt1/README.md'
+    const floatingFileId = ownedEditorFileId(sharedPath, FLOATING_TERMINAL_WORKTREE_ID, null)
+    const groupId = 'floating-group-1'
+
+    store.setState({ activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+
+    const session = {
+      activeRepoId: null,
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            filePath: sharedPath,
+            relativePath: 'README.md',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            language: 'markdown',
+            runtimeEnvironmentId: null
+          }
+        ]
+      },
+      activeFileIdByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: floatingFileId
+      },
+      activeTabTypeByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'editor' as const },
+      unifiedTabs: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: floatingFileId,
+            entityId: floatingFileId,
+            groupId,
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            contentType: 'editor' as const,
+            label: 'README.md',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      tabGroups: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: groupId,
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            activeTabId: floatingFileId,
+            tabOrder: [floatingFileId],
+            recentTabIds: [floatingFileId]
+          }
+        ]
+      },
+      activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: groupId }
+    }
+
+    store.getState().hydrateTabsSession(session)
+    store.getState().hydrateEditorSession(session)
+
+    const s = store.getState()
+    expect(s.openFiles).toEqual([
+      expect.objectContaining({
+        id: floatingFileId,
+        filePath: sharedPath,
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+      })
+    ])
+    expect(s.activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(floatingFileId)
+    expect(s.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toEqual([
+      expect.objectContaining({
+        id: floatingFileId,
+        entityId: floatingFileId
+      })
+    ])
+    expect(s.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toEqual([
+      expect.objectContaining({
+        activeTabId: floatingFileId,
+        tabOrder: [floatingFileId],
+        recentTabIds: [floatingFileId]
+      })
+    ])
+  })
+
+  it('migrates legacy floating unified tab file-path references to the hydrated owner id', () => {
+    const store = createTestStore()
+    const filePath = '/orca/userData/floating-workspace/README.md'
+    const fileId = ownedEditorFileId(filePath, FLOATING_TERMINAL_WORKTREE_ID, null)
+    const groupId = 'floating-group-legacy'
+
+    store.setState({ activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+
+    const session = {
+      activeRepoId: null,
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            filePath,
+            relativePath: 'README.md',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            language: 'markdown',
+            runtimeEnvironmentId: null
+          }
+        ]
+      },
+      activeFileIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: filePath },
+      activeTabTypeByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'editor' as const },
+      unifiedTabs: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: filePath,
+            entityId: filePath,
+            groupId,
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            contentType: 'editor' as const,
+            label: 'README.md',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      tabGroups: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: groupId,
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            activeTabId: filePath,
+            tabOrder: [filePath],
+            recentTabIds: [filePath]
+          }
+        ]
+      },
+      activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: groupId }
+    }
+
+    store.getState().hydrateTabsSession(session)
+    store.getState().hydrateEditorSession(session)
+
+    const s = store.getState()
+    expect(s.openFiles[0]?.id).toBe(fileId)
+    expect(s.activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(fileId)
+    expect(s.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.[0]).toEqual(
+      expect.objectContaining({ id: fileId, entityId: fileId })
+    )
+    expect(s.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.[0]).toEqual(
+      expect.objectContaining({
+        activeTabId: fileId,
+        tabOrder: [fileId],
+        recentTabIds: [fileId]
+      })
+    )
   })
 
   it('re-detects restored file languages instead of trusting stale session data', () => {

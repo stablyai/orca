@@ -19,6 +19,9 @@ import type {
   GitPushTarget,
   GitStatusEntry,
   GitStatusResult,
+  PersistedOpenFile,
+  Tab,
+  TabGroup,
   GitUpstreamStatus,
   SearchResult,
   WorkspaceSessionState,
@@ -188,11 +191,20 @@ export type ClosedEditorTabSnapshot = Omit<OpenFile, 'id' | 'isDirty'>
 
 const MAX_RECENT_CLOSED_EDITOR_TABS = 10
 
+export type PendingEditorReveal = {
+  filePath: string
+  fileId?: string
+  line: number
+  column: number
+  matchLength: number
+}
+
 function scheduleEditorLineReveal(
   get: () => AppState,
   filePath: string,
   line: number,
-  column?: number
+  column?: number,
+  fileId?: string
 ): void {
   // Why: openFile can replace a preview and remount Monaco asynchronously; the
   // reveal must land after that remount or the old editor can clear it.
@@ -201,6 +213,7 @@ function scheduleEditorLineReveal(
     requestAnimationFrame(() => {
       get().setPendingEditorReveal({
         filePath,
+        fileId,
         line,
         column: column ?? 1,
         matchLength: 0
@@ -451,15 +464,8 @@ export type EditorSlice = {
   clearFileSearch: (worktreeId: string) => void
 
   // Editor navigation (for search result → go-to-line)
-  pendingEditorReveal: {
-    filePath: string
-    line: number
-    column: number
-    matchLength: number
-  } | null
-  setPendingEditorReveal: (
-    reveal: { filePath: string; line: number; column: number; matchLength: number } | null
-  ) => void
+  pendingEditorReveal: PendingEditorReveal | null
+  setPendingEditorReveal: (reveal: PendingEditorReveal | null) => void
 
   // Session hydration — restore editor files from persisted workspace session
   hydrateEditorSession: (session: WorkspaceSessionState) => void
@@ -539,6 +545,247 @@ function buildOwnedEditorFileId(
 ): string {
   const runtimeKey = runtimeOwnerKey(runtimeEnvironmentId) ?? 'local'
   return `editor:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(filePath)}`
+}
+
+function isEditorFileIdOccupiedByOtherOwner(
+  file: Pick<
+    OpenFile,
+    'id' | 'worktreeId' | 'runtimeEnvironmentId' | 'markdownPreviewSourceFileId'
+  >,
+  filePath: string,
+  worktreeId: string,
+  runtimeEnvironmentId: string | null | undefined
+): boolean {
+  if (isSameEditorOwner(file, worktreeId, runtimeEnvironmentId)) {
+    return false
+  }
+  return file.id === filePath || file.markdownPreviewSourceFileId === filePath
+}
+
+function matchesEditorMode(
+  file: OpenFile,
+  modes: readonly OpenFile['mode'][] | undefined
+): boolean {
+  return !modes || modes.includes(file.mode)
+}
+
+function resolveEditorFileIdForOwner(
+  state: Pick<EditorSlice, 'openFiles'>,
+  filePath: string,
+  worktreeId: string,
+  runtimeEnvironmentId: string | null | undefined,
+  modes?: readonly OpenFile['mode'][]
+): string {
+  const existing = state.openFiles.find(
+    (file) =>
+      file.filePath === filePath &&
+      matchesEditorMode(file, modes) &&
+      isSameEditorOwner(file, worktreeId, runtimeEnvironmentId)
+  )
+  if (existing) {
+    return existing.id
+  }
+  // Why: preview-only markdown tabs also reserve their source id. Treat those
+  // source ids like open editor ids so same-path owners do not collapse.
+  return state.openFiles.some((file) =>
+    isEditorFileIdOccupiedByOtherOwner(file, filePath, worktreeId, runtimeEnvironmentId)
+  )
+    ? buildOwnedEditorFileId(filePath, worktreeId, runtimeEnvironmentId)
+    : filePath
+}
+
+function getOpenedEditFileIdAfterOpen(
+  state: Pick<EditorSlice, 'openFiles' | 'activeFileIdByWorktree'>,
+  filePath: string,
+  worktreeId: string
+): string {
+  const activeFileId = state.activeFileIdByWorktree[worktreeId]
+  const activeFile = state.openFiles.find(
+    (file) =>
+      file.id === activeFileId &&
+      file.filePath === filePath &&
+      file.worktreeId === worktreeId &&
+      file.mode === 'edit'
+  )
+  if (activeFile) {
+    return activeFile.id
+  }
+  return (
+    state.openFiles.find(
+      (file) => file.filePath === filePath && file.worktreeId === worktreeId && file.mode === 'edit'
+    )?.id ?? filePath
+  )
+}
+
+function shouldHydrateWithOwnedEditorFileId(
+  worktreeId: string,
+  runtimeEnvironmentId: string | null | undefined
+): boolean {
+  return (
+    worktreeId === FLOATING_TERMINAL_WORKTREE_ID || runtimeOwnerKey(runtimeEnvironmentId) !== null
+  )
+}
+
+function addEditorFileIdMigration(
+  migrationsByWorktree: Record<string, Map<string, string>>,
+  worktreeId: string,
+  from: string,
+  to: string
+): void {
+  if (from === to) {
+    return
+  }
+  const migrations =
+    migrationsByWorktree[worktreeId] ?? (migrationsByWorktree[worktreeId] = new Map())
+  migrations.set(from, to)
+}
+
+type LegacyHydratedEditorFile = Pick<
+  OpenFile,
+  'id' | 'filePath' | 'worktreeId' | 'runtimeEnvironmentId' | 'markdownPreviewSourceFileId'
+>
+
+function resolveLegacyHydratedEditorFileId(
+  files: readonly LegacyHydratedEditorFile[],
+  persistedFile: PersistedOpenFile,
+  worktreeId: string
+): string {
+  const existing = files.find(
+    (file) =>
+      file.filePath === persistedFile.filePath &&
+      isSameEditorOwner(file, worktreeId, persistedFile.runtimeEnvironmentId)
+  )
+  if (existing) {
+    return existing.id
+  }
+  return files.some((file) =>
+    isEditorFileIdOccupiedByOtherOwner(
+      file,
+      persistedFile.filePath,
+      worktreeId,
+      persistedFile.runtimeEnvironmentId
+    )
+  )
+    ? buildOwnedEditorFileId(persistedFile.filePath, worktreeId, persistedFile.runtimeEnvironmentId)
+    : persistedFile.filePath
+}
+
+function migrateEditorFileId(
+  migrationsByWorktree: Record<string, Map<string, string>>,
+  worktreeId: string,
+  fileId: string | null | undefined
+): string | null {
+  if (!fileId) {
+    return null
+  }
+  return migrationsByWorktree[worktreeId]?.get(fileId) ?? fileId
+}
+
+function dedupeEditorTabOrder(tabIds: string[], validTabIds: Set<string>): string[] {
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const tabId of tabIds) {
+    if (!validTabIds.has(tabId) || seen.has(tabId)) {
+      continue
+    }
+    seen.add(tabId)
+    result.push(tabId)
+  }
+  return result
+}
+
+function areStringArraysEqual(
+  a: readonly string[] | undefined,
+  b: readonly string[] | undefined
+): boolean {
+  if (a === b) {
+    return true
+  }
+  if (!a || !b || a.length !== b.length) {
+    return false
+  }
+  return a.every((value, index) => value === b[index])
+}
+
+function migrateHydratedEditorTabsAndGroups(
+  state: Pick<AppState, 'unifiedTabsByWorktree' | 'groupsByWorktree'>,
+  migrationsByWorktree: Record<string, Map<string, string>>
+): Partial<Pick<AppState, 'unifiedTabsByWorktree' | 'groupsByWorktree'>> {
+  let tabsChanged = false
+  let groupsChanged = false
+  const nextUnifiedTabsByWorktree: Record<string, Tab[]> = { ...state.unifiedTabsByWorktree }
+  const tabIdMigrationsByWorktree: Record<string, Map<string, string>> = {}
+
+  for (const [worktreeId, idMigrations] of Object.entries(migrationsByWorktree)) {
+    const tabs = state.unifiedTabsByWorktree[worktreeId]
+    if (!tabs) {
+      continue
+    }
+    const tabIdMigrations = new Map<string, string>()
+    const nextTabs = tabs.map((tab) => {
+      if (tab.contentType !== 'editor') {
+        return tab
+      }
+      const nextId = idMigrations.get(tab.id) ?? tab.id
+      const nextEntityId = idMigrations.get(tab.entityId) ?? tab.entityId
+      if (nextId === tab.id && nextEntityId === tab.entityId) {
+        return tab
+      }
+      tabsChanged = true
+      if (nextId !== tab.id) {
+        tabIdMigrations.set(tab.id, nextId)
+      }
+      return { ...tab, id: nextId, entityId: nextEntityId }
+    })
+    if (tabIdMigrations.size > 0) {
+      tabIdMigrationsByWorktree[worktreeId] = tabIdMigrations
+    }
+    nextUnifiedTabsByWorktree[worktreeId] = nextTabs
+  }
+
+  const nextGroupsByWorktree: Record<string, TabGroup[]> = { ...state.groupsByWorktree }
+  for (const [worktreeId, tabIdMigrations] of Object.entries(tabIdMigrationsByWorktree)) {
+    const groups = state.groupsByWorktree[worktreeId]
+    if (!groups) {
+      continue
+    }
+    const validTabIds = new Set((nextUnifiedTabsByWorktree[worktreeId] ?? []).map((tab) => tab.id))
+    nextGroupsByWorktree[worktreeId] = groups.map((group) => {
+      const tabOrder = dedupeEditorTabOrder(
+        group.tabOrder.map((tabId) => tabIdMigrations.get(tabId) ?? tabId),
+        validTabIds
+      )
+      const activeTabId = group.activeTabId
+        ? (tabIdMigrations.get(group.activeTabId) ?? group.activeTabId)
+        : null
+      const validActiveTabId = activeTabId && validTabIds.has(activeTabId) ? activeTabId : null
+      const recentTabIds = group.recentTabIds
+        ? dedupeEditorTabOrder(
+            group.recentTabIds.map((tabId) => tabIdMigrations.get(tabId) ?? tabId),
+            validTabIds
+          )
+        : group.recentTabIds
+      if (
+        validActiveTabId === group.activeTabId &&
+        areStringArraysEqual(tabOrder, group.tabOrder) &&
+        areStringArraysEqual(recentTabIds, group.recentTabIds)
+      ) {
+        return group
+      }
+      groupsChanged = true
+      return {
+        ...group,
+        activeTabId: validActiveTabId,
+        tabOrder,
+        recentTabIds
+      }
+    })
+  }
+
+  return {
+    ...(tabsChanged ? { unifiedTabsByWorktree: nextUnifiedTabsByWorktree } : {}),
+    ...(groupsChanged ? { groupsByWorktree: nextGroupsByWorktree } : {})
+  }
 }
 
 const REMOTE_OPERATION_FAILED_MESSAGE = 'Remote operation failed'
@@ -858,14 +1105,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         (f) =>
           f.filePath === file.filePath && isSameEditorOwner(f, worktreeId, runtimeEnvironmentId)
       )
-      // Why: editor tabs historically used filePath as the id. Keep that for
-      // the common single-owner case, but qualify same-path cross-owner opens
-      // so the floating workspace can show its own copy of an already-open note.
-      const id =
-        existing?.id ??
-        (s.openFiles.some((f) => f.id === file.filePath)
-          ? buildOwnedEditorFileId(file.filePath, worktreeId, runtimeEnvironmentId)
-          : file.filePath)
+      const id = resolveEditorFileIdForOwner(s, file.filePath, worktreeId, runtimeEnvironmentId)
       editorItemFileId = id
       const isPreview = options?.preview ?? false
       const recordReplacedPreview = options?.recordReplacedPreview ?? false
@@ -1095,13 +1335,13 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           undefined)
     const sourceFileId =
       options?.sourceFileId ??
-      initialState.openFiles.find(
-        (openFile) =>
-          openFile.filePath === file.filePath &&
-          openFile.mode === 'edit' &&
-          isSameEditorOwner(openFile, file.worktreeId, resolvedRuntimeEnvironmentId)
-      )?.id ??
-      file.filePath
+      resolveEditorFileIdForOwner(
+        initialState,
+        file.filePath,
+        file.worktreeId,
+        resolvedRuntimeEnvironmentId,
+        ['edit']
+      )
     const id = `markdown-preview::${sourceFileId}`
     const anchor = options?.anchor || undefined
     set((s) => {
@@ -2779,7 +3019,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         }
       )
       if (line !== undefined) {
-        scheduleEditorLineReveal(get, target.absolutePath, line, column)
+        const fileId = getOpenedEditFileIdAfterOpen(get(), target.absolutePath, ctx.worktreeId)
+        scheduleEditorLineReveal(get, target.absolutePath, line, column, fileId)
       }
       return
     }
@@ -2798,47 +3039,29 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return
     }
 
-    const state = get()
-    const sourceRuntimeEnvironmentKey = sourceRuntimeEnvironmentId ?? null
-    const existing = state.openFiles.find(
-      (f) =>
-        f.filePath === absolutePath &&
-        f.worktreeId === ctx.worktreeId &&
-        (f.runtimeEnvironmentId ?? null) === sourceRuntimeEnvironmentKey
+    get().openFile(
+      {
+        filePath: absolutePath,
+        relativePath,
+        worktreeId: ctx.worktreeId,
+        runtimeEnvironmentId: sourceRuntimeEnvironmentId,
+        language: 'markdown',
+        mode: 'edit'
+      },
+      {
+        preview: true,
+        targetGroupId: get().activeGroupIdByWorktree?.[ctx.worktreeId],
+        recordReplacedPreview: true
+      }
     )
-    const fileId = existing?.id ?? absolutePath
 
-    // Why: pendingEditorReveal is consumed by MonacoEditor on mount. If the
-    // file opens/stays in rich mode, the reveal is silently dropped. Flip to
-    // source before openFile/setActiveFile so Monaco is the surface that
-    // mounts or is already mounted when the reveal lands. Rich-mode line
-    // reveal is tracked as a follow-up (design doc §open-q 1).
     if (line !== undefined) {
+      const fileId = getOpenedEditFileIdAfterOpen(get(), absolutePath, ctx.worktreeId)
+      // Why: pendingEditorReveal is consumed by MonacoEditor on mount. If the
+      // file stays in rich mode, the reveal is silently dropped; use the final
+      // owner-qualified id after openFile has resolved the tab identity.
       get().setMarkdownViewMode(fileId, 'source')
-    }
-
-    if (!existing) {
-      get().openFile(
-        {
-          filePath: absolutePath,
-          relativePath,
-          worktreeId: ctx.worktreeId,
-          runtimeEnvironmentId: sourceRuntimeEnvironmentId,
-          language: 'markdown',
-          mode: 'edit'
-        },
-        {
-          preview: true,
-          targetGroupId: get().activeGroupIdByWorktree?.[ctx.worktreeId],
-          recordReplacedPreview: true
-        }
-      )
-    } else {
-      get().setActiveFile(existing.id)
-    }
-
-    if (line !== undefined) {
-      scheduleEditorLineReveal(get, absolutePath, line, column)
+      scheduleEditorLineReveal(get, absolutePath, line, column, fileId)
     }
   },
 
@@ -2863,15 +3086,38 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
       const openFiles: OpenFile[] = []
       const usedOpenFileIds = new Set<string>()
+      const legacyHydratedOpenFiles: LegacyHydratedEditorFile[] = []
+      const editorFileIdMigrationsByWorktree: Record<string, Map<string, string>> = {}
       for (const [worktreeId, files] of Object.entries(openFilesByWorktree)) {
         if (!validWorktreeIds.has(worktreeId)) {
           continue
         }
         for (const pf of files) {
-          const id = usedOpenFileIds.has(pf.filePath)
-            ? buildOwnedEditorFileId(pf.filePath, worktreeId, pf.runtimeEnvironmentId)
-            : pf.filePath
+          const legacyId = resolveLegacyHydratedEditorFileId(
+            legacyHydratedOpenFiles,
+            pf,
+            worktreeId
+          )
+          // Why: floating/runtime-owned files need IDs that survive peers
+          // disappearing between restarts; collision-based IDs drift when the
+          // same path is no longer open in another owner.
+          const ownedId = buildOwnedEditorFileId(pf.filePath, worktreeId, pf.runtimeEnvironmentId)
+          const id =
+            shouldHydrateWithOwnedEditorFileId(worktreeId, pf.runtimeEnvironmentId) ||
+            usedOpenFileIds.has(pf.filePath)
+              ? ownedId
+              : pf.filePath
           usedOpenFileIds.add(id)
+          // Why: legacy sessions used the collision-derived id for each
+          // persisted entry. Mapping every filePath would collapse same-path
+          // local/runtime tabs onto whichever owner hydrates last.
+          addEditorFileIdMigration(editorFileIdMigrationsByWorktree, worktreeId, legacyId, id)
+          legacyHydratedOpenFiles.push({
+            id: legacyId,
+            filePath: pf.filePath,
+            worktreeId,
+            runtimeEnvironmentId: pf.runtimeEnvironmentId
+          })
           openFiles.push({
             id,
             filePath: pf.filePath,
@@ -2897,7 +3143,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         ? (openFiles.find((f) => f.worktreeId === activeWorktreeId)?.id ?? null)
         : null
       const persistedActiveFileId = activeWorktreeId
-        ? (persistedActiveFileIdByWorktree[activeWorktreeId] ?? null)
+        ? migrateEditorFileId(
+            editorFileIdMigrationsByWorktree,
+            activeWorktreeId,
+            persistedActiveFileIdByWorktree[activeWorktreeId]
+          )
         : null
       // Why: verify the persisted active file still exists in the restored set.
       // The file may have been removed due to worktree validation or the
@@ -2918,7 +3168,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       // Filter per-worktree maps to only valid worktrees with valid file references
       const filteredActiveFileIdByWorktree = Object.fromEntries(
         [...validWorktreeIds].flatMap((wId) => {
-          const persistedFileId = persistedActiveFileIdByWorktree[wId]
+          const persistedFileId = migrateEditorFileId(
+            editorFileIdMigrationsByWorktree,
+            wId,
+            persistedActiveFileIdByWorktree[wId]
+          )
           if (
             persistedFileId &&
             openFiles.some((f) => f.id === persistedFileId && f.worktreeId === wId)
@@ -2957,7 +3211,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         activeFileId: nextActiveFileId,
         activeFileIdByWorktree: filteredActiveFileIdByWorktree,
         activeTabType: nextActiveTabType,
-        activeTabTypeByWorktree: filteredActiveTabTypeByWorktree
+        activeTabTypeByWorktree: filteredActiveTabTypeByWorktree,
+        ...migrateHydratedEditorTabsAndGroups(s, editorFileIdMigrationsByWorktree)
       }
     })
   }

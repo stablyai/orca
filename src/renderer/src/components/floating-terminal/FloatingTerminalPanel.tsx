@@ -328,7 +328,8 @@ export function FloatingTerminalPanel({
   useEffect(() => {
     void window.api.app
       .getFloatingTerminalCwd({
-        path: floatingTerminalCwd
+        path: floatingTerminalCwd,
+        requireTrusted: true
       })
       .then(setCwd)
   }, [floatingTerminalCwd])

@@ -1496,6 +1496,7 @@ export type SourceControlViewMode = 'list' | 'tree'
 
 export type FloatingTerminalCwdRequest = {
   path?: string
+  requireTrusted?: boolean
 }
 
 export type GlobalSettings = {
@@ -1614,6 +1615,9 @@ export type GlobalSettings = {
   /** Where new Floating Workspace tabs start. Empty means Orca's app-owned
    *  floating workspace under Electron userData. */
   floatingTerminalCwd: string
+  /** Picker-approved Floating Workspace directories that may be reauthorized
+   *  across restarts. Renderer-provided text alone must not populate this. */
+  floatingTerminalTrustedCwds?: string[]
   /** One-shot migration from the old implicit '~' default to the app-owned
    *  floating workspace. Explicit future '~' choices are preserved. */
   floatingTerminalCwdMigratedToAppWorkspace?: boolean

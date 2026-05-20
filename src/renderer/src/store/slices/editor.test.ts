@@ -37,6 +37,15 @@ function createEditorStore(): StoreApi<AppState> {
   })) as unknown as StoreApi<AppState>
 }
 
+function ownedEditorFileId(
+  filePath: string,
+  worktreeId: string,
+  runtimeEnvironmentId: string | null | undefined
+): string {
+  const runtimeKey = runtimeEnvironmentId?.trim() || 'local'
+  return `editor:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(filePath)}`
+}
+
 describe('createEditorSlice right sidebar state', () => {
   it('right sidebar is closed by default', () => {
     const store = createEditorStore()
@@ -687,6 +696,43 @@ describe('createEditorSlice openMarkdownPreview', () => {
         id: 'markdown-preview::/repo/docs/README.md',
         mode: 'markdown-preview',
         markdownPreviewAnchor: 'install'
+      })
+    ])
+  })
+
+  it('keeps preview-only same-path markdown previews separate by owner', () => {
+    const store = createEditorStore()
+    const floatingSourceId = ownedEditorFileId(
+      '/repo/docs/README.md',
+      FLOATING_TERMINAL_WORKTREE_ID,
+      null
+    )
+
+    store.getState().openMarkdownPreview({
+      filePath: '/repo/docs/README.md',
+      relativePath: 'docs/README.md',
+      worktreeId: 'wt-1',
+      language: 'markdown'
+    })
+    store.getState().openMarkdownPreview({
+      filePath: '/repo/docs/README.md',
+      relativePath: 'README.md',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      runtimeEnvironmentId: null,
+      language: 'markdown'
+    })
+
+    const previews = store.getState().openFiles.filter((file) => file.mode === 'markdown-preview')
+    expect(previews).toEqual([
+      expect.objectContaining({
+        id: 'markdown-preview::/repo/docs/README.md',
+        markdownPreviewSourceFileId: '/repo/docs/README.md',
+        worktreeId: 'wt-1'
+      }),
+      expect.objectContaining({
+        id: `markdown-preview::${floatingSourceId}`,
+        markdownPreviewSourceFileId: floatingSourceId,
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID
       })
     ])
   })
@@ -1899,7 +1945,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
     expect(openFileUriMock).not.toHaveBeenCalled()
   })
 
-  it('sets source view mode before opening when the link has a line anchor', async () => {
+  it('sets source view mode when the link has a line anchor', async () => {
     const store = createEditorStore()
     pathExistsMock.mockResolvedValue(true)
 
@@ -1912,7 +1958,90 @@ describe('createEditorSlice activateMarkdownLink', () => {
     expect(store.getState().markdownViewMode['/repo/docs/guide.md']).toBe('source')
     expect(store.getState().pendingEditorReveal).toEqual({
       filePath: '/repo/docs/guide.md',
+      fileId: '/repo/docs/guide.md',
       line: 10,
+      column: 1,
+      matchLength: 0
+    })
+  })
+
+  it('reveals active-runtime markdown line anchors on the owner-qualified tab id', async () => {
+    const store = createEditorStore()
+    pathExistsMock.mockResolvedValue(true)
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-active' } as AppState['settings'],
+      openFiles: [
+        {
+          id: '/repo/docs/guide.md',
+          filePath: '/repo/docs/guide.md',
+          relativePath: 'docs/guide.md',
+          worktreeId: 'wt-1',
+          runtimeEnvironmentId: null,
+          language: 'markdown',
+          isDirty: false,
+          mode: 'edit'
+        }
+      ]
+    } as Partial<AppState>)
+    const activeRuntimeFileId = ownedEditorFileId('/repo/docs/guide.md', 'wt-1', 'env-active')
+
+    await store.getState().activateMarkdownLink('./guide.md#L10', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(store.getState().markdownViewMode[activeRuntimeFileId]).toBe('source')
+    expect(store.getState().markdownViewMode['/repo/docs/guide.md']).toBeUndefined()
+    expect(store.getState().pendingEditorReveal).toEqual({
+      filePath: '/repo/docs/guide.md',
+      fileId: activeRuntimeFileId,
+      line: 10,
+      column: 1,
+      matchLength: 0
+    })
+  })
+
+  it('sets line-anchor source mode on the owner-qualified target id', async () => {
+    const store = createEditorStore()
+    pathExistsMock.mockResolvedValue(true)
+    store.getState().openFile({
+      filePath: '/repo/docs/note.md',
+      relativePath: 'docs/note.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().openFile(
+      {
+        filePath: '/repo/docs/note.md',
+        relativePath: 'docs/note.md',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        runtimeEnvironmentId: null,
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { suppressActiveRuntimeFallback: true }
+    )
+    const floatingFileId = ownedEditorFileId(
+      '/repo/docs/note.md',
+      FLOATING_TERMINAL_WORKTREE_ID,
+      null
+    )
+
+    await store.getState().activateMarkdownLink('./note.md#L3', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      worktreeRoot: '/repo',
+      runtimeEnvironmentId: null
+    })
+
+    expect(store.getState().markdownViewMode[floatingFileId]).toBe('source')
+    expect(store.getState().markdownViewMode['/repo/docs/note.md']).toBeUndefined()
+    expect(store.getState().pendingEditorReveal).toEqual({
+      filePath: '/repo/docs/note.md',
+      fileId: floatingFileId,
+      line: 3,
       column: 1,
       matchLength: 0
     })
@@ -1966,6 +2095,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
     ])
     expect(store.getState().pendingEditorReveal).toEqual({
       filePath: '/repo/src/PdfViewer.tsx',
+      fileId: '/repo/src/PdfViewer.tsx',
       line: 142,
       column: 7,
       matchLength: 0

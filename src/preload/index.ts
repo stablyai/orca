@@ -369,7 +369,9 @@ const api = {
     pickFloatingMarkdownDocument: (
       args?: FloatingTerminalCwdRequest
     ): Promise<MarkdownDocument | null> =>
-      ipcRenderer.invoke('app:pickFloatingMarkdownDocument', args)
+      ipcRenderer.invoke('app:pickFloatingMarkdownDocument', args),
+    pickFloatingWorkspaceDirectory: (): Promise<string | null> =>
+      ipcRenderer.invoke('app:pickFloatingWorkspaceDirectory')
   },
 
   wsl: {

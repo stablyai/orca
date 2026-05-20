@@ -1,12 +1,12 @@
 import { readdir } from 'fs/promises'
-import { basename as pathBasename, extname, join, relative } from 'path'
+import { basename as pathBasename, extname, isAbsolute, join, relative, resolve } from 'path'
 import type { MarkdownDocument } from '../../shared/types'
 
 function normalizeRelativePath(path: string): string {
   return path.replace(/[\\/]+/g, '/').replace(/^\/+/, '')
 }
 
-function isMarkdownDocumentName(name: string): boolean {
+export function isMarkdownDocumentName(name: string): boolean {
   const extension = extname(name).toLowerCase()
   return extension === '.md' || extension === '.mdx' || extension === '.markdown'
 }
@@ -20,12 +20,35 @@ function isSafeRelativePath(relativePath: string): boolean {
   return !relativePath.split('/').includes('..')
 }
 
-function toMarkdownDocument(rootPath: string, filePath: string): MarkdownDocument {
+function hasParentTraversalSegment(relativePath: string): boolean {
+  return relativePath.split(/[\\/]+/).includes('..')
+}
+
+function rootRelativePath(rootPath: string, filePath: string): string | null {
+  const resolvedRoot = resolve(rootPath)
+  const resolvedFile = resolve(filePath)
+  const relativePath = relative(resolvedRoot, resolvedFile)
+  if (hasParentTraversalSegment(relativePath) || isAbsolute(relativePath)) {
+    return null
+  }
+  return normalizeRelativePath(relativePath)
+}
+
+export function markdownDocumentFromFilePath(
+  rootPath: string,
+  filePath: string,
+  options: { outsideRootRelativePath?: 'basename' | 'relative' } = {}
+): MarkdownDocument {
   const basename = pathBasename(filePath)
   const extension = extname(basename)
+  const relativePath =
+    rootRelativePath(rootPath, filePath) ??
+    (options.outsideRootRelativePath === 'basename'
+      ? basename
+      : normalizeRelativePath(relative(rootPath, filePath)))
   return {
     filePath,
-    relativePath: normalizeRelativePath(relative(rootPath, filePath)),
+    relativePath,
     basename,
     name: extension ? basename.slice(0, -extension.length) : basename
   }
@@ -88,7 +111,7 @@ export async function listMarkdownDocuments(rootPath: string): Promise<MarkdownD
       }
 
       if (entry.isFile() && isMarkdownDocumentName(entry.name)) {
-        documents.push(toMarkdownDocument(rootPath, entryPath))
+        documents.push(markdownDocumentFromFilePath(rootPath, entryPath))
       }
     }
   }
