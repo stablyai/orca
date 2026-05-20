@@ -22,6 +22,13 @@ function firstCommandToken(command: string): string {
   return command.trim().split(/\s+/)[0] ?? ''
 }
 
+// Why: custom TUI agent presets (issue #2284) are intentionally NOT
+// registered here. Recognition is built once at module load from the static
+// TUI_AGENT_CONFIG, so adding custom agents would require either rebuilding
+// the map per-call or a runtime registration API both renderer and hooks
+// honor — neither justified for v1. A missing recognition only means the
+// agent shows as "Unknown" in process-keyed UI (status tooltips). Launch,
+// detection, and paste-draft are unaffected. Revisit if users ask for it.
 const PROCESS_TO_AGENT = new Map<string, TuiAgent>()
 const AGENT_TYPE_IDS = new Set<TuiAgent>()
 

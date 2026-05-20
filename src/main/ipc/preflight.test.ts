@@ -64,6 +64,13 @@ import {
 
 type HandlerMap = Record<string, (_event?: unknown, args?: { force?: boolean }) => Promise<unknown>>
 
+// Why: preflight handlers read customTuiAgents from the Store at call time
+// (issue #2284). Tests don't exercise persistence, so a minimal stub that
+// returns no customs is all we need.
+const fakeStore = {
+  getSettings: () => ({ customTuiAgents: [] })
+} as unknown as Parameters<typeof registerPreflightHandlers>[0]
+
 describe('preflight', () => {
   const originalPlatform = process.platform
   const handlers: HandlerMap = {}
@@ -271,7 +278,7 @@ describe('preflight', () => {
       .mockResolvedValueOnce({ stdout: 'github.com\n' })
       .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
 
-    registerPreflightHandlers()
+    registerPreflightHandlers(fakeStore)
 
     const status = await handlers['preflight:check']()
 
@@ -298,7 +305,7 @@ describe('preflight', () => {
       .mockResolvedValueOnce({ stdout: 'github.com\n  - Active account: true\n' })
       .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
 
-    registerPreflightHandlers()
+    registerPreflightHandlers(fakeStore)
 
     const firstStatus = await handlers['preflight:check']()
     const refreshedStatus = await handlers['preflight:check'](null, { force: true })
@@ -340,7 +347,30 @@ describe('preflight', () => {
       throw new Error('not found')
     })
 
-    await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'cursor'])
+    await expect(detectInstalledAgents([])).resolves.toEqual(['claude', 'cursor'])
+  })
+
+  it('includes a custom agent id when its detect command resolves on PATH', async () => {
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'which') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      if (String(args[0]) === 'my-wrapper') {
+        return { stdout: '/usr/local/bin/my-wrapper\n' }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(
+      detectInstalledAgents([
+        {
+          id: 'custom:my-wrapper-abc123',
+          label: 'My Wrapper',
+          command: 'my-wrapper --beta',
+          promptInjectionMode: 'stdin-after-start'
+        }
+      ])
+    ).resolves.toEqual(['custom:my-wrapper-abc123'])
   })
 
   it('registers agent detection through the shared launch config commands', async () => {
@@ -354,7 +384,7 @@ describe('preflight', () => {
       throw new Error('not found')
     })
 
-    registerPreflightHandlers()
+    registerPreflightHandlers(fakeStore)
 
     await expect(handlers['preflight:detectAgents']()).resolves.toEqual(['cursor'])
   })
@@ -378,7 +408,7 @@ describe('preflight', () => {
       throw new Error('not found')
     })
 
-    await expect(detectInstalledAgents({ wslDistro: 'Ubuntu' })).resolves.toEqual(['claude'])
+    await expect(detectInstalledAgents([], { wslDistro: 'Ubuntu' })).resolves.toEqual(['claude'])
   })
 
   it('refreshes via preflight:refreshAgents by re-hydrating PATH before re-detecting', async () => {
@@ -401,7 +431,7 @@ describe('preflight', () => {
       throw new Error('not found')
     })
 
-    registerPreflightHandlers()
+    registerPreflightHandlers(fakeStore)
 
     const result = (await handlers['preflight:refreshAgents']()) as {
       agents: string[]
@@ -437,7 +467,7 @@ describe('preflight', () => {
       throw new Error('not found')
     })
 
-    registerPreflightHandlers()
+    registerPreflightHandlers(fakeStore)
 
     const result = (await handlers['preflight:refreshAgents']()) as {
       agents: string[]
@@ -466,7 +496,7 @@ describe('preflight', () => {
       hydrateShellPathMock.mockResolvedValueOnce({ segments: [], ok: false, failureReason })
       execFileAsyncMock.mockRejectedValue(new Error('not found'))
 
-      registerPreflightHandlers()
+      registerPreflightHandlers(fakeStore)
 
       const result = (await handlers['preflight:refreshAgents']()) as {
         pathSource: string

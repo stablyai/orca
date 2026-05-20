@@ -89,7 +89,7 @@ export function registerCoreHandlers(
 
   registerAppHandlers()
   registerCliHandlers()
-  registerPreflightHandlers()
+  registerPreflightHandlers(store)
   registerClaudeUsageHandlers(claudeUsage)
   registerCodexUsageHandlers(codexUsage)
   registerOpenCodeUsageHandlers(openCodeUsage)
