@@ -211,6 +211,58 @@ describe('shared agent-hook-listener', () => {
     }
   })
 
+  it('keeps the cached Antigravity prompt instead of rescanning the transcript', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-cached-prompt-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    try {
+      writeFileSync(
+        transcriptPath,
+        `${JSON.stringify({
+          source: 'USER_EXPLICIT',
+          type: 'USER_INPUT',
+          content: '<USER_REQUEST>\nFirst request\n</USER_REQUEST>'
+        })}\n`
+      )
+
+      const started = normalizeHookPayload(
+        state,
+        'antigravity',
+        {
+          paneKey: PANE_KEY,
+          hook_event_name: 'PreInvocation',
+          payload: { transcriptPath }
+        },
+        'production'
+      )
+      expect(started?.payload.prompt).toBe('First request')
+
+      writeFileSync(
+        transcriptPath,
+        `${JSON.stringify({
+          source: 'USER_EXPLICIT',
+          type: 'USER_INPUT',
+          content: '<USER_REQUEST>\nSecond request\n</USER_REQUEST>'
+        })}\n`,
+        { flag: 'a' }
+      )
+
+      const tool = normalizeHookPayload(
+        state,
+        'antigravity',
+        {
+          paneKey: PANE_KEY,
+          hook_event_name: 'PostToolUse',
+          payload: { transcriptPath, toolCall: { name: 'run_command' } }
+        },
+        'production'
+      )
+
+      expect(tool?.payload.prompt).toBe('First request')
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
   it('maps Antigravity feedback tools to waiting state', () => {
     const question = normalizeHookPayload(
       state,

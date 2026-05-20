@@ -1607,19 +1607,24 @@ function normalizeAntigravityEvent(
     return null
   }
 
-  const effectivePrompt = promptText || readLastUserPromptFromTranscript(transcriptPath) || ''
+  const resetsTurn = isNewTurnEvent('antigravity', eventName)
+  // Why: Antigravity transcripts can grow during long tool-heavy turns. Once
+  // the prompt is cached for this pane, avoid rescanning the file per hook.
+  const cachedPrompt = resetsTurn ? undefined : state.lastPromptByPaneKey.get(paneKey)
+  const effectivePrompt =
+    promptText || cachedPrompt || readLastUserPromptFromTranscript(transcriptPath) || ''
   const snapshot = resolveToolState(
     state,
     paneKey,
     extractToolFields('antigravity', eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent('antigravity', eventName) }
+    { resetOnNewTurn: resetsTurn }
   )
 
   const payload = parseAgentStatusPayload(
     JSON.stringify({
       state: stateName,
       prompt: resolvePrompt(state, paneKey, effectivePrompt, {
-        resetOnNewTurn: isNewTurnEvent('antigravity', eventName)
+        resetOnNewTurn: resetsTurn
       }),
       agentType: 'antigravity',
       toolName: snapshot.toolName,
