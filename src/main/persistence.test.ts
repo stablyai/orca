@@ -705,6 +705,173 @@ describe('Store', () => {
     ])
   })
 
+  it('round-trips a valid customTuiAgents entry', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        customTuiAgents: [
+          {
+            id: 'custom:my-wrapper-abc123',
+            label: 'My Wrapper',
+            command: 'npx -y my-wrapper',
+            promptInjectionMode: 'stdin-after-start'
+          }
+        ]
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().customTuiAgents).toEqual([
+      {
+        id: 'custom:my-wrapper-abc123',
+        label: 'My Wrapper',
+        command: 'npx -y my-wrapper',
+        detectCmd: undefined,
+        expectedProcess: undefined,
+        promptInjectionMode: 'stdin-after-start',
+        faviconDomain: undefined,
+        homepageUrl: undefined
+      }
+    ])
+  })
+
+  it('drops customTuiAgents entries missing id prefix, label, or command', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        customTuiAgents: [
+          {
+            id: 'not-prefixed',
+            label: 'Bad',
+            command: 'echo',
+            promptInjectionMode: 'stdin-after-start'
+          },
+          {
+            id: 'custom:no-label-aaa111',
+            label: '   ',
+            command: 'echo',
+            promptInjectionMode: 'stdin-after-start'
+          },
+          {
+            id: 'custom:no-cmd-bbb222',
+            label: 'No command',
+            command: '',
+            promptInjectionMode: 'stdin-after-start'
+          },
+          {
+            id: 'custom:ok-ccc333',
+            label: 'OK',
+            command: 'echo hi',
+            promptInjectionMode: 'stdin-after-start'
+          }
+        ]
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    const customs = store.getSettings().customTuiAgents
+    expect(customs).toHaveLength(1)
+    expect(customs[0]?.id).toBe('custom:ok-ccc333')
+  })
+
+  it('coerces persisted promptInjectionMode for custom agents to stdin-after-start', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        customTuiAgents: [
+          {
+            id: 'custom:has-argv-ddd444',
+            label: 'Has Argv',
+            command: 'echo',
+            promptInjectionMode: 'argv'
+          }
+        ]
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().customTuiAgents[0]?.promptInjectionMode).toBe('stdin-after-start')
+  })
+
+  it('resets defaultTuiAgent to null when it references a missing custom id', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        customTuiAgents: [],
+        defaultTuiAgent: 'custom:missing-eee555'
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().defaultTuiAgent).toBeNull()
+  })
+
+  it('preserves defaultTuiAgent when it references a present custom id', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        customTuiAgents: [
+          {
+            id: 'custom:keep-fff666',
+            label: 'Keep',
+            command: 'echo',
+            promptInjectionMode: 'stdin-after-start'
+          }
+        ],
+        defaultTuiAgent: 'custom:keep-fff666'
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().defaultTuiAgent).toBe('custom:keep-fff666')
+  })
+
+  it('drops agentCmdOverrides keys for missing custom ids but keeps built-in keys', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        customTuiAgents: [],
+        agentCmdOverrides: {
+          claude: 'claude --beta',
+          'custom:gone-ggg777': 'something'
+        }
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().agentCmdOverrides).toEqual({ claude: 'claude --beta' })
+  })
+
   it('migrates the legacy floating terminal disabled default to enabled', async () => {
     writeDataFile({
       schemaVersion: 1,

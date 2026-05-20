@@ -3,6 +3,7 @@
    prevents those paths from drifting. */
 import { exec, spawn, type ChildProcess } from 'child_process'
 import type { GlobalSettings, TuiAgent } from '../../shared/types'
+import { isCustomTuiAgentId } from '../../shared/effective-tui-agent'
 import {
   buildCommitMessagePrompt,
   splitGeneratedCommitMessage,
@@ -118,7 +119,13 @@ export function resolveCommitMessageSettings(
     return { ok: false, error: 'Enable AI commit messages in Settings -> Git.' }
   }
 
-  const agentChoice = resolveCommitMessageAgentChoice(config.agentId, settings.defaultTuiAgent)
+  // Why: commit-message AI is built-in-only (issue #2284 plan §9). A `custom:*`
+  // default agent has no commit-message spec, so we pass `null` and let the
+  // resolver fall through to the feature's own default.
+  const defaultForCommitMsg = isCustomTuiAgentId(settings.defaultTuiAgent)
+    ? null
+    : settings.defaultTuiAgent
+  const agentChoice = resolveCommitMessageAgentChoice(config.agentId, defaultForCommitMsg)
   if (!agentChoice) {
     return {
       ok: false,

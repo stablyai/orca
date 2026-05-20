@@ -1,11 +1,6 @@
-import type { TuiAgent } from './types'
+import type { AgentPromptInjectionMode, TuiAgent } from './types'
 
-export type AgentPromptInjectionMode =
-  | 'argv'
-  | 'flag-prompt'
-  | 'flag-prompt-interactive'
-  | 'flag-interactive'
-  | 'stdin-after-start'
+export type { AgentPromptInjectionMode }
 
 export type DraftPasteReadySignal = 'render-quiet-after-bracketed-paste' | 'codex-composer-prompt'
 

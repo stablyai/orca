@@ -44,8 +44,11 @@ import type {
   TerminalPaneLayoutNode,
   TerminalLayoutSnapshot,
   TerminalTab,
-  WorkspaceSessionState
+  WorkspaceSessionState,
+  CustomTuiAgent,
+  TuiAgentId
 } from '../shared/types'
+import { isCustomTuiAgentId } from '../shared/effective-tui-agent'
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
 import type { SshRemotePtyLease, SshTarget } from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
@@ -937,6 +940,95 @@ function remapAcknowledgedAgentPaneKeys(
   return { acknowledgements: next, changed }
 }
 
+// Why: custom agent presets (issue #2284) are user-defined and persisted alongside
+// settings. Validate every load so a corrupted or partially-edited entry can't break
+// pickers or launch. Drops entries missing required fields, dedupes by id, and locks
+// promptInjectionMode to 'stdin-after-start' (v1 only stores the field; future PRs
+// will expose the other modes in the UI).
+function normalizeCustomTuiAgents(value: unknown): CustomTuiAgent[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const seen = new Set<string>()
+  const out: CustomTuiAgent[] = []
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') {
+      continue
+    }
+    const candidate = entry as Partial<CustomTuiAgent>
+    const id = candidate.id
+    const label = candidate.label
+    const command = candidate.command
+    if (typeof id !== 'string' || !isCustomTuiAgentId(id)) {
+      continue
+    }
+    if (typeof label !== 'string' || label.trim().length === 0) {
+      continue
+    }
+    if (typeof command !== 'string' || command.trim().length === 0) {
+      continue
+    }
+    if (seen.has(id)) {
+      continue
+    }
+    seen.add(id)
+    out.push({
+      id,
+      label,
+      command,
+      detectCmd: typeof candidate.detectCmd === 'string' ? candidate.detectCmd : undefined,
+      expectedProcess:
+        typeof candidate.expectedProcess === 'string' ? candidate.expectedProcess : undefined,
+      promptInjectionMode: 'stdin-after-start',
+      faviconDomain:
+        typeof candidate.faviconDomain === 'string' ? candidate.faviconDomain : undefined,
+      homepageUrl: typeof candidate.homepageUrl === 'string' ? candidate.homepageUrl : undefined
+    })
+  }
+  return out
+}
+
+// Why: if a user deletes a custom agent that's selected as the default, fall back
+// to null so the picker shows "auto" rather than silently launching nothing.
+function normalizeDefaultTuiAgent(
+  raw: GlobalSettings['defaultTuiAgent'] | undefined,
+  customAgents: CustomTuiAgent[]
+): GlobalSettings['defaultTuiAgent'] {
+  if (raw === undefined) {
+    return null
+  }
+  if (raw === null || raw === 'blank') {
+    return raw
+  }
+  if (isCustomTuiAgentId(raw)) {
+    return customAgents.some((agent) => agent.id === raw) ? raw : null
+  }
+  return raw
+}
+
+// Why: same idea for command overrides — a stale `custom:` key would never resolve
+// to a real agent. Built-in keys are preserved unconditionally.
+function normalizeAgentCmdOverrides(
+  raw: GlobalSettings['agentCmdOverrides'] | undefined,
+  customAgents: CustomTuiAgent[]
+): GlobalSettings['agentCmdOverrides'] {
+  if (!raw || typeof raw !== 'object') {
+    return {}
+  }
+  const customIds = new Set(customAgents.map((agent) => agent.id))
+  const out: Partial<Record<TuiAgentId, string>> = {}
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value !== 'string') {
+      continue
+    }
+    if (isCustomTuiAgentId(key) && !customIds.has(key)) {
+      continue
+    }
+    out[key as TuiAgentId] = value
+  }
+  return out
+}
+
 function normalizeMigrationUnsupportedPtyEntries(value: unknown): MigrationUnsupportedPtyEntry[] {
   if (!Array.isArray(value)) {
     return []
@@ -1261,6 +1353,18 @@ export class Store {
             floatingTerminalDefaultedForAllUsers: true,
             terminalQuickCommands: normalizeTerminalQuickCommands(
               parsed.settings?.terminalQuickCommands
+            ),
+            // Why: load-time guard for custom agent presets (issue #2284). Cascade
+            // ensures defaultTuiAgent / agentCmdOverrides never reference a custom
+            // id that no longer exists, even if a UI delete path missed the cleanup.
+            customTuiAgents: normalizeCustomTuiAgents(parsed.settings?.customTuiAgents),
+            defaultTuiAgent: normalizeDefaultTuiAgent(
+              parsed.settings?.defaultTuiAgent,
+              normalizeCustomTuiAgents(parsed.settings?.customTuiAgents)
+            ),
+            agentCmdOverrides: normalizeAgentCmdOverrides(
+              parsed.settings?.agentCmdOverrides,
+              normalizeCustomTuiAgents(parsed.settings?.customTuiAgents)
             ),
             visibleTaskProviders: normalizeVisibleTaskProviders(
               parsed.settings?.visibleTaskProviders

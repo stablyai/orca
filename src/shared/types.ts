@@ -1429,6 +1429,41 @@ export type TuiAgent =
   | 'copilot' // GitHub Copilot CLI
   | 'grok' // xAI Grok CLI
 
+/** How a prompt is delivered to a launched TUI. The full set of modes lives with TUI_AGENT_CONFIG;
+ *  built-in agents may use any. Custom presets are locked to 'stdin-after-start' in v1 because the
+ *  other modes require knowing a specific CLI's flag schema. */
+export type AgentPromptInjectionMode =
+  | 'argv'
+  | 'flag-prompt'
+  | 'flag-prompt-interactive'
+  | 'flag-interactive'
+  | 'stdin-after-start'
+
+/** Branded id for user-defined custom agent presets. The 'custom:' prefix is the runtime boundary
+ *  that distinguishes them from built-in TuiAgent ids in pickers, settings, and detection. */
+export type CustomTuiAgentId = `custom:${string}`
+
+/** Union of every agent id Orca can launch. Use this at boundaries that must accept both built-in
+ *  and user-defined agents (launch planning, command overrides, default-agent picker). Keep narrower
+ *  TuiAgent typing where only built-ins are valid (e.g. process recognition, trust preflight). */
+export type TuiAgentId = TuiAgent | CustomTuiAgentId
+
+/** A user-defined agent preset persisted in GlobalSettings.customTuiAgents. Created from
+ *  Settings → Agents. The id is auto-generated and never user-editable. */
+export type CustomTuiAgent = {
+  id: CustomTuiAgentId
+  label: string
+  command: string
+  /** Defaults to firstExecutableToken(command) when omitted. */
+  detectCmd?: string
+  /** Defaults to firstExecutableToken(command) when omitted. */
+  expectedProcess?: string
+  /** v1: persistence coerces this to 'stdin-after-start'. Stored so future PRs can expose it. */
+  promptInjectionMode: AgentPromptInjectionMode
+  faviconDomain?: string
+  homepageUrl?: string
+}
+
 export type TaskViewPresetId = 'all' | 'issues' | 'review' | 'my-issues' | 'my-prs' | 'prs'
 
 /** Where the repo setup script runs when a worktree is created.
@@ -1646,8 +1681,8 @@ export type GlobalSettings = {
   /** Which agent to pre-select in the new-workspace composer.
    *  - null: auto (first detected agent)
    *  - 'blank': blank terminal (no agent launched)
-   *  - TuiAgent: a specific agent id */
-  defaultTuiAgent: TuiAgent | 'blank' | null
+   *  - TuiAgentId: a built-in or custom agent id */
+  defaultTuiAgent: TuiAgentId | 'blank' | null
   /** Why: worktree deletion is destructive (git worktree remove + rm -rf of the
    *  working directory), so Orca shows a confirmation dialog by default. Users
    *  who delete frequently can opt into skipping the dialog via a "Don't ask
@@ -1686,8 +1721,11 @@ export type GlobalSettings = {
   /** Whether to extract OAuth credentials from the local Gemini CLI installation
    *  for rate-limit fetching. Disabled by default for explicit opt-in. */
   geminiCliOAuthEnabled: boolean
-  /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
-  agentCmdOverrides: Partial<Record<TuiAgent, string>>
+  /** Per-agent CLI command overrides. A missing key means use the catalog default binary name.
+   *  Custom agent ids (`custom:*`) are valid keys; persistence drops keys for unknown custom ids. */
+  agentCmdOverrides: Partial<Record<TuiAgentId, string>>
+  /** User-defined custom agent presets. Each is launchable alongside built-ins; default is []. */
+  customTuiAgents: CustomTuiAgent[]
   /** When true, Orca requests local awake assertions while hook-reported agents are working. */
   keepComputerAwakeWhileAgentsRun: boolean
   /** Why: macOS terminals must choose between letting Option compose layout
