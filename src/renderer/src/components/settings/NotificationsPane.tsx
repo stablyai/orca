@@ -77,45 +77,31 @@ export function NotificationsPane({
   updateSettings
 }: NotificationsPaneProps): React.JSX.Element {
   const notificationSettings = settings.notifications
+  const notificationSettingsRef = useRef(notificationSettings)
   const [isPickingSound, setIsPickingSound] = useState(false)
 
   const updateNotificationSettings = (updates: Partial<GlobalSettings['notifications']>): void => {
     updateSettings({
       notifications: {
-        ...notificationSettings,
+        ...notificationSettingsRef.current,
         ...updates
       }
     })
   }
 
-  // Why: the slider fires onValueChange on every step while dragging. Persisting
-  // through IPC on every tick laggs the drag. Mirror the value locally for
-  // instant visual feedback and commit to settings 200ms after the last change,
-  // restarting the timer on each tick (autosave-style).
+  // Why: keep dragging local and persist only on Radix's commit event. That
+  // avoids IPC on every tick without a debounce timer that can race settings updates.
   const [volumeDraft, setVolumeDraft] = useState(notificationSettings.customSoundVolume)
-  const volumeCommitTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
+    notificationSettingsRef.current = notificationSettings
     setVolumeDraft(notificationSettings.customSoundVolume)
-  }, [notificationSettings.customSoundVolume])
+  }, [notificationSettings])
 
-  useEffect(() => {
-    return () => {
-      if (volumeCommitTimer.current) {
-        clearTimeout(volumeCommitTimer.current)
-      }
-    }
-  }, [])
-
-  const handleVolumeChange = (value: number): void => {
-    setVolumeDraft(value)
-    if (volumeCommitTimer.current) {
-      clearTimeout(volumeCommitTimer.current)
-    }
-    volumeCommitTimer.current = setTimeout(() => {
-      volumeCommitTimer.current = null
+  const handleVolumeCommit = (value: number): void => {
+    if (notificationSettingsRef.current.customSoundVolume !== value) {
       updateNotificationSettings({ customSoundVolume: value })
-    }, 200)
+    }
   }
 
   const handleSendTestNotification = async (): Promise<void> => {
@@ -141,7 +127,7 @@ export function NotificationsPane({
       const soundResult = notificationSettings.customSoundPath
         ? await window.api.notifications.playSound({
             force: true,
-            volume: notificationSettings.customSoundVolume
+            volume: volumeDraft
           })
         : null
       if (notificationSettings.customSoundPath && soundResult && !soundResult.played) {
@@ -280,7 +266,8 @@ export function NotificationsPane({
               max={100}
               step={5}
               disabled={!notificationSettings.enabled}
-              onValueChange={([value]) => handleVolumeChange(value)}
+              onValueChange={([value]) => setVolumeDraft(value)}
+              onValueCommit={([value]) => handleVolumeCommit(value)}
               className="flex-1"
               aria-label="Notification sound volume"
             />

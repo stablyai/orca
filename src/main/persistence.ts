@@ -36,6 +36,7 @@ import type {
   WorktreeMeta,
   WorktreeLineage,
   GlobalSettings,
+  NotificationSettings,
   OnboardingChecklistState,
   OnboardingOutcome,
   OnboardingState,
@@ -181,6 +182,22 @@ function normalizeSortBy(sortBy: unknown): 'name' | 'smart' | 'recent' | 'repo' 
     return sortBy
   }
   return getDefaultUIState().sortBy
+}
+
+function normalizeNotificationSettings(value: unknown): NotificationSettings {
+  const defaults = getDefaultNotificationSettings()
+  const candidate =
+    value && typeof value === 'object' ? (value as Partial<NotificationSettings>) : {}
+  const rawVolume = candidate.customSoundVolume
+  const customSoundVolume =
+    typeof rawVolume === 'number' && Number.isFinite(rawVolume)
+      ? Math.min(100, Math.max(0, rawVolume))
+      : defaults.customSoundVolume
+  return {
+    ...defaults,
+    ...candidate,
+    customSoundVolume
+  }
 }
 
 function normalizeAutomationRunWorkspaceDisplayName(value: string | null): string | null {
@@ -1242,10 +1259,7 @@ export class Store {
               parsed.settings?.visibleTaskProviders
             ),
             openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications),
-            notifications: {
-              ...getDefaultNotificationSettings(),
-              ...parsed.settings?.notifications
-            },
+            notifications: normalizeNotificationSettings(parsed.settings?.notifications),
             voice: {
               ...getDefaultVoiceSettings(),
               ...parsed.settings?.voice
@@ -2137,10 +2151,10 @@ export class Store {
     this.state.settings = {
       ...this.state.settings,
       ...sanitizedUpdates,
-      notifications: {
+      notifications: normalizeNotificationSettings({
         ...this.state.settings.notifications,
         ...sanitizedUpdates.notifications
-      },
+      }),
       ...(mergedTelemetry !== undefined ? { telemetry: mergedTelemetry } : {})
     }
     this.scheduleSave()

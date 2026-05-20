@@ -227,6 +227,7 @@ describe('Store', () => {
     expect(settings.floatingTerminalEnabled).toBe(true)
     expect(settings.floatingTerminalDefaultedForAllUsers).toBe(true)
     expect(settings.notifications.customSoundPath).toBeNull()
+    expect(settings.notifications.customSoundVolume).toBe(100)
   })
 
   it('returns default UI state when no data file exists', async () => {
@@ -719,8 +720,47 @@ describe('Store', () => {
       agentTaskComplete: true,
       terminalBell: false,
       suppressWhenFocused: true,
-      customSoundPath: '/Users/kaylee/Downloads/Note_block_pling.ogg'
+      customSoundPath: '/Users/kaylee/Downloads/Note_block_pling.ogg',
+      customSoundVolume: 100
     })
+  })
+
+  it('clamps notification custom sound volume from persisted settings', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        notifications: {
+          customSoundVolume: 250
+        }
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().notifications.customSoundVolume).toBe(100)
+  })
+
+  it('defaults invalid notification custom sound volume from persisted settings', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        notifications: {
+          customSoundVolume: Number.NaN
+        }
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().notifications.customSoundVolume).toBe(100)
   })
 
   it('preserves editorAutoSaveDelayMs when set in persisted data', async () => {
@@ -958,6 +998,20 @@ describe('Store', () => {
     expect(updated.openInApplications).toEqual([
       { id: 'cursor', label: 'Cursor', command: 'cursor' }
     ])
+  })
+
+  it('updateSettings deep-merges and clamps notification custom sound volume', async () => {
+    const store = await createStore()
+    const updated = store.updateSettings({
+      notifications: {
+        ...store.getSettings().notifications,
+        customSoundVolume: -20
+      }
+    })
+
+    expect(updated.notifications.customSoundVolume).toBe(0)
+    expect(updated.notifications.enabled).toBe(true)
+    expect(updated.notifications.customSoundPath).toBeNull()
   })
 
   it('updateSettings toggles editorAutoSave', async () => {
