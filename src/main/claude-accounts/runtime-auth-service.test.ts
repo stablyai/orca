@@ -217,14 +217,15 @@ function createClaudeCredentialsJson(
 
 function createClaudeCredentialsWithoutEmail(
   accessToken: string,
-  organizationUuid: string | null = null
+  organizationUuid: string | null = null,
+  options: { expiresAt?: number; refreshToken?: string } = {}
 ): string {
   return `${JSON.stringify({
     claudeAiOauth: {
       ...(organizationUuid ? { organizationUuid } : {}),
       accessToken,
-      refreshToken: `${accessToken}-refresh`,
-      expiresAt: Date.now() + 60_000
+      refreshToken: options.refreshToken ?? `${accessToken}-refresh`,
+      expiresAt: options.expiresAt ?? Date.now() + 60_000
     }
   })}\n`
 }
@@ -1094,6 +1095,92 @@ describe('ClaudeRuntimeAuthService', () => {
 
     expect(readManagedCredentialsForTest('account-1', managedAuthPath)).toBe(originalCredentials)
     expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(originalCredentials)
+  })
+
+  it('reads back identity-less refreshed credentials when the refresh token matches', async () => {
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const refreshToken = 'same-managed-refresh-token'
+    const originalCredentials = createClaudeCredentialsWithoutEmail('original', null, {
+      expiresAt: 1_000,
+      refreshToken
+    })
+    const refreshedCredentials = createClaudeCredentialsWithoutEmail('refreshed', null, {
+      expiresAt: 2_000,
+      refreshToken
+    })
+    const managedAuthPath = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-1',
+      originalCredentials
+    )
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('account-1', managedAuthPath, { organizationUuid: 'org-from-account' })
+      ],
+      activeClaudeManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    await service.syncForCurrentSelection()
+
+    writeFileSync(runtimeCredentialsPath, refreshedCredentials, 'utf-8')
+    await service.syncForCurrentSelection()
+
+    expect(readManagedCredentialsForTest('account-1', managedAuthPath)).toBe(refreshedCredentials)
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(refreshedCredentials)
+  })
+
+  it('rules out other identity-less accounts with different refresh tokens', async () => {
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const account1RefreshToken = 'account-1-refresh-token'
+    const account1OriginalCredentials = createClaudeCredentialsWithoutEmail('account-1', null, {
+      expiresAt: 1_000,
+      refreshToken: account1RefreshToken
+    })
+    const account1RefreshedCredentials = createClaudeCredentialsWithoutEmail(
+      'account-1-refreshed',
+      null,
+      {
+        expiresAt: 2_000,
+        refreshToken: account1RefreshToken
+      }
+    )
+    const account2Credentials = createClaudeCredentialsWithoutEmail('account-2', null, {
+      refreshToken: 'account-2-refresh-token'
+    })
+    const managedAuthPath1 = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-1',
+      account1OriginalCredentials
+    )
+    const managedAuthPath2 = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-2',
+      account2Credentials
+    )
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('account-1', managedAuthPath1),
+        createClaudeAccount('account-2', managedAuthPath2, { email: 'other@example.com' })
+      ],
+      activeClaudeManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    await service.syncForCurrentSelection()
+
+    writeFileSync(runtimeCredentialsPath, account1RefreshedCredentials, 'utf-8')
+    await service.syncForCurrentSelection()
+
+    expect(readManagedCredentialsForTest('account-1', managedAuthPath1)).toBe(
+      account1RefreshedCredentials
+    )
+    expect(readManagedCredentialsForTest('account-2', managedAuthPath2)).toBe(account2Credentials)
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(account1RefreshedCredentials)
   })
 
   it('restores the system default after rejecting unverifiable managed credentials', async () => {
