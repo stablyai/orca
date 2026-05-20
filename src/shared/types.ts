@@ -521,7 +521,7 @@ export type PersistedOpenFile = {
   worktreeId: string
   language: string
   isPreview?: boolean
-  runtimeEnvironmentId?: string
+  runtimeEnvironmentId?: string | null
 }
 
 export type WorkspaceSessionState = {
@@ -1604,17 +1604,20 @@ export type GlobalSettings = {
   /** Controls how Ctrl+Tab chooses the next visible tab. Optional for
    *  profiles saved before this setting existed; readers default to MRU. */
   ctrlTabOrderMode?: CtrlTabOrderMode
-  /** Why: Floating Terminal is the default global shell surface so users can
-   *  reach a terminal outside repo/worktree context immediately. */
+  /** Why: Floating Workspace is the default global surface so users can
+   *  reach terminal, browser, and markdown tabs outside repo/worktree context. */
   floatingTerminalEnabled: boolean
   /** One-shot migration flag for the default-on rollout. Before this field
-   *  landed, the floating terminal defaulted off and many profiles persisted
+   *  landed, the floating workspace defaulted off and many profiles persisted
    *  that inherited false. Once migrated, an explicit off choice sticks. */
   floatingTerminalDefaultedForAllUsers?: boolean
-  /** Where new Floating Terminal tabs start. Defaults to '~' so the visible
-   *  setting matches the shell-oriented directory users expect. */
+  /** Where new Floating Workspace tabs start. Empty means Orca's app-owned
+   *  floating workspace under Electron userData. */
   floatingTerminalCwd: string
-  /** Where the Floating Terminal toggle is shown. Defaults to the floating
+  /** One-shot migration from the old implicit '~' default to the app-owned
+   *  floating workspace. Explicit future '~' choices are preserved. */
+  floatingTerminalCwdMigratedToAppWorkspace?: boolean
+  /** Where the Floating Workspace toggle is shown. Defaults to the floating
    *  button for discoverability. */
   floatingTerminalTriggerLocation: FloatingTerminalTriggerLocation
   diffDefaultView: 'inline' | 'side-by-side'

@@ -10,6 +10,7 @@ import type {
   Worktree
 } from '../../../../shared/types'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -467,6 +468,37 @@ describe('hydrateBrowserSession', () => {
     expect(s.browserTabsByWorktree[validWt]).toHaveLength(2)
     expect(s.activeBrowserTabIdByWorktree[validWt]).toBe('browser-1')
     expect(s.activeBrowserTabId).toBe('browser-1')
+  })
+
+  it('restores floating workspace browser tabs without a repo worktree', () => {
+    const store = createTestStore()
+
+    store.setState({ activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+
+    store.getState().hydrateBrowserSession({
+      activeRepoId: null,
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      browserTabsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          makeBrowserTab({
+            id: 'floating-browser-1',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            url: 'https://example.com'
+          })
+        ]
+      },
+      activeBrowserTabIdByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-browser-1'
+      },
+      activeTabTypeByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'browser' }
+    })
+
+    const s = store.getState()
+    expect(s.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toHaveLength(1)
+    expect(s.activeBrowserTabIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe('floating-browser-1')
   })
 
   it('restores activeTabTypeByWorktree for browser worktrees when hydrateEditorSession was a no-op', () => {
@@ -1559,6 +1591,110 @@ describe('hydrateEditorSession', () => {
     expect(s.openFiles[1].isPreview).toBe(true)
     expect(s.activeFileId).toBe('/path/wt1/src/index.ts')
     expect(s.activeTabType).toBe('editor')
+  })
+
+  it('restores floating workspace markdown files without a repo worktree', () => {
+    const store = createTestStore()
+
+    store.setState({ activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+
+    store.getState().hydrateEditorSession({
+      activeRepoId: null,
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            filePath: '/orca/userData/floating-workspace/note.md',
+            relativePath: 'note.md',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            language: 'markdown',
+            runtimeEnvironmentId: null
+          }
+        ]
+      },
+      activeFileIdByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: '/orca/userData/floating-workspace/note.md'
+      },
+      activeTabTypeByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'editor' }
+    })
+
+    const s = store.getState()
+    expect(s.openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/orca/userData/floating-workspace/note.md',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        runtimeEnvironmentId: null
+      })
+    ])
+    expect(s.activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(
+      '/orca/userData/floating-workspace/note.md'
+    )
+  })
+
+  it('falls back to the floating workspace file id when duplicate paths are owner-qualified', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const sharedPath = '/path/wt1/README.md'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID
+    })
+
+    store.getState().hydrateEditorSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        [wt]: [
+          {
+            filePath: sharedPath,
+            relativePath: 'README.md',
+            worktreeId: wt,
+            language: 'markdown'
+          }
+        ],
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            filePath: sharedPath,
+            relativePath: 'README.md',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            language: 'markdown',
+            runtimeEnvironmentId: null
+          }
+        ]
+      },
+      activeFileIdByWorktree: {
+        [wt]: sharedPath,
+        [FLOATING_TERMINAL_WORKTREE_ID]: sharedPath
+      },
+      activeTabTypeByWorktree: {
+        [wt]: 'editor',
+        [FLOATING_TERMINAL_WORKTREE_ID]: 'editor'
+      }
+    })
+
+    const floatingActiveFileId =
+      store.getState().activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
+    expect(floatingActiveFileId).not.toBe(sharedPath)
+    expect(
+      store
+        .getState()
+        .openFiles.some(
+          (file) =>
+            file.id === floatingActiveFileId && file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+        )
+    ).toBe(true)
   })
 
   it('re-detects restored file languages instead of trusting stale session data', () => {

@@ -829,7 +829,9 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
-  const floatingTerminalActionLabel = floatingTerminalOpen ? 'Minimize Terminal' : 'Show Terminal'
+  const floatingTerminalActionLabel = floatingTerminalOpen
+    ? 'Minimize Floating Workspace'
+    : 'Show Floating Workspace'
 
   return (
     <div

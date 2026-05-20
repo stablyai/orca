@@ -5,7 +5,7 @@
  * more clarity than the ~5 lines of bloat is worth. */
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { SortableContext } from '@dnd-kit/sortable'
-import { FilePlus, Globe, Plus, TerminalSquare } from 'lucide-react'
+import { FilePlus, FileText, Globe, Plus, TerminalSquare } from 'lucide-react'
 import type {
   BrowserTab as BrowserTabState,
   TerminalTab,
@@ -59,6 +59,7 @@ type TabBarProps = {
   terminalOnly?: boolean
   showAgentLaunchItems?: boolean
   onNewFileTab?: () => void
+  onOpenFileTab?: () => void
   onSetCustomTitle: (tabId: string, title: string | null) => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePaneExpand: (tabId: string) => void
@@ -123,6 +124,7 @@ function TabBarInner({
   terminalOnly = false,
   showAgentLaunchItems = true,
   onNewFileTab,
+  onOpenFileTab,
   onSetCustomTitle,
   onSetTabColor,
   onTogglePaneExpand,
@@ -556,6 +558,15 @@ function TabBarInner({
               <FilePlus className="size-4 text-muted-foreground" />
               New Markdown
               <DropdownMenuShortcut>{NEW_FILE_SHORTCUT}</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          )}
+          {!terminalOnly && onOpenFileTab && (
+            <DropdownMenuItem
+              onSelect={onOpenFileTab}
+              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+            >
+              <FileText className="size-4 text-muted-foreground" />
+              Open Markdown...
             </DropdownMenuItem>
           )}
           {showAgentLaunchItems ? (

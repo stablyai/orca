@@ -3,6 +3,7 @@
  * handling in one surface so the floating worktree does not drift from the
  * main tab model while still keeping the DOM-mounted panes local. */
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { FileText, Globe, TerminalSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import BrowserPane from '@/components/browser-pane/BrowserPane'
 import TabBar from '@/components/tab-bar/TabBar'
@@ -21,6 +22,7 @@ import { useTerminalSaveDialog } from '@/components/terminal/useTerminalSaveDial
 import { appendUniqueOpenFileIds } from '@/components/terminal/unsaved-close-queue'
 import { getConnectionId } from '@/lib/connection-context'
 import { createUntitledMarkdownFile } from '@/lib/create-untitled-markdown'
+import { detectLanguage } from '@/lib/language-detect'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import {
@@ -61,6 +63,7 @@ const EMPTY_TERMINAL_TABS: TerminalTab[] = []
 const EMPTY_BROWSER_TABS: BrowserTabState[] = []
 const EMPTY_GROUPS: TabGroup[] = []
 const EMPTY_UNIFIED_TABS: Tab[] = []
+const LOCAL_RUNTIME_SETTINGS = { activeRuntimeEnvironmentId: null } as const
 
 const EditorPanel = lazy(() => import('@/components/editor/EditorPanel'))
 
@@ -100,8 +103,7 @@ export function FloatingTerminalPanel({
   const pinFile = useAppStore((s) => s.pinFile)
   const openFile = useAppStore((s) => s.openFile)
   const browserDefaultUrl = useAppStore((s) => s.browserDefaultUrl)
-  const settings = useAppStore((s) => s.settings)
-  const floatingTerminalCwd = useAppStore((s) => s.settings?.floatingTerminalCwd ?? '~')
+  const floatingTerminalCwd = useAppStore((s) => s.settings?.floatingTerminalCwd ?? '')
 
   const [cwd, setCwd] = useState<string | null>(null)
   const [bounds, setBounds] = useState(() => getDefaultFloatingTerminalBounds())
@@ -112,8 +114,6 @@ export function FloatingTerminalPanel({
   )
   const restoreBoundsRef = useRef<FloatingTerminalPanelBounds | null>(null)
   const normalizedInitialBoundsRef = useRef(false)
-  const previousOpenRef = useRef(false)
-  const pendingLastEditorCloseRef = useRef(false)
   const pendingEditorCloseQueueRef = useRef<string[]>([])
   const saveDialogFileIdRef = useRef<string | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -311,7 +311,6 @@ export function FloatingTerminalPanel({
 
   const handleFloatingSaveDialogCancel = useCallback(() => {
     pendingEditorCloseQueueRef.current = []
-    pendingLastEditorCloseRef.current = false
     handleSaveDialogCancel()
   }, [handleSaveDialogCancel])
 
@@ -335,48 +334,11 @@ export function FloatingTerminalPanel({
   }, [floatingTerminalCwd])
 
   useEffect(() => {
-    const opened = open && !previousOpenRef.current
-    previousOpenRef.current = open
-    // Why: zero renderable tabs only means "bootstrap" when the panel is newly
-    // opened. Later zero-tab states are intentional closes or PTY exits.
-    if (!opened || unifiedTabs.length > 0) {
-      return
-    }
-    void (async () => {
-      if (
-        await createWebRuntimeSessionTerminal({
-          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-          targetGroupId: activeGroup?.id,
-          activate: true,
-          selectWorktree: false
-        })
-      ) {
-        return
-      }
-      const tab = createTab(FLOATING_TERMINAL_WORKTREE_ID, activeGroup?.id, undefined, {
-        activate: false
-      })
-      activateTab(tab.id)
-      focusTerminalTabSurface(tab.id)
-    })()
-  }, [activateTab, activeGroup, createTab, open, unifiedTabs.length])
-
-  useEffect(() => {
     if (!open || !activeTerminalId) {
       return
     }
     focusTerminalTabSurface(activeTerminalId)
   }, [activeTerminalId, open])
-
-  useEffect(() => {
-    if (!open || saveDialogFileId !== null || !pendingLastEditorCloseRef.current) {
-      return
-    }
-    if (unifiedTabs.length === 0) {
-      pendingLastEditorCloseRef.current = false
-      onOpenChange(false)
-    }
-  }, [onOpenChange, open, saveDialogFileId, unifiedTabs.length])
 
   const refreshOrchestrationSetupVisibility = useCallback(async (): Promise<void> => {
     if (isOrchestrationSetupDismissed()) {
@@ -507,7 +469,7 @@ export function FloatingTerminalPanel({
           cwd,
           FLOATING_TERMINAL_WORKTREE_ID,
           getConnectionId(FLOATING_TERMINAL_WORKTREE_ID) ?? undefined,
-          settings
+          LOCAL_RUNTIME_SETTINGS
         )
         openFile(fileInfo, {
           preview: false,
@@ -518,7 +480,37 @@ export function FloatingTerminalPanel({
         toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))
       }
     })()
-  }, [activeGroup, cwd, openFile, settings])
+  }, [activeGroup, cwd, openFile])
+
+  const openFloatingMarkdownTab = useCallback(() => {
+    void (async () => {
+      try {
+        const document = await window.api.app.pickFloatingMarkdownDocument({
+          path: floatingTerminalCwd
+        })
+        if (!document) {
+          return
+        }
+        openFile(
+          {
+            filePath: document.filePath,
+            relativePath: document.relativePath,
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            language: detectLanguage(document.relativePath),
+            mode: 'edit',
+            runtimeEnvironmentId: null
+          },
+          {
+            preview: false,
+            targetGroupId: activeGroup?.id,
+            suppressActiveRuntimeFallback: true
+          }
+        )
+      } catch (err) {
+        toast.error(extractIpcErrorMessage(err, 'Failed to open markdown file.'))
+      }
+    })()
+  }, [activeGroup, floatingTerminalCwd, openFile])
 
   const closeFloatingItems = useCallback(
     (visibleIds: string[]) => {
@@ -534,10 +526,7 @@ export function FloatingTerminalPanel({
       if (items.length === 0) {
         return
       }
-      const closingTabIds = new Set(items.map((item) => item.id))
-      const isClosingEveryVisibleTab = currentGroupTabs.every((tab) => closingTabIds.has(tab.id))
       const dirtyEditorFileIds: string[] = []
-      let hasRuntimeSessionClose = false
       const runtimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim()
       for (const item of items) {
         if (
@@ -546,7 +535,6 @@ export function FloatingTerminalPanel({
         ) {
           // Why: paired web clients mirror host-owned tabs; ask the runtime to
           // close the host tab instead of deleting the local mirror directly.
-          hasRuntimeSessionClose = true
           void closeWebRuntimeSessionTab({
             worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
             tabId: item.contentType === 'browser' ? item.id : item.entityId,
@@ -569,15 +557,10 @@ export function FloatingTerminalPanel({
         }
       }
       if (dirtyEditorFileIds.length > 0) {
-        pendingLastEditorCloseRef.current = isClosingEveryVisibleTab
         queueEditorCloseRequests(dirtyEditorFileIds)
-        return
-      }
-      if (isClosingEveryVisibleTab && !hasRuntimeSessionClose) {
-        onOpenChange(false)
       }
     },
-    [activeGroup, closeBrowserTab, closeFile, closeTab, onOpenChange, queueEditorCloseRequests]
+    [activeGroup, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests]
   )
 
   const closeFloatingItem = useCallback(
@@ -768,6 +751,7 @@ export function FloatingTerminalPanel({
               onNewTerminalWithShell={createFloatingTerminalTab}
               onNewBrowserTab={createFloatingBrowserTab}
               onNewFileTab={createFloatingMarkdownTab}
+              onOpenFileTab={openFloatingMarkdownTab}
               onSetCustomTitle={setTabCustomTitle}
               onSetTabColor={setTabColor}
               onTogglePaneExpand={(tabId) =>
@@ -869,6 +853,14 @@ export function FloatingTerminalPanel({
               </Suspense>
             </div>
           ) : null}
+          {unifiedTabs.length === 0 ? (
+            <FloatingTerminalEmptyState
+              onNewTerminal={() => createFloatingTerminalTab()}
+              onNewMarkdown={createFloatingMarkdownTab}
+              onOpenMarkdown={openFloatingMarkdownTab}
+              onNewBrowser={createFloatingBrowserTab}
+            />
+          ) : null}
         </div>
       </div>
       {showOrchestrationSetup && activeTabType === 'terminal' ? (
@@ -953,6 +945,61 @@ export function FloatingTerminalPanel({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+function FloatingTerminalEmptyState({
+  onNewTerminal,
+  onNewMarkdown,
+  onOpenMarkdown,
+  onNewBrowser
+}: {
+  onNewTerminal: () => void
+  onNewMarkdown: () => void
+  onOpenMarkdown: () => void
+  onNewBrowser: () => void
+}): React.JSX.Element {
+  return (
+    <div className="absolute inset-0 flex items-center justify-center">
+      <div className="flex w-[230px] flex-col items-center gap-1.5" data-floating-terminal-no-drag>
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-8 justify-center gap-2.5 rounded-md px-3 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          onClick={onNewTerminal}
+        >
+          <TerminalSquare className="size-3.5 opacity-80" />
+          New Terminal
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-8 justify-center gap-2.5 rounded-md px-3 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          onClick={onNewBrowser}
+        >
+          <Globe className="size-3.5 opacity-80" />
+          New Browser
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-8 justify-center gap-2.5 rounded-md px-3 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          onClick={onNewMarkdown}
+        >
+          <FileText className="size-3.5 opacity-80" />
+          New Markdown Note
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-8 justify-center gap-2.5 rounded-md px-3 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          onClick={onOpenMarkdown}
+        >
+          <FileText className="size-3.5 opacity-80" />
+          Open Markdown Note
+        </Button>
+      </div>
     </div>
   )
 }

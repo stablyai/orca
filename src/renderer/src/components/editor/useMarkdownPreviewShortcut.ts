@@ -7,13 +7,16 @@ type UseMarkdownPreviewShortcutParams = {
   activeFile: OpenFile | null
   panelRef: RefObject<HTMLDivElement | null>
   isMac: boolean
-  openMarkdownPreview: (file: {
-    filePath: string
-    relativePath: string
-    worktreeId: string
-    runtimeEnvironmentId?: string
-    language: string
-  }) => void
+  openMarkdownPreview: (
+    file: {
+      filePath: string
+      relativePath: string
+      worktreeId: string
+      runtimeEnvironmentId?: string | null
+      language: string
+    },
+    options?: { sourceFileId?: string }
+  ) => void
 }
 
 export function useMarkdownPreviewShortcut({
@@ -25,6 +28,7 @@ export function useMarkdownPreviewShortcut({
   const activeFilePath = activeFile?.filePath ?? null
   const activeFileRelativePath = activeFile?.relativePath ?? null
   const activeFileWorktreeId = activeFile?.worktreeId ?? null
+  const activeFileId = activeFile?.id ?? null
   const activeFileMode = activeFile?.mode ?? null
   const activeFileDiffSource = activeFile?.diffSource
   const activeFileRuntimeEnvironmentId = activeFile?.runtimeEnvironmentId
@@ -56,13 +60,16 @@ export function useMarkdownPreviewShortcut({
       }
       event.preventDefault()
       event.stopPropagation()
-      openMarkdownPreview({
-        filePath: activeFilePath,
-        relativePath: activeFileRelativePath,
-        worktreeId: activeFileWorktreeId,
-        runtimeEnvironmentId: activeFileRuntimeEnvironmentId,
-        language: shortcutLanguage
-      })
+      openMarkdownPreview(
+        {
+          filePath: activeFilePath,
+          relativePath: activeFileRelativePath,
+          worktreeId: activeFileWorktreeId,
+          runtimeEnvironmentId: activeFileRuntimeEnvironmentId,
+          language: shortcutLanguage
+        },
+        { sourceFileId: activeFileId ?? undefined }
+      )
     }
     window.addEventListener('keydown', handleKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
@@ -70,6 +77,7 @@ export function useMarkdownPreviewShortcut({
     activeFileDiffSource,
     activeFileMode,
     activeFilePath,
+    activeFileId,
     activeFileRelativePath,
     activeFileRuntimeEnvironmentId,
     activeFileWorktreeId,

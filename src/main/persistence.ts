@@ -1235,6 +1235,17 @@ export class Store {
         const migratedFloatingTerminalEnabled = floatingTerminalDefaultedForAllUsers
           ? (parsed.settings?.floatingTerminalEnabled ?? true)
           : true
+        const floatingTerminalCwdMigrated =
+          parsed.settings?.floatingTerminalCwdMigratedToAppWorkspace === true
+        // Why: the old inherited floating cwd was '~', which works for shells
+        // but not for app-managed markdown files. Migrate only once so users
+        // can still explicitly choose '~' after this release.
+        const migratedFloatingTerminalCwd = floatingTerminalCwdMigrated
+          ? (parsed.settings?.floatingTerminalCwd ?? defaults.settings.floatingTerminalCwd)
+          : parsed.settings?.floatingTerminalCwd === undefined ||
+              parsed.settings.floatingTerminalCwd === '~'
+            ? defaults.settings.floatingTerminalCwd
+            : parsed.settings.floatingTerminalCwd
         const experimentalActivityDefaultedOffForAllUsers =
           parsed.settings?.experimentalActivityDefaultedOffForAllUsers === true
         // Why: the Agents view moved back behind Experimental. Flip every
@@ -1259,6 +1270,8 @@ export class Store {
             terminalMacOptionAsAltMigrated: true,
             floatingTerminalEnabled: migratedFloatingTerminalEnabled,
             floatingTerminalDefaultedForAllUsers: true,
+            floatingTerminalCwd: migratedFloatingTerminalCwd,
+            floatingTerminalCwdMigratedToAppWorkspace: true,
             terminalQuickCommands: normalizeTerminalQuickCommands(
               parsed.settings?.terminalQuickCommands
             ),

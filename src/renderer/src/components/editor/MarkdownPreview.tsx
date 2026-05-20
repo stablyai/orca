@@ -80,10 +80,14 @@ import {
 } from '@/lib/markdown-review-notes'
 import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { findWorktreeById } from '@/store/slices/worktree-helpers'
 
 type MarkdownPreviewProps = {
   content: string
   filePath: string
+  sourceFileId?: string | null
+  sourceWorktreeId?: string | null
+  sourceRuntimeEnvironmentId?: string | null
   scrollCacheKey: string
   initialAnchor?: string | null
   showTableOfContents?: boolean
@@ -223,6 +227,9 @@ function findWorktreeForMarkdownPreviewPath(
 export default function MarkdownPreview({
   content,
   filePath,
+  sourceFileId = null,
+  sourceWorktreeId = null,
+  sourceRuntimeEnvironmentId = undefined,
   scrollCacheKey,
   initialAnchor = null,
   showTableOfContents = false,
@@ -250,15 +257,27 @@ export default function MarkdownPreview({
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const markDiffCommentsSent = useAppStore((s) => s.markDiffCommentsSent)
-  const allDiffComments = useAppStore((s): DiffComment[] | undefined => {
-    const worktree = findWorktreeForMarkdownPreviewPath(s.worktreesByRepo, filePath)
-    return worktree?.diffComments
-  })
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  const sourceRuntimeEnvironmentId = useAppStore(
-    (s) => s.openFiles.find((file) => file.filePath === filePath)?.runtimeEnvironmentId
+  const sourceOpenFile = useAppStore((s) =>
+    sourceFileId
+      ? s.openFiles.find((file) => file.id === sourceFileId)
+      : s.openFiles.find(
+          (file) =>
+            file.filePath === filePath &&
+            (!sourceWorktreeId || file.worktreeId === sourceWorktreeId) &&
+            (sourceRuntimeEnvironmentId === undefined ||
+              (file.runtimeEnvironmentId ?? null) === (sourceRuntimeEnvironmentId ?? null))
+        )
   )
-  const sourceWorktree = findWorktreeForMarkdownPreviewPath(worktreesByRepo, filePath)
+  const resolvedSourceWorktreeId = sourceWorktreeId ?? sourceOpenFile?.worktreeId ?? null
+  const resolvedSourceRuntimeEnvironmentId =
+    sourceRuntimeEnvironmentId !== undefined
+      ? sourceRuntimeEnvironmentId
+      : sourceOpenFile?.runtimeEnvironmentId
+  const sourceWorktree = resolvedSourceWorktreeId
+    ? findWorktreeById(worktreesByRepo, resolvedSourceWorktreeId)
+    : findWorktreeForMarkdownPreviewPath(worktreesByRepo, filePath)
+  const allDiffComments = sourceWorktree?.diffComments
   const sourceConnectionId = sourceWorktree ? getConnectionId(sourceWorktree.id) : null
   const worktreeRoot = sourceWorktree?.path ?? null
   const sourceRelativePath = useMemo(() => {
@@ -287,13 +306,13 @@ export default function MarkdownPreview({
     () =>
       sourceWorktree
         ? {
-            settings: settingsForRuntimeOwner(settings, sourceRuntimeEnvironmentId),
+            settings: settingsForRuntimeOwner(settings, resolvedSourceRuntimeEnvironmentId),
             worktreeId: sourceWorktree.id,
             worktreePath: sourceWorktree.path,
             connectionId: sourceConnectionId
           }
         : undefined,
-    [settings, sourceConnectionId, sourceRuntimeEnvironmentId, sourceWorktree]
+    [settings, sourceConnectionId, resolvedSourceRuntimeEnvironmentId, sourceWorktree]
   )
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const editorFontSize = computeEditorFontSize(14, editorFontZoomLevel)
@@ -804,7 +823,7 @@ export default function MarkdownPreview({
                 isLocalPathOpenBlocked(
                   settingsForRuntimeOwner(
                     useAppStore.getState().settings,
-                    sourceRuntimeEnvironmentId
+                    resolvedSourceRuntimeEnvironmentId
                   ),
                   { connectionId: sourceConnectionId }
                 )
@@ -876,7 +895,7 @@ export default function MarkdownPreview({
                 sourceFilePath: filePath,
                 worktreeId: sourceWorktree.id,
                 worktreeRoot: sourceWorktree.path,
-                runtimeEnvironmentId: sourceRuntimeEnvironmentId
+                runtimeEnvironmentId: resolvedSourceRuntimeEnvironmentId
               })
               return
             }
@@ -884,7 +903,7 @@ export default function MarkdownPreview({
               isLocalPathOpenBlocked(
                 settingsForRuntimeOwner(
                   useAppStore.getState().settings,
-                  sourceRuntimeEnvironmentId
+                  resolvedSourceRuntimeEnvironmentId
                 ),
                 { connectionId: sourceConnectionId }
               )
@@ -905,7 +924,7 @@ export default function MarkdownPreview({
               {
                 settings: settingsForRuntimeOwner(
                   useAppStore.getState().settings,
-                  sourceRuntimeEnvironmentId
+                  resolvedSourceRuntimeEnvironmentId
                 ),
                 worktreeId: targetWorktree.id,
                 worktreePath: targetWorktree.path,
@@ -932,7 +951,7 @@ export default function MarkdownPreview({
               filePath: absolutePath,
               relativePath,
               worktreeId: targetWorktree.id,
-              runtimeEnvironmentId: sourceRuntimeEnvironmentId,
+              runtimeEnvironmentId: resolvedSourceRuntimeEnvironmentId,
               language,
               mode: 'edit'
             })
@@ -956,7 +975,7 @@ export default function MarkdownPreview({
                 filePath: absolutePath,
                 relativePath,
                 worktreeId: targetWorktree.id,
-                runtimeEnvironmentId: sourceRuntimeEnvironmentId,
+                runtimeEnvironmentId: resolvedSourceRuntimeEnvironmentId,
                 language
               },
               { anchor: target.hash ? target.hash.slice(1) : null }
@@ -968,7 +987,7 @@ export default function MarkdownPreview({
             filePath: absolutePath,
             relativePath,
             worktreeId: targetWorktree.id,
-            runtimeEnvironmentId: sourceRuntimeEnvironmentId,
+            runtimeEnvironmentId: resolvedSourceRuntimeEnvironmentId,
             language,
             mode: 'edit'
           })
@@ -1006,7 +1025,7 @@ export default function MarkdownPreview({
             sourceFilePath: filePath,
             worktreeId: sourceWorktree.id,
             worktreeRoot: sourceWorktree.path,
-            runtimeEnvironmentId: sourceRuntimeEnvironmentId
+            runtimeEnvironmentId: resolvedSourceRuntimeEnvironmentId
           })
         }
 
@@ -1157,7 +1176,7 @@ export default function MarkdownPreview({
     setMarkdownViewMode,
     setPendingEditorReveal,
     sourceConnectionId,
-    sourceRuntimeEnvironmentId,
+    resolvedSourceRuntimeEnvironmentId,
     sourceWorktree,
     worktreeRoot,
     worktreesByRepo,

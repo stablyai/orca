@@ -249,13 +249,16 @@ function EditorPanelInner({
     }
   }
   const handleOpenMarkdownPreview = (): void => {
-    openMarkdownPreview({
-      filePath: activeFile.filePath,
-      relativePath: activeFile.relativePath,
-      worktreeId: activeFile.worktreeId,
-      runtimeEnvironmentId: activeFile.runtimeEnvironmentId,
-      language: model.resolvedLanguage
-    })
+    openMarkdownPreview(
+      {
+        filePath: activeFile.filePath,
+        relativePath: activeFile.relativePath,
+        worktreeId: activeFile.worktreeId,
+        runtimeEnvironmentId: activeFile.runtimeEnvironmentId,
+        language: model.resolvedLanguage
+      },
+      { sourceFileId: activeFile.id }
+    )
   }
   const handleOpenContainingFolder = (): void => {
     if (

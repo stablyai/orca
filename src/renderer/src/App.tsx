@@ -289,7 +289,7 @@ function App(): React.JSX.Element {
   const showFloatingTerminalButton =
     floatingTerminalEnabled &&
     (floatingTerminalTriggerLocation === 'floating-button' || !statusBarVisible)
-  // Why: the floating terminal is a transient overlay; hotkey minimize should
+  // Why: the floating workspace is a transient overlay; hotkey minimize should
   // return keyboard focus to the surface the user was working in before it.
   const floatingTerminalReturnFocusRef = useRef<HTMLElement | null>(null)
 

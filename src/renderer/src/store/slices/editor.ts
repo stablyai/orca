@@ -135,7 +135,7 @@ export type OpenFile = {
   isDirty: boolean
   // Why: remote untitled cleanup must target the environment that created the
   // file, even if the user switches to Local or another runtime before closing.
-  runtimeEnvironmentId?: string
+  runtimeEnvironmentId?: string | null
   /** Why: markdown preview tabs are separate editor tabs that mirror a source
    *  markdown file's live draft. Storing the source file ID lets the preview
    *  follow unsaved edits from the normal editor without becoming editable
@@ -289,7 +289,7 @@ export type EditorSlice = {
       OpenFile,
       'filePath' | 'relativePath' | 'worktreeId' | 'language' | 'runtimeEnvironmentId'
     >,
-    options?: { anchor?: string | null; targetGroupId?: string }
+    options?: { anchor?: string | null; targetGroupId?: string; sourceFileId?: string }
   ) => void
   pinFile: (fileId: string, tabId?: string) => void
   closeFile: (fileId: string) => void
@@ -517,6 +517,30 @@ function buildEditorActiveResult(
   }
 }
 
+function runtimeOwnerKey(runtimeEnvironmentId: string | null | undefined): string | null {
+  return runtimeEnvironmentId?.trim() || null
+}
+
+function isSameEditorOwner(
+  file: Pick<OpenFile, 'worktreeId' | 'runtimeEnvironmentId'>,
+  worktreeId: string,
+  runtimeEnvironmentId: string | null | undefined
+): boolean {
+  return (
+    file.worktreeId === worktreeId &&
+    runtimeOwnerKey(file.runtimeEnvironmentId) === runtimeOwnerKey(runtimeEnvironmentId)
+  )
+}
+
+function buildOwnedEditorFileId(
+  filePath: string,
+  worktreeId: string,
+  runtimeEnvironmentId: string | null | undefined
+): string {
+  const runtimeKey = runtimeOwnerKey(runtimeEnvironmentId) ?? 'local'
+  return `editor:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(filePath)}`
+}
+
 const REMOTE_OPERATION_FAILED_MESSAGE = 'Remote operation failed'
 const REMOTE_OPERATION_DETAIL_MAX_LENGTH = 200
 
@@ -647,9 +671,7 @@ function deleteUntouchedUntitledFile(state: AppState, file: OpenFile): void {
   // Why: untitled placeholders may live on a remote runtime or SSH target.
   // Route through the runtime-aware client instead of assuming client-local FS.
   const context = {
-    settings: owningRuntimeEnvironmentId
-      ? { activeRuntimeEnvironmentId: owningRuntimeEnvironmentId }
-      : state.settings,
+    settings: settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId),
     worktreeId: file.worktreeId,
     worktreePath: worktree?.path ?? null,
     connectionId: repo?.connectionId ?? undefined
@@ -817,15 +839,34 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     }),
 
   openFile: (file, options) => {
+    let editorItemWorktreeId = file.worktreeId
+    let editorItemFileId = file.filePath
+    let editorItemLabel = file.relativePath
+    let editorItemContentType: 'editor' | 'diff' | 'conflict-review' =
+      file.mode === 'conflict-review' ? 'conflict-review' : file.mode === 'diff' ? 'diff' : 'editor'
+    let editorItemTargetGroupId = options?.targetGroupId
     set((s) => {
-      const id = file.filePath
-      const existing = s.openFiles.find((f) => f.id === id)
       const worktreeId = file.worktreeId
       const runtimeEnvironmentId =
-        file.runtimeEnvironmentId ??
-        (options?.suppressActiveRuntimeFallback
-          ? undefined
-          : (s.settings?.activeRuntimeEnvironmentId?.trim() ?? undefined))
+        file.runtimeEnvironmentId === null
+          ? null
+          : (file.runtimeEnvironmentId ??
+            (options?.suppressActiveRuntimeFallback
+              ? null
+              : (s.settings?.activeRuntimeEnvironmentId?.trim() ?? undefined)))
+      const existing = s.openFiles.find(
+        (f) =>
+          f.filePath === file.filePath && isSameEditorOwner(f, worktreeId, runtimeEnvironmentId)
+      )
+      // Why: editor tabs historically used filePath as the id. Keep that for
+      // the common single-owner case, but qualify same-path cross-owner opens
+      // so the floating workspace can show its own copy of an already-open note.
+      const id =
+        existing?.id ??
+        (s.openFiles.some((f) => f.id === file.filePath)
+          ? buildOwnedEditorFileId(file.filePath, worktreeId, runtimeEnvironmentId)
+          : file.filePath)
+      editorItemFileId = id
       const isPreview = options?.preview ?? false
       const recordReplacedPreview = options?.recordReplacedPreview ?? false
       // Why: resolve the target group up-front so preview replacement can be
@@ -1035,27 +1076,38 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     })
     void openWorkspaceEditorItem(
       get(),
-      file.filePath,
-      file.worktreeId,
-      file.relativePath,
-      file.mode === 'conflict-review'
-        ? 'conflict-review'
-        : file.mode === 'diff'
-          ? 'diff'
-          : 'editor',
+      editorItemFileId,
+      editorItemWorktreeId,
+      editorItemLabel,
+      editorItemContentType,
       options?.preview ?? false,
-      options?.targetGroupId
+      editorItemTargetGroupId
     )
   },
 
   openMarkdownPreview: (file, options) => {
-    const id = `markdown-preview::${file.filePath}`
+    const initialState = get()
+    const resolvedRuntimeEnvironmentId =
+      file.runtimeEnvironmentId === null
+        ? null
+        : (file.runtimeEnvironmentId ??
+          initialState.settings?.activeRuntimeEnvironmentId?.trim() ??
+          undefined)
+    const sourceFileId =
+      options?.sourceFileId ??
+      initialState.openFiles.find(
+        (openFile) =>
+          openFile.filePath === file.filePath &&
+          openFile.mode === 'edit' &&
+          isSameEditorOwner(openFile, file.worktreeId, resolvedRuntimeEnvironmentId)
+      )?.id ??
+      file.filePath
+    const id = `markdown-preview::${sourceFileId}`
     const anchor = options?.anchor || undefined
     set((s) => {
       const existing = s.openFiles.find((openFile) => openFile.id === id)
       const worktreeId = file.worktreeId
-      const runtimeEnvironmentId =
-        file.runtimeEnvironmentId ?? s.settings?.activeRuntimeEnvironmentId?.trim() ?? undefined
+      const runtimeEnvironmentId = resolvedRuntimeEnvironmentId
       const activeResult = buildEditorActiveResult(s, worktreeId, id)
 
       if (existing) {
@@ -1063,7 +1115,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           existing.relativePath !== file.relativePath ||
           existing.filePath !== file.filePath ||
           existing.language !== file.language ||
-          existing.markdownPreviewSourceFileId !== file.filePath ||
+          existing.markdownPreviewSourceFileId !== sourceFileId ||
           existing.markdownPreviewAnchor !== anchor ||
           existing.mode !== 'markdown-preview'
         return needsUpdate
@@ -1077,7 +1129,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                       worktreeId: file.worktreeId,
                       language: file.language,
                       runtimeEnvironmentId,
-                      markdownPreviewSourceFileId: file.filePath,
+                      markdownPreviewSourceFileId: sourceFileId,
                       markdownPreviewAnchor: anchor,
                       mode: 'markdown-preview' as const
                     }
@@ -1096,7 +1148,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         language: file.language,
         isDirty: false,
         runtimeEnvironmentId,
-        markdownPreviewSourceFileId: file.filePath,
+        markdownPreviewSourceFileId: sourceFileId,
         markdownPreviewAnchor: anchor,
         mode: 'markdown-preview'
       }
@@ -2658,10 +2710,10 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   activateMarkdownLink: async (rawHref, ctx) => {
     const initialState = get()
     const sourceRuntimeEnvironmentId =
-      ctx.runtimeEnvironmentId ??
-      initialState.openFiles.find((file) => file.filePath === ctx.sourceFilePath)
-        ?.runtimeEnvironmentId ??
-      null
+      ctx.runtimeEnvironmentId !== undefined
+        ? ctx.runtimeEnvironmentId
+        : initialState.openFiles.find((file) => file.filePath === ctx.sourceFilePath)
+            ?.runtimeEnvironmentId
     const sourceSettings = settingsForRuntimeOwner(
       initialState.settings,
       sourceRuntimeEnvironmentId
@@ -2716,7 +2768,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           filePath: target.absolutePath,
           relativePath: target.relativePath ?? target.absolutePath,
           worktreeId: ctx.worktreeId,
-          runtimeEnvironmentId: sourceRuntimeEnvironmentId ?? undefined,
+          runtimeEnvironmentId: sourceRuntimeEnvironmentId,
           language: detectLanguage(target.absolutePath),
           mode: 'edit'
         },
@@ -2747,10 +2799,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     }
 
     const state = get()
+    const sourceRuntimeEnvironmentKey = sourceRuntimeEnvironmentId ?? null
     const existing = state.openFiles.find(
       (f) =>
         f.filePath === absolutePath &&
-        (f.runtimeEnvironmentId ?? null) === sourceRuntimeEnvironmentId
+        f.worktreeId === ctx.worktreeId &&
+        (f.runtimeEnvironmentId ?? null) === sourceRuntimeEnvironmentKey
     )
     const fileId = existing?.id ?? absolutePath
 
@@ -2769,7 +2823,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           filePath: absolutePath,
           relativePath,
           worktreeId: ctx.worktreeId,
-          runtimeEnvironmentId: sourceRuntimeEnvironmentId ?? undefined,
+          runtimeEnvironmentId: sourceRuntimeEnvironmentId,
           language: 'markdown',
           mode: 'edit'
         },
@@ -2805,15 +2859,21 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           .flat()
           .map((w) => w.id)
       )
+      validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
 
       const openFiles: OpenFile[] = []
+      const usedOpenFileIds = new Set<string>()
       for (const [worktreeId, files] of Object.entries(openFilesByWorktree)) {
         if (!validWorktreeIds.has(worktreeId)) {
           continue
         }
         for (const pf of files) {
+          const id = usedOpenFileIds.has(pf.filePath)
+            ? buildOwnedEditorFileId(pf.filePath, worktreeId, pf.runtimeEnvironmentId)
+            : pf.filePath
+          usedOpenFileIds.add(id)
           openFiles.push({
-            id: pf.filePath,
+            id,
             filePath: pf.filePath,
             relativePath: pf.relativePath,
             worktreeId,
@@ -2843,7 +2903,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       // The file may have been removed due to worktree validation or the
       // persisted data may reference a stale path.
       const activeFileExists = persistedActiveFileId
-        ? openFiles.some((f) => f.id === persistedActiveFileId)
+        ? openFiles.some((f) => f.id === persistedActiveFileId && f.worktreeId === activeWorktreeId)
         : false
       // Why: if the previously active editor surface pointed at a transient
       // diff/conflict tab, restart still restores any normal edit tabs for the
@@ -2859,7 +2919,10 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const filteredActiveFileIdByWorktree = Object.fromEntries(
         [...validWorktreeIds].flatMap((wId) => {
           const persistedFileId = persistedActiveFileIdByWorktree[wId]
-          if (persistedFileId && openFiles.some((f) => f.id === persistedFileId)) {
+          if (
+            persistedFileId &&
+            openFiles.some((f) => f.id === persistedFileId && f.worktreeId === wId)
+          ) {
             return [[wId, persistedFileId]]
           }
           const fallbackFileId = openFiles.find((f) => f.worktreeId === wId)?.id

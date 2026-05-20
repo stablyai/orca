@@ -1288,6 +1288,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         .flat()
         .map((worktree) => worktree.id)
     )
+    validWorktreeIdsForCleanup.add(FLOATING_TERMINAL_WORKTREE_ID)
 
     // Why: mirror closeBrowserTab's contract — reducers are pure, imperative
     // side effects bracket them. Compute dropped workspaces first, destroy
@@ -1316,6 +1317,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           .flat()
           .map((worktree) => worktree.id)
       )
+      validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
 
       const browserTabsByWorktree: Record<string, BrowserWorkspace[]> = {}
       const browserPagesByWorkspace: Record<string, BrowserPage[]> = {}

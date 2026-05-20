@@ -557,6 +557,11 @@ export type AppApi = {
   setUnreadDockBadgeCount: (count: number) => Promise<void>
   /** Resolves the launch directory for global Floating Terminal tabs. */
   getFloatingTerminalCwd: (args?: FloatingTerminalCwdRequest) => Promise<string>
+  /** Opens a native picker for markdown documents, rooted in the floating
+   *  workspace, and authorizes the selected file for editor reads/writes. */
+  pickFloatingMarkdownDocument: (
+    args?: FloatingTerminalCwdRequest
+  ) => Promise<MarkdownDocument | null>
 }
 
 export type PreloadApi = {

@@ -94,7 +94,7 @@ export const STAR_NAG_INITIAL_THRESHOLD = 35
  *  the collector and the status-bar popover agree on the sentinel. */
 export const ORPHAN_WORKTREE_ID = '__orphan__'
 
-// Why: the floating terminal is a local synthetic workspace, so persistence
+// Why: the floating workspace is a local synthetic workspace, so persistence
 // pruning must classify it without consulting the repo catalog.
 export const FLOATING_TERMINAL_WORKTREE_ID = 'global-floating-terminal'
 
@@ -212,7 +212,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     ctrlTabOrderMode: 'mru',
     floatingTerminalEnabled: true,
     floatingTerminalDefaultedForAllUsers: true,
-    floatingTerminalCwd: '~',
+    floatingTerminalCwd: '',
+    floatingTerminalCwdMigratedToAppWorkspace: true,
     floatingTerminalTriggerLocation: 'floating-button',
     notifications: getDefaultNotificationSettings(),
     diffDefaultView: 'inline',

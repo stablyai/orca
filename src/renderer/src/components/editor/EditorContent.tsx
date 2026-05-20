@@ -413,6 +413,9 @@ export function EditorContent({
               key={viewStateScopeId}
               content={currentContent}
               filePath={activeFile.filePath}
+              sourceFileId={activeFile.id}
+              sourceWorktreeId={activeFile.worktreeId}
+              sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
               scrollCacheKey={`${editorViewStateKey}:preview`}
               showTableOfContents={showMarkdownTableOfContents}
               onCloseTableOfContents={onCloseMarkdownTableOfContents}
@@ -657,6 +660,9 @@ export function EditorContent({
           key={viewStateScopeId}
           content={previewContent}
           filePath={activeFile.filePath}
+          sourceFileId={previewSourceFileId}
+          sourceWorktreeId={activeFile.worktreeId}
+          sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
           scrollCacheKey={markdownPreviewViewStateKey}
           initialAnchor={activeFile.markdownPreviewAnchor ?? null}
           showTableOfContents={showMarkdownTableOfContents}
@@ -811,6 +817,9 @@ export function EditorContent({
             key={viewStateScopeId}
             content={modifiedDiffContent}
             filePath={activeFile.filePath}
+            sourceFileId={activeFile.id}
+            sourceWorktreeId={activeFile.worktreeId}
+            sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
             scrollCacheKey={`${diffViewStateKey}:preview`}
             showTableOfContents={showMarkdownTableOfContents}
             onCloseTableOfContents={onCloseMarkdownTableOfContents}

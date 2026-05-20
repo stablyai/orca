@@ -278,6 +278,52 @@ describe('createEditorSlice floating editor activation', () => {
     )
     expect(store.getState().activeTabTypeByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe('editor')
   })
+
+  it('opens same-path floating markdown as a separate owner-qualified tab', () => {
+    const store = createEditorStore()
+    store.setState({
+      openFiles: [
+        {
+          id: '/repo/README.md',
+          filePath: '/repo/README.md',
+          relativePath: 'README.md',
+          worktreeId: 'wt-1',
+          language: 'markdown',
+          isDirty: false,
+          mode: 'edit'
+        }
+      ],
+      activeFileIdByWorktree: { 'wt-1': '/repo/README.md' },
+      activeTabTypeByWorktree: { 'wt-1': 'editor' }
+    } as Partial<AppState>)
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/README.md',
+        relativePath: 'README.md',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        runtimeEnvironmentId: null,
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { suppressActiveRuntimeFallback: true }
+    )
+
+    expect(store.getState().openFiles).toHaveLength(2)
+    expect(store.getState().openFiles[0]).toMatchObject({
+      filePath: '/repo/README.md',
+      worktreeId: 'wt-1'
+    })
+    expect(store.getState().openFiles[1]).toMatchObject({
+      filePath: '/repo/README.md',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      runtimeEnvironmentId: null
+    })
+    expect(store.getState().openFiles[1]?.id).not.toBe('/repo/README.md')
+    expect(store.getState().activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(
+      store.getState().openFiles[1]?.id
+    )
+  })
 })
 
 describe('createEditorSlice untitled cleanup routing', () => {
@@ -643,6 +689,98 @@ describe('createEditorSlice openMarkdownPreview', () => {
         markdownPreviewAnchor: 'install'
       })
     ])
+  })
+
+  it('keeps same-path markdown previews separate by source owner', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile({
+      filePath: '/repo/docs/README.md',
+      relativePath: 'docs/README.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().openFile(
+      {
+        filePath: '/repo/docs/README.md',
+        relativePath: 'README.md',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        runtimeEnvironmentId: null,
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { suppressActiveRuntimeFallback: true }
+    )
+    const floatingFile = store
+      .getState()
+      .openFiles.find((file) => file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID)
+    expect(floatingFile).toBeDefined()
+
+    store.getState().openMarkdownPreview({
+      filePath: '/repo/docs/README.md',
+      relativePath: 'docs/README.md',
+      worktreeId: 'wt-1',
+      language: 'markdown'
+    })
+    store.getState().openMarkdownPreview(
+      {
+        filePath: '/repo/docs/README.md',
+        relativePath: 'README.md',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        runtimeEnvironmentId: null,
+        language: 'markdown'
+      },
+      { sourceFileId: floatingFile?.id }
+    )
+
+    const previews = store.getState().openFiles.filter((file) => file.mode === 'markdown-preview')
+    expect(previews).toHaveLength(2)
+    expect(previews.map((file) => file.markdownPreviewSourceFileId)).toEqual([
+      '/repo/docs/README.md',
+      floatingFile?.id
+    ])
+  })
+
+  it('uses the resolved active runtime owner when opening markdown previews', () => {
+    const store = createEditorStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-active' } as AppState['settings'],
+      openFiles: [
+        {
+          id: '/repo/docs/README.md',
+          filePath: '/repo/docs/README.md',
+          relativePath: 'docs/README.md',
+          worktreeId: 'wt-1',
+          language: 'markdown',
+          isDirty: false,
+          mode: 'edit'
+        },
+        {
+          id: 'editor:wt-1:env-active:readme',
+          filePath: '/repo/docs/README.md',
+          relativePath: 'docs/README.md',
+          worktreeId: 'wt-1',
+          runtimeEnvironmentId: 'env-active',
+          language: 'markdown',
+          isDirty: false,
+          mode: 'edit'
+        }
+      ]
+    } as Partial<AppState>)
+
+    store.getState().openMarkdownPreview({
+      filePath: '/repo/docs/README.md',
+      relativePath: 'docs/README.md',
+      worktreeId: 'wt-1',
+      language: 'markdown'
+    })
+
+    expect(store.getState().openFiles.at(-1)).toMatchObject({
+      mode: 'markdown-preview',
+      runtimeEnvironmentId: 'env-active',
+      markdownPreviewSourceFileId: 'editor:wt-1:env-active:readme'
+    })
   })
 })
 
@@ -1723,7 +1861,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
     expect(toastErrorMock).toHaveBeenCalledWith('Cannot open directory: docs/guide.md')
   })
 
-  it('can open a file without adopting the currently active runtime owner', () => {
+  it('can open a local file without adopting the currently active runtime owner', () => {
     const store = createEditorStore()
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-active' } as AppState['settings']
@@ -1743,7 +1881,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
     expect(store.getState().openFiles[0]).toMatchObject({
       filePath: '/remote/.orca/drops/log.txt'
     })
-    expect(store.getState().openFiles[0]?.runtimeEnvironmentId).toBeUndefined()
+    expect(store.getState().openFiles[0]?.runtimeEnvironmentId).toBeNull()
   })
 
   it('toasts when the markdown target is missing', async () => {

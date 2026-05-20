@@ -4,16 +4,18 @@ import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
-import { app, ipcMain } from 'electron'
+import { app, dialog, ipcMain } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import type { AppIdentity } from '../../shared/app-identity'
-import type { FloatingTerminalCwdRequest } from '../../shared/types'
+import type { FloatingTerminalCwdRequest, MarkdownDocument } from '../../shared/types'
 import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
 import { isPwshAvailable } from '../pwsh'
 import { isWslAvailable } from '../wsl'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
+import { authorizeExternalPath, isDescendantOrEqual } from './filesystem-auth'
 
 const execFileAsync = promisify(execFile)
+const FLOATING_WORKSPACE_DIRNAME = 'floating-workspace'
 
 function expandHomePath(input: string, home: string): string {
   if (input === '~') {
@@ -29,19 +31,70 @@ function expandHomePath(input: string, home: string): string {
 }
 
 async function resolveFloatingTerminalCwd(args?: FloatingTerminalCwdRequest): Promise<string> {
-  const home = app.getPath('home')
   const configuredPath = args?.path?.trim()
   if (!configuredPath) {
-    return home
+    return ensureDefaultFloatingWorkspacePath()
   }
+  const home = app.getPath('home')
   const expanded = expandHomePath(configuredPath, home)
   const cwd = path.isAbsolute(expanded) ? expanded : path.resolve(home, expanded)
   try {
     await mkdir(cwd, { recursive: true })
+    authorizeExternalPath(cwd)
     return cwd
   } catch {
-    return home
+    return ensureDefaultFloatingWorkspacePath()
   }
+}
+
+async function ensureDefaultFloatingWorkspacePath(): Promise<string> {
+  const cwd = path.join(app.getPath('userData'), FLOATING_WORKSPACE_DIRNAME)
+  await mkdir(cwd, { recursive: true })
+  // Why: the default floating workspace lives outside repo roots by design;
+  // authorize only this app-owned directory instead of widening access to ~.
+  authorizeExternalPath(cwd)
+  return cwd
+}
+
+function isMarkdownDocumentName(filePath: string): boolean {
+  const extension = path.extname(filePath).toLowerCase()
+  return extension === '.md' || extension === '.mdx' || extension === '.markdown'
+}
+
+function createFloatingMarkdownDocument(rootPath: string, filePath: string): MarkdownDocument {
+  const basename = path.basename(filePath)
+  const extension = path.extname(basename)
+  const resolvedRoot = path.resolve(rootPath)
+  const resolvedFile = path.resolve(filePath)
+  const relativePath = isDescendantOrEqual(resolvedFile, resolvedRoot)
+    ? path.relative(resolvedRoot, resolvedFile).replace(/[\\/]+/g, '/')
+    : basename
+  return {
+    filePath,
+    relativePath,
+    basename,
+    name: extension ? basename.slice(0, -extension.length) : basename
+  }
+}
+
+async function pickFloatingMarkdownDocument(
+  args?: FloatingTerminalCwdRequest
+): Promise<MarkdownDocument | null> {
+  const cwd = await resolveFloatingTerminalCwd(args)
+  const result = await dialog.showOpenDialog({
+    defaultPath: cwd,
+    properties: ['openFile'],
+    filters: [{ name: 'Markdown', extensions: ['md', 'mdx', 'markdown'] }]
+  })
+  if (result.canceled || result.filePaths.length === 0) {
+    return null
+  }
+  const filePath = result.filePaths[0]
+  if (!isMarkdownDocumentName(filePath)) {
+    throw new Error('Selected file is not a markdown document.')
+  }
+  authorizeExternalPath(filePath)
+  return createFloatingMarkdownDocument(cwd, filePath)
 }
 
 function getFeatureWallAssetBaseUrl(): string {
@@ -155,5 +208,9 @@ export function registerAppHandlers(): void {
 
   ipcMain.handle('app:getFloatingTerminalCwd', (_event, args?: FloatingTerminalCwdRequest) =>
     resolveFloatingTerminalCwd(args)
+  )
+
+  ipcMain.handle('app:pickFloatingMarkdownDocument', (_event, args?: FloatingTerminalCwdRequest) =>
+    pickFloatingMarkdownDocument(args)
   )
 }

@@ -1592,7 +1592,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // Only SSH repos need this: local worktrees are persisted and a missing
       // local worktree genuinely means it was deleted.
       const sshRepoIds = new Set(s.repos.filter((r) => r.connectionId).map((r) => r.id))
-      // Why: the Floating Terminal is intentionally not a repo worktree, but
+      // Why: the Floating Workspace is intentionally not a repo worktree, but
       // its tabs still use the normal terminal session pipeline so daemon PTYs
       // can survive app restart just like workspace terminals.
       validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)

@@ -28,6 +28,7 @@ import {
 import { buildHydratedTabState } from './tabs-hydration'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
 
@@ -1485,6 +1486,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         .flat()
         .map((w) => w.id)
     )
+    validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
     set(buildHydratedTabState(session, validWorktreeIds))
   }
 })

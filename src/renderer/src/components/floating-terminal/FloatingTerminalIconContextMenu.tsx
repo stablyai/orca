@@ -88,7 +88,7 @@ export function FloatingTerminalIconContextMenu({
             }}
           >
             <EyeOff className="size-3.5" />
-            Hide
+            Hide Floating Workspace
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

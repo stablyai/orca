@@ -219,7 +219,12 @@ export function useFileExplorerDragDrop({
         })
         // Why: OpenFile.id === absolute path, so moves must close/reopen tabs to migrate
         // draft/dirty metadata to the new key (forward move and undo/redo parity).
-        for (const file of filesToMove) {
+        const remappedFileIds = new Map<string, string>()
+        const orderedFilesToMove = [...filesToMove].sort((a, b) =>
+          a.mode === 'markdown-preview' && b.mode !== 'markdown-preview' ? 1 : -1
+        )
+
+        for (const file of orderedFilesToMove) {
           const oldFilePath = file.filePath
           const suffix = oldFilePath.slice(fromPath.length)
           const updatedPath = toPath + suffix
@@ -233,32 +238,53 @@ export function useFileExplorerDragDrop({
           state.closeFile(file.id)
 
           if (file.mode === 'edit') {
-            state.openFile({
-              filePath: updatedPath,
-              relativePath: updatedRelative,
-              worktreeId: file.worktreeId,
-              language: detectLanguage(basename(updatedPath)),
-              mode: 'edit'
-            })
+            state.openFile(
+              {
+                filePath: updatedPath,
+                relativePath: updatedRelative,
+                worktreeId: file.worktreeId,
+                runtimeEnvironmentId: file.runtimeEnvironmentId,
+                language: detectLanguage(basename(updatedPath)),
+                mode: 'edit'
+              },
+              { suppressActiveRuntimeFallback: file.runtimeEnvironmentId === null }
+            )
           } else if (file.mode === 'markdown-preview') {
             state.openMarkdownPreview(
               {
                 filePath: updatedPath,
                 relativePath: updatedRelative,
                 worktreeId: file.worktreeId,
+                runtimeEnvironmentId: file.runtimeEnvironmentId,
                 language: 'markdown'
               },
-              { anchor: file.markdownPreviewAnchor ?? null }
+              {
+                anchor: file.markdownPreviewAnchor ?? null,
+                sourceFileId: file.markdownPreviewSourceFileId
+                  ? (remappedFileIds.get(file.markdownPreviewSourceFileId) ??
+                    file.markdownPreviewSourceFileId)
+                  : undefined
+              }
             )
           } else {
             continue
           }
 
+          const freshState = useAppStore.getState()
+          const reopenedFile = freshState.openFiles.find(
+            (entry) =>
+              entry.filePath === updatedPath &&
+              entry.worktreeId === file.worktreeId &&
+              entry.mode === file.mode &&
+              (entry.runtimeEnvironmentId ?? null) === (file.runtimeEnvironmentId ?? null)
+          )
+          const reopenedFileId = reopenedFile?.id ?? updatedPath
+          remappedFileIds.set(file.id, reopenedFileId)
           if (draft !== undefined) {
-            state.setEditorDraft(updatedPath, draft)
+            freshState.setEditorDraft(reopenedFileId, draft)
           }
           if (wasDirty) {
-            state.markFileDirty(updatedPath, true)
+            freshState.markFileDirty(reopenedFileId, true)
           }
         }
       }

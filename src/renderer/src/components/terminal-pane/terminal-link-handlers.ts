@@ -162,7 +162,7 @@ export function openDetectedFilePath(
       worktreeId: worktreeId || '',
       language: detectLanguage(filePath),
       mode: 'edit',
-      runtimeEnvironmentId: runtimeEnvironmentId ?? undefined
+      runtimeEnvironmentId
     })
 
     if (line !== null) {

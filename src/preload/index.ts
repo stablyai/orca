@@ -33,6 +33,7 @@ import type {
   NotificationSoundResult,
   OnboardingState,
   FloatingTerminalCwdRequest,
+  MarkdownDocument,
   SearchResult,
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
@@ -364,7 +365,11 @@ const api = {
     setUnreadDockBadgeCount: (count: number): Promise<void> =>
       ipcRenderer.invoke('app:setUnreadDockBadgeCount', count),
     getFloatingTerminalCwd: (args?: FloatingTerminalCwdRequest): Promise<string> =>
-      ipcRenderer.invoke('app:getFloatingTerminalCwd', args)
+      ipcRenderer.invoke('app:getFloatingTerminalCwd', args),
+    pickFloatingMarkdownDocument: (
+      args?: FloatingTerminalCwdRequest
+    ): Promise<MarkdownDocument | null> =>
+      ipcRenderer.invoke('app:pickFloatingMarkdownDocument', args)
   },
 
   wsl: {

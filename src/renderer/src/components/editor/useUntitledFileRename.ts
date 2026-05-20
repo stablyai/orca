@@ -11,6 +11,7 @@ import {
 } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { requestEditorFileSave, requestEditorSaveQuiesce } from './editor-autosave'
+import { getUntitledFileRoot } from './untitled-file-rename-path'
 
 type UseUntitledFileRenameParams = {
   openFiles: OpenFile[]
@@ -19,7 +20,7 @@ type UseUntitledFileRenameParams = {
     filePath: string
     relativePath: string
     worktreeId: string
-    runtimeEnvironmentId?: string
+    runtimeEnvironmentId?: string | null
     language: string
     mode: 'edit'
   }) => void
@@ -58,12 +59,7 @@ export function useUntitledFileRename({
         return
       }
       const oldPath = renameDialogFile.filePath
-      // Why: derive the worktree root from the old relative path so nested
-      // untitled saves resolve relative to the worktree, not the current folder.
-      const worktreeRoot = oldPath.slice(
-        0,
-        oldPath.length - renameDialogFile.relativePath.length - 1
-      )
+      const worktreeRoot = getUntitledFileRoot(renameDialogFile)
       const newPath = joinPath(worktreeRoot, newRelPath)
       const connectionId = getConnectionId(renameDialogFile.worktreeId) ?? undefined
       const fileContext = {
@@ -110,7 +106,7 @@ export function useUntitledFileRename({
         return
       }
 
-      closeFile(oldPath)
+      closeFile(renameDialogFile.id)
       openFile({
         filePath: newPath,
         relativePath: newRelPath,

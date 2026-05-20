@@ -85,7 +85,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       reload: () => Promise.resolve(window.location.reload()),
       getKeyboardInputSourceId: () => Promise.resolve(null),
       setUnreadDockBadgeCount: () => Promise.resolve(),
-      getFloatingTerminalCwd: () => Promise.resolve('~')
+      getFloatingTerminalCwd: () => Promise.resolve(''),
+      pickFloatingMarkdownDocument: () => Promise.resolve(null)
     },
     e2e: {
       getConfig: () => createE2EConfig({})

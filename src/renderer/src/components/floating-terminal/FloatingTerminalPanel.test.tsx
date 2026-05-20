@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { BrowserTab, Tab, TabGroup, TerminalTab } from '../../../../shared/types'
 import type { OpenFile } from '@/store/slices/editor'
+import { createUntitledMarkdownFile } from '@/lib/create-untitled-markdown'
 
 type EffectCallback = () => void | (() => void)
 
@@ -82,6 +83,7 @@ const mocks = vi.hoisted(() => ({
   isWebRuntimeSessionActive: vi.fn(),
   markFileDirty: vi.fn(),
   openFile: vi.fn(),
+  pickFloatingMarkdownDocument: vi.fn(),
   pinFile: vi.fn(),
   setActiveTab: vi.fn(),
   setTabColor: vi.fn(),
@@ -405,7 +407,7 @@ function resetStore(tabs: TerminalTab[] = []): void {
     setTabPaneExpanded: mocks.setTabPaneExpanded,
     browserDefaultUrl: 'about:blank',
     tabBarOrderByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: tabs.map((tab) => tab.id) },
-    settings: { floatingTerminalCwd: '~' }
+    settings: { floatingTerminalCwd: '' }
   } satisfies FloatingPanelStoreState
 }
 
@@ -476,10 +478,14 @@ describe('FloatingTerminalPanel close behavior', () => {
     mocks.getFloatingTerminalCwd.mockResolvedValue('/tmp/orca')
     mocks.getInstallStatus.mockResolvedValue({ state: 'installed' })
     mocks.isWebRuntimeSessionActive.mockReturnValue(false)
+    mocks.pickFloatingMarkdownDocument.mockResolvedValue(null)
     vi.stubGlobal('window', {
       addEventListener: vi.fn(),
       api: {
-        app: { getFloatingTerminalCwd: mocks.getFloatingTerminalCwd },
+        app: {
+          getFloatingTerminalCwd: mocks.getFloatingTerminalCwd,
+          pickFloatingMarkdownDocument: mocks.pickFloatingMarkdownDocument
+        },
         browser: { notifyActiveTabChanged: vi.fn() },
         cli: { getInstallStatus: mocks.getInstallStatus }
       },
@@ -493,7 +499,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     vi.unstubAllGlobals()
   })
 
-  it('bootstraps a terminal tab only when the panel opens', async () => {
+  it('does not bootstrap a terminal tab when the panel opens empty', async () => {
     await renderPanel(false)
     runEffects()
     await flushAsyncWork()
@@ -502,27 +508,19 @@ describe('FloatingTerminalPanel close behavior', () => {
     await renderPanel(true)
     runEffects()
     await flushAsyncWork()
-    expect(mocks.createTab).toHaveBeenCalledTimes(1)
-    expect(mocks.createTab).toHaveBeenCalledWith(
-      FLOATING_TERMINAL_WORKTREE_ID,
-      undefined,
-      undefined,
-      { activate: false }
-    )
-    expect(mocks.activateTab).toHaveBeenCalledWith('created-tab')
-    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('created-tab')
+    expect(mocks.createTab).not.toHaveBeenCalled()
 
     await renderPanel(true)
     runEffects()
     await flushAsyncWork()
-    expect(mocks.createTab).toHaveBeenCalledTimes(1)
+    expect(mocks.createTab).not.toHaveBeenCalled()
 
     await renderPanel(false)
     runEffects()
     await renderPanel(true)
     runEffects()
     await flushAsyncWork()
-    expect(mocks.createTab).toHaveBeenCalledTimes(2)
+    expect(mocks.createTab).not.toHaveBeenCalled()
   })
 
   it('creates new floating terminal tabs without globally activating createTab', async () => {
@@ -543,7 +541,64 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('created-tab')
   })
 
-  it('closes the panel when the explicit close action removes the last tab', async () => {
+  it('creates floating markdown files in local filesystem mode', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+    vi.mocked(createUntitledMarkdownFile).mockResolvedValue({
+      filePath: '/tmp/orca/untitled.md',
+      relativePath: 'untitled.md',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      language: 'markdown',
+      isUntitled: true,
+      mode: 'edit'
+    })
+
+    let element = await renderPanel(true)
+    runEffects()
+    await flushAsyncWork()
+    element = await renderPanel(true)
+    const tabBar = findByTypeName(element, 'TabBar')
+    ;(tabBar.props.onNewFileTab as () => void)()
+    await flushAsyncWork()
+
+    expect(createUntitledMarkdownFile).toHaveBeenCalledWith(
+      '/tmp/orca',
+      FLOATING_TERMINAL_WORKTREE_ID,
+      undefined,
+      { activeRuntimeEnvironmentId: null }
+    )
+    expect(mocks.openFile).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/tmp/orca/untitled.md' }),
+      expect.objectContaining({ suppressActiveRuntimeFallback: true })
+    )
+  })
+
+  it('opens existing markdown documents through the floating picker', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+    mocks.pickFloatingMarkdownDocument.mockResolvedValue({
+      filePath: '/tmp/orca/notes.md',
+      relativePath: 'notes.md',
+      basename: 'notes.md',
+      name: 'notes'
+    })
+
+    const element = await renderPanel(true)
+    const tabBar = findByTypeName(element, 'TabBar')
+    ;(tabBar.props.onOpenFileTab as () => void)()
+    await flushAsyncWork()
+
+    expect(mocks.pickFloatingMarkdownDocument).toHaveBeenCalledWith({ path: '' })
+    expect(mocks.openFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/tmp/orca/notes.md',
+        relativePath: 'notes.md',
+        runtimeEnvironmentId: null,
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+      }),
+      expect.objectContaining({ suppressActiveRuntimeFallback: true })
+    )
+  })
+
+  it('keeps the panel open when the explicit close action removes the last tab', async () => {
     const onOpenChange = vi.fn()
     setFloatingTabs([makeTab({ id: 'tab-1' })])
 
@@ -552,7 +607,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     ;(tabBar.props.onClose as (tabId: string) => void)('tab-1')
 
     expect(mocks.closeTab).toHaveBeenCalledWith('tab-1')
-    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(onOpenChange).not.toHaveBeenCalled()
   })
 
   it('keeps the panel open when the explicit close action leaves another tab', async () => {
@@ -587,7 +642,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     mocks.closeTab.mockClear()
     ;(terminalPane.props.onCloseTab as () => void)()
     expect(mocks.closeTab).toHaveBeenCalledWith('tab-1')
-    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(onOpenChange).not.toHaveBeenCalled()
   })
 
   it('routes floating terminal create and close through active web runtime sessions', async () => {

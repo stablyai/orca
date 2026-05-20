@@ -28,7 +28,7 @@ export function FloatingTerminalToggleButton({
             size="icon-sm"
             className="border-border bg-secondary text-secondary-foreground shadow-xs hover:bg-accent hover:text-accent-foreground"
             data-floating-terminal-toggle
-            aria-label={open ? 'Minimize floating terminal' : 'Show floating terminal'}
+            aria-label={open ? 'Minimize floating workspace' : 'Show floating workspace'}
             aria-pressed={open}
             onClick={onToggle}
           >
@@ -38,7 +38,7 @@ export function FloatingTerminalToggleButton({
         <TooltipContent
           side="left"
           sideOffset={6}
-        >{`${open ? 'Minimize' : 'Show'} floating terminal (${shortcutLabel})`}</TooltipContent>
+        >{`${open ? 'Minimize' : 'Show'} floating workspace (${shortcutLabel})`}</TooltipContent>
       </Tooltip>
     </FloatingTerminalIconContextMenu>
   )

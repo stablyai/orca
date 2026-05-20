@@ -14,6 +14,7 @@ import {
   Lock,
   MousePointerClick,
   Network,
+  PanelsTopLeft,
   ShieldCheck,
   Palette,
   Server,
@@ -40,12 +41,14 @@ import { AppearancePane, APPEARANCE_PANE_SEARCH_ENTRIES } from './AppearancePane
 import { InputPane, INPUT_PANE_SEARCH_ENTRIES } from './InputPane'
 import { ShortcutsPane, SHORTCUTS_PANE_SEARCH_ENTRIES } from './ShortcutsPane'
 import { TerminalPane } from './TerminalPane'
+import { FloatingWorkspacePane } from './FloatingWorkspacePane'
 import { useGhosttyImport } from './useGhosttyImport'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import ghosttyIcon from '../../../../../resources/ghostty.svg'
 import { RepositoryPane, getRepositoryPaneSearchEntries } from './RepositoryPane'
 import { getTerminalPaneSearchEntries } from './terminal-search'
+import { FLOATING_WORKSPACE_SEARCH_ENTRIES } from './floating-workspace-search'
 import { GitPane, GIT_PANE_SEARCH_ENTRIES } from './GitPane'
 import { CommitMessageAiPane } from './CommitMessageAiPane'
 import { COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES } from './commit-message-ai-search'
@@ -96,6 +99,7 @@ type SettingsNavTarget =
   | 'tasks'
   | 'appearance'
   | 'input'
+  | 'floating-workspace'
   | 'terminal'
   | 'notifications'
   | 'computer-use'
@@ -484,6 +488,14 @@ function Settings(): React.JSX.Element {
         description: 'Choose which task providers appear in the Tasks page and sidebar.',
         icon: ListChecks,
         searchEntries: TASKS_PANE_SEARCH_ENTRIES,
+        group: 'workflows'
+      },
+      {
+        id: 'floating-workspace',
+        title: 'Floating Workspace',
+        description: 'Global terminal, browser, and markdown tabs.',
+        icon: PanelsTopLeft,
+        searchEntries: FLOATING_WORKSPACE_SEARCH_ENTRIES,
         group: 'workflows'
       },
       {
@@ -1030,6 +1042,17 @@ function Settings(): React.JSX.Element {
                 >
                   {isSectionMounted('tasks') ? (
                     <TasksPane settings={settings} updateSettings={updateSettings} />
+                  ) : null}
+                </SettingsSection>
+
+                <SettingsSection
+                  id="floating-workspace"
+                  title="Floating Workspace"
+                  description="Global terminal, browser, and markdown tabs."
+                  searchEntries={FLOATING_WORKSPACE_SEARCH_ENTRIES}
+                >
+                  {isSectionMounted('floating-workspace') ? (
+                    <FloatingWorkspacePane settings={settings} updateSettings={updateSettings} />
                   ) : null}
                 </SettingsSection>
 
