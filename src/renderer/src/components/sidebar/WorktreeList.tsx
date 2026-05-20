@@ -54,6 +54,14 @@ import {
   getLineageGroupKey
 } from './worktree-list-groups'
 import {
+  estimateRenderRowSize,
+  getActiveStickyHeaderIndex,
+  getStickyHeaderIndexes,
+  getVirtualRowTransform,
+  shouldUseHeaderTopSpacing,
+  type RenderRow
+} from './worktree-list-virtual-rows'
+import {
   getWorkspaceStatus,
   getWorkspaceStatusFromGroupKey,
   hasWorkspaceDragData,
@@ -96,8 +104,6 @@ const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
   // fight virtual row measurement/remounts and produce visible jumps.
   overflowAnchor: 'none'
 }
-const GROUP_HEADER_ROW_HEIGHT = 28
-const SECONDARY_GROUP_HEADER_TOP_MARGIN = 8
 
 type ScrollVisibilityItem = {
   start: number
@@ -287,7 +293,6 @@ type VirtualizedWorktreeViewportProps = {
 }
 
 type WorktreeItemRow = Extract<Row, { type: 'item' }>
-type RenderRow = Row | { type: 'lineage-group'; key: string; rows: WorktreeItemRow[] }
 
 function isWorktreeItemRow(row: Row): row is WorktreeItemRow {
   return row.type === 'item'
@@ -355,75 +360,6 @@ function getVirtualRowIndex(element: Element): number | null {
 
 function getVirtualRowKey(element: Element): string | null {
   return element.getAttribute('data-worktree-virtual-row-key')
-}
-
-function shouldUseHeaderTopSpacing(args: {
-  rows: readonly RenderRow[]
-  index: number
-  firstHeaderIndex: number
-  isActiveStickyHeader: boolean
-}): boolean {
-  const previousRenderRow = args.rows[args.index - 1]
-  const followsCollapsedPinnedHeader =
-    previousRenderRow?.type === 'header' && previousRenderRow.key === PINNED_GROUP_KEY
-  return (
-    args.index !== args.firstHeaderIndex &&
-    !args.isActiveStickyHeader &&
-    !followsCollapsedPinnedHeader
-  )
-}
-
-function estimateRenderRowSize(
-  rows: readonly RenderRow[],
-  index: number,
-  firstHeaderIndex: number,
-  activeStickyHeaderIndex: number | null
-): number {
-  const row = rows[index]
-  if (row?.type === 'header') {
-    return (
-      GROUP_HEADER_ROW_HEIGHT +
-      (shouldUseHeaderTopSpacing({
-        rows,
-        index,
-        firstHeaderIndex,
-        isActiveStickyHeader: activeStickyHeaderIndex === index
-      })
-        ? SECONDARY_GROUP_HEADER_TOP_MARGIN
-        : 0)
-    )
-  }
-  if (row?.type === 'lineage-group') {
-    return 100 + Math.max(0, row.rows.length - 1) * 96
-  }
-  return 116
-}
-
-function getVirtualRowTransform(start: number): string {
-  return `translateY(${start}px)`
-}
-
-function getStickyHeaderIndexes(rows: readonly RenderRow[]): number[] {
-  const indexes: number[] = []
-  rows.forEach((row, index) => {
-    if (row.type === 'header') {
-      indexes.push(index)
-    }
-  })
-  return indexes
-}
-
-function getActiveStickyHeaderIndex(
-  stickyHeaderIndexes: readonly number[],
-  rangeStartIndex: number
-): number | null {
-  for (let index = stickyHeaderIndexes.length - 1; index >= 0; index--) {
-    const headerIndex = stickyHeaderIndexes[index]
-    if (headerIndex <= rangeStartIndex) {
-      return headerIndex
-    }
-  }
-  return null
 }
 
 const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewport({
@@ -1230,8 +1166,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               const hasHeaderTopSpacing = shouldUseHeaderTopSpacing({
                 rows: renderRows,
                 index: vItem.index,
-                firstHeaderIndex,
-                isActiveStickyHeader
+                firstHeaderIndex
               })
               const isRepoHeader = groupBy === 'repo' && row.repo !== undefined
               const repoIdForHeader = isRepoHeader ? row.repo!.id : undefined
@@ -1265,6 +1200,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   ref={measureVirtualRowElement}
                   className={cn(
                     'left-0 right-0',
+                    // Why: keep the secondary-header spacer on the measured
+                    // virtual row so sticky swaps do not change row height.
+                    hasHeaderTopSpacing && 'pt-2',
                     isActiveStickyHeader ? 'sticky -top-px z-20 bg-sidebar' : 'absolute top-0'
                   )}
                   style={
@@ -1291,11 +1229,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       isPinnedHeader &&
                         pinDragOver &&
                         'rounded-md bg-sidebar-accent ring-1 ring-sidebar-ring/40',
-                      // First header sits directly under SidebarHeader, which already
-                      // supplies its own spacing — only offset secondary group headers.
-                      // Why: the active sticky header must paint flush to the
-                      // scrollport top; a collapsed top margin leaks rows behind it.
-                      hasHeaderTopSpacing && 'mt-2',
+                      // First header sits directly under SidebarHeader, which
+                      // already supplies its own spacing. Secondary sticky
+                      // headers keep their spacer measured while the painted
+                      // header stays flush to the scrollport top.
+                      isActiveStickyHeader && hasHeaderTopSpacing && '-translate-y-2',
                       row.repo && 'overflow-hidden'
                     )}
                     onDragOver={

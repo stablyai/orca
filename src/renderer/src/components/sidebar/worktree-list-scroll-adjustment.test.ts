@@ -6,6 +6,16 @@ import {
   shouldShowFloatingCurrentWorkspaceButton,
   shouldQueueStartupSidebarReveal
 } from './WorktreeList'
+import { estimateRenderRowSize } from './worktree-list-virtual-rows'
+
+const makeHeaderRow = (key: string) =>
+  ({
+    type: 'header',
+    key,
+    label: key,
+    count: 0,
+    tone: 'text-foreground'
+  }) as const
 
 describe('shouldAdjustWorktreeSidebarMeasuredRowScroll', () => {
   it('suppresses measured-row scroll correction while TanStack is scrolling', () => {
@@ -189,5 +199,23 @@ describe('shouldAdjustWorktreeSidebarMeasuredRowScroll', () => {
         pendingRevealWorktreeId: 'wt-1'
       })
     ).toBe(false)
+  })
+})
+
+describe('estimateRenderRowSize', () => {
+  it('keeps secondary group header size stable while it is the active sticky header', () => {
+    const rows = [makeHeaderRow('first'), makeHeaderRow('second')]
+    const firstHeaderIndex = 0
+    const secondaryHeaderIndex = 1
+    const inactiveSize = estimateRenderRowSize(rows, secondaryHeaderIndex, firstHeaderIndex, null)
+    const activeSize = estimateRenderRowSize(
+      rows,
+      secondaryHeaderIndex,
+      firstHeaderIndex,
+      secondaryHeaderIndex
+    )
+
+    expect(inactiveSize).toBe(36)
+    expect(activeSize).toBe(36)
   })
 })
