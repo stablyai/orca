@@ -1,7 +1,7 @@
 /* oxlint-disable max-lines */
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { POST_REPLAY_FOCUS_REPORTING_RESET, POST_REPLAY_MODE_RESET } from './layout-serialization'
+import { POST_REPLAY_MODE_RESET, POST_REPLAY_REATTACH_RESET } from './layout-serialization'
 import type * as UseNotificationDispatchModule from './use-notification-dispatch'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 
@@ -1837,7 +1837,7 @@ describe('connectPanePty', () => {
     expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'fresh-ssh-pty')
   })
 
-  it('resets focus reporting after daemon snapshot replay without applying the full mode reset', async () => {
+  it('resets reattach cursor/focus state after daemon snapshot replay without applying the full mode reset', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
@@ -1873,7 +1873,7 @@ describe('connectPanePty', () => {
       expect.any(Function)
     )
     expect(pane.terminal.write).toHaveBeenCalledWith(
-      POST_REPLAY_FOCUS_REPORTING_RESET,
+      POST_REPLAY_REATTACH_RESET,
       expect.any(Function)
     )
     expect(pane.terminal.write).not.toHaveBeenCalledWith(
@@ -3065,7 +3065,7 @@ describe('connectPanePty', () => {
     expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[2J\x1b[3J\x1b[H', expect.any(Function))
     expect(pane.terminal.write).toHaveBeenCalledWith('restored-ssh-output', expect.any(Function))
     expect(pane.terminal.write).toHaveBeenCalledWith(
-      POST_REPLAY_FOCUS_REPORTING_RESET,
+      POST_REPLAY_REATTACH_RESET,
       expect.any(Function)
     )
     expect(api.pty.signal).toHaveBeenCalledWith('leaf-session', 'SIGWINCH')

@@ -18,7 +18,7 @@ import { getFitOverrideForPty, bindPanePtyId } from '@/lib/pane-manager/mobile-f
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { isPaneReplaying, replayIntoTerminal } from './replay-guard'
 import { terminalOutputPrefersDomRenderer } from '@/lib/pane-manager/terminal-complex-script'
-import { POST_REPLAY_MODE_RESET, POST_REPLAY_FOCUS_REPORTING_RESET } from './layout-serialization'
+import { POST_REPLAY_MODE_RESET, POST_REPLAY_REATTACH_RESET } from './layout-serialization'
 import { warnTerminalLifecycleAnomaly } from './terminal-lifecycle-diagnostics'
 import { registerPtySerializer, registerPtyTitleSource } from './pty-buffer-serializer'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
@@ -1220,9 +1220,9 @@ export function connectPanePty(
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
         writeReplayData(connectResult.snapshot)
         // Snapshot reattach keeps a live session, so avoid the broader mode
-        // reset. Focus reporting is the unsafe exception: preserving `?1004h`
-        // can make restored shells ring BEL on pane focus/blur.
-        writeReplayData(POST_REPLAY_FOCUS_REPORTING_RESET)
+        // reset. We only drop stale cursor/focus state that should not leak
+        // from replay bytes into the restored renderer terminal.
+        writeReplayData(POST_REPLAY_REATTACH_RESET)
         if (connectResult.coldRestore) {
           // Snapshot superseded the cold-restore payload — ack it so the
           // daemon does not redeliver it on the next reattach.
@@ -1233,11 +1233,11 @@ export function connectPanePty(
       } else if (connectResult?.replay) {
         // Relay replay holds the last 100 KB of raw output. The xterm may
         // already hold pre-disconnect content; clear first to avoid
-        // duplication. Focus-reporting reset prevents BEL from stale mode
-        // bits in the replayed data.
+        // duplication. The reattach reset prevents stale cursor/focus mode
+        // bits in the replayed data from leaking into the restored terminal.
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
         writeReplayData(connectResult.replay)
-        writeReplayData(POST_REPLAY_FOCUS_REPORTING_RESET)
+        writeReplayData(POST_REPLAY_REATTACH_RESET)
         if (connectResult.coldRestore) {
           if (!isRemoteRuntimePtyId(ptyId)) {
             window.api.pty.ackColdRestore(ptyId)
