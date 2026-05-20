@@ -245,9 +245,12 @@ function ProjectFilterHeader({
       <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground">
         Projects
         {hasRepoFilter && (
-          <span className="ml-0.5 normal-case tracking-normal font-medium text-foreground">
-            · {selectedCount}
-          </span>
+          <Badge
+            variant="outline"
+            className="h-4 min-w-4 px-1 py-0 text-[10px] font-semibold leading-none text-foreground"
+          >
+            {selectedCount}
+          </Badge>
         )}
       </span>
       <button
