@@ -19,12 +19,12 @@ export type InactiveCodexAccountInfo = {
   managedHomePath: string
 }
 
-// Why: quota state does not need near-real-time polling, and a less aggressive
-// default reduces avoidable Claude /usage pressure. We intentionally use a
-// slower cadence here rather than polling every 2 minutes.
-const DEFAULT_POLL_MS = 5 * 60 * 1000 // 5 minutes
-const MIN_REFETCH_MS = 30 * 1000 // 30 seconds — debounce rapid refresh requests
-const STALE_THRESHOLD_MS = 10 * 60 * 1000 // 10 minutes — after this, stale data is dropped
+// Why: Claude's subscription usage endpoint has a tight request budget. Quota
+// state is informational, so prefer keeping a recent snapshot over polling it
+// into 429s during long focused Orca sessions.
+const DEFAULT_POLL_MS = 15 * 60 * 1000 // 15 minutes
+const MIN_REFETCH_MS = 5 * 60 * 1000 // 5 minutes — debounce resume/manual refresh bursts
+const STALE_THRESHOLD_MS = 30 * 60 * 1000 // 30 minutes — after this, stale data is dropped
 const INACTIVE_FETCH_DEBOUNCE_MS = 60 * 1000 // 60 seconds — debounce fetch-on-open
 
 // Why: the internal state only tracks claude and codex. The inactiveClaudeAccounts
