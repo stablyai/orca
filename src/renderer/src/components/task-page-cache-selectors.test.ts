@@ -7,8 +7,13 @@ import {
   buildTaskPageRepoSourceState,
   findTaskPageDialogWorkItem,
   findTaskPageLinearDrawerIssue,
+  reconcileTaskPageItemsAfterLandingRefresh,
+  reconcileTaskPageLinearIssuesAfterLandingRefresh,
+  reconcileTaskPagePagesAfterLandingRefresh,
   reconcileTaskPagePagesWithWorkItemsCache,
-  selectTaskPageWorkItemsCacheEntries
+  selectTaskPageWorkItemsCacheEntries,
+  shouldResetTaskPagePaginationAfterLandingRefresh,
+  shouldReplaceTaskPageItemsAfterRefresh
 } from './task-page-cache-selectors'
 
 function entry<T>(data: T): CacheEntry<T> {
@@ -92,6 +97,110 @@ describe('task page cache selectors', () => {
 
     expect(nextPages[0][0]).toBe(patched)
     expect(nextPages[0][1]).toBe(otherRepoSameId)
+  })
+
+  it('merges landing refresh status changes without reordering GitHub rows', () => {
+    const first = {
+      ...workItem('issue-1', 'repo-1'),
+      state: 'open' as const,
+      updatedAt: '2026-01-01'
+    }
+    const second = {
+      ...workItem('issue-2', 'repo-1'),
+      state: 'open' as const,
+      updatedAt: '2026-01-02'
+    }
+    const refreshedSecond = { ...second, updatedAt: '2026-01-04' }
+    const refreshedFirst = { ...first, state: 'closed' as const, updatedAt: '2026-01-03' }
+
+    const next = reconcileTaskPageItemsAfterLandingRefresh(
+      [first, second],
+      [refreshedSecond, refreshedFirst]
+    )
+
+    expect(
+      shouldReplaceTaskPageItemsAfterRefresh([first, second], [refreshedSecond, refreshedFirst])
+    ).toBe(false)
+    expect(next).toEqual([refreshedFirst, refreshedSecond])
+  })
+
+  it('replaces GitHub landing refresh rows when membership changes', () => {
+    const first = workItem('issue-1', 'repo-1')
+    const second = workItem('issue-2', 'repo-1')
+    const third = workItem('issue-3', 'repo-1')
+    const older = workItem('issue-4', 'repo-1')
+
+    const nextPages = reconcileTaskPagePagesAfterLandingRefresh(
+      [[first, second], [older]],
+      [third, first]
+    )
+
+    expect(nextPages).toEqual([[third, first]])
+  })
+
+  it('resets GitHub landing refresh pagination when first-page order changes', () => {
+    const first = { ...workItem('issue-1', 'repo-1'), updatedAt: '2026-01-02' }
+    const second = { ...workItem('issue-2', 'repo-1'), updatedAt: '2026-01-01' }
+    const older = { ...workItem('issue-3', 'repo-1'), updatedAt: '2025-12-31' }
+    const refreshedSecond = { ...second, updatedAt: '2026-01-03' }
+
+    const nextPages = reconcileTaskPagePagesAfterLandingRefresh(
+      [[first, second], [older]],
+      [refreshedSecond, first]
+    )
+
+    expect(
+      shouldResetTaskPagePaginationAfterLandingRefresh([first, second], [refreshedSecond, first])
+    ).toBe(true)
+    expect(nextPages).toEqual([[refreshedSecond, first]])
+  })
+
+  it('resets GitHub landing refresh pagination when the cursor boundary changes', () => {
+    const first = { ...workItem('issue-1', 'repo-1'), updatedAt: '2026-01-03' }
+    const second = { ...workItem('issue-2', 'repo-1'), updatedAt: '2026-01-01' }
+    const older = { ...workItem('issue-3', 'repo-1'), updatedAt: '2025-12-31' }
+    const refreshedSecond = { ...second, updatedAt: '2026-01-02' }
+
+    const nextPages = reconcileTaskPagePagesAfterLandingRefresh(
+      [[first, second], [older]],
+      [first, refreshedSecond]
+    )
+
+    expect(nextPages).toEqual([[first, refreshedSecond]])
+  })
+
+  it('merges Linear landing refresh status changes without reordering issues', () => {
+    const first = {
+      ...linearIssue('LIN-1'),
+      identifier: 'ENG-1',
+      url: 'https://linear.test/ENG-1',
+      state: { name: 'Todo', type: 'unstarted', color: '#111111' },
+      team: { id: 'team-1', name: 'Team', key: 'ENG' },
+      labels: [],
+      labelIds: [],
+      priority: 2,
+      updatedAt: '2026-01-01'
+    } as LinearIssue
+    const second = {
+      ...first,
+      id: 'LIN-2',
+      identifier: 'ENG-2',
+      title: 'LIN-2',
+      updatedAt: '2026-01-02'
+    }
+    const refreshedFirst = {
+      ...first,
+      state: { name: 'Done', type: 'completed', color: '#222222' },
+      updatedAt: '2026-01-03'
+    }
+    const refreshedSecond = { ...second, updatedAt: '2026-01-04' }
+
+    const next = reconcileTaskPageLinearIssuesAfterLandingRefresh(
+      [first, second],
+      [refreshedSecond, refreshedFirst]
+    )
+
+    expect(next).toEqual([refreshedFirst, refreshedSecond])
   })
 
   it('returns null while the Linear drawer is closed and finds open issues by stable reference', () => {

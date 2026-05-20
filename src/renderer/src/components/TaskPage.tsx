@@ -107,8 +107,12 @@ import {
   buildTaskPageRepoSourceState,
   findTaskPageDialogWorkItem,
   findTaskPageLinearIssue,
+  reconcileTaskPageLinearIssuesAfterLandingRefresh,
+  reconcileTaskPagePagesAfterLandingRefresh,
   reconcileTaskPagePagesWithWorkItemsCache,
+  shouldResetTaskPagePaginationAfterLandingRefresh,
   selectTaskPageWorkItemsCacheEntries,
+  shouldReplaceTaskPageItemsAfterRefresh,
   type TaskPageRepoSourceState
 } from '@/components/task-page-cache-selectors'
 import type {
@@ -1867,6 +1871,10 @@ export default function TaskPage(): React.JSX.Element {
   // collapse onto a stale in-flight request that resolved against the
   // pre-flip source).
   const lastFetchedInvalidationNonceRef = useRef(0)
+  // Why: entering Tasks with fresh cache should still verify remote status
+  // once, but the result is reconciled into existing rows to avoid a full
+  // table shuffle when only status/key fields changed.
+  const landingGitHubRefreshKeysRef = useRef<ReadonlySet<string>>(new Set())
   // Why: pages holds all fetched pages of work items. Page 0 is seeded from
   // cache for instant first paint; subsequent pages are loaded via date cursors.
   const [pages, setPages] = useState<GitHubWorkItem[][]>(() => {
@@ -2140,6 +2148,7 @@ export default function TaskPage(): React.JSX.Element {
     ReadonlySet<string>
   >(() => new Set())
   const lastLinearRequestRef = useRef<{ nonce: number; signature: string } | null>(null)
+  const landingLinearRefreshKeysRef = useRef<ReadonlySet<string>>(new Set())
 
   useEffect(() => {
     if (taskResumeAppliedRef.current || !persistedUIReady || !settings) {
@@ -2788,11 +2797,13 @@ export default function TaskPage(): React.JSX.Element {
     // to this pre-paint; the fetch will fill it in.
     const preMerged: GitHubWorkItem[] = []
     let anyUncached = false
+    let anyRepoCached = false
     for (const r of selectedRepos) {
       const cached = getCachedWorkItems(r.id, PER_REPO_FETCH_LIMIT, q)
       if (cached === null) {
         anyUncached = true
       } else {
+        anyRepoCached = true
         preMerged.push(...cached)
       }
     }
@@ -2823,12 +2834,21 @@ export default function TaskPage(): React.JSX.Element {
       workItemsInvalidationNonce !== lastFetchedInvalidationNonceRef.current
     lastFetchedInvalidationNonceRef.current = workItemsInvalidationNonce
     const forcedFetch = (forceRefresh && taskRefreshNonce > 0) || preferenceInvalidated
+    const repoArgs = selectedRepos.map((r) => ({ repoId: r.id, path: r.path }))
+    const landingRefreshKey = `${repoArgs.map((r) => `${r.repoId}:${r.path}`).join('|')}::${q}`
+    const shouldProbeOnLanding =
+      !forcedFetch && anyRepoCached && !landingGitHubRefreshKeysRef.current.has(landingRefreshKey)
+    if (shouldProbeOnLanding) {
+      landingGitHubRefreshKeysRef.current = new Set([
+        ...landingGitHubRefreshKeysRef.current,
+        landingRefreshKey
+      ])
+    }
     // Why: manual refresh keeps cached rows visible, so the normal
     // `tasksLoading` flag may stay false. Track the forced fetch separately
     // so the toolbar still shows a refresh-in-progress affordance.
     setTasksRefreshing(forcedFetch)
 
-    const repoArgs = selectedRepos.map((r) => ({ repoId: r.id, path: r.path }))
     // Why: snapshot the retrying paths at effect-dispatch so overlapping
     // retries don't clear each other's pending state. An earlier cancelled
     // effect settling after a newer retry starts would otherwise wipe the
@@ -2836,7 +2856,7 @@ export default function TaskPage(): React.JSX.Element {
     // when this effect dispatched preserves later additions.
     const dispatchedRetryPaths = retryingRepoPaths
     void fetchWorkItemsAcrossRepos(repoArgs, PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT, q, {
-      force: forcedFetch
+      force: forcedFetch || shouldProbeOnLanding
     })
       .then(({ items, failedCount: failed }) => {
         // Why: clear only the repos this effect was responsible for
@@ -2858,8 +2878,17 @@ export default function TaskPage(): React.JSX.Element {
         if (cancelled) {
           return
         }
-        setPages([items])
-        setCurrentPage(0)
+        if (shouldProbeOnLanding) {
+          const replaceFirstPage = shouldReplaceTaskPageItemsAfterRefresh(page0, items)
+          const resetPagination = shouldResetTaskPagePaginationAfterLandingRefresh(page0, items)
+          setPages((current) => reconcileTaskPagePagesAfterLandingRefresh(current, items))
+          if (replaceFirstPage || resetPagination) {
+            setCurrentPage(0)
+          }
+        } else {
+          setPages([items])
+          setCurrentPage(0)
+        }
         setFailedCount(failed)
         setTasksLoading(false)
         setTasksRefreshing(false)
@@ -3329,6 +3358,16 @@ export default function TaskPage(): React.JSX.Element {
       previousRequest?.nonce !== linearRefreshNonce &&
       previousRequest?.signature === requestSignature
     lastLinearRequestRef.current = { nonce: linearRefreshNonce, signature: requestSignature }
+    const shouldProbeOnLanding =
+      !forceRefresh &&
+      cachedIssues !== null &&
+      !landingLinearRefreshKeysRef.current.has(requestSignature)
+    if (shouldProbeOnLanding) {
+      landingLinearRefreshKeysRef.current = new Set([
+        ...landingLinearRefreshKeysRef.current,
+        requestSignature
+      ])
+    }
 
     // Why: cached rows should remain visible on navigation. Only an explicit
     // refresh or a true cache miss needs the blocking loading state.
@@ -3336,15 +3375,25 @@ export default function TaskPage(): React.JSX.Element {
 
     const request =
       readArgs.kind === 'search'
-        ? searchLinearIssues(readArgs.query, LINEAR_ITEM_LIMIT, { force: forceRefresh })
-        : listLinearIssues(readArgs.filter, LINEAR_ITEM_LIMIT, { force: forceRefresh })
+        ? searchLinearIssues(readArgs.query, LINEAR_ITEM_LIMIT, {
+            force: forceRefresh || shouldProbeOnLanding
+          })
+        : listLinearIssues(readArgs.filter, LINEAR_ITEM_LIMIT, {
+            force: forceRefresh || shouldProbeOnLanding
+          })
 
     void request
       .then((issues) => {
         if (cancelled) {
           return
         }
-        setLinearIssues(issues)
+        if (shouldProbeOnLanding) {
+          setLinearIssues((current) =>
+            reconcileTaskPageLinearIssuesAfterLandingRefresh(current, issues)
+          )
+        } else {
+          setLinearIssues(issues)
+        }
         setLinearLoading(false)
       })
       .catch((err) => {
