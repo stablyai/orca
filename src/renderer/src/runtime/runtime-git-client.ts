@@ -28,8 +28,9 @@ export type RuntimeGeneratePullRequestFieldsResult =
       success: true
       fields: { base: string; title: string; body: string; draft: boolean }
       agentLabel?: string
+      branchChangedByPreparation?: boolean
     }
-  | { success: false; error: string; canceled?: boolean }
+  | { success: false; error: string; canceled?: boolean; branchChangedByPreparation?: boolean }
 
 type RuntimeGitSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> &
   Partial<Pick<GlobalSettings, 'commitMessageAi' | 'agentCmdOverrides' | 'enableGitHubAttribution'>>

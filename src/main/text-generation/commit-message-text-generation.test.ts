@@ -748,6 +748,7 @@ describe('generateCommitMessageFromContext', () => {
       {
         branch: 'feature/pr-fields',
         base: 'main',
+        branchChangedByPreparation: false,
         currentTitle: '',
         currentBody: '',
         currentDraft: false,
@@ -795,6 +796,97 @@ describe('generateCommitMessageFromContext', () => {
 
     cancelGeneratePullRequestFieldsLocal('/repo')
     expect(children[1]?.kill).not.toHaveBeenCalled()
+  })
+
+  it('reports branch changes when pull request field output cannot be parsed', async () => {
+    const listeners = new Map<string, (value: unknown) => void>()
+    spawnMock.mockReturnValue({
+      pid: 123,
+      kill: vi.fn(),
+      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
+      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+      stdin: { end: vi.fn() },
+      on: vi.fn((event, callback) => listeners.set(event, callback))
+    } as never)
+
+    const pullRequest = generatePullRequestFieldsFromContext(
+      {
+        branch: 'feature/pr-fields',
+        base: 'main',
+        branchChangedByPreparation: true,
+        currentTitle: '',
+        currentBody: '',
+        currentDraft: false,
+        commitSummary: '- feat: update README',
+        changeSummary: 'M\tREADME.md',
+        patch: '+hello'
+      },
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent'
+      },
+      {
+        kind: 'local',
+        cwd: '/repo'
+      }
+    )
+
+    listeners.get('stdout:data')?.(Buffer.from('not json'))
+    listeners.get('close')?.(0)
+
+    await expect(pullRequest).resolves.toEqual({
+      success: false,
+      error: 'Generated pull request details could not be parsed.',
+      branchChangedByPreparation: true
+    })
+  })
+
+  it('reports branch changes when pull request generation is canceled', async () => {
+    const listeners = new Map<string, (value: unknown) => void>()
+    const child = {
+      pid: 123,
+      kill: vi.fn(),
+      stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
+      stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+      stdin: { end: vi.fn() },
+      on: vi.fn((event, callback) => listeners.set(event, callback))
+    }
+    spawnMock.mockReturnValue(child as never)
+
+    const pullRequest = generatePullRequestFieldsFromContext(
+      {
+        branch: 'feature/pr-fields',
+        base: 'main',
+        branchChangedByPreparation: true,
+        currentTitle: '',
+        currentBody: '',
+        currentDraft: false,
+        commitSummary: '- feat: update README',
+        changeSummary: 'M\tREADME.md',
+        patch: '+hello'
+      },
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent'
+      },
+      {
+        kind: 'local',
+        cwd: '/repo'
+      }
+    )
+
+    cancelGeneratePullRequestFieldsLocal('/repo')
+    listeners.get('close')?.(null)
+
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    await expect(pullRequest).resolves.toEqual({
+      success: false,
+      error: 'Generation canceled.',
+      canceled: true,
+      branchChangedByPreparation: true
+    })
   })
 
   it('routes Windows batch-script agent commands through cmd.exe', async () => {

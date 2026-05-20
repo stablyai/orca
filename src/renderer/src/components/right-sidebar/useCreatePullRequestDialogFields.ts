@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: field state, base search, AI generation,
+   and cancellation share request guards that need to stay in one hook. */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getConnectionId } from '@/lib/connection-context'
 import { useAppStore, type AppState } from '@/store'
@@ -25,6 +27,7 @@ type UseCreatePullRequestDialogFieldsOptions = {
   eligibility: HostedReviewCreationEligibility | null
   settings: AppState['settings']
   submitting: boolean
+  onBranchChangedByGeneration?: () => Promise<void>
 }
 
 type GenerationSeed = {
@@ -47,7 +50,8 @@ export function useCreatePullRequestDialogFields({
   branch,
   eligibility,
   settings,
-  submitting
+  submitting,
+  onBranchChangedByGeneration
 }: UseCreatePullRequestDialogFieldsOptions) {
   const commitMessageAi = settings?.commitMessageAi
   const effectiveCommitMessageAgentId = resolveCommitMessageAgentChoice(
@@ -208,7 +212,11 @@ export function useCreatePullRequestDialogFields({
           draft
         }
       )
-      if (generationRequestIdRef.current !== requestId) {
+      if (result.branchChangedByPreparation) {
+        await onBranchChangedByGeneration?.()
+      }
+      const isCurrentRequest = generationRequestIdRef.current === requestId
+      if (!isCurrentRequest) {
         return
       }
       if (!result.success) {
@@ -254,7 +262,16 @@ export function useCreatePullRequestDialogFields({
         setGenerating(false)
       }
     }
-  }, [base, body, draft, generateDisabled, title, worktreeId, worktreePath])
+  }, [
+    base,
+    body,
+    draft,
+    generateDisabled,
+    onBranchChangedByGeneration,
+    title,
+    worktreeId,
+    worktreePath
+  ])
 
   const handleCancelGenerate = useCallback((): void => {
     if (!worktreePath || !generateInFlightRef.current) {

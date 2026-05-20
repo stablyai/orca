@@ -33,6 +33,7 @@ type CreatePullRequestDialogProps = {
   pushBeforeCreate: boolean
   onOpenChange: (open: boolean) => void
   onPushBeforeCreate: () => Promise<boolean>
+  onBranchChangedByGeneration: () => Promise<void>
   onCreated: (result: { number: number; url: string }) => Promise<void>
 }
 
@@ -57,6 +58,7 @@ export function CreatePullRequestDialog({
   pushBeforeCreate,
   onOpenChange,
   onPushBeforeCreate,
+  onBranchChangedByGeneration,
   onCreated
 }: CreatePullRequestDialogProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
@@ -93,7 +95,8 @@ export function CreatePullRequestDialog({
     branch,
     eligibility,
     settings,
-    submitting
+    submitting,
+    onBranchChangedByGeneration
   })
 
   useEffect(() => {

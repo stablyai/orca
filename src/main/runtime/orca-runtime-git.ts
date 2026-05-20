@@ -443,22 +443,30 @@ export class RuntimeGitCommands {
         error: SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
       }
     }
-    const context = target.connectionId
-      ? await getPullRequestDraftContext((argv) => provider!.exec(argv, target.worktree.path), {
-          base: input.base,
-          currentTitle: input.title,
-          currentBody: input.body,
-          currentDraft: input.draft
-        })
-      : await getPullRequestDraftContext(
-          (argv, options) => gitExecFileAsync(argv, { cwd: target.worktree.path, ...options }),
-          {
+    let context: Awaited<ReturnType<typeof getPullRequestDraftContext>>
+    try {
+      context = target.connectionId
+        ? await getPullRequestDraftContext((argv) => provider!.exec(argv, target.worktree.path), {
             base: input.base,
             currentTitle: input.title,
             currentBody: input.body,
             currentDraft: input.draft
-          }
-        )
+          })
+        : await getPullRequestDraftContext(
+            (argv, options) => gitExecFileAsync(argv, { cwd: target.worktree.path, ...options }),
+            {
+              base: input.base,
+              currentTitle: input.title,
+              currentBody: input.body,
+              currentDraft: input.draft
+            }
+          )
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to prepare branch for PR details.'
+      }
+    }
     if (!context) {
       return { success: false, error: 'No branch changes to summarize.' }
     }

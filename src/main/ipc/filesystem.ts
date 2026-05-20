@@ -771,15 +771,24 @@ export function registerFilesystemHandlers(
             error: SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
           }
         }
-        const context = await getPullRequestDraftContext(
-          (argv) => provider.exec(argv, args.worktreePath),
-          {
-            base: args.base,
-            currentTitle: args.title,
-            currentBody: args.body,
-            currentDraft: args.draft
+        let context: Awaited<ReturnType<typeof getPullRequestDraftContext>>
+        try {
+          context = await getPullRequestDraftContext(
+            (argv) => provider.exec(argv, args.worktreePath),
+            {
+              base: args.base,
+              currentTitle: args.title,
+              currentBody: args.body,
+              currentDraft: args.draft
+            }
+          )
+        } catch (error) {
+          return {
+            success: false,
+            error:
+              error instanceof Error ? error.message : 'Failed to prepare branch for PR details.'
           }
-        )
+        }
         if (!context) {
           return { success: false, error: 'No branch changes to summarize.' }
         }
@@ -793,15 +802,23 @@ export function registerFilesystemHandlers(
       }
 
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const context = await getPullRequestDraftContext(
-        (argv, options) => gitExecFileAsync(argv, { cwd: worktreePath, ...options }),
-        {
-          base: args.base,
-          currentTitle: args.title,
-          currentBody: args.body,
-          currentDraft: args.draft
+      let context: Awaited<ReturnType<typeof getPullRequestDraftContext>>
+      try {
+        context = await getPullRequestDraftContext(
+          (argv, options) => gitExecFileAsync(argv, { cwd: worktreePath, ...options }),
+          {
+            base: args.base,
+            currentTitle: args.title,
+            currentBody: args.body,
+            currentDraft: args.draft
+          }
+        )
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to prepare branch for PR details.'
         }
-      )
+      }
       if (!context) {
         return { success: false, error: 'No branch changes to summarize.' }
       }

@@ -747,6 +747,17 @@ export default function ChecksPanel(): React.JSX.Element {
     }
   }, [activeWorktree, activeWorktreeId, fetchUpstreamStatus, pushBranch])
 
+  const handleBranchChangedByPullRequestGeneration = useCallback(async (): Promise<void> => {
+    if (!activeWorktreeId || !activeWorktree?.path) {
+      return
+    }
+    // Why: AI PR detail generation rebases before summarizing; if HEAD moved,
+    // the dialog must push before creating from the refreshed branch state.
+    setCreatePrPushFirst(true)
+    const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+    await fetchUpstreamStatus(activeWorktreeId, activeWorktree.path, connectionId)
+  }, [activeWorktree?.path, activeWorktreeId, fetchUpstreamStatus])
+
   const handlePullRequestCreated = useCallback(
     async (result: { number: number; url: string }): Promise<void> => {
       if (!repo || !branch) {
@@ -940,6 +951,7 @@ export default function ChecksPanel(): React.JSX.Element {
             pushBeforeCreate={createPrPushFirst}
             onOpenChange={setCreatePrDialogOpen}
             onPushBeforeCreate={pushBeforeCreatePullRequest}
+            onBranchChangedByGeneration={handleBranchChangedByPullRequestGeneration}
             onCreated={handlePullRequestCreated}
           />
         )}

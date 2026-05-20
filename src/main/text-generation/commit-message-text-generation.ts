@@ -67,8 +67,13 @@ export type DiscoverCommitMessageModelsResult =
   | { success: false; error: string }
 
 export type GeneratePullRequestFieldsResult =
-  | { success: true; fields: GeneratedPullRequestFields; agentLabel?: string }
-  | { success: false; error: string; canceled?: boolean }
+  | {
+      success: true
+      fields: GeneratedPullRequestFields
+      agentLabel?: string
+      branchChangedByPreparation?: boolean
+    }
+  | { success: false; error: string; canceled?: boolean; branchChangedByPreparation?: boolean }
 
 export type RemoteCommitMessageExecResult = {
   stdout: string
@@ -755,16 +760,24 @@ function formatPullRequestFieldsGenerationResult(
   context: PullRequestDraftContext
 ): GeneratePullRequestFieldsResult {
   if (!result.success) {
-    return result
+    return {
+      ...result,
+      branchChangedByPreparation: context.branchChangedByPreparation
+    }
   }
   try {
     return {
       success: true,
       fields: parseGeneratedPullRequestFields(result.rawOutput, context),
-      agentLabel: result.agentLabel
+      agentLabel: result.agentLabel,
+      branchChangedByPreparation: context.branchChangedByPreparation
     }
   } catch {
-    return { success: false, error: 'Generated pull request details could not be parsed.' }
+    return {
+      success: false,
+      error: 'Generated pull request details could not be parsed.',
+      branchChangedByPreparation: context.branchChangedByPreparation
+    }
   }
 }
 
@@ -776,7 +789,11 @@ export async function generatePullRequestFieldsFromContext(
   const prompt = buildPullRequestFieldsPrompt(context, params.customPrompt ?? '')
   const planned = planCommitMessageGeneration(params, prompt)
   if (!planned.ok) {
-    return { success: false, error: planned.error }
+    return {
+      success: false,
+      error: planned.error,
+      branchChangedByPreparation: context.branchChangedByPreparation
+    }
   }
 
   const internalResult =

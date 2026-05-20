@@ -1575,6 +1575,13 @@ function SourceControlInner(): React.JSX.Element {
     worktreePath
   ])
 
+  const handleBranchChangedByPullRequestGeneration = useCallback(async (): Promise<void> => {
+    // Why: AI PR detail generation rebases before summarizing; if HEAD moved,
+    // the dialog must not create a PR from stale push/create eligibility.
+    setCreatePrPushFirst(true)
+    await refreshActiveGitStatusAfterMutation()
+  }, [refreshActiveGitStatusAfterMutation])
+
   const handlePullRequestCreated = useCallback(
     async (result: { number: number; url: string }): Promise<void> => {
       if (!activeRepo || !branchName) {
@@ -2748,6 +2755,7 @@ function SourceControlInner(): React.JSX.Element {
         pushBeforeCreate={createPrPushFirst}
         onOpenChange={setCreatePrDialogOpen}
         onPushBeforeCreate={pushBeforeCreatePullRequest}
+        onBranchChangedByGeneration={handleBranchChangedByPullRequestGeneration}
         onCreated={handlePullRequestCreated}
       />
       <div ref={sourceControlRef} className="relative flex h-full flex-col overflow-hidden">
