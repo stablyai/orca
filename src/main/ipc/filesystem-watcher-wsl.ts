@@ -14,7 +14,7 @@ import { readdir } from 'fs/promises'
 import * as path from 'path'
 import type { WebContents } from 'electron'
 import type { Event as WatcherEvent } from '@parcel/watcher'
-import { appendWatcherEvents } from './filesystem-watcher-event-batch'
+import { queueWatcherEvents } from './filesystem-watcher-event-batch'
 
 export type WatcherSubscription = {
   unsubscribe(): Promise<void>
@@ -22,6 +22,7 @@ export type WatcherSubscription = {
 
 type DebouncedBatch = {
   events: WatcherEvent[]
+  overflowed: boolean
   timer: ReturnType<typeof setTimeout> | null
   firstEventAt: number
 }
@@ -134,7 +135,7 @@ export async function createWslWatcher(
   const root: WatchedRoot = {
     subscription: null!,
     listeners: new Map(),
-    batch: { events: [], timer: null, firstEventAt: 0 }
+    batch: { events: [], overflowed: false, timer: null, firstEventAt: 0 }
   }
 
   // Take initial snapshot
@@ -156,7 +157,7 @@ export async function createWslWatcher(
       prevSnapshot = nextSnapshot
 
       if (events.length > 0) {
-        appendWatcherEvents(root.batch.events, events)
+        queueWatcherEvents(root.batch, events)
         deps.scheduleBatchFlush(rootKey, root)
       }
     } catch {

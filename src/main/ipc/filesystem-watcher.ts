@@ -12,7 +12,7 @@ import { isWslPath } from '../wsl'
 import { createWslWatcher } from './filesystem-watcher-wsl'
 import type { WatchedRoot } from './filesystem-watcher-wsl'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
-import { appendWatcherEvents } from './filesystem-watcher-event-batch'
+import { MAX_BATCHED_WATCHER_EVENTS, queueWatcherEvents } from './filesystem-watcher-event-batch'
 
 // ── Ignore patterns ──────────────────────────────────────────────────
 // Why: high-churn directories are suppressed at the native watcher level
@@ -36,7 +36,6 @@ const WATCHER_IGNORE_DIRS: string[] = [
 
 const DEBOUNCE_TRAILING_MS = 150
 const DEBOUNCE_MAX_WAIT_MS = 500
-const MAX_BATCHED_CHANGE_EVENTS = 5_000
 
 // ── Per-root watcher state ───────────────────────────────────────────
 // WatchedRoot and WatcherSubscription are defined in filesystem-watcher-wsl.ts
@@ -174,15 +173,17 @@ function emitOverflowPayload(rootKey: string, root: WatchedRoot): void {
 }
 
 async function flushBatch(rootKey: string, root: WatchedRoot): Promise<void> {
+  const overflowed = root.batch.overflowed
   const rawEvents = root.batch.events.splice(0)
+  root.batch.overflowed = false
   root.batch.timer = null
   root.batch.firstEventAt = 0
 
-  if (rawEvents.length === 0 || root.listeners.size === 0) {
+  if ((rawEvents.length === 0 && !overflowed) || root.listeners.size === 0) {
     return
   }
 
-  if (rawEvents.length > MAX_BATCHED_CHANGE_EVENTS) {
+  if (overflowed || rawEvents.length > MAX_BATCHED_WATCHER_EVENTS) {
     // Why: deletion storms can be valid but too large to coalesce/stat/send
     // per path. One overflow asks the renderer for the same conservative refresh.
     emitOverflowPayload(rootKey, root)
@@ -252,7 +253,7 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
   const root: WatchedRoot = {
     subscription: null!,
     listeners: new Map(),
-    batch: { events: [], timer: null, firstEventAt: 0 }
+    batch: { events: [], overflowed: false, timer: null, firstEventAt: 0 }
   }
 
   try {
@@ -298,7 +299,7 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
           return
         }
 
-        appendWatcherEvents(root.batch.events, events)
+        queueWatcherEvents(root.batch, events)
         scheduleBatchFlush(rootKey, root)
       },
       watcherOptions

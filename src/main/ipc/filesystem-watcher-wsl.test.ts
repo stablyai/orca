@@ -143,7 +143,7 @@ describe('createWslWatcher', () => {
     await root.subscription.unsubscribe()
   })
 
-  it('accepts a large WSL poll event batch without overflowing V8 arguments', async () => {
+  it('marks a large WSL poll event batch for overflow without retaining every event', async () => {
     const scheduleBatchFlush = vi.fn()
     const initialEntries = Array.from({ length: 200_000 }, (_, index) => dirent(`file-${index}.ts`))
 
@@ -153,7 +153,8 @@ describe('createWslWatcher', () => {
     await vi.advanceTimersByTimeAsync(2_000)
 
     expect(scheduleBatchFlush).toHaveBeenCalledOnce()
-    expect(root.batch.events).toHaveLength(200_000)
+    expect(root.batch.events).toHaveLength(0)
+    expect(root.batch.overflowed).toBe(true)
     await root.subscription.unsubscribe()
   })
 })
