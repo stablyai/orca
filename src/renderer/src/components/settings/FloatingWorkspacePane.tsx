@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { FolderOpen } from 'lucide-react'
 import type { FloatingTerminalTriggerLocation, GlobalSettings } from '../../../../shared/types'
 import { Button } from '../ui/button'
@@ -14,11 +15,47 @@ type FloatingWorkspacePaneProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
+export function getFloatingWorkspaceDirectoryInputValue({
+  configuredDirectory,
+  defaultFloatingWorkspacePath,
+  directoryDraft
+}: {
+  configuredDirectory: string | null | undefined
+  defaultFloatingWorkspacePath: string
+  directoryDraft: string | null
+}): string {
+  const configured = configuredDirectory ?? ''
+  return (
+    directoryDraft ?? (configured.trim().length > 0 ? configured : defaultFloatingWorkspacePath)
+  )
+}
+
 export function FloatingWorkspacePane({
   settings,
   updateSettings
 }: FloatingWorkspacePaneProps): React.JSX.Element | null {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
+  const [defaultFloatingWorkspacePath, setDefaultFloatingWorkspacePath] = useState('')
+  const [directoryDraft, setDirectoryDraft] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void window.api.app
+      .getFloatingTerminalCwd()
+      .then((path) => {
+        if (!cancelled) {
+          setDefaultFloatingWorkspacePath(path)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDefaultFloatingWorkspacePath('')
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const pickFloatingWorkspaceDirectory = async (): Promise<void> => {
     const path = await window.api.repos.pickFolder()
@@ -27,6 +64,12 @@ export function FloatingWorkspacePane({
     }
     updateSettings({ floatingTerminalCwd: path })
   }
+
+  const directoryInputValue = getFloatingWorkspaceDirectoryInputValue({
+    configuredDirectory: settings.floatingTerminalCwd,
+    defaultFloatingWorkspacePath,
+    directoryDraft
+  })
 
   if (!matchesSettingsSearch(searchQuery, FLOATING_WORKSPACE_SEARCH_ENTRIES)) {
     return null
@@ -82,12 +125,14 @@ export function FloatingWorkspacePane({
           <Label>Default Directory</Label>
           <div className="flex max-w-xl gap-2">
             <Input
-              value={settings.floatingTerminalCwd ?? ''}
-              onChange={(event) =>
+              value={directoryInputValue}
+              onChange={(event) => {
+                setDirectoryDraft(event.target.value)
                 updateSettings({
                   floatingTerminalCwd: event.target.value
                 })
-              }
+              }}
+              onBlur={() => setDirectoryDraft(null)}
               placeholder="Orca floating workspace"
               className="min-w-0 flex-1"
             />
@@ -102,8 +147,8 @@ export function FloatingWorkspacePane({
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Takes effect for new floating workspace tabs. Leave blank to use the Orca floating
-            workspace, or use ~ for your home directory.
+            New floating workspace tabs start here. The default is the Orca app-owned workspace; use
+            ~ only if you want your home directory.
           </p>
         </div>
 
