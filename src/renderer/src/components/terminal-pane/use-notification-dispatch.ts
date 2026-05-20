@@ -144,6 +144,7 @@ export function dispatchTerminalNotification(
   const worktree = getWorktreeMapFromState(state).get(worktreeId)
   const repo = worktree ? getRepoMapFromState(state).get(worktree.repoId) : null
   const customSoundPath = state.settings?.notifications?.customSoundPath ?? null
+  const customSoundVolume = state.settings?.notifications?.customSoundVolume ?? null
   const agentStatus =
     event.source === 'agent-task-complete' && event.paneKey
       ? state.agentStatusByPaneKey[event.paneKey]
@@ -177,7 +178,7 @@ export function dispatchTerminalNotification(
     })
     .then((result) => {
       if (result.delivered) {
-        void playDesktopNotificationSound(customSoundPath)
+        void playDesktopNotificationSound(customSoundPath, customSoundVolume)
       }
     })
     .catch((err) => {

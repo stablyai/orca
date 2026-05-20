@@ -1,10 +1,11 @@
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../shared/types'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
-import { BellRing, Bot, FileAudio, Siren, X } from 'lucide-react'
+import { Slider } from '../ui/slider'
+import { BellRing, Bot, FileAudio, Siren, Volume2, X } from 'lucide-react'
 import type { SettingsSearchEntry } from './settings-search'
 import { basename } from '@/lib/path'
 
@@ -34,6 +35,11 @@ export const NOTIFICATIONS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     description:
       'Choose one local audio file (MP3, WAV, OGG, M4A, AAC, or FLAC) for all delivered desktop notifications.',
     keywords: ['notifications', 'sound', 'audio', 'mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac']
+  },
+  {
+    title: 'Notification Volume',
+    description: 'Playback volume for the custom notification sound.',
+    keywords: ['notifications', 'sound', 'volume', 'loudness']
   },
   {
     title: 'Send Test Notification',
@@ -82,6 +88,36 @@ export function NotificationsPane({
     })
   }
 
+  // Why: the slider fires onValueChange on every step while dragging. Persisting
+  // through IPC on every tick laggs the drag. Mirror the value locally for
+  // instant visual feedback and commit to settings 200ms after the last change,
+  // restarting the timer on each tick (autosave-style).
+  const [volumeDraft, setVolumeDraft] = useState(notificationSettings.customSoundVolume)
+  const volumeCommitTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    setVolumeDraft(notificationSettings.customSoundVolume)
+  }, [notificationSettings.customSoundVolume])
+
+  useEffect(() => {
+    return () => {
+      if (volumeCommitTimer.current) {
+        clearTimeout(volumeCommitTimer.current)
+      }
+    }
+  }, [])
+
+  const handleVolumeChange = (value: number): void => {
+    setVolumeDraft(value)
+    if (volumeCommitTimer.current) {
+      clearTimeout(volumeCommitTimer.current)
+    }
+    volumeCommitTimer.current = setTimeout(() => {
+      volumeCommitTimer.current = null
+      updateNotificationSettings({ customSoundVolume: value })
+    }, 200)
+  }
+
   const handleSendTestNotification = async (): Promise<void> => {
     // Why: Electron main cannot reliably read macOS notification authorization,
     // but the renderer exposes it. Without this check, dev builds can report
@@ -103,7 +139,10 @@ export function NotificationsPane({
       // it twice in quick succession — the in-flight dedupe is for incidental
       // bursts of real notifications, not for an explicit user action.
       const soundResult = notificationSettings.customSoundPath
-        ? await window.api.notifications.playSound({ force: true })
+        ? await window.api.notifications.playSound({
+            force: true,
+            volume: notificationSettings.customSoundVolume
+          })
         : null
       if (notificationSettings.customSoundPath && soundResult && !soundResult.played) {
         toast.error('Custom notification sound could not be played')
@@ -232,6 +271,24 @@ export function NotificationsPane({
             </Button>
           ) : null}
         </div>
+        {selectedSoundPath ? (
+          <div className="flex items-center gap-3 pt-1">
+            <Volume2 className="size-4 text-muted-foreground" />
+            <Slider
+              value={[volumeDraft]}
+              min={0}
+              max={100}
+              step={5}
+              disabled={!notificationSettings.enabled}
+              onValueChange={([value]) => handleVolumeChange(value)}
+              className="flex-1"
+              aria-label="Notification sound volume"
+            />
+            <span className="w-10 text-right font-mono text-xs tabular-nums text-muted-foreground">
+              {volumeDraft}%
+            </span>
+          </div>
+        ) : null}
       </div>
 
       <Separator />

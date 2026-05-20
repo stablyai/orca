@@ -1186,7 +1186,7 @@ export type PreloadApi = {
     openSystemSettings: () => Promise<void>
     getPermissionStatus: () => Promise<NotificationPermissionStatusResult>
     requestPermission: () => Promise<NotificationPermissionStatusResult>
-    playSound: (options?: { force?: boolean }) => Promise<NotificationSoundResult>
+    playSound: (options?: { force?: boolean; volume?: number }) => Promise<NotificationSoundResult>
   }
   onboarding: {
     get: () => Promise<OnboardingState>

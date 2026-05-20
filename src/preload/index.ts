@@ -1254,7 +1254,10 @@ const api = {
       ipcRenderer.invoke('notifications:getPermissionStatus'),
     requestPermission: (): Promise<NotificationPermissionStatusResult> =>
       ipcRenderer.invoke('notifications:requestPermission'),
-    playSound: async (options?: { force?: boolean }): Promise<NotificationSoundResult> => {
+    playSound: async (options?: {
+      force?: boolean
+      volume?: number
+    }): Promise<NotificationSoundResult> => {
       try {
         // Why: drop replays while the sound is still ringing. The "test"
         // button bypasses with force so the user always hears a confirmation.
@@ -1295,6 +1298,9 @@ const api = {
         // the sound from the start instead of stacking overlapping copies.
         // Matches GNOME canberra and VS Code AccessibilitySignalService.
         audio.currentTime = 0
+        if (typeof options?.volume === 'number' && Number.isFinite(options.volume)) {
+          audio.volume = Math.min(1, Math.max(0, options.volume / 100))
+        }
         isNotificationSoundPlaying = true
         const release = (): void => {
           isNotificationSoundPlaying = false
