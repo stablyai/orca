@@ -58,6 +58,7 @@ export type HookListenerState = {
   lastPromptByPaneKey: Map<string, string>
   lastToolByPaneKey: Map<string, ToolSnapshot>
   lastStatusByPaneKey: Map<string, AgentHookEventPayload>
+  antigravityCompletedTranscriptByPaneKey: Map<string, string>
 }
 
 export function createHookListenerState(): HookListenerState {
@@ -66,7 +67,8 @@ export function createHookListenerState(): HookListenerState {
     warnedEnvs: new Set(),
     lastPromptByPaneKey: new Map(),
     lastToolByPaneKey: new Map(),
-    lastStatusByPaneKey: new Map()
+    lastStatusByPaneKey: new Map(),
+    antigravityCompletedTranscriptByPaneKey: new Map()
   }
 }
 
@@ -74,17 +76,20 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.lastPromptByPaneKey.delete(paneKey)
   state.lastToolByPaneKey.delete(paneKey)
   state.lastStatusByPaneKey.delete(paneKey)
+  state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
 }
 
 function clearPaneTurnCacheState(state: HookListenerState, paneKey: string): void {
   state.lastPromptByPaneKey.delete(paneKey)
   state.lastToolByPaneKey.delete(paneKey)
+  state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
 }
 
 export function clearAllListenerCaches(state: HookListenerState): void {
   state.lastPromptByPaneKey.clear()
   state.lastToolByPaneKey.clear()
   state.lastStatusByPaneKey.clear()
+  state.antigravityCompletedTranscriptByPaneKey.clear()
   state.warnedVersions.clear()
   state.warnedEnvs.clear()
 }
@@ -558,11 +563,46 @@ function extractAssistantContentText(content: unknown): string | undefined {
   return undefined
 }
 
+function extractAntigravityUserRequest(content: string): string | undefined {
+  const request = content.match(/<USER_REQUEST>\s*([\s\S]*?)\s*<\/USER_REQUEST>/)
+  const text = request ? request[1] : content
+  const trimmed = text.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
+function extractUserPromptTextFromLine(line: string): string | undefined {
+  let entry: unknown
+  try {
+    entry = JSON.parse(line)
+  } catch {
+    return undefined
+  }
+  if (typeof entry !== 'object' || entry === null) {
+    return undefined
+  }
+  const record = entry as Record<string, unknown>
+  if (
+    (record.source === 'USER_EXPLICIT' || record.source === 'USER') &&
+    (record.type === 'USER_INPUT' || record.type === 'REQUEST') &&
+    typeof record.content === 'string'
+  ) {
+    return extractAntigravityUserRequest(record.content)
+  }
+  return undefined
+}
+
 function readLastAssistantFromTranscript(transcriptPath: unknown): string | undefined {
   if (typeof transcriptPath !== 'string' || transcriptPath.length === 0) {
     return undefined
   }
   return readLastAssistantFromTranscriptOnce(transcriptPath)
+}
+
+function readLastUserPromptFromTranscript(transcriptPath: unknown): string | undefined {
+  if (typeof transcriptPath !== 'string' || transcriptPath.length === 0) {
+    return undefined
+  }
+  return readLastTextFromTranscriptOnce(transcriptPath, extractUserPromptTextFromLine)
 }
 
 function parseHookBodyPayloadRecord(body: unknown): Record<string, unknown> | null {
@@ -667,6 +707,13 @@ export function hasPendingAgentResultText(source: AgentHookSource, body: unknown
 }
 
 function readLastAssistantFromTranscriptOnce(transcriptPath: string): string | undefined {
+  return readLastTextFromTranscriptOnce(transcriptPath, extractAssistantTextFromLine)
+}
+
+function readLastTextFromTranscriptOnce(
+  transcriptPath: string,
+  extractLineText: (line: string) => string | undefined
+): string | undefined {
   try {
     const stats = statSync(transcriptPath)
     const size = stats.size
@@ -716,7 +763,7 @@ function readLastAssistantFromTranscriptOnce(transcriptPath: string): string | u
             if (line.length === 0) {
               continue
             }
-            const extracted = extractAssistantTextFromLine(line)
+            const extracted = extractLineText(line)
             if (extracted !== undefined) {
               return extracted
             }
@@ -1530,14 +1577,25 @@ function normalizeAntigravityEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
+  const transcriptPath = readFirstString(hookPayload, ['transcriptPath', 'transcript_path'])
+  if (eventName === 'PreInvocation') {
+    state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
+  } else if (
+    transcriptPath &&
+    eventName !== 'Stop' &&
+    state.antigravityCompletedTranscriptByPaneKey.get(paneKey) === transcriptPath
+  ) {
+    // Why: agy can emit a bookkeeping PostToolUse after Stop; ignore it so a
+    // finished row does not turn back into a yellow spinner.
+    return null
+  }
+
   const toolName = readAntigravityToolCall(hookPayload).toolName
   const stateName =
     eventName === 'PreToolUse' && isAntigravityFeedbackTool(toolName)
       ? 'waiting'
       : eventName === 'Stop'
-        ? hookPayload.fullyIdle === false
-          ? 'working'
-          : 'done'
+        ? 'done'
         : eventName === 'PreInvocation' ||
             eventName === 'PostInvocation' ||
             eventName === 'PreToolUse' ||
@@ -1549,6 +1607,7 @@ function normalizeAntigravityEvent(
     return null
   }
 
+  const effectivePrompt = promptText || readLastUserPromptFromTranscript(transcriptPath) || ''
   const snapshot = resolveToolState(
     state,
     paneKey,
@@ -1556,10 +1615,10 @@ function normalizeAntigravityEvent(
     { resetOnNewTurn: isNewTurnEvent('antigravity', eventName) }
   )
 
-  return parseAgentStatusPayload(
+  const payload = parseAgentStatusPayload(
     JSON.stringify({
       state: stateName,
-      prompt: resolvePrompt(state, paneKey, promptText, {
+      prompt: resolvePrompt(state, paneKey, effectivePrompt, {
         resetOnNewTurn: isNewTurnEvent('antigravity', eventName)
       }),
       agentType: 'antigravity',
@@ -1568,6 +1627,10 @@ function normalizeAntigravityEvent(
       lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
+  if (eventName === 'Stop' && transcriptPath) {
+    state.antigravityCompletedTranscriptByPaneKey.set(paneKey, transcriptPath)
+  }
+  return payload
 }
 
 function normalizeCodexEvent(

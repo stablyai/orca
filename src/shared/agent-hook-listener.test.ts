@@ -176,6 +176,41 @@ describe('shared agent-hook-listener', () => {
     })
   })
 
+  it('reads Antigravity user requests from the transcript', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-prompt-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    try {
+      writeFileSync(
+        transcriptPath,
+        `${JSON.stringify({
+          source: 'USER_EXPLICIT',
+          type: 'USER_INPUT',
+          content:
+            '<USER_REQUEST>\nFix the failing test\n</USER_REQUEST>\n<ADDITIONAL_METADATA>\nignored\n</ADDITIONAL_METADATA>'
+        })}\n`
+      )
+
+      const started = normalizeHookPayload(
+        state,
+        'antigravity',
+        {
+          paneKey: PANE_KEY,
+          hook_event_name: 'PreInvocation',
+          payload: { transcriptPath }
+        },
+        'production'
+      )
+
+      expect(started?.payload).toMatchObject({
+        state: 'working',
+        prompt: 'Fix the failing test',
+        agentType: 'antigravity'
+      })
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
   it('maps Antigravity feedback tools to waiting state', () => {
     const question = normalizeHookPayload(
       state,
@@ -285,6 +320,7 @@ describe('shared agent-hook-listener', () => {
 
       expect(done?.payload).toMatchObject({
         state: 'done',
+        prompt: 'hi',
         agentType: 'antigravity',
         lastAssistantMessage: 'Antigravity is wired up.'
       })
@@ -293,7 +329,7 @@ describe('shared agent-hook-listener', () => {
     }
   })
 
-  it('keeps Antigravity working when Stop reports the agent is not fully idle', () => {
+  it('normalizes Antigravity Stop to done even when fullyIdle is false', () => {
     const event = normalizeHookPayload(
       state,
       'antigravity',
@@ -306,9 +342,40 @@ describe('shared agent-hook-listener', () => {
     )
 
     expect(event?.payload).toMatchObject({
-      state: 'working',
+      state: 'done',
       agentType: 'antigravity'
     })
+  })
+
+  it('ignores late Antigravity tool hooks after a completed Stop for the same transcript', () => {
+    const transcriptPath = '/tmp/antigravity-transcript.jsonl'
+    const done = normalizeHookPayload(
+      state,
+      'antigravity',
+      {
+        paneKey: PANE_KEY,
+        hook_event_name: 'Stop',
+        payload: { transcriptPath, fullyIdle: true }
+      },
+      'production'
+    )
+    expect(done?.payload.state).toBe('done')
+
+    const lateTool = normalizeHookPayload(
+      state,
+      'antigravity',
+      {
+        paneKey: PANE_KEY,
+        hook_event_name: 'PostToolUse',
+        payload: {
+          transcriptPath,
+          toolCall: { name: 'run_command', args: { CommandLine: 'pwd' } }
+        }
+      },
+      'production'
+    )
+
+    expect(lateTool).toBeNull()
   })
 
   it('treats Antigravity Stop transcripts as pending result text', () => {
