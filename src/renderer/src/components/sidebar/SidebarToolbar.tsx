@@ -38,9 +38,6 @@ const GITHUB_ISSUES_URL = 'https://github.com/stablyai/orca/issues/'
 const DISCORD_URL = 'https://discord.gg/fzjDKHxv8Q'
 const X_URL = 'https://x.com/orca_build'
 const DOCS_URL = 'https://www.onorca.dev/docs'
-// Why: the sidebar resize handle intentionally keeps a wide right-edge hit
-// target, but the bottom Settings action should remain clickable over it.
-const SETTINGS_ACTION_HIT_TARGET_CLASS = 'relative z-20'
 
 type SubmitIdentity = {
   githubLogin: string | null
@@ -374,7 +371,7 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
                 variant="ghost"
                 size="icon-xs"
                 onClick={openSettingsPage}
-                className={`${SETTINGS_ACTION_HIT_TARGET_CLASS} text-muted-foreground`}
+                className="text-muted-foreground"
               >
                 <Settings className="size-3.5" />
               </Button>

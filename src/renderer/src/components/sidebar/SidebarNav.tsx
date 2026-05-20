@@ -15,9 +15,6 @@ import {
 } from '../../../../shared/task-providers'
 
 const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
-// Why: the sidebar resize handle keeps a wide edge target, but primary nav
-// rows under that strip should remain clickable when their bounds overlap.
-const SIDEBAR_NAV_HIT_TARGET_CLASS = 'relative z-20'
 
 export function shouldShowAgentsButton(
   settings: Pick<GlobalSettings, 'experimentalActivity'> | null | undefined
@@ -163,7 +160,6 @@ const SidebarNav = React.memo(function SidebarNav() {
           disabled={!canBrowseTasks}
           aria-current={tasksActive ? 'page' : undefined}
           className={cn(
-            SIDEBAR_NAV_HIT_TARGET_CLASS,
             'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
             tasksActive
               ? 'bg-sidebar-accent text-sidebar-accent-foreground'
@@ -236,7 +232,6 @@ const SidebarNav = React.memo(function SidebarNav() {
         onClick={openAutomationsPage}
         aria-current={automationsActive ? 'page' : undefined}
         className={cn(
-          SIDEBAR_NAV_HIT_TARGET_CLASS,
           'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
           automationsActive
             ? 'bg-sidebar-accent text-sidebar-accent-foreground'
@@ -255,7 +250,6 @@ const SidebarNav = React.memo(function SidebarNav() {
           onClick={openActivityPage}
           aria-current={activityActive ? 'page' : undefined}
           className={cn(
-            SIDEBAR_NAV_HIT_TARGET_CLASS,
             'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
             activityActive
               ? 'bg-sidebar-accent text-sidebar-accent-foreground'
@@ -278,7 +272,7 @@ const SidebarNav = React.memo(function SidebarNav() {
         type="button"
         onClick={() => openModal('worktree-palette')}
         aria-label="Search worktrees and browser tabs"
-        className={`${SIDEBAR_NAV_HIT_TARGET_CLASS} group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight text-sidebar-foreground/60 transition-colors hover:bg-sidebar-foreground/8`}
+        className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight text-sidebar-foreground/60 transition-colors hover:bg-sidebar-foreground/8"
       >
         <Search className="size-4 shrink-0 text-sidebar-foreground/30" strokeWidth={1.75} />
         <span className="flex-1">Search</span>
