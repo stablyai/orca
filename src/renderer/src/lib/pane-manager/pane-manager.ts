@@ -277,9 +277,9 @@ export class PaneManager {
       this.getDragCallbacks(),
       // Why: always re-focus even if already active — after splits the
       // browser's real textarea focus can lag the manager's activePaneId.
-      (paneId) => {
+      (paneId, options) => {
         if (!this.destroyed) {
-          this.setActivePane(paneId, { focus: true })
+          this.setActivePane(paneId, { focus: options?.focusTerminal !== false })
         }
       },
       (paneId, event) => {

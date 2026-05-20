@@ -244,6 +244,29 @@ test.describe('Terminal Panes', () => {
     await expect(orcaPage.locator('.pane-title-text', { hasText: title })).toHaveCount(1)
   })
 
+  test('Set Title input stays open when clicked in a split terminal', async ({ orcaPage }) => {
+    await splitActiveTerminalPane(orcaPage, 'vertical')
+    await waitForPaneCount(orcaPage, 2)
+    await splitActiveTerminalPane(orcaPage, 'horizontal')
+    await waitForPaneCount(orcaPage, 3)
+
+    await openTerminalContextMenu(orcaPage)
+    await orcaPage.getByText('Set Title…', { exact: true }).click()
+
+    const titleInput = orcaPage.locator('.pane-title-input').first()
+    await expect(titleInput).toBeVisible()
+    await expect(titleInput).toBeFocused()
+
+    // Why: pane-level pointerdown focuses xterm for terminal clicks. Pane-local
+    // controls must be excluded or clicking the already-open title input blurs
+    // it and commits an empty title, which looks like the editor flashed closed.
+    await titleInput.click({ position: { x: 10, y: 10 } })
+    await orcaPage.waitForTimeout(250)
+
+    await expect(titleInput).toBeVisible()
+    await expect(titleInput).toBeFocused()
+  })
+
   test('Set Title survives an early blur during first focus handoff', async ({ orcaPage }) => {
     await openTerminalContextMenu(orcaPage)
     await orcaPage.evaluate(() => {
