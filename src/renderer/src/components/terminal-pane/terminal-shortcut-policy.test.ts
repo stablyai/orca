@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: the shortcut policy matrix keeps cross-platform terminal chord expectations together. */
 import { describe, expect, it } from 'vitest'
 import {
   resolveTerminalShortcutAction,
@@ -86,6 +87,21 @@ describe('resolveTerminalShortcutAction', () => {
     expect(resolveTerminalShortcutAction(event({ key: 'Backspace', altKey: true }), true)).toEqual({
       type: 'sendInput',
       data: '\x1b\x7f'
+    })
+  })
+
+  it('uses the Codex-compatible Shift+Enter sequence on Windows', () => {
+    expect(
+      resolveTerminalShortcutAction(
+        event({ key: 'Enter', code: 'Enter', shiftKey: true }),
+        false,
+        'false',
+        0,
+        true
+      )
+    ).toEqual({
+      type: 'sendInput',
+      data: '\x1b\r'
     })
   })
 

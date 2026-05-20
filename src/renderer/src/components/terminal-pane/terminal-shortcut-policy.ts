@@ -40,7 +40,8 @@ export function resolveTerminalShortcutAction(
   event: TerminalShortcutEvent,
   isMac: boolean,
   macOptionAsAlt: MacOptionAsAlt = 'false',
-  optionKeyLocation: number = 0
+  optionKeyLocation: number = 0,
+  isWindows: boolean = false
 ): TerminalShortcutAction | null {
   const mod = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
   if (!event.repeat && mod && !event.altKey) {
@@ -118,7 +119,9 @@ export function resolveTerminalShortcutAction(
     event.shiftKey &&
     event.key === 'Enter'
   ) {
-    return { type: 'sendInput', data: '\x1b[13;2u' }
+    // Why: Codex on Windows PowerShell treats CSI-u Shift+Enter as inert,
+    // while the Alt+Enter byte path inserts a composer newline.
+    return { type: 'sendInput', data: isWindows ? '\x1b\r' : '\x1b[13;2u' }
   }
 
   if (

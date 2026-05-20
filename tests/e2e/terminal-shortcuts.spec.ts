@@ -18,13 +18,13 @@
 import { test, expect } from './helpers/orca-app'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import {
-  discoverActivePtyId,
   execInTerminal,
   countVisibleTerminalPanes,
   waitForActiveTerminalManager,
   waitForTerminalOutput,
   waitForPaneCount,
-  getTerminalContent
+  getTerminalContent,
+  waitForActivePanePtyId
 } from './helpers/terminal'
 import { waitForSessionReady, waitForActiveWorktree, ensureTerminalVisible } from './helpers/store'
 
@@ -274,6 +274,21 @@ test.describe('Terminal Shortcuts', () => {
     await waitForPaneCount(orcaPage, 1, 30_000)
   })
 
+  test('Shift+Enter writes the platform newline chord for terminal TUIs', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    await installMainProcessPtyWriteSpy(electronApp)
+    await waitForActivePanePtyId(orcaPage)
+
+    await pressAndExpectWrite(
+      orcaPage,
+      electronApp,
+      'Shift+Enter',
+      process.platform === 'win32' ? '\x1b\r' : '\x1b[13;2u'
+    )
+  })
+
   test('all terminal chords reach the PTY or fire their action', async ({
     orcaPage,
     electronApp
@@ -281,7 +296,7 @@ test.describe('Terminal Shortcuts', () => {
     await installMainProcessPtyWriteSpy(electronApp)
 
     // Seed the buffer so Cmd+K has something to clear.
-    const ptyId = await discoverActivePtyId(orcaPage)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
     const marker = `SHORTCUT_TEST_${Date.now()}`
     await execInTerminal(orcaPage, ptyId, `echo ${marker}`)
     await waitForTerminalOutput(orcaPage, marker)
@@ -305,8 +320,14 @@ test.describe('Terminal Shortcuts', () => {
     // Ctrl+Backspace → \x17 (unix-word-rubout).
     await pressAndExpectWrite(orcaPage, electronApp, 'Control+Backspace', '\x17')
 
-    // Shift+Enter → CSI-u so agents can distinguish from plain Enter.
-    await pressAndExpectWrite(orcaPage, electronApp, 'Shift+Enter', '\x1b[13;2u')
+    // Shift+Enter → a modified Enter byte path so agents can distinguish it
+    // from plain Enter. Windows uses Esc+CR because Codex ignores CSI-u there.
+    await pressAndExpectWrite(
+      orcaPage,
+      electronApp,
+      'Shift+Enter',
+      process.platform === 'win32' ? '\x1b\r' : '\x1b[13;2u'
+    )
 
     // --- send-input chords (macOS-only) ---
 
@@ -413,7 +434,7 @@ test.describe('Terminal Shortcuts', () => {
     // Why: CI can mount the xterm surface before the pane transport has a
     // live PTY. Probe first so xterm onData cannot race a disconnected
     // sendInput path, then clear the probe writes before the layout assertion.
-    await discoverActivePtyId(orcaPage)
+    await waitForActivePanePtyId(orcaPage)
     await enableKittyKeyboardReporting(orcaPage, 31)
     await clearPtyWriteLog(electronApp)
 

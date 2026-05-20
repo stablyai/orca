@@ -128,6 +128,7 @@ export function useTerminalKeyboardShortcuts({
     }
 
     const isMac = navigator.userAgent.includes('Mac')
+    const isWindows = navigator.userAgent.includes('Windows')
 
     // Why: KeyboardEvent.location on a character key (e.g. Period) always
     // reports that key's own position (0 = standard), not which modifier is
@@ -199,7 +200,8 @@ export function useTerminalKeyboardShortcuts({
         e,
         isMac,
         macOptionAsAltRef.current,
-        optionKeyLocation
+        optionKeyLocation,
+        isWindows
       )
       if (!action) {
         return
