@@ -7,6 +7,7 @@ const deferredScrollRestores = new WeakMap<
   {
     cancelled: boolean
     rafIds: number[]
+    state: ScrollState
     timeoutIds: ReturnType<typeof setTimeout>[]
   }
 >()
@@ -33,34 +34,46 @@ export function cancelDeferredScrollRestore(terminal: Terminal): void {
   for (const timeoutId of pending.timeoutIds) {
     clearTimeout(timeoutId)
   }
+  releaseScrollStateMarker(pending.state)
   deferredScrollRestores.delete(terminal)
 }
 
 export function captureScrollState(terminal: Terminal): ScrollState {
   const buf = terminal.buffer.active
+  const viewportY = buf.viewportY
+  const wasAtBottom = viewportY >= buf.baseY
   return {
     bufferType: buf.type,
-    wasAtBottom: buf.viewportY >= buf.baseY,
-    viewportY: buf.viewportY,
-    baseY: buf.baseY
+    wasAtBottom,
+    viewportY,
+    baseY: buf.baseY,
+    // Why: xterm markers track the same buffer line through resize reflow;
+    // a numeric viewport line alone can point at different content afterward.
+    firstVisibleLineMarker:
+      !wasAtBottom && buf.type === 'normal'
+        ? terminal.registerMarker?.(viewportY - (buf.baseY + buf.cursorY))
+        : undefined
   }
 }
 
 export function restoreScrollState(terminal: Terminal, state: ScrollState): void {
   cancelDeferredScrollRestore(terminal)
   restoreScrollStateNow(terminal, state)
+  releaseScrollStateMarker(state)
 }
 
 export function restoreScrollStateAfterLayout(terminal: Terminal, state: ScrollState): void {
   cancelDeferredScrollRestore(terminal)
   restoreScrollStateNow(terminal, state)
   if (typeof requestAnimationFrame !== 'function') {
+    releaseScrollStateMarker(state)
     return
   }
 
   const pending = {
     cancelled: false,
     rafIds: [] as number[],
+    state,
     timeoutIds: [] as ReturnType<typeof setTimeout>[]
   }
   const restore = (): void => {
@@ -93,6 +106,7 @@ export function restoreScrollStateAfterLayout(terminal: Terminal, state: ScrollS
     // authoritative timeout restore has run, stale frame callbacks must not
     // later rewind a user-initiated scroll or follow-output jump.
     cancelPendingRafs()
+    releaseScrollStateMarker(state)
     deferredScrollRestores.delete(terminal)
   }, 80)
   pending.rafIds.push(firstRaf)
@@ -112,8 +126,21 @@ function restoreScrollStateNow(terminal: Terminal, state: ScrollState): void {
     return
   }
 
-  terminal.scrollToLine(Math.min(state.viewportY, buf.baseY))
+  const markerLine =
+    state.firstVisibleLineMarker && !state.firstVisibleLineMarker.isDisposed
+      ? state.firstVisibleLineMarker.line
+      : -1
+  const targetLine = Math.min(markerLine >= 0 ? markerLine : state.viewportY, buf.baseY)
+  state.viewportY = targetLine
+  state.firstVisibleLineMarker?.dispose()
+  state.firstVisibleLineMarker = undefined
+  terminal.scrollToLine(targetLine)
   forceViewportScrollbarSync(terminal)
+}
+
+function releaseScrollStateMarker(state: ScrollState): void {
+  state.firstVisibleLineMarker?.dispose()
+  state.firstVisibleLineMarker = undefined
 }
 
 // Why: xterm 6 can leave its scrollbar thumb stale when ydisp is unchanged.

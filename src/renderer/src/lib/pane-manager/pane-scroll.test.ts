@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Terminal } from '@xterm/xterm'
+import type { IMarker, Terminal } from '@xterm/xterm'
 import {
   captureScrollState,
   getTerminalOutputEpoch,
@@ -13,14 +13,19 @@ function createTerminal(args: {
   viewportY: number
   baseY: number
   type?: 'normal' | 'alternate'
+  cursorY?: number
 }): Terminal {
   const active = {
     type: args.type ?? 'normal',
     viewportY: args.viewportY,
-    baseY: args.baseY
+    baseY: args.baseY,
+    cursorY: args.cursorY ?? 5
   }
   return {
     buffer: { active },
+    registerMarker: vi.fn((cursorYOffset: number) =>
+      createMarker(active.baseY + active.cursorY + cursorYOffset)
+    ),
     scrollToBottom: vi.fn(() => {
       active.viewportY = active.baseY
     }),
@@ -33,6 +38,18 @@ function createTerminal(args: {
   } as unknown as Terminal
 }
 
+function createMarker(line: number): IMarker {
+  return {
+    id: line,
+    isDisposed: false,
+    line,
+    dispose: vi.fn(function (this: { isDisposed: boolean }) {
+      this.isDisposed = true
+    }),
+    onDispose: vi.fn()
+  } as unknown as IMarker
+}
+
 describe('scroll state', () => {
   afterEach(() => {
     vi.useRealTimers()
@@ -40,14 +57,15 @@ describe('scroll state', () => {
   })
 
   it('captures the numeric viewport position', () => {
-    const terminal = createTerminal({ viewportY: 42, baseY: 100 })
+    const terminal = createTerminal({ viewportY: 42, baseY: 100, cursorY: 7 })
 
-    expect(captureScrollState(terminal)).toEqual({
+    expect(captureScrollState(terminal)).toMatchObject({
       bufferType: 'normal',
       wasAtBottom: false,
       viewportY: 42,
       baseY: 100
     })
+    expect(terminal.registerMarker).toHaveBeenCalledWith(-65)
   })
 
   it('tracks output epochs per terminal', () => {
@@ -75,6 +93,24 @@ describe('scroll state', () => {
 
     expect(terminal.scrollToLine).toHaveBeenCalledWith(42)
     expect(terminal.buffer.active.viewportY).toBe(42)
+  })
+
+  it('uses the visible line marker when resize reflow changes numeric line positions', () => {
+    const terminal = createTerminal({ viewportY: 10, baseY: 300 })
+    const marker = createMarker(160)
+    const state: ScrollState = {
+      bufferType: 'normal',
+      wasAtBottom: false,
+      viewportY: 42,
+      baseY: 100,
+      firstVisibleLineMarker: marker
+    }
+
+    restoreScrollState(terminal, state)
+
+    expect(terminal.scrollToLine).toHaveBeenCalledWith(160)
+    expect(terminal.buffer.active.viewportY).toBe(160)
+    expect(marker.dispose).toHaveBeenCalledTimes(1)
   })
 
   it('reapplies a layout restore after xterm settles asynchronously', () => {

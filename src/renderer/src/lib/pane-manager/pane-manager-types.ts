@@ -1,4 +1,4 @@
-import type { Terminal } from '@xterm/xterm'
+import type { IMarker, Terminal } from '@xterm/xterm'
 import type { ITerminalOptions } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
 import type { LigaturesAddon } from '@xterm/addon-ligatures'
@@ -83,6 +83,7 @@ export type ScrollState = {
   wasAtBottom: boolean
   viewportY: number
   baseY: number
+  firstVisibleLineMarker?: IMarker
 }
 
 export type ManagedPaneInternal = {
